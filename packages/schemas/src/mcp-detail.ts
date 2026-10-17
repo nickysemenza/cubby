@@ -16,7 +16,7 @@ export const mcpReadSelectionFields = {
     .enum(["summary", "compact", "full"])
     .default("summary")
     .describe(
-      "How much record detail to return. 'summary' returns identity and relevant status; 'compact' returns the entity's declared list fields without nested child collections; 'full' returns the complete MCP projection.",
+      "How much record detail to return. 'summary' returns identity and relevant status; 'compact' returns the same identity-and-status row from list and get: the entity's required list fields, nested objects reduced to their scalars (dataQuality to status and score), without child collections, field resolutions, display labels or long notes text; 'full' returns the complete MCP projection.",
     ),
   fields: z
     .array(z.string().trim().min(1).max(200))

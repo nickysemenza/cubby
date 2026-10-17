@@ -3,6 +3,7 @@
  * generic over the generated MCP output schemas and list-read declarations,
  * so no entity carries a hand-curated field list.
  */
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { z } from "zod";
 
 import {
@@ -49,8 +50,8 @@ function publishedSchema(entity: string, action: "get" | "list") {
   return schema instanceof z.ZodObject ? schema : null;
 }
 
-/** Peel wrappers that do not change which keys a value can carry. */
-function unwrap(schema: z.core.$ZodType): z.core.$ZodType {
+/** Peel wrappers that do not change the shape of a value. */
+function peel(schema: z.core.$ZodType): z.core.$ZodType {
   if (
     schema instanceof z.ZodOptional ||
     schema instanceof z.ZodNullable ||
@@ -58,13 +59,37 @@ function unwrap(schema: z.core.$ZodType): z.core.$ZodType {
     schema instanceof z.ZodReadonly ||
     schema instanceof z.ZodCatch
   )
-    return unwrap(schema.def.innerType);
-  if (schema instanceof z.ZodPipe) return unwrap(schema.def.in);
-  if (schema instanceof z.ZodLazy) return unwrap(schema.def.getter());
-  // A path through an array addresses every element.
-  if (schema instanceof z.ZodArray) return unwrap(schema.def.element);
+    return peel(schema.def.innerType);
+  if (schema instanceof z.ZodPipe) return peel(schema.def.in);
+  if (schema instanceof z.ZodLazy) return peel(schema.def.getter());
   return schema;
 }
+
+/** Peel wrappers that do not change which keys a value can carry. */
+function unwrap(schema: z.core.$ZodType): z.core.$ZodType {
+  const node = peel(schema);
+  // A path through an array addresses every element.
+  return node instanceof z.ZodArray ? unwrap(node.def.element) : node;
+}
+
+const objectLike = (schema: z.core.$ZodType): boolean => {
+  const node = peel(schema);
+  if (node instanceof z.ZodUnion) return node.options.some(objectLike);
+  return (
+    node instanceof z.ZodObject ||
+    node instanceof z.ZodRecord ||
+    node instanceof z.ZodIntersection
+  );
+};
+
+/** An array or record of objects: a child collection, empty or not. */
+const objectCollection = (schema: z.core.$ZodType): boolean => {
+  const node = peel(schema);
+  if (node instanceof z.ZodUnion) return node.options.some(objectCollection);
+  if (node instanceof z.ZodArray) return objectLike(node.def.element);
+  if (node instanceof z.ZodRecord) return objectLike(node.def.valueType);
+  return false;
+};
 
 /** The schemas published at `key` beneath an object-like schema. */
 function childSchemas(schema: z.core.$ZodType, key: string): z.core.$ZodType[] {
@@ -113,6 +138,57 @@ function unknownSegment(schema: z.core.$ZodType, path: string[]) {
   return null;
 }
 
+const fieldModelEntity = (
+  entity: string,
+): entity is keyof typeof entityFieldModels =>
+  Object.hasOwn(entityFieldModels, entity);
+
+/** Declared long free text (notes, markdown): a `textarea` control. */
+function longText(entity: string, key: string) {
+  if (!fieldModelEntity(entity)) return false;
+  const fields: readonly {
+    key: string;
+    readKey: string | null;
+    control: { kind: string } | null;
+  }[] = entityFieldModels[entity].fields;
+  return fields.some(
+    (field) =>
+      (field.readKey ?? field.key) === key &&
+      field.control?.kind === "textarea",
+  );
+}
+
+/**
+ * The one compact key set list and get share, decided from declarations:
+ * non-media list-read fields both published read schemas require, minus child
+ * collections and declared long text. A declared-optional key (server display
+ * labels, detail-only enrichment) is one either read may omit, so it would
+ * make list and get disagree; `fields` still selects it.
+ */
+function compactKeys(entity: string): string[] {
+  const list = publishedSchema(entity, "list");
+  const detail = publishedSchema(entity, "get");
+  const listEntity = listEntityOf(entity);
+  // Media URLs and image rows are the bulk of a list row; compact omits them.
+  const declared = listEntity
+    ? (["core", "relations", "derived", "quality"] as const).flatMap(
+        (group) => listReadFields(listEntity)[group],
+      )
+    : list
+      ? schemaKeys(list)
+      : [];
+  return declared.filter(
+    (key) =>
+      [list, detail].every(
+        (schema) =>
+          !schema ||
+          (Object.hasOwn(schema.shape, key) &&
+            !(schema.shape[key] instanceof z.ZodOptional) &&
+            !objectCollection(schema.shape[key])),
+      ) && !longText(entity, key),
+  );
+}
+
 /** The selection a read command asked for, validated against the entity's published schema. */
 export function readSelection(command: {
   action: string;
@@ -143,18 +219,7 @@ export function readSelection(command: {
     return { kind: "fields", paths };
   }
   if (command.resultDetail !== "compact") return null;
-  const listEntity = listEntityOf(command.entity);
-  return {
-    kind: "compact",
-    // Media URLs and image rows are the bulk of a list row; compact omits them.
-    keys: listEntity
-      ? (["core", "relations", "derived", "quality"] as const).flatMap(
-          (group) => listReadFields(listEntity)[group],
-        )
-      : published
-        ? schemaKeys(published)
-        : [],
-  };
+  return { kind: "compact", keys: compactKeys(command.entity) };
 }
 
 /** List fields to read for a selection, when the progressive list reader can serve it. */
@@ -171,10 +236,6 @@ export function selectionListFields(
         );
   return keys.every((key) => declared.has(key)) ? keys : null;
 }
-
-const isChildCollection = (value: ListReadRow[string]) =>
-  Array.isArray(value) &&
-  value.some((entry) => typeof entry === "object" && entry !== null);
 
 /** A value in a projected read row: JSON plus the dates read schemas emit. */
 type SelectedValue =
@@ -199,6 +260,7 @@ const selectedValue: z.ZodType<SelectedValue> = z.lazy(() =>
   ]),
 );
 const selectedObject = z.record(z.string(), selectedValue);
+type SelectedObject = z.output<typeof selectedObject>;
 
 /**
  * The part of `value` a path selects, shaped like `value`: an array maps the
@@ -232,13 +294,45 @@ function merge(left: SelectedValue, right: SelectedValue): SelectedValue {
   return merged;
 }
 
-function selectItem(row: ListReadRow, selection: ReadSelection): ListReadRow {
+/**
+ * A compact value: nested objects keep only what the schema publishes beneath
+ * them, minus child collections, so a nested `dataQuality` reads as its
+ * status and score. Undefined when every candidate schema is a collection.
+ */
+function compactValue(
+  schemas: z.core.$ZodType[],
+  value: SelectedValue,
+): SelectedValue {
+  if (schemas.length === 0 || schemas.some(objectCollection)) return undefined;
+  if (!schemas.some(objectLike)) return value;
+  if (value instanceof Date || Array.isArray(value)) return value;
+  const object = selectedObject.safeParse(value);
+  if (!object.success) return value;
+  const output: SelectedObject = {};
+  for (const [key, child] of Object.entries(object.data)) {
+    const compact = compactValue(
+      schemas.flatMap((schema) => childSchemas(schema, key)),
+      child,
+    );
+    if (compact !== undefined) output[key] = compact;
+  }
+  return output;
+}
+
+function selectItem(
+  row: ListReadRow,
+  selection: ReadSelection,
+  published: z.ZodObject,
+): ListReadRow {
   if (selection.kind === "compact") {
-    const output: ListReadRow = { id: row.id };
-    for (const key of selection.keys)
-      if (Object.hasOwn(row, key) && !isChildCollection(row[key]))
-        output[key] = row[key];
-    return output;
+    const source = selectedObject.parse(row);
+    const output: SelectedObject = { id: row.id };
+    for (const key of selection.keys) {
+      if (!Object.hasOwn(source, key)) continue;
+      const compact = compactValue(childSchemas(published, key), source[key]);
+      if (compact !== undefined) output[key] = compact;
+    }
+    return listReadRowSchema.parse(output);
   }
   const source = selectedObject.parse(row);
   return listReadRowSchema.parse(
@@ -283,7 +377,8 @@ export function projectSelection(result: unknown, selection: ReadSelection) {
       ),
     )
     .pipe(listReadRowSchema);
-  const select = (raw: unknown) => selectItem(row.parse(raw), selection);
+  const select = (raw: unknown) =>
+    selectItem(row.parse(raw), selection, published);
   return {
     ...parsed,
     ...(parsed.items ? { items: parsed.items.map(select) } : {}),
