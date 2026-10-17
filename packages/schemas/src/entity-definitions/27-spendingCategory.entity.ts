@@ -2,6 +2,7 @@ import { productCategoryShortcode } from "../identifier-fields";
 import { recordEmojiField } from "../emoji";
 import { z } from "zod";
 import { spendingCategoryShortcode as code } from "../identifier-fields";
+import { optionalFieldResolutionsSchema } from "../field-resolution";
 import { productExpectation } from "../purchase-evidence-policy";
 import { defineEntity } from "./definition";
 
@@ -29,6 +30,7 @@ export default defineEntity({
     list: {
       read: {
         relations: ["parentId", "productCategories"],
+        derived: ["fieldResolutions"],
         media: ["displayImages"],
         quality: ["dataQuality"],
       },
@@ -208,15 +210,53 @@ export default defineEntity({
         },
       },
       {
+        key: "fieldResolutions",
+        kind: "json",
+        validation: {
+          read: optionalFieldResolutionsSchema,
+          create: null,
+          update: null,
+        },
+      },
+      {
         // Gates only the import arrival prompt for Products whose own stock
-        // tracking is undecided (ADR 0013); a category without a decision
-        // inherits the nearest live ancestor's.
+        // tracking is undecided (ADR 0013).
         key: "stockTracked",
         kind: "boolean",
         nullable: true,
         labelOverride: "Stock tracking",
         control: { kind: "checkbox" },
         display: { detail: true },
+        resolution: {
+          inherit: { from: ["hierarchy"] },
+          reset: { stockTracked: null },
+          redundancy: "eligible",
+        },
+        explanation: {
+          ruleId: "spendingCategory.effective-stock-tracking",
+          description:
+            "A spending category's own stock-tracking decision wins; otherwise the nearest live ancestor with a decision supplies it. With neither, the category is undecided.",
+          resolver: "field",
+          projections: {
+            list: "fieldResolutions.stockTracked.value",
+            detail: "fieldResolutions.stockTracked.value",
+            summary: "fieldResolutions.stockTracked.value",
+          },
+          sourceDependencies: [
+            {
+              path: "fieldResolutions.stockTracked.storedValue",
+              label: "Category decision",
+            },
+            {
+              path: "fieldResolutions.stockTracked.fallbackValue",
+              label: "Ancestor decision",
+            },
+            {
+              path: "fieldResolutions.stockTracked.sourceEntity",
+              label: "Source category",
+            },
+          ],
+        },
         validation: {
           read: z.boolean().nullable(),
           create: z.boolean().nullable().optional(),
@@ -300,6 +340,7 @@ export default defineEntity({
       "itemizationExpectation",
       "productExpectation",
       "stockTracked",
+      "fieldResolutions",
       "createdAt",
       "updatedAt",
     ],

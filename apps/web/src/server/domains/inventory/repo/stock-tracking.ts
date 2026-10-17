@@ -20,23 +20,25 @@ import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import { product } from "~/server/db/retained-tables";
 import { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
+import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 
 /**
  * ADR 0013: a record's own stock-tracking decision wins; otherwise the
  * nearest category decision above it applies; with neither it is undecided.
  * One shape for a Product (fallback: its category's effective decision) and a
- * Product Category (fallback: its nearest deciding ancestor).
+ * Product or Spending Category (fallback: its nearest deciding ancestor).
  */
 export const resolveStockTrackingField = (
   stored: boolean | null,
   fallback: CategoryStockTracking | null,
   ownSource: string,
+  sourceKind: "productCategory" | "spendingCategory" = "productCategory",
 ): FieldResolution => {
   const fallbackValue = fallback?.value ?? null;
   const fallbackSource =
     fallback?.id && fallbackValue !== null
       ? {
-          entityKind: "productCategory" as const,
+          entityKind: sourceKind,
           entityId: fallback.id,
           name: fallback.name,
         }
@@ -74,22 +76,6 @@ export const loadCategoryStockTracking = async (
   return rows.rows[0]?.tracking ?? null;
 };
 
-/** A Spending Category's own stock-tracking decision, else its nearest live
- * deciding ancestor's; null when none decides. */
-const spendingCategoryStockTrackedSql = (categoryId: SQL): SQL => sql`(
-  WITH RECURSIVE chain AS (
-    SELECT sc.id, sc."parentId", sc."stockTracked", 0 AS depth
-    FROM "SpendingCategory" sc
-    WHERE sc.id = ${categoryId} AND sc."deletedAt" IS NULL
-    UNION ALL
-    SELECT parent.id, parent."parentId", parent."stockTracked", chain.depth + 1
-    FROM "SpendingCategory" parent JOIN chain ON parent.id = chain."parentId"
-    WHERE parent."deletedAt" IS NULL AND chain."stockTracked" IS NULL AND chain.depth < 16
-  )
-  SELECT "stockTracked" FROM chain WHERE "stockTracked" IS NOT NULL
-  ORDER BY depth LIMIT 1
-)`;
-
 /**
  * An undecided Product bought on this Purchase is not stock: every one of its
  * live principal lines resolves to a not-tracked spending category, or, with
@@ -121,7 +107,7 @@ const undecidedArrivalQuietSql = (purchaseId: PurchaseId): SQL => sql`(
       AND arrival_line."deletedAt" IS NULL
       AND arrival_purchase."deletedAt" IS NULL
       AND COALESCE(
-        ${spendingCategoryStockTrackedSql(effectiveExpenseSpendingCategorySql("arrival_line"))},
+        ${effectiveFieldSql("spendingCategory", "stockTracked", { id: effectiveExpenseSpendingCategorySql("arrival_line") })},
         CASE WHEN arrival_vendor."spendingProfile" = ${foodRetail} THEN false END
       ) IS DISTINCT FROM false
   )
