@@ -85,6 +85,11 @@ export interface RelationSectionPlan {
   filterKey: string;
   /** The URL key the target's list route reads for the same filter. */
   urlKey: string;
+  /**
+   * The filter's "Include sub-…" toggle, switched off: a declared relation
+   * follows the direct reference, not the target's subtree.
+   */
+  subtree: string | null;
   /** The create-intent field the section's create button prefills, if any. */
   seed: { intent: string; field: string } | null;
   /** Whether the seeded field is an id array (`idMulti`/many reference). */
@@ -191,6 +196,7 @@ export function planRelationSection(
     descriptorId: descriptor.columnId,
     filterKey,
     urlKey: filterUrlKey(descriptor),
+    subtree: descriptor.subtree ?? null,
     seed: seed ? { intent: seed.intent, field: seed.field } : null,
     seedMultiple: seed?.multiple === true,
     columns: section.columns,
@@ -401,7 +407,7 @@ function RelationLoadingSkeleton<TItem extends RowData>({
 
 type RelationRow = BaseListRow;
 /** One descriptor key → the record's shortcode; the target's schema parses it. */
-type RelationFilters = Partial<Record<string, string>>;
+type RelationFilters = Partial<Record<string, string | boolean>>;
 
 const EMBEDDED_TABLE_STATE = {
   urlSync: false,
@@ -519,8 +525,11 @@ function LiveEntityRelationTable({
     );
   const helper = useMemo(() => createCubbyColumnHelper<RelationRow>(), []);
   const scope = useMemo<RelationFilters>(
-    () => ({ [plan.filterKey]: recordId }),
-    [plan.filterKey, recordId],
+    () => ({
+      [plan.filterKey]: recordId,
+      ...(plan.subtree === null ? {} : { [plan.subtree]: false }),
+    }),
+    [plan.filterKey, plan.subtree, recordId],
   );
   // The same inline scalar editing the target's own list page offers: a row
   // here is the target entity's record, so its update command applies as-is.

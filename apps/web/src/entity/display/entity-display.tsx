@@ -17,6 +17,7 @@ import {
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { resolvedListSchema } from "@cubby/schemas/field-resolution";
+import { FILTER_EXACT } from "@cubby/schemas/filter-sentinel-fields";
 import prettyBytes from "pretty-bytes";
 import { Fragment, type ReactNode } from "react";
 import { z } from "zod";
@@ -840,6 +841,9 @@ function relationCountFilter(entity: Entity, field: DisplayField) {
     ? {
         to: entities[target].routes.list,
         urlKey: filterUrlKey(spec),
+        // The count follows the direct reference, so the list opens exact.
+        value: (id: string) =>
+          spec.subtree === undefined ? id : [id, FILTER_EXACT],
         plural: entityPluralLabel(target).toLocaleLowerCase(),
       }
     : null;
@@ -862,7 +866,9 @@ function cohortFilterAction<TRecord extends object>(
       <EntityRefLink
         variant="filter"
         to={countFilter.to}
-        search={{ [countFilter.urlKey]: recordId.data.id }}
+        search={{
+          [countFilter.urlKey]: countFilter.value(recordId.data.id),
+        }}
         label={`Show all ${countFilter.plural}`}
         className={LEDGER_FILTER_ACTION_CLASS}
       />
@@ -2086,7 +2092,9 @@ export function createEntityDisplayColumns<TRecord extends object>(
                   variant="filter"
                   display="value"
                   to={countFilter.to}
-                  search={{ [countFilter.urlKey]: recordId.data.id }}
+                  search={{
+                    [countFilter.urlKey]: countFilter.value(recordId.data.id),
+                  }}
                   label={`Show ${value.raw} ${countFilter.plural}`}
                   className="tabular-nums"
                 >
