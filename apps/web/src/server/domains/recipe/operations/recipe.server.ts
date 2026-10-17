@@ -298,7 +298,7 @@ const makeableWorkflow = bindWorkflow(
     .call("candidates", async ({ context }) =>
       recipeList(
         context.db,
-        { excludeSubRecipes: true },
+        { subRecipe: false },
         [{ orderBy: "name", direction: "asc" }],
         { pageIndex: 0, pageSize: CANDIDATE_CAP },
       ),

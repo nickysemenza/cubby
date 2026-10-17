@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { locationShortcode, plantingShortcode } from "./identifiers";
+import { plantingShortcode } from "./identifiers";
 import { createPaginatedResponseSchema, oneOrMany } from "./pagination";
 import {
   gardenEntryBaseFilterFields,
@@ -18,7 +18,6 @@ export {
 
 export const gardenEntryFilterFields = {
   ...gardenEntryBaseFilterFields,
-  locationId: oneOrMany(locationShortcode).optional(),
   /**
    * A planting's journal: its own entries plus whole-location entries
    * observed during one of its confirmed location periods.

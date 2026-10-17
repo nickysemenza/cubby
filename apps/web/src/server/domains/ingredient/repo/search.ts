@@ -25,9 +25,9 @@ import {
   isNull,
   ne,
   notInArray,
-  type SQL,
   sql,
 } from "drizzle-orm";
+import { QueryBuilder } from "drizzle-orm/pg-core";
 
 import { listReadRowSchema } from "~/entity/model/list-read-fields";
 import { projectListRows } from "~/entity/model/list-read-schema";
@@ -39,9 +39,7 @@ import {
 import { productClassificationEvidenceSql } from "~/server/db/computed/product-classification-evidence";
 import {
   buildSearchConditions,
-  flagCondition,
   getDb,
-  idSetPresence,
   imageOrder,
   type ListReadIntent,
   notDeleted,
@@ -439,67 +437,26 @@ export const getIngredientMatches = async (
   return map;
 };
 
-const ingredientScaffold = listScaffold("ingredient", ingredient, {
-  derived: {
-    // Shared with global search so the sort key matches the displayed
-    // `appearsInRecipes.length` exactly (live recipes/sections/usages only).
-    appearsInRecipes: sql.raw(
-      liveRecipeCountForIngredientSql('"Ingredient"."id"'),
-    ),
-    product: sql.raw(
-      `(SELECT count(*) FROM "Product" p ` +
-        `WHERE p."ingredientId" = "Ingredient"."id" AND p."deletedAt" IS NULL)`,
-    ),
-  },
-});
+const qb = new QueryBuilder();
+
+// Ingredients with at least one live linked product. `product.ingredientId`
+// is a nullable FK, so `isNotNull` is load-bearing — a NULL inside a NOT IN
+// list makes the whole predicate UNKNOWN and "none" would match zero rows.
+const ingredientIdsWithLiveProducts = qb
+  .select({ ingredientId: product.ingredientId })
+  .from(product)
+  .where(and(notDeleted(product), isNotNull(product.ingredientId)));
 
 /**
- * The complete WHERE for an ingredient list. `getEntityCounts` calls it with
- * `{}` — see repo/dashboard.ts.
- *
- * Named `...ListWhere` rather than `buildIngredientWhere`: that name is already
- * taken by the name-matching helper in ingredient/internal-types.ts.
+ * Ingredients used by a live recipe, join-guarded at every level (rsi,
+ * section, recipe) to match `liveRecipeCountForIngredientSql` exactly
+ * (recipe/helpers.ts) — a looser predicate would disagree with the
+ * `appearsInRecipes` cell the filter partitions on. `ownOnly` scopes to
+ * recipes of your own as a SEPARATE subquery: scoping the shared one would
+ * make `recipePresenceFilter` disagree with that cell and its sort.
  */
-export const buildIngredientListWhere = async (
-  db: Database,
-  filters: IngredientFilters,
-) => {
-  const dbClient = getDb(db);
-
-  // Ingredients with at least one live linked product. `product.ingredientId`
-  // is a nullable FK, so `isNotNull` is load-bearing — a NULL inside a NOT IN
-  // list makes the whole predicate UNKNOWN and "none" would match zero rows.
-  const ingredientIdsWithLiveProducts = dbClient
-    .select({ ingredientId: product.ingredientId })
-    .from(product)
-    .where(and(notDeleted(product), isNotNull(product.ingredientId)));
-
-  // Ingredients used by at least one live recipe. Join-guarded at every level
-  // (rsi, section, recipe) to match `liveRecipeCountForIngredientSql` exactly
-  // (recipe/helpers.ts) — a looser predicate here would disagree with the
-  // `appearsInRecipes` cell this same filter is supposed to partition on.
-  const ingredientIdsInLiveRecipes = dbClient
-    .select({ ingredientId: recipeSectionIngredient.ingredientId })
-    .from(recipeSectionIngredient)
-    .innerJoin(
-      recipeSection,
-      and(
-        eq(recipeSection.id, recipeSectionIngredient.recipeSectionId),
-        notDeleted(recipeSection),
-      ),
-    )
-    .innerJoin(
-      recipe,
-      and(eq(recipe.id, recipeSection.recipeId), notDeleted(recipe)),
-    )
-    .where(notDeleted(recipeSectionIngredient));
-
-  // The same three-level guarded shape as `ingredientIdsInLiveRecipes`, scoped
-  // to recipes of your own. A SEPARATE subquery on purpose: scoping the one
-  // above would make `recipePresenceFilter` disagree with the
-  // `appearsInRecipes` cell and sort beside it, which count every live recipe —
-  // exactly the divergence that subquery's own comment forbids.
-  const ingredientIdsInOwnRecipes = dbClient
+const ingredientIdsInLiveRecipes = (ownOnly: boolean) =>
+  qb
     .select({ ingredientId: recipeSectionIngredient.ingredientId })
     .from(recipeSectionIngredient)
     .innerJoin(
@@ -514,78 +471,61 @@ export const buildIngredientListWhere = async (
       and(
         eq(recipe.id, recipeSection.recipeId),
         notDeleted(recipe),
-        isNull(recipe.cookbookId),
+        ownOnly ? isNull(recipe.cookbookId) : undefined,
       ),
     )
     .where(notDeleted(recipeSectionIngredient));
 
-  // Live products whose persisted conversion coverage is complete. A product
-  // with no current coverage row is unknown, so it does not close the gap. The
-  // isNotNull guard keeps NOT IN from going UNKNOWN on a NULL ingredientId.
-  const ingredientIdsWithCompleteProducts = dbClient
-    .select({ ingredientId: product.ingredientId })
-    .from(product)
-    .innerJoin(
-      productConversionCoverage,
-      eq(productConversionCoverage.productId, product.id),
-    )
-    .where(
-      and(
-        notDeleted(product),
-        isNotNull(product.ingredientId),
-        currentProductConversionCoverageCondition(),
-        eq(productConversionCoverage.coverageTier, "complete"),
-      ),
-    );
-
-  // Always filter out recipe-scoped ingredients; `notDeleted` is folded into
-  // `ingredientScaffold.where` below.
-  const computed: Array<SQL | undefined> = [isNull(ingredient.recipeId)];
-
-  // Add name filter if provided
-  if (filters.nameFilter) {
-    const nameCondition = buildIngredientWhere(false, filters.nameFilter);
-    if (nameCondition) {
-      computed.push(nameCondition);
-    }
-  }
-
-  // `usuallyOnHand` is a declared stored filter, folded into
-  // `ingredientScaffold.where` below. `nameFilter` above stays hand-written —
-  // it ORs the alias match in, which the standard text shape can't express —
-  // and the presence filters below stay hand-written too, since their
-  // descriptors aren't `deriveSchema: true` and resolve against a correlated
-  // id-set subquery, not a real column.
-  computed.push(
-    idSetPresence(
-      ingredient.id,
-      filters.productPresenceFilter,
-      ingredientIdsWithLiveProducts,
-    ),
-    idSetPresence(
-      ingredient.id,
-      filters.recipePresenceFilter,
-      ingredientIdsInLiveRecipes,
-    ),
-    idSetPresence(
-      ingredient.id,
-      filters.ownRecipePresenceFilter,
-      ingredientIdsInOwnRecipes,
+// Live products whose persisted conversion coverage is complete. A product
+// with no current coverage row is unknown, so it does not close the gap. The
+// isNotNull guard keeps NOT IN from going UNKNOWN on a NULL ingredientId.
+const ingredientIdsWithCompleteProducts = qb
+  .select({ ingredientId: product.ingredientId })
+  .from(product)
+  .innerJoin(
+    productConversionCoverage,
+    eq(productConversionCoverage.productId, product.id),
+  )
+  .where(
+    and(
+      notDeleted(product),
+      isNotNull(product.ingredientId),
+      currentProductConversionCoverageCondition(),
+      eq(productConversionCoverage.coverageTier, "complete"),
     ),
   );
 
-  computed.push(
-    flagCondition(filters.mappingGap, () =>
-      and(
-        inArray(ingredient.id, ingredientIdsInLiveRecipes),
-        notInArray(ingredient.id, ingredientIdsWithCompleteProducts),
-      ),
+const ingredientScaffold = listScaffold("ingredient", ingredient, {
+  derived: {
+    // Shared with global search so the sort key matches the displayed
+    // `appearsInRecipes.length` exactly (live recipes/sections/usages only).
+    appearsInRecipes: sql.raw(
+      liveRecipeCountForIngredientSql('"Ingredient"."id"'),
     ),
-  );
+    product: sql.raw(
+      `(SELECT count(*) FROM "Product" p ` +
+        `WHERE p."ingredientId" = "Ingredient"."id" AND p."deletedAt" IS NULL)`,
+    ),
+    hasProduct: inArray(ingredient.id, ingredientIdsWithLiveProducts),
+    inRecipes: inArray(ingredient.id, ingredientIdsInLiveRecipes(false)),
+    ownRecipes: inArray(ingredient.id, ingredientIdsInLiveRecipes(true)),
+    mappingGap: and(
+      inArray(ingredient.id, ingredientIdsInLiveRecipes(false)),
+      notInArray(ingredient.id, ingredientIdsWithCompleteProducts),
+    )!,
+  },
+});
 
-  const whereClause = ingredientScaffold.where(filters, computed);
-  return whereClause;
-};
+/**
+ * The complete WHERE for an ingredient list. `getEntityCounts` calls it with
+ * `{}` — see repo/dashboard.ts. Recipe-scoped ingredient rows (a recipe used
+ * as an ingredient) are never listed.
+ *
+ * Named `...ListWhere` rather than `buildIngredientWhere`: that name is already
+ * taken by the name-matching helper in ingredient/internal-types.ts.
+ */
+export const buildIngredientListWhere = (filters: IngredientFilters) =>
+  and(ingredientScaffold.where(filters), isNull(ingredient.recipeId));
 
 const ingredientListImpl = async (
   db: Database,
@@ -596,7 +536,7 @@ const ingredientListImpl = async (
   projection: ListProjection = { kind: "full" },
 ) => {
   const dbClient = getDb(db);
-  const whereClause = await buildIngredientListWhere(db, filters);
+  const whereClause = buildIngredientListWhere(filters);
 
   if (readIntent === "ids") {
     const { take, skip } = ingredientScaffold.page(pagination);

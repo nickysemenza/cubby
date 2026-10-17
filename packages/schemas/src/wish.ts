@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { productShortcode } from "./identifiers";
 import { wishBaseFilterFields, wishOut } from "./generated/wish.gen";
 
 export {
@@ -15,12 +14,9 @@ export {
   type WishListItemOut,
 } from "./generated/wish.gen";
 export { wishCandidateOut, type WishCandidateOut } from "./wish-fields";
-import { createPaginatedResponseSchema, oneOrMany } from "./pagination";
+import { createPaginatedResponseSchema } from "./pagination";
 
-export const wishFilterFields = {
-  ...wishBaseFilterFields,
-  candidateProductId: oneOrMany(productShortcode).optional(),
-};
+export const wishFilterFields = wishBaseFilterFields;
 export const wishFiltersSchema = z.object(wishFilterFields);
 export type WishFilters = z.infer<typeof wishFiltersSchema>;
 

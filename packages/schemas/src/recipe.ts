@@ -20,11 +20,7 @@ import {
 } from "./identifiers";
 import { displayImagesField } from "./display-images";
 import { imageUrlSummary } from "./image-summary";
-import {
-  createPaginatedResponseSchema,
-  entityFilterList,
-  presenceFilter,
-} from "./pagination";
+import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
 import {
   recipeTopLevelFields,
   recipeTopLevel,
@@ -267,8 +263,6 @@ export type RecipeIngredientInput = z.infer<typeof recipeIngredientInput>;
 
 export const recipeFilterFields = {
   ...recipeBaseFilterFields,
-  cookbookId: entityFilterList(cookbookShortcode).optional(),
-  cookbookPresenceFilter: presenceFilter,
   /**
    * `"none"` is the never-planned worklist. A live MealRecipe under a
    * soft-deleted Meal doesn't count — that isn't a plan.

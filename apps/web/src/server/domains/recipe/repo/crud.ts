@@ -27,8 +27,6 @@ import {
   inArray,
   isNotNull,
   ne,
-  notInArray,
-  or,
   type SQL,
   sql,
 } from "drizzle-orm";
@@ -42,12 +40,10 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   associatePendingImages,
-  eqAnyRequested,
   getDb,
   imageJoinBindings,
   type ListReadIntent,
   notDeleted,
-  presenceCondition,
   relations,
   unwrapDb,
   updateLiveAndReturn,
@@ -91,7 +87,6 @@ import { deleteByPolicy } from "~/server/generic/removal/repo/dispositions";
 import {
   resolveAllOrThrow,
   resolveAllPresent,
-  resolveFilterIds,
   resolveLiveShortcode,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -444,6 +439,39 @@ const recipeIdsWithInstructions = qb
     ),
   );
 
+// Recipes currently used as a sub-recipe: a live recipe-as-ingredient row
+// (`ingredient.recipeId`) reached through a LIVE link — section-ingredient →
+// section → parent recipe, each non-deleted. Matching the "in use" scoping the
+// ingredient usage SQL uses (helpers.ts) matters because removing a sub-recipe
+// line only soft-deletes the link, never the pointer `Ingredient` row: keying
+// off the pointer alone would exclude a recipe from suggestions forever.
+// Deliberately UNCORRELATED (no back-reference to the outer recipe.id): the RQB
+// data query aliases the root table while `countWhere` doesn't, so a correlated
+// EXISTS resolves against different names in each. `isNotNull` is load-bearing —
+// a NULL in a NOT IN list matches no rows at all.
+const parentRecipe = alias(recipe, "parentRecipe");
+const subRecipeIds = qb
+  .select({ recipeId: ingredient.recipeId })
+  .from(ingredient)
+  .innerJoin(
+    recipeSectionIngredient,
+    eq(recipeSectionIngredient.ingredientId, ingredient.id),
+  )
+  .innerJoin(
+    recipeSection,
+    eq(recipeSection.id, recipeSectionIngredient.recipeSectionId),
+  )
+  .innerJoin(parentRecipe, eq(parentRecipe.id, recipeSection.recipeId))
+  .where(
+    and(
+      isNotNull(ingredient.recipeId),
+      notDeleted(ingredient),
+      notDeleted(recipeSectionIngredient),
+      notDeleted(recipeSection),
+      notDeleted(parentRecipe),
+    ),
+  );
+
 const recipeScaffold = listScaffold("recipe", recipe, {
   derived: {
     costTotal: recipeTotalSql("{cost,lower}"),
@@ -457,70 +485,13 @@ const recipeScaffold = listScaffold("recipe", recipe, {
     meals: inArray(recipe.id, recipeIdsInLiveMeals),
     image: inArray(recipe.id, recipeIdsWithImages),
     instructions: inArray(recipe.id, recipeIdsWithInstructions),
+    subRecipe: inArray(recipe.id, subRecipeIds),
   },
 });
 
 /** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
-export const buildRecipeWhere = async (
-  db: Database,
-  filters: RecipeFilters,
-) => {
-  const dbClient = getDb(db);
-  const cookbookIds = await resolveFilterIds(
-    db,
-    "cookbook",
-    filters.cookbookId,
-  );
-
-  // Recipes currently used as a sub-recipe: a live recipe-as-ingredient row
-  // (`ingredient.recipeId`) reached through a LIVE link — section-ingredient →
-  // section → parent recipe, each non-deleted. Matching the "in use" scoping the
-  // ingredient usage SQL uses (helpers.ts) matters because removing a sub-recipe
-  // line only soft-deletes the link, never the pointer `Ingredient` row: keying
-  // off the pointer alone would exclude a recipe from suggestions forever.
-  // Deliberately UNCORRELATED (no back-reference to the outer recipe.id): the RQB
-  // data query aliases the root table while `countWhere` doesn't, so a correlated
-  // EXISTS resolves against different names in each. `isNotNull` is load-bearing —
-  // a NULL in a NOT IN list matches no rows at all.
-  const parentRecipe = alias(recipe, "parentRecipe");
-  const subRecipeIds = dbClient
-    .select({ recipeId: ingredient.recipeId })
-    .from(ingredient)
-    .innerJoin(
-      recipeSectionIngredient,
-      eq(recipeSectionIngredient.ingredientId, ingredient.id),
-    )
-    .innerJoin(
-      recipeSection,
-      eq(recipeSection.id, recipeSectionIngredient.recipeSectionId),
-    )
-    .innerJoin(parentRecipe, eq(parentRecipe.id, recipeSection.recipeId))
-    .where(
-      and(
-        isNotNull(ingredient.recipeId),
-        notDeleted(ingredient),
-        notDeleted(recipeSectionIngredient),
-        notDeleted(recipeSection),
-        notDeleted(parentRecipe),
-      ),
-    );
-
-  // `nameFilter`, `tagFilters`, `sourceTypeFilter`, the meal, image and
-  // instructions presences, and the totals are declared filters — applied by
-  // `recipeScaffold.where` before the conditions below.
-  return recipeScaffold.where(filters, [
-    // `eqAnyRequested` + `presenceCondition` rather than `eqAnyOrPresence`:
-    // the id half must distinguish "no cookbook filter" (unrestricted) from
-    // "a cookbook code that resolves to nothing" (match nothing), which the
-    // combined helper's `eqAny` cannot. The OR against the presence sentinel
-    // is unchanged — presence WIDENS the id filter (see `tagsPresenceFilter`).
-    or(
-      eqAnyRequested(recipe.cookbookId, cookbookIds),
-      presenceCondition(recipe.cookbookId, filters.cookbookPresenceFilter),
-    ),
-    filters.excludeSubRecipes ? notInArray(recipe.id, subRecipeIds) : undefined,
-  ]);
-};
+export const buildRecipeWhere = (filters: RecipeFilters) =>
+  recipeScaffold.where(filters);
 
 export const recipeListRead = async (
   db: Database,
@@ -534,7 +505,6 @@ export const recipeListRead = async (
     db,
     { filters, sorts, pagination, readIntent, projection },
     {
-      where: await buildRecipeWhere(db, filters),
       tieBreaker: sql`${recipe.name} asc`,
       // List reads fetch flat rows and scalar counts; never full graphs. The
       // thumbnail comes from the display-image resolver, not an images join.

@@ -34,7 +34,12 @@ import type { ListReadRow } from "~/entity/model/list-read-fields";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { buildPartialUpdateValues } from "~/server/db/helpers";
-import { notDeleted, unwrapDb, withTransaction } from "~/server/db/helpers";
+import {
+  notDeleted,
+  shortcodeSetCondition,
+  unwrapDb,
+  withTransaction,
+} from "~/server/db/helpers";
 import { product, productCategory } from "~/server/db/schema";
 import { resolveStockTrackingField } from "~/server/domains/inventory/repo/stock-tracking";
 import { categoryMappingSql } from "~/server/domains/product-category/repo/category-connections";
@@ -100,7 +105,21 @@ type CategoryPathRow = {
   }>;
 };
 
-const scaffold = listScaffold("productCategory", productCategory);
+// The raw root name: the list's RQB data query and its count read the same
+// unaliased table.
+const categoryMapping = () =>
+  categoryMappingSql(sql.raw('"ProductCategory"."id"'));
+
+const scaffold = listScaffold("productCategory", productCategory, {
+  derived: {
+    needsClassification: sql`(${categoryMapping()}->>'state' = 'unmapped')`,
+    effectiveSpendingCategoryId: ({ values }) =>
+      shortcodeSetCondition(
+        sql`(${categoryMapping()}->'category'->>'id')`,
+        values,
+      ),
+  },
+});
 
 const parseFeature = (feature: string | null): ProductCategoryFeature | null =>
   productCategoryFeature.nullable().parse(feature);
@@ -406,20 +425,7 @@ const hydrate = async (
   );
 
 export const buildProductCategoryWhere = (filters: ProductCategoryFilters) =>
-  scaffold.where(filters, [
-    filters.needsClassification === undefined
-      ? undefined
-      : sql`(${categoryMappingSql(sql.raw('"ProductCategory"."id"'))}->>'state' = 'unmapped') = ${filters.needsClassification}`,
-    filters.effectiveSpendingCategoryId?.length
-      ? sql`(${categoryMappingSql(sql.raw('"ProductCategory"."id"'))}->'category'->>'id') IN (${sql.join(
-          (Array.isArray(filters.effectiveSpendingCategoryId)
-            ? filters.effectiveSpendingCategoryId
-            : [filters.effectiveSpendingCategoryId]
-          ).map((code) => sql`${code}`),
-          sql`, `,
-        )})`
-      : undefined,
-  ]);
+  scaffold.where(filters);
 
 export const listProductCategoriesRead = (
   db: Database,

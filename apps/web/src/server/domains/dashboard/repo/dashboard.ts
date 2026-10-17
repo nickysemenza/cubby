@@ -68,8 +68,8 @@ type LocalCountEntity = keyof DashboardLocalCounts;
 
 const COUNT_WHERE = {
   product: (db) => buildProductWhere(db, {}),
-  recipe: (db) => buildRecipeWhere(db, {}),
-  ingredient: (db) => buildIngredientListWhere(db, {}),
+  recipe: () => buildRecipeWhere({}),
+  ingredient: () => buildIngredientListWhere({}),
   cookbook: () => cookbookListWhere(),
   location: (db) => buildLocationWhere(db, {}),
   // Movable stock: a fixture is not something to count.
@@ -80,10 +80,10 @@ const COUNT_WHERE = {
   vendor: () => buildVendorWhereClause({}),
   purchase: (db) => buildPurchaseWhereClause(db, {}),
   expense: (db) => buildExpenseWhereClause(db, {}),
-  financialAccount: () => buildFinancialAccountWhere({}),
+  financialAccount: (db) => buildFinancialAccountWhere(db, {}),
   financialTransaction: (db) => buildFinancialTransactionWhere(db, {}),
   image: (db) => buildImageWhere(db, {}),
-  wish: (db) => buildWishWhere(db, {}),
+  wish: () => buildWishWhere({}),
   plant: () => notDeleted(plant),
   planting: () => buildPlantingWhere(),
   gardenEntry: () => buildGardenEntryWhere(),

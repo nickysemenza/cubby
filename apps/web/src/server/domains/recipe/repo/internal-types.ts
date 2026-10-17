@@ -76,21 +76,18 @@ export interface RecipeFilters {
   // null OR an empty array — and it ORs with `tagFilters` rather than
   // narrowing it. See TAGS_ARE_EMPTY in ./crud.ts.
   tagsPresenceFilter?: PresenceFilter;
-  // Scope the list to a single cookbook (or several — see `oneOrMany`). Powers
-  // the cookbook detail page. Public codes: `recipeList` resolves them itself
-  // via `resolveFilterIds`, so a code naming no live cookbook narrows to
-  // nothing rather than 404ing the whole list.
+  // Scope the list to one or more cookbooks. Powers the cookbook detail page;
+  // a code naming no live cookbook narrows to nothing.
   cookbookId?:
     | CookbookShortcode
     | typeof UNRESOLVABLE_ENTITY_FILTER
     | Array<CookbookShortcode | typeof UNRESOLVABLE_ENTITY_FILTER>;
   // The cookbook column's "(none)" / "Has cookbook" sentinel. ORs with
   // `cookbookId` rather than narrowing it (see `tagsPresenceFilter` above).
-  cookbookPresenceFilter?: PresenceFilter;
-  // Drop recipes that are used as an ingredient elsewhere (a recipe-as-ingredient
-  // Ingredient row points at them). Powers "what can I make?", where a sub-recipe
-  // is a component, not a meal.
-  excludeSubRecipes?: boolean;
+  sourcePresenceFilter?: PresenceFilter;
+  // `false` drops recipes used as an ingredient line elsewhere. Powers "what
+  // can I make?", where a sub-recipe is a component, not a meal.
+  subRecipe?: boolean;
   // "none" is the never-planned worklist. A live MealRecipe under a
   // soft-deleted Meal doesn't count as a plan.
   mealPresenceFilter?: PresenceFilter;

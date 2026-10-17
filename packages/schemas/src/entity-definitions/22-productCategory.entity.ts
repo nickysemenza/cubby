@@ -590,6 +590,15 @@ Rules:
       "feature",
       "stockTracked",
     ],
+    derived: {
+      // No effective spending category, direct or inherited.
+      needsClassification: { type: "boolean" },
+      effectiveSpendingCategoryId: {
+        predicate: "idMulti",
+        reason:
+          "The effective spending category is inherited through category ancestors, so it is not a row value",
+      },
+    },
     sort: {
       fields: ["sortOrder", "name", "updatedAt"],
       directionOverride: "asc",
@@ -695,6 +704,7 @@ Rules:
         optionsKey: "spendingCategory",
         brandRef: { entity: "spendingCategory" },
         deriveSchema: true,
+        derived: "effectiveSpendingCategoryId",
       },
       {
         columnId: "needsClassification",
@@ -703,6 +713,7 @@ Rules:
         kind: "boolean",
         placeholder: "Needs classification",
         deriveSchema: true,
+        derived: true,
       },
       {
         columnId: "name",

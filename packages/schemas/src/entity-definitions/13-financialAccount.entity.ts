@@ -535,7 +535,35 @@ export default defineEntity({
       "ledgerPartyId",
       "inventoryOwnerDefaultEnabled",
     ],
-    derived: { transactionCount: { type: "number" } },
+    derived: {
+      transactionCount: { type: "number" },
+      identityKind: {
+        type: "enum",
+        options: [
+          "credit_card",
+          "bank_account",
+          "stored_value",
+          "cash",
+          "other",
+        ],
+      },
+      // At least one source alias.
+      hasSourceAlias: { type: "boolean" },
+      last4: {
+        predicate: "text",
+        reason:
+          "Matches any card the account has ever presented, not only today's primary",
+      },
+      source: {
+        predicate: "multiselect",
+        reason:
+          "Matches a source alias, together with externalAccountId on the same alias",
+      },
+      externalAccountId: {
+        predicate: "multiselect",
+        reason: "Matches the external account id of any source alias",
+      },
+    },
     sort: {
       fields: [
         "name",
@@ -699,6 +727,7 @@ export default defineEntity({
         columnId: "identity",
         field: "identityKind",
         kind: "multiselect",
+        derived: "identityKind",
         placeholder: "Filter by account type...",
         options: [
           { value: "credit_card", label: "Credit card" },
@@ -724,6 +753,7 @@ export default defineEntity({
         urlKey: "aliases",
         field: "sourceAliasPresenceFilter",
         kind: "presence",
+        derived: "hasSourceAlias",
         placeholder: "Filter aliases...",
         options: [
           { value: "has", label: "Has aliases", meta: true },
@@ -732,18 +762,21 @@ export default defineEntity({
       },
       {
         columnId: "last4",
+        derived: true,
         kind: "text",
         placeholder: "Filter by last four digits...",
         urlOnly: true,
       },
       {
         columnId: "source",
+        derived: true,
         kind: "multiselect",
         placeholder: "Filter by source...",
         urlOnly: true,
       },
       {
         columnId: "externalAccountId",
+        derived: true,
         kind: "multiselect",
         placeholder: "Filter by external account id...",
         urlOnly: true,

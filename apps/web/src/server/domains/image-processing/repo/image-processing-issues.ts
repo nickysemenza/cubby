@@ -5,7 +5,6 @@ import {
   imageProcessingJobState,
 } from "@cubby/schemas/image-processing";
 import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
-import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
@@ -19,7 +18,7 @@ import {
 } from "./image-processing";
 
 /** The same expression drives Problems membership, list filtering and row labels. */
-function imageProcessingIssueExpression(
+export function imageProcessingIssueExpression(
   source: typeof image = image,
 ): SQL<"failed" | "review_needed" | null> {
   const current = sql`j."imageId" = ${source.id} AND j."sourceContentHash" = ${source.sha256}
@@ -33,19 +32,6 @@ function imageProcessingIssueExpression(
       AND NOT EXISTS (SELECT 1 FROM "ImageProcessingJob" j WHERE j."deletedAt" IS NULL AND ${current} AND j.kind = ${imageProcessingJobKind.enum.subject_lift}
         AND j.state IN (${imageProcessingJobState.enum.ready}, ${imageProcessingJobState.enum.skipped})) THEN ${imageProcessingIssue.enum.review_needed}
     ELSE NULL END`;
-}
-
-export function imageProcessingIssueFilter(
-  source: typeof image,
-  requested: string | readonly string[] | undefined,
-): SQL | undefined {
-  if (!requested) return undefined;
-  const values = z
-    .array(z.string())
-    .parse(Array.isArray(requested) ? requested : [requested]);
-  return values.length
-    ? inArray(imageProcessingIssueExpression(source), values)
-    : undefined;
 }
 
 export async function loadImageProcessingIssues(

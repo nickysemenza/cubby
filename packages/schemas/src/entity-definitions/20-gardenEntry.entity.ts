@@ -300,6 +300,11 @@ export default defineEntity({
     ],
     derived: {
       plantingId: { via: "plantings" },
+      journalPlantingId: {
+        predicate: "idMulti",
+        reason:
+          "A planting's journal also holds whole-area entries observed at its location while it was active",
+      },
     },
     sort: {
       fields: ["observedOn", "createdAt", "updatedAt", "kind"],
@@ -395,6 +400,8 @@ export default defineEntity({
       {
         columnId: "locationId",
         kind: "idMulti",
+        deriveSchema: true,
+        stored: true,
         placeholder: "Filter by location...",
         brandRef: { entity: "location" },
       },
@@ -411,6 +418,7 @@ export default defineEntity({
         // observed during one of its confirmed location periods.
         columnId: "journalPlantingId",
         kind: "idMulti",
+        derived: true,
         placeholder: "Journal for planting...",
         brandRef: { entity: "planting" },
         urlOnly: true,

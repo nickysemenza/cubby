@@ -275,7 +275,14 @@ export default defineEntity({
     bulk: [],
     audit: ["name", "notes", "acquiredAt", "candidateProductIds"],
     // The midpoint of the candidates' price range.
-    derived: { priceRange: { type: "number" } },
+    derived: {
+      priceRange: { type: "number" },
+      search: {
+        predicate: "text",
+        reason:
+          "Searches the wish's name and notes and its candidate products' name, manufacturer and model",
+      },
+    },
     sort: {
       fields: ["name", "acquiredAt", "priceRange", "createdAt", "updatedAt"],
     },
@@ -324,6 +331,7 @@ export default defineEntity({
         placeholder: "Search wishlist...",
         deriveSchema: true,
         schemaFromRead: true,
+        derived: "search",
       },
       {
         columnId: "acquiredAt",
@@ -341,26 +349,13 @@ export default defineEntity({
       },
       {
         columnId: "related:wish.candidates",
-        field: "candidateProductId",
+        field: "productId",
         urlKey: "related-product",
         kind: "idMulti",
         placeholder: "Filter by candidate product...",
         optionsKey: "wishCandidates",
         brandRef: { entity: "product" },
         nullable: { field: "productPresenceFilter", label: "candidate" },
-      },
-      {
-        columnId: "productId",
-        kind: "idMulti",
-        placeholder: "Filter by candidate product id...",
-        brandRef: { entity: "product" },
-        urlOnly: true,
-      },
-      {
-        columnId: "productPresenceFilter",
-        kind: "presence",
-        placeholder: "Filter candidate presence...",
-        urlOnly: true,
       },
     ],
   },

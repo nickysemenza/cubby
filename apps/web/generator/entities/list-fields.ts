@@ -520,8 +520,8 @@ export const compileListFields = (
                 predicate: entry.predicate,
                 options: entry.options ?? null,
                 reason: entry.reason,
-                sort: `Filter only: ${entry.reason}.`,
-                group: `Filter only: ${entry.reason}.`,
+                sort: `Filter only: ${entry.reason.replace(/\.$/, "")}.`,
+                group: `Filter only: ${entry.reason.replace(/\.$/, "")}.`,
               };
     }
     const sort = entity.fieldModel.sort;

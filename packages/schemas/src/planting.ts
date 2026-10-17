@@ -1,8 +1,7 @@
 import { z } from "zod";
 
 import { plainDate } from "./base-entity";
-import { locationShortcode } from "./identifiers";
-import { createPaginatedResponseSchema, oneOrMany } from "./pagination";
+import { createPaginatedResponseSchema } from "./pagination";
 import {
   plantingBaseFilterFields,
   plantingListItemOut,
@@ -19,7 +18,6 @@ export {
 
 export const plantingFilterFields = {
   ...plantingBaseFilterFields,
-  locationId: oneOrMany(locationShortcode).optional(),
   activeOn: plainDate.optional(),
 };
 export const plantingFiltersSchema = z.object(plantingFilterFields);

@@ -12,12 +12,7 @@ import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { nonEmptyTuple } from "./identifiers";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import { entityRecordSourceInputs } from "./entity-source";
-import {
-  entityFilterList,
-  oneOrMany,
-  partyFilterList,
-  presenceFilter,
-} from "./pagination";
+import { entityFilterList, oneOrMany, presenceFilter } from "./pagination";
 import { auditDateFilterFields } from "./base-entity";
 import { imageCaptureLocation } from "./image-capture-fields";
 import { imageSightingCamera } from "./image-sighting-fields";
@@ -38,7 +33,6 @@ import {
   id,
   imageShortcode,
   runShortcode,
-  ledgerPartyShortcode,
   productShortcode,
   projectShortcode,
 } from "./identifiers";
@@ -268,12 +262,6 @@ export const imageFilterFields = {
   referencePresenceFilter: presenceFilter.describe(
     "Filter to images that are or are not referenced by any owning entity.",
   ),
-  uploadedAgeHoursMin: z.coerce
-    .number()
-    .positive()
-    .max(24 * 365 * 10)
-    .optional()
-    .describe("Only images uploaded more than this many hours ago."),
   runId: entityFilterList(runShortcode)
     .optional()
     .describe(
@@ -282,14 +270,6 @@ export const imageFilterFields = {
   targetState: oneOrMany(runTargetState)
     .optional()
     .describe("Only images whose import-run target is in one of these states."),
-  // `capturedByPartyId` is declared `idMulti`/`urlOnly` in the manifest (no
-  // `stored` descriptor — it needs shortcode resolution, same as
-  // `runId` above), so it is hand-added here rather than generated.
-  capturedByPartyId: partyFilterList(ledgerPartyShortcode)
-    .optional()
-    .describe(
-      "Only images derived-captured by one of these household members.",
-    ),
 };
 
 export const imageListFiltersSchema = z.object(imageFilterFields);

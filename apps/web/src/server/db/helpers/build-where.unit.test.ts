@@ -1,5 +1,6 @@
 import type { FinancialAccountFilters } from "@cubby/schemas/financial-account";
 import type { FinancialTransactionFilters } from "@cubby/schemas/financial-transaction";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ImageListFilters } from "@cubby/schemas/image";
 import {
   type IngredientFilters,
@@ -45,7 +46,20 @@ import { mockWhereDatabase, renderWhereSql } from "~/server/testing/mock-db";
 
 describe("buildWishWhere", () => {
   const where = (filters: WishFilters) =>
-    buildWishWhere(mockWhereDatabase(), filters).then(renderWhereSql);
+    Promise.resolve(renderWhereSql(buildWishWhere(filters)));
+
+  it("searches name, notes and candidate products in one OR", async () => {
+    const rendered = await where({ search: "kettle" });
+    expect(rendered).toContain('"Wish"."name" ilike');
+    expect(rendered).toContain('"Wish"."notes" ilike');
+    expect(rendered).toContain('p."manufacturer" ILIKE');
+  });
+
+  it("filters candidates through the related view's productId", async () => {
+    expect(
+      await where({ productId: [parseShortcodeFor("product", "PRD-2345")] }),
+    ).toContain('JOIN "Product" t ON (related1."toEntityId" = t."id"');
+  });
 
   it.each([
     {
@@ -68,7 +82,36 @@ describe("buildWishWhere", () => {
 
 describe("buildFinancialAccountWhere", () => {
   const where = (filters: FinancialAccountFilters) =>
-    Promise.resolve(renderWhereSql(buildFinancialAccountWhere(filters)));
+    buildFinancialAccountWhere(mockWhereDatabase(), filters).then(
+      renderWhereSql,
+    );
+
+  it("matches source and external account id on the same alias", async () => {
+    const rendered = await where({
+      source: "bank-export",
+      externalAccountId: "acct-1",
+    });
+    expect(rendered).toMatch(
+      /alias->>\$\d+ = \$\d+\s+AND alias->>'externalAccountId' = \$\d+/,
+    );
+  });
+
+  it.each([
+    {
+      name: "identityKind",
+      filters: { identityKind: "cash" as const },
+      contains: '"identity"->>',
+    },
+    { name: "last4", filters: { last4: "4242" }, contains: "card->>'last4'" },
+    {
+      name: "sourceAliasPresenceFilter",
+      filters: { sourceAliasPresenceFilter: "none" as const },
+      contains:
+        'NOT COALESCE((jsonb_array_length("FinancialAccount"."sourceAliases") > 0), false)',
+    },
+  ])("compiles $name from its declaration", async ({ filters, contains }) => {
+    expect(await where(filters)).toContain(contains);
+  });
 
   it.each([
     { name: "name", filters: { search: "checking" }, contains: '"name"' },
@@ -268,7 +311,27 @@ describe("buildLocationWhere", () => {
 
 describe("buildRecipeWhere", () => {
   const where = (filters: RecipeFilters) =>
-    buildRecipeWhere(mockWhereDatabase(), filters).then(renderWhereSql);
+    Promise.resolve(renderWhereSql(buildRecipeWhere(filters)));
+
+  it("resolves cookbook codes against live cookbooks inside the query", async () => {
+    const rendered = await where({
+      cookbookId: [parseShortcodeFor("cookbook", "CKB-2345")],
+    });
+    expect(rendered).toMatch(
+      /"cookbookId" in \(select ref\."id" from "Cookbook" ref/i,
+    );
+    expect(rendered).toContain('ref."deletedAt" IS NULL');
+    expect(await where({ sourcePresenceFilter: "none" })).toMatch(
+      /"cookbookId" is null or not/i,
+    );
+  });
+
+  it("drops sub-recipes with subRecipe=false", async () => {
+    const rendered = await where({ subRecipe: false });
+    expect(rendered).toContain(
+      'NOT COALESCE((COALESCE(("Recipe"."id" in (select "Ingredient"."recipeId"',
+    );
+  });
 
   it("matches name or notes (declared stored text filter)", async () => {
     const rendered = await where({ nameFilter: "soup" });
@@ -430,10 +493,41 @@ describe("buildIngredientListWhere", () => {
   // shortcodes, and every filter field is optional, so the schema accepts
   // the partial set under test.
   const where = (filters: Partial<IngredientFilters>) =>
-    buildIngredientListWhere(
-      mockWhereDatabase(),
-      ingredientFiltersSchema.parse(filters),
-    ).then(renderWhereSql);
+    Promise.resolve(
+      renderWhereSql(
+        buildIngredientListWhere(ingredientFiltersSchema.parse(filters)),
+      ),
+    );
+
+  it("never lists recipe-scoped ingredient rows", async () => {
+    expect(await where({})).toContain('"Ingredient"."recipeId" is null');
+  });
+
+  it("matches the name or any alias", async () => {
+    const rendered = await where({ nameFilter: "scallion" });
+    expect(rendered).toContain('"Ingredient"."name" ilike');
+    expect(rendered).toContain('unnest("Ingredient"."aliases")');
+  });
+
+  it.each([
+    {
+      name: "productPresenceFilter",
+      filters: { productPresenceFilter: "none" as const },
+    },
+    {
+      name: "recipePresenceFilter",
+      filters: { recipePresenceFilter: "has" as const },
+    },
+    {
+      name: "ownRecipePresenceFilter",
+      filters: { ownRecipePresenceFilter: "has" as const },
+    },
+    { name: "mappingGap", filters: { mappingGap: true } },
+  ])("compiles $name from its declared derived value", async ({ filters }) => {
+    expect(await where(filters)).toMatch(
+      /COALESCE\(\(+"Ingredient"\."id" in \(select/,
+    );
+  });
 
   it.each([
     {
