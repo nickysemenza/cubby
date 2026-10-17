@@ -138,6 +138,80 @@ describe("product list declared filters", () => {
     return { garage, rack, drivers, driver, flour, misc, kit, bit, tote };
   };
 
+  // An unavailable stock count cannot establish double-counting, and must
+  // remain unavailable when a boolean filter treats it as not applicable.
+  it("keeps unavailable stock out of stock-dependent worklists", async () => {
+    const w = await world();
+    for (const stocked of [w.kit, w.bit])
+      await createInventoryFixture(
+        ctx.db,
+        {
+          productId: stocked.id,
+          locationId: w.rack.id,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+    await createInventoryFixture(
+      ctx.db,
+      {
+        productId: w.flour.id,
+        locationId: w.rack.id,
+        amount: { value: 200, unit: "g" },
+      },
+      ctx.actor,
+    );
+    const all = [w.driver, w.flour, w.misc, w.kit, w.bit, w.tote];
+    const list = async (filters: ProductFilters) =>
+      (
+        await productList(
+          ctx.db,
+          { ...filters, ids: all.map((row) => row.id) },
+          [],
+          { pageIndex: 0, pageSize: 25 },
+        )
+      ).data;
+    expect((await list({ kitAccounting: true })).map((row) => row.id)).toEqual([
+      w.kit.id,
+    ]);
+    expect(
+      (await list({ kitAccounting: false })).map((row) => row.id).sort(),
+    ).toEqual(
+      all
+        .filter((row) => row.id !== w.kit.id)
+        .map((row) => row.id)
+        .sort(),
+    );
+    const rows = await list({});
+    expect(rows.find((row) => row.id === w.flour.id)?.onHandUnits).toBeNull();
+    expect(rows.find((row) => row.id === w.misc.id)?.onHandUnits).toBeNull();
+    // A zero-cost negative quantity is a discard; a refund alone does not close ownership.
+    for (const disposed of [w.driver, w.flour, w.misc])
+      await createRepoEntity(
+        ctx,
+        "expense",
+        makeExpenseInput({
+          name: "Synthetic recorded exit",
+          productId: disposed.id,
+          productQuantity: -1,
+          cost: 0,
+        }),
+      );
+    expect(
+      (await list({ ownershipReconciliation: true })).map((row) => row.id),
+    ).toEqual([w.driver.id]);
+    expect(
+      (await list({ ownershipReconciliation: false }))
+        .map((row) => row.id)
+        .sort(),
+    ).toEqual(
+      all
+        .filter((row) => row.id !== w.driver.id)
+        .map((row) => row.id)
+        .sort(),
+    );
+  });
+
   it("narrows by each declared filter", async () => {
     const w = await world();
     const all = [w.driver, w.flour, w.misc, w.kit, w.bit, w.tote];

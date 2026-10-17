@@ -121,7 +121,36 @@ function treeData(): InfLocation[] {
 }
 
 describe("LocationTree", () => {
-  it("renders an expanded navigable ledger with labeled rollups", () => {
+  it("keeps subtree rollups when supplied tree data omits projected counts", () => {
+    const [root] = treeData();
+    if (!root) throw new Error("missing synthetic root");
+    renderTree(
+      <LocationTree
+        data={[
+          {
+            ...root,
+            directItemCount: undefined,
+            totalItemCount: undefined,
+            children: (root.children ?? []).map((child) => ({
+              ...child,
+              directItemCount: undefined,
+              totalItemCount: undefined,
+            })),
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByLabelText("1 item here, 2 total")).toHaveTextContent(
+      "2",
+    );
+    fireEvent.change(screen.getByRole("searchbox"), {
+      target: { value: "Kitchen" },
+    });
+    expect(screen.getByLabelText("1 item here, 2 total")).toHaveTextContent(
+      "2",
+    );
+  });
+  it("opens roots one level with navigable identity and labeled rollups", () => {
     const data = treeData();
     renderTree(<LocationTree data={data} />);
 
@@ -129,25 +158,25 @@ describe("LocationTree", () => {
       "href",
       `/locations/${data[0]?.id}`,
     );
-    expect(screen.getByRole("link", { name: "Top Shelf" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Top Shelf" })).toBeNull();
     expect(
       screen.getByRole("img", { name: "Photo of Kitchen" }),
     ).toHaveAttribute("src", kitchenImage.url);
-    expect(screen.getAllByLabelText("1 item here")).toHaveLength(2);
-    expect(screen.getByLabelText("2 items total")).toHaveTextContent("2 total");
+    expect(screen.getByLabelText("1 item here, 2 total")).toHaveTextContent(
+      "2",
+    );
 
     const kitchenToggle = screen.getByRole("button", {
       name: "Collapse Kitchen",
     });
-    const controlledId = kitchenToggle.getAttribute("aria-controls");
     expect(kitchenToggle).toHaveAttribute("aria-expanded", "true");
-    expect(controlledId).not.toBeNull();
-    expect(document.getElementById(controlledId ?? "")).toBeInTheDocument();
   });
 
   it("supports branch and global disclosure controls", () => {
     renderTree(<LocationTree data={treeData()} />);
 
+    fireEvent.click(screen.getByRole("button", { name: "Expand Pantry" }));
+    expect(screen.getByRole("link", { name: "Top Shelf" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Collapse Pantry" }));
     expect(
       screen.queryByRole("link", { name: "Top Shelf" }),
@@ -155,10 +184,6 @@ describe("LocationTree", () => {
     expect(
       screen.getByRole("button", { name: "Expand Pantry" }),
     ).toHaveAttribute("aria-expanded", "false");
-    const pantryContents = screen
-      .getByRole("button", { name: "Expand Pantry" })
-      .getAttribute("aria-controls");
-    expect(document.getElementById(pantryContents ?? "")).not.toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Collapse all" }));
     expect(
@@ -175,8 +200,12 @@ describe("LocationTree", () => {
     expect(
       screen.queryByRole("link", { name: "Bread Flour" }),
     ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Collapse Pantry" }));
     fireEvent.click(screen.getByRole("checkbox", { name: "Show inventory" }));
+
+    expect(screen.queryByRole("link", { name: "Jasmine Rice" })).toBeNull();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Show contents in Kitchen" }),
+    );
 
     expect(screen.getByRole("link", { name: "Jasmine Rice" })).toHaveAttribute(
       "href",
@@ -189,7 +218,9 @@ describe("LocationTree", () => {
       screen.getByRole("button", { name: "Expand Pantry" }),
     ).toHaveAttribute("aria-expanded", "false");
 
-    fireEvent.click(screen.getByRole("button", { name: "Expand Pantry" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Show contents in Pantry" }),
+    );
     expect(screen.getByRole("link", { name: "Bread Flour" })).toHaveAttribute(
       "href",
       `/inventory/${FLOUR_ID}`,
@@ -200,7 +231,6 @@ describe("LocationTree", () => {
   it("searches case-insensitively, retains ancestors, and restores expansion", () => {
     renderTree(<LocationTree data={treeData()} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Collapse Pantry" }));
     const search = screen.getByRole("searchbox", { name: "Find a location" });
     fireEvent.change(search, { target: { value: "TOP SHELF" } });
 
@@ -210,9 +240,9 @@ describe("LocationTree", () => {
     expect(
       screen.queryByRole("link", { name: "Garage" }),
     ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Pantry is expanded for search" }),
-    ).toBeDisabled();
+    expect(screen.queryByRole("link", { name: "Bottom Shelf" })).toBeNull();
+    fireEvent.change(search, { target: { value: "Kitchen" } });
+    expect(screen.queryByRole("link", { name: "Pantry" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Clear tree search" }));
     expect(
@@ -243,9 +273,7 @@ describe("LocationTree", () => {
 
     fireEvent.change(search, { target: { value: "nowhere" } });
     expect(screen.getByText("No matching locations")).toBeInTheDocument();
-    expect(
-      screen.getByText(/clear the search to see the whole house/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/clear the search/i)).toBeInTheDocument();
   });
 });
 

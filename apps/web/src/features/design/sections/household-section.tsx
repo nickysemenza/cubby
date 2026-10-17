@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { LocationTree } from "~/features/inventory/location-tree-view";
+import { LocationBrowser } from "~/features/location/location-gallery";
 import { formatRichText, parseRichTextSafe } from "~/features/recipe/richtext";
 import { ConversionCapabilities } from "~/features/units/conversion-capabilities";
 import { Stack } from "~/ui/layout";
@@ -26,9 +27,13 @@ export function LocationTreeSection() {
         name="<LocationTree data />"
         note="Searchable household index: location hierarchy, inventory rollups and direct record navigation."
       >
-        <div className="h-72">
-          <LocationTree data={sampleLocations} />
-        </div>
+        <LocationTree data={sampleLocations} />
+      </Demo>
+      <Demo
+        name="<LocationBrowser data />"
+        note="Compact navigation tracks a continuous gallery of every location, with contents on demand."
+      >
+        <LocationBrowser data={sampleLocations} />
       </Demo>
     </Stack>
   );

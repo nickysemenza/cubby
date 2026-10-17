@@ -155,8 +155,7 @@ it). An open HMR socket is not activity: forgotten preview panes and test
 browsers hold one indefinitely. A runtime whose supervisor was killed closes
 itself within 15 seconds. Built preview (`pnpm --dir apps/web preview:cf`)
 uses the same supervisor and runs `vite preview` against the native Build Output.
-Its explicit preview build includes synthetic dev seeding, which production
-bundle checks exclude. Preview provenance cannot satisfy production prebuilt reuse.
+Preview provenance cannot satisfy production prebuilt reuse.
 The lifecycle plugin's idle and orphan checks currently apply to HMR only.
 
 ## Tooling layout
@@ -312,7 +311,8 @@ with remote AI and callbacks to the local Cubby Worker; PostgreSQL and storage
 remain local. Stop a running offline session before switching profiles.
 Integration mode supports HMR development. Built preview currently supports
 the offline profile only because the agent's auxiliary entry is served by its Vite
-plugin.
+plugin. The preview build admits its local fixture bundle and enforces the
+same closure size and instrumentation checks.
 
 Scheduled work does not run automatically. Invoke the real handler when needed
 with `<discovered-origin>/cdn-cgi/local/scheduled?format=json&cron=0+12+*+*+*`.
