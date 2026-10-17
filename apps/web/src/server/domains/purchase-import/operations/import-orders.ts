@@ -3,6 +3,7 @@ import type { ExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import {
   type LedgerPartyId,
   parseEntityId,
+  type ProductId,
   type VendorId,
   runEntityId,
 } from "@cubby/schemas/identifiers";
@@ -22,9 +23,11 @@ import {
   type PurchaseImportRunExecution,
 } from "@cubby/schemas/purchase-import";
 import { sha256Hex } from "@cubby/shared/sha256";
+import { createLogger } from "@cubby/worker-tracing";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import type { DecisionPort } from "~/server/ai/decision-model";
 import type { Database } from "~/server/db";
 import {
@@ -148,6 +151,8 @@ async function importRunScope(
   });
   return loadImportScope(db, runId, actor);
 }
+
+const log = createLogger("purchase-import");
 
 /**
  * An order's Vendor: named by id, matched or created from its named seller
@@ -828,6 +833,10 @@ export async function commitPurchaseImport(
   rawInput: CommitPurchaseImportInput,
   actor: ActorContext,
   decisionPort?: DecisionPort,
+  followUps: {
+    /** Best-effort work on the Products this commit created; never fails it. */
+    onProductsCreated?: (productIds: ProductId[]) => Promise<void>;
+  } = {},
 ) {
   const input = commitPurchaseImportInput.parse(rawInput);
   const scope = await importRunScope(db, actor, input._runExecution, false);
@@ -988,6 +997,7 @@ export async function commitPurchaseImport(
         // Mail orders whose line thumbnails are fetched after commit.
         const thumbnailWork: Parameters<typeof attachOrderLineThumbnails>[1][] =
           [];
+        const createdProductIds: ProductId[] = [];
         let requiresReview = false;
         // Adjustment lines (tax/shipping/discount/etc.) never carry a
         // Product, so the caller's resolution roster is keyed to principal
@@ -1110,6 +1120,8 @@ export async function commitPurchaseImport(
             // unassigned principal lines get Other.
             {
               applyUnassignedPurposeFallback: input.defaultTrade === undefined,
+              onProductCreated: (productId) =>
+                createdProductIds.push(productId),
               resolveReversal: (index, line) =>
                 chooseLineStage(
                   transactionDb,
@@ -1209,7 +1221,12 @@ export async function commitPurchaseImport(
             updatedAt: new Date(),
           })
           .where(eq(runTable.id, scope.runId));
-        return { result: publicResult, requiresReview, thumbnailWork };
+        return {
+          result: publicResult,
+          requiresReview,
+          thumbnailWork,
+          createdProductIds,
+        };
       });
     },
   );
@@ -1219,6 +1236,14 @@ export async function commitPurchaseImport(
   if (transactionResult.requiresReview) {
     await finalizeReviewRun(db, scope.runId, input._runExecution.operationId);
   }
+  const createdProductIds = transactionResult.createdProductIds ?? [];
+  if (createdProductIds.length > 0 && followUps.onProductsCreated)
+    await followUps.onProductsCreated(createdProductIds).catch((error) =>
+      log.warn("Post-commit Product follow-up failed", {
+        runId: scope.runId,
+        error: scrubErrorMessage(String(error)),
+      }),
+    );
   return transactionResult.result;
 }
 

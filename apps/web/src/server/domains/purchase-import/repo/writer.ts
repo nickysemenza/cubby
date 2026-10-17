@@ -1027,6 +1027,8 @@ export async function importVendorOrder(
   actorUserId: string,
   options: {
     applyUnassignedPurposeFallback?: boolean;
+    /** Each Product this order created, reported before its transaction commits. */
+    onProductCreated?: (productId: ProductId) => void;
     /** The reversal Decision for negative principal lines; the caller owns the model call. */
     resolveReversal?: (
       index: number,
@@ -2177,6 +2179,12 @@ export async function importVendorOrder(
       "updatedAt" = now()
       WHERE "id" = ${input.runId}`);
 
+    for (const mutation of rowMutations)
+      if (
+        mutation.targetKind === "product" &&
+        mutation.mutationKind === "create"
+      )
+        options.onProductCreated?.(parseEntityId("product", mutation.targetId));
     return importWriterOutput.parse({
       outcome: created ? "created" : "updated",
       purchaseId,
