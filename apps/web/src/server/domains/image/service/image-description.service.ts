@@ -9,7 +9,7 @@ import {
   type ImageDescriptionResult,
   imageDescriptionResult,
 } from "@cubby/schemas/image-processing";
-import { providerFor } from "@cubby/shared/ai/models";
+import { providerFor, type SupportedChatModel } from "@cubby/shared/ai/models";
 import {
   fetchExternalResponse,
   readResponseWithLimit,
@@ -115,6 +115,8 @@ export async function describeOriginalImage(
   result: ImageDescriptionResult;
   cached: boolean;
   fingerprint: string;
+  /** The model that produced the description; the declared one on a stored-analysis hit. */
+  model: SupportedChatModel;
 }> {
   const source = await getUploadedImageProcessingSource(db, input.imageId);
   if (!source) {
@@ -199,7 +201,9 @@ export async function describeOriginalImage(
       result: imageDescriptionResult.parse(exactCached),
       cached: true,
       fingerprint,
+      model: IMAGE_DESCRIPTION_FEATURE.model,
     };
+  let model: SupportedChatModel = IMAGE_DESCRIPTION_FEATURE.model;
   const raw = await runStructuredFeature(
     IMAGE_DESCRIPTION_FEATURE,
     IMAGE_DESCRIPTION_FEATURE.request(analysisUrl),
@@ -210,10 +214,13 @@ export async function describeOriginalImage(
       job: { kind: "image_processing_attempt", id: input.attemptId },
       cacheStatus: "miss",
       entity: { entityKind: "image", entityId: source.id },
+      onAnswered: (answered) => {
+        model = answered;
+      },
     },
   );
   const result = normalizeImageDescriptionResult(raw, source.shortcode);
-  return { result, cached: false, fingerprint };
+  return { result, cached: false, fingerprint, model };
 }
 
 /** Proposed zeros require a quoted, explicitly named label footnote before human review. */

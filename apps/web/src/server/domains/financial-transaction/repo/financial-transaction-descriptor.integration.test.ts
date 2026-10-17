@@ -27,7 +27,7 @@ describe("financial transaction descriptor processor filter", () => {
     for (const [index, rawDescription] of [
       "TST* SYNTHETIC DINER #42",
       "tst*synthetic cafe",
-      "SQ *SYNTHETIC MARKET",
+      "SQ  *SYNTHETIC MARKET",
       "SYNTHETIC HARDWARE",
     ].entries()) {
       const created = await createRepoEntity(ctx, "financialTransaction", {

@@ -102,13 +102,15 @@ export const descriptorProcessor = z.enum([
   "instacart",
   "py",
 ]);
+// Whitespace is matched with `\s` so the raw column (SQL) and the trimmed
+// text (parser) agree on padded or tab-separated descriptors.
 export const descriptorProcessors = [
-  { value: "square", label: "Square", pattern: "^(SQ|SQUARE) ?\\*" },
-  { value: "toast", label: "Toast", pattern: "^TST ?\\*" },
-  { value: "paypal", label: "PayPal", pattern: "^(PAYPAL|PP) ?\\*" },
-  { value: "shopify", label: "Shopify", pattern: "^SP " },
-  { value: "instacart", label: "Instacart", pattern: "^IC ?\\*" },
-  { value: "py", label: "PY", pattern: "^PY ?\\*" },
+  { value: "square", label: "Square", pattern: "^\\s*(SQ|SQUARE)\\s*\\*" },
+  { value: "toast", label: "Toast", pattern: "^\\s*TST\\s*\\*" },
+  { value: "paypal", label: "PayPal", pattern: "^\\s*(PAYPAL|PP)\\s*\\*" },
+  { value: "shopify", label: "Shopify", pattern: "^\\s*SP\\s+" },
+  { value: "instacart", label: "Instacart", pattern: "^\\s*IC\\s*\\*" },
+  { value: "py", label: "PY", pattern: "^\\s*PY\\s*\\*" },
 ] as const satisfies readonly {
   value: z.infer<typeof descriptorProcessor>;
   label: string;
@@ -119,19 +121,27 @@ export type DescriptorProcessor = z.infer<typeof descriptorProcessor>;
 const US_STATE =
   /^(A[KLRZ]|C[AOT]|D[CE]|FL|GA|HI|I[ADLN]|K[SY]|LA|M[ADEINOST]|N[CDEHJMVY]|O[HKR]|PA|RI|S[CD]|T[NX]|UT|V[AT]|W[AIVY])$/u;
 
+// Leading words of multiword US place names (`SAN FRANCISCO`, `SALT LAKE
+// CITY`), dropped with the city so they never reach an exact-phrase search.
+const PLACE_PREFIX =
+  /^(SAN|SANTA|LOS|LAS|NEW|FORT|FT|ST|SAINT|EL|LA|PALM|SALT|LAKE|CITY|NORTH|SOUTH|EAST|WEST|PORT|MOUNT|MT|BEVERLY|GRAND|BATON|COLORADO|DES|CEDAR|CORPUS|OVERLAND|CULVER|DALY|REDWOOD|KANSAS|JERSEY|OKLAHOMA|SIOUX|ANN|LITTLE|LONG|VIRGINIA)$/u;
+
 /**
  * Splits a bank descriptor into its processor and a searchable merchant
  * phrase: the processor prefix, store and reference numbers, a trailing
- * phone number, and a trailing `CITY ST` are removed. `merchant` is null
- * when fewer than three letters remain.
+ * phone number, and a trailing `CITY ST` are removed. A run of two or more
+ * spaces is the bank's fixed-width field padding, so the name ends there.
+ * `merchant` is null when fewer than three letters remain.
  */
 export function parseBankDescriptor(raw: string | null | undefined) {
-  let text = (raw ?? "").trim().replace(/\s+/gu, " ");
+  let text = (raw ?? "").replace(/\t/gu, "  ").trim();
   const matched = descriptorProcessors.find((processor) =>
     new RegExp(processor.pattern, "iu").test(text),
   );
   if (matched) text = text.replace(new RegExp(matched.pattern, "iu"), "");
-  const words = text
+  const padded = text.split(/\s{2,}/u).filter(Boolean);
+  const fields = padded.length > 1 ? padded : [text];
+  const words = (fields[0] ?? "")
     .replace(/\(?\d{3}\)?[-. ]?\d{3}[-. ]?\d{4}\s*$/u, " ")
     .replace(/#\s*\d+/gu, " ")
     .replace(/\b\d{3,}\b/gu, " ")
@@ -139,9 +149,16 @@ export function parseBankDescriptor(raw: string | null | undefined) {
     .trim()
     .split(/\s+/u)
     .filter(Boolean);
-  // A trailing state code, and the city word before it, once a name remains.
-  if (words.length >= 3 && US_STATE.test(words.at(-1)?.toUpperCase() ?? ""))
+  // A trailing state code, the city word before it, and any leading words
+  // of a multiword place name, while a name remains.
+  if (words.length >= 3 && US_STATE.test(words.at(-1)?.toUpperCase() ?? "")) {
     words.splice(-2);
+    while (
+      words.length > 1 &&
+      PLACE_PREFIX.test(words.at(-1)?.toUpperCase() ?? "")
+    )
+      words.pop();
+  }
   const merchant = words.join(" ").toLowerCase();
   return {
     processor: matched?.value ?? null,

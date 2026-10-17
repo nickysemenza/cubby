@@ -168,6 +168,7 @@ it("hands off 25 photos before claim and completes independent background work w
         cutoutEligibility: "eligible" as const,
       },
       fingerprint: `synthetic:${invocation}`,
+      model: "gpt-6-luna" as const,
     };
   };
   const consume = (body: ReturnType<typeof message>["body"]) =>

@@ -158,14 +158,17 @@ export interface AiRunContext<T = unknown> extends Pick<
    * the model that originally answered, so stored provenance survives later
    * ladder changes.
    */
-  onAnswered?: (model: string) => void;
+  onAnswered?: (model: SupportedChatModel) => void;
 }
 
 interface Answered<T> {
   value: T;
-  model: string;
+  model: SupportedChatModel;
 }
-const answeredEntry = z.object({ value: z.unknown(), model: z.string() });
+const answeredEntry = z.object({
+  value: z.unknown(),
+  model: supportedChatModelSchema,
+});
 
 /** The call-site fields a usage row takes from an {@link AiRunContext}. */
 type UsageCallContext = Pick<
@@ -909,6 +912,7 @@ export async function runStructuredFeature<T>(
     request,
   };
   if (spec.effort !== undefined) keyInput.effort = spec.effort;
+  let hitModel: SupportedChatModel | undefined;
   const answer = await withAiResponseCache<Answered<T>>({
     enabled: spec.cache && ports === productionStructuredRunPorts,
     force: ctx.force,
@@ -917,9 +921,16 @@ export async function runStructuredFeature<T>(
     // parse and is recomputed once.
     validate: (cached) => {
       const entry = answeredEntry.parse(cached);
+      hitModel = entry.model;
       return { value: validate(entry.value), model: entry.model };
     },
-    onHit: (durationMs) => recordApplicationCacheHit(spec, ctx, durationMs),
+    // A replayed answer is booked under the model that originally produced it.
+    onHit: (durationMs) =>
+      recordApplicationCacheHit(
+        { ...spec, model: hitModel ?? spec.model },
+        ctx,
+        durationMs,
+      ),
     compute: async (applicationCacheStatus) => {
       const callContext = { ...ctx, applicationCacheStatus };
       const firstResult = await placeCall(

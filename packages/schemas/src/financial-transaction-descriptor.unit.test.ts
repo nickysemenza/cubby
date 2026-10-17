@@ -12,6 +12,11 @@ it.each([
   ["SYNTHETIC HARDWARE 00123 SPRINGFIELD IL", null, "synthetic hardware"],
   ["TARGET WA", null, "target wa"],
   ["SQ *12345", "square", null],
+  ["SQ  *SYNTHETIC MARKET", "square", "synthetic market"],
+  ["  TST*\tSYNTHETIC CAFE", "toast", "synthetic cafe"],
+  ["TST* SYNTHETIC DINER SAN FRANCISCO CA", "toast", "synthetic diner"],
+  ["SYNTHETIC GRILL SALT LAKE CITY UT", null, "synthetic grill"],
+  ["SYNTHETIC BAKERY       PORTLAND     OR", null, "synthetic bakery"],
   [null, null, null],
 ] as const)("parses %s", (raw, processor, merchant) => {
   expect(parseBankDescriptor(raw)).toEqual({ processor, merchant });
