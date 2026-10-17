@@ -980,6 +980,7 @@ type LocationRosterFilters = Pick<
   | "itemTypeFilter"
   | "parentId"
   | "parentPresenceFilter"
+  | "includeSubLocations"
   | "inventoryPresenceFilter"
   | "productId"
   | "productPresenceFilter"
