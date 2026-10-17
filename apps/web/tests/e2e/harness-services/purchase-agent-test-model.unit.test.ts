@@ -10,7 +10,7 @@ it("plays the script through the funded Anthropic SDK transport", async () => {
     new Request("https://fake/configure", {
       method: "POST",
       body: JSON.stringify({
-        expectedInference: { model: "claude-opus-5-5", effort: "high" },
+        expectedInference: { model: "claude-opus-5-5", effort: "medium" },
         steps: [{ call: "claim", tool: "claim_next_import_work", args: {} }],
         purposeSteps: {
           mail: [
@@ -55,7 +55,7 @@ it("plays the script through the funded Anthropic SDK transport", async () => {
   const first = await models.completeSimple(
     model,
     { messages },
-    { reasoning: "high", apiKey: "synthetic" },
+    { reasoning: "medium", apiKey: "synthetic" },
   );
   expect(first.stopReason).toBe("toolUse");
   expect(first.content).toContainEqual(
@@ -83,7 +83,7 @@ it("plays the script through the funded Anthropic SDK transport", async () => {
   const pending = models.completeSimple(
     model,
     { messages: transcript },
-    { reasoning: "high", apiKey: "synthetic" },
+    { reasoning: "medium", apiKey: "synthetic" },
   );
   await expect
     .poll(async () =>
@@ -120,7 +120,7 @@ it("plays the script through the funded Anthropic SDK transport", async () => {
         },
       ],
     },
-    { reasoning: "high", apiKey: "synthetic" },
+    { reasoning: "medium", apiKey: "synthetic" },
   );
   expect(final.stopReason).toBe("stop");
   expect(final.content).toContainEqual({

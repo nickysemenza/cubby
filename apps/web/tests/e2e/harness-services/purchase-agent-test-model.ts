@@ -125,6 +125,7 @@ type InputItem = {
 
 type AnthropicMessage = {
   role: string;
+  output_config?: { effort?: string };
   content:
     | string
     | Array<{
@@ -416,7 +417,15 @@ export default {
       input,
       reasoning:
         wire === "messages"
-          ? { effort: body.output_config?.effort }
+          ? {
+              // Pi's managed-effort models put the active level in the last
+              // system message; the request-level value is only the default.
+              effort:
+                body.messages?.findLast(
+                  (message) =>
+                    message.role === "system" && message.output_config?.effort,
+                )?.output_config?.effort ?? body.output_config?.effort,
+            }
           : body.reasoning,
     };
     checkInference(normalized);

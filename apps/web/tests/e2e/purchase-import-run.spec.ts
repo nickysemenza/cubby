@@ -293,7 +293,7 @@ test("imports saved order mail from its Email page and follows the live Run to t
 
   await page.reload();
   await importEmail.click();
-  const runLink = page.getByRole("link", { name: /^RUN-/u }).first();
+  const runLink = page.locator('a[href^="/runs/RUN-"]').first();
   await expect(runLink).toHaveAttribute("href", /^\/runs\/RUN-/u);
   const runShortcode = (await runLink.getAttribute("href"))?.replace(
     "/runs/",
