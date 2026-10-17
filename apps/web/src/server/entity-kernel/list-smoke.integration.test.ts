@@ -1,3 +1,4 @@
+import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
 /**
  * Structural regression guard for the historical dual-FROM alias bug class.
  *
@@ -30,9 +31,11 @@
  * accepts and validates but never applies. `imageSighting.imageId` shipped
  * that way — the list showed the filter chip and returned every row.
  * For each seeded entity, every id-shaped filter is re-run with a
- * well-formed shortcode that names no row, and must return nothing.
+ * well-formed shortcode that names no row, and must return nothing; its
+ * generated Exclude key must instead keep every row. An Exclude key whose
+ * declaration cannot exclude must be rejected with its declared reason.
  */
-import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
+import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
 import { ingredientFiltersSchema } from "@cubby/schemas/ingredient";
 import { SHORTCODE_BODY_LENGTH, SHORTCODE_CHARS } from "@cubby/shared";
 import { withTestDb } from "tooling/test-setup";
@@ -106,6 +109,20 @@ function unmatchedIdSample(
   return Array.isArray(value) ? swapped : (swapped[0] ?? null);
 }
 /* oxlint-enable anti-slop/no-unknown-returns */
+
+/** The entity's generated Exclude keys, with the reason when it cannot exclude. */
+function excludeKeysOf(entity: EntityKernelEntity): Map<string, string | null> {
+  const descriptors: ReadonlyArray<{
+    exclude: { field: string; reason: string | null } | null;
+  }> =
+    Object.entries(entityInspectorMetadata).find(([key]) => key === entity)?.[1]
+      .filterDescriptors ?? [];
+  return new Map(
+    descriptors.flatMap(({ exclude }) =>
+      exclude ? [[exclude.field, exclude.reason] as const] : [],
+    ),
+  );
+}
 
 function filterFieldsOf(entity: EntityKernelEntity): Record<string, z.ZodType> {
   const schema = ENTITY_KERNEL_BINDINGS[entity].schemas.filters;
@@ -193,9 +210,11 @@ describe("entity list smoke — shared selection/count FROM context", () => {
         pagination: { pageIndex: 0, pageSize: 1 },
       }).catch(() => null);
       const hasRows = (unfiltered?.meta.totalCount ?? 0) > 0;
+      const excludeKeys = excludeKeysOf(entity);
 
       for (const [key, fieldSchema] of Object.entries(filterFields)) {
         seed += 1;
+        const excludeReason = excludeKeys.get(key);
         const sample = buildFilterSample(
           fieldSchema,
           seed,
@@ -203,6 +222,26 @@ describe("entity list smoke — shared selection/count FROM context", () => {
         );
         if (!sample.ok) {
           skipped.push(`${entity} filter ${key}: ${sample.reason}`);
+          continue;
+        }
+        if (typeof excludeReason === "string") {
+          listCases.push(async () => {
+            caseCount += 1;
+            const outcome = await executeEntity(kernelCtx, {
+              action: "list",
+              entity,
+              filters: { [key]: sample.value },
+              pagination: { pageIndex: 0, pageSize: 1 },
+            }).then(
+              () => "accepted",
+              (err: unknown) => describeError(err),
+            );
+            // `describeError` truncates; the reason follows this prefix.
+            if (!outcome.startsWith(`Cannot exclude ${entity} by`))
+              failures.push(
+                `${entity} filter ${key}: expected rejection "${excludeReason}", got ${outcome}`,
+              );
+          });
           continue;
         }
         listCases.push(() =>
@@ -229,9 +268,12 @@ describe("entity list smoke — shared selection/count FROM context", () => {
               filters: { [key]: unmatched },
               pagination: { pageIndex: 0, pageSize: 1 },
             });
-            if (result.meta.totalCount !== 0)
+            // Excluding a code that names no row excludes nothing.
+            const expected =
+              excludeReason === null ? (unfiltered?.meta.totalCount ?? 0) : 0;
+            if (result.meta.totalCount !== expected)
               failures.push(
-                `${entity} filter ${key}=${String(unmatched)}: matched ${result.meta.totalCount} row(s) — the filter is accepted but not applied`,
+                `${entity} filter ${key}=${String(unmatched)}: matched ${result.meta.totalCount} row(s), expected ${expected}${expected === 0 ? " — the filter is accepted but not applied" : ""}`,
               );
           } catch (err) {
             // Category ancestry requires a real category; an unknown code is
