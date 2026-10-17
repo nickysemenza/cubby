@@ -1,8 +1,8 @@
 /**
  * Purchase → paying FinancialAccount. A member's explicit links are the only
  * stored rows; with none, the order's paying accounts derive on read from its
- * payment evidence (`purchasePayingAccountIdsRawSql`), so editing card history
- * or a vendor account's member corrects them without a recompute. Re-import
+ * payment evidence (`purchasePayingAccountIdsSql`), so editing card history
+ * or the order's member corrects them without a recompute. Re-import
  * never touches a link: no source claim owns it.
  */
 
@@ -20,7 +20,7 @@ import { uniq } from "es-toolkit";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import { entityLink, financialAccount, purchase } from "~/server/db/schema";
-import { purchasePayingAccountIdsRawSql } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
+import { purchasePayingAccountIdsSql } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
 import { linkRelationAdapter } from "~/server/entity-kernel/repo/relation-mutation-adapter";
 import {
   emptyPreflight,
@@ -73,9 +73,7 @@ export async function listPurchasePaymentAccounts(
     .from(financialAccount)
     .innerJoin(purchase, and(eq(purchase.id, purchaseId), notDeleted(purchase)))
     .where(
-      sql`${financialAccount.id} = ANY((${sql.raw(
-        purchasePayingAccountIdsRawSql('"Purchase"'),
-      )})::uuid[])`,
+      sql`${financialAccount.id} = ANY((${purchasePayingAccountIdsSql('"Purchase"')})::uuid[])`,
     )
     .orderBy(asc(financialAccount.name));
   return derived.map((row) => ({

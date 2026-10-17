@@ -459,7 +459,10 @@ review, never a settlement by itself.
 Before proposing any charge for an order, read the charge account's `notes`
 and the order's payment method. Cubby refuses an allocation whose account
 conflicts with the order (`settlement_party_conflict`: the account's people on
-the charge date do not include the order's vendor-account member;
+the charge date do not include the order's member — its vendor account's
+member, else its `purchaserOverrideId`, else the one member whose mailbox holds
+its accepted or linked Email, never the card-derived purchaser; an order with
+no known member never conflicts;
 `settlement_tender_conflict`: the account is not among the order's paying
 accounts — its `paymentAccounts` links, else those derived from payment
 evidence). A refusal is evidence, not an obstacle: move to the order the
@@ -524,8 +527,8 @@ physical card as a `physical_card` entry in `cardNumbers` rather than one
 account per card. A unique index allows one live account per provider and
 owner. To find the account a gift-card leg drew on, list `financialAccount`
 filtered by `providerVendorId` = the purchase's vendor and `ledgerPartyId` =
-the member of the purchase's vendor account; with no vendor account and more
-than one candidate, ask rather than pick.
+the order's member (as for `settlement_party_conflict`); with no known member
+and more than one candidate, ask rather than pick.
 
 Record what paid each order line as `tender` on payment evidence: `card` with
 `cardLastFour` when shown, `stored_value` for gift card, account balance or

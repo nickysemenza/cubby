@@ -81,7 +81,7 @@ itemization expectation) keep their own resolution until #2616 declares a
 variant or records why not. A set-valued fallback is outside `resolution.inherit`:
 Purchase `paymentAccounts` stores only explicit `purchasePaymentAccount` links
 and otherwise derives its accounts on read from payment evidence
-(`purchasePayingAccountIdsRawSql`), like derived funding beside explicit
+(`purchasePayingAccountIdsSql`), like derived funding beside explicit
 Expense attribution.
 
 A new field is complete when its normal reads and supported filters/sorts agree

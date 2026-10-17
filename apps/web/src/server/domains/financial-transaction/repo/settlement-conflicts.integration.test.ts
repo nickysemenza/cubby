@@ -1,10 +1,20 @@
 import { financialTransactionUpdateData } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { eq } from "drizzle-orm";
+import { seedEmailLinkDecision } from "tooling/shared-assessment-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getDb } from "~/server/db/helpers";
-import { financialTransactionAllocation } from "~/server/db/schema";
+import { getDb, insertAndReturn } from "~/server/db/helpers";
+import {
+  financialTransactionAllocation,
+  importSourceClaim,
+  orderMailEvent,
+  purchasePaymentEvidence,
+  vendorAccount,
+} from "~/server/db/schema";
+import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
+import { startImportRunFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
 import { getPurchaseByShortcode } from "~/server/domains/purchase/repo/purchase";
 import { purchasePaymentAccountsRelationAdapter } from "~/server/domains/purchase/repo/purchase-payment-accounts";
 import { listPurchaseSettlementCandidates } from "~/server/domains/purchase/repo/purchase-settlement-candidates";
@@ -79,7 +89,16 @@ describe("settlement conflicts", () => {
         postedDate: "2026-09-13",
         merchant: "Example Store",
       });
-    return { buyer, buyerCard, otherCard, giftCard, order, charge };
+    return {
+      buyer,
+      other,
+      vendor,
+      buyerCard,
+      otherCard,
+      giftCard,
+      order,
+      charge,
+    };
   }
 
   const gaps = async (shortcode: string) =>
@@ -106,7 +125,7 @@ describe("settlement conflicts", () => {
     const wrong = await charge(otherCard.id, 13.59);
     await expect(
       allocate(wrong.shortcode, order.shortcode, 13.59),
-    ).rejects.toThrow(/vendor-account member/);
+    ).rejects.toThrow(/order's member/);
 
     await applyFinancialSettlementAllocation(
       ctx.db,
@@ -155,7 +174,7 @@ describe("settlement conflicts", () => {
         }),
         ctx.actor,
       ),
-    ).rejects.toThrow(/vendor-account member/);
+    ).rejects.toThrow(/order's member/);
   });
 
   it("refuses redating a charge outside the order member's card access", async () => {
@@ -186,7 +205,183 @@ describe("settlement conflicts", () => {
         financialTransactionUpdateData.parse({ postedDate: "2026-08-15" }),
         ctx.actor,
       ),
-    ).rejects.toThrow(/vendor-account member/);
+    ).rejects.toThrow(/order's member/);
+  });
+
+  it("names the order's member by purchaser override, else by one member's Email", async () => {
+    const { buyer, other, vendor, otherCard, charge } = await world();
+    const accountless = (fields: { purchaserOverrideId?: typeof buyer.id }) =>
+      insertWithShortcode(ctx.db, "purchase", {
+        vendorId: vendor.id,
+        date: "2026-09-14",
+        statedTotal: 13.59,
+        ...fields,
+      });
+    const asserted = await accountless({ purchaserOverrideId: buyer.id });
+    await expect(
+      allocate(
+        (await charge(otherCard.id, 13.59)).shortcode,
+        asserted.shortcode,
+        13.59,
+      ),
+    ).rejects.toThrow(/order's member/);
+
+    const mailed = await accountless({});
+    const linkMail = async (
+      party: typeof buyer,
+      index: number,
+      purchase: typeof mailed = mailed,
+    ) => {
+      const original = await syntheticRetainedMail(ctx.db, {
+        ledgerPartyId: party.id,
+        mailboxId: `synthetic-settle-${index}`,
+        messageId: `synthetic-settle-message-${index}`,
+        vendorId: vendor.id,
+        sender: "receipts@example.test",
+        subject: "Synthetic receipt",
+        receivedAt: new Date("2026-09-14T12:00:00Z"),
+        rawChecksum: "e".repeat(64),
+        content: {
+          bodyText: "Synthetic receipt",
+          bodyHtml: null,
+          snippet: null,
+        },
+      });
+      const event = await insertAndReturn(ctx.db, orderMailEvent, {
+        orderMailId: original.id,
+        event: "placed",
+        orderId: "SYN-1002",
+        sourceKey: `synthetic-settle-event-${index}`,
+      });
+      await seedEmailLinkDecision(ctx.db, {
+        eventId: event.id,
+        purchaseId: purchase.id,
+        decision: "linked",
+        evidenceChecksum: "e".repeat(64),
+        decidedByUserId: ctx.actor.userId,
+        proposedBy: "member",
+      });
+    };
+    await linkMail(buyer, 0);
+    const wrong = await charge(otherCard.id, 13.59);
+    await expect(
+      allocate(wrong.shortcode, mailed.shortcode, 13.59),
+    ).rejects.toThrow(/order's member/);
+    // Email naming both members leaves the order's member unknown.
+    await linkMail(other, 1);
+    await allocate(wrong.shortcode, mailed.shortcode, 13.59);
+    expect(await gaps(mailed.shortcode)).not.toContain(
+      "settlement_party_conflict",
+    );
+
+    // An explicit override outranks Email naming another member.
+    const overridden = await accountless({ purchaserOverrideId: buyer.id });
+    await linkMail(other, 2, overridden);
+    await expect(
+      allocate(
+        (await charge(otherCard.id, 13.59)).shortcode,
+        overridden.shortcode,
+        13.59,
+      ),
+    ).rejects.toThrow(/order's member/);
+
+    // A household override names no member and stops the Email fallback.
+    const household = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic household",
+      kind: "household",
+    });
+    const shared = await accountless({ purchaserOverrideId: household.id });
+    await linkMail(buyer, 3, shared);
+    await allocate(
+      (await charge(otherCard.id, 13.59)).shortcode,
+      shared.shortcode,
+      13.59,
+    );
+    expect(await gaps(shared.shortcode)).not.toContain(
+      "settlement_party_conflict",
+    );
+  });
+
+  it("derives an accountless order's gift-card account from its Email member", async () => {
+    const { buyer, vendor, buyerCard, giftCard, charge } = await world();
+    const order = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      date: "2026-09-14",
+      statedTotal: 13.59,
+    });
+    const original = await syntheticRetainedMail(ctx.db, {
+      ledgerPartyId: buyer.id,
+      mailboxId: "synthetic-gift-mailbox",
+      messageId: "synthetic-gift-message",
+      vendorId: vendor.id,
+      sender: "receipts@example.test",
+      subject: "Synthetic gift-card order",
+      receivedAt: new Date("2026-09-14T12:00:00Z"),
+      rawChecksum: "f".repeat(64),
+      content: { bodyText: "Synthetic", bodyHtml: null, snippet: null },
+    });
+    const event = await insertAndReturn(ctx.db, orderMailEvent, {
+      orderMailId: original.id,
+      event: "placed",
+      orderId: "SYN-1003",
+      sourceKey: "synthetic-gift-event",
+    });
+    await seedEmailLinkDecision(ctx.db, {
+      eventId: event.id,
+      purchaseId: order.id,
+      decision: "linked",
+      evidenceChecksum: "f".repeat(64),
+      decidedByUserId: ctx.actor.userId,
+      proposedBy: "member",
+    });
+    const [buyerAccount] = await getDb(ctx.db)
+      .select({ id: vendorAccount.id })
+      .from(vendorAccount)
+      .where(eq(vendorAccount.ledgerPartyId, buyer.id));
+    const run = await startImportRunFixture(ctx.db, {
+      ledgerPartyId: buyer.id,
+      vendorAccountId: buyerAccount!.id,
+    });
+    const [claim] = await getDb(ctx.db)
+      .insert(importSourceClaim)
+      .values({
+        ledgerPartyId: buyer.id,
+        kind: "browser_order",
+        externalKey: "synthetic-gift-claim",
+        checksum: "f".repeat(64),
+        firstRunId: run.id,
+        lastRunId: run.id,
+      })
+      .returning({ id: importSourceClaim.id });
+    await getDb(ctx.db)
+      .insert(purchasePaymentEvidence)
+      .values({
+        purchaseId: order.id,
+        sourceClaimId: claim!.id,
+        amount: 13.59,
+        chargedAt: new Date("2026-09-14T12:00:00Z"),
+        tender: "stored_value",
+        evidenceIndex: 0,
+      });
+
+    expect(
+      await purchasePaymentAccountsRelationAdapter.list(
+        ctx.db,
+        order.shortcode,
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        accountId: giftCard.shortcode,
+        source: "evidence",
+      }),
+    ]);
+    await expect(
+      allocate(
+        (await charge(buyerCard.id, 13.59)).shortcode,
+        order.shortcode,
+        13.59,
+      ),
+    ).rejects.toThrow(/accounts that paid the order/);
   });
 
   it("flags a conflicting allocation that predates the guard", async () => {

@@ -5,10 +5,12 @@
  * data-quality checks, the allocation write guards and the settlement
  * candidate ranker:
  *
- * - **party**: the order's vendor-account member is not anyone who could use
- *   the account on the charge date (owner, dated funder, primary cardholder,
- *   dated authorized user). A household-owned account, or an order with no
- *   vendor-account member, never conflicts.
+ * - **party**: the order's member is not anyone who could use the account on
+ *   the charge date (owner, dated funder, primary cardholder, dated authorized
+ *   user). The order's member is its vendor account's member, else the
+ *   explicit purchaser override, else the one member whose mailbox holds the
+ *   order's Email evidence. A household-owned account, or an order with no
+ *   known member, never conflicts.
  * - **tender**: the order's paying accounts are known and the account is not
  *   among them. Paying accounts are the member's explicit
  *   `purchasePaymentAccount` links when any exist, otherwise derived on read
@@ -16,12 +18,14 @@
  *   exactly one account leaves them unknown, which never conflicts. Refunds
  *   are exempt: a credit lands wherever the vendor sends it.
  *
- * Raw-SQL builders take hand-qualified aliases, like `financial-reconciliation`.
+ * Builders take hand-qualified alias strings, like `financial-reconciliation`.
  */
 
+import { financialAccountIdentityKind } from "@cubby/schemas/financial-account-fields";
 import {
   financialTransactionKind,
   type FinancialTransactionKind,
+  financialTransactionStatus,
   purchaseSettlementKinds,
 } from "@cubby/schemas/financial-transaction";
 import type {
@@ -29,25 +33,28 @@ import type {
   FinancialTransactionId,
   PurchaseId,
 } from "@cubby/schemas/identifiers";
+import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
 import {
   settlementConflictKind,
   type SettlementConflictKind,
 } from "@cubby/schemas/purchase";
-import { eq, inArray, sql } from "drizzle-orm";
+import { paymentTender } from "@cubby/schemas/purchase-import";
+import { eq, inArray, type SQL, sql } from "drizzle-orm";
 
 import type { DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { financialTransaction, purchase } from "~/server/db/schema";
+import { purchaseAssociatedEmailsSql } from "~/server/domains/email/repo/email-sql";
 import { createAppError } from "~/server/errors/app-error";
 
 export const settlementConflictKinds = settlementConflictKind.options;
 export type { SettlementConflictKind };
 
-const settlementKindList = purchaseSettlementKinds
-  .map((kind) => `'${kind}'`)
-  .join(", ");
+const settlementKindList = sql.raw(
+  purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", "),
+);
 
 /** A dated `{ledgerPartyId: shortcode, validFrom, validTo}` period covers `date`. */
-const periodPartiesSql = (periods: string, date: string) => `(
+const periodPartiesSql = (periods: SQL, date: SQL) => sql`(
   SELECT party.id FROM jsonb_array_elements(${periods}) period
   JOIN "LedgerParty" party
     ON party.shortcode = period->>'ledgerPartyId' AND party."deletedAt" IS NULL
@@ -60,19 +67,15 @@ const periodPartiesSql = (periods: string, date: string) => `(
  * Everyone who could use the account on `date`. Undated funding history falls
  * back to the owner, as in `accountFundingPartySql`.
  */
-const accountPeopleSql = (account: string, date: string) => `(
+const accountPeopleSql = (account: SQL, date: SQL) => sql`(
   SELECT ${account}."ledgerPartyId"
   UNION SELECT ${account}."primaryCardholderId"
-  UNION SELECT party_id FROM ${periodPartiesSql(`${account}."fundingPeriods"`, date)} funded(party_id)
-  UNION SELECT party_id FROM ${periodPartiesSql(`${account}."authorizedUsers"`, date)} authorized(party_id)
+  UNION SELECT party_id FROM ${periodPartiesSql(sql`${account}."fundingPeriods"`, date)} funded(party_id)
+  UNION SELECT party_id FROM ${periodPartiesSql(sql`${account}."authorizedUsers"`, date)} authorized(party_id)
 )`;
 
 /** True when the account's people admit `party` on `date` (see module doc). */
-const accountAdmitsPartyRawSql = (
-  account: string,
-  date: string,
-  party: string,
-) => `(
+const accountAdmitsPartySql = (account: SQL, date: SQL, party: SQL) => sql`(
   ${party} IS NULL
   OR NOT EXISTS (
     SELECT 1 FROM ${accountPeopleSql(account, date)} people(id) WHERE people.id IS NOT NULL
@@ -80,14 +83,32 @@ const accountAdmitsPartyRawSql = (
   OR EXISTS (
     SELECT 1 FROM ${accountPeopleSql(account, date)} people(id)
     JOIN "LedgerParty" person ON person.id = people.id AND person."deletedAt" IS NULL
-    WHERE person.id = ${party} OR person.kind = 'household'
+    WHERE person.id = ${party} OR person.kind = ${ledgerPartyKind.enum.household}
   )
 )`;
 
-/** The order's vendor-account member, or NULL. */
-const purchaseMemberSql = (purchase: string) => `(
-  SELECT va."ledgerPartyId" FROM "VendorAccount" va
-  WHERE va.id = ${purchase}."vendorAccountId" AND va."deletedAt" IS NULL
+/**
+ * The order's member id, or NULL when unknown (see module doc). A purchaser
+ * override that names no live member (a household purchaser) leaves it
+ * unknown rather than falling through to Email. Never the card-derived
+ * purchaser: that derives from the settling account this check judges.
+ */
+const purchaseMemberSql = (purchase: SQL) => sql`coalesce(
+  (SELECT va."ledgerPartyId" FROM "VendorAccount" va
+    WHERE va.id = ${purchase}."vendorAccountId" AND va."deletedAt" IS NULL),
+  CASE WHEN ${purchase}."purchaserOverrideId" IS NOT NULL THEN (
+    SELECT override_party.id FROM "LedgerParty" override_party
+    WHERE override_party.id = ${purchase}."purchaserOverrideId"
+      AND override_party."deletedAt" IS NULL
+      AND override_party.kind = ${ledgerPartyKind.enum.member}
+  ) ELSE (
+    SELECT CASE WHEN count(DISTINCT mail_party.id) = 1
+      THEN (array_agg(mail_party.id))[1] END
+    FROM (${purchaseAssociatedEmailsSql(sql`${purchase}.id`, "ignore")}) "Email"
+    JOIN "LedgerParty" mail_party ON mail_party.id = "Email"."ledgerPartyId"
+      AND mail_party."deletedAt" IS NULL
+      AND mail_party.kind = ${ledgerPartyKind.enum.member}
+  ) END
 )`;
 
 /**
@@ -95,17 +116,19 @@ const purchaseMemberSql = (purchase: string) => `(
  * none or several. Card digits resolve through `cardNumbers` on the UTC charge
  * day (an undated line admits only undated cards, as `cardLastFoursOn`); a
  * stored-value line resolves to the vendor's stored-value account owned by the
- * order's member (`FinancialAccount_provider_owner_key`).
+ * order's member (`FinancialAccount_provider_owner_key`): the balance is
+ * whoever placed the order.
  */
-const evidenceAccountSql = (evidence: string, purchase: string) => `(
+// oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- 'kind' is the account identity's JSON discriminator property, not a vocabulary value.
+const evidenceAccountSql = (evidence: SQL, purchase: SQL) => sql`(
   SELECT CASE WHEN count(*) = 1 THEN (array_agg(fa.id))[1] END
   FROM "FinancialAccount" fa
   WHERE fa."deletedAt" IS NULL AND (
-    (${evidence}.tender = 'stored_value'
-      AND fa.identity->>'kind' = 'stored_value'
+    (${evidence}.tender = ${paymentTender.enum.stored_value}
+      AND fa.identity->>'kind' = ${financialAccountIdentityKind.enum.stored_value}
       AND fa."providerVendorId" = ${purchase}."vendorId"
       AND fa."ledgerPartyId" = ${purchaseMemberSql(purchase)})
-    OR (${evidence}.tender <> 'stored_value'
+    OR (${evidence}.tender <> ${paymentTender.enum.stored_value}
       AND ${evidence}."cardLastFour" IS NOT NULL
       AND EXISTS (
         SELECT 1 FROM jsonb_array_elements(CASE
@@ -126,7 +149,9 @@ const evidenceAccountSql = (evidence: string, purchase: string) => `(
  * account contributes them (sources of one order agree on amounts, but an order
  * page may omit the tender an export names).
  */
-export const purchasePayingAccountIdsRawSql = (purchase: string) => `(
+export const purchasePayingAccountIdsSql = (purchaseAlias: string) => {
+  const purchase = sql.raw(purchaseAlias);
+  return sql`(
   SELECT CASE
     WHEN EXISTS (
       SELECT 1 FROM "EntityLink" pay_link
@@ -148,7 +173,7 @@ export const purchasePayingAccountIdsRawSql = (purchase: string) => `(
           bool_and(line.account_id IS NOT NULL) OVER (PARTITION BY line.claim_id) AS complete
         FROM (
           SELECT pay_evidence."sourceClaimId" AS claim_id,
-            ${evidenceAccountSql("pay_evidence", purchase)} AS account_id
+            ${evidenceAccountSql(sql.raw("pay_evidence"), purchase)} AS account_id
           FROM "PurchasePaymentEvidence" pay_evidence
           WHERE pay_evidence."purchaseId" = ${purchase}.id
         ) line
@@ -157,39 +182,42 @@ export const purchasePayingAccountIdsRawSql = (purchase: string) => `(
     )
   END
 )`;
+};
 
 /** One allocation's conflict of `kind`, given the purchase, account and transaction aliases. */
-export const settlementConflictRawSql = (
+export const settlementConflictSql = (
   kind: SettlementConflictKind,
   aliases: { purchase: string; account: string; transaction: string },
 ) => {
-  const { purchase, account, transaction } = aliases;
+  const purchase = sql.raw(aliases.purchase);
+  const account = sql.raw(aliases.account);
+  const transaction = sql.raw(aliases.transaction);
   if (kind === "party")
-    return `NOT ${accountAdmitsPartyRawSql(
+    return sql`NOT ${accountAdmitsPartySql(
       account,
-      `coalesce(${transaction}."transactionDate", ${transaction}."postedDate")`,
+      sql`coalesce(${transaction}."transactionDate", ${transaction}."postedDate")`,
       purchaseMemberSql(purchase),
     )}`;
-  return `(${transaction}.kind <> 'refund'
-    AND coalesce(NOT (${account}.id = ANY((${purchasePayingAccountIdsRawSql(purchase)})::uuid[])), false))`;
+  return sql`(${transaction}.kind <> ${financialTransactionKind.enum.refund}
+    AND coalesce(NOT (${account}.id = ANY((${purchasePayingAccountIdsSql(aliases.purchase)})::uuid[])), false))`;
 };
 
-const conflictingAllocationsRawSql = (
-  select: string,
+const conflictingAllocationsSql = (
+  select: SQL,
   kind: SettlementConflictKind,
   purchase: string,
-) => `(
+) => sql`(
   SELECT ${select} FROM "FinancialTransactionAllocation" conflict_alloc
   JOIN "FinancialTransaction" conflict_tx
     ON conflict_tx.id = conflict_alloc."transactionId"
     AND conflict_tx."deletedAt" IS NULL
-    AND conflict_tx.status <> 'void'
+    AND conflict_tx.status <> ${financialTransactionStatus.enum.void}
     AND conflict_tx.kind IN (${settlementKindList})
   JOIN "FinancialAccount" conflict_account
     ON conflict_account.id = conflict_tx."accountId"
-  WHERE conflict_alloc."purchaseId" = ${purchase}.id
+  WHERE conflict_alloc."purchaseId" = ${sql.raw(purchase)}.id
     AND conflict_alloc."deletedAt" IS NULL
-    AND ${settlementConflictRawSql(kind, {
+    AND ${settlementConflictSql(kind, {
       purchase,
       account: "conflict_account",
       transaction: "conflict_tx",
@@ -197,21 +225,21 @@ const conflictingAllocationsRawSql = (
 )`;
 
 /** A live settlement allocation on the purchase carries a conflict of `kind`. */
-export const purchaseSettlementConflictRawSql = (
+export const purchaseSettlementConflictSql = (
   kind: SettlementConflictKind,
   purchase: string,
-) => `EXISTS ${conflictingAllocationsRawSql("1", kind, purchase)}`;
+) => sql`EXISTS ${conflictingAllocationsSql(sql`1`, kind, purchase)}`;
 
 /**
  * The conflicting transactions, so an exception recorded for one charge
  * reopens when another conflicting charge is allocated.
  */
-export const purchaseSettlementConflictFingerprintRawSql = (
+export const purchaseSettlementConflictFingerprintSql = (
   kind: SettlementConflictKind,
   purchase: string,
 ) =>
-  conflictingAllocationsRawSql(
-    "array_agg(conflict_tx.id ORDER BY conflict_tx.id)",
+  conflictingAllocationsSql(
+    sql`array_agg(conflict_tx.id ORDER BY conflict_tx.id)`,
     kind,
     purchase,
   );
@@ -247,8 +275,8 @@ export async function findSettlementConflicts(
         NULL::date AS "postedDate"
     )
     SELECT candidate_purchase.id AS "purchaseId",
-      ${sql.raw(settlementConflictRawSql("party", aliases))} AS party,
-      ${sql.raw(settlementConflictRawSql("tender", aliases))} AS tender
+      ${settlementConflictSql("party", aliases)} AS party,
+      ${settlementConflictSql("tender", aliases)} AS tender
     FROM "Purchase" candidate_purchase
     CROSS JOIN charge
     JOIN "FinancialAccount" charge_account ON charge_account.id = ${input.accountId}::uuid
@@ -292,8 +320,7 @@ export async function transactionSettlementConflicts(
 }
 
 const conflictSentence = {
-  party:
-    "its account is not one the order's vendor-account member could use on that date",
+  party: "its account is not one the order's member could use on that date",
   tender: "its account is not among the accounts that paid the order",
 } as const satisfies Record<SettlementConflictKind, string>;
 
