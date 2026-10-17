@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { EntityId, ShortcodeFor } from "@cubby/schemas/identifiers";
 import {
@@ -133,13 +134,7 @@ const crud = createEntityCrud({
       parentId?: EntityId<"spendingCategory"> | null;
     },
   ) => buildPartialUpdateValues(data),
-  auditUpdateFields: [
-    "name",
-    "aliases",
-    "parentId",
-    "itemizationExpectation",
-    "productExpectation",
-  ],
+  auditUpdateFields: [...entityFieldModels.spendingCategory.audit],
 });
 export const getSpendingCategoryByShortcode = crud.getByShortcode;
 /** The category and every live ancestor above it. */

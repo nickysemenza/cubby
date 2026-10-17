@@ -349,3 +349,44 @@ describe("spending category merge", () => {
     expect(loser?.deletedAt).toBeNull();
   });
 });
+
+// Failure: stock-tracking decisions change without an audit trail because the
+// repository's audit roster drifts from the declaration's.
+describe("spending category stock tracking", () => {
+  const ctx = withTestDb();
+  const context = () =>
+    entityKernelContextSchema.parse({
+      ...createTestRequestContext(ctx.db, {
+        auth: { userId: ctx.actor.userId },
+      }),
+      actorContext: ctx.actor,
+    });
+
+  it("audits an update that changes only stockTracked", async () => {
+    const tools = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: `Synthetic tools ${crypto.randomUUID()}`,
+    });
+    await executeEntity(context(), {
+      action: "update",
+      entity: "spendingCategory",
+      id: tools.shortcode,
+      data: { stockTracked: false },
+    });
+    const audits = await unwrapDb(ctx.db)
+      .select({ action: auditLog.action, changes: auditLog.changes })
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.entityKind, "spendingCategory"),
+          eq(auditLog.entityId, tools.id),
+          eq(auditLog.action, "update"),
+        ),
+      );
+    expect(audits).toEqual([
+      {
+        action: "update",
+        changes: { stockTracked: { from: null, to: false } },
+      },
+    ]);
+  });
+});
