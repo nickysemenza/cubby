@@ -1,6 +1,7 @@
 {
   "env": {
-    "CLAUDE_CODE_SUBAGENT_MODEL": "opus"
+    "CLAUDE_CODE_SUBAGENT_MODEL": "opus",
+    "AXIOM_SESSION_CONTEXT": "never"
   },
   "model": "opus",
   "hooks": {

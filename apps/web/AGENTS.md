@@ -1,8 +1,10 @@
 # apps/web agent rules
 
 Root rules apply. This file is loaded for `apps/web` work; load the focused
-reference below before changing the matching surface. Read [DESIGN.md](DESIGN.md)
-only when making UI or visual decisions.
+reference below before changing the matching surface.
+
+Before changing visible UI (layout, spacing, density, color, copy), load the
+`impeccable` skill in Operate mode and read [DESIGN.md](DESIGN.md).
 
 - **React hooks, queries, mutations, client/server boundaries, SSR:**
   [web runtime rules](docs/web-runtime.md).
