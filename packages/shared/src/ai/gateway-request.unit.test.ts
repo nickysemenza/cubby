@@ -256,6 +256,33 @@ describe("gateway required subscription", () => {
     ]);
   });
 
+  // A request the plan cannot carry (e.g. an unsupported input item) is as
+  // definitive as an exhausted quota; any other 400 is not replayed.
+  it.each([
+    ["subscription_sharing_unsupported_capability", true],
+    ["invalid_value", false],
+  ] as const)(
+    "replays a 400 plan refusal only for unsupported capability: %s",
+    async (code, replays) => {
+      const gateway = vi.fn(async () => new Response("paid research"));
+      const send = gatewayFetchThrough({
+        provider: "openai",
+        subscriptionRequired: true,
+        subscriptionFallback: "budgeted",
+        chatGpt: async () =>
+          Response.json(
+            { error: { code, type: "invalid_request_error", param: "input" } },
+            { status: 400 },
+          ),
+        beforePaidRequest: async () => {},
+        gateway,
+      });
+      const response = await send(url, init);
+      expect(response.status).toBe(replays ? 200 : 400);
+      expect(gateway).toHaveBeenCalledTimes(replays ? 1 : 0);
+    },
+  );
+
   it("separates a recovered quota diagnostic before a refused paid admission", async () => {
     const diagnostic = {
       error: { code: "subscription_sharing_usage_limit_exceeded" },

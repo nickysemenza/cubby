@@ -28,8 +28,9 @@ unfamiliar vendor can be discovered, and pages targeted history searches. Each
 known Vendor's verified receipt senders and website domain seed exact
 `from:`/domain searches; a Vendor name never becomes a free-text search, and a
 Vendor without a verified sender or website waits for research. Merchant
-descriptions on unallocated financial transactions seed further searches.
-Targets are recomputed on every pass, so a Vendor that gains a verified sender
+descriptions on unallocated financial transactions seed one search per distinct
+merchant. Targets are recomputed on every pass; an unfinished search that is no
+longer a target is dropped, and a Vendor that gains a verified sender
 joins history search automatically. Targeted pages alternate with new mail;
 there is no all-of-Gmail crawl, and Spam and Trash are excluded. Shared
 platform domains do not identify the seller or establish purchase ownership.

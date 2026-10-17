@@ -57,7 +57,6 @@ export async function listGmailSyncTargets(
       .where(notDeleted(vendor)),
     getDb(db)
       .select({
-        id: financialTransaction.id,
         merchant: financialTransaction.merchant,
         ledgerPartyId: financialAccount.ledgerPartyId,
       })
@@ -88,6 +87,18 @@ export async function listGmailSyncTargets(
       ),
   ]);
   const quote = (value: string) => `"${value.replaceAll('"', " ")}"`;
+  // One search per distinct merchant (case- and space-insensitive): many
+  // unallocated charges share a merchant, and Gmail search ignores case.
+  const merchantQueries = (rows: readonly { merchant: string | null }[]) => {
+    const byKey = new Map<string, { key: string; query: string }>();
+    for (const charge of rows) {
+      const merchant = charge.merchant?.trim().replace(/\s+/gu, " ");
+      const key = merchant && `merchant:${merchant.toLowerCase()}`;
+      if (key && !byKey.has(key))
+        byKey.set(key, { key, query: quote(merchant) });
+    }
+    return [...byKey.values()];
+  };
   // A Vendor without a verified sender or website domain waits for research.
   const vendorQueries = vendors.flatMap((row) =>
     vendorMailQueries(row.id, vendorSearchTerms(row)),
@@ -101,16 +112,11 @@ export async function listGmailSyncTargets(
             mailboxId: row.mailboxId,
             scopedQueries: [
               ...vendorQueries,
-              ...charges
-                .filter(
-                  (charge) =>
-                    charge.ledgerPartyId === row.ledgerPartyId &&
-                    charge.merchant?.trim(),
-                )
-                .map((charge) => ({
-                  key: `charge:${charge.id}`,
-                  query: quote(charge.merchant!),
-                })),
+              ...merchantQueries(
+                charges.filter(
+                  (charge) => charge.ledgerPartyId === row.ledgerPartyId,
+                ),
+              ),
             ],
           },
         ]

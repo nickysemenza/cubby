@@ -4,6 +4,7 @@
  * member who never connected Google is not a target: a scheduled pass for
  * them could only fail.
  */
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -53,6 +54,55 @@ describe("Gmail sync targets", () => {
         },
       ],
     });
+  });
+
+  it("searches each unallocated merchant once, regardless of case or spacing", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic charge member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    await getDb(ctx.db).insert(account).values({
+      id: crypto.randomUUID(),
+      accountId: "synthetic-google-subject",
+      providerId: "google",
+      userId: ctx.actor.userId,
+      updatedAt: new Date(),
+    });
+    const card = await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic card",
+      identity: { kind: "cash" },
+      ledgerPartyId: party.shortcode,
+      provisional: false,
+    });
+    for (const [index, merchant] of [
+      "Synthetic Market",
+      "synthetic  market",
+      "Other Shop",
+    ].entries())
+      await createRepoEntity(ctx, "financialTransaction", {
+        accountId: card.output.id,
+        kind: "purchase",
+        amount: 10 + index,
+        status: "posted",
+        transactionDate: "2026-09-01",
+        postedDate: "2026-09-02",
+        merchant,
+        sourceRefs: [
+          { source: "synthetic-bank", externalId: `synthetic-charge-${index}` },
+        ],
+        allocations: [],
+      });
+
+    const [target] = await listGmailSyncTargets(ctx.db);
+
+    // Gmail search ignores case, so either spelling may carry the query.
+    expect(
+      target?.scopedQueries.map(({ key, query }) => [key, query.toLowerCase()]),
+    ).toEqual([
+      ["merchant:synthetic market", '"synthetic market"'],
+      ["merchant:other shop", '"other shop"'],
+    ]);
   });
 
   it("leaves out a member who never connected Google", async () => {

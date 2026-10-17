@@ -87,7 +87,8 @@ or `unknown`. The transport is selected before the request leaves
 (`GatewayCallOptions.onTransport`, the agent's `onSelected`), so a connected
 plan's failure — even one that throws before any HTTP response — records a
 failed `chatgpt` row. Only callers with an explicit funding fallback policy
-advance recognized quota refusals to the paid gateway. The
+advance recognized plan refusals to the paid gateway: a quota 429, or a 400
+`subscription_sharing_unsupported_capability` for a request the plan cannot carry. The
 telemetry writer records plan coverage for every `chatgpt` row while retaining
 its token evidence and standard-price comparison. `cache` means an application replay with no upstream call (the
 application response cache or a stored `AiAnalysis`); a Gateway response-cache
