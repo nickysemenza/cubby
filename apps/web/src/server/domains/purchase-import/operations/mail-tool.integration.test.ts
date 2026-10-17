@@ -1,5 +1,6 @@
 import {
   MAIL_ATTACHMENT_MAX_BYTES,
+  MAIL_READ_RESPONSE_MAX_BYTES,
   mailResolveInput,
 } from "@cubby/schemas/mailbox-research";
 /**
@@ -1194,7 +1195,21 @@ describe("public mail tool", () => {
       ctx.actor,
     );
     expect(page.content.bodyHtml).toBe(bodyHtml.slice(10, 30));
-    expect(page.content.truncated).toBe(true);
+    expect(page.content).toMatchObject({
+      bodyText: null,
+      nextOffset: 30,
+      truncated: true,
+    });
+
+    const firstPage = await readMail(
+      ctx.db,
+      { mailboxId, messageId: mail.messageId, includeHtml: true },
+      ctx.actor,
+    );
+    expect(firstPage.content.nextOffset).toBeGreaterThan(0);
+    expect(
+      new TextEncoder().encode(JSON.stringify(firstPage)).length,
+    ).toBeLessThan(MAIL_READ_RESPONSE_MAX_BYTES);
   });
 
   describe("read attachment originals", () => {

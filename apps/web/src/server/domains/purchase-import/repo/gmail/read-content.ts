@@ -16,13 +16,38 @@ const decoder = new TextDecoder();
 const isContinuation = (byte: number | undefined) =>
   byte !== undefined && (byte & 0xc0) === 0x80;
 
-/** A UTF-8 byte window moved onto character boundaries. */
-function byteWindow(bytes: Uint8Array, offset: number, maxBytes: number) {
+const utf8Length = (lead: number) =>
+  lead < 0x80 ? 1 : lead < 0xe0 ? 2 : lead < 0xf0 ? 3 : 4;
+
+/** Bytes a character occupies inside a JSON string literal. */
+function jsonLength(lead: number) {
+  if (lead === 0x22 || lead === 0x5c) return 2;
+  if (lead >= 0x20) return utf8Length(lead);
+  return [0x08, 0x09, 0x0a, 0x0c, 0x0d].includes(lead) ? 2 : 6;
+}
+
+/**
+ * A page of whole characters from `offset` whose JSON-escaped size fits
+ * `maxBytes`. It holds at least one character, so paging by `nextOffset`
+ * always progresses and concatenates back to the original.
+ */
+function jsonPage(bytes: Uint8Array, offset: number, maxBytes: number) {
   let start = Math.min(offset, bytes.length);
-  while (isContinuation(bytes[start])) start += 1;
-  let end = Math.min(start + maxBytes, bytes.length);
-  while (end > start && isContinuation(bytes[end])) end -= 1;
-  return { text: decoder.decode(bytes.subarray(start, end)), end };
+  while (start > 0 && isContinuation(bytes[start])) start -= 1;
+  let end = start;
+  let size = 0;
+  while (end < bytes.length) {
+    const lead = bytes[end] ?? 0;
+    const cost = jsonLength(lead);
+    if (end > start && size + cost > maxBytes) break;
+    size += cost;
+    end += utf8Length(lead);
+  }
+  return {
+    text: decoder.decode(bytes.subarray(start, end)),
+    start,
+    nextOffset: end < bytes.length ? end : null,
+  };
 }
 
 const readableChars = (text: string) =>
@@ -30,8 +55,8 @@ const readableChars = (text: string) =>
 
 /**
  * The read view of retained content: compact text from the HTML body when the
- * text part is empty or carries less readable text, and raw HTML only as an
- * explicitly requested page. Long retailer HTML is mostly inline styles and
+ * text part is empty or carries less readable text, or instead one explicitly
+ * requested raw HTML page. Long retailer HTML is mostly inline styles and
  * layout tables, so the raw body overflows tool output caps before its totals.
  */
 export function mailReadContent(
@@ -48,28 +73,29 @@ export function mailReadContent(
     compact.text.trim() !== "" &&
     (plain === null || compact.readable_chars > readableChars(plain));
   const body = compacted ? compact.text : plain;
-  const bodyBytes = body === null ? null : encoder.encode(body);
-  const bodyText =
-    bodyBytes === null
-      ? null
-      : byteWindow(bodyBytes, 0, MAIL_READ_TEXT_MAX_BYTES).text;
-  let truncated =
-    (compacted && compact.truncated) ||
-    (bodyBytes?.length ?? 0) > MAIL_READ_TEXT_MAX_BYTES;
-  let bodyHtml: string | null = null;
-  if (input.includeHtml && html) {
-    const page = byteWindow(
-      html,
-      input.offset ?? 0,
-      input.maxBytes ?? MAIL_READ_HTML_PAGE_MAX_BYTES,
-    );
-    bodyHtml = page.text;
-    truncated ||= page.end < html.length || (input.offset ?? 0) > 0;
-  }
+  const page =
+    input.includeHtml && html
+      ? jsonPage(
+          html,
+          input.offset ?? 0,
+          input.maxBytes ?? MAIL_READ_HTML_PAGE_MAX_BYTES,
+        )
+      : null;
+  // An HTML page replaces the text so the response stays under the agent cap.
+  const textPage =
+    page === null && body !== null
+      ? jsonPage(encoder.encode(body), 0, MAIL_READ_TEXT_MAX_BYTES)
+      : null;
+  const truncated =
+    page === null
+      ? (compacted && compact.truncated) ||
+        (textPage !== null && textPage.nextOffset !== null)
+      : page.start > 0 || page.nextOffset !== null;
   return {
     snippet: content.snippet,
-    bodyText,
-    bodyHtml,
+    bodyText: textPage?.text ?? null,
+    bodyHtml: page?.text ?? null,
+    nextOffset: page?.nextOffset ?? null,
     ...(content.headers ? { headers: content.headers } : {}),
     htmlBytes: html?.length ?? null,
     compacted,

@@ -293,7 +293,14 @@ export const mailTriagePreviewOut = z.object({
 });
 export type MailTriagePreviewOut = z.infer<typeof mailTriagePreviewOut>;
 
-/** Raw HTML page bound for `includeHtml` reads. */
+/**
+ * The purchase agent's output cap for an Email read. A read's serialized
+ * response (text or HTML page, plus metadata) stays below it, so the agent
+ * never cuts a read before its last line or total.
+ */
+export const MAIL_READ_RESPONSE_MAX_BYTES = 200_000;
+
+/** Raw HTML page bound for `includeHtml` reads, measured JSON-escaped. */
 export const MAIL_READ_HTML_PAGE_MAX_BYTES = 100_000;
 
 export const mailReadInput = mailMessageRef.extend({
@@ -308,14 +315,16 @@ export const mailReadInput = mailMessageRef.extend({
     .boolean()
     .optional()
     .describe(
-      "Also return one page of the raw HTML body. Omitted: only compact text.",
+      "Return one page of the raw HTML body instead of the compact text. Omitted: only compact text.",
     ),
   offset: z
     .number()
     .int()
     .min(0)
     .optional()
-    .describe("UTF-8 byte offset of the raw HTML page (includeHtml)."),
+    .describe(
+      "UTF-8 byte offset of the raw HTML page (includeHtml): 0, or the previous page's nextOffset.",
+    ),
   maxBytes: z
     .number()
     .int()
@@ -323,23 +332,26 @@ export const mailReadInput = mailMessageRef.extend({
     .max(MAIL_READ_HTML_PAGE_MAX_BYTES)
     .optional()
     .describe(
-      `UTF-8 bytes of raw HTML per page (includeHtml), default ${MAIL_READ_HTML_PAGE_MAX_BYTES}.`,
+      `JSON-escaped UTF-8 bytes of raw HTML per page (includeHtml), default ${MAIL_READ_HTML_PAGE_MAX_BYTES}. A page always holds at least one whole character.`,
     ),
 });
 export type MailReadInput = z.infer<typeof mailReadInput>;
 
-/** Compact text body bound; the purchase agent's tool output cap sits above it. */
+/** Compact text body bound, measured JSON-escaped; below MAIL_READ_RESPONSE_MAX_BYTES. */
 export const MAIL_READ_TEXT_MAX_BYTES = 120_000;
 
 /**
  * What a read returns: the body as compact text (HTML converted when the text
- * part is empty or poorer), never raw HTML unless `includeHtml` pages it.
+ * part is empty or poorer), or, when `includeHtml` pages it, one raw HTML page
+ * in place of that text.
  */
 export const mailReadContent = z.object({
   snippet: z.string().nullable(),
   bodyText: z.string().nullable(),
   /** One raw HTML page, only when `includeHtml` asked for it. */
   bodyHtml: z.string().nullable(),
+  /** Exact `offset` of the next HTML page; null at the end or without a page. */
+  nextOffset: z.number().int().nullable(),
   headers: z.record(z.string(), z.string()).optional(),
   /** UTF-8 size of the stored HTML body. */
   htmlBytes: z.number().int().nullable(),
