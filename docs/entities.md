@@ -1998,9 +1998,7 @@ the Problems orphan finder, and MCP `entity_read.connections`. Writes never go
 through it.
 
 The referential-liveness audit reads the complementary case: live sources whose
-declared `must-target-live` edge points at a deleted domain row. It shares each
-target table's deleted IDs within one statement and applies indexable membership
-predicates to sources, skipping source scans when that target set is empty.
+declared `must-target-live` edge points at a deleted domain row.
 Each edge counts before its 50-row sample cap, preserving exact totals in capped
 descriptions. Scoped edges, source liveness and declared exemptions still apply;
 the Entity identity table cannot replace domain tombstones for this audit.

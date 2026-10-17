@@ -38,7 +38,7 @@
  * including silent self-joins). Building one explicit `UNION ALL` of
  * hand-written, alias-qualified SQL fragments — table and column names always
  * routed through `sql.identifier()`, values always bound parameters — sidesteps
- * both problems and keeps every branch visually inspectable.
+ * ambiguous qualification and keeps every branch visually inspectable.
  */
 
 import { entityRefKey, type Entity } from "@cubby/schemas/entity";
@@ -193,13 +193,16 @@ function buildEdgeAuditSpecs(): EdgeAuditSpec[] {
  */
 function detailBranch(spec: EdgeAuditSpec): SQL {
   return sql`(
+    WITH matching_targets AS MATERIALIZED (${matchingTargetCounts(spec)})
     SELECT ${spec.edgeKey}::text AS "edgeKey",
            ${spec.targetEntity}::text AS "targetEntity",
            s.${sql.identifier(spec.sourceIdColumnName)}::text AS "sourceId",
            s.${sql.identifier(spec.sourceColumnName)}::text AS "targetId",
-           count(*) OVER ()::int AS "totalCount"
+           (SELECT sum("count")::int FROM matching_targets) AS "totalCount"
     FROM ${sql.identifier(spec.sourceTableName)} s
-    WHERE ${violationFilter(spec)}
+    JOIN matching_targets t ON t.id = s.${sql.identifier(spec.sourceColumnName)}
+    WHERE EXISTS (SELECT 1 FROM matching_targets)
+    ${liveSourceFilter(spec)}
     LIMIT ${ROW_CAP}
   )`;
 }
@@ -208,9 +211,8 @@ function countBranch(spec: EdgeAuditSpec): SQL {
   return sql`
     SELECT ${spec.edgeKey}::text AS "edgeKey",
            ${spec.targetEntity}::text AS "targetEntity",
-           count(*)::int AS "count"
-    FROM ${sql.identifier(spec.sourceTableName)} s
-    WHERE ${violationFilter(spec)}
+           COALESCE(sum("count"), 0)::int AS "count"
+    FROM (${matchingTargetCounts(spec)}) matching_targets
   `;
 }
 
@@ -220,15 +222,24 @@ function deletedTargetRelation(
   return sql.identifier(`_liveness_deleted_${table}`);
 }
 
-function violationFilter(spec: EdgeAuditSpec): SQL {
+function matchingTargetCounts(spec: EdgeAuditSpec): SQL {
   const targets = deletedTargetRelation(spec.targetTableName);
-  // Empty targets must skip the source scan entirely. With targets present,
-  // membership can use the existing FK index rather than hash-joining every
-  // wide historical source row. The domain table owns the tombstone: Entity
-  // identity liveness cannot substitute for it when auditing raw corruption.
+  // Count using only FK/filter columns before loading any source IDs. A
+  // covering FK index can audit wide history without fetching its heap rows;
+  // unindexed edges retain ordinary joins rather than row × array comparisons.
+  // The materialized matches keep source-ID hydration after this narrow read.
   return sql`
-    EXISTS (SELECT 1 FROM ${targets})
-    AND s.${sql.identifier(spec.sourceColumnName)} = ANY (ARRAY(SELECT id FROM ${targets}))
+    SELECT s.${sql.identifier(spec.sourceColumnName)} AS id, count(*)::int AS "count"
+    FROM ${sql.identifier(spec.sourceTableName)} s
+    JOIN ${targets} t ON t.id = s.${sql.identifier(spec.sourceColumnName)}
+    WHERE EXISTS (SELECT 1 FROM ${targets})
+    ${liveSourceFilter(spec)}
+    GROUP BY s.${sql.identifier(spec.sourceColumnName)}
+  `;
+}
+
+function liveSourceFilter(spec: EdgeAuditSpec): SQL {
+  return sql`
     ${spec.sourceSoftDeletable ? sql`AND s."deletedAt" IS NULL` : sql``}
     ${scopeFilter(spec)}
   `;
@@ -239,6 +250,8 @@ function auditQuery(
   branch: (spec: EdgeAuditSpec) => SQL,
 ): SQL {
   const tables = new Set(specs.map((spec) => spec.targetTableName));
+  // Domain tombstones remain authoritative when the audit catches corruption
+  // that changed a domain table without updating the Entity identity table.
   const targets = [...tables].map(
     (table) => sql`${deletedTargetRelation(table)} AS MATERIALIZED (
       SELECT id FROM ${sql.identifier(table)} WHERE "deletedAt" IS NOT NULL

@@ -1862,6 +1862,9 @@ describe("findReferentialLivenessViolations", () => {
 
     const violations = await findReferentialLivenessViolations(ctx.db);
     expect(violations).toHaveLength(expected.length);
+    expect(await countReferentialLivenessViolations(ctx.db)).toBe(
+      expected.length,
+    );
     for (const violation of violations) {
       expect(violation.description).toContain(violation.sourceTable);
     }
@@ -1905,6 +1908,7 @@ describe("findReferentialLivenessViolations", () => {
     expect(new Set(rows.map((row) => row.sourceId)).size).toBe(50);
     for (const row of rows) {
       expect(expected.has(row.sourceId)).toBe(true);
+      expect(row.targetId).toBe(target.id);
       expect(row.description).toContain("Showing 50 of 51");
     }
     expect(await countReferentialLivenessViolations(ctx.db)).toBe(51);
