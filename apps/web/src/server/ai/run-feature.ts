@@ -56,6 +56,7 @@ import {
   cachedCall,
   piCallTarget,
   type AnthropicEffort,
+  type FundedCall,
   type PiCallTarget,
   type SharedEffort,
 } from "~/server/ai/adapters";
@@ -250,7 +251,7 @@ export interface StructuredRunPlan {
   model: SupportedChatModel;
   call: GatewayCallOptions;
   /** Present: the household funding ladder answers (`fundedChatAttempts`). */
-  funded?: { paid: boolean };
+  funded?: Pick<FundedCall, "paid">;
 }
 
 export function planStructuredRun<T = unknown>(
@@ -315,7 +316,7 @@ export interface StructuredRunPorts {
   callTarget: (
     model: SupportedChatModel,
     call: GatewayCallOptions,
-    funded?: { paid: boolean },
+    funded?: FundedCall,
   ) => PiCallTarget;
 }
 
@@ -652,7 +653,7 @@ async function placeStructuredCall<T>(args: {
   ports: StructuredRunPorts;
   model: SupportedChatModel;
   call: GatewayCallOptions;
-  funded?: { paid: boolean };
+  funded?: FundedCall;
   request: AiChatRequest;
   schema: z.ZodType<T>;
   maxTokens: number;
@@ -773,13 +774,40 @@ export async function runStructuredFeature<T>(
         responseWire = undefined;
       },
     };
-    const startedAt = performance.now();
+    let startedAt = performance.now();
+    // The funding ladder may answer with another model than the tier's.
+    const answeredBy = (message: AssistantMessage | undefined) => {
+      const answered = supportedChatModelSchema.safeParse(message?.model);
+      return answered.success ? answered.data : plan.model;
+    };
+    const funded: FundedCall | undefined = plan.funded && {
+      ...plan.funded,
+      onRefusedAttempt: async (refused) => {
+        if (responseFailure) recoveredFailures.push(responseFailure);
+        responseFailure = undefined;
+        responseWire = undefined;
+        if (callCtx.db)
+          await recordFeatureUsage(
+            { ...spec, model: answeredBy(refused) },
+            callCtx,
+            {
+              ...messageUsage(refused, gateway),
+              transport,
+              durationMs: Math.round(performance.now() - startedAt),
+              status: "failed",
+              applicationCacheStatus: callCtx.applicationCacheStatus,
+            },
+          );
+        gateway = undefined;
+        startedAt = performance.now();
+      },
+    };
     try {
       const { value, message } = await placeStructuredCall({
         ports,
         model: plan.model,
         call,
-        funded: plan.funded,
+        funded,
         request: callRequest,
         schema: spec.schema,
         maxTokens: spec.maxTokens,
@@ -789,10 +817,8 @@ export async function runStructuredFeature<T>(
         },
       });
       if (callCtx.db) {
-        // The funding ladder may answer with another model than the tier's.
-        const answered = supportedChatModelSchema.safeParse(message.model);
         await recordFeatureUsage(
-          answered.success ? { ...spec, model: answered.data } : spec,
+          { ...spec, model: answeredBy(message) },
           callCtx,
           {
             ...messageUsage(message, gateway),
@@ -809,23 +835,28 @@ export async function runStructuredFeature<T>(
       // and a response the forced tool call or schema rejected was still
       // billed, so its usage stays on the row.
       if (!isGatewayAdmissionWait(error) || response || gateway)
-        await recordFeatureUsage(spec, callCtx, {
-          transport,
-          durationMs: Math.round(performance.now() - startedAt),
-          status: "failed",
-          ...(response
-            ? messageUsage(response, gateway)
-            : {
-                gatewayLogId: gateway?.gatewayLogId,
-                gatewayCacheStatus: gateway?.gatewayCacheStatus,
-              }),
-          applicationCacheStatus: callCtx.applicationCacheStatus,
-        });
-      const model = getChatModelConfig(plan.model);
+        await recordFeatureUsage(
+          { ...spec, model: answeredBy(response) },
+          callCtx,
+          {
+            transport,
+            durationMs: Math.round(performance.now() - startedAt),
+            status: "failed",
+            ...(response
+              ? messageUsage(response, gateway)
+              : {
+                  gatewayLogId: gateway?.gatewayLogId,
+                  gatewayCacheStatus: gateway?.gatewayCacheStatus,
+                }),
+            applicationCacheStatus: callCtx.applicationCacheStatus,
+          },
+        );
+      const answered = answeredBy(response);
+      const model = getChatModelConfig(answered);
       throw wrapAiGatewayError(
         error,
         {
-          model: plan.model,
+          model: answered,
           provider: model.provider,
           route: model.gatewayProvider,
           feature: spec.feature,

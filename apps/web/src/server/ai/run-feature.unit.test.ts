@@ -187,6 +187,64 @@ it("keeps the model, gateway route, operation, and provider cause on a failed ca
   });
 });
 
+// A refusal the funding ladder recovered from is not the call's failure, and a
+// failed answer belongs to the model that actually answered.
+it("reports a laddered failure against its answering model, not a recovered refusal", async () => {
+  const faux = fauxProvider();
+  const ports: StructuredRunPorts = {
+    callTarget: (_model, call, funded) => ({
+      model: faux.getModel(),
+      complete: async () => {
+        if (!funded?.onRefusedAttempt) throw new Error("Expected the ladder");
+        const answer = {
+          ...faux.getModel(),
+          role: "assistant" as const,
+          content: [],
+          api: "anthropic-messages" as const,
+          provider: "anthropic",
+          model: "claude-opus-5-5",
+          timestamp: Date.now(),
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: {
+              input: 0,
+              output: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              total: 0,
+            },
+          },
+        };
+        call.onErrorResponse?.({
+          status: 429,
+          statusText: "Too Many Requests",
+          body: "Synthetic stale subscription quota",
+          retryAfter: null,
+        });
+        await funded.onRefusedAttempt({ ...answer, stopReason: "error" });
+        return {
+          ...answer,
+          stopReason: "error" as const,
+          errorMessage: "Synthetic invalid answer",
+        };
+      },
+    }),
+  };
+  const failure = runStructuredFeature(
+    PURCHASE_IMPORT_REPAIR_FEATURE,
+    request,
+    { runId, operation: "purchaseImport.repair" },
+    ports,
+  );
+  await expect(failure).rejects.toThrow(
+    /model: claude-opus-5-5, provider: anthropic.*: Synthetic invalid answer; recovered refusals: 429/u,
+  );
+});
+
 it("retains response headers when a requested stream fails outside an observed error envelope", async () => {
   const providerError = new Error("Synthetic stream refusal");
   const faux = fauxProvider();

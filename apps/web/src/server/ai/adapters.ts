@@ -61,6 +61,13 @@ export interface PiCallTarget {
   ) => Promise<AssistantMessage>;
 }
 
+/** The household funding ladder for one call (`fundedChatAttempts`). */
+export interface FundedCall {
+  paid: boolean;
+  /** A refused attempt the ladder recovered from; it is not the answer. */
+  onRefusedAttempt?: (message: AssistantMessage) => Promise<void>;
+}
+
 /**
  * Builds a fresh pi-ai `Models` collection per call: the gateway's per-call
  * metadata and cache policy (`call`) live in the provider's fetch closure
@@ -73,7 +80,7 @@ export function piCallTarget(
   model: SupportedChatModel,
   call: GatewayCallOptions,
   /** Present: run the household funding ladder instead of `model` alone. */
-  funded?: { paid: boolean },
+  funded?: FundedCall,
 ): PiCallTarget {
   const { gatewayProvider } = getChatModelConfig(model);
   const models = createModels();
@@ -102,7 +109,7 @@ export function piCallTarget(
     };
   };
   for (const provider of funded
-    ? fundedCubbyPiProviders(fetchFor, undefined, funded)
+    ? fundedCubbyPiProviders(fetchFor, funded.onRefusedAttempt, funded)
     : cubbyPiProviders(fetchFor))
     models.setProvider(provider);
   const resolved = models.getModel(gatewayProvider, model);
