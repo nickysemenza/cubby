@@ -8,6 +8,7 @@ import {
   type FinancialAccountOut,
   type FinancialAccountUpdateData,
   financialAccountCardNumbers,
+  financialAccountFiltersSchema,
   financialAccountIdentity,
   financialAccountIdentityKind,
   financialAccountOut,
@@ -18,8 +19,12 @@ import {
   type FinancialAccountShortcode,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { and, eq, type SQL, sql } from "drizzle-orm";
+import {
+  oneOrManyValues,
+  type PaginationParams,
+  type SortParams,
+} from "@cubby/schemas/pagination";
+import { and, eq, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -56,6 +61,7 @@ import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
+import { listPrepare } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
@@ -246,62 +252,66 @@ const hydrateAccountsRead = async (
     }),
   });
 
-const aliasCondition = (
-  sources: string[] | undefined,
-  externalAccountIds: string[] | undefined,
-): SQL | undefined => {
-  if (!sources && !externalAccountIds) return undefined;
-  return sql`EXISTS (
-    SELECT 1 FROM jsonb_array_elements(CASE
-      WHEN jsonb_typeof("FinancialAccount"."sourceAliases") = 'array'
-      THEN "FinancialAccount"."sourceAliases" ELSE '[]'::jsonb END) alias
-    WHERE ${matchesStringValues(sql`alias->>${"source"}`, sources)}
-      AND ${matchesStringValues(sql`alias->>'externalAccountId'`, externalAccountIds)}
-  )`;
-};
+const sourceAliasesSql = sql`jsonb_array_elements(CASE
+  WHEN jsonb_typeof("FinancialAccount"."sourceAliases") = 'array'
+  THEN "FinancialAccount"."sourceAliases" ELSE '[]'::jsonb END) alias`;
+
+// A `source` filter matches `externalAccountId` on the same alias, so it reads
+// that sibling filter.
+const aliasAccountIds = listPrepare(async (_db, filters) => {
+  const ids = oneOrManyValues(
+    financialAccountFiltersSchema
+      .pick({ externalAccountId: true })
+      .parse(filters).externalAccountId,
+  );
+  return ids === undefined ? undefined : [...ids];
+});
 
 const financialAccountScaffold = listScaffold(
   "financialAccount",
   financialAccount,
-  { derived: { transactionCount: financialAccountTransactionCount } },
+  {
+    derived: {
+      transactionCount: financialAccountTransactionCount,
+      identityKind: sql`"FinancialAccount"."identity"->>${"kind"}`,
+      hasSourceAlias: sql`jsonb_array_length("FinancialAccount"."sourceAliases") > 0`,
+      // Any card the account has ever presented, not just today's primary:
+      // a receipt's digits are the usual reason someone filters by last four.
+      last4: (last4) => sql`EXISTS (
+        SELECT 1 FROM jsonb_array_elements(CASE
+          WHEN jsonb_typeof("FinancialAccount"."cardNumbers") = 'array'
+          THEN "FinancialAccount"."cardNumbers" ELSE '[]'::jsonb END) card
+        WHERE card->>'last4' = ${last4}
+      )`,
+      // `matchesStringValues`, NOT sql`expr = ANY(${arr})`: drizzle expands a
+      // JS array in a template into a row constructor (`ANY(($1, $2))`),
+      // which postgres rejects.
+      source: aliasAccountIds.predicate(
+        (externalAccountIds, { values }) => sql`EXISTS (
+          SELECT 1 FROM ${sourceAliasesSql}
+          WHERE ${matchesStringValues(sql`alias->>${"source"}`, [...values])}
+            AND ${matchesStringValues(sql`alias->>'externalAccountId'`, externalAccountIds)}
+        )`,
+      ),
+      externalAccountId: ({ values }) => sql`EXISTS (
+        SELECT 1 FROM ${sourceAliasesSql}
+        WHERE ${matchesStringValues(sql`alias->>'externalAccountId'`, [...values])}
+      )`,
+    },
+  },
 );
 
 /** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
-export const buildFinancialAccountWhere = (filters: FinancialAccountFilters) =>
-  // `name` (text) and `provisional` (boolean) are declared stored filters —
-  // applied by `.where` before the conditions below.
-  financialAccountScaffold.where(filters, [
-    // `matchesStringValues`, NOT sql`expr = ANY(${arr})`: drizzle expands a
-    // JS array in a template into a row constructor (`ANY(($1, $2))`), which
-    // postgres rejects.
-    filters.identityKind
-      ? matchesStringValues(
-          sql`"FinancialAccount"."identity"->>${"kind"}`,
-          [filters.identityKind].flat(),
-        )
-      : undefined,
-    // Any card the account has ever presented, not just today's primary:
-    // a receipt's digits are the usual reason someone filters by last four.
-    filters.last4
-      ? sql`EXISTS (
-          SELECT 1 FROM jsonb_array_elements(CASE
-            WHEN jsonb_typeof("FinancialAccount"."cardNumbers") = 'array'
-            THEN "FinancialAccount"."cardNumbers" ELSE '[]'::jsonb END) card
-          WHERE card->>'last4' = ${filters.last4}
-        )`
-      : undefined,
-    aliasCondition(
-      filters.source ? [filters.source].flat() : undefined,
-      filters.externalAccountId
-        ? [filters.externalAccountId].flat()
-        : undefined,
-    ),
-    filters.sourceAliasPresenceFilter === "has"
-      ? sql`jsonb_array_length("FinancialAccount"."sourceAliases") > 0`
-      : filters.sourceAliasPresenceFilter === "none"
-        ? sql`jsonb_array_length("FinancialAccount"."sourceAliases") = 0`
-        : undefined,
-  ]);
+export const buildFinancialAccountWhere = async (
+  db: Database | DrizzleTransaction,
+  filters: FinancialAccountFilters,
+) =>
+  financialAccountScaffold.where(filters, [], {
+    context: await financialAccountScaffold.context(db, {
+      filters,
+      readIntent: "count",
+    }),
+  });
 
 export const listFinancialAccountsRead = (
   db: Database,
@@ -314,7 +324,6 @@ export const listFinancialAccountsRead = (
     db,
     { filters, sorts, pagination, projection },
     {
-      where: buildFinancialAccountWhere(filters),
       select: (page) =>
         selectAccountsRead(db, projection)
           .where(page.where)

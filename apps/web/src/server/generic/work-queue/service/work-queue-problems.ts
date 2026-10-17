@@ -81,16 +81,14 @@ const sharedProblemBuilders = {
       productFiltersSchema.parse(compileProblemFilters("product", filters)),
       readContext,
     ),
-  ingredient: (db, filters) =>
+  ingredient: (_db, filters) =>
     buildIngredientListWhere(
-      db,
       ingredientFiltersSchema.parse(
         compileProblemFilters("ingredient", filters),
       ),
     ),
-  recipe: (db, filters) =>
+  recipe: (_db, filters) =>
     buildRecipeWhere(
-      db,
       recipeFiltersSchema.parse(compileProblemFilters("recipe", filters)),
     ),
   inventory: (db, filters) =>

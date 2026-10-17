@@ -536,6 +536,11 @@ export default defineEntity({
     ],
     derived: {
       gardenEntryId: { via: "entries" },
+      activeOn: {
+        predicate: "text",
+        reason:
+          "Active on a date: started on or before it and not finished before it",
+      },
     },
     sort: {
       fields: ["createdAt", "updatedAt", "status", "sowedOn", "finishedOn"],
@@ -629,6 +634,8 @@ export default defineEntity({
       {
         columnId: "locationId",
         kind: "idMulti",
+        deriveSchema: true,
+        stored: true,
         placeholder: "Filter by location...",
         brandRef: { entity: "location" },
       },
@@ -637,6 +644,7 @@ export default defineEntity({
         // planting pickers; the repository computes lifecycle membership.
         columnId: "activeOn",
         kind: "text",
+        derived: true,
         placeholder: "Filter plantings active on...",
         urlOnly: true,
       },

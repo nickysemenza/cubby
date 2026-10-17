@@ -750,6 +750,8 @@ export default defineEntity({
       image: { type: "boolean" },
       // A live section with written instructions.
       instructions: { type: "boolean" },
+      // Used as an ingredient line of another live recipe.
+      subRecipe: { type: "boolean" },
     },
     sort: {
       fields: [
@@ -910,7 +912,17 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by cookbook...",
         brandRef: { entity: "cookbook" },
-        nullable: { field: "cookbookPresenceFilter", label: "cookbook" },
+        deriveSchema: true,
+        stored: { columns: ["cookbookId"] },
+      },
+      {
+        // "What can I make?" drops sub-recipes: a component, not a meal.
+        columnId: "subRecipe",
+        kind: "boolean",
+        placeholder: "Filter sub-recipes...",
+        urlOnly: true,
+        deriveSchema: true,
+        derived: true,
       },
       {
         columnId: "meals",

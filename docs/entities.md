@@ -1413,7 +1413,8 @@ declared exception with its reason. Email's urlOnly
 `purchaseId`/`vendorId`/`vendorAccountId` declare `singleValue: { reason }`
 (`linkState` is relative to one scope record): their schemas accept one value,
 the native picker chooses one record, and the repository rejects more than one
-across the three. Every other filter that cannot be a stored column or a `via`
+across the three. Each is also a `model.derived` predicate over the one scope
+record they resolve. Every other filter that cannot be a stored column or a `via`
 path is a `model.derived` predicate whose `reason` lives in the declaration.
 
 A `stored` descriptor names the standard predicate over stored columns, and
@@ -1489,7 +1490,13 @@ only when the request filters, sorts, groups, or projects on a field that
 reads it; a caller that already holds a prepare's data passes it as
 `context(db, request, [[handle, data]])` (project attention). `where`/`orderBy`/`filterPredicates` stay synchronous and take that
 context, `list` builds it unless `spec.context` passes one, and `hydrate`
-receives it. The generated `generatedEntityListFields` map
+receives it. A predicate that must match on the same related row as a sibling
+filter (an account alias's `source` with its `externalAccountId`, an image's
+import `runId` with its `targetState`) reads the sibling's value through a
+prepare; the sibling keeps its own independent predicate, which the combined
+one implies. A list's static row scope (ingredient lists never show
+recipe-scoped rows) is ANDed with `where` by the repository; it is not a
+filter. The generated `generatedEntityListFields` map
 (`@cubby/schemas/entity-list-fields`) carries each entity's derived shapes,
 hierarchy, subtree toggles, and Group by choices.
 

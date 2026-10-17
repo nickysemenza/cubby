@@ -22,11 +22,7 @@ import { runStatus } from "@cubby/schemas/run-fields";
 import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import {
-  householdDayRangeConditions,
-  notDeleted,
-  unwrapDb,
-} from "~/server/db/helpers";
+import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import {
   expense,
   product,
@@ -61,7 +57,10 @@ import {
   createEntityReader,
   defineRepository,
 } from "~/server/entity-kernel/repo/repository";
-import { listPrepare } from "~/server/generic/list/repo/field-compiler";
+import {
+  ListContext,
+  listPrepare,
+} from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import { hydrateListRead } from "~/server/generic/list/repo/list-projection";
@@ -225,6 +224,12 @@ const emailScopeFilters = emailFilters.pick({
   vendorAccountId: true,
 });
 
+// One scope record across the three filters (`resolveEmailScope`), so each
+// filter that names it applies the same condition.
+const inScope = emailScope.predicate((scope) =>
+  scope ? emailInScopeSql(scope) : undefined,
+);
+
 const scaffold = listScaffold("email", emailTable, {
   derived: {
     // Ties read newest first in either direction.
@@ -232,6 +237,12 @@ const scaffold = listScaffold("email", emailTable, {
       emailLinkRankSql(scope),
       { sql: sql`${emailTable.receivedAt}`, direction: "desc" },
     ]),
+    scopeLinkState: emailScope.value((scope) => emailLinkStateSql(scope)),
+    linked: emailLinkedSql(),
+    reviewConflict: emailReviewConflictSql(),
+    purchaseId: inScope,
+    vendorId: inScope,
+    vendorAccountId: inScope,
   },
 });
 
@@ -281,28 +292,8 @@ export async function resolveEmailScope(
 
 export const buildEmailWhere = (
   filters: EmailFilters,
-  scope: EmailPurchaseScope | null = null,
-) =>
-  scaffold.where(filters, [
-    ...householdDayRangeConditions(
-      emailTable.receivedAt,
-      filters.receivedAtFrom,
-      filters.receivedAtTo,
-    ),
-    filters.linked === undefined
-      ? undefined
-      : eq(emailLinkedSql(), filters.linked),
-    filters.reviewConflict === undefined
-      ? undefined
-      : eq(emailReviewConflictSql(), filters.reviewConflict),
-    scope ? emailInScopeSql(scope) : undefined,
-    filters.linkState === undefined
-      ? undefined
-      : sql`${emailLinkStateSql(scope)} IN (${sql.join(
-          [filters.linkState].flat().map((state) => sql`${state}`),
-          sql`, `,
-        )})`,
-  ]);
+  context: ListContext = ListContext.empty,
+) => scaffold.where(filters, [], { context });
 
 /** Accepted import evidence, else the import Run's own status. */
 const OUTCOME = emailImportOutcome.enum;
@@ -504,7 +495,6 @@ const emailListRead =
       : await resolveEmailScope(db, filters);
     return scaffold.list(db, request, {
       context,
-      where: buildEmailWhere(filters, scope),
       hydrate: (rows, selected) =>
         hydrateRead(db, rows, selected, viewer, scope),
     });

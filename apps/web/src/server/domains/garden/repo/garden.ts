@@ -27,27 +27,27 @@ import {
   and,
   desc,
   eq,
-  gte,
+  exists,
   inArray,
+  isNull,
   lte,
   notExists,
   or,
   sql,
 } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import { alias, QueryBuilder } from "drizzle-orm/pg-core";
 import type { z } from "zod";
 
-import { householdLocalDate } from "~/lib/household-date";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   associatePendingImages,
   buildPartialUpdateValues,
-  eqAnyRequested,
   householdDaySql,
   imageJoinBindings,
   mapImages,
   type MappableImageRecord,
   notDeleted,
+  shortcodeSetCondition,
   unwrapDb,
   updateLiveAndReturn,
   withTransaction,
@@ -79,6 +79,7 @@ import {
   liveLinks,
   ofLinkKind,
 } from "~/server/generic/entity-links/repo/entity-links";
+import { shortcodeIdsSql } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
@@ -89,12 +90,13 @@ import {
 import { parseCompleteListRead } from "~/server/generic/list/repo/list-read-adapters";
 import {
   resolveAllOrThrow,
-  resolveFilterIds,
   resolveLiveShortcode,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 type GardenDb = Database | DrizzleTransaction;
+
+const qb = new QueryBuilder();
 
 // `z.input`, not `z.infer`/`z.output`: every defaultable create field
 // (`status`, `outcome`, …) is optional pre-parse and non-optional
@@ -799,7 +801,13 @@ export const updateGardenEntry = async (
     return getGardenEntry(tx, id);
   });
 
-const plantingScaffold = listScaffold("planting", planting);
+const plantingScaffold = listScaffold("planting", planting, {
+  derived: {
+    activeOn: (day) =>
+      sql`COALESCE(${planting.sowedOn}, ${planting.transplantedOn}, ${householdDaySql(planting.createdAt)}) <= ${day}::date
+        AND (${planting.finishedOn} IS NULL OR ${planting.finishedOn} >= ${day}::date)`,
+  },
+});
 
 export const plantingListRead = async (
   db: Database,
@@ -808,25 +816,10 @@ export const plantingListRead = async (
   sorts: SortParams[] = [],
   projection: ListProjection = { kind: "full" },
 ) => {
-  // Id filters resolve shortcodes first; a requested set that resolves to
-  // nothing matches nothing (`eqAnyRequested`), never the whole list.
-  const locationIds = await resolveFilterIds(
-    db,
-    "location",
-    filters.locationId,
-  );
-  const where = plantingScaffold.where(filters, [
-    filters.activeOn
-      ? sql`COALESCE(${planting.sowedOn}, ${planting.transplantedOn}, ${householdDaySql(planting.createdAt)}) <= ${filters.activeOn}::date
-          AND (${planting.finishedOn} IS NULL OR ${planting.finishedOn} >= ${filters.activeOn}::date)`
-      : undefined,
-    eqAnyRequested(planting.locationId, locationIds),
-  ]);
   return plantingScaffold.list(
     db,
     { filters, sorts, pagination, projection },
     {
-      where,
       load: (where, selected) =>
         unwrapDb(db).query.planting.findMany({
           where,
@@ -869,71 +862,68 @@ export const plantingList = async (
   return parseCompleteListRead(plantingListItemOut, Promise.resolve(result));
 };
 
-const gardenEntryScaffold = listScaffold("gardenEntry", gardenEntry);
+const journalLink = alias(entityLink, "journalLink");
+const wholeAreaLink = alias(entityLink, "wholeAreaLink");
+const journalPlanting = alias(planting, "journalPlanting");
 
-/**
- * A planting's journal always includes its direct live associations. A
- * whole-area entry joins only when it has no live planting associations and
- * was observed at the planting's current location within the planting's own
- * active window. The planting's location and window are resolved once for
- * selection and count.
- */
-const journalPredicate = async (db: Database, plantingId: PlantingId) => {
-  const row = await unwrapDb(db).query.planting.findFirst({
-    where: and(eq(planting.id, plantingId), notDeleted(planting)),
-    columns: {
-      locationId: true,
-      sowedOn: true,
-      transplantedOn: true,
-      createdAt: true,
-      finishedOn: true,
-    },
-  });
-  const directEntryIds = unwrapDb(db)
-    .select({ id: entityLink.fromEntityId })
-    .from(entityLink)
-    .where(
-      and(
-        eq(entityLink.toEntityId, plantingId),
-        liveLinks("gardenEntryPlanting"),
-      ),
-    );
-  if (!row || row.locationId === null) {
-    return inArray(gardenEntry.id, directEntryIds);
-  }
-
-  const wholeAreaEntry = alias(gardenEntry, "wholeAreaGardenEntry");
-  const wholeAreaLink = alias(entityLink, "wholeAreaGardenEntryPlanting");
-  const start =
-    row.sowedOn ?? row.transplantedOn ?? householdLocalDate(row.createdAt);
-  const wholeAreaEntryIds = unwrapDb(db)
-    .select({ id: wholeAreaEntry.id })
-    .from(wholeAreaEntry)
-    .where(
-      and(
-        notExists(
-          unwrapDb(db)
-            .select({ id: wholeAreaLink.id })
-            .from(wholeAreaLink)
+const gardenEntryScaffold = listScaffold("gardenEntry", gardenEntry, {
+  derived: {
+    /**
+     * A planting's journal always includes its direct live associations. A
+     * whole-area entry joins only when it has no live planting associations
+     * and was observed at the planting's current location within the
+     * planting's own active window.
+     */
+    journalPlantingId: ({ values }) => {
+      const plantingIds = shortcodeIdsSql("planting", (shortcode) =>
+        shortcodeSetCondition(shortcode, values),
+      );
+      return or(
+        exists(
+          qb
+            .select({ id: journalLink.id })
+            .from(journalLink)
             .where(
               and(
-                eq(wholeAreaLink.fromEntityId, wholeAreaEntry.id),
-                liveLinks("gardenEntryPlanting", wholeAreaLink),
+                eq(journalLink.fromEntityId, gardenEntry.id),
+                sql`${journalLink.toEntityId} IN ${plantingIds}`,
+                liveLinks("gardenEntryPlanting", journalLink),
               ),
             ),
         ),
-        eq(wholeAreaEntry.locationId, row.locationId),
-        gte(wholeAreaEntry.observedOn, start),
-        row.finishedOn === null
-          ? undefined
-          : lte(wholeAreaEntry.observedOn, row.finishedOn),
-      ),
-    );
-  return or(
-    inArray(gardenEntry.id, directEntryIds),
-    inArray(gardenEntry.id, wholeAreaEntryIds),
-  );
-};
+        and(
+          notExists(
+            qb
+              .select({ id: wholeAreaLink.id })
+              .from(wholeAreaLink)
+              .where(
+                and(
+                  eq(wholeAreaLink.fromEntityId, gardenEntry.id),
+                  liveLinks("gardenEntryPlanting", wholeAreaLink),
+                ),
+              ),
+          ),
+          exists(
+            qb
+              .select({ id: journalPlanting.id })
+              .from(journalPlanting)
+              .where(
+                and(
+                  sql`${journalPlanting.id} IN ${plantingIds}`,
+                  eq(journalPlanting.locationId, gardenEntry.locationId),
+                  sql`${gardenEntry.observedOn} >= COALESCE(${journalPlanting.sowedOn}, ${journalPlanting.transplantedOn}, ${householdDaySql(journalPlanting.createdAt)})`,
+                  or(
+                    isNull(journalPlanting.finishedOn),
+                    lte(gardenEntry.observedOn, journalPlanting.finishedOn),
+                  ),
+                ),
+              ),
+          ),
+        ),
+      );
+    },
+  },
+});
 
 export const gardenEntryListRead = async (
   db: Database,
@@ -942,27 +932,10 @@ export const gardenEntryListRead = async (
   sorts: SortParams[] = [],
   projection: ListProjection = { kind: "full" },
 ) => {
-  const [locationIds, journalPlantingIds] = await Promise.all([
-    resolveFilterIds(db, "location", filters.locationId),
-    resolveFilterIds(db, "planting", filters.journalPlantingId),
-  ]);
-  const where = gardenEntryScaffold.where(filters, [
-    eqAnyRequested(gardenEntry.locationId, locationIds),
-    journalPlantingIds === undefined
-      ? undefined
-      : journalPlantingIds.length > 0
-        ? or(
-            ...(await Promise.all(
-              journalPlantingIds.map((id) => journalPredicate(db, id)),
-            )),
-          )
-        : sql`false`,
-  ]);
   return gardenEntryScaffold.list(
     db,
     { filters, sorts, pagination, projection },
     {
-      where,
       // `createdAt desc` is a deliberate stable tiebreak — a `tieBreaker`, not
       // a `resolve` special-case, so it can't swallow a second user-requested
       // sort (see `buildOrderBy`'s doc comment).

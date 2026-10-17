@@ -628,6 +628,21 @@ export default defineEntity({
     ],
     bulk: [],
     audit: [],
+    derived: {
+      // Referenced by a live owner (an attachment, an order document).
+      referenced: { type: "boolean" },
+      processingIssue: { type: "enum", options: ["failed", "review_needed"] },
+      uploadedAgeHours: { type: "number" },
+      runId: {
+        predicate: "idMulti",
+        reason:
+          "Matches an import-run target row, together with targetState on the same row",
+      },
+      targetState: {
+        predicate: "multiselect",
+        reason: "Matches the state of any import-run target row",
+      },
+    },
     sort: {
       fields: ["createdAt", "updatedAt", "filename", "size", "status"],
     },
@@ -728,6 +743,7 @@ export default defineEntity({
         columnId: "processingIssue",
         field: "processingIssue",
         kind: "multiselect",
+        derived: true,
         placeholder: "Filter processing issues...",
         options: [
           { value: "failed", label: "Failed", color: "var(--destructive)" },
@@ -742,6 +758,7 @@ export default defineEntity({
         columnId: "entity",
         field: "referencePresenceFilter",
         kind: "presence",
+        derived: "referenced",
         placeholder: "Filter references...",
         options: [
           { value: "has", label: "Has reference", meta: true },
@@ -784,6 +801,7 @@ export default defineEntity({
       {
         columnId: "runId",
         kind: "idMulti",
+        derived: true,
         placeholder: "Filter by import run...",
         brandRef: { entity: "run" },
         urlOnly: true,
@@ -791,6 +809,7 @@ export default defineEntity({
       {
         columnId: "targetState",
         kind: "multiselect",
+        derived: true,
         placeholder: "Filter by import-run target state...",
         options: [
           { value: "pending", label: "Pending", color: "var(--slate)" },
@@ -867,6 +886,24 @@ export default defineEntity({
         brandRef: { entity: "ledgerParty" },
         currentMember: true,
         urlOnly: true,
+        deriveSchema: true,
+        stored: true,
+      },
+      {
+        columnId: "uploadedAgeHours",
+        kind: "range",
+        placeholder: "Filter by upload age...",
+        urlOnly: true,
+        deriveSchema: true,
+        derived: true,
+        range: {
+          kind: "number",
+          nonnegative: true,
+          describe: {
+            lower: "Only images uploaded at least this many hours ago.",
+            upper: "Only images uploaded at most this many hours ago.",
+          },
+        },
       },
     ],
   },

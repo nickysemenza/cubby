@@ -268,79 +268,26 @@ const wishPriceMid = sql`((${wishPriceLow} + ${wishPriceHigh}) / 2)`;
 // A price range is an aggregate over candidates, not a column on `Wish`; a
 // wish whose alternatives are all unpriced has no range at all.
 const wishScaffold = listScaffold("wish", wish, {
-  derived: { priceRange: wishPriceMid },
-});
-
-/** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
-export const buildWishWhere = async (
-  db: Database | DrizzleTransaction,
-  filters: WishFilters,
-) => {
-  const candidateProductIds = filters.candidateProductId
-    ? Array.isArray(filters.candidateProductId)
-      ? filters.candidateProductId
-      : [filters.candidateProductId]
-    : undefined;
-  // Resolved to uuids up front, same idiom as `resolveAllPresent`:
-  // matching the raw shortcode STRING against `p.shortcode`
-  // compares byte-for-byte, so a lowercase code would silently match nothing
-  // instead of being canonicalized — the #591 bug class, guarded generically
-  // by `shortcode.integration.test.ts`. `resolveLiveShortcodes` also means an
-  // unknown/malformed/soft-deleted code resolves to nothing rather than
-  // throwing, matching every other filter here.
-  const candidateProductUuids = candidateProductIds
-    ? [
-        ...(
-          await resolveLiveShortcodes(db, candidateProductIds, "product")
-        ).values(),
-      ]
-    : undefined;
-  const candidateFilter = candidateProductUuids
-    ? candidateProductUuids.length > 0
-      ? sql`EXISTS (
-        SELECT 1 FROM "EntityLink" wc
-        JOIN "Product" p ON p."id" = wc."toEntityId" AND p."deletedAt" IS NULL
-        WHERE wc."fromEntityId" = ${wish.id}
-          AND wc."deletedAt" IS NULL AND wc."kind" = 'wishCandidate'
-          AND p."id" IN (${sql.join(
-            candidateProductUuids.map((id) => sql`${id}::uuid`),
-            sql`, `,
-          )})
-      )`
-      : // A candidateProductId WAS supplied but none of it resolved to a live
-        // product — must match nothing, not drop the constraint (same
-        // requested-but-unresolved handling `expense/lookup.ts` uses for
-        // `productId`/`vendorId`/`purchaseId`).
-        sql`false`
-    : undefined;
-  const search = filters.search
-    ? or(
-        formatSearchTerm(wish.name, filters.search),
-        formatSearchTerm(wish.notes, filters.search),
+  derived: {
+    priceRange: wishPriceMid,
+    search: (term) =>
+      or(
+        formatSearchTerm(wish.name, term),
+        formatSearchTerm(wish.notes, term),
         sql`EXISTS (
           SELECT 1 FROM "EntityLink" wc
           JOIN "Product" p ON p."id" = wc."toEntityId" AND p."deletedAt" IS NULL
           WHERE wc."fromEntityId" = ${wish.id}
             AND wc."deletedAt" IS NULL AND wc."kind" = 'wishCandidate'
-            AND ${candidateProductSearch(filters.search)}
+            AND ${candidateProductSearch(term)}
         )`,
-      )
-    : undefined;
-  // The name/notes/candidate search is an OR across columns (see `search`
-  // above), not the per-column AND a declared stored predicate would apply —
-  // so it goes in via `computed` instead, alongside `acquired` (a declared
-  // stored boolean over the nullable `acquiredAt`, applied by
-  // `wishScaffold.where` before the conditions below).
-  return wishScaffold.where(filters, [
-    candidateFilter,
-    search,
-    // `wishFilterFields` spreads both of these, and the manifest renders their
-    // controls — so omitting either here is the same manifest/server drift this
-    // entity's UI work set out to remove, just pointing the other way (the UI
-    // sends a filter the server silently ignores). Every other related-view
-    // source repo applies both.
-  ]);
-};
+      ),
+  },
+});
+
+/** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
+export const buildWishWhere = (filters: WishFilters) =>
+  wishScaffold.where(filters);
 
 export const wishListRead = async (
   db: Database,
@@ -349,12 +296,10 @@ export const wishListRead = async (
   pagination: PaginationParams,
   projection: ListProjection = { kind: "full" },
 ) => {
-  const where = await buildWishWhere(db, filters);
   return wishScaffold.list(
     db,
     { filters, sorts, pagination, projection },
     {
-      where,
       hydrate: (rows) => hydrateWishesRead(db, rows, projection),
     },
   );
@@ -367,7 +312,7 @@ export const wishListSummary = async (db: Database, filters: WishFilters) => {
       priceHigh: sql<number>`COALESCE(sum(${wishPriceHigh}), 0)::double precision`,
     })
     .from(wish)
-    .where(await buildWishWhere(db, filters));
+    .where(buildWishWhere(filters));
   return {
     priceLow: Number(totals?.priceLow ?? 0),
     priceHigh: Number(totals?.priceHigh ?? 0),

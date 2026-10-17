@@ -276,6 +276,15 @@ export default defineEntity({
       appearsInRecipes: { type: "number" },
       // The number of live Products mapped to the ingredient.
       product: { type: "number" },
+      // A live Product is mapped to the ingredient.
+      hasProduct: { type: "boolean" },
+      // Used by a live recipe.
+      inRecipes: { type: "boolean" },
+      // Used by a live recipe of your own (not a cookbook import).
+      ownRecipes: { type: "boolean" },
+      // Used by a live recipe with no live Product whose conversion coverage
+      // is complete.
+      mappingGap: { type: "boolean" },
     },
     sort: {
       fields: ["createdAt", "updatedAt", "name", "appearsInRecipes", "product"],
@@ -366,12 +375,14 @@ export default defineEntity({
         kind: "text",
         placeholder: "Filter by ingredient name...",
         deriveSchema: true,
-        schemaDescription: "Filter by ingredient name (substring)",
+        stored: { columns: ["name", "aliases"] },
+        schemaDescription: "Filter by ingredient name or alias (substring)",
       },
       {
         columnId: "product",
         field: "productPresenceFilter",
         kind: "presence",
+        derived: "hasProduct",
         placeholder: "Filter product...",
         options: [
           { value: "has", label: "Has product", meta: true },
@@ -382,6 +393,7 @@ export default defineEntity({
         columnId: "mappingGap",
         field: "mappingGap",
         kind: "boolean",
+        derived: true,
         placeholder: "Filter product mapping...",
         options: [{ value: "true", label: "Needs product mapping" }],
       },
@@ -402,6 +414,7 @@ export default defineEntity({
         columnId: "ownRecipes",
         field: "ownRecipePresenceFilter",
         kind: "presence",
+        derived: true,
         placeholder: "Filter own recipes...",
         options: [
           { value: "has", label: "Has own recipes", meta: true },
@@ -412,6 +425,7 @@ export default defineEntity({
         columnId: "appearsInRecipes",
         field: "recipePresenceFilter",
         kind: "presence",
+        derived: "inRecipes",
         placeholder: "Filter recipes...",
         options: [
           { value: "has", label: "Has recipes", meta: true },

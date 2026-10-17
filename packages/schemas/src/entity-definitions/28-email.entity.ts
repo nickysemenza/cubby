@@ -467,6 +467,14 @@ export default defineEntity({
     derived: {
       // Linked, then suggested, then unlinked; newest first within one.
       linkState: { type: "enum", options: [...emailLinkState.options] },
+      // The link state the list shows, relative to its scope record.
+      scopeLinkState: { type: "enum", options: [...emailLinkState.options] },
+      linked: { type: "boolean" },
+      // The pipeline stage disagrees with a review decision.
+      reviewConflict: { type: "boolean" },
+      purchaseId: { predicate: "idMulti", reason: EMAIL_SCOPE_REASON },
+      vendorId: { predicate: "idMulti", reason: EMAIL_SCOPE_REASON },
+      vendorAccountId: { predicate: "idMulti", reason: EMAIL_SCOPE_REASON },
     },
     sort: {
       fields: [
@@ -572,6 +580,7 @@ export default defineEntity({
         kind: "range",
         placeholder: "Filter by received date...",
         deriveSchema: true,
+        stored: true,
       },
       {
         columnId: "classification",
@@ -638,6 +647,7 @@ export default defineEntity({
       {
         columnId: "linked",
         kind: "boolean",
+        derived: true,
         placeholder: "Filter by Purchase association...",
         deriveSchema: true,
         options: [
@@ -648,12 +658,14 @@ export default defineEntity({
       {
         columnId: "linkState",
         kind: "multiselect",
+        derived: "scopeLinkState",
         placeholder: "Filter by link...",
         options: linkStateOptions,
       },
       {
         columnId: "purchaseId",
         kind: "idMulti",
+        derived: true,
         placeholder: "Emails for Purchase...",
         brandRef: { entity: "purchase" },
         urlOnly: true,
@@ -662,6 +674,7 @@ export default defineEntity({
       {
         columnId: "vendorId",
         kind: "idMulti",
+        derived: true,
         placeholder: "Emails for Vendor...",
         brandRef: { entity: "vendor" },
         urlOnly: true,
@@ -670,6 +683,7 @@ export default defineEntity({
       {
         columnId: "vendorAccountId",
         kind: "idMulti",
+        derived: true,
         placeholder: "Emails for Vendor account...",
         brandRef: { entity: "vendorAccount" },
         urlOnly: true,
@@ -678,6 +692,7 @@ export default defineEntity({
       {
         columnId: "reviewConflict",
         kind: "boolean",
+        derived: true,
         placeholder: "Stage disagrees with review",
         deriveSchema: true,
         options: [

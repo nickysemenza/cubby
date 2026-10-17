@@ -12,18 +12,19 @@ import type {
   RecipeId,
 } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type {
-  AttachableImageEntity,
-  ImageAssociation,
-  ImageListFilters,
-  ImageHashIndex,
-  ImportTargetSummary,
-  SetPerceptualHashesInput,
-  SetPerceptualHashesOutput,
-  ImageUpdateInput,
-  ImageWithEntity,
-  ProductImagePurpose,
-  StoredImageEmbeddedMetadata,
+import {
+  type AttachableImageEntity,
+  type ImageAssociation,
+  type ImageListFilters,
+  imageListFiltersSchema,
+  type ImageHashIndex,
+  type ImportTargetSummary,
+  type SetPerceptualHashesInput,
+  type SetPerceptualHashesOutput,
+  type ImageUpdateInput,
+  type ImageWithEntity,
+  type ProductImagePurpose,
+  type StoredImageEmbeddedMetadata,
 } from "@cubby/schemas/image";
 import {
   attachableImageEntityId,
@@ -40,6 +41,7 @@ import {
   imageSightingSourceType,
   imageSightingMatchKind,
 } from "@cubby/schemas/image-sighting-fields";
+import { oneOrManyValues } from "@cubby/schemas/pagination";
 import { photoRunImageState } from "@cubby/schemas/photo-import-run";
 import type { PurchaseDocumentKind } from "@cubby/schemas/purchase";
 import {
@@ -66,7 +68,12 @@ import {
   type GetColumnData,
   sql,
 } from "drizzle-orm";
-import type { PgColumn, PgTable, PgUpdateSetSource } from "drizzle-orm/pg-core";
+import {
+  type PgColumn,
+  type PgTable,
+  type PgUpdateSetSource,
+  QueryBuilder,
+} from "drizzle-orm/pg-core";
 import { match } from "ts-pattern";
 
 import { localPhotoAnalysisSchema } from "~/contracts/photo-import.contract";
@@ -84,8 +91,6 @@ import { correlated } from "~/server/db/helpers";
 import {
   associatePendingImages,
   countWhere,
-  eqAny,
-  eqAnyRequested,
   getDb,
   imageJoinBindings,
   type ImageJoinBinding,
@@ -93,7 +98,9 @@ import {
   isNotDeleted,
   type ListReadIntent,
   nextImageSortOrder,
+  matchesStringValues,
   notDeleted,
+  shortcodeSetCondition,
   unwrapDb,
   updateAndReturn,
   uuidArrayParam,
@@ -129,7 +136,7 @@ import {
 } from "~/server/db/schema";
 import { loadImageRepresentations } from "~/server/domains/image-processing/repo/image-processing";
 import {
-  imageProcessingIssueFilter,
+  imageProcessingIssueExpression,
   loadImageProcessingIssues,
 } from "~/server/domains/image-processing/repo/image-processing-issues";
 import { loadImageAnalysisSummaries } from "~/server/domains/image/repo/image-analysis-summary";
@@ -146,6 +153,10 @@ import { retireAssessmentTargetsTx } from "~/server/generic/assessment/repo/asse
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { softDeleteEntitySearchArtifactsTx } from "~/server/generic/embedding/repo/entity-embedding-cleanup";
+import {
+  listPrepare,
+  shortcodeIdsSql,
+} from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import { hydrateListRead } from "~/server/generic/list/repo/list-projection";
@@ -157,7 +168,6 @@ import {
 import {
   lookupEntityReferences,
   resolveAllPresent,
-  resolveFilterIds,
   resolveOrThrow,
   resolveShortcode,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -1186,12 +1196,13 @@ type ImageReferenceLiveness = "active" | "any-fk";
  * enforce. Keeping the distinction here prevents the maintenance detectors
  * from materializing every edge merely to make the same decision in JavaScript.
  */
+const qb = new QueryBuilder();
+
 const imageReferenceCondition = (
-  db: Database,
   outerImage: typeof image,
   liveness: ImageReferenceLiveness,
 ): SQL => {
-  const dbc = getDb(db);
+  const dbc = qb;
   const joinReferenceWhere = (imageId: PgColumn, activeWhere: SQL) =>
     and(
       eq(imageId, outerImage.id),
@@ -1255,77 +1266,72 @@ const imageReferenceCondition = (
   return or(...Object.values(byEdge))!;
 };
 
-const activeImageReferenceCondition = (
-  db: Database,
-  outerImage: typeof image,
-) => imageReferenceCondition(db, outerImage, "active");
+const anyForeignKeyImageReferenceCondition = (outerImage: typeof image) =>
+  imageReferenceCondition(outerImage, "any-fk");
 
-const anyForeignKeyImageReferenceCondition = (
-  db: Database,
-  outerImage: typeof image,
-) => imageReferenceCondition(db, outerImage, "any-fk");
-
-const cullablePendingImageWhere = (db: Database, cutoffDate: Date) =>
+const cullablePendingImageWhere = (cutoffDate: Date) =>
   and(
     eq(image.status, "PENDING"),
     lt(image.createdAt, cutoffDate),
     // Any reference, including a tombstoned join-row owner, protects this hard
     // delete. PostgreSQL still enforces that FK even though no page renders it.
-    not(anyForeignKeyImageReferenceCondition(db, image)),
+    not(anyForeignKeyImageReferenceCondition(image)),
   );
 
-const imageScaffold = listScaffold("image", image);
+/** The live ids of the requested run codes, resolved inside the query. */
+const requestedRunIds = (codes: readonly string[]) =>
+  shortcodeIdsSql("run", (shortcode) =>
+    shortcodeSetCondition(shortcode, codes),
+  );
 
-/** Shared live-image predicate for lists and dashboard counts. Shortcode filters
- * resolve asynchronously before contributing their root-table predicates. */
+// A `runId` filter matches `targetState` on the same target row, so it reads
+// that sibling filter.
+const targetStates = listPrepare(
+  async (_db, filters) =>
+    oneOrManyValues(
+      imageListFiltersSchema.pick({ targetState: true }).parse(filters)
+        .targetState,
+    ) ?? [],
+);
+
+const importTargetExists = (condition: SQL | undefined) =>
+  exists(
+    qb
+      .select({ one: sql`1` })
+      .from(photoRunImage)
+      .where(and(eq(photoRunImage.imageId, image.id), condition)),
+  );
+
+const imageScaffold = listScaffold("image", image, {
+  derived: {
+    referenced: imageReferenceCondition(image, "active"),
+    processingIssue: imageProcessingIssueExpression(image),
+    uploadedAgeHours: sql`(extract(epoch from (now() - ${image.createdAt})) / 3600)`,
+    runId: targetStates.predicate((states, { values }) =>
+      importTargetExists(
+        and(
+          inArray(photoRunImage.runId, requestedRunIds(values)),
+          states.length > 0
+            ? matchesStringValues(sql`${photoRunImage.state}`, [...states])
+            : undefined,
+        ),
+      ),
+    ),
+    targetState: ({ values }) =>
+      importTargetExists(
+        matchesStringValues(sql`${photoRunImage.state}`, [...values]),
+      ),
+  },
+});
+
+/** Shared live-image predicate for lists and dashboard counts. */
 export const buildImageWhere = async (
   db: Database,
   filters: ImageListFilters,
-): Promise<SQL | undefined> => {
-  let referencePresence: SQL | undefined;
-  if (filters.referencePresenceFilter) {
-    const referenced = activeImageReferenceCondition(db, image);
-    referencePresence =
-      filters.referencePresenceFilter === "has" ? referenced : not(referenced);
-  }
-
-  // `undefined` here means "not requested"; `[]` means "requested but every
-  // code failed to resolve" — `eqAnyRequested` treats those differently
-  // (unrestricted vs. matches nothing), see its own doc comment.
-  const [runIds, capturedByPartyIds] = await Promise.all([
-    resolveFilterIds(db, "run", filters.runId),
-    resolveFilterIds(db, "ledgerParty", filters.capturedByPartyId),
-  ]);
-  const importTargetCondition =
-    runIds !== undefined || filters.targetState !== undefined
-      ? exists(
-          getDb(db)
-            .select({ one: sql`1` })
-            .from(photoRunImage)
-            .where(
-              and(
-                eq(photoRunImage.imageId, image.id),
-                eqAnyRequested(photoRunImage.runId, runIds),
-                eqAny(photoRunImage.state, filters.targetState),
-              ),
-            ),
-        )
-      : undefined;
-
-  return imageScaffold.where(filters, [
-    // `source`/`captureAttribution`/`capturedAt` (stored, manifest-declared)
-    // and the `dataStatus`/`dataGap`/`dataQuality`-sort filters bind inside
-    // `imageScaffold.where` itself; only the resolved-shortcode and
-    // subquery predicates stay hand-written here.
-    referencePresence,
-    importTargetCondition,
-    eqAnyRequested(image.capturedByPartyId, capturedByPartyIds),
-    imageProcessingIssueFilter(image, filters.processingIssue),
-    filters.uploadedAgeHoursMin !== undefined
-      ? sql`${image.createdAt} < now() - (${filters.uploadedAgeHoursMin} * interval '1 hour')`
-      : undefined,
-  ]);
-};
+): Promise<SQL | undefined> =>
+  imageScaffold.where(filters, [], {
+    context: await imageScaffold.context(db, { filters, readIntent: "count" }),
+  });
 
 /**
  * Each image's current import-run target row, batched by the public `IMG-`
@@ -1430,27 +1436,23 @@ const imageListWith = async <Out>(
     projection: ListProjection,
   ) => Promise<Out[]>,
 ) => {
-  const [whereClause, runIdsForOrder] = await Promise.all([
-    buildImageWhere(db, filters),
-    resolveFilterIds(db, "run", filters.runId),
-  ]);
-
+  const runCodes = oneOrManyValues(filters.runId);
   // A photo-inventory run's capture order overrides the caller's own sort:
   // an agent working `filters.runId` wants the order the photos were taken,
   // not whatever default/requested sort the generic image list uses.
   const runOrder =
-    runIdsForOrder === undefined
+    runCodes === undefined
       ? undefined
       : photoRunImageOrder({
           addedAt: sql`(
             SELECT min("createdAt") FROM "PhotoRunImage"
             WHERE "PhotoRunImage"."imageId" = ${image.id}
-              AND "PhotoRunImage"."runId" = ANY(${uuidArrayParam(runIdsForOrder)})
+              AND "PhotoRunImage"."runId" IN ${requestedRunIds(runCodes)}
           )`,
           position: sql`(
             SELECT min("position") FROM "PhotoRunImage"
             WHERE "PhotoRunImage"."imageId" = ${image.id}
-              AND "PhotoRunImage"."runId" = ANY(${uuidArrayParam(runIdsForOrder)})
+              AND "PhotoRunImage"."runId" IN ${requestedRunIds(runCodes)}
           )`,
         });
 
@@ -1458,7 +1460,6 @@ const imageListWith = async <Out>(
     db,
     { filters, sorts, pagination, ...request },
     {
-      where: whereClause,
       orderBy: runOrder,
       load: (where) => loadImageRows(db, where),
       hydrate,
@@ -1718,7 +1719,7 @@ export const countCullablePendingImages = async (
   const [row] = await getDb(db)
     .select({ count: sql<number>`count(*)::int` })
     .from(image)
-    .where(cullablePendingImageWhere(db, cutoffDate));
+    .where(cullablePendingImageWhere(cutoffDate));
   return row?.count ?? 0;
 };
 
@@ -1736,7 +1737,7 @@ export const cullPendingImages = async (
     const pendingImages = await tx
       .select({ id: image.id })
       .from(image)
-      .where(cullablePendingImageWhere(db, cutoffDate))
+      .where(cullablePendingImageWhere(cutoffDate))
       .for("update", { skipLocked: true });
 
     if (pendingImages.length === 0) {
