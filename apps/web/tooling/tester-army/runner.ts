@@ -112,7 +112,7 @@ export async function runTesterArmyLane(input: {
     const exit = await spawnToExit(
       "node",
       [
-        "scripts/test-services.ts",
+        "apps/web/tooling/dev-services/test-services.ts",
         "--",
         "pnpm",
         "--dir",

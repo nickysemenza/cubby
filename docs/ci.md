@@ -74,7 +74,7 @@ pass never allocates a Mac. Minor and patch Xcode updates within the declared
 major reuse passes; bump `.xcode-version` (and the `xcode-27` runner label) to
 change majors, and the nightly run builds on whatever the image currently
 ships. TestFlight's toolchain policy is independent. Swift formatting keys the
-runner's `swift --version` stdout. `scripts/apple/apple-inputs.test.ts` fails
+runner's `swift --version` stdout. `apps/apple/tooling/apple-inputs.test.ts` fails
 if an Apple pass gains any other runtime input.
 
 A developer pass satisfies hosted CI only when all execution-sensitive inputs

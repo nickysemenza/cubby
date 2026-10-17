@@ -99,7 +99,7 @@ Compare related layout bounds in one browser evaluation so their rectangles
 come from the same render state.
 
 Playwright E2E and the coupled Workers harness share a per-worktree lock at
-`/tmp/cubby-harness-<worktree hash>.lock` (`scripts/lib/harness-lock.ts`,
+`/tmp/cubby-harness-<worktree hash>.lock` (`apps/web/tooling/dev-services/harness-lock.ts`,
 managed by `proper-lockfile`). It keeps one checkout's suites from rebuilding
 its Worker under each other or starving each other of CPU; other worktrees run
 concurrently on the shared test services. The library refreshes the lock

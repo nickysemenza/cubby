@@ -36,7 +36,7 @@ services:
     #   docker compose -f docker-compose.yml -f docker-compose.debug.yml up -d
     #
     # `jit=off` matches production, which has no JIT provider; see
-    # scripts/test-services.ts for the measured failure.
+    # apps/web/tooling/dev-services/test-services.ts for the measured failure.
     command:
       [
         "postgres",

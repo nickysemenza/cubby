@@ -7,11 +7,11 @@ import { fileURLToPath } from "node:url";
 import type { R2Bucket } from "@cloudflare/workers-types";
 import { usdaReleaseObjectName } from "@cubby/usda/release";
 
-import { SYNTHETIC_USDA_RELEASE } from "../../../scripts/lib/dev-profile.ts";
+import { SYNTHETIC_USDA_RELEASE } from "./dev-services/dev-profile.ts";
 import {
   holdLock,
   WORKTREE_HARNESS_LOCK,
-} from "../../../scripts/lib/harness-lock.ts";
+} from "./dev-services/harness-lock.ts";
 
 import { seedUsdaRelease } from "./dev/usda-synthetic-release";
 import { COUPLED_WORKER_BUILDS, ensureWorkerBuilds } from "./worker-builds";

@@ -14,8 +14,8 @@ import { z } from "zod";
 import {
   processIdentity,
   processStatus,
-} from "../../../scripts/lib/process-identity.ts";
-import { templateMarkerDirectory } from "../../../scripts/lib/template-markers.ts";
+} from "./dev-services/process-identity.ts";
+import { templateMarkerDirectory } from "./dev-services/template-markers.ts";
 import { testServiceConfig } from "./test-service-config";
 import { templateClient } from "./schema-template";
 

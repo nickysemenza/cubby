@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { once } from "node:events";
 import { expect, it } from "vitest";
 import { Client } from "pg";
-import { templateMarkerDirectory } from "../../../scripts/lib/template-markers.ts";
+import { templateMarkerDirectory } from "./dev-services/template-markers.ts";
 import { initializeRecoverableTemplate } from "./template-recovery";
 import { templateClient, templateConnectionUrl } from "./schema-template";
 

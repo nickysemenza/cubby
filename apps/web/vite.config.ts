@@ -15,7 +15,7 @@ import {
 } from "vite";
 import wasm from "vite-plugin-wasm";
 import { createServerFunctionIdGenerator } from "./tooling/server-function-id.ts";
-import { resolveDevProfile } from "../../scripts/lib/dev-profile.ts";
+import { resolveDevProfile } from "./tooling/dev-services/dev-profile.ts";
 import { devLifecycle } from "./tooling/dev/lifecycle.ts";
 import { readR2PublicUrl } from "./tooling/cloudflare-public-config.ts";
 

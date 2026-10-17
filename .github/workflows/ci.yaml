@@ -85,7 +85,6 @@ jobs:
               - 'apps/apple/**'
               - '.xcode-version'
               - '.github/actions/setup-apple/**'
-              - 'scripts/apple/**'
               - 'scripts/{ensure,rust-fingerprint}.ts'
               - 'scripts/lib/**'
               # Generator inputs (project.json cubby-checks:generate): the

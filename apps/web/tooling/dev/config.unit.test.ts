@@ -1,6 +1,6 @@
 import { bindings, defineWorker, exports } from "cf/config";
 import { expect, it } from "vitest";
-import { resolveDevProfile } from "../../../../scripts/lib/dev-profile";
+import { resolveDevProfile } from "../dev-services/dev-profile";
 import { localWorker } from "./config";
 
 // A preview retry must rebuild the current origin and keep local bindings isolated.

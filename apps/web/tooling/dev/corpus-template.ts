@@ -13,7 +13,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import { resolveDevProfile } from "../../../../scripts/lib/dev-profile";
+import { resolveDevProfile } from "../dev-services/dev-profile";
 import { Client } from "pg";
 import { hashPassword } from "better-auth/crypto";
 import {
@@ -246,12 +246,12 @@ export async function prepareDevDatabase(
 
 if (import.meta.main) {
   const { devProcessEnvironment } =
-    await import("../../../../scripts/lib/dev-profile.ts");
+    await import("../dev-services/dev-profile.ts");
   const root = new URL("../../../..", import.meta.url).pathname;
   const { resolveOwnedDevProfile } =
-    await import("../../../../scripts/lib/shared-postgres.ts");
+    await import("../dev-services/shared-postgres.ts");
   const { ensureDevSeedArtifacts } =
-    await import("../../../../scripts/lib/dev-seed-artifacts.ts");
+    await import("../dev-services/dev-seed-artifacts.ts");
   const profile = await resolveOwnedDevProfile(root);
   await ensureDevSeedArtifacts(root);
   Object.assign(process.env, devProcessEnvironment(profile));

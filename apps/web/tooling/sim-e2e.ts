@@ -8,11 +8,8 @@ import { execFileSync, spawn } from "node:child_process";
 import { pollUntil } from "@cubby/shared/retry";
 import { digestFiles, walkFiles } from "../../../scripts/lib/tree-digest.ts";
 import { spawnToExit } from "../../../scripts/lib/run.ts";
-import {
-  holdLock,
-  NATIVE_DEVICE_LOCK,
-} from "../../../scripts/lib/harness-lock.ts";
-import { sharedDeviceCommand } from "../../../scripts/apple/lib/shared-device-command.ts";
+import { holdLock, NATIVE_DEVICE_LOCK } from "./dev-services/harness-lock.ts";
+import { sharedDeviceCommand } from "../../apple/tooling/lib/shared-device-command.ts";
 import { createHash, randomBytes } from "node:crypto";
 import {
   appendFileSync,
@@ -40,7 +37,7 @@ import { simulatorInventorySchema } from "./simulator-inventory-schema";
 import {
   iosSimulatorDeviceType,
   selectIOSSimulator,
-} from "../../../scripts/apple/apple-simulator-selection.ts";
+} from "../../apple/tooling/apple-simulator-selection.ts";
 import { scrubErrorMessage } from "../src/lib/error-diagnostics";
 import { startOperation } from "../tests/e2e/support/start-operation";
 import { openWorkerdRuntime, type WorkerdRuntime } from "./workerd-runtime";
@@ -1946,7 +1943,7 @@ async function main(): Promise<void> {
     if (process.env.CUBBY_SIM_DB_EXTERNAL !== "1")
       await run(
         "node",
-        ["scripts/dev-db.ts", "up"],
+        ["apps/web/tooling/dev-services/dev-db.ts", "up"],
         repoRoot,
         undefined,
         false,

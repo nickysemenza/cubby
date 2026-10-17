@@ -1,6 +1,6 @@
 import { createPostgresPool } from "./postgres-pool";
 import { execFileSync, spawn } from "node:child_process";
-import { withKitPackageResolution } from "../../../scripts/apple/apple-package-resolution.ts";
+import { withKitPackageResolution } from "../../apple/tooling/apple-package-resolution.ts";
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -685,7 +685,11 @@ async function main(): Promise<void> {
     );
     phase = "database";
     if (process.env.CUBBY_SIM_DB_EXTERNAL !== "1") {
-      await run("node", ["scripts/dev-db.ts", "up"], bootstrapEnvironment);
+      await run(
+        "node",
+        ["apps/web/tooling/dev-services/dev-db.ts", "up"],
+        bootstrapEnvironment,
+      );
     }
     ({ runtime } = await openWorkerdRuntime(
       {

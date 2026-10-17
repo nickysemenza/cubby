@@ -24,7 +24,7 @@
         "{workspaceRoot}/apps/web/cloudflare.config.ts",
         "{workspaceRoot}/apps/web/tooling/cloudflare-public-config.ts",
         "{workspaceRoot}/apps/web/tooling/dev/config.ts",
-        "{workspaceRoot}/scripts/lib/dev-profile.ts",
+        "{workspaceRoot}/apps/web/tooling/dev-services/dev-profile.ts",
         "{workspaceRoot}/apps/web/tsconfig.json",
         // The entity-declaration import-boundary override (import-boundary.ts).
         "{workspaceRoot}/.oxlintrc.json",

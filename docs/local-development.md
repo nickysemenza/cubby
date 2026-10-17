@@ -130,7 +130,7 @@ Runtime settings are meant for people:
 (a branch's own `cubby_dev_<name>` database), and `CUBBY_DEV_SERVICES`
 (`apple` or `docker`). Everything else, including
 `CUBBY_DEV_ID` and the database name the Worker verifies, is derived by one
-resolved profile (`scripts/lib/dev-profile.ts`) and should not be set by hand.
+resolved profile (`apps/web/tooling/dev-services/dev-profile.ts`) and should not be set by hand.
 Unset inherited application
 database and storage overrides before starting; the supervisor rejects values
 that target another database or origin. Local startup ignores production `.env`

@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
 
-import { resolveDevProfile } from "../../../../../scripts/lib/dev-profile.ts";
+import { resolveDevProfile } from "../../../tooling/dev-services/dev-profile.ts";
 import { devSessionSchema, type DevSession } from "../../../tooling/dev/state";
 
 const repoRoot = path.resolve(import.meta.dirname, "../../../../..");

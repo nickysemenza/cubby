@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import {
   holdLock,
   WORKTREE_HARNESS_LOCK,
-} from "../../../../../scripts/lib/harness-lock.ts";
+} from "../../../tooling/dev-services/harness-lock.ts";
 import { prepareTemplate } from "../../../tooling/test-database-lease";
 import { webBuildNeedsBuild } from "../../../tooling/web-build-provenance";
 

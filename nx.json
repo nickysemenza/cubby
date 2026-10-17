@@ -20,8 +20,9 @@
       "{workspaceRoot}/**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts,json,jsonc,json5,css,scss,less,graphql,gql,md,mdx,markdown,yaml,yml,toml}",
       "{workspaceRoot}/.oxfmtrc.json",
       "{workspaceRoot}/.editorconfig",
-      // The same Apple files .oxfmtrc.json ignores.
-      "!{workspaceRoot}/apps/apple/**/*.{json,ts,tsx,js,jsx}"
+      // The same Apple files .oxfmtrc.json ignores (its host tooling is checked).
+      "!{workspaceRoot}/apps/apple/*.{json,ts,tsx,js,jsx}",
+      "!{workspaceRoot}/apps/apple/{App,CubbyKit,Generated,docs,e2e}/**/*.{json,ts,tsx,js,jsx}"
     ],
     "default": ["{projectRoot}/**/*", "sharedGlobals"],
     "sharedGlobals": [
@@ -48,7 +49,8 @@
     // tree. Apple/Rust native sources and prose never change their output.
     "repo": [
       "{workspaceRoot}/**/*",
-      "!{workspaceRoot}/apps/apple/**/*.{json,ts,tsx,js,jsx}",
+      "!{workspaceRoot}/apps/apple/*.{json,ts,tsx,js,jsx}",
+      "!{workspaceRoot}/apps/apple/{App,CubbyKit,Generated,docs,e2e}/**/*.{json,ts,tsx,js,jsx}",
       "!{workspaceRoot}/cubby-ffi/**",
       "!{workspaceRoot}/**/*.md",
       "!{workspaceRoot}/.claude/**"

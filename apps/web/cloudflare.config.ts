@@ -6,7 +6,7 @@ import {
   triggers,
 } from "cf/config";
 import { fileURLToPath } from "node:url";
-import { resolveDevProfile } from "../../scripts/lib/dev-profile.ts";
+import { resolveDevProfile } from "./tooling/dev-services/dev-profile.ts";
 import { localWorker } from "./tooling/dev/config.ts";
 
 // Existing names and lifecycle tombstones preserve stored Durable Object namespaces.

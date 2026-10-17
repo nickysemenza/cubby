@@ -12,7 +12,7 @@ import {
   assertSimulatorDatabaseName,
 } from "./sim-db-guard";
 import { testServiceConfig } from "./test-service-config";
-import { worktreeRoot } from "../../../scripts/lib/harness-lock.ts";
+import { worktreeRoot } from "./dev-services/harness-lock.ts";
 
 /**
  * Disposable databases for Vitest, browser E2E and native runners.
