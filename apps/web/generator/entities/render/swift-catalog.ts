@@ -29,7 +29,12 @@ import {
 } from "../../../../../packages/schemas/src/native-coverage.ts";
 import { SECTION_ACTION_IDS } from "../../../../../packages/schemas/src/entity-section-actions.ts";
 import { generatedHeader } from "../../artifacts.ts";
-import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
+import { parseRangeBounds } from "../../../../../packages/shared/src/filter.ts";
+import {
+  type CompiledEntity,
+  dateRangeBounds,
+  type EntityArtifacts,
+} from "../declarations.ts";
 import {
   entityPrefixLookup,
   valueSchemaForField,
@@ -473,6 +478,14 @@ const savedViewFilters = (
         return Object.entries(expansion).map(([id, value]) =>
           wireFilter(id, [String(value)]),
         );
+      // `from..to` bounds set the range's own keys, tokens and all.
+      const keys = dateRangeBounds(descriptor);
+      const bounds = value === undefined ? undefined : parseRangeBounds(value);
+      if (keys && bounds)
+        return [
+          ...(bounds.from ? [wireFilter(keys.from, [bounds.from])] : []),
+          ...(bounds.to ? [wireFilter(keys.to, [bounds.to])] : []),
+        ];
       const presence =
         descriptor.wire.kind === "range"
           ? descriptor.wire.presence

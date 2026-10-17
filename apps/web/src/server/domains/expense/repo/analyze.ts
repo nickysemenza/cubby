@@ -13,6 +13,7 @@ import type {
   ExpenseAnalyzeInput,
   ExpenseAnalyzeOut,
   ExpenseAnalyzeRowDimension,
+  ExpenseAnalyzeSpendingCategoryRollup,
   ExpenseFacetCountsInput,
   ExpenseFacetCountsOut,
   ExpenseFilters,
@@ -66,6 +67,12 @@ import {
   buildExpenseWhereClause,
   resolveExpenseProjectAllocationScope,
 } from "./lookup";
+import {
+  rootSpendingCategoryBucketFilter,
+  rootSpendingCategoryJoins,
+  rootSpendingCategoryKeySql,
+  rootSpendingCategoryLabelSql,
+} from "./spending-category-root";
 
 const ROW_LIMIT = 200;
 const MONTH_COLUMN_LIMIT = 24;
@@ -127,6 +134,20 @@ const dimensionSpecs = {
 >;
 
 type DirectDimension = Exclude<Dimension, "project" | "vendor">;
+type Rollup = ExpenseAnalyzeSpendingCategoryRollup;
+
+const rollsUp = (dimension: Dimension | null | undefined, rollup: Rollup) =>
+  dimension === "spendingCategory" && rollup === "root";
+
+/** A rolled-up category key is never null: it always names a bucket. */
+const dimensionSpecFor = (dimension: Dimension, rollup: Rollup) =>
+  rollsUp(dimension, rollup)
+    ? {
+        key: rootSpendingCategoryKeySql,
+        label: rootSpendingCategoryLabelSql,
+        relation: "allocation" as const,
+      }
+    : dimensionSpecs[dimension];
 
 /** Scalar facets all share the same cardinality query and null label policy. */
 const scalarFacetSpecs = {
@@ -199,7 +220,9 @@ const subtractAggregate = (
 const bucketFilter = (
   dimension: Dimension,
   key: string,
+  rollup: Rollup,
 ): ExpenseAnalyzeBucket["filter"] => {
+  if (rollsUp(dimension, rollup)) return rootSpendingCategoryBucketFilter(key);
   const filter: ExpenseAnalyzeBucket["filter"] = {};
   switch (dimension) {
     case "trade":
@@ -225,8 +248,8 @@ const bucketFilter = (
   return filter;
 };
 
-const dimensionColumns = (dimension: DirectDimension) =>
-  dimensionSpecs[dimension];
+const dimensionColumns = (dimension: DirectDimension, rollup: Rollup) =>
+  dimensionSpecFor(dimension, rollup);
 
 const isAllocatedDimension = (dimension: Dimension) =>
   dimension === "project" ||
@@ -276,11 +299,12 @@ function groupedDimensionQuery(
   dimension: Dimension,
   allocationScope?: ExpenseAllocationProjectScope,
   prepared?: ExpenseDerivedBatchRead,
+  rollup: Rollup = "none",
 ) {
   const database = getDb(db);
-  const spec = dimensionSpecs[dimension];
+  const spec = dimensionSpecFor(dimension, rollup);
   if (isAllocatedDimension(dimension)) {
-    return database
+    const query = database
       .select({
         key: spec.key,
         label: spec.label,
@@ -303,6 +327,16 @@ function groupedDimensionQuery(
           notDeleted(spendingCategory),
         ),
       )
+      .leftJoin(
+        rootSpendingCategoryJoins.roots.table,
+        rootSpendingCategoryJoins.roots.on,
+      )
+      .leftJoin(
+        rootSpendingCategoryJoins.root.table,
+        rootSpendingCategoryJoins.root.on,
+      )
+      .$dynamic();
+    return query
       .where(
         and(
           where,
@@ -346,16 +380,17 @@ function groupedCellsQuery(
   columnDimension: ExpenseAnalyzeColumnDimension,
   allocationScope?: ExpenseAllocationProjectScope,
   prepared?: ExpenseDerivedBatchRead,
+  rollup: Rollup = "none",
 ) {
   const database = getDb(db);
-  const row = dimensionSpecs[rowDimension];
-  const column = dimensionColumns(columnDimension);
+  const row = dimensionSpecFor(rowDimension, rollup);
+  const column = dimensionColumns(columnDimension, rollup);
   if (
     isAllocatedDimension(rowDimension) ||
     isAllocatedDimension(columnDimension)
   ) {
     const charge = alias(purchase, "analyzeAllocatedCellCharge");
-    return database
+    const query = database
       .select({
         rowKey: row.key,
         columnKey: column.key,
@@ -383,6 +418,16 @@ function groupedCellsQuery(
         and(eq(expense.purchaseId, charge.id), notDeleted(charge)),
       )
       .leftJoin(vendor, and(eq(charge.vendorId, vendor.id), notDeleted(vendor)))
+      .leftJoin(
+        rootSpendingCategoryJoins.roots.table,
+        rootSpendingCategoryJoins.roots.on,
+      )
+      .leftJoin(
+        rootSpendingCategoryJoins.root.table,
+        rootSpendingCategoryJoins.root.on,
+      )
+      .$dynamic();
+    return query
       .where(
         and(
           where,
@@ -429,14 +474,15 @@ function allocatedGridCountQuery(
   columnDimension: ExpenseAnalyzeColumnDimension | null | undefined,
   allocationScope?: ExpenseAllocationProjectScope,
   prepared?: ExpenseDerivedBatchRead,
+  rollup: Rollup = "none",
 ) {
   const keys = [rowDimension, columnDimension]
     .filter((dimension) => dimension != null)
-    .map((dimension) => dimensionSpecs[dimension])
+    .map((dimension) => dimensionSpecFor(dimension, rollup))
     .filter((spec) => spec.relation !== "expense")
     .map((spec) => isNotNull(spec.key));
   const charge = alias(purchase, "analyzeGridCountCharge");
-  return getDb(db)
+  const query = getDb(db)
     .select({ count: sql<number>`count(distinct ${expense.id})::int` })
     .from(expense)
     .innerJoin(
@@ -460,15 +506,24 @@ function allocatedGridCountQuery(
       and(eq(expense.purchaseId, charge.id), notDeleted(charge)),
     )
     .leftJoin(vendor, and(eq(charge.vendorId, vendor.id), notDeleted(vendor)))
-    .where(
-      and(
-        where,
-        ...keys,
-        allocationScope
-          ? expenseAllocationScopeConditionSql("allocation", allocationScope)
-          : undefined,
-      ),
-    );
+    .leftJoin(
+      rootSpendingCategoryJoins.roots.table,
+      rootSpendingCategoryJoins.roots.on,
+    )
+    .leftJoin(
+      rootSpendingCategoryJoins.root.table,
+      rootSpendingCategoryJoins.root.on,
+    )
+    .$dynamic();
+  return query.where(
+    and(
+      where,
+      ...keys,
+      allocationScope
+        ? expenseAllocationScopeConditionSql("allocation", allocationScope)
+        : undefined,
+    ),
+  );
 }
 
 export function previousExpenseFilters(filters: ExpenseFilters) {
@@ -480,12 +535,8 @@ export function previousExpenseFilters(filters: ExpenseFilters) {
   const days = plainDateDaysBetween(filters.dateFrom, filters.dateTo) + 1;
   const dateTo = shiftPlainDate(filters.dateFrom, -1);
   const dateFrom = shiftPlainDate(filters.dateFrom, -days);
-  // An explicit comparison window replaces every date-window constraint. A
-  // saved relative predicate (for example, `beforeToday`) must not continue to
-  // narrow the shifted period behind the user's back.
-  const { dateRelative: _dateRelative, ...nonRelativeFilters } = filters;
   return {
-    filters: { ...nonRelativeFilters, dateFrom, dateTo },
+    filters: { ...filters, dateFrom, dateTo },
     range: { dateFrom, dateTo },
   };
 }
@@ -767,6 +818,7 @@ export const loadExpenseAnalysisPeriod = async (
   rowDimension: ExpenseAnalyzeRowDimension,
   columnDimension: ExpenseAnalyzeColumnDimension | null | undefined,
   allocationScope?: ExpenseAllocationProjectScope,
+  rollup: Rollup = "none",
 ): Promise<ExpenseAnalysisPeriod> => {
   const allocated =
     isAllocatedDimension(rowDimension) ||
@@ -785,6 +837,7 @@ export const loadExpenseAnalysisPeriod = async (
         rowDimension,
         allocationScope,
         read,
+        rollup,
       ),
       columns: groupedDimensionQuery(
         db,
@@ -792,6 +845,7 @@ export const loadExpenseAnalysisPeriod = async (
         columnDimension ?? "month",
         allocationScope,
         read,
+        rollup,
       ),
       cells: groupedCellsQuery(
         db,
@@ -800,6 +854,7 @@ export const loadExpenseAnalysisPeriod = async (
         columnDimension ?? "month",
         allocationScope,
         read,
+        rollup,
       ),
       scope: scopeAggregateQuery(db, scopeWhere, allocationScope, read),
       gridCount: allocatedGridCountQuery(
@@ -809,6 +864,7 @@ export const loadExpenseAnalysisPeriod = async (
         columnDimension,
         allocationScope,
         read,
+        rollup,
       ),
       ...analysisCausesQueries(
         db,
@@ -985,11 +1041,12 @@ export const loadExpenseAnalysisCauses = async (
 const projectAnalysisBuckets = (
   rows: Map<string, BucketRow>,
   dimension: Dimension,
+  rollup: Rollup,
 ) =>
   [...rows.values()].map((row) => ({
     key: row.key,
     label: row.label,
-    filter: bucketFilter(dimension, row.key),
+    filter: bucketFilter(dimension, row.key, rollup),
   }));
 
 export type ExpenseAnalysisCauses = ReturnType<typeof analysisCausesFromRows>;
@@ -1108,9 +1165,17 @@ export const readyExpenseAnalysisOutput = (
       mode: input.comparison,
       previousRange: comparison?.range ?? null,
     },
-    rows: projectAnalysisBuckets(grid.rowMap, input.rowDimension),
+    rows: projectAnalysisBuckets(
+      grid.rowMap,
+      input.rowDimension,
+      input.spendingCategoryRollup,
+    ),
     columns: input.columnDimension
-      ? projectAnalysisBuckets(grid.columnMap, input.columnDimension)
+      ? projectAnalysisBuckets(
+          grid.columnMap,
+          input.columnDimension,
+          input.spendingCategoryRollup,
+        )
       : [],
     cells: grid.cells,
     totals: {

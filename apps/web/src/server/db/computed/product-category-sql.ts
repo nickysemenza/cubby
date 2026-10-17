@@ -7,6 +7,14 @@ import {
 import { type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import {
+  effectiveFieldSql,
+  effectiveSourceSql,
+  inheritanceLadderSql,
+  inheritedFieldSql,
+  inheritedSourceSql,
+} from "~/server/db/computed/effective-field";
+
 /** Constants below are inlined with `sql.raw` (not `.inlineParams()`): under the
  * relational `extras` API (`db.query.product.findFirst({ extras: {...} })`),
  * drizzle's `mapColumnsInSQLToAlias` (alias.js) rebuilds nested SQL via
@@ -36,7 +44,7 @@ export const categorySummarySql = (categoryIdExpr: SQL) =>
       'id', (SELECT "shortcode" FROM ancestors ORDER BY depth LIMIT 1),
       ${"name"}::text, (SELECT "name" FROM ancestors ORDER BY depth LIMIT 1),
       'path', json_agg(json_build_object('id', "shortcode", ${"name"}::text, "name") ORDER BY depth DESC),
-      'feature', (SELECT "feature" FROM ancestors WHERE "feature" IS NOT NULL ORDER BY depth LIMIT 1)
+      'feature', ${effectiveFieldSql("productCategory", "feature", { id: categoryIdExpr })}
     ) FROM ancestors
     HAVING count(*) > 0
   )`;
@@ -50,62 +58,39 @@ const categoryStockTrackingSchema = z.object({
 });
 export type CategoryStockTracking = z.infer<typeof categoryStockTrackingSchema>;
 
-/** Categories whose nearest live decision (their own or an ancestor's within
- * the supported depth) equals `value`. Uncorrelated, so a filter over every
- * Product resolves the taxonomy once, like `categoryFeatureInSql`. */
-const stockTrackingCategoriesSql = (value: boolean) => sql`(
-    WITH RECURSIVE decided AS (
-      SELECT c."id", 0 AS depth, ARRAY[c."id"] AS visited
-      FROM "ProductCategory" c
-      WHERE c."stockTracked" = ${sql.raw(value ? "true" : "false")} AND c."deletedAt" IS NULL
-      UNION ALL
-      SELECT child."id", a.depth + 1, a.visited || child."id"
-      FROM decided a
-      JOIN "ProductCategory" child ON child."parentId" = a."id"
-      WHERE child."deletedAt" IS NULL AND child."stockTracked" IS NULL
-        AND a.depth < ${MAX_ANCESTOR_DEPTH}
-        AND NOT child."id" = ANY(a.visited)
-    ) SELECT "id" FROM decided
-  )`;
-
-/** A category's effective stock tracking: null when nothing decides it. */
-export const categoryStockTrackedSql = (categoryIdExpr: SQL) =>
-  sql<boolean | null>`(CASE
-    WHEN ${categoryIdExpr} IN ${stockTrackingCategoriesSql(true)} THEN true
-    WHEN ${categoryIdExpr} IN ${stockTrackingCategoriesSql(false)} THEN false
-  END)`;
-
-/** ADR 0013: a Product's own decision wins over its category's. */
-export const productStockTrackedSql = (
-  stockTrackedExpr: SQL,
+/** The effective decision at or above a category, the category that made
+ * it, and every category the chain reads, for page-bounded reads that
+ * explain the value. `inherited` reads what the category would inherit
+ * instead (its own decision ignored, the ladder from its parent), along the
+ * category's own capped chain, so a category's provenance agrees with its
+ * value. Inner aliases are `ih_`-prefixed so a caller's correlated
+ * `categoryIdExpr` is never shadowed. */
+export const categoryStockTrackingSql = (
   categoryIdExpr: SQL,
-) =>
-  sql<
-    boolean | null
-  >`COALESCE(${stockTrackedExpr}, ${categoryStockTrackedSql(categoryIdExpr)})`;
-
-/** The nearest live decision at or above a category, with the category that
- * made it, for page-bounded reads that explain the value. Agrees with
- * `categoryStockTrackedSql` (asserted in the feature-query integration test). */
-export const categoryStockTrackingSql = (categoryIdExpr: SQL) =>
-  sql<CategoryStockTracking | null>`(
-    WITH RECURSIVE ancestors AS (
-      SELECT c."id", c."parentId", c."shortcode", c."name", c."stockTracked", 0 AS depth,
-             ARRAY[c."id"] AS visited
-      FROM "ProductCategory" c
-      WHERE c."id" = ${categoryIdExpr} AND c."deletedAt" IS NULL
-      UNION ALL
-      SELECT parent."id", parent."parentId", parent."shortcode", parent."name", parent."stockTracked", a.depth + 1,
-             a.visited || parent."id"
-      FROM ancestors a
-      JOIN "ProductCategory" parent ON parent."id" = a."parentId"
-      WHERE parent."deletedAt" IS NULL AND a.depth < ${MAX_ANCESTOR_DEPTH}
-        AND NOT parent."id" = ANY(a.visited)
-    )
+  { inherited = false }: { inherited?: boolean } = {},
+) => {
+  const row = { id: categoryIdExpr };
+  const source = inherited
+    ? inheritedSourceSql("productCategory", "stockTracked", row)
+    : effectiveSourceSql("productCategory", "stockTracked", row);
+  const value = inherited
+    ? inheritedFieldSql("productCategory", "stockTracked", row)
+    : effectiveFieldSql("productCategory", "stockTracked", row);
+  const minDepth = sql.raw(inherited ? "1" : "0");
+  const ladder = inheritanceLadderSql(
+    "productCategory",
+    "stockTracked",
+    categoryIdExpr,
+  );
+  const decider = (column: "shortcode" | "name") =>
+    sql`(SELECT ih_pd.${sql.identifier(column)} FROM "ProductCategory" ih_pd WHERE ih_pd."id" = (${source}->>'id')::uuid)`;
+  return sql<CategoryStockTracking | null>`(
     SELECT jsonb_build_object(
-      'value', (SELECT "stockTracked" FROM ancestors WHERE "stockTracked" IS NOT NULL ORDER BY depth LIMIT 1),
-      'id', (SELECT "shortcode" FROM ancestors WHERE "stockTracked" IS NOT NULL ORDER BY depth LIMIT 1),
-      ${"name"}::text, (SELECT "name" FROM ancestors WHERE "stockTracked" IS NOT NULL ORDER BY depth LIMIT 1),
-      ${"evaluation"}::text, (SELECT jsonb_agg(jsonb_build_object('entityKind', ${entitySchema.enum.productCategory}::text, 'entityId', "shortcode", ${"name"}::text, "name", 'value', "stockTracked", ${"assigned"}::text, "stockTracked" IS NOT NULL) ORDER BY depth) FROM ancestors)
-    ) WHERE EXISTS (SELECT 1 FROM ancestors)
+      'value', ${value},
+      'id', ${decider("shortcode")},
+      ${"name"}::text, ${decider("name")},
+      ${"evaluation"}::text, (SELECT jsonb_agg(jsonb_build_object('entityKind', ${entitySchema.enum.productCategory}::text, 'entityId', ih_pc."shortcode", ${"name"}::text, ih_pc."name", 'value', l."value", ${"assigned"}::text, l."decides") ORDER BY l."depth")
+        FROM ${ladder} l JOIN "ProductCategory" ih_pc ON ih_pc."id" = l."id" WHERE l."depth" >= ${minDepth})
+    ) WHERE EXISTS (SELECT 1 FROM ${ladder} ih_pe WHERE ih_pe."depth" >= ${minDepth})
   )`;
+};

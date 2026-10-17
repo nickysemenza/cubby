@@ -680,12 +680,37 @@ struct EntityFilterSheet: View {
         }
     }
 
-    /// A date bound is optional: a toggle turns the picker on with today, off clears the parameter.
+    /// How a date bound is set: not at all, a calendar day, or a day relative to today.
+    private enum DateBoundMode: Hashable { case any, date, relative }
+
+    /// A date bound is optional. A relative bound keeps its token (`@today-30d`), which the
+    /// server resolves against the household's today, so an edited or saved filter stays
+    /// current instead of freezing into the day it was set.
     @ViewBuilder
     private func dateBound(_ label: String, value: String, set: @escaping (String) -> Void) -> some View {
-        Toggle(
-            label, isOn: Binding(get: { !value.isEmpty }, set: { set($0 ? PlainDate(.now).rawValue : "") }))
-        if !value.isEmpty {
+        let days = RelativeDate.offset(value)
+        let mode: DateBoundMode = value.isEmpty ? .any : days == nil ? .date : .relative
+        Picker(
+            label,
+            selection: Binding(
+                get: { mode },
+                set: { next in
+                    switch next {
+                    case .any: set("")
+                    case .date: set(PlainDate(.now).rawValue)
+                    case .relative: set(RelativeDate.token(0))
+                    }
+                })
+        ) {
+            Text("Any").tag(DateBoundMode.any)
+            Text("Date").tag(DateBoundMode.date)
+            Text("Relative").tag(DateBoundMode.relative)
+        }
+        .pickerStyle(.segmented)
+        switch mode {
+        case .any:
+            EmptyView()
+        case .date:
             DatePicker(
                 label,
                 selection: Binding(
@@ -694,6 +719,44 @@ struct EntityFilterSheet: View {
                 displayedComponents: .date
             )
             .labelsHidden()
+        case .relative:
+            relativeBound(label, value: value, set: set)
+        }
+    }
+
+    /// N days ago or ahead of the household's today, shown as "today − 30 days". The direction
+    /// reads from the token itself (`@today+0d` is ahead at zero), so it survives a zero count.
+    private func relativeBound(_ label: String, value: String, set: @escaping (String) -> Void)
+        -> some View
+    {
+        let days = RelativeDate.offset(value) ?? 0
+        let ahead = value.hasPrefix(RelativeDate.today + "+")
+        return LabeledContent(RelativeDate.describe(days)) {
+            HStack {
+                TextField(
+                    "Days",
+                    value: Binding(
+                        get: { abs(days) },
+                        set: { set(RelativeDate.token(max($0, 0), ahead: ahead)) }),
+                    format: .number
+                )
+                .multilineTextAlignment(.trailing)
+                .frame(maxWidth: 64)
+                #if os(iOS)
+                    .keyboardType(.numberPad)
+                #endif
+                Picker(
+                    "\(label) direction",
+                    selection: Binding(
+                        get: { ahead },
+                        set: { set(RelativeDate.token(abs(days), ahead: $0)) })
+                ) {
+                    Text("ago").tag(false)
+                    Text("ahead").tag(true)
+                }
+                .labelsHidden()
+                .fixedSize()
+            }
         }
     }
 }
@@ -701,4 +764,14 @@ struct EntityFilterSheet: View {
 #Preview("Product filters") {
     EntityFilterSheet(descriptor: EntityCatalog[.product], filters: EntityFilterState()) { _ in }
         .environment(PreviewFixtures.signedInModel())
+}
+
+#Preview("Relative recount filter") {
+    EntityFilterSheet(
+        descriptor: EntityCatalog[.location],
+        filters: EntityFilterState([
+            "lastBulkInventoryTo": ["@today-30d"], "lastBulkInventoryPresenceFilter": ["none"],
+        ])
+    ) { _ in }
+    .environment(PreviewFixtures.signedInModel())
 }

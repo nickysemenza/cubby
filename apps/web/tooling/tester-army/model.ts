@@ -63,6 +63,7 @@ const configuration = z
   })
   .transform((value) => ({
     ...value,
+    explicitModel: value.TESTER_ARMY_MODEL !== undefined,
     TESTER_ARMY_MODEL:
       value.TESTER_ARMY_MODEL ?? `anthropic/${AUDIT_RECOVERY_MODEL}`,
   }));
@@ -207,12 +208,14 @@ export function testerArmyModel(
       );
     },
   });
-  // An explicit OpenAI override remains a paid, single-model diagnostic lane.
+  // An explicit override is a single-model diagnostic lane: OpenAI paid,
+  // Anthropic on subscriber credit. Only the default rides the funding ladder.
   if (config.TESTER_ARMY_MODEL.startsWith("openai/"))
     return openai.responses(config.TESTER_ARMY_MODEL);
   const preferred = anthropic(
     config.TESTER_ARMY_MODEL.slice("anthropic/".length),
   );
+  if (config.explicitModel) return preferred;
   return wrapLanguageModel({
     model: preferred,
     middleware: {

@@ -21,7 +21,6 @@ describe("list selection and relation loading", () => {
       completion: sql`NULL`,
       topLevel: sql`true`,
       search: () => undefined,
-      dueRelative: () => undefined,
     },
   });
 
@@ -121,7 +120,6 @@ describe("list selection and relation loading", () => {
         completion: sql`NULL`,
         topLevel: sql`true`,
         search: () => undefined,
-        dueRelative: () => undefined,
       },
     }).list(
       ctx.db,

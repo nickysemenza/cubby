@@ -13,6 +13,7 @@ import { foodSummary, foodSummaryCompact } from "@cubby/usda";
 import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import {
+  dateBound,
   dateRangeFields,
   numericRangeFields,
   timestampedFields,
@@ -319,10 +320,10 @@ export const productFilterFields = {
   purchaseDatePresenceFilter: presenceFilter.describe(
     "Filter to products that do / don't have a dated live Purchase linked through an Expense.",
   ),
-  purchaseDateFrom: plainDate
+  purchaseDateFrom: dateBound
     .optional()
     .describe("Match a product with any linked Purchase on or after this date"),
-  purchaseDateTo: plainDate
+  purchaseDateTo: dateBound
     .optional()
     .describe(
       "Match a product with any linked Purchase on or before this date",

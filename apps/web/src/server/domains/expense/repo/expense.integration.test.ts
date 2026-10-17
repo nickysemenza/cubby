@@ -138,6 +138,7 @@ describe("expense workflows — analyzer orchestration", () => {
         filters,
         rowDimension: "trade",
         comparison: "previousPeriod",
+        spendingCategoryRollup: "none",
       }),
     );
     const analysis = analysisRead.result;
@@ -1109,6 +1110,7 @@ describe("expense repository — expenseAnalytics", () => {
       filters: { search: "synthetic split" },
       rowDimension: "trade",
       comparison: "none",
+      spendingCategoryRollup: "none",
     });
     expect(analysis).toMatchObject({
       status: "ready",
@@ -1183,6 +1185,7 @@ describe("expense repository — expenseAnalytics", () => {
       filters,
       rowDimension: "project",
       comparison: "none",
+      spendingCategoryRollup: "none",
     });
     expect(analysis).toMatchObject({
       status: "ready",

@@ -852,7 +852,10 @@ const buildMetadataSchemas = () => {
    * A list field that is not a table column, or the value a stored field
    * orders and groups by. `via` is a related path of relation keys,
    * optionally ending in a field of the last entity; the list compiler builds
-   * it. `type` is a value whose SQL the repository passes to `listScaffold`.
+   * it. `type` is a value whose SQL the repository passes to `listScaffold`;
+   * a `dateInterval` is the two-part `[start, end]` (NULL `end` is open)
+   * that range filters test for overlap and a one-date filter for
+   * containment.
    * `predicate` is a filter-only declared exception and carries its reason;
    * `negatable` declares that its SQL reads only the values it receives, so
    * a value filter's generated Exclude key is its negation.
@@ -861,7 +864,14 @@ const buildMetadataSchemas = () => {
     z.object({ via: nonEmptyString() }).strict(),
     z
       .object({
-        type: z.enum(["text", "number", "date", "boolean", "enum"]),
+        type: z.enum([
+          "text",
+          "number",
+          "date",
+          "dateInterval",
+          "boolean",
+          "enum",
+        ]),
         options: z.array(nonEmptyString()).min(1).optional(),
       })
       .strict(),

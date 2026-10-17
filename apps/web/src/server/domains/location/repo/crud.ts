@@ -19,16 +19,7 @@ import type {
 } from "@cubby/schemas/location";
 import { locationPickerSortableFields } from "@cubby/schemas/location";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import {
-  and,
-  eq,
-  inArray,
-  isNotNull,
-  isNull,
-  or,
-  type SQL,
-  sql,
-} from "drizzle-orm";
+import { and, eq, inArray, isNotNull, type SQL, sql } from "drizzle-orm";
 import { alias, QueryBuilder } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 
@@ -715,15 +706,6 @@ const locationScaffold = listScaffold("location", location, {
     hasImage: inArray(location.id, locationIdsWithImages),
     hasChildren: inArray(location.id, locationIdsWithChildren),
     hasAiDescription: sql`${locationAiDescriptionSql(location.id)} IS NOT NULL`,
-    // The never-recounted half is part of the predicate: a plain `<` bound
-    // drops NULLs, and a bin nobody has ever counted is the worst offender.
-    recountOverdue: ({ param }) =>
-      param === undefined
-        ? undefined
-        : or(
-            isNull(location.lastBulkInventory),
-            sql`${location.lastBulkInventory} < now() - make_interval(days => ${Number(param)})`,
-          ),
   },
 });
 

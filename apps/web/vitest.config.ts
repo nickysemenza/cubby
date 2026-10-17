@@ -148,7 +148,7 @@ const integrationProject = {
   isolate: false,
   testTimeout: 10000,
   // First-test database provisioning is the long tail; resets use the
-  // full safe TRUNCATE path documented in tooling/test-setup.ts.
+  // full-table reset documented in tooling/test-setup.ts.
   hookTimeout: 30000,
 };
 const sharedIsolationSeed = Number.parseInt(

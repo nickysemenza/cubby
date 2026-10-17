@@ -12,6 +12,7 @@ import { z } from "zod";
 
 import { wasm } from "~/lib/wasm";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { categorySummarySql } from "~/server/db/computed/product-category-sql";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
@@ -24,7 +25,6 @@ import {
 } from "~/server/generic/embedding/repo/entity-embedding";
 import { normalizeSearchText } from "~/server/generic/embedding/repo/semantic/text";
 import type { SemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
-import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 
 interface SearchDocumentSource {
   entityKind: SearchableEntity;

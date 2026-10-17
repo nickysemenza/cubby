@@ -31,6 +31,7 @@ import { sumBy, uniq } from "es-toolkit";
 
 import { householdDaysFromNow, householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
+import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { countWhere, getDb, notDeleted, relations } from "~/server/db/helpers";
 import { expense, project, task } from "~/server/db/schema";
 import { expenseDerivedCostRead } from "~/server/domains/expense/repo/expense-derived-read";
@@ -45,7 +46,6 @@ import {
 } from "~/server/domains/task/repo/helpers";
 import { hydrateTaskInheritanceRows } from "~/server/domains/task/repo/task-project-inheritance";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 
 import { projectDependencyIds } from "./analytics";
 import { computeAttentionItems } from "./attention";

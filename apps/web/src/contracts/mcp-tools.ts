@@ -25,7 +25,10 @@ import { cookbookContract } from "~/contracts/cookbook.contract";
 import { dataQualityContract } from "~/contracts/data-quality.contract";
 import { entityGraphContract } from "~/contracts/entity-graph.contract";
 import { expenseContract } from "~/contracts/expense.contract";
-import { financialTransactionContract } from "~/contracts/finance.contract";
+import {
+  cashFlowContract,
+  financialTransactionContract,
+} from "~/contracts/finance.contract";
 import { householdContributionContract } from "~/contracts/household-contribution.contract";
 import { imageProcessingContract } from "~/contracts/image-processing.contract";
 import { imageUploadContract } from "~/contracts/image-upload.contract";
@@ -481,13 +484,18 @@ export const MCP_TOOLS = defineMcpTools({
 
   spending_classification_read: {
     description:
-      "Review historical spending impact before changing Product Category mappings, Vendor defaults, or explicit Expense categories, or merging Spending Categories.",
+      "Where spending went by Spending Category and other axes, and the historical impact of changing Product Category mappings, Vendor defaults, or explicit Expense categories, or merging Spending Categories.",
     actions: {
       preview: mcpAction({
         op: spendingClassificationContract.ops.preview,
         readPolicy: "strong",
         description:
           "Nonmutating historical impact preview. Supply one complete Product Category mapping, Vendor spending policy, selected Expense category assignment/reset, or Spending Category merge (`spendingCategoryMerge` with keepId and mergeIds; entity.merge refuses one that moves Expense history). Returns signed exact-cent category totals and deltas including shared adjustments, unknown coverage, and a fingerprint. Review before applying; stored source evidence and Expense amounts remain unchanged.",
+      }),
+      analyze: mcpAction({
+        op: expenseContract.ops.analyze,
+        description:
+          'Complete server-side pivot of the expense ledger: `filters` takes the same fields as entity_read.list(expense); `rowDimension` is spendingCategory, trade, costType, month, project, or vendor, with an optional different `columnDimension` (spendingCategory, trade, costType, month). Money is allocation shares: tax, shipping, and fees follow the items they were charged on, and filters never change which item receives an adjustment cent. `spendingCategoryRollup: "root"` buckets a spendingCategory axis by root Spending Category plus `uncategorized` (no category resolved) and `unclassified` (receipt role unresolved), so its buckets reconcile to totals.scope; otherwise rows without a live category fall into reconciliation.tail. `comparison: "previousPeriod"` (needs dateFrom and dateTo, no month axis) adds the immediately preceding equal-length window. Each bucket carries `filter`, the Ledger URL params that select its rows. Returns `status: "too_large"` instead of a grid past 200 rows, 24 month columns, or 1,000 cells. Credits are signed: net = actual + committed − credits.',
       }),
     },
   },
@@ -521,6 +529,11 @@ export const MCP_TOOLS = defineMcpTools({
         description:
           'Book one posted Financial Transaction into spending through the reviewed booking checks (the same preview/commit as the web review, in one call; replays an identical booking). Name `purchaseId` to book into an existing Purchase, or `vendorId` to book into a new lump Purchase dated the transaction day. Incoming credits (income) book only as `economicRole: "reimbursement"`, as a negative reimbursement Expense; a reimbursement naming neither resolves the Vendor its merchant names exactly (name or alias) and refuses an unknown merchant. Links the transaction to the Purchase; never creates a Vendor. Transfers and card repayments are refused.',
       }),
+      accept_transfer_pair: mcpAction({
+        op: financialTransactionContract.ops.acceptTransferPair,
+        description:
+          "Accept one reviewed finance_read.transfer_pairs suggestion: pass the positive (outflow) and negative (inflow) FTX- legs. In one transaction it creates a Ledger Transfer from the outflow account's owner to the inflow account's owner for the absolute amount, dated the earlier leg, and links both legs as its evidence. A same-owner pair is recorded as an internal move. Refuses as data (canProceed false with the reason naming the record) unless the signs are opposite, the amounts equal, the accounts differ, both accounts have an owner, and neither leg already evidences a transfer; a refusal writes nothing.",
+      }),
       converge: mcpAction({
         op: financialTransactionContract.ops.converge,
         description:
@@ -531,7 +544,7 @@ export const MCP_TOOLS = defineMcpTools({
 
   finance_read: {
     description:
-      "Statement-row, settlement, and contribution-ledger reads, plus expense matching against vendor exports. Financial Transactions are settlement evidence only; all spend is Expense.cost.",
+      "Statement-row, settlement, contribution-ledger, and cash-flow reads, plus expense matching against vendor exports. Financial Transactions are settlement evidence only; all spend is Expense.cost.",
     actions: {
       statement_rows: mcpAction({
         op: statementRowContract.ops.list,
@@ -562,12 +575,17 @@ export const MCP_TOOLS = defineMcpTools({
       transfer_pairs: mcpAction({
         op: householdContributionContract.ops.transferPairs,
         description:
-          "A candidate worklist pairing selected Financial Transaction evidence with opposite-signed, different-account matches. Suggestions never create Ledger Transfers, attach evidence, or decide a match; review each candidate before using standard mutations.",
+          "A candidate worklist pairing selected Financial Transaction evidence with opposite-signed, different-account matches. Suggestions never create Ledger Transfers, attach evidence, or decide a match; review each candidate, then pass its outflowTransactionId and inflowTransactionId to finance.accept_transfer_pair.",
       }),
       contribution_ledger: mcpAction({
         op: householdContributionContract.ops.ledger,
         description:
           "The household-wide contribution ledger as of a date (today when omitted). Positions include Expenses and Ledger Transfers dated through that day; evidence-gap counts describe currently attached Financial Transaction evidence. Never records attribution, transfers, or evidence.",
+      }),
+      cash_flow: mcpAction({
+        op: cashFlowContract.ops.projection,
+        description:
+          "Forward monthly cash flow over horizonMonths (6, 12, 24), computed on read and never stored. Baseline: per root Spending Category, the median of the trailing 12 complete household months of landed spend with no project or on the standing Household project (empty months count as 0), carried flat; a category with spend in fewer than 3 of the 12 months is Irregular and carries its mean, grouped as one row or separate. Envelopes: remaining = max(0, estimate − subtree actual − committed) for in_progress projects (not_started with includeNotStarted, planning only with an estimate, none under an estimated ancestor), spread evenly to a future end date; otherwise unscheduled. Committed future Expenses land in their month, overdue ones in the current month, never also in an envelope. Scenarios are what-if inflows/outflows; inflows exist only as scenarios.",
       }),
       expense_match: mcpAction({
         op: expenseContract.ops.match,

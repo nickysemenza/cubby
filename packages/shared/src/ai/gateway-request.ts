@@ -471,7 +471,7 @@ export function isInferenceFundingRefusal(
   if (funding === "subscription")
     return (
       [400, 429].includes(status) &&
-      /"(?:code|type)"\s*:\s*"(?:usage_limit_reached|rate_limit_exceeded|subscription_sharing_usage_limit_exceeded|subscription_unavailable)"/u.test(
+      /"(?:code|type)"\s*:\s*"(?:usage_limit_reached|rate_limit_exceeded|subscription_sharing_usage_limit_exceeded|subscription_sharing_unsupported_capability|subscription_unavailable)"/u.test(
         body,
       )
     );

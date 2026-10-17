@@ -304,13 +304,34 @@ export function cubbyPiProviders(fetchFor: GatewayFetchFor): Provider[] {
 }
 
 /**
+ * The household's one funding order for frontier chat (ADR 0017): the Claude
+ * subscriber credit first, then the ChatGPT plan, then paid only where the
+ * caller allows it. Each step advances only on a funding refusal.
+ */
+export function fundedChatAttempts(policy: { paid: boolean }): readonly {
+  model: SupportedChatModel;
+  funding: InferenceFunding;
+}[] {
+  return [
+    { model: "claude-opus-5-5", funding: "subscriber_credit" },
+    { model: "gpt-6-sol", funding: "subscription" },
+    ...(policy.paid
+      ? [{ model: "gpt-6-sol" as const, funding: "paid" as const }]
+      : []),
+  ];
+}
+
+/**
  * Funding retries restart one generation from its input transcript. Hold every
  * event until that attempt settles, so a refused partial tool call never runs.
  * Completed prior turns and their writes remain in pi's durable transcript.
+ * The requested model only selects the provider entry; `fundedChatAttempts`
+ * decides which model answers.
  */
 export function fundedCubbyPiProviders(
   fetchFor: GatewayFetchFor,
   onRefusedAttempt?: (message: AssistantMessage) => Promise<void>,
+  policy: { paid: boolean } = { paid: true },
 ): Provider[] {
   const base = cubbyPiProviders(fetchFor);
   return base.map((provider): Provider => {
@@ -322,22 +343,8 @@ export function fundedCubbyPiProviders(
     ) => {
       const output = createAssistantMessageEventStream();
       void (async () => {
-        const fast = model.id.includes("haiku") || model.id === "gpt-6-luna";
-        const primary: SupportedChatModel = fast
-          ? "claude-haiku-4-5"
-          : "claude-opus-5-5";
-        const subscription: SupportedChatModel = fast
-          ? "gpt-6-luna"
-          : "gpt-6-sol";
-        const attempts: {
-          model: SupportedChatModel;
-          funding: InferenceFunding;
-        }[] = [
-          { model: primary, funding: "subscriber_credit" },
-          { model: subscription, funding: "subscription" },
-          { model: primary, funding: "paid" },
-        ];
-        for (const attempt of attempts) {
+        const attempts = fundedChatAttempts(policy);
+        for (const [index, attempt] of attempts.entries()) {
           let refused = false;
           const providers = cubbyPiProviders((route, unbilled) => {
             const fetch = fetchFor(route, unbilled, attempt.funding);
@@ -389,7 +396,7 @@ export function fundedCubbyPiProviders(
             failed &&
             quota &&
             !options?.signal?.aborted &&
-            attempt.funding !== "paid"
+            index < attempts.length - 1
           ) {
             await onRefusedAttempt?.(result);
             continue;
@@ -456,11 +463,16 @@ function fundingOptions(
     .parse(options ?? {});
   const { toolChoice, reasoningEffort, effort, ...common } = parsed;
   const name = typeof toolChoice === "object" ? toolChoice.name : undefined;
+  const requested = effort ?? reasoningEffort;
   return route === "anthropic"
     ? {
         ...common,
-        ...(name ? { toolChoice: { type: "tool", name } } : {}),
-        effort: effort ?? reasoningEffort,
+        // Claude's thinking models reject a forced tool_choice (400); the
+        // single respond tool still answers under "auto".
+        ...(name ? { toolChoice: "auto" } : {}),
+        // OpenAI's "none"/"minimal" have no Anthropic value; "low" is closest.
+        effort:
+          requested === "none" || requested === "minimal" ? "low" : requested,
       }
     : {
         ...common,

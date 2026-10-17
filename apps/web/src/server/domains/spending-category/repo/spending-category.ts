@@ -18,6 +18,10 @@ import { uniq } from "es-toolkit";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import {
+  inheritedFieldSql,
+  inheritedSourceSql,
+} from "~/server/db/computed/effective-field";
 import type { CategoryStockTracking } from "~/server/db/computed/product-category-sql";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -43,10 +47,6 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
-import {
-  inheritedFieldSql,
-  inheritedSourceSql,
-} from "~/server/generic/inheritance/repo/effective-field";
 import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";

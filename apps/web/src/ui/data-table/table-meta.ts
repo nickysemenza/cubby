@@ -22,6 +22,8 @@ export interface FilterConfig {
   subtree?: { label: string };
   /** A value filter with an Exclude key: the editor offers is | is not. */
   exclude?: { reason: string | null };
+  /** A date range: beside its presets the editor sets `from..to` bounds. */
+  dateRange?: boolean;
   /** Client-side facet hints are opt-in because most Cubby tables are server-backed. */
   facetCount?: boolean;
   /** Deferred/server-backed option roster activation and search controls. */

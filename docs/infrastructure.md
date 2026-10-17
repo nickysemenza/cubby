@@ -457,8 +457,9 @@ the gateway before relying on a feature that selects it.
 
 ### Claude subscriber credits
 
-Pi coordinators and Tester Army use subscriber credits first, then their existing
-ChatGPT subscription transport, then paid Unified Billing. The implementation
+Every tier-routed chat call uses subscriber credits first (Opus), then the
+ChatGPT subscription transport (Sol), then paid Unified Billing (Sol);
+`fundedChatAttempts` owns the ladder. The implementation
 and model declarations own the model choices; [ADR 0017](adr/0017-subscription-funded-model-fallback.md#funding-and-gateway-amendment)
 records why paid fallback is allowed. Fixed-model evaluations do not change model.
 

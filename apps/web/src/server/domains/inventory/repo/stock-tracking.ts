@@ -8,10 +8,10 @@ import type {
 import { vendorSpendingProfile } from "@cubby/schemas/spending-classification";
 import { and, inArray, sql, type SQL } from "drizzle-orm";
 
+import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import {
   type CategoryStockTracking,
   categoryStockTrackingSql,
-  productStockTrackedSql,
 } from "~/server/db/computed/product-category-sql";
 import { type Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
@@ -20,7 +20,6 @@ import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import { product } from "~/server/db/retained-tables";
 import { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
-import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 
 /**
  * ADR 0013: a record's own stock-tracking decision wins; otherwise the
@@ -128,10 +127,7 @@ export const receivableProductIds = async (
   purchaseId: PurchaseId,
 ): Promise<Set<ProductId>> => {
   if (ids.length === 0) return new Set();
-  const tracking = productStockTrackedSql(
-    sql`${product.stockTracked}`,
-    sql`${product.categoryId}`,
-  );
+  const tracking = effectiveFieldSql("product", "stockTracked");
   const rows = await unwrapDb(db)
     .select({ id: product.id })
     .from(product)

@@ -1,3 +1,4 @@
+import { createRepoEntity } from "tooling/factories/repo";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -168,5 +169,95 @@ describe("project attention activity", () => {
     expect(scoped.some((item) => item.type === "stalled_project")).toBe(false);
     expect(await computeAttentionItems(ctx.db)).toEqual(measured.result);
     expect(measured.queryCount).toBeLessThanOrEqual(8);
+  });
+});
+
+describe("spend_below_estimate", () => {
+  const ctx = withTestDb();
+
+  const project = async (
+    name: string,
+    fields: {
+      status?: "done" | "in_progress";
+      costEstimate?: number | null;
+      parentProjectId?: string;
+    },
+  ) =>
+    (
+      await createRepoEntity(ctx, "project", {
+        name,
+        status: fields.status ?? "done",
+        costEstimate: fields.costEstimate ?? null,
+        ...(fields.parentProjectId
+          ? { parentProjectId: fields.parentProjectId }
+          : {}),
+      })
+    ).output;
+  const spend = (projectId: string, cost: number) =>
+    createRepoEntity(ctx, "expense", {
+      name: "Synthetic recorded spend",
+      cost,
+      date: "2025-03-01",
+      costType: "materials",
+      trade: "other",
+      future: false,
+      projectId,
+    });
+  const belowEstimate = async () =>
+    (await computeAttentionItems(ctx.db)).filter(
+      (item) => item.type === "spend_below_estimate",
+    );
+
+  // Fires only under 10% of the project's own estimate, counts subtree spend,
+  // and leaves projects under an estimated ancestor to that ancestor.
+  it("fires below the subtree threshold and respects an estimated ancestor", async () => {
+    const below = await project("Synthetic below", { costEstimate: 1000 });
+    await spend(below.id, 99);
+    const atThreshold = await project("Synthetic at threshold", {
+      costEstimate: 1000,
+    });
+    await spend(atThreshold.id, 100);
+    const noSpend = await project("Synthetic no spend", { costEstimate: 500 });
+    const live = await project("Synthetic live", {
+      status: "in_progress",
+      costEstimate: 1000,
+    });
+
+    const subtreeParent = await project("Synthetic subtree parent", {
+      costEstimate: 1000,
+    });
+    const child = await project("Synthetic subtree child", {
+      parentProjectId: subtreeParent.id,
+    });
+    await spend(child.id, 150);
+
+    const estimatedAncestor = await project("Synthetic estimated ancestor", {
+      status: "in_progress",
+      costEstimate: 5000,
+    });
+    const middle = await project("Synthetic unestimated middle", {
+      parentProjectId: estimatedAncestor.id,
+    });
+    const covered = await project("Synthetic covered child", {
+      costEstimate: 800,
+      parentProjectId: middle.id,
+    });
+
+    const items = await belowEstimate();
+    expect(items.map((item) => item.entityId).sort()).toEqual(
+      [below.id, noSpend.id].sort(),
+    );
+    for (const excluded of [atThreshold, live, subtreeParent, child, covered])
+      expect(items.map((item) => item.entityId)).not.toContain(excluded.id);
+
+    const item = items.find((row) => row.entityId === below.id);
+    expect(item?.facts).toEqual({
+      costEstimate: 1000,
+      actualSpend: 99,
+      thresholdPercent: 10,
+    });
+    expect(item?.description).toContain(
+      "spend was recorded elsewhere or the estimate is wrong",
+    );
   });
 });

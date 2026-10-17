@@ -1,4 +1,8 @@
 import {
+  cashFlowProjectionInput,
+  cashFlowProjectionOut,
+} from "@cubby/schemas/cash-flow";
+import {
   financialBookingInput,
   financialBookingPreview,
   financialBookingResult,
@@ -16,6 +20,10 @@ import {
   merchantVendorInference,
   merchantVendorInferenceInput,
 } from "@cubby/schemas/financial-transaction";
+import {
+  acceptFinancialTransferPairInput,
+  acceptFinancialTransferPairOut,
+} from "@cubby/schemas/household-contribution";
 import { ledgerPartyShortcode, userId } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 
@@ -60,6 +68,17 @@ export const ledgerPartyContract = defineContract("ledgerParty", {
   }),
 });
 
+export const cashFlowContract = defineContract("cashFlow", {
+  /** Forward monthly projection over Expenses and project estimates (MCP `finance_read`). */
+  projection: query({
+    input: cashFlowProjectionInput,
+    output: cashFlowProjectionOut,
+    // Scenarios are an array of objects; keep them out of a bounded URL.
+    transport: "post",
+    cache: { tags: [["expense"], ["project"], ["spendingCategory"]] },
+  }),
+});
+
 export const financialTransactionContract = defineContract(
   "financialTransaction",
   {
@@ -71,6 +90,12 @@ export const financialTransactionContract = defineContract(
       native:
         "Save reviewed settlement without replacing a changed allocation graph",
       invalidates: ["financialTransaction", "purchase", "expense"],
+    }),
+    acceptTransferPair: mutation({
+      input: acceptFinancialTransferPairInput,
+      output: acceptFinancialTransferPairOut,
+      native: "Accept a reviewed transfer pair as a Ledger Transfer",
+      invalidates: ["financialTransaction", "ledgerTransfer"],
     }),
     converge: mutation({
       input: financialConvergenceInput,

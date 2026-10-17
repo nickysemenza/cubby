@@ -1,9 +1,10 @@
 import { compactLiteral, generatedHeader } from "../../artifacts.ts";
-import type {
-  CompiledEntity,
-  EntityArtifacts,
-  FilterDescriptor,
-  SourceRef,
+import {
+  type CompiledEntity,
+  dateRangeBounds,
+  type EntityArtifacts,
+  type FilterDescriptor,
+  type SourceRef,
 } from "../declarations.ts";
 import { entityProjectionMaps } from "./index.ts";
 
@@ -111,6 +112,19 @@ export const renderFilterArtifacts = (
       ...(presetTable(descriptor) === null
         ? []
         : [`expand:presetExpand(${compactLiteral(presetTable(descriptor))})`]),
+      // A one-parameter range with no presets (planting `activeOn`) passes
+      // its value through to that parameter.
+      ...(descriptor.kind === "range" &&
+      descriptor.wire.kind === "param" &&
+      descriptor.expandRef === null &&
+      presetTable(descriptor) === null
+        ? [
+            `expand:(value) => ({${JSON.stringify(descriptor.wire.name)}:value})`,
+          ]
+        : []),
+      ...(dateRangeBounds(descriptor) === null
+        ? []
+        : [`range:${compactLiteral(dateRangeBounds(descriptor))}`]),
       ...(descriptor.urlOnly ? ["urlOnly:true"] : []),
       ...(descriptor.nullable === null
         ? []

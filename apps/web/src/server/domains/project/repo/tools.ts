@@ -47,6 +47,7 @@ import {
   UNKNOWN_OWNERSHIP,
 } from "~/lib/tool-timeline";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
+import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import {
   entityLink,
@@ -84,7 +85,6 @@ import {
   linkValues,
   liveLinks,
 } from "~/server/generic/entity-links/repo/entity-links";
-import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 import { foldAssociation } from "~/server/generic/merge/repo/collisions";
 
 import { maxPlainDate } from "./helpers";

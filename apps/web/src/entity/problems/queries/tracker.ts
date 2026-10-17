@@ -24,7 +24,8 @@ export const trackerProblemQueries = [
       kind: "entity",
       entity: "task",
       filters: [
-        { id: "dueRelative", value: "beforeToday" },
+        // Before today: the household's today, resolved when the Problem runs.
+        { id: "dueDate", value: "..@today-1d" },
         { id: "completion", value: "open" },
         { id: "parentTaskId", value: [FILTER_NONE] },
       ],
@@ -65,6 +66,24 @@ export const trackerProblemQueries = [
       entity: "project",
       filters: [{ id: "attention", value: "missing_budget" }],
       sort: [{ id: "costEstimate", desc: false }],
+      columnVisibility: { costEstimate: true, status: true },
+    },
+  }),
+  defineProblem({
+    key: "projectsSpendBelowEstimate",
+    problemClass: "defect",
+    executionLane: "tracker",
+    freshness: { kind: "live" },
+    continuation: { kind: "entity-list" },
+    title: "Done projects with spend below estimate",
+    description:
+      "Done projects whose subtree spend is under 10% of their own estimate: spend was recorded elsewhere or the estimate is wrong.",
+    emptyMessage: "Every done project's recorded spend is near its estimate.",
+    source: {
+      kind: "entity",
+      entity: "project",
+      filters: [{ id: "attention", value: "spend_below_estimate" }],
+      sort: [{ id: "costEstimate", desc: true }],
       columnVisibility: { costEstimate: true, status: true },
     },
   }),

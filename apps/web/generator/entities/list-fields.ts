@@ -41,10 +41,10 @@ type CompiledListField =
     }>
   | Readonly<{
       shape: "value";
-      type: "text" | "number" | "date" | "boolean" | "enum";
+      type: "text" | "number" | "date" | "dateInterval" | "boolean" | "enum";
       options: readonly string[] | null;
       sort: null;
-      group: null;
+      group: string | null;
     }>
   | Readonly<{
       shape: "predicate";
@@ -143,6 +143,8 @@ type InheritSource =
  */
 type CompiledInherit = Readonly<{
   column: string;
+  /** The entity the field references, for readers that show its record. */
+  reference: string | null;
   empty: "array" | null;
   mode: Readonly<{
     column: string;
@@ -375,6 +377,7 @@ const compileInherit = (
     });
     compiled[field.key] = {
       column: stored.column,
+      reference: stored.reference,
       empty: stored.nullable ? null : "array",
       mode,
       from,
@@ -435,7 +438,9 @@ const compatibleKinds = (
       return [field.predicate];
     // Any value reads presence: a boolean as true, any other as non-NULL.
     case "value":
-      return field.type === "number" || field.type === "date"
+      return field.type === "number" ||
+        field.type === "date" ||
+        field.type === "dateInterval"
         ? ["range", "presence"]
         : field.type === "boolean"
           ? ["boolean", "presence"]
@@ -710,7 +715,9 @@ const compileGroupChoice = (
       `A record can have several ${field.label}, so it would appear in more than one group.`,
     );
   if (bound?.shape === "via") return viaValue(bound);
-  if (bound?.shape === "predicate") return choice(null, bound.group);
+  // A predicate, or a value with no single section key (a date span).
+  if (bound !== undefined && bound.group !== null)
+    return choice(null, bound.group);
   if (stored !== undefined && field !== undefined) {
     if (field.reference !== null) {
       const relation = entity.relations.find((candidate) => {
@@ -822,7 +829,10 @@ export const compileListFields = (
                 type: entry.type,
                 options: entry.options ?? null,
                 sort: null,
-                group: null,
+                group:
+                  entry.type === "dateInterval"
+                    ? `${humanize(key)} is a date span, so a record has no single date to group under.`
+                    : null,
               }
             : {
                 shape: "predicate",

@@ -173,7 +173,7 @@ async function seedTestUser(rawDb: ReturnType<typeof drizzle>) {
  * global "zero" invariants (`findOrphanedEntityEmbeddings`) and recent-N
  * windows (`listBackgroundBatches`) rely on NOT happening — they stay correct
  * only because they scope by `TEST_HOME_ID`/`TEST_USER_ID` rows that
- * `resetTestDb()` truncates every test, not because the module graph resets.
+ * `resetTestDb()` clears before every test, not because the module graph resets.
  */
 let fileDb: {
   db: Database;
@@ -184,8 +184,8 @@ let fileDb: {
   lease: DatabaseLease;
 } | null = null;
 
-/** `TRUNCATE` target list, resolved once per file (see {@link resetTestDb}). */
-let truncateTargets = "";
+/** Reset statement, resolved once per file (see {@link resetTestDb}). */
+let resetSql = "";
 
 /**
  * Every public table, derived from the live database rather than hardcoded,
@@ -193,18 +193,27 @@ let truncateTargets = "";
  * would silently leak rows between tests — the exact bug this whole mechanism
  * exists to prevent — and nothing would fail loudly enough to notice.
  */
-async function readTruncateTargets(pool: Pool): Promise<string> {
-  const { rows } = await pool.query<{ list: string | null }>(
-    `SELECT string_agg(format('%I', tablename), ', ') AS list
-       FROM pg_tables WHERE schemaname = 'public'`,
+async function readResetSql(pool: Pool): Promise<string> {
+  const { rows } = await pool.query<{ name: string }>(
+    `SELECT format('%I', tablename) AS name
+       FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename`,
   );
-  const list = rows[0]?.list ?? "";
-  if (!list) {
+  if (!rows.length) {
     throw new Error(
-      "test-setup: found no public tables to truncate — is the IntegreSQL template migrated?",
+      "test-setup: found no public tables to reset — is the IntegreSQL template migrated?",
     );
   }
-  return list;
+  const tables = rows.map(({ name }) => name);
+  // One statement (the query tracer expects a single result) and so one
+  // transaction: the `set_config(..., true)` setting and the locks end at its
+  // commit and never leak to the pooled connection.
+  return [
+    "DO $reset$ BEGIN",
+    "PERFORM set_config('session_replication_role', 'replica', true);",
+    `LOCK TABLE ${tables.join(", ")} IN ACCESS EXCLUSIVE MODE;`,
+    ...tables.map((table) => `DELETE FROM ${table};`),
+    "END $reset$",
+  ].join("\n");
 }
 
 async function getFileDb() {
@@ -214,7 +223,7 @@ async function getFileDb() {
   // unreleased slot is re-handed to a parallel file while still in use.
   const {
     lease,
-    prepared: { pool, tables },
+    prepared: { pool, reset },
   } = await leaseDatabase("vitest", async ({ databaseUrl }) => {
     const pool = countPoolQueries(
       createPostgresPool({ connectionString: databaseUrl }),
@@ -225,13 +234,13 @@ async function getFileDb() {
     // connection.
     pool.on("error", () => {});
     try {
-      return { pool, tables: await readTruncateTargets(pool) };
+      return { pool, reset: await readResetSql(pool) };
     } catch (error) {
       await pool.end();
       throw error;
     }
   });
-  truncateTargets = tables;
+  resetSql = reset;
   const rawDb = drizzle({ client: pool, schema });
 
   fileDb = {
@@ -247,51 +256,51 @@ async function getFileDb() {
 /**
  * Restore the pristine-database contract between tests.
  *
- * One statement clears all 40 tables: ordering doesn't matter (the only cycles
- * are the self-FKs on `Project.parentProjectId` / `Task.parentTaskId`, which are
- * irrelevant when the whole table goes), and `RESTART IDENTITY` is a no-op since
- * every PK is a UUID or a client-generated text id. Crucially the ~177 indexes,
- * 7 enum types and 2 extensions all survive — that is precisely the per-database
- * work a `CREATE DATABASE ... TEMPLATE` was repeating for all 294 tests.
+ * One implicit transaction empties every public table and leaves the schema,
+ * indexes, enum types and extensions in place — the per-database work a
+ * `CREATE DATABASE ... TEMPLATE` would repeat for every test.
  *
- * Measured with docker-compose.yml tuned for tests (`fsync=off`,
- * `synchronous_commit=off`, `full_page_writes=off`, statement logging off)
- * and no leaked IntegreSQL databases dragging on the pool. Both halves of the
- * original trade-off moved, and the conclusion survives:
+ * `DELETE`, not `TRUNCATE`: TRUNCATE gives every table, toast table and index a
+ * new relfilenode (~850 relations for 106 tables) and broadcasts a relcache
+ * invalidation for each, so its cost scales with the schema rather than the
+ * handful of rows a test writes. On the shared container (PG17, durability
+ * off) a TRUNCATE-all reset measured ~300ms of server CPU alone and ~800ms
+ * with parallel workers; deleting from the same tables measured ~7ms. Most of
+ * the integration suite's PostgreSQL CPU was this reset.
  *
- *   - a fresh `getTestDatabase()` per test: **777ms -> 34ms**
- *   - this TRUNCATE-all reset:             **266ms -> 31ms**
+ * `session_replication_role = replica` (superuser; every test database is owned
+ * by `postgres`) disables FK and user triggers for the transaction, matching
+ * TRUNCATE: deletion order is irrelevant, and row triggers such as
+ * `assessment_history_immutable` — which rejects DELETE — never fire. No public
+ * table owns a sequence, so there is no identity to restart. ACCESS EXCLUSIVE
+ * locks keep TRUNCATE's wait for any transaction still open on these tables;
+ * without them a straggler's uncommitted insert would commit after the DELETE
+ * and leak into the next test.
  *
- * So per-test databases are no longer disqualified on cost — they are simply a
- * tie, and a tie does not justify rewriting `withTestDb()`. Note also that the
- * 34ms was measured sequentially; under the real 8-way parallel run the binding
- * constraint is IntegreSQL refilling its pool, which is what the original 777ms
- * actually captured. Don't re-open this on a single-threaded microbenchmark.
- *
- * ⚠️ Truncating only the DIRTY tables (`pg_stat_user_tables` where
- * `n_tup_ins + n_tup_upd + n_tup_del > 0`) looks like a 10x win and is NOT
- * SAFE. Those counters are not synchronous: measured on PG17, a table INSERTed
- * into reports `(NONE)` when queried immediately afterwards and only appears
- * ~2s later. A reset built on them silently skips the tables the previous test
- * just wrote — row leakage between tests, which is the exact failure this
- * function exists to prevent, and it would fail as a confusing duplicate-key
- * error in some unrelated later test rather than here.
+ * ⚠️ Resetting only the DIRTY tables (`pg_stat_user_tables` where
+ * `n_tup_ins + n_tup_upd + n_tup_del > 0`) is NOT SAFE. Those counters are not
+ * synchronous: measured on PG17, a table INSERTed into reports `(NONE)` when
+ * queried immediately afterwards and only appears ~2s later. A reset built on
+ * them silently skips the tables the previous test just wrote — row leakage
+ * between tests, which is the exact failure this function exists to prevent,
+ * and it would fail as a confusing duplicate-key error in some unrelated later
+ * test rather than here.
  */
 async function resetTestDb() {
   const { rawDb, pool } = await getFileDb();
 
   // Evict the selected owned sessions first; an unowned runtime must drain
-  // before reset and fails with a lifecycle diagnostic. TRUNCATE needs
-  // ACCESS EXCLUSIVE on all 40 tables, and the file's pool is now shared across
+  // before reset and fails with a lifecycle diagnostic. The reset takes
+  // ACCESS EXCLUSIVE on every table, and the file's pool is shared across
   // tests — so a fire-and-forget background job still writing from the previous
-  // test holds a lock and TRUNCATE waits behind it until the hook times out.
+  // test holds a lock and the reset waits behind it until the hook times out.
   // (That failure is self-propagating: the blocked reset never clears `user`,
   // so the *next* test dies on `duplicate key ... "user_pkey"` instead.)
   // Nothing legitimate is in flight between tests, so terminating that fixed
   // owned set is what the per-test database used to do implicitly
   // by simply never reusing a connection.
   await terminateOtherPostgresConnections(pool);
-  await pool.query(`TRUNCATE ${truncateTargets} RESTART IDENTITY CASCADE`);
+  await pool.query(resetSql);
   await seedTestUser(rawDb);
   await seedBaseWorld(rawDb);
   return (await getFileDb()).db;
@@ -319,7 +328,7 @@ export async function closeTestDb() {
   if (!fileDb) return;
   const { pool, lease } = fileDb;
   fileDb = null;
-  truncateTargets = "";
+  resetSql = "";
   // Release even when ending the pool fails: a held slot starves the ring.
   try {
     await pool.end();
@@ -343,7 +352,7 @@ export async function closeTestDb() {
  * Every test starts from the same two baseline rows (the test user and Home), so
  * domain tables other than Location remain empty and uniqueness behavior stays
  * deterministic. What changed is *how* that is achieved: the file provisions ONE IntegreSQL database
- * and truncates between tests, instead of paying a `CREATE DATABASE ...
+ * and empties every table between tests, instead of paying a `CREATE DATABASE ...
  * TEMPLATE` per test. See {@link resetTestDb}.
  *
  * Pass `source` for suites that audit as something other than the UI (the

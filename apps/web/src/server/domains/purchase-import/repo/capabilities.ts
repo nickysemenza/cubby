@@ -115,6 +115,7 @@ const actionCapability = {
   "finance.converge": "business_writer",
   "finance.allocate_settlement": "member_decision",
   "finance.book_transaction": "member_decision",
+  "finance.accept_transfer_pair": "member_decision",
   "product_enrichment.verify_images": "generic_mutation",
   "product_enrichment.propose_match": "match_proposal",
   "product_enrichment.merge_match": "member_decision",

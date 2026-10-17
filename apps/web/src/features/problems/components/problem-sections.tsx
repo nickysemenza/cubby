@@ -507,6 +507,7 @@ const TRACKER_GROUPS: { type: ProjectAttentionType; title: string }[] = [
   { type: "stalled_project", title: "Stalled projects" },
   { type: "past_due_planned_expense", title: "Planned expenses past due" },
   { type: "missing_budget", title: "Missing a cost estimate" },
+  { type: "spend_below_estimate", title: "Spend below estimate" },
   { type: "unclassified_expense", title: "Unclassified expenses" },
   { type: "date_window_drift", title: "Date window drift" },
 ];
@@ -517,6 +518,7 @@ const TRACKER_GROUP_TITLE = {
   stalled_project: "Stalled projects",
   past_due_planned_expense: "Planned expenses past due",
   missing_budget: "Missing a cost estimate",
+  spend_below_estimate: "Spend below estimate",
   unclassified_expense: "Unclassified expenses",
   date_window_drift: "Date window drift",
 } satisfies Record<ProjectAttentionType, string>;

@@ -11,6 +11,7 @@ import {
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
+import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   assertNoDependents,
@@ -27,7 +28,6 @@ import {
   setProjectExternalUrls,
   withProjectExternalUrls,
 } from "~/server/domains/project/repo/external-links";
-import { effectiveProjectTradeSql } from "~/server/domains/task/repo/task-project-inheritance";
 import { createEntityReader } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -38,7 +38,6 @@ import {
 } from "~/server/generic/audit-log/repo/audit-log";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { replaceDependencyEdges } from "~/server/generic/entity-links/repo/dependency-edges";
-import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 import { validateLiveEffectiveTrades } from "~/server/generic/inheritance/repo/inheritance-validation";
 /**
  * Project CRUD operations.
@@ -262,7 +261,7 @@ async function projectSettingsAfterParentChange(
         }>(sql`
     SELECT ${effectiveFieldSql("project", "assigneeId", { id: sql`${id}::uuid` })} AS "assigneeId",
       ${effectiveFieldSql("project", "locations", { id: sql`${id}::uuid` })} AS locations,
-      ${effectiveProjectTradeSql(sql`${id}::uuid`)} AS trade
+      ${effectiveFieldSql("project", "defaultTrade", { id: sql`${id}::uuid` })} AS trade
   `)
       ).rows[0]
     : undefined;

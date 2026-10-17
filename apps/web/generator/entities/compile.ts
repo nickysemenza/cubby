@@ -1,6 +1,7 @@
 import type { ChildTableDeclaration } from "../../../../packages/schemas/src/entity-definitions/child-definition.ts";
 import { servesKernelGet } from "./list-capabilities.ts";
 import { humanize } from "../../../../packages/shared/src/text-case.ts";
+import { parseRangeBounds } from "../../../../packages/shared/src/filter.ts";
 import { colorizeEnumOptions } from "../../../../packages/shared/src/enum-palette.ts";
 import {
   FILTER_KINDS,
@@ -36,16 +37,17 @@ import {
   deriveInverseRelations,
   deriveRelationSections,
 } from "./derive.ts";
-import type {
-  CompiledEntity,
-  DeclarationObject,
-  DeclarationValue,
-  EntityField,
-  EntityFieldModel,
-  EntityPorts,
-  EntityStorageField,
-  FilterDescriptor,
-  RelationMutation,
+import {
+  type CompiledEntity,
+  dateRangeBounds,
+  type DeclarationObject,
+  type DeclarationValue,
+  type EntityField,
+  type EntityFieldModel,
+  type EntityPorts,
+  type EntityStorageField,
+  type FilterDescriptor,
+  type RelationMutation,
 } from "./declarations.ts";
 import {
   compilePresentation,
@@ -1816,6 +1818,10 @@ const validateSavedViews = (
           descriptor.kind === "range" &&
           descriptor.expandRef === null &&
           descriptor.options !== null &&
+          !(
+            dateRangeBounds(descriptor) !== null &&
+            parseRangeBounds(value) !== undefined
+          ) &&
           !(
             descriptor.wire.kind === "range" &&
             descriptor.wire.presence !== undefined &&

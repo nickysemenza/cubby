@@ -52,6 +52,11 @@ import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
+  effectiveFieldInSql,
+  effectiveFieldSql,
+  inheritedFieldOfColumn,
+} from "~/server/db/computed/effective-field";
+import {
   arrayOverlapOrPresence,
   auditDateWhereConditions,
   buildOrderBy,
@@ -84,11 +89,6 @@ import {
 } from "~/server/generic/data-quality/repo/sql";
 import { relatedWhereConditions } from "~/server/generic/entity-links/repo/related-view";
 import {
-  effectiveFieldInSql,
-  effectiveFieldSql,
-  inheritedFieldOfColumn,
-} from "~/server/generic/inheritance/repo/effective-field";
-import {
   type HierarchyEntity,
   hierarchyDescendantsSql,
 } from "~/server/generic/list/repo/hierarchy";
@@ -108,6 +108,7 @@ import {
   derivedOrderBy,
   derivedPredicateSql,
   derivedPrepare,
+  derivedIntervalSql,
   derivedValueSet,
   derivedValueSql,
   type AnyDerivedSql,
@@ -559,6 +560,17 @@ const derivedFilterPredicates = (
       case "presence":
         return [valuePresence(field.type, test, presenceFilter.parse(value))];
       case "range": {
+        if (field.type === "dateInterval")
+          return [
+            intervalPredicate(
+              entity,
+              derived,
+              derivedKey,
+              context,
+              descriptor,
+              values,
+            ),
+          ];
         if (descriptor.wire.kind !== "range")
           throw new Error(
             `${entity}.${descriptor.columnId} is a range filter without range wire keys`,
@@ -570,22 +582,21 @@ const derivedFilterPredicates = (
           bound.parse(values[to]),
         ];
         return [
-          // Unbounded reads no value, so an unrequested prepare stays unread.
-          low === undefined && high === undefined
-            ? undefined
-            : test((column) =>
-                and(
-                  low === undefined ? undefined : sql`${column} >= ${low}`,
-                  high === undefined ? undefined : sql`${column} <= ${high}`,
+          rangeOrPresence(
+            // Unbounded reads no value, so an unrequested prepare stays unread.
+            low === undefined && high === undefined
+              ? undefined
+              : test((column) =>
+                  and(
+                    low === undefined ? undefined : sql`${column} >= ${low}`,
+                    high === undefined ? undefined : sql`${column} <= ${high}`,
+                  ),
                 ),
-              ),
-          descriptor.wire.presence === undefined
-            ? undefined
-            : valuePresence(
-                field.type,
-                test,
-                presenceFilter.parse(values[descriptor.wire.presence]),
-              ),
+            descriptor.wire.presence === undefined
+              ? undefined
+              : presenceFilter.parse(values[descriptor.wire.presence]),
+            (presence) => valuePresence(field.type, test, presence),
+          ),
         ];
       }
       default: {
@@ -723,6 +734,58 @@ const dateRange = (
   from === undefined ? undefined : sql`${column} >= ${from}`,
   to === undefined ? undefined : sql`${column} <= ${to}`,
 ];
+
+/**
+ * A range's bounds with its Any value / No value. No value ORs with the
+ * bounds, as it does with any-of values ("older than 30 days, or never");
+ * Any value beside bounds is the bounds alone, which already imply a value.
+ */
+const rangeOrPresence = (
+  bounds: SQL | undefined,
+  presence: PresenceFilter,
+  presenceSql: (presence: "has" | "none") => SQL | undefined,
+): SQL | undefined =>
+  presence === undefined
+    ? bounds
+    : bounds === undefined
+      ? presenceSql(presence)
+      : presence === "has"
+        ? bounds
+        : or(bounds, presenceSql("none"));
+
+/**
+ * A range filter over a `dateInterval` value. Range bounds match overlap,
+ * so a span that runs into the window from either side counts; a one-date
+ * parameter (`activeOn`) matches containment. A NULL end is open; a NULL
+ * start matches nothing.
+ */
+const intervalPredicate = (
+  entity: Entity,
+  derived: AnyDerivedSql,
+  key: string,
+  context: ListContext,
+  descriptor: StoredDescriptorView,
+  values: ListFilterValues,
+): SQL | undefined => {
+  const [low, high] =
+    descriptor.wire.kind === "range"
+      ? [
+          optionalDate.parse(values[descriptor.wire.from]),
+          optionalDate.parse(values[descriptor.wire.to]),
+        ]
+      : [
+          optionalDate.parse(values[descriptor.wire.name]),
+          optionalDate.parse(values[descriptor.wire.name]),
+        ];
+  if (low === undefined && high === undefined) return undefined;
+  const { start, end } = derivedIntervalSql(entity, derived, key, context);
+  return and(
+    high === undefined ? undefined : sql`(${start}) <= ${high}::date`,
+    low === undefined
+      ? undefined
+      : sql`((${end}) IS NULL OR (${end}) >= ${low}::date)`,
+  );
+};
 
 /**
  * A pending field suggestion of any of the picked kinds, ORed with the
@@ -873,35 +936,35 @@ export function declaredFilterPredicates<Filters extends object>(
                 `${entity}.${descriptor.columnId} is a stored range without range wire keys`,
               );
             const { from, to, presence: presenceKey } = descriptor.wire;
-            const rangePresence =
+            const presence =
               presenceKey === undefined
                 ? undefined
-                : presenceCondition(
-                    first.value,
-                    presenceFilter.parse(values[presenceKey]),
-                  );
-            if (descriptor.range?.kind !== "date")
-              return [
-                ...rangeConditions(
-                  first.value,
-                  {
-                    [`${key}Min`]: optionalNumber.parse(values[from]),
-                    [`${key}Max`]: optionalNumber.parse(values[to]),
-                  },
-                  key,
-                ),
-                rangePresence,
+                : presenceFilter.parse(values[presenceKey]);
+            const dateBounds = () => {
+              const [low, high] = [
+                optionalDate.parse(values[from]),
+                optionalDate.parse(values[to]),
               ];
-            const [low, high] = [
-              optionalDate.parse(values[from]),
-              optionalDate.parse(values[to]),
-            ];
-            // A timestamp bounds whole household days; a date compares as is.
-            return [
-              ...(first.kind === "timestamp"
+              // A timestamp bounds whole household days; a date compares as is.
+              return first.kind === "timestamp"
                 ? householdDayRangeConditions(first.value, low, high)
-                : dateRange(first.value, low, high)),
-              rangePresence,
+                : dateRange(first.value, low, high);
+            };
+            const bounds =
+              descriptor.range?.kind !== "date"
+                ? rangeConditions(
+                    first.value,
+                    {
+                      [`${key}Min`]: optionalNumber.parse(values[from]),
+                      [`${key}Max`]: optionalNumber.parse(values[to]),
+                    },
+                    key,
+                  )
+                : dateBounds();
+            return [
+              rangeOrPresence(and(...bounds), presence, (wanted) =>
+                presenceCondition(first.value, wanted),
+              ),
             ];
           }
           default:

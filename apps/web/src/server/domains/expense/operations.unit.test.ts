@@ -16,6 +16,7 @@ const input: ExpenseAnalyzeInput = {
   rowDimension: "trade",
   columnDimension: "costType",
   comparison: "none",
+  spendingCategoryRollup: "none",
 };
 
 describe("expense workflow observability", () => {

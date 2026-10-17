@@ -1,3 +1,4 @@
+import { RELATIVE_DATE_PATTERN } from "@cubby/shared";
 import { z } from "zod";
 
 /**
@@ -29,10 +30,28 @@ export const plainDate = z
   .meta({ mockValue: "2024-01-15" })
   .describe('Calendar day as "YYYY-MM-DD"');
 
+/**
+ * A date range filter bound: a calendar day, or a relative date token
+ * (`@today`, `@today-30d`) the entity kernel resolves to the household's
+ * day before a repository runs (#2415).
+ */
+export const dateBound = z
+  .string()
+  .regex(
+    new RegExp(
+      `^(?:\\d{4}-\\d{2}-\\d{2}|${RELATIVE_DATE_PATTERN.source.slice(1, -1)})$`,
+    ),
+    'expected YYYY-MM-DD or "@today", "@today-Nd", "@today+Nd"',
+  )
+  .meta({ mockValue: "2024-01-15" })
+  .describe(
+    'Calendar day as "YYYY-MM-DD", or the household\'s today as "@today", "@today-Nd" or "@today+Nd" (N whole days)',
+  );
+
 type DateRangeFields<Prefix extends string> = {
-  [K in `${Prefix}From`]: z.ZodOptional<typeof plainDate>;
+  [K in `${Prefix}From`]: z.ZodOptional<typeof dateBound>;
 } & {
-  [K in `${Prefix}To`]: z.ZodOptional<typeof plainDate>;
+  [K in `${Prefix}To`]: z.ZodOptional<typeof dateBound>;
 };
 
 /**
@@ -50,10 +69,10 @@ export const dateRangeFields = <Prefix extends string>(
   prefix: Prefix,
   opts?: { describe?: { from: string; to: string } },
 ): DateRangeFields<Prefix> => {
-  const bound = plainDate.optional();
+  const bound = dateBound.optional();
   const describe = opts?.describe;
   // SAFETY: the two computed keys are derived from the same Prefix used by the
-  // return type, and both values are the shared optional plain-date schema.
+  // return type, and both values are the shared optional date-bound schema.
   return {
     [`${prefix}From`]: describe ? bound.describe(describe.from) : bound,
     [`${prefix}To`]: describe ? bound.describe(describe.to) : bound,

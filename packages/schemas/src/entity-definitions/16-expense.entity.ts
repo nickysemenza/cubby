@@ -1145,10 +1145,6 @@ Rules:
       costSign: { type: "enum", options: ["negative", "positive"] },
       // Belongs to a disposal Purchase (a relationship, not a negative line).
       disposalPurchase: { type: "boolean" },
-      dateRelative: {
-        predicate: "multiselect",
-        reason: "Relative to the household's today",
-      },
       ledgerPartyId: {
         predicate: "idMulti",
         reason:
@@ -1409,13 +1405,6 @@ Rules:
         columnId: "dateTo",
         kind: "text",
         placeholder: "Expense date to...",
-        urlOnly: true,
-      },
-      {
-        columnId: "dateRelative",
-        kind: "multiselect",
-        derived: true,
-        placeholder: "Filter by relative date...",
         urlOnly: true,
       },
       {

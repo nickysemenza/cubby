@@ -19,6 +19,7 @@ import type { Trade } from "@cubby/schemas/project";
 import { sql, type SQL } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { unwrapDb, sqlEnumConstant } from "~/server/db/helpers";
 import {
   effectiveExpenseSpendingCategorySql,
@@ -27,9 +28,12 @@ import {
 } from "~/server/domains/expense/repo/expense-category-resolution";
 import { categoryFeatureSql } from "~/server/domains/product-category/repo/category-feature";
 import { assertClassificationPolicies } from "~/server/domains/spending-category/repo/classification-field-policy";
-import { effectiveProjectTradeSql } from "~/server/domains/task/repo/task-project-inheritance";
 import { createAppError } from "~/server/errors/app-error";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
+
+/** A project's effective default trade (`resolution.inherit`). */
+const effectiveProjectTradeSql = (projectId: SQL) =>
+  effectiveFieldSql("project", "defaultTrade", { id: projectId });
 
 const column = (alias: string, name: string) => sql.raw(`${alias}."${name}"`);
 

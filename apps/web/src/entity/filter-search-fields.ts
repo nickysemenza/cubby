@@ -98,8 +98,14 @@ export const problemFilterSemantics = {
     {
       columnId: "lastBulkInventory",
       kind: "range",
+      range: { from: "lastBulkInventoryFrom", to: "lastBulkInventoryTo" },
       expand: (value) =>
-        value === "60" ? { lastBulkInventoryOlderThanDays: 60 } : {},
+        value === "60"
+          ? {
+              lastBulkInventoryTo: "@today-60d",
+              lastBulkInventoryPresenceFilter: "none",
+            }
+          : {},
     },
     {
       columnId: "inventoryEntries",
@@ -142,6 +148,7 @@ export const problemFilterSemantics = {
       columnId: "verifiedAt",
       field: "verified",
       kind: "range",
+      range: { from: "verifiedFrom", to: "verifiedTo" },
       expand: (value) =>
         value === "has" || value === "none"
           ? { verifiedPresenceFilter: value }
@@ -155,7 +162,11 @@ export const problemFilterSemantics = {
   expense: [
     { columnId: "future", kind: "boolean" },
     { columnId: "costSign", kind: "multiselect" },
-    { columnId: "dateRelative", kind: "multiselect" },
+    {
+      columnId: "date",
+      kind: "range",
+      range: { from: "dateFrom", to: "dateTo" },
+    },
     {
       columnId: "productId",
       urlKey: "product",
@@ -201,6 +212,7 @@ export const problemFilterSemantics = {
     {
       columnId: "createdAt",
       kind: "range",
+      range: { from: "createdFrom", to: "createdTo" },
       expand: (value) =>
         value === "olderThan1h" ? { uploadedAgeHoursMin: 1 } : {},
     },
@@ -215,7 +227,11 @@ export const problemFilterSemantics = {
     { columnId: "dataGaps", field: "dataGap", kind: "multiselect" },
   ],
   task: [
-    { columnId: "dueRelative", kind: "multiselect" },
+    {
+      columnId: "dueDate",
+      kind: "range",
+      range: { from: "dueFrom", to: "dueTo" },
+    },
     { columnId: "completion", kind: "multiselect" },
     {
       columnId: "parentTaskId",

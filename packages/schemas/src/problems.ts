@@ -847,6 +847,11 @@ export const problemDetectors = {
     "defect",
     projectAttentionItemSchema,
   ),
+  projectsSpendBelowEstimate: detector(
+    "tracker",
+    "defect",
+    projectAttentionItemSchema,
+  ),
   pastDuePlannedExpenses: detector(
     "tracker",
     "defect",
@@ -1026,6 +1031,7 @@ export const TRACKER_PROBLEM_KEY_BY_TYPE = {
   overdue_task: "overdueTasks",
   stalled_project: "stalledProjects",
   missing_budget: "projectsMissingBudget",
+  spend_below_estimate: "projectsSpendBelowEstimate",
   past_due_planned_expense: "pastDuePlannedExpenses",
   unclassified_expense: "unclassifiedExpenses",
   blocked_work: "blockedWorkProjects",

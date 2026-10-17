@@ -99,6 +99,7 @@ const specFilterConfig = (
     matchAll: spec.match === undefined ? undefined : true,
     exclude: spec.exclude && { reason: spec.exclude.reason },
     subtree: subtreeControl(spec, specs),
+    dateRange: spec.range === undefined ? undefined : true,
     onActivate: deferred?.onActivate,
     onSearchChange: deferred?.onSearchChange,
     isLoading: deferred?.isLoading,

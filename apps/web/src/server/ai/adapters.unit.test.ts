@@ -41,7 +41,7 @@ describe("chatCompletionOptionsFor", () => {
       maxTokens: 4000,
       thinkingEnabled: true,
       effort: "low",
-      toolChoice: { type: "tool", name: "respond" },
+      toolChoice: "auto",
     });
     expect(options).not.toHaveProperty("temperature");
     expect(options).not.toHaveProperty("top_p");

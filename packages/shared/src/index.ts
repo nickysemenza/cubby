@@ -9,8 +9,19 @@ export {
 
 export {
   CURRENT_MEMBER_FILTER,
+  describeDateBound,
+  describeRangeBounds,
+  describeRelativeDate,
+  formatRangeBounds,
   OWNER_FILTER_HOUSEHOLD,
   OWNER_FILTER_UNKNOWN,
+  parseRangeBounds,
+  RANGE_BOUNDS_SEPARATOR,
+  RELATIVE_DATE_PATTERN,
+  RELATIVE_DATE_TODAY,
+  relativeDateOffset,
+  relativeDateToken,
+  resolveRelativeDate,
   UNRESOLVABLE_ENTITY_FILTER,
 } from "./filter";
 

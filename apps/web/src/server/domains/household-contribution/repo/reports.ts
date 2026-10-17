@@ -249,6 +249,8 @@ export async function householdContributionLedger(
       initiallyOutlaid: bigint;
       sent: bigint;
       received: bigint;
+      internalMoveCount: number;
+      internalMoved: bigint;
     }
   >();
   for (const sourceId of directory.parties.keys()) {
@@ -257,6 +259,8 @@ export async function householdContributionLedger(
       initiallyOutlaid: 0n,
       sent: 0n,
       received: 0n,
+      internalMoveCount: 0,
+      internalMoved: 0n,
     });
   }
 
@@ -281,8 +285,18 @@ export async function householdContributionLedger(
     const cents = BigInt(transfer.cents);
     const from = balances.get(transfer.fromPartyId);
     const to = balances.get(transfer.toPartyId);
-    if (from) from.sent += cents;
-    if (to) to.received += cents;
+    // An internal move (same sending and receiving party) would add equal
+    // sent and received and leave the position unchanged; it is reported
+    // apart so transfers sent/received count only money between parties.
+    if (transfer.fromPartyId === transfer.toPartyId) {
+      if (from) {
+        from.internalMoveCount += 1;
+        from.internalMoved += cents;
+      }
+    } else {
+      if (from) from.sent += cents;
+      if (to) to.received += cents;
+    }
     if (Number(transfer.evidenceCount) === 1) {
       transferGaps.push({
         code: "transfer_evidence_one_sided",
@@ -305,6 +319,10 @@ export async function householdContributionLedger(
         initiallyOutlaid: money(balance.initiallyOutlaid),
         transfersSent: money(balance.sent),
         transfersReceived: money(balance.received),
+        internalMoves: {
+          count: balance.internalMoveCount,
+          amount: money(balance.internalMoved),
+        },
         netContribution: money(netContribution),
         position: money(netContribution - balance.consumed),
       };

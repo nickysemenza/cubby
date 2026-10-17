@@ -351,7 +351,7 @@ function tailLabel(data: ExpenseAnalyzeReadyOut) {
 
 export function expenseAnalyzeGridTotalFilter(
   data: ExpenseAnalyzeReadyOut,
-  filters: Pick<ExpenseFilters, "dateFrom" | "dateTo" | "dateRelative"> = {},
+  filters: Pick<ExpenseFilters, "dateFrom" | "dateTo"> = {},
 ): Record<string, string> | null {
   // These axes leave a tail (unattributed rows, unassigned-trade shares)
   // outside the grid, so its total is no exact Ledger population.
@@ -370,9 +370,7 @@ export function expenseAnalyzeGridTotalFilter(
       : data.columnDimension === "month"
         ? data.columns
         : [];
-  const dateAlreadyBound = Boolean(
-    filters.dateFrom || filters.dateTo || filters.dateRelative,
-  );
+  const dateAlreadyBound = Boolean(filters.dateFrom || filters.dateTo);
   if (monthBuckets.length > 0 && !dateAlreadyBound) {
     const dateFrom = monthBuckets.at(0)?.filter.dateFrom;
     const dateTo = monthBuckets.at(-1)?.filter.dateTo;

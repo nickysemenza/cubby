@@ -168,7 +168,6 @@ describe("list field compiler", () => {
             hasImage: sql`false`,
             hasChildren: sql`false`,
             hasAiDescription: sql`false`,
-            recountOverdue: () => undefined,
           },
         }).where({}),
       ),

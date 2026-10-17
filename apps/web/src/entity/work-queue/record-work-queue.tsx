@@ -12,6 +12,10 @@ import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { SectionHeading } from "~/ui/layout";
 
 import {
+  isTransferEvidenceRow,
+  TransferPairAccept,
+} from "./transfer-pair-accept";
+import {
   GapChip,
   memberOptionsOf,
   WaitingForPill,
@@ -75,6 +79,9 @@ export function RecordWorkQueue({ id }: { id: string }) {
           </LedgerRow>
         ))}
       </Ledger>
+      {rows.some(isTransferEvidenceRow) ? (
+        <TransferPairAccept transactionId={id} />
+      ) : null}
     </section>
   );
 }

@@ -14,7 +14,12 @@ net contribution = initially outlaid + transfers sent - transfers received
 position         = net contribution - consumed
 ```
 
-Internal account moves have zero contribution effect. Positions are advisory when attribution or evidence is incomplete and are never labeled as debts.
+An internal move is a Ledger Transfer whose sending and receiving party are
+the same. It has zero contribution effect, so the report leaves it out of
+transfers sent and received and lists it per party as `internalMoves { count,
+amount }`; positions, transfer net, and the checks are unchanged. Positions are
+advisory when attribution or evidence is incomplete and are never labeled as
+debts.
 
 Evidence completeness is intentionally present-day rather than historical: a
 transfer shown in an as-of position is checked against the Financial Transaction
@@ -37,6 +42,13 @@ A Source Claim accepts a provider row ID only as write-time key material. The se
 - Create, update, or delete a Ledger Transfer between parties, including reimbursements and same-party internal moves.
 - List and get Ledger Parties and Ledger Transfers for review, including their own browser list and detail pages under Finance.
 - Pair statement evidence to a transfer without treating mirrored rows as separate transfers.
+- Accept a suggested transfer pair (`finance.accept_transfer_pair`, or Accept on
+  the transaction's Work queue row): one transaction creates the Ledger Transfer
+  from the outflow account's owner to the inflow account's owner, for the
+  absolute amount, dated the earlier leg, and links both legs as evidence. It
+  refuses, as data naming the record, mismatched signs or amounts, a single
+  account, an unowned account, or a leg that already evidences a transfer. A
+  same-owner pair becomes an internal move.
 - Review household-global positions and project-local initial funding, consumption, and gaps.
 
 Project kind never implies attribution. Project reports include both recorded and

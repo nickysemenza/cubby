@@ -61,6 +61,7 @@ import { uniq } from "es-toolkit";
 import { householdLocalDate } from "~/lib/household-date";
 import { toolTimelineConflict, UNKNOWN_OWNERSHIP } from "~/lib/tool-timeline";
 import type { Database } from "~/server/db";
+import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import {
   buildSearchConditions,
   formatSearchTerm,
@@ -83,7 +84,6 @@ import { categoryFeatureSql } from "~/server/domains/product-category/repo/categ
 import { loadProductOwnershipTimelines } from "~/server/domains/product/repo/ownership";
 import { effectiveTaskTradeSql } from "~/server/domains/task/repo/task-project-inheritance";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
-import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 
 import { buildDashboardProjectWhere } from "./dashboard-shared";
 import { loadProjectDateWindows, projectCompletionYear } from "./subtree";

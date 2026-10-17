@@ -1,8 +1,8 @@
 import { and, isNull, type SQL, sql } from "drizzle-orm";
 
+import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { product } from "~/server/db/schema";
 import type { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
-import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 
 import {
   isRetainingEdgeKey,

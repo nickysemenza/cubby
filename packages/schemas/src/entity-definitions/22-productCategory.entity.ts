@@ -412,6 +412,7 @@ Rules:
         resolution: {
           reset: { stockTracked: null },
           redundancy: "eligible",
+          inherit: { from: ["hierarchy"] },
         },
         explanation: {
           ruleId: "productCategory.effective-stock-tracking",

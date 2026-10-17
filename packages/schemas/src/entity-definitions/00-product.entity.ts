@@ -1202,6 +1202,8 @@ Rules:
         resolution: {
           reset: { stockTracked: null },
           redundancy: "intentional",
+          // ADR 0013: the Product's own decision, else its category's.
+          inherit: { from: [{ path: "category.stockTracked" }] },
         },
         explanation: {
           ruleId: "product.effective-stock-tracking",

@@ -30,6 +30,7 @@ import { uniq } from "es-toolkit";
 import { shiftPlainDate } from "~/lib/household-date";
 import { aggregateTotals } from "~/lib/nutrition-estimates";
 import type { Database } from "~/server/db";
+import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { getDb, notDeleted, relations } from "~/server/db/helpers";
 import { eqAny, presenceCondition } from "~/server/db/helpers/query";
 import { expense, project, purchase, task } from "~/server/db/schema";
@@ -56,7 +57,6 @@ import {
   hydrateTaskInheritanceRows,
 } from "~/server/domains/task/repo/task-project-inheritance";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 import { resolveAllPresent } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {

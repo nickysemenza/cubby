@@ -25,8 +25,10 @@ import {
 
 import { CostTypeDonut } from "./charts/cost-type-donut";
 import { CumulativeSpend } from "./charts/cumulative-spend";
+import { MoneyFlowSankey } from "./charts/money-flow-sankey";
 import { MonthlySpend } from "./charts/monthly-spend";
 import { ProjectBreakdown } from "./charts/project-breakdown";
+import { SpendingCategoryBreakdown } from "./charts/spending-category-breakdown";
 import type { AggregateMatrixCell } from "./charts/trade-cost-aggregate";
 import {
   TradeBarsAggregate,
@@ -138,26 +140,21 @@ export function ExpenseAnalyticsView() {
   const handleOpenLedger = useCallback(
     (filter: Record<string, string>) => {
       void navigate({
-        search: (prev) => {
-          const nextSearch = {
-            ...prev,
-            // A project bucket is one exact project; otherwise the Ledger
-            // keeps the default sub-project subtree.
-            includeSubProjects: filter.project
-              ? "false"
-              : prev.includeSubProjects,
-            includeSubSpendingCategories: filter.spendingCategory
-              ? "false"
-              : prev.includeSubSpendingCategories,
-            // Exact month bounds supersede a relative date preset.
-            date: filter.dateFrom || filter.dateTo ? undefined : prev.date,
-            ...filter,
-            view: "table" as const,
-          };
-          return filter.dateFrom || filter.dateTo
-            ? { ...nextSearch, dateRelative: undefined }
-            : nextSearch;
-        },
+        search: (prev) => ({
+          ...prev,
+          // A project bucket is one exact project; otherwise the Ledger
+          // keeps the default sub-project subtree.
+          includeSubProjects: filter.project
+            ? "false"
+            : prev.includeSubProjects,
+          includeSubSpendingCategories: filter.spendingCategory
+            ? "false"
+            : prev.includeSubSpendingCategories,
+          // Exact month bounds supersede a relative date preset.
+          date: filter.dateFrom || filter.dateTo ? undefined : prev.date,
+          ...filter,
+          view: "table" as const,
+        }),
       });
     },
     [navigate],
@@ -288,9 +285,19 @@ function ExpenseAnalytics({
           </Suspense>
         </Section>
 
+        <Section
+          title="Spending by Spending Category"
+          description="Net per root category. Tax, shipping, and fees follow the items they were charged on; Uncategorized and Unclassified close the total. Click a bar to open its rows in the Ledger."
+        >
+          <SpendingCategoryBreakdown
+            filters={filters}
+            onOpenLedger={onOpenLedger}
+          />
+        </Section>
+
         <Grid cols="pair">
           <Section
-            title="Spending by Category"
+            title="Spending by Cost Type"
             description="Tax, shipping, and fees follow the items they were charged on."
           >
             <CostTypeDonut
@@ -352,6 +359,13 @@ function ExpenseAnalytics({
           description="Running net total across the filtered set."
         >
           <CumulativeSpend cumulative={cumulative} />
+        </Section>
+
+        <Section
+          title="Money flow"
+          description="Who paid, through which project, into which root category. Net per path; Credits net inside their path. Click a band to open its rows in the Ledger."
+        >
+          <MoneyFlowSankey filters={filters} onOpenLedger={onOpenLedger} />
         </Section>
 
         {byProject.length > 0 && (
