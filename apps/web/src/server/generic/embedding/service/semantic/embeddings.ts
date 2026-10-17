@@ -4,7 +4,6 @@ import { LRUCache } from "lru-cache";
 import { z } from "zod";
 
 import { cachedCall } from "~/server/ai/adapters";
-import { assertAiBudget } from "~/server/ai/budget";
 import {
   gatewayConfigured,
   gatewayFetch,
@@ -122,9 +121,6 @@ export async function embedTexts(
       "ai.dimensions": config.dimensions,
       "ai.input_count": texts.length,
     });
-    // Background indexing is metered spend; an interactive search query is not.
-    if (opts?.db && feature !== SEMANTIC_QUERY_FEATURE.feature)
-      await assertAiBudget(opts.db, feature);
     const metadata: GatewayMetadata = { feature, operation };
     const runId = opts?.db
       ? (opts.runId ??

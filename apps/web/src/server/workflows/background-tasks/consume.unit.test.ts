@@ -29,8 +29,17 @@ const db = createDatabase(() => {
 
 const requestedAt = "2026-09-12T12:00:00.000Z";
 
+/** A predecessor Worker's envelope for the retired `work.advance` kind. */
+type RetiredWorkAdvance = {
+  version: 2;
+  queueType: "background";
+  task: { kind: "work.advance"; requestedAt: string };
+};
+
 /** A delivered message is Cloudflare's transport type: the one seam faked here. */
-function delivered(body: BackgroundTaskMessageInput | LegacyWakeup) {
+function delivered(
+  body: BackgroundTaskMessageInput | LegacyWakeup | RetiredWorkAdvance,
+) {
   const message = {
     body,
     ack: vi.fn(),
@@ -184,6 +193,28 @@ describe("handleBackgroundQueueBatch", () => {
         message: expect.stringContaining("Unreadable"),
       }),
     );
+    expect(handle).not.toHaveBeenCalled();
+  });
+
+  // A predecessor Worker's queued wake hint must not retry until dead-lettered.
+  it("acknowledges a retired work.advance message without running a task", async () => {
+    const capture = vi.fn();
+    const message = delivered({
+      version: 2,
+      queueType: "background",
+      task: { kind: "work.advance", requestedAt },
+    });
+
+    const outcomes = await handleBackgroundQueueBatch(
+      db,
+      { queue: "cubby-background", messages: [message] },
+      { captureException: capture, handleTask: handle },
+    );
+
+    expect(outcomes).toEqual(["skipped"]);
+    expect(message.ack).toHaveBeenCalledOnce();
+    expect(message.retry).not.toHaveBeenCalled();
+    expect(capture).not.toHaveBeenCalled();
     expect(handle).not.toHaveBeenCalled();
   });
 

@@ -1,5 +1,4 @@
 import type { GatewayFetchRequest } from "@cubby/shared/ai/gateway-request";
-import { fromPartial } from "@total-typescript/shoehorn";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -10,16 +9,8 @@ import {
   aiBudgetWindow,
   readAiBudget,
 } from "~/server/ai/budget";
-import {
-  ENTITY_EMBEDDING_FEATURE,
-  SEMANTIC_QUERY_FEATURE,
-} from "~/server/ai/policy/features";
 import { getDb } from "~/server/db/helpers";
 import { aiUsage, run } from "~/server/db/schema";
-import {
-  embedTexts,
-  type EmbeddingPorts,
-} from "~/server/generic/embedding/service/semantic/embeddings";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { ensureRun } from "../repo/ensure-run";
@@ -150,7 +141,7 @@ describe("household AI budget at the paid transport boundary", () => {
     expect((await status(runId))?.status).toBe("running");
   });
 
-  it("counts only this window's metered spend outside classification", async () => {
+  it("counts only this window's frontier chat spend outside classification", async () => {
     const runId = await setup("mail_import");
     const window = aiBudgetWindow();
     await spend(runId, 5, {
@@ -161,6 +152,10 @@ describe("household AI budget at the paid transport boundary", () => {
       feature: "field-suggestion",
       model: "typesafe/jev",
     });
+    await spend(runId, 5, {
+      feature: "entity-embedding",
+      model: "text-embedding-3-small",
+    });
     await spend(runId, 0.25);
     expect((await readAiBudget(ctx.db)).spentUsd).toBeCloseTo(0.25);
     await paidRunPreflight(
@@ -168,39 +163,6 @@ describe("household AI budget at the paid transport boundary", () => {
       runId,
       "purchase_import_agent",
     )(chatRequest());
-  });
-
-  it("budgets background embedding indexing but not interactive search queries", async () => {
-    const runId = await setup("mail_import");
-    await spend(runId, AI_BUDGET_LIMIT_USD);
-    let transmissions = 0;
-    const ports: EmbeddingPorts = {
-      fetchFor: () => async () => {
-        transmissions += 1;
-        return Response.json({ data: [{ index: 0, embedding: [0.5] }] });
-      },
-      configured: () => true,
-      vectorStore: fromPartial({}),
-      config: () => ({
-        provider: "openai",
-        model: "text-embedding-3-small",
-        dimensions: 1,
-      }),
-    };
-    await expect(
-      embedTexts(
-        ["Synthetic kettle"],
-        { db: ctx.db, runId, feature: ENTITY_EMBEDDING_FEATURE.feature },
-        ports,
-      ),
-    ).rejects.toBeInstanceOf(AiBudgetExhaustedError);
-    expect(transmissions).toBe(0);
-    await embedTexts(
-      ["Synthetic kettle"],
-      { db: ctx.db, runId, feature: SEMANTIC_QUERY_FEATURE.feature },
-      ports,
-    );
-    expect(transmissions).toBe(1);
   });
 
   it("refuses paid work for a Run that is no longer executable", async () => {

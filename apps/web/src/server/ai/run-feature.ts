@@ -271,7 +271,7 @@ export function planStructuredRun<T = unknown>(
       subscriptionFallback: ctx.subscriptionFallback,
       beforePaidRequest: withAiBudget(
         ctx.db,
-        spec.feature,
+        { model: spec.model, feature: spec.feature },
         ctx.beforePaidRequest,
       ),
     },

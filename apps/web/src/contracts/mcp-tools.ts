@@ -595,7 +595,7 @@ export const MCP_TOOLS = defineMcpTools({
       mail_import: mcpAction({
         op: runContract.ops.mailImport,
         description:
-          "The member's connected Gmail mailboxes with their automatic Mail import switch, and metered AI spend in the current six-hour budget window (classification excluded).",
+          "The member's connected Gmail mailboxes with their automatic Mail import switch, and frontier chat-model spend in the current six-hour budget window (classification excluded).",
       }),
 
       mail: mcpAction({

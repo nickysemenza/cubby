@@ -1,6 +1,6 @@
 import type { AiBudgetStatus } from "@cubby/schemas/mail-import-settings";
-import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
-import { and, gte, isNull, notInArray, sql } from "drizzle-orm";
+import { supportedChatModelSchema } from "@cubby/shared/ai/models";
+import { and, gte, inArray, isNull, notInArray, sql } from "drizzle-orm";
 
 import { roundTo } from "~/lib/round-to";
 import type { Database } from "~/server/db";
@@ -12,23 +12,23 @@ import {
   MAILBOX_TRIAGE_FEATURE,
 } from "./policy/features";
 
-/** Household allowance for metered AI: $1 per fixed six-hour UTC window. */
+/**
+ * A stopgap safety net on frontier chat-model spend: $1 per fixed six-hour UTC
+ * window. Embeddings, closed-set decision models and other model roles are not
+ * budgeted, and neither is classification (mail triage and relevance).
+ * Admission (`paidRunPreflight`, `withAiBudget`) and accounting
+ * (`readAiBudget`) share `aiBudgetCovers`.
+ */
 export const AI_BUDGET_LIMIT_USD = 1;
 const WINDOW_MS = 6 * 60 * 60 * 1000;
-
-/**
- * Classification never waits on the allowance and never counts against it:
- * mail triage and relevance, and every closed-set decision model call.
- * Admission (`paidRunPreflight`) and accounting (`readAiBudget`) share these.
- */
+const FRONTIER_MODELS: readonly string[] = supportedChatModelSchema.options;
 const EXEMPT_FEATURES: readonly string[] = [
   MAILBOX_TRIAGE_FEATURE.feature,
   MAILBOX_RELEVANCE_FEATURE.feature,
 ];
-const EXEMPT_MODELS: readonly string[] = supportedDecisionModelSchema.options;
-const aiBudgetExempt = (feature: string) => EXEMPT_FEATURES.includes(feature);
-export const aiBudgetExemptModel = (model: string) =>
-  EXEMPT_MODELS.includes(model);
+export const aiBudgetCovers = (call: { model: string; feature: string }) =>
+  FRONTIER_MODELS.includes(call.model) &&
+  !EXEMPT_FEATURES.includes(call.feature);
 
 export class AiBudgetExhaustedError extends Error {
   constructor(readonly status: AiBudgetStatus) {
@@ -63,8 +63,8 @@ export async function readAiBudget(
       and(
         gte(aiUsage.createdAt, window.start),
         isNull(aiUsage.deletedAt),
+        inArray(aiUsage.model, [...FRONTIER_MODELS]),
         notInArray(aiUsage.feature, [...EXEMPT_FEATURES]),
-        notInArray(aiUsage.model, [...EXEMPT_MODELS]),
       ),
     );
   return {
@@ -75,22 +75,22 @@ export async function readAiBudget(
   };
 }
 
-export async function assertAiBudget(db: Database, feature: string) {
-  if (aiBudgetExempt(feature)) return;
+export async function assertAiBudget(db: Database) {
   const status = await readAiBudget(db);
   if (status.spentUsd >= status.limitUsd)
     throw new AiBudgetExhaustedError(status);
 }
 
 /**
- * Adds the budget check to a call that has no Run-bound preflight. A supplied
- * preflight owns the check itself (`paidRunPreflight`), so it can pause its Run.
+ * Adds the budget check to a frontier call that has no Run-bound preflight. A
+ * supplied preflight owns the check itself (`paidRunPreflight`), so it can
+ * pause its Run.
  */
 export function withAiBudget<R>(
   db: Database | undefined,
-  feature: string,
+  call: { model: string; feature: string },
   preflight: ((request: R) => Promise<void>) | undefined,
 ): ((request: R) => Promise<void>) | undefined {
-  if (preflight || !db || aiBudgetExempt(feature)) return preflight;
-  return () => assertAiBudget(db, feature);
+  if (preflight || !db || !aiBudgetCovers(call)) return preflight;
+  return () => assertAiBudget(db);
 }

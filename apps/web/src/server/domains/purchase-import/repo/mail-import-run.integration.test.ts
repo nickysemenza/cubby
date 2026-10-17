@@ -330,23 +330,20 @@ describe("mail research admission", () => {
       provider: "openai",
       model: "gpt-6-luna",
       endpoint: "responses",
-      unapprovedModel: "gpt-6-astra",
     },
     {
       provider: "openai",
       model: "gpt-6-sol",
       endpoint: "responses",
-      unapprovedModel: "gpt-6-astra",
     },
     {
       provider: "anthropic",
       model: "claude-opus-5-5",
       endpoint: "v1/messages",
-      unapprovedModel: "claude-sonnet-4-6",
     },
   ] as const)(
     "admits member-selected coordinator $model past a spent background budget",
-    async ({ provider, model, endpoint, unapprovedModel }) => {
+    async ({ provider, model, endpoint }) => {
       const { party, mail } = await source();
       const [admitted] = await startMailImport(
         ctx.db,
@@ -383,7 +380,7 @@ describe("mail research admission", () => {
         );
       const request = (requestModel: string = model) =>
         paid(url, { method: "POST", body: requestBody(requestModel) });
-      // Foreground coordinator work is not background spend; any other model is.
+      // Foreground coordinator work is not budgeted background spend.
       await getDb(ctx.db)
         .insert(aiUsage)
         .values({
@@ -396,9 +393,6 @@ describe("mail research admission", () => {
           chargedCost: 1,
         });
       await expect(request()).resolves.toBeInstanceOf(Response);
-      await expect(request(unapprovedModel)).rejects.toThrow(
-        /AI budget reached/u,
-      );
       expect(transmissions).toBe(1);
       await getDb(ctx.db)
         .update(run)

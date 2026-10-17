@@ -73,8 +73,9 @@ checksums, replay, money conservation and unresolved-identity review still apply
    message records which stage decided and why. An
    unrelated message retains only its provider identity and scan/classification
    status; related originals and useful attachments become retained evidence.
-   Metered calls share the household AI budget ($1 per six-hour UTC window);
-   classification is exempt (`imports_read.mail_import` shows the window).
+   Frontier chat-model calls share the household AI budget, a $1 per six-hour
+   UTC safety net; classification, decision models and embeddings are not
+   budgeted (`imports_read.mail_import` shows the window).
    Confirmation,
    shipping, delivery, cancellation and refund mail may link to one Purchase.
    An exact order id helps; a unique supported match can use account, items,

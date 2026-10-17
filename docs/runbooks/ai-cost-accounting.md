@@ -6,8 +6,8 @@ Subscriber-credit inference records billing reason `subscriber_credit`, zero
 incremental charge and the standard API comparison; its nominal comparison
 tracks credit consumption separately from paid inference.
 Subscription fees remain separate. The household AI budget
-(`server/ai/budget.ts`) reads these rows' charged cost, falling back to the
-standard cost, per six-hour window.
+(`server/ai/budget.ts`) reads frontier chat-model rows' charged cost, falling
+back to the standard cost, per six-hour window.
 
 Every call retains independent nullable `standardCost` and `chargedCost`, plus
 `costEvidence` identifying price provenance and the billing adjustment. Pricing

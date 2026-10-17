@@ -9,7 +9,7 @@ import { migrateDatabase } from "./db-migrate";
 // close unfinished discovery passes so none resumes under a retired scope or
 // holds the one-active-discovery slot, and drop legacy Vendor-name queries from
 // mailbox coverage without moving history or other query positions.
-it("strips approval references and retires unfinished Vendor history across the migration", async () => {
+it("expands safely, then strips approval references and retires legacy discovery in the staged contraction", async () => {
   return withMigrationDatabase(async (client) => {
     await migrateDatabase(drizzle(client), {
       through: "0080_run_operation_audit_cover",
@@ -156,6 +156,38 @@ it("strips approval references and retires unfinished Vendor history across the 
     const receipts = async () =>
       (await client.query(`SELECT * FROM "RunOperation"`)).rows;
     const beforeReceipts = await receipts();
+    const snapshot = async () => ({
+      runs: (await client.query(`SELECT * FROM "Run" ORDER BY shortcode`)).rows,
+      cursors: (await client.query(`SELECT * FROM "MailboxCursor"`)).rows,
+      evaluations: (await client.query(`SELECT * FROM "AiEvaluation"`)).rows,
+    });
+    const predecessor = await snapshot();
+
+    // The expansion is safe under the predecessor Worker: it changes no data.
+    await migrateDatabase(drizzle(client), {
+      through: "0081_automatic_mail_import",
+    });
+    expect(await snapshot()).toEqual(predecessor);
+    expect(
+      (
+        await client.query(
+          `SELECT 1 FROM pg_indexes WHERE indexname = 'AiUsage_createdAt_idx'`,
+        )
+      ).rowCount,
+    ).toBe(1);
+    // The new Worker can start an import pass before the contraction runs.
+    await insertRun(
+      "00000000-0000-4000-8000-0000000000a6",
+      "RUN-7R8S",
+      "mail_discovery",
+      "running",
+      {
+        mailboxId: "synthetic-third-mailbox",
+        scopedQueries: [],
+        executionPolicy: "import",
+        emailAuditVersion: 1,
+      },
+    );
 
     await migrateDatabase(drizzle(client));
 
@@ -200,6 +232,10 @@ it("strips approval references and retires unfinished Vendor history across the 
     expect(runs["RUN-6P7Q"]).toMatchObject({
       status: "completed",
       failureCode: "discovery_policy_replaced",
+    });
+    expect(runs["RUN-7R8S"]).toMatchObject({
+      status: "running",
+      failureCode: null,
     });
     const [cursor] = (
       await client.query(`SELECT coverage FROM "MailboxCursor"`)

@@ -41,17 +41,16 @@ under the writer contracts and leaves the rest in the Work queue. Keep a
 minimal identity and classification footprint for scanned negatives; retain
 useful related evidence and uncertain candidates for resolution.
 
-Every metered model call draws from one household AI budget: $1 per fixed
-six-hour UTC window (`server/ai/budget.ts`), summed from `AiUsage`.
-Classification (mail triage, relevance escalation and closed-set decision
-models) is exempt and never waits. The limit is soft: usage lands after each
-call, so calls already in flight can overshoot a window by their own cost. A
-Run that reaches the limit pauses with `execution_limit`, and the Work queue
-shows it waiting on the budget. Reclassification, suggestion sweeps and agent
-imports resume through missed-work recovery once a later window has room.
-Background entity embedding indexing is budgeted; interactive search queries
-are not. A member-selected coordinator import is foreground work and is not
-budgeted.
+The household AI budget is a stopgap safety net on frontier chat-model spend:
+$1 per fixed six-hour UTC window (`server/ai/budget.ts`), summed from
+`AiUsage`. Embeddings, closed-set decision models (Jev/Clef) and other model
+roles are not budgeted, and neither is classification (mail triage and
+relevance escalation). The limit is soft: usage lands after each call, so calls
+already in flight can overshoot a window by their own cost. A Run that reaches
+the limit pauses with `execution_limit`, and the Work queue shows it waiting on
+the budget. Reclassification, suggestion sweeps and agent imports resume
+through missed-work recovery once a later window has room. A member-selected
+coordinator import is foreground work and is not budgeted.
 
 ## Follow the evidence
 

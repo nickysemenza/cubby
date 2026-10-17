@@ -85,7 +85,8 @@ export function MailImportCard() {
                 hour: "numeric",
                 minute: "2-digit",
               })}
-              . Classification is not counted.
+              . Only frontier chat models count; classification and embeddings
+              don't.
             </p>
           ) : null}
         </Stack>

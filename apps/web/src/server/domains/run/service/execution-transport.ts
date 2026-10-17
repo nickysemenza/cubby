@@ -1,7 +1,6 @@
 import type { RunId } from "@cubby/schemas/identifiers";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import {
-  workersAiModel,
   type GatewayFetchRoutes,
   type GatewayFetchRequest,
 } from "@cubby/shared/ai/gateway-request";
@@ -9,7 +8,7 @@ import { z } from "zod";
 
 import {
   AiBudgetExhaustedError,
-  aiBudgetExemptModel,
+  aiBudgetCovers,
   assertAiBudget,
 } from "~/server/ai/budget";
 import type { Database } from "~/server/db";
@@ -100,9 +99,9 @@ async function selectedCoordinatorExecution(
 }
 
 /**
- * Run-bound paid admission: the Run must still be executable, then metered
- * calls draw from the household AI budget. A budget stop pauses the Run so
- * recovery can resume it in a later window.
+ * Run-bound paid admission: the Run must still be executable, then frontier
+ * chat calls draw from the household AI budget. A budget stop pauses the Run
+ * so recovery can resume it in a later window.
  */
 export function paidRunPreflight(
   db: Database,
@@ -113,14 +112,16 @@ export function paidRunPreflight(
     // A member-requested coordinator is foreground work, not background spend.
     if (await selectedCoordinatorExecution(db, runId, request)) return;
     await assertRunExecutable(db, runId);
-    // Closed-set decision models are classification: never budgeted.
-    if (
-      request.endpoint.startsWith("run/") &&
-      aiBudgetExemptModel(workersAiModel(request.endpoint))
-    )
-      return;
+    // Only frontier chat models are budgeted.
+    const chat =
+      request.endpoint === "responses" || request.endpoint === "v1/messages";
+    const model = chat
+      ? z.object({ model: z.string() }).safeParse(await request.query()).data
+          ?.model
+      : undefined;
+    if (!model || !aiBudgetCovers({ model, feature })) return;
     try {
-      await assertAiBudget(db, feature);
+      await assertAiBudget(db);
     } catch (error) {
       if (error instanceof AiBudgetExhaustedError)
         await pauseExecutionRun(db, runId, error.message);

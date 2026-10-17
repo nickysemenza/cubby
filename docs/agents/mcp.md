@@ -54,8 +54,9 @@ result). An agent calls one only
 on the member's explicit instruction. An exact-checksum member-selected Email
 import using the declared coordinator models or its member-controlled retry is
 foreground work outside the AI budget. Explicit member selections of Vendor
-order Emails use the same policy within the existing selection limit. All other
-metered calls draw from the household AI budget.
+order Emails use the same policy within the existing selection limit. Other
+frontier chat-model calls draw from the household AI budget, a stopgap safety
+net ([import journey](../guide/import-journey.md)).
 No run purpose holds the `start_run` or `member_decision` capability
 (`server/domains/purchase-import/repo/capabilities.ts`), so a coordinator never starts
 another run or makes a member's decision. That gate applies only to

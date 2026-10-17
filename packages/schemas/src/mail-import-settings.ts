@@ -8,7 +8,7 @@ export const mailImportSettings = z.strictObject({
 });
 export type MailImportSettings = z.infer<typeof mailImportSettings>;
 
-/** Metered AI spend in the current fixed UTC window; classification is excluded. */
+/** Frontier chat-model spend in the current fixed UTC window, classification excluded. */
 export const aiBudgetStatus = z.strictObject({
   windowStart: z.iso.datetime(),
   windowEnd: z.iso.datetime(),

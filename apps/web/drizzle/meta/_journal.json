@@ -575,6 +575,13 @@
       "when": 1792248131455,
       "tag": "0081_automatic_mail_import",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1792251472662,
+      "tag": "0082_retire_execution_approvals",
+      "breakpoints": true
     }
   ]
 }
