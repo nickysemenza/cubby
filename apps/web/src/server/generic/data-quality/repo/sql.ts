@@ -63,17 +63,26 @@ export const qualityFilterJoin = (entity: ScoredEntity, t: ScoredTable) => {
  * One MATERIALIZED bulk quality relation per entity for a multi-branch
  * statement. Inlining `qualityFilterSource` in every UNION arm re-plans and
  * re-aggregates the same relation per arm; `source` joins the shared CTE under
- * the same `dq_filter` alias and `ctes` emits each used relation once.
+ * the same `dq_filter` alias and `ctes` emits each used relation once. A
+ * record-scoped statement (`scoped`) keeps the plain table and the record-level
+ * predicates: a whole-entity relation behind MATERIALIZED cannot be narrowed
+ * to the one requested record.
  */
-export const statementQualityRelations = () => {
+export const statementQualityRelations = ({
+  scoped = false,
+}: { scoped?: boolean } = {}) => {
   const used = new Set<ScoredEntity>();
   const name = (entity: ScoredEntity) => sql.identifier(`quality_${entity}`);
   return {
+    /** The read context matching `source`: record-level SQL when scoped. */
+    context(entity: ScoredEntity): QualityReadContext | undefined {
+      return scoped ? {} : qualityFilterContext(entity);
+    },
     source(
       entity: ScoredEntity,
       t: ScoredTable = entryFor(entity).table,
     ): PgTable | SQL {
-      if (!entryFor(entity).filterRead) return t;
+      if (scoped || !entryFor(entity).filterRead) return t;
       used.add(entity);
       return sql`${t} LEFT JOIN ${name(entity)} dq_filter ON dq_filter."entityId" = ${t.id}`;
     },

@@ -79,7 +79,6 @@ import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import {
   gapCondition,
-  qualityFilterContext,
   statementQualityRelations,
   type StatementQualityRelations,
 } from "~/server/generic/data-quality/repo/sql";
@@ -215,7 +214,7 @@ async function workQueueProjection(
         owners: workPurchaseSourceOwners(sql`"Purchase".id`),
         where: buildPurchaseWhereClause(
           purchaseFiltersSchema.parse(purchaseGaps),
-          qualityFilterContext("purchase"),
+          quality.context("purchase"),
         ),
         details: research,
         key: "research:purchase",
@@ -249,7 +248,7 @@ async function workQueueProjection(
         id: sql`"Email".shortcode`,
         name: sql`coalesce("Email".subject, 'Email')`,
         owners: sql`ARRAY["Email"."ledgerPartyId"]`,
-        where: buildEmailWhere(emailGaps),
+        where: buildEmailWhere(emailGaps, undefined, quality.context("email")),
         details: {
           source: "email",
           kind: "review",
@@ -290,8 +289,8 @@ async function workQueueProjection(
         id: sql`"Purchase".shortcode`,
         name: sql`coalesce("Purchase"."displayLabel", "Purchase"."orderId", 'Purchase')`,
         owners: workPurchaseOwners(sql`"Purchase".id`),
-        where: sql`(${buildPurchaseWhereClause(purchaseFiltersSchema.parse(viewFilters("purchase", "unsettled")), qualityFilterContext("purchase"))})
-        AND NOT (${gapCondition("purchase", "settlement_mismatch", undefined, qualityFilterContext("purchase"))})`,
+        where: sql`(${buildPurchaseWhereClause(purchaseFiltersSchema.parse(viewFilters("purchase", "unsettled")), quality.context("purchase"))})
+        AND NOT (${gapCondition("purchase", "settlement_mismatch", undefined, quality.context("purchase"))})`,
         details: {
           source: "reconciliation",
           kind: sql`CASE WHEN ${deferred} THEN ${workQueueKindSchema.enum.awaiting_posting} ELSE ${workQueueKindSchema.enum.repair} END`,
@@ -343,7 +342,7 @@ async function workQueueProjection(
           owners: workPurchaseOwners(sql`"Purchase".id`),
           where: buildPurchaseWhereClause(
             purchaseFiltersSchema.parse(filters),
-            qualityFilterContext("purchase"),
+            quality.context("purchase"),
           ),
           details: settlementDetails,
           key: definition.key,
@@ -632,7 +631,7 @@ async function queryWorkQueue(
       )`;
     },
   };
-  const quality = statementQualityRelations();
+  const quality = statementQualityRelations({ scoped: Boolean(record) });
   const projection = await workQueueProjection(
     db,
     {
