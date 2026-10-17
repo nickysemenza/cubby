@@ -21,6 +21,7 @@ interface LocationVisualProps {
   size?: number;
   /** Hero media can link each source; cards/rows already own their outer link. */
   interactive?: boolean;
+  showChildCount?: boolean;
 }
 
 function VisualFallback({ location }: { location: InfLocation }) {
@@ -215,6 +216,7 @@ export function LocationVisual({
   className,
   size = 40,
   interactive = false,
+  showChildCount = true,
 }: LocationVisualProps) {
   const visual = resolveLocationVisual(location);
 
@@ -228,7 +230,7 @@ export function LocationVisual({
         style={{ width: size, height: size }}
       >
         <PrimaryImage location={location} displayWidth={size} />
-        {visual.childCount > 0 && (
+        {showChildCount && visual.childCount > 0 && (
           <span
             className="absolute right-0 bottom-0 flex min-w-4 items-center justify-center bg-foreground px-1 font-mono text-3xs text-background tabular-nums"
             title={`${visual.childCount} child ${visual.childCount === 1 ? "location" : "locations"}`}

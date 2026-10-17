@@ -195,6 +195,26 @@ RTable owns interactive record work: virtualization, pinned and resizable column
 
 ### Data visualization
 
+Location browsing keeps a compact navigation outline beside a continuous,
+scrollable gallery of the full filtered hierarchy. Sidebar names jump to mounted
+location sections; scrolling the gallery highlights and reveals the current
+location in the outline, like the entity-detail contents index. Outline disclosure
+never hides gallery sections. Gallery indentation is 12px per level, capped at
+36px so deep trees retain content width. Inventory contents are disclosed per
+location on demand. Open record and inventory links retain their record
+destinations; breadcrumbs jump through the hierarchy. Phones keep the same
+continuous gallery with collapsible location navigation.
+The page shell owns creation; the browser toolbar does not repeat New.
+Search and type/contents filters retain matching locations and their ancestor
+paths, rather than revealing every descendant of a matching name; Clear filters
+remains available with no results. Clearing filters restores manual expansion.
+`TreeOutline` owns shared keyboard traversal, focus, disclosure and geometry;
+`LocationOutline` supplies location identity and inventory semantics. Desktop
+outline rows are 28px with 12px indentation per level and quiet numeric rollups;
+phone and coarse-pointer actions retain a 44px minimum target. Roots initially
+expand one level. Collapsed branches unmount their descendants, and frequent
+tree navigation and disclosure have no movement animation.
+
 Share the visual grammar, never the domain arithmetic. Statistical charts (ranked bars, donuts, spend trends) use `ui/charts/kit.tsx` (`RankedBarBreakdown`, `CategoryDonut`, `SpendTrend`) with `lib/nivo-theme.ts`, `ChartTooltip`, and `Visualization`: one implementation of ranking, sizing, empty state, tooltip, keyboard-safe click, no-motion policy, and screen-reader summary. Keep `ChartTooltip` separate from absolute `VizTooltip`; Nivo owns tooltip placement.
 
 - **Money stays server-owned.** Filtered SQL aggregates preserve `SUM(Expense.cost)`, credits, null-date treatment, and principal spend versus adjustments. Signed monthly and ranked net bars keep refunds below zero; positive-only donut arcs show a true-net center; the trade x cost-type matrix is the corrective detail for negative nets that stacked bars cannot show.
