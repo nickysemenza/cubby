@@ -250,9 +250,12 @@ const renderDerivedFilterFields = (
     switch (descriptor.kind) {
       case "text": {
         if (!descriptor.schemaFromRead) needs.z = true;
+        // A text filter's `schemaRef` names a value schema of several terms.
         const base = descriptor.schemaFromRead
           ? readRef(descriptor)
-          : "z.string()";
+          : descriptor.schemaRef !== null
+            ? refAlias(descriptor.schemaRef)
+            : "z.string()";
         return `${key}:${base}.optional()${describe}`;
       }
       case "boolean":

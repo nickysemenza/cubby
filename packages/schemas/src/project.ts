@@ -450,9 +450,11 @@ export const expenseBulkCostTypeInput = z.object({
 });
 export type ExpenseBulkCostTypeInput = z.infer<typeof expenseBulkCostTypeInput>;
 
+/** An expense's cost direction; zero and unknown costs have none. */
+export const expenseCostSign = z.enum(["negative", "positive"]);
+
 export const expenseFilterFields = {
   spendingCategoryId: entityFilterList(spendingCategoryShortcode).optional(),
-  spendingCategoryPresenceFilter: presenceFilter,
   ...expenseBaseFilterFields,
   /** Expenses attributed to the given ledger part(ies) (`ExpenseAttribution`). */
   ledgerPartyId: partyFilterList(ledgerPartyShortcode).optional(),
@@ -460,18 +462,6 @@ export const expenseFilterFields = {
   // Only meaningful alongside `projectId`: expands the filter to the project
   // plus every live descendant (sub-project subtree).
   includeSubProjects: z.boolean().optional(),
-  /**
-   * `"none"` matches expenses with `projectId IS NULL` — the unassigned-spend
-   * worklist. Mirrors `taskFilterFields.projectPresenceFilter`, including the
-   * OR-with-`projectId` semantics documented there.
-   */
-  projectPresenceFilter: presenceFilter,
-  productId: entityFilterList(productShortcode).optional(),
-  productPresenceFilter: presenceFilter,
-  vendorId: entityFilterList(vendorShortcode).optional(),
-  vendorPresenceFilter: presenceFilter,
-  /** Expense-name terms are OR-matched case-insensitively; a bare string preserves existing behavior. */
-  search: oneOrMany(z.string()).optional(),
   /**
    * Substring match on `notes`. Deliberately its OWN field rather than folded
    * into `search`, for the same reason `vendorId` is: `buildSearchConditions`
@@ -492,7 +482,7 @@ export const expenseFilterFields = {
    * 3-value enum.
    */
   costPresenceFilter: presenceFilter,
-  costSign: oneOrMany(z.enum(["negative", "positive"])).optional(),
+  costSign: oneOrMany(expenseCostSign).optional(),
   /**
    * Whether an Expense belongs to a disposal Purchase. This is a relationship
    * fact, not a restatement of a negative line: refunds are often negative but
@@ -525,23 +515,11 @@ export const expenseFilterFields = {
    * "111-1234567-1234567" also drag in a longer id that contains it.
    *
    * Every link that sets this ALSO sets `vendor` (or
-   * `vendorPresenceFilter: "none"`), because an order id is only unique within
+   * `purchaseIdPresenceFilter: "none"`), because an order id is only unique within
    * a vendor — short ones like Tool Nirvana's "#11325" would otherwise collide.
    * The two together are the group key.
    */
   orderId: oneOrMany(z.string()).optional(),
-  /**
-   * Exact match on the purchase itself — the "show me the rest of this purchase"
-   * scope, seeded from the URL only (a deep link from the purchase's own detail
-   * page), same shape as `productId` above. Simpler than either
-   * `vendorId`/`orderId`: `purchaseId` is a column ON `expense`, not resolved
-   * through `Purchase` like they are, so the repo needs no `chargeCondition`
-   * sub-select hop for this one — a plain `eqAny`.
-   *
-   * No dedicated presence field: `vendorPresenceFilter` already means
-   * `purchaseId IS NULL`, since `purchase.vendorId` is NOT NULL (see above).
-   */
-  purchaseId: entityFilterList(purchaseShortcode).optional(),
   projectScope: embeddedProjectScopeSchema.optional(),
 };
 export const expenseFiltersSchema = z.object(expenseFilterFields);

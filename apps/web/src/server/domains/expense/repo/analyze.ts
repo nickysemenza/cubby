@@ -521,7 +521,7 @@ function emptyExpenseFacetFilters(
       break;
     case "vendor":
       delete copy.vendorId;
-      delete copy.vendorPresenceFilter;
+      delete copy.purchaseIdPresenceFilter;
       break;
     case "orderIdPresence":
       delete copy.orderIdPresenceFilter;
@@ -565,7 +565,7 @@ function selectedExpenseFacetValues(
     case "vendor":
       return [
         ...asStrings(filters.vendorId),
-        nullableSentinel(filters.vendorPresenceFilter),
+        nullableSentinel(filters.purchaseIdPresenceFilter),
       ].filter((value): value is string => value !== undefined);
     case "orderIdPresence":
       return filters.orderIdPresenceFilter
@@ -1164,7 +1164,7 @@ export async function loadExpenseFacetCounts(
       prepared = (async () => {
         const scope = await resolveExpenseProjectAllocationScope(db, filters);
         const where = await buildExpenseWhereClause(db, filters, {
-          projectScope: undefined,
+          omitAllocationScope: true,
         });
         return {
           scope,

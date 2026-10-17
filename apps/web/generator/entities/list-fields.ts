@@ -265,6 +265,7 @@ const toggleDescriptor = (
 const withViaKeys = (
   descriptor: FilterDescriptor,
   derived: Readonly<Record<string, CompiledListField>>,
+  byKey: ReadonlyMap<string, CompiledEntity>,
   context: string,
 ): FilterDescriptor => {
   const bound =
@@ -283,7 +284,11 @@ const withViaKeys = (
     ...descriptor,
     nullable: {
       field: `${descriptor.columnId}PresenceFilter`,
-      label: (descriptor.label ?? descriptor.columnId).toLowerCase(),
+      label: (
+        descriptor.label ??
+        byKey.get(bound.target)?.inspector.singular ??
+        descriptor.columnId
+      ).toLowerCase(),
     },
     match: bound.many ? { field: `${descriptor.columnId}Match` } : null,
   };
@@ -536,7 +541,7 @@ export const compileListFields = (
     const toggles: FilterDescriptor[] = [];
     const compiled: FilterDescriptor[] = [];
     for (const declared of entity.filterDescriptors) {
-      const descriptor = withViaKeys(declared, derived, context);
+      const descriptor = withViaKeys(declared, derived, byKey, context);
       compiled.push(descriptor);
       const bound =
         descriptor.derived === null ? undefined : derived[descriptor.derived];

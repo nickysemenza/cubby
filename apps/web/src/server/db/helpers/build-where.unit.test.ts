@@ -618,6 +618,66 @@ describe("buildExpenseWhereClause", () => {
   const where = (filters: ExpenseFilters) =>
     buildExpenseWhereClause(mockWhereDatabase(), filters).then(renderWhereSql);
 
+  it("ORs several name terms", async () => {
+    expect(await where({ search: ["vacuum", "dust extractor"] })).toMatch(
+      /"Expense"\."name" ilike \$\d+ or "Expense"\."name" ilike \$\d+/,
+    );
+  });
+
+  it("matches vendors and exact order ids through a live purchase", async () => {
+    const vendor = await where({
+      vendorId: [parseShortcodeFor("vendor", "VEN-2345")],
+    });
+    expect(vendor).toContain('JOIN "Vendor"');
+    expect(vendor).toContain('"deletedAt" IS NULL');
+    expect(await where({ purchaseIdPresenceFilter: "none" })).toMatch(
+      /NOT EXISTS \(SELECT 1 FROM "Expense"/,
+    );
+    expect(await where({ orderId: ["#11325"] })).toMatch(
+      /"orderId" IN \(\$\d+\)/,
+    );
+  });
+
+  it("applies the allocation scope once across allocation filters", async () => {
+    const rendered = await where({
+      trade: "electrical",
+      costType: "materials",
+    });
+    expect(rendered?.match(/member_share/g)).toHaveLength(1);
+  });
+
+  it.each([
+    {
+      name: "ledgerPartyId",
+      filters: {
+        ledgerPartyId: [parseShortcodeFor("ledgerParty", "LPY-2345")],
+      },
+      contains: '"ExpenseAttribution" ea',
+    },
+    {
+      name: "costSign",
+      filters: { costSign: "negative" as const },
+      contains: '"cost" < 0 THEN',
+    },
+    {
+      name: "disposalPurchasePresenceFilter",
+      filters: { disposalPurchasePresenceFilter: "none" as const },
+      contains: 'NOT COALESCE(("Expense"."purchaseId" in',
+    },
+    {
+      name: "costPresenceFilter",
+      filters: { costPresenceFilter: "none" as const },
+      contains: '"Expense"."cost" is null',
+    },
+    {
+      name: "productQuantityPresenceFilter",
+      filters: { productQuantityPresenceFilter: "has" as const },
+      contains: '"Expense"."productQuantity" is not null',
+    },
+  ])("compiles $name from its declaration", async ({ filters, contains }) => {
+    expect(await where(filters)).toContain(contains);
+  });
+
   it.each([
     {
       name: "dateFrom",

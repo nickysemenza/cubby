@@ -692,7 +692,14 @@ export function declaredFilterPredicates<Filters extends object>(
           : undefined;
         switch (descriptor.kind) {
           case "text":
-            return [textPredicate(columns, optionalText.parse(value)?.trim())];
+            // Several terms OR (an agent guessing at synonyms).
+            return [
+              or(
+                ...(optionalTextList.parse(value) ?? []).map((term) =>
+                  textPredicate(columns, term.trim()),
+                ),
+              ),
+            ];
           case "boolean":
             return [booleanPredicate(first, optionalBoolean.parse(value))];
           case "multiselect":

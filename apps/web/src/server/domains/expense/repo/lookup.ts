@@ -1,31 +1,21 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { oneOrManyValues } from "@cubby/schemas/pagination";
-import { expenseListItemOut } from "@cubby/schemas/project";
-import type { ExpenseFilters } from "@cubby/schemas/project";
 import {
-  and,
-  gt,
-  inArray,
-  isNotNull,
-  isNull,
-  lt,
-  lte,
-  notInArray,
-  or,
-  type SQL,
-  sql,
-} from "drizzle-orm";
+  expenseCostSign,
+  expenseFiltersSchema,
+  expenseListItemOut,
+} from "@cubby/schemas/project";
+import type { ExpenseFilters } from "@cubby/schemas/project";
+import { and, inArray, lt, lte, or, type SQL, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import { projectListRows } from "~/entity/model/list-read-schema";
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import {
-  anyOfCondition,
-  eqAny,
-  formatSearchTerm,
   getDb,
+  isTransaction,
   type ListReadIntent,
   notDeleted,
   presenceCondition,
@@ -47,6 +37,11 @@ import {
 import { withDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import {
+  ListContext,
+  listPrepare,
+  shortcodeIdsSql,
+} from "~/server/generic/list/repo/field-compiler";
+import {
   declaredFilterPredicates,
   listScaffold,
 } from "~/server/generic/list/repo/list";
@@ -64,7 +59,6 @@ import {
 } from "./expense-inheritance";
 import {
   type ExpenseAllocationProjectScope,
-  type ExpenseIdSelection,
   loadExpenseProjectAllocations,
 } from "./expense-project-allocation";
 import { loadExpenseSpendingAllocations } from "./expense-spending-allocation";
@@ -85,32 +79,6 @@ export const chargeCondition = (
   inner === undefined
     ? undefined
     : inArray(expense.purchaseId, chargeIdsWhere(db, inner));
-
-/**
- * "Has / has no order id", resolved through the charge.
- *
- * `"none"` folds TWO states: a row with no charge at all, and a row whose charge
- * simply never got an order id (a contractor's progress payment). Both have no
- * order id, which is what this filter has always meant.
- *
- * The `isNull` arm is load-bearing, not defensive: `NOT IN (…)` evaluates to NULL
- * — and so fails to match — when the left side is NULL, so a `notInArray` alone
- * would silently drop every charge-less row from the "none" bucket. That's 193
- * rows on the real ledger.
- */
-const orderIdPresence = (
-  db: Database,
-  presence: ExpenseFilters["orderIdPresenceFilter"],
-): SQL | undefined => {
-  if (presence === undefined) return undefined;
-  const withOrderId = chargeIdsWhere(db, isNotNull(purchase.orderId));
-  return presence === "has"
-    ? inArray(expense.purchaseId, withOrderId)
-    : or(
-        isNull(expense.purchaseId),
-        notInArray(expense.purchaseId, withOrderId),
-      );
-};
 
 export const resolveExpenseProjectAllocationScope = async (
   db: Database,
@@ -173,253 +141,161 @@ export const resolveExpenseProjectAllocationScope = async (
   };
 };
 
-const projectFilterCondition = async (
+/**
+ * The allocation filters: each matches the expense's allocation shares, so
+ * together they select one membership, read once. Trade presence reads the
+ * row's own column and stays.
+ */
+const allocationKeys = [
+  "projectId",
+  "projectPresenceFilter",
+  "includeSubProjects",
+  "spendingCategoryId",
+  "spendingCategoryPresenceFilter",
+  "trade",
+  "costType",
+  "projectScope",
+] as const;
+
+const withoutAllocation = (filters: ExpenseFilters): ExpenseFilters => {
+  const rest: Partial<ExpenseFilters> = { ...filters };
+  for (const key of allocationKeys) delete rest[key];
+  return rest;
+};
+
+/** The first allocation filter set, which applies the shared membership. */
+const allocationLead = (filters: ExpenseFilters) =>
+  (oneOrManyValues(filters.projectId)?.length ?? 0) > 0 ||
+  filters.projectPresenceFilter !== undefined
+    ? "projectFilter"
+    : (oneOrManyValues(filters.spendingCategoryId)?.length ?? 0) > 0 ||
+        filters.spendingCategoryPresenceFilter !== undefined
+      ? "spendingCategoryFilter"
+      : (oneOrManyValues(filters.trade)?.length ?? 0) > 0
+        ? "tradeFilter"
+        : (oneOrManyValues(filters.costType)?.length ?? 0) > 0
+          ? "costTypeFilter"
+          : filters.projectScope !== undefined
+            ? "projectScope"
+            : null;
+
+/** The SQL of every declared non-allocation filter, by derived key. */
+const rowDerived = {
+  // The allocated spending categories' names.
+  spendingCategoryId: expenseDerivedValueSql(
+    "spendingCategoryNames",
+    sql`${expense.id}`,
+  ),
+  projectId: sql`(SELECT p."name" FROM "Project" p
+    WHERE p."id" = ${effectiveExpenseProjectSql('"Expense"')}
+      AND p."deletedAt" IS NULL)`,
+  costSign: sql`CASE WHEN ${expense.cost} < 0 THEN ${expenseCostSign.enum.negative}::text
+    WHEN ${expense.cost} > 0 THEN ${expenseCostSign.enum.positive}::text END`,
+  disposalPurchase: inArray(expense.purchaseId, disposalPurchaseIds()),
+  dateRelative: ({ values }: { values: readonly string[] }) =>
+    or(
+      ...values.map((value) =>
+        value === "beforeToday"
+          ? lt(expense.date, householdLocalDate())
+          : lte(expense.date, householdLocalDate()),
+      ),
+    ),
+  ledgerPartyId: ({ values }: { values: readonly string[] }) => sql`EXISTS (
+    SELECT 1 FROM "ExpenseAttribution" ea
+    WHERE ea."expenseId" = ${expense.id}
+      AND ea."deletedAt" IS NULL
+      AND ea."ledgerPartyId" IN ${shortcodeIdsSql("ledgerParty", (shortcode) =>
+        shortcodeSetCondition(shortcode, values),
+      )})`,
+};
+
+/**
+ * The expenses whose allocation shares match the filters' allocation scope.
+ * Only the independent row filters bound the allocation inputs; quality and
+ * related-view conditions may themselves depend on allocation evidence.
+ */
+const allocationMembership = async (
   db: Database,
   filters: ExpenseFilters,
-  expenseIds?: ExpenseIdSelection,
 ): Promise<SQL | undefined> => {
   const scope = await resolveExpenseProjectAllocationScope(db, filters);
   if (!scope) return undefined;
-  return expenseDerivedMembershipSql(sql`${expense.id}`, scope, expenseIds);
-};
-
-const requestedReferenceCondition = (
-  column: typeof expense.productId | typeof expense.purchaseId,
-  requested: boolean,
-  ids: string[],
-): SQL | undefined => {
-  if (ids.length > 0) return eqAny(column, ids);
-  return requested ? sql`false` : undefined;
-};
-
-const vendorFilterCondition = (
-  db: Database,
-  filters: ExpenseFilters,
-  vendorIds: string[],
-): SQL | undefined =>
-  or(
-    filters.vendorId
-      ? vendorIds.length > 0
-        ? chargeCondition(db, eqAny(purchase.vendorId, vendorIds))
-        : sql`false`
+  const selected = and(
+    ...declaredFilterPredicates(
+      "expense",
+      expense,
+      { ...withoutAllocation(filters), tradePresenceFilter: undefined },
+      { derived: rowDerived, context: ListContext.empty },
+    ),
+  );
+  return expenseDerivedMembershipSql(
+    sql`${expense.id}`,
+    scope,
+    selected
+      ? expenseSelectionForWhere(and(notDeleted(expense), selected))
       : undefined,
-    presenceCondition(expense.purchaseId, filters.vendorPresenceFilter),
   );
-
-const relativeDateCondition = (
-  relative: ExpenseFilters["dateRelative"],
-): SQL | undefined =>
-  anyOfCondition(relative, (value) =>
-    value === "beforeToday"
-      ? lt(expense.date, householdLocalDate())
-      : lte(expense.date, householdLocalDate()),
-  );
-
-const disposalPurchaseCondition = (
-  presence: ExpenseFilters["disposalPurchasePresenceFilter"],
-): SQL | undefined => {
-  if (presence === "has") {
-    return inArray(expense.purchaseId, disposalPurchaseIds());
-  }
-  if (presence === "none") {
-    return or(
-      isNull(expense.purchaseId),
-      notInArray(expense.purchaseId, disposalPurchaseIds()),
-    );
-  }
-  return undefined;
 };
 
-const loadExpenseFilterReferences = async (
-  db: Database,
-  filters: ExpenseFilters,
-) => {
-  // Keep these sequential: callers may supply a transaction-backed Database.
-  const vendorIds = await resolveAllPresent(
-    db,
-    "vendor",
-    filters.vendorId ? [filters.vendorId].flat() : [],
+const allocation = listPrepare(async (db, values) => {
+  // The project tree and embedded scope loaders read outside a transaction.
+  if (isTransaction(db))
+    throw new Error("Expense allocation filters cannot read in a transaction");
+  const filters = expenseFiltersSchema.parse(values);
+  return {
+    lead: allocationLead(filters),
+    membership: await allocationMembership(db, filters),
+  };
+});
+
+/** An allocation filter applies the membership when it leads the set. */
+const allocationFilter = (key: ReturnType<typeof allocationLead>) =>
+  allocation.predicate(({ lead, membership }) =>
+    lead === key ? membership : undefined,
   );
-  const purchaseIds = await resolveAllPresent(
-    db,
-    "purchase",
-    filters.purchaseId ? [filters.purchaseId].flat() : [],
-  );
-  const productIds = await resolveAllPresent(
-    db,
-    "product",
-    oneOrManyValues(filters.productId) ?? [],
-  );
-  return { vendorIds, purchaseIds, productIds };
-};
 
 // Allocation-backed sorts use one grouped lookup and retain the plain root
 // FROM; the product and purchase sorts compile from their declared paths.
 const expenseScaffold = listScaffold("expense", expense, {
   derived: {
-    spendingCategoryId: expenseDerivedValueSql(
-      "spendingCategoryNames",
-      sql`${expense.id}`,
+    ...rowDerived,
+    projectFilter: allocationFilter("projectFilter"),
+    spendingCategoryFilter: allocationFilter("spendingCategoryFilter"),
+    costTypeFilter: allocationFilter("costTypeFilter"),
+    // The presence half reads the row's own trade column.
+    tradeFilter: allocation.predicate(({ lead, membership }, { presence }) =>
+      and(
+        lead === "tradeFilter" ? membership : undefined,
+        presenceCondition(expense.trade, presence),
+      ),
     ),
-    projectId: sql`(SELECT p."name" FROM "Project" p
-      WHERE p."id" = ${effectiveExpenseProjectSql('"Expense"')}
-        AND p."deletedAt" IS NULL)`,
   },
 });
 
-// Shared by list and analytics so identical filter sets produce identical totals.
+/**
+ * Shared by list and analytics so identical filter sets produce identical
+ * totals. `omitAllocationScope` drops the allocation filters for analytics
+ * that join the allocation shares themselves.
+ */
 export const buildExpenseWhereClause = async (
   db: Database,
   filters: ExpenseFilters,
-  options?: {
-    extraConditions?: Array<SQL | undefined>;
-    projectScope?: ExpenseAllocationProjectScope;
-  },
+  options?: { omitAllocationScope?: boolean },
 ): Promise<SQL | undefined> => {
-  // The `(none)` / `Has project` sentinels OR with that selection instead of
-  // ANDing against it, so "Kitchen or unassigned" is one filter. The
-  // unassigned-spend worklist is just `projectPresenceFilter: "none"` with no
-  // `projectId`. (This replaced a `noProject` boolean that AND-ed, which is
-  // why the Unassigned view had to clobber `projectId` to avoid matching
-  // nothing at all.)
-
-  // `search` matches the expense NAME only, and its terms OR. It is passed as
-  // an extra condition rather than a `searchFilters` entry because
-  // buildSearchConditions ANDs those — which is right for `notesSearch` and
-  // `urlSearch` below (distinct filters, meant to narrow) but wrong within one
-  // multi-term name search, where the caller is guessing at synonyms for a row
-  // that names the thing rather than the product (`dust extractor` for a
-  // Festool vacuum). The search document builder uses the same pattern.
-  //
-  // `formatSearchTerm` returns undefined for an empty/whitespace term, so `or()`
-  // degrades cleanly to undefined when every term is blank.
-  const nameSearch = or(
-    ...[filters.search ?? []]
-      .flat()
-      .map((term) => formatSearchTerm(expense.name, term)),
+  const selected = options?.omitAllocationScope
+    ? withoutAllocation(filters)
+    : filters;
+  const context = await expenseScaffold.context(db, {
+    filters: selected,
+    readIntent: "count",
+  });
+  return and(
+    expenseScaffold.where(selected, [], { context }),
+    // A project page's embedded scope, when no allocation filter carries it.
+    allocationLead(selected) === "projectScope"
+      ? await allocationMembership(db, filters)
+      : undefined,
   );
-
-  const { vendorIds, purchaseIds, productIds } =
-    await loadExpenseFilterReferences(db, filters);
-
-  // `notesSearch`/`urlSearch` are declared stored filters of their own, ANDed
-  // with the name search. What must never happen is a predicate reusing
-  // `filters.search` over notes — most rows have no notes, which would
-  // silently zero out expense search.
-  //
-  // `lineKind`, `lineBasis` and `future` are declared stored filters, applied
-  // by `expenseScaffold.where` before the conditions below. `trade`,
-  // `costType` and spending category are stripped from `storedFilters` and
-  // applied per allocation share by `projectFilterCondition`.
-  const storedFilters = {
-    ...filters,
-    trade: undefined,
-    costType: undefined,
-    spendingCategoryId: undefined,
-    spendingCategoryPresenceFilter: undefined,
-  };
-  const rowConditions: Array<SQL | undefined> = [
-    filters.ledgerPartyId === undefined
-      ? undefined
-      : sql`EXISTS (
-          SELECT 1
-          FROM "ExpenseAttribution" ea
-          JOIN "LedgerParty" lp ON lp."id" = ea."ledgerPartyId" AND lp."deletedAt" IS NULL
-          WHERE ea."expenseId" = ${expense.id}
-            AND ea."deletedAt" IS NULL
-            AND ${shortcodeSetCondition(sql`lp."shortcode"`, filters.ledgerPartyId)})`,
-    nameSearch,
-    // `productIds.length === 0` is ambiguous by itself — it means either
-    // "no productId filter was supplied" (no constraint) or "a productId WAS
-    // supplied but didn't resolve to a live product" (must match nothing).
-    // `eqAny([])` can't tell those apart (it always drops the condition, by
-    // design — see its doc in db/helpers/query.ts), so the requested-
-    // but-unresolved case is handled explicitly here, same as
-    // the project/reference conditions above.
-    requestedReferenceCondition(
-      expense.productId,
-      filters.productId !== undefined,
-      productIds,
-    ),
-    // "linked" means productId IS NOT NULL — this deliberately includes
-    // expenses whose product was later soft-deleted (those read back with
-    // productId still set and productName null; see dbExpenseToAPI). The
-    // same column-null-only rule applies to the project presence above: a
-    // expense whose project was soft-deleted is NOT "(none)".
-    presenceCondition(expense.productId, filters.productPresenceFilter),
-    // Vendor is a joined entity now, so this matches vendor IDS through the
-    // charge instead of an exact string on the row. `(none)` still ORs in, same
-    // rule as project above — and because `purchase.vendorId` is NOT NULL, "no
-    // vendor" and "no Purchase" are one predicate: `purchaseId IS NULL`.
-    //
-    // Same requested-but-unresolved handling as `productId` above: a
-    // `filters.vendorId` that resolved to nothing contributes `sql\`false\``
-    // to the OR (not `undefined`, which would drop the vendor half entirely
-    // and let the presence filter alone decide — or, with no presence filter
-    // either, let the whole condition vanish and match every row).
-    vendorFilterCondition(db, filters, vendorIds),
-    relativeDateCondition(filters.dateRelative),
-    // `date`, `cost` and `productQuantity` bounds are declared stored ranges
-    // (`costMin: 0` / `costMax: 0` are meaningful, and the declared predicate
-    // keys on `!== undefined`). `cost` IS nullable — `cost IS NULL` is the
-    // Unclassified predicate — and those rows fall out of either bound by
-    // plain SQL comparison semantics; `costPresenceFilter: "none"` is the
-    // filter for "no cost recorded".
-    presenceCondition(expense.cost, filters.costPresenceFilter),
-    anyOfCondition(filters.costSign, (sign) =>
-      sign === "negative" ? lt(expense.cost, 0) : gt(expense.cost, 0),
-    ),
-    disposalPurchaseCondition(filters.disposalPurchasePresenceFilter),
-    // Quantity is nullable evidence, never an inferred one-unit default.
-    // Bounds naturally exclude unknown rows; the presence filter is the
-    // explicit worklist for those receipts.
-    presenceCondition(
-      expense.productQuantity,
-      filters.productQuantityPresenceFilter,
-    ),
-    // `orderId` presence can't be a column-null check any more: it's a column
-    // on the CHARGE, and a row with a charge that has no order id is a
-    // different state from a row with no charge at all. Both read as "no order
-    // id" here, which is what the filter has always meant.
-    orderIdPresence(db, filters.orderIdPresenceFilter),
-    // Exact, not a substring — an order id is an identifier, not a search term.
-    // No longer needs pairing with a vendor to be a safe group key: it resolves
-    // through `purchaseId`, and `(vendorId, orderId)` is partial-unique, so a
-    // short id like Tool Nirvana's "#11325" can't drag in another retailer's.
-    chargeCondition(db, eqAny(purchase.orderId, filters.orderId)),
-    // Unlike `vendorId`/`orderId` above, `purchaseId` IS the column on
-    // `expense` — no `chargeCondition` sub-select hop needed. Same
-    // requested-but-unresolved handling as `productId`/`vendorId` above.
-    requestedReferenceCondition(
-      expense.purchaseId,
-      filters.purchaseId !== undefined,
-      purchaseIds,
-    ),
-  ];
-  // Only independent stored predicates bound allocation inputs. Quality and
-  // caller-supplied conditions may themselves depend on allocation evidence.
-  const selectedWhere = and(
-    ...declaredFilterPredicates("expense", expense, storedFilters),
-    ...rowConditions,
-  );
-  const selectedIds = selectedWhere
-    ? expenseSelectionForWhere(and(notDeleted(expense), selectedWhere))
-    : undefined;
-  const projectCondition =
-    options && "projectScope" in options
-      ? options.projectScope
-        ? expenseDerivedMembershipSql(
-            sql`${expense.id}`,
-            options.projectScope,
-            selectedIds,
-          )
-        : undefined
-      : await projectFilterCondition(db, filters, selectedIds);
-  return expenseScaffold.where(storedFilters, [
-    ...rowConditions,
-    ...(options?.extraConditions ?? []),
-    projectCondition,
-  ]);
 };
 
 export const expenseListRead = async (

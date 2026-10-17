@@ -26,14 +26,14 @@ describe("expenseFiltersForScope", () => {
       expenseFiltersForScope("vendorOrUnattached", ven("VEN-4K7M"), "  saw "),
     ).toEqual({
       vendorId: ven("VEN-4K7M"),
-      vendorPresenceFilter: "none",
+      purchaseIdPresenceFilter: "none",
       search: "saw",
     });
   });
 
   it("narrows to unattached or widens to any expense", () => {
     expect(expenseFiltersForScope("unattached", ven("VEN-4K7M"), "")).toEqual({
-      vendorPresenceFilter: "none",
+      purchaseIdPresenceFilter: "none",
       search: undefined,
     });
     expect(expenseFiltersForScope("any", ven("VEN-4K7M"), undefined)).toEqual({

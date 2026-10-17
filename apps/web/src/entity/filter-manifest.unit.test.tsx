@@ -318,13 +318,13 @@ describe("expense vendor filter", () => {
     });
   });
 
-  it("routes the (none) sentinel to vendorPresenceFilter, ORing with a selection", () => {
+  it("routes the (none) sentinel to purchaseIdPresenceFilter, ORing with a selection", () => {
     expect(build({ vendor: `${VENDOR_ONE},${FILTER_NONE}` })).toEqual({
       vendorId: [VENDOR_ONE],
-      vendorPresenceFilter: "none",
+      purchaseIdPresenceFilter: "none",
     });
     expect(build({ vendor: FILTER_NONE })).toEqual({
-      vendorPresenceFilter: "none",
+      purchaseIdPresenceFilter: "none",
     });
   });
 

@@ -95,7 +95,7 @@ describe("expense views produce the filters their old tabs pinned", () => {
   });
 
   it("unattached pins the existing no-purchase vendor predicate", () => {
-    expect(build("unattached")).toEqual({ vendorPresenceFilter: "none" });
+    expect(build("unattached")).toEqual({ purchaseIdPresenceFilter: "none" });
     const view = viewsForEntity("expense").find((v) => v.id === "unattached");
     expect(view?.filters).toEqual([{ id: "purchaseId", value: [FILTER_NONE] }]);
   });
