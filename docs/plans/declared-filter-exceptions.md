@@ -433,11 +433,15 @@ Five predicates are one row value, or can be made one:
   id-to-year map the way inventory valuations render today. Its prepare is
   `projectCompletion`, which the list already shares with its rollups.
 
-Each value gains sort and Exclude, because values negate generically. The
-enum and text values (`valuationStatus`, `quantityVarianceState`,
-`reconciliation`, `completionYear`) also gain Group by.
-`ledgerExpectedQuantity` is a number. Group by does not support numbers
-(`list-fields.ts:530`), so it stays a disabled choice with its derived reason.
+Each value gains sort. Exclude follows the descriptor kind: the enum values
+(`valuationStatus`, `quantityVarianceState`, `reconciliation`) gain a
+generated Exclude key because multiselect filters negate generically.
+`completionYear` is a URL-only dashboard key (`completed`), and URL-only
+scopes have no Exclude (§5). `ledgerExpectedQuantity` stays a range filter,
+which negates through its bounds and has no Exclude key, as no range filter
+does. The enum and text values also gain Group by. `ledgerExpectedQuantity`
+is a number. Group by does not support numbers (`list-fields.ts:530`), so it
+stays a disabled choice with its derived reason.
 
 ### 3.6 Declared scopes
 
@@ -509,7 +513,7 @@ sets carry app-computed data (§3.1, §3.5).
   group. That is the existing to-many rule ("no related row has an excluded
   value"). The §3.1 filters therefore become negatable, and their
   `Include only` reasons go away. Inherited values negate their effective
-  value (`NOT COALESCE((…), false)`). §3.5 values negate as values. Stays keep
+  value (`NOT COALESCE((…), false)`). §3.5 values negate as values where their descriptor kind negates (§3.5). Stays keep
   their current `negatable`.
 - **Presence.** On a row-set field, Any value joins the shared row like a
   picked value (`col IS NOT NULL`). No value matches a record when a row in
