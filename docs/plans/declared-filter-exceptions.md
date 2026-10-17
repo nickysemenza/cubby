@@ -465,8 +465,8 @@ enum and text values (`valuationStatus`, `quantityVarianceState`,
   `listScaffold("task", task, { scopes: { projectScope: projectScaffold } })`.
   Task already imports from the project domain
   (`matchingEmbeddedProjectIds`). `scaffold.context(db, request)` builds the
-  nested scaffold's context when the scope key is present, so the project
-  predicates that stay (`completionYear`) load once, and `where` stays
+  nested scaffold's context when the scope key is present, so the project's
+  prepared data (including the `completionYear` value) loads once, and `where` stays
   synchronous. `embeddedProjectScopeSchema` is replaced by the project list
   filter schema, keyed `status`, `kind`, `locations` (effective, §3.2),
   `search`, `dateRange`, and `completionYear`. The mapping is not identical.
