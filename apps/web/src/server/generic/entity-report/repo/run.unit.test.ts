@@ -1157,6 +1157,7 @@ describe("changesBlocks", () => {
             displayImage: null,
             action: "update",
             changes: { orderId: { from: "a", to: "b" } },
+            references: {},
             userId: "user-1",
             channel: "web",
             oauthClient: null,

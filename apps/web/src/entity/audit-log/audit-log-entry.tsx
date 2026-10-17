@@ -172,12 +172,48 @@ type LedgerField = {
   to: LedgerValue | null;
 };
 
+type AuditReferences = AuditLogEntry["references"];
+
+/** A relationship code reads as the record it names; anything else as text. */
+function LedgerValueText({
+  value,
+  references,
+  className,
+}: {
+  value: LedgerValue;
+  references: AuditReferences;
+  className?: string;
+}) {
+  const parsed = value.mono ? parseShortcode(value.text) : null;
+  const reference = parsed ? references[parsed.shortcode] : undefined;
+  if (parsed && reference) {
+    return (
+      <EntityRefLink
+        variant="audit"
+        entityKind={parsed.type}
+        entityId={parsed.shortcode}
+        name={reference.name}
+        displayImage={reference.displayImage}
+        compact
+        className={cn("gap-1 text-xs font-normal", className)}
+      />
+    );
+  }
+  return (
+    <span className={cn("truncate", value.mono && "font-mono", className)}>
+      {value.text}
+    </span>
+  );
+}
+
 function LedgerChangeSummary({
   shown,
   omitted,
+  references,
 }: {
   shown: LedgerField[];
   omitted: number;
+  references: AuditReferences;
 }) {
   return (
     <Row align="baseline" gap="sm" className="min-w-0 text-xs">
@@ -187,19 +223,18 @@ function LedgerChangeSummary({
             {humanizeChangeField(field)}
           </span>
           {from && (
-            <span
-              className={cn(
-                "truncate text-muted-foreground",
-                from.mono && "font-mono",
-              )}
-            >
-              {from.text}
-            </span>
+            <LedgerValueText
+              value={from}
+              references={references}
+              className="text-muted-foreground"
+            />
           )}
           <span className="shrink-0 text-slate">&rarr;</span>
-          <span className={cn("truncate", to?.mono && "font-mono")}>
-            {to ? to.text : "(empty)"}
-          </span>
+          {to ? (
+            <LedgerValueText value={to} references={references} />
+          ) : (
+            <span className="truncate">(empty)</span>
+          )}
         </Row>
       ))}
       {omitted > 0 && (
@@ -311,6 +346,9 @@ export function AuditRecordRow({
       )
     : entry.changes;
   const summary = entry.action === "update" ? summarizeChanges(changes) : null;
+  const references: AuditReferences = folded
+    ? Object.assign({}, ...group.map((item) => item.references))
+    : entry.references;
   const via = auditVia(entry);
   const changedCount = Object.keys(changes ?? {}).length;
   const shownCount = summary?.shown.length ?? 0;
@@ -349,7 +387,11 @@ export function AuditRecordRow({
         summary || via || entry.runId ? (
           <span className="flex min-w-0 items-baseline gap-2">
             {summary ? (
-              <LedgerChangeSummary shown={summary.shown} omitted={0} />
+              <LedgerChangeSummary
+                shown={summary.shown}
+                omitted={0}
+                references={references}
+              />
             ) : null}
             {via || entry.runId ? (
               <span className="flex shrink-0 items-baseline gap-1">

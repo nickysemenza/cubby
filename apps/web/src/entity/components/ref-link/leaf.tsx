@@ -1,4 +1,4 @@
-import type { AuditEntityKind } from "@cubby/schemas/audit";
+import type { Entity } from "@cubby/schemas/entity";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
@@ -368,11 +368,12 @@ export function ChipRefLink({
 
 export type AuditRefLinkProps = {
   variant: "audit";
-  entityKind: AuditEntityKind;
+  entityKind: Entity;
   entityId: string;
   name?: string | null;
   displayImage: ImageUrlSummary | null;
   compact?: boolean;
+  className?: string;
 };
 
 /**
@@ -393,6 +394,7 @@ export function AuditRefLink({
   name,
   displayImage,
   compact,
+  className: classNameProp,
 }: Leaf<AuditRefLinkProps>) {
   const label = entityLabel(entityKind);
   const title = name ? `${name} · ${entityId}` : `${label} ${entityId}`;
@@ -419,6 +421,7 @@ export function AuditRefLink({
     // the reader is aiming at, not the 20px of text inside it.
     "inline-flex min-h-11 min-w-0 items-center gap-2 text-sm font-medium text-primary sm:min-h-0",
     compact && "max-w-48 sm:max-w-72",
+    classNameProp,
   );
 
   if (!isBrowserRoutedEntity(entityKind)) {

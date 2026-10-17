@@ -507,12 +507,15 @@ export async function getAuditLog(
   // AuditLog's identity FK guarantees every subject has an Entity row. Read
   // those codes once, including codes inside changes, instead of querying each
   // payload table again for the same shortcodes.
+  // Change refs share the subject's label and image batches so a
+  // relationship diff renders as the record it points at.
+  const labelRefs = [...entryRefs, ...changeRefs];
   const [nameByRef, displayImageByRef, clientNames, identities] =
     await Promise.all([
-      lookupEntityLabels(db, entryRefs),
+      lookupEntityLabels(db, labelRefs),
       resolveEntityDisplayImages(
         db,
-        entryRefs.map(({ entity, id }) => ({
+        labelRefs.map(({ entity, id }) => ({
           entityKind: entity,
           entityId: id,
         })),
@@ -541,7 +544,6 @@ export async function getAuditLog(
         : [];
     }),
   );
-
   return {
     entries: returnEntries.map(
       ({
@@ -580,6 +582,23 @@ export async function getAuditLog(
           entry.entityKind,
           changes,
           shortcodeByRef,
+        ),
+        references: Object.fromEntries(
+          collectChangeRefs(entry.entityKind, changes).flatMap((ref) => {
+            const key = entityRefKey(ref.entity, ref.id);
+            const shortcode = shortcodeByRef.get(key);
+            return shortcode
+              ? [
+                  [
+                    shortcode,
+                    {
+                      name: nameByRef.get(key) ?? null,
+                      displayImage: displayImageByRef.get(key) ?? null,
+                    },
+                  ],
+                ]
+              : [];
+          }),
         ),
       }),
     ),

@@ -188,4 +188,51 @@ describe("getAuditLog — entityName", () => {
     });
     expect(entries[0]?.entityName).toBe("Cast Iron Skillet · Garage");
   });
+
+  it("names each relationship code a diff points at", async () => {
+    const shelf = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Shelf" }),
+      ctx.actor,
+    );
+    const garage = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Garage" }),
+      ctx.actor,
+    );
+    const prod = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Synthetic Trowel" }),
+      ctx.actor,
+    );
+    const entry = await createInventoryEntry(
+      ctx.db,
+      {
+        productId: prod.id,
+        locationId: garage.id,
+        amount: { value: 1, unit: "ea" },
+      },
+      ctx.actor,
+    );
+    await insertAndReturn(ctx.db, auditLog, {
+      entityKind: "inventory",
+      entityId: entry.entityId,
+      action: "update",
+      userId: ctx.actor.userId,
+      changes: { locationId: { from: shelf.entityId, to: garage.entityId } },
+    });
+
+    const { entries } = await getAuditLog(ctx.db, {
+      limit: 1,
+      entityKind: "inventory",
+    });
+    expect(entries[0]?.changes?.locationId).toEqual({
+      from: shelf.id,
+      to: garage.id,
+    });
+    expect(entries[0]?.references).toEqual({
+      [shelf.id]: { name: "Shelf", displayImage: null },
+      [garage.id]: { name: "Garage", displayImage: null },
+    });
+  });
 });
