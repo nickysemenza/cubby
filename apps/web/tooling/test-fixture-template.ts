@@ -48,10 +48,48 @@ function runDirectory(run: string): string {
   return join(runRoot, run);
 }
 
+const isMissing = (error: unknown) =>
+  error instanceof Error && "code" in error && error.code === "ENOENT";
+
+/**
+ * Discard a run's templates. A hash whose discard fails keeps its entry, so
+ * the next dead-run sweep retries it; IntegreSQL 404 means it is already gone.
+ * Another worktree's sweep may collect the same dead run concurrently.
+ */
 async function discardRun(directory: string): Promise<void> {
+  let hashes: string[];
+  try {
+    hashes = readdirSync(directory);
+  } catch (error) {
+    if (isMissing(error)) return;
+    throw error;
+  }
   const client = templateClient();
-  for (const hash of readdirSync(directory))
-    await client.api.discardTemplate(hash).catch(() => undefined);
+  const failures: string[] = [];
+  for (const hash of hashes) {
+    try {
+      await client.api.discardTemplate(hash);
+    } catch (error) {
+      const status =
+        error instanceof Error && "responseStatus" in error
+          ? error.responseStatus
+          : undefined;
+      if (status !== 404) {
+        failures.push(
+          `${hash}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        continue;
+      }
+    }
+    rmSync(join(directory, hash), { force: true });
+  }
+  if (failures.length) {
+    // Cleanup must not fail a finished run; the entries stay for a retry.
+    console.warn(
+      `[test fixtures] Could not discard ${failures.length} IntegreSQL fixture template(s); the next run retries them:\n${failures.join("\n")}`,
+    );
+    return;
+  }
   rmSync(directory, { recursive: true, force: true });
 }
 

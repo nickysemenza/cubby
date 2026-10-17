@@ -149,6 +149,18 @@ test("unknown input is rejected only in exported signatures, except predicates a
   );
 });
 
+test("an export list is found even with a comment after export", () => {
+  // Regression: a text pre-check for `export {` skipped scope analysis here.
+  const diagnostics = lintFixture(
+    "no-unknown-parameters",
+    "no-unknown-parameters-commented-export.txt",
+  );
+  assert.deepEqual(
+    diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line),
+    [1],
+  );
+});
+
 test("shape naming applies to owned symbols but not external property names", () => {
   const allowed = lintFixture(
     "no-shape-in-symbol-names",

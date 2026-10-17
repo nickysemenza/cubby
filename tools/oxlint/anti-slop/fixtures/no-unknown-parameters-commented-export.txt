@@ -1,0 +1,4 @@
+function exportedByCommentedList(value: unknown): boolean {
+  return value !== undefined;
+}
+export /* public */ { exportedByCommentedList };

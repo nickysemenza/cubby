@@ -12,9 +12,10 @@ import { testShuffleSeed } from "./tooling/test-seed.ts";
 
 // Generated output and the @cubby/recipebridge WASM are never committed; bring
 // them current before any module graph (or TanStack's route scan) reads them.
-// Each is a marker or Nx cache hit when its inputs are unchanged. Every Nx
-// task that runs Vitest already depends on both targets
-// (apps/web/project.json), and Vitest evaluates this file more than once.
+// Each is a marker or Nx cache hit when its inputs are unchanged. Inside an
+// Nx task `ensure.ts` already returns without work (the declared test targets
+// in apps/web/project.json depend on both), so skip spawning it; Vitest also
+// evaluates this file more than once per run.
 if (
   process.env.NX_TASK_TARGET_PROJECT === undefined &&
   process.env.CUBBY_VITEST_ENSURED === undefined
