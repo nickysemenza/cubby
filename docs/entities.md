@@ -71,7 +71,10 @@ uses; `inheritedFieldSql` the fallback; `effectiveSourceSql` and
 which `fieldResolutions.sourceEntity` names; `inheritanceLadderSql` every
 record a hierarchy chain reads, for "why this value" explanations. A stored
 filter over an inherited field, a `via` path ending at one, and a relation
-edge whose foreign key is one all read the effective value; a hierarchy-only
+edge whose foreign key is one all read the effective value (a batched
+traversal that walks such an edge toward its source may join a statement-local
+relation of each row's effective value, so the match is an equality join
+rather than a per-pair walk); a hierarchy-only
 chain filters in the top-down set form (`effectiveFieldInSql`), resolved once
 per query. Repositories format provenance labels and nothing else; never
 hand-write an ancestor walk or fallback for a declared field. Fields whose

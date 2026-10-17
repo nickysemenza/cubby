@@ -39,6 +39,15 @@ interface TraversalHop {
   condition: SQL;
 }
 
+/** A statement-local relation of one table's rows with an inherited field's
+ * effective value, joined in place of the table by an incoming inherited hop. */
+export interface InheritedRelation {
+  name: string;
+  entity: Entity;
+  field: string;
+  table: string;
+}
+
 export interface Traversal {
   rootTable: string;
   rootAlias: string;
@@ -47,7 +56,16 @@ export interface Traversal {
   leafAlias: string;
   joins: SQL;
   usesExpenseProjectRelation: boolean;
+  inheritedRelations: readonly InheritedRelation[];
 }
+
+/** The CTE body for an `InheritedRelation`: every row plus `"effectiveValue"`,
+ * from the same expression the scalar join condition evaluates. */
+export const inheritedRelationSql = (relation: InheritedRelation): SQL =>
+  sql`${sql.identifier(relation.name)} AS MATERIALIZED (
+    SELECT inherited_source.*, ${effectiveFieldSql(relation.entity, relation.field, "inherited_source")} AS "effectiveValue"
+    FROM ${sql.identifier(relation.table)} inherited_source
+  )`;
 
 const entityTable = (entity: Entity): string => {
   const table = entityManifest[entity].dbTable;
@@ -250,6 +268,13 @@ export const compileTraversal = (
     to?: Entity;
     /** A page-wide effective Expense assignment relation supplied by the caller. */
     expenseProjectRelation?: string;
+    /**
+     * Names a caller-registered `InheritedRelation` for an incoming inherited
+     * edge. Matching a target against each source row's effective value inline
+     * is not sargable, so the planner nests loops over the whole path; the
+     * relation computes each effective value once and joins on equality.
+     */
+    inheritedRelation?: (entity: Entity, field: string) => string;
   },
 ): Traversal => {
   const rootTable = entityTable(from);
@@ -257,6 +282,7 @@ export const compileTraversal = (
   let currentTable = rootTable;
   let currentAlias = rootAlias;
   const hops: TraversalHop[] = [];
+  const inheritedRelations: InheritedRelation[] = [];
 
   for (const [index, step] of steps.entries()) {
     const edge = EDGES.get(step.edge);
@@ -285,6 +311,32 @@ export const compileTraversal = (
       index,
       aliases?.expenseProjectRelation,
     );
+    const inherited =
+      !outgoing && !mappedExpenseProject && aliases?.inheritedRelation
+        ? inheritedEdge(edge)
+        : null;
+    if (inherited !== null && aliases?.inheritedRelation) {
+      const relation = {
+        name: aliases.inheritedRelation(inherited.entity, inherited.field),
+        entity: inherited.entity,
+        field: inherited.field,
+        table: nextTable,
+      };
+      inheritedRelations.push(relation);
+      hops.push({
+        table: nextTable,
+        relation: relation.name,
+        alias,
+        fromAlias: currentAlias,
+        fromColumn: "id",
+        toColumn: edge.sourceColumn,
+        softDelete: edge.sourceSoftDeletable,
+        condition: sql`${sql.raw(`${alias}."effectiveValue"`)} = ${sql.raw(`${currentAlias}."id"`)}`,
+      });
+      currentTable = nextTable;
+      currentAlias = alias;
+      continue;
+    }
     hops.push({
       table: nextTable,
       relation: mappedExpenseProject
@@ -316,7 +368,12 @@ export const compileTraversal = (
     hops,
     leafTable: currentTable,
     leafAlias: currentAlias,
-    usesExpenseProjectRelation: hops.some((hop) => hop.relation !== undefined),
+    usesExpenseProjectRelation: hops.some(
+      (hop) =>
+        hop.relation !== undefined &&
+        hop.relation === aliases?.expenseProjectRelation,
+    ),
+    inheritedRelations,
   };
   return { ...traversal, joins: renderJoins(traversal) };
 };
