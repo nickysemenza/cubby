@@ -39,6 +39,16 @@ export async function builtWorkerTestConfig(root: string) {
     },
     containers: [],
   });
+  // Wrangler's legacy dev runtime discovers local export storage only for
+  // implicit self bindings; native config uses an explicit Worker reference.
+  const implicitSelf = <T extends { script_name?: string }>(binding: T) => {
+    const { script_name, ...local } = binding;
+    return script_name === config.name ? local : binding;
+  };
+  if (config.durable_objects?.bindings)
+    config.durable_objects.bindings =
+      config.durable_objects.bindings.map(implicitSelf);
+  config.workflows = config.workflows?.map(implicitSelf);
   const rules: ModuleRule[] = Object.values(moduleRuleTypes).map((type) => ({
     type,
     globs: [],
