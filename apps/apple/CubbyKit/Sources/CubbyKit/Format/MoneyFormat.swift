@@ -31,6 +31,7 @@ public func aiBillingReasonLabel(_ reason: String) -> String {
     switch reason {
     case "standard": "Standard billing"
     case "plan": "Plan covered"
+    case "subscriber_credit": "Subscriber credits"
     case "cache": "Cached response"
     case "discount": "Discount applied"
     case "local": "On device"

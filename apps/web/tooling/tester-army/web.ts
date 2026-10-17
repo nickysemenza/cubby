@@ -229,6 +229,7 @@ function liveGatewayWorker(
   }
   return {
     main: "tooling/tester-army/live-gateway.ts",
+    ...(swap && { fixedModel: true as const }),
     vars,
     secrets: { GATEWAY_TOKEN: coupledGatewayToken(config) },
   };

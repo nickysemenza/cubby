@@ -12,7 +12,7 @@ const env = {
   GATEWAY_TOKEN: "synthetic-token",
   GATEWAY_ENVIRONMENT: "ci" as const,
 };
-const GATEWAY_BASE_URL = `https://gateway.ai.cloudflare.com/v1/${env.ACCOUNT_ID}/cubby-testing`;
+const GATEWAY_BASE_URL = `https://gateway.ai.cloudflare.com/v1/${env.ACCOUNT_ID}/cubby`;
 const agentEnv = {
   ...env,
   RESPONSES_MODEL: "gpt-6-luna",
@@ -26,6 +26,28 @@ const responsesBody = {
 };
 
 const upstream = vi.fn<typeof fetch>();
+
+// The live peer has no connected ChatGPT session; a subscription-only attempt
+// must refuse explicitly rather than silently purchase OpenAI inference.
+it("refuses unavailable subscription attempts without a paid transmission", async () => {
+  vi.stubGlobal("fetch", upstream);
+  const response = await liveGateway.fetch(
+    new Request("https://ai-gateway.invalid/openai/responses", {
+      method: "POST",
+      headers: {
+        "x-cubby-inference-funding": "subscription",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(responsesBody),
+    }),
+    env,
+  );
+  expect(response.status).toBe(429);
+  expect(await response.json()).toMatchObject({
+    error: { code: "subscription_unavailable" },
+  });
+  expect(upstream).not.toHaveBeenCalled();
+});
 afterEach(() => {
   upstream.mockReset();
   vi.unstubAllGlobals();
@@ -220,7 +242,7 @@ it("runs Workers AI through the account run route, scoped to evaluation", async 
     `https://api.cloudflare.com/client/v4/accounts/${env.ACCOUNT_ID}/ai/run`,
   );
   expect(sent.headers.get("authorization")).toBe("Bearer synthetic-token");
-  expect(sent.headers.get("cf-aig-gateway-id")).toBe("cubby-testing");
+  expect(sent.headers.get("cf-aig-gateway-id")).toBe("cubby");
   expect(sent.headers.get("cf-aig-skip-cache")).toBe("true");
   expect(JSON.parse(sent.headers.get("cf-aig-metadata") ?? "{}")).toEqual({
     environment: "ci",

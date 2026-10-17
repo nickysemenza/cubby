@@ -57,8 +57,12 @@ function purchaseAgentEnvironment(
 ): PurchaseAgentEnvironment {
   // SAFETY: the workerd harness adds this service binding to the Worker; it
   // is deliberately absent from wrangler.jsonc, so production never has it.
-  const { CUBBY_PURCHASE_AGENT_TEST_MODEL: testModel } = env as Env & {
+  const {
+    CUBBY_PURCHASE_AGENT_TEST_MODEL: testModel,
+    CUBBY_PURCHASE_AGENT_FIXED_MODEL: fixedModel,
+  } = env as Env & {
     CUBBY_PURCHASE_AGENT_TEST_MODEL?: PurchaseAgentEnvironment["testModel"];
+    CUBBY_PURCHASE_AGENT_FIXED_MODEL?: string;
   };
   return {
     chatGptInference: (body, options) =>
@@ -85,6 +89,10 @@ function purchaseAgentEnvironment(
     services: runServicesFor(env, ctx, runId),
     mcpTools: purchaseAgentMcpTools,
     ...(testModel && { testModel }),
+    ...(testModel &&
+      fixedModel === "openai-responses" && {
+        fixedModel,
+      }),
     settlementPollMs: testDurationOverrideMs(env.CUBBY_TEST_SETTLEMENT_POLL_MS),
   };
 }

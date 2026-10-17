@@ -7,10 +7,13 @@ import {
 import { getErrorMessage } from "@cubby/shared";
 import {
   gatewayBaseURL,
+  type InferenceFunding,
   type GatewayResponseInfo,
   gatewayResponseInfo,
+  isInferenceFundingRefusal,
 } from "@cubby/shared/ai/gateway-request";
 import { gatewayProviderSchema } from "@cubby/shared/ai/models";
+import { createParser } from "eventsource-parser";
 import { z } from "zod";
 
 import { type UnparsedError } from "~/lib/error-utils";
@@ -29,6 +32,8 @@ const STRIPPED_REQUEST_HEADERS = new Set([
   "authorization",
   "cf-aig-authorization",
   "cf-aig-metadata",
+  "cf-aig-byok-alias",
+  "cf-aig-no-wholesale",
   "content-length",
   "cookie",
   "host",
@@ -168,7 +173,7 @@ function usageRecord(
   purpose: string | undefined,
   usage: WGatewayCallUsage,
   durationMs: number,
-  gateway: GatewayResponseInfo,
+  gateway: GatewayResponseInfo & Pick<AiUsageRecord, "costEvidence">,
   transport: GatewayTransport | "unknown",
   runId: RunId,
 ): AiUsageRecord {
@@ -189,6 +194,94 @@ function usageRecord(
   };
 }
 
+const responsesEvent = z.looseObject({
+  type: z.string(),
+  response: z.looseObject({ error: z.unknown().optional() }).optional(),
+  error: z.unknown().optional(),
+});
+function subscriptionCapacityRefusal(body: string): boolean {
+  return isInferenceFundingRefusal(400, body, "subscription");
+}
+
+/** Terminal Responses roots preserve truncation output/usage for Rust recovery. */
+async function foldResponsesStream(response: Response): Promise<Response> {
+  if (
+    !response.ok ||
+    !response.headers.get("content-type")?.includes("text/event-stream")
+  )
+    return response;
+  let completed: z.infer<typeof responsesEvent>["response"];
+  let failure: unknown;
+  const parser = createParser({
+    onEvent: (event) => {
+      if (event.data === "[DONE]") return;
+      const parsed = responsesEvent.parse(JSON.parse(event.data));
+      if (
+        parsed.type === "response.completed" ||
+        parsed.type === "response.incomplete"
+      )
+        completed = parsed.response;
+      if (parsed.type === "response.failed")
+        failure = parsed.response?.error ?? parsed;
+      if (parsed.type === "error") failure = parsed.error ?? parsed;
+    },
+  });
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("Responses stream has no body");
+  const decoder = new TextDecoder();
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      parser.feed(decoder.decode(chunk.value, { stream: true }));
+    }
+    parser.feed(decoder.decode());
+  } finally {
+    reader.releaseLock();
+  }
+  const headers = new Headers(response.headers);
+  headers.set("content-type", "application/json");
+  headers.delete("content-length");
+  if (failure !== undefined) {
+    const body = JSON.stringify({ error: failure });
+    return new Response(body, {
+      status: subscriptionCapacityRefusal(body) ? 429 : 502,
+      headers,
+    });
+  }
+  if (!completed)
+    throw new Error(
+      "Responses stream ended without a completed or incomplete response",
+    );
+  return new Response(JSON.stringify(completed), {
+    status: response.status,
+    headers,
+  });
+}
+
+export async function forwardGatewayRequest(
+  request: GatewayForwardRequest,
+  opts: { db?: Database; runId?: RunId; feature: string },
+  port: GatewayForwardPort = productionGatewayForwardPort,
+): Promise<GatewayForwardResponse> {
+  const { provider } = splitProviderRoute(request.path);
+  const funding =
+    provider === "anthropic"
+      ? "subscriber_credit"
+      : provider === "openai"
+        ? "subscription"
+        : "paid";
+  const response = await forwardGatewayAttempt(request, opts, port, funding);
+  if (
+    funding === "subscription" &&
+    [400, 429].includes(response.status) &&
+    subscriptionCapacityRefusal(response.body)
+  ) {
+    return forwardGatewayAttempt(request, opts, port, "paid");
+  }
+  return response;
+}
+
 /**
  * Forward one gateway request built by the `cookbook` crate in the browser.
  * A failed attempt (thrown or non-2xx) records a failed row on its selected
@@ -200,10 +293,11 @@ function usageRecord(
  * responses are returned as-is so the Rust ladder can react (retry, step
  * down, mark a model exhausted); only a transport failure throws.
  */
-export async function forwardGatewayRequest(
+async function forwardGatewayAttempt(
   request: GatewayForwardRequest,
   opts: { db?: Database; runId?: RunId; feature: string },
-  port: GatewayForwardPort = productionGatewayForwardPort,
+  port: GatewayForwardPort,
+  funding: InferenceFunding,
 ): Promise<GatewayForwardResponse> {
   const { model, purpose } = crateCallTags(request.headers);
   const operation = cookbookOperation(purpose);
@@ -230,6 +324,7 @@ export async function forwardGatewayRequest(
     // The crate decides its own caching; only the app-side adapters skip it.
     port.transport(provider, {
       metadata: { feature: opts.feature, operation },
+      funding,
       onTransport: (selected) => {
         transport = selected;
       },
@@ -237,10 +332,14 @@ export async function forwardGatewayRequest(
     `${gatewayBaseURL(provider)}/${endpoint}`,
     forwardHeaders(request),
     JSON.stringify(request.body),
-  ).catch(async (error: UnparsedError) => {
-    await recordFailure();
-    throw error;
-  });
+  )
+    .then((response) =>
+      provider === "openai" ? foldResponsesStream(response) : response,
+    )
+    .catch(async (error: UnparsedError) => {
+      await recordFailure();
+      throw error;
+    });
   if (!response.ok) await recordFailure(response);
   const body = await response.text().catch(async (error: UnparsedError) => {
     // A non-2xx response already has its failed row; a broken success stream
@@ -261,7 +360,18 @@ export async function forwardGatewayRequest(
         purpose,
         usage,
         durationMs,
-        gatewayResponseInfo(response),
+        {
+          ...gatewayResponseInfo(response),
+          ...(funding === "subscriber_credit"
+            ? {
+                costEvidence: {
+                  standard: null,
+                  charged: null,
+                  billingReason: "subscriber_credit" as const,
+                },
+              }
+            : {}),
+        },
         transport,
         opts.runId,
       ),

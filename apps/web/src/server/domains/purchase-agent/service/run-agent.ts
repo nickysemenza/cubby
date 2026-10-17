@@ -46,7 +46,11 @@ import { z } from "zod";
 
 import { createContextRecorder } from "./context-breakdown";
 import { projectConversation } from "./conversation";
-import { CONTEXT_SCOPE, cubbyAgentProviders } from "./cubby-ai-provider";
+import {
+  CONTEXT_SCOPE,
+  cubbyAgentModel,
+  cubbyAgentProviders,
+} from "./cubby-ai-provider";
 import { cubbyMcpExtension } from "./cubby-mcp";
 import type {
   DispatchInput,
@@ -246,6 +250,9 @@ export class PurchaseImportRunAgent
     const models = createModels();
     const identity = this.identity();
     for (const provider of cubbyAgentProviders({
+      fundingFallback: true,
+      fixedModel: this.agentEnv.fixedModel,
+      onFundingRefusal: (message) => this.afterResponse(message),
       gateway: () => this.agentEnv.gateway(),
       recorder: this.recorder,
       testModel: this.agentEnv.testModel,
@@ -463,7 +470,7 @@ export class PurchaseImportRunAgent
     const root = await (await this.harness.pi()).root(context);
     await root.configure(
       {
-        model: { provider: "openai", modelId: manifest.model },
+        model: cubbyAgentModel(manifest.model, this.agentEnv.fixedModel),
         thinkingLevel: manifest.effort,
         instructions: workflowForRun(identity.purpose, identity.runId)
           .instructions,

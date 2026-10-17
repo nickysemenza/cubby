@@ -3,6 +3,23 @@ import { describe, expect, it } from "vitest";
 
 // A shared gateway window must survive different stubs and release capacity on cancellation.
 describe("shared Gateway admission", () => {
+  it("keeps subscriber-credit cooldown from delaying unified fallback", async () => {
+    const stub = env.AI_GATEWAY_EGRESS.getByName(crypto.randomUUID());
+    const now = Date.now();
+    const credit = await stub.admit("subscriber-credit:anthropic", now);
+    expect(credit.kind).toBe("admitted");
+    if (credit.kind !== "admitted") throw new Error("Credit admission refused");
+    await stub.finish(credit.token, 429, "60", now);
+    expect(await stub.admit("subscriber-credit:anthropic", now + 1)).toEqual({
+      kind: "wait",
+      until: now + 60_000,
+    });
+    const unified = await stub.admit("unified", now + 1);
+    expect(unified.kind).toBe("admitted");
+    if (unified.kind === "admitted")
+      await stub.finish(unified.token, 200, null, now + 1);
+  });
+
   it("shares the aggregate budget and cooldown across callers without spending capacity on a refusal", async () => {
     const name = crypto.randomUUID();
     const first = env.AI_GATEWAY_EGRESS.getByName(name);

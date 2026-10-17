@@ -1,4 +1,4 @@
-import type { OpenAiChatModel } from "@cubby/shared/ai/models";
+import type { SupportedChatModel } from "@cubby/shared/ai/models";
 import { z } from "zod";
 
 import type {
@@ -87,8 +87,8 @@ const toolsOf = <const Actions extends readonly CubbyMcpToolAction[]>(
   >;
 
 export type ImportRunAgentConfig = {
-  /** OpenAI model id the coordinator runs on. */
-  model: OpenAiChatModel;
+  /** Primary model; the runtime owns the ordered funding fallback. */
+  model: SupportedChatModel;
   effort: "low" | "medium" | "high";
   agentTools: readonly ImportRunAgentToolName[];
   /**
@@ -103,14 +103,14 @@ export type ImportRunAgentConfig = {
 /** Each purpose's model and authority: host tools plus narrowed MCP actions. */
 export const importRunAgentManifest = {
   photo_inventory: {
-    model: "gpt-6-luna",
+    model: "claude-opus-5-5",
     effort: "medium",
     agentTools: RUN_AGENT_TOOLS,
     mcpActions: PHOTO_MCP_ACTIONS,
     mcpTools: toolsOf(PHOTO_MCP_ACTIONS),
   },
   mail_import: {
-    model: "gpt-6-luna",
+    model: "claude-opus-5-5",
     effort: "medium",
     agentTools: RUN_AGENT_TOOLS,
     mcpActions: MAIL_IMPORT_MCP_ACTIONS,

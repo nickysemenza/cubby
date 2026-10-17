@@ -36,6 +36,9 @@ For every deletion, record either the stronger retained regression or why the
 test guarded no runtime behavior in the commit message that deletes it. Preserve named regressions before removal.
 
 Reuse a healthy HMR session for iteration and fingerprint-verified builds.
+Finish source edits and formatting before starting a web build, and keep the
+checkout unchanged through its E2E run. Build fingerprints include tests and
+tooling under `src`; queue the build after implementation lanes settle.
 For test-speed investigations, extract the existing GitHub reports, traces and
 job logs before considering a local run. Label cache replays and timings from
 other revisions; missing timing artifacts do not justify rerunning a whole tier.

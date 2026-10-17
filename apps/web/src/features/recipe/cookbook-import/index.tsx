@@ -1,8 +1,4 @@
-import type {
-  Book as WasmBook,
-  ExtractOptions,
-  Progress,
-} from "@cubby/recipebridge/cookbook";
+import type { Book as WasmBook, Progress } from "@cubby/recipebridge/cookbook";
 import {
   cookbookExtractionSchema,
   cookbookRunReportSchema,
@@ -64,6 +60,7 @@ import { loadCookbookWasm, type LoadCookbookWasm } from "./cookbook-wasm";
 import { asStoredExtraction, toBookEstimate } from "./extraction-result";
 import { createGatewaySend } from "./gateway-transport";
 import { deriveBookName } from "./import-helpers";
+import { extractOptions } from "./options";
 import {
   discardBookPhotoResources,
   resetReextractedBook,
@@ -71,25 +68,6 @@ import {
 } from "./photo-lifecycle";
 import { heroPhoto, selectedPhotoItemIds } from "./photos";
 import type { Book, ExtractPhase, ImportResult, PhotoResult } from "./types";
-
-/**
- * The tunables one extraction runs with.
- *
- * An empty `ladder` means the crate's catalog default, which is where model
- * choice belongs: the browser has no business pinning a model list that the
- * crate and the CLI would then disagree about. `second_opinion` and
- * `whole_book_escalation` are the two quality passes that cost extra money
- * only when the run needs them, and the estimate panel prices them in before
- * the user commits.
- */
-const extractOptions = (label: string): ExtractOptions => ({
-  label,
-  concurrency: 8,
-  ladder: [],
-  second_opinion: true,
-  whole_book_escalation: true,
-  max_output_tokens: 16000,
-});
 
 const isAllowedImageType = (value: string): value is AllowedImageType =>
   ALLOWED_IMAGE_TYPES.some((type) => type === value);

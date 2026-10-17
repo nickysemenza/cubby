@@ -316,7 +316,7 @@ pnpm --dir apps/web exec wrangler secret list --config wrangler.jsonc
 | `APNS_KEY_ID`          | `cubby` Worker secret          | APNs token-auth key id (photo-run Live Activities and alerts) |
 | `APNS_TEAM_ID`         | `cubby` Worker secret          | Apple Developer team id that owns the APNs key                |
 | `APNS_PRIVATE_KEY`     | `cubby` Worker secret          | APNs `.p8` PKCS8 PEM; absent = pushes recorded unsent         |
-| `AI_GATEWAY_API_KEY`   | Local secret only              | REST fallback outside the production Workers AI binding       |
+| `AI_GATEWAY_API_KEY`   | Worker/local secret            | Authenticated REST inference, including named subscriber BYOK |
 | `NOTION_API_KEY`       | Optional Worker/local secret   | Optional Notion integration                                   |
 
 OAuth client IDs, Cloudflare account IDs, resource IDs, public origins, and
@@ -403,7 +403,8 @@ Local and preview environments retain password login.
 All billed application, Tester Army, live-evaluation, and integration-enabled
 development calls use gateway `cubby`. Production uses the Workers AI Gateway
 binding: `AI.run` with an explicit gateway for Workers AI models, and
-`AI.gateway("cubby").run` for other providers. Tools outside Workers use
+`AI.gateway("cubby").run` for managed providers. Named subscriber-credit BYOK
+uses native authenticated passthrough instead; see setup below. Tools outside Workers use
 explicitly authenticated REST requests. Workers AI REST calls use the account
 `/ai/run` endpoint with gateway routing, metadata, caching, and timeout controls
 in `cf-aig-*` headers (not body options), avoiding a nested
@@ -429,12 +430,15 @@ documented cache key does not include the gateway or metadata, so shared-gateway
 traffic can return another environment's cached response
 ([caching](https://developers.cloudflare.com/ai-gateway/features/caching/#how-the-cache-key-works)).
 
+All environments use `cubby`; `environment` metadata separates their logs and spend rules.
 The shared gateway also shares Cloudflare's Unified Billing allowance of
 200 requests per 60 seconds and its gateway-wide rate limit; this is an
 accepted capacity tradeoff. A spend limit can filter by `environment` to budget
-CI independently, but cannot separate that request allowance. Gateways are not
-a security boundary: AI Gateway tokens are account-scoped, so any `Run` token
-reaches every gateway and its stored BYOK keys
+CI independently, but cannot separate that request allowance. Egress cooldowns
+from subscriber-credit 429s apply only to their credit bucket, leaving Unified
+Billing fallback available; unified 429s retain a shared cooldown across all
+buckets. Gateways are not a security boundary: AI Gateway tokens are
+account-scoped, so any `Run` token reaches every gateway and its stored BYOK keys
 ([authenticated gateway](https://developers.cloudflare.com/ai-gateway/configuration/authentication/)).
 Dynamic routes accept only the OpenAI chat-completions shape, so Anthropic
 Messages calls cannot use them
@@ -446,6 +450,46 @@ and tooling callers. Provider credentials or unified-billing
 configuration are Cloudflare AI Gateway state; no provider key belongs in this
 repository. Verify that every model in the checked-in registry is enabled in
 the gateway before relying on a feature that selects it.
+
+### Claude subscriber credits
+
+Pi coordinators and Tester Army use subscriber credits first, then their existing
+ChatGPT subscription transport, then paid Unified Billing. The implementation
+and model declarations own the model choices; [ADR 0017](adr/0017-subscription-funded-model-fallback.md#funding-and-gateway-amendment)
+records why paid fallback is allowed. Fixed-model evaluations do not change model.
+
+1. Link the eligible Claude plan to the intended Anthropic Console organization.
+2. Create a dedicated Cubby workspace with a monthly spend limit no larger than
+   the included allowance, then create an API key in that workspace. Keys draw
+   from the organization's shared credit balance; existing purchased credits and
+   auto-reload can otherwise keep the key usable after promotional exhaustion.
+3. In Cloudflare **AI → AI Gateway → cubby → Provider Keys**, add the Anthropic
+   key with alias **subscriber-credit**. Never put it in repository files, CI,
+   application environment variables or chat. Leave the **default** Anthropic
+   BYOK key unset; unaliased requests must be able to use paid Unified Billing.
+4. Keep Unified Billing enabled and Require provider credentials disabled for
+   the final paid route. Credit requests explicitly send the named alias and
+   `cf-aig-no-wholesale: true`; a missing or invalid key fails with raw setup
+   diagnostics rather than silently spending paid credits.
+
+Named BYOK uses the native Anthropic endpoint: Universal `gateway.run()` does
+not honor the alias in its payload. The Worker authenticates native passthrough
+with its `AI_GATEWAY_API_KEY` secret (a Cloudflare inference token, not the
+Anthropic key). Reuse the existing Worker secret; deploying this feature does
+not provision or overwrite it from a GitHub Actions token. Check the deployed
+secret names with `wrangler secret list` before adding provisioning changes.
+Managed paid calls retain the binding. Missing native authentication fails with an explicit diagnostic.
+
+Console spend limits reset on the first of the calendar month, while promotional
+credits refresh on the subscription billing cycle. A workspace cap is therefore
+not an exact promotional-balance detector: an organization with purchased
+credits may spend those before its cap. Console Billing owns the actual balance
+and expiry; do not infer them from Cubby's usage totals. The retired
+`cubby-testing` gateway can be removed after older deployments and local
+processes stop using it; deleting it does not update those callers. Requests
+that omit gateway scoping can recreate Cloudflare's `default` gateway.
+
+### Pricing and transport
 
 AI catalog/pricing implementation is owned by
 `packages/shared/src/ai/pricing.ts`; runtime model defaults by

@@ -52,7 +52,7 @@ decisions are reachable on MCP too
 `entity.review_assessments`, each batch returning a per-id `ok`/`error`
 result). An agent calls one only
 on the member's explicit instruction for that specific budget or scope. An
-exact-checksum member-selected Luna Email import or its member-controlled retry
+exact-checksum member-selected Email import using the declared coordinator models or its member-controlled retry
 needs no dollar grant. Explicit member selections of Vendor order Emails use
 the same policy within the existing selection limit. Historical discovery still needs its
 separate scope authorization; other paid models keep their allowance checks.
