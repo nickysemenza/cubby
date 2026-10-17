@@ -178,4 +178,61 @@ describe("entity_read field selection", () => {
       expect(text).not.toMatch(uuid);
     }
   });
+
+  it("selects through record and array parents and returns their values", async () => {
+    const parent = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: `Synthetic pantry ${crypto.randomUUID()}`,
+      stockTracked: false,
+    });
+    const child = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: `Synthetic spices ${crypto.randomUUID()}`,
+      parentId: parent.id,
+    });
+    const resolved = await read({
+      action: "get",
+      entity: "spendingCategory",
+      id: child.shortcode,
+      fields: ["fieldResolutions.stockTracked.value"],
+    });
+    expect(resolved.isError).not.toBe(true);
+    expect(one.parse(resolved.structuredContent).item).toEqual({
+      id: child.shortcode,
+      fieldResolutions: { stockTracked: { value: false } },
+    });
+
+    const created = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic array selection product" }),
+      TEST_ACTOR,
+    );
+    await ensureExternalSources(ctx.db, ["synthetic"]);
+    await unwrapDb(ctx.db)
+      .insert(entityExternalId)
+      .values(
+        ["SYN-SKU-A", "SYN-SKU-B"].map((externalId, index) => ({
+          entityId: created.entityId,
+          entityKind: "product" as const,
+          source: "synthetic",
+          kind: "retailer_sku",
+          externalId,
+          isPrimary: index === 0,
+        })),
+      );
+    const listed = await read({
+      action: "get",
+      entity: "product",
+      id: created.id,
+      fields: ["externalIds.externalId"],
+    });
+    expect(listed.isError).not.toBe(true);
+    const item = one.parse(listed.structuredContent).item;
+    expect(item).toEqual({
+      id: created.id,
+      externalIds: expect.arrayContaining([
+        { externalId: "SYN-SKU-A" },
+        { externalId: "SYN-SKU-B" },
+      ]),
+    });
+    expect(item["externalIds"]).toHaveLength(2);
+  });
 });

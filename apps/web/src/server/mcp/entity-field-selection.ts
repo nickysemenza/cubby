@@ -71,6 +71,8 @@ function childSchemas(schema: z.core.$ZodType, key: string): z.core.$ZodType[] {
   const node = unwrap(schema);
   if (node instanceof z.ZodObject)
     return Object.hasOwn(node.shape, key) ? [node.shape[key]] : [];
+  if (node instanceof z.ZodRecord)
+    return node.def.keyType.safeParse(key).success ? [node.def.valueType] : [];
   if (node instanceof z.ZodUnion)
     return node.options.flatMap((option) => childSchemas(option, key));
   if (node instanceof z.ZodIntersection)
@@ -172,34 +174,77 @@ const isChildCollection = (value: ListReadRow[string]) =>
   Array.isArray(value) &&
   value.some((entry) => typeof entry === "object" && entry !== null);
 
-const nested = listReadRowSchema.omit({ id: true });
-type NestedRow = z.infer<typeof nested>;
+/** A value in a projected read row: JSON plus the dates read schemas emit. */
+type SelectedValue =
+  | null
+  | undefined
+  | string
+  | number
+  | boolean
+  | Date
+  | SelectedValue[]
+  | { [key: string]: SelectedValue };
+const selectedValue: z.ZodType<SelectedValue> = z.lazy(() =>
+  z.union([
+    z.null(),
+    z.undefined(),
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.date(),
+    z.array(selectedValue),
+    z.record(z.string(), selectedValue),
+  ]),
+);
+const selectedObject = z.record(z.string(), selectedValue);
+
+/**
+ * The part of `value` a path selects, shaped like `value`: an array maps the
+ * rest of the path over its elements in order (an element without it reads
+ * `{}`), and a null parent reads null. Undefined when the path is absent.
+ */
+function pick(value: SelectedValue, path: readonly string[]): SelectedValue {
+  const [key, ...rest] = path;
+  if (key === undefined) return value;
+  if (Array.isArray(value))
+    return value.map((element) => pick(element, path) ?? {});
+  if (value === null) return null;
+  const object = selectedObject.safeParse(value);
+  if (!object.success || !Object.hasOwn(object.data, key)) return undefined;
+  const selected = pick(object.data[key], rest);
+  return selected === undefined ? undefined : { [key]: selected };
+}
+
+/** Combine two selections of the same value: objects by key, arrays by element. */
+function merge(left: SelectedValue, right: SelectedValue): SelectedValue {
+  if (Array.isArray(left) && Array.isArray(right))
+    return right.map((element, index) => merge(left[index], element));
+  const a = selectedObject.safeParse(left);
+  const b = selectedObject.safeParse(right);
+  if (!a.success || !b.success) return right;
+  const merged = { ...a.data };
+  for (const [key, value] of Object.entries(b.data))
+    merged[key] = Object.hasOwn(merged, key)
+      ? merge(merged[key], value)
+      : value;
+  return merged;
+}
 
 function selectItem(row: ListReadRow, selection: ReadSelection): ListReadRow {
-  const output: ListReadRow = { id: row.id };
   if (selection.kind === "compact") {
+    const output: ListReadRow = { id: row.id };
     for (const key of selection.keys)
       if (Object.hasOwn(row, key) && !isChildCollection(row[key]))
         output[key] = row[key];
     return output;
   }
-  for (const path of selection.paths) {
-    let source: ListReadRow[string] = row;
-    for (const key of path) {
-      const parsed = nested.safeParse(source);
-      source = parsed.success ? parsed.data[key] : undefined;
-    }
-    if (source === undefined) continue;
-    let target: NestedRow = output;
-    for (const key of path.slice(0, -1)) {
-      const parsed = nested.safeParse(target[key]);
-      const next = parsed.success ? parsed.data : {};
-      target[key] = next;
-      target = next;
-    }
-    target[path.at(-1) ?? ""] = source;
-  }
-  return output;
+  const source = selectedObject.parse(row);
+  return listReadRowSchema.parse(
+    selection.paths.reduce<SelectedValue>(
+      (output, path) => merge(output, pick(source, path) ?? {}),
+      { id: row.id },
+    ),
+  );
 }
 
 const projectable = z
