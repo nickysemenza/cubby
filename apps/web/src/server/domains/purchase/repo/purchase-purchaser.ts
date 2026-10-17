@@ -48,13 +48,13 @@ export const purchasePurchaserSql = sql<LedgerPartyShortcode | null>`(
   SELECT CASE
     WHEN "Purchase"."purchaserOverrideId" IS NOT NULL THEN
       (SELECT shortcode FROM "LedgerParty" WHERE id = "Purchase"."purchaserOverrideId" AND "deletedAt" IS NULL)
+    -- A settlement_party_conflict is a disagreement between the paying
+    -- account and the order's member, not attribution for either.
+    WHEN ${sql.raw(purchaseSettlementConflictRawSql("party", '"Purchase"'))} THEN NULL
     WHEN (SELECT count(*) FROM payment_accounts) > 0
       AND (SELECT count(*) FROM payment_accounts) = (SELECT count(*) FROM sole_users)
       AND (SELECT count(DISTINCT shortcode) FROM sole_users) = 1
-      -- A settlement_party_conflict is a disagreement, not attribution.
-      THEN CASE WHEN ${sql.raw(purchaseSettlementConflictRawSql("party", '"Purchase"'))}
-        THEN NULL
-        ELSE (SELECT min(shortcode) FROM sole_users) END
+      THEN (SELECT min(shortcode) FROM sole_users)
     WHEN (SELECT count(*) FROM evidence_parties) = 1 THEN (SELECT min(shortcode) FROM evidence_parties)
     ELSE NULL END
 )`;

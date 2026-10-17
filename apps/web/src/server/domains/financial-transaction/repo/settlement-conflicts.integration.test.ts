@@ -142,9 +142,41 @@ describe("settlement conflicts", () => {
     );
   });
 
+  it("refuses moving an allocated charge onto another member's account", async () => {
+    const { buyerCard, otherCard, order, charge } = await world();
+    const paid = await charge(buyerCard.id, 13.59);
+    await allocate(paid.shortcode, order.shortcode, 13.59);
+    await expect(
+      updateFinancialTransaction(
+        ctx.db,
+        parseShortcodeFor("financialTransaction", paid.shortcode),
+        financialTransactionUpdateData.parse({
+          accountId: otherCard.shortcode,
+        }),
+        ctx.actor,
+      ),
+    ).rejects.toThrow(/vendor-account member/);
+  });
+
   it("flags a conflicting allocation that predates the guard", async () => {
-    const { otherCard, order, charge } = await world();
-    const wrong = await charge(otherCard.id, 13.58);
+    const { order, charge } = await world();
+    // No primary cardholder: the sole-user purchaser rule never applies, and
+    // the conflict must still keep the vendor-account member from being inferred.
+    const otherMember = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Bank member",
+      kind: "member",
+      userId: null,
+    });
+    const otherBank = await insertWithShortcode(ctx.db, "financialAccount", {
+      name: "Other member bank",
+      identity: {
+        kind: "bank_account",
+        institution: null,
+        accountType: "checking",
+      },
+      ledgerPartyId: otherMember.id,
+    });
+    const wrong = await charge(otherBank.id, 13.58);
     await getDb(ctx.db).insert(financialTransactionAllocation).values({
       transactionId: wrong.id,
       purchaseId: order.id,

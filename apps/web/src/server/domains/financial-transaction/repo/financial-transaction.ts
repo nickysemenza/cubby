@@ -707,18 +707,26 @@ const applyUpdatedAllocations = async (
       kind: financialTransactionKind.parse(state.nextKind),
       next,
     });
-    // Only newly named purchases: an amount follow-up on an existing slice
-    // is not a new settlement judgment.
-    const held = new Set((before.get(id) ?? []).map((row) => row.purchaseId));
-    if (!options.acknowledgeSettlementConflicts)
-      await refuseSettlementConflicts(tx, {
-        transactionId: id,
-        purchaseIds: next
-          .map((row) => row.purchaseId)
-          .filter((purchaseId) => !held.has(purchaseId)),
-      });
     await writeAllocationSet(tx, id, next, before);
   }
+  // A newly named purchase is a new settlement judgment; so is moving an
+  // allocated charge to another account or kind. Amount, status and date
+  // follow-ups (statement re-imports) are not; an allocation that was already
+  // wrong stays visible through the Purchase conflict checks instead.
+  const held = (before.get(id) ?? []).map((row) => row.purchaseId);
+  const settlementEvidenceChanged = (["accountId", "kind"] as const).some(
+    (key) => data[key] !== undefined,
+  );
+  const recheck = settlementEvidenceChanged
+    ? (next?.map((row) => row.purchaseId) ?? held)
+    : (next ?? [])
+        .map((row) => row.purchaseId)
+        .filter((purchaseId) => !held.includes(purchaseId));
+  if (!options.acknowledgeSettlementConflicts)
+    await refuseSettlementConflicts(tx, {
+      transactionId: id,
+      purchaseIds: recheck,
+    });
   await applyAllocationChanges(tx, { transactionIds: [id], before, actor });
 };
 

@@ -276,6 +276,41 @@ describe("settlement from retained order evidence", () => {
         .from(purchasePaymentEvidence)
         .where(eq(purchasePaymentEvidence.purchaseId, purchaseId)),
     ).toEqual([{ tender: "stored_value" }]);
+    // A reread lists split tender in another order: tender follows the facts,
+    // not the position.
+    const split = await importOrder(run, {
+      orderId: "FW-1602",
+      total: 13.59,
+      payments: [
+        { amount: 5, chargedAt: "2026-09-02T12:00:00.000Z" },
+        { amount: 8.59, chargedAt: "2026-09-02T12:00:00.000Z" },
+      ],
+    });
+    await importOrder(run, {
+      orderId: "FW-1602",
+      total: 13.59,
+      payments: [
+        { amount: 8.59, chargedAt: "2026-09-02T12:00:00.000Z", tender: "card" },
+        {
+          amount: 5,
+          chargedAt: "2026-09-02T12:00:00.000Z",
+          tender: "stored_value",
+        },
+      ],
+    });
+    expect(
+      await getDb(ctx.db)
+        .select({
+          amount: purchasePaymentEvidence.amount,
+          tender: purchasePaymentEvidence.tender,
+        })
+        .from(purchasePaymentEvidence)
+        .where(eq(purchasePaymentEvidence.purchaseId, split))
+        .orderBy(purchasePaymentEvidence.amount),
+    ).toEqual([
+      { amount: 5, tender: "stored_value" },
+      { amount: 8.59, tender: "card" },
+    ]);
     await charge(card.id, { amount: 13.59, postedDate: "2026-09-02" });
     await settleRetainedPaymentEvidence(ctx.db);
     expect(await allocationsFor([purchaseId])).toEqual([]);

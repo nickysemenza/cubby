@@ -14,11 +14,13 @@ import {
   importWriterOutput,
   type ExtractedPaymentEvidence,
   type ExtractedPurchaseLine,
+  type PaymentTender,
   type ImportWriterInput,
   type ImportWriterOutput,
   type ProposedImportFix,
   type AcceptedSourceOrder,
 } from "@cubby/schemas/purchase-import";
+import { cents } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 
@@ -235,21 +237,57 @@ async function findPurchase(
  * Tender is excluded from `sourceFinancialFacts`, so a re-read that only
  * learns how an already-retained line was paid (an export naming the gift
  * card) is not a financial disagreement. It fills an `unknown` tender in
- * place; a known tender is never rewritten by a later read.
+ * place, matching lines by their financial facts rather than position (sources
+ * reorder payments); facts whose proposed lines disagree on tender stay
+ * unknown, and a known tender is never rewritten by a later read.
  */
 async function recordLearnedTender(
   tx: DrizzleTransaction,
-  retained: (typeof purchasePaymentEvidence.$inferSelect)[],
+  source: { purchaseId: PurchaseId; sourceClaimId: string },
   proposed: readonly ExtractedPaymentEvidence[],
 ): Promise<void> {
+  const factKey = (payment: {
+    amount: number;
+    chargedAt: string | null;
+    cardLastFour: string | null;
+  }) =>
+    `${cents(payment.amount)}|${payment.chargedAt ?? ""}|${payment.cardLastFour ?? ""}`;
+  const learned = new Map<string, PaymentTender | null>();
+  for (const payment of proposed) {
+    if (payment.tender === undefined || payment.tender === "unknown") continue;
+    const key = factKey({
+      amount: payment.amount,
+      chargedAt: payment.chargedAt
+        ? new Date(payment.chargedAt).toISOString()
+        : null,
+      cardLastFour: payment.cardLastFour ?? null,
+    });
+    const prior = learned.get(key);
+    learned.set(
+      key,
+      prior === undefined || prior === payment.tender ? payment.tender : null,
+    );
+  }
+  if (learned.size === 0) return;
+  const retained = await tx
+    .select()
+    .from(purchasePaymentEvidence)
+    .where(
+      and(
+        eq(purchasePaymentEvidence.purchaseId, source.purchaseId),
+        eq(purchasePaymentEvidence.sourceClaimId, source.sourceClaimId),
+      ),
+    );
   for (const row of retained) {
-    const tender = proposed[row.evidenceIndex]?.tender;
-    if (
-      row.tender !== "unknown" ||
-      tender === undefined ||
-      tender === "unknown"
-    )
-      continue;
+    if (row.tender !== "unknown") continue;
+    const tender = learned.get(
+      factKey({
+        amount: row.amount,
+        chargedAt: row.chargedAt?.toISOString() ?? null,
+        cardLastFour: row.cardLastFour,
+      }),
+    );
+    if (!tender) continue;
     await tx
       .update(purchasePaymentEvidence)
       .set({ tender, updatedAt: new Date() })
@@ -1302,6 +1340,14 @@ export async function importVendorOrder(
       financialProjectionUnchanged
     ) {
       await promoteHistoricalAcceptedObservation(tx, existingOrder.id);
+      await recordLearnedTender(
+        tx,
+        {
+          purchaseId: existingOrder.purchaseId,
+          sourceClaimId: existingOrder.sourceClaimId,
+        },
+        input.extraction.candidate?.payments ?? [],
+      );
       await tx
         .update(importSourceClaim)
         .set({
@@ -1378,7 +1424,14 @@ export async function importVendorOrder(
         });
       }
       const purchaseId = parseEntityId("purchase", existingOrder.purchaseId);
-      await recordLearnedTender(tx, retainedPayments, candidate.payments);
+      await recordLearnedTender(
+        tx,
+        {
+          purchaseId: existingOrder.purchaseId,
+          sourceClaimId: existingOrder.sourceClaimId,
+        },
+        candidate.payments,
+      );
       await attachEvidence(tx, purchaseId, input);
       await recordImportSourceAssociation(
         tx,
