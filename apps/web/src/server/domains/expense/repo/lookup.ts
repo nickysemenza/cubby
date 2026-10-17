@@ -8,7 +8,6 @@ import {
 } from "@cubby/schemas/project";
 import type { ExpenseFilters } from "@cubby/schemas/project";
 import { and, inArray, type SQL, sql } from "drizzle-orm";
-import { uniq } from "es-toolkit";
 
 import { projectListRows } from "~/entity/model/list-read-schema";
 import type { Database } from "~/server/db";
@@ -21,7 +20,12 @@ import {
   relations,
   shortcodeSetCondition,
 } from "~/server/db/helpers";
-import { expense, purchase, spendingCategory } from "~/server/db/schema";
+import {
+  expense,
+  project,
+  purchase,
+  spendingCategory,
+} from "~/server/db/schema";
 import {
   expenseDerivedMembershipSql,
   expenseDerivedValueSql,
@@ -29,10 +33,6 @@ import {
 } from "~/server/domains/expense/repo/expense-derived-read";
 import { disposalPurchaseIds } from "~/server/domains/product/repo/ownership";
 import { matchingEmbeddedProjectIds } from "~/server/domains/project/repo/dashboard-shared";
-import {
-  collectDescendantIds,
-  loadProjectTree,
-} from "~/server/domains/project/repo/subtree";
 import { withDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import {
@@ -89,16 +89,17 @@ export const resolveExpenseProjectAllocationScope = async (
   let selectedIds = ids;
   // The generated "Include sub-projects" toggle reads absent as on.
   if (ids.length > 0 && filters.includeSubProjects !== false) {
-    const { childrenByParent } = await loadProjectTree(db);
-    selectedIds = uniq(
-      ids.flatMap((id) => {
-        const projectId = parseEntityId("project", id);
-        return [
-          projectId,
-          ...collectDescendantIds(childrenByParent, projectId),
-        ];
-      }),
-    );
+    selectedIds = (
+      await getDb(db)
+        .select({ id: project.id })
+        .from(project)
+        .where(
+          sql`${project.id} IN ${hierarchyDescendantsSql(
+            "project",
+            ids.map((id) => parseEntityId("project", id)),
+          )}`,
+        )
+    ).map((row) => row.id);
   }
   if (codes.length > 0 && selectedIds.length === 0) {
     return { projectIds: [] };

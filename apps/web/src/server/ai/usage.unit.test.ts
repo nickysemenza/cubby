@@ -1,6 +1,7 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { runWithExecutionCtx } from "~/server/cf-env";
 import { createDatabase } from "~/server/db/database-runtime";
 
 import type { snapshotAiUsagePrice } from "./pricing";
@@ -19,6 +20,32 @@ const db = createDatabase(() => {
 });
 
 describe("recordAiUsage", () => {
+  // Regression: pricing and the queue send sat between an AI answer and its
+  // response.
+  it("does not hold a Worker response for its usage event", async () => {
+    const emit = vi.fn<AiUsagePort["emit"]>(() => new Promise(() => {}));
+    const deferred: Promise<unknown>[] = [];
+    await runWithExecutionCtx(
+      { waitUntil: (task) => deferred.push(task) },
+      () =>
+        recordAiUsage(
+          db,
+          {
+            feature: "embeddings",
+            provider: "openai",
+            model: "text-embedding-3-small",
+            operation: "embed",
+            runId,
+            durationMs: 1,
+            transport: "cache",
+          },
+          { emit, snapshot },
+        ),
+    );
+    expect(deferred).toHaveLength(1);
+    await vi.waitFor(() => expect(emit).toHaveBeenCalledOnce());
+  });
+
   it("preserves AI usage fields in the queued event", async () => {
     const emit = vi.fn<AiUsagePort["emit"]>();
     await recordAiUsage(

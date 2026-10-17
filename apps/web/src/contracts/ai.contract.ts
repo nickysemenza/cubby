@@ -19,6 +19,8 @@ import {
   fieldSuggestionsInput,
   fieldSuggestionsOut,
   fieldSuggestionsReviewOut,
+  settledSuggestionQuestionInput,
+  settledSuggestionQuestionOut,
   suggestionReviewListInput,
   suggestionReviewListOut,
   suggestionCountsInput,
@@ -41,6 +43,7 @@ import {
 } from "@cubby/schemas/ai";
 import { z as zod } from "zod";
 
+import { ENTITY_ROOT_TAGS } from "~/contracts/cache-policy";
 import {
   defineContract,
   mutation,
@@ -138,6 +141,7 @@ export const aiContract = defineContract("ai", {
     input: fieldSuggestionsInput,
     output: fieldSuggestionsOut,
     cache: { profile: "stable" },
+    queryKeyOmit: ["runKey"],
   }),
   suggestFieldsReview: query({
     mcp: {
@@ -151,6 +155,23 @@ export const aiContract = defineContract("ai", {
     transport: "post",
     native: "Reviewed manifest field suggestions with nullable proposals",
     cache: { profile: "stable" },
+    queryKeyOmit: ["runKey"],
+  }),
+  settledSuggestionQuestion: query({
+    mcp: {
+      omit: "client_view",
+      note: "List pages skip re-asking declined suggestion questions",
+    },
+    input: settledSuggestionQuestionInput,
+    output: settledSuggestionQuestionOut,
+    readPolicy: "strong",
+    transport: "post",
+    // A decline depends on saved data beyond its basis (rosters, linked
+    // records), so any entity write rechecks it, and member review reopens it.
+    cache: {
+      profile: "stable",
+      tags: [["ai", "settledSuggestionQuestion"], ...ENTITY_ROOT_TAGS],
+    },
   }),
   listSuggestionReviewQueue: query({
     input: suggestionReviewListInput,
@@ -209,6 +230,7 @@ export const aiContract = defineContract("ai", {
     input: externalIdKindSuggestionInput,
     output: suggestExternalIdKindOut,
     cache: { profile: "stable" },
+    queryKeyOmit: ["runKey"],
   }),
   usageFilterOptions: query({
     mcp: { omit: "operator_maintenance", note: "AI spend telemetry" },

@@ -14,7 +14,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { createLogger } from "@cubby/worker-tracing";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, exists, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { aiContract, aiStreamsContract } from "~/contracts/ai.contract";
@@ -36,6 +36,13 @@ import {
 } from "~/server/ai/enrichment/usda-match";
 import { withAiInputs } from "~/server/ai/evaluation-inputs";
 import { suggestExternalIdKind } from "~/server/ai/external-id-kind";
+import {
+  fieldQuestionKey,
+  isSettledOutcome,
+  readSettledQuestion,
+  rememberSettledQuestions,
+  settledSignature,
+} from "~/server/ai/field-suggest/settled-questions";
 import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
 import {
   dependencyStamps,
@@ -47,6 +54,7 @@ import {
   listRecentAiUsage,
   summarizeAiUsage,
 } from "~/server/ai/repo/ai-usage";
+import { afterResponse } from "~/server/cf-env";
 import { getAiClient } from "~/server/clients/ai";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
@@ -86,6 +94,7 @@ import {
 } from "~/server/workflows/runtime";
 
 const log = createLogger("precomputeEnrichmentProposals");
+const suggestionLog = createLogger("suggestFields");
 
 /** The actor's AI run for the hour: every AI operation opens it once with
  * `ensureRun` before calling out. */
@@ -283,9 +292,16 @@ export const inferFieldAssessments = async (
       }),
     );
     const publicationKey = `field-inference:${input.entity}:${recordId}:${field}:${fingerprint}`;
-    const prediction = await withTransactionDatabase(
-      context.db,
-      async (transactionDb) => {
+    // A repeated question reuses its published assessment without opening the
+    // locking transaction; the transaction below still rechecks under its lock.
+    const [published] = await getDb(context.db)
+      .select()
+      .from(assessment)
+      .where(eq(assessment.publicationKey, publicationKey))
+      .limit(1);
+    const prediction =
+      published ??
+      (await withTransactionDatabase(context.db, async (transactionDb) => {
         await getDb(transactionDb).execute(
           sql`SELECT pg_advisory_xact_lock(hashtextextended(${publicationKey},0))`,
         );
@@ -345,45 +361,63 @@ export const inferFieldAssessments = async (
             data: { reviewKey },
           },
         );
-      },
-    );
-    const [state] = await getDb(context.db)
-      .select({ status: assessmentState.status })
-      .from(assessmentState)
-      .where(eq(assessmentState.id, prediction.id))
-      .limit(1);
-    const matchingWrong = reviewKey
-      ? await getDb(context.db)
+      }));
+    // One round trip for every review that withholds this answer: its own
+    // rejection, a rejection of the same served evidence, or a member's miss
+    // on a draft.
+    const client = getDb(context.db);
+    const withholding = [
+      exists(
+        client
           .select({ id: assessmentState.id })
           .from(assessmentState)
           .where(
             and(
-              eq(assessmentState.family, "field"),
+              eq(assessmentState.id, prediction.id),
               eq(assessmentState.status, "rejected"),
-              sql`${assessmentState.data}->>'reviewKey' = ${reviewKey}`,
             ),
-          )
-          .limit(1)
-      : [];
-    const draftMiss =
-      recordId === null
-        ? await getDb(context.db)
-            .select({ id: feedback.id })
-            .from(feedback)
-            .where(
-              and(
-                eq(feedback.assessmentId, prediction.id),
-                eq(feedback.authority, "member"),
-                eq(feedback.verdict, "wrong"),
-              ),
-            )
-            .limit(1)
-        : [];
-    if (
-      state?.status === "rejected" ||
-      draftMiss.length ||
-      matchingWrong.length
-    ) {
+          ),
+      ),
+      ...(reviewKey
+        ? [
+            exists(
+              client
+                .select({ id: assessmentState.id })
+                .from(assessmentState)
+                .where(
+                  and(
+                    eq(assessmentState.family, "field"),
+                    eq(assessmentState.status, "rejected"),
+                    sql`${assessmentState.data}->>'reviewKey' = ${reviewKey}`,
+                  ),
+                ),
+            ),
+          ]
+        : []),
+      ...(recordId === null
+        ? [
+            exists(
+              client
+                .select({ id: feedback.id })
+                .from(feedback)
+                .where(
+                  and(
+                    eq(feedback.assessmentId, prediction.id),
+                    eq(feedback.authority, "member"),
+                    eq(feedback.verdict, "wrong"),
+                  ),
+                ),
+            ),
+          ]
+        : []),
+    ];
+    const withheldResult = await client.execute(
+      sql`SELECT ${or(...withholding)} AS "withheld"`,
+    );
+    const [{ withheld }] = z
+      .tuple([z.object({ withheld: z.boolean() })])
+      .parse(withheldResult.rows);
+    if (withheld) {
       output.suggestions[field] = null;
       if (output.outcomes) delete output.outcomes[field];
       continue;
@@ -402,6 +436,37 @@ export const inferFieldAssessments = async (
         originalJudgment.outcome.kind === "evaluated"
           ? { ...originalJudgment.outcome, assessmentId: prediction.id }
           : originalJudgment.outcome;
+  }
+  // A pinned model replays one record for grading; only live answers settle
+  // a question. A saved record's own context (`entityId`) keeps its finance
+  // review fingerprint instead. Everything else the answer read beyond the
+  // basis is pinned by the input signature and rechecked on read.
+  if (!input.decisionModel && !input.entityId) {
+    const settled = await Promise.all(
+      Object.entries(output.outcomes ?? {})
+        .filter(
+          ([field, outcome]) =>
+            output.suggestions[field] == null && isSettledOutcome(outcome),
+        )
+        .map(async ([field, outcome]) => ({
+          key: await fieldQuestionKey({ ...input, field }, manifest),
+          outcome,
+          signature: await settledSignature(
+            { entity: input.entity, field },
+            outcome,
+            captured.inputs,
+          ),
+        })),
+    );
+    if (settled.length)
+      await afterResponse(
+        rememberSettledQuestions(context.db, settled).catch((error) => {
+          // SILENT: an unremembered decline is asked again on the next visit.
+          suggestionLog.error("failed to remember settled questions", {
+            error,
+          });
+        }),
+      );
   }
   return output;
 };
@@ -489,6 +554,8 @@ export const aiHandlers = implementOperationDomain(aiContract, {
   },
   applyFinanceCategorySuggestion: (context, input) =>
     applyFinanceCategorySuggestion(context, input),
+  settledSuggestionQuestion: (context, input) =>
+    readSettledQuestion(context.db, input),
   listSuggestionReviewQueue: (context, input) =>
     listSuggestions(context.db, input),
   suggestionCounts: (context, input) => suggestionCounts(context.db, input),

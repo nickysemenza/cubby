@@ -23,6 +23,13 @@ export const expenseContract = defineContract("expense", {
     input: schemas.expenseFiltersSchema,
     output: schemas.expenseAnalyticsOut,
   }),
+  // The ledger totals strip needs only `analytics.summary`; the full read also
+  // runs the eight breakdowns over the same allocation.
+  spendSummary: query({
+    mcp: { omit: "client_view" },
+    input: schemas.expenseFiltersSchema,
+    output: schemas.expenseAnalyticsSummary,
+  }),
   // Home summaries are bounded, single-round-trip reads. Asking the freshness Durable Object first adds another network hop before these short queries.
   monthlySummary: query({
     mcp: { omit: "client_view" },

@@ -17,6 +17,7 @@ import type { Database } from "~/server/db";
 import {
   expenseAnalytics,
   expenseMonthlySummary,
+  expenseSpendSummary,
   expenseTradeAffinity,
 } from "~/server/domains/expense/repo/analytics";
 import {
@@ -299,6 +300,7 @@ async function confirmInventoryBeneficiary(
 export const expenseHandlers = implementOperationDomain(expenseContract, {
   chartData: (context, input) => expenseChartDataWorkflow(context.db, input),
   analytics: (context, input) => expenseAnalytics(context.db, input),
+  spendSummary: (context, input) => expenseSpendSummary(context.db, input),
   monthlySummary: (context, input) => expenseMonthlySummary(context.db, input),
   analyze: (context, input) => expenseAnalyzeWorkflow(context.db, input),
   flowSankey: (context, input) => expenseFlowSankey(context.db, input),

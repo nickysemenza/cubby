@@ -4,6 +4,7 @@ import { getErrorMessage } from "@cubby/shared";
 import { accountAiUsage, type AiCostEvidence } from "@cubby/shared/ai/pricing";
 import { createLogger } from "@cubby/worker-tracing";
 
+import { afterResponse } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { emitTelemetry } from "~/server/observability/telemetry";
 
@@ -128,10 +129,20 @@ async function usageBilling(
   };
 }
 
+/** The answer never waits on its usage row: pricing and the queue send run
+ * after the response inside a Worker request. */
 export async function recordAiUsage(
   db: Database,
   input: RecordAiUsageInput,
   port: AiUsagePort = productionAiUsagePort,
+): Promise<void> {
+  await afterResponse(emitAiUsage(db, input, port));
+}
+
+async function emitAiUsage(
+  db: Database,
+  input: RecordAiUsageInput,
+  port: AiUsagePort,
 ): Promise<void> {
   try {
     await port.emit(db, {

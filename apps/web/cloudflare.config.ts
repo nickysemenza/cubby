@@ -190,9 +190,6 @@ export const productionWorker = defineWorker({
     CalendarFeedDurableObject: exports.durableObject({
       storage: "sqlite",
     }),
-    PurchaseImportDurableObject: exports.durableObject({
-      state: "deleted",
-    }),
     ImageProcessingDurableObject: exports.durableObject({
       storage: "sqlite",
     }),

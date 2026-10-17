@@ -23,7 +23,9 @@ import { z } from "zod";
 
 import { createEntityMutationPort } from "~/entity/editing/use-entity-commands";
 import { installFeatures } from "~/features/registry";
+import { rippleFor } from "~/integrations/tanstack-query/cache-tags";
 import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 import type { EntityBrowserMutationInput } from "~/server/entity-kernel/contracts";
@@ -62,6 +64,14 @@ const emptyStoredSuggestionOperations: StoredSuggestionOperations = {
     applied: intent === "apply",
   }),
   reviewBatch: async () => [],
+  settled: async () => null,
+};
+const decline = {
+  kind: "evaluated" as const,
+  answer: "none" as const,
+  confidence: "high" as const,
+  probability: 0.9,
+  alternatives: [],
 };
 const food = {
   assessmentId: "00000000-0000-4000-8000-000000000001",
@@ -247,6 +257,7 @@ describe("record suggestions", () => {
             ok: true as const,
           })),
       ),
+      settled: async () => null,
     };
     const suggestFields = vi.fn((_input: FieldSuggestionsInput) => undefined);
     const operations: EntitySuggestionsOperations = {
@@ -308,6 +319,137 @@ describe("record suggestions", () => {
       }),
     );
     expect(suggestFields).not.toHaveBeenCalled();
+  });
+
+  // Regression: a fresh page-mount runKey in the query key re-asked every row
+  // on each remount, defeating the stable cache profile.
+  it("reuses the answer when the list remounts with a new runKey", async () => {
+    const asked = vi.fn();
+    const operations: EntitySuggestionsOperations = {
+      suggestFields: ai.suggestFields.withTransport(async ({ input }) => {
+        asked(input);
+        return { suggestions: { categoryId: null }, outcomes: {} };
+      }),
+    };
+    const record = {
+      id,
+      name: "Synthetic oats",
+      manufacturer: null,
+      categoryId: null,
+    };
+    const List = () => (
+      <RecordSuggestionsProvider
+        entity="product"
+        records={[record]}
+        fieldKeys={["categoryId"]}
+        operations={operations}
+        storedSuggestionOperations={emptyStoredSuggestionOperations}
+      >
+        <span>rows</span>
+      </RecordSuggestionsProvider>
+    );
+    const first = render(<List />, { wrapper: harness.wrapper });
+    await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
+    first.unmount();
+    render(<List />, { wrapper: harness.wrapper });
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    await waitFor(() => expect(harness.queryClient.isFetching()).toBe(0));
+    expect(asked).toHaveBeenCalledTimes(1);
+    expect(asked.mock.calls[0]?.[0]).toHaveProperty("runKey");
+  });
+
+  it("skips a remembered decline until its basis changes", async () => {
+    const asked = vi.fn();
+    const operations: EntitySuggestionsOperations = {
+      suggestFields: ai.suggestFields.withTransport(async ({ input }) => {
+        asked(input.basis.name);
+        return { suggestions: { categoryId: null }, outcomes: {} };
+      }),
+    };
+    const settled = vi.fn<StoredSuggestionOperations["settled"]>(
+      async (question) =>
+        question.basis.name === "Synthetic gadget" ? decline : null,
+    );
+    const stored = { ...emptyStoredSuggestionOperations, settled };
+    const List = ({ name }: { name: string }) => (
+      <RecordSuggestionsProvider
+        entity="product"
+        records={[{ id, name, manufacturer: null, categoryId: null }]}
+        fieldKeys={["categoryId"]}
+        operations={operations}
+        storedSuggestionOperations={stored}
+      >
+        <span>rows</span>
+      </RecordSuggestionsProvider>
+    );
+    const view = render(<List name="Synthetic gadget" />, {
+      wrapper: harness.wrapper,
+    });
+    await waitFor(() => expect(settled).toHaveBeenCalledTimes(1));
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    await waitFor(() => expect(harness.queryClient.isFetching()).toBe(0));
+    expect(asked).not.toHaveBeenCalled();
+
+    view.rerender(<List name="Synthetic gadget, renamed" />);
+    await waitFor(() =>
+      expect(asked).toHaveBeenCalledExactlyOnceWith(
+        "Synthetic gadget, renamed",
+      ),
+    );
+    expect(settled).toHaveBeenCalledTimes(2);
+  });
+
+  // Regression: a component-local memory kept suppressing a decline after a
+  // member review reopened it.
+  it("re-asks a remembered decline after a review invalidates it", async () => {
+    const asked = vi.fn();
+    const operations: EntitySuggestionsOperations = {
+      suggestFields: ai.suggestFields.withTransport(async ({ input }) => {
+        asked(input.basis.name);
+        return { suggestions: { categoryId: null }, outcomes: {} };
+      }),
+    };
+    let remembered = true;
+    const settled = vi.fn<StoredSuggestionOperations["settled"]>(async () =>
+      remembered ? decline : null,
+    );
+    render(
+      <RecordSuggestionsProvider
+        entity="product"
+        records={[
+          {
+            id,
+            name: "Synthetic gadget",
+            manufacturer: null,
+            categoryId: null,
+          },
+        ]}
+        fieldKeys={["categoryId"]}
+        operations={operations}
+        storedSuggestionOperations={{
+          ...emptyStoredSuggestionOperations,
+          settled,
+        }}
+      >
+        <span>rows</span>
+      </RecordSuggestionsProvider>,
+      { wrapper: harness.wrapper },
+    );
+    await waitFor(() => expect(settled).toHaveBeenCalledTimes(1));
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    await waitFor(() => expect(harness.queryClient.isFetching()).toBe(0));
+    expect(asked).not.toHaveBeenCalled();
+
+    remembered = false;
+    await act(() =>
+      invalidateOperationTags(
+        harness.queryClient,
+        rippleFor(["settledSuggestions"]),
+      ),
+    );
+    await waitFor(() =>
+      expect(asked).toHaveBeenCalledExactlyOnceWith("Synthetic gadget"),
+    );
   });
 
   // Regression: deriving a basis and a query observer per row during SSR cost

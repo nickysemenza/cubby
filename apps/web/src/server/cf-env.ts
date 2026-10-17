@@ -41,6 +41,17 @@ export const runWithExecutionCtx = <T>(
 export const getExecutionCtx = (): WaitUntilContext | undefined =>
   executionCtxStore.getStore();
 
+/**
+ * Best-effort work the response does not need: inside a Worker request it
+ * runs past the response; elsewhere nothing keeps an un-awaited promise
+ * alive, so the caller waits. `task` must catch and log its own failure.
+ */
+export const afterResponse = async (task: Promise<void>): Promise<void> => {
+  const execution = getExecutionCtx();
+  if (execution) execution.waitUntil(task);
+  else await task;
+};
+
 let cfEnv: Env | undefined;
 
 export const setCfEnv = (env?: Env): void => {

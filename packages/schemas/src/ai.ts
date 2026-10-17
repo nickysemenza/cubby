@@ -730,6 +730,22 @@ export type FieldSuggestionOutcome = z.infer<
   typeof fieldSuggestionOutcomeSchema
 >;
 
+/**
+ * A single-field `suggestFields` question a list already asked. While its
+ * basis, the field's decision policy and the decision inputs prepared from
+ * saved data are unchanged, a remembered decline (`none`) or `no_signal`
+ * answer is returned; otherwise null and the question is asked live.
+ */
+export const settledSuggestionQuestionInput = fieldSuggestionsInput
+  .pick({ entity: true, basisMode: true, basis: true })
+  .extend({ field: z.string().min(1) });
+export type SettledSuggestionQuestionInput = z.infer<
+  typeof settledSuggestionQuestionInput
+>;
+export const settledSuggestionQuestionOut = z.object({
+  outcome: fieldSuggestionOutcomeSchema.nullable(),
+});
+
 /** Input for classifying one external identifier's `kind` from its shape and source. */
 export const externalIdKindSuggestionInput = z.object({
   source: z.string().trim().min(1),

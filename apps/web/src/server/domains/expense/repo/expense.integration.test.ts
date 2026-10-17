@@ -30,6 +30,7 @@ import {
 import {
   expenseAnalytics,
   expenseMonthlySummary,
+  expenseSpendSummary,
   expenseTradeAffinity,
 } from "~/server/domains/expense/repo/analytics";
 import { expenseChargeContextWorkflow } from "~/server/domains/expense/repo/charge-context";
@@ -1013,6 +1014,47 @@ describe("expense repository — bulk trade / cost-type writes", () => {
 
 describe("expense repository — expenseAnalytics", () => {
   const ctx = withTestDb();
+
+  it("scopes project totals to the project and its live descendants at any depth", async () => {
+    const { output: parent } = await createRepoEntity(ctx, "project", {
+      name: "Synthetic scope parent",
+    });
+    const { output: child } = await createRepoEntity(ctx, "project", {
+      name: "Synthetic scope child",
+      parentProjectId: parent.id,
+    });
+    const { output: grandchild } = await createRepoEntity(ctx, "project", {
+      name: "Synthetic scope grandchild",
+      parentProjectId: child.id,
+    });
+    const { output: unrelated } = await createRepoEntity(ctx, "project", {
+      name: "Synthetic scope unrelated",
+    });
+    for (const [projectId, cost] of [
+      [parent.id, 100],
+      [child.id, 20],
+      [grandchild.id, 3],
+      [unrelated.id, 4000],
+    ] as const) {
+      await createRepoEntity(ctx, "expense", {
+        name: `Synthetic scope ${cost}`,
+        cost,
+        date: "2026-08-01",
+        costType: "materials",
+        trade: "other",
+        projectId,
+      });
+    }
+
+    const net = async (filters: Parameters<typeof expenseSpendSummary>[1]) =>
+      (await expenseSpendSummary(ctx.db, filters)).net;
+    expect(await net({ projectId: parent.id })).toBe(123);
+    expect(await net({ projectId: child.id })).toBe(23);
+    expect(await net({ projectId: parent.id, includeSubProjects: false })).toBe(
+      100,
+    );
+    expect(await net({ projectId: [child.id, grandchild.id] })).toBe(23);
+  });
 
   // An award ticket's fees showed no trade while its fare read "travel".
   it("resolves and filters an adjustment's trade and cost type through its principals", async () => {

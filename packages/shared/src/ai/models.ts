@@ -241,11 +241,28 @@ export const CLEF_MODEL =
 /** Set to 0 to return all decisions to Jev, or 1 to send all to Clef. */
 const CLEF_TRAFFIC_SHARE = 0.5;
 
+/**
+ * The trial split. A `key` (the decision's own input) always maps to the same
+ * model, so a repeated question reuses that model's cached answer while the
+ * share still holds across distinct inputs; no key samples per call.
+ */
 export function selectDecisionModel(
-  options: { vision?: boolean } = {},
+  options: { vision?: boolean; key?: string } = {},
 ): SupportedDecisionModel {
   if (options.vision) return CLEF_MODEL;
-  return Math.random() < 1 - CLEF_TRAFFIC_SHARE ? DECISION_MODEL : CLEF_MODEL;
+  const draw =
+    options.key === undefined ? Math.random() : unitHash(options.key);
+  return draw < 1 - CLEF_TRAFFIC_SHARE ? DECISION_MODEL : CLEF_MODEL;
+}
+
+/** FNV-1a over UTF-16 code units, scaled to [0, 1). */
+function unitHash(key: string): number {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < key.length; index += 1) {
+    hash ^= key.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0) / 2 ** 32;
 }
 
 export const DEFAULT_EMBEDDING_MODEL =
