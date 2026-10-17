@@ -533,8 +533,12 @@ export function withTestDb(channel: AuditChannel = "web"): TestDbContext {
       );
       state.acquiring = acquiring;
       const { fixtureDb, value } = await acquisition;
-      // Teardown already claimed this acquisition: the test timed out.
-      if (state.acquiring !== acquiring) return value;
+      // Teardown already claimed (and closes) this acquisition: the test timed
+      // out. Stop its body rather than let it continue on the file database.
+      if (state.acquiring !== acquiring)
+        throw new Error(
+          `withTestDb fixture ${key} resolved after its test ended`,
+        );
       state.acquiring = null;
       state.fixtureDb = fixtureDb;
       return value;
