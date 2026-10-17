@@ -1,6 +1,6 @@
--- Contraction for automatic Mail import (#2601). Staged: apply only after the
--- Worker that no longer reads or writes execution approvals is deployed
--- (docs/runbooks/production-migrations.md).
+-- Contraction for automatic Mail import (#2601). Applied by the ordinary
+-- deploy just before the new Worker; the member accepted brief failures from the
+-- predecessor Worker reading these shapes in that window.
 -- Execution approvals are retired. Approval-root Runs and their receipts stay
 -- as history; strict Run input schemas refuse the stale reference key.
 UPDATE "AiEvaluation"
