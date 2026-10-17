@@ -1,7 +1,9 @@
 # ADR 0009: Gate merges on content-hashed check results
 
 Status: Accepted. [ADR 0020](0020-cache-routed-ci.md) decides which lanes
-start; the cache still decides whether a started lane reruns.
+start; the cache still decides whether a started lane reruns. ADR 0020 also
+replaces the observed Apple toolchain identity below with a declared Xcode
+major, so no Mac job observes the toolchain before the Linux lookup.
 
 ## Context
 

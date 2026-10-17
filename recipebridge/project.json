@@ -3,16 +3,9 @@
   "name": "recipebridge",
   "targets": {
     "rust": {
-      "executor": "nx:run-commands",
+      "command": "failed=0; cargo fmt --check || failed=1; cargo clippy --locked --profile ci --all-targets -- -D warnings || failed=1; cargo clippy --locked --profile ci --no-default-features -- -D warnings || failed=1; cargo test --locked --profile ci || failed=1; exit $failed",
       "options": {
-        "cwd": "{projectRoot}",
-        "commands": [
-          "cargo fmt --check",
-          "cargo clippy --locked --profile ci --all-targets -- -D warnings",
-          "cargo clippy --locked --profile ci --no-default-features -- -D warnings",
-          "cargo test --locked --profile ci"
-        ],
-        "parallel": false
+        "cwd": "{projectRoot}"
       },
       "cache": true,
       "inputs": ["rustGate"]

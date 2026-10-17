@@ -80,6 +80,8 @@ jobs:
               - '{.rustfmt,rustfmt,.clippy,clippy}.toml'
               - 'packages/shared/golden-vectors/**'
               - '.github/workflows/ci.yaml'
+              # Nx configuration and ignore files change every task's key.
+              - '{nx.json,.gitignore,.nxignore}'
             apple:
               - *rust
               - 'apps/apple/**'

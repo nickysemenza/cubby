@@ -24,11 +24,6 @@ on:
           - tester-army-import
           - tester-army-all
 
-concurrency:
-  # A relabel or new dispatch of the same journey supersedes the older run.
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event.label.name || inputs.journey || 'push' }}
-  cancel-in-progress: true
-
 permissions:
   contents: read
   actions: read
@@ -57,6 +52,10 @@ jobs:
       (github.event.label.name == 'tester-army' ||
       (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'tester-army')) ||
       contains(fromJSON('["tester-army-web", "tester-army-both", "tester-army-all", "tester-army-visual", "tester-army-explore"]'), inputs.journey))
+    concurrency:
+      # A push, relabel or redispatch supersedes this lane's older run.
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-tester-army-web
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.journey && 25 || 10 }}
     services: &test-databases
@@ -153,6 +152,10 @@ jobs:
       (github.event.label.name == 'tester-army:import' ||
       (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'tester-army:import')) ||
       contains(fromJSON('["tester-army-import", "tester-army-all"]'), inputs.journey))
+    concurrency:
+      # A push, relabel or redispatch supersedes this lane's older run.
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-tester-army-import
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 30
     services: *test-databases
@@ -175,6 +178,10 @@ jobs:
       (github.event.label.name == 'tester-army:ios' ||
       (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'tester-army:ios')) ||
       contains(fromJSON('["tester-army-ios", "tester-army-both", "tester-army-all"]'), inputs.journey))
+    concurrency:
+      # A push, relabel or redispatch supersedes this lane's older run.
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-tester-army-ios
+      cancel-in-progress: true
     runs-on: xcode-27
     strategy:
       fail-fast: false
@@ -269,6 +276,10 @@ jobs:
       (github.event.label.name == 'simulator-e2e' ||
       (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'simulator-e2e')) ||
       startsWith(inputs.journey, 'simulator-'))
+    concurrency:
+      # A push, relabel or redispatch supersedes this lane's older run.
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-simulator-e2e
+      cancel-in-progress: true
     runs-on: xcode-27
     timeout-minutes: 40
     steps:

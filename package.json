@@ -39,7 +39,7 @@
     "apple": "node apps/apple/tooling/apple.ts",
     "wasm": "node scripts/ensure.ts wasm --build",
     "deploy:all": "pnpm run wasm && pnpm --filter @cubby/web run deploy:cf",
-    "prepare": "git rev-parse --git-dir >/dev/null 2>&1 && git config core.hooksPath .husky || true",
+    "prepare": "[ ! -e .git ] || git config core.hooksPath .husky",
     "test:services:down": "node apps/web/tooling/dev-services/test-services.ts --down",
     "db:generate": "pnpm --filter @cubby/web db:generate",
     "db:check": "pnpm --filter @cubby/web db:check",

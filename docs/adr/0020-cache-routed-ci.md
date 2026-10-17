@@ -52,5 +52,5 @@ Mac (63 hits and 50 rebuilds that day) and never matched the Linux probe's key
 - Diffing against the PR base can skip the Rust or Apple lane on a PR whose
   base never passed them; the nightly run and the next lane-touching change
   catch that.
-- An Xcode minor update or Rust stable release does not invalidate passes until
-  a nightly or fresh run builds against it.
+- An Xcode minor update or Rust stable release does not invalidate Apple passes;
+  only a `fresh` dispatch or a changed input builds against it.
