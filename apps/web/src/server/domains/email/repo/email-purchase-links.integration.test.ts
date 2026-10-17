@@ -52,7 +52,10 @@ import {
 import { decideEmailPurchase } from "~/server/domains/purchase-import/repo/email-purchase-decision";
 import { recordEmailClassificationObservation } from "~/server/domains/purchase-import/repo/gmail/observations";
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
-import { mergePurchases } from "~/server/domains/purchase/repo/purchase";
+import {
+  getPurchaseByID,
+  mergePurchases,
+} from "~/server/domains/purchase/repo/purchase";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { ensureEmailAssessment } from "~/server/generic/assessment/repo/assessment-email";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
@@ -307,6 +310,24 @@ describe("Email Purchase links", () => {
         }),
       ).toEqual([]);
       expect(await reviewSourceState()).toEqual(before);
+      // Purchaser inheritance must retain accepted aliases/attachments even
+      // without a Vendor Account identifying the member.
+      await getDb(ctx.db)
+        .update(purchaseTable)
+        .set({ vendorAccountId: null })
+        .where(eq(purchaseTable.id, purchase.id));
+      expect(
+        (await getPurchaseByID(ctx.db, purchaseId.parse(purchase.id)))
+          .purchaserId,
+      ).toBeNull();
+      await getDb(ctx.db)
+        .update(emailTable)
+        .set({ deletedAt: new Date() })
+        .where(eq(emailTable.ledgerPartyId, foreignParty.id));
+      expect(
+        (await getPurchaseByID(ctx.db, purchaseId.parse(purchase.id)))
+          .purchaserId,
+      ).toBe(party.shortcode);
     },
   );
 

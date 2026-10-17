@@ -118,7 +118,10 @@ export const emailAcceptedEvidenceSql = (
 `;
 
 /** Purchases an active order event of the Email is linked to by review. */
-const emailLinkedDecisionPurchasesSql = (includeDeleted = false): SQL => sql`
+const emailLinkedDecisionPurchasesSql = (
+  includeDeleted = false,
+  accountOwnerScope: "respect" | "ignore" = "respect",
+): SQL => sql`
   SELECT decision."purchaseId"
   FROM "OrderMailEvent" event
   INNER JOIN "OrderMail" original ON original."id" = event."orderMailId"
@@ -128,15 +131,16 @@ const emailLinkedDecisionPurchasesSql = (includeDeleted = false): SQL => sql`
   WHERE original."id" = "Email"."orderMailId"
     AND original."ledgerPartyId" = "Email"."ledgerPartyId"
     AND event."supersededAt" IS NULL AND decision."decision" = ${emailPurchaseLinkState.enum.linked}
-    AND (account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")
+    AND ${accountOwnerScope === "respect" ? sql`(account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")` : sql`true`}
 `;
 
 /** Accepted families and explicit lifecycle decisions share one association policy. */
 export const emailPurchaseAssociationsSql = (
   includeDeleted = false,
+  accountOwnerScope: "respect" | "ignore" = "respect",
 ): SQL => sql`
-  SELECT evidence."purchaseId" FROM (${emailAcceptedEvidenceSql(includeDeleted)}) evidence
-  UNION ${emailLinkedDecisionPurchasesSql(includeDeleted)}
+  SELECT evidence."purchaseId" FROM (${emailAcceptedEvidenceSql(includeDeleted, accountOwnerScope)}) evidence
+  UNION ${emailLinkedDecisionPurchasesSql(includeDeleted, accountOwnerScope)}
 `;
 
 /**
@@ -145,7 +149,10 @@ export const emailPurchaseAssociationsSql = (
  * purchase identities before the Email join prevents a mailbox × claims join;
  * materializing eligible metadata keeps the final policy off the entire mailbox.
  */
-export const purchaseAssociatedEmailsSql = (purchaseId: SQL): SQL => sql`
+export const purchaseAssociatedEmailsSql = (
+  purchaseId: SQL,
+  accountOwnerScope: "respect" | "ignore" = "respect",
+): SQL => sql`
   WITH accepted_identities AS MATERIALIZED (
     SELECT DISTINCT identity."ledgerPartyId", identity."kind", identity."externalKey"
     FROM "ImportSourceOrder" accepted
@@ -177,7 +184,7 @@ export const purchaseAssociatedEmailsSql = (purchaseId: SQL): SQL => sql`
     FROM candidate_ids ids JOIN "Email" candidate ON candidate."id" = ids."id" AND candidate."deletedAt" IS NULL
   )
   SELECT "Email".* FROM eligible "Email"
-  WHERE EXISTS (SELECT 1 FROM (${emailPurchaseAssociationsSql()}) association
+  WHERE EXISTS (SELECT 1 FROM (${emailPurchaseAssociationsSql(false, accountOwnerScope)}) association
     WHERE association."purchaseId" = ${purchaseId})
 `;
 

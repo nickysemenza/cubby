@@ -1,4 +1,3 @@
-import { emailLinkEvidenceKind } from "@cubby/schemas/email-fields";
 import {
   financialTransactionStatus,
   purchaseSettlementKinds,
@@ -7,7 +6,7 @@ import type { LedgerPartyShortcode } from "@cubby/schemas/identifiers";
 import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
 import { sql } from "drizzle-orm";
 
-import { emailPurchaseEvidenceSql } from "~/server/domains/email/repo/email-purchase-links";
+import { purchaseAssociatedEmailsSql } from "~/server/domains/email/repo/email-sql";
 
 /** Correlated to Purchase; inherited attribution is never persisted. */
 export const purchasePurchaserSql = sql<LedgerPartyShortcode | null>`(
@@ -40,13 +39,10 @@ export const purchasePurchaserSql = sql<LedgerPartyShortcode | null>`(
       AND party."deletedAt" IS NULL AND party.kind = ${ledgerPartyKind.enum.member}
     WHERE account.id = "Purchase"."vendorAccountId" AND account."deletedAt" IS NULL
     UNION
-    SELECT party.shortcode FROM "Email"
+    SELECT party.shortcode
+    FROM (${purchaseAssociatedEmailsSql(sql`"Purchase".id`, "ignore")}) "Email"
     JOIN "LedgerParty" party ON party.id = "Email"."ledgerPartyId"
       AND party."deletedAt" IS NULL AND party.kind = ${ledgerPartyKind.enum.member}
-    WHERE "Email"."deletedAt" IS NULL AND EXISTS (
-      SELECT 1 FROM (${emailPurchaseEvidenceSql("ignore")}) evidence
-      WHERE evidence."purchaseId" = "Purchase".id AND evidence.kind IN (${emailLinkEvidenceKind.enum.accepted}, ${emailLinkEvidenceKind.enum.linked})
-    )
   )
   SELECT CASE
     WHEN "Purchase"."purchaserOverrideId" IS NOT NULL THEN
