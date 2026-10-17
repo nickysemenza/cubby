@@ -1,7 +1,8 @@
-import type {
-  ExpenseId,
-  FinancialAccountId,
-  LedgerPartyId,
+import {
+  type ExpenseId,
+  type FinancialAccountId,
+  type LedgerPartyId,
+  parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { LedgerPartyKind } from "@cubby/schemas/ledger-party";
 import { withTestDb } from "tooling/test-setup";
@@ -145,7 +146,12 @@ describe("loadExpenseAllocations derived funders", () => {
   /** A purchase paid by `splits`, and one expense line booked against it. */
   const payFor = async (
     cost: number,
-    splits: { accountId: FinancialAccountId; amount: number; kind?: string }[],
+    splits: {
+      accountId: FinancialAccountId;
+      amount: number;
+      kind?: string;
+      postedDate?: string;
+    }[],
   ) => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: `Vendor ${splits.length}-${cost}`,
@@ -169,7 +175,7 @@ describe("loadExpenseAllocations derived funders", () => {
         accountId: split.accountId,
         kind: split.kind ?? "purchase",
         status: "posted",
-        postedDate: "2026-08-10",
+        postedDate: split.postedDate ?? "2026-08-10",
         amount: split.amount,
       });
       await unwrapDb(ctx.db).insert(financialTransactionAllocation).values({
@@ -272,6 +278,69 @@ describe("loadExpenseAllocations derived funders", () => {
         allocationKey: "LPY-RFND",
         basis: "derived_from_payment",
         cents: 8_000n,
+      }),
+    ]);
+  });
+
+  it("resolves dated funding history from the posting date when the charge date is missing", async () => {
+    const [before, after] = await Promise.all([
+      mkParty("Before boundary", "LPY-FPBF", "member"),
+      mkParty("After boundary", "LPY-FPAF", "member"),
+    ]);
+    const account = await insertAndReturn(ctx.db, financialAccount, {
+      name: "Dated card",
+      shortcode: "FAC-FPDC",
+      identity: { kind: "cash" },
+      ledgerPartyId: after.id,
+      fundingPeriods: [
+        {
+          ledgerPartyId: parseShortcodeFor("ledgerParty", before.shortcode),
+          validFrom: null,
+          validTo: "2026-06-30",
+        },
+        {
+          ledgerPartyId: parseShortcodeFor("ledgerParty", after.shortcode),
+          validFrom: "2026-07-01",
+          validTo: null,
+        },
+      ],
+    });
+    // Statement imports store only postedDate. Clear of the boundary, the
+    // posting date picks the period; within the lag window it could belong to
+    // a charge made in the earlier period, so it stays unknown.
+    const clear = await payFor(30, [
+      { accountId: account.id, amount: 30, postedDate: "2026-08-05" },
+    ]);
+    const nearBoundary = await payFor(31, [
+      { accountId: account.id, amount: 31, postedDate: "2026-07-10" },
+    ]);
+
+    expect(await fundersOf(clear.id)).toEqual([
+      expect.objectContaining({
+        allocationKey: "LPY-FPAF",
+        basis: "derived_from_payment",
+        cents: 3_000n,
+      }),
+    ]);
+    expect(await fundersOf(nearBoundary.id)).toEqual([
+      expect.objectContaining({ basis: "unowned_account", cents: 3_100n }),
+    ]);
+  });
+
+  it("credits a repayment-only purchase to the receiving account's owner", async () => {
+    const party = await mkParty("Receiver", "LPY-RCVR", "member");
+    const account = await mkAccount("FAC-RCVA", "Receiving wallet", party.id);
+    const expense = await payFor(-60, [
+      { accountId: account.id, amount: -60, kind: "income" },
+    ]);
+
+    // No outgoing settlement exists to weight by, so the incoming money is the
+    // only evidence of whose position the repayment changes.
+    expect(await fundersOf(expense.id)).toEqual([
+      expect.objectContaining({
+        allocationKey: "LPY-RCVR",
+        basis: "derived_from_payment",
+        cents: -6_000n,
       }),
     ]);
   });

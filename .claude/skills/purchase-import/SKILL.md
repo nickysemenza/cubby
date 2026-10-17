@@ -122,6 +122,10 @@ same outcome without prescribing an agent runtime.
 
 - `SUM(Expense.cost)` is the only spend ledger. A Purchase describes an order;
   a FinancialTransaction is settlement evidence.
+- One order or receipt is one Purchase ([naming policy](../../../docs/guide/terminology.md#naming-policy)).
+  Separate charges at one venue or event (each festival stand, each bar tab)
+  are separate Purchases grouped by their Project, never one event Purchase:
+  funders derive per Purchase, so grouping blends every card into every line.
 - Inventory never auto-increments. An `arrived` finding asks a human to receive,
   and the writer files it only when a delivered line is unresolved or its
   Product is stock-tracked or undecided — the Product's own decision, else

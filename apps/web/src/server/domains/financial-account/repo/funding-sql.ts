@@ -1,15 +1,38 @@
 import type { DisplayItem } from "@cubby/schemas/entity-definitions/label-field";
 import { sql, type SQL } from "drizzle-orm";
 
-/** Nonempty history replaces the undated fallback; a gap remains unknown. */
-export const accountFundingPartySql = (account: SQL, date: SQL) => sql`(
+/** The party whose funding period covers every day from `from` through `to`. */
+const fundingPartyCoveringSql = (account: SQL, from: SQL, to: SQL) => sql`(
   CASE WHEN jsonb_array_length(${account}."fundingPeriods") = 0 THEN ${account}."ledgerPartyId"
   ELSE (SELECT party.id FROM jsonb_array_elements(${account}."fundingPeriods") period
     JOIN "LedgerParty" party ON party.shortcode = period->>'ledgerPartyId' AND party."deletedAt" IS NULL
-    WHERE ${date} IS NOT NULL
-      AND (period->>'validFrom' IS NULL OR (period->>'validFrom')::date <= ${date})
-      AND (period->>'validTo' IS NULL OR ${date} <= (period->>'validTo')::date)
+    WHERE ${from} IS NOT NULL AND ${to} IS NOT NULL
+      AND (period->>'validFrom' IS NULL OR (period->>'validFrom')::date <= ${from})
+      AND (period->>'validTo' IS NULL OR ${to} <= (period->>'validTo')::date)
   ) END
+)`;
+
+/** Nonempty history replaces the undated fallback; a gap remains unknown. */
+export const accountFundingPartySql = (account: SQL, date: SQL) =>
+  fundingPartyCoveringSql(account, date, date);
+
+/**
+ * Statement imports store only `postedDate`, which can trail the charge by days
+ * and cross a period boundary. A posting date therefore resolves a party only
+ * when one period also covers this many preceding days; otherwise it stays unknown.
+ */
+const POSTING_LAG_DAYS = 14;
+
+/** Funding party for a settlement row, by charge date, else a boundary-safe posting date. */
+export const paymentFundingPartySql = (account: SQL, payment: SQL) => sql`(
+  CASE WHEN ${payment}."transactionDate" IS NOT NULL
+    THEN ${accountFundingPartySql(account, sql`${payment}."transactionDate"`)}
+    ELSE ${fundingPartyCoveringSql(
+      account,
+      sql`${payment}."postedDate" - ${sql.raw(String(POSTING_LAG_DAYS))}`,
+      sql`${payment}."postedDate"`,
+    )}
+  END
 )`;
 
 /** Linked detail rows preserve dated membership order on every client. */
