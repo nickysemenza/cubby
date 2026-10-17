@@ -103,7 +103,7 @@ describe("expenseFlowSankey", () => {
     const filters = { search: "synthetic flow" };
     const sankey = await expenseFlowSankey(ctx.db, filters);
     const projectNode = `project:${renovation.shortcode}`;
-    const homeNode = `category:${home.shortcode}`;
+    const homeNode = `spendingCategory:${home.shortcode}`;
 
     // 100 splits 75 / 25 by weight; the -30 Credit nets inside the first
     // funder's path rather than drawing a negative link.
@@ -114,7 +114,7 @@ describe("expenseFlowSankey", () => {
       {
         funder: "funder:unknown",
         project: "project:none",
-        category: `category:${travel.shortcode}`,
+        category: `spendingCategory:${travel.shortcode}`,
         net: -10,
       },
     ]);

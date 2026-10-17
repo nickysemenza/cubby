@@ -27,16 +27,16 @@ import {
 const COLUMN_COLOR = {
   funder: "var(--chart-6)",
   project: "var(--chart-1)",
-  category: "var(--chart-3)",
+  spendingCategory: "var(--chart-3)",
 } satisfies Record<ExpenseFlowSankeyNode["column"], string>;
 /** Grouped and unresolved buckets stay quiet beside named ones. */
 const QUIET_BUCKETS = new Set([
   "funder:unknown",
   "project:none",
   "project:other",
-  "category:other",
-  "category:uncategorized",
-  "category:unclassified",
+  "spendingCategory:other",
+  "spendingCategory:uncategorized",
+  "spendingCategory:unclassified",
 ]);
 
 const pathLabel = (
@@ -132,7 +132,7 @@ export function MoneyFlowSankey({
                   QUIET_BUCKETS.has(node.id)
                     ? "var(--chart-neutral)"
                     : COLUMN_COLOR[
-                        view.nodeById.get(node.id)?.column ?? "category"
+                        view.nodeById.get(node.id)?.column ?? "spendingCategory"
                       ]
                 }
                 nodeOpacity={1}

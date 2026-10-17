@@ -17,10 +17,7 @@ import { hierarchyAncestorSql } from "~/server/generic/list/repo/hierarchy";
 export const UNCATEGORIZED_BUCKET = "uncategorized";
 export const UNCLASSIFIED_BUCKET = "unclassified";
 
-export const rootSpendingCategory = alias(
-  spendingCategory,
-  "rootSpendingCategory",
-);
+const rootSpendingCategory = alias(spendingCategory, "rootSpendingCategory");
 
 /** Each live category's live root, walked once per category, not per share. */
 const categoryRootsSql = sql`(SELECT c."id", ${hierarchyAncestorSql(

@@ -323,7 +323,7 @@ export async function expenseFlowSankey(
         projectBucket(share.projectKey, share.projectLabel),
       );
       const categoryNode = node(
-        "category",
+        "spendingCategory",
         categoryBucket(share.categoryKey, share.categoryLabel),
       );
       split.forEach((funderOf, funderIndex) => {

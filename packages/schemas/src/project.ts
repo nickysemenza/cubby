@@ -833,7 +833,7 @@ const expenseFlowLedgerFilter = z.record(z.string(), z.string());
 
 export const expenseFlowSankeyNode = z.object({
   id: z.string(),
-  column: z.enum(["funder", "project", "category"]),
+  column: z.enum(["funder", "project", "spendingCategory"]),
   label: z.string(),
   /** Null for a grouped bucket (Other projects / Other categories, a funder). */
   filter: expenseFlowLedgerFilter.nullable(),
