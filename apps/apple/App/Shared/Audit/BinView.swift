@@ -223,16 +223,10 @@ struct BinView: View {
 
     @ViewBuilder
     private var footerRows: some View {
-        Text(unresolvedText)
-            .font(.fieldGuideLabel)
-            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-            .listRowBackground(FieldGuideTokens.canvas)
-            .listRowSeparator(.hidden)
-
         Button {
             Task { await session.commitBin() }
         } label: {
-            Text("Done with bin").frame(maxWidth: .infinity)
+            Text(commitTitle).frame(maxWidth: .infinity)
         }
         .buttonStyle(.borderedProminent)
         .tint(FieldGuideTokens.interaction)
@@ -253,10 +247,11 @@ struct BinView: View {
         .listRowSeparator(.hidden)
     }
 
-    private var unresolvedText: String {
+    /// Committing marks every uncounted row verified, so the title states that effect.
+    private var commitTitle: String {
         session.unresolvedCount == 0
-            ? "Everything counted."
-            : "\(session.unresolvedCount) not counted yet — Done marks them verified."
+            ? "Done with bin"
+            : "Verify \(session.unresolvedCount) uncounted & finish"
     }
 }
 
