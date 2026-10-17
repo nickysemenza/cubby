@@ -155,6 +155,8 @@ it). An open HMR socket is not activity: forgotten preview panes and test
 browsers hold one indefinitely. A runtime whose supervisor was killed closes
 itself within 15 seconds. Built preview (`pnpm --dir apps/web preview:cf`)
 uses the same supervisor and runs `vite preview` against the native Build Output.
+Its explicit preview build includes synthetic dev seeding, which production
+bundle checks exclude. Preview provenance cannot satisfy production prebuilt reuse.
 The lifecycle plugin's idle and orphan checks currently apply to HMR only.
 
 ## Tooling layout

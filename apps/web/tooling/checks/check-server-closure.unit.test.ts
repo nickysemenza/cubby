@@ -117,6 +117,33 @@ describe("findSentryOrchestrionInjection", () => {
 });
 
 describe("findBundledFaker", () => {
+  it("allows dev seed data only for an explicit local preview build", () => {
+    const cwd = dist({
+      ".cloudflare/output/v0/workers/default/bundle/index.js":
+        'const b=()=>import("./assets/browser-operation-dispatch-1.js");',
+      ".cloudflare/output/v0/workers/default/bundle/assets/browser-operation-dispatch-1.js":
+        "export const adapter=1;",
+      ".cloudflare/output/v0/workers/default/bundle/assets/seed-1.js":
+        "const h={weightedArrayElement(){},fromRegExp(){}};export{h};",
+    });
+    const run = (preview: string) =>
+      spawnSync(
+        process.execPath,
+        [fileURLToPath(new URL("./check-server-closure.ts", import.meta.url))],
+        {
+          cwd,
+          encoding: "utf8",
+          env: { ...process.env, CUBBY_DEV_PREVIEW_BUILD: preview },
+        },
+      );
+    const production = run("false");
+    expect(production.status).not.toBe(0);
+    expect(production.stderr).toContain(
+      "@faker-js/faker reached the Worker bundle",
+    );
+    const preview = run("true");
+    expect(preview.status).toBe(0);
+  });
   it("flags a chunk carrying Faker's helpers but not ordinary chunks", () => {
     const root = dist({
       "index.js": "export const a=1;",

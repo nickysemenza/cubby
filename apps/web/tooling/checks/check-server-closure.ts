@@ -181,7 +181,9 @@ const invokedPath = process.argv[1]
 if (invokedPath === import.meta.url) {
   const serverRoot = getWorkerBundleDir(process.cwd());
   const faker = findBundledFaker(serverRoot);
-  if (faker.length > 0)
+  // The explicit local preview entry includes its synthetic dev-seed route.
+  // Keep production's exclusion and every other closure/bundle check intact.
+  if (faker.length > 0 && process.env.CUBBY_DEV_PREVIEW_BUILD !== "true")
     throw new Error(
       `@faker-js/faker reached the Worker bundle (${faker.join(", ")}). It is for tests and dev seeding only; keep tooling/factories and *.fixtures imports out of src/ production code.`,
     );
