@@ -4,7 +4,7 @@ import {
 } from "../generated/entity-lists.gen";
 import {
   listEnrichmentGroups,
-  type ListEnrichmentGroup,
+  type ListProjection,
   type ListReadRow,
 } from "./list-read-fields";
 
@@ -33,22 +33,48 @@ export function selectListReadFields(
   return output;
 }
 
+/** Finalize after repository and transport-owned loaders have supplied their fields. */
+export function selectListReadRows(
+  entity: ListEntity,
+  rows: ListReadRow[],
+  fields: readonly string[],
+): ListReadRow[] {
+  const read = ENTITY_LIST_READ_SCHEMAS[entity];
+  const groups = listGroupsForFields(entity, fields);
+  return rows.map((row) => {
+    // Check raw mapped values before a group's schema can insert defaults.
+    selectListReadFields(row, fields);
+    const validated = Object.assign(
+      read.project(row, "core"),
+      ...groups.map((group) => read.project(row, group)),
+    );
+    return selectListReadFields(validated, fields);
+  });
+}
+
 export function projectListRows(
   entity: ListEntity,
   rows: ListReadRow[],
-  projection: {
-    kind: "full" | "base" | "enrichment";
-    groups?: readonly ListEnrichmentGroup[];
-  },
+  projection: ListProjection,
 ) {
   const read = ENTITY_LIST_READ_SCHEMAS[entity];
-  if (projection.kind === "full") return rows;
-  return rows.map((row) =>
-    projection.kind === "base"
-      ? read.project(row, "core")
-      : Object.assign(
+  switch (projection.kind) {
+    case "full":
+    case "selected":
+      // Complete and selected consumers validate after all their loaders run.
+      return rows;
+    case "base":
+      return rows.map((row) => read.project(row, "core"));
+    case "enrichment":
+      return rows.map((row) =>
+        Object.assign(
           { id: row.id },
           ...(projection.groups ?? []).map((group) => read.project(row, group)),
         ),
-  );
+      );
+    default: {
+      const unhandled: never = projection;
+      throw new Error(`Unsupported list projection: ${unhandled}`);
+    }
+  }
 }

@@ -11,7 +11,11 @@ import type {
   ListReadRow,
   ListEnrichmentGroup,
 } from "~/entity/model/list-read-fields";
-import { projectListRows } from "~/entity/model/list-read-schema";
+import {
+  listGroupsForFields,
+  listReadFields,
+  projectListRows,
+} from "~/entity/model/list-read-schema";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   resolveEntityDisplayImageLists,
@@ -24,10 +28,48 @@ import { traceListGroup } from "~/server/observability/list-read-tracing";
 export const wantsListGroup = (
   projection: ListProjection,
   group: ListEnrichmentGroup,
-): boolean =>
-  projection.kind === "full" ||
-  (projection.kind === "enrichment" &&
-    projection.groups?.includes(group) === true);
+): boolean => {
+  switch (projection.kind) {
+    case "full":
+      return true;
+    case "base":
+      return false;
+    case "enrichment":
+    case "selected":
+      return projection.groups?.includes(group) === true;
+    default: {
+      const unhandled: never = projection;
+      throw new Error(`Unsupported list projection: ${unhandled}`);
+    }
+  }
+};
+
+/** Validate demand before reading even an empty page, using canonical ownership. */
+export function selectedListProjection(
+  entity: ListEntity,
+  requested: readonly string[],
+): Extract<ListProjection, { kind: "selected" }> {
+  const ownership = listReadFields(entity);
+  const known = new Set([
+    ...ownership.core,
+    ...ownership.media,
+    ...ownership.quality,
+    ...ownership.relations,
+    ...ownership.derived,
+  ]);
+  for (const field of requested)
+    if (!known.has(field))
+      throw new Error(`Unknown list field: ${entity}.${field}`);
+  const fields = [...new Set(requested)];
+  return {
+    kind: "selected",
+    fields,
+    groups: expandListGroups(
+      listGroupsForFields(entity, fields),
+      ownership.dependencies,
+    ),
+  };
+}
 
 /** A dependency shared by several groups is one loader, gated by its consumers. */
 export const loadListGroup = async <T>(

@@ -10,6 +10,14 @@ import {
   entityListBaseOutputSchema,
   listEntities,
 } from "~/entity/generated/entity-lists.gen";
+import {
+  listEnrichmentGroups,
+  listReadRowSchema,
+} from "~/entity/model/list-read-fields";
+import {
+  listReadFields,
+  selectListReadFields,
+} from "~/entity/model/list-read-schema";
 import { getDb } from "~/server/db/helpers";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { executeEntity } from "~/server/entity-kernel";
@@ -155,6 +163,22 @@ describe("standard progressive list composition", () => {
           ),
         ),
       ).toEqual(projectEntityResult({ action: "list" }, full));
+      // One coherent selected read must retain values from every owning group,
+      // including fields whose defaults could otherwise conceal a missed load.
+      const fields = [
+        "id",
+        ...listEnrichmentGroups.flatMap((group) =>
+          listReadFields(entity)[group].slice(0, 1),
+        ),
+        ...(entity === "product" ? ["unitPrice", "food"] : []),
+      ];
+      const selected = await operation.listFields(context, input, fields);
+      expect(selected.meta.totalCount).toBe(full.meta.totalCount);
+      expect(selected.items).toEqual(
+        full.items.map((row) =>
+          selectListReadFields(listReadRowSchema.parse(row), fields),
+        ),
+      );
       // Counts and totals use the entire ID-restricted population, across pages.
       const selectedId = base.data[0]?.id;
       if (!selectedId) continue;

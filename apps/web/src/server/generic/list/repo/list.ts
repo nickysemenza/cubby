@@ -1021,7 +1021,9 @@ export function listScaffold<
       (name) => readGroups?.[name]?.some((field) => field === key) === true,
     );
     return group === undefined
-      ? projection.kind !== "enrichment"
+      ? projection.kind === "selected"
+        ? projection.fields.includes(key)
+        : projection.kind !== "enrichment"
       : wantsListGroup(projection, group);
   };
   const searchable = isSearchableEntity(entity);

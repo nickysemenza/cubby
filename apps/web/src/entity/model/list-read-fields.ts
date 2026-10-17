@@ -21,6 +21,14 @@ export const listEnrichmentGroups = [
 ] as const;
 export type ListEnrichmentGroup = (typeof listEnrichmentGroups)[number];
 export type ListReadGroup = "core" | ListEnrichmentGroup;
+export type ListProjection =
+  | { kind: "full" | "base"; groups?: never }
+  | { kind: "enrichment"; groups?: readonly ListEnrichmentGroup[] }
+  | {
+      kind: "selected";
+      fields: readonly string[];
+      groups: readonly ListEnrichmentGroup[];
+    };
 export type ListFieldPartition = Partial<
   Record<ListEnrichmentGroup, readonly string[]>
 >;

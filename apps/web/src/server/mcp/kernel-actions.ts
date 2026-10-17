@@ -140,7 +140,7 @@ const hasListReader = (
 
 /**
  * Production executor. A summary list publishes only `entitySummaryFields`, so
- * it reads the base page plus the groups owning those fields instead of the
+ * it reads one page with the groups owning those fields instead of the
  * complete row (data quality, pricing, USDA, media); every other command and
  * an entity without a progressive reader run the full kernel operation.
  */
