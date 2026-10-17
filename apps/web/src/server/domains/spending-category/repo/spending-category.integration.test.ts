@@ -428,6 +428,7 @@ describe("spending category stock tracking", () => {
           action: "get",
           entity: "spendingCategory",
           id: child.shortcode,
+          missing: "error",
         }),
       ).item;
 
@@ -450,6 +451,7 @@ describe("spending category stock tracking", () => {
         await executeEntity(context(), {
           action: "list",
           entity: "spendingCategory",
+          filters: {},
           pagination: { pageIndex: 0, pageSize: 200 },
         }),
       );
