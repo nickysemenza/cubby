@@ -39,7 +39,9 @@ export async function findOpenRunFindingsPage(db: Database, limit?: number) {
     .leftJoin(entityIdentity, eq(runFinding.entityId, entityIdentity.id))
     .where(openFindingWhere(new Date()))
     .orderBy(runFinding.createdAt, runFinding.id);
-  const rows = await (limit === undefined ? query : query.limit(limit));
+  const rows = await (limit === undefined || limit === Number.POSITIVE_INFINITY
+    ? query
+    : query.limit(limit));
   const items = rows.map((row) => ({
     id: row.id,
     targetId: row.targetShortcode,

@@ -63,11 +63,12 @@ describe("SQL-backed finding diagnostic intent", () => {
         })),
       )
       .returning({ id: runFinding.id, createdAt: runFinding.createdAt });
-    const ordered = [...rows].sort(
-      (left, right) =>
-        left.createdAt.getTime() - right.createdAt.getTime() ||
-        left.id.localeCompare(right.id),
-    );
+    const ordered = [...rows].sort((left, right) => {
+      const created = left.createdAt.getTime() - right.createdAt.getTime();
+      if (created !== 0) return created;
+      if (left.id === right.id) return 0;
+      return left.id < right.id ? -1 : 1;
+    });
     const last = rows.at(-1);
     if (!last) throw new Error("Synthetic finding fixture is empty");
     await getDb(ctx.db)
@@ -108,6 +109,17 @@ describe("SQL-backed finding diagnostic intent", () => {
         "import-findings",
         {},
         { kind: "sample", limit: 16 },
+      ),
+    ).rejects.toBeInstanceOf(z.ZodError);
+    await expect(
+      runDiagnostic(
+        ctx.db,
+        "import-findings",
+        {},
+        {
+          kind: "sample",
+          limit: Number.POSITIVE_INFINITY,
+        },
       ),
     ).rejects.toBeInstanceOf(z.ZodError);
     await expect(findOpenRunFindings(ctx.db)).rejects.toBeInstanceOf(
