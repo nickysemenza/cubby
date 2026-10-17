@@ -1283,9 +1283,11 @@ progressive reader run the complete list. Product list readers start the page's
 USDA batch as soon as its barcodes load, so the external lookup overlaps the
 remaining enrichment reads.
 
-Fast Problems cards derive selected fields from their required presenter
-schemas, using the same ownership and transitive loader dependencies. The inventory
-price-path card requires its embedded product's effective price explicitly.
+Fast and view-backed Problems cards derive selected fields from their required
+presenter schemas, using the same ownership and transitive loader dependencies.
+View-backed cards run through the canonical Problem executor; full list
+hydration remains available to raw consumers rather than running for every card.
+The inventory price-path card requires its embedded product's effective price explicitly.
 Shared group loaders may declare their consumer fields: selected reads load
 them only when one of those fields is requested; full and group reads retain
 their complete dependency behavior. For example, requesting inventory product

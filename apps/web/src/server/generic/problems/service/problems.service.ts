@@ -114,6 +114,7 @@ import {
   problemRow,
   type ProblemRowInput,
   recordBadge,
+  selectedProblemCard,
   textBadge,
 } from "~/server/generic/problems/service/problem-rows";
 import {
@@ -747,10 +748,7 @@ const selectedFastCard = <S extends z.ZodObject>(
     row: z.output<S>,
     hydration: FastProblemHydration | undefined,
   ) => FastProblemCard,
-): FastExactPresenter => ({
-  fields: Object.keys(schema.shape),
-  present: (row, hydration) => present(schema.parse(row), hydration),
-});
+): FastExactPresenter => selectedProblemCard(schema, present);
 
 const productRef = (row: ExactProblemPresentationRow) => ({
   id: row.id,

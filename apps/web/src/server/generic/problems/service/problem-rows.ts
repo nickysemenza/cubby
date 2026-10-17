@@ -6,6 +6,16 @@ export type ProblemRowInput = z.input<typeof problemRowSchema>;
 type BadgeInput = ProblemRowInput["badges"][number];
 type Ref = { id: string; name: string };
 
+/** The parser owns both required card fields and selected-list demand. */
+export const selectedProblemCard = <S extends z.ZodObject, T, Context>(
+  schema: S,
+  present: (row: z.output<S>, context: Context) => T,
+) => ({
+  fields: Object.keys(schema.shape),
+  present: (row: unknown, context: Context) =>
+    present(schema.parse(row), context),
+});
+
 /** A badge naming a record; the page links it to that record. */
 export const recordBadge = (entity: ShortcodeEntity, ref: Ref): BadgeInput => ({
   label: ref.name,

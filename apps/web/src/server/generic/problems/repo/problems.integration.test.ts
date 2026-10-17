@@ -21,6 +21,7 @@ beforeEach(() => {
 });
 afterEach(() => backgroundQueue.restore());
 
+import { viewProblemDeclarations } from "~/entity/model/view-manifest";
 import { problemQueryDeclarations } from "~/entity/problems/problem-registry";
 import { householdDaysAgo } from "~/lib/household-date";
 import { getDb } from "~/server/db/helpers";
@@ -51,6 +52,7 @@ import {
   createLocationFixture,
   createProductFixture,
   createRecipeFixture,
+  ingredientRef,
   makeExpenseInput,
   makeLocationInput,
   makeProductInput,
@@ -89,6 +91,57 @@ const page = { pageIndex: 0, pageSize: 100 };
 
 describe("Problems card read projections", () => {
   const ctx = withTestDb();
+
+  // Selected view cards must retain the full reader's facts and exact totals,
+  // including live relation evidence and results beyond the twelve-row sample.
+  it("selects view card dependencies without changing the canonical sample", async () => {
+    for (let index = 0; index < 16; index++) {
+      await createIngredientFixture(
+        ctx.db,
+        { name: `Synthetic unused ingredient ${index}` },
+        ctx.actor,
+      );
+      await createLocationFixture(
+        ctx.db,
+        makeLocationInput({
+          name: `Synthetic empty shelf ${index}`,
+          type: "shelf",
+        }),
+        ctx.actor,
+      );
+    }
+    for (const { key, fields } of [
+      {
+        key: "unusedIngredientsWithoutProduct",
+        fields: ["id", "name", "product"],
+      },
+      {
+        key: "emptyLocations",
+        fields: [
+          "id",
+          "name",
+          "type",
+          "createdAt",
+          "lastBulkInventory",
+          "aiDescription",
+          "images",
+        ],
+      },
+    ] as const) {
+      const full = await executeProblem(ctx.db, key);
+      const selected = await executeProblem(ctx.db, key, { fields });
+      expect(full.count).toBeGreaterThanOrEqual(16);
+      expect(selected.count).toBe(full.count);
+      expect(selected.items).toEqual(full.items);
+      expect(selected.data.map(({ id }) => id)).toEqual(
+        full.data.map(({ id }) => id),
+      );
+      expect(selected.data).toHaveLength(12);
+      for (const row of selected.data) {
+        expect(Object.keys(row).sort()).toEqual([...fields].sort());
+      }
+    }
+  });
 
   // Identity-only membership must retain canonical order and totals beyond
   // the sample, while cards retain the attention engine's measured facts.
@@ -349,7 +402,82 @@ describe("problems — view-backed uniform rows", () => {
       ctx.actor,
     );
 
+    const bucket = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "misc: Synthetic spare parts" }),
+      ctx.actor,
+    );
+    await createInventoryFixture(
+      ctx.db,
+      {
+        productId: bucket.id,
+        locationId: shelf.id,
+        amount: { value: 3, unit: "each" },
+      },
+      ctx.actor,
+    );
+    await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: "Synthetic historic disposal",
+        productId: thing.id,
+        productQuantity: -2,
+        cost: -5,
+        future: false,
+      }),
+    );
+    const needed = await createIngredientFixture(
+      ctx.db,
+      { name: "Synthetic recipe ingredient" },
+      ctx.actor,
+    );
+    await createRecipeFixture(
+      ctx.db,
+      makeRecipeInput({
+        name: "Synthetic view recipe",
+        sections: [
+          {
+            name: "Main",
+            instructions: [{ instruction: "Combine" }],
+            ingredients: [
+              ingredientRef(needed.id, {
+                amounts: [{ value: 1, unit: "cup" }],
+              }),
+            ],
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+
     const views = await findViewProblems(ctx.db);
+    expect(
+      views.negativeExpectedQuantity.some(({ id }) => id === thing.id),
+    ).toBe(true);
+    expect(
+      views.unvaluedBucketProducts.some(({ id }) => id === bucket.id),
+    ).toBe(true);
+    expect(
+      views.ingredientsWithoutProduct.some(({ id }) => id === needed.id),
+    ).toBe(true);
+    expect(
+      views.productsWithoutMappings.some(({ id }) => id === thing.id),
+    ).toBe(true);
+    const fullViews = await Promise.all(
+      viewProblemDeclarations().map(async ({ problem }) => ({
+        key: problem.key,
+        page: await executeProblem(ctx.db, problem.key),
+      })),
+    );
+    expect(views).toEqual({
+      ...Object.fromEntries(
+        fullViews.map(({ key, page }) => [key, page.items]),
+      ),
+      sectionTotals: Object.fromEntries(
+        fullViews.map(({ key, page }) => [key, page.count]),
+      ),
+    });
     const shelfBadge = {
       label: "Test shelf",
       entity: "location",
@@ -379,7 +507,7 @@ describe("problems — view-backed uniform rows", () => {
       subtitle: "never recounted",
       badges: [
         { label: "shelf", entity: null, id: null },
-        { label: "1 item", entity: null, id: null },
+        { label: "2 items", entity: null, id: null },
       ],
     });
     expect(

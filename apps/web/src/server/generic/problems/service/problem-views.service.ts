@@ -52,12 +52,18 @@ import {
   listFinancialTransactionsRead,
 } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { imageList, imageListRead } from "~/server/domains/image/repo/image";
-import { ingredientList } from "~/server/domains/ingredient/repo/search";
+import {
+  ingredientList,
+  ingredientListRead,
+} from "~/server/domains/ingredient/repo/search";
 import {
   inventoryentryList,
   inventoryentryListRead,
 } from "~/server/domains/inventory/repo/crud";
-import { locationList } from "~/server/domains/location/repo/crud";
+import {
+  locationList,
+  locationListRead,
+} from "~/server/domains/location/repo/crud";
 import { mealList, mealListRead } from "~/server/domains/meal/repo/crud";
 import {
   getProductConversionCoverageFreshness,
@@ -94,6 +100,7 @@ import {
   problemRow,
   type ProblemRowInput,
   recordBadge,
+  selectedProblemCard,
   textBadge,
 } from "~/server/generic/problems/service/problem-rows";
 import { traceAllBounded } from "~/server/observability/tracing";
@@ -214,6 +221,14 @@ const ENTITY_READERS = {
       ),
   },
   ingredient: {
+    selected: (db, filters, sorts, pagination, projection) =>
+      ingredientListRead(
+        db,
+        parsedFiltersFor("ingredient", filters),
+        sorts,
+        pagination,
+        projection,
+      ),
     read: (db, filters, sorts, pagination, kind) =>
       ingredientList(
         db,
@@ -256,6 +271,15 @@ const ENTITY_READERS = {
       ),
   },
   location: {
+    selected: (db, filters, sorts, pagination, projection) =>
+      locationListRead(
+        db,
+        parsedFiltersFor("location", filters),
+        sorts,
+        pagination,
+        projection,
+        "sample",
+      ),
     read: (db, filters, sorts, pagination, kind) =>
       locationList(
         db,
@@ -403,18 +427,6 @@ const toSortParams = (
     direction: desc ? "desc" : "asc",
   }));
 
-const entityFiltersFor = (
-  declaration: ViewProblemDeclaration,
-): FilterAssembly => {
-  const source = declaration.problem.source;
-  if (source.kind !== "entity") {
-    throw new Error(
-      `View problem "${declaration.problem.key}" is not entity-backed`,
-    );
-  }
-  return source.filters;
-};
-
 const entityProblemForKey = (key: ProblemKey): EntityProblemSource => {
   const definition = problemQuery(key);
   if (definition?.source.kind !== "entity") {
@@ -481,34 +493,127 @@ const usesConversionCoverageProjection = (key: ProblemKey): boolean =>
   key === "productsWithIslandedMappings";
 
 /**
- * Narrow a list row to the card's contract. One entry per view-backed key; a
- * key without one returns the list rows unchanged.
- *
- * Each presenter parses only the fields it reads, rather than the card
- * schema, because `strictOutput` rejects extra keys and several list fields
- * (`amount`) are codecs that don't round-trip through their own output.
+ * Required presenter inputs also own selected-list demand. Parse at that raw
+ * row boundary rather than through strict card outputs: list codecs such as
+ * `amount` do not round-trip through their own output schema.
  */
+const refSchema = z.object({ id: z.string(), name: z.string() });
+
+const inventoryCardSchema = z.object({
+  id: z.string(),
+  amount,
+  product: refSchema,
+  location: refSchema,
+});
+
+const unusedIngredientCardSchema = refSchema.extend({
+  product: z.array(refSchema),
+});
+
+const locationDescriptionCardSchema = refSchema.extend({
+  type: z.string().nullable(),
+  images: z.array(z.unknown()),
+});
+
+const emptyLocationCardSchema = emptyLocationSchema
+  .omit({ firstImageId: true, firstImageUrl: true })
+  .extend({ images: z.array(z.object({ id: z.string(), url: z.string() })) });
+
+const negativeQuantityCardSchema = refSchema.extend({
+  manufacturer: z.string(),
+  quantityLedger: z.object({
+    expectedQuantity: z.number(),
+    acquiredUnits: z.number(),
+    exitedUnits: z.number(),
+    unknownAcquisitionLines: z.number().int(),
+    unknownExitLines: z.number().int(),
+  }),
+});
+
+const missingPriceCardSchema = refSchema.extend({
+  manufacturer: z.string(),
+  inventoryEntry: z.array(
+    z.object({
+      amount: z.object({ value: z.number() }),
+      location: refSchema,
+    }),
+  ),
+});
+
+const withoutMappingsCardSchema = productWithoutMappingsSchema
+  .omit({ isIngredient: true, ingredientId: true, usdaUnavailable: true })
+  .extend({
+    ingredient: z
+      .object({
+        id: productWithoutMappingsSchema.shape.ingredientId.unwrap(),
+      })
+      .nullable(),
+    usdaUnavailable: z.boolean().nullable(),
+  });
+
+const staleLocationCardSchema = refSchema.extend({
+  type: z.string().nullable(),
+  lastBulkInventory: z.date().nullable(),
+  inventoryEntries: z.array(z.unknown()),
+});
+
+const ingredientWithoutProductCardSchema = refSchema.extend({
+  ownRecipeCount: z.number(),
+});
+
 const PROBLEM_ROW_PRESENTERS = {
-  neverVerifiedInventory: (row) => toInventoryRow(row),
-  unusedIngredientsWithProduct: (row) => toUnusedIngredient(row, true),
-  unusedIngredientsWithoutProduct: (row) => toUnusedIngredient(row, false),
-  locationsWithoutAiDescription: (row) => toLocationWithoutAiDescription(row),
-  emptyLocations: (row) => toEmptyLocation(row),
-  negativeExpectedQuantity: (row) => toNegativeExpectedQuantity(row),
-  productsMissingPrice: (row) => toProductMissingPrice(row, false),
-  unvaluedBucketProducts: (row) => toProductMissingPrice(row, true),
-  productsWithoutMappings: (row) => toProductWithoutMappings(row),
-  staleLocations: (row) => toStaleLocation(row),
-  ingredientsWithoutProduct: (row) => toIngredientWithoutProduct(row),
+  neverVerifiedInventory: selectedProblemCard(inventoryCardSchema, (row) =>
+    toInventoryRow(row),
+  ),
+  unusedIngredientsWithProduct: selectedProblemCard(
+    unusedIngredientCardSchema,
+    (row) => toUnusedIngredient(row, true),
+  ),
+  unusedIngredientsWithoutProduct: selectedProblemCard(
+    unusedIngredientCardSchema,
+    (row) => toUnusedIngredient(row, false),
+  ),
+  locationsWithoutAiDescription: selectedProblemCard(
+    locationDescriptionCardSchema,
+    (row) => toLocationWithoutAiDescription(row),
+  ),
+  emptyLocations: selectedProblemCard(emptyLocationCardSchema, (row) =>
+    toEmptyLocation(row),
+  ),
+  negativeExpectedQuantity: selectedProblemCard(
+    negativeQuantityCardSchema,
+    (row) => toNegativeExpectedQuantity(row),
+  ),
+  productsMissingPrice: selectedProblemCard(missingPriceCardSchema, (row) =>
+    toProductMissingPrice(row, false),
+  ),
+  unvaluedBucketProducts: selectedProblemCard(missingPriceCardSchema, (row) =>
+    toProductMissingPrice(row, true),
+  ),
+  productsWithoutMappings: selectedProblemCard(
+    withoutMappingsCardSchema,
+    (row) => toProductWithoutMappings(row),
+  ),
+  staleLocations: selectedProblemCard(staleLocationCardSchema, (row) =>
+    toStaleLocation(row),
+  ),
+  ingredientsWithoutProduct: selectedProblemCard(
+    ingredientWithoutProductCardSchema,
+    (row) => toIngredientWithoutProduct(row),
+  ),
 } satisfies Partial<
   Record<
     ProblemKey,
-    (
-      row: ListRow,
-    ) =>
-      | ProblemRowInput
-      | ProblemItem<"emptyLocations">
-      | ProblemItem<"productsWithoutMappings">
+    {
+      fields: readonly string[];
+      present: (
+        row: unknown,
+        context: unknown,
+      ) =>
+        | ProblemRowInput
+        | ProblemItem<"emptyLocations">
+        | ProblemItem<"productsWithoutMappings">;
+    }
   >
 >;
 
@@ -524,7 +629,7 @@ const presentProblemRows = (
 ): readonly unknown[] => {
   if (!hasRowPresenter(key)) return rows;
   const present = PROBLEM_ROW_PRESENTERS[key];
-  return rows.map((row) => present(row));
+  return rows.map((row) => present.present(row, undefined));
 };
 
 /**
@@ -636,12 +741,7 @@ export const executeProblem = async (
   };
 };
 
-const refSchema = z.object({ id: z.string(), name: z.string() });
-
-const toInventoryRow = (row: ListRow) => {
-  const r = z
-    .object({ id: z.string(), amount, product: refSchema, location: refSchema })
-    .parse(row);
+const toInventoryRow = (r: z.output<typeof inventoryCardSchema>) => {
   return problemRow(
     "inventory",
     { id: r.id, name: r.product.name },
@@ -650,8 +750,10 @@ const toInventoryRow = (row: ListRow) => {
   );
 };
 
-const toUnusedIngredient = (row: ListRow, withProduct: boolean) => {
-  const r = refSchema.extend({ product: z.array(refSchema) }).parse(row);
+const toUnusedIngredient = (
+  r: z.output<typeof unusedIngredientCardSchema>,
+  withProduct: boolean,
+) => {
   return problemRow(
     "ingredient",
     r,
@@ -661,10 +763,9 @@ const toUnusedIngredient = (row: ListRow, withProduct: boolean) => {
   );
 };
 
-const toLocationWithoutAiDescription = (row: ListRow) => {
-  const r = refSchema
-    .extend({ type: z.string().nullable(), images: z.array(z.unknown()) })
-    .parse(row);
+const toLocationWithoutAiDescription = (
+  r: z.output<typeof locationDescriptionCardSchema>,
+) => {
   // The list's `images` relation is soft-delete guarded and carries no
   // content-type filter, so a PDF attachment still counts.
   return problemRow(
@@ -675,11 +776,9 @@ const toLocationWithoutAiDescription = (row: ListRow) => {
   );
 };
 
-const toEmptyLocation = (row: ListRow): ProblemItem<"emptyLocations"> => {
-  const r = emptyLocationSchema
-    .omit({ firstImageId: true, firstImageUrl: true })
-    .extend({ images: z.array(z.object({ id: z.string(), url: z.string() })) })
-    .parse(row);
+const toEmptyLocation = (
+  r: z.output<typeof emptyLocationCardSchema>,
+): ProblemItem<"emptyLocations"> => {
   // The list's `images` relation is `imageOrder`-first, so this is the cover.
   // Display-only — every count comes from `sectionTotals`.
   const cover = r.images[0];
@@ -695,19 +794,9 @@ const toEmptyLocation = (row: ListRow): ProblemItem<"emptyLocations"> => {
   };
 };
 
-const toNegativeExpectedQuantity = (row: ListRow) => {
-  const r = refSchema
-    .extend({
-      manufacturer: z.string(),
-      quantityLedger: z.object({
-        expectedQuantity: z.number(),
-        acquiredUnits: z.number(),
-        exitedUnits: z.number(),
-        unknownAcquisitionLines: z.number().int(),
-        unknownExitLines: z.number().int(),
-      }),
-    })
-    .parse(row);
+const toNegativeExpectedQuantity = (
+  r: z.output<typeof negativeQuantityCardSchema>,
+) => {
   const ledger = r.quantityLedger;
   const unknown = ledger.unknownAcquisitionLines + ledger.unknownExitLines;
   return problemRow("product", r, [
@@ -717,18 +806,10 @@ const toNegativeExpectedQuantity = (row: ListRow) => {
   ]);
 };
 
-const toProductMissingPrice = (row: ListRow, miscBucket: boolean) => {
-  const r = refSchema
-    .extend({
-      manufacturer: z.string(),
-      inventoryEntry: z.array(
-        z.object({
-          amount: z.object({ value: z.number() }),
-          location: refSchema,
-        }),
-      ),
-    })
-    .parse(row);
+const toProductMissingPrice = (
+  r: z.output<typeof missingPriceCardSchema>,
+  miscBucket: boolean,
+) => {
   const quantity = r.inventoryEntry.reduce((n, e) => n + e.amount.value, 0);
   return problemRow(
     "product",
@@ -742,19 +823,8 @@ const toProductMissingPrice = (row: ListRow, miscBucket: boolean) => {
 };
 
 const toProductWithoutMappings = (
-  row: ListRow,
+  r: z.output<typeof withoutMappingsCardSchema>,
 ): ProblemItem<"productsWithoutMappings"> => {
-  const r = productWithoutMappingsSchema
-    .omit({ isIngredient: true, ingredientId: true, usdaUnavailable: true })
-    .extend({
-      ingredient: z
-        .object({
-          id: productWithoutMappingsSchema.shape.ingredientId.unwrap(),
-        })
-        .nullable(),
-      usdaUnavailable: z.boolean().nullable(),
-    })
-    .parse(row);
   return {
     id: r.id,
     name: r.name,
@@ -767,14 +837,7 @@ const toProductWithoutMappings = (
   };
 };
 
-const toStaleLocation = (row: ListRow) => {
-  const r = refSchema
-    .extend({
-      type: z.string().nullable(),
-      lastBulkInventory: z.date().nullable(),
-      inventoryEntries: z.array(z.unknown()),
-    })
-    .parse(row);
+const toStaleLocation = (r: z.output<typeof staleLocationCardSchema>) => {
   // The recount age is the finding, so it leads. `inventoryEntries` is the
   // live population the `directItemCountMin` filter selected on.
   return problemRow(
@@ -792,8 +855,9 @@ const toStaleLocation = (row: ListRow) => {
   );
 };
 
-const toIngredientWithoutProduct = (row: ListRow) => {
-  const r = refSchema.extend({ ownRecipeCount: z.number() }).parse(row);
+const toIngredientWithoutProduct = (
+  r: z.output<typeof ingredientWithoutProductCardSchema>,
+) => {
   // `ownRecipeCount`, not `appearsInRecipes.length` — the same non-cookbook
   // population the filter selected on.
   return problemRow("ingredient", r, [
@@ -828,22 +892,12 @@ export const findViewProblems = async (
       declarations.map((declaration) => [
         declaration.problem.key,
         async () => {
-          const reader = entityReaderFor(declaration.entity);
-          if (!reader) {
-            throw new Error(
-              `No list function registered for entity "${declaration.entity}" (view "${declaration.viewId}")`,
-            );
-          }
-          return reader.read(
-            db,
-            entityFiltersFor(declaration),
-            toSortParams(declaration.sort),
-            {
-              pageIndex: 0,
-              pageSize: SAMPLE_SIZE,
-            },
-            "sample",
-          );
+          const key = declaration.problem.key;
+          return executeProblem(db, key, {
+            fields: hasRowPresenter(key)
+              ? PROBLEM_ROW_PRESENTERS[key].fields
+              : undefined,
+          });
         },
       ]),
     ),
@@ -854,7 +908,7 @@ export const findViewProblems = async (
     ...Object.fromEntries(
       declarations.map(({ problem }) => [
         problem.key,
-        presentProblemRows(problem.key, results[problem.key]?.data ?? []),
+        results[problem.key]?.items ?? [],
       ]),
     ),
     sectionTotals: viewProblemSectionTotals(declarations, results),
