@@ -211,6 +211,51 @@ describe("entity_read field selection", () => {
     }
   });
 
+  // Regression: Location detail declares `parent` optional behind z.lazy, so
+  // compact kept it; a root Location's list emitted `parent: null` while get
+  // omitted it.
+  it("compact keeps list and get keys equal for a root Location and omits long notes", async () => {
+    const notes = "Synthetic shelf note line.\n".repeat(40);
+    const root = await insertWithShortcode(ctx.db, "location", {
+      name: `Synthetic root ${crypto.randomUUID()}`,
+      type: "room",
+      notes,
+    });
+    const listed = await read({
+      action: "list",
+      entity: "location",
+      resultDetail: "compact",
+      limit: 100,
+    });
+    expect(listed.isError).not.toBe(true);
+    const fromList = rows
+      .parse(listed.structuredContent)
+      .items.find((item) => item["id"] === root.shortcode);
+    const got = await read({
+      action: "get",
+      entity: "location",
+      id: root.shortcode,
+      resultDetail: "compact",
+    });
+    expect(got.isError).not.toBe(true);
+    const fromGet = one.parse(got.structuredContent).item;
+    expect(fromList).toBeDefined();
+    expect(new Set(Object.keys(fromList ?? {}))).toEqual(
+      new Set(Object.keys(fromGet)),
+    );
+    expect(fromGet).not.toHaveProperty("notes");
+    const selected = await read({
+      action: "get",
+      entity: "location",
+      id: root.shortcode,
+      fields: ["notes"],
+    });
+    expect(one.parse(selected.structuredContent).item).toEqual({
+      id: root.shortcode,
+      notes,
+    });
+  });
+
   it("refuses an unknown field path naming the allowed keys", async () => {
     await world();
     const refused = await read({

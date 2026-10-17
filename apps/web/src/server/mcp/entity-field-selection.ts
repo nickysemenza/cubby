@@ -82,6 +82,30 @@ const objectLike = (schema: z.core.$ZodType): boolean => {
   );
 };
 
+/**
+ * Whether a read may omit the key, looking through wrappers: Location detail
+ * declares `parent` as `z.lazy(() => location.optional())`. A default fills
+ * the key, so it is not omittable.
+ */
+const declaredOptional = (schema: z.core.$ZodType): boolean => {
+  if (schema instanceof z.ZodOptional || schema instanceof z.ZodUndefined)
+    return true;
+  if (
+    schema instanceof z.ZodNullable ||
+    schema instanceof z.ZodReadonly ||
+    schema instanceof z.ZodCatch
+  )
+    return declaredOptional(schema.def.innerType);
+  if (schema instanceof z.ZodLazy) return declaredOptional(schema.def.getter());
+  if (schema instanceof z.ZodPipe)
+    return declaredOptional(
+      schema.def.out instanceof z.ZodTransform ? schema.def.in : schema.def.out,
+    );
+  if (schema instanceof z.ZodUnion)
+    return schema.options.some(declaredOptional);
+  return false;
+};
+
 /** An array or record of objects: a child collection, empty or not. */
 const objectCollection = (schema: z.core.$ZodType): boolean => {
   const node = peel(schema);
@@ -183,7 +207,7 @@ function compactKeys(entity: string): string[] {
         (schema) =>
           !schema ||
           (Object.hasOwn(schema.shape, key) &&
-            !(schema.shape[key] instanceof z.ZodOptional) &&
+            !declaredOptional(schema.shape[key]) &&
             !objectCollection(schema.shape[key])),
       ) && !longText(entity, key),
   );

@@ -130,7 +130,7 @@ export const MCP_TOOLS = defineMcpTools({
       list: mcpAction({
         op: kernelAction("list", "query"),
         description:
-          'One page of a kind, with that kind\'s own typed `filters`, `sort`, `pagination` and `groupBy`; returns { meta, items }. `sort` is a stack, primary first: sort=[{orderBy:"name",direction:"asc"}]. Every scored entity accepts orderBy "dataQuality" (ascending = weakest identity first) plus dataStatus/dataGap filters, the enrichment worklist. A full page of a large kind can exceed the output limit: prefer `resultDetail: "compact"` (identity and status: scalar list fields, dataQuality status/score, no child collections or long notes) or `fields` (only those keys, dot paths allowed, `id` always) over "full".',
+          'One page of a kind, with that kind\'s own typed `filters`, `sort`, `pagination` and `groupBy`; returns { meta, items }. `sort` is a stack, primary first: sort=[{orderBy:"name",direction:"asc"}]. Every scored entity accepts orderBy "dataQuality" (ascending = weakest identity first) plus dataStatus/dataGap filters, the enrichment worklist. A full page of a large kind can exceed the output limit: prefer `resultDetail: "compact"` (identity and status: scalar list fields, dataQuality status/score when the entity declares it required, no child collections or long notes) or `fields` (only those keys, dot paths allowed, `id` always) over "full".',
       }),
       search: mcpAction({
         op: kernelAction("search", "query"),
