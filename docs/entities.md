@@ -980,7 +980,7 @@ key, so it exists only when that filter can exclude; a level section's Hide
 turns "Include sub-…" on, so the ancestor goes with its descendants. Hiding
 the "No ‹label›" section drops No value beside picked values, and otherwise
 picks Any value. Both actions reveal on hover and stay keyboard reachable on
-web; Apple offers them on the header.
+web; on Apple, tapping a header opens a menu with both.
 
 A choice whose section key is a related record of an entity that declares
 `model.hierarchy` can group at a level (`groupLevel`, 1 = top, absolute from

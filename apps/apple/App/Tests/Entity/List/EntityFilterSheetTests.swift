@@ -78,6 +78,37 @@ struct EntityFilterSheetTests {
         #expect(draft.state.isEmpty)
     }
 
+    /// "is not" writes the exclude key beside the include values; a value lives on one side, the
+    /// Any value rule stays on "is", and the summary chip clears only the exclusions.
+    @Test func isNotWritesTheExcludeParameter() throws {
+        let category = try #require(inventory.filter("category"))
+        let exclude = try #require(category.excludeParam)
+        let presence = try #require(category.presenceParam)
+        var draft = EntityFilterDraft(EntityFilterState([presence: ["has"]]))
+
+        draft.set("CAT-2345", true, for: category)
+        draft.set("CAT-6789", true, for: category, side: .exclude)
+        draft.set("CAT-1357", true, for: category, side: .exclude)
+        #expect(draft.state["categoryFilter"] == ["CAT-2345"])
+        #expect(draft.state[exclude] == ["CAT-1357", "CAT-6789"])
+        #expect(draft.state[presence] == nil)
+
+        draft.setNoValue(true, for: category)
+        draft.set("CAT-2345", true, for: category, side: .exclude)
+        #expect(draft.state["categoryFilter"] == nil)
+        #expect(draft.state[presence] == ["none"])
+        #expect(
+            EntityFilterDraft.excludedSummary(category, in: inventory, state: draft.state)
+                == "Category is not CAT-2345 or CAT-1357 or CAT-6789")
+
+        draft.clearExcluded(category)
+        #expect(draft.state == EntityFilterState([presence: ["none"]]))
+
+        draft.set("CAT-2345", true, for: category, side: .exclude)
+        draft.clear(category)
+        #expect(draft.state.isEmpty)
+    }
+
     /// Match all is offered only where declared and writes `all`; Match any removes it.
     @Test func matchAllWritesTheMatchParameter() throws {
         let tags = try #require(EntityCatalog[.product].filter("tags"))

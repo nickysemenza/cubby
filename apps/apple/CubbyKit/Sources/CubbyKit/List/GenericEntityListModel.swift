@@ -354,6 +354,14 @@ public final class GenericEntityListModel {
         await apply(filters: next)
     }
 
+    /// "Hide" on a section header; see `EntityDescriptor.hiding(_:section:of:)`.
+    public func hide(_ section: EntityListSection) async {
+        guard let choice = groupChoice,
+            let next = descriptor.hiding(filters, section: section, of: choice)
+        else { return }
+        await apply(filters: next)
+    }
+
     /// Sortable fields come from the same declaration the server validates. Injected page
     /// sources own their ordering and cannot be reordered through the declared list route.
     public func apply(sort newSort: String?) async {

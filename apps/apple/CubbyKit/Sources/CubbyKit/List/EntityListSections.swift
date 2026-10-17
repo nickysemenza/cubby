@@ -77,4 +77,34 @@ extension EntityDescriptor {
         }
         return next
     }
+
+    /// "Hide" on `section`: the list keeps its grouping and drops the section. A value section
+    /// joins the filter's excluded values (`excludeParam`), leaving its include values alone; a
+    /// level section also turns "Include sub-…" on so its key's descendants go with it. The
+    /// no-value section narrows presence instead: picked values alone drop their "or no value",
+    /// otherwise the list keeps only rows with a value. Nil when the filter cannot exclude
+    /// (`excludeReason`) or, for the no-value section, declares no No value.
+    public func hiding(
+        _ state: EntityFilterState, section: EntityListSection, of choice: GroupChoice
+    ) -> EntityFilterState? {
+        guard let binding = choice.filter,
+            let filter = filters.first(where: { $0.columnId == binding.columnId }),
+            case .param(let name) = filter.wire
+        else { return nil }
+        var next = state
+        if section.id == EntityListSection.noValueKey {
+            guard binding.noValue, let presence = filter.presenceParam else { return nil }
+            if state[name]?.isEmpty == false {
+                next.remove(presence)
+            } else {
+                next.set(["has"], for: presence)
+            }
+            return next
+        }
+        guard let exclude = filter.excludeParam, filter.excludeReason == nil else { return nil }
+        let excluded = state[exclude] ?? []
+        if !excluded.contains(section.id) { next.set(excluded + [section.id], for: exclude) }
+        if section.subtree, let subtree = filter.subtreeParam { next.remove(subtree) }
+        return next
+    }
 }

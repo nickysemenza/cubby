@@ -393,13 +393,21 @@ struct EntityListView: View {
         }
     }
 
-    /// "Filter to this" for a section header, nil when the choice declares no filter for it.
-    private func sectionFilter(_ model: GenericEntityListModel) -> (EntityListSection) -> (() -> Void)? {
+    /// A section header's "Filter to this" and "Hide", each nil when the choice's filter cannot
+    /// express it for that section.
+    private func sectionActions(
+        _ model: GenericEntityListModel
+    ) -> (EntityListSection) -> EntityListSectionHeader.Actions {
         { section in
-            guard let choice = model.groupChoice,
-                descriptor.filtering(model.filters, to: section, of: choice) != nil
-            else { return nil }
-            return { Task { await model.filter(to: section) } }
+            guard let choice = model.groupChoice else { return .init() }
+            var actions = EntityListSectionHeader.Actions()
+            if descriptor.filtering(model.filters, to: section, of: choice) != nil {
+                actions.filter = { Task { await model.filter(to: section) } }
+            }
+            if descriptor.hiding(model.filters, section: section, of: choice) != nil {
+                actions.hide = { Task { await model.hide(section) } }
+            }
+            return actions
         }
     }
 
@@ -613,7 +621,7 @@ struct EntityListView: View {
                     descriptor: descriptor, rows: rows, density: cardDensity,
                     section: .browse,
                     sections: model.sections,
-                    sectionFilter: sectionFilter(model))
+                    sectionActions: sectionActions(model))
                 loadMore(model).padding(FieldGuideTokens.Space.md)
             }
         }
@@ -812,7 +820,7 @@ struct EntityListView: View {
         let visibleRows = model.isSearching ? (model.searchModel?.rows ?? []) : model.rows
         let visibleMeta = model.isSearching ? model.searchModel?.summaryMeta : model.summaryMeta
         let sections = model.sections
-        let filter = sectionFilter(model)
+        let actions = sectionActions(model)
         #if os(macOS)
             // Native table cells are rehosted when sorting replaces the rows. Capture the
             // owning model before that boundary so explanation views keep their dependency.
@@ -866,7 +874,7 @@ struct EntityListView: View {
                                 ForEach(section.rows) { TableRow($0) }
                             } header: {
                                 EntityListSectionHeader(
-                                    section: section, entity: key, onFilter: filter(section))
+                                    section: section, entity: key, actions: actions(section))
                             }
                         }
                     } else {
@@ -907,7 +915,7 @@ struct EntityListView: View {
                                     ForEach(section.rows) { row in compactTableRow(row) }
                                 } header: {
                                     EntityListSectionHeader(
-                                        section: section, entity: key, onFilter: filter(section))
+                                        section: section, entity: key, actions: actions(section))
                                 }
                             }
                         } else {
@@ -1047,12 +1055,12 @@ struct EntityListView: View {
             listSummary(meta: meta, shown: visibleRows.count)
         }
         if let sections = model.sections {
-            let filter = sectionFilter(model)
+            let actions = sectionActions(model)
             ForEach(sections) { section in
                 Section {
                     listRows(section.rows)
                 } header: {
-                    EntityListSectionHeader(section: section, entity: key, onFilter: filter(section))
+                    EntityListSectionHeader(section: section, entity: key, actions: actions(section))
                         .listRowInsets(EdgeInsets())
                 }
             }
