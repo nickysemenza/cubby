@@ -424,6 +424,38 @@ describe("scheduled Gmail discovery", () => {
       mailboxId: "synthetic-second-google-subject",
     });
   });
+  it("credits a retried page with Emails whose import completed between attempts", async () => {
+    const state = await seed();
+    const seam = ports(
+      gmail({
+        listMessages: async () => ({ messages: [{ id: "source-one" }] }),
+      }),
+    );
+    // Dispatch reaches the child, which finishes its import before the page
+    // checkpoints; the attempt then fails and the page is retried.
+    seam.research = vi.fn(async () => {
+      await getDb(ctx.db)
+        .update(emailTable)
+        .set({ status: "completed" })
+        .where(eq(emailTable.messageId, "source-one"));
+      throw new Error("Synthetic failure after research dispatch");
+    });
+    await listMailDiscovery(ctx.db, state.params, seam);
+    await expect(
+      saveMailDiscoveryBatch(ctx.db, state.params, 0, seam),
+    ).rejects.toThrow("Synthetic failure after research dispatch");
+    await saveMailDiscoveryBatch(ctx.db, state.params, 0, seam);
+    expect(seam.research).toHaveBeenCalledOnce();
+    expect(
+      (await getDb(ctx.db).select().from(mailboxCursor))[0]?.coverage
+        ?.scoped[0],
+    ).toMatchObject({
+      completed: true,
+      emailCount: 1,
+      completedAt: expect.any(String),
+    });
+  });
+
   it("persists baseline before freezing one page and checkpoints after admitting retained content", async () => {
     const state = await seed();
     let listed = 0;

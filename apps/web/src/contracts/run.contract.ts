@@ -261,7 +261,8 @@ export const runContract = defineContract("run", {
     native: "Show automatic Mail import switches and the AI budget window",
     input: z.strictObject({}),
     output: mailImportStatus,
-    cache: { tags: [] },
+    // Search progress moves while discovery runs; Run writes refresh it.
+    cache: { tags: [["run"]], profile: "live-status" },
   }),
   setMailImport: mutation({
     native: "Turn automatic Mail import on or off for a connected mailbox",

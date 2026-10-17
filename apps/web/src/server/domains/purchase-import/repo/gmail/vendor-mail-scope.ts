@@ -9,9 +9,7 @@ import type { VendorId } from "@cubby/schemas/identifiers";
 import type { MailboxScopedQuery } from "@cubby/schemas/mailbox-research";
 
 // Gmail operators, quotes or spaces in a stored sender would widen `from:`.
-// Also read as a Postgres regex by the vendor list's `mailSearch`; keep it to
-// syntax both engines share.
-export const LITERAL_SENDER =
+const LITERAL_SENDER =
   /^(?:[a-z0-9._%+-]+@)?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/u;
 
 /** One literal sender or website-domain query per verified term. */

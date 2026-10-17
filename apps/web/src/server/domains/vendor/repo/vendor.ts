@@ -13,7 +13,10 @@ import {
   type SpendingCategoryShortcode,
 } from "@cubby/schemas/identifiers";
 import { imageSourceEvidence } from "@cubby/schemas/image-capture-fields";
-import type { MailSearchState } from "@cubby/schemas/mailbox-research";
+import {
+  scopedPositionState,
+  type MailSearchState,
+} from "@cubby/schemas/mailbox-research";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { vendorSpendingProfile } from "@cubby/schemas/spending-classification";
 import type {
@@ -50,6 +53,8 @@ import {
   getDb,
   type ListReadIntent,
   lockAndValidateForDelete,
+  databaseForTransaction,
+  isTransaction,
   notDeleted,
   withTransaction,
 } from "~/server/db/helpers";
@@ -59,7 +64,10 @@ import {
   displayableImageSql,
   displayableImageWhere,
 } from "~/server/domains/image/repo/image-displayability";
-import { LITERAL_SENDER } from "~/server/domains/purchase-import/repo/gmail/vendor-mail-scope";
+import { loadGmailCursor } from "~/server/domains/purchase-import/repo/gmail/persistence";
+import { listMemberMailboxes } from "~/server/domains/purchase-import/repo/gmail/targets";
+import { vendorSearchTerms } from "~/server/domains/purchase-import/repo/gmail/vendor-identity";
+import { vendorMailQueries } from "~/server/domains/purchase-import/repo/gmail/vendor-mail-scope";
 import { foldChargeInto } from "~/server/domains/purchase/repo/purchase";
 import { assertReviewedSpendingClassification } from "~/server/domains/spending-category/repo/spending-classification-review-authorization";
 import { foldVendorAccountsInto } from "~/server/domains/vendor-account/repo/vendor-account";
@@ -74,6 +82,10 @@ import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
+import {
+  ListContext,
+  listPrepare,
+} from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
@@ -259,57 +271,65 @@ const vendorLatestPurchaseDate = correlated<string | null>(
      WHERE p."vendorId" = "Vendor"."id" AND p."deletedAt" IS NULL)`,
 );
 
-// The Vendor's current searches (`vendorMailQueries`): one per literal sender
-// and one for the website's registrable domain. That domain needs the public
-// suffix list, so the website expects one `domain:` entry whose domain is the
-// shortest suffix of its host.
-const vendorMailExpectations = `(
-  SELECT 'vendor:' || "Vendor"."id"::text
-           || CASE WHEN t LIKE '%@%' THEN ':from:' ELSE ':domain:' END || t AS key,
-         NULL::text AS host
-    FROM (SELECT lower(s) AS t FROM unnest("Vendor"."orderEmailSenders") AS s) senders
-   WHERE t ~ '${LITERAL_SENDER.source}'
-  UNION
-  SELECT NULL, h
-    FROM (SELECT lower(substring("Vendor"."website"
-            FROM '^[Hh][Tt][Tt][Pp][Ss]?://(?:[^/?#@]*@)?([^/:?#]+)')) AS h) site
-   WHERE h ~ '[.]' AND h !~ '^[0-9.]+$'
-)`;
-
 /**
- * Mail discovery's progress on this Vendor's searches across every member's
- * connected Google mailbox (`MailSearchState`), or null with no searches.
+ * Each live Vendor's Mail search state (`MailSearchState`) across every
+ * member's connected Google mailbox, by Vendor id; a Vendor with no searches
+ * is absent. Computed here rather than in SQL: the website's search needs the
+ * public suffix list (`vendorMailQueries`), and keyed lookups keep it linear in
+ * searches plus stored coverage entries.
  */
-const vendorMailSearch = correlated<MailSearchState | null>(
-  `(SELECT CASE
-       WHEN count(*) = 0 THEN NULL
-       WHEN bool_and(COALESCE(x.done, false)) THEN 'done'
-       WHEN bool_or(COALESCE(x.started, false)) THEN 'in_progress'
-       ELSE 'not_started'
-     END
-     FROM ${vendorMailExpectations} e
-     LEFT JOIN (
-       SELECT DISTINCT lp."id" AS party, a."account_id" AS mailbox
-         FROM "LedgerParty" lp
-         JOIN "account" a ON a."user_id" = lp."userId" AND a."provider_id" = 'google'
-        WHERE lp."deletedAt" IS NULL AND lp."userId" IS NOT NULL
-     ) m ON true
-     LEFT JOIN LATERAL (
-       SELECT (q->>'completed')::boolean AS done,
-              ((q->>'completed')::boolean OR q->>'pageToken' IS NOT NULL) AS started
-         FROM "MailboxCursor" c
-         CROSS JOIN LATERAL jsonb_array_elements(COALESCE(c."coverage"->'scoped', '[]'::jsonb)) q
-        WHERE c."ledgerPartyId" = m.party AND c."provider" = 'gmail' AND c."mailboxId" = m.mailbox
-          AND (q->>'key' = e.key OR (
-            e.host IS NOT NULL
-            AND starts_with(q->>'key', 'vendor:' || "Vendor"."id"::text || ':domain:')
-            AND (e.host = split_part(q->>'key', ':domain:', 2)
-              OR right(e.host, length(split_part(q->>'key', ':domain:', 2)) + 1)
-                = '.' || split_part(q->>'key', ':domain:', 2))))
-        ORDER BY length(q->>'key')
-        LIMIT 1
-     ) x ON true)`,
-);
+async function loadVendorMailSearch(
+  client: Database | DrizzleTransaction,
+  ids?: readonly VendorId[],
+): Promise<Record<string, MailSearchState>> {
+  const db = isTransaction(client) ? databaseForTransaction(client) : client;
+  const [rows, mailboxes] = await Promise.all([
+    getDb(db)
+      .select({
+        id: vendor.id,
+        website: vendor.website,
+        orderEmailSenders: vendor.orderEmailSenders,
+      })
+      .from(vendor)
+      .where(
+        and(notDeleted(vendor), ids ? inArray(vendor.id, [...ids]) : undefined),
+      ),
+    listMemberMailboxes(db),
+  ]);
+  const cursors = await Promise.all(
+    mailboxes.map(async (mailbox) => {
+      const { coverage } = await loadGmailCursor(db, mailbox);
+      return new Map(coverage?.scoped.map((entry) => [entry.key, entry]));
+    }),
+  );
+  return Object.fromEntries(
+    rows.flatMap((row) => {
+      const queries = vendorMailQueries(row.id, vendorSearchTerms(row));
+      if (queries.length === 0) return [];
+      const states = cursors.flatMap((cursor) =>
+        queries.map((query) => {
+          const position = cursor.get(query.key);
+          return scopedPositionState(
+            position?.query === query.query ? position : undefined,
+          );
+        }),
+      );
+      const state: MailSearchState =
+        states.length > 0 && states.every((value) => value === "done")
+          ? "done"
+          : states.some((value) => value !== "not_started")
+            ? "in_progress"
+            : "not_started";
+      return [[row.id, state]];
+    }),
+  );
+}
+
+/** The prepared state of the row's Vendor: one keyed lookup per row. */
+const vendorMailSearchSql = (states: Record<string, MailSearchState>) =>
+  sql<MailSearchState | null>`(${JSON.stringify(states)}::jsonb ->> (${sql.raw('"Vendor"."id"')}::text))`;
+
+const vendorMailSearch = listPrepare((db) => loadVendorMailSearch(db));
 
 export async function getVendorCoverage(
   db: Database,
@@ -389,7 +409,6 @@ const vendorColumns = {
   purchaseCount: vendorPurchaseCount,
   spend: vendorSpend,
   latestPurchaseDate: vendorLatestPurchaseDate,
-  mailSearch: vendorMailSearch,
   logo: {
     id: image.shortcode,
     key: image.key,
@@ -551,15 +570,17 @@ const vendorScaffold = listScaffold("vendor", vendor, {
     purchaseCount: vendorPurchaseCount,
     // A vendor with no purchases leads a newest-first list.
     latestPurchaseDate: { sql: vendorLatestPurchaseDate, nulls: "high" },
-    mailSearch: vendorMailSearch,
+    mailSearch: vendorMailSearch.value(vendorMailSearchSql),
     needsClassification: sql`${vendor.defaultSpendingCategoryId} IS NULL`,
     hasLogo: sql`${vendorHasDisplayableLogo}`,
   },
 });
 
 /** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
-export const buildVendorWhereClause = (filters: VendorFilters) =>
-  vendorScaffold.where(filters);
+export const buildVendorWhereClause = (
+  filters: VendorFilters,
+  context: ListContext = ListContext.empty,
+) => vendorScaffold.where(filters, { context });
 
 export const vendorListRead = async (
   db: Database,
@@ -569,71 +590,64 @@ export const vendorListRead = async (
   readIntent: ListReadIntent = "page",
   projection: ListProjection = { kind: "full" },
 ) => {
-  const {
-    purchaseCount,
-    spend,
-    latestPurchaseDate,
-    mailSearch,
-    logo,
-    ...core
-  } = vendorColumns;
-  return vendorScaffold.list(
-    db,
-    { filters, sorts, pagination, readIntent, projection },
-    {
-      where: buildVendorWhereClause(filters),
-      select: async (page) => {
-        const query = getDb(db)
-          .select({
-            ...core,
-            ...listGroupFields(projection, "derived", () => ({
-              purchaseCount,
-              spend,
-              latestPurchaseDate,
-              mailSearch,
-            })),
-            ...listGroupFields(projection, "media", () => ({ logo })),
-          })
-          .from(vendor)
-          .where(page.where)
-          .orderBy(...page.orderBy)
-          .limit(page.limit)
-          .offset(page.offset)
-          .$dynamic();
-        if (wantsListGroup(projection, "media"))
-          return query
-            .leftJoin(entityAttachment, vendorLogoAttachment)
-            .leftJoin(
-              image,
-              and(
-                eq(image.id, entityAttachment.imageId),
-                notDeleted(image),
-                displayableImageWhere,
-              ),
-            );
-        return query;
-      },
-      hydrate: (rows) =>
-        hydrateListRead(db, "vendor", rows, projection, {
-          load: async () => undefined,
-          mapRow: (row) => {
-            const agentHints = vendorAgentHints.parse(row.agentHints);
-            return {
-              ...row,
-              id: parseShortcodeFor("vendor", row.shortcode),
-              orderEvidence: vendorOrderEvidence
-                .nullable()
-                .parse(row.orderEvidence),
-              agentHints,
-              agentHintsLabel: agentHintsLabel(agentHints),
-              ...listGroupFields(projection, "media", () => ({
-                logo: vendorLogoToAPI(row.logo ?? null),
-              })),
-            };
-          },
-        }),
+  const { purchaseCount, spend, latestPurchaseDate, logo, ...core } =
+    vendorColumns;
+  const request = { filters, sorts, pagination, readIntent, projection };
+  const context = await vendorScaffold.context(db, request);
+  return vendorScaffold.list(db, request, {
+    context,
+    where: buildVendorWhereClause(filters, context),
+    select: async (page) => {
+      const query = getDb(db)
+        .select({
+          ...core,
+          ...listGroupFields(projection, "derived", () => ({
+            purchaseCount,
+            spend,
+            latestPurchaseDate,
+            mailSearch: vendorMailSearchSql(context.get(vendorMailSearch)),
+          })),
+          ...listGroupFields(projection, "media", () => ({ logo })),
+        })
+        .from(vendor)
+        .where(page.where)
+        .orderBy(...page.orderBy)
+        .limit(page.limit)
+        .offset(page.offset)
+        .$dynamic();
+      if (wantsListGroup(projection, "media"))
+        return query
+          .leftJoin(entityAttachment, vendorLogoAttachment)
+          .leftJoin(
+            image,
+            and(
+              eq(image.id, entityAttachment.imageId),
+              notDeleted(image),
+              displayableImageWhere,
+            ),
+          );
+      return query;
     },
-  );
+    hydrate: (rows) =>
+      hydrateListRead(db, "vendor", rows, projection, {
+        load: async () => undefined,
+        mapRow: (row) => {
+          const agentHints = vendorAgentHints.parse(row.agentHints);
+          return {
+            ...row,
+            id: parseShortcodeFor("vendor", row.shortcode),
+            orderEvidence: vendorOrderEvidence
+              .nullable()
+              .parse(row.orderEvidence),
+            agentHints,
+            agentHintsLabel: agentHintsLabel(agentHints),
+            ...listGroupFields(projection, "media", () => ({
+              logo: vendorLogoToAPI(row.logo ?? null),
+            })),
+          };
+        },
+      }),
+  });
 };
 
 export const vendorListSummary = async (
@@ -646,7 +660,12 @@ export const vendorListSummary = async (
       purchaseCount: sql<number>`COALESCE(sum(${vendorPurchaseCount}), 0)::int`,
     })
     .from(vendor)
-    .where(buildVendorWhereClause(filters));
+    .where(
+      buildVendorWhereClause(
+        filters,
+        await vendorScaffold.context(db, { filters, readIntent: "count" }),
+      ),
+    );
   return {
     spend: Number(totals?.spend ?? 0),
     purchaseCount: Number(totals?.purchaseCount ?? 0),
@@ -681,7 +700,10 @@ export const getVendorByID = async (
   id: VendorId,
 ): Promise<VendorOut> => {
   const [row] = await getDb(db)
-    .select(vendorColumns)
+    .select({
+      ...vendorColumns,
+      mailSearch: vendorMailSearchSql(await loadVendorMailSearch(db, [id])),
+    })
     .from(vendor)
     .leftJoin(entityAttachment, vendorLogoAttachment)
     .leftJoin(

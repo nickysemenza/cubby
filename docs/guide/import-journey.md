@@ -46,7 +46,8 @@ Each search records its finish time and the Emails its pages retained
 neither. The Mail import card shows, per mailbox, finished Vendor and charge
 searches over today's targets only (a finished search whose target is gone
 stays in the cursor but is not counted), the search in progress, the next five
-queued searches, and a link to Mail import Runs that need review. The Vendor
+queued searches, and a link to Mail import Runs that need review; it
+refreshes every 30 seconds while a switched-on mailbox has searches left. The Vendor
 list's derived Mail search column is done when every current search of that
 Vendor has finished in every member's connected mailbox, in progress once any
 has a finished page or a page token, not started otherwise, and blank for a

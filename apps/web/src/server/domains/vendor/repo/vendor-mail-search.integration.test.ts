@@ -20,8 +20,9 @@ import { vendorList } from "./vendor";
 
 // Failures: a search finished in one mailbox reading as done everywhere; a
 // stale completed search (the website moved) counting as current; a Vendor
-// with no searches reading as not started; the website's registrable domain
-// (public-suffix logic in TypeScript) not matching its host in SQL.
+// with no searches reading as not started; a finished parent-domain search
+// standing in for an unsearched private-suffix website; a website host that
+// TypeScript normalizes (trailing dot) never matching in SQL.
 describe("vendor Mail search status", () => {
   const ctx = withTestDb();
 
@@ -81,11 +82,33 @@ describe("vendor Mail search status", () => {
       "https://new-home.example.com",
       [],
     );
+    // `github.io` is a private suffix: the website searches `tenant.github.io`,
+    // and a finished search of the former `github.io` website is not it.
+    const privateSuffix = await vendorRow(
+      "Synthetic Private Suffix Vendor",
+      "https://tenant.github.io/store",
+      ["orders@tenant-mail.example.com"],
+    );
+    const trailingDot = await vendorRow(
+      "Synthetic Trailing Dot Vendor",
+      "https://Shop.Trailing.example.com./",
+      [],
+    );
     const unresearched = await vendorRow(
       "Synthetic Unresearched Vendor",
       null,
       [],
     );
+    const formerWebsite = (): MailboxScopedPosition[] => [
+      ...at(privateSuffix, finished).filter((query) =>
+        query.key.includes(":from:"),
+      ),
+      {
+        key: `vendor:${privateSuffix.id}:domain:github.io`,
+        query: '"github.io"',
+        ...finished,
+      },
+    ];
     const queries = (row: {
       id: VendorId;
       website: string | null;
@@ -114,6 +137,8 @@ describe("vendor Mail search status", () => {
         ...at(done, finished),
         ...at(partial, finished),
         ...at(untouched, { pageToken: null, completed: false }),
+        ...at(trailingDot, finished),
+        ...formerWebsite(),
         // The Vendor's old website: finished, but no longer one of its searches.
         {
           key: `vendor:${moved.id}:domain:old-home.example.com`,
@@ -126,7 +151,11 @@ describe("vendor Mail search status", () => {
       ledgerPartyId: b.party.id,
       mailboxId: b.mailboxId,
       from: null,
-      to: coverage(at(done, finished)),
+      to: coverage([
+        ...at(done, finished),
+        ...at(trailingDot, finished),
+        ...formerWebsite(),
+      ]),
     });
 
     const states = async (mailSearch?: MailSearchState[]) =>
@@ -144,13 +173,20 @@ describe("vendor Mail search status", () => {
       "Synthetic Done Vendor": "done",
       "Synthetic Moved Vendor": "not_started",
       "Synthetic Partial Vendor": "in_progress",
+      "Synthetic Private Suffix Vendor": "in_progress",
+      "Synthetic Trailing Dot Vendor": "done",
       "Synthetic Unresearched Vendor": null,
       "Synthetic Untouched Vendor": "not_started",
     });
     expect(Object.keys(await states(["in_progress", "done"]))).toEqual([
       "Synthetic Done Vendor",
       "Synthetic Partial Vendor",
+      "Synthetic Private Suffix Vendor",
+      "Synthetic Trailing Dot Vendor",
     ]);
+    expect(queries(privateSuffix).map((query) => query.key)).toContain(
+      `vendor:${privateSuffix.id}:domain:tenant.github.io`,
+    );
     const sorted = await vendorList(
       ctx.db,
       { mailSearch: ["done", "in_progress"] },
@@ -159,6 +195,8 @@ describe("vendor Mail search status", () => {
     );
     expect(sorted.data.map((row) => row.mailSearch)).toEqual([
       "done",
+      "done",
+      "in_progress",
       "in_progress",
     ]);
 
