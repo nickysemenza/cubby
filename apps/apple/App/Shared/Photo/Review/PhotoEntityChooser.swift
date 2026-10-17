@@ -350,8 +350,9 @@ struct PhotoEntityChooser: View {
             Button {
                 onCreateNew(affordance)
             } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "plus.circle").frame(width: 24)
+                // Sits above every load/search/empty state, so it stays outside the List.
+                HStack(spacing: FieldGuideTokens.Space.md) {
+                    Image(systemName: "plus.circle").fieldGuideIconSlot(width: 24)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(title)
                         if let disabledReason {
@@ -359,10 +360,12 @@ struct PhotoEntityChooser: View {
                         }
                     }
                 }
+                .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
+                .contentShape(.rect)
             }
             .disabled(!enabled)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, FieldGuideTokens.Space.xl)
+            .padding(.vertical, FieldGuideTokens.Space.xs)
             .accessibilityIdentifier("photos.destination.new.\(key.rawValue)")
             Divider()
         }

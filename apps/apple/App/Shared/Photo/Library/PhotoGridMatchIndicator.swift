@@ -20,13 +20,12 @@ struct PhotoGridMatchIndicator: View {
         .frame(minWidth: 20, minHeight: 20)
         .foregroundStyle(categoryTint == nil ? AnyShapeStyle(.primary) : AnyShapeStyle(.white))
         .background {
-            if let categoryTint {
-                Capsule().fill(categoryTint)
-            } else {
-                Capsule().fill(.regularMaterial)
-            }
+            if let categoryTint { Capsule().fill(categoryTint) }
         }
-        .shadow(radius: 1, y: 0.5)
+        // The pending pill is a control-like overlay on media, so it is clear glass; a tinted pill
+        // carries its own category color and keeps a hairline shadow instead.
+        .glassEffect(categoryTint == nil ? .clear : .identity, in: .capsule)
+        .shadow(radius: categoryTint == nil ? 0 : 1, y: 0.5)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(state.accessibilityStatus)
         .help(state.accessibilityStatus)
@@ -34,7 +33,7 @@ struct PhotoGridMatchIndicator: View {
 
     /// B4's category signal, carried by the pill itself (it replaced a separate 6pt dot): the
     /// category's tint (by ramp index, never by key) once a hit lands, grey once analysed with no
-    /// hit, and the plain material pill while analysis is pending.
+    /// hit, and the clear glass pill while analysis is pending.
     private var categoryTint: Color? {
         guard case .analysed(let categories) = state.analysis else { return nil }
         return PhotoCategoryTint.color(for: categories) ?? .gray

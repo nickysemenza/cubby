@@ -133,7 +133,7 @@ struct PhotoDestinationSheet: View {
             #endif
             .navigationSubtitle(manifest.reviewSelectionStatus)
             .toolbar { reviewToolbar }
-            .safeAreaInset(edge: .bottom, spacing: 0) { statusFooter }
+            .safeAreaBar(edge: .bottom) { statusFooter }
             .navigationDestination(for: PhotoImportNavigationDestination.self) { destination in
                 destinationScreen(destination)
             }
@@ -278,9 +278,9 @@ struct PhotoDestinationSheet: View {
                         Button {
                             path.append(.sourceType(type.source))
                         } label: {
-                            HStack(spacing: 12) {
+                            HStack(spacing: FieldGuideTokens.Space.md) {
                                 Image(systemName: entitySymbol(for: type.source))
-                                    .frame(width: 24)
+                                    .fieldGuideIconSlot(width: 24)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(type.title)
                                     Text(type.outcomeDescription)
@@ -367,7 +367,7 @@ struct PhotoDestinationSheet: View {
                         Spacer()
                         selectAllButton
                     }
-                    .padding(.horizontal)
+                    .padding(.horizontal, FieldGuideTokens.Space.md)
                     analysisStatus
                     List {
                         if !manifest.selectedIDs.isEmpty {
@@ -435,10 +435,9 @@ struct PhotoDestinationSheet: View {
                     .accessibilityIdentifier("photos.analysis.cancel")
             }
             .font(.subheadline)
-            .padding(.horizontal)
+            .padding(.horizontal, FieldGuideTokens.Space.md)
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.bar)
             .accessibilityElement(children: .combine)
         case .complete:
             // Folded into the first list section's header (`analysisCompleteCaption`) instead of
@@ -448,7 +447,7 @@ struct PhotoDestinationSheet: View {
             InlineLoadFailure(message: message) {
                 manifest.startAnalysis(client: appModel.client, matches: appModel.photoMatches)
             }
-            .padding(.horizontal)
+            .padding(.horizontal, FieldGuideTokens.Space.md)
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -630,7 +629,7 @@ struct PhotoDestinationSheet: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .padding(.horizontal)
+            .padding(.horizontal, FieldGuideTokens.Space.md)
             .padding(.vertical, 6)
         }
     }

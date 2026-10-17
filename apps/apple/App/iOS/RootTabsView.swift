@@ -3,87 +3,60 @@ import Photos
 import SwiftUI
 
 struct LibraryHomeView: View {
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var recentAssets: [PHAsset] = []
     @State private var canReadPhotos = false
     @State private var loadingRecentAssets = true
 
     var body: some View {
-        ScrollView {
-            // The inline navigation title names the screen; no second in-content title.
-            Group {
-                if dynamicTypeSize.isAccessibilitySize {
-                    VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
-                        photosPanel
-                        catalogPanel
-                    }
-                } else {
-                    ViewThatFits(in: .horizontal) {
-                        HStack(alignment: .top, spacing: FieldGuideTokens.Space.lg) {
-                            photosPanel.frame(minWidth: 280)
-                            catalogPanel.frame(minWidth: 280)
-                        }
-                        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
-                            photosPanel
-                            catalogPanel
-                        }
-                    }
+        // The inline navigation title names the screen; no second in-content title.
+        List {
+            Section("Photos") {
+                recentPhotosRow
+                NavigationLink(value: Route.photosLibrary) {
+                    Label("All photos", systemImage: "photo.on.rectangle.angled")
                 }
+                .accessibilityIdentifier("library.photos")
             }
-            .frame(maxWidth: 960, alignment: .leading)
-            .frame(maxWidth: .infinity, alignment: .top)
-            .padding(FieldGuideTokens.Space.lg)
+            Section {
+                NavigationLink(value: Route.browseCatalog) {
+                    Label("Browse catalog", systemImage: "square.grid.2x2")
+                }
+                .accessibilityIdentifier("library.catalog")
+            } header: {
+                Text("Catalog")
+            } footer: {
+                Text("Browse records by kind, with counts and filters.")
+            }
         }
         .navigationTitle("Library")
         .task { await loadRecentAssets() }
     }
 
-    private var photosPanel: some View {
-        GroupBox {
-            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
-                if loadingRecentAssets {
-                    LoadingIndicator(label: "Loading recent photos")
-                        .frame(height: 112)
-                } else if canReadPhotos && !recentAssets.isEmpty {
-                    ScrollView(.horizontal) {
-                        HStack(spacing: 8) {
-                            ForEach(recentAssets, id: \.localIdentifier) { asset in
-                                LibraryRecentThumbnail(asset: asset)
-                            }
+    /// The recent-photo strip is media, not a grouped cell, so it sits on a clear row.
+    @ViewBuilder private var recentPhotosRow: some View {
+        Group {
+            if loadingRecentAssets {
+                LoadingIndicator(label: "Loading recent photos")
+                    .frame(maxWidth: .infinity, minHeight: 112)
+            } else if canReadPhotos && !recentAssets.isEmpty {
+                ScrollView(.horizontal) {
+                    HStack(spacing: FieldGuideTokens.Space.sm) {
+                        ForEach(recentAssets, id: \.localIdentifier) { asset in
+                            LibraryRecentThumbnail(asset: asset)
                         }
                     }
-                    .scrollIndicators(.hidden)
-                } else {
-                    Text(canReadPhotos ? "No recent photos" : "Open Photos to choose library access")
-                        .foregroundStyle(.secondary)
                 }
-                NavigationLink(value: Route.photosLibrary) {
-                    Label("All photos", systemImage: "photo.on.rectangle.angled")
-                        .frame(minHeight: FieldGuideTokens.touchTarget)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        } label: {
-            Label("Photos", systemImage: "photo.on.rectangle.angled")
-        }
-        .accessibilityIdentifier("library.photos")
-    }
-
-    private var catalogPanel: some View {
-        GroupBox {
-            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
-                Text("Browse records by kind, with counts and filters.")
+                .contentMargins(.horizontal, FieldGuideTokens.Space.lg, for: .scrollContent)
+                .scrollIndicators(.hidden)
+            } else {
+                Text(canReadPhotos ? "No recent photos" : "Open Photos to choose library access")
                     .foregroundStyle(.secondary)
-                NavigationLink(value: Route.browseCatalog) {
-                    Label("Browse catalog", systemImage: "square.grid.2x2")
-                        .frame(minHeight: FieldGuideTokens.touchTarget)
-                }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, FieldGuideTokens.Space.lg)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        } label: {
-            Label("Catalog", systemImage: "square.grid.2x2")
         }
-        .accessibilityIdentifier("library.catalog")
+        .listRowBackground(Color.clear)
+        .listRowInsets(EdgeInsets())
     }
 
     private func loadRecentAssets() async {
@@ -109,7 +82,7 @@ private struct LibraryRecentThumbnail: View {
             }
         }
         .frame(width: 112, height: 112)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel))
         .accessibilityLabel(asset.creationDate.map { DatePresentation.timestamp($0).absolute } ?? "Photo")
         .task(id: asset.localIdentifier) {
             thumbnail = try? await PhotoLibraryIO.shared.thumbnail(for: asset)
@@ -169,4 +142,8 @@ extension View {
 
 #Preview(traits: .modifier(SignedInPreview())) {
     RootTabsView()
+}
+
+#Preview("Library") {
+    NavigationStack { LibraryHomeView() }
 }
