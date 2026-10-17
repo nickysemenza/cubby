@@ -14,12 +14,7 @@
  * detector is the audit that catches a new removal path (or an old one,
  * missed) that skips it.
  *
- * **This is a REGRESSION GUARD, not a hypothetical.** Run against production
- * data, it returns zero violations: the only live rows pointing at
- * soft-deleted targets anywhere in the schema are `Ingredient.recipeId`
- * tombstones — see below — and every one of those is on the sole edge that is
- * deliberately exempt. A non-empty result from this detector is a real bug,
- * not noise to tune away.
+ * A non-empty result is a removal-path defect, not noise to tune away.
  *
  * **Why `Ingredient.recipeId` is exempt.** It is the one edge marked
  * `allow-target-deleted` in `ENTITY_EDGE_SEMANTICS`: deleting a recipe
@@ -36,16 +31,11 @@
  * prevents a missing parent, while this audit catches the separate liveness
  * defect of a live child still pointing at a soft-deleted parent.
  *
- * **Why raw SQL instead of the Drizzle query builder.** Three edges are
- * self-referential (`Location.parentId`, `Project.parentProjectId`,
- * `Task.parentTaskId`) — source and target are the same table, which the
- * builder's `.innerJoin()` can only express with explicit table aliasing that
- * `INCOMING_EDGES`' generic `{ column }` shape doesn't carry. Worse,
- * interpolating a Drizzle column object into a `sql` select field silently
+ * **Why raw SQL instead of the Drizzle query builder.** Interpolating a
+ * Drizzle column object into a `sql` select field silently
  * drops its table-qualifying prefix (the `drizzle-buildSelection-strips-
  * prefixes` hazard — it has already produced four bugs in this repo,
- * including silent self-joins), which is precisely the failure mode a
- * self-join query is most exposed to. Building one explicit `UNION ALL` of
+ * including silent self-joins). Building one explicit `UNION ALL` of
  * hand-written, alias-qualified SQL fragments — table and column names always
  * routed through `sql.identifier()`, values always bound parameters — sidesteps
  * both problems and keeps every branch visually inspectable.
@@ -206,13 +196,10 @@ function detailBranch(spec: EdgeAuditSpec): SQL {
     SELECT ${spec.edgeKey}::text AS "edgeKey",
            ${spec.targetEntity}::text AS "targetEntity",
            s.${sql.identifier(spec.sourceIdColumnName)}::text AS "sourceId",
-           t.id::text AS "targetId"
+           s.${sql.identifier(spec.sourceColumnName)}::text AS "targetId",
+           count(*) OVER ()::int AS "totalCount"
     FROM ${sql.identifier(spec.sourceTableName)} s
-    JOIN ${sql.identifier(spec.targetTableName)} t
-      ON t.id = s.${sql.identifier(spec.sourceColumnName)}
-    WHERE t."deletedAt" IS NOT NULL
-    ${spec.sourceSoftDeletable ? sql`AND s."deletedAt" IS NULL` : sql``}
-    ${scopeFilter(spec)}
+    WHERE ${violationFilter(spec)}
     LIMIT ${ROW_CAP}
   )`;
 }
@@ -223,12 +210,41 @@ function countBranch(spec: EdgeAuditSpec): SQL {
            ${spec.targetEntity}::text AS "targetEntity",
            count(*)::int AS "count"
     FROM ${sql.identifier(spec.sourceTableName)} s
-    JOIN ${sql.identifier(spec.targetTableName)} t
-      ON t.id = s.${sql.identifier(spec.sourceColumnName)}
-    WHERE t."deletedAt" IS NOT NULL
+    WHERE ${violationFilter(spec)}
+  `;
+}
+
+function deletedTargetRelation(
+  table: string,
+): ReturnType<typeof sql.identifier> {
+  return sql.identifier(`_liveness_deleted_${table}`);
+}
+
+function violationFilter(spec: EdgeAuditSpec): SQL {
+  const targets = deletedTargetRelation(spec.targetTableName);
+  // Empty targets must skip the source scan entirely. With targets present,
+  // membership can use the existing FK index rather than hash-joining every
+  // wide historical source row. The domain table owns the tombstone: Entity
+  // identity liveness cannot substitute for it when auditing raw corruption.
+  return sql`
+    EXISTS (SELECT 1 FROM ${targets})
+    AND s.${sql.identifier(spec.sourceColumnName)} = ANY (ARRAY(SELECT id FROM ${targets}))
     ${spec.sourceSoftDeletable ? sql`AND s."deletedAt" IS NULL` : sql``}
     ${scopeFilter(spec)}
   `;
+}
+
+function auditQuery(
+  specs: EdgeAuditSpec[],
+  branch: (spec: EdgeAuditSpec) => SQL,
+): SQL {
+  const tables = new Set(specs.map((spec) => spec.targetTableName));
+  const targets = [...tables].map(
+    (table) => sql`${deletedTargetRelation(table)} AS MATERIALIZED (
+      SELECT id FROM ${sql.identifier(table)} WHERE "deletedAt" IS NOT NULL
+    )`,
+  );
+  return sql`WITH ${sql.join(targets, sql`, `)} ${sql.join(specs.map(branch), sql` UNION ALL `)}`;
 }
 
 function scopeFilter(spec: EdgeAuditSpec): SQL {
@@ -251,11 +267,12 @@ function describeViolation(
   return base;
 }
 
-type DetailRow = Record<string, string> & {
+type DetailRow = Record<string, string | number> & {
   edgeKey: string;
   targetEntity: string;
   sourceId: string;
   targetId: string;
+  totalCount: number;
 };
 
 type CountRow = Record<string, string | number> & {
@@ -267,24 +284,18 @@ type CountRow = Record<string, string | number> & {
 export const countReferentialLivenessViolations = async (
   db: Database,
 ): Promise<number> => {
-  const countQuery = sql.join(
-    buildEdgeAuditSpecs().map((spec) => countBranch(spec)),
-    sql` UNION ALL `,
-  );
+  const countQuery = auditQuery(buildEdgeAuditSpecs(), countBranch);
   const result = await getDb(db).execute<CountRow>(countQuery);
   return result.rows.reduce((total, row) => total + Number(row.count), 0);
 };
 
 /**
- * Every live row whose FK points at a soft-deleted target, across all 57
+ * Every live row whose FK points at a soft-deleted target, across all declared
  * `must-target-live` incoming edges. See the file-level doc comment for the
- * invariant, why it's a regression guard, and the two audit exemptions
- * (`Ingredient.recipeId` skipped entirely).
+ * invariant and the declared audit exemptions.
  *
- * Two round trips total, not one per edge: one `UNION ALL` for the (capped)
- * violation rows, one `UNION ALL` for the true per-edge count, run
- * concurrently. When an edge's true count exceeds what was returned, that
- * edge's violations say so in their `description`.
+ * One statement shares deleted-target IDs across edges. Each branch counts
+ * before its sample cap, so descriptions retain the true per-edge total.
  */
 export const findReferentialLivenessViolations = async (
   db: Database,
@@ -297,22 +308,8 @@ export const findReferentialLivenessViolations = async (
   const specByKey = new Map(specs.map((s) => [specKey(s), s]));
 
   const dbClient = getDb(db);
-  const detailQuery = sql.join(
-    specs.map((s) => detailBranch(s)),
-    sql` UNION ALL `,
-  );
-  const countQuery = sql.join(
-    specs.map((s) => countBranch(s)),
-    sql` UNION ALL `,
-  );
-
-  const [detailResult, countResult] = await Promise.all([
-    dbClient.execute<DetailRow>(detailQuery),
-    dbClient.execute<CountRow>(countQuery),
-  ]);
-
-  const countByKey = new Map(
-    countResult.rows.map((r) => [specKey(r), Number(r.count)]),
+  const detailResult = await dbClient.execute<DetailRow>(
+    auditQuery(specs, detailBranch),
   );
   const shownByKey = new Map<string, number>();
   for (const row of detailResult.rows) {
@@ -327,7 +324,7 @@ export const findReferentialLivenessViolations = async (
       );
     }
     const shown = shownByKey.get(specKey(row)) ?? 0;
-    const trueCount = countByKey.get(specKey(row)) ?? shown;
+    const trueCount = Number(row.totalCount);
 
     return {
       edgeKey: spec.edgeKey,

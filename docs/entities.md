@@ -1997,6 +1997,14 @@ tab's Connections, the impact preview, the graph explorer's physical edges,
 the Problems orphan finder, and MCP `entity_read.connections`. Writes never go
 through it.
 
+The referential-liveness audit reads the complementary case: live sources whose
+declared `must-target-live` edge points at a deleted domain row. It shares each
+target table's deleted IDs within one statement and applies indexable membership
+predicates to sources, skipping source scans when that target set is empty.
+Each edge counts before its 50-row sample cap, preserving exact totals in capped
+descriptions. Scoped edges, source liveness and declared exemptions still apply;
+the Entity identity table cannot replace domain tombstones for this audit.
+
 The orphan finder restricts graph arms to edges touching its checked kinds
 before reading rows. Polymorphic source arms remain eligible because their
 source kind is stored on each identity. Both endpoints must still be live;

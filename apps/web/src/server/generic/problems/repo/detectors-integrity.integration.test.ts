@@ -67,6 +67,7 @@ import { makeCookbookExtraction } from "~/server/testing/repo.fixtures";
 
 import {
   countDependencyCycles,
+  countReferentialLivenessViolations,
   findDependencyCycles,
   findReferentialLivenessViolations,
 } from "./detectors-integrity";
@@ -1882,6 +1883,31 @@ describe("findReferentialLivenessViolations", () => {
     }
 
     expect(await findReferentialLivenessViolations(ctx.db)).toEqual([]);
+  });
+
+  it("keeps per-edge totals exact above the returned sample cap", async () => {
+    // Counting after LIMIT would hide the backlog beyond the sampled rows.
+    const target = await mkProduct(ctx.db);
+    const expected = new Set<string>();
+    for (let index = 0; index < 51; index++) {
+      const source = await sourceFactoryFor("Expense.productId")(
+        ctx.db,
+        target.id,
+      );
+      expected.add(source.id);
+    }
+    await softDelete(ctx.db, "Product", target.id);
+    const rows = (await findReferentialLivenessViolations(ctx.db)).filter(
+      (row) =>
+        row.edgeKey === "Expense.productId" && row.targetEntity === "product",
+    );
+    expect(rows).toHaveLength(50);
+    expect(new Set(rows.map((row) => row.sourceId)).size).toBe(50);
+    for (const row of rows) {
+      expect(expected.has(row.sourceId)).toBe(true);
+      expect(row.description).toContain("Showing 50 of 51");
+    }
+    expect(await countReferentialLivenessViolations(ctx.db)).toBe(51);
   });
 
   // The one deliberate exemption — see ENTITY_EDGE_SEMANTICS.recipe["Ingredient.recipeId"]
