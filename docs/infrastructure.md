@@ -174,6 +174,20 @@ initializes relation loaders and CRUD dependencies. These belong behind their
 consuming handler; the entry budget does not measure the additional imports
 an API operation or page needs.
 
+Module-scope work in the entry closure runs on every isolate start; construct
+expensive objects (an `Intl.Segmenter`, compiled tables) on first use. To
+profile startup, build with `pnpm --dir apps/web build:cf`, copy
+`.cloudflare/output/v0/workers/default/bundle` without `*.map` into an ignored
+directory beside a `wrangler.jsonc` that sets `main: "bundle/index.js"`,
+`no_bundle: true`, `find_additional_modules: true`, the Worker's compatibility
+date and flags, and module rules for `**/*.js` (ESModule), `**/*.wasm`
+(CompiledWasm), `**/*.{md,css}` (Text) and `**/*.json` (Data), then run
+`wrangler check startup --cwd <dir>`. The CPU profile is local and sampled at
+about 1 ms; repeat it and compare module shares, not absolute times. Cold
+latency is mostly outside this profile: production traces carry
+`cubby.worker.first_invocation`, and comparing the root span with
+`cf.app.entry` separates platform isolate start from handler time.
+
 Run purposes and MCP authority are declared in
 `packages/schemas/src/import-run-agent.ts`; execution, settlement and transcript
 retirement follow the [purchase-import module guide](../apps/web/src/server/domains/purchase-import/service/README.md).
@@ -227,7 +241,9 @@ AI refresh follows this rule; its scheduling details live in the
 [refresh runbook](runbooks/ai-refresh.md).
 
 Neon owns the PostgreSQL database. Production compute is autoscaling
-0.25–4 CU. This range belongs to the production endpoint: changing the project's
+0.25–4 CU and keeps scale-to-zero (300 s idle) by choice: the first query after
+an idle gap waits for compute start (about 0.5 s median, 0.9 s p90), visible
+as a long `db.connect.phase.startup` on `db.client.connect`. This range belongs to the production endpoint: changing the project's
 default compute range does not resize an existing endpoint. The Hyperdrive
 origin connection caps below are 12 + 12. Both configurations share origin
 compute; the cached pool needs headroom for short reads while expensive reads
