@@ -8,6 +8,7 @@ import {
 import {
   inventoryPlacement,
   inventoryValuation,
+  inventoryValuationStatus,
 } from "@cubby/schemas/inventory-fields";
 import {
   effectiveInventoryOwnership,
@@ -503,16 +504,11 @@ export default defineEntity({
       // The unit, then the size within it.
       amount: { type: "number" },
       valuationStatus: {
-        predicate: "multiselect",
-        negatable: true,
-        reason:
-          "Missing includes priceable entries, so the statuses overlap and are not one row value",
+        type: "enum",
+        options: [...inventoryValuationStatus.options],
       },
-      categoryFeature: {
-        predicate: "multiselect",
-        negatable: true,
-        reason: "Inherited through category ancestors; not a row value",
-      },
+      // The product category's effective feature.
+      categoryFeature: { via: "product.category.feature" },
       // Stock parked in the household-wide Unknown location.
       locationRole: { type: "boolean" },
       effectiveOwner: {
@@ -532,9 +528,10 @@ export default defineEntity({
         "valuation",
         "verifiedAt",
         "category",
+        "valuationStatus",
       ],
     },
-    grouping: ["category", "location", "placement"],
+    grouping: ["category", "location", "placement", "valuationStatus"],
     intents: {
       fields: {
         capture: [
@@ -815,13 +812,11 @@ export default defineEntity({
         field: "valuationStatus",
         kind: "multiselect",
         placeholder: "Filter valuation...",
+        // Missing valuation is Priceable and Unpriceable picked together.
         options: [
           { value: "valued", label: "Valued" },
-          { value: "missing", label: "Missing valuation" },
-          {
-            value: "missing_with_priced_product",
-            label: "Missing despite product price",
-          },
+          { value: "priceable", label: "Missing despite product price" },
+          { value: "unpriceable", label: "Missing, product unpriced" },
         ],
         derived: true,
         deriveSchema: true,

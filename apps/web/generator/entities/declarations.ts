@@ -17,6 +17,7 @@ import {
   deriveInverseRelations,
   deriveRelationSections,
 } from "./derive.ts";
+import { validatePredicateBaseline } from "./predicate-baseline.ts";
 import { validateRelationSections } from "./presentation.ts";
 import { browserRoutes } from "./render/routes.ts";
 import type {
@@ -231,11 +232,12 @@ export type EntityField = Readonly<{
     sourceDependencies?: readonly Readonly<{ path: string; label: string }>[];
   }> | null;
   resolution: Readonly<{
-    reset: Readonly<Record<string, EntityFieldResolutionValue>>;
+    reset?: Readonly<Record<string, EntityFieldResolutionValue>>;
     none: Readonly<Record<string, EntityFieldResolutionValue>> | null;
     redundancy: "eligible" | "intentional";
     confirm: Readonly<Record<string, EntityFieldResolutionValue>> | null;
     labels: Readonly<{ none?: string; unresolved?: string }> | null;
+    inherit?: EntityFieldInherit;
   }> | null;
   control: EntityFieldControl | null;
   display: Readonly<{
@@ -279,6 +281,17 @@ export type EntityField = Readonly<{
     update: z.ZodType | null;
   }>;
 }>;
+/** A field's declared fallback chain (`resolution.inherit`). */
+type EntityFieldInherit = Readonly<{
+  mode?: Readonly<{
+    field: string;
+    inherit: string;
+    none?: readonly string[];
+    explicitIfSet?: true;
+  }>;
+  from: readonly ("hierarchy" | Readonly<{ path: string }>)[];
+}>;
+
 export type EntityStorageField = Readonly<{
   key: string;
   column: string;
@@ -572,10 +585,9 @@ export const loadEntityDeclarationBundle = async (): Promise<{
       return raw;
     }),
   );
-  return {
-    entities: compileLoadedEntityDeclarations(loaded),
-    declarations: loaded,
-  };
+  const entities = compileLoadedEntityDeclarations(loaded);
+  validatePredicateBaseline(entities);
+  return { entities, declarations: loaded };
 };
 
 export const loadEntityDeclarations = async (): Promise<CompiledEntity[]> =>

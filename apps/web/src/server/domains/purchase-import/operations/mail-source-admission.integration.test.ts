@@ -9,7 +9,6 @@
  * order. Deterministic original checks precede all admission judgments.
  */
 import type { ActorContext } from "@cubby/schemas/context";
-import { executionAuthorizationInput } from "@cubby/schemas/execution-authorization";
 import type { LedgerPartyId, RunId } from "@cubby/schemas/identifiers";
 import {
   preparePurchaseImportInput,
@@ -22,21 +21,16 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
-import { account } from "~/server/db/auth.schema";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
   email as emailTable,
   expense,
-  assessmentEmailLink,
-  entityAttachment,
-  orderMailEvent,
   importPreparedOrder,
   purchase,
   run,
   vendorAccount,
 } from "~/server/db/schema";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
-import { issueExecutionAuthorization } from "~/server/domains/run/repo/execution-authorization";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { commitPurchaseImport, preparePurchaseImport } from "./import-orders";
@@ -208,183 +202,6 @@ describe("Mail import source admission", () => {
       .parse(row?.input)
       .sources.map((source) => source.orderMailId);
   }
-
-  it("refuses another merchant found through a selected Vendor's shared platform sender", async () => {
-    const { party, vendor: selected } = await world();
-    const other = await insertWithShortcode(ctx.db, "vendor", {
-      name: "Synthetic other platform merchant",
-    });
-    const mail = await retain(
-      party.id,
-      "shared-platform-other-merchant",
-      "Order OTHER-1 from another merchant",
-    );
-    const owner = await mailRun(party, [mail], "foreground");
-    await getDb(ctx.db).insert(account).values({
-      id: crypto.randomUUID(),
-      accountId: mailboxId,
-      providerId: "google",
-      userId: ctx.actor.userId,
-      updatedAt: new Date(),
-    });
-    const ref = await issueExecutionAuthorization(
-      ctx.db,
-      ctx.actor,
-      executionAuthorizationInput.parse({
-        kind: "execution_authorization",
-        version: 1,
-        owner: { userId: ctx.actor.userId, ledgerPartyId: party.id },
-        scope: {
-          kind: "vendor_backfill",
-          mailboxId,
-          discovery: "vendor_history",
-          vendors: [{ vendorId: selected.id }, { vendorId: other.id }],
-          senderPolicy: "verified_at_first_start",
-          receivedAfter: null,
-          receivedBefore: "2026-10-01",
-          candidateLimit: 10,
-          productLimit: 5,
-        },
-        meteredBudget: { period: "lifetime", limitMicroUSD: 1_000_000 },
-        expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
-      }),
-    );
-    const input = mailResearchRunInput.parse({
-      kind: "mail_research",
-      sources: [{ orderMailId: mail.id, checksum: mail.rawChecksum }],
-      executionAuthorization: ref,
-    });
-    await getDb(ctx.db)
-      .update(run)
-      .set({ vendorId: selected.id, input })
-      .where(eq(run.id, owner.id));
-    await expect(
-      preparePurchaseImport(
-        ctx.db,
-        prepareInput(
-          owner.id,
-          "wrong-seller",
-          other.shortcode,
-          mail,
-          "OTHER-1",
-        ),
-        owner.actor,
-      ),
-    ).rejects.toThrow(
-      "Vendor history order is outside this Run's selected Vendor",
-    );
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(importPreparedOrder)
-        .where(eq(importPreparedOrder.runId, owner.id)),
-    ).toEqual([]);
-    const otherPurchase = await insertWithShortcode(ctx.db, "purchase", {
-      vendorId: other.id,
-      orderId: "OTHER-1",
-    });
-    await expect(
-      resolveMail(
-        ctx.db,
-        {
-          mailboxId,
-          messageId: mail.messageId,
-          checksum: mail.rawChecksum,
-          disposition: {
-            kind: "linked",
-            purchaseIds: [otherPurchase.shortcode],
-            event: "confirmation",
-          },
-        },
-        owner.actor,
-      ),
-    ).rejects.toThrow(
-      "Vendor history order is outside this Run's selected Vendor",
-    );
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(orderMailEvent)
-        .where(eq(orderMailEvent.orderMailId, mail.id)),
-    ).toEqual([]);
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(assessmentEmailLink)
-        .where(eq(assessmentEmailLink.purchaseId, otherPurchase.id)),
-    ).toEqual([]);
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(entityAttachment)
-        .where(eq(entityAttachment.entityId, otherPurchase.id)),
-    ).toEqual([]);
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(vendorAccount)
-        .where(eq(vendorAccount.vendorId, other.id)),
-    ).toEqual([]);
-    await preparePurchaseImport(
-      ctx.db,
-      prepareInput(
-        owner.id,
-        "accepted-seller",
-        selected.shortcode,
-        mail,
-        "OTHER-1",
-      ),
-      owner.actor,
-    );
-    await getDb(ctx.db)
-      .update(run)
-      .set({ vendorId: other.id })
-      .where(eq(run.id, owner.id));
-    await expect(
-      commitPurchaseImport(
-        ctx.db,
-        {
-          _runExecution: {
-            runId: owner.id,
-            operationId: "commit:changed-vendor-scope",
-          },
-          prepareOperationId: "prepare:accepted-seller",
-          defaultTrade: "other",
-          resolutions: [
-            {
-              stableOrderId: "accepted-seller",
-              stableLineId: "accepted-seller:line-1",
-              resolution: { kind: "expense_only" },
-            },
-          ],
-        },
-        owner.actor,
-      ),
-    ).rejects.toThrow(
-      "Vendor history order is outside this Run's selected Vendor",
-    );
-    expect(
-      await getDb(ctx.db).select().from(expense).where(notDeleted(expense)),
-    ).toEqual([]);
-    // Missing per-Run identity must never widen to every Vendor in the approval.
-    await getDb(ctx.db)
-      .update(run)
-      .set({ vendorId: null })
-      .where(eq(run.id, owner.id));
-    await expect(
-      preparePurchaseImport(
-        ctx.db,
-        prepareInput(
-          owner.id,
-          "missing-seller",
-          selected.shortcode,
-          mail,
-          "OTHER-1",
-        ),
-        owner.actor,
-      ),
-    ).rejects.toThrow("Vendor history Run has no selected Vendor");
-  });
 
   it("reads a same-mailbox original outside the roster for context but writes only admitted Email", async () => {
     const { party } = await world();

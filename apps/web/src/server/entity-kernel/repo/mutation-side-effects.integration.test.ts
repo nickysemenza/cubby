@@ -7,6 +7,7 @@ import {
 } from "@cubby/schemas/project";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { testUserId } from "@cubby/schemas/testing";
+import { eq } from "drizzle-orm";
 import type { CreatableEntity, EntityOverrides } from "tooling/factories/build";
 import { createEntity } from "tooling/factories/create";
 import { fakerFromSeed, hashSeed } from "tooling/factories/faker";
@@ -23,6 +24,8 @@ afterEach(() => backgroundQueue.restore());
 
 import { mock } from "~/lib/test/mock-schema";
 import type { Database } from "~/server/db";
+import { getDb } from "~/server/db/helpers";
+import { task } from "~/server/db/schema";
 import { createExpense } from "~/server/domains/expense/repo/crud";
 import { deleteProducts } from "~/server/domains/product/repo/crud";
 import {
@@ -30,6 +33,7 @@ import {
   updateProject,
 } from "~/server/domains/project/repo/crud";
 import { createTask } from "~/server/domains/task/repo/crud";
+import { executeEntity } from "~/server/entity-kernel";
 import {
   getEntityEmbeddingDeletedAtForRef,
   seedEntityEmbedding,
@@ -39,7 +43,9 @@ import {
   getSearchDocumentEmbeddingText,
   refreshSearchDocument,
 } from "~/server/generic/search/repo/search-document";
+import { refreshSearchDocuments } from "~/server/generic/search/repo/search-document";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createInventoryFixture as createInventoryEntry,
   createLocationFixture as createLocation,
@@ -381,6 +387,84 @@ describe("mutation side effects integration", () => {
         { entityKind: "task", entityId: child.id },
         { entityKind: "wish", entityId: wish.id },
       ]),
+    );
+  });
+
+  it("a task change reaches the search projection of every inheriting descendant", async () => {
+    const seed = kernelSeeder(ctx.db);
+    const tarp = await seed("product", { name: "Lineage tarp" });
+    const awning = await seed("product", { name: "Lineage awning" });
+    const top = await seed("task", {
+      name: "Lineage top chore",
+      trade: "other",
+      subjectProductId: tarp.code,
+    });
+    const middle = await seed("task", {
+      name: "Lineage middle chore",
+      trade: "other",
+      parentTaskId: top.code,
+    });
+    // Two levels down, which writes no longer create (one subtask level)
+    // but older data holds: it inherits the top task's subject.
+    const bottom = await insertWithShortcode(ctx.db, "task", {
+      name: "Lineage bottom chore",
+      trade: "other",
+      parentTaskId: middle.id as never,
+    });
+
+    await getDb(ctx.db)
+      .update(task)
+      .set({ subjectProductId: awning.id as never })
+      .where(eq(task.id, top.id as never));
+    await runMutationSideEffects(
+      ctx.db,
+      {
+        action: "updated",
+        entity: { entity: "task", id: top.id },
+        source: "test.task.subject",
+      },
+      capturingPorts(),
+    );
+
+    const text = await semanticText(ctx.db, "task", bottom.id);
+    expect(text).toContain("Lineage awning");
+    expect(text).not.toContain("Lineage tarp");
+  });
+
+  it("deleting a task refreshes a surviving descendant that inherited through it", async () => {
+    const seed = kernelSeeder(ctx.db);
+    const tarp = await seed("product", { name: "Orphan tarp" });
+    const top = await seed("task", {
+      name: "Orphan top chore",
+      trade: "other",
+      subjectProductId: tarp.code,
+    });
+    const middle = await seed("task", {
+      name: "Orphan middle chore",
+      trade: "other",
+      parentTaskId: top.code,
+    });
+    // Older data nests below the one-level delete cascade.
+    const bottom = await insertWithShortcode(ctx.db, "task", {
+      name: "Orphan bottom chore",
+      trade: "other",
+      parentTaskId: middle.id as never,
+    });
+    await refreshSearchDocuments(ctx.db, [
+      { entityKind: "task", entityId: bottom.id },
+    ]);
+    expect(await semanticText(ctx.db, "task", bottom.id)).toContain(
+      "Orphan tarp",
+    );
+
+    await executeEntity(buildKernelContext(ctx.db, testUserId(TEST_USER_ID)), {
+      action: "delete",
+      entity: "task",
+      ids: [top.code],
+    });
+
+    expect(await semanticText(ctx.db, "task", bottom.id)).not.toContain(
+      "Orphan tarp",
     );
   });
 

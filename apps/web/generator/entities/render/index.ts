@@ -983,6 +983,14 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
       ];
     }),
   );
+  // An inherit-only resolution has no client actions.
+  const withoutInherit = (
+    resolution: CompiledEntity["fieldModel"]["fields"][number]["resolution"],
+  ) => {
+    if (resolution?.reset === undefined) return null;
+    const { inherit: _inherit, ...rest } = resolution;
+    return rest;
+  };
   const fieldModels = Object.fromEntries(
     entities.map(({ key, fieldModel }) => {
       // `derived`/`hierarchy`/`grouping` are emitted compiled, in
@@ -1001,6 +1009,8 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
           ...rest,
           fields: fieldModel.fields.map(({ validation, ...field }) => ({
             ...field,
+            // `resolution.inherit` is emitted compiled, as list fields' `inherit`.
+            resolution: withoutInherit(field.resolution),
             // A field is required on create when it declares a create schema
             // that rejects `undefined` — a field with no create schema at all
             // is never required (it is not part of the create roster).
@@ -1371,6 +1381,9 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         " * (0 exactly when `levelReason` says why).\n" +
         " */\n" +
         'export type GeneratedListField = { readonly shape: "via"; readonly path: string; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity; readonly terminal: { readonly kind: "record"; readonly titleColumn: string | null } | { readonly kind: "field"; readonly column: string; readonly fieldKind: string }; readonly many: boolean; readonly sort: string | null; readonly group: string | null } | { readonly shape: "value"; readonly type: "text" | "number" | "date" | "boolean" | "enum"; readonly options: readonly string[] | null; readonly sort: null; readonly group: null } | { readonly shape: "predicate"; readonly predicate: "text" | "multiselect" | "idMulti" | "boolean" | "presence" | "range"; readonly options: readonly string[] | null; readonly reason: string; readonly sort: string; readonly group: string; readonly exclude: string | null };\n\n' +
+        "type InheritHop = { readonly field: string; readonly column: string; readonly target: Entity };\n" +
+        "/** A field's compiled `resolution.inherit`, rendered by `effectiveFieldSql`. */\n" +
+        'export type GeneratedInherit = { readonly column: string; readonly empty: "array" | null; readonly mode: { readonly column: string; readonly inherit: string; readonly none: readonly string[]; readonly explicitIfSet: boolean } | null; readonly from: readonly ({ readonly kind: "hierarchy"; readonly parentColumn: string; readonly maxDepth: number } | { readonly kind: "effective"; readonly hops: readonly InheritHop[]; readonly field: string; readonly column: string })[] };\n\n' +
         "type GroupOptions = readonly { readonly value: string; readonly label: string }[] | null;\n" +
         "/** One Group by choice: `value` is null exactly when `reason` is set. */\n" +
         'export type GeneratedGroupChoice = { readonly key: string; readonly label: string; readonly noValueLabel: string; readonly reason: string | null; readonly value: { readonly kind: "column"; readonly column: string; readonly options: GroupOptions } | { readonly kind: "record"; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity; readonly titleColumn: string } | { readonly kind: "field"; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity; readonly column: string; readonly options: GroupOptions } | { readonly kind: "derived"; readonly options: GroupOptions } | null; readonly filter: { readonly columnId: string; readonly noValue: boolean; readonly subtree: string | null } | null; readonly levels: number; readonly levelReason: string | null };\n\n' +
@@ -1380,7 +1393,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
             entities.map(({ key, listFields }) => [key, listFields]),
           ),
           satisfies:
-            "Record<Entity, { derived: Record<string, GeneratedListField>; hierarchy: { parentField: string; column: string; maxDepth: number } | null; subtree: Record<string, string>; grouping: readonly GeneratedGroupChoice[] }>",
+            "Record<Entity, { derived: Record<string, GeneratedListField>; inherit: Record<string, GeneratedInherit>; hierarchy: { parentField: string; column: string; maxDepth: number } | null; subtree: Record<string, string>; grouping: readonly GeneratedGroupChoice[] }>",
           comment: "// Generated list fields stay one entity per line.",
         }) +
         "\n" +

@@ -2,8 +2,6 @@ import { entitySchema } from "@cubby/schemas/entity";
 import { fieldResolutionEvaluationSchema } from "@cubby/schemas/field-resolution";
 import {
   PRODUCT_CATEGORY_MAX_DEPTH,
-  type ProductCategoryFeature,
-  productCategoryFeatureValues,
   type ProductCategorySummary,
 } from "@cubby/schemas/product-category-fields";
 import { type SQL, sql } from "drizzle-orm";
@@ -15,48 +13,8 @@ import { z } from "zod";
  * `sql.join(...)`, which silently drops `.inlineParams()`'s inline flag and binds
  * the value as a parameter instead — breaking the requirement below that repeated
  * SELECT/GROUP BY expressions stay textually identical. Both values are
- * compile-time literals: the depth is a module constant, and the feature is
- * validated against the feature enum by `featureLiteral` before it ever reaches
- * `sql.raw`, so no user input can reach a raw template. */
+ * compile-time literals: the depth is a module constant. */
 const MAX_ANCESTOR_DEPTH = sql.raw(String(PRODUCT_CATEGORY_MAX_DEPTH - 1));
-
-/** Quotes a feature as a raw SQL literal after validating it is a real member of
- * the feature enum — the only guard standing between `sql.raw` and injection. */
-function featureLiteral(feature: ProductCategoryFeature): SQL {
-  if (!productCategoryFeatureValues.includes(feature)) {
-    throw new Error(`Invalid product category feature: ${String(feature)}`);
-  }
-  return sql.raw(`'${feature}'`);
-}
-
-/** Resolve matching categories once; overrides stop propagation to descendants. */
-export const categoryFeatureInSql = (
-  categoryIdExpr: SQL,
-  features: readonly ProductCategoryFeature[],
-) => {
-  if (features.length === 0) return sql<boolean>`false`;
-  const literals = sql.join(features.map(featureLiteral), sql`, `);
-  return sql<boolean>`COALESCE(${categoryIdExpr} IN (
-    WITH RECURSIVE feature_categories AS (
-      SELECT c."id", 0 AS depth, ARRAY[c."id"] AS visited
-      FROM "ProductCategory" c
-      WHERE c."feature" IN (${literals}) AND c."deletedAt" IS NULL
-      UNION ALL
-      SELECT child."id", a.depth + 1, a.visited || child."id"
-      FROM feature_categories a
-      JOIN "ProductCategory" child ON child."parentId" = a."id"
-      WHERE child."deletedAt" IS NULL AND child."feature" IS NULL
-        AND a.depth < ${MAX_ANCESTOR_DEPTH}
-        AND NOT child."id" = ANY(a.visited)
-    ) SELECT "id" FROM feature_categories
-  ), false)`;
-};
-
-/** True only when the closest non-null ancestor feature matches. */
-export const categoryFeatureSql = (
-  categoryIdExpr: SQL,
-  feature: ProductCategoryFeature,
-) => categoryFeatureInSql(categoryIdExpr, [feature]);
 
 /** A nullable JSON summary expression for product and relation projections. */
 export const categorySummarySql = (categoryIdExpr: SQL) =>

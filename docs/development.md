@@ -89,7 +89,7 @@ The interactive `/ai` Smoke tests tab covers every active AI feature. Mailbox
 triage and relevance probes use synthetic original mail; research source support
 compares a proposed fact with a synthetic retained catalog observation. These
 probes share production request builders and feature/subscription settings;
-durable research allowance admission is verified by its PostgreSQL and Worker
+the AI budget at paid admission is verified by its PostgreSQL and Worker
 contracts separately.
 
 ## Commands

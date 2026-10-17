@@ -141,7 +141,7 @@ describe("persisted Suggestion sweeps", () => {
       {
         entity: "product",
         fields: ["categoryId"],
-        filters: { categoryPresenceFilter: "none" },
+        filters: { categoryIdPresenceFilter: "none" },
       },
       { context, pauseAfter: 2, ...categoryPorts() },
     );
@@ -151,7 +151,7 @@ describe("persisted Suggestion sweeps", () => {
     expect(paused.input).toMatchObject({
       entity: "product",
       fields: ["categoryId"],
-      filters: { categoryPresenceFilter: "none" },
+      filters: { categoryIdPresenceFilter: "none" },
       decisionModel: PRIMARY_MODEL,
     });
     expect(paused.progress).toMatchObject({ done: 2, applied: 2 });
@@ -199,7 +199,7 @@ describe("persisted Suggestion sweeps", () => {
       {
         entity: "product",
         fields: ["categoryId"],
-        filters: { categoryPresenceFilter: "none" },
+        filters: { categoryIdPresenceFilter: "none" },
       },
       { context, pauseAfter: 1, ...categoryPorts(), samplePair },
     );

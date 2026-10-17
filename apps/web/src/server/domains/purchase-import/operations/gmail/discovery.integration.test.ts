@@ -1,16 +1,10 @@
-import {
-  executionAuthorizationInput,
-  type ExecutionAuthorizationInput,
-} from "@cubby/schemas/execution-authorization";
 /** Plausible failures: baseline capture follows listing; pages checkpoint before
  * source/Mail import dispatch; interrupted pages duplicate sources; retries replay a
  * changed manifest; revoked auth becomes negative; stale attempts move coverage;
  * bounded passes wait a day instead of scheduling the next durable pass;
- * scheduled connection starts unapproved historical scans; a newer approval
- * shadows another scope; scan/history descendants spend the wrong allowance;
- * revocation revives an older grant or starves another mailbox. */
+ * targeted search falls through to whole-mailbox history or searches a Vendor
+ * name; completed coverage keeps chaining passes; one mailbox starves another. */
 import { runEntityId } from "@cubby/schemas/identifiers";
-import { mailboxDiscoveryInput } from "@cubby/schemas/mailbox-research";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -27,10 +21,7 @@ import {
   runFinding,
 } from "~/server/db/schema";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
-import {
-  issueExecutionAuthorization,
-  revokeExecutionAuthorization,
-} from "~/server/domains/run/repo/execution-authorization";
+import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import type { WorkflowLauncher } from "~/server/workflows/runs/launcher";
 import {
@@ -89,9 +80,7 @@ const recorder = () => {
 
 describe("scheduled Gmail discovery", () => {
   const ctx = withTestDb();
-  const seed = async (
-    authorization: "backfill" | "continuous" | false = "backfill",
-  ) => {
+  const seed = async ({ targeted = true } = {}) => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic discovery member",
       kind: "member",
@@ -105,30 +94,16 @@ describe("scheduled Gmail discovery", () => {
       updatedAt: new Date(),
     });
     const launch = recorder();
-    if (authorization)
-      await issueExecutionAuthorization(
-        ctx.db,
-        ctx.actor,
-        executionAuthorizationInput.parse({
-          kind: "execution_authorization",
-          version: 1,
-          owner: { userId: ctx.actor.userId, ledgerPartyId: party.id },
-          scope: {
-            kind: authorization,
-            mailboxId: "synthetic-google-subject",
-            discovery:
-              authorization === "continuous" ? "new_mail" : "all_history",
-          },
-          meteredBudget: {
-            period:
-              authorization === "continuous"
-                ? "utc_calendar_month"
-                : "lifetime",
-            limitMicroUSD: 1_000_000,
-          },
-          expiresAt: new Date(Date.now() + 60_000).toISOString(),
-        }),
-      );
+    await setMailImport(ctx.db, {
+      mailboxId: "synthetic-google-subject",
+      enabled: true,
+    });
+    // A verified Vendor gives the pass a targeted history query to page.
+    if (targeted)
+      await insertWithShortcode(ctx.db, "vendor", {
+        name: "Synthetic Seed Vendor",
+        orderEmailSenders: ["orders@seed.example.test"],
+      });
     await startMailDiscovery(ctx.db, launch);
     const params = launch.created[0];
     if (!params) throw new Error("Synthetic discovery not launched");
@@ -153,27 +128,7 @@ describe("scheduled Gmail discovery", () => {
     },
     research: async () => [],
   });
-  const approve = (
-    partyId: ExecutionAuthorizationInput["owner"]["ledgerPartyId"],
-    scope: ExecutionAuthorizationInput["scope"],
-  ) =>
-    issueExecutionAuthorization(
-      ctx.db,
-      ctx.actor,
-      executionAuthorizationInput.parse({
-        kind: "execution_authorization",
-        version: 1,
-        owner: { userId: ctx.actor.userId, ledgerPartyId: partyId },
-        scope,
-        meteredBudget: {
-          period:
-            scope.kind === "continuous" ? "utc_calendar_month" : "lifetime",
-          limitMicroUSD: 1_000_000,
-        },
-        expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
-      }),
-    );
-  it("retains classification-only originals without import admission through page replay and continuation", async () => {
+  it("admits retained originals once through page replay and continuation", async () => {
     const state = await seed();
     const relevance = vi.fn(async () => ({
       classification: "related" as const,
@@ -193,43 +148,16 @@ describe("scheduled Gmail discovery", () => {
     const successor = state.created[1];
     if (!successor) throw new Error("Synthetic continuation missing");
     expect((await readRun(successor.runId)).input).toMatchObject({
-      executionPolicy: "classification_only",
+      executionPolicy: "import",
     });
     await listMailDiscovery(ctx.db, successor, seam);
     await saveMailDiscoveryBatch(ctx.db, successor, 0, seam);
-    expect(relevance).not.toHaveBeenCalled();
-    expect(research).not.toHaveBeenCalled();
+    expect(relevance).toHaveBeenCalledOnce();
+    expect(research).toHaveBeenCalledOnce();
     expect(await getDb(ctx.db).select().from(orderMail)).toHaveLength(1);
     expect((await getDb(ctx.db).select().from(emailTable))[0]).toMatchObject({
-      classification: "uncertain",
-      executionPolicy: "classification_only",
-      status: "pending",
-    });
-  });
-  it("keeps a classification-only parent policy when an existing failed continuation carries an import policy", async () => {
-    const state = await seed();
-    const seam = ports(gmail());
-    await listMailDiscovery(ctx.db, state.params, seam);
-    await saveMailDiscoveryBatch(ctx.db, state.params, 0, seam);
-    await finishMailDiscovery(ctx.db, state.params);
-    await continueMailDiscovery(ctx.db, state.params, state);
-    const successor = state.created[1];
-    if (!successor) throw new Error("Synthetic continuation missing");
-    const prepared = await readRun(successor.runId);
-    await getDb(ctx.db)
-      .update(run)
-      .set({
-        status: "failed",
-        failureCode: "mail_discovery_failed",
-        input: {
-          ...mailboxDiscoveryInput.parse(prepared.input),
-          executionPolicy: "import",
-        },
-      })
-      .where(eq(run.id, prepared.id));
-    await continueMailDiscovery(ctx.db, state.params, state);
-    expect((await readRun(prepared.id)).input).toMatchObject({
-      executionPolicy: "classification_only",
+      classification: "related",
+      executionPolicy: "import",
     });
   });
   it("keeps a failed page's raw diagnostic and Sentry event on the retained discovery Run", async () => {
@@ -279,52 +207,22 @@ describe("scheduled Gmail discovery", () => {
     );
   });
 
-  const baselineForAllowances = async () => {
-    const state = await seed(false);
-    const seam = ports(gmail());
-    await listMailDiscovery(ctx.db, state.params, seam);
-    await saveMailDiscoveryBatch(ctx.db, state.params, 0, seam);
+  it("alternates verified Vendor history with new mail and continues only while coverage remains", async () => {
+    const state = await seed({ targeted: false });
+    const baseline = ports(gmail());
+    await listMailDiscovery(ctx.db, state.params, baseline);
+    await saveMailDiscoveryBatch(ctx.db, state.params, 0, baseline);
     await finishMailDiscovery(ctx.db, state.params);
     await insertWithShortcode(ctx.db, "vendor", {
-      name: "Synthetic priority vendor",
-    });
-    return state;
-  };
-
-  it("keeps targeted, incremental and broad classification-only discovery pages on independent allowances", async () => {
-    const state = await baselineForAllowances();
-    const mailboxId = "synthetic-google-subject";
-    const pilot = await approve(state.party.id, {
-      kind: "pilot",
-      mailboxId,
-      discovery: "targeted",
-      candidateLimit: 2,
-      productLimit: 2,
-    });
-    const backfill = await approve(state.party.id, {
-      kind: "backfill",
-      mailboxId,
-      discovery: "all_history",
-    });
-    const continuous = await approve(state.party.id, {
-      kind: "continuous",
-      mailboxId,
-      discovery: "new_mail",
+      name: "Synthetic Priority Vendor",
+      orderEmailSenders: ["orders@priority.example.test"],
     });
     const queries: string[] = [];
     const historyStarts: string[] = [];
     const provider = gmail({
       listMessages: async ({ query }) => {
         queries.push(query);
-        return {
-          messages: [
-            {
-              id: query.includes("Synthetic priority vendor")
-                ? "synthetic-targeted-original"
-                : "synthetic-broad-original",
-            },
-          ],
-        };
+        return { messages: [{ id: "synthetic-targeted-original" }] };
       },
       listHistory: async ({ startHistoryId }) => {
         historyStarts.push(startHistoryId);
@@ -341,122 +239,35 @@ describe("scheduled Gmail discovery", () => {
         };
       },
     });
-    const events: PurchaseAgentEvent[] = [];
-    const seam: DiscoveryPorts = {
-      ...ports(provider),
-      research: (db, input) =>
-        startMailImport(db, input, {
-          send: async (event) => {
-            events.push(event);
-          },
-        }),
-    };
-    await startMailDiscovery(ctx.db, state);
-    const phases = [
-      { allowance: pilot, historyId: "110", broadCompleted: false },
-      { allowance: continuous, historyId: "130", broadCompleted: false },
-      { allowance: backfill, historyId: "130", broadCompleted: true },
-    ];
-    for (const [index, expected] of phases.entries()) {
-      const params = state.created[index + 1];
-      if (!params) throw new Error("Synthetic allowance pass not launched");
-      expect((await readRun(params.runId)).input).toMatchObject({
-        executionAuthorization: expected.allowance,
-      });
+    const research = vi.fn(async () => []);
+    const seam: DiscoveryPorts = { ...ports(provider), research };
+    for (const pass of [1, 2]) {
+      await startMailDiscovery(ctx.db, state);
+      const params = state.created[pass];
+      if (!params) throw new Error(`Synthetic pass ${pass} not launched`);
       await listMailDiscovery(ctx.db, params, seam);
       await saveMailDiscoveryBatch(ctx.db, params, 0, seam);
-      const [cursor] = await getDb(ctx.db).select().from(mailboxCursor);
-      expect(cursor?.coverage).toMatchObject({
-        baselineHistoryId: "100",
-        broad: { pageToken: null, completed: expected.broadCompleted },
-        history: { historyId: expected.historyId, pageToken: null },
-        scoped: [{ completed: true, pageToken: null }],
-      });
-      const children = await getDb(ctx.db)
-        .select()
-        .from(run)
-        .where(eq(run.parentRunId, runEntityId.parse(params.runId)));
-      expect(children).toEqual([]);
       await finishMailDiscovery(ctx.db, params);
-      if (index < phases.length - 1) {
-        await continueMailDiscovery(ctx.db, params, state);
-        await continueMailDiscovery(ctx.db, params, state);
-      }
+      // Completed coverage never chains another pass.
+      await continueMailDiscovery(ctx.db, params, state);
+      expect(state.created).toHaveLength(pass + 1);
     }
-    expect(state.created).toHaveLength(4);
-    expect(queries).toHaveLength(2);
-    expect(queries[0]).toContain("Synthetic priority vendor");
-    expect(queries[0]).toContain("-in:spam -in:trash");
-    expect(queries[1]).toBe("-in:spam -in:trash");
+    expect(queries).toEqual([
+      "(from:orders@priority.example.test) -in:spam -in:trash",
+    ]);
     expect(historyStarts).toEqual(["110"]);
-    expect(events).toHaveLength(0);
-    expect(await getDb(ctx.db).select().from(orderMail)).toHaveLength(3);
-  });
-
-  it("does not revive a revoked newest pilot or let it block continuous allowances in either mailbox", async () => {
-    const state = await baselineForAllowances();
-    const mailboxId = "synthetic-google-subject";
-    await approve(state.party.id, {
-      kind: "pilot",
-      mailboxId,
-      discovery: "targeted",
-      candidateLimit: 2,
-      productLimit: 2,
+    expect(research).toHaveBeenCalledTimes(2);
+    const [cursor] = await getDb(ctx.db).select().from(mailboxCursor);
+    expect(cursor?.coverage).toMatchObject({
+      broad: { pageToken: null, completed: false },
+      history: { historyId: "130", pageToken: null },
+      scoped: [{ completed: true, pageToken: null }],
     });
-    const continuous = await approve(state.party.id, {
-      kind: "continuous",
-      mailboxId,
-      discovery: "new_mail",
-    });
-    const revoked = await approve(state.party.id, {
-      kind: "pilot",
-      mailboxId,
-      discovery: "targeted",
-      candidateLimit: 2,
-      productLimit: 2,
-    });
-    await revokeExecutionAuthorization(ctx.db, ctx.actor, revoked);
-    const otherMailbox = "synthetic-second-google-subject";
-    await getDb(ctx.db).insert(account).values({
-      id: crypto.randomUUID(),
-      accountId: otherMailbox,
-      providerId: "google",
-      userId: ctx.actor.userId,
-      updatedAt: new Date(),
-    });
-    const otherContinuous = await approve(state.party.id, {
-      kind: "continuous",
-      mailboxId: otherMailbox,
-      discovery: "new_mail",
-    });
-    expect(await startMailDiscovery(ctx.db, state)).toEqual({
-      started: 2,
-      running: 0,
-    });
-    const provider = gmail();
-    const scan = vi.spyOn(provider, "listMessages");
-    const history = vi.spyOn(provider, "listHistory");
-    const seam = ports(provider);
-    for (const params of state.created.slice(1)) {
-      const row = await readRun(params.runId);
-      const input = mailboxDiscoveryInput.parse(row.input);
-      expect(input).toMatchObject({
-        executionAuthorization:
-          input.mailboxId === mailboxId ? continuous : otherContinuous,
-      });
-      await listMailDiscovery(ctx.db, params, seam);
-      await saveMailDiscoveryBatch(ctx.db, params, 0, seam);
-    }
-    expect(scan).not.toHaveBeenCalled();
-    expect(history).toHaveBeenCalledTimes(2);
-    const cursors = await getDb(ctx.db).select().from(mailboxCursor);
-    expect(cursors).toHaveLength(2);
-    expect(cursors.every((row) => !row.coverage?.broad.completed)).toBe(true);
   });
 
   // A classifier's uncertainty must remain actionable after the page checkpoint;
   // otherwise an unfamiliar acquisition is lost without a Mail import owner.
-  it("retains uncertain discovery mail and its attachment without import admission or replay duplication", async () => {
+  it("retains uncertain discovery mail and its attachment and admits it once across replay", async () => {
     const state = await seed();
     const provider = gmail({
       getMessage: async (id) => ({
@@ -533,23 +344,22 @@ describe("scheduled Gmail discovery", () => {
     const [message] = await getDb(ctx.db).select().from(emailTable);
     expect(message).toMatchObject({
       classification: "uncertain",
-      status: "pending",
       orderMailId: original.id,
-      executionPolicy: "classification_only",
-      runId: null,
+      executionPolicy: "import",
     });
-    expect(events).toHaveLength(0);
+    expect(message?.runId).not.toBeNull();
+    expect(events).toHaveLength(1);
     expect(
-      (await getDb(ctx.db).select().from(mailboxCursor))[0]?.coverage?.broad
-        .pageToken,
+      (await getDb(ctx.db).select().from(mailboxCursor))[0]?.coverage?.scoped[0]
+        ?.pageToken,
     ).toBe("page-two");
     await saveMailDiscoveryBatch(ctx.db, state.params, 0, seam);
     expect(await getDb(ctx.db).select().from(orderMail)).toHaveLength(1);
-    expect(events).toHaveLength(0);
+    expect(events).toHaveLength(1);
   });
 
-  it("establishes new-mail coverage without scanning historical mail before backfill authorization", async () => {
-    const state = await seed(false);
+  it("establishes new-mail coverage without scanning history when nothing is targeted", async () => {
+    const state = await seed({ targeted: false });
     const provider = gmail();
     const listMessages = vi.spyOn(provider, "listMessages");
     const listHistory = vi.spyOn(provider, "listHistory");
@@ -587,6 +397,10 @@ describe("scheduled Gmail discovery", () => {
       userId: ctx.actor.userId,
       updatedAt: new Date(),
     });
+    await setMailImport(ctx.db, {
+      mailboxId: "synthetic-second-google-subject",
+      enabled: true,
+    });
     expect(await startMailDiscovery(ctx.db, state)).toEqual({
       started: 1,
       running: 1,
@@ -596,7 +410,7 @@ describe("scheduled Gmail discovery", () => {
       mailboxId: "synthetic-second-google-subject",
     });
   });
-  it("persists baseline before freezing one page and checkpoints after retained classification-only content", async () => {
+  it("persists baseline before freezing one page and checkpoints after admitting retained content", async () => {
     const state = await seed();
     let listed = 0;
     const provider = gmail({
@@ -610,17 +424,17 @@ describe("scheduled Gmail discovery", () => {
     const seam = ports(provider);
     const research = vi.fn(async () => {
       const [cursor] = await getDb(ctx.db).select().from(mailboxCursor);
-      expect(cursor?.coverage?.broad.pageToken).toBeNull();
+      expect(cursor?.coverage?.scoped[0]?.pageToken).toBeNull();
       return [];
     });
     seam.research = research;
     await listMailDiscovery(ctx.db, state.params, seam);
     expect(listed).toBe(1);
     await saveMailDiscoveryBatch(ctx.db, state.params, 0, seam);
-    expect(research).not.toHaveBeenCalled();
+    expect(research).toHaveBeenCalledOnce();
     expect(
-      (await getDb(ctx.db).select().from(mailboxCursor))[0]?.coverage?.broad
-        .pageToken,
+      (await getDb(ctx.db).select().from(mailboxCursor))[0]?.coverage?.scoped[0]
+        ?.pageToken,
     ).toBe("page-two");
     expect((await readRun(state.params.runId)).progress).not.toHaveProperty(
       "page",
@@ -660,8 +474,8 @@ describe("scheduled Gmail discovery", () => {
       saveMailDiscoveryBatch(ctx.db, state.params, 0, seam),
     ).rejects.toThrow("Synthetic attachment upload unavailable");
     expect(
-      (await getDb(ctx.db).select().from(mailboxCursor))[0]?.coverage?.broad
-        .pageToken,
+      (await getDb(ctx.db).select().from(mailboxCursor))[0]?.coverage?.scoped[0]
+        ?.pageToken,
     ).toBeNull();
     unavailable = false;
     await listMailDiscovery(ctx.db, state.params, seam);
@@ -670,8 +484,8 @@ describe("scheduled Gmail discovery", () => {
     expect(listMessages).toHaveBeenCalledTimes(1);
     expect(await getDb(ctx.db).select().from(orderMail)).toHaveLength(1);
   });
-  it("retains expanded history records without import dispatch and checkpoints after acquisition", async () => {
-    const state = await seed("continuous");
+  it("dispatches expanded history records in bounded import batches and checkpoints after acquisition", async () => {
+    const state = await seed({ targeted: false });
     const messages = Array.from({ length: 61 }, (_, index) => ({
       message: { id: `synthetic-history-${index}` },
     }));
@@ -696,7 +510,7 @@ describe("scheduled Gmail discovery", () => {
     };
     await listMailDiscovery(ctx.db, state.params, seam);
     await saveMailDiscoveryBatch(ctx.db, state.params, 0, seam);
-    expect(sizes).toEqual([]);
+    expect(sizes).toEqual([50, 11]);
     expect(await getDb(ctx.db).select().from(orderMail)).toHaveLength(61);
     expect(
       (await getDb(ctx.db).select().from(mailboxCursor))[0]?.coverage?.history
@@ -730,8 +544,8 @@ describe("scheduled Gmail discovery", () => {
     await listMailDiscovery(ctx.db, params, ports(gmail()));
     await saveMailDiscoveryBatch(ctx.db, params, 0, ports(gmail()));
     expect(
-      (await getDb(ctx.db).select().from(mailboxCursor))[0]?.coverage?.broad
-        .pageToken,
+      (await getDb(ctx.db).select().from(mailboxCursor))[0]?.coverage?.scoped[0]
+        ?.pageToken,
     ).toBe("page-two");
   });
   it("records no history and leaves the cursor alone once a pass is cancelled", async () => {

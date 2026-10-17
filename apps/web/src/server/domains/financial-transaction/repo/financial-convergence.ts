@@ -36,7 +36,6 @@ import {
   assertMailFinancialEvidenceCurrent,
   type PreparedMailFinancialEvent,
 } from "~/server/domains/purchase-import/repo/mail-financial-event";
-import { assertRunVendorAuthorization } from "~/server/domains/run/repo/execution-context";
 import { normalizeMerchant } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import { AppError } from "~/server/errors/app-error";
 import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
@@ -455,13 +454,6 @@ async function runFinancialConvergence(
       if (target && !acceptedVendor)
         return review(
           "Resolve the accepted Purchase's live Vendor before automatic booking.",
-        );
-      const authorizedVendor = acceptedVendor ?? vendorId;
-      if (actor.runId && authorizedVendor)
-        await assertRunVendorAuthorization(
-          txDb,
-          actor.runId,
-          authorizedVendor.id,
         );
       const verifiedTransactionId = row.id;
       const verifiedAccountId = row.accountId;

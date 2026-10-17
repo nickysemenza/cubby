@@ -13,7 +13,7 @@ import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { location, plant, planting } from "~/server/db/schema";
 import { plantingDisplayName } from "~/server/domains/garden/repo/garden";
-import { effectiveTaskProjectSql } from "~/server/domains/task/repo/task-project-inheritance";
+import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 
 /** The planting lifecycle's milestone date columns, in the order they occur.
  * Shared by the "any milestone falls in range" read predicate and by
@@ -34,7 +34,7 @@ const MILESTONES = Object.keys(
 /** A Planting has no direct Project. Its linked Task supplies the effective
  * Project, including Task inheritance; a missing/deleted Task is unassigned. */
 export const plantingLinkedProjectSql: SQL<ProjectId | null> = sql`(
-  SELECT ${effectiveTaskProjectSql("linked_task")}
+  SELECT ${effectiveFieldSql("task", "projectId", "linked_task")}
   FROM "Task" linked_task
   WHERE linked_task."id" = "Planting"."taskId"
     AND linked_task."deletedAt" IS NULL

@@ -187,6 +187,17 @@ export default defineEntity({
         reference: { entity: "spendingCategory" },
         control: { kind: "specialized", renderer: "entity-select" },
         display: { list: true, detail: true },
+        // `blocked` keeps the category unresolved: an explicit None.
+        resolution: {
+          inherit: {
+            mode: {
+              field: "spendingCategoryMode",
+              inherit: "inherit",
+              none: ["blocked"],
+            },
+            from: ["hierarchy"],
+          },
+        },
         validation: {
           read: spendingCategoryShortcode.nullable().default(null),
           create: spendingCategoryShortcode.nullable().default(null),
@@ -269,6 +280,8 @@ export default defineEntity({
         key: "feature",
         kind: "enum",
         nullable: true,
+        // No mode field: a category without its own feature inherits.
+        resolution: { inherit: { from: ["hierarchy"] } },
         control: {
           kind: "select",
           options: [
@@ -593,12 +606,8 @@ Rules:
     derived: {
       // No effective spending category, direct or inherited.
       needsClassification: { type: "boolean" },
-      effectiveSpendingCategoryId: {
-        predicate: "idMulti",
-        negatable: true,
-        reason:
-          "The effective spending category is inherited through category ancestors, so it is not a row value",
-      },
+      // The mapping in effect, inherited through category ancestors.
+      effectiveSpendingCategoryId: { via: "spendingCategory" },
     },
     sort: {
       fields: ["sortOrder", "name", "updatedAt"],

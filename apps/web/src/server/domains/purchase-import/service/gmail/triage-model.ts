@@ -17,7 +17,7 @@ import {
 import { mailTriageChoices } from "~/server/ai/policy/prompts/mail";
 import { runStructuredFeature } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
-import { paidResearchPreflight } from "~/server/domains/run/service/execution-transport";
+import { paidRunPreflight } from "~/server/domains/run/service/execution-transport";
 
 import { gmailRelevanceAllowed } from "../../repo/gmail/execution-policy";
 import type { MailRelevance } from "./relevance";
@@ -50,7 +50,11 @@ export const productionMailTriage =
         db,
         runId: runEntityId.parse(runId),
         operation: "mailbox-triage",
-        beforePaidRequest: paidResearchPreflight(db, runEntityId.parse(runId)),
+        beforePaidRequest: paidRunPreflight(
+          db,
+          runEntityId.parse(runId),
+          MAILBOX_TRIAGE_FEATURE.feature,
+        ),
       },
     });
     onCall?.({
@@ -81,7 +85,11 @@ export const productionMailRelevance =
         operation: "mailbox-relevance",
         subscriptionRequired: true,
         subscriptionFallback: "budgeted",
-        beforePaidRequest: paidResearchPreflight(db, runEntityId.parse(runId)),
+        beforePaidRequest: paidRunPreflight(
+          db,
+          runEntityId.parse(runId),
+          MAILBOX_RELEVANCE_FEATURE.feature,
+        ),
       },
     );
     onCall?.({

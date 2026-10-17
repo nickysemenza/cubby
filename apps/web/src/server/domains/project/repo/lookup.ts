@@ -20,23 +20,15 @@ import {
   textArrayMatches,
   type ListReadIntent,
   notDeleted,
-  shortcodeSetCondition,
 } from "~/server/db/helpers";
 import { entityAttachment, image, project } from "~/server/db/schema";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { displayableImageWhere } from "~/server/domains/image/repo/image-displayability";
 import { withProjectExternalUrls } from "~/server/domains/project/repo/external-links";
-import {
-  effectiveProjectAssigneeSql,
-  effectiveProjectLocationsSql,
-  effectiveTaskProjectSql,
-} from "~/server/domains/task/repo/task-project-inheritance";
 import { withDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import {
-  listPrepare,
-  shortcodeIdsSql,
-} from "~/server/generic/list/repo/field-compiler";
+import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
+import { listPrepare } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
@@ -74,10 +66,7 @@ const projectIdsWithImages = qb
   )
   .where(and(notDeleted(entityAttachment), displayableImageWhere));
 
-const effectiveAssigneeSql = effectiveProjectAssigneeSql(
-  sql.raw('"Project"."id"'),
-);
-const effectiveLocationsSql = effectiveProjectLocationsSql(sql`${project.id}`);
+const effectiveLocationsSql = effectiveFieldSql("project", "locations");
 
 // The tree and attention reads take the request's Database handle; a project
 // list never reads inside a write transaction.
@@ -117,27 +106,6 @@ const projectScaffold = listScaffold("project", project, {
         formatSearchTerm(project.notes, term),
         textArrayMatches(effectiveLocationsSql, term),
       ),
-    effectiveLocations: ({ values }) =>
-      values.length === 0
-        ? undefined
-        : sql`${effectiveLocationsSql} && ARRAY[${sql.join(
-            values.map((location) => sql`${location}`),
-            sql`, `,
-          )}]::text[]`,
-    effectiveAssignee: ({ values, presence }) =>
-      or(
-        values.length === 0
-          ? undefined
-          : sql`${effectiveAssigneeSql} IN ${shortcodeIdsSql(
-              "ledgerParty",
-              (shortcode) => shortcodeSetCondition(shortcode, values),
-            )}`,
-        presence === undefined
-          ? undefined
-          : presence === "has"
-            ? sql`${effectiveAssigneeSql} IS NOT NULL`
-            : sql`${effectiveAssigneeSql} IS NULL`,
-      ),
     attention: projectAttention.predicate((items, { values }) => {
       const types = new Set<string>(
         Object.entries(projectAttentionFilterTypes)
@@ -154,23 +122,19 @@ const projectScaffold = listScaffold("project", project, {
         dateFrom: typeof from === "string" ? from : undefined,
         dateTo: typeof to === "string" ? to : undefined,
       }),
-    completionYear: projectCompletion.predicate(
-      ({ tree, dateWindows }, { values }) => {
-        const ids = tree.allRows
-          .filter((row) => {
-            const window = dateWindows.get(row.id);
-            return (
-              window !== undefined &&
-              values.includes(projectCompletionYear(row, window))
-            );
-          })
-          .map((row) => row.id);
-        return ids.length ? inArray(project.id, ids) : sql`false`;
-      },
-    ),
-    assigneeId: sql`(SELECT member."name" FROM "LedgerParty" member WHERE member."id" = ${effectiveProjectAssigneeSql(
-      sql.raw('"Project"."id"'),
-    )} AND member."deletedAt" IS NULL)`,
+    // The id-to-year map travels as one jsonb parameter, as inventory
+    // valuations do.
+    completionYear: projectCompletion.value(({ tree, dateWindows }) => {
+      const years = Object.fromEntries(
+        tree.allRows.flatMap((row) => {
+          const window = dateWindows.get(row.id);
+          return window === undefined
+            ? []
+            : [[row.id, projectCompletionYear(row, window)]];
+        }),
+      );
+      return sql`(${JSON.stringify(years)}::jsonb ->> (${project.id})::text)`;
+    }),
     // Stop at explicit starts: descendants behind an override must not
     // influence an ancestor's folded date.
     startDate: sql`(
@@ -185,7 +149,7 @@ const projectScaffold = listScaffold("project", project, {
       ), allocations AS (${expenseDerivedReadSql("projects")})
       SELECT min(coalesce(node."startDate", LEAST(
         (SELECT min(coalesce(t."dueEndDate", t."dueDate")) FROM "Task" t
-         WHERE ${effectiveTaskProjectSql("t")} = node."id" AND t."deletedAt" IS NULL),
+         WHERE ${effectiveFieldSql("task", "projectId", "t")} = node."id" AND t."deletedAt" IS NULL),
         (SELECT min(e."date") FROM "Expense" e JOIN allocations a ON a."expenseId" = e."id"
          WHERE a."projectId" = node."id" AND e."deletedAt" IS NULL)
       ))) FROM date_tree node
@@ -261,12 +225,12 @@ export const buildProjectListQuery = async (
   attentionItems?: readonly ProjectAttentionItem[],
   preparedTree?: ProjectTree,
 ) => {
-  // Filter-only: `getEntityCounts` calls this with `{}` inside a function
-  // whose design is one round trip, so the tree and attention items load
-  // only when their filter asks.
+  // `getEntityCounts` calls this with `{}` inside a function whose design is
+  // one round trip, so the tree and attention items load only when a filter,
+  // sort or group asks; rows hydrate apart from this context.
   const context = await projectScaffold.context(
     db,
-    { filters, readIntent: "count" },
+    { filters, sorts, projection: { kind: "base" } },
     attentionItems === undefined ? [] : [[projectAttention, attentionItems]],
   );
   const loadedTree = context.has(projectCompletion)
@@ -274,7 +238,7 @@ export const buildProjectListQuery = async (
     : preparedTree;
   const whereClause = projectScaffold.where(filters, { context });
 
-  const orderByArray = projectScaffold.orderBy(sorts, {}, filters);
+  const orderByArray = projectScaffold.orderBy(sorts, {}, filters, context);
 
   return { tree: loadedTree, whereClause, orderByArray, context };
 };

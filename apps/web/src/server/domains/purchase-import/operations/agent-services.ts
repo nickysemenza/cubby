@@ -98,11 +98,15 @@ export function runServicesFor(
   return {
     admitPaidInference: (request) =>
       withDatabase(async (db) => {
-        const [{ paidResearchPreflight }, { runEntityId }] = await Promise.all([
+        const [{ paidRunPreflight }, { runEntityId }] = await Promise.all([
           import("~/server/domains/run/service/execution-transport"),
           import("@cubby/schemas/identifiers"),
         ]);
-        await paidResearchPreflight(db, runEntityId.parse(runId))(request);
+        await paidRunPreflight(
+          db,
+          runEntityId.parse(runId),
+          "purchase_import_agent",
+        )(request);
       }),
     coordinatorRetired: () =>
       withDatabase(async (db) => {

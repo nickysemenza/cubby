@@ -33,7 +33,7 @@ Each actionable step should explain:
 
 Readiness, executor and authority are separate facts. A member's name in
 Waiting for does not explain a missing prerequisite, and an automated step can
-still be waiting for evidence, posting, execution allowance or an explicit
+still be waiting for evidence, posting, the AI budget or an explicit
 resume. Unknown dependencies and effects stay unknown rather than becoming
 invented progress or promises.
 
@@ -62,13 +62,13 @@ logos, including Vendors discovered before any Purchase. A supported website
 exception closes that gap without suppressing independent logo research.
 
 People resolve material ambiguity and conflicting accepted facts. Supported
-unambiguous work should complete automatically within the granted scope and
-allowance; review should explain the unresolved choice and exact impact,
+unambiguous work should complete automatically within the Mail import switch
+and the AI budget; review should explain the unresolved choice and exact impact,
 rather than ask the person to repeat a judgment the evidence already settles.
 Physical receiving remains an explicit human action.
 
 Executor choice never grants access to another member's originals or expands
-a paid allowance. Runtime and tool availability can narrow the eligible path;
+the AI budget. Runtime and tool availability can narrow the eligible path;
 a guide cannot enable an unsupported writer or bypass its review contract.
 
 ## Dependencies and resumption
@@ -85,21 +85,18 @@ dependent search ran. Changed evidence can make an exception stale.
 
 After research, review or posting changes a prerequisite, re-evaluate the
 affected work from current evidence. Resume newly eligible work that is
-already authorized, within the existing scope and allowance. Preserve explicit
+already enabled, within the AI budget. Preserve explicit
 pauses and completed receipts; replay-safe wakeups must not create duplicate
 imports, spending or execution. A prerequisite's completion is a reason to
 recheck eligibility, not permission to repeat every downstream operation.
 
-Reuse Run execution and authorization references for continuation. Store only
-intent that cannot be reconstructed from those records; derive readiness from
-current prerequisites. Recheck authority, scope, expiry and remaining allowance
+Reuse Run execution references for continuation. Store only intent that cannot
+be reconstructed from those records; derive readiness from current
+prerequisites. Recheck the Mail import switch, Run liveness and the AI budget
 before dispatch. Recovery must also find eligible continuations after a missed
-wakeup. Vendor-history approvals name Vendors, a fixed history window, lifetime
-allowance and the `verified_at_first_start` sender policy. Each Vendor gets a
-stable discovery generation. Missing sender evidence waits for research; its
-first eligible start freezes exact queries, and retries reuse them. Vendor
-edits, approval issuance and missed-work recovery reach the same advancement
-service. Explicit pauses, completed generations and tombstones never reopen.
+wakeup. Discovery recomputes its Vendor and transaction targets on every pass,
+so research that adds a verified sender needs no separate wake. Explicit pauses
+and completed receipts never reopen.
 
 ## Show the flow and its effects
 

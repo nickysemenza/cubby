@@ -120,8 +120,43 @@ type CompiledGroupChoice = Readonly<{
  */
 const GROUP_LEVEL_CHOICES = 3;
 
+/**
+ * One step of an inheritance path: the foreign key on the current entity
+ * (by field key and column) and the entity it leads to.
+ */
+type InheritHop = Readonly<{ field: string; column: string; target: string }>;
+
+/** A compiled `resolution.inherit` source, in declared order. */
+type InheritSource =
+  | Readonly<{ kind: "hierarchy"; parentColumn: string; maxDepth: number }>
+  | Readonly<{
+      kind: "effective";
+      hops: readonly InheritHop[];
+      field: string;
+      column: string;
+    }>;
+
+/**
+ * A field's compiled fallback chain: its column, the mode that decides
+ * whether the row's own value wins, and its sources. `empty` is the value a
+ * non-nullable list reads when nothing decides.
+ */
+type CompiledInherit = Readonly<{
+  column: string;
+  empty: "array" | null;
+  mode: Readonly<{
+    column: string;
+    inherit: string;
+    none: readonly string[];
+    explicitIfSet: boolean;
+  }> | null;
+  from: readonly InheritSource[];
+}>;
+
 export type CompiledEntityListFields = Readonly<{
   derived: Readonly<Record<string, CompiledListField>>;
+  /** Field key → its compiled `resolution.inherit`. */
+  inherit: Readonly<Record<string, CompiledInherit>>;
   hierarchy: Readonly<{
     parentField: string;
     column: string;
@@ -215,6 +250,181 @@ const compileVia = (
     sort: reason("sort"),
     group: reason("group"),
   };
+};
+
+// Mode values reach SQL as literals, so they must stay plain words.
+const sqlWord = /^[A-Za-z_][A-Za-z0-9_-]*$/;
+
+/** A path of to-one foreign keys, each one outgoing step from a stored column. */
+const compileInheritHops = (
+  owner: CompiledEntity,
+  segments: readonly string[],
+  byKey: ReadonlyMap<string, CompiledEntity>,
+  context: string,
+) => {
+  let current = owner;
+  const hops: InheritHop[] = [];
+  for (const segment of segments) {
+    const relation = current.relations.find(({ key }) => key === segment);
+    const steps =
+      relation === undefined
+        ? undefined
+        : relationshipProvenanceSchema.parse(relation.provenance).steps;
+    const [step, ...more] = steps ?? [];
+    const column = step?.edge.split(".").at(-1);
+    const stored = current.fieldModel.storage.find(
+      (candidate) => candidate.column === column,
+    );
+    const target =
+      relation === undefined ? undefined : byKey.get(relation.target);
+    if (
+      relation?.cardinality !== "one" ||
+      step?.direction !== "outgoing" ||
+      more.length > 0 ||
+      stored === undefined ||
+      target === undefined
+    )
+      throw new EntityDeclarationError(
+        `${context}: ${current.key}.${segment} is not a to-one reference through one stored foreign key.`,
+      );
+    hops.push({ field: stored.key, column: stored.column, target: target.key });
+    current = target;
+  }
+  return { hops, target: current };
+};
+
+/**
+ * Compiles every field's `resolution.inherit` into the chain the runtime
+ * renders (`effectiveFieldSql`), rejecting a chain it cannot render.
+ */
+const compileInherit = (
+  entity: CompiledEntity,
+  byKey: ReadonlyMap<string, CompiledEntity>,
+) => {
+  const compiled: Record<string, CompiledInherit> = {};
+  for (const field of entity.fieldModel.fields) {
+    const inherit = field.resolution?.inherit;
+    if (inherit === undefined) continue;
+    const context = `${entity.key}.${field.key}.resolution.inherit`;
+    const stored = entity.fieldModel.storage.find(
+      ({ key }) => key === field.key,
+    );
+    if (stored === undefined)
+      throw new EntityDeclarationError(`${context} needs a stored field.`);
+    if (!stored.nullable && stored.kind !== "text-array")
+      throw new EntityDeclarationError(
+        `${context}: ${field.key} is not nullable, so a chain that decides nothing has no value.`,
+      );
+    let mode: CompiledInherit["mode"] = null;
+    if (inherit.mode !== undefined) {
+      const declared = inherit.mode;
+      const modeColumn = entity.fieldModel.storage.find(
+        ({ key }) => key === declared.field,
+      );
+      if (modeColumn === undefined)
+        throw new EntityDeclarationError(
+          `${context}.mode.field ${declared.field} is not stored.`,
+        );
+      const values = [declared.inherit, ...(declared.none ?? [])];
+      if (values.some((value) => !sqlWord.test(value)))
+        throw new EntityDeclarationError(
+          `${context}.mode values must be plain words.`,
+        );
+      mode = {
+        column: modeColumn.column,
+        inherit: declared.inherit,
+        none: declared.none ?? [],
+        explicitIfSet: declared.explicitIfSet === true,
+      };
+    }
+    const from = inherit.from.map((source): InheritSource => {
+      if (source === "hierarchy") {
+        const hierarchy = entity.fieldModel.hierarchy;
+        const parent =
+          hierarchy === null
+            ? undefined
+            : entity.fieldModel.storage.find(
+                ({ key }) => key === hierarchy.parentField,
+              );
+        if (hierarchy === null || parent === undefined)
+          throw new EntityDeclarationError(
+            `${context}.from hierarchy: ${entity.key} declares no model.hierarchy.`,
+          );
+        return {
+          kind: "hierarchy",
+          parentColumn: parent.column,
+          maxDepth: hierarchy.maxDepth,
+        };
+      }
+      const segments = source.path.split(".");
+      const terminal = segments.at(-1)!;
+      const { hops, target } = compileInheritHops(
+        entity,
+        segments.slice(0, -1),
+        byKey,
+        `${context}.from ${source.path}`,
+      );
+      const column = target.fieldModel.storage.find(
+        ({ key }) => key === terminal,
+      )?.column;
+      if (hops.length === 0 || column === undefined)
+        throw new EntityDeclarationError(
+          `${context}.from ${source.path} must end at a stored field of a related record.`,
+        );
+      return { kind: "effective", hops, field: terminal, column };
+    });
+    compiled[field.key] = {
+      column: stored.column,
+      empty: stored.nullable ? null : "array",
+      mode,
+      from,
+    };
+  }
+  return compiled;
+};
+
+/**
+ * Rejects a chain that reads itself: an effective value whose sources lead
+ * back to it would render without end.
+ */
+const assertAcyclicInherit = (
+  entities: readonly CompiledEntity[],
+  inherit: ReadonlyMap<string, Readonly<Record<string, CompiledInherit>>>,
+) => {
+  const depends = (entity: string, field: string): string[] => {
+    const chain = inherit.get(entity)?.[field];
+    if (chain === undefined) return [];
+    return chain.from.flatMap((source) => {
+      if (source.kind === "hierarchy") return [];
+      const reads: string[] = [];
+      let current = entity;
+      for (const hop of source.hops) {
+        if (inherit.get(current)?.[hop.field] !== undefined)
+          reads.push(`${current}.${hop.field}`);
+        current = hop.target;
+      }
+      reads.push(`${current}.${source.field}`);
+      return reads;
+    });
+  };
+  const visiting = new Set<string>();
+  const done = new Set<string>();
+  const visit = (node: string, trail: readonly string[]) => {
+    if (done.has(node)) return;
+    if (visiting.has(node))
+      throw new EntityDeclarationError(
+        `resolution.inherit reads itself: ${[...trail, node].join(" → ")}.`,
+      );
+    visiting.add(node);
+    const dot = node.indexOf(".");
+    const [entity, field] = [node.slice(0, dot), node.slice(dot + 1)];
+    for (const next of depends(entity, field)) visit(next, [...trail, node]);
+    visiting.delete(node);
+    done.add(node);
+  };
+  for (const entity of entities)
+    for (const field of Object.keys(inherit.get(entity.key) ?? {}))
+      visit(`${entity.key}.${field}`, []);
 };
 
 const compatibleKinds = (
@@ -530,18 +740,25 @@ const compileGroupChoice = (
   if (
     bound?.shape === "value" &&
     (bound.type === "enum" || bound.type === "text")
-  )
+  ) {
+    // A section reads the label its value filter shows for the same value.
+    const labels = descriptors.find(
+      (candidate) => candidate.derived === key,
+    )?.options;
     return choice(
       {
         kind: "derived",
         options:
           bound.options?.map((value) => ({
             value,
-            label: value[0]!.toUpperCase() + value.slice(1),
+            label:
+              labels?.find((option) => option.value === value)?.label ??
+              value[0]!.toUpperCase() + value.slice(1),
           })) ?? null,
       },
       null,
     );
+  }
   throw new EntityDeclarationError(
     `${where} is not an enum, text, reference or to-one related field.`,
   );
@@ -587,6 +804,10 @@ export const compileListFields = (
   entities: readonly CompiledEntity[],
 ): CompiledEntity[] => {
   const byKey = new Map(entities.map((entity) => [entity.key, entity]));
+  const inherit = new Map(
+    entities.map((entity) => [entity.key, compileInherit(entity, byKey)]),
+  );
+  assertAcyclicInherit(entities, inherit);
   return entities.map((entity) => {
     const context = entity.key;
     const derived: Record<string, CompiledListField> = {};
@@ -709,6 +930,7 @@ export const compileListFields = (
     validateSavedViewGrouping(entity, grouping, context);
     const listFields: CompiledEntityListFields = {
       derived,
+      inherit: inherit.get(entity.key) ?? {},
       hierarchy:
         hierarchy === null || parentColumn === undefined
           ? null

@@ -83,9 +83,9 @@ pending: nothing here starts Product research.
 2. **Admission** (`mail-import-run.ts`) freezes up to 50 Emails' checksums into
    one `mail_import` Run with a RunTarget per Email, assigns ownership through
    `Email.runId`, and dispatches `start_or_resume` to
-   `PURCHASE_AGENT_QUEUE` after commit (`dispatch.ts`). Paid inference is
-   admitted per call against the Run's execution authorization
-   (`runs/execution-*`).
+   `PURCHASE_AGENT_QUEUE` after commit (`dispatch.ts`). Each paid call checks
+   the Run is still executable and draws from the household AI budget
+   (`run/service/execution-transport.ts`, `server/ai/budget.ts`).
 3. **Pi** (`agent-host.ts`, `server/domains/purchase-agent/`) runs on the generic agent
    tools (`claim_next_import_work`, `report_agent_progress`,
    `stop_import_run_for_review`) plus the MCP actions its manifest mounts

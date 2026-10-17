@@ -32,6 +32,7 @@ import {
   moneyNullable,
   positiveMoneyNullable,
   productPricingOut,
+  productQuantityVarianceState,
 } from "@cubby/schemas/product-fields";
 import { unitMappingInput } from "@cubby/schemas/unitmapping";
 import { fdcId, foodSummary } from "@cubby/usda";
@@ -206,7 +207,7 @@ export default defineEntity({
           label: "Shelf disagrees",
           description: "Stocked products whose count differs from the ledger",
           // Server-scoped to products that are BOTH stocked and in the ledger —
-          // see `quantityVarianceFilter` in the product repo. Neither half is
+          // see `quantityVarianceState` in the product repo. Neither half is
           // optional: without "stocked" this is dominated by things correctly sold
           // off, and without "in the ledger" by stocked products that have no
           // product-linked Expense at all (a provenance gap, not a counting one).
@@ -215,7 +216,7 @@ export default defineEntity({
           // which is why it lives here rather than as a Problems section. The
           // narrower acquisition-history gap — more recorded units gone than
           // arrived — is surfaced separately as `negativeExpectedQuantity`.
-          filters: [{ id: "quantityVariance", value: "mismatched" }],
+          filters: [{ id: "quantityVariance", value: ["mismatched"] }],
           // Both hidden by default on a table this wide, so the view has to reveal
           // them — otherwise it selects rows on a signal nothing on screen explains.
           // `servingAsLocations` joins them because a product can now be short
@@ -248,7 +249,7 @@ export default defineEntity({
           description:
             "Bought, never sold, and held nowhere — not on a shelf, not a bin, not inside a kit",
           // The other half of `shelf-disagrees`, and the half that view cannot
-          // reach: `quantityVarianceFilter` is scoped to products that are BOTH
+          // reach: `quantityVarianceState` is scoped to products that are BOTH
           // stocked and in the ledger, and `onHandUnitsSql` returns NULL for a
           // zero-entry shelf — so a product the ledger says you own with nothing
           // on a shelf matches neither "mismatched" nor "matched". It needs no new
@@ -1994,6 +1995,12 @@ Rules:
       expenseCount: { type: "number" },
       ledgerExpectedQuantity: { type: "number" },
       quantityVariance: { type: "number" },
+      // Shelf against ledger, only where stock and comparable ledger history
+      // both exist; no value otherwise.
+      quantityVarianceState: {
+        type: "enum",
+        options: [...productQuantityVarianceState.options],
+      },
       purchaseDate: { type: "date" },
       stockLocation: { via: "inventory.location" },
       growsPlant: { via: "grows-plant" },
@@ -2026,26 +2033,13 @@ Rules:
         reason:
           "The effective owner is resolved from inventory and acquisition evidence outside SQL",
       },
-      categoryFeature: {
-        predicate: "multiselect",
-        negatable: true,
-        reason: "Inherited through category ancestors; not a row value",
-      },
+      // The category's effective feature, inherited from its ancestors.
+      categoryFeature: { via: "category.feature" },
       externalIdSource: {
         predicate: "multiselect",
         negatable: true,
         reason:
           "External identifiers are rows keyed by source with no declared relation",
-      },
-      expectedQuantityRange: {
-        predicate: "range",
-        reason:
-          "Filters the catalog with one shared kit walk; the row value walks each product's kits again",
-      },
-      quantityVarianceState: {
-        predicate: "range",
-        reason:
-          "Shelf and ledger only compare where stock and comparable ledger history both exist",
       },
       taskStatus: {
         predicate: "multiselect",
@@ -2081,13 +2075,14 @@ Rules:
         "expenseCount",
         "ledgerExpectedQuantity",
         "quantityVariance",
+        "quantityVarianceState",
         "purchaseDate",
         "related:product.projects",
         "related:product.vendors",
         "related:product.purchases",
       ],
     },
-    grouping: ["categoryId", "manufacturer", "tags"],
+    grouping: ["categoryId", "manufacturer", "tags", "quantityVarianceState"],
     intents: {
       fields: {
         // The list's "New" dialog and the picker's "Create product" open
@@ -2372,10 +2367,9 @@ Rules:
         derived: true,
         field: "categoryFeatureFilter",
         kind: "multiselect",
+        label: "Category family",
         placeholder: "Filter category family...",
         optionsKey: "productCategoryFamilies",
-        // Its own No value, so "food or unclassified" stays one filter.
-        nullable: { field: "categoryPresenceFilter", label: "classification" },
       },
       {
         columnId: "categoryId",
@@ -2488,7 +2482,7 @@ Rules:
       },
       {
         columnId: "ledgerExpectedQuantity",
-        derived: "expectedQuantityRange",
+        derived: "ledgerExpectedQuantity",
         field: "expectedQuantity",
         urlKey: "expectedQuantity",
         wire: {
@@ -2529,21 +2523,16 @@ Rules:
       },
       {
         columnId: "quantityVariance",
+        field: "quantityVarianceFilter",
         derived: "quantityVarianceState",
-        kind: "range",
-        wire: { kind: "param", name: "quantityVarianceFilter" },
+        kind: "multiselect",
         placeholder: "Filter shelf vs. ledger...",
+        deriveSchema: true,
+        schemaDescription:
+          "mismatched: stocked products whose on-hand units differ from the expected quantity. matched: stocked products where they agree.",
         options: [
-          {
-            value: "mismatched",
-            label: "Shelf disagrees with ledger",
-            expand: { quantityVarianceFilter: "mismatched" },
-          },
-          {
-            value: "matched",
-            label: "Shelf matches ledger",
-            expand: { quantityVarianceFilter: "matched" },
-          },
+          { value: "mismatched", label: "Shelf disagrees with ledger" },
+          { value: "matched", label: "Shelf matches ledger" },
         ],
       },
       {

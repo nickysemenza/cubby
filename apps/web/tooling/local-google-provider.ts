@@ -18,6 +18,8 @@ const configuration = z.object({
       messages: z.array(z.json()).min(1).max(8),
       pages: z.array(z.array(z.string()).max(8)).min(1).max(4),
       history: z.array(z.json()).max(8).default([]),
+      /** The one listing query whose pages this mailbox serves. */
+      query: z.string().default("-in:spam -in:trash"),
     })
     .optional(),
   extraction: z
@@ -191,7 +193,7 @@ export async function createLocalGoogleProvider() {
           });
           return true;
         }
-        if (query !== "-in:spam -in:trash") {
+        if (query !== mailbox.query) {
           send(200, { messages: [], resultSizeEstimate: 0 });
           return true;
         }

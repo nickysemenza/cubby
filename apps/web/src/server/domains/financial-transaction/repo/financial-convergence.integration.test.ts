@@ -1,4 +1,3 @@
-import { executionAuthorizationInput } from "@cubby/schemas/execution-authorization";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { ExtractedOrderCandidate } from "@cubby/schemas/purchase-import";
 import { eq } from "drizzle-orm";
@@ -7,7 +6,6 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
-import { account as authAccount } from "~/server/db/auth.schema";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
   expense,
@@ -15,14 +13,12 @@ import {
   orderMail,
   purchase as purchaseTable,
   runFinding,
-  run,
   vendor as vendorTable,
 } from "~/server/db/schema";
 import { memberImport } from "~/server/domains/purchase-import/operations/order-import.fixtures";
 import { resolveRunFinding } from "~/server/domains/purchase-import/repo/findings";
 import { prepareSourceOrderReconciliation } from "~/server/domains/purchase-import/repo/reconciliation";
 import { prepareMailFinancialEvent } from "~/server/domains/purchase-import/service/mail-financial-event";
-import { issueExecutionAuthorization } from "~/server/domains/run/repo/execution-authorization";
 import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
@@ -288,91 +284,6 @@ describe("server verified financial convergence", () => {
   });
   // Even an accepted allocation cannot let finance.converge cross the Vendor
   // selected by this history Run or fall back to the approval's other Vendors.
-  it("enforces the history Run selected Vendor before financial writes", async () => {
-    const { transaction, vendor } = await fixture();
-    const otherVendor = await createRepoEntity(ctx, "vendor", {
-      name: "Synthetic other history store",
-    });
-    const member = await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Synthetic history finance member",
-      kind: "member",
-      userId: ctx.actor.userId,
-    });
-    const mailboxId = "synthetic-finance-history";
-    await getDb(ctx.db).insert(authAccount).values({
-      id: crypto.randomUUID(),
-      accountId: mailboxId,
-      providerId: "google",
-      userId: ctx.actor.userId,
-      updatedAt: new Date(),
-    });
-    const authorization = await issueExecutionAuthorization(
-      ctx.db,
-      ctx.actor,
-      executionAuthorizationInput.parse({
-        kind: "execution_authorization",
-        version: 1,
-        owner: { userId: ctx.actor.userId, ledgerPartyId: member.id },
-        scope: {
-          kind: "vendor_backfill",
-          mailboxId,
-          discovery: "vendor_history",
-          vendors: [
-            { vendorId: vendor.entityId },
-            { vendorId: otherVendor.entityId },
-          ],
-          senderPolicy: "verified_at_first_start",
-          receivedAfter: "2026-01-01",
-          receivedBefore: "2026-10-01",
-          candidateLimit: 10,
-          productLimit: 0,
-        },
-        meteredBudget: { period: "lifetime", limitMicroUSD: 1_000_000 },
-        expiresAt: "2099-01-01T00:00:00.000Z",
-      }),
-    );
-    const historyRun = await insertWithShortcode(ctx.db, "run", {
-      purpose: "mail_discovery",
-      trigger: "backfill",
-      status: "running",
-      parentRunId: authorization.runId,
-      ledgerPartyId: member.id,
-      actorUserId: ctx.actor.userId,
-      actorName: "Synthetic financial-history member",
-      actorEmail: "financial-history@example.test",
-      actorLedgerPartyShortcode: member.shortcode,
-      actorLedgerPartyName: member.name,
-      actorLedgerPartyKind: "member",
-      input: {
-        executionAuthorization: authorization,
-        executionPolicy: "import",
-        mailboxId,
-        scopedQueries: [],
-      },
-    });
-    const actor = { ...ctx.actor, runId: historyRun.id };
-    const input = { transactionId: transaction.output.id };
-    await expect(
-      convergeFinancialTransaction(ctx.db, input, actor),
-    ).rejects.toThrow("Vendor history Run has no selected Vendor");
-    expect(await liveCosts()).toEqual([]);
-    await getDb(ctx.db)
-      .update(run)
-      .set({ vendorId: otherVendor.entityId })
-      .where(eq(run.id, historyRun.id));
-    await expect(
-      convergeFinancialTransaction(ctx.db, input, actor),
-    ).rejects.toThrow("outside this Run's selected Vendor");
-    expect(await liveCosts()).toEqual([]);
-    await getDb(ctx.db)
-      .update(run)
-      .set({ vendorId: vendor.entityId })
-      .where(eq(run.id, historyRun.id));
-    expect(
-      await convergeFinancialTransaction(ctx.db, input, actor),
-    ).toMatchObject({ status: "applied" });
-    expect(await liveCosts()).toEqual([{ cost: 25 }]);
-  });
   it("keeps transfer evidence out of the spending ledger", async () => {
     const { transaction } = await fixture("account_transfer", false);
     expect(

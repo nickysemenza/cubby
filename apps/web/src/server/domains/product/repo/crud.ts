@@ -42,10 +42,8 @@ import {
   type ProductTopLevelOut,
   type ProductUpdateInput,
 } from "@cubby/schemas/product";
-import {
-  productCategoryFeature,
-  type ProductCategorySummary,
-} from "@cubby/schemas/product-category-fields";
+import { type ProductCategorySummary } from "@cubby/schemas/product-category-fields";
+import { productQuantityVarianceState } from "@cubby/schemas/product-fields";
 import { taskStatusSchema } from "@cubby/schemas/project";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import {
@@ -76,8 +74,6 @@ import {
 import {
   categorySummarySql,
   categoryStockTrackingSql,
-  categoryFeatureInSql,
-  categoryFeatureSql,
   productStockTrackedSql,
 } from "~/server/db/computed/product-category-sql";
 import { getProductClassificationEvidence } from "~/server/db/computed/product-classification-evidence";
@@ -93,7 +89,6 @@ import {
   type ListReadIntent,
   mapImages,
   notDeleted,
-  presenceCondition,
   relations,
   textArrayMatches,
   updateLiveAndReturn,
@@ -132,6 +127,7 @@ import {
   loadInventoryValuations,
 } from "~/server/domains/inventory/repo/valuation";
 import { loadLocationAncestorsWithIds } from "~/server/domains/location/repo/tree";
+import { categoryFeatureSql } from "~/server/domains/product-category/repo/category-feature";
 import {
   resolveProductCategory,
   loadCategorySummaries,
@@ -145,7 +141,6 @@ import {
   productHasGtin,
   productMatchesGtinTerm,
 } from "~/server/domains/product/repo/gtin";
-import { effectiveTaskSubjectProductSql } from "~/server/domains/task/repo/task-project-inheritance";
 import {
   resolveEntityDisplayImageLists,
   resolveEntityDisplayImages,
@@ -165,6 +160,7 @@ import {
   lockExternalIdentifierParents,
 } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
+import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 import { validateLiveInheritedPolicies } from "~/server/generic/inheritance/repo/inheritance-validation";
 import {
   listPrepare,
@@ -375,12 +371,12 @@ const productHasTask = ({
   return inArray(
     product.id,
     qb
-      .select({ productId: effectiveTaskSubjectProductSql() })
+      .select({ productId: effectiveFieldSql("task", "subjectProductId") })
       .from(task)
       .where(
         and(
           notDeleted(task),
-          isNotNull(effectiveTaskSubjectProductSql()),
+          isNotNull(effectiveFieldSql("task", "subjectProductId")),
           taskStatusFilter.length > 0
             ? inArray(task.status, taskStatusFilter)
             : undefined,
@@ -415,8 +411,30 @@ const productScaffold = listScaffold("product", product, {
     // note on the column in app/products/productlist.tsx for why the id is
     // the half that cannot move.
     expenseCount: productExpenseCountFilterSql(product.id),
-    ledgerExpectedQuantity: sql.raw(expectedQuantitySql('"Product"')),
+    // The range filter reads the catalog's one shared kit walk; the row value
+    // walks each product's kits.
+    ledgerExpectedQuantity: {
+      value: sql.raw(expectedQuantitySql('"Product"')),
+      set: expectedQuantityReadSql(),
+    },
     quantityVariance: sql.raw(quantityVarianceSql('"Product"')),
+    // Variance only means reconciliation when both physical stock and ledger
+    // evidence exist. Locations count as on-hand here because the compared SQL
+    // projection counts them too.
+    quantityVarianceState: listReadValue((read) => {
+      const onHand = onHandUnitsFilterSql(product.id, read);
+      const expected = expectedQuantityFilterSql(product.id);
+      return sql`CASE WHEN ${and(
+        or(
+          inArray(product.id, productIdsWithLiveInventory),
+          inArray(product.id, productIdsServingAsLocations),
+        ),
+        inArray(product.id, productIdsWithExpenses),
+        comparableQuantityHistoryFilterSql(product.id),
+      )} THEN CASE ${onHand} = ${expected}
+        WHEN true THEN ${productQuantityVarianceState.enum.matched}::text
+        WHEN false THEN ${productQuantityVarianceState.enum.mismatched}::text END END`;
+    }),
     // Same fragment the cell renders (relations.ts) and both filters use.
     purchaseDate: productAcquisitionDateFilterSql(product.id),
     upcPresence: inArray(
@@ -488,19 +506,6 @@ const productScaffold = listScaffold("product", product, {
     effectiveOwner: ownedProducts.predicate((ids) =>
       ids.length === 0 ? sql`false` : inArray(product.id, ids),
     ),
-    categoryFeature: ({ values, presence }) =>
-      or(
-        values.length === 0
-          ? undefined
-          : categoryFeatureInSql(
-              sql`${product.categoryId}`,
-              values.flatMap((value) => {
-                const feature = productCategoryFeature.safeParse(value);
-                return feature.success ? [feature.data] : [];
-              }),
-            ),
-        presenceCondition(product.categoryId, presence),
-      ),
     externalIdSource: ({ values, presence }) =>
       or(
         values.length === 0
@@ -526,40 +531,6 @@ const productScaffold = listScaffold("product", product, {
             .where(notDeleted(entityExternalId)),
         ),
       ),
-    expectedQuantityRange: ({ from, to }) =>
-      from === undefined && to === undefined
-        ? undefined
-        : inArray(
-            product.id,
-            sql`(SELECT quantity_range."productId" FROM (${expectedQuantityReadSql()}) quantity_range
-          WHERE ${and(
-            from === undefined
-              ? undefined
-              : sql`quantity_range."expectedQuantity" >= ${from}`,
-            to === undefined
-              ? undefined
-              : sql`quantity_range."expectedQuantity" <= ${to}`,
-          )})`,
-          ),
-    // Variance only means reconciliation when both physical stock and ledger
-    // evidence exist. Locations count as on-hand here because the compared SQL
-    // projection counts them too.
-    quantityVarianceState: ({ param }, read) => {
-      if (param !== "mismatched" && param !== "matched") return undefined;
-      const onHand = onHandUnitsFilterSql(product.id, read);
-      const expected = expectedQuantityFilterSql(product.id);
-      return and(
-        or(
-          inArray(product.id, productIdsWithLiveInventory),
-          inArray(product.id, productIdsServingAsLocations),
-        ),
-        inArray(product.id, productIdsWithExpenses),
-        comparableQuantityHistoryFilterSql(product.id),
-        param === "mismatched"
-          ? sql`${onHand} <> ${expected}`
-          : sql`${onHand} = ${expected}`,
-      );
-    },
     taskStatus: productTasks.predicate((keys) => productHasTask(keys)),
     taskOpen: productTasks.predicate((keys) =>
       keys.taskStatusFilter.length === 0 ? productHasTask(keys) : undefined,

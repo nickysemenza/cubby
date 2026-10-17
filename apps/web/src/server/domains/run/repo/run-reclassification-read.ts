@@ -3,8 +3,11 @@ import {
   mailReclassificationRead,
 } from "@cubby/schemas/email-actions";
 import { emailReclassifyResult } from "@cubby/schemas/email-actions";
-import type { ExecutionAuthorizationOwner } from "@cubby/schemas/execution-authorization";
-import { runShortcode } from "@cubby/schemas/identifiers";
+import {
+  runShortcode,
+  type LedgerPartyId,
+  type UserId,
+} from "@cubby/schemas/identifiers";
 import { mailReclassifyRunInput } from "@cubby/schemas/run-fields";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
@@ -26,7 +29,7 @@ import {
 export async function loadMailReclassificationRead(
   db: Database,
   publicId: string,
-  owner: ExecutionAuthorizationOwner | null,
+  owner: { userId: UserId; ledgerPartyId: LedgerPartyId } | null,
 ) {
   const database = getDb(db);
   const [row] = await database

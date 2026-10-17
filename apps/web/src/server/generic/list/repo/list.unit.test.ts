@@ -9,14 +9,10 @@ import { listScaffold } from "./list";
 describe("listScaffold", () => {
   const scaffold = listScaffold("task", task, {
     derived: {
-      assigneeId: sql`NULL`,
       effectiveTrade: sql`NULL`,
       effectiveDueDate: sql`NULL`,
       completion: sql`NULL`,
       topLevel: sql`true`,
-      assigneeFilter: () => undefined,
-      projectFilter: () => undefined,
-      subjectProductFilter: () => undefined,
       search: () => undefined,
       dueRelative: () => undefined,
     },

@@ -8,7 +8,7 @@ import { eq, inArray } from "drizzle-orm";
 
 import * as schema from "~/server/db/schema";
 import {
-  authorizeSyntheticBackfill,
+  enableSyntheticMailImport,
   authorizePurchaseAgent,
   workerdDiagnostic,
 } from "~/server/domains/purchase-import/repo/purchase-agent-workerd.fixtures";
@@ -154,7 +154,7 @@ function controls(purchaseAgent: ScenarioControls | undefined) {
   return purchaseAgent;
 }
 
-async function authorizeSeed(
+async function enableSeedMailImport(
   context: Awaited<ReturnType<typeof createEvidenceHarnessContext>>,
   seed: Seed,
 ) {
@@ -163,7 +163,7 @@ async function authorizeSeed(
     orderMailIds: [seed.events[0]!.orderMailId],
   });
   if (!source) throw new Error("Synthetic original is missing");
-  return authorizeSyntheticBackfill(context, seed.member.id, source.mailboxId);
+  return enableSyntheticMailImport(context, source.mailboxId);
 }
 
 async function vendorPurchases(
@@ -236,7 +236,7 @@ test("imports saved order mail from its Email page and follows the live Run to t
     `Synthetic import vendor ${Date.now()}`,
   );
   await authorizePurchaseAgent(getFixtureDb(), await fixtureUserId(page));
-  await authorizeSeed(await createEvidenceHarnessContext(page), seed);
+  await enableSeedMailImport(await createEvidenceHarnessContext(page), seed);
   const [claimed] = await claimOrder(seed);
   if (!claimed) throw new Error("Seeded original is missing");
   await agent.configure({
@@ -375,7 +375,7 @@ test("admits several retained confirmations as separate tasks in the same Run", 
     2,
   );
   await authorizePurchaseAgent(getFixtureDb(), await fixtureUserId(page));
-  await authorizeSeed(await createEvidenceHarnessContext(page), seed);
+  await enableSeedMailImport(await createEvidenceHarnessContext(page), seed);
   const [first, second] = await claimOrder(seed);
   if (!first || !second) throw new Error("Missing seeded confirmations");
   await agent.configure({

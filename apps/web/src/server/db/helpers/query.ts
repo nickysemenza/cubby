@@ -7,7 +7,6 @@ import {
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { ENTITY_NOT_FOUND_REASON } from "@cubby/schemas/identifiers";
 import {
-  oneOrManyValues,
   type PresenceFilter,
   type SortParams,
 } from "@cubby/schemas/pagination";
@@ -193,14 +192,20 @@ export const textArrayMatches = (
  * parens are load-bearing because `presenceCondition` negates the clause.
  */
 export const arrayOverlapOrPresence = (
-  column: AnyColumn,
+  column: AnyColumn | SQL,
   values: readonly string[] | undefined,
   presence: PresenceFilter,
   nullable: boolean,
 ): SQL | undefined =>
   or(
     values !== undefined && values.length > 0
-      ? arrayOverlaps(column, [...values])
+      ? // Against an expression drizzle binds the list as one scalar.
+        column instanceof SQL
+        ? sql`${column} && ARRAY[${sql.join(
+            values.map((value) => sql`${value}`),
+            sql`, `,
+          )}]::text[]`
+        : arrayOverlaps(column, [...values])
       : undefined,
     presenceCondition(
       column,
@@ -596,7 +601,7 @@ export const shortcodeSetCondition = (
  * unaffected; the redundant parens are free.
  */
 export const presenceCondition = (
-  column: AnyColumn,
+  column: AnyColumn | SQL,
   presence: PresenceFilter,
   emptyWhen?: SQL,
 ): SQL | undefined =>
@@ -621,18 +626,6 @@ export const flagCondition = (
   const met = condition();
   if (met === undefined) return undefined;
   return flag ? met : sql`NOT COALESCE((${met}), false)`;
-};
-
-/**
- * Any-of for a hand-written {@link oneOrMany} filter: the rows matching at
- * least one picked value. A scalar reads as a one-element list.
- */
-export const anyOfCondition = <TValue>(
-  value: TValue | readonly TValue[] | undefined,
-  condition: (value: TValue) => SQL | undefined,
-): SQL | undefined => {
-  const values = oneOrManyValues(value);
-  return values?.length ? or(...values.map(condition)) : undefined;
 };
 
 /**

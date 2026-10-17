@@ -6,11 +6,11 @@ import {
   type SearchableEntity,
   type SearchableEntityRef,
 } from "@cubby/schemas/search";
-import { chunk, uniqBy } from "es-toolkit";
+import { uniqBy } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
-  findChildTaskEmbeddingRefs,
+  findDescendantTaskEmbeddingRefs,
   findCommercialEmbeddingRefsForExpenses,
   findEmbeddingRefsForCategories,
   findEmbeddingRefsForPurchases,
@@ -32,7 +32,6 @@ import {
   findDirectImageSearchOwnerRefs,
   refreshSearchDocuments,
 } from "~/server/generic/search/repo/search-document";
-import { changesWorkPrerequisite } from "~/server/generic/work-queue/repo/work-dependencies";
 import {
   type PublishOptions,
   publishInBackground,
@@ -153,7 +152,7 @@ const searchDependents: SearchDependents = {
   inventory: {},
   meal: {},
   project: { updated: [findTrackerEmbeddingRefsForProjects] },
-  task: { updated: [findChildTaskEmbeddingRefs] },
+  task: { updated: [findDescendantTaskEmbeddingRefs] },
   vendor: { updated: [findEmbeddingRefsForVendors] },
   purchase: { updated: [(db, ids) => findEmbeddingRefsForPurchases(db, ids)] },
   financialAccount: { updated: [findTransactionEmbeddingRefsForAccounts] },
@@ -372,22 +371,6 @@ export async function runMutationSideEffectsForEntities(
     ports,
   );
   for (const event of events) await enqueueLocationAiRefresh(db, event, ports);
-  const workChanges = events
-    .filter((event) => changesWorkPrerequisite(event.entity.entity))
-    .map((event) => ({
-      entityKind: event.entity.entity,
-      entityId: event.entity.id,
-    }));
-  if (workChanges.length)
-    await ports.publishTasks(
-      db,
-      chunk(workChanges, 100).map((changed) => ({
-        kind: "work.advance",
-        requestedAt: new Date().toISOString(),
-        changed,
-      })),
-      { source: `${firstEvent.source}:${firstEvent.action}` },
-    );
 }
 
 /**

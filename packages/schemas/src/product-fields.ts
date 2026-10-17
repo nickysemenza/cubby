@@ -24,6 +24,8 @@ export { moneyNullable, positiveMoneyNullable };
  * it only informs project suggestions and worklist filters. Adding a value
  * widens the generated CHECK: ship the migration before the code.
  */
+/** Shelf against ledger where both are comparable (product `quantityVarianceState`). */
+export const productQuantityVarianceState = z.enum(["matched", "mismatched"]);
 export const productKindValues = ["consumable", "durable"] as const;
 export const productKindSchema = z.enum(productKindValues);
 export type ProductKind = z.infer<typeof productKindSchema>;

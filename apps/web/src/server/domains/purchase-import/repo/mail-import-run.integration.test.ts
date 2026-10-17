@@ -1,4 +1,3 @@
-import { executionAuthorizationInput } from "@cubby/schemas/execution-authorization";
 import { parseEntityId, runShortcode } from "@cubby/schemas/identifiers";
 import { coordinatorModelFor } from "@cubby/schemas/import-run-agent";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
@@ -9,22 +8,20 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
-import { account } from "~/server/db/auth.schema";
 import {
   databaseForTransaction,
   getDb,
   withTransaction,
 } from "~/server/db/helpers";
 import {
+  aiUsage,
   orderMail,
   email as emailTable,
   run,
   runOperation,
 } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { issueExecutionAuthorization } from "~/server/domains/run/repo/execution-authorization";
-import { executionAuthorizationFromInput } from "~/server/domains/run/repo/execution-context";
-import { paidResearchPreflight } from "~/server/domains/run/service/execution-transport";
+import { paidRunPreflight } from "~/server/domains/run/service/execution-transport";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { createMcpServer } from "~/server/mcp/server";
@@ -270,58 +267,6 @@ describe("mail research admission", () => {
       ),
     ).toEqual([]);
   });
-  it.each(["owned", "foreign"] as const)(
-    "binds retained mail backfill only to an owned connected mailbox: %s",
-    async (ownership) => {
-      const { party, mail } = await source();
-      await getDb(ctx.db).insert(account).values({
-        id: crypto.randomUUID(),
-        accountId: mail.mailboxId,
-        providerId: "google",
-        userId: ctx.actor.userId,
-        updatedAt: new Date(),
-      });
-      const approval = await issueExecutionAuthorization(
-        ctx.db,
-        ctx.actor,
-        executionAuthorizationInput.parse({
-          kind: "execution_authorization",
-          version: 1,
-          owner: { userId: ctx.actor.userId, ledgerPartyId: party.id },
-          scope: {
-            kind: "backfill",
-            mailboxId: mail.mailboxId,
-            discovery: "all_history",
-          },
-          meteredBudget: { period: "lifetime", limitMicroUSD: 10_000_000 },
-          expiresAt: new Date(Date.now() + 60_000).toISOString(),
-        }),
-      );
-      if (ownership === "foreign")
-        await getDb(ctx.db)
-          .update(account)
-          .set({ accountId: "another-mailbox" })
-          .where(eq(account.userId, ctx.actor.userId));
-      const [admitted] = await startMailImport(
-        ctx.db,
-        {
-          ledgerPartyId: party.id,
-          userId: ctx.actor.userId,
-          mailboxId: mail.mailboxId,
-          messageIds: [mail.id],
-        },
-        { send: async () => {} },
-      );
-      expect(admitted).toBeDefined();
-      const [saved] = await getDb(ctx.db)
-        .select()
-        .from(run)
-        .where(eq(run.id, parseEntityId("run", admitted!.runId)));
-      expect(executionAuthorizationFromInput(saved?.input)).toEqual(
-        ownership === "owned" ? approval : undefined,
-      );
-    },
-  );
   it("refuses selected Luna when cancellation completes during source validation", async () => {
     const { party, mail } = await source();
     if (!mail.rawChecksum) throw new Error("Synthetic checksum missing");
@@ -357,9 +302,10 @@ describe("mail research admission", () => {
     let transmissions = 0;
     const paid = gatewayFetchThrough({
       provider: "openai",
-      beforePaidRequest: paidResearchPreflight(
+      beforePaidRequest: paidRunPreflight(
         ctx.db,
         parseEntityId("run", admitted.runId),
+        "purchase_import_agent",
       ),
       gateway: async () => {
         transmissions += 1;
@@ -384,23 +330,20 @@ describe("mail research admission", () => {
       provider: "openai",
       model: "gpt-6-luna",
       endpoint: "responses",
-      unapprovedModel: "gpt-6-astra",
     },
     {
       provider: "openai",
       model: "gpt-6-sol",
       endpoint: "responses",
-      unapprovedModel: "gpt-6-astra",
     },
     {
       provider: "anthropic",
       model: "claude-opus-5-5",
       endpoint: "v1/messages",
-      unapprovedModel: "claude-sonnet-4-6",
     },
   ] as const)(
-    "permits authorized coordinator $model for a member-selected source without a dollar grant",
-    async ({ provider, model, endpoint, unapprovedModel }) => {
+    "admits member-selected coordinator $model past a spent background budget",
+    async ({ provider, model, endpoint }) => {
       const { party, mail } = await source();
       const [admitted] = await startMailImport(
         ctx.db,
@@ -418,9 +361,10 @@ describe("mail research admission", () => {
       let transmissions = 0;
       const paid = gatewayFetchThrough({
         provider,
-        beforePaidRequest: paidResearchPreflight(
+        beforePaidRequest: paidRunPreflight(
           ctx.db,
           parseEntityId("run", admitted.runId),
+          "purchase_import_agent",
         ),
         gateway: async () => {
           transmissions += 1;
@@ -436,8 +380,19 @@ describe("mail research admission", () => {
         );
       const request = (requestModel: string = model) =>
         paid(url, { method: "POST", body: requestBody(requestModel) });
+      // Foreground coordinator work is not budgeted background spend.
+      await getDb(ctx.db)
+        .insert(aiUsage)
+        .values({
+          runId: parseEntityId("run", admitted.runId),
+          feature: "purchase_import_agent",
+          provider: "openai",
+          model: "gpt-6-luna",
+          operation: "agent.generation",
+          durationMs: 1,
+          chargedCost: 1,
+        });
       await expect(request()).resolves.toBeInstanceOf(Response);
-      await expect(request(unapprovedModel)).rejects.toThrow(/authorization/iu);
       expect(transmissions).toBe(1);
       await getDb(ctx.db)
         .update(run)
@@ -471,9 +426,10 @@ describe("mail research admission", () => {
       ]);
       const retryPaid = gatewayFetchThrough({
         provider,
-        beforePaidRequest: paidResearchPreflight(
+        beforePaidRequest: paidRunPreflight(
           ctx.db,
           parseEntityId("run", successor.successorRunId),
+          "purchase_import_agent",
         ),
         gateway: async () => {
           transmissions += 1;
@@ -487,207 +443,6 @@ describe("mail research admission", () => {
         }),
       ).resolves.toBeInstanceOf(Response);
       expect(transmissions).toBe(2);
-      await getDb(ctx.db).insert(account).values({
-        id: crypto.randomUUID(),
-        accountId: mail.mailboxId,
-        providerId: "google",
-        userId: ctx.actor.userId,
-        updatedAt: new Date(),
-      });
-      const historicalApproval = await issueExecutionAuthorization(
-        ctx.db,
-        ctx.actor,
-        executionAuthorizationInput.parse({
-          kind: "execution_authorization",
-          version: 1,
-          owner: { userId: ctx.actor.userId, ledgerPartyId: party.id },
-          scope: {
-            kind: "backfill",
-            mailboxId: mail.mailboxId,
-            discovery: "all_history",
-          },
-          meteredBudget: { period: "lifetime", limitMicroUSD: 500_000 },
-          expiresAt: new Date(Date.now() + 60_000).toISOString(),
-        }),
-      );
-      const [approvalRoot] = await getDb(ctx.db)
-        .select({ input: run.input })
-        .from(run)
-        .where(eq(run.id, historicalApproval.runId));
-      await getDb(ctx.db)
-        .update(run)
-        .set({
-          input: {
-            ...executionAuthorizationInput.parse(approvalRoot?.input),
-            expiresAt: "2020-01-01T00:00:00.000Z",
-          },
-        })
-        .where(eq(run.id, historicalApproval.runId));
-      const successorId = parseEntityId("run", successor.successorRunId);
-      const [priorSuccessor] = await getDb(ctx.db)
-        .select({ input: run.input, shortcode: run.shortcode })
-        .from(run)
-        .where(eq(run.id, successorId));
-      if (!priorSuccessor) throw new Error("Selected successor missing");
-      await getDb(ctx.db)
-        .update(run)
-        .set({
-          status: "failed",
-          input: {
-            ...mailResearchRunInput.parse(priorSuccessor.input),
-            executionAuthorization: historicalApproval,
-          },
-        })
-        .where(eq(run.id, successorId));
-      const expiredRetry = await controlRun(ctx.db, ctx.actor, {
-        runPublicId: priorSuccessor.shortcode,
-        action: "retry",
-      });
-      if (!("successorRunId" in expiredRetry))
-        throw new Error("Expired-allowance retry missing");
-      const expiredPaid = gatewayFetchThrough({
-        provider,
-        beforePaidRequest: paidResearchPreflight(
-          ctx.db,
-          parseEntityId("run", expiredRetry.successorRunId),
-        ),
-        gateway: async () => {
-          transmissions += 1;
-          return Response.json({});
-        },
-      });
-      await expect(
-        expiredPaid(url, {
-          method: "POST",
-          body: requestBody(model),
-        }),
-      ).resolves.toBeInstanceOf(Response);
-      expect(transmissions).toBe(3);
-    },
-  );
-
-  it.each(["retry", "restart"] as const)(
-    "refuses Luna on a discovery %s after its grant expires",
-    async (action) => {
-      const { party, mail } = await source();
-      await getDb(ctx.db).insert(account).values({
-        id: crypto.randomUUID(),
-        accountId: mail.mailboxId,
-        providerId: "google",
-        userId: ctx.actor.userId,
-        updatedAt: new Date(),
-      });
-      const approval = await issueExecutionAuthorization(
-        ctx.db,
-        ctx.actor,
-        executionAuthorizationInput.parse({
-          kind: "execution_authorization",
-          version: 1,
-          owner: { userId: ctx.actor.userId, ledgerPartyId: party.id },
-          scope: {
-            kind: "backfill",
-            mailboxId: mail.mailboxId,
-            discovery: "all_history",
-          },
-          meteredBudget: { period: "lifetime", limitMicroUSD: 500_000 },
-          expiresAt: new Date(Date.now() + 60_000).toISOString(),
-        }),
-      );
-      const parentRunId = await ensureRun(ctx.db, ctx.actor, {
-        purpose: "mail_discovery",
-        trigger: "scheduled",
-        input: {
-          mailboxId: mail.mailboxId,
-          scopedQueries: [],
-          executionPolicy: "import",
-          executionAuthorization: approval,
-        },
-      });
-      const [admitted] = await startMailImport(
-        ctx.db,
-        {
-          ledgerPartyId: party.id,
-          userId: ctx.actor.userId,
-          messageIds: [mail.id],
-          parentRunId,
-        },
-        { send: async () => {} },
-      );
-      if (!admitted) throw new Error("Synthetic discovery child missing");
-      const [root] = await getDb(ctx.db)
-        .select({ input: run.input })
-        .from(run)
-        .where(eq(run.id, approval.runId));
-      const expiredInput = executionAuthorizationInput.parse({
-        ...executionAuthorizationInput.parse(root?.input),
-        expiresAt: "2020-01-01T00:00:00.000Z",
-      });
-      await getDb(ctx.db)
-        .update(run)
-        .set({
-          input: expiredInput,
-        })
-        .where(eq(run.id, approval.runId));
-      const admittedId = parseEntityId("run", admitted.runId);
-      const [child] = await getDb(ctx.db)
-        .select({ input: run.input })
-        .from(run)
-        .where(eq(run.id, admittedId));
-      await getDb(ctx.db)
-        .update(run)
-        .set({
-          status: "failed",
-          input: {
-            ...mailResearchRunInput.parse(child?.input),
-            executionAuthorization: {
-              ...approval,
-              approvalFingerprint: await sha256Hex(
-                JSON.stringify(expiredInput),
-              ),
-            },
-          },
-        })
-        .where(eq(run.id, admittedId));
-      const [previous] = await getDb(ctx.db)
-        .select({ shortcode: run.shortcode })
-        .from(run)
-        .where(eq(run.id, admittedId));
-      if (!previous) throw new Error("Synthetic discovery child missing");
-      const successor = await controlRun(ctx.db, ctx.actor, {
-        runPublicId: previous.shortcode,
-        action,
-      });
-      if (!("successorRunId" in successor))
-        throw new Error("Synthetic discovery successor missing");
-      let transmissions = 0;
-      const paid = gatewayFetchThrough({
-        provider: "openai",
-        beforePaidRequest: paidResearchPreflight(
-          ctx.db,
-          parseEntityId("run", successor.successorRunId),
-        ),
-        gateway: async () => {
-          transmissions += 1;
-          return Response.json({});
-        },
-      });
-      await expect(
-        paid("https://ai-gateway.invalid/openai/responses", {
-          method: "POST",
-          body: JSON.stringify({ model: "gpt-6-luna", input: [] }),
-        }),
-      ).rejects.toThrow(/expired/iu);
-      expect(transmissions).toBe(0);
-      if (!successor.successorRunPublicId)
-        throw new Error("Synthetic successor missing");
-      const [parent] = await getDb(ctx.db)
-        .select({ shortcode: run.shortcode })
-        .from(run)
-        .where(eq(run.id, parentRunId));
-      expect(
-        (await loadRunDetail(ctx.db, successor.successorRunPublicId))
-          .parentRunId,
-      ).toBe(parent?.shortcode);
     },
   );
 
@@ -748,9 +503,10 @@ describe("mail research admission", () => {
       let transmissions = 0;
       const paid = gatewayFetchThrough({
         provider: "openai",
-        beforePaidRequest: paidResearchPreflight(
+        beforePaidRequest: paidRunPreflight(
           ctx.db,
           parseEntityId("run", successor.successorRunId),
+          "purchase_import_agent",
         ),
         gateway: async () => {
           transmissions += 1;
@@ -766,68 +522,6 @@ describe("mail research admission", () => {
       expect(transmissions).toBe(0);
     },
   );
-
-  it("admits a member-selected checksum without inheriting an expired backfill allowance", async () => {
-    const { party, mail } = await source();
-    await getDb(ctx.db).insert(account).values({
-      id: crypto.randomUUID(),
-      accountId: mail.mailboxId,
-      providerId: "google",
-      userId: ctx.actor.userId,
-      updatedAt: new Date(),
-    });
-    const approval = await issueExecutionAuthorization(
-      ctx.db,
-      ctx.actor,
-      executionAuthorizationInput.parse({
-        kind: "execution_authorization",
-        version: 1,
-        owner: { userId: ctx.actor.userId, ledgerPartyId: party.id },
-        scope: {
-          kind: "backfill",
-          mailboxId: mail.mailboxId,
-          discovery: "all_history",
-        },
-        meteredBudget: { period: "lifetime", limitMicroUSD: 500_000 },
-        expiresAt: new Date(Date.now() + 60_000).toISOString(),
-      }),
-    );
-    const [root] = await getDb(ctx.db)
-      .select({ input: run.input })
-      .from(run)
-      .where(eq(run.id, approval.runId));
-    // An expired approval fixture must not become authority for this new selection.
-    await getDb(ctx.db)
-      .update(run)
-      .set({
-        input: {
-          ...executionAuthorizationInput.parse(root?.input),
-          expiresAt: "2020-01-01T00:00:00.000Z",
-        },
-      })
-      .where(eq(run.id, approval.runId));
-    const [admitted] = await startMailImport(
-      ctx.db,
-      {
-        ledgerPartyId: party.id,
-        userId: ctx.actor.userId,
-        messageIds: [mail.id],
-        expectedChecksums: [
-          { orderMailId: mail.id, checksum: mail.rawChecksum! },
-        ],
-      },
-      { send: async () => {} },
-    );
-    if (!admitted) throw new Error("Selected mail Run missing");
-    const [saved] = await getDb(ctx.db)
-      .select()
-      .from(run)
-      .where(eq(run.id, parseEntityId("run", admitted.runId)));
-    expect(executionAuthorizationFromInput(saved?.input)).toBeUndefined();
-    expect(await frozenSources(admitted.runId)).toEqual([
-      { orderMailId: mail.id, checksum: mail.rawChecksum },
-    ]);
-  });
 
   it("refuses a historical ownership block before admitting or dispatching mail", async () => {
     const { party, mail } = await source();

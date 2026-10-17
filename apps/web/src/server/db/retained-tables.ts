@@ -575,6 +575,8 @@ export const aiUsage = pgTable(
     index("AiUsage_entity_idx").on(table.entityKind, table.entityId),
     index("AiUsage_job_idx").on(table.jobKind, table.jobId),
     index("AiUsage_run_idx").on(table.runId),
+    // The household AI budget sums each six-hour window by time.
+    index("AiUsage_createdAt_idx").on(table.createdAt),
     check(
       "AiUsage_transport_check",
       sql`${table.transport} IN (${sql.raw(aiUsageTransportValues.map((value) => `'${value}'`).join(", "))})`,

@@ -51,6 +51,27 @@ None where supported. Domain rules supply the fallback; the generic framework
 owns its presentation and assignment intent. Generic form controls alone do not
 establish reuse of the resolution framework.
 
+An inherited value has one implementation: the field's `resolution.inherit`
+declaration (`packages/schemas/src/entity-definitions/definition.ts`) and its
+generator, `server/generic/inheritance/repo/effective-field.ts`. `mode` says when the
+row's own stored value decides (absent: NULL inherits; a `none` mode value is
+an explicit None); `from` lists the ordered sources, and the first that
+decides (a value or an explicit None) ends the chain: `"hierarchy"` is the
+nearest live ancestor along `model.hierarchy` whose own value decides
+(cycle-guarded, capped at `maxDepth`), and `{ path }` the effective value of
+the field a to-one path ends at. Project and category fields, and task project,
+subject product and assignee, walk their hierarchy; the task assignee then
+falls back to its effective project's default.
+
+`effectiveFieldSql` is the value every read, list row, filter, sort and group
+uses; `inheritedFieldSql` the fallback; `inheritedSourceSql` the source and
+record that decided, which `fieldResolutions.sourceEntity` names. A stored
+filter over an inherited field, a `via` path ending at one, and a relation
+edge whose foreign key is one all read the effective value; a hierarchy-only
+chain filters in the top-down set form (`effectiveFieldInSql`), resolved once
+per query. Repositories format provenance labels and nothing else; never
+hand-write an ancestor walk or fallback for a declared field.
+
 A new field is complete when its normal reads and supported filters/sorts agree
 on the effective value, reset restores inheritance, and source changes update
 inherited values while preserving explicit choices. Extend the shared contract
@@ -733,7 +754,7 @@ run globally, with dependent calls sequential. An execution claim defers immedia
 when global admission is busy, preserving queued work and its attempt count for
 the existing Workflow retry instead of occupying an origin connection in a lock
 wait. Email Runs freeze at most 200
-items and retain the mailbox's existing execution authorization. Reused Email
+items and run only while Mail import is on for that mailbox. Reused Email
 stages require current source checksum and feature provenance. The
 [AI refresh runbook](runbooks/ai-refresh.md) owns activation, observation and
 recovery. Independent model grading and member labels follow the
@@ -1522,7 +1543,8 @@ value a stored field orders and groups by when its column is not that value
 (`tags` by its first tag, a reference by its effective record's name). Its
 filter, sort, and group share one expression
 (`server/generic/list/repo/field-compiler.ts`); a stored field's filters stay
-on its column, so only a `type` or `via` entry may name one. Each key takes
+on its column (its effective value when it declares `resolution.inherit`), so
+only a `type` or `via` entry may name one. Each key takes
 one shape:
 
 - `{ via: "relation.relation[.field]" }` walks declared `local-path`
@@ -1542,11 +1564,23 @@ one shape:
   `listScaffold(entity, table, { derived })`, whose argument type is
   generated, so a declared key without SQL fails typecheck. A compound value
   (an array of SQL, inventory `amount` as unit then size) orders part by part
-  and cannot filter.
+  and cannot filter. A state that is one row value is an `enum` value whose
+  `options` are disjoint and whose CASE yields no value outside them
+  (inventory `valuationStatus`, purchase `reconciliation`, product
+  `quantityVarianceState`); a filter that means several states picks them
+  together, as Missing valuation is `priceable` with `unpriceable`. A value
+  may be `{ value, set }`: `set` selects `("id", "value")` for the whole list
+  and its filters match `id IN (SELECT "id" FROM set WHERE …)`, so one
+  set-based walk serves the filter while sort, group, and projection read the
+  per-row `value`, which must agree with it row for row (product
+  `ledgerExpectedQuantity` shares one kit walk).
 - `{ predicate, reason }` is filter-only SQL the repository passes the same
-  way; `reason` says why it is not one row value (inventory's
-  `valuationStatus` statuses overlap). Predicates are the countable declared
-  exception and should shrink; `negatable: true` offers Exclude (above). `predicate` names the descriptor kind
+  way; `reason` says why it is not one row value (an effective owner is
+  resolved outside SQL). Predicates are the countable declared exception and
+  only shrink: each is listed in
+  `apps/web/generator/entities/predicate-baseline.json`, and the generator
+  rejects an unlisted predicate and an entry whose predicate is gone.
+  `negatable: true` offers Exclude (above). `predicate` names the descriptor kind
   it serves, and the SQL receives that kind's parsed value: a trimmed string
   (`text`), `{ values, presence }` (`multiselect`/`idMulti`, with the
   descriptor's declared `nullable`; `idMulti` adds `includeDescendants`), a
@@ -1599,8 +1633,7 @@ A compiled id filter resolves its shortcodes inside the list query, through
 `shortcodeIdsSql`, rather than in a lookup before it: an unknown or
 soft-deleted code matches nothing (#2333).
 
-An id filter (stored, `via`, or an `idMulti` predicate over an inherited
-reference, by its `brandRef`) whose target declares `model.hierarchy` matches
+An id filter (stored, `via`, or an `idMulti` predicate, by its `brandRef`) whose target declares `model.hierarchy` matches
 the selected records and their live descendants through
 `hierarchyDescendantsSql` (`server/generic/list/repo/hierarchy.ts`), the one
 recursive-descendant generator repositories also call directly. The compiler
@@ -1610,9 +1643,10 @@ selected records. It replaced the hand-written pairs: inventory's
 `locationSubtreeFilter` is `locationIdFilter` with `includeSubLocations`, and
 project's parent filter is the stored `parentProjectId` with
 `includeSubProjects`. A predicate receives the toggle as `includeDescendants`
-on its `idMulti` value: task's effective project, expense's allocated project
-and spending category, a product category's effective spending category, and
-an image's import run.
+on its `idMulti` value: expense's allocated project and spending category, and
+an image's import run. An inherited reference (task project, a product
+category's effective spending category) is a `via` path through its effective
+edge and gets the toggle like any other.
 
 Searchable entities use persisted `SearchDocument` rows for lexical and
 embedding input. The spec generates search capability gates, while projection

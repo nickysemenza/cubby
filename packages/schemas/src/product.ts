@@ -315,12 +315,6 @@ export const productFilterFields = {
   ),
   ...numericRangeFields("expenseCount", { int: true, nonnegative: true }),
   ...numericRangeFields("expenseTotal"),
-  quantityVarianceFilter: z
-    .enum(["mismatched", "matched"])
-    .optional()
-    .describe(
-      "mismatched: stocked products whose on-hand units differ from the expected quantity. matched: stocked products where they agree.",
-    ),
   unknownQuantityLinesFilter: presenceFilter,
   purchaseDatePresenceFilter: presenceFilter.describe(
     "Filter to products that do / don't have a dated live Purchase linked through an Expense.",

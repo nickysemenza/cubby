@@ -89,8 +89,8 @@ diagnostics under Technical details. Usage telemetry is asynchronous: missing
 call receipts leave costs unknown with accounting pending, never a false zero;
 the diagnostic Run exposes usage after its telemetry arrives. A preview records only its diagnostic Run
 and model usage; it publishes no Email classification, observation, retained
-content, import or member grade. Existing Gmail execution approval is required;
-preview never grants import authority or bypasses paid-request admission.
+content, import or member grade. Preview never grants import authority or
+bypasses paid-request admission.
 Pi/Luna/Sol authorization remains separate. Classification and import are
 separate operations, allowing members to assess Relevance before import.
 A classifier-version refresh defers Emails already assigned to a frozen import
@@ -174,8 +174,7 @@ prediction becomes a reconciliation conflict rather than silently clearing
 linked content.
 
 A member may Reclassify up to 200 owned Emails at once. One Run per mailbox
-(a `mail_reclassify` Run with a frozen Email roster, bound to that mailbox's
-backfill or continuous execution approval) reruns rule, Jev and the relevance
+(a `mail_reclassify` Run with a frozen Email roster) reruns rule, Jev and the relevance
 model even under classification-only policy, refetching each original from
 Gmail. The rerun is always recorded as a prediction, but it never becomes the
 Email's processing Run and never admits import. Unaccepted retained negatives
@@ -188,14 +187,9 @@ disagrees with the member's resolution or latest review of the same checksum
 records a `member_review` conflict. The request always returns Run references;
 Cloudflare Workflows finishes the roster with bounded retries and exact publication
 receipts. Each target follows current evidence, with bounded restarts before a
-linked delayed continuation, so a changing Email cannot starve its roster. A
-usable bound approval stays bound; otherwise execution selects the newest
-applicable approval and retains the switch audit. Missing authority pauses work
-until an approval wake or reconciliation can resume it.
-Metered fallback refusal also pauses the roster without consuming a target retry.
-Recovery checks the denied request's quoted allowance against current-period
-reservations before selecting authority; a replacement approval or a renewed
-continuous budget can resume it, with the binding switch retained in the audit.
+linked delayed continuation, so a changing Email cannot starve its roster.
+Reaching the household AI budget pauses the roster without consuming a target
+retry; recovery resumes it once a later budget window has room.
 
 Run reads expose per-Email receipts and linked continuation Run references.
 Discovery Run reads also page through handling receipts, including reused

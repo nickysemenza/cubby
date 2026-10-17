@@ -36,26 +36,27 @@ member's instruction), photo uploads and a member's own
 ([ADR 0010](../adr/0010-mail-import-unattended-burn-down-interactive.md)).
 `imports_read.run_status` reads one Run. An owned `mail_discovery` Run includes
 `mailDiscovery`: its frozen mailbox/query scope, persisted Workflow checkpoint,
-current mailbox coverage, retained approval expiry and reservation/claim/revocation
-receipts, recorded AI-call usage/retries and failure diagnostics. Current mailbox
-coverage can advance after that Run; the Workflow checkpoint belongs to that Run.
-Reservations consume allowance and are separate from priced usage; unpriced calls
-remain counted. Missing approval/checkpoint/coverage stays null. These reads never
+current mailbox coverage, recorded AI-call usage/retries and failure diagnostics.
+Current mailbox coverage can advance after that Run; the Workflow checkpoint
+belongs to that Run. Unpriced calls remain counted. Missing checkpoint/coverage
+stays null. `imports_read.mail_import` reads each connected mailbox's Mail import
+switch and the current AI budget window. These reads never
 load or resume a Workflow. Discovery has no coordinator conversation, so its owned
 `imports_read.run_transcript` returns `absent`; that is not evidence it never ran.
 `run.lifecycle` runs every Run control
-(cancel, retry, restart, approve, reject and the rest). Review and paid-grant
+(cancel, retry, restart, approve, reject and the rest). Review and spending
 decisions are reachable on MCP too
-(`run.approve_execution`, `run.discover_mail`, `run.commit_prepared`,
+(`run.set_mail_import`, `run.discover_mail`, `run.commit_prepared`,
 `run.resolve_finding`, `photo_run.approve_groups`,
 `product_enrichment.merge_match`, suggestion review: `entity.review_assessment`,
 `entity.review_assessments`, each batch returning a per-id `ok`/`error`
 result). An agent calls one only
-on the member's explicit instruction for that specific budget or scope. An
-exact-checksum member-selected Email import using the declared coordinator models or its member-controlled retry
-needs no dollar grant. Explicit member selections of Vendor order Emails use
-the same policy within the existing selection limit. Historical discovery still needs its
-separate scope authorization; other paid models keep their allowance checks.
+on the member's explicit instruction. An exact-checksum member-selected Email
+import using the declared coordinator models or its member-controlled retry is
+foreground work outside the AI budget. Explicit member selections of Vendor
+order Emails use the same policy within the existing selection limit. Other
+frontier chat-model calls draw from the household AI budget, a stopgap safety
+net ([import journey](../guide/import-journey.md)).
 No run purpose holds the `start_run` or `member_decision` capability
 (`server/domains/purchase-import/repo/capabilities.ts`), so a coordinator never starts
 another run or makes a member's decision. That gate applies only to

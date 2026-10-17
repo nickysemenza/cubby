@@ -80,7 +80,6 @@ import {
 import { resolveImportSourceOrder } from "~/server/domains/purchase-import/repo/source-claim-family";
 import { sourceOrderKey } from "~/server/domains/purchase-import/repo/source-order-key";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { assertRunVendorAuthorization } from "~/server/domains/run/repo/execution-context";
 import { executeAtomicOperation } from "~/server/domains/run/repo/operation";
 import { readOperation } from "~/server/domains/run/repo/run-operation";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -186,7 +185,6 @@ async function preparedOrderVendor(
       : scope.vendorId;
   if (!vendorId)
     throw new Error("Name each order's Vendor (vendorId or vendor.name).");
-  await assertRunVendorAuthorization(db, scope.runId, vendorId);
   return { vendorId, vendorCandidates };
 }
 
@@ -919,11 +917,6 @@ export async function commitPurchaseImport(
             throw new Error(
               "The prepared order's Vendor was deleted or merged; prepare it again.",
             );
-          await assertRunVendorAuthorization(
-            transactionDb,
-            scope.runId,
-            vendorId,
-          );
           return vendorId;
         };
         const mailSources = new Map<string, RetainedMailSource | null>();

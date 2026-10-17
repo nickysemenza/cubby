@@ -152,7 +152,7 @@ describe("project and task saved views use ordinary server filters", () => {
   it("Inbox tasks are open, unassigned, and parentless", () => {
     expect(build("task", "inbox")).toEqual({
       status: ["not_started", "later", "in_progress", "blocked"],
-      projectPresenceFilter: "none",
+      projectIdPresenceFilter: "none",
       parentTaskPresenceFilter: "none",
     });
   });
@@ -364,7 +364,7 @@ describe("the unlocated views stay one question at three widths", () => {
     const disagrees = productViews.find((v) => v.id === "shelf-disagrees");
     expect(disagrees?.filters).toContainEqual({
       id: "quantityVariance",
-      value: "mismatched",
+      value: ["mismatched"],
     });
     expect(broad?.filters).toContainEqual({
       id: "servingAsLocations",

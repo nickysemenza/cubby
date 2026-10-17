@@ -21,8 +21,10 @@ import {
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
+import { findErrorCause } from "~/lib/error-diagnostics";
 import type { UnparsedError } from "~/lib/error-utils";
 import { cachedCall } from "~/server/ai/adapters";
+import { AiBudgetExhaustedError, withAiBudget } from "~/server/ai/budget";
 import { gatewayFetch } from "~/server/ai/gateway";
 import {
   PURCHASE_IMPORT_AUDIT_FEATURE,
@@ -251,6 +253,14 @@ async function recoverPurchaseAudit(
       ...cachedCall({
         metadata: { feature: PURCHASE_IMPORT_AUDIT_FEATURE.feature, operation },
       }),
+      beforePaidRequest: withAiBudget(
+        args.db,
+        {
+          model: AUDIT_RECOVERY_MODEL,
+          feature: PURCHASE_IMPORT_AUDIT_FEATURE.feature,
+        },
+        undefined,
+      ),
       onTransport: (selected) => {
         transport = selected;
       },
@@ -358,6 +368,15 @@ export const auditPurchaseImportBatch = async (
       ),
     );
   } catch (primaryError) {
+    // A spent budget is not a model failure; the fallback must not buy past it.
+    if (
+      findErrorCause(
+        primaryError,
+        (cause): cause is AiBudgetExhaustedError =>
+          cause instanceof AiBudgetExhaustedError,
+      )
+    )
+      throw primaryError;
     try {
       return await recoverPurchaseAudit(args, ports);
     } catch (recoveryError) {

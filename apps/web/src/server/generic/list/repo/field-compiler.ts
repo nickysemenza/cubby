@@ -29,6 +29,10 @@ import { createAppError } from "~/server/errors/app-error";
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import { relatedSortExpression } from "~/server/generic/entity-links/repo/related-view";
 import {
+  effectiveFieldSql,
+  inheritedFieldOfColumn,
+} from "~/server/generic/inheritance/repo/effective-field";
+import {
   hierarchyAncestorSql,
   hierarchyLevelSql,
 } from "~/server/generic/list/repo/hierarchy";
@@ -148,6 +152,18 @@ export const listReadValue = (
   read: (read: QualityReadContext | undefined) => DerivedValue,
 ): ReadValue => ({ read });
 
+/**
+ * A value whose filters read a whole-list relation instead of the per-row
+ * scalar: `set` selects `("id", "value")` for every row that has one, and a
+ * filter matches `id IN (SELECT "id" FROM set WHERE …)`, so one set-based
+ * walk serves the filter. Sort, group and projection read `value`, which must
+ * agree with `set` row for row.
+ */
+interface SetValue {
+  readonly value: SQL;
+  readonly set: SQL;
+}
+
 export const listPrepare = <P>(load: PrepareLoad<P>): ListPrepare<P> => {
   const handle: ListPrepare<P> = {
     load,
@@ -193,7 +209,7 @@ export class ListContext {
   }
 }
 
-type DerivedValueSql = DerivedValue | PreparedValue | ReadValue;
+type DerivedValueSql = DerivedValue | PreparedValue | ReadValue | SetValue;
 type DerivedPredicateSql<V> =
   | ((value: V, read: QualityReadContext | undefined) => SQL | undefined)
   | PreparedPredicate<V>;
@@ -235,6 +251,9 @@ const isPrepared = (
 const isReadValue = (
   entry: DerivedValueSql | DerivedPredicateSql<never>,
 ): entry is ReadValue => typeof entry === "object" && "read" in entry;
+const isSetValue = (
+  entry: DerivedValueSql | DerivedPredicateSql<never>,
+): entry is SetValue => typeof entry === "object" && "set" in entry;
 
 /** The prepare a derived field's SQL needs, if any. */
 export const derivedPrepare = (
@@ -260,14 +279,15 @@ const derivedValueParts = (
   const entry = derived[key];
   if (entry === undefined || typeof entry === "function")
     throw missingSql(entity, key);
-  // SAFETY: `DerivedSqlArg` gives a value key only a value, a prepared
-  // value, or a read value, never a predicate's function or prepared
-  // predicate.
+  // SAFETY: `DerivedSqlArg` gives a value key only a value, a prepared,
+  // read or set value, never a predicate's function or prepared predicate.
   const value = isPrepared(entry)
     ? (entry as PreparedValue).render(context)
     : isReadValue(entry)
       ? entry.read(context.read)
-      : (entry as DerivedValue);
+      : isSetValue(entry)
+        ? entry.value
+        : (entry as DerivedValue);
   return isCompound(value) ? value : [value];
 };
 
@@ -289,6 +309,15 @@ export const derivedValueSql = (
       `${entity}.model.derived.${key} is a compound sort key and cannot filter`,
     );
   return value instanceof SQL ? value : value.sql;
+};
+
+/** A value's filter relation (`SetValue`), or null when filters read its scalar. */
+export const derivedValueSet = (
+  derived: AnyDerivedSql,
+  key: string,
+): SQL | null => {
+  const entry = derived[key];
+  return entry !== undefined && isSetValue(entry) ? entry.set : null;
 };
 
 /** A declared predicate's condition for a parsed filter value. */
@@ -325,8 +354,20 @@ const viaParts = (entity: Entity, field: ViaField) => {
     from: sql`${sql.identifier(traversal.rootTable)} ${sql.raw(traversal.rootAlias)} ${traversal.joins}`,
     root: sql.raw(traversal.rootAlias),
     leaf,
+    leafAlias: traversal.leafAlias,
     leafTable: traversal.leafTable,
   };
+};
+
+/**
+ * A terminal column of a related record: its effective value when the field
+ * it stores is inherited (`resolution.inherit`), else the column.
+ */
+const terminalSql = (target: Entity, leaf: string, column: string): SQL => {
+  const inherited = inheritedFieldOfColumn(target, column);
+  return inherited === null
+    ? sql`${sql.raw(leaf)}.${sql.identifier(column)}`
+    : effectiveFieldSql(target, inherited, leaf);
 };
 
 /**
@@ -348,7 +389,7 @@ const relatedColumnSql = (
   if (first === undefined)
     throw new Error(`${entity} → ${path.target} has no relation step`);
   const firstAlias = sql.raw(first.alias);
-  return sql`(SELECT ${sql.raw(traversal.leafAlias)}.${sql.identifier(column)} FROM ${sql.identifier(first.relation ?? first.table)} ${firstAlias} ${renderJoins({ hops: rest })} WHERE (${first.condition})${
+  return sql`(SELECT ${terminalSql(path.target, traversal.leafAlias, column)} FROM ${sql.identifier(first.relation ?? first.table)} ${firstAlias} ${renderJoins({ hops: rest })} WHERE (${first.condition})${
     first.softDelete ? sql` AND ${firstAlias}."deletedAt" IS NULL` : sql``
   })`;
 };
@@ -380,12 +421,14 @@ export const relatedExistsSql = (
   outerId: AnyColumn,
   matches: (leaf: SQL, column: SQL) => SQL | undefined,
 ): SQL | undefined => {
-  const { from, root, leaf } = viaParts(entity, field);
-  const column = sql`${leaf}.${sql.identifier(
+  const { from, root, leaf, leafAlias } = viaParts(entity, field);
+  const column = terminalSql(
+    field.target,
+    leafAlias,
     field.terminal.kind === "field"
       ? field.terminal.column
       : (field.terminal.titleColumn ?? "id"),
-  )}`;
+  );
   const condition = matches(leaf, column);
   if (condition === undefined) return undefined;
   return sql`EXISTS (SELECT 1 FROM ${from} WHERE ${root}."id" = ${outerId} AND ${condition})`;
@@ -547,7 +590,7 @@ export const groupSql = (
     case "derived": {
       const raw =
         value.kind === "column"
-          ? sql`${sql.identifier(getTableName(table))}.${sql.identifier(value.column)}`
+          ? terminalSql(entity, `"${getTableName(table)}"`, value.column)
           : value.kind === "field"
             ? relatedColumnSql(entity, value, table, value.column)
             : derivedValueSql(entity, derived, key, context);

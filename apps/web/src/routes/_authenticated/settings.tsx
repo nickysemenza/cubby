@@ -22,7 +22,7 @@ import { Picker } from "~/entity/picker/picker";
 import { ChatGptPlanCard } from "~/features/account/chatgpt-plan-card";
 import { PurchaseImportAgentConnection } from "~/features/activity/purchase-import-agent-connection";
 import { CalendarConnectDialog } from "~/features/calendar/calendar-connect-dialog";
-import { VendorHistoryApproval } from "~/features/email/vendor-history-approval";
+import { MailImportCard } from "~/features/email/mail-import-card";
 import { AwaitingWorkCard } from "~/features/problems/components/awaiting-work-card";
 import { MaintenanceCard } from "~/features/problems/components/maintenance-card";
 import {
@@ -79,7 +79,7 @@ function SettingsPage() {
         <CalendarAccessCard />
         <ChatGptPlanCard />
         <GmailAccessCard />
-        <VendorHistoryApproval />
+        <MailImportCard />
         <PurchaseImportAgentConnection feedback={purchaseAgent} />
         <MemberLoginsCard />
         <MerchantVendorRulesCard />
