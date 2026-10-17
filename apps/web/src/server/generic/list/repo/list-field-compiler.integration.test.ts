@@ -1,3 +1,4 @@
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { TEST_HOME_SHORTCODE, withTestDb } from "tooling/test-setup";
@@ -689,14 +690,17 @@ describe("compiled list fields", () => {
     });
     // Product reads the plant through a related path; planting's stored
     // reference compiles to the live-row shortcode subquery.
-    const matches = async (code: string) => ({
-      products: (
-        await productList(ctx.db, { growsPlantIdFilter: code }, [], page)
-      ).data.map((row) => row.id),
-      plantings: (await plantingList(ctx.db, { plantId: code }, page)).data.map(
-        (row) => row.id,
-      ),
-    });
+    const matches = async (input: string) => {
+      const code = parseShortcodeFor("plant", input);
+      return {
+        products: (
+          await productList(ctx.db, { growsPlantIdFilter: code }, [], page)
+        ).data.map((row) => row.id),
+        plantings: (
+          await plantingList(ctx.db, { plantId: code }, page)
+        ).data.map((row) => row.id),
+      };
+    };
     expect(await matches(basil.shortcode)).toEqual({
       products: [seeds.id],
       plantings: [bed.shortcode],
