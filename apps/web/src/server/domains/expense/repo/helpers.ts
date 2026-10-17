@@ -228,8 +228,15 @@ const expenseSourceClaims = (row: ExpenseRow): ExpenseOut["sourceClaims"] =>
       updatedAt: value.updatedAt,
     }));
 
-const expenseSpendingCategoryAllocationSource = (hasSingleCategory: boolean) =>
-  hasSingleCategory ? "Principal line allocation" : "Follows items";
+const expenseSpendingCategoryAllocationSource = (
+  hasSingleCategory: boolean,
+  fromPurchase: boolean,
+) =>
+  !hasSingleCategory
+    ? "Follows items"
+    : fromPurchase
+      ? "purchase default"
+      : "Principal line allocation";
 
 const expenseSpendingCategoryFieldResolution = (
   row: ExpenseRow,
@@ -246,13 +253,27 @@ const expenseSpendingCategoryFieldResolution = (
           .filter(Boolean),
       ),
     ];
+    // An order with no item line lends its own category (basis "default").
+    const fromPurchase = row.spendingCategoryAllocations.every(
+      (a) => a.basis === "default",
+    );
     return {
       mode: "allocated",
       storedValue: null,
       value: categories.length === 1 ? categories[0]! : null,
       fallbackValue: null,
-      source: expenseSpendingCategoryAllocationSource(categories.length === 1),
-      sourceEntity: null,
+      source: expenseSpendingCategoryAllocationSource(
+        categories.length === 1,
+        fromPurchase,
+      ),
+      sourceEntity:
+        fromPurchase && categories.length === 1 && purchaseRow
+          ? {
+              entityKind: "purchase",
+              entityId: purchaseRow.shortcode,
+              name: purchaseRow.displayLabel ?? purchaseRow.orderId ?? null,
+            }
+          : null,
       matchesFallback: true,
       canReset: false,
     };
@@ -380,7 +401,10 @@ const allocatedShareResolution = <K extends "trades" | "costTypes">(
     storedValue: key === "costTypes" ? row.costType : null,
     value: values.length === 1 ? values[0]! : null,
     fallbackValue: null,
-    source: expenseSpendingCategoryAllocationSource(values.length === 1),
+    source: expenseSpendingCategoryAllocationSource(
+      values.length === 1,
+      allocations.every((a) => a.basis === "default"),
+    ),
     sourceEntity: null,
     matchesFallback: true,
     canReset: false,

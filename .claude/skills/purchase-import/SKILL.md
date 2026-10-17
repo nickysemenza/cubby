@@ -135,6 +135,11 @@ same outcome without prescribing an agent runtime.
   `statedTotal`, infer tax, or fabricate a transaction to close a gap.
 - Unknown facts stay unknown. A missing cost, date, quantity, or order id is
   recorded as absent, never as zero or a guessed value.
+- A line that only adjusts the order (a bag fee or bag refund, a delivery or
+  pickup charge, a tip, a coupon) takes its adjustment receipt role (`fee`,
+  `shipping`, `tip`, `discount`, `other_adjustment`), even at $0. Never bind it
+  to a Product: a principal line's Product decides its Spending Category, and
+  an adjustment follows the order's item lines instead.
 - A warranty source that explicitly states free replacement hardware proves
   zero cost for those parts. Resolve the replacement parts themselves; the
   original tool's model identifies compatibility, not another whole tool

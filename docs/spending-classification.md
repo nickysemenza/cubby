@@ -37,7 +37,9 @@ ties. Project, Spending Category, trade, and cost type reports group those same
 joint allocations: each share carries its principal's trade and cost type,
 unless the adjustment names its own trade, which claims the whole charge at the
 adjustment's own cost type. A share with no principal reports under no trade
-and the adjustment's own cost type. Filtering never changes the full Purchase
+and the adjustment's own cost type, and under the Purchase's own Spending
+Category when it has one that did not come from a statement (the rule
+principal lines follow); otherwise it is uncategorized. Filtering never changes the full Purchase
 weights. Unknown shares remain in the
 report, and the allocated total equals `SUM(Expense.cost)`. Refund-only baskets
 use absolute principal weights; unidentified refund adjustments on a positive

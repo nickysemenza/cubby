@@ -275,6 +275,64 @@ describe("joint expense spending allocation", () => {
     expect(await loadExpenseJointAllocations(ctx.db, [])).toEqual([]);
     expect((await loadExpenseSpendingAllocations(ctx.db, [])).size).toBe(0);
   });
+  it("gives adjustments on an order with no item line the order's own non-statement category", async () => {
+    const { categories, vendor } = await fixture();
+    const order = (spendingCategoryOrigin: "manual" | "source") =>
+      insertWithShortcode(ctx.db, "purchase", {
+        vendorId: vendor.id,
+        date: "2026-09-20",
+        spendingCategoryId: categories[0]!.id,
+        spendingCategoryOrigin,
+      });
+    const chosen = await order("manual");
+    const statement = await order("source");
+    const refund = await line(
+      "Synthetic refund-only credit",
+      -5,
+      "other_adjustment",
+      {
+        purchaseId: chosen.id,
+      },
+    );
+    const shipping = await line("Synthetic return shipping", 1.25, "shipping", {
+      purchaseId: chosen.id,
+    });
+    const sourced = await line(
+      "Synthetic sourced credit",
+      -3,
+      "other_adjustment",
+      {
+        purchaseId: statement.id,
+      },
+    );
+    const map = await loadExpenseSpendingAllocations(ctx.db, [
+      refund.id,
+      shipping.id,
+      sourced.id,
+    ]);
+    for (const [id, amount] of [
+      [refund.id, -5],
+      [shipping.id, 1.25],
+    ] as const)
+      expect(map.get(id)).toEqual([
+        expect.objectContaining({
+          spendingCategoryId: categories[0]!.id,
+          amount,
+          basis: "default",
+          incomplete: false,
+        }),
+      ]);
+    // A statement-sourced Purchase category is evidence, never an input.
+    expect(map.get(sourced.id)).toEqual([
+      expect.objectContaining({
+        spendingCategoryId: null,
+        amount: -3,
+        basis: "default",
+        incomplete: true,
+      }),
+    ]);
+  });
+
   it("carries each principal's trade and cost type onto adjustment shares", async () => {
     const { projects, purchase } = await fixture();
     await line("Synthetic wire", 1, "principal", {
