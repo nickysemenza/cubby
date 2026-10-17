@@ -14,7 +14,7 @@ struct AuditEntryFoldingTests {
         let json = """
             {"entryKey":"\(key)","entityKind":"product","entityId":"\(id)","canonicalEntityId":null,
              "entityName":"Synthetic oat milk","action":"\(action)",
-             "changes":{"\(field)":{"from":"a","to":"b"}},"userId":"\(user)","channel":"\(channel)",
+             "changes":{"\(field)":{"from":"a","to":"b"}},"references":{},"userId":"\(user)","channel":"\(channel)",
              "oauthClient":null,"device":null,"createdAt":"\(time)","user":null}
             """
         return try JSONDecoder.cubby().decode(AuditLogEntryOut.self, from: Data(json.utf8))

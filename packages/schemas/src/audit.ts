@@ -141,6 +141,18 @@ export const auditLogEntryOut = z.object({
   displayImage: imageUrlSummary.nullable(),
   action: auditLogActionSchema,
   changes: z.record(z.string(), auditLogChangeSchema).nullable(),
+  /**
+   * Display identity for each relationship shortcode named in `changes`,
+   * keyed by that shortcode and resolved at read time like `entityName`.
+   * A code whose row is gone has no entry.
+   */
+  references: z.record(
+    z.string(),
+    z.object({
+      name: z.string().nullable(),
+      displayImage: imageUrlSummary.nullable(),
+    }),
+  ),
   userId: z.string(),
   channel: auditChannelSchema,
   /** The MCP OAuth client; its name is resolved at read time. */

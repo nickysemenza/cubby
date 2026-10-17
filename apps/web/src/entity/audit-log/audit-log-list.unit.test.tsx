@@ -1,3 +1,4 @@
+import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -83,6 +84,7 @@ describe("AuditLogList", () => {
       displayImage: null,
       action: "update" as const,
       changes: { [field]: { from: "a", to: "b" } },
+      references: {},
       userId: "user-a",
       channel: "web" as const,
       oauthClient: null,
@@ -117,5 +119,47 @@ describe("AuditLogList", () => {
     );
     expect(await screen.findByText("3 updates · 2 fields")).toBeVisible();
     expect(screen.queryByText("Synthetic oat milk")).toBeNull();
+  });
+
+  it("names the records a relationship diff points at", async () => {
+    activityError = null;
+    const before = testShortcode("product", "audit-before");
+    const after = testShortcode("product", "audit-after");
+    const operations: AuditLogListOperations = {
+      list: auditLog.list.withTransport(async () => ({
+        entries: [
+          {
+            entryKey: "a",
+            entityKind: "expense",
+            entityId: testShortcode("expense", "audit-subject"),
+            canonicalEntityId: null,
+            entityName: "Synthetic groceries",
+            displayImage: null,
+            action: "update",
+            changes: { productId: { from: before, to: after } },
+            references: {
+              [before]: { name: "Synthetic carrot", displayImage: null },
+              [after]: { name: "Synthetic peeled carrot", displayImage: null },
+            },
+            userId: "user-a",
+            channel: "web",
+            oauthClient: null,
+            device: null,
+            runId: null,
+            createdAt: new Date(Date.UTC(2026, 9, 11, 12, 0)),
+            user: null,
+          },
+        ],
+      })),
+    };
+    render(
+      <AuditLogList operations={operations} session={authenticatedSession} />,
+      { wrapper: harness.wrapper },
+    );
+    const link = await screen.findByRole("link", {
+      name: new RegExp(`Synthetic peeled carrot\\s*${after}`, "u"),
+    });
+    expect(link.getAttribute("href")).toContain(after);
+    expect(screen.getByText("Synthetic carrot")).toBeVisible();
   });
 });

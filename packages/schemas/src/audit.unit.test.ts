@@ -45,6 +45,7 @@ const entry = (channel: string) => ({
   displayImage: null,
   action: "update" as const,
   changes: { tags: { from: [], to: ["fs-rail"] } },
+  references: {},
   userId: "user-1",
   channel,
   oauthClient: null,
