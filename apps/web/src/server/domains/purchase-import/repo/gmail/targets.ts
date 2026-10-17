@@ -57,7 +57,6 @@ export async function listGmailSyncTargets(
       .where(notDeleted(vendor)),
     getDb(db)
       .select({
-        id: financialTransaction.id,
         merchant: financialTransaction.merchant,
         ledgerPartyId: financialAccount.ledgerPartyId,
       })
@@ -88,6 +87,25 @@ export async function listGmailSyncTargets(
       ),
   ]);
   const quote = (value: string) => `"${value.replaceAll('"', " ")}"`;
+  // One search per distinct merchant (case- and space-insensitive): many
+  // unallocated charges share a merchant, and Gmail search ignores case. The
+  // query derives from the normalized merchant alone, so allocating one
+  // spelling never changes the query text and resets its saved coverage.
+  const merchantQueries = (rows: readonly { merchant: string | null }[]) =>
+    [
+      ...new Set(
+        rows.flatMap((charge) => {
+          const merchant = charge.merchant
+            ?.trim()
+            .replace(/\s+/gu, " ")
+            .toLowerCase();
+          return merchant ? [merchant] : [];
+        }),
+      ),
+    ].map((merchant) => ({
+      key: `merchant:${merchant}`,
+      query: quote(merchant),
+    }));
   // A Vendor without a verified sender or website domain waits for research.
   const vendorQueries = vendors.flatMap((row) =>
     vendorMailQueries(row.id, vendorSearchTerms(row)),
@@ -101,16 +119,11 @@ export async function listGmailSyncTargets(
             mailboxId: row.mailboxId,
             scopedQueries: [
               ...vendorQueries,
-              ...charges
-                .filter(
-                  (charge) =>
-                    charge.ledgerPartyId === row.ledgerPartyId &&
-                    charge.merchant?.trim(),
-                )
-                .map((charge) => ({
-                  key: `charge:${charge.id}`,
-                  query: quote(charge.merchant!),
-                })),
+              ...merchantQueries(
+                charges.filter(
+                  (charge) => charge.ledgerPartyId === row.ledgerPartyId,
+                ),
+              ),
             ],
           },
         ]

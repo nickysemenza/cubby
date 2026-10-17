@@ -52,13 +52,23 @@ export async function initializeMailboxCoverage(
   });
 }
 
-/** New targeted objectives do not reset broad or unchanged query coverage. */
+/**
+ * New targeted objectives do not reset broad or unchanged query coverage. An
+ * unfinished query that is no longer a target (its charge was allocated, its
+ * key format retired) is dropped so it cannot keep claiming pages; completed
+ * ones stay so a returning target is not rescanned.
+ */
 export function mergeMailboxQueries(
   coverage: MailboxCoverage,
   queries: readonly MailboxScopedQuery[],
 ): MailboxCoverage {
   const next = mailboxCoverage.parse(coverage);
-  const byKey = new Map(next.scoped.map((query) => [query.key, query]));
+  const current = new Set(queries.map((query) => query.key));
+  const byKey = new Map(
+    next.scoped
+      .filter((query) => query.completed || current.has(query.key))
+      .map((query) => [query.key, query]),
+  );
   for (const query of queries) {
     const prior = byKey.get(query.key);
     if (!prior || prior.query !== query.query)

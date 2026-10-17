@@ -498,13 +498,29 @@ export function isInferenceStreamFundingRefusal(
 const subscriptionQuotaCode = z.object({
   code: z.literal("subscription_sharing_usage_limit_exceeded"),
 });
-const subscriptionQuotaRefusal = z.object({ error: subscriptionQuotaCode });
+/**
+ * Definitive plan refusals a budgeted caller may replay on the paid route: an
+ * exhausted quota (429), or a request the plan cannot carry at all (400), such
+ * as an input item subscription sharing does not support.
+ */
+const subscriptionRefusal = z.union([
+  z.object({
+    status: z.literal(429),
+    body: z.object({ error: subscriptionQuotaCode }),
+  }),
+  z.object({
+    status: z.literal(400),
+    body: z.object({
+      error: z.object({
+        code: z.literal("subscription_sharing_unsupported_capability"),
+      }),
+    }),
+  }),
+]);
 
-/** A complete HTTP quota refusal; streams use {@link admitSubscriptionStream}. */
-async function isSubscriptionQuotaRefusal(
-  response: Response,
-): Promise<boolean> {
-  if (response.status !== 429) return false;
+/** A complete HTTP plan refusal; streams use {@link admitSubscriptionStream}. */
+async function isSubscriptionRefusal(response: Response): Promise<boolean> {
+  if (response.status !== 429 && response.status !== 400) return false;
   const reader = response.clone().body?.getReader();
   if (!reader) return false;
   const decoder = new TextDecoder();
@@ -514,9 +530,10 @@ async function isSubscriptionQuotaRefusal(
     while (true) {
       const part = await reader.read();
       if (part.done)
-        return subscriptionQuotaRefusal.safeParse(
-          JSON.parse(body + decoder.decode()),
-        ).success;
+        return subscriptionRefusal.safeParse({
+          status: response.status,
+          body: JSON.parse(body + decoder.decode()),
+        }).success;
       if (part.value.length > remaining) return false;
       remaining -= part.value.length;
       body += decoder.decode(part.value, { stream: true });
@@ -932,7 +949,7 @@ async function routeSubscriptionResponse(
     routes.onRecoveredErrorResponse?.(admitted.quota);
   } else {
     const recover =
-      budgetedFallback && (await isSubscriptionQuotaRefusal(subscription));
+      budgetedFallback && (await isSubscriptionRefusal(subscription));
     const observedSubscription = await observeGatewayResponse(
       subscription,
       {
@@ -953,9 +970,10 @@ async function routeSubscriptionResponse(
 /**
  * A `fetch` any provider SDK can be handed: the test peer when the harness
  * supplies one, else the connected ChatGPT plan for Responses calls, else the
- * gateway. Explicit budgeted fallback may replay a definitive quota refusal —
- * a complete HTTP 429, or a requested stream's quota `error` before any output
- * ({@link admitSubscriptionStream}) — only after durable paid admission. Every received
+ * gateway. Explicit budgeted fallback may replay a definitive plan refusal —
+ * a complete HTTP quota 429 or unsupported-capability 400, or a requested
+ * stream's quota `error` before any output ({@link admitSubscriptionStream}) —
+ * only after durable paid admission. Every received
  * response is reported to observers. Streaming bytes pass through unchanged;
  * passive error observation never authorizes replay.
  */

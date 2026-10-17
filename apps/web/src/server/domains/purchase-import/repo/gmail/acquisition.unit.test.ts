@@ -227,4 +227,20 @@ describe("durable Gmail page acquisition", () => {
       { key: "charge", query: "platform", pageToken: null, completed: false },
     ]);
   });
+
+  it("drops unfinished queries that are no longer targets and keeps completed ones", async () => {
+    const coverage = await initializeMailboxCoverage(gmail(), [
+      { key: "charge:retired", query: '"SHOP"' },
+      { key: "charge:finished", query: '"OTHER"' },
+    ]);
+    coverage.scoped[0]!.pageToken = "stale-page";
+    coverage.scoped[1]!.completed = true;
+    const updated = mergeMailboxQueries(coverage, [
+      { key: "merchant:shop", query: '"SHOP"' },
+    ]);
+    expect(updated.scoped.map((query) => query.key)).toEqual([
+      "charge:finished",
+      "merchant:shop",
+    ]);
+  });
 });
