@@ -2,6 +2,7 @@ import { assertManifestWire, renderManifestWire } from "./manifest-wire.ts";
 import type { ManifestWire } from "../../../../../packages/schemas/src/manifest-wire.ts";
 import { capitalize } from "../../../../../packages/shared/src/text-case.ts";
 import {
+  excludedFilterValue,
   FILTER_ALL,
   FILTER_ANY,
   FILTER_NONE,
@@ -220,6 +221,8 @@ const filterJSON = (
   sentinels: options(filter.sentinels),
   presenceParam: filter.nullable?.field ?? null,
   matchParam: filter.match?.field ?? null,
+  excludeParam: filter.exclude?.field ?? null,
+  excludeReason: filter.exclude?.reason ?? null,
   subtreeParam: filter.subtree,
   currentMember: filter.currentMember,
   singleValue: filter.singleValue !== null,
@@ -482,10 +485,21 @@ const savedViewFilters = (
     const none = values.includes(FILTER_NONE);
     const any = values.includes(FILTER_ANY);
     const all = values.includes(FILTER_ALL);
+    const excluded = values.flatMap((value) => {
+      const item = excludedFilterValue(value);
+      return item === undefined ? [] : [item];
+    });
     const selected = values.filter(
       (value) =>
-        value !== FILTER_NONE && value !== FILTER_ANY && value !== FILTER_ALL,
+        value !== FILTER_NONE &&
+        value !== FILTER_ANY &&
+        value !== FILTER_ALL &&
+        excludedFilterValue(value) === undefined,
     );
+    if (excluded.length && descriptor.exclude?.reason !== null)
+      throw new Error(
+        `Saved view ${view.id} excludes ${filter.id}, which cannot exclude${descriptor.exclude ? `: ${descriptor.exclude.reason}` : "."}`,
+      );
     // Any value already includes every picked value.
     if (none && any) return [];
     return [
@@ -497,6 +511,9 @@ const savedViewFilters = (
         : []),
       ...(descriptor.match && all && selected.length
         ? [wireFilter(descriptor.match.field, ["all"])]
+        : []),
+      ...(descriptor.exclude && excluded.length
+        ? [wireFilter(descriptor.exclude.field, excluded)]
         : []),
     ];
   });

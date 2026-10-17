@@ -820,16 +820,19 @@ Rules:
       },
       effectiveLocations: {
         predicate: "multiselect",
+        negatable: true,
         reason:
           "Effective locations are a list inherited from the nearest ancestor that sets its own",
       },
       effectiveAssignee: {
         predicate: "idMulti",
+        negatable: true,
         reason:
           "The inherited assignee filters by its record while its sort value is the name",
       },
       attention: {
         predicate: "multiselect",
+        negatable: true,
         reason:
           "Tracker membership comes from the attention rules over tasks and budgets",
       },

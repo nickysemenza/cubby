@@ -595,6 +595,7 @@ Rules:
       needsClassification: { type: "boolean" },
       effectiveSpendingCategoryId: {
         predicate: "idMulti",
+        negatable: true,
         reason:
           "The effective spending category is inherited through category ancestors, so it is not a row value",
       },

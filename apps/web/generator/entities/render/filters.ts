@@ -118,6 +118,9 @@ export const renderFilterArtifacts = (
       ...(descriptor.match === null
         ? []
         : [`match:${compactLiteral(descriptor.match)}`]),
+      ...(descriptor.exclude === null
+        ? []
+        : [`exclude:${compactLiteral(descriptor.exclude)}`]),
       ...(descriptor.subtree === null
         ? []
         : [`subtree:${JSON.stringify(descriptor.subtree)}`]),

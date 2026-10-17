@@ -6,10 +6,21 @@
  * carries — a uuid, an enum slug, or a user-authored tag. They never reach the
  * wire: `buildFiltersFromManifest` partitions them out and emits the filter's
  * generated keys instead — Any value / No value as its `presenceFilter`, Match
- * all as its match key — so the runtime input schemas never see them.
+ * all as its match key, an excluded value as its Exclude key — so the runtime
+ * input schemas never see them.
  */
 export const FILTER_ANY = "__any__";
 export const FILTER_NONE = "__none__";
 export const FILTER_ALL = "__all__";
 /** A hierarchical reference's "Include sub-…" toggle switched off. */
 export const FILTER_EXACT = "__exact__";
+/**
+ * Marks an excluded value ("is not") in a value filter's list; the codecs
+ * move it to the filter's generated Exclude key.
+ */
+export const FILTER_NOT_PREFIX = "__not__:";
+/** The excluded value a list item names, or undefined for an included one. */
+export const excludedFilterValue = (value: string): string | undefined =>
+  value.startsWith(FILTER_NOT_PREFIX)
+    ? value.slice(FILTER_NOT_PREFIX.length)
+    : undefined;

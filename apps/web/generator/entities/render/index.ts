@@ -240,13 +240,15 @@ const renderDerivedFilterFields = (
       );
     return `definition.model.fields[${index}].validation.read`;
   };
-  const valueEntry = (descriptor: FilterDescriptor): string => {
-    const name = descriptor.field ?? descriptor.columnId;
+  const valueEntry = (
+    descriptor: FilterDescriptor,
+    as?: Readonly<{ name: string; description: string }>,
+  ): string => {
+    const name = as?.name ?? descriptor.field ?? descriptor.columnId;
     const key = JSON.stringify(name);
+    const description = as?.description ?? descriptor.schemaDescription;
     const describe =
-      descriptor.schemaDescription === null
-        ? ""
-        : `.describe(${JSON.stringify(descriptor.schemaDescription)})`;
+      description === null ? "" : `.describe(${JSON.stringify(description)})`;
     switch (descriptor.kind) {
       case "text": {
         if (!descriptor.schemaFromRead) needs.z = true;
@@ -313,8 +315,9 @@ const renderDerivedFilterFields = (
       const label =
         descriptor.nullable?.label ??
         (descriptor.label ?? descriptor.columnId).toLowerCase();
-      // The generated Any value / No value and Match all keys ride beside
-      // the value key, so a request can say "has a value" or "all of these".
+      // The generated Any value / No value, Match all and Exclude keys ride
+      // beside the value key, so a request can say "has a value", "all of
+      // these" or "none of these".
       if (descriptor.nullable !== null) needs.presence = true;
       if (descriptor.match !== null) needs.z = true;
       return [
@@ -328,6 +331,19 @@ const renderDerivedFilterFields = (
           ? []
           : [
               `${JSON.stringify(descriptor.match.field)}:z.enum(["any","all"]).optional().describe(${JSON.stringify(`all: every picked ${label}`)})`,
+            ]),
+        // The Exclude key takes the value key's schema; a filter that cannot
+        // exclude keeps it so the list rejects it with the reason.
+        ...(descriptor.exclude === null
+          ? []
+          : [
+              valueEntry(descriptor, {
+                name: descriptor.exclude.field,
+                description:
+                  descriptor.exclude.reason === null
+                    ? `Exclude rows matching any of these ${label} values; rows with no value stay`
+                    : `Unsupported: ${descriptor.exclude.reason}`,
+              }),
             ]),
       ];
     });

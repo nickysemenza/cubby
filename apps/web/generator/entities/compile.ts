@@ -1286,6 +1286,7 @@ const filterDescriptor = (
       stored?.array && !value.urlOnly
         ? { field: `${value.columnId}Match` }
         : null,
+    exclude: null,
     subtree: null,
     currentMember: value.currentMember === true,
     singleValue: value.singleValue?.reason ?? null,
@@ -1960,6 +1961,7 @@ const suggestionFilterDescriptors = (
       nullable: { field: "suggestionPresenceFilter", label: "suggestion" },
       sentinels: null,
       match: null,
+      exclude: { field: "suggestionExclude", reason: null },
       subtree: null,
       currentMember: false,
       singleValue: null,
@@ -2105,6 +2107,7 @@ export const compileEntity = (
           nullable: null,
           sentinels: null,
           match: null,
+          exclude: null,
           subtree: null,
           currentMember: false,
           singleValue: null,
@@ -2141,6 +2144,7 @@ export const compileEntity = (
           nullable: null,
           sentinels: null,
           match: null,
+          exclude: null,
           subtree: null,
           currentMember: false,
           singleValue: null,
