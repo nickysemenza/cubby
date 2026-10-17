@@ -102,15 +102,24 @@ export const descriptorProcessor = z.enum([
   "instacart",
   "py",
 ]);
-// Whitespace is matched with `\s` so the raw column (SQL) and the trimmed
-// text (parser) agree on padded or tab-separated descriptors.
+// Whitespace is the explicit `[ \t]` class: Postgres classifies non-ASCII
+// spaces by locale, so `\s` would let the parser and the SQL filter disagree.
+// The parser matches the untrimmed descriptor for the same reason.
 export const descriptorProcessors = [
-  { value: "square", label: "Square", pattern: "^\\s*(SQ|SQUARE)\\s*\\*" },
-  { value: "toast", label: "Toast", pattern: "^\\s*TST\\s*\\*" },
-  { value: "paypal", label: "PayPal", pattern: "^\\s*(PAYPAL|PP)\\s*\\*" },
-  { value: "shopify", label: "Shopify", pattern: "^\\s*SP\\s+" },
-  { value: "instacart", label: "Instacart", pattern: "^\\s*IC\\s*\\*" },
-  { value: "py", label: "PY", pattern: "^\\s*PY\\s*\\*" },
+  {
+    value: "square",
+    label: "Square",
+    pattern: "^[ \\t]*(SQ|SQUARE)[ \\t]*\\*",
+  },
+  { value: "toast", label: "Toast", pattern: "^[ \\t]*TST[ \\t]*\\*" },
+  {
+    value: "paypal",
+    label: "PayPal",
+    pattern: "^[ \\t]*(PAYPAL|PP)[ \\t]*\\*",
+  },
+  { value: "shopify", label: "Shopify", pattern: "^[ \\t]*SP[ \\t]+" },
+  { value: "instacart", label: "Instacart", pattern: "^[ \\t]*IC[ \\t]*\\*" },
+  { value: "py", label: "PY", pattern: "^[ \\t]*PY[ \\t]*\\*" },
 ] as const satisfies readonly {
   value: z.infer<typeof descriptorProcessor>;
   label: string;
@@ -121,10 +130,52 @@ export type DescriptorProcessor = z.infer<typeof descriptorProcessor>;
 const US_STATE =
   /^(A[KLRZ]|C[AOT]|D[CE]|FL|GA|HI|I[ADLN]|K[SY]|LA|M[ADEINOST]|N[CDEHJMVY]|O[HKR]|PA|RI|S[CD]|T[NX]|UT|V[AT]|W[AIVY])$/u;
 
-// Leading words of multiword US place names (`SAN FRANCISCO`, `SALT LAKE
-// CITY`), dropped with the city so they never reach an exact-phrase search.
-const PLACE_PREFIX =
-  /^(SAN|SANTA|LOS|LAS|NEW|FORT|FT|ST|SAINT|EL|LA|PALM|SALT|LAKE|CITY|NORTH|SOUTH|EAST|WEST|PORT|MOUNT|MT|BEVERLY|GRAND|BATON|COLORADO|DES|CEDAR|CORPUS|OVERLAND|CULVER|DALY|REDWOOD|KANSAS|JERSEY|OKLAHOMA|SIOUX|ANN|LITTLE|LONG|VIRGINIA)$/u;
+// Multiword US cities common in descriptors; a trailing match is removed
+// whole, so a merchant word like `LAKE` survives unless the full name matches.
+const MULTIWORD_CITIES = new Set([
+  "SAN FRANCISCO",
+  "SAN JOSE",
+  "SAN DIEGO",
+  "SAN ANTONIO",
+  "SAN MATEO",
+  "SANTA MONICA",
+  "SANTA CLARA",
+  "SANTA BARBARA",
+  "SANTA CRUZ",
+  "SANTA FE",
+  "LOS ANGELES",
+  "LOS ALTOS",
+  "LAS VEGAS",
+  "NEW YORK",
+  "NEW ORLEANS",
+  "SALT LAKE CITY",
+  "KANSAS CITY",
+  "JERSEY CITY",
+  "OKLAHOMA CITY",
+  "ST LOUIS",
+  "ST PAUL",
+  "SAINT LOUIS",
+  "SAINT PAUL",
+  "FORT WORTH",
+  "FORT LAUDERDALE",
+  "PALO ALTO",
+  "PALM SPRINGS",
+  "EL PASO",
+  "LONG BEACH",
+  "BATON ROUGE",
+  "COLORADO SPRINGS",
+  "DES MOINES",
+  "ANN ARBOR",
+  "LITTLE ROCK",
+  "VIRGINIA BEACH",
+  "BEVERLY HILLS",
+  "CULVER CITY",
+  "DALY CITY",
+  "REDWOOD CITY",
+  "MOUNTAIN VIEW",
+  "NORTH BEND",
+  "PORT ANGELES",
+]);
 
 /**
  * Splits a bank descriptor into its processor and a searchable merchant
@@ -134,14 +185,14 @@ const PLACE_PREFIX =
  * `merchant` is null when fewer than three letters remain.
  */
 export function parseBankDescriptor(raw: string | null | undefined) {
-  let text = (raw ?? "").replace(/\t/gu, "  ").trim();
+  let text = raw ?? "";
   const matched = descriptorProcessors.find((processor) =>
     new RegExp(processor.pattern, "iu").test(text),
   );
   if (matched) text = text.replace(new RegExp(matched.pattern, "iu"), "");
-  const padded = text.split(/\s{2,}/u).filter(Boolean);
-  const fields = padded.length > 1 ? padded : [text];
-  const words = (fields[0] ?? "")
+  text = text.trim();
+  const padded = text.split(/[ \t]{2,}|\t/u).filter(Boolean);
+  const words = (padded[0] ?? "")
     .replace(/\(?\d{3}\)?[-. ]?\d{3}[-. ]?\d{4}\s*$/u, " ")
     .replace(/#\s*\d+/gu, " ")
     .replace(/\b\d{3,}\b/gu, " ")
@@ -149,15 +200,16 @@ export function parseBankDescriptor(raw: string | null | undefined) {
     .trim()
     .split(/\s+/u)
     .filter(Boolean);
-  // A trailing state code, the city word before it, and any leading words
-  // of a multiword place name, while a name remains.
+  // A trailing state code and its city: a known multiword city whole,
+  // otherwise one word, while a name remains.
   if (words.length >= 3 && US_STATE.test(words.at(-1)?.toUpperCase() ?? "")) {
-    words.splice(-2);
-    while (
-      words.length > 1 &&
-      PLACE_PREFIX.test(words.at(-1)?.toUpperCase() ?? "")
-    )
-      words.pop();
+    words.pop();
+    const city = [3, 2].find(
+      (size) =>
+        words.length > size &&
+        MULTIWORD_CITIES.has(words.slice(-size).join(" ").toUpperCase()),
+    );
+    words.splice(-(city ?? 1));
   }
   const merchant = words.join(" ").toLowerCase();
   return {

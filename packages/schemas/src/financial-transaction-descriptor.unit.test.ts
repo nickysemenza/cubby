@@ -17,6 +17,10 @@ it.each([
   ["TST* SYNTHETIC DINER SAN FRANCISCO CA", "toast", "synthetic diner"],
   ["SYNTHETIC GRILL SALT LAKE CITY UT", null, "synthetic grill"],
   ["SYNTHETIC BAKERY       PORTLAND     OR", null, "synthetic bakery"],
+  ["SYNTHETIC LAKE SEATTLE WA", null, "synthetic lake"],
+  ["SYNTHETIC LAKE HOUSE SEATTLE WA", null, "synthetic lake house"],
+  // Non-ASCII spaces are not processor separators in either engine.
+  ["SP\u00A0SYNTHETIC GOODS", null, "sp synthetic goods"],
   [null, null, null],
 ] as const)("parses %s", (raw, processor, merchant) => {
   expect(parseBankDescriptor(raw)).toEqual({ processor, merchant });

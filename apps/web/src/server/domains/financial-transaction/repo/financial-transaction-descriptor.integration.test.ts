@@ -27,7 +27,10 @@ describe("financial transaction descriptor processor filter", () => {
     for (const [index, rawDescription] of [
       "TST* SYNTHETIC DINER #42",
       "tst*synthetic cafe",
+      "\tTST*\tSYNTHETIC GRILL",
       "SQ  *SYNTHETIC MARKET",
+      // A non-ASCII space is not a processor separator in either engine.
+      "SP\u00A0SYNTHETIC GOODS",
       "SYNTHETIC HARDWARE",
     ].entries()) {
       const created = await createRepoEntity(ctx, "financialTransaction", {
@@ -59,10 +62,14 @@ describe("financial transaction descriptor processor filter", () => {
         .map((row) => charges.get(row.id))
         .sort();
 
-    expect(await listed(["toast"])).toEqual([
-      "TST* SYNTHETIC DINER #42",
-      "tst*synthetic cafe",
-    ]);
-    expect(await listed(["square", "toast"])).toHaveLength(3);
+    expect(await listed(["toast"])).toEqual(
+      [
+        "TST* SYNTHETIC DINER #42",
+        "tst*synthetic cafe",
+        "\tTST*\tSYNTHETIC GRILL",
+      ].sort(),
+    );
+    expect(await listed(["square", "toast"])).toHaveLength(4);
+    expect(await listed(["shopify"])).toEqual([]);
   });
 });
