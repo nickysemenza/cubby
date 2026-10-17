@@ -315,7 +315,7 @@ describe("buildRecipeWhere", () => {
 
   it("resolves cookbook codes against live cookbooks inside the query", async () => {
     const rendered = await where({
-      cookbookId: [parseShortcodeFor("cookbook", "CBK-2345")],
+      cookbookId: [parseShortcodeFor("cookbook", "CKB-2345")],
     });
     expect(rendered).toMatch(
       /"cookbookId" in \(select ref\."id" from "Cookbook" ref/i,
