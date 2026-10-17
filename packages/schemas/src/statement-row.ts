@@ -6,7 +6,7 @@ import {
   financialAccountShortcode,
   financialTransactionShortcode,
 } from "./identifiers";
-import { dateRangeFields, numericRangeFields, plainDate } from "./base-entity";
+import { numericRangeFields, plainDate } from "./base-entity";
 import {
   financialStatementImportPreviewOut,
   financialTransactionKind,
@@ -193,7 +193,10 @@ export const statementRowFilters = z.object({
    * is one filtered write rather than thousands of ids.
    */
   sourceCategory: z.string().optional(),
-  ...dateRangeFields("date"),
+  // Plain days, not relative tokens: these filters also select the rows a
+  // statement_rows mutation writes, and mutations resolve no filter tokens.
+  dateFrom: plainDate.optional(),
+  dateTo: plainDate.optional(),
   ...numericRangeFields("amount", { coerce: false }),
   search: z.string().optional(),
 });
@@ -406,7 +409,8 @@ export type StatementRowDriftCandidate = z.infer<
 
 export const findStatementRowDriftInput = z.object({
   source: z.string().optional(),
-  ...dateRangeFields("date"),
+  dateFrom: plainDate.optional(),
+  dateTo: plainDate.optional(),
   importFingerprint: z.string().optional(),
   /**
    * Also report groups whose rows all came from ONE export.

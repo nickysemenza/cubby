@@ -175,6 +175,9 @@ struct EntityFilterTests {
         }
         #expect(RelativeDate.token(-30) == "@today-30d")
         #expect(RelativeDate.token(0) == "@today")
+        #expect(RelativeDate.token(0, ahead: true) == "@today+0d")
+        #expect(RelativeDate.offset("@today+0d") == 0)
+        #expect(RelativeDate.token(7, ahead: false) == "@today-7d")
         #expect(RelativeDate.describe(-1) == "today − 1 day")
         #expect(RelativeDate.describe(30) == "today + 30 days")
     }

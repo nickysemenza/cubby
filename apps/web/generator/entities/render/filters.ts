@@ -112,6 +112,16 @@ export const renderFilterArtifacts = (
       ...(presetTable(descriptor) === null
         ? []
         : [`expand:presetExpand(${compactLiteral(presetTable(descriptor))})`]),
+      // A one-parameter range with no presets (planting `activeOn`) passes
+      // its value through to that parameter.
+      ...(descriptor.kind === "range" &&
+      descriptor.wire.kind === "param" &&
+      descriptor.expandRef === null &&
+      presetTable(descriptor) === null
+        ? [
+            `expand:(value) => ({${JSON.stringify(descriptor.wire.name)}:value})`,
+          ]
+        : []),
       ...(dateRangeBounds(descriptor) === null
         ? []
         : [`range:${compactLiteral(dateRangeBounds(descriptor))}`]),

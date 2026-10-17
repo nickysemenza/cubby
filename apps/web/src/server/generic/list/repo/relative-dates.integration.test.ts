@@ -10,7 +10,11 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { householdLocalDate, shiftPlainDate } from "~/lib/household-date";
+import {
+  householdDateTime,
+  householdLocalDate,
+  shiftPlainDate,
+} from "~/lib/household-date";
 import { getDb, householdDaySql } from "~/server/db/helpers";
 import { expense, location, planting, task } from "~/server/db/schema";
 import { expenseList } from "~/server/domains/expense/repo/lookup";
@@ -56,7 +60,7 @@ describe("relative date tokens and date intervals", () => {
           .select({ name: table.name })
           .from(table)
           .where(and(inArray(table.name, [...names]), condition))
-      ).map((row) => row.name),
+      ).map((row) => String(row.name)),
     );
   const within = (
     rows: readonly { name: string }[],
@@ -183,10 +187,15 @@ describe("relative date tokens and date intervals", () => {
     await seed("Never recounted", null);
     await seed("Recounted 90 days ago", counted(90));
     await seed("Recounted 5 days ago", counted(5));
+    // Late on the cutoff day: a whole household day 30 days back, but less
+    // than 30 elapsed days ago for all but the last minute of today.
+    const cutoffEvening = householdDateTime(day(-30), 23 * 60 + 59);
+    await seed("Recounted on the cutoff day", cutoffEvening);
     const names = [
       "Never recounted",
       "Recounted 90 days ago",
       "Recounted 5 days ago",
+      "Recounted on the cutoff day",
     ];
     const { data } = await locationList(
       ctx.db,
@@ -201,18 +210,28 @@ describe("relative date tokens and date intervals", () => {
       [],
       page,
     );
-    // Equal away from the boundary day; on it, whole household days now
-    // decide where elapsed time did (named in the PR).
-    expect(within(data, names)).toEqual(
+    // The expected diff (plan §8): whole household days now decide the
+    // cutoff day, where the retired predicate measured elapsed time.
+    const elapsedCutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    expect(
       await retired(
         location,
         names,
         sql`(${location.lastBulkInventory} IS NULL OR ${location.lastBulkInventory} < now() - make_interval(days => 30))`,
       ),
+    ).toEqual(
+      sorted([
+        "Never recounted",
+        "Recounted 90 days ago",
+        ...(cutoffEvening.getTime() < elapsedCutoff
+          ? ["Recounted on the cutoff day"]
+          : []),
+      ]),
     );
     expect(within(data, names)).toEqual([
       "Never recounted",
       "Recounted 90 days ago",
+      "Recounted on the cutoff day",
     ]);
   });
 

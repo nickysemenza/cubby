@@ -720,19 +720,24 @@ struct EntityFilterSheet: View {
             )
             .labelsHidden()
         case .relative:
-            relativeBound(label, days: days ?? 0, set: set)
+            relativeBound(label, value: value, set: set)
         }
     }
 
-    /// N days ago or ahead of the household's today, shown as "today − 30 days".
-    private func relativeBound(_ label: String, days: Int, set: @escaping (String) -> Void) -> some View {
-        LabeledContent(RelativeDate.describe(days)) {
+    /// N days ago or ahead of the household's today, shown as "today − 30 days". The direction
+    /// reads from the token itself (`@today+0d` is ahead at zero), so it survives a zero count.
+    private func relativeBound(_ label: String, value: String, set: @escaping (String) -> Void)
+        -> some View
+    {
+        let days = RelativeDate.offset(value) ?? 0
+        let ahead = value.hasPrefix(RelativeDate.today + "+")
+        return LabeledContent(RelativeDate.describe(days)) {
             HStack {
                 TextField(
                     "Days",
                     value: Binding(
                         get: { abs(days) },
-                        set: { set(RelativeDate.token(days > 0 ? max($0, 0) : -max($0, 0))) }),
+                        set: { set(RelativeDate.token(max($0, 0), ahead: ahead)) }),
                     format: .number
                 )
                 .multilineTextAlignment(.trailing)
@@ -743,8 +748,8 @@ struct EntityFilterSheet: View {
                 Picker(
                     "\(label) direction",
                     selection: Binding(
-                        get: { days > 0 },
-                        set: { ahead in set(RelativeDate.token(ahead ? abs(days) : -abs(days))) })
+                        get: { ahead },
+                        set: { set(RelativeDate.token(abs(days), ahead: $0)) })
                 ) {
                     Text("ago").tag(false)
                     Text("ahead").tag(true)

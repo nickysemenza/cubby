@@ -25,6 +25,12 @@ public enum RelativeDate {
         days == 0 ? today : "\(today)\(days < 0 ? "-" : "+")\(abs(days))d"
     }
 
+    /// The token `count` whole days ago or ahead. Ahead at zero is `@today+0d`, so an editor can
+    /// read the direction back while the count is still zero.
+    public static func token(_ count: Int, ahead: Bool) -> String {
+        ahead && count == 0 ? "\(today)+0d" : token(ahead ? count : -count)
+    }
+
     /// "today", "today − 30 days", "today + 1 day".
     public static func describe(_ days: Int) -> String {
         if days == 0 { return "today" }
