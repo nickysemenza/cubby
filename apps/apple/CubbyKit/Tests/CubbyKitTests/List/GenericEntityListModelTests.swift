@@ -30,6 +30,16 @@ struct GenericEntityListModelTests {
         )
     }
 
+    /// A declared relation follows the direct reference: a parent project's Tasks section must
+    /// not widen through the generated default-on "Include sub-projects" toggle.
+    @Test func relationSectionsSwitchOffTheSubtreeToggle() throws {
+        let sections = RelationSectionModel.sections(
+            of: EntityCatalog[.project], recordID: "PRJ-2345", client: try makeClient())
+        let tasks = try #require(sections.first { $0.id == "tasks" })
+        #expect(tasks.list.filters["projectId"] == ["PRJ-2345"])
+        #expect(tasks.list.filters["includeSubProjects"] == ["false"])
+    }
+
     /// Saved views must send wire filters, including nullable presence, and replace the old
     /// scope in one request. Sending column ids or sentinel ids fails the kernel's filter schema.
     @Test func savedViewsReplaceFiltersUsingWireParameters() async throws {

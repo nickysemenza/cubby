@@ -62,12 +62,16 @@ public final class RelationSectionModel: Identifiable {
                 : nil)
         self.prefillIsMany = referenceField?.reference?.multiple
         let sort = spec.sort.map { $0.direction == .desc ? "-\($0.field)" : $0.field }
+        // A declared relation follows the direct reference, so a hierarchical filter's
+        // default-on "Include sub-…" toggle is switched off.
+        var scope = EntityFilterState([wireName: [recordID]])
+        if let subtree = filter.subtreeParam { scope.set(["false"], for: subtree) }
         self.list = GenericEntityListModel(
             descriptor: target,
             client: client,
             pageSize: spec.limit ?? 25,
             sort: sort,
-            filters: EntityFilterState([wireName: [recordID]]),
+            filters: scope,
             view: .table
         )
     }
