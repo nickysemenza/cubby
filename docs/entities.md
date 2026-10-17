@@ -970,9 +970,17 @@ view's `groupBy` opens the list grouped; web keeps the choice in `?groupBy=`
 and Apple in the list's view state. Timeline is already arranged by date, so
 both clients disable Group by there; Apple's search results are ranked by
 match, so it disables Group by with that reason while searching and restores
-the choice afterwards. A section header's "Filter to this" sets
+the choice afterwards. Sections use the neutral band (a domain colour stays
+optional) with a sticky header and a quiet tabular count; collapsing sections
+is not offered. A section header's "Filter to this" sets
 the section's value (and turns an "Include sub-…" toggle off) as the field's
-include filter, and exists only when the choice declares a filter.
+include filter, and exists only when the choice declares a filter. Its
+"Hide" keeps the grouping and adds the section's value to the field's Exclude
+key, so it exists only when that filter can exclude; a level section's Hide
+turns "Include sub-…" on, so the ancestor goes with its descendants. Hiding
+the "No ‹label›" section drops No value beside picked values, and otherwise
+picks Any value. Both actions reveal on hover and stay keyboard reachable on
+web; Apple offers them on the header.
 
 A choice whose section key is a related record of an entity that declares
 `model.hierarchy` can group at a level (`groupLevel`, 1 = top, absolute from
@@ -1425,10 +1433,48 @@ the filter's query semantics. A filter over several values per row (a
 `text[]` column or a `via` path through a list) also generates
 `<columnId>Match` (`any`/`all`), the Match all control, which appears nowhere
 else. `currentMember: true` marks a Ledger Party filter that accepts `@me` and offers Me
-([ADR 0018](adr/0018-current-member-filter-token.md)). Chips join values with
-"or" (or "and" under Match all); an active Any value chip reads "has a value".
-Choices the clients cannot offer are disabled with their reason (§7 of the
-[list-fields plan](plans/manifest-driven-list-fields.md)).
+([ADR 0018](adr/0018-current-member-filter-token.md)). Any value and No value
+lead a filter's value list above a divider; No value combines with picked
+values, and picking Any value clears them, since it already includes them.
+Chips join values with "or" (or "and" under Match all); an inactive chip reads
+"any" and an active Any value chip "has a value", so the two never look alike.
+There are no per-filter meta-options (`all`, `either`), boolean AND/OR/NOT
+trees, cross-filter OR, or typed search syntax: any-of, Match all, and Exclude
+cover household questions, and a rare cross-filter one is a second query or
+the agent's. The Work queue and calendar pages read their own pipelines, not
+the entity list.
+
+Every compiled value filter (a non-URL-only `multiselect`/`idMulti` over a
+stored column or a `model.derived` entry, plus the generic data-quality and
+pending-suggestion filters) also generates `<columnId>Exclude`, "is not",
+with the value key's schema; the filter record stays flat, so URLs, saved
+views, MCP, and Apple's filter dictionary carry it unchanged. Its predicate is
+the include predicate built for the excluded values, negated as
+`NOT COALESCE((…), false)` (`excludedFilterRequests` in
+`server/generic/list/repo/list.ts`): a row with no value stays
+(`IS NULL OR NOT IN`; pair it with No value's opposite, Any value, to drop
+empty rows), a to-many path matches when no related row has an excluded
+value, and excluding a hierarchy node excludes its descendants through the
+filter's own "Include sub-…" toggle. Include and exclude combine ("Clothing
+except Outerwear"). A declared `predicate` offers Exclude only with
+`negatable: true`, which asserts its SQL reads only the values it receives.
+One that reads request data prepared from the include values (an effective
+owner, an expense allocation share) or pairs with a sibling on one related
+row (an image's import-run target state) would ignore or mis-pair excluded
+values, so it keeps the key with the reason `Include only: <its reason>.`;
+clients disable "is not" with that line and the list rejects the key as
+`LIST_FILTER_EXCLUDE_UNSUPPORTED` with the same text. Web column state carries
+excluded values with `FILTER_NOT_PREFIX` (`__not__:`) beside the included
+ones, and each side shows its own chip ("Category is not Outerwear"); Any
+value, No value, and Match all belong to the include side, the subtree toggle
+to both.
+
+A field, path, layout, or filter side the compiler cannot support stays in
+its menu, disabled, with a one-line reason derived from the declaration, never
+hand-written per entity: web shows it as a secondary line and Apple as a menu
+subtitle, since a hover tooltip does not work on touch. HTTP and MCP reject the
+same request with the same text, unmasked
+([README tenets](../README.md#tenets)).
 
 Every list filter predicate compiles from its declaration: `scaffold.where`
 takes the filters and a read context, and no hand-written condition. A
@@ -1468,7 +1514,10 @@ one shape:
 - `{ via: "relation.relation[.field]" }` walks declared `local-path`
   relations to a record (its stored title) or a field of the last one. The
   scaffold compiles a filter to `EXISTS` over the path and a sort or group to
-  a correlated scalar subquery that starts at the outer row's reference. Only
+  a correlated scalar subquery that starts at the outer row's reference, even
+  when the repository already joins that table: knowing each FROM would be
+  per-entity knowledge, so a measured cost earns a declared index rather than
+  a join-aware compiler. Only
   a to-one path (every relation `one` and every step outgoing) can sort or
   group. The compiler rejects any other in `sort.fields` with the reason it
   derives (`Goes through a list of Purchases. Only paths that lead to a
@@ -1482,7 +1531,8 @@ one shape:
   and cannot filter.
 - `{ predicate, reason }` is filter-only SQL the repository passes the same
   way; `reason` says why it is not one row value (inventory's
-  `valuationStatus` statuses overlap). `predicate` names the descriptor kind
+  `valuationStatus` statuses overlap). Predicates are the countable declared
+  exception and should shrink; `negatable: true` offers Exclude (above). `predicate` names the descriptor kind
   it serves, and the SQL receives that kind's parsed value: a trimmed string
   (`text`), `{ values, presence }` (`multiselect`/`idMulti`, with the
   descriptor's declared `nullable`; `idMulti` adds `includeDescendants`), a
