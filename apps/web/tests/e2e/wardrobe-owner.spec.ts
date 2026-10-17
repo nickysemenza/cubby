@@ -234,14 +234,11 @@ test("wardrobe cards exclude a clothing type, keep uncategorized items, and a he
   );
 
   // Category is not Outerwear, through the picker's is / is not toggle.
-  const categoryChip = page.getByRole("button", {
-    name: "Category: any",
-    exact: true,
-  });
-  if (!(await categoryChip.isVisible()))
-    await page.getByRole("button", { name: "More", exact: true }).click();
-  await categoryChip.click();
-  await page.getByRole("radio", { name: "is not", exact: true }).click();
+  await page.getByRole("button", { name: "Filters", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Category: any", exact: true })
+    .click();
+  await page.getByRole("button", { name: "is not", exact: true }).click();
   await page
     .getByRole("combobox", { name: "Filter Category" })
     .fill(`${name} Outerwear`);

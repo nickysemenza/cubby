@@ -173,12 +173,17 @@ function MultiselectEditor({
 }) {
   const [draft, setDraft] = useState<string[]>(() => filter?.values ?? []);
   const [side, setSide] = useState<FilterSide>(initialSide);
-  // Any value / No value belong to the "is" side.
-  const options = visibleOptions(field, filter).filter(
-    (option) =>
-      side === "is" ||
-      (option.value !== FILTER_ANY && option.value !== FILTER_NONE),
+  const roster = visibleOptions(field, filter);
+  // Any value / No value belong to the "is" side. A stable roster keeps the
+  // open picker from re-rendering every row on each draft change.
+  const isNotRoster = useMemo(
+    () =>
+      roster.filter(
+        (option) => option.value !== FILTER_ANY && option.value !== FILTER_NONE,
+      ),
+    [roster],
   );
+  const options = side === "is" ? roster : isNotRoster;
   const label = field.label ?? field.key;
   useEffect(() => {
     field.onActivate?.(filter?.values ?? []);
