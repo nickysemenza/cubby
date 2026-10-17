@@ -19,8 +19,11 @@ import { z } from "zod";
 
 import {
   parseEntityListInput,
+  listEntities,
   type ListEntity,
 } from "~/entity/generated/entity-lists.gen";
+import type { ListReadRow } from "~/entity/model/list-read-fields";
+import { selectListReadRows } from "~/entity/model/list-read-schema";
 import {
   type ViewProblemDeclaration,
   viewProblemDeclarations,
@@ -40,23 +43,43 @@ import {
 import { validateCompleteProblemRegistry } from "~/entity/problems/problem-registry-validation";
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
-import { expenseList } from "~/server/domains/expense/repo/lookup";
-import { listFinancialTransactions } from "~/server/domains/financial-transaction/repo/financial-transaction";
-import { imageList } from "~/server/domains/image/repo/image";
+import {
+  expenseList,
+  expenseListRead,
+} from "~/server/domains/expense/repo/lookup";
+import {
+  listFinancialTransactions,
+  listFinancialTransactionsRead,
+} from "~/server/domains/financial-transaction/repo/financial-transaction";
+import { imageList, imageListRead } from "~/server/domains/image/repo/image";
 import { ingredientList } from "~/server/domains/ingredient/repo/search";
-import { inventoryentryList } from "~/server/domains/inventory/repo/crud";
+import {
+  inventoryentryList,
+  inventoryentryListRead,
+} from "~/server/domains/inventory/repo/crud";
 import { locationList } from "~/server/domains/location/repo/crud";
-import { mealList } from "~/server/domains/meal/repo/crud";
+import { mealList, mealListRead } from "~/server/domains/meal/repo/crud";
 import {
   getProductConversionCoverageFreshness,
   type ProductConversionCoverageFreshness,
 } from "~/server/domains/product/repo/conversion-coverage";
-import { productList } from "~/server/domains/product/repo/crud";
+import {
+  productList,
+  listProductsRead,
+} from "~/server/domains/product/repo/crud";
 import { projectList } from "~/server/domains/project/repo/lookup";
-import { purchaseList } from "~/server/domains/purchase/repo/purchase";
+import {
+  purchaseList,
+  purchaseListRead,
+} from "~/server/domains/purchase/repo/purchase";
 import { recipeList } from "~/server/domains/recipe/repo/crud";
 import { taskList } from "~/server/domains/task/repo/lookup";
-import { vendorList } from "~/server/domains/vendor/repo/vendor";
+import {
+  vendorList,
+  vendorListRead,
+} from "~/server/domains/vendor/repo/vendor";
+import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
+import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import {
   type DiagnosticRunOptions,
   diagnosticAdapters,
@@ -98,6 +121,13 @@ const SAMPLE_SIZE = 12;
 type ListRow = { id: string };
 type EntityReadKind = "sample" | "count";
 type EntityReadAdapter = {
+  selected?: (
+    db: Database,
+    filters: FilterAssembly,
+    sorts: SortParams[],
+    pagination: { pageIndex: number; pageSize: number },
+    projection: Extract<ListProjection, { kind: "selected" }>,
+  ) => Promise<{ data: ListReadRow[]; count: number }>;
   read: (
     db: Database,
     filters: FilterAssembly,
@@ -124,6 +154,15 @@ const parsedFiltersFor = <E extends ListEntity>(
 
 const ENTITY_READERS = {
   expense: {
+    selected: (db, filters, sorts, pagination, projection) =>
+      expenseListRead(
+        db,
+        parsedFiltersFor("expense", filters),
+        sorts,
+        pagination,
+        projection,
+        "sample",
+      ),
     read: (db, filters, sorts, pagination, kind) =>
       expenseList(
         db,
@@ -134,6 +173,15 @@ const ENTITY_READERS = {
       ),
   },
   financialTransaction: {
+    selected: (db, filters, sorts, pagination, projection) =>
+      listFinancialTransactionsRead(
+        db,
+        parsedFiltersFor("financialTransaction", filters),
+        sorts,
+        pagination,
+        "sample",
+        projection,
+      ),
     read: (db, filters, sorts, pagination, kind) =>
       listFinancialTransactions(
         db,
@@ -144,6 +192,14 @@ const ENTITY_READERS = {
       ),
   },
   image: {
+    selected: (db, filters, sorts, pagination, projection) =>
+      imageListRead(
+        db,
+        imageListFiltersSchema.parse(compileProblemFilters("image", filters)),
+        sorts,
+        pagination,
+        projection,
+      ),
     read: (db, filters, sorts, pagination, kind) =>
       imageList(
         db,
@@ -177,6 +233,15 @@ const ENTITY_READERS = {
     },
   },
   inventory: {
+    selected: (db, filters, sorts, pagination, projection) =>
+      inventoryentryListRead(
+        db,
+        parsedFiltersFor("inventory", filters),
+        sorts,
+        pagination,
+        projection,
+        "sample",
+      ),
     read: (db, filters, sorts, pagination, kind) =>
       inventoryentryList(
         db,
@@ -197,10 +262,29 @@ const ENTITY_READERS = {
       ),
   },
   meal: {
+    selected: (db, filters, sorts, pagination, projection) =>
+      mealListRead(
+        db,
+        parsedFiltersFor("meal", filters),
+        sorts,
+        pagination,
+        "sample",
+        projection,
+      ),
     read: (db, filters, sorts, pagination, kind) =>
       mealList(db, parsedFiltersFor("meal", filters), sorts, pagination, kind),
   },
   product: {
+    selected: (db, filters, sorts, pagination, projection) =>
+      listProductsRead(
+        db,
+        parsedFiltersFor("product", filters),
+        sorts,
+        pagination,
+        "sample",
+        undefined,
+        projection,
+      ),
     read: (db, filters, sorts, pagination, kind) =>
       productList(
         db,
@@ -221,6 +305,15 @@ const ENTITY_READERS = {
       ),
   },
   purchase: {
+    selected: (db, filters, sorts, pagination, projection) =>
+      purchaseListRead(
+        db,
+        parsedFiltersFor("purchase", filters),
+        sorts,
+        pagination,
+        "sample",
+        projection,
+      ),
     read: (db, filters, sorts, pagination, kind) =>
       purchaseList(
         db,
@@ -245,6 +338,15 @@ const ENTITY_READERS = {
       taskList(db, parsedFiltersFor("task", filters), sorts, pagination, kind),
   },
   vendor: {
+    selected: (db, filters, sorts, pagination, projection) =>
+      vendorListRead(
+        db,
+        parsedFiltersFor("vendor", filters),
+        sorts,
+        pagination,
+        "sample",
+        projection,
+      ),
     read: (db, filters, sorts, pagination, kind) =>
       vendorList(
         db,
@@ -416,6 +518,7 @@ export const executeProblem = async (
     sampleSize?: number;
     diagnostic?: DiagnosticRunOptions;
     projectionFreshness?: ProductConversionCoverageFreshness;
+    fields?: readonly string[];
   } = {},
 ): Promise<ProblemRunResult> => {
   const definition = problemQuery(key);
@@ -466,16 +569,34 @@ export const executeProblem = async (
       `No list function registered for entity "${source.entity}"`,
     );
   }
-  const page = await reader.read(
-    db,
-    source.filters,
-    toSortParams(source.sort),
-    {
-      pageIndex: options.pageIndex ?? 0,
-      pageSize: options.sampleSize ?? SAMPLE_SIZE,
-    },
-    options.mode === "count" ? "count" : "sample",
-  );
+  const pagination = {
+    pageIndex: options.pageIndex ?? 0,
+    pageSize: options.sampleSize ?? SAMPLE_SIZE,
+  };
+  const fields = options.mode === "count" ? undefined : options.fields;
+  const entity = listEntities.find((entity) => entity === source.entity);
+  const page = fields
+    ? await (async () => {
+        if (!entity || !reader.selected)
+          throw new Error(
+            `No selected list reader registered for ${source.entity}`,
+          );
+        const page = await reader.selected(
+          db,
+          source.filters,
+          toSortParams(source.sort),
+          pagination,
+          selectedListProjection(entity, fields),
+        );
+        return { ...page, data: selectListReadRows(entity, page.data, fields) };
+      })()
+    : await reader.read(
+        db,
+        source.filters,
+        toSortParams(source.sort),
+        pagination,
+        options.mode === "count" ? "count" : "sample",
+      );
   const projection =
     options.mode !== "count" && usesConversionCoverageProjection(key)
       ? (options.projectionFreshness ??

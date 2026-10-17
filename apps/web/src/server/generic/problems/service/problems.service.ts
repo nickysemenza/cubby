@@ -50,6 +50,7 @@ import { createLogger } from "@cubby/worker-tracing";
 import { sum, uniq, uniqBy } from "es-toolkit";
 import { z } from "zod";
 
+import { listEntities } from "~/entity/generated/entity-lists.gen";
 import { problemQueryDeclarations } from "~/entity/problems/problem-registry";
 import {
   BASE_KINDS,
@@ -80,6 +81,7 @@ import type { UsdaFoodBatchPort } from "~/server/domains/usda-food/repo/usda-hel
 import { batchEnrichWithFood } from "~/server/domains/usda-food/repo/usda-helpers";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { semanticEmbeddingsConfigured } from "~/server/generic/embedding/service/semantic/embeddings";
+import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import { findCoverageTotalsOnConnection } from "~/server/generic/problems/repo/detectors-coverage";
 import { countEntitiesMissingEmbeddings } from "~/server/generic/problems/repo/detectors-embedding";
 import { loadAllocationDefectPresenters } from "~/server/generic/problems/repo/detectors-financial";
@@ -514,6 +516,7 @@ const runExactProblemPages = async (
     projectionFreshness?: ProductConversionCoverageFreshness;
     concurrency?: number;
     diagnostic?: DiagnosticRunOptions;
+    fieldsFor?: (key: ProblemKey) => readonly string[] | undefined;
   },
 ): Promise<Partial<Record<ProblemKey, ExactProblemPage>>> => {
   const tasks: Record<string, () => Promise<ExactProblemPage>> = {};
@@ -522,6 +525,7 @@ const runExactProblemPages = async (
       executeProblem(db, key, {
         projectionFreshness: options?.projectionFreshness,
         diagnostic: options?.diagnostic,
+        fields: options?.fieldsFor?.(key),
       });
   }
   return await traceAllBounded(tasks, options?.concurrency ?? 4);
@@ -729,10 +733,35 @@ const inventoryLocations = (row: ExactProblemPresentationRow) =>
       : [],
   );
 
-type FastExactPresenter = (
-  row: ExactProblemPresentationRow,
-  hydration: FastProblemHydration | undefined,
-) => FastProblemCard;
+type FastExactPresenter = {
+  fields: readonly string[] | undefined;
+  present: (
+    row: unknown,
+    hydration: FastProblemHydration | undefined,
+  ) => FastProblemCard;
+};
+
+const selectedFastCard = <S extends z.ZodObject>(
+  schema: S,
+  present: (
+    row: z.output<S>,
+    hydration: FastProblemHydration | undefined,
+  ) => FastProblemCard,
+): FastExactPresenter => ({
+  fields: Object.keys(schema.shape),
+  present: (row, hydration) => present(schema.parse(row), hydration),
+});
+
+const fullFastCard = (
+  present: (
+    row: ExactProblemPresentationRow,
+    hydration: FastProblemHydration | undefined,
+  ) => FastProblemCard,
+): FastExactPresenter => ({
+  fields: undefined,
+  present: (row, hydration) =>
+    present(exactProblemPresentationRowSchema.parse(row), hydration),
+});
 
 const productRef = (row: ExactProblemPresentationRow) => ({
   id: row.id,
@@ -765,114 +794,188 @@ const exitExpenseSubtitle = (
 ];
 
 const fastExactPresenters = {
-  duplicateInventory: (row) => {
-    const locations = inventoryLocations(row);
-    return problemRow(
-      "product",
-      productRef(row),
-      [
-        byManufacturer(row.manufacturer),
-        `${countLabel(locations.length, "entry")} across ${countLabel(uniqBy(locations, (l) => l.id).length, "location")}`,
-        row.expectedQuantity != null
-          ? `${row.expectedQuantity} expected`
-          : null,
-      ],
-      locationBadges(uniqBy(locations, (l) => l.id)),
-    );
-  },
-  soldButStillStocked: (row, hydration) => {
-    const totals = hydration?.soldTotals?.get(row.id);
-    if (!totals) {
-      throw new Error(
-        `Canonical sold-but-stocked Problem selected ${row.id}, but bounded presentation hydration found no row`,
+  duplicateInventory: selectedFastCard(
+    exactProblemPresentationRowSchema
+      .pick({
+        id: true,
+        name: true,
+        manufacturer: true,
+        expectedQuantity: true,
+        inventoryEntry: true,
+      })
+      .required(),
+    (row) => {
+      const locations = inventoryLocations(row);
+      return problemRow(
+        "product",
+        productRef(row),
+        [
+          byManufacturer(row.manufacturer),
+          `${countLabel(locations.length, "entry")} across ${countLabel(uniqBy(locations, (l) => l.id).length, "location")}`,
+          row.expectedQuantity != null
+            ? `${row.expectedQuantity} expected`
+            : null,
+        ],
+        locationBadges(uniqBy(locations, (l) => l.id)),
       );
-    }
-    return problemRow(
-      "product",
-      productRef(row),
-      [
-        byManufacturer(row.manufacturer),
-        `sold ${totals.soldQuantity}, ${Number(row.onHandUnits ?? 0)} still on a shelf`,
-        `${formatCurrency(Math.abs(totals.proceeds))} recovered`,
-      ],
-      locationBadges(
-        uniqBy(
-          [...inventoryLocations(row), ...totals.servingLocations],
-          (location) => location.id,
+    },
+  ),
+  soldButStillStocked: selectedFastCard(
+    exactProblemPresentationRowSchema
+      .pick({
+        id: true,
+        name: true,
+        manufacturer: true,
+        onHandUnits: true,
+        inventoryEntry: true,
+      })
+      .required(),
+    (row, hydration) => {
+      const totals = hydration?.soldTotals?.get(row.id);
+      if (!totals) {
+        throw new Error(
+          `Canonical sold-but-stocked Problem selected ${row.id}, but bounded presentation hydration found no row`,
+        );
+      }
+      return problemRow(
+        "product",
+        productRef(row),
+        [
+          byManufacturer(row.manufacturer),
+          `sold ${totals.soldQuantity}, ${Number(row.onHandUnits ?? 0)} still on a shelf`,
+          `${formatCurrency(Math.abs(totals.proceeds))} recovered`,
+        ],
+        locationBadges(
+          uniqBy(
+            [...inventoryLocations(row), ...totals.servingLocations],
+            (location) => location.id,
+          ),
         ),
+      );
+    },
+  ),
+  unlinkedExitExpenses: selectedFastCard(
+    exactProblemPresentationRowSchema
+      .pick({
+        id: true,
+        name: true,
+        cost: true,
+        date: true,
+        vendor: true,
+        purchaseId: true,
+      })
+      .required(),
+    (row) =>
+      problemRow(
+        "expense",
+        productRef(row),
+        exitExpenseSubtitle(row, row.vendor),
+        row.purchaseId
+          ? [
+              recordBadge("purchase", {
+                id: row.purchaseId,
+                name: row.purchaseId,
+              }),
+            ]
+          : [],
       ),
-    );
-  },
-  unlinkedExitExpenses: (row) =>
-    problemRow(
-      "expense",
-      productRef(row),
-      exitExpenseSubtitle(row, row.vendor),
-      row.purchaseId
-        ? [
-            recordBadge("purchase", {
-              id: row.purchaseId,
-              name: row.purchaseId,
-            }),
-          ]
-        : [],
-    ),
-  purchaselessExitExpenses: (row) =>
-    problemRow(
-      "expense",
-      productRef(row),
-      exitExpenseSubtitle(row, row.projectName),
-    ),
-  productsWithNoImages: (row) =>
-    problemRow(
-      "product",
-      productRef(row),
-      [byManufacturer(row.manufacturer)],
-      row.primaryGtin ? [textBadge(displayGtin(row.primaryGtin))] : [],
-    ),
-  imageProcessingIssues: (row) =>
-    problemRow(
-      "image",
-      { id: row.id, name: row.filename ?? row.name ?? "(unnamed image)" },
-      [
-        row.processingIssue === "failed"
-          ? "Processing failed"
-          : "Cutout eligibility needs review",
-      ],
-      [textBadge(row.processingIssue === "failed" ? "Failed" : "Needs review")],
-    ),
-  kitsCountedTwice: (row) =>
-    problemRow("product", productRef(row), [
-      byManufacturer(row.manufacturer),
-      `${Number(row.onHandUnits ?? 0)} stocked as itself, plus its parts`,
-      `more than the ${Number(row.quantityLedger?.expectedQuantity ?? 0)} bought`,
-    ]),
-  understatedCostMeals: (row) => {
-    const affectedRecipes = (row.recipes ?? []).flatMap((entry) => {
-      const recipe = entry.recipe;
-      const cost = recipe?.totals?.cost;
-      const coverage = cost ? estimateCoverage(cost) : undefined;
-      return recipe && coverage && coverage.covered < coverage.total
-        ? [
-            {
-              id: recipe.id,
-              name: recipe.name,
-              costCovered: coverage.covered,
-              ingredientCount: coverage.total,
-            },
-          ]
-        : [];
-    });
-    return allProblemsSchema.shape.understatedCostMeals.element.parse({
-      id: row.id,
-      name: row.name ?? null,
-      date: row.date,
-      affectedRecipes,
-      recipeCount: affectedRecipes.length,
-    });
-  },
-  unknownParkedItems: (row) => inventoryRow(row, [amountLabel(row)]),
-  inventoryWithoutPricePath: (row) =>
+  ),
+  purchaselessExitExpenses: selectedFastCard(
+    exactProblemPresentationRowSchema
+      .pick({ id: true, name: true, cost: true, date: true, projectName: true })
+      .required(),
+    (row) =>
+      problemRow(
+        "expense",
+        productRef(row),
+        exitExpenseSubtitle(row, row.projectName),
+      ),
+  ),
+  productsWithNoImages: selectedFastCard(
+    exactProblemPresentationRowSchema
+      .pick({ id: true, name: true, manufacturer: true, primaryGtin: true })
+      .required(),
+    (row) =>
+      problemRow(
+        "product",
+        productRef(row),
+        [byManufacturer(row.manufacturer)],
+        row.primaryGtin ? [textBadge(displayGtin(row.primaryGtin))] : [],
+      ),
+  ),
+  imageProcessingIssues: selectedFastCard(
+    exactProblemPresentationRowSchema
+      .pick({ id: true, filename: true, processingIssue: true })
+      .required(),
+    (row) =>
+      problemRow(
+        "image",
+        { id: row.id, name: row.filename ?? "(unnamed image)" },
+        [
+          row.processingIssue === "failed"
+            ? "Processing failed"
+            : "Cutout eligibility needs review",
+        ],
+        [
+          textBadge(
+            row.processingIssue === "failed" ? "Failed" : "Needs review",
+          ),
+        ],
+      ),
+  ),
+  kitsCountedTwice: selectedFastCard(
+    exactProblemPresentationRowSchema
+      .pick({
+        id: true,
+        name: true,
+        manufacturer: true,
+        onHandUnits: true,
+        quantityLedger: true,
+      })
+      .required(),
+    (row) =>
+      problemRow("product", productRef(row), [
+        byManufacturer(row.manufacturer),
+        `${Number(row.onHandUnits ?? 0)} stocked as itself, plus its parts`,
+        `more than the ${Number(row.quantityLedger?.expectedQuantity ?? 0)} bought`,
+      ]),
+  ),
+  understatedCostMeals: selectedFastCard(
+    exactProblemPresentationRowSchema
+      .pick({ id: true, name: true, date: true, recipes: true })
+      .required(),
+    (row) => {
+      const affectedRecipes = (row.recipes ?? []).flatMap((entry) => {
+        const recipe = entry.recipe;
+        const cost = recipe?.totals?.cost;
+        const coverage = cost ? estimateCoverage(cost) : undefined;
+        return recipe && coverage && coverage.covered < coverage.total
+          ? [
+              {
+                id: recipe.id,
+                name: recipe.name,
+                costCovered: coverage.covered,
+                ingredientCount: coverage.total,
+              },
+            ]
+          : [];
+      });
+      return allProblemsSchema.shape.understatedCostMeals.element.parse({
+        id: row.id,
+        name: row.name ?? null,
+        date: row.date,
+        affectedRecipes,
+        recipeCount: affectedRecipes.length,
+      });
+    },
+  ),
+  unknownParkedItems: selectedFastCard(
+    exactProblemPresentationRowSchema
+      .pick({ id: true, amount: true, product: true, location: true })
+      .required(),
+    (row) => inventoryRow(row, [amountLabel(row)]),
+  ),
+  inventoryWithoutPricePath: fullFastCard((row) =>
     // The price is what the unit WOULD be valued against — the row exists
     // precisely because no conversion reaches it.
     inventoryRow(
@@ -884,52 +987,87 @@ const fastExactPresenters = {
         ),
       ],
     ),
-  vendorsWithoutLogos: (row, hydration) => {
-    const counts = hydration?.vendorExpenseCounts?.get(row.id);
-    if (!counts) {
-      throw new Error(
-        `Canonical vendor-logo Problem selected ${row.id}, but bounded presentation hydration found no row`,
-      );
-    }
-    return allProblemsSchema.shape.vendorsWithoutLogos.element.parse({
-      id: row.id,
-      name: String(row.name),
-      website: row.website ?? null,
-      purchaseCount: Number(row.purchaseCount ?? 0),
-      expenseRowCount: counts.expenseRowCount,
-    });
-  },
-  purchasesNotReconciling: (row) =>
-    allProblemsSchema.shape.purchasesNotReconciling.element.parse({
-      id: row.id,
-      vendorName: row.vendorName ?? null,
-      orderId: row.orderId ?? null,
-      orderUrl: row.orderUrl ?? null,
-      date: row.date ?? null,
-      statedTotal: Number(row.statedTotal),
-      expenseTotal: Number(row.expenseTotal),
-      expenseCount: Number(row.expenseCount),
-      unpricedExpenseCount: Number(row.unpricedExpenseCount),
-      postedRefundTotal: Number(
-        row.financialReconciliation?.postedRefundTotal ?? 0,
-      ),
-    }),
-  purchaseFinancialSettlementMismatches: (row) =>
-    allProblemsSchema.shape.purchaseFinancialSettlementMismatches.element.parse(
-      {
+  ),
+  vendorsWithoutLogos: selectedFastCard(
+    exactProblemPresentationRowSchema
+      .pick({ id: true, name: true, website: true, purchaseCount: true })
+      .required(),
+    (row, hydration) => {
+      const counts = hydration?.vendorExpenseCounts?.get(row.id);
+      if (!counts) {
+        throw new Error(
+          `Canonical vendor-logo Problem selected ${row.id}, but bounded presentation hydration found no row`,
+        );
+      }
+      return allProblemsSchema.shape.vendorsWithoutLogos.element.parse({
+        id: row.id,
+        name: String(row.name),
+        website: row.website ?? null,
+        purchaseCount: Number(row.purchaseCount ?? 0),
+        expenseRowCount: counts.expenseRowCount,
+      });
+    },
+  ),
+  purchasesNotReconciling: selectedFastCard(
+    exactProblemPresentationRowSchema
+      .pick({
+        id: true,
+        vendorName: true,
+        orderId: true,
+        orderUrl: true,
+        date: true,
+        statedTotal: true,
+        expenseTotal: true,
+        expenseCount: true,
+        unpricedExpenseCount: true,
+        financialReconciliation: true,
+      })
+      .required(),
+    (row) =>
+      allProblemsSchema.shape.purchasesNotReconciling.element.parse({
         id: row.id,
         vendorName: row.vendorName ?? null,
+        orderId: row.orderId ?? null,
+        orderUrl: row.orderUrl ?? null,
+        date: row.date ?? null,
+        statedTotal: Number(row.statedTotal),
         expenseTotal: Number(row.expenseTotal),
-        financialReconciliation: row.financialReconciliation,
-      },
-    ),
-  financialTransactionAllocationDefects: (row, hydration) => {
-    const hydrated = hydration?.allocationDefects?.get(row.id);
-    if (hydrated) return hydrated;
-    throw new Error(
-      `Canonical allocation Problem selected ${row.id}, but bounded presentation hydration found no row`,
-    );
-  },
+        expenseCount: Number(row.expenseCount),
+        unpricedExpenseCount: Number(row.unpricedExpenseCount),
+        postedRefundTotal: Number(
+          row.financialReconciliation?.postedRefundTotal ?? 0,
+        ),
+      }),
+  ),
+  purchaseFinancialSettlementMismatches: selectedFastCard(
+    exactProblemPresentationRowSchema
+      .pick({
+        id: true,
+        vendorName: true,
+        expenseTotal: true,
+        financialReconciliation: true,
+      })
+      .required(),
+    (row) =>
+      allProblemsSchema.shape.purchaseFinancialSettlementMismatches.element.parse(
+        {
+          id: row.id,
+          vendorName: row.vendorName ?? null,
+          expenseTotal: Number(row.expenseTotal),
+          financialReconciliation: row.financialReconciliation,
+        },
+      ),
+  ),
+  financialTransactionAllocationDefects: selectedFastCard(
+    exactProblemPresentationRowSchema.pick({ id: true }).required(),
+    (row, hydration) => {
+      const hydrated = hydration?.allocationDefects?.get(row.id);
+      if (hydrated) return hydrated;
+      throw new Error(
+        `Canonical allocation Problem selected ${row.id}, but bounded presentation hydration found no row`,
+      );
+    },
+  ),
 } satisfies Record<FastEntityProblemKey, FastExactPresenter>;
 
 /**
@@ -945,10 +1083,8 @@ const presentFastExactRows = (
   page: ExactProblemPage,
   hydration?: FastProblemHydration,
 ): FastProblemCard[] => {
-  const present = fastExactPresenters[key];
-  return page.data.map((row) =>
-    present(exactProblemPresentationRowSchema.parse(row), hydration),
-  );
+  const presenter = fastExactPresenters[key];
+  return page.data.map((row) => presenter.present(row, hydration));
 };
 
 /**
@@ -1025,6 +1161,20 @@ const isFastEntityProblemKey = (
   key: ProblemKey,
 ): key is (typeof FAST_ENTITY_PROBLEM_KEYS)[number] =>
   FAST_ENTITY_PROBLEM_KEYS.some((candidate) => candidate === key);
+
+for (const key of FAST_ENTITY_PROBLEM_KEYS) {
+  const fields = fastExactPresenters[key].fields;
+  if (!fields) continue;
+  const source = problemQueryDeclarations().find(
+    (entry) => entry.key === key,
+  )?.source;
+  const entity =
+    source?.kind === "entity"
+      ? listEntities.find((entity) => entity === source.entity)
+      : undefined;
+  if (!entity) throw new Error(`Selected Problem has no list entity: ${key}`);
+  selectedListProjection(entity, fields);
+}
 
 /** Fast Problems stays DB-only: no WASM or provider calls. */
 export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
@@ -1154,7 +1304,13 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       },
       2,
     ),
-    runExactProblemPages(db, exactKeys, { concurrency: 2 }),
+    runExactProblemPages(db, exactKeys, {
+      concurrency: 2,
+      fieldsFor: (key) =>
+        isFastEntityProblemKey(key)
+          ? fastExactPresenters[key].fields
+          : undefined,
+    }),
   ]);
   const legacy = {
     runFindings: r.runFindings.items,

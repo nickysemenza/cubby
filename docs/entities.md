@@ -1257,11 +1257,21 @@ retried.
 
 MCP `entity_read.list` at the default summary detail publishes only
 `entitySummaryFields` (`contracts/mcp-projections.ts`), so it runs `listFields`:
-the base read, one enrichment read of only the groups owning those fields, and
-the complete-population summary. `resultDetail: "full"` and kinds without a
+one selected read with the groups owning those fields, and the
+complete-population summary. Selected reads retain authoritative filtering,
+sorting, pagination and counts in that one page read. Their caller validates
+actual loaded fields before schema defaults can insert values. Unknown fields
+fail before even an empty read. `resultDetail: "full"` and kinds without a
 progressive reader run the complete list. Product list readers start the page's
 USDA batch as soon as its barcodes load, so the external lookup overlaps the
 remaining enrichment reads.
+
+Fast Problems cards derive selected fields from their required presenter
+schemas, using the same ownership and transitive loader dependencies. Consumers
+without an established narrower shape retain complete reads. In particular,
+the inventory price-path card remains complete while its embedded product price
+contract is unresolved. Focused raw Problems consumers and count/continuation
+reads retain their existing contracts.
 
 MCP create/update summaries request `entityWriteSummaryFields` before response
 hydration through the kernel's `createRead`/`updateRead` repository ports. They

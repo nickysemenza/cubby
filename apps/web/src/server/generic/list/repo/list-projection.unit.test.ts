@@ -1,8 +1,41 @@
 import { describe, expect, it } from "vitest";
 
-import { expandListGroups, loadListGroup } from "./list-projection";
+import { selectListReadRows } from "~/entity/model/list-read-schema";
+
+import {
+  expandListGroups,
+  loadListGroup,
+  selectedListProjection,
+} from "./list-projection";
 
 describe("list projection group execution", () => {
+  // Selected reads must load their owning group, reject misspelled demand
+  // even for empty pages, and never let schema defaults hide unloaded fields.
+  it("loads selected field dependencies without media and rejects absent defaulted fields", async () => {
+    const projection = selectedListProjection("product", ["unitPrice"]);
+    const executed: string[] = [];
+    await loadListGroup(projection, "derived", async () => {
+      executed.push("derived");
+    });
+    await loadListGroup(projection, "media", async () => {
+      throw new Error("Unrequested media must not load");
+    });
+    expect(executed).toEqual(["derived"]);
+    expect(() =>
+      selectListReadRows("product", [{ id: "PRD-4K7M" }], projection.fields),
+    ).toThrow("Requested record field was not loaded: unitPrice");
+    expect(
+      selectListReadRows(
+        "product",
+        [{ id: "PRD-4K7M", unitPrice: null }],
+        projection.fields,
+      ),
+    ).toEqual([{ id: "PRD-4K7M", unitPrice: null }]);
+    expect(() => selectedListProjection("product", ["unknownField"])).toThrow(
+      "Unknown list field",
+    );
+  });
+
   // A selected consumer must include transitive dependencies once, before its
   // own group. A cycle must fail rather than recurse indefinitely.
   it("expands transitive loader dependencies in order, deduplicating repeated consumers", () => {

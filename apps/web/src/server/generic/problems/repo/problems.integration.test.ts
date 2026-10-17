@@ -5,6 +5,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { buildNutrition } from "@cubby/schemas/nutrition";
+import type { ProblemArrays } from "@cubby/schemas/problems";
 import { type ExpenseCreateInput } from "@cubby/schemas/project";
 import { eq, sql } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
@@ -20,6 +21,7 @@ beforeEach(() => {
 });
 afterEach(() => backgroundQueue.restore());
 
+import { problemQueryDeclarations } from "~/entity/problems/problem-registry";
 import { getDb } from "~/server/db/helpers";
 import {
   entityLink,
@@ -65,7 +67,10 @@ import {
 } from "../operations/problem-workflows.server";
 import { runDiagnostic } from "../service/problem-diagnostics.service";
 import { findViewProblems } from "../service/problem-views.service";
-import { findFastProblems } from "../service/problems.service";
+import {
+  findFastProblems,
+  findProblemByType,
+} from "../service/problems.service";
 import { findEntitiesMissingEmbeddings } from "./detectors-embedding";
 
 /**
@@ -76,6 +81,117 @@ const unwrap = async <T>(p: Promise<{ output: T }>): Promise<T> =>
   (await p).output;
 
 const page = { pageIndex: 0, pageSize: 100 };
+
+describe("Problems card read projections", () => {
+  const ctx = withTestDb();
+
+  // Narrow hydration must preserve rich cards, signed values, full-population
+  // totals and the twelve-row sample across independent entity readers.
+  it("matches complete card reads beyond the sample boundary", async () => {
+    const shelf = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Projection shelf", type: "shelf" }),
+      ctx.actor,
+    );
+    const incomplete = await createRecipeFixture(
+      ctx.db,
+      makeRecipeInput({ name: "Projection recipe" }),
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(recipe)
+      .set({
+        totals: {
+          cost: {
+            status: "partial",
+            lower: 4,
+            upper: null,
+            coverage: { covered: 2, total: 3 },
+          },
+          nutrition: buildNutrition(() => ({
+            status: "unavailable",
+            reason: "no_data",
+          })),
+        },
+        totalsComputedAt: new Date(),
+      })
+      .where(eq(recipe.id, incomplete.entityId));
+    for (let index = 0; index < 14; index++) {
+      const product = await createProductFixture(
+        ctx.db,
+        makeProductInput({ name: `Projection product ${index}`, price: 10 }),
+        ctx.actor,
+      );
+      await createInventoryFixture(
+        ctx.db,
+        {
+          productId: product.id,
+          locationId: shelf.id,
+          amount: { value: 2, unit: "kg" },
+        },
+        ctx.actor,
+      );
+      const expense = await unwrap(
+        createRepoEntity(
+          ctx,
+          "expense",
+          makeExpenseInput({
+            name: `Projection exit ${index}`,
+            cost: -(index + 1),
+            vendor: "Example projection marketplace",
+            orderId: `EXAMPLE-PROJECTION-${index}`,
+            lineKind: "principal",
+            lineBasis: "item_line",
+          }),
+        ),
+      );
+      await updatePurchase(
+        ctx.db,
+        parseShortcodeFor("purchase", expense.purchaseId),
+        { statedTotal: 1000 },
+        ctx.actor,
+      );
+      await createMealWithEntityId(
+        ctx.db,
+        buildEntity("meal", {
+          date: "2026-09-01",
+          name: `Projection meal ${index}`,
+          recipes: [{ recipeId: incomplete.id }],
+        }),
+        ctx.actor,
+      );
+    }
+    const grouped = await findFastProblems(ctx.db);
+    const sections: Partial<ProblemArrays> = grouped;
+    const clients = createTestRequestContext(ctx.db);
+    for (const definition of problemQueryDeclarations()) {
+      if (
+        definition.executionLane !== "fast" ||
+        definition.source.kind !== "entity"
+      )
+        continue;
+      const full = await findProblemByType(
+        ctx.db,
+        definition.key,
+        clients.upcLookupClient,
+        clients.usdaClient,
+      );
+      expect(sections[definition.key]).toEqual(full.items);
+      expect(grouped.sectionTotals[definition.key]).toBe(full.total);
+    }
+    for (const key of [
+      "productsWithNoImages",
+      "purchasesNotReconciling",
+      "unlinkedExitExpenses",
+      "understatedCostMeals",
+      "inventoryWithoutPricePath",
+    ] as const) {
+      expect(grouped.sectionTotals[key]).toBeGreaterThan(12);
+      expect(grouped[key]).toHaveLength(12);
+    }
+    expect(grouped.understatedCostMeals[0]?.recipeCount).toBe(1);
+  });
+});
 
 // The defect/coverage split. `totalProblems` — the navbar badge, the homepage
 // banner, the headline card — must count only rows that can reach zero;

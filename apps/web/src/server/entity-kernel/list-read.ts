@@ -8,14 +8,17 @@ import {
 } from "~/entity/model/list-read-fields";
 import {
   listReadFields,
-  listGroupsForFields,
   projectListRows,
+  selectListReadRows,
 } from "~/entity/model/list-read-schema";
 import { withListEntityMedia } from "~/server/entity-kernel/repo/entity-display-image";
 import { withRecordEmoji } from "~/server/entity-kernel/repo/entity-emoji";
 import { withListGroupBy } from "~/server/generic/list/repo/list";
 import { listTotalLabels } from "~/server/generic/list/repo/list-display-labels";
-import { expandListGroups } from "~/server/generic/list/repo/list-projection";
+import {
+  expandListGroups,
+  selectedListProjection,
+} from "~/server/generic/list/repo/list-projection";
 import { withListReadTracing } from "~/server/observability/list-read-tracing";
 import { withTrace } from "~/server/observability/tracing";
 import { normalizeStartOperationError } from "~/server/operation-runtime/start-operation.server";
@@ -196,30 +199,46 @@ export function defineProgressiveListOperations<
       value: unknown,
       fields: readonly string[],
     ) {
-      const requested = listGroupsForFields(binding.entity, fields);
+      const projection = selectedListProjection(binding.entity, fields);
       const input = inputSchema.parse(value);
       const filters = await filtersFor(context, input.filters);
-      const [{ pagination, result }, sums] = await Promise.all([
-        readBase(context, input, await scopedFilters(context, input)),
+      const pagination = input.pagination ?? { pageIndex: 0, pageSize: 50 };
+      const scoped = await scopedFilters(context, input);
+      const [result, sums] = await Promise.all([
+        withListReadTracing(
+          { entity: binding.entity, projection: "selected" },
+          () =>
+            reader()(
+              context,
+              scoped,
+              parseSorts(
+                binding,
+                input.sort,
+                Boolean(input.filters.searchQuery),
+              ),
+              pagination,
+              projection,
+            ),
+        ),
         binding.repository.listSummary?.(context, filters),
       ]);
-      const ids = result.data.map((row) => row.id);
-      const enriched =
-        requested.length > 0 && ids.length > 0
-          ? new Map(
-              projectListRows(
+      const rows = projection.groups.includes("media")
+        ? z
+            .array(listReadRowSchema)
+            .parse(
+              await withListEntityMedia(
+                context.db,
                 binding.entity,
-                (await readEnrichment(context, ids, requested)).data,
-                { kind: "enrichment", groups: requested },
-              ).map((row) => [row.id, row]),
+                result.data,
+              ),
             )
-          : undefined;
+        : result.data;
       return {
         action: "list" as const,
         entity: binding.entity,
         ...buildPaginatedResponse(
           pagination,
-          result.data.map((row) => ({ ...row, ...enriched?.get(row.id) })),
+          selectListReadRows(binding.entity, rows, fields),
           result.count,
           {
             sums,
