@@ -1177,7 +1177,11 @@ and tracing. SSR invokes that dispatcher in-process.
 The dispatcher measures selected-handler loading in
 `start.dispatch.load.<operation>` before the operation's execution span. Include
 that load and Worker startup when attributing cold request latency; execution
-spans alone omit module initialization.
+spans alone omit module initialization. Cloudflare's application timers advance
+only after I/O, so a zero-duration load span does not establish that module
+initialization used no CPU. Attribute CPU with a matching platform profile;
+label local startup and request profiles separately from production evidence.
+See [Cloudflare's timer contract](https://developers.cloudflare.com/workers/runtime-apis/performance/).
 
 The operation boundary chooses the read policy before invoking its handler.
 `apps/web/src/server/db/read-policy.ts` owns that policy; ordinary interactive
