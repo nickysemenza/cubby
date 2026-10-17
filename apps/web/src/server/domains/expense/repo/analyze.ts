@@ -480,12 +480,8 @@ export function previousExpenseFilters(filters: ExpenseFilters) {
   const days = plainDateDaysBetween(filters.dateFrom, filters.dateTo) + 1;
   const dateTo = shiftPlainDate(filters.dateFrom, -1);
   const dateFrom = shiftPlainDate(filters.dateFrom, -days);
-  // An explicit comparison window replaces every date-window constraint. A
-  // saved relative predicate (for example, `beforeToday`) must not continue to
-  // narrow the shifted period behind the user's back.
-  const { dateRelative: _dateRelative, ...nonRelativeFilters } = filters;
   return {
-    filters: { ...nonRelativeFilters, dateFrom, dateTo },
+    filters: { ...filters, dateFrom, dateTo },
     range: { dateFrom, dateTo },
   };
 }

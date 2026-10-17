@@ -138,26 +138,21 @@ export function ExpenseAnalyticsView() {
   const handleOpenLedger = useCallback(
     (filter: Record<string, string>) => {
       void navigate({
-        search: (prev) => {
-          const nextSearch = {
-            ...prev,
-            // A project bucket is one exact project; otherwise the Ledger
-            // keeps the default sub-project subtree.
-            includeSubProjects: filter.project
-              ? "false"
-              : prev.includeSubProjects,
-            includeSubSpendingCategories: filter.spendingCategory
-              ? "false"
-              : prev.includeSubSpendingCategories,
-            // Exact month bounds supersede a relative date preset.
-            date: filter.dateFrom || filter.dateTo ? undefined : prev.date,
-            ...filter,
-            view: "table" as const,
-          };
-          return filter.dateFrom || filter.dateTo
-            ? { ...nextSearch, dateRelative: undefined }
-            : nextSearch;
-        },
+        search: (prev) => ({
+          ...prev,
+          // A project bucket is one exact project; otherwise the Ledger
+          // keeps the default sub-project subtree.
+          includeSubProjects: filter.project
+            ? "false"
+            : prev.includeSubProjects,
+          includeSubSpendingCategories: filter.spendingCategory
+            ? "false"
+            : prev.includeSubSpendingCategories,
+          // Exact month bounds supersede a relative date preset.
+          date: filter.dateFrom || filter.dateTo ? undefined : prev.date,
+          ...filter,
+          view: "table" as const,
+        }),
       });
     },
     [navigate],

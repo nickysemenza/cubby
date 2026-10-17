@@ -150,6 +150,35 @@ struct EntityFilterTests {
         #expect(body["filters"] == .object([from: "2026-01-01", to: "2026-01-31"]))
     }
 
+    /// A relative date bound travels as its token; the server resolves it to the household's
+    /// day, so a saved native filter never freezes into the day it was set (#2415).
+    @Test func relativeDateBoundTravelsAsItsToken() async throws {
+        let filter = try #require(EntityCatalog[.location].filter("lastBulkInventory"))
+        guard case .range(_, let to, let presence?) = filter.wire else {
+            Issue.record("location.lastBulkInventory is not a range filter with presence")
+            return
+        }
+        let body = try await requestBody { client in
+            _ = try await client.list(
+                EntityCatalog[.location],
+                filters: EntityFilterState([to: ["@today-30d"], presence: ["none"]]))
+        }
+        #expect(body["filters"] == .object([to: "@today-30d", presence: "none"]))
+    }
+
+    @Test func relativeDateTokensParseFormatAndDescribe() {
+        #expect(RelativeDate.offset("@today") == 0)
+        #expect(RelativeDate.offset("@today-30d") == -30)
+        #expect(RelativeDate.offset("@today+7d") == 7)
+        for invalid in ["2026-05-01", "@today-3w", "@today-", "@tomorrow", "@today-123456d"] {
+            #expect(RelativeDate.offset(invalid) == nil, Comment(rawValue: invalid))
+        }
+        #expect(RelativeDate.token(-30) == "@today-30d")
+        #expect(RelativeDate.token(0) == "@today")
+        #expect(RelativeDate.describe(-1) == "today − 1 day")
+        #expect(RelativeDate.describe(30) == "today + 30 days")
+    }
+
     /// The timeline's `ids`, `order`, `from` and `to` land under `window`, beside the list
     /// filters; a list body never accepts them.
     @Test func timelineTakesIdsAndOrderBesideTheListFilters() async throws {

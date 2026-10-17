@@ -29,6 +29,8 @@ export type FilterFieldConfig = {
   subtree?: { label: string };
   /** Offers is | is not; a `reason` disables "is not" with that line. */
   exclude?: { reason: string | null };
+  /** A date range: beside its presets the editor sets `from..to` bounds. */
+  dateRange?: boolean;
   onActivate?: (selectedIds?: readonly string[]) => void;
   onSearchChange?: (query: string) => void;
   isLoading?: boolean;
@@ -253,6 +255,7 @@ export function barFieldFromConfig(
     matchAll: config.matchAll,
     subtree: config.subtree,
     exclude: config.exclude,
+    dateRange: config.dateRange,
     onActivate: config.onActivate,
     onSearchChange: config.onSearchChange,
     isLoading: config.isLoading,

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { plainDate } from "./base-entity";
+import { dateBound, dateRangeFields } from "./base-entity";
 import { createPaginatedResponseSchema } from "./pagination";
 import {
   plantingBaseFilterFields,
@@ -18,7 +18,15 @@ export {
 
 export const plantingFilterFields = {
   ...plantingBaseFilterFields,
-  activeOn: plainDate.optional(),
+  activeOn: dateBound
+    .optional()
+    .describe("Plantings whose active span contains this day"),
+  ...dateRangeFields("active", {
+    describe: {
+      from: "Plantings whose active span ends on or after this day",
+      to: "Plantings whose active span starts on or before this day",
+    },
+  }),
 };
 export const plantingFiltersSchema = z.object(plantingFilterFields);
 export type PlantingFilters = z.infer<typeof plantingFiltersSchema>;

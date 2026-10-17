@@ -7,11 +7,10 @@ import {
   expenseListItemOut,
 } from "@cubby/schemas/project";
 import type { ExpenseFilters } from "@cubby/schemas/project";
-import { and, inArray, lt, lte, or, type SQL, sql } from "drizzle-orm";
+import { and, inArray, type SQL, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import { projectListRows } from "~/entity/model/list-read-schema";
-import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import {
   getDb,
@@ -203,14 +202,6 @@ const rowDerived = {
   costSign: sql`CASE WHEN ${expense.cost} < 0 THEN ${expenseCostSign.enum.negative}::text
     WHEN ${expense.cost} > 0 THEN ${expenseCostSign.enum.positive}::text END`,
   disposalPurchase: inArray(expense.purchaseId, disposalPurchaseIds()),
-  dateRelative: ({ values }: { values: readonly string[] }) =>
-    or(
-      ...values.map((value) =>
-        value === "beforeToday"
-          ? lt(expense.date, householdLocalDate())
-          : lte(expense.date, householdLocalDate()),
-      ),
-    ),
   ledgerPartyId: ({ values }: { values: readonly string[] }) => sql`EXISTS (
     SELECT 1 FROM "ExpenseAttribution" ea
     WHERE ea."expenseId" = ${expense.id}

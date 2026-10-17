@@ -15,7 +15,7 @@ import {
   positiveMoneyNullable,
 } from "./money";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
-import { dateRangeFields, plainDate } from "./base-entity";
+import { dateBound, dateRangeFields, plainDate } from "./base-entity";
 import { generatedExpenseFieldSchemas } from "./generated/entity-field-schemas.expense.gen";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { projectKindSchema, projectStatusSchema } from "./project-fields";
@@ -90,7 +90,6 @@ import {
   partyFilterList,
   oneOrMany,
   presenceFilter,
-  relativeDateFilter,
   sortPaginationFields,
 } from "./pagination";
 
@@ -291,10 +290,9 @@ export const taskFilterFields = {
   /** Only these parents' live subtasks. */
   parentTaskId: entityFilterList(taskShortcode).optional(),
   parentTaskPresenceFilter: presenceFilter,
-  dueFrom: plainDate.optional().describe("Inclusive lower bound on due date"),
-  dueTo: plainDate.optional().describe("Inclusive upper bound on due date"),
+  dueFrom: dateBound.optional().describe("Inclusive lower bound on due date"),
+  dueTo: dateBound.optional().describe("Inclusive upper bound on due date"),
   duePresenceFilter: presenceFilter,
-  dueRelative: oneOrMany(relativeDateFilter).optional(),
   completion: oneOrMany(taskCompletionSchema)
     .optional()
     .describe('Undefined = "all" (today\'s default, unchanged)'),
@@ -455,18 +453,6 @@ export const expenseFilterFields = {
   /** Expenses attributed to the given ledger part(ies) (`ExpenseAttribution`). */
   ledgerPartyId: partyFilterList(ledgerPartyShortcode).optional(),
   projectId: entityFilterList(projectShortcode).optional(),
-  /**
-   * Substring match on `notes`. Deliberately its OWN field rather than folded
-   * into `search`, for the same reason `vendorId` is: `buildSearchConditions`
-   * ANDs its `searchFilters` entries, so a second entry sharing the `search`
-   * term would mean `name ILIKE q AND notes ILIKE q` — and most rows have no
-   * notes, which would silently zero out expense search.
-   *
-   * Notes carry an import's provenance (line itemizations on aggregate rows,
-   * refund documentation, legacy `"<Vendor> order <ID>"` prose), so this is how
-   * you find the rows a previous pass touched.
-   */
-  dateRelative: oneOrMany(relativeDateFilter).optional(),
   /**
    * `"none"` matches expenses with a null `cost`; `"has"` matches expenses
    * with a non-null `cost`. Combined with `trade: "other"`, `"none"` is the

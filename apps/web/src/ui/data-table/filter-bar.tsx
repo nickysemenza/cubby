@@ -4,7 +4,7 @@ import {
   FILTER_EXACT,
   FILTER_NONE,
 } from "@cubby/schemas/filter-sentinel-fields";
-import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
+import { describeRangeBounds, UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { GearSixIcon } from "@phosphor-icons/react/dist/csr/GearSix";
@@ -28,6 +28,7 @@ import {
 } from "~/ui/primitives/popover";
 import { Switch } from "~/ui/primitives/switch";
 
+import { DateRangeBounds } from "./date-range-bounds";
 import {
   activeSides,
   type Filter,
@@ -82,6 +83,10 @@ export function filterSummary(
 ): string {
   if (filter === undefined || !isFieldActive(filter)) return "any";
   if (field.type === "text") return filter.values[0] ?? "any";
+  const bounds = field.dateRange
+    ? describeRangeBounds(filter.values[0] ?? "")
+    : undefined;
+  if (bounds !== undefined) return bounds;
   const labels = new Map(
     visibleOptions(field, filter).map((option) => [option.value, option.label]),
   );
@@ -302,12 +307,19 @@ function FilterValueEditor({
       />
     );
   }
-  return (
+  const value = filter?.values[0];
+  const isBounds =
+    field.dateRange === true &&
+    value !== undefined &&
+    describeRangeBounds(value) !== undefined;
+  const picker = (
     <Picker
       options={options}
-      value={filter?.values[0] ?? null}
+      value={isBounds ? null : (value ?? null)}
       onValueChange={(value) => setValues(value === null ? [] : [value])}
-      placeholder={`Filter ${field.label ?? field.key}`}
+      placeholder={
+        isBounds ? "Custom range" : `Filter ${field.label ?? field.key}`
+      }
       label={`Filter ${field.label ?? field.key}`}
       clearable
       className="w-full"
@@ -317,6 +329,18 @@ function FilterValueEditor({
       onSearchChange={field.onSearchChange}
       isLoading={field.isLoading}
     />
+  );
+  if (!field.dateRange) return picker;
+  return (
+    <>
+      {options.length > 0 && picker}
+      {/* A preset replaces the bounds, so the bounds editor starts over. */}
+      <DateRangeBounds
+        key={isBounds ? "bounds" : (value ?? "")}
+        value={isBounds ? value : undefined}
+        onChange={(next) => setValues(next === undefined ? [] : [next])}
+      />
+    </>
   );
 }
 

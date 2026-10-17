@@ -22,7 +22,9 @@ const isPartyFilter = (field: z.ZodType) =>
   !field.safeParse(TEXT_PROBE).success;
 
 /** The object schema under optional/nullable/default/catch wrappers, if any. */
-const filterObjectSchema = (schema: z.ZodType): z.ZodObject | undefined => {
+export const filterObjectSchema = (
+  schema: z.ZodType,
+): z.ZodObject | undefined => {
   if (schema instanceof z.ZodObject) return schema;
   const inner: unknown =
     schema instanceof z.ZodOptional ||

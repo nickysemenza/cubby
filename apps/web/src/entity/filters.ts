@@ -10,7 +10,9 @@ import {
 } from "@cubby/schemas/filter-sentinel-fields";
 import {
   CURRENT_MEMBER_FILTER,
+  describeRangeBounds,
   humanize,
+  parseRangeBounds,
   UNRESOLVABLE_ENTITY_FILTER,
 } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
@@ -21,7 +23,8 @@ import { z } from "zod";
 /**
  * text: substring match. multiselect: any-of a set of enum values. presence:
  * "has" | "none". boolean: "true" | "false". idMulti: any-of a set of branded
- * entity ids. range: preset key expanding to a {from,to} pair.
+ * entity ids. range: preset key expanding to a {from,to} pair, or a date
+ * range's `from..to` bounds.
  */
 export type FilterKind = (typeof FILTER_KINDS)[number];
 
@@ -62,6 +65,12 @@ export interface FilterSpecCore {
   /** Declared target for the shortcode-native reference, when applicable. */
   referenceEntity?: ShortcodeEntity;
   expand?: (value: string) => FilterPatch;
+  /**
+   * A date range's bound keys. Beside its presets, the filter's value can be
+   * the bounds themselves, `from..to` (`parseRangeBounds`), each side a date
+   * or a relative date token the server resolves (`..@today-1d`).
+   */
+  range?: { from: string; to: string };
   /**
    * No table column renders this spec — it's URL state only: a deep link's
    * scope (expenses' `?productId=` and `?order=`), surfaced as a `ScopeChip`
@@ -264,16 +273,21 @@ export function buildFiltersFromManifest(
           patch[spec.subtree] = false;
         return Object.keys(patch).length ? patch : undefined;
       })
-      .with("range", () =>
-        // A range preset owns several server fields at once (dateFrom+dateTo),
-        // so its expander returns the whole patch rather than one value.
-        match(single(raw))
-          .when(
-            (value): value is string => value !== undefined,
-            (value) => spec.expand?.(value),
-          )
-          .otherwise(() => undefined),
-      )
+      .with("range", () => {
+        const value = single(raw);
+        if (value === undefined) return undefined;
+        // Explicit bounds set the range's own keys; a preset owns several
+        // server fields at once (dateFrom+dateTo), so its expander returns
+        // the whole patch rather than one value.
+        const bounds = spec.range && parseRangeBounds(value);
+        if (spec.range && bounds) {
+          const patch: FilterPatch = {};
+          if (bounds.from) patch[spec.range.from] = bounds.from;
+          if (bounds.to) patch[spec.range.to] = bounds.to;
+          return patch;
+        }
+        return spec.expand?.(value);
+      })
       .exhaustive();
 
     if (patch) Object.assign(filters, patch);
@@ -758,7 +772,13 @@ function describeFilter(
       // on its own — the roster label ("Last 30 days") is the whole point.
       // `humanize` is only the fallback for a spec whose options are supplied
       // at runtime.
-      .with("range", () => optionLabel(spec, first) ?? humanize(first))
+      .with(
+        "range",
+        () =>
+          optionLabel(spec, first) ??
+          describeRangeBounds(first) ??
+          humanize(first),
+      )
       .with("presence", () => describePresence(spec, first))
       .with("boolean", () => {
         const noun = humanize(spec.columnId);

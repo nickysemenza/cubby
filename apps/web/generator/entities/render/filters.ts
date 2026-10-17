@@ -1,9 +1,10 @@
 import { compactLiteral, generatedHeader } from "../../artifacts.ts";
-import type {
-  CompiledEntity,
-  EntityArtifacts,
-  FilterDescriptor,
-  SourceRef,
+import {
+  type CompiledEntity,
+  dateRangeBounds,
+  type EntityArtifacts,
+  type FilterDescriptor,
+  type SourceRef,
 } from "../declarations.ts";
 import { entityProjectionMaps } from "./index.ts";
 
@@ -111,6 +112,9 @@ export const renderFilterArtifacts = (
       ...(presetTable(descriptor) === null
         ? []
         : [`expand:presetExpand(${compactLiteral(presetTable(descriptor))})`]),
+      ...(dateRangeBounds(descriptor) === null
+        ? []
+        : [`range:${compactLiteral(dateRangeBounds(descriptor))}`]),
       ...(descriptor.urlOnly ? ["urlOnly:true"] : []),
       ...(descriptor.nullable === null
         ? []

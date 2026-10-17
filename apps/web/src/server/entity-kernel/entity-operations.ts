@@ -80,7 +80,7 @@ import {
   entityMutationReadResultSchema,
   entityQueryResultSchema,
 } from "./contracts";
-import { resolveCurrentMemberFilters } from "./current-member-filter";
+import { resolveFilterTokens } from "./filter-tokens";
 import {
   parseGroupBy,
   parseNesting,
@@ -368,7 +368,7 @@ const buildEntityOperations = <
           .passthrough()
           .parse(input.filters);
         for (const id of ids ?? []) binding.schemas.id.parse(id);
-        const filters = await resolveCurrentMemberFilters(
+        const filters = await resolveFilterTokens(
           context,
           binding.schemas.filters,
           parseSchema<S["filters"], unknown>(

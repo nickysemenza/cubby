@@ -9,7 +9,7 @@ import {
   startOperationDefinitionFor,
 } from "~/lib/start-operation-observability";
 import { type ReadPolicy, readPolicyFor } from "~/server/db/read-policy";
-import { resolveCurrentMemberFilters } from "~/server/entity-kernel/current-member-filter";
+import { resolveFilterTokens } from "~/server/entity-kernel/filter-tokens";
 import type { StartOperationHandler } from "~/server/generated/start-operation-handlers.gen";
 import type { StartOperationResult } from "~/server/operation-runtime/start-operation.contract";
 import {
@@ -161,8 +161,8 @@ function declaredOutputSchema(descriptor: OperationDomainDescriptor) {
 
 /**
  * A query's run with `@me` resolved in every Ledger Party filter its input
- * schema declares (ADR 0018), so no read handler forwards the token to a
- * repository unresolved.
+ * schema declares (ADR 0018), and relative date tokens in every date bound
+ * (#2415), so no read handler forwards a token to a repository unresolved.
  */
 function resolvingCurrentMember<Descriptor extends OperationDomainDescriptor>(
   kind: Descriptor["definition"]["kind"],
@@ -171,10 +171,7 @@ function resolvingCurrentMember<Descriptor extends OperationDomainDescriptor>(
 ): OperationRun<Descriptor> {
   if (kind !== "query") return run;
   return async (context, input) =>
-    run(
-      context,
-      await resolveCurrentMemberFilters(context, inputSchema, input),
-    );
+    run(context, await resolveFilterTokens(context, inputSchema, input));
 }
 
 function operationHandlerFor<Descriptor extends OperationDomainDescriptor>(

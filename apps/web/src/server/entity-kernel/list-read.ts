@@ -28,7 +28,7 @@ import type {
   EntityKernelCoreBinding,
   EntityKernelContext,
 } from "./adapter";
-import { resolveCurrentMemberFilters } from "./current-member-filter";
+import { resolveFilterTokens } from "./filter-tokens";
 import {
   parseGroupBy,
   parseNesting,
@@ -72,11 +72,7 @@ export function defineProgressiveListOperations<
     context: EntityKernelContext,
     input: z.output<typeof inputSchema>["filters"],
   ) =>
-    resolveCurrentMemberFilters(
-      context,
-      binding.schemas.filters,
-      parseFilters(input),
-    );
+    resolveFilterTokens(context, binding.schemas.filters, parseFilters(input));
   /**
    * The page's filters plus its nesting scope and `groupBy`, both carried
    * beside the filters; totals stay over the filters.
