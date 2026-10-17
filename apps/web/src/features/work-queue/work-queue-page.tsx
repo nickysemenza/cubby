@@ -127,7 +127,6 @@ type QueueTablePage = Omit<z.infer<typeof workQueueOutSchema>, "items"> & {
   items: QueueTableRow[];
 };
 const helper = createCubbyColumnHelper<QueueTableRow>();
-const INITIAL_PAGINATION = { pageIndex: 0, pageSize: 25 };
 const PREVIEW_OPTIONS = { responsiveInspector: true };
 const FILTER_SPECS: readonly FilterSpecCore[] = [
   { columnId: "name", urlKey: "query", kind: "text" },
@@ -585,7 +584,6 @@ function WorkQueueTable() {
   const tableState = useTableState({
     initialSort: "kind",
     initialSortDesc: false,
-    initialPagination: INITIAL_PAGINATION,
     filterSpecs: FILTER_SPECS,
     urlSync: true,
     syncPaginationToUrl: false,
