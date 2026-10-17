@@ -22,17 +22,20 @@ struct PhotoGroupDraftEditView: View {
     var body: some View {
         Form {
             Section("Product") {
-                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                    Text("Name").font(.caption).foregroundStyle(.secondary)
-                    TextField("Product name", text: $name)
+                LabeledContent("Name") {
+                    TextField("Name", text: $name, prompt: Text("None"))
+                        .multilineTextAlignment(.trailing)
+                        .labelsHidden()
                 }
-                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                    Text("Manufacturer").font(.caption).foregroundStyle(.secondary)
-                    TextField("Manufacturer", text: $manufacturer)
+                LabeledContent("Manufacturer") {
+                    TextField("Manufacturer", text: $manufacturer, prompt: Text("None"))
+                        .multilineTextAlignment(.trailing)
+                        .labelsHidden()
                 }
-                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                    Text("Model").font(.caption).foregroundStyle(.secondary)
-                    TextField("Model", text: $modelName)
+                LabeledContent("Model") {
+                    TextField("Model", text: $modelName, prompt: Text("None"))
+                        .multilineTextAlignment(.trailing)
+                        .labelsHidden()
                 }
                 Button {
                     choosingCategory = true
