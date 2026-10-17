@@ -80,10 +80,13 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { assertRunVendorAuthorization } from "~/server/domains/run/repo/execution-context";
 import { executeAtomicOperation } from "~/server/domains/run/repo/operation";
 import { readOperation } from "~/server/domains/run/repo/run-operation";
-import { resolveImportVendor } from "~/server/domains/vendor/repo/vendor";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { ensureMailVendorAccount } from "../repo/gmail/mail-account";
+import {
+  importVendorCandidates,
+  resolveImportVendor,
+} from "../repo/import-vendor";
 import {
   amazonAsin,
   importVendorOrder,
@@ -147,8 +150,9 @@ async function importRunScope(
 }
 
 /**
- * An order's Vendor: named by id, proven by its Email's sender or found by
- * exact name or alias (`resolveImportVendor`), else the import Run's own.
+ * An order's Vendor: named by id, matched or created from its named seller
+ * (`resolveImportVendor`), else the import Run's own. A named seller also
+ * returns the candidates it was matched against, read before any creation.
  */
 async function preparedOrderVendor(
   db: Database,
@@ -156,24 +160,29 @@ async function preparedOrderVendor(
   scope: ImportScope,
   mail: RetainedMailSource | null | undefined,
   actor: ActorContext,
-): Promise<VendorId> {
+) {
+  const seller = order.vendor
+    ? {
+        name: order.vendor.name,
+        sender: mail?.sender ?? null,
+        evidence: mail ? order.source.externalKey : null,
+        distinctFrom: order.vendor.distinctFrom,
+      }
+    : null;
+  const vendorCandidates = seller
+    ? (await importVendorCandidates(db, seller)).map(
+        ({ candidate }) => candidate,
+      )
+    : [];
   const vendorId = order.vendorId
     ? await resolveOrThrow(db, "vendor", order.vendorId)
-    : order.vendor
-      ? await resolveImportVendor(
-          db,
-          {
-            name: order.vendor.name,
-            sender: mail?.sender ?? null,
-            evidence: mail ? order.source.externalKey : null,
-          },
-          actor,
-        )
+    : seller
+      ? await resolveImportVendor(db, seller, actor)
       : scope.vendorId;
   if (!vendorId)
     throw new Error("Name each order's Vendor (vendorId or vendor.name).");
   await assertRunVendorAuthorization(db, scope.runId, vendorId);
-  return vendorId;
+  return { vendorId, vendorCandidates };
 }
 
 /**
@@ -587,7 +596,7 @@ export async function preparePurchaseImport(
         const outputOrders = [];
         const sourceOrders = new Set<string>();
         for (const order of input.orders) {
-          const vendorId = await preparedOrderVendor(
+          const { vendorId, vendorCandidates } = await preparedOrderVendor(
             transactionDb,
             order,
             scope,
@@ -761,6 +770,7 @@ export async function preparePurchaseImport(
             orderId: candidate.orderId,
             targetFingerprint,
             evidenceFingerprint,
+            vendorCandidates,
             lines: outputLines,
           });
         }

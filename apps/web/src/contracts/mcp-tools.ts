@@ -807,7 +807,7 @@ export const MCP_TOOLS = defineMcpTools({
       prepare: mcpAction({
         op: purchaseImportContract.ops.prepare,
         description:
-          "Persist an immutable proposed purchase import. Each order names its Vendor (`vendorId`, or `vendor.name` to reuse or create an exact-name Vendor) and its source: a retained Email (`mail_message`, key `gmail:<mailboxId>:<messageId>` and the checksum imports_read.mail returned), a receipt photo, or a vendor export. Without `_runExecution.run`, a member's preparation opens its own import Run and returns its RUN- code. Returns stable order and line ids plus existing Product candidates to reuse before creating one. Never writes Purchases, Expenses, or Products.",
+          "Persist an immutable proposed purchase import. Each order names its Vendor (`vendorId`, or `vendor.name` to reuse the Vendor its sender or website domain proves or an exact-name Vendor, else create one; similar candidates need `vendor.distinctFrom`) and its source: a retained Email (`mail_message`, key `gmail:<mailboxId>:<messageId>` and the checksum imports_read.mail returned), a receipt photo, or a vendor export. Without `_runExecution.run`, a member's preparation opens its own import Run and returns its RUN- code. Returns stable order and line ids plus existing Vendor candidates (`vendorCandidates`) and Product candidates to reuse before creating one. Never writes Purchases, Expenses, or Products.",
       }),
       commit: mcpAction({
         op: purchaseImportContract.ops.commit,
