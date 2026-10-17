@@ -143,7 +143,7 @@ export function nextPickedValues(
 }
 
 /** The values a picker shows: every value except the editor's mode tokens. */
-export const pickerValues = (values: readonly string[]): string[] =>
+const pickerValues = (values: readonly string[]): string[] =>
   values.filter((value) => !MODE_TOKENS.has(value));
 
 /** Sets or clears one mode token in a value list. */

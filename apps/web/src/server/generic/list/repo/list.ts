@@ -344,7 +344,7 @@ const descriptorValueKeys = (descriptor: StoredDescriptorView): string[] => [
  * whose declaration cannot exclude fails with the reason it derives, the
  * same text every client shows on its disabled "is not".
  */
-export const excludedFilterRequests = (
+const excludedFilterRequests = (
   entity: Entity,
   values: ListFilterValues,
 ): ListFilterValues[] =>
@@ -379,7 +379,7 @@ export const excludedFilterRequests = (
  * not matching, so a row with no value stays (`IS NULL OR NOT IN`); pair it
  * with the presence filter to drop empty rows.
  */
-export const excludedPredicate = (
+const excludedPredicate = (
   include: ReadonlyArray<SQL | undefined>,
 ): SQL | undefined => flagCondition(false, () => and(...include));
 

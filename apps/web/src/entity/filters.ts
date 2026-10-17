@@ -119,10 +119,10 @@ export interface FilterSpecCore {
 // `FILTER_EXACT` (an "Include sub-…" toggle switched off) is the one token
 // the URL codec writes under another key: the toggle's own
 // (`includeSubLocations=false`).
-export { FILTER_ALL, FILTER_ANY, FILTER_EXACT, FILTER_NONE, FILTER_NOT_PREFIX };
+export { FILTER_ALL, FILTER_ANY, FILTER_EXACT, FILTER_NONE };
 
 /** The Exclude key a spec can write, or undefined when it cannot exclude. */
-export const excludeKey = (spec: FilterSpecCore): string | undefined =>
+const excludeKey = (spec: FilterSpecCore): string | undefined =>
   spec.exclude && spec.exclude.reason === null ? spec.exclude.field : undefined;
 
 const isSentinel = (value: string): boolean =>
