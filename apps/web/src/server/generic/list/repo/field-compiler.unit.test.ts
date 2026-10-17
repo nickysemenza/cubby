@@ -33,7 +33,7 @@ describe("list field compiler", () => {
         valuation: valuations.value(() => sql`0`),
         amount: [sql`unit`, sql`size`],
         ...filterOnly,
-        valuationStatus: valuations.predicate(() => sql`true`),
+        valuationStatus: valuations.value(() => sql`0`),
       },
     });
     const included = whereSql(
@@ -63,7 +63,7 @@ describe("list field compiler", () => {
         valuation: valuations.value(() => sql`0`),
         amount: [sql`unit`, sql`size`],
         ...filterOnly,
-        valuationStatus: valuations.predicate(() => sql`true`),
+        valuationStatus: valuations.value(() => sql`0`),
       },
     });
     const [clause] =
@@ -82,7 +82,7 @@ describe("list field compiler", () => {
     expenseStatus: sql`0`,
     hasDocuments: sql`false`,
     financialReconciliation: sql`0`,
-    reconciliation: () => undefined,
+    reconciliation: sql`0`,
   };
 
   it("keeps a part's declared NULL placement and fixed direction", () => {
@@ -120,7 +120,7 @@ describe("list field compiler", () => {
         valuation: valuations.value(() => sql`0`),
         amount: [sql`unit`, sql`size`],
         ...filterOnly,
-        valuationStatus: valuations.predicate(() => sql`true`),
+        valuationStatus: valuations.value(() => sql`0`),
       },
     });
     expect(
@@ -186,9 +186,7 @@ describe("list field compiler", () => {
         valuation: valuations.value(() => sql`prepared_valuation`),
         amount: [sql`unit`, sql`size`],
         ...filterOnly,
-        valuationStatus: valuations.predicate(
-          (_prepared, { values }) => sql`prepared_status = ${values[0]}`,
-        ),
+        valuationStatus: valuations.value(() => sql`prepared_status`),
       },
     });
 
@@ -217,7 +215,7 @@ describe("list field compiler", () => {
     expect(loads).toBe(1);
     expect(
       whereSql(and(...scaffold.filterPredicates(filters, context))),
-    ).toContain("prepared_status = $");
+    ).toContain("prepared_status IN ($");
     expect(
       renderWhereSql(
         scaffold.derivedSort(

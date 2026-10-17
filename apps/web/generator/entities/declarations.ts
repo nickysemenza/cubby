@@ -17,6 +17,7 @@ import {
   deriveInverseRelations,
   deriveRelationSections,
 } from "./derive.ts";
+import { validatePredicateBaseline } from "./predicate-baseline.ts";
 import { validateRelationSections } from "./presentation.ts";
 import { browserRoutes } from "./render/routes.ts";
 import type {
@@ -572,10 +573,9 @@ export const loadEntityDeclarationBundle = async (): Promise<{
       return raw;
     }),
   );
-  return {
-    entities: compileLoadedEntityDeclarations(loaded),
-    declarations: loaded,
-  };
+  const entities = compileLoadedEntityDeclarations(loaded);
+  validatePredicateBaseline(entities);
+  return { entities, declarations: loaded };
 };
 
 export const loadEntityDeclarations = async (): Promise<CompiledEntity[]> =>

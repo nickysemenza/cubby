@@ -1542,11 +1542,23 @@ one shape:
   `listScaffold(entity, table, { derived })`, whose argument type is
   generated, so a declared key without SQL fails typecheck. A compound value
   (an array of SQL, inventory `amount` as unit then size) orders part by part
-  and cannot filter.
+  and cannot filter. A state that is one row value is an `enum` value whose
+  `options` are disjoint and whose CASE yields no value outside them
+  (inventory `valuationStatus`, purchase `reconciliation`, product
+  `quantityVarianceState`); a filter that means several states picks them
+  together, as Missing valuation is `priceable` with `unpriceable`. A value
+  may be `{ value, set }`: `set` selects `("id", "value")` for the whole list
+  and its filters match `id IN (SELECT "id" FROM set WHERE …)`, so one
+  set-based walk serves the filter while sort, group, and projection read the
+  per-row `value`, which must agree with it row for row (product
+  `ledgerExpectedQuantity` shares one kit walk).
 - `{ predicate, reason }` is filter-only SQL the repository passes the same
-  way; `reason` says why it is not one row value (inventory's
-  `valuationStatus` statuses overlap). Predicates are the countable declared
-  exception and should shrink; `negatable: true` offers Exclude (above). `predicate` names the descriptor kind
+  way; `reason` says why it is not one row value (an effective owner is
+  resolved outside SQL). Predicates are the countable declared exception and
+  only shrink: each is listed in
+  `apps/web/generator/entities/predicate-baseline.json`, and the generator
+  rejects an unlisted predicate and an entry whose predicate is gone.
+  `negatable: true` offers Exclude (above). `predicate` names the descriptor kind
   it serves, and the SQL receives that kind's parsed value: a trimmed string
   (`text`), `{ values, presence }` (`multiselect`/`idMulti`, with the
   descriptor's declared `nullable`; `idMulti` adds `includeDescendants`), a

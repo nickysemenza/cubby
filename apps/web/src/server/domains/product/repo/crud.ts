@@ -46,6 +46,7 @@ import {
   productCategoryFeature,
   type ProductCategorySummary,
 } from "@cubby/schemas/product-category-fields";
+import { productQuantityVarianceState } from "@cubby/schemas/product-fields";
 import { taskStatusSchema } from "@cubby/schemas/project";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import {
@@ -415,8 +416,29 @@ const productScaffold = listScaffold("product", product, {
     // note on the column in app/products/productlist.tsx for why the id is
     // the half that cannot move.
     expenseCount: productExpenseCountFilterSql(product.id),
-    ledgerExpectedQuantity: sql.raw(expectedQuantitySql('"Product"')),
+    // The range filter reads the catalog's one shared kit walk; the row value
+    // walks each product's kits.
+    ledgerExpectedQuantity: {
+      value: sql.raw(expectedQuantitySql('"Product"')),
+      set: expectedQuantityReadSql(),
+    },
     quantityVariance: sql.raw(quantityVarianceSql('"Product"')),
+    // Variance only means reconciliation when both physical stock and ledger
+    // evidence exist. Locations count as on-hand here because the compared SQL
+    // projection counts them too.
+    quantityVarianceState: listReadValue((read) => {
+      const onHand = onHandUnitsFilterSql(product.id, read);
+      const expected = expectedQuantityFilterSql(product.id);
+      return sql`CASE WHEN ${and(
+        or(
+          inArray(product.id, productIdsWithLiveInventory),
+          inArray(product.id, productIdsServingAsLocations),
+        ),
+        inArray(product.id, productIdsWithExpenses),
+        comparableQuantityHistoryFilterSql(product.id),
+      )} THEN CASE WHEN ${onHand} = ${expected} THEN ${productQuantityVarianceState.enum.matched}::text
+        WHEN ${onHand} <> ${expected} THEN ${productQuantityVarianceState.enum.mismatched}::text END END`;
+    }),
     // Same fragment the cell renders (relations.ts) and both filters use.
     purchaseDate: productAcquisitionDateFilterSql(product.id),
     upcPresence: inArray(
@@ -526,40 +548,6 @@ const productScaffold = listScaffold("product", product, {
             .where(notDeleted(entityExternalId)),
         ),
       ),
-    expectedQuantityRange: ({ from, to }) =>
-      from === undefined && to === undefined
-        ? undefined
-        : inArray(
-            product.id,
-            sql`(SELECT quantity_range."productId" FROM (${expectedQuantityReadSql()}) quantity_range
-          WHERE ${and(
-            from === undefined
-              ? undefined
-              : sql`quantity_range."expectedQuantity" >= ${from}`,
-            to === undefined
-              ? undefined
-              : sql`quantity_range."expectedQuantity" <= ${to}`,
-          )})`,
-          ),
-    // Variance only means reconciliation when both physical stock and ledger
-    // evidence exist. Locations count as on-hand here because the compared SQL
-    // projection counts them too.
-    quantityVarianceState: ({ param }, read) => {
-      if (param !== "mismatched" && param !== "matched") return undefined;
-      const onHand = onHandUnitsFilterSql(product.id, read);
-      const expected = expectedQuantityFilterSql(product.id);
-      return and(
-        or(
-          inArray(product.id, productIdsWithLiveInventory),
-          inArray(product.id, productIdsServingAsLocations),
-        ),
-        inArray(product.id, productIdsWithExpenses),
-        comparableQuantityHistoryFilterSql(product.id),
-        param === "mismatched"
-          ? sql`${onHand} <> ${expected}`
-          : sql`${onHand} = ${expected}`,
-      );
-    },
     taskStatus: productTasks.predicate((keys) => productHasTask(keys)),
     taskOpen: productTasks.predicate((keys) =>
       keys.taskStatusFilter.length === 0 ? productHasTask(keys) : undefined,

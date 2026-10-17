@@ -108,7 +108,7 @@ describe("inventory valuation — computed on read", () => {
     );
     const missing = await inventoryentryList(
       ctx.db,
-      { valuationStatus: "missing" },
+      { valuationStatus: ["priceable", "unpriceable"] },
       [],
       page,
     );

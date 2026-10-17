@@ -33,6 +33,7 @@ import {
   purchaseFinancialReconciliation,
   purchaseListItemOut,
   purchaseOut,
+  purchaseReconciliation,
   RECONCILIATION_TOLERANCE,
   reconcilePurchase,
   splitExpenseDelta,
@@ -40,17 +41,7 @@ import {
 import type { SpendingCategorySummary } from "@cubby/schemas/spending-classification";
 import { purchaseOrderUrl } from "@cubby/schemas/vendor";
 import { parseShortcode, cents } from "@cubby/shared";
-import {
-  and,
-  asc,
-  eq,
-  inArray,
-  isNull,
-  ne,
-  or,
-  type SQL,
-  sql,
-} from "drizzle-orm";
+import { and, asc, eq, inArray, ne, type SQL, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import { purchaseLabel } from "~/lib/purchase-label";
@@ -570,9 +561,15 @@ const syncPurchaseImages = async (
   return detachedImageKeys;
 };
 
-const reconciliationCondition = (
-  selected: readonly string[],
-): SQL | undefined => {
+/**
+ * The verdict `reconcilePurchase` gives, in its order. The verdicts are
+ * disjoint, so the CASE matches what each verdict's own condition would.
+ * Mismatch is the `paperwork_mismatch` gap, not a restated predicate: the
+ * `purchasesNotReconciling` Problem must honour a recorded
+ * `expected_mismatch` exception, which only the gap condition applies, so an
+ * excepted mismatch has no verdict.
+ */
+const reconciliationSql = (): SQL => {
   const toleranceInCents = cents(RECONCILIATION_TOLERANCE);
   const gapInCents = sql`abs(
     floor((${purchase.statedTotal} * 100)::numeric + 0.5) -
@@ -583,31 +580,19 @@ const reconciliationCondition = (
     floor((${purchase.statedTotal} * 100)::numeric + 0.5)
   )`;
   const refundInCents = sql`floor((${purchasePostedRefundTotal} * 100)::numeric + 0.5)`;
-  const refundAdjusted = sql`${purchaseVendorUnpricedExpenseCount} = 0
-    AND ${deltaInCents} < ${-toleranceInCents}
-    AND ${refundInCents} = ${deltaInCents}`;
   // Mirrors the zero-expense guard in `reconcilePurchase`: once the totals fail
   // to match, a purchase with no lines is `unknown` rather than a mismatch, so
   // the filter agrees with the verdict the hydrated purchase carries.
   const comparable = sql`${purchase.statedTotal} IS NOT NULL
     AND (${gapInCents} <= ${toleranceInCents} OR ${purchaseVendorExpenseCount} > 0)`;
-  return or(
-    selected.includes("unknown")
-      ? or(isNull(purchase.statedTotal), sql`NOT (${comparable})`)
-      : undefined,
-    selected.includes("match")
-      ? sql`${purchase.statedTotal} IS NOT NULL AND ${gapInCents} <= ${toleranceInCents}`
-      : undefined,
-    selected.includes("refund_adjusted")
-      ? sql`${comparable} AND ${gapInCents} > ${toleranceInCents} AND ${refundAdjusted}`
-      : undefined,
-    selected.includes("mismatch")
-      ? // The `paperwork_mismatch` gap, not a restated predicate: the
-        // `purchasesNotReconciling` Problem must honour a recorded
-        // `expected_mismatch` exception, which only the gap condition applies.
-        gapCondition("purchase", "paperwork_mismatch", purchase)
-      : undefined,
-  );
+  return sql`CASE
+    WHEN ${purchase.statedTotal} IS NULL OR NOT (${comparable}) THEN ${purchaseReconciliation.enum.unknown}::text
+    WHEN ${gapInCents} <= ${toleranceInCents} THEN ${purchaseReconciliation.enum.match}::text
+    WHEN ${purchaseVendorUnpricedExpenseCount} = 0
+      AND ${deltaInCents} < ${-toleranceInCents}
+      AND ${refundInCents} = ${deltaInCents} THEN ${purchaseReconciliation.enum.refund_adjusted}::text
+    WHEN ${gapCondition("purchase", "paperwork_mismatch", purchase)} THEN ${purchaseReconciliation.enum.mismatch}::text
+  END`;
 };
 
 const purchaseScaffold = listScaffold("purchase", purchase, {
@@ -625,7 +610,7 @@ const purchaseScaffold = listScaffold("purchase", purchase, {
       ELSE ${purchaseExpenseStatus.enum.priced}::text END`,
     hasDocuments: sql`${purchaseDocumentCount} > 0`,
     financialReconciliation: sql`CASE WHEN ${gapCondition("purchase", "settlement_mismatch")} THEN ${purchaseFinancialReconciliation.enum.mismatch}::text END`,
-    reconciliation: ({ values }) => reconciliationCondition(values),
+    reconciliation: reconciliationSql(),
   },
 });
 

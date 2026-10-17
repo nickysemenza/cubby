@@ -6,3 +6,12 @@ import { moneyNullable } from "./money";
 export const inventoryPlacement = z.enum(inventoryPlacementValues);
 
 export const inventoryValuation = moneyNullable;
+/**
+ * A row's valuation state: valued, else whether its product has an effective
+ * price the stored unit cannot reach (priceable) or none (unpriceable).
+ */
+export const inventoryValuationStatus = z.enum([
+  "valued",
+  "priceable",
+  "unpriceable",
+]);
