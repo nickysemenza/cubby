@@ -42,6 +42,9 @@ const DOMAIN_GROUP_CHOICE: GroupConfig["choice"] = {
   reason: null,
   value: { kind: "derived", options: null },
   filter: null,
+  levels: 0,
+  levelReason:
+    "Domain is a value, not a record with parents, so it has no levels.",
 };
 
 /** The server's contract, played locally: contiguous sections with counts. */

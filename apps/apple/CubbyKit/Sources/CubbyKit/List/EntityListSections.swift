@@ -11,27 +11,34 @@ public struct EntityListSection: Identifiable, Sendable, Hashable {
     public let label: String
     /// The section's rows in the whole filtered set, loaded or not.
     public let count: Int
+    /// The section holds rows under its key's descendants (a list grouped at a hierarchy level),
+    /// so its filter keeps "Include sub-…" on.
+    public let subtree: Bool
     public let rows: [EntityRow]
 
-    public init(id: String, label: String, count: Int, rows: [EntityRow]) {
+    public init(id: String, label: String, count: Int, subtree: Bool = false, rows: [EntityRow]) {
         self.id = id
         self.label = label
         self.count = count
+        self.subtree = subtree
         self.rows = rows
     }
 
     /// The loaded rows split into the server's sections. The page and summary queries share one
     /// total order, so loaded rows are a prefix of the sections: each section takes its next
     /// `count` rows. A section with no loaded row yet is omitted.
-    public static func sections(rows: [EntityRow], groups: [(key: String, label: String, count: Int)])
-        -> [EntityListSection]
-    {
+    public static func sections(
+        rows: [EntityRow], groups: [(key: String, label: String, count: Int, subtree: Bool)]
+    ) -> [EntityListSection] {
         var sections: [EntityListSection] = []
         var remaining = rows[...]
         for group in groups where !remaining.isEmpty {
             let taken = remaining.prefix(group.count)
             remaining = remaining.dropFirst(taken.count)
-            sections.append(.init(id: group.key, label: group.label, count: group.count, rows: Array(taken)))
+            sections.append(
+                .init(
+                    id: group.key, label: group.label, count: group.count, subtree: group.subtree,
+                    rows: Array(taken)))
         }
         return sections
     }
@@ -44,9 +51,10 @@ extension EntityDescriptor {
         return grouping.first { $0.id == key && $0.reason == nil }
     }
 
-    /// "Filter to this" on `section`: the section's value as the choice's include filter, with
-    /// an "Include sub-…" toggle off so the filtered list keeps one section. Nil when the choice
-    /// declares no filter, or for the no-value section of a filter without No value.
+    /// "Filter to this" on `section`: the section's value as the choice's include filter, so the
+    /// filtered list keeps one section: an "Include sub-…" toggle stays on only for a level
+    /// section that holds its key's descendants. Nil when the choice declares no filter, or for
+    /// the no-value section of a filter without No value.
     public func filtering(
         _ state: EntityFilterState, to section: EntityListSection, of choice: GroupChoice
     ) -> EntityFilterState? {
@@ -63,7 +71,9 @@ extension EntityDescriptor {
         } else {
             next.set([section.id], for: name)
             if let presence = filter.presenceParam { next.remove(presence) }
-            if let subtree = filter.subtreeParam { next.set(["false"], for: subtree) }
+            if let subtree = filter.subtreeParam {
+                next.set([section.subtree ? "true" : "false"], for: subtree)
+            }
         }
         return next
     }

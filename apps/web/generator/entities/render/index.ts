@@ -529,7 +529,7 @@ export const renderEntityArtifacts = (
   const listInputVariants = listEntitySpecs
     .map(
       ({ key, filterSchema, inspector }) =>
-        `z.object({entity:z.literal(${JSON.stringify(key)}),filters:${filterSchema === null ? "z.record(z.string(),z.unknown())" : `${key}ListFiltersSchema`},sort:entityListSortsSchema.optional(),pagination:entityListPaginationSchema.optional(),groupBy:z.string().min(1).optional()${inspector.list.tree === null ? "" : ",nesting:listNestingSchema.optional()"}})`,
+        `z.object({entity:z.literal(${JSON.stringify(key)}),filters:${filterSchema === null ? "z.record(z.string(),z.unknown())" : `${key}ListFiltersSchema`},sort:entityListSortsSchema.optional(),pagination:entityListPaginationSchema.optional(),groupBy:z.string().min(1).optional(),groupLevel:z.number().int().positive().optional()${inspector.list.tree === null ? "" : ",nesting:listNestingSchema.optional()"}})`,
     )
     .join(",\n  ");
   // Strict: an unknown filter name is a 400, not a silently wider list.
@@ -1347,13 +1347,14 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         " * column and depth cap; `subtree` maps a filter key to its generated\n" +
         ' * "Include sub-…" toggle; `grouping` is `model.grouping` in menu order,\n' +
         " * each choice with what its section key reads, its no-value label, the\n" +
-        " * filter its section header applies, and the reason it cannot group\n" +
-        " * (null when it can).\n" +
+        " * filter its section header applies, the reason it cannot group\n" +
+        " * (null when it can), and the hierarchy levels it can group at\n" +
+        " * (0 exactly when `levelReason` says why).\n" +
         " */\n" +
         'export type GeneratedListField = { readonly shape: "via"; readonly path: string; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity; readonly terminal: { readonly kind: "record"; readonly titleColumn: string | null } | { readonly kind: "field"; readonly column: string; readonly fieldKind: string }; readonly many: boolean; readonly sort: string | null; readonly group: string | null } | { readonly shape: "value"; readonly type: "text" | "number" | "date" | "boolean" | "enum"; readonly options: readonly string[] | null; readonly sort: null; readonly group: null } | { readonly shape: "predicate"; readonly predicate: "text" | "multiselect" | "idMulti" | "boolean" | "presence" | "range"; readonly options: readonly string[] | null; readonly reason: string; readonly sort: string; readonly group: string };\n\n' +
         "type GroupOptions = readonly { readonly value: string; readonly label: string }[] | null;\n" +
         "/** One Group by choice: `value` is null exactly when `reason` is set. */\n" +
-        'export type GeneratedGroupChoice = { readonly key: string; readonly label: string; readonly noValueLabel: string; readonly reason: string | null; readonly value: { readonly kind: "column"; readonly column: string; readonly options: GroupOptions } | { readonly kind: "record"; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity; readonly titleColumn: string } | { readonly kind: "field"; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity; readonly column: string; readonly options: GroupOptions } | { readonly kind: "derived"; readonly options: GroupOptions } | null; readonly filter: { readonly columnId: string; readonly noValue: boolean } | null };\n\n' +
+        'export type GeneratedGroupChoice = { readonly key: string; readonly label: string; readonly noValueLabel: string; readonly reason: string | null; readonly value: { readonly kind: "column"; readonly column: string; readonly options: GroupOptions } | { readonly kind: "record"; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity; readonly titleColumn: string } | { readonly kind: "field"; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity; readonly column: string; readonly options: GroupOptions } | { readonly kind: "derived"; readonly options: GroupOptions } | null; readonly filter: { readonly columnId: string; readonly noValue: boolean; readonly subtree: string | null } | null; readonly levels: number; readonly levelReason: string | null };\n\n' +
         renderRecord({
           name: "generatedEntityListFields",
           entries: Object.fromEntries(
@@ -1529,7 +1530,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         "type EntityListParsedFiltersByEntity = { [E in ListEntity]: z.output<(typeof ENTITY_LIST_FILTER_SCHEMAS)[E]> };\n" +
         "type EntityListSort = z.input<typeof entityListSortSchema>;\n" +
         "export type EntityListInputByEntity = {\n" +
-        "  [E in ListEntity]: { entity: E; filters: EntityListInputFiltersByEntity[E]; sort?: EntityListSort[]; pagination?: { pageIndex: number; pageSize: number }; groupBy?: string; nesting?: z.input<typeof listNestingSchema> };\n" +
+        "  [E in ListEntity]: { entity: E; filters: EntityListInputFiltersByEntity[E]; sort?: EntityListSort[]; pagination?: { pageIndex: number; pageSize: number }; groupBy?: string; groupLevel?: number; nesting?: z.input<typeof listNestingSchema> };\n" +
         "};\n" +
         "export type ParsedEntityListInputByEntity = {\n" +
         '  [E in ListEntity]: Omit<EntityListInputByEntity[E], "filters"> & { filters: EntityListParsedFiltersByEntity[E] };\n' +
@@ -1545,7 +1546,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         "  const { entity: _entity, ...params } = input;\n" +
         "  return params;\n" +
         "}\n\n" +
-        "export type EntityListParseInput = EntityListInputByEntity[ListEntity] | { entity: ListEntity; filters: FilterPatch; sort?: EntityListSort[]; pagination?: { pageIndex: number; pageSize: number }; groupBy?: string; nesting?: z.input<typeof listNestingSchema> };\n\n" +
+        "export type EntityListParseInput = EntityListInputByEntity[ListEntity] | { entity: ListEntity; filters: FilterPatch; sort?: EntityListSort[]; pagination?: { pageIndex: number; pageSize: number }; groupBy?: string; groupLevel?: number; nesting?: z.input<typeof listNestingSchema> };\n\n" +
         "export type EntityListResultByEntity = {\n" +
         "  [E in ListEntity]: z.output<(typeof ENTITY_LIST_OUTPUT_SCHEMAS)[E]>;\n" +
         "};\n\n" +

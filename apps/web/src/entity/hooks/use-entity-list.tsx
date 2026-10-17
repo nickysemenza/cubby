@@ -208,6 +208,11 @@ export interface UseEntityListOptions<
    * entity declares, leaves the list flat.
    */
   groupBy?: string;
+  /**
+   * The hierarchy level (1 = top) `groupBy` groups at; a level the choice
+   * does not offer groups by the exact value.
+   */
+  groupLevel?: number;
   tree?: EntityListTreeConfig<TData, TRow>;
   /**
    * Nest under the entity's declared `list.tree` on the server: page the
@@ -379,6 +384,7 @@ export function useEntityList<
   namePrefix,
   hiddenFilterColumns,
   groupBy,
+  groupLevel,
   tree,
   serverTree = false,
   nestToggle,
@@ -394,6 +400,10 @@ export function useEntityList<
         (choice) => choice.key === groupBy && choice.reason === null,
       )
     : undefined;
+  const level =
+    groupChoice && groupLevel && groupLevel <= groupChoice.levels
+      ? groupLevel
+      : undefined;
   const inspection = useEntityPreview(
     fixedPreviewEntity(entity, previewOptions),
     previewOptions,
@@ -505,6 +515,7 @@ export function useEntityList<
     buildFilters: effectiveBuildFilters,
     tableState,
     groupBy: groupChoice?.key,
+    groupLevel: level,
     nesting: serverTree ? ROOTS_SCOPE : undefined,
     visibleFields: requestedReadFields,
   });
@@ -531,15 +542,15 @@ export function useEntityList<
     return {
       choice: groupChoice,
       groups,
-      // "Filter to this" includes the section's own value only: an "Include
-      // sub-…" toggle goes off so the filtered list keeps one section.
+      // "Filter to this" keeps one section: "Include sub-…" stays on only for
+      // a level section that holds its key's descendants.
       onFilter: filter
-        ? (key) =>
+        ? ({ key, subtree }) =>
             setColumnFilters((previous) => [
               ...previous.filter(({ id }) => id !== filter.columnId),
               {
                 id: filter.columnId,
-                value: spec?.subtree ? [key, FILTER_EXACT] : [key],
+                value: spec?.subtree && !subtree ? [key, FILTER_EXACT] : [key],
               },
             ])
         : undefined,

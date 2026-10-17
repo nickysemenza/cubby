@@ -36,6 +36,8 @@ interface UseInfiniteTableListOptions<
   tableState: TableStateReturn;
   /** DB column name to group by (prepends primary ORDER BY on server) */
   groupBy?: string;
+  /** The hierarchy level (1 = top) `groupBy` groups at. */
+  groupLevel?: number;
   /** A declared tree's scope for the paged rows (`roots` when nested). */
   nesting?: ListNesting;
   visibleFields?: readonly string[];
@@ -114,6 +116,7 @@ export function useInfiniteTableList<
   buildFilters,
   tableState,
   groupBy,
+  groupLevel,
   nesting,
   visibleFields,
 }: UseInfiniteTableListOptions<
@@ -127,6 +130,7 @@ export function useInfiniteTableList<
       buildFilters,
       tableState,
       groupBy,
+      groupLevel,
     });
 
   const pageInputFor = useCallback(
@@ -140,12 +144,14 @@ export function useInfiniteTableList<
         };
       if (queryParams.sort !== undefined) params.sort = sortParams;
       if (groupBy) params.groupBy = groupBy;
+      if (groupBy && groupLevel) params.groupLevel = groupLevel;
       if (nesting) params.nesting = nesting;
       return params;
     },
     [
       filters,
       groupBy,
+      groupLevel,
       nesting,
       pagination.pageSize,
       queryParams.sort,

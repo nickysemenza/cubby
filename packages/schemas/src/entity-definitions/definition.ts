@@ -1359,6 +1359,17 @@ const buildMetadataSchemas = () => {
                   /** The `model.grouping` field the view opens grouped by. */
                   groupBy: nonEmptyString().nullable().optional().default(null),
                   /**
+                   * The hierarchy level (1 = top) `groupBy` groups at, for a
+                   * field whose target declares `model.hierarchy`.
+                   */
+                  groupLevel: z
+                    .number()
+                    .int()
+                    .positive()
+                    .nullable()
+                    .optional()
+                    .default(null),
+                  /**
                    * A shortcut on another surface. `home` lists the view in
                    * the home "Your views" row on web and Apple, by `order`.
                    */

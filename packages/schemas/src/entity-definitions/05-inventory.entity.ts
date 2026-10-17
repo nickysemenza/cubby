@@ -73,7 +73,10 @@ export default defineEntity({
             { id: "product", desc: false },
           ],
           view: "shelf",
+          // Apparel is a taxonomy root, so its clothing types (Tops,
+          // Outerwear) are the second level.
           groupBy: "category",
+          groupLevel: 2,
           pin: { surface: "home", order: 0 },
         },
         {
@@ -660,9 +663,9 @@ export default defineEntity({
         columnId: "locationId",
         field: "locationIdFilter",
         kind: "idMulti",
-        placeholder: "Filter by location id...",
+        placeholder: "Filter by location...",
         brandRef: { entity: "location" },
-        urlOnly: true,
+        label: "Location",
         deriveSchema: true,
         stored: true,
         schemaDescription:

@@ -93,6 +93,7 @@ type EntityListInput<TFilters = unknown> = {
   sort?: { orderBy: string; direction: "asc" | "desc" }[];
   pagination?: PaginationParams;
   groupBy?: string;
+  groupLevel?: number;
   nesting?: unknown;
 };
 
@@ -381,7 +382,7 @@ const buildEntityOperations = <
           ids,
           pagination: input.pagination ?? DEFAULT_PAGINATION,
           sorts: parseSorts(binding, input.sort, Boolean(searchQuery)),
-          groupBy: parseGroupBy(binding, input.groupBy),
+          groupBy: parseGroupBy(binding, input.groupBy, input.groupLevel),
           nesting: parseNesting(binding, input.nesting),
         };
       })

@@ -41,7 +41,7 @@ const groupedProducts = (
   pageIndex: number,
   pageSize: number,
 ) =>
-  productList(ctx.db, withListGroupBy({}, "categoryId"), sort, {
+  productList(ctx.db, withListGroupBy({}, { key: "categoryId" }), sort, {
     pageIndex,
     pageSize,
   });
@@ -51,7 +51,11 @@ const kernel = () =>
       auth: { userId: testUserId("test-user-id") },
     }),
   );
-async function category(name: string, sortOrder: number) {
+async function category(
+  name: string,
+  sortOrder: number,
+  parentId: ProductCategoryShortcode = taxonomyShortcode("tools"),
+) {
   return createProductCategory(
     ctx.db,
     {
@@ -60,7 +64,7 @@ async function category(name: string, sortOrder: number) {
       name,
       aliases: [],
       description: null,
-      parentId: taxonomyShortcode("tools"),
+      parentId,
       sortOrder,
       feature: null,
     },
@@ -152,6 +156,129 @@ describe("server list grouping", () => {
         pages[0]!.meta.totalCount,
       );
     }
+  });
+
+  it("groups at a hierarchy level: ancestor sections count descendants, a shallower value groups under itself, no value last, contiguous across pages", async () => {
+    // Tools (level 1) > Alpha (2) > Alpha leaf (3); Tools > Beta (2).
+    const alpha = await category("Alpha level group", 0);
+    const alphaLeaf = await category("Alpha leaf group", 0, alpha.output.id);
+    const beta = await category("Beta level group", 1);
+    const shelf = await location("Level shelf", "box");
+    const ids: Awaited<ReturnType<typeof createInventoryFixture>>["id"][] = [];
+    // Created out of section order, so only the group-first ORDER BY puts
+    // the rows together.
+    for (const [name, categoryId] of [
+      ["Root one", taxonomyShortcode("tools")],
+      ["No category one", null],
+      ["Alpha leaf one", alphaLeaf.output.id],
+      ["Beta one", beta.output.id],
+      ["Alpha direct", alpha.output.id],
+    ] as const) {
+      const item = await product(name, categoryId);
+      const entry = await createInventoryFixture(
+        ctx.db,
+        {
+          productId: item.id,
+          locationId: shelf.id,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+      ids.push(entry.id);
+    }
+    const read = (
+      pageIndex: number,
+      pageSize: number,
+      filters: {
+        categoryFilter?: string[];
+        includeSubProductCategories?: boolean;
+      } = {},
+    ) =>
+      executeEntity(kernel(), {
+        action: "list",
+        entity: "inventory",
+        filters: { ids, ...filters },
+        sort: [{ orderBy: "product", direction: "asc" }],
+        groupBy: "category",
+        groupLevel: 2,
+        pagination: { pageIndex, pageSize },
+      });
+    const sections = [
+      {
+        key: alpha.output.id,
+        label: "Alpha level group",
+        count: 2,
+        subtree: true,
+      },
+      {
+        key: beta.output.id,
+        label: "Beta level group",
+        count: 1,
+        subtree: false,
+      },
+      {
+        key: taxonomyShortcode("tools"),
+        label: "Tools",
+        count: 1,
+        subtree: false,
+      },
+      { key: FILTER_NONE, label: "No category", count: 1, subtree: false },
+    ];
+    const displayNames = (items: readonly unknown[]) =>
+      items.map(
+        (item) =>
+          z
+            .object({ displayName: z.string() })
+            .parse(item)
+            .displayName.split(" · ")[0],
+      );
+    // Page boundaries inside the Alpha section and before No category.
+    for (const pageSize of [1, 2, 4]) {
+      const pages = await Promise.all(
+        Array.from({ length: Math.ceil(5 / pageSize) }, (_, index) =>
+          read(index, pageSize),
+        ),
+      );
+      for (const page of pages) expect(page.meta.groups).toEqual(sections);
+      expect(pages.flatMap((page) => displayNames(page.items))).toEqual([
+        "Alpha direct",
+        "Alpha leaf one",
+        "Beta one",
+        "Root one",
+        "No category one",
+      ]);
+    }
+    // A header filters to its key, with descendants exactly when its section
+    // holds them, so the filtered list is that one section.
+    for (const section of sections.slice(0, 3)) {
+      const filtered = await read(0, 10, {
+        categoryFilter: [section.key],
+        includeSubProductCategories: section.subtree,
+      });
+      expect(filtered.meta.groups).toEqual([section]);
+      expect(filtered.meta.totalCount).toBe(section.count);
+    }
+  });
+
+  it("rejects a level on a field with no hierarchy, without a groupBy, or past its levels", async () => {
+    const list = (groupBy: string | undefined, groupLevel: number) =>
+      executeEntity(kernel(), {
+        action: "list",
+        entity: "inventory",
+        filters: {},
+        ...(groupBy === undefined ? {} : { groupBy }),
+        groupLevel,
+        pagination: { pageIndex: 0, pageSize: 1 },
+      });
+    await expect(list("placement", 1)).rejects.toThrow(
+      'Cannot group inventory by "placement" at a level: Placement is a value, not a record with parents, so it has no levels.',
+    );
+    await expect(list(undefined, 1)).rejects.toThrow(
+      "groupLevel 1 needs a groupBy for inventory",
+    );
+    await expect(list("category", 4)).rejects.toThrow(
+      'Cannot group inventory by "category" at level 4: Category offers levels 1–3',
+    );
   });
 
   it("orders Product categories before pagination and reports their names and counts", async () => {
@@ -273,7 +400,7 @@ describe("server list grouping", () => {
     const grouped = (pageIndex: number, readIntent?: "count") =>
       locationList(
         ctx.db,
-        withListGroupBy({ itemTypeFilter: ["box", "room"] }, "type"),
+        withListGroupBy({ itemTypeFilter: ["box", "room"] }, { key: "type" }),
         [
           { orderBy: "name", direction: "asc" },
           { orderBy: "type", direction: "desc" },

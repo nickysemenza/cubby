@@ -20,6 +20,7 @@ import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
 import {
   buildTakeSkip,
   type ListGroupSummary,
+  type ListGroupBy,
   type ListNesting,
   listNestingSchema,
   type PaginationParams,
@@ -891,21 +892,37 @@ const listNestingFromFilters = (filters: unknown): ListNesting =>
 const listRowIdSchema = z.object({ id: z.string() });
 
 const listGroupByCarrier = z
-  .object({ groupBy: z.string().optional() })
+  .object({
+    groupBy: z.string().optional(),
+    groupLevel: z.number().int().positive().optional(),
+  })
   .passthrough();
 /**
  * The kernel's validated `groupBy`, carried beside the entity's own filters
  * like `nesting`, so every repository's list groups without threading it.
  */
-const listGroupByFromFilters = (filters: unknown): string | undefined =>
-  listGroupByCarrier.parse(filters).groupBy;
+const listGroupByFromFilters = (filters: unknown): ListGroupBy | undefined => {
+  const { groupBy, groupLevel } = listGroupByCarrier.parse(filters);
+  return groupBy === undefined
+    ? undefined
+    : groupLevel === undefined
+      ? { key: groupBy }
+      : { key: groupBy, level: groupLevel };
+};
 
-/** `filters` carrying a kernel-validated `groupBy` for `listScaffold`. */
+/** `filters` carrying a kernel-validated Group by for `listScaffold`. */
 export const withListGroupBy = <Filters extends object>(
   filters: Filters,
-  groupBy: string | undefined,
+  groupBy: ListGroupBy | undefined,
 ): Filters =>
-  groupBy === undefined ? filters : Object.assign({}, filters, { groupBy });
+  groupBy === undefined
+    ? filters
+    : Object.assign(
+        {},
+        filters,
+        { groupBy: groupBy.key },
+        groupBy.level === undefined ? {} : { groupLevel: groupBy.level },
+      );
 
 const searchQueryFromFilters = <Filters extends object>(
   filters: Filters | undefined,
@@ -924,6 +941,7 @@ const groupSummaryRow = z.object({
   key: z.string().nullable(),
   label: z.string().nullable(),
   count: z.number().int().positive(),
+  subtree: z.boolean().nullable(),
 });
 
 /**
@@ -947,6 +965,9 @@ const loadGroupSummaries = async (
     label: group.label ?? sql`null::text`,
     ...Object.fromEntries(parts.map((part, index) => [`o${index}`, part])),
     count: sql`count(*)::int`,
+    subtree: group.subtree
+      ? sql`bool_or(${group.subtree})`
+      : sql`null::boolean`,
   };
   const position = (part: SQL | "key" | "label") =>
     part === "key" ? 1 : part === "label" ? 2 : 3 + parts.indexOf(part);
@@ -972,7 +993,7 @@ const loadGroupSummaries = async (
   return z
     .array(groupSummaryRow)
     .parse(rows)
-    .map(({ key, label, count }) => ({
+    .map(({ key, label, count, subtree }) => ({
       key: key ?? FILTER_NONE,
       label:
         key === null
@@ -981,6 +1002,7 @@ const loadGroupSummaries = async (
             options?.find((option) => option.value === key)?.label ??
             key),
       count,
+      ...(subtree === null ? {} : { subtree }),
     }));
 };
 
@@ -1135,7 +1157,7 @@ export function listScaffold<
           filtered.has(key) ||
           (!counting &&
             (request.sorts?.some((sort) => sort.orderBy === key) === true ||
-              listGroupByFromFilters(request.filters) === key ||
+              listGroupByFromFilters(request.filters)?.key === key ||
               projects(key, request.projection ?? { kind: "full" }))),
       );
       const prepares = new Set(

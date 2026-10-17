@@ -65,3 +65,49 @@ export const hierarchyDescendantsSql = <E extends HierarchyEntity>(
       ) SELECT "id" FROM descendants${descendantsOnly ? sql` WHERE depth > 0` : sql``}
     )`;
 };
+
+/**
+ * Correlated scalar over the walk up `model.hierarchy` from the `entity`
+ * record `id`: `up` holds the record (step 1) and each live ancestor, at most
+ * `maxDepth` above it, so the walk agrees with `hierarchyDescendantsSql`
+ * expanding from any ancestor it reaches. The visited guard stops a stored
+ * cycle; an absent or soft-deleted record walks nothing.
+ */
+const ancestorWalkSql = (entity: Entity, id: SQL, select: SQL): SQL => {
+  const { table, column, maxDepth, softDelete } = hierarchyOf(entity);
+  const name = sql.identifier(table);
+  const parent = sql.identifier(column);
+  const live = (alias: string) =>
+    softDelete ? sql` AND ${sql.raw(alias)}."deletedAt" IS NULL` : sql``;
+  return sql`(
+      WITH RECURSIVE up AS (
+        SELECT h."id", h.${parent} AS parent, 1 AS step, ARRAY[h."id"] AS visited
+        FROM ${name} h
+        WHERE h."id" = ${id}${live("h")}
+        UNION ALL
+        SELECT p."id", p.${parent}, up.step + 1, up.visited || p."id"
+        FROM up JOIN ${name} p ON p."id" = up.parent
+        WHERE up.step <= ${sql.raw(String(maxDepth))}
+          AND NOT p."id" = ANY(up.visited)${live("p")}
+      ) SELECT ${select} FROM up
+    )`;
+};
+
+/**
+ * The id of the `entity` record `id`'s ancestor at `level` (1 = top), or the
+ * record itself when it sits above that level; NULL for no record.
+ */
+export const hierarchyAncestorSql = (
+  entity: Entity,
+  id: SQL,
+  level: number,
+): SQL =>
+  ancestorWalkSql(
+    entity,
+    id,
+    sql`(array_agg(up."id" ORDER BY up.step DESC))[LEAST(${level}::int, count(*)::int)]`,
+  );
+
+/** The `entity` record `id`'s level (1 = top), or 0 for no record. */
+export const hierarchyLevelSql = (entity: Entity, id: SQL): SQL<number> =>
+  sql<number>`${ancestorWalkSql(entity, id, sql`count(*)::int`)}`;

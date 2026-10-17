@@ -53,7 +53,13 @@ describe("entity cards", () => {
             noValueLabel: "No category",
             reason: null,
             value: { kind: "derived", options: null },
-            filter: { columnId: "category", noValue: false },
+            filter: {
+              columnId: "category",
+              noValue: false,
+              subtree: null,
+            },
+            levels: 0,
+            levelReason: "Category has no levels.",
           },
           groups: [
             { key: "alpha", label: "Alpha", count: 2 },
@@ -78,7 +84,11 @@ describe("entity cards", () => {
     fireEvent.click(
       within(sections[1]!).getByRole("button", { name: /Filter to this/ }),
     );
-    expect(onFilter).toHaveBeenCalledWith("beta");
+    expect(onFilter).toHaveBeenCalledWith({
+      key: "beta",
+      label: "Beta",
+      count: 1,
+    });
   });
 
   it("uses uploaded image records directly and keeps unfinished uploads as icon tiles", () => {

@@ -48,6 +48,7 @@ const inputSchema = z.object({
     )
     .optional(),
   groupBy: z.string().optional(),
+  groupLevel: z.number().optional(),
   nesting: z.unknown().optional(),
 });
 
@@ -88,7 +89,7 @@ export function defineProgressiveListOperations<
       Object.assign(await filtersFor(context, input.filters), {
         nesting: parseNesting(binding, input.nesting),
       }),
-      parseGroupBy(binding, input.groupBy),
+      parseGroupBy(binding, input.groupBy, input.groupLevel),
     );
   const reader = () => {
     if (!binding.repository.listRead)

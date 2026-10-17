@@ -266,11 +266,16 @@ export const manifestWire = {
       problemKey: "string~",
       view: "string~",
       groupBy: "string~",
+      groupLevel: "integer~",
       pin: "SavedViewPin~",
     },
     { conformances: identifiable },
   ),
-  GroupChoiceFilter: record({ columnId: "string", noValue: "boolean" }),
+  GroupChoiceFilter: record({
+    columnId: "string",
+    noValue: "boolean",
+    subtree: "string~",
+  }),
   GroupChoice: record(
     {
       id: "string",
@@ -278,6 +283,8 @@ export const manifestWire = {
       noValueLabel: "string",
       reason: "string~",
       filter: "GroupChoiceFilter~",
+      levels: "integer",
+      levelReason: "string~",
     },
     { conformances: identifiable },
   ),

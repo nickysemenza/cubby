@@ -573,6 +573,7 @@ const presentationJSON = (
       problemKey: view.problem?.key ?? null,
       view: view.view,
       groupBy: view.groupBy,
+      groupLevel: view.groupLevel,
       pin: view.pin === null ? null : { ...view.pin },
     })),
   };
@@ -620,6 +621,8 @@ const entityJSON = (
       noValueLabel: choice.noValueLabel,
       reason: choice.reason,
       filter: choice.filter === null ? null : { ...choice.filter },
+      levels: choice.levels,
+      levelReason: choice.levelReason,
     })),
     domain: entity.inspector.domain,
     sfSymbol: entity.inspector.icons.sfSymbol,

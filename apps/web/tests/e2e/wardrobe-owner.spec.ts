@@ -86,6 +86,8 @@ test("home pins open the viewer's wardrobe as a generic saved view", async ({
   expect(href.searchParams.get("categoryFeature")).toBe("apparel");
   expect(href.searchParams.get("view")).toBe("shelf");
   expect(href.searchParams.get("groupBy")).toBe("category");
+  // Apparel is the taxonomy root, so clothing types are its second level.
+  expect(href.searchParams.get("groupLevel")).toBe("2");
 });
 
 test("wardrobe cards section by clothing type and a header filters to one type", async ({
@@ -132,6 +134,59 @@ test("wardrobe cards section by clothing type and a header filters to one type",
     tops.getByRole("link", { name: new RegExp(`^${name} Tops item`) }),
   ).toBeVisible();
   expect(new URL(page.url()).searchParams.get("groupBy")).toBe("category");
+});
+
+test("wardrobe cards group at a category level and a header filters to that type with its sub-types", async ({
+  page,
+}) => {
+  const name = `Wardrobe levels ${Date.now()}`;
+  const { owner, location } = await seedWardrobePrerequisites(page, name);
+  const tops = await seedProductCategoryPrerequisite(page, {
+    name: `${name} Tops`,
+    parentId: taxonomyShortcode("apparel"),
+  });
+  const tees = await seedProductCategoryPrerequisite(page, {
+    name: `${name} Tees`,
+    parentId: tops.id,
+  });
+  for (const [item, categoryId] of [
+    ["Tops item", tops.id],
+    ["Tee item", tees.id],
+  ] as const) {
+    const product = await createEntityFixture(page, "product", {
+      name: `${name} ${item}`,
+      manufacturer: "Fixture",
+      categoryId,
+    });
+    await createEntityFixture(page, "inventory", {
+      productId: product.id,
+      locationId: location.id,
+      amount: { value: 1, unit: "each" },
+      ownershipMode: "explicit",
+      ownerLedgerPartyId: owner.id,
+    });
+  }
+  const sections = page.getByTestId("entity-card-grid").getByRole("region");
+  const topsSection = sections.filter({ hasText: `${name} Tops` });
+  await gotoAuthenticatedPage(
+    page,
+    `${wardrobeUrl(owner.id)}&groupBy=category&groupLevel=2`,
+    topsSection,
+  );
+  // The tee groups under its level-2 ancestor; the seed shirt sits in the
+  // Apparel root, above that level, so it groups under itself.
+  await expect(sections).toHaveText([
+    /^Apparel/,
+    new RegExp(`^${name} Tops\\s*2`),
+  ]);
+  await topsSection.hover();
+  await topsSection.getByRole("button", { name: /Filter to this/ }).click();
+  await expect(sections).toHaveText([new RegExp(`^${name} Tops\\s*2`)]);
+  await expect(
+    topsSection.getByRole("link", { name: new RegExp(`^${name} Tee item`) }),
+  ).toBeVisible();
+  const url = new URL(page.url());
+  expect(url.searchParams.get("groupLevel")).toBe("2");
 });
 
 test("mobile list section headers stay pinned while their section scrolls", async ({

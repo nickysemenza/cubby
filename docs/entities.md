@@ -972,6 +972,20 @@ the choice afterwards. A section header's "Filter to this" sets
 the section's value (and turns an "Include sub-…" toggle off) as the field's
 include filter, and exists only when the choice declares a filter.
 
+A choice whose section key is a related record of an entity that declares
+`model.hierarchy` can group at a level (`groupLevel`, 1 = top, absolute from
+the root): each row groups under its ancestor at that level, a row whose value
+sits above that level groups under itself, and no value stays last. The
+choice's `levels` (at most three, fewer for a shallower hierarchy) bounds the
+level; any other choice carries a `levelReason` derived from the declaration,
+which clients show on the disabled Level choices and the kernel returns when
+it rejects the level. `hierarchyAncestorSql` walks up the same hierarchy the
+descendant filter walks down, so a level section counts its key's
+descendants, and its summary's `subtree` flag tells "Filter to this" to keep
+"Include sub-…" on: the filtered list is that one section. Level rides beside
+`groupBy` in the URL (`?groupLevel=`), the list request, Apple's view state,
+and a saved view's `groupLevel`; changing Group by clears it.
+
 Declare object-valued outputs as `json`, and render relations and structured
 values through explicit overrides. A logo object is not a text field. Fields
 already owned by a dedicated section, such as Wish candidates, stay outside

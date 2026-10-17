@@ -148,7 +148,8 @@ public actor CubbyClient {
         pageSize: Int = 50,
         sort: String? = nil,
         filters: EntityFilterState = EntityFilterState(),
-        groupBy: String? = nil
+        groupBy: String? = nil,
+        groupLevel: Int? = nil
     ) async throws -> ListPage<EntityRow> {
         try await perform {
             switch descriptor.key.nativeReadKind {
@@ -158,7 +159,7 @@ public actor CubbyClient {
             case .kernel:
                 let result = try await descriptor.listPage(
                     client: api, page: page, pageSize: pageSize, sort: sort, filters: filters,
-                    groupBy: groupBy)
+                    groupBy: groupBy, groupLevel: groupLevel)
                 return ListPage(
                     items: result.items.compactMap(descriptor.row(from:)), meta: result.meta)
             case .unavailable:

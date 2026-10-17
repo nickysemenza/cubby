@@ -191,6 +191,36 @@ struct GenericEntityListModelTests {
         #expect(model.groupByUnavailableReason == nil)
     }
 
+    /// A level rides with its Group by choice: sent only while that choice offers it, cleared when
+    /// the choice changes, and refused with the declaration's reason on a choice with no levels.
+    @Test func groupLevelFollowsItsChoice() async throws {
+        defer { ListStub.handler.withLock { $0 = nil } }
+        let page = try productPage(id: "PRD-2345", name: "Base", page: 1, total: 1)
+        let levels = Mutex<[Double?]>([])
+        ListStub.handler.withLock { handler in
+            handler = { request in
+                levels.withLock { $0.append(Self.body(of: request)["groupLevel"]?.doubleValue) }
+                return (200, page)
+            }
+        }
+        let model = GenericEntityListModel(
+            descriptor: EntityCatalog[.product], client: try makeClient(), groupBy: "categoryId",
+            groupLevel: 2, progressive: false, searchDebounceNanoseconds: 0)
+        await model.loadInitial()
+        #expect(model.activeGroupLevel == 2)
+        #expect(model.groupLevelUnavailableReason == nil)
+
+        await model.apply(groupLevel: 1)
+        #expect(model.activeGroupLevel == 1)
+
+        await model.apply(groupBy: "manufacturer")
+        #expect(model.activeGroupLevel == nil)
+        #expect(model.groupLevelUnavailableReason?.hasSuffix("so it has no levels.") == true)
+        await model.apply(groupLevel: 1)
+        #expect(model.activeGroupLevel == nil)
+        #expect(levels.withLock { $0 } == [2, 1, nil])
+    }
+
     @Test func loadsProductsIntoRows() async throws {
         defer { ListStub.handler.withLock { $0 = nil } }
         let payload = try Fixtures.data(named: "products-list.json")

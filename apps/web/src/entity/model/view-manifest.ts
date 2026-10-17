@@ -87,6 +87,8 @@ export interface ViewDefinition {
   view?: string;
   /** The `model.grouping` choice (`?groupBy=`) the saved view opens with. */
   groupBy?: string;
+  /** The hierarchy level (`?groupLevel=`, 1 = top) `groupBy` groups at. */
+  groupLevel?: number;
   /** A shortcut on another surface (the home "Your views" row). */
   pin?: { surface: "home"; order: number };
 }
@@ -126,6 +128,7 @@ const toViewDefinition = (view: DeclaredView): ViewDefinition => {
     definition.problem = { ...view.problem, key: problemKey(view.problem.key) };
   if (view.view) definition.view = view.view;
   if (view.groupBy) definition.groupBy = view.groupBy;
+  if (view.groupLevel) definition.groupLevel = view.groupLevel;
   if (view.pin) definition.pin = { ...view.pin };
   return definition;
 };

@@ -12,7 +12,7 @@ import { useMemo } from "react";
 export interface GroupConfig {
   choice: GeneratedGroupChoice;
   groups: readonly ListGroupSummary[];
-  onFilter?: (key: string) => void;
+  onFilter?: (group: ListGroupSummary) => void;
 }
 
 export interface GroupSection<T> {
@@ -49,7 +49,7 @@ export function groupSections<T>(
       onFilter:
         config.onFilter &&
         (group.key !== FILTER_NONE || config.choice.filter?.noValue)
-          ? () => config.onFilter?.(group.key)
+          ? () => config.onFilter?.(group)
           : undefined,
     };
     let taken = 0;

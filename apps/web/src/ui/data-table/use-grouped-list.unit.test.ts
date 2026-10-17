@@ -19,6 +19,8 @@ describe("groupSections", () => {
           reason: null,
           value: { kind: "derived", options: null },
           filter: null,
+          levels: 0,
+          levelReason: "Type has no levels.",
         },
         groups: [
           { key: "alpha", label: "Alpha", count: 1 },

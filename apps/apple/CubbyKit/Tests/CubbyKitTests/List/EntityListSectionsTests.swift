@@ -13,13 +13,14 @@ struct EntityListSectionsTests {
         let sections = EntityListSection.sections(
             rows: ["Alpha one", "Alpha two", "Beta one"].map(Self.row),
             groups: [
-                (key: "PCT-ALPHA", label: "Alpha", count: 2),
-                (key: "PCT-BETA", label: "Beta", count: 3),
-                (key: EntityListSection.noValueKey, label: "No category", count: 1),
+                (key: "PCT-ALPHA", label: "Alpha", count: 2, subtree: true),
+                (key: "PCT-BETA", label: "Beta", count: 3, subtree: false),
+                (key: EntityListSection.noValueKey, label: "No category", count: 1, subtree: false),
             ])
         #expect(sections.map(\.id) == ["PCT-ALPHA", "PCT-BETA"])
         #expect(sections.map { $0.rows.map(\.title) } == [["Alpha one", "Alpha two"], ["Beta one"]])
         #expect(sections[1].count == 3)
+        #expect(sections.map(\.subtree) == [true, false])
     }
 
     @Test func filteringToASectionIncludesOnlyItsOwnValue() throws {
@@ -40,6 +41,14 @@ struct EntityListSectionsTests {
             inventory.filtering(filtered, to: none, of: category)
                 == EntityFilterState(["categoryPresenceFilter": ["none"]]))
 
+        // A level section holding its key's descendants keeps them in the filtered list.
+        let tops = EntityListSection(id: "PCT-TOPS", label: "Tops", count: 3, subtree: true, rows: [])
+        #expect(
+            inventory.filtering(state, to: tops, of: category)
+                == EntityFilterState([
+                    "categoryFilter": ["PCT-TOPS"], "includeSubProductCategories": ["true"],
+                ]))
+
         // Placement declares no No value filter, so its no-value section has no header action.
         let placement = try #require(inventory.groupChoice("placement"))
         #expect(inventory.filtering(state, to: none, of: placement) == nil)
@@ -49,6 +58,28 @@ struct EntityListSectionsTests {
         let input = try inventory.listInput(
             page: 1, pageSize: 20, sort: nil, filters: EntityFilterState(), groupBy: "category")
         #expect(input["groupBy"] == "category")
+        #expect(input["groupLevel"] == nil)
+        let leveled = try inventory.listInput(
+            page: 1, pageSize: 20, sort: nil, filters: EntityFilterState(), groupBy: "category",
+            groupLevel: 2)
+        #expect(leveled["groupLevel"] == 2)
+    }
+
+    // Levels come from the declaration: a related record whose entity nests offers them, a value
+    // field says why it has none.
+    @Test func groupingChoicesDeclareTheirLevels() throws {
+        let category = try #require(inventory.groupChoice("category"))
+        #expect(category.levels == 3)
+        #expect(category.levelReason == nil)
+        #expect(category.filter?.subtree == "includeSubProductCategories")
+        let placement = try #require(inventory.groupChoice("placement"))
+        #expect(placement.levels == 0)
+        #expect(
+            placement.levelReason
+                == "Placement is a value, not a record with parents, so it has no levels.")
+        let wardrobe = try #require(inventory.presentation.savedViews.first { $0.id == "wardrobe" })
+        #expect(wardrobe.groupBy == "category")
+        #expect(wardrobe.groupLevel == 2)
     }
 
     private static func row(_ title: String) -> EntityRow {

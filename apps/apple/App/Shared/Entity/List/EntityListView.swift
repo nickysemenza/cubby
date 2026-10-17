@@ -183,7 +183,8 @@ struct EntityListView: View {
                     sort: initialSavedView?.sortParameter,
                     filters: descriptor.openingFilters(savedView: initialSavedView, explicit: initialFilters),
                     view: initialSavedView?.listView(in: descriptor) ?? renderableViews.first ?? .table,
-                    groupBy: initialSavedView?.groupBy)
+                    groupBy: initialSavedView?.groupBy,
+                    groupLevel: initialSavedView?.groupLevel)
             }
             await model?.loadInitial()
         }
@@ -322,7 +323,8 @@ struct EntityListView: View {
 
     /// Every declared Group by choice; one that cannot group stays listed, disabled, with its
     /// reason as the subtitle. While the list cannot group (Timeline, search), every choice
-    /// shows that reason.
+    /// shows that reason. A list whose choices can nest adds the hierarchy levels beside them,
+    /// disabled with the reason when the active choice has none.
     private func groupByMenu(_ model: GenericEntityListModel) -> some View {
         let unavailable = model.groupByUnavailableReason
         return Menu("Group by", systemImage: "rectangle.grid.1x2") {
@@ -351,8 +353,44 @@ struct EntityListView: View {
                 .disabled(reason != nil)
                 .accessibilityIdentifier("browse.\(key.rawValue).group.\(choice.id)")
             }
+            if descriptor.grouping.contains(where: { $0.levels > 0 }) {
+                groupLevelSection(model)
+            }
         }
         .accessibilityIdentifier("browse.\(key.rawValue).group-by")
+    }
+
+    @ViewBuilder
+    private func groupLevelSection(_ model: GenericEntityListModel) -> some View {
+        Section("Level") {
+            if let reason = model.groupLevelUnavailableReason {
+                Button {
+                } label: {
+                    Text("By level")
+                    Text(reason)
+                }
+                .disabled(true)
+                .accessibilityIdentifier("browse.\(key.rawValue).group-level.unavailable")
+            } else if let choice = model.groupChoice {
+                let levels: [Int?] = [nil] + (1...max(1, choice.levels)).map { $0 }
+                ForEach(levels, id: \.self) { level in
+                    let label =
+                        level.map { $0 == 1 ? "Top level" : "Level \($0)" }
+                        ?? "Exact \(choice.label.lowercased())"
+                    Button {
+                        Task { await model.apply(groupLevel: level) }
+                    } label: {
+                        if model.activeGroupLevel == level {
+                            Label(label, systemImage: "checkmark")
+                        } else {
+                            Text(label)
+                        }
+                    }
+                    .accessibilityIdentifier(
+                        "browse.\(key.rawValue).group-level.\(level.map(String.init) ?? "exact")")
+                }
+            }
+        }
     }
 
     /// "Filter to this" for a section header, nil when the choice declares no filter for it.
