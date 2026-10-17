@@ -308,7 +308,8 @@ with remote AI and callbacks to the local Cubby Worker; PostgreSQL and storage
 remain local. Stop a running offline session before switching profiles.
 Integration mode supports HMR development. Built preview currently supports
 the offline profile only because the agent's auxiliary entry is served by its Vite
-plugin.
+plugin. The preview build admits its local fixture bundle and enforces the
+same closure size and instrumentation checks.
 
 Scheduled work does not run automatically. Invoke the real handler when needed
 with `<discovered-origin>/cdn-cgi/local/scheduled?format=json&cron=0+12+*+*+*`.

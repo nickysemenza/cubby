@@ -28,6 +28,42 @@ function dist(files: Record<string, string>) {
 }
 
 describe("measureServerClosure", () => {
+  it("admits preview fixtures while retaining production and injection guards", () => {
+    const cwd = dist({
+      "dist/server/index.js":
+        'const b=()=>import("./assets/browser-operation-dispatch-1.js");',
+      "dist/server/assets/browser-operation-dispatch-1.js":
+        "export const adapter=1;",
+      "dist/server/assets/fixtures-1.js":
+        "export const weightedArrayElement=1;export const fromRegExp=1;",
+    });
+    const run = (preview: boolean) =>
+      spawnSync(
+        process.execPath,
+        [fileURLToPath(new URL("./check-server-closure.ts", import.meta.url))],
+        {
+          cwd,
+          encoding: "utf8",
+          env: { ...process.env, CUBBY_DEV_PREVIEW_BUILD: String(preview) },
+        },
+      );
+    const production = run(false);
+    expect(production.status).not.toBe(0);
+    expect(production.stderr).toContain(
+      "@faker-js/faker reached the Worker bundle",
+    );
+    const preview = run(true);
+    expect(preview.status).toBe(0);
+    writeFileSync(
+      path.join(cwd, "dist/server/assets/browser-operation-dispatch-1.js"),
+      "globalThis.__SENTRY_ORCHESTRION_INJECT__=1;",
+    );
+    const injected = run(true);
+    expect(injected.status).not.toBe(0);
+    expect(injected.stderr).toContain(
+      "Sentry build-time instrumentation reached the Worker bundle",
+    );
+  });
   it("rejects a build whose renamed dispatch chunk escapes the budget scope", () => {
     const cwd = dist({
       "dist/server/index.js":

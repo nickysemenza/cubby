@@ -179,7 +179,11 @@ const invokedPath = process.argv[1]
   : undefined;
 if (invokedPath === import.meta.url) {
   const serverRoot = path.resolve("dist/server");
-  const faker = findBundledFaker(serverRoot);
+  // Local fixture routes belong to preview builds, whose provenance is separate.
+  const faker =
+    process.env.CUBBY_DEV_PREVIEW_BUILD === "true"
+      ? []
+      : findBundledFaker(serverRoot);
   if (faker.length > 0)
     throw new Error(
       `@faker-js/faker reached the Worker bundle (${faker.join(", ")}). It is for tests and dev seeding only; keep tooling/factories and *.fixtures imports out of src/ production code.`,
