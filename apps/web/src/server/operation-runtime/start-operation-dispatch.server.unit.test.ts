@@ -50,6 +50,28 @@ describe("browser Start operation dispatcher", () => {
     });
   });
 
+  it("keeps rejected handler imports correlated to the dispatch stage", async () => {
+    const loader = vi.fn(async () => {
+      throw new Error("Failed to load synthetic operation chunk");
+    });
+    await expect(
+      dispatchStartOperation(
+        { operation: "calendar.rotateFeed", input: undefined, request },
+        { "calendar.rotateFeed": loader },
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      error: {
+        message: "Failed to load synthetic operation chunk",
+        diagnostics: {
+          operation: "calendar.rotateFeed",
+          stage: "dispatch",
+        },
+      },
+    });
+    expect(loader).toHaveBeenCalledOnce();
+  });
+
   it("returns correlated loader failures before invoking a handler", async () => {
     await expect(
       dispatchStartOperation(
