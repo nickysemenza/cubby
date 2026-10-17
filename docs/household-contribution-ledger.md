@@ -90,10 +90,6 @@ Vendor Account and accepted or explicitly linked Email evidence. Conflicting
 identities or shared use without identifying evidence stays unknown. Suggestions
 are not accepted evidence. Purchaser evidence includes conflicting mailbox and
 vendor-account identities even where account-scoped Email views hide that mailbox. Missing Purchase dates cannot establish sole use.
-Purchaser mail evidence uses the shared inverse association read: it selects
-candidate mail for the Purchase before applying the canonical accepted-source
-and reviewed-link policy. Its account-owner scope includes conflicting members;
-ordinary Email association readers retain their account-owner restriction.
 Clearing the override restores inheritance. Purchase merges carry an override
 when the survivor has none and refuse conflicting explicit purchasers. Source identities remain intact;
 purchaser attribution does not change beneficiaries or inventory ownership.
