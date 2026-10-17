@@ -643,6 +643,7 @@ export async function resolveArrivedFindingsForPurchase(
       ...(await receivableProductIds(
         tx,
         productLines.flatMap(({ productId }) => (productId ? [productId] : [])),
+        parseEntityId("purchase", input.purchaseId),
       )),
     ];
     const stocked = await tx

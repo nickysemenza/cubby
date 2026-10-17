@@ -1018,7 +1018,7 @@ export async function arrivalAsksToReceive(
       line.productId ? [line.productId] : [],
     ),
   ];
-  return (await receivableProductIds(tx, productIds)).size > 0;
+  return (await receivableProductIds(tx, productIds, purchaseId)).size > 0;
 }
 
 export async function importVendorOrder(

@@ -366,9 +366,13 @@ describe("arrived finding follows stock tracking", () => {
     | { unresolved: true }
   );
 
-  async function importDelivered(key: string, lines: Line[]) {
+  async function importDelivered(
+    key: string,
+    lines: Line[],
+    seller: Parameters<typeof memberImportWorld>[2]["vendor"] = {},
+  ) {
     const { party, vendor } = await memberImportWorld(ctx.db, ctx.actor, {
-      vendor: { name: `Synthetic delivered vendor ${key}` },
+      vendor: { name: `Synthetic delivered vendor ${key}`, ...seller },
     });
     const runId = await ensureRun(ctx.db, ctx.actor, {
       purpose: "file_import",
@@ -530,6 +534,79 @@ describe("arrived finding follows stock tracking", () => {
       );
     expect(await asks(false)).toBe(false);
     expect(await asks(true)).toBe(true);
+  });
+
+  // Failures: a grocery order whose new Products have no category asks the
+  // member to receive food the household never stock-tracks; an explicitly
+  // tracked Product on such an order stops asking.
+  describe("undecided Products on a not-tracked spending context", () => {
+    const undecided = (name: string) =>
+      insertWithShortcode(ctx.db, "product", {
+        name,
+        manufacturer: "Example maker",
+      });
+
+    it("does not ask on a food-retail Vendor's order", async () => {
+      const bread = await undecided("Synthetic sourdough loaf");
+      expect(
+        await importDelivered(
+          "food-retail",
+          [{ title: "Synthetic sourdough loaf", product: bread }],
+          { spendingProfile: "food_retail" },
+        ),
+      ).toBe(false);
+    });
+
+    it("does not ask when the effective spending category inherits not tracked", async () => {
+      const parent = await insertWithShortcode(ctx.db, "spendingCategory", {
+        name: "Synthetic consumables",
+        stockTracked: false,
+      });
+      const child = await insertWithShortcode(ctx.db, "spendingCategory", {
+        name: "Synthetic pantry restock",
+        parentId: parent.id,
+      });
+      // The Product's own category is undecided; its spending mapping is not.
+      const mapped = await insertWithShortcode(ctx.db, "productCategory", {
+        name: "Synthetic pantry staples",
+        spendingCategoryMode: "mapped",
+        spendingCategoryId: child.id,
+      });
+      const beans = await insertWithShortcode(ctx.db, "product", {
+        name: "Synthetic dried beans",
+        manufacturer: "Example maker",
+        categoryId: mapped.id,
+      });
+      expect(
+        await importDelivered("category-untracked", [
+          { title: "Synthetic dried beans", product: beans },
+        ]),
+      ).toBe(false);
+    });
+
+    it("still asks for an undecided Product on an ordinary order", async () => {
+      const lamp = await undecided("Synthetic desk lamp");
+      expect(
+        await importDelivered("ordinary", [
+          { title: "Synthetic desk lamp", product: lamp },
+        ]),
+      ).toBe(true);
+    });
+
+    it("still asks for an explicitly tracked Product on a food order", async () => {
+      const kettle = await insertWithShortcode(ctx.db, "product", {
+        name: "Synthetic stovetop kettle",
+        manufacturer: "Example maker",
+        stockTracked: true,
+      });
+      expect(
+        await importDelivered(
+          "food-tracked",
+          [{ title: "Synthetic stovetop kettle", product: kettle }],
+          { spendingProfile: "food_retail" },
+        ),
+      ).toBe(true);
+    });
   });
 
   it("asks to receive a Product tracked by its own decision inside an untracked category", async () => {
