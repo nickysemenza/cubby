@@ -3,9 +3,16 @@
   "name": "recipebridge",
   "targets": {
     "rust": {
-      "command": "node ../scripts/check-rust.ts --browser",
+      "executor": "nx:run-commands",
       "options": {
-        "cwd": "{projectRoot}"
+        "cwd": "{projectRoot}",
+        "commands": [
+          "cargo fmt --check",
+          "cargo clippy --locked --profile ci --all-targets -- -D warnings",
+          "cargo clippy --locked --profile ci --no-default-features -- -D warnings",
+          "cargo test --locked --profile ci"
+        ],
+        "parallel": false
       },
       "cache": true,
       "inputs": ["rustGate"]

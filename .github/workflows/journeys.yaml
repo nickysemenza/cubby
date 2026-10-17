@@ -1,0 +1,347 @@
+name: Journeys
+
+# Informational journeys (docs/tester-army.md), outside `CI passed`: a journey
+# label on a PR runs its journey on the PR head right away and on each later
+# push, and a dispatch runs one on the dispatched ref. Fork PRs receive no
+# secrets and run none.
+on:
+  pull_request:
+    # A journey label starts its journey; later pushes rerun it while labeled.
+    types: [labeled, synchronize]
+  workflow_dispatch:
+    inputs:
+      journey:
+        description: Journey to run on the dispatched ref
+        type: choice
+        options:
+          - simulator-search
+          - simulator-inputs
+          - tester-army-web
+          - tester-army-visual
+          - tester-army-explore
+          - tester-army-ios
+          - tester-army-both
+          - tester-army-import
+          - tester-army-all
+
+concurrency:
+  # A relabel or new dispatch of the same journey supersedes the older run.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event.label.name || inputs.journey || 'push' }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+  # The GitHub reporter comments on the PR from the pull_request event.
+  pull-requests: write
+
+env:
+  NX_CACHE_URL: ${{ secrets.NX_CACHE_URL }}
+  NX_CACHE_TOKEN: ${{ secrets.NX_CACHE_TOKEN }}
+  REF: ${{ github.event.pull_request.head.sha || github.sha }}
+  TESTER_ARMY_CF_API_TOKEN: ${{ secrets.TESTER_ARMY_CF_API_TOKEN }}
+  E2E_OAUTH_CREDENTIALS: ${{ secrets.E2E_OAUTH_CREDENTIALS }}
+  TESTER_ARMY_CF_ACCOUNT_ID: ${{ vars.TESTER_ARMY_CF_ACCOUNT_ID }}
+  TESTER_ARMY_MODEL: ${{ vars.TESTER_ARMY_MODEL }}
+  E2E_TELEMETRY_DISABLED: "1"
+  TESTER_ARMY_CI_EVIDENCE: "1"
+  GITHUB_TOKEN: ${{ github.token }}
+  # PR runs replay verified actions; a dispatch runs live.
+  TESTER_ARMY_REPLAY: ${{ github.event_name == 'pull_request' && '1' || '0' }}
+
+jobs:
+  tester-army-web:
+    name: Tester Army web (informational)
+    if: >-
+      (github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository) &&
+      (github.event.label.name == 'tester-army' ||
+      (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'tester-army')) ||
+      contains(fromJSON('["tester-army-web", "tester-army-both", "tester-army-all", "tester-army-visual", "tester-army-explore"]'), inputs.journey))
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.journey && 25 || 10 }}
+    services: &test-databases
+      postgres:
+        image: mirror.gcr.io/pgvector/pgvector@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: cubby
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_INITDB_ARGS: >-
+            --set=jit=off --set=fsync=off
+            --set=synchronous_commit=off --set=full_page_writes=off
+        ports:
+          - 5432:5432
+          - 127.0.0.1:55432:5432
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U postgres"
+          --health-interval 2s --health-timeout 5s
+          --health-retries 10 --health-start-period 3s
+      integresql:
+        image: ghcr.io/allaboutapps/integresql@sha256:66b7433399f1907bad9e4b7cc7bd528ed4ebfccddecb8fd65da4af4d06a68c5a
+        env:
+          PGHOST: postgres
+          PGUSER: postgres
+          PGPASSWORD: password
+        ports:
+          - 5000:5000
+    env:
+      TESTER_ARMY_AGENT_MODEL: ${{ vars.TESTER_ARMY_AGENT_MODEL }}
+      TESTER_ARMY_AGENT_EFFORT: ${{ vars.TESTER_ARMY_AGENT_EFFORT }}
+      TESTER_ARMY_LANE: web
+      HARNESS: standard
+      TESTER_ARMY_WEB_MODE: ${{ inputs.journey == 'tester-army-visual' && 'visual' || inputs.journey == 'tester-army-explore' && 'explore' || 'agent' }}
+      # A label runs the short replayable set; a dispatch runs every journey.
+      TESTER_ARMY_JOURNEYS: ${{ !inputs.journey && 'product-rename,receive-purchase,field-product-tags' || '' }}
+    steps: &tester-army-web-steps
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ env.REF }}
+      - uses: ./.github/actions/setup-node-with-deps
+        with:
+          wasm: restore
+      - name: Restore verified action recordings
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: apps/web/.e2e/cache
+          key: tester-army-replay-v1-${{ env.TESTER_ARMY_LANE }}-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            tester-army-replay-v1-${{ env.TESTER_ARMY_LANE }}-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+      - run: pnpm --filter @cubby/web run test:e2e:install-browser chromium --with-deps
+      - run: pnpm test:e2e:agent:web -- --harness ${{ env.HARNESS }}
+      - name: Save verified action recordings
+        if: always() && !cancelled() && github.event_name == 'pull_request'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: apps/web/.e2e/cache
+          key: tester-army-replay-v1-${{ env.TESTER_ARMY_LANE }}-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Save synthetic run bundle
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tester-army-${{ env.TESTER_ARMY_LANE }}-run
+          retention-days: 7
+          if-no-files-found: warn
+          path: |
+            artifacts/tester-army/web/*/run-manifest.json
+            artifacts/tester-army/web/*/run-results.json
+            artifacts/tester-army/web/*/agent-summary.json
+            artifacts/tester-army/web/*/gateway-usage.json
+            artifacts/tester-army/web/*/SHA256SUMS
+      - name: Save screenshots, failure traces and video
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tester-army-${{ env.TESTER_ARMY_LANE }}-evidence-${{ env.REF }}
+          retention-days: 7
+          if-no-files-found: warn
+          include-hidden-files: true
+          path: |
+            apps/web/.e2e/runs/web/**/report.json
+            apps/web/.e2e/runs/web/**/junit.xml
+            apps/web/.e2e/runs/web/**/results/*/attempt-*/screenshots/*.png
+            apps/web/.e2e/runs/web/**/results/*/attempt-*/snapshots/**/*.png
+            apps/web/.e2e/runs/web/**/results/*/trace.md
+            apps/web/.e2e/runs/web/**/results/*/attempt-*/screen-at-failure.txt
+            apps/web/.e2e/runs/web/**/results/*/attempt-*/video/*.webm
+            apps/web/.e2e/runs/web/**/results/*/attempt-*/video/*.mp4
+
+  tester-army-import:
+    name: Tester Army import (informational)
+    if: >-
+      (github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository) &&
+      (github.event.label.name == 'tester-army:import' ||
+      (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'tester-army:import')) ||
+      contains(fromJSON('["tester-army-import", "tester-army-all"]'), inputs.journey))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services: *test-databases
+    env:
+      TESTER_ARMY_AGENT_MODEL: ${{ vars.TESTER_ARMY_AGENT_MODEL }}
+      TESTER_ARMY_AGENT_EFFORT: ${{ vars.TESTER_ARMY_AGENT_EFFORT }}
+      TESTER_ARMY_LANE: import
+      HARNESS: coupled
+      TESTER_ARMY_WEB_MODE: agent
+      TESTER_ARMY_JOURNEYS: ""
+    steps: *tester-army-web-steps
+
+  # Native journeys reuse a simulator app an earlier CI run cached.
+  # setup-apple probes the app before the large SPM clone and DerivedData
+  # restores, and the journey command builds a miss.
+  tester-army-ios:
+    name: Tester Army ios ${{ matrix.shard }}/2 (informational)
+    if: >-
+      (github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository) &&
+      (github.event.label.name == 'tester-army:ios' ||
+      (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'tester-army:ios')) ||
+      contains(fromJSON('["tester-army-ios", "tester-army-both", "tester-army-all"]'), inputs.journey))
+    runs-on: xcode-27
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    timeout-minutes: 40
+    env:
+      CUBBY_SIM_DB_EXTERNAL: "1"
+      TESTER_ARMY_SHARD: ${{ matrix.shard }}/2
+      TESTER_ARMY_LANE: ios-${{ matrix.shard }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ env.REF }}
+      - uses: ./.github/actions/setup-apple
+        id: apple
+        with:
+          ffi-targets: sim
+          wasm: restore
+          build-cache: "true"
+          probe: apple:simulator-build
+      - name: Restore verified action recordings
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: apps/web/.e2e/cache
+          key: tester-army-replay-v1-ios-${{ matrix.shard }}-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            tester-army-replay-v1-ios-${{ matrix.shard }}-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+      - run: pnpm test:e2e:agent:preflight
+      - uses: ./.github/actions/setup-apple-test-runner-cache
+        id: test-runner
+        with:
+          toolchain-hash: ${{ steps.apple.outputs.toolchain-hash }}
+      - uses: ./.github/actions/start-native-postgres
+      - run: pnpm test:e2e:agent:ios
+      - name: Save Apple test runner cache
+        uses: ./.github/actions/save-apple-test-runner-cache
+        with:
+          path: ${{ steps.test-runner.outputs.cache-paths }}
+          key: ${{ steps.test-runner.outputs.cache-key }}
+          cache-hit: ${{ steps.test-runner.outputs.cache-hit }}
+          matched-key: ${{ steps.test-runner.outputs.matched-key }}
+      - name: Save DerivedData cache
+        if: steps.apple.outputs.probe-hit != 'true'
+        uses: ./.github/actions/save-cache-main-only
+        with:
+          path: ${{ steps.apple.outputs.cache-paths }}
+          key: ${{ steps.apple.outputs.cache-key }}
+          cache-hit: ${{ steps.apple.outputs.cache-hit }}
+          matched-key: ${{ steps.apple.outputs.save-matched-key }}
+      - name: Save verified action recordings
+        if: always() && !cancelled() && github.event_name == 'pull_request'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: apps/web/.e2e/cache
+          key: tester-army-replay-v1-ios-${{ matrix.shard }}-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Save synthetic iOS run bundle
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tester-army-ios-${{ matrix.shard }}-run
+          retention-days: 7
+          if-no-files-found: warn
+          path: |
+            artifacts/sim-tester-army-e2e/*/run-manifest.json
+            artifacts/sim-tester-army-e2e/*/run-results.json
+            artifacts/sim-tester-army-e2e/*/agent-summary.json
+            artifacts/sim-tester-army-e2e/*/native-driver-diagnostics.json
+            artifacts/sim-tester-army-e2e/*/SHA256SUMS
+      - name: Save screenshots, failure traces and video
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tester-army-ios-${{ matrix.shard }}-evidence-${{ env.REF }}
+          retention-days: 7
+          if-no-files-found: warn
+          include-hidden-files: true
+          path: |
+            apps/web/.e2e/runs/sim-tester-army-e2e/**/report.json
+            apps/web/.e2e/runs/sim-tester-army-e2e/**/junit.xml
+            apps/web/.e2e/runs/sim-tester-army-e2e/**/results/*/attempt-*/screenshots/*.png
+            apps/web/.e2e/runs/sim-tester-army-e2e/**/results/*/trace.md
+            apps/web/.e2e/runs/sim-tester-army-e2e/**/results/*/attempt-*/screen-at-failure.txt
+            apps/web/.e2e/runs/sim-tester-army-e2e/**/results/*/attempt-*/video/*.webm
+            apps/web/.e2e/runs/sim-tester-army-e2e/**/results/*/attempt-*/video/*.mp4
+
+  simulator-e2e:
+    name: iPhone simulator E2E (informational)
+    if: >-
+      (github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository) &&
+      (github.event.label.name == 'simulator-e2e' ||
+      (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'simulator-e2e')) ||
+      startsWith(inputs.journey, 'simulator-'))
+    runs-on: xcode-27
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ env.REF }}
+      - uses: ./.github/actions/setup-apple
+        id: apple
+        with:
+          ffi-targets: sim
+          wasm: restore
+          build-cache: "true"
+          probe: apple:simulator-build
+      - uses: ./.github/actions/setup-apple-test-runner-cache
+        id: test-runner
+        with:
+          toolchain-hash: ${{ steps.apple.outputs.toolchain-hash }}
+      - uses: ./.github/actions/start-native-postgres
+      - name: Run native read and write against a disposable database
+        env:
+          CUBBY_SIM_DB_EXTERNAL: "1"
+          CI: "1"
+          SIMULATOR_JOURNEY: ${{ inputs.journey == 'simulator-inputs' && 'inputs' || 'search' }}
+        run: |
+          if [[ "$SIMULATOR_JOURNEY" == "inputs" ]]; then
+            pnpm test:e2e:sim -- --input-journey
+          else
+            pnpm test:e2e:sim -- --extended-journey
+          fi
+      - name: Save Apple test runner cache
+        uses: ./.github/actions/save-apple-test-runner-cache
+        with:
+          path: ${{ steps.test-runner.outputs.cache-paths }}
+          key: ${{ steps.test-runner.outputs.cache-key }}
+          cache-hit: ${{ steps.test-runner.outputs.cache-hit }}
+          matched-key: ${{ steps.test-runner.outputs.matched-key }}
+      - name: Save DerivedData cache
+        if: steps.apple.outputs.probe-hit != 'true'
+        uses: ./.github/actions/save-cache-main-only
+        with:
+          path: ${{ steps.apple.outputs.cache-paths }}
+          key: ${{ steps.apple.outputs.cache-key }}
+          cache-hit: ${{ steps.apple.outputs.cache-hit }}
+          matched-key: ${{ steps.apple.outputs.save-matched-key }}
+      # Upload only files whose checksums the run sealed.
+      - name: Collect verified simulator E2E evidence
+        if: always()
+        shell: python
+        run: |
+          import hashlib
+          import pathlib
+          import shutil
+
+          for checksums in pathlib.Path("artifacts").glob("sim*-e2e/*/SHA256SUMS"):
+              source = checksums.parent
+              target = pathlib.Path("artifacts/sealed-simulator-e2e") / source.name
+              target.mkdir(parents=True, exist_ok=True)
+              for line in checksums.read_text().splitlines():
+                  digest, name = line.split("  ", 1)
+                  file = source / name
+                  if not file.resolve().is_relative_to(source.resolve()):
+                      raise ValueError("Sealed evidence escapes its run directory")
+                  if hashlib.sha256(file.read_bytes()).hexdigest() != digest:
+                      raise ValueError(f"Sealed evidence checksum mismatch: {name}")
+                  destination = target / name
+                  destination.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.copyfile(file, destination)
+              shutil.copyfile(checksums, target / checksums.name)
+      - name: Save simulator E2E run bundle
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: simulator-e2e-run
+          if-no-files-found: error
+          retention-days: 7
+          path: artifacts/sealed-simulator-e2e

@@ -8,13 +8,18 @@
       "{workspaceRoot}/Cargo.{toml,lock}",
       "{workspaceRoot}/rust-toolchain.toml",
       "{workspaceRoot}/.cargo/**/*",
-      "{workspaceRoot}/scripts/{apple/apple-check.sh,apple/apple.ts,apple/apple-inputs.ts,ci-environment.ts,ensure.ts,rust-fingerprint.ts,lib/tree-digest.ts,lib/run.ts}",
-      { "runtime": "node scripts/ci-environment.ts apple" },
-      { "runtime": "node scripts/ci-environment.ts ffi" },
+      "{workspaceRoot}/scripts/{apple/apple-check.sh,apple/apple.ts,apple/apple-inputs.ts,ensure.ts,rust-fingerprint.ts,lib/tree-digest.ts,lib/run.ts}",
+      // The toolchain is declared, not observed, so a Linux runner computes
+      // the same key as a Mac and skips macOS for an unchanged pass. Minor
+      // Xcode updates within the declared major reuse passes.
+      "{workspaceRoot}/.xcode-version",
+      "{workspaceRoot}/.github/actions/setup-apple/**/*",
+      { "env": "CUBBY_FFI_PROFILE" },
+      { "env": "CARGO_BUILD_WARNINGS" },
+      { "env": "RUSTFLAGS" },
+      { "env": "CARGO_ENCODED_RUSTFLAGS" },
       "{projectRoot}/scripts/{prepare-project.sh,build-rust.sh,check-openapi-warnings.sh}",
       "{workspaceRoot}/packages/shared/golden-vectors/**/*",
-      "{workspaceRoot}/.github/workflows/ci.yaml",
-      "{workspaceRoot}/.github/actions/**/*",
       {
         "externalDependencies": []
       }
@@ -46,7 +51,8 @@
         "{projectRoot}/**/*.swift",
         "{projectRoot}/.swift-format",
         "{workspaceRoot}/scripts/apple/apple-check.sh",
-        { "runtime": "node scripts/ci-environment.ts swift" },
+        // stdout only: some Swift builds print a driver version to stderr.
+        { "runtime": "swift --version 2>/dev/null" },
         {
           "externalDependencies": []
         }

@@ -21,9 +21,10 @@ rewriting its decision.
 | [0011](0011-email-as-a-first-class-entity.md)                 | Email as a first-class entity                                          |
 | [0012](0012-import-convergence-through-burn-down.md)          | Import convergence through Burn-down                                   |
 | [0013](0013-stock-tracking-inherits-from-product-category.md) | Stock tracking inherits from Product Category                          |
-| [0014](0014-path-routed-ci-lanes.md)                          | Start only the CI lanes whose inputs changed                           |
+| [0014](0014-path-routed-ci-lanes.md)                          | Start only the CI lanes whose inputs changed (superseded by 0020)      |
 | [0015](0015-unified-durable-work-coordination.md)             | Shared durable execution for member-requested AI work                  |
 | [0016](0016-shared-assessments-and-feedback.md)               | Shared Assessments and Feedback                                        |
 | [0017](0017-subscription-funded-model-fallback.md)            | Subscription-funded model fallback                                     |
 | [0018](0018-current-member-filter-token.md)                   | `@me` is a declared value of Ledger Party filters                      |
 | [0019](0019-domain-first-server-layout.md)                    | Domain-first server layout                                             |
+| [0020](0020-cache-routed-ci.md)                               | Start every Linux lane and let the cache route                         |

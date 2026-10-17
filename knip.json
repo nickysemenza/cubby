@@ -11,17 +11,11 @@
         "scripts/apple/apple-release.ts!",
         "scripts/test-services.ts!",
         "scripts/ensure.ts!",
-        "scripts/install-git-hooks.ts!",
         "scripts/design-tokens.ts!",
         // Reached from hooks, CI, or package scripts rather than an import
         // (production mode does not read those): .husky/commit-msg,
         // ci.yaml, and the Nx targets.
         "scripts/check-outward-text.ts!",
-        "scripts/ci-lanes.ts!",
-        "scripts/ci-policy.ts!",
-        "scripts/ci-environment.ts!",
-        "scripts/ci-summary.ts!",
-        "scripts/check-rust.ts!",
         "scripts/stack-preflight.ts!",
         "scripts/dev-db.ts!"
       ],

@@ -1,6 +1,6 @@
 # ADR 0009: Gate merges on content-hashed check results
 
-Status: Accepted. [ADR 0014](0014-path-routed-ci-lanes.md) decides which lanes
+Status: Accepted. [ADR 0020](0020-cache-routed-ci.md) decides which lanes
 start; the cache still decides whether a started lane reruns.
 
 ## Context
