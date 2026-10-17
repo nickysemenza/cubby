@@ -130,6 +130,11 @@ view is visible manifest-backed URL state; `scopeFilters` is only a visible
 contextual scope. Missing filters never widen a query; renderer omissions are
 server-enforced and disclosed.
 
+Infinite tables use the shared pagination default unless a measured caller
+constraint requires an override. A smaller batch can repeat full population
+reads just to fill the same prefetch runway. Measure first-data latency and
+buffer completion separately; keep the shared prefetch and paging behavior.
+
 ## Reuse before writing a helper
 
 The catalog of shared helpers and generic paths lives in
