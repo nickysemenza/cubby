@@ -1,13 +1,19 @@
 import { z } from "zod";
 
-const segmenter = new Intl.Segmenter("en", { granularity: "grapheme" });
+// Built on first use: constructing a Segmenter loads ICU break data, which cost
+// ~7 ms of every Worker isolate's startup when this ran at module scope.
+let segmenter: Intl.Segmenter | undefined;
 /** Emoji identity is one grapheme, including flags, skin tones, keycaps and ZWJ sequences. */
 export const recordEmojiInput = z
   .string()
   .refine(
     (value) =>
       value.length <= 64 &&
-      [...segmenter.segment(value)].length === 1 &&
+      [
+        ...(segmenter ??= new Intl.Segmenter("en", {
+          granularity: "grapheme",
+        })).segment(value),
+      ].length === 1 &&
       /[\p{Extended_Pictographic}\p{Regional_Indicator}\u20e3]/u.test(value),
     "Choose one emoji, or clear the field.",
   )
