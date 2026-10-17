@@ -109,7 +109,6 @@ import {
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-/** "This transaction settles at least one Purchase" — allocation-aware. */
 const accountName = sql<string | null>`(
   SELECT fa.name FROM "FinancialAccount" fa
   WHERE fa.id = "FinancialTransaction"."accountId" AND fa."deletedAt" IS NULL
