@@ -89,7 +89,10 @@ import {
   lexicalEligibility,
   lexicalRelevance,
 } from "~/server/generic/search/repo/search-lexical";
-import { withListReadTracing } from "~/server/observability/list-read-tracing";
+import {
+  traceListPageWithCount,
+  withListReadTracing,
+} from "~/server/observability/list-read-tracing";
 
 import {
   type DerivedSqlArg,
@@ -1334,7 +1337,21 @@ export function listScaffold<
         offset: skip,
       };
       const load = spec.load;
-      const selectRows = load
+      const loadIds = load
+        ? async (
+            ids: readonly string[],
+            selected: ListProjection,
+          ): Promise<Row[]> => {
+            if (ids.length === 0) return [];
+            const loaded = await load(inArray(table.id, [...ids]), selected);
+            const byId = new Map(loaded.map((row) => [row.id, row]));
+            return ids.flatMap((id) => {
+              const row = byId.get(id);
+              return row ? [row] : [];
+            });
+          }
+        : undefined;
+      const selectRows = loadIds
         ? async (
             clauses: ListPage,
             selected: ListProjection,
@@ -1347,19 +1364,10 @@ export function listScaffold<
               .orderBy(...clauses.orderBy)
               .limit(clauses.limit)
               .offset(clauses.offset);
-            if (ids.length === 0) return [];
-            const loaded = await load(
-              inArray(
-                table.id,
-                ids.map((row) => row.id),
-              ),
+            return loadIds(
+              ids.map((row) => row.id),
               selected,
             );
-            const byId = new Map(loaded.map((row) => [row.id, row]));
-            return ids.flatMap(({ id }) => {
-              const row = byId.get(id);
-              return row ? [row] : [];
-            });
           }
         : (spec.select ??
           (async (clauses: ListPage) => {
@@ -1386,15 +1394,53 @@ export function listScaffold<
               .limit(clauses.limit)
               .offset(clauses.offset)) as Row[];
           }));
+      const readLoadedPageWithCount =
+        loadIds && !spec.count
+          ? () =>
+              traceListPageWithCount(async (span) => {
+                // Keep the authoritative FROM, predicates and total order. A window
+                // counts before LIMIT without a second evaluation of the filter.
+                const ids = await unwrapDb(db)
+                  .select({
+                    id: sql<string>`${table.id}`,
+                    total: sql<number>`count(*) OVER ()::int`,
+                  })
+                  .from(source)
+                  .where(page.where)
+                  .orderBy(...page.orderBy)
+                  .limit(page.limit)
+                  .offset(page.offset);
+                // With a positive LIMIT, an empty first page proves the total is zero.
+                // Later empty pages need a count because OFFSET may hide matches.
+                const count =
+                  ids[0]?.total ??
+                  (page.offset === 0 && page.limit > 0
+                    ? 0
+                    : await countWhere(db, table, where, source));
+                const data = await loadIds(
+                  ids.map((row) => row.id),
+                  projection,
+                );
+                span.setAttributes({
+                  "db.result_count": data.length,
+                  "db.total_count": count,
+                  "list.rows": data.length,
+                });
+                return { data, count };
+              })
+          : undefined;
       return withListReadTracing(
         { entity, projection: projection.kind },
         async () => {
           const [{ data, count }, groups] = await Promise.all([
-            executeListQueryWithCount({
-              kind: readIntent,
-              rows: () => selectRows(page, projection),
-              count: spec.count ?? (() => countWhere(db, table, where, source)),
-            }),
+            readIntent !== "count" && readLoadedPageWithCount
+              ? readLoadedPageWithCount()
+              : executeListQueryWithCount({
+                  kind: readIntent,
+                  rows: () => selectRows(page, projection),
+                  count:
+                    spec.count ?? (() => countWhere(db, table, where, source)),
+                }),
             group && readIntent === "page"
               ? loadGroupSummaries(db, group, source, where, spec.joins)
               : undefined,

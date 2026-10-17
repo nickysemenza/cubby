@@ -4,7 +4,7 @@ import type { Entity } from "@cubby/schemas/entity";
 
 import type { ListEnrichmentGroup } from "~/entity/model/list-read-fields";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import { withTrace } from "~/server/observability/tracing";
+import { type AppSpan, withTrace } from "~/server/observability/tracing";
 
 interface ListReadTraceContext {
   entity?: Entity;
@@ -48,6 +48,15 @@ export async function traceListPage<T>(run: () => Promise<T[]>): Promise<T[]> {
     ),
   );
 }
+export function traceListPageWithCount<T>(
+  run: (span: AppSpan) => Promise<T>,
+): Promise<T> {
+  const context = listReadContext.getStore();
+  return listReadContext.run({ ...context, corePhase: "page" }, () =>
+    withTrace("entity.list.core.pageWithCount", run, dimensions()),
+  );
+}
+
 export async function traceListCount(
   run: () => Promise<number>,
   table?: string,
