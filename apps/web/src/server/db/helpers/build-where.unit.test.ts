@@ -269,7 +269,7 @@ describe("buildPurchaseWhereClause", () => {
 
   it("resolves vendor codes against live vendors inside the query", async () => {
     expect(
-      await where({ vendorId: [parseShortcodeFor("vendor", "VND-2345")] }),
+      await where({ vendorId: [parseShortcodeFor("vendor", "VEN-2345")] }),
     ).toMatch(/"vendorId" in \(select ref\."id" from "Vendor" ref/i);
   });
 
