@@ -59,7 +59,7 @@ export const cashFlowBaselineRow = z.object({
   /** Months of the trailing window with nonzero net spend. */
   activeMonths: z.number().int().nonnegative(),
   trailingTotal: money,
-  /** Median of the 12 months; an Irregular category carries its mean. */
+  /** Mean of the 12 months (trailing total ÷ 12). */
   monthly: money,
   /** Ledger search over this bucket's trailing window; null when grouped. */
   ledgerFilter: ledgerFilter.nullable(),

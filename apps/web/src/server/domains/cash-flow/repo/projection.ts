@@ -32,7 +32,8 @@ import { loadProjectSubtreeRollups } from "~/server/domains/project/repo/subtree
 import { createAppError } from "~/server/errors/app-error";
 
 const BASELINE_MONTHS = 12;
-/** A category with spend in fewer of the 12 months than this is Irregular. */
+/** A category with spend in fewer of the 12 months than this is Irregular,
+ * a display grouping only: every category carries the same mean. */
 const IRREGULAR_BELOW_ACTIVE_MONTHS = 3;
 
 const monthIndex = (month: string): number => {
@@ -58,14 +59,6 @@ const definedEntries = (
       (entry): entry is [string, string] => entry[1] !== undefined,
     ),
   );
-
-/** Median of whole-cent values, the middle pair rounded to a whole cent. */
-const medianCents = (values: readonly number[]): number => {
-  const sorted = [...values].sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
-  if (sorted.length % 2 === 1) return sorted[middle] ?? 0;
-  return Math.round(((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2);
-};
 
 /** Split `total` cents evenly over `count` months, extra cents first. */
 const spreadCents = (total: number, count: number): number[] => {
@@ -252,12 +245,11 @@ export async function cashFlowProjection(
     const activeMonths = series.filter((value) => value !== 0).length;
     const totalCents = series.reduce((sum, value) => sum + value, 0);
     const irregular = activeMonths < IRREGULAR_BELOW_ACTIVE_MONTHS;
-    // A sparse series' median is almost always 0, so an Irregular category
-    // carries its mean (trailing total ÷ 12). Grouped and separate modes both
-    // sum these same whole-cent figures, so they reconcile exactly.
-    const monthlyCents = irregular
-      ? Math.round(totalCents / BASELINE_MONTHS)
-      : medianCents(series);
+    // The mean (trailing total ÷ 12), so the baseline reconciles to trailing
+    // spend: a median zeroes any category idle in more than half the months, however
+    // large its spend. Grouped and separate modes sum these same whole-cent
+    // figures, so they reconcile exactly.
+    const monthlyCents = Math.round(totalCents / BASELINE_MONTHS);
     return {
       key,
       label: bucket.label,
