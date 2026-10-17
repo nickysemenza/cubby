@@ -2,6 +2,8 @@ import {
   FILTER_ALL,
   FILTER_ANY,
   FILTER_EXACT,
+  FILTER_NOT_PREFIX,
+  splitExcluded,
 } from "@cubby/schemas/filter-sentinel-fields";
 import type { ColumnFiltersState } from "@tanstack/react-table";
 
@@ -25,6 +27,8 @@ export type FilterFieldConfig = {
   matchAll?: boolean;
   /** The "Include sub-…" toggle inside a hierarchical reference's editor. */
   subtree?: { label: string };
+  /** Offers is | is not; a `reason` disables "is not" with that line. */
+  exclude?: { reason: string | null };
   onActivate?: (selectedIds?: readonly string[]) => void;
   onSearchChange?: (query: string) => void;
   isLoading?: boolean;
@@ -67,6 +71,55 @@ const MODE_TOKENS: ReadonlySet<string> = new Set([FILTER_ALL, FILTER_EXACT]);
 /** A filter is active (counts toward "Clear N", tints its chip) once it has a real value. */
 export function hasFilterValue(filter: Filter): boolean {
   return filter.values.some((value) => value !== "" && !MODE_TOKENS.has(value));
+}
+
+/**
+ * The two sides of a value filter: the values it includes ("is") and the
+ * ones it excludes ("is not"), each with its own chip. One value list holds
+ * both; excluded values carry {@link FILTER_NOT_PREFIX}.
+ */
+export type FilterSide = "is" | "isNot";
+
+/** The sides of a filter's values that hold a value, in chip order. */
+export function activeSides(
+  values: readonly string[] | undefined,
+): FilterSide[] {
+  if (values === undefined) return [];
+  const { included, excluded } = splitExcluded(values);
+  return [
+    ...(included.some((value) => value !== "" && !MODE_TOKENS.has(value))
+      ? (["is"] as const)
+      : []),
+    ...(excluded.length > 0 ? (["isNot"] as const) : []),
+  ];
+}
+
+/** The values a side's picker shows: no mode tokens, excluded unprefixed. */
+export function sideValues(
+  values: readonly string[],
+  side: FilterSide,
+): string[] {
+  const { included, excluded } = splitExcluded(values);
+  return side === "is" ? pickerValues(included) : excluded;
+}
+
+/**
+ * A picker change on one side, keeping the other side and the mode tokens.
+ * The "is" side follows the Any value rule ({@link nextPickedValues}); the
+ * "is not" side is a plain value list.
+ */
+export function withSideValues(
+  previous: readonly string[],
+  side: FilterSide,
+  picked: readonly string[],
+): string[] {
+  const { included, excluded } = splitExcluded(previous);
+  return side === "is"
+    ? [
+        ...nextPickedValues(included, picked),
+        ...excluded.map((value) => `${FILTER_NOT_PREFIX}${value}`),
+      ]
+    : [...included, ...picked.map((value) => `${FILTER_NOT_PREFIX}${value}`)];
 }
 
 /**
@@ -190,6 +243,7 @@ export function barFieldFromConfig(
       : undefined,
     matchAll: config.matchAll,
     subtree: config.subtree,
+    exclude: config.exclude,
     onActivate: config.onActivate,
     onSearchChange: config.onSearchChange,
     isLoading: config.isLoading,

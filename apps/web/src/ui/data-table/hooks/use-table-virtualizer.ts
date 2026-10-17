@@ -27,6 +27,7 @@ export type GroupedItem =
       title: string;
       count: number;
       onFilter?: () => void;
+      onHide?: () => void;
     }
   | { kind: "row"; rowIndex: number; groupRowIndex: number };
 
@@ -47,6 +48,7 @@ type ResolvedVirtualIndex =
       title: string;
       count: number;
       onFilter?: () => void;
+      onHide?: () => void;
     }
   /** groupRowIndex present only in grouped mode (position within the group). */
   | { kind: "row"; rowIndex: number; groupRowIndex?: number }

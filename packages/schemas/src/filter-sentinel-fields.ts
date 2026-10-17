@@ -24,3 +24,15 @@ export const excludedFilterValue = (value: string): string | undefined =>
   value.startsWith(FILTER_NOT_PREFIX)
     ? value.slice(FILTER_NOT_PREFIX.length)
     : undefined;
+
+/** A value list split into its included and excluded ("is not") values. */
+export const splitExcluded = (values: readonly string[]) => {
+  const included: string[] = [];
+  const excluded: string[] = [];
+  for (const value of values) {
+    const item = excludedFilterValue(value);
+    if (item === undefined) included.push(value);
+    else excluded.push(item);
+  }
+  return { included, excluded };
+};

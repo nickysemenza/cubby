@@ -5,6 +5,8 @@ import {
   FILTER_ANY,
   FILTER_EXACT,
   FILTER_NONE,
+  FILTER_NOT_PREFIX,
+  splitExcluded,
 } from "@cubby/schemas/filter-sentinel-fields";
 import {
   CURRENT_MEMBER_FILTER,
@@ -88,6 +90,12 @@ export interface FilterSpecCore {
   /** A multi-valued field's Match all key: the control offers Match any | all. */
   match?: { field: string };
   /**
+   * The generated Exclude key: the control offers is | is not, and the column
+   * state carries excluded values with {@link FILTER_NOT_PREFIX}. A `reason`
+   * means the filter cannot exclude; "is not" is disabled with it.
+   */
+  exclude?: { field: string; reason: string | null };
+  /**
    * The key of the reference's generated "Include sub-…" toggle (on unless
    * `false`). Its control sits in this filter's editor, and the column state
    * carries it as {@link FILTER_EXACT}; the URL keeps the toggle's own key.
@@ -111,7 +119,11 @@ export interface FilterSpecCore {
 // `FILTER_EXACT` (an "Include sub-…" toggle switched off) is the one token
 // the URL codec writes under another key: the toggle's own
 // (`includeSubLocations=false`).
-export { FILTER_ALL, FILTER_ANY, FILTER_EXACT, FILTER_NONE };
+export { FILTER_ALL, FILTER_ANY, FILTER_EXACT, FILTER_NONE, FILTER_NOT_PREFIX };
+
+/** The Exclude key a spec can write, or undefined when it cannot exclude. */
+export const excludeKey = (spec: FilterSpecCore): string | undefined =>
+  spec.exclude && spec.exclude.reason === null ? spec.exclude.field : undefined;
 
 const isSentinel = (value: string): boolean =>
   value === FILTER_ANY ||
@@ -210,8 +222,9 @@ export function buildFiltersFromManifest(
           : undefined;
       })
       .with("multiselect", "idMulti", () => {
-        const values = many(raw);
-        if (!values) return undefined;
+        const all = many(raw);
+        if (!all) return undefined;
+        const { included: values, excluded } = splitExcluded(all);
         // Partition BEFORE branding — a token is not an entity id, and
         // `unsafe*Id` would happily brand the string into a lie.
         // Only the tokens this spec declares; anything else is a value.
@@ -225,11 +238,17 @@ export function buildFiltersFromManifest(
         );
         const wantsNone = tokens.includes(FILTER_NONE);
         const wantsAny = tokens.includes(FILTER_ANY);
+        const patch: FilterPatch = {};
+        const exclude = excludeKey(spec);
+        const excludedParsed = exclude
+          ? excluded.map((value) => brand(spec, value))
+          : [];
+        if (exclude && excludedParsed.length) patch[exclude] = excludedParsed;
         // `IS NULL OR IS NOT NULL` is every row, and the OR swallows any value
         // selection sitting alongside it — so both together mean no
         // constraint at all. Degenerate, but the control permits it.
-        if (wantsNone && wantsAny) return undefined;
-        const patch: FilterPatch = {};
+        if (wantsNone && wantsAny)
+          return Object.keys(patch).length ? patch : undefined;
         // Any value already includes every picked value.
         const parsed = wantsAny ? [] : rest.map((value) => brand(spec, value));
         if (parsed.length) patch[field] = parsed;
@@ -237,7 +256,11 @@ export function buildFiltersFromManifest(
           patch[spec.nullable.field] = wantsNone ? "none" : "has";
         if (spec.match && parsed.length && tokens.includes(FILTER_ALL))
           patch[spec.match.field] = "all";
-        if (spec.subtree && parsed.length && tokens.includes(FILTER_EXACT))
+        if (
+          spec.subtree &&
+          (parsed.length || excludedParsed.length) &&
+          tokens.includes(FILTER_EXACT)
+        )
           patch[spec.subtree] = false;
         return Object.keys(patch).length ? patch : undefined;
       })
@@ -258,6 +281,37 @@ export function buildFiltersFromManifest(
 
   return filters;
 }
+
+/**
+ * "Hide" on a grouped list's section, as the field's next column-filter
+ * value: the section's value joins the excluded ones, so the grouping stays
+ * and the section goes. A level section stands for its key's descendants,
+ * so "Include sub-…" turns on. The no-value section hides as Any value, or,
+ * beside picked values, by dropping No value. Undefined when the filter
+ * cannot hide the section.
+ */
+export const hideSectionValues = (
+  spec: FilterSpecCore,
+  section: Readonly<{ key: string; subtree?: boolean }>,
+  values: readonly string[],
+): string[] | undefined => {
+  if (section.key === FILTER_NONE) {
+    if (!spec.nullable) return undefined;
+    const rest = values.filter(
+      (value) => value !== FILTER_NONE && value !== FILTER_ANY,
+    );
+    const picked = splitExcluded(rest).included.filter(
+      (value) => !isSentinel(value),
+    );
+    return picked.length ? rest : [...rest, FILTER_ANY];
+  }
+  if (excludeKey(spec) === undefined) return undefined;
+  const hidden = `${FILTER_NOT_PREFIX}${section.key}`;
+  const next = values.includes(hidden) ? [...values] : [...values, hidden];
+  return section.subtree
+    ? next.filter((value) => value !== FILTER_EXACT)
+    : next;
+};
 
 /**
  * Does one cell value satisfy a multiselect column filter?
@@ -384,11 +438,18 @@ export const partitionFilterSpecs = <TSpec extends FilterSpecCore>(
   );
 };
 
-/** The URL keys a spec writes: its own, plus a folded-in subtree toggle's. */
-const ownedUrlKeys = (spec: FilterSpecCore): string[] =>
-  spec.subtree && !spec.urlOnly
-    ? [filterUrlKey(spec), spec.subtree]
-    : [filterUrlKey(spec)];
+/**
+ * The URL keys a spec writes: its own, plus a folded-in subtree toggle's and
+ * its Exclude key's.
+ */
+const ownedUrlKeys = (spec: FilterSpecCore): string[] => {
+  const exclude = excludeKey(spec);
+  return [
+    filterUrlKey(spec),
+    ...(spec.subtree && !spec.urlOnly ? [spec.subtree] : []),
+    ...(exclude ? [exclude] : []),
+  ];
+};
 
 /**
  * Everything a table needs to move filters between state and the URL,
@@ -470,14 +531,23 @@ export function encodeFilters(
     const raw = get(spec.columnId);
     const all = Array.isArray(raw) ? raw : raw ? [raw] : [];
     const exact = all.includes(FILTER_EXACT);
-    const values = all.filter((value) => value !== FILTER_EXACT);
+    const { included, excluded } = splitExcluded(
+      all.filter((value) => value !== FILTER_EXACT),
+    );
+    const exclude = excludeKey(spec);
+    const values = included;
     // undefined, never "" — `stripSearchParams` only strips on undefined, so
     // an empty string would stick in the URL forever.
     params[filterUrlKey(spec)] = values.length
       ? values.join(LIST_SEPARATOR)
       : undefined;
+    if (exclude)
+      params[exclude] = excluded.length
+        ? excluded.join(LIST_SEPARATOR)
+        : undefined;
     if (spec.subtree && !spec.urlOnly)
-      params[spec.subtree] = exact && values.length ? "false" : undefined;
+      params[spec.subtree] =
+        exact && (values.length || excluded.length) ? "false" : undefined;
   }
   return params;
 }
@@ -489,14 +559,19 @@ export function decodeFilters<TSearch extends {}>(
 ): ColumnFilterValue[] {
   const parsedSearch = parseFilterSearch(search);
   const filters: ColumnFilterValue[] = [];
-  for (const spec of specs) {
-    const raw = parsedSearch[filterUrlKey(spec)];
-    if (raw === undefined || raw === "") continue;
-    const parts = raw
+  const listParts = (raw: string | undefined) =>
+    (raw ?? "")
       .split(LIST_SEPARATOR)
       .map((part) => part.trim())
       .filter(Boolean);
-    if (parts.length === 0) continue;
+  for (const spec of specs) {
+    const exclude = excludeKey(spec);
+    const excluded = exclude
+      ? listParts(parsedSearch[exclude]).map(
+          (value) => `${FILTER_NOT_PREFIX}${value}`,
+        )
+      : [];
+    const parts = [...listParts(parsedSearch[filterUrlKey(spec)]), ...excluded];
     const first = parts[0];
     if (first === undefined) continue;
     const exact =
@@ -690,15 +765,23 @@ function describeFilter(
         return first === "false" ? `No ${noun.toLowerCase()}` : noun;
       })
       .with("multiselect", "idMulti", () => {
-        const [tokens, rest] = partition(values, isSentinel);
+        const { included, excluded } = splitExcluded(values);
+        const [tokens, rest] = partition(included, isSentinel);
         // Values of a reference are entity UUIDs whose names are only
         // resolvable at runtime, so a count is the most this surface can say.
-        const picked =
+        const labelled = (items: string[]) =>
           spec.kind === "idMulti"
-            ? rest.length
-              ? [countLabel(rest.length, humanize(spec.columnId).toLowerCase())]
+            ? items.length
+              ? [
+                  countLabel(
+                    items.length,
+                    humanize(spec.columnId).toLowerCase(),
+                  ),
+                ]
               : []
-            : rest.map((value) => optionLabel(spec, value) ?? value);
+            : items.map((value) => optionLabel(spec, value) ?? value);
+        const picked = labelled(rest);
+        const notPicked = labelled(excluded);
         const presence = spec.nullable
           ? tokens
               .filter((value) => value === FILTER_ANY || value === FILTER_NONE)
@@ -710,7 +793,13 @@ function describeFilter(
           picked.length > MAX_VALUES_PER_FILTER
             ? collapse(picked, MAX_VALUES_PER_FILTER)
             : picked.join(tokens.includes(FILTER_ALL) ? " and " : " or ");
-        const parts = [...(joined ? [joined] : []), ...presence];
+        const parts = [
+          ...(joined ? [joined] : []),
+          ...presence,
+          ...(notPicked.length
+            ? [`not ${collapse(notPicked, MAX_VALUES_PER_FILTER)}`]
+            : []),
+        ];
         return parts.length ? parts.join(", ") : undefined;
       })
       .exhaustive()

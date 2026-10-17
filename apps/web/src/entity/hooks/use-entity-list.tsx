@@ -17,6 +17,7 @@ import {
   buildFiltersFromManifest,
   FILTER_EXACT,
   filterGetterFromColumnFilters,
+  hideSectionValues,
   summarizeListState,
 } from "~/entity/filters";
 import type { ListGroupState } from "~/entity/hooks/progressive-list";
@@ -553,6 +554,29 @@ export function useEntityList<
                 value: spec?.subtree && !subtree ? [key, FILTER_EXACT] : [key],
               },
             ])
+        : undefined,
+      // "Hide" excludes the section's value and keeps the grouping.
+      hide: spec
+        ? (group) =>
+            hideSectionValues(spec, group, []) === undefined
+              ? undefined
+              : () =>
+                  setColumnFilters((previous) => {
+                    const current = previous.find(
+                      ({ id }) => id === spec.columnId,
+                    )?.value;
+                    const values = hideSectionValues(
+                      spec,
+                      group,
+                      Array.isArray(current) ? current.map(String) : [],
+                    );
+                    return [
+                      ...previous.filter(({ id }) => id !== spec.columnId),
+                      ...(values?.length
+                        ? [{ id: spec.columnId, value: values }]
+                        : []),
+                    ];
+                  })
         : undefined,
     };
   }, [entity, groupChoice, groups, setColumnFilters]);

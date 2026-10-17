@@ -189,6 +189,95 @@ test("wardrobe cards group at a category level and a header filters to that type
   expect(url.searchParams.get("groupLevel")).toBe("2");
 });
 
+// Without the apparel family scope, so an uncategorized owned item shows.
+test("wardrobe cards exclude a clothing type, keep uncategorized items, and a header hides a section", async ({
+  page,
+}) => {
+  const name = `Wardrobe except ${Date.now()}`;
+  const { owner, location } = await seedWardrobePrerequisites(page, name);
+  const own = {
+    locationId: location.id,
+    amount: { value: 1, unit: "each" },
+    ownershipMode: "explicit",
+    ownerLedgerPartyId: owner.id,
+  } as const;
+  for (const type of ["Tops", "Outerwear"]) {
+    const category = await seedProductCategoryPrerequisite(page, {
+      name: `${name} ${type}`,
+      parentId: taxonomyShortcode("apparel"),
+    });
+    const product = await createEntityFixture(page, "product", {
+      name: `${name} ${type} item`,
+      manufacturer: "Fixture",
+      categoryId: category.id,
+    });
+    await createEntityFixture(page, "inventory", {
+      productId: product.id,
+      ...own,
+    });
+  }
+  const loose = await createEntityFixture(page, "product", {
+    name: `${name} uncategorized item`,
+    manufacturer: "Fixture",
+  });
+  await createEntityFixture(page, "inventory", { productId: loose.id, ...own });
+
+  const sections = page.getByTestId("entity-card-grid").getByRole("region");
+  const tops = sections.filter({ hasText: `${name} Tops` });
+  await gotoAuthenticatedPage(
+    page,
+    `/inventory?owner=${owner.id}&view=shelf&groupBy=category`,
+    tops,
+  );
+  await expect(sections.filter({ hasText: `${name} Outerwear` })).toHaveCount(
+    1,
+  );
+
+  // Category is not Outerwear, through the picker's is / is not toggle.
+  const categoryChip = page.getByRole("button", {
+    name: "Category: any",
+    exact: true,
+  });
+  if (!(await categoryChip.isVisible()))
+    await page.getByRole("button", { name: "More", exact: true }).click();
+  await categoryChip.click();
+  await page.getByRole("radio", { name: "is not", exact: true }).click();
+  await page
+    .getByRole("combobox", { name: "Filter Category" })
+    .fill(`${name} Outerwear`);
+  await page
+    .getByRole("option", { name: new RegExp(`${name} Outerwear`) })
+    .click();
+  await page.getByRole("button", { name: "Apply", exact: true }).click();
+
+  await expect(
+    page.getByRole("button", {
+      name: new RegExp(`^Category: is not .*${name} Outerwear`),
+    }),
+  ).toBeVisible();
+  // No Outerwear section; the uncategorized item is not Outerwear, so it
+  // stays, under the no-value section, which is always last.
+  await expect(sections).toHaveText([
+    /^Apparel/,
+    new RegExp(`^${name} Tops`),
+    /^No category/,
+  ]);
+  await expect(
+    sections
+      .filter({ hasText: /^No category/ })
+      .getByRole("link", { name: new RegExp(`^${name} uncategorized item`) }),
+  ).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("categoryExclude")).toBeTruthy();
+
+  // Hide keeps the grouping and excludes that section's value too.
+  await tops.hover();
+  await tops.getByRole("button", { name: /^Hide/ }).click();
+  await expect(sections).toHaveText([/^Apparel/, /^No category/]);
+  const url = new URL(page.url());
+  expect(url.searchParams.get("groupBy")).toBe("category");
+  expect(url.searchParams.get("categoryExclude")?.split(",")).toHaveLength(2);
+});
+
 test("mobile list section headers stay pinned while their section scrolls", async ({
   page,
 }) => {
