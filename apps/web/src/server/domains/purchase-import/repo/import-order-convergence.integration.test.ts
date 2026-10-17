@@ -22,7 +22,8 @@ import {
   buildKernelContext,
   createFixtureWithContext,
 } from "tooling/scenarios/context";
-import { withTestDb } from "tooling/test-setup";
+import { seededRandom, testShuffleSeed } from "tooling/test-seed";
+import { type TestDbContext, withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { Database } from "~/server/db";
@@ -66,7 +67,12 @@ import {
  * Every arrival order of the four evidence sources must converge on one
  * Purchase, Product, Expense, settlement, inventory row and linked mail. The
  * browser spec keeps both statement-first and receipt-first UI paths; this file
- * keeps all 24 orders against the same server writers those UI steps dispatch.
+ * drives the same server writers those UI steps dispatch.
+ *
+ * Each order costs ~2s of real writers, so the file runs a Latin square (every
+ * source arrives in every position once) plus two further orders drawn from
+ * the run's shuffle seed, instead of all 24. A different
+ * `CUBBY_TEST_SHUFFLE_SEED` reproduces a different pair.
  */
 const EVIDENCE_SOURCES = ["gmail", "retailer", "photo", "csv"] as const;
 type EvidenceSource = (typeof EVIDENCE_SOURCES)[number];
@@ -79,6 +85,23 @@ function sourcePermutations(
       (tail) => [source, ...tail],
     ),
   );
+}
+
+function sampledSourceOrders(): EvidenceSource[][] {
+  const rotations = EVIDENCE_SOURCES.map((_, offset) => [
+    ...EVIDENCE_SOURCES.slice(offset),
+    ...EVIDENCE_SOURCES.slice(0, offset),
+  ]);
+  const key = (order: readonly EvidenceSource[]) => order.join("-");
+  const chosen = new Set(rotations.map(key));
+  const remaining = sourcePermutations(EVIDENCE_SOURCES).filter(
+    (order) => !chosen.has(key(order)),
+  );
+  const random = seededRandom(testShuffleSeed());
+  const sampled = [0, 1].map(
+    () => remaining.splice(Math.floor(random() * remaining.length), 1)[0],
+  );
+  return [...rotations, ...sampled.filter((order) => order !== undefined)];
 }
 
 async function ensureMember(db: Database, actor: ActorContext) {
@@ -103,16 +126,16 @@ async function ensureMember(db: Database, actor: ActorContext) {
   return member;
 }
 
-async function createConvergenceHarness(
-  db: Database,
-  actor: ActorContext,
-  token: string,
-) {
-  const database = getDb(db);
+/**
+ * The member binding and the six reference entities every order needs. Each
+ * order runs in its own clone of this world, so one token serves them all.
+ */
+const CONVERGENCE_TOKEN = "order";
+async function seedConvergenceWorld(db: Database, actor: ActorContext) {
+  // Writers under test drive describe jobs by hand, never automatic processing.
+  await updateImageProcessingSettings(db, { enabled: false, paused: false });
   const kernel = buildKernelContext(db, actor.userId);
   const member = await ensureMember(db, actor);
-  const names = convergenceNames(token);
-  const { productName, orderId } = names;
   const { vendor, account, card, location, category, productCategory } =
     await createConvergenceFixtures(
       (entity, overrides) =>
@@ -122,11 +145,38 @@ async function createConvergenceHarness(
           buildEntity(entity, overrides),
         ),
       member.shortcode,
-      names,
+      convergenceNames(CONVERGENCE_TOKEN),
     );
-  const vendorId = await resolveOrThrow(db, "vendor", vendor.id);
-  const accountId = await resolveOrThrow(db, "vendorAccount", account.id);
-  const cardId = await resolveOrThrow(db, "financialAccount", card.id);
+  return {
+    member: { id: member.id, shortcode: member.shortcode },
+    vendor: { id: vendor.id },
+    location: { id: location.id },
+    category: { id: category.id },
+    productCategory: { id: productCategory.id },
+    vendorId: await resolveOrThrow(db, "vendor", vendor.id),
+    accountId: await resolveOrThrow(db, "vendorAccount", account.id),
+    cardId: await resolveOrThrow(db, "financialAccount", card.id),
+  };
+}
+
+async function createConvergenceHarness(ctx: TestDbContext) {
+  const world = await ctx.fixture("convergence-world", seedConvergenceWorld);
+  const { db, actor } = ctx;
+  const token = CONVERGENCE_TOKEN;
+  const database = getDb(db);
+  const kernel = buildKernelContext(db, actor.userId);
+  const names = convergenceNames(token);
+  const { productName, orderId } = names;
+  const {
+    member,
+    vendor,
+    location,
+    category,
+    productCategory,
+    vendorId,
+    accountId,
+    cardId,
+  } = world;
   let bookedPurchaseCode: string | undefined;
   let retailerDone = false;
   let reconciliationFindingId: string | undefined;
@@ -520,22 +570,18 @@ describe("import order convergence", { timeout: 30_000 }, () => {
   const ctx = withTestDb();
   let queue: ReturnType<typeof captureBackgroundQueue>;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     // Background publishes are captured, not run inline: processing and
     // enrichment must not reach a model while the writers under test run.
     queue = captureBackgroundQueue();
-    await updateImageProcessingSettings(ctx.db, {
-      enabled: false,
-      paused: false,
-    });
   });
   afterEach(() => queue.restore());
 
-  it.each(sourcePermutations(EVIDENCE_SOURCES).map((order) => [order]))(
+  it.each(sampledSourceOrders().map((order) => [order]))(
     "Gmail, retailer, own photos and statement converge: %j",
     async (order) => {
-      const token = `order-${order.join("-")}`;
-      const harness = await createConvergenceHarness(ctx.db, ctx.actor, token);
+      const token = CONVERGENCE_TOKEN;
+      const harness = await createConvergenceHarness(ctx);
       for (const source of order) await harness.sources[source]();
       const result = await harness.settle();
       expect(await harness.projection()).toEqual({

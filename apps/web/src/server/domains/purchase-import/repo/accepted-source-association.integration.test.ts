@@ -65,72 +65,102 @@ import {
 // fabricated finding, a second spend line, or stock receiving.
 describe("reviewed accepted source Product association", () => {
   const ctx = withTestDb();
+  // The imported order is the expensive part of every case, so each variant
+  // is seeded once per run and every case gets its own clone of it.
   async function world(linked = false, multi = false, unboundSecond = false) {
-    const { party, vendor } = await memberImportWorld(ctx.db, ctx.actor, {
-      vendor: { name: "Synthetic photo retailer" },
-    });
-    const retainedProduct = multi
-      ? await createProductFixture(
-          ctx.db,
-          makeProductInput({ name: "Synthetic retained item" }),
-          ctx.actor,
-        )
-      : null;
-    await memberImport(ctx.db, ctx.actor, {
-      key: "accepted-photo-item",
-      orders: [
-        {
-          stableOrderId: "accepted-photo-item",
-          resolutions:
-            retainedProduct && !unboundSecond
-              ? [undefined, { kind: "existing", productId: retainedProduct.id }]
-              : undefined,
-          vendorId: vendor.shortcode,
-          source: {
-            kind: "receipt_photo",
-            externalKey: "synthetic:photo-association",
-            checksum: "a".repeat(64),
-          },
-          extraction: {
-            status: "ready",
-            candidate: {
-              orderId: "SYNTHETIC-PHOTO-ITEM",
-              orderedAt: "2026-09-01T18:00:00Z",
-              merchant: "Synthetic photo retailer",
-              currency: "USD",
-              printedGrandTotal: multi ? 65 : 40,
-              lines: [
-                {
-                  title: "Synthetic household item",
-                  amount: 40,
-                  quantity: 2,
-                  lineKind: "principal",
-                },
-                ...(multi
+    const { party, vendor, retainedProduct, photographed } = await ctx.fixture(
+      `world:${multi}:${unboundSecond}`,
+      async (db, actor) => {
+        const { party, vendor } = await memberImportWorld(db, actor, {
+          vendor: { name: "Synthetic photo retailer" },
+        });
+        const retainedProduct = multi
+          ? await createProductFixture(
+              db,
+              makeProductInput({ name: "Synthetic retained item" }),
+              actor,
+            )
+          : null;
+        await memberImport(db, actor, {
+          key: "accepted-photo-item",
+          orders: [
+            {
+              stableOrderId: "accepted-photo-item",
+              resolutions:
+                retainedProduct && !unboundSecond
                   ? [
-                      {
-                        title: "Synthetic retained item",
-                        amount: 20,
-                        quantity: 3,
-                        lineKind: "principal" as const,
-                      },
-                      {
-                        title: "Synthetic order tax",
-                        amount: 5,
-                        lineKind: "tax" as const,
-                      },
+                      undefined,
+                      { kind: "existing", productId: retainedProduct.id },
                     ]
-                  : []),
-              ],
-              payments: [
-                { amount: multi ? 65 : 40, chargedAt: "2026-09-01T18:00:00Z" },
-              ],
-              allShipmentsDelivered: true,
+                  : undefined,
+              vendorId: vendor.shortcode,
+              source: {
+                kind: "receipt_photo",
+                externalKey: "synthetic:photo-association",
+                checksum: "a".repeat(64),
+              },
+              extraction: {
+                status: "ready",
+                candidate: {
+                  orderId: "SYNTHETIC-PHOTO-ITEM",
+                  orderedAt: "2026-09-01T18:00:00Z",
+                  merchant: "Synthetic photo retailer",
+                  currency: "USD",
+                  printedGrandTotal: multi ? 65 : 40,
+                  lines: [
+                    {
+                      title: "Synthetic household item",
+                      amount: 40,
+                      quantity: 2,
+                      lineKind: "principal",
+                    },
+                    ...(multi
+                      ? [
+                          {
+                            title: "Synthetic retained item",
+                            amount: 20,
+                            quantity: 3,
+                            lineKind: "principal" as const,
+                          },
+                          {
+                            title: "Synthetic order tax",
+                            amount: 5,
+                            lineKind: "tax" as const,
+                          },
+                        ]
+                      : []),
+                  ],
+                  payments: [
+                    {
+                      amount: multi ? 65 : 40,
+                      chargedAt: "2026-09-01T18:00:00Z",
+                    },
+                  ],
+                  allShipmentsDelivered: true,
+                },
+              },
             },
+          ],
+        });
+        const photographed = await createProductFixture(
+          db,
+          makeProductInput({ name: "Synthetic photographed household item" }),
+          actor,
+        );
+        return {
+          party: { id: party.id },
+          vendor: { id: vendor.id, shortcode: vendor.shortcode },
+          retainedProduct: retainedProduct && {
+            id: retainedProduct.id,
+            entityId: retainedProduct.entityId,
           },
-        },
-      ],
-    });
+          photographed: {
+            id: photographed.id,
+            entityId: photographed.entityId,
+          },
+        };
+      },
+    );
     const db = getDb(ctx.db);
     const association = await db.query.importSourceOrder.findFirst();
     const item = await db.query.expense.findFirst({
@@ -138,11 +168,6 @@ describe("reviewed accepted source Product association", () => {
     });
     if (!association || !item)
       throw new Error("Synthetic accepted item missing");
-    const photographed = await createProductFixture(
-      ctx.db,
-      makeProductInput({ name: "Synthetic photographed household item" }),
-      ctx.actor,
-    );
     if (linked)
       await db
         .update(expense)

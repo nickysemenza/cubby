@@ -11,8 +11,15 @@ import { pollUntil } from "@cubby/shared/retry";
 import {
   type DatabaseLease,
   leaseDatabase,
+  leaseTemplateDatabase,
   prepareTemplate,
 } from "./test-database-lease";
+import {
+  prepareFixtureTemplate,
+  setupFixtureRun,
+  teardownFixtureRun,
+} from "./test-fixture-template";
+import type { TestProject } from "vitest/node";
 import {
   BASE_HOME_ID,
   BASE_HOME_SHORTCODE,
@@ -28,7 +35,7 @@ import { testUserId } from "@cubby/schemas/testing";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { type Pool } from "pg";
-import { beforeEach } from "vitest";
+import { afterEach, beforeEach, expect } from "vitest";
 import { Database } from "../src/server/db/database";
 import {
   observePgPoolAndClientQueries,
@@ -133,9 +140,14 @@ export const TEST_ACTOR: ActorContext = buildActorContext(
   testUserId(TEST_USER_ID),
 );
 
-/** Vitest `globalSetup`: prepare the template every integration file leases from. */
-export async function setup() {
+/**
+ * Vitest `globalSetup`: prepare the template every integration file leases
+ * from, and name the run that owns {@link TestDbContext.fixture} templates.
+ */
+export async function setup(project: TestProject) {
   await prepareTemplate("vitest");
+  const run = await setupFixtureRun(project);
+  return () => teardownFixtureRun(run);
 }
 
 /**
@@ -225,14 +237,11 @@ async function getFileDb() {
     lease,
     prepared: { pool, reset },
   } = await leaseDatabase("vitest", async ({ databaseUrl }) => {
-    const pool = countPoolQueries(
-      createPostgresPool({ connectionString: databaseUrl }),
-    );
     // `resetTestDb` terminates this pool's own idle backends; node-postgres
     // surfaces that as an 'error' on the idle client, and an unhandled one
-    // takes the whole worker down. Swallow it — the pool just opens a fresh
-    // connection.
-    pool.on("error", () => {});
+    // takes the whole worker down. `openTestPool` swallows it — the pool just
+    // opens a fresh connection.
+    const pool = openTestPool(databaseUrl);
     try {
       return { pool, reset: await readResetSql(pool) };
     } catch (error) {
@@ -306,12 +315,116 @@ async function resetTestDb() {
   return (await getFileDb()).db;
 }
 
+/** What a fixture seed may return: it is stored in, and read back from, SQL. */
+export type FixtureJson =
+  | string
+  | number
+  | boolean
+  | null
+  | FixtureJson[]
+  | { [key: string]: FixtureJson };
+
 /** Holder returned by {@link withTestDb}; fields are live before each test. */
 export interface TestDbContext {
   db: Database;
   /** Isolated IntegreSQL URL for a workerd Worker/Hyperdrive test binding. */
   databaseUrl: string;
   actor: ActorContext;
+  /**
+   * Switch this test to a fresh clone of `key`'s seeded template and return
+   * the seed's result. The first call in the run seeds a template through
+   * `seed` (on top of the baseline user and Home); every later call, in any
+   * worker, clones it. Use it only when `seed` costs more than a clone
+   * (~250 ms under parallel load); see `tooling/test-fixture-template.ts`.
+   * `seed` must be deterministic for its key and close over nothing per-test.
+   */
+  fixture<T extends FixtureJson>(
+    key: string,
+    seed: (db: Database, actor: ActorContext) => Promise<T>,
+  ): Promise<T>;
+}
+
+/** A per-test clone of a fixture template, released after the test. */
+interface FixtureDb {
+  db: Database;
+  databaseUrl: string;
+  pool: Pool;
+  lease: DatabaseLease;
+}
+
+function openTestPool(databaseUrl: string): Pool {
+  const pool = countPoolQueries(
+    createPostgresPool({ connectionString: databaseUrl }),
+  );
+  // See getFileDb: terminated idle backends surface as pool errors.
+  pool.on("error", () => {});
+  return pool;
+}
+
+async function closeFixtureDb(fixtureDb: FixtureDb | null) {
+  if (!fixtureDb) return;
+  try {
+    await fixtureDb.pool.end();
+  } finally {
+    await fixtureDb.lease.close();
+  }
+}
+
+async function leaseFixtureDb<T extends FixtureJson>(
+  key: string,
+  actor: ActorContext,
+  seed: (db: Database, actor: ActorContext) => Promise<T>,
+): Promise<{ fixtureDb: FixtureDb; value: T }> {
+  // Keys are file-scoped: workers share one module graph and one run.
+  const scopedKey = `${expect.getState().testPath ?? ""}\0${key}`;
+  const hash = await prepareFixtureTemplate(scopedKey, async (databaseUrl) => {
+    const pool = openTestPool(databaseUrl);
+    try {
+      const rawDb = drizzle({ client: pool, schema });
+      await seedTestUser(rawDb);
+      await seedBaseWorld(rawDb);
+      const value = await seed(toTestDatabase(rawDb, pool), actor);
+      // Outside `public`, so the file reset and table scans never see it. One
+      // statement per query: the traced pool expects a single result.
+      await pool.query("CREATE SCHEMA cubby_test");
+      await pool.query(
+        "CREATE TABLE cubby_test.fixture (value jsonb NOT NULL)",
+      );
+      await pool.query("INSERT INTO cubby_test.fixture VALUES ($1)", [
+        JSON.stringify(value),
+      ]);
+    } finally {
+      await pool.end();
+    }
+  });
+  const { lease, prepared } = await leaseTemplateDatabase(
+    hash,
+    async ({ databaseUrl }) => {
+      const pool = openTestPool(databaseUrl);
+      try {
+        const { rows } = await pool.query<{ value: T }>(
+          "SELECT value FROM cubby_test.fixture",
+        );
+        const [row] = rows;
+        if (!row || rows.length !== 1)
+          throw new Error(`Fixture template ${key} has no stored result`);
+        return { pool, value: row.value };
+      } catch (error) {
+        await pool.end();
+        throw error;
+      }
+    },
+  );
+  const rawDb = drizzle({ client: prepared.pool, schema });
+  return {
+    fixtureDb: {
+      db: toTestDatabase(rawDb, prepared.pool),
+      databaseUrl: lease.databaseUrl,
+      pool: prepared.pool,
+      lease,
+    },
+    value: prepared.value,
+  };
 }
 
 /**
@@ -362,27 +475,44 @@ export function withTestDb(channel: AuditChannel = "web"): TestDbContext {
   const actor = buildActorContext(testUserId(TEST_USER_ID), channel);
   interface TestDbState {
     db: Database | null;
+    fixtureDb: FixtureDb | null;
   }
-  const state: TestDbState = { db: null };
+  const state: TestDbState = { db: null, fixtureDb: null };
   const ctx: TestDbContext = {
     get db() {
       if (!state.db) {
         throw new Error("withTestDb database is unavailable before beforeEach");
       }
-      return state.db;
+      return state.fixtureDb?.db ?? state.db;
     },
     get databaseUrl() {
       if (!state.db) {
         throw new Error("withTestDb database is unavailable before beforeEach");
       }
-      return fileDb?.databaseUrl ?? "";
+      return state.fixtureDb?.databaseUrl ?? fileDb?.databaseUrl ?? "";
     },
     actor,
+    async fixture(key, seed) {
+      if (!state.db) {
+        throw new Error("withTestDb fixture is unavailable before beforeEach");
+      }
+      if (state.fixtureDb) {
+        throw new Error("withTestDb fixture is already active for this test");
+      }
+      const { fixtureDb, value } = await leaseFixtureDb(key, actor, seed);
+      state.fixtureDb = fixtureDb;
+      return value;
+    },
   };
 
   beforeEach(async () => {
     state.db = await resetTestDb();
     ctx.actor = actor;
+  });
+  afterEach(async () => {
+    const fixtureDb = state.fixtureDb;
+    state.fixtureDb = null;
+    await closeFixtureDb(fixtureDb);
   });
   return ctx;
 }

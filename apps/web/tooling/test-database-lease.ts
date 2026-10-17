@@ -103,6 +103,14 @@ export async function leaseDatabase<T>(
   if (!preparedHashes.has(namespace)) await prepareTemplate(namespace);
   const hash = preparedHashes.get(namespace);
   if (!hash) throw new Error(`Missing prepared ${namespace} template`);
+  return leaseTemplateDatabase(hash, setup);
+}
+
+/** {@link leaseDatabase} for an already-initialized template hash. */
+export async function leaseTemplateDatabase<T>(
+  hash: string,
+  setup: (lease: DatabaseLease) => Promise<T>,
+): Promise<{ lease: DatabaseLease; prepared: T }> {
   const { id, database } = await integreSQL().api.getTestDatabase(hash);
   const name = database.config.database;
   let released: Promise<void> | undefined;
@@ -195,6 +203,8 @@ export async function leaseNamedDatabase<T>(
     name: string;
     retention: "drop" | "retain";
     onCreated?: (target: NamedDatabaseTarget) => void | Promise<void>;
+    /** Defaults to the committed migrations; lifecycle tests skip them. */
+    migrate?: (client: Client) => Promise<void>;
   },
   setup: (target: NamedDatabaseTarget) => Promise<T>,
 ): Promise<{ lease: DatabaseLease; prepared: T }> {
@@ -248,7 +258,7 @@ export async function leaseNamedDatabase<T>(
     const client = new Client({ connectionString: databaseUrl });
     await client.connect();
     try {
-      await migrateDatabase(drizzle(client));
+      await (options.migrate ?? ((c) => migrateDatabase(drizzle(c))))(client);
     } finally {
       await client.end();
     }

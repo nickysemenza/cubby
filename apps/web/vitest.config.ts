@@ -8,15 +8,24 @@ import topLevelAwait from "vite-plugin-top-level-await";
 import wasm from "vite-plugin-wasm";
 import { defineConfig, type TestProjectConfiguration } from "vitest/config";
 import { readR2PublicUrl } from "./tooling/cloudflare-public-config.ts";
+import { testShuffleSeed } from "./tooling/test-seed.ts";
 
 // Generated output and the @cubby/recipebridge WASM are never committed; bring
 // them current before any module graph (or TanStack's route scan) reads them.
-// Each is an Nx cache hit when its inputs are unchanged.
-for (const target of ["wasm", "generate"])
-  execFileSync(process.execPath, ["../../scripts/ensure.ts", target], {
-    cwd: import.meta.dirname,
-    stdio: "inherit",
-  });
+// Each is a marker or Nx cache hit when its inputs are unchanged. Every Nx
+// task that runs Vitest already depends on both targets
+// (apps/web/project.json), and Vitest evaluates this file more than once.
+if (
+  process.env.NX_TASK_TARGET_PROJECT === undefined &&
+  process.env.CUBBY_VITEST_ENSURED === undefined
+) {
+  for (const target of ["wasm", "generate"])
+    execFileSync(process.execPath, ["../../scripts/ensure.ts", target], {
+      cwd: import.meta.dirname,
+      stdio: "inherit",
+    });
+  process.env.CUBBY_VITEST_ENSURED = "1";
+}
 
 const gitCommit = execSync("git rev-parse --short HEAD", {
   encoding: "utf-8",
@@ -151,13 +160,7 @@ const integrationProject = {
   // full-table reset documented in tooling/test-setup.ts.
   hookTimeout: 30000,
 };
-const sharedIsolationSeed = Number.parseInt(
-  process.env.CUBBY_TEST_SHUFFLE_SEED ?? "20260831",
-  10,
-);
-if (!Number.isSafeInteger(sharedIsolationSeed)) {
-  throw new Error("CUBBY_TEST_SHUFFLE_SEED must be an integer");
-}
+const sharedIsolationSeed = testShuffleSeed();
 const groupZeroMaxWorkers = Number.parseInt(
   process.env.VITEST_MAX_WORKERS ?? "4",
   10,
