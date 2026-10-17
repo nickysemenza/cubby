@@ -213,7 +213,7 @@ describe("entity_read field selection", () => {
           entityId: created.entityId,
           entityKind: "product" as const,
           source: "synthetic",
-          kind: "retailer_sku",
+          kind: "retailer_sku" as const,
           externalId,
           isPrimary: index === 0,
         })),

@@ -72,7 +72,9 @@ function childSchemas(schema: z.core.$ZodType, key: string): z.core.$ZodType[] {
   if (node instanceof z.ZodObject)
     return Object.hasOwn(node.shape, key) ? [node.shape[key]] : [];
   if (node instanceof z.ZodRecord)
-    return node.def.keyType.safeParse(key).success ? [node.def.valueType] : [];
+    return z.safeParse(node.def.keyType, key).success
+      ? [node.def.valueType]
+      : [];
   if (node instanceof z.ZodUnion)
     return node.options.flatMap((option) => childSchemas(option, key));
   if (node instanceof z.ZodIntersection)
