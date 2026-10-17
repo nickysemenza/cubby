@@ -71,13 +71,19 @@ export function selectedListProjection(
   };
 }
 
-/** A dependency shared by several groups is one loader, gated by its consumers. */
+/** Selected reads can gate a shared loader by all its consumer fields,
+ * including transitive consumers;
+ * full/group reads still load every dependency belonging to their groups. */
 export const loadListGroup = async <T>(
   projection: ListProjection,
   groups: ListEnrichmentGroup | readonly ListEnrichmentGroup[],
   load: () => Promise<T>,
+  consumerFields?: readonly string[],
 ): Promise<T | undefined> =>
-  [groups].flat().some((group) => wantsListGroup(projection, group))
+  [groups].flat().some((group) => wantsListGroup(projection, group)) &&
+  (projection.kind !== "selected" ||
+    consumerFields === undefined ||
+    consumerFields.some((field) => projection.fields.includes(field)))
     ? traceListGroup(groups, load)
     : undefined;
 

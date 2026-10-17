@@ -687,7 +687,7 @@ const exactProblemPresentationRowSchema = z.object({
     .object({
       id: z.string(),
       name: z.string(),
-      effectivePrice: z.number().nullish(),
+      price: z.number().nullish(),
     })
     .optional(),
   location: z.object({ id: z.string(), name: z.string() }).optional(),
@@ -750,17 +750,6 @@ const selectedFastCard = <S extends z.ZodObject>(
 ): FastExactPresenter => ({
   fields: Object.keys(schema.shape),
   present: (row, hydration) => present(schema.parse(row), hydration),
-});
-
-const fullFastCard = (
-  present: (
-    row: ExactProblemPresentationRow,
-    hydration: FastProblemHydration | undefined,
-  ) => FastProblemCard,
-): FastExactPresenter => ({
-  fields: undefined,
-  present: (row, hydration) =>
-    present(exactProblemPresentationRowSchema.parse(row), hydration),
 });
 
 const productRef = (row: ExactProblemPresentationRow) => ({
@@ -975,18 +964,25 @@ const fastExactPresenters = {
       .required(),
     (row) => inventoryRow(row, [amountLabel(row)]),
   ),
-  inventoryWithoutPricePath: fullFastCard((row) =>
-    // The price is what the unit WOULD be valued against — the row exists
-    // precisely because no conversion reaches it.
-    inventoryRow(
-      row,
-      [amountLabel(row)],
-      [
-        textBadge(
-          `Unreachable ${formatCurrency(Number(row.product?.effectivePrice ?? 0))} each`,
-        ),
-      ],
-    ),
+  inventoryWithoutPricePath: selectedFastCard(
+    exactProblemPresentationRowSchema
+      .pick({ id: true, amount: true, product: true, location: true })
+      .required()
+      .extend({
+        product: exactProblemPresentationRowSchema.shape.product
+          .unwrap()
+          .extend({
+            price: z.number(),
+          }),
+      }),
+    (row) =>
+      // The price is what the unit WOULD be valued against — the row exists
+      // precisely because no conversion reaches it.
+      inventoryRow(
+        row,
+        [amountLabel(row)],
+        [textBadge(`Unreachable ${formatCurrency(row.product.price)} each`)],
+      ),
   ),
   vendorsWithoutLogos: selectedFastCard(
     exactProblemPresentationRowSchema

@@ -418,8 +418,15 @@ const hydrateInventoryListRows = async (
 ) => {
   const entries = results.map((row) => row.inventoryEntry);
   const [ownership, dataQualities] = await Promise.all([
-    loadListGroup(projection, ["relations", "derived"], () =>
-      loadInventoryOwnershipTraces(db, entries),
+    loadListGroup(
+      projection,
+      ["relations", "derived"],
+      () => loadInventoryOwnershipTraces(db, entries),
+      [
+        "ownerLedgerPartyId",
+        "effectiveOwnership",
+        "fieldResolutions",
+      ] satisfies readonly (keyof z.output<typeof inventoryListItemOut>)[],
     ),
     loadListGroup(projection, "quality", () =>
       loadDataQualities(

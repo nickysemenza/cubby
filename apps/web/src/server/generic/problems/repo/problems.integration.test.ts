@@ -190,6 +190,13 @@ describe("Problems card read projections", () => {
       expect(grouped[key]).toHaveLength(12);
     }
     expect(grouped.understatedCostMeals[0]?.recipeCount).toBe(1);
+    // Inventory's embedded `price` is already resolved. Reading the Product
+    // detail field name here used to silently turn a known price into zero.
+    expect(grouped.inventoryWithoutPricePath[0]?.badges).toContainEqual({
+      label: "Unreachable $10.00 each",
+      entity: null,
+      id: null,
+    });
   });
 });
 

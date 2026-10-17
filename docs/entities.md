@@ -1268,9 +1268,14 @@ remaining enrichment reads.
 
 Fast Problems cards derive selected fields from their required presenter
 schemas, using the same ownership and transitive loader dependencies. Consumers
-without an established narrower shape retain complete reads. In particular,
-the inventory price-path card remains complete while its embedded product price
-contract is unresolved. Focused raw Problems consumers and count/continuation
+without an established narrower shape retain complete reads. The inventory
+price-path card requires its embedded product's effective price explicitly.
+Shared group loaders may declare their consumer fields: selected reads load
+them only when one of those fields is requested; full and group reads retain
+their complete dependency behavior. For example, requesting inventory product
+and location identities does not resolve acquisition ownership, while any of
+its ownership fields still loads the complete inherited evidence.
+Focused raw Problems consumers and count/continuation
 reads retain their existing contracts.
 
 The shared list scaffold selects relation-loaded page IDs with a window count,
