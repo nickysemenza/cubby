@@ -48,7 +48,6 @@ export {
   countWhere,
   eqAny,
   eqAnyOrPresence,
-  eqAnyRequested,
   executeListQueryWithCount,
   anyOfCondition,
   flagCondition,

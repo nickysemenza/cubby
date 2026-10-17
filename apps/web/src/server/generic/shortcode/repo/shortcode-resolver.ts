@@ -203,18 +203,6 @@ export const bindShortcodeResolver = <E extends ShortcodeEntity>(
     resolveAllPresent(db, entity, codes),
 });
 
-/** Empty input is unrestricted; supplied-but-unresolved input returns `[]`. */
-export async function resolveFilterIds<E extends ShortcodeEntity>(
-  db: Database | DrizzleTransaction,
-  entity: E,
-  value: string | readonly string[] | undefined,
-): Promise<EntityId<E>[] | undefined> {
-  if (value === undefined) return undefined;
-  const codes = Array.isArray(value) ? value : [value];
-  if (codes.length === 0) return undefined;
-  return resolveAllPresent(db, entity, codes);
-}
-
 /** Resolves in one query per entity and keys results by canonical code. */
 export async function resolveShortcodes(
   db: Database | DrizzleTransaction,
