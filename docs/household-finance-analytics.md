@@ -54,8 +54,8 @@ no stored presets because the view manifest declares only entity list views.
 
 - **Baseline**: per root category, the mean (trailing total ÷ 12) of the 12
   complete months before the current one, carried forward flat, so it
-  reconciles to trailing spend. A median would zero any category idle in half
-  the months, however large its spend; a one-off spike belongs in a project.
+  reconciles to trailing spend. A median would zero any category idle in more than
+  half the months, however large its spend; a one-off spike belongs in a project.
   A share counts when it has no live project or sits on the Household project;
   other project spend is forecast only by envelopes. A category with spend in
   fewer than 3 of the 12 months is **Irregular**, a display grouping:
