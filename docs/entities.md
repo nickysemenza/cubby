@@ -1174,6 +1174,11 @@ Ordinary browser calls POST a SuperJSON operation envelope to
 dispatcher; operation and entity labels remain in request headers for DevTools
 and tracing. SSR invokes that dispatcher in-process.
 
+The dispatcher measures selected-handler loading in
+`start.dispatch.load.<operation>` before the operation's execution span. Include
+that load and Worker startup when attributing cold request latency; execution
+spans alone omit module initialization.
+
 The operation boundary chooses the read policy before invoking its handler.
 `apps/web/src/server/db/read-policy.ts` owns that policy; ordinary interactive
 operations currently use authoritative reads without a freshness RPC.

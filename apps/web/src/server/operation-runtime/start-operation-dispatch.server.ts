@@ -44,7 +44,9 @@ export async function dispatchStartOperation(
         throw new Error(
           `No browser handler is registered for ${options.operation}`,
         );
-      const handler = await loader();
+      const handler = await withTrace<
+        LoadedStartOperationHandler<BrowserStartOperationId>
+      >(`start.dispatch.load.${options.operation}`, () => loader());
       return await handler({
         data: options.input,
         request: { ...options.request, verifiedContext },
