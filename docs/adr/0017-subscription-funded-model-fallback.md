@@ -88,12 +88,16 @@ expiry.
 
 ## Funding and gateway amendment
 
-Pi coordinators and Tester Army favor quality and consume the Claude subscriber
-credit pool first, then the existing ChatGPT subscription, then paid Cloudflare
-Unified Billing. Paid fallback is explicitly authorized so exhaustion does not
-stop useful work. Opus leads; simple work can use the fast tier without a
-separate router. Fixed-model evaluation calls remain fixed so comparisons still
-measure the requested model.
+Every tier-routed chat call (Pi coordinators, Tester Army and structured
+feature runs, including Mail import) consumes the Claude subscriber credit pool
+first on Opus, then Sol on the existing ChatGPT subscription, then paid Sol
+through Cloudflare Unified Billing. One ladder serves every tier: the credit
+costs nothing at the margin, so a separate fast path saves nothing. Paid fallback
+is explicitly authorized so exhaustion does not stop useful work; callers that
+require the subscription stop before paid unless their fallback is budgeted. A
+plan refusal of an unsupported request is a funding refusal, so it advances the
+ladder. Fixed-model evaluation calls and explicit model overrides remain fixed so
+comparisons still measure the requested model.
 
 Use one gateway, `cubby`, for all billed production, local, CI and evaluation
 traffic. Environment metadata preserves attribution; shared gateway capacity is

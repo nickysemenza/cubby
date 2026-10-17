@@ -4,7 +4,11 @@ import {
   type OpenAiEffort,
   type SupportedChatModel,
 } from "@cubby/shared/ai/models";
-import { cubbyPiProviders } from "@cubby/shared/ai/pi-providers";
+import {
+  cubbyPiProviders,
+  fundedCubbyPiProviders,
+  type GatewayFetchFor,
+} from "@cubby/shared/ai/pi-providers";
 import {
   createModels,
   type Api,
@@ -57,6 +61,13 @@ export interface PiCallTarget {
   ) => Promise<AssistantMessage>;
 }
 
+/** The household funding ladder for one call (`fundedChatAttempts`). */
+export interface FundedCall {
+  paid: boolean;
+  /** A refused attempt the ladder recovered from; it is not the answer. */
+  onRefusedAttempt?: (message: AssistantMessage) => Promise<void>;
+}
+
 /**
  * Builds a fresh pi-ai `Models` collection per call: the gateway's per-call
  * metadata and cache policy (`call`) live in the provider's fetch closure
@@ -68,14 +79,17 @@ export interface PiCallTarget {
 export function piCallTarget(
   model: SupportedChatModel,
   call: GatewayCallOptions,
+  /** Present: run the household funding ladder instead of `model` alone. */
+  funded?: FundedCall,
 ): PiCallTarget {
   const { gatewayProvider } = getChatModelConfig(model);
   const models = createModels();
   let failedFetch: { error: UnparsedError } | undefined;
-  for (const provider of cubbyPiProviders((route, onUnbilledResponse) => {
+  const fetchFor: GatewayFetchFor = (route, onUnbilledResponse, funding) => {
     let finalTransport: "gateway" | "chatgpt" | undefined;
     const routedFetch = gatewayFetch(route, {
       ...call,
+      ...(funding && { funding }),
       onTransport: (transport) => {
         finalTransport = transport;
         call.onTransport?.(transport);
@@ -93,9 +107,11 @@ export function piCallTarget(
         throw error;
       }
     };
-  })) {
+  };
+  for (const provider of funded
+    ? fundedCubbyPiProviders(fetchFor, funded.onRefusedAttempt, funded)
+    : cubbyPiProviders(fetchFor))
     models.setProvider(provider);
-  }
   const resolved = models.getModel(gatewayProvider, model);
   if (!resolved) {
     throw new Error(
