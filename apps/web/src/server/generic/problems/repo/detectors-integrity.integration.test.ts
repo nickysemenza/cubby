@@ -100,7 +100,7 @@ import {
 let seq = 0;
 /** A short, always-unique suffix — every fixture row that needs a unique
  * name/shortcode/key gets one so unrelated cases (which never share a
- * database — see `withTestDb`'s per-test truncate) never collide with each
+ * database — see `withTestDb`'s per-test reset) never collide with each
  * other within a single multi-row test case either. */
 const uniq = (label: string) => `${label}-${(seq++).toString(36)}`;
 

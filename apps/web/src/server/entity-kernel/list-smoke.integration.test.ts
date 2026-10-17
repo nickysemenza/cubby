@@ -18,7 +18,7 @@ import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
  * into generated filter samples wherever their prefix matches a seeded
  * entity.
  *
- * Harness note: `withTestDb()` truncates every table before EVERY `it`, so a
+ * Harness note: `withTestDb()` clears every table before EVERY `it`, so a
  * `beforeAll` seed never survives to see a test body (`ctx.db` is not even
  * reachable inside `beforeAll`). Reseeding the ~20-entity reference universe
  * before each of the several hundred (entity, filter/sort) cases below would
