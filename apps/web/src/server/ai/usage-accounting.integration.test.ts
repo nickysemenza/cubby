@@ -81,13 +81,12 @@ describe("AiUsage accounting", () => {
   }
 
   it.each([
-    { random: 0.25, model: "typesafe/jev", provider: "typesafe" },
-    { random: 0.75, model: "@cf/cloudflare/clef", provider: "cloudflare" },
+    { model: "typesafe/jev" as const, provider: "typesafe" },
+    { model: "@cf/cloudflare/clef" as const, provider: "cloudflare" },
   ])(
     "records exactly one usage row for the selected $model",
-    async ({ random, model, provider }) => {
+    async ({ model, provider }) => {
       vi.stubEnv("AI_GATEWAY_API_KEY", "test-gateway-key");
-      vi.spyOn(Math, "random").mockReturnValue(random);
       vi.resetModules();
       stubInferenceFetch(async () => {
         const answer = {
@@ -116,6 +115,7 @@ describe("AiUsage accounting", () => {
         rules: "Choose one.",
         choices: ["one"],
         usage: { db: ctx.db, runId, operation: "decision-model-trial" },
+        decisionModel: model,
       });
       const rows = await usageRows();
       expect(rows).toHaveLength(1);

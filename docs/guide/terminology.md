@@ -680,7 +680,8 @@ _Avoid_: proposal, Jev suggestion, recommendation
 
 **Decision model**:
 The closed-set classifier behind every Suggestion and Mail triage: Jev or
-Clef, chosen per call by the trial split. Stored stages and user-facing text
+Clef, chosen by the trial split (unpinned field decisions hash their input, so a
+repeated question reuses one model). Stored stages and user-facing text
 say "decision"; the record's `model` names which one answered.
 _Avoid_: Jev (when either model may have answered)
 

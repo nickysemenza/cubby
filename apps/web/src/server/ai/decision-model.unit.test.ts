@@ -1,5 +1,5 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   DECISION_MAX_CANDIDATES,
@@ -11,7 +11,10 @@ import { type DecisionImage } from "~/server/ai/policy/decision-choice";
 
 import { FIELD_SUGGESTION_FEATURE } from "./policy/features";
 
+// Pinned so routing never depends on the input-keyed trial split; the split
+// itself is exercised by the unpinned cases below.
 const base = {
+  decisionModel: "typesafe/jev" as const,
   feature: { ...FIELD_SUGGESTION_FEATURE, cache: false },
   subject: "pick one",
   rules: "Choose one.",
@@ -47,10 +50,6 @@ function decisionPortFor(
   );
   return port;
 }
-
-beforeEach(() => {
-  vi.spyOn(Math, "random").mockReturnValue(0.25);
-});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -488,14 +487,13 @@ describe("runDecisionChoice", () => {
   });
 
   it.each([
-    { random: 0.25, model: "typesafe/jev", selector: undefined },
-    { random: 0.75, model: "@cf/cloudflare/clef", selector: "clef" },
+    { model: "typesafe/jev" as const, selector: undefined },
+    { model: "@cf/cloudflare/clef" as const, selector: "clef" },
   ])(
     "posts the selected $model to the gateway-scoped run route",
-    async ({ random, model, selector }) => {
+    async ({ model, selector }) => {
       // Jev wraps its answer in a completed run; Clef returns it directly.
       vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
-      vi.spyOn(Math, "random").mockReturnValue(random);
       vi.resetModules();
       const { runDecisionChoice: devRunDecisionChoice } =
         await import("./decision-model");
@@ -518,6 +516,7 @@ describe("runDecisionChoice", () => {
 
       const result = await devRunDecisionChoice({
         ...base,
+        decisionModel: model,
         subject: "pick red",
         choices: ["red", "blue"],
       });
@@ -551,43 +550,73 @@ describe("runDecisionChoice", () => {
     "rejects malformed flat Clef answers: %j",
     async (response) => {
       vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
-      vi.spyOn(Math, "random").mockReturnValue(0.75);
       vi.resetModules();
       const { runDecisionChoice: request } = await import("./decision-model");
       vi.stubGlobal("fetch", async () => Response.json(response));
-      await expect(request({ ...base, choices: ["one"] })).rejects.toThrow(
-        "Decision model returned an invalid choice response.",
-      );
+      await expect(
+        request({
+          ...base,
+          decisionModel: "@cf/cloudflare/clef",
+          choices: ["one"],
+        }),
+      ).rejects.toThrow("Decision model returned an invalid choice response.");
     },
   );
 
-  it("keeps Clef selected through a throttled retry even when the next coin flip changes", async () => {
+  it("keeps the input's trial model through a throttled retry", async () => {
     vi.useFakeTimers();
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
-    const random = vi.spyOn(Math, "random").mockReturnValue(0.75);
+    vi.resetModules();
+    const { runDecisionChoice: request } = await import("./decision-model");
+    const sent: string[] = [];
+    vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
+      const model = sentModel(init);
+      sent.push(model);
+      const answer = answerFor("c0", { c0: 0.9, none: 0.1 });
+      return sent.length === 1
+        ? new Response("Rate limited", { status: 429 })
+        : Response.json(
+            model === "@cf/cloudflare/clef" ? answer : { result: answer },
+          );
+    });
+    await Promise.all([
+      expect(
+        request({ ...base, decisionModel: undefined, choices: ["one"] }),
+      ).resolves.toMatchObject({ selectedIndex: 0 }),
+      vi.runAllTimersAsync(),
+    ]);
+    expect(sent).toHaveLength(2);
+    expect(sent[1]).toBe(sent[0]);
+  });
+
+  // Regression: a per-call coin flip split one question across two cache
+  // keys, so a repeat paid for a second model answer half the time.
+  it("answers a repeated unpinned question from one model's cache", async () => {
+    vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
     vi.resetModules();
     const { runDecisionChoice: request } = await import("./decision-model");
     const sent: string[] = [];
     vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
       sent.push(sentModel(init));
-      random.mockReturnValue(0.25);
-      return sent.length === 1
-        ? new Response("Rate limited", { status: 429 })
-        : Response.json(answerFor("c0", { c0: 0.9, none: 0.1 }));
+      const answer = answerFor("c0", { c0: 0.9, c1: 0.05, none: 0.05 });
+      return Response.json(
+        sentModel(init) === "@cf/cloudflare/clef" ? answer : { result: answer },
+      );
     });
-    await Promise.all([
-      expect(request({ ...base, choices: ["one"] })).resolves.toMatchObject({
-        selectedIndex: 0,
-      }),
-      vi.runAllTimersAsync(),
-    ]);
-    expect(sent).toHaveLength(2);
-    expect(sent).toEqual(["@cf/cloudflare/clef", "@cf/cloudflare/clef"]);
+    const input = {
+      ...base,
+      decisionModel: undefined,
+      feature: FIELD_SUGGESTION_FEATURE,
+      subject: `synthetic split trial ${crypto.randomUUID()}`,
+      choices: ["red", "blue"],
+    };
+    for (let call = 0; call < 6; call += 1)
+      expect((await request(input)).selectedIndex).toBe(0);
+    expect(sent).toHaveLength(1);
   });
 
   it("isolates and reuses each model's cached choice for the same input", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
-    const random = vi.spyOn(Math, "random").mockReturnValue(0.25);
     vi.resetModules();
     const { runDecisionChoice: request } = await import("./decision-model");
     const sent: string[] = [];
@@ -606,13 +635,12 @@ describe("runDecisionChoice", () => {
       subject: `synthetic cache trial ${crypto.randomUUID()}`,
       choices: ["red", "blue"],
     };
-    expect((await request(input)).selectedIndex).toBe(0);
-    random.mockReturnValue(0.75);
-    expect((await request(input)).selectedIndex).toBe(1);
-    random.mockReturnValue(0.25);
-    expect((await request(input)).selectedIndex).toBe(0);
-    random.mockReturnValue(0.75);
-    expect((await request(input)).selectedIndex).toBe(1);
+    const jev = { ...input, decisionModel: "typesafe/jev" as const };
+    const clef = { ...input, decisionModel: "@cf/cloudflare/clef" as const };
+    expect((await request(jev)).selectedIndex).toBe(0);
+    expect((await request(clef)).selectedIndex).toBe(1);
+    expect((await request(jev)).selectedIndex).toBe(0);
+    expect((await request(clef)).selectedIndex).toBe(1);
     expect(sent).toHaveLength(2);
   });
 });

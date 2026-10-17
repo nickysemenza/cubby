@@ -414,14 +414,23 @@ async function runDecisionChoiceInternal(
     return result;
   };
   // Images require vision even when a text-only model was pinned. Text calls
-  // retain their pinned model or sample once before cache/retry.
+  // retain their pinned model or take the input-keyed split before cache/retry.
   const feature = input.images?.length
     ? { ...args.feature, model: selectDecisionModel({ vision: true }) }
     : args.decisionModel
       ? { ...args.feature, model: args.decisionModel }
       : args.port
         ? args.feature
-        : { ...args.feature, model: selectDecisionModel() };
+        : {
+            ...args.feature,
+            model: selectDecisionModel({
+              key: JSON.stringify([
+                args.feature.feature,
+                args.feature.promptVersion,
+                input,
+              ]),
+            }),
+          };
   await captureAiInput(feature, args.usage.operation, input);
   if (preparingAiInputs())
     return {
