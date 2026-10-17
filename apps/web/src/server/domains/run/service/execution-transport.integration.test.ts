@@ -161,7 +161,7 @@ describe("household AI budget at the paid transport boundary", () => {
       resumeBudgetPausedImports(ctx.db),
       resumeBudgetPausedImports(ctx.db),
     ]);
-    expect(counts.toSorted()).toEqual([0, 1]);
+    expect([...counts].sort()).toEqual([0, 1]);
     const [sent] = await getDb(ctx.db)
       .select({ dispatchAttempts: run.dispatchAttempts })
       .from(run)
