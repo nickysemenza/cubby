@@ -157,13 +157,18 @@ describe("list field compiler", () => {
         scaffold.where({ parentRunId: ["RUN-2345"], includeSubRuns: false }),
       ),
     ).not.toContain("WITH RECURSIVE");
-    // A hierarchy without a toggle-bearing filter leaves own filters alone.
+    // An unset toggle-bearing filter leaves the list unexpanded.
     expect(
       whereSql(
         listScaffold("location", location, {
           derived: {
             inventoryEntries: sql`0`,
             valuation: listPrepare(async () => null).value(() => sql`0`),
+            hasInventory: sql`false`,
+            hasImage: sql`false`,
+            hasChildren: sql`false`,
+            hasAiDescription: sql`false`,
+            recountOverdue: () => undefined,
           },
         }).where({}),
       ),

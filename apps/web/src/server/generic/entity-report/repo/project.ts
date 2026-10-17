@@ -314,7 +314,6 @@ export async function projectScheduleReport(
         [{ orderBy: "createdAt", direction: "desc" }],
         pagination,
         "page",
-        tree,
       ),
     ),
   ]);

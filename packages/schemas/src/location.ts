@@ -15,11 +15,7 @@ import {
   productShortcode,
 } from "./identifiers";
 import { firstDisplayableImage, type ImageOut, imageOut } from "./image";
-import {
-  createPaginatedResponseSchema,
-  entityFilterList,
-  presenceFilter,
-} from "./pagination";
+import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
 import {
   locationIdentityProductOut,
   locationType,
@@ -48,16 +44,6 @@ export { locationTypeValues } from "@cubby/shared";
 
 export const locationFilterFields = {
   ...locationBaseFilterFields,
-  /**
-   * Locations that ARE this product. Matches the identity link, not stock
-   * held at the location — for that, use the inventory list.
-   */
-  productId: entityFilterList(productShortcode).optional(),
-  productPresenceFilter: presenceFilter.describe(
-    'Filter to locations that are / aren\'t an instance of a Product. "has" is the vessel set (totes, bins, racks); "none" is rooms, areas and drawers.',
-  ),
-  parentId: entityFilterList(locationShortcode).optional(),
-  parentPresenceFilter: presenceFilter,
   /**
    * `"none"` is the empty-shelf worklist. Counts only entries whose product is
    * itself live — `dbLocationToListAPI` drops entries on soft-deleted products,

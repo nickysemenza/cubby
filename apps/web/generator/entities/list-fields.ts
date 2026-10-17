@@ -557,14 +557,18 @@ export const compileListFields = (
           `${context}.filters ${descriptor.columnId} is a ${descriptor.kind} filter over derived ${bound.shape} field; expected ${compatibleKinds(bound).join(" | ")}.`,
         );
       if (descriptor.kind !== "idMulti") continue;
+      // A declared idMulti predicate (an inherited reference) targets its
+      // brand's entity.
       const referenced =
         bound?.shape === "via" && bound.terminal.kind === "record"
           ? bound.target
-          : descriptor.stored === null
-            ? null
-            : (entity.fieldModel.storage.find(
-                ({ key }) => key === descriptor.stored?.columns[0],
-              )?.reference ?? null);
+          : bound?.shape === "predicate"
+            ? (descriptor.brandRef?.entity ?? null)
+            : descriptor.stored === null
+              ? null
+              : (entity.fieldModel.storage.find(
+                  ({ key }) => key === descriptor.stored?.columns[0],
+                )?.reference ?? null);
       const target = referenced === null ? undefined : byKey.get(referenced);
       if (target?.fieldModel.hierarchy == null) continue;
       const toggle = toggleDescriptor(target, descriptor);

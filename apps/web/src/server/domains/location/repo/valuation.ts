@@ -92,14 +92,6 @@ export const directValuationSql = (
   return sql<number>`COALESCE((${JSON.stringify(direct)}::jsonb ->> ${location.id}::text)::double precision, 0)`;
 };
 
-export const loadDirectValuationSql = async (
-  db: Database | DrizzleTransaction,
-  entryValuations?: InventoryValuations,
-): Promise<SQL<number>> =>
-  directValuationSql(
-    (await loadLocationValuationInputs(db, entryValuations)).entries,
-  );
-
 /** Top locations by direct value, for Home; computed, no tree or relation hydration. */
 export const getLocationValuationSummary = async (
   db: Database,

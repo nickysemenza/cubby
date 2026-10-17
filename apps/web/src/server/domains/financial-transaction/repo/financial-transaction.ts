@@ -413,7 +413,7 @@ export const buildFinancialTransactionWhere = async (
   db: Database,
   filters: FinancialTransactionFilters,
 ): Promise<SQL | undefined> =>
-  financialTransactionScaffold.where(filters, [], {
+  financialTransactionScaffold.where(filters, {
     context: await financialTransactionScaffold.context(db, {
       filters,
       readIntent: "count",

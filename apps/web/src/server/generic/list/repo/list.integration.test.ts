@@ -1,4 +1,4 @@
-import { asc, eq, exists, sql } from "drizzle-orm";
+import { and, asc, eq, exists, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -15,7 +15,18 @@ import { listScaffold } from "./list";
 describe("list selection and relation loading", () => {
   const ctx = withTestDb();
   const scaffold = listScaffold("task", task, {
-    derived: { assigneeId: sql`NULL` },
+    derived: {
+      assigneeId: sql`NULL`,
+      effectiveTrade: sql`NULL`,
+      effectiveDueDate: sql`NULL`,
+      completion: sql`NULL`,
+      topLevel: sql`true`,
+      assigneeFilter: () => undefined,
+      projectFilter: () => undefined,
+      subjectProductFilter: () => undefined,
+      search: () => undefined,
+      dueRelative: () => undefined,
+    },
   });
 
   it("uses one FROM context and preserves the selected order across graph loading", async () => {
@@ -34,14 +45,15 @@ describe("list selection and relation loading", () => {
           .where(eq(task.id, child.id));
     }
     const parentTable = alias(task, "parent");
-    const where = scaffold.where({}, [
+    const where = and(
+      scaffold.where({}),
       exists(
         getDb(ctx.db)
           .select({ id: parentTable.id })
           .from(parentTable)
           .where(eq(parentTable.id, task.parentTaskId)),
       ),
-    ]);
+    );
     const read = (readIntent: "page" | "count", pageIndex = 0) =>
       scaffold.list(
         ctx.db,
@@ -107,7 +119,18 @@ describe("list selection and relation loading", () => {
     await insertWithShortcode(ctx.db, "task", { name: "Test Aliased Task" });
     const table = alias(task, "listed_task");
     const page = await listScaffold("task", table, {
-      derived: { assigneeId: sql`NULL` },
+      derived: {
+        assigneeId: sql`NULL`,
+        effectiveTrade: sql`NULL`,
+        effectiveDueDate: sql`NULL`,
+        completion: sql`NULL`,
+        topLevel: sql`true`,
+        assigneeFilter: () => undefined,
+        projectFilter: () => undefined,
+        subjectProductFilter: () => undefined,
+        search: () => undefined,
+        dueRelative: () => undefined,
+      },
     }).list(
       ctx.db,
       { filters: {}, sorts: [], pagination: { pageIndex: 0, pageSize: 2 } },

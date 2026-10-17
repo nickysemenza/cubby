@@ -157,6 +157,7 @@ import {
   listPrepare,
   shortcodeIdsSql,
 } from "~/server/generic/list/repo/field-compiler";
+import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import { hydrateListRead } from "~/server/generic/list/repo/list-projection";
@@ -1278,11 +1279,21 @@ const cullablePendingImageWhere = (cutoffDate: Date) =>
     not(anyForeignKeyImageReferenceCondition(image)),
   );
 
-/** The live ids of the requested run codes, resolved inside the query. */
-const requestedRunIds = (codes: readonly string[]) =>
-  shortcodeIdsSql("run", (shortcode) =>
+/**
+ * The live ids of the requested run codes, resolved inside the query, with
+ * their sub-runs unless the generated toggle is off.
+ */
+const requestedRunIds = (
+  codes: readonly string[],
+  includeDescendants: boolean,
+) => {
+  const selected = shortcodeIdsSql("run", (shortcode) =>
     shortcodeSetCondition(shortcode, codes),
   );
+  return includeDescendants
+    ? hierarchyDescendantsSql("run", selected)
+    : selected;
+};
 
 // A `runId` filter matches `targetState` on the same target row, so it reads
 // that sibling filter.
@@ -1307,10 +1318,13 @@ const imageScaffold = listScaffold("image", image, {
     referenced: imageReferenceCondition(image, "active"),
     processingIssue: imageProcessingIssueExpression(image),
     uploadedAgeHours: sql`(extract(epoch from (now() - ${image.createdAt})) / 3600)`,
-    runId: targetStates.predicate((states, { values }) =>
+    runId: targetStates.predicate((states, { values, includeDescendants }) =>
       importTargetExists(
         and(
-          inArray(photoRunImage.runId, requestedRunIds(values)),
+          inArray(
+            photoRunImage.runId,
+            requestedRunIds(values, includeDescendants),
+          ),
           states.length > 0
             ? matchesStringValues(sql`${photoRunImage.state}`, [...states])
             : undefined,
@@ -1329,7 +1343,7 @@ export const buildImageWhere = async (
   db: Database,
   filters: ImageListFilters,
 ): Promise<SQL | undefined> =>
-  imageScaffold.where(filters, [], {
+  imageScaffold.where(filters, {
     context: await imageScaffold.context(db, { filters, readIntent: "count" }),
   });
 
@@ -1447,12 +1461,12 @@ const imageListWith = async <Out>(
           addedAt: sql`(
             SELECT min("createdAt") FROM "PhotoRunImage"
             WHERE "PhotoRunImage"."imageId" = ${image.id}
-              AND "PhotoRunImage"."runId" IN ${requestedRunIds(runCodes)}
+              AND "PhotoRunImage"."runId" IN ${requestedRunIds(runCodes, filters.includeSubRuns !== false)}
           )`,
           position: sql`(
             SELECT min("position") FROM "PhotoRunImage"
             WHERE "PhotoRunImage"."imageId" = ${image.id}
-              AND "PhotoRunImage"."runId" IN ${requestedRunIds(runCodes)}
+              AND "PhotoRunImage"."runId" IN ${requestedRunIds(runCodes, filters.includeSubRuns !== false)}
           )`,
         });
 

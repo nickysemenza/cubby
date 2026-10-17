@@ -25,12 +25,11 @@ import {
   inArray,
   isNotNull,
   isNull,
-  notInArray,
   or,
   type SQL,
   sql,
 } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import { alias, QueryBuilder } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 
 import { projectListRows } from "~/entity/model/list-read-schema";
@@ -46,17 +45,13 @@ import {
   associatePendingImages,
   buildOrderBy,
   buildPartialUpdateValues,
-  eqAny,
-  eqAnyOrPresence,
   getDb,
-  idSetPresence,
   imageJoinBindings,
   imageOrder,
   type ListReadIntent,
   isTransaction,
   mapImages,
   notDeleted,
-  rangeConditions,
   relations,
   unwrapDb,
   updateLiveAndReturn,
@@ -98,7 +93,10 @@ import {
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import { listPrepare } from "~/server/generic/list/repo/field-compiler";
+import {
+  type ListContext,
+  listPrepare,
+} from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
@@ -123,7 +121,6 @@ import { loadLocationAncestors, wouldCreateParentCycle } from "./tree";
 import {
   computeLocationValuations,
   directValuationSql,
-  loadDirectValuationSql,
   loadLocationValuationInputs,
 } from "./valuation";
 
@@ -666,6 +663,39 @@ const locationValuations = listPrepare(async (db) => {
   };
 });
 
+const qb = new QueryBuilder();
+
+// Inner-joins Product (notDeleted) because dbLocationToListAPI drops inventory
+// entries whose product is soft-deleted — without that join, a shelf holding
+// only deleted products would count as "has inventory" but render empty.
+// Installed fixtures aren't browsable stock, so `stockOnly()`.
+const locationIdsWithLiveInventory = qb
+  .select({ locationId: inventoryEntry.locationId })
+  .from(inventoryEntry)
+  .innerJoin(
+    product,
+    and(eq(product.id, inventoryEntry.productId), notDeleted(product)),
+  )
+  .where(and(notDeleted(inventoryEntry), stockOnly()));
+
+// Joins Image so this matches what the thumbnail cell renders — it drops PDF
+// attachments, and Image is separately soft-deletable from the attachment.
+const locationIdsWithImages = qb
+  .select({ locationId: entityAttachment.entityId })
+  .from(entityAttachment)
+  .innerJoin(
+    image,
+    and(eq(image.id, entityAttachment.imageId), notDeleted(image)),
+  )
+  .where(and(notDeleted(entityAttachment), displayableImageWhere));
+
+// Aliased because this reads the SAME table the outer query selects from.
+const childLocation = alias(location, "child_location");
+const locationIdsWithChildren = qb
+  .select({ parentId: childLocation.parentId })
+  .from(childLocation)
+  .where(and(notDeleted(childLocation), isNotNull(childLocation.parentId)));
+
 const locationScaffold = listScaffold("location", location, {
   derived: {
     // Direct value, because that is what the list cell renders in compact
@@ -673,170 +703,45 @@ const locationScaffold = listScaffold("location", location, {
     valuation: locationValuations.value(({ inputs }) =>
       directValuationSql(inputs.entries),
     ),
-    // Matches locationIdsMeetingInventoryMinimum/ExceedingMaximum's
-    // stockOnly() filter — otherwise sort and filter disagree on whether an
-    // installed fixture counts.
+    // Live stock entries on live products — the same population
+    // `hasInventory` reads, so the count filter and the presence agree.
     inventoryEntries: sql.raw(
       `(SELECT count(*) FROM "InventoryEntry" ie ` +
         `INNER JOIN "Product" p ON p."id" = ie."productId" AND p."deletedAt" IS NULL ` +
         `WHERE ie."locationId" = "Location"."id" AND ie."deletedAt" IS NULL ` +
         `AND ie."placement" = 'stock')`,
     ),
+    hasInventory: inArray(location.id, locationIdsWithLiveInventory),
+    hasImage: inArray(location.id, locationIdsWithImages),
+    hasChildren: inArray(location.id, locationIdsWithChildren),
+    hasAiDescription: sql`${locationAiDescriptionSql(location.id)} IS NOT NULL`,
+    // The never-recounted half is part of the predicate: a plain `<` bound
+    // drops NULLs, and a bin nobody has ever counted is the worst offender.
+    recountOverdue: ({ param }) =>
+      param === undefined
+        ? undefined
+        : or(
+            isNull(location.lastBulkInventory),
+            sql`${location.lastBulkInventory} < now() - make_interval(days => ${Number(param)})`,
+          ),
   },
 });
 
 /**
- * "Which SKU is this location an instance of", plus the has/none presence
- * split. A requested-but-unresolvable product code must match nothing rather
- * than widening to an unfiltered query — the same rule the parent filter
- * follows directly above.
- */
-const locationProductCondition = async (
-  db: Database,
-  filters: Pick<LocationFilters, "productId" | "productPresenceFilter">,
-) => {
-  const codes = filters.productId ? [filters.productId].flat() : [];
-  const ids = await resolveAllPresent(db, "product", codes);
-  if (codes.length > 0 && ids.length === 0) {
-    return filters.productPresenceFilter
-      ? eqAnyOrPresence(location.productId, [], filters.productPresenceFilter)
-      : sql`false`;
-  }
-  return eqAnyOrPresence(
-    location.productId,
-    ids,
-    filters.productPresenceFilter,
-  );
-};
-
-/**
- * The full `locationList` predicate: parent/product resolution plus the
- * uncorrelated live-inventory/children/image/valuation subqueries. Exported so
- * `getEntityCounts` can call `buildLocationWhere(db, {})` and get the list's
- * REAL population rather than a hand-restated copy that can drift from it.
+ * The full `locationList` predicate. Exported so `getEntityCounts` can call
+ * `buildLocationWhere(db, {})` and get the list's REAL population rather
+ * than a hand-restated copy that can drift from it.
  */
 export const buildLocationWhere = async (
   db: Database,
   filters: LocationFilters,
-): Promise<SQL | undefined> => {
-  const parentCodes = filters.parentId ? [filters.parentId].flat() : [];
-  const parentIds = await resolveAllPresent(db, "location", parentCodes);
-  const parentCondition =
-    parentCodes.length > 0 && parentIds.length === 0
-      ? filters.parentPresenceFilter
-        ? eqAnyOrPresence(location.parentId, [], filters.parentPresenceFilter)
-        : sql`false`
-      : eqAnyOrPresence(
-          location.parentId,
-          parentIds,
-          filters.parentPresenceFilter,
-        );
-  const productCondition = await locationProductCondition(db, filters);
-  // Valuation is computed on read, so a range filter needs the computed map.
-  const directValuation =
-    filters.valuationMin !== undefined || filters.valuationMax !== undefined
-      ? await loadDirectValuationSql(db)
-      : undefined;
-  const aiDescription = locationAiDescriptionSql(location.id);
-  // Uncorrelated subquery of location ids holding live inventory. Inner-joins
-  // Product (notDeleted) because dbLocationToListAPI drops inventory entries
-  // whose product is soft-deleted — without that join, a shelf holding only
-  // deleted products would count as "has inventory" here but render empty on
-  // the list, so an empty-shelf search would miss it.
-  const locationIdsWithLiveInventory = getDb(db)
-    .select({ locationId: inventoryEntry.locationId })
-    .from(inventoryEntry)
-    .innerJoin(
-      product,
-      and(eq(product.id, inventoryEntry.productId), notDeleted(product)),
-    )
-    // Installed fixtures aren't browsable stock — an "has inventory" filter
-    // must not match a location whose only item is wired into the wall.
-    .where(and(notDeleted(inventoryEntry), stockOnly()));
-  // Joins Image so this matches what the thumbnail cell actually renders — it
-  // drops PDF attachments, and Image is separately soft-deletable from
-  // LocationImage.
-  // Aliased because this reads the SAME table the outer query selects from.
-  // Uncorrelated — it names every location that is somebody's parent — but the
-  // alias keeps the inner reference unambiguous rather than relying on Postgres
-  // shadowing the outer `Location`.
-  const childLocation = alias(location, "child_location");
-  const locationIdsWithChildren = getDb(db)
-    .select({ parentId: childLocation.parentId })
-    .from(childLocation)
-    .where(and(notDeleted(childLocation), isNotNull(childLocation.parentId)));
-  const locationIdsWithImages = getDb(db)
-    .select({ locationId: entityAttachment.entityId })
-    .from(entityAttachment)
-    .innerJoin(
-      image,
-      and(eq(image.id, entityAttachment.imageId), notDeleted(image)),
-    )
-    .where(and(notDeleted(entityAttachment), displayableImageWhere));
-  const locationIdsMeetingInventoryMinimum = getDb(db)
-    .select({ locationId: inventoryEntry.locationId })
-    .from(inventoryEntry)
-    .innerJoin(
-      product,
-      and(eq(product.id, inventoryEntry.productId), notDeleted(product)),
-    )
-    .where(and(notDeleted(inventoryEntry), stockOnly()))
-    .groupBy(inventoryEntry.locationId)
-    .having(sql`count(*) >= ${filters.directItemCountMin ?? 0}`);
-  const locationIdsExceedingInventoryMaximum = getDb(db)
-    .select({ locationId: inventoryEntry.locationId })
-    .from(inventoryEntry)
-    .innerJoin(
-      product,
-      and(eq(product.id, inventoryEntry.productId), notDeleted(product)),
-    )
-    .where(and(notDeleted(inventoryEntry), stockOnly()))
-    .groupBy(inventoryEntry.locationId)
-    .having(sql`count(*) > ${filters.directItemCountMax ?? 0}`);
-
-  // `nameFilter` and `type` are declared stored filters — applied by
-  // `locationScaffold.where` before the conditions below. The description is
-  // computed from AiAnalysis, so its presence filter is written here.
-  return locationScaffold.where(filters, [
-    parentCondition,
-    productCondition,
-    idSetPresence(
-      location.id,
-      filters.inventoryPresenceFilter,
-      locationIdsWithLiveInventory,
-    ),
-    idSetPresence(
-      location.id,
-      filters.imagePresenceFilter,
-      locationIdsWithImages,
-    ),
-    idSetPresence(
-      location.id,
-      filters.childPresenceFilter,
-      locationIdsWithChildren,
-    ),
-    filters.lastBulkInventoryOlderThanDays !== undefined
-      ? or(
-          isNull(location.lastBulkInventory),
-          sql`${location.lastBulkInventory} < now() - make_interval(days => ${filters.lastBulkInventoryOlderThanDays})`,
-        )
-      : undefined,
-    filters.directItemCountMin !== undefined
-      ? inArray(location.id, locationIdsMeetingInventoryMinimum)
-      : undefined,
-    filters.directItemCountMax !== undefined
-      ? notInArray(location.id, locationIdsExceedingInventoryMaximum)
-      : undefined,
-    filters.aiDescriptionPresenceFilter === "has"
-      ? sql`${aiDescription} IS NOT NULL`
-      : filters.aiDescriptionPresenceFilter === "none"
-        ? sql`${aiDescription} IS NULL`
-        : undefined,
-    ...(directValuation
-      ? rangeConditions(directValuation, filters, "valuation")
-      : []),
-  ]);
-};
+  prepared?: ListContext,
+): Promise<SQL | undefined> =>
+  locationScaffold.where(filters, {
+    context:
+      prepared ??
+      (await locationScaffold.context(db, { filters, readIntent: "count" })),
+  });
 
 export const locationListRead = async (
   db: Database,
@@ -846,13 +751,13 @@ export const locationListRead = async (
   projection: ListProjection,
   readIntent: ListReadIntent = "page",
 ) => {
-  const whereClause = await buildLocationWhere(db, filters);
   const context = await locationScaffold.context(db, {
     filters,
     sorts,
     readIntent,
     projection,
   });
+  const whereClause = await buildLocationWhere(db, filters, context);
   const prepared = context.has(locationValuations)
     ? context.get(locationValuations)
     : undefined;
@@ -1095,47 +1000,9 @@ export const locationSearch = async (
   sorts: SortParams[],
   pagination: PaginationParams,
 ): Promise<{ data: LocationPickerItemOut[]; count: number }> => {
-  const parentCodes = filters.parentId ? [filters.parentId].flat() : [];
-  const parentIds = await resolveAllPresent(db, "location", parentCodes);
-  // A requested-but-unresolvable parent must match nothing rather than widening
-  // to an unfiltered query — same rule as `locationList`.
-  const parentCondition =
-    parentCodes.length > 0 && parentIds.length === 0
-      ? filters.parentPresenceFilter
-        ? eqAnyOrPresence(location.parentId, [], filters.parentPresenceFilter)
-        : sql`false`
-      : eqAnyOrPresence(
-          location.parentId,
-          parentIds,
-          filters.parentPresenceFilter,
-        );
-
-  const locationIdsWithLiveInventory = getDb(db)
-    .select({ locationId: inventoryEntry.locationId })
-    .from(inventoryEntry)
-    .innerJoin(
-      product,
-      and(eq(product.id, inventoryEntry.productId), notDeleted(product)),
-    )
-    // Installed fixtures aren't browsable stock — a location picker's "has
-    // inventory" filter must not match on a wired-in fixture alone.
-    .where(and(notDeleted(inventoryEntry), stockOnly()));
-
-  const productCondition = await locationProductCondition(db, filters);
-
-  // `nameFilter` is a declared stored filter — applied by
-  // `locationScaffold.where` before the conditions below (the same predicate
-  // `buildLocationWhere` gets, so the two surfaces cannot drift).
-  const whereClause = locationScaffold.where(filters, [
-    eqAny(location.type, filters.itemTypeFilter),
-    parentCondition,
-    productCondition,
-    idSetPresence(
-      location.id,
-      filters.inventoryPresenceFilter,
-      locationIdsWithLiveInventory,
-    ),
-  ]);
+  // The same declared predicates `buildLocationWhere` applies, so the two
+  // surfaces cannot drift.
+  const whereClause = locationScaffold.where(filters);
 
   return locationScaffold.list(
     db,

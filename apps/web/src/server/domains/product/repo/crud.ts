@@ -821,7 +821,7 @@ const productWhere = async (
     readIntent: "count",
   });
   return {
-    where: productScaffold.where(filters, [], { context, readContext }),
+    where: productScaffold.where(filters, { context, readContext }),
     context,
   };
 };

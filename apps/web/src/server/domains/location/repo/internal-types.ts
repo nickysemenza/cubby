@@ -88,8 +88,11 @@ export interface LocationFilters {
   // "has" is the vessel set (a location that IS a tote/bin/rack); "none" is
   // rooms, areas and drawers.
   productPresenceFilter?: "has" | "none";
+  // Under these parents, including deeper sub-locations unless
+  // `includeSubLocations` is false.
   parentId?: string | string[];
   parentPresenceFilter?: "has" | "none";
+  includeSubLocations?: boolean;
   // The inventory column's "(none)" / "Has inventory" sentinel — "none" is the
   // empty-shelf worklist. Counts only entries whose product is itself live.
   inventoryPresenceFilter?: "has" | "none";

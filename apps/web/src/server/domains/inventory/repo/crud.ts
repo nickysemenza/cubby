@@ -317,7 +317,7 @@ export const buildInventoryWhere = async (
     prepared ??
     (await inventoryScaffold.context(db, { filters, readIntent: "count" }));
   return and(
-    inventoryScaffold.where(filters, [], { context }),
+    inventoryScaffold.where(filters, { context }),
     liveProductAndLocation(),
   );
 };

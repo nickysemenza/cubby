@@ -1690,13 +1690,6 @@ Rules:
         nullable: { field: "projectPresenceFilter", label: "project" },
       },
       {
-        columnId: "includeSubProjects",
-        urlKey: "subprojects",
-        kind: "boolean",
-        placeholder: "Include sub-projects...",
-        urlOnly: true,
-      },
-      {
         columnId: "productIdFilter",
         field: "productId",
         urlKey: "productId",

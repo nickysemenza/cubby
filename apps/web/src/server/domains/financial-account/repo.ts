@@ -306,7 +306,7 @@ export const buildFinancialAccountWhere = async (
   db: Database | DrizzleTransaction,
   filters: FinancialAccountFilters,
 ) =>
-  financialAccountScaffold.where(filters, [], {
+  financialAccountScaffold.where(filters, {
     context: await financialAccountScaffold.context(db, {
       filters,
       readIntent: "count",

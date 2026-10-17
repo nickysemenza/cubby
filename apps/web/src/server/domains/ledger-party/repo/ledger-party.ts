@@ -482,7 +482,7 @@ export const getLedgerPartyByShortcode = reader.getByShortcode;
 
 /** The complete WHERE for this entity's list; `search` and `kind` are declared. */
 export const buildLedgerPartyWhere = (filters: LedgerPartyFilters) =>
-  scaffold.where(filters, []);
+  scaffold.where(filters);
 
 export const listLedgerPartiesRead = (
   db: Database,

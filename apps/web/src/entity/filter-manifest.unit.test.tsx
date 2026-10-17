@@ -535,7 +535,7 @@ describe("expense URL-only scopes", () => {
         "productId",
         "order",
         "purchaseId",
-        "subprojects",
+        "includeSubProjects",
       ]),
     );
   });
@@ -545,8 +545,8 @@ describe("expense URL-only scopes", () => {
     expect(
       buildFiltersFromManifest(
         specs,
-        filterGetterFromSearch(specs, { subprojects: "true" }),
+        filterGetterFromSearch(specs, { includeSubProjects: "false" }),
       ),
-    ).toMatchObject({ includeSubProjects: true });
+    ).toMatchObject({ includeSubProjects: false });
   });
 });

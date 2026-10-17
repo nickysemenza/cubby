@@ -55,14 +55,22 @@ interface RangeValue {
   readonly from: string | number | undefined;
   readonly to: string | number | undefined;
   readonly presence: PresenceFilter;
-  readonly param: string | undefined;
+  readonly param: string | number | undefined;
+}
+
+/**
+ * An idMulti predicate's value, with its generated "Include sub-…" toggle
+ * when the brand's entity declares `model.hierarchy` (false otherwise).
+ */
+interface IdMultiValue extends AnyOfValue {
+  readonly includeDescendants: boolean;
 }
 
 /** The parsed filter value a declared predicate receives, by its kind. */
 interface PredicateValues {
   text: string;
   multiselect: AnyOfValue;
-  idMulti: AnyOfValue;
+  idMulti: IdMultiValue;
   boolean: boolean;
   presence: "has" | "none";
   range: RangeValue;
