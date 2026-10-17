@@ -10,7 +10,7 @@ import {
   distinctSenderDomain,
   SHARED_SENDER_DOMAINS,
   vendorWebsiteDomain,
-} from "~/lib/vendor-domains";
+} from "~/lib/vendor/domains";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { vendor } from "~/server/db/schema";

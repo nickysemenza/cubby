@@ -1,4 +1,4 @@
-import { vendorWebsiteDomain } from "~/lib/vendor-domains";
+import { vendorWebsiteDomain } from "~/lib/vendor/domains";
 
 export type VendorMailIdentity = {
   website: string | null;
