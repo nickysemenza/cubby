@@ -23,6 +23,7 @@ struct EntityDetailView: View {
     @State private var heroEditor: HeroEditorRequest?
     @State private var heroNotice: String?
     @State private var heroBusy = false
+    @State private var showingRunEvidence = false
     /// Set when a delete finished: the record is gone, so leave its screen once the sheet that
     /// ran the delete has actually dismissed (dismissing both at once only closes the sheet).
     @State private var leaveAfterHeroSheet = false
@@ -69,7 +70,7 @@ struct EntityDetailView: View {
             }
     }
 
-    /// Extracted so `body` stays under the project's 200ms type-check budget: the four sheets.
+    /// Extracted so `body` stays under the project's 200ms type-check budget: the sheets.
     private func sheets<V: View>(on view: V) -> some View {
         view
             .sheet(item: $photoCapture) { capture in
@@ -106,6 +107,9 @@ struct EntityDetailView: View {
                 .environment(appModel)
             }
             .alert(heroNotice ?? "", isPresented: heroNoticeBinding) { Button("OK") {} }
+            .sheet(isPresented: $showingRunEvidence) {
+                NavigationStack { RunEvidenceView(runID: model?.row?.id ?? id) }
+            }
             .sheet(item: $creatingRelation) { section in
                 EntityEditorSheet(
                     key: section.target.key, mode: .create(prefill: section.createPrefill)
@@ -125,9 +129,6 @@ struct EntityDetailView: View {
             ToolbarItem { copyDiagnosticsButton(row: row, fetchedAt: model?.fetchedAt) }
         }
         if let row = model?.row {
-            if key == .run {
-                ToolbarItem { RunEvidenceLink(runID: row.id) }
-            }
             if key.nativeActions.contains(.update) {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Edit") { editing = true }
@@ -151,24 +152,37 @@ struct EntityDetailView: View {
                     } label: {
                         Label("Copy shortcode", systemImage: "number")
                     }
+                    recordMenuButtons(row: row)
                     heroActionButtons
                 } label: {
                     Label("More", systemImage: "ellipsis.circle")
                 }
             }
         }
+    }
+
+    @ViewBuilder private func recordMenuButtons(row: EntityRow) -> some View {
         // Any entity whose update takes pendingImageIds can take a photo; the cover
         // choice inside the sheet is product-only.
-        if descriptor.acceptsImages, let row = model?.row {
-            ToolbarItem {
-                Button {
-                    photoCapture = PhotoCaptureModel(
-                        client: appModel.client, entity: key, entityID: row.id,
-                        entityTitle: row.title,
-                        featurePrints: appModel.featurePrints
-                    )
-                } label: {
-                    Label("Add photo", systemImage: "camera.badge.ellipsis")
+        if descriptor.acceptsImages || key == .run {
+            Section {
+                if descriptor.acceptsImages {
+                    Button {
+                        photoCapture = PhotoCaptureModel(
+                            client: appModel.client, entity: key, entityID: row.id,
+                            entityTitle: row.title,
+                            featurePrints: appModel.featurePrints
+                        )
+                    } label: {
+                        Label("Add photo", systemImage: "camera.badge.ellipsis")
+                    }
+                }
+                if key == .run {
+                    // The evidence sheet is presented from this view: a sheet owned by a menu
+                    // item is torn down with the menu.
+                    Button("Transcript, logs and AI usage", systemImage: "doc.text.magnifyingglass") {
+                        showingRunEvidence = true
+                    }
                 }
             }
         }
@@ -275,18 +289,28 @@ struct EntityDetailView: View {
         let plans = descriptor.presentation.heroActions.compactMap { verb in
             HeroActionRunner.plan(for: verb, on: key).map { (verb, $0) }
         }
-        if !plans.isEmpty {
-            Divider()
-            ForEach(plans, id: \.0) { verb, plan in
-                Button(
-                    plan.label, systemImage: plan.symbol,
-                    role: plan.confirmation == .destructive ? .destructive : nil
-                ) {
-                    startHeroAction(plan)
-                }
-                .accessibilityIdentifier("detail.\(key.rawValue).hero.\(verb.rawValue)")
+        let routine = plans.filter { $0.1.confirmation != .destructive }
+        let destructive = plans.filter { $0.1.confirmation == .destructive }
+        if !routine.isEmpty {
+            Section {
+                ForEach(routine, id: \.0) { verb, plan in heroActionButton(verb, plan) }
             }
         }
+        if !destructive.isEmpty {
+            Section {
+                ForEach(destructive, id: \.0) { verb, plan in heroActionButton(verb, plan) }
+            }
+        }
+    }
+
+    private func heroActionButton(_ verb: EntityHeroActionID, _ plan: HeroActionPlan) -> some View {
+        Button(
+            plan.label, systemImage: plan.symbol,
+            role: plan.confirmation == .destructive ? .destructive : nil
+        ) {
+            startHeroAction(plan)
+        }
+        .accessibilityIdentifier("detail.\(key.rawValue).hero.\(verb.rawValue)")
     }
 
     private var heroNoticeBinding: Binding<Bool> {

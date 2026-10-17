@@ -229,6 +229,10 @@ struct EntityListView: View {
                     .accessibilityIdentifier("browse.\(key.rawValue).create")
                 }
             }
+            if key.nativeActions.contains(.create), hasControls {
+                // Create and Controls are unrelated; split them into separate glass groups.
+                ToolbarSpacer(.fixed, placement: .topBarTrailing)
+            }
             if hasControls {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {

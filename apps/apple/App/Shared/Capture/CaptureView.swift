@@ -62,6 +62,7 @@ extension CaptureView {
 }
 
 private struct CaptureContent: View {
+    @Environment(AppModel.self) private var appModel
     @Bindable var capture: CaptureModel
     @Binding var pickingLocation: Bool
     @Binding var showingStrays: Bool
@@ -73,6 +74,7 @@ private struct CaptureContent: View {
                     scannerSlot
                 #endif
                 locationRow
+                walkShelf
                 manualEntry
                 tally
                 chips
@@ -90,19 +92,19 @@ private struct CaptureContent: View {
         )
         .toolbar {
             ToolbarItem {
-                NavigationLink(value: Route.identify) {
-                    Label("Identify a photo", systemImage: "camera.metering.center.weighted")
+                // Menu items cannot host NavigationLinks reliably, so they push onto Capture's
+                // own stack, which is where this screen is always the root.
+                Menu {
+                    Button("Identify a photo", systemImage: "camera.metering.center.weighted") {
+                        push(.identify)
+                    }
+                    Button("Location photo pass", systemImage: "camera.on.rectangle") {
+                        push(.locationPhotoPass(scope: capture.location?.id))
+                    }
+                } label: {
+                    Label("Photo tools", systemImage: "camera")
                 }
-            }
-            ToolbarItem {
-                NavigationLink(value: Route.locationPhotoPass(scope: capture.location?.id)) {
-                    Label("Location photo pass", systemImage: "camera.on.rectangle")
-                }
-            }
-            ToolbarItem {
-                NavigationLink(value: Route.audit(locationID: capture.location?.id)) {
-                    Label("Walk the shelf", systemImage: "checklist")
-                }
+                .accessibilityIdentifier("capture.photoTools")
             }
             ToolbarItem {
                 Button {
@@ -114,6 +116,24 @@ private struct CaptureContent: View {
                 .disabled(capture.session.strays.isEmpty)
             }
         }
+    }
+
+    private func push(_ route: Route) {
+        appModel.navigator.paths[.capture, default: []].append(route)
+    }
+
+    /// Walking the shelf is the screen's other main job, so it sits in the body beside the
+    /// location it walks rather than among the toolbar glyphs.
+    private var walkShelf: some View {
+        NavigationLink(value: Route.audit(locationID: capture.location?.id)) {
+            Label("Walk the shelf", systemImage: "checklist")
+                .font(.fieldGuideTitle)
+                .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget)
+        }
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.roundedRectangle(radius: FieldGuideTokens.radiusControl))
+        .tint(FieldGuideTokens.interaction)
+        .accessibilityIdentifier("capture.walkShelf")
     }
 
     #if os(iOS)
