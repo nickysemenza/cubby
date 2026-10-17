@@ -154,20 +154,19 @@ const projectScaffold = listScaffold("project", project, {
         dateFrom: typeof from === "string" ? from : undefined,
         dateTo: typeof to === "string" ? to : undefined,
       }),
-    completionYear: projectCompletion.predicate(
-      ({ tree, dateWindows }, { values }) => {
-        const ids = tree.allRows
-          .filter((row) => {
-            const window = dateWindows.get(row.id);
-            return (
-              window !== undefined &&
-              values.includes(projectCompletionYear(row, window))
-            );
-          })
-          .map((row) => row.id);
-        return ids.length ? inArray(project.id, ids) : sql`false`;
-      },
-    ),
+    // The id-to-year map travels as one jsonb parameter, as inventory
+    // valuations do.
+    completionYear: projectCompletion.value(({ tree, dateWindows }) => {
+      const years = Object.fromEntries(
+        tree.allRows.flatMap((row) => {
+          const window = dateWindows.get(row.id);
+          return window === undefined
+            ? []
+            : [[row.id, projectCompletionYear(row, window)]];
+        }),
+      );
+      return sql`(${JSON.stringify(years)}::jsonb ->> (${project.id})::text)`;
+    }),
     assigneeId: sql`(SELECT member."name" FROM "LedgerParty" member WHERE member."id" = ${effectiveProjectAssigneeSql(
       sql.raw('"Project"."id"'),
     )} AND member."deletedAt" IS NULL)`,
@@ -261,12 +260,12 @@ export const buildProjectListQuery = async (
   attentionItems?: readonly ProjectAttentionItem[],
   preparedTree?: ProjectTree,
 ) => {
-  // Filter-only: `getEntityCounts` calls this with `{}` inside a function
-  // whose design is one round trip, so the tree and attention items load
-  // only when their filter asks.
+  // `getEntityCounts` calls this with `{}` inside a function whose design is
+  // one round trip, so the tree and attention items load only when a filter,
+  // sort or group asks; rows hydrate apart from this context.
   const context = await projectScaffold.context(
     db,
-    { filters, readIntent: "count" },
+    { filters, sorts, projection: { kind: "base" } },
     attentionItems === undefined ? [] : [[projectAttention, attentionItems]],
   );
   const loadedTree = context.has(projectCompletion)
@@ -274,7 +273,7 @@ export const buildProjectListQuery = async (
     : preparedTree;
   const whereClause = projectScaffold.where(filters, { context });
 
-  const orderByArray = projectScaffold.orderBy(sorts, {}, filters);
+  const orderByArray = projectScaffold.orderBy(sorts, {}, filters, context);
 
   return { tree: loadedTree, whereClause, orderByArray, context };
 };

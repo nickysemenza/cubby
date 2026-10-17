@@ -148,6 +148,18 @@ export const listReadValue = (
   read: (read: QualityReadContext | undefined) => DerivedValue,
 ): ReadValue => ({ read });
 
+/**
+ * A value whose filters read a whole-list relation instead of the per-row
+ * scalar: `set` selects `("id", "value")` for every row that has one, and a
+ * filter matches `id IN (SELECT "id" FROM set WHERE …)`, so one set-based
+ * walk serves the filter. Sort, group and projection read `value`, which must
+ * agree with `set` row for row.
+ */
+interface SetValue {
+  readonly value: SQL;
+  readonly set: SQL;
+}
+
 export const listPrepare = <P>(load: PrepareLoad<P>): ListPrepare<P> => {
   const handle: ListPrepare<P> = {
     load,
@@ -193,7 +205,7 @@ export class ListContext {
   }
 }
 
-type DerivedValueSql = DerivedValue | PreparedValue | ReadValue;
+type DerivedValueSql = DerivedValue | PreparedValue | ReadValue | SetValue;
 type DerivedPredicateSql<V> =
   | ((value: V, read: QualityReadContext | undefined) => SQL | undefined)
   | PreparedPredicate<V>;
@@ -235,6 +247,9 @@ const isPrepared = (
 const isReadValue = (
   entry: DerivedValueSql | DerivedPredicateSql<never>,
 ): entry is ReadValue => typeof entry === "object" && "read" in entry;
+const isSetValue = (
+  entry: DerivedValueSql | DerivedPredicateSql<never>,
+): entry is SetValue => typeof entry === "object" && "set" in entry;
 
 /** The prepare a derived field's SQL needs, if any. */
 export const derivedPrepare = (
@@ -260,14 +275,15 @@ const derivedValueParts = (
   const entry = derived[key];
   if (entry === undefined || typeof entry === "function")
     throw missingSql(entity, key);
-  // SAFETY: `DerivedSqlArg` gives a value key only a value, a prepared
-  // value, or a read value, never a predicate's function or prepared
-  // predicate.
+  // SAFETY: `DerivedSqlArg` gives a value key only a value, a prepared,
+  // read or set value, never a predicate's function or prepared predicate.
   const value = isPrepared(entry)
     ? (entry as PreparedValue).render(context)
     : isReadValue(entry)
       ? entry.read(context.read)
-      : (entry as DerivedValue);
+      : isSetValue(entry)
+        ? entry.value
+        : (entry as DerivedValue);
   return isCompound(value) ? value : [value];
 };
 
@@ -289,6 +305,15 @@ export const derivedValueSql = (
       `${entity}.model.derived.${key} is a compound sort key and cannot filter`,
     );
   return value instanceof SQL ? value : value.sql;
+};
+
+/** A value's filter relation (`SetValue`), or null when filters read its scalar. */
+export const derivedValueSet = (
+  derived: AnyDerivedSql,
+  key: string,
+): SQL | null => {
+  const entry = derived[key];
+  return entry !== undefined && isSetValue(entry) ? entry.set : null;
 };
 
 /** A declared predicate's condition for a parsed filter value. */

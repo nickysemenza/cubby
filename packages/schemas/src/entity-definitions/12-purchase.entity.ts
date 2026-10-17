@@ -1181,11 +1181,10 @@ export default defineEntity({
       hasDocuments: { type: "boolean" },
       // The settlement-mismatch gap, less an active evidence-bound exception.
       financialReconciliation: { type: "enum", options: ["mismatch"] },
+      // The paperwork verdict; an excepted mismatch has none.
       reconciliation: {
-        predicate: "multiselect",
-        negatable: true,
-        reason:
-          "Needs review reads the paperwork_mismatch gap, which honours a recorded expected_mismatch exception, so the states are not one row value",
+        type: "enum",
+        options: [...purchaseReconciliation.options],
       },
     },
     sort: {
@@ -1198,11 +1197,13 @@ export default defineEntity({
         "expenseCount",
         "expenseTotal",
         "reconciliationGap",
+        "reconciliation",
         "documentCount",
         "createdAt",
         "updatedAt",
       ],
     },
+    grouping: ["reconciliation"],
     intents: {
       fields: {
         capture: [

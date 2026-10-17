@@ -102,6 +102,7 @@ import {
   derivedOrderBy,
   derivedPredicateSql,
   derivedPrepare,
+  derivedValueSet,
   derivedValueSql,
   type AnyDerivedSql,
   groupSql,
@@ -383,21 +384,27 @@ const excludedPredicate = (
   include: ReadonlyArray<SQL | undefined>,
 ): SQL | undefined => flagCondition(false, () => and(...include));
 
+/** A condition over a derived value, given the value's SQL. */
+type ValueTest = (
+  condition: (value: SQL) => SQL | undefined,
+) => SQL | undefined;
+
 /**
  * Any value / No value over a derived value: a boolean reads true as a value
  * (an UNKNOWN as none), any other type reads NULL as no value.
  */
 const valuePresence = (
   type: string,
-  expression: () => SQL,
+  test: ValueTest,
   presence: PresenceFilter,
 ): SQL | undefined => {
   if (presence === undefined) return undefined;
-  const has =
+  const has = test((value) =>
     type === "boolean"
-      ? sql`COALESCE((${expression()}), false)`
-      : sql`(${expression()}) IS NOT NULL`;
-  return presence === "has" ? has : sql`NOT ${has}`;
+      ? sql`COALESCE((${value}), false)`
+      : sql`(${value}) IS NOT NULL`,
+  );
+  return has === undefined || presence === "has" ? has : sql`NOT ${has}`;
 };
 
 /**
@@ -499,25 +506,33 @@ const derivedFilterPredicates = (
     ];
   }
   if (field.shape === "value") {
-    const expression = () =>
-      derivedValueSql(entity, derived, derivedKey, context);
+    // A set value tests its relation once per condition; any other value
+    // tests its per-row scalar.
+    const set = derivedValueSet(derived, derivedKey);
+    const test: ValueTest = (condition) => {
+      if (set === null)
+        return condition(derivedValueSql(entity, derived, derivedKey, context));
+      const matched = condition(sql`value_set."value"`);
+      return matched === undefined
+        ? undefined
+        : sql`${table.id} IN (SELECT value_set."id" FROM (${set}) value_set WHERE ${matched})`;
+    };
     switch (descriptor.kind) {
       case "text": {
         const term = optionalText.parse(value)?.trim();
-        return term ? [formatSearchTerm(expression(), term)] : [];
+        return term ? [test((column) => formatSearchTerm(column, term))] : [];
       }
       case "boolean":
         // An UNKNOWN value counts as not met, as `flagCondition` reads it.
         return [
           flagCondition(
             optionalBoolean.parse(value),
-            () => sql`COALESCE((${expression()}), false)`,
+            () =>
+              test((column) => sql`COALESCE((${column}), false)`) ?? sql`false`,
           ),
         ];
       case "presence":
-        return [
-          valuePresence(field.type, expression, presenceFilter.parse(value)),
-        ];
+        return [valuePresence(field.type, test, presenceFilter.parse(value))];
       case "range": {
         if (descriptor.wire.kind !== "range")
           throw new Error(
@@ -530,13 +545,20 @@ const derivedFilterPredicates = (
           bound.parse(values[to]),
         ];
         return [
-          low === undefined ? undefined : sql`${expression()} >= ${low}`,
-          high === undefined ? undefined : sql`${expression()} <= ${high}`,
+          // Unbounded reads no value, so an unrequested prepare stays unread.
+          low === undefined && high === undefined
+            ? undefined
+            : test((column) =>
+                and(
+                  low === undefined ? undefined : sql`${column} >= ${low}`,
+                  high === undefined ? undefined : sql`${column} <= ${high}`,
+                ),
+              ),
           descriptor.wire.presence === undefined
             ? undefined
             : valuePresence(
                 field.type,
-                expression,
+                test,
                 presenceFilter.parse(values[descriptor.wire.presence]),
               ),
         ];
@@ -547,11 +569,14 @@ const derivedFilterPredicates = (
           or(
             list === undefined || list.length === 0
               ? undefined
-              : sql`${expression()} IN (${sql.join(
-                  list.map((item) => sql`${item}`),
-                  sql`, `,
-                )})`,
-            valuePresence(field.type, expression, presence),
+              : test(
+                  (column) =>
+                    sql`${column} IN (${sql.join(
+                      list.map((item) => sql`${item}`),
+                      sql`, `,
+                    )})`,
+                ),
+            valuePresence(field.type, test, presence),
           ),
         ];
       }

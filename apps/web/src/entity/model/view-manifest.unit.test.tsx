@@ -364,7 +364,7 @@ describe("the unlocated views stay one question at three widths", () => {
     const disagrees = productViews.find((v) => v.id === "shelf-disagrees");
     expect(disagrees?.filters).toContainEqual({
       id: "quantityVariance",
-      value: "mismatched",
+      value: ["mismatched"],
     });
     expect(broad?.filters).toContainEqual({
       id: "servingAsLocations",

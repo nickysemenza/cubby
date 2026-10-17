@@ -16,23 +16,13 @@ import type {
   InventoryPlacement,
   inventoryFiltersSchema,
 } from "@cubby/schemas/inventory";
+import { inventoryValuationStatus } from "@cubby/schemas/inventory-fields";
 import {
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
 import { productCategoryFeature } from "@cubby/schemas/product-category-fields";
-import {
-  and,
-  asc,
-  count,
-  desc,
-  eq,
-  inArray,
-  not,
-  or,
-  sql,
-  sum,
-} from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, not, sql, sum } from "drizzle-orm";
 import { z } from "zod";
 
 import { projectListRows } from "~/entity/model/list-read-schema";
@@ -248,22 +238,11 @@ const inventoryScaffold = listScaffold("inventory", inventoryEntry, {
       sql`${inventoryEntry.amountUnit}`,
       sql`${inventoryEntry.amountValue}`,
     ],
-    valuationStatus: inventoryValuations.predicate(
-      (valuations, { values: statuses }) => {
-        const valuation = inventoryValuationSql(valuations, inventoryEntry.id);
-        return or(
-          ...statuses.map((status) =>
-            status === "valued"
-              ? sql`${valuation} IS NOT NULL`
-              : status === "missing"
-                ? sql`${valuation} IS NULL`
-                : and(
-                    sql`${valuation} IS NULL`,
-                    sql`${sql.raw(effectiveProductPriceSql('"Product"'))} IS NOT NULL`,
-                  ),
-          ),
-        );
-      },
+    valuationStatus: inventoryValuations.value(
+      (valuations) => sql`CASE
+        WHEN ${inventoryValuationSql(valuations, inventoryEntry.id)} IS NOT NULL THEN ${inventoryValuationStatus.enum.valued}::text
+        WHEN (SELECT ${sql.raw(effectiveProductPriceSql("vs_p"))} FROM "Product" vs_p WHERE vs_p."id" = ${inventoryEntry.productId}) IS NOT NULL THEN ${inventoryValuationStatus.enum.priceable}::text
+        ELSE ${inventoryValuationStatus.enum.unpriceable}::text END`,
     ),
   },
 });

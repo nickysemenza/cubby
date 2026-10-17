@@ -73,7 +73,11 @@ const PROJECTED_ACQUIRED = unitWeighted(`"acquiredUnits"`);
 const PROJECTED_EXITED = unitWeighted(`"exitedUnits"`);
 const PROJECTED_EXPECTED = `COALESCE(${PROJECTED_ACQUIRED} - ${PROJECTED_EXITED}, 0)::double precision`;
 
-/** Catalog range filters share the kit walk and own ledger aggregation before testing balances. */
+/**
+ * Every product's expected quantity as `("id", "value")`: catalog filters
+ * share one kit walk and own ledger aggregation before testing balances.
+ * Agrees row for row with `expectedQuantitySql`.
+ */
 export const expectedQuantityReadSql = () => sql`${kitAncestorCteSql(
   kitSeedForProductIds([], true),
   { groupedSiblingQuantities: true },
@@ -83,7 +87,7 @@ export const expectedQuantityReadSql = () => sql`${kitAncestorCteSql(
   WHERE ${sql.raw(QUANTITY_OWN_PREDICATES)}
   GROUP BY kqe."productId"
 )
-SELECT ka.target AS "productId", ${sql.raw(PROJECTED_EXPECTED)} AS "expectedQuantity"
+SELECT ka.target AS "id", ${sql.raw(PROJECTED_EXPECTED)} AS "value"
 FROM kit_anc ka LEFT JOIN kit_own ko ON ko."productId" = ka."productId"
 GROUP BY ka.target`;
 const PROJECTED_COMPARABLE_HISTORY = `COALESCE(sum(ko."unknownAcquisitionLines") + sum(ko."unknownExitLines"), 0) = 0 AND COALESCE(${PROJECTED_ACQUIRED} + ${PROJECTED_EXITED}, 0) > 0`;

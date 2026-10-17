@@ -1,0 +1,44 @@
+{
+  "email": ["purchaseId", "vendorAccountId", "vendorId"],
+  "expense": [
+    "costTypeFilter",
+    "dateRelative",
+    "ledgerPartyId",
+    "projectFilter",
+    "spendingCategoryFilter",
+    "tradeFilter"
+  ],
+  "financialAccount": ["externalAccountId", "last4", "source"],
+  "financialTransaction": ["externalId", "sourceRefs"],
+  "gardenEntry": ["journalPlantingId"],
+  "image": ["runId", "targetState"],
+  "imageJob": ["submissionId"],
+  "inventory": ["categoryFeature", "effectiveOwner"],
+  "location": ["recountOverdue"],
+  "planting": ["activeOn"],
+  "product": [
+    "anyGtin",
+    "categoryFeature",
+    "effectiveOwner",
+    "externalIdSource",
+    "taskDue",
+    "taskOpen",
+    "taskStatus"
+  ],
+  "productCategory": ["effectiveSpendingCategoryId"],
+  "project": [
+    "attention",
+    "dateRange",
+    "effectiveAssignee",
+    "effectiveLocations",
+    "search"
+  ],
+  "task": [
+    "assigneeFilter",
+    "dueRelative",
+    "projectFilter",
+    "search",
+    "subjectProductFilter"
+  ],
+  "wish": ["search"]
+}

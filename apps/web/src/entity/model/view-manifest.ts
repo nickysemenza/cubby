@@ -470,9 +470,7 @@ const standaloneEntityProblems = [
     source: {
       kind: "entity" as const,
       entity: "inventory" as const,
-      filters: [
-        { id: "valuationStatus", value: ["missing_with_priced_product"] },
-      ],
+      filters: [{ id: "valuationStatus", value: ["priceable"] }],
       sort: [{ id: "createdAt", desc: false }],
       columnVisibility: { valuation: true, product: true },
     },

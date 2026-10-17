@@ -530,18 +530,25 @@ const compileGroupChoice = (
   if (
     bound?.shape === "value" &&
     (bound.type === "enum" || bound.type === "text")
-  )
+  ) {
+    // A section reads the label its value filter shows for the same value.
+    const labels = descriptors.find(
+      (candidate) => candidate.derived === key,
+    )?.options;
     return choice(
       {
         kind: "derived",
         options:
           bound.options?.map((value) => ({
             value,
-            label: value[0]!.toUpperCase() + value.slice(1),
+            label:
+              labels?.find((option) => option.value === value)?.label ??
+              value[0]!.toUpperCase() + value.slice(1),
           })) ?? null,
       },
       null,
     );
+  }
   throw new EntityDeclarationError(
     `${where} is not an enum, text, reference or to-one related field.`,
   );

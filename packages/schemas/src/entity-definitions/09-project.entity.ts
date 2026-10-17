@@ -841,11 +841,8 @@ Rules:
         reason:
           "A project matches by its own dates or by any dated task or expense under it",
       },
-      completionYear: {
-        predicate: "multiselect",
-        reason:
-          "The completion year folds the subtree's effective dates outside SQL",
-      },
+      // The year of the subtree's effective end, folded in TS.
+      completionYear: { type: "text" },
     },
     sort: {
       fields: [
@@ -855,10 +852,12 @@ Rules:
         "kind",
         "startDate",
         "costEstimate",
+        "completionYear",
         "createdAt",
         "updatedAt",
       ],
     },
+    grouping: ["completionYear"],
     intents: {
       fields: {
         capture: [

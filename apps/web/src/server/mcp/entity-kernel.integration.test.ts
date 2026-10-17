@@ -204,16 +204,16 @@ describe("MCP entity kernel boundary", () => {
         auth: { userId: testUserId("test-user-id") },
       }),
     );
-    // `valuationStatus` is a filter-only predicate; a to-many `via` path
+    // `effectiveOwner` is a filter-only predicate; a to-many `via` path
     // derives its reason into the same generated field, which HTTP and MCP
     // read through one kernel parse.
     const reason =
-      'Cannot sort inventory by "valuationStatus": Filter only: Missing includes priceable entries, so the statuses overlap and are not one row value.';
+      'Cannot sort inventory by "effectiveOwner": Filter only: The effective owner is resolved from acquisition evidence outside SQL.';
     const command = {
       action: "list" as const,
       entity: "inventory" as const,
       filters: {},
-      sort: [{ orderBy: "valuationStatus", direction: "asc" as const }],
+      sort: [{ orderBy: "effectiveOwner", direction: "asc" as const }],
     };
     await expect(executeEntity(entityKernel, command)).rejects.toMatchObject({
       code: "BAD_REQUEST",
@@ -223,7 +223,7 @@ describe("MCP entity kernel boundary", () => {
     const viaMcp = await callKernel(command, entityKernel);
     expect(viaMcp.isError).toBe(true);
     expect(JSON.stringify(viaMcp.content)).toContain(
-      "Filter only: Missing includes priceable entries",
+      "Filter only: The effective owner is resolved",
     );
     const http = createHttpApiHandler(
       fromPartial<Parameters<typeof createHttpApiHandler>[0]>({
