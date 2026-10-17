@@ -36,6 +36,95 @@ const rows = z.object({
 });
 const one = z.object({ item: z.record(z.string(), z.unknown()) });
 
+type JsonSchemaNode =
+  | boolean
+  | {
+      type?: unknown;
+      items?: JsonSchemaNode;
+      properties?: Record<string, JsonSchemaNode>;
+      additionalProperties?: JsonSchemaNode;
+      anyOf?: JsonSchemaNode[];
+      oneOf?: JsonSchemaNode[];
+      allOf?: JsonSchemaNode[];
+    };
+const jsonSchemaNode: z.ZodType<JsonSchemaNode> = z.lazy(() =>
+  z.union([
+    z.boolean(),
+    z.looseObject({
+      type: z.unknown().optional(),
+      items: jsonSchemaNode.optional(),
+      properties: z.record(z.string(), jsonSchemaNode).optional(),
+      additionalProperties: jsonSchemaNode.optional(),
+      anyOf: z.array(jsonSchemaNode).optional(),
+      oneOf: z.array(jsonSchemaNode).optional(),
+      allOf: z.array(jsonSchemaNode).optional(),
+    }),
+  ]),
+);
+const variants = (
+  node: JsonSchemaNode | undefined,
+): Exclude<JsonSchemaNode, boolean>[] => {
+  if (typeof node !== "object") return [];
+  const nested: JsonSchemaNode[] = [
+    ...(node.anyOf ?? []),
+    ...(node.oneOf ?? []),
+    ...(node.allOf ?? []),
+  ];
+  return [node, ...nested.flatMap(variants)];
+};
+const declaresObject = (node: JsonSchemaNode | undefined) =>
+  variants(node).some(
+    (variant) => variant.type === "object" || variant.properties !== undefined,
+  );
+const declaresObjectCollection = (node: JsonSchemaNode | undefined) =>
+  variants(node).some(
+    (variant) =>
+      declaresObject(variant.items) ||
+      declaresObject(variant.additionalProperties),
+  );
+
+/**
+ * Compact is an identity-and-status row: no collections of objects (an empty
+ * one included), no data-quality facets or gaps, no field resolutions.
+ */
+function compactViolations(
+  entity: keyof typeof ENTITY_SCHEMA_BINDINGS,
+  item: z.output<typeof rows>["items"][number],
+): string[] {
+  const found: string[] = [];
+  // An empty collection can't be classified from its value; read the schema.
+  const published = jsonSchemaNode.parse(
+    z.toJSONSchema(ENTITY_SCHEMA_BINDINGS[entity].mcpList, {
+      io: "output",
+      unrepresentable: "any",
+    }),
+  );
+  for (const key of Object.keys(item))
+    if (
+      typeof published === "object" &&
+      declaresObjectCollection(published.properties?.[key])
+    )
+      found.push(
+        `${entity} compact ${key} is declared a collection of objects`,
+      );
+  const visit = (value: unknown, path: string) => {
+    if (Array.isArray(value)) {
+      if (value.some((entry) => typeof entry === "object" && entry !== null))
+        found.push(`${entity} compact ${path} is a collection of objects`);
+      return;
+    }
+    if (typeof value !== "object" || value === null) return;
+    for (const [key, child] of Object.entries(value)) {
+      const at = path ? `${path}.${key}` : key;
+      if (["facets", "gaps", "fieldResolutions"].includes(key))
+        found.push(`${entity} compact carries ${at}`);
+      visit(child, at);
+    }
+  };
+  visit(item, "");
+  return found;
+}
+
 // A full list of a few dozen purchases exceeded the MCP output limit; field
 // selection and the compact preset keep reads bounded without per-entity lists.
 describe("entity_read field selection", () => {
@@ -102,7 +191,7 @@ describe("entity_read field selection", () => {
     });
   });
 
-  it("compact returns declared list fields without nested child collections", async () => {
+  it("compact returns declared list fields without child collections", async () => {
     await world();
     const listed = await read({
       action: "list",
@@ -120,6 +209,51 @@ describe("entity_read field selection", () => {
           value.some((entry) => typeof entry === "object" && entry !== null),
       ).toBe(false);
     }
+  });
+
+  // Regression: Location detail declares `parent` optional behind z.lazy, so
+  // compact kept it; a root Location's list emitted `parent: null` while get
+  // omitted it.
+  it("compact keeps list and get keys equal for a root Location and omits long notes", async () => {
+    const notes = "Synthetic shelf note line.\n".repeat(40);
+    const root = await insertWithShortcode(ctx.db, "location", {
+      name: `Synthetic root ${crypto.randomUUID()}`,
+      type: "room",
+      notes,
+    });
+    const listed = await read({
+      action: "list",
+      entity: "location",
+      resultDetail: "compact",
+      limit: 100,
+    });
+    expect(listed.isError).not.toBe(true);
+    const fromList = rows
+      .parse(listed.structuredContent)
+      .items.find((item) => item["id"] === root.shortcode);
+    const got = await read({
+      action: "get",
+      entity: "location",
+      id: root.shortcode,
+      resultDetail: "compact",
+    });
+    expect(got.isError).not.toBe(true);
+    const fromGet = one.parse(got.structuredContent).item;
+    expect(fromList).toBeDefined();
+    expect(new Set(Object.keys(fromList ?? {}))).toEqual(
+      new Set(Object.keys(fromGet)),
+    );
+    expect(fromGet).not.toHaveProperty("notes");
+    const selected = await read({
+      action: "get",
+      entity: "location",
+      id: root.shortcode,
+      fields: ["notes"],
+    });
+    expect(one.parse(selected.structuredContent).item).toEqual({
+      id: root.shortcode,
+      notes,
+    });
   });
 
   it("refuses an unknown field path naming the allowed keys", async () => {
@@ -289,18 +423,14 @@ describe("entity_read field selection", () => {
               declared[group].slice(0, 1),
             ),
           ];
-          let id: string | undefined;
-          for (const selection of [{ resultDetail: "compact" }, { fields }]) {
-            const result = await call({ action: "list", entity, ...selection });
-            id ??= z
-              .string()
-              .optional()
-              .parse(
-                rows.safeParse(result?.structuredContent).data?.items[0]?.[
-                  "id"
-                ],
-              );
-          }
+          const listedCompact = rows.safeParse(
+            (await call({ action: "list", entity, resultDetail: "compact" }))
+              ?.structuredContent,
+          ).data?.items[0];
+          await call({ action: "list", entity, fields });
+          if (listedCompact)
+            failed.push(...compactViolations(entity, listedCompact));
+          const id = z.string().optional().parse(listedCompact?.["id"]);
           if (!id) continue;
           // A get selects from the published detail schema, not the list one.
           const detail: z.core.$ZodType =
@@ -309,11 +439,28 @@ describe("entity_read field selection", () => {
             detail instanceof z.ZodObject
               ? fields.filter((field) => Object.hasOwn(detail.shape, field))
               : [];
-          for (const selection of [
-            { resultDetail: "compact" },
-            { fields: detailFields },
-          ])
-            await call({ action: "get", entity, id, ...selection });
+          const gotCompact = one.safeParse(
+            (
+              await call({
+                action: "get",
+                entity,
+                id,
+                resultDetail: "compact",
+              })
+            )?.structuredContent,
+          ).data?.item;
+          await call({ action: "get", entity, id, fields: detailFields });
+          if (gotCompact) {
+            failed.push(...compactViolations(entity, gotCompact));
+            const listKeys = Object.keys(listedCompact ?? {});
+            const getKeys = Object.keys(gotCompact);
+            const onlyList = listKeys.filter((key) => !getKeys.includes(key));
+            const onlyGet = getKeys.filter((key) => !listKeys.includes(key));
+            if (onlyList.length > 0 || onlyGet.length > 0)
+              failed.push(
+                `${entity} compact keys differ: list-only ${onlyList.join(",")}; get-only ${onlyGet.join(",")}`,
+              );
+          }
         }
         return failed;
       },

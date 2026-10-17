@@ -125,12 +125,12 @@ export const MCP_TOOLS = defineMcpTools({
       get: mcpAction({
         op: kernelAction("get", "query"),
         description:
-          'One record by its shortcode. `missing: "null"` returns null instead of an error. `resultDetail: "full"` returns the complete projection — for a Product the detailed media read; the default summary is identity plus status; "compact" is the declared list fields without nested child collections. `fields` returns only those keys (dot paths like "financialReconciliation.status"; `id` always) of the full projection.',
+          'One record by its shortcode. `missing: "null"` returns null instead of an error. `resultDetail: "full"` returns the complete projection — for a Product the detailed media read; the default summary is identity plus status; "compact" is the same identity-and-status row list compact returns (no child collections, labels or long notes). `fields` returns only those keys (dot paths like "financialReconciliation.status"; `id` always) of the full projection.',
       }),
       list: mcpAction({
         op: kernelAction("list", "query"),
         description:
-          'One page of a kind, with that kind\'s own typed `filters`, `sort`, `pagination` and `groupBy`; returns { meta, items }. `sort` is a stack, primary first: sort=[{orderBy:"name",direction:"asc"}]. Every scored entity accepts orderBy "dataQuality" (ascending = weakest identity first) plus dataStatus/dataGap filters, the enrichment worklist. A full page of a large kind can exceed the output limit: prefer `resultDetail: "compact"` (declared list fields, no nested child collections) or `fields` (only those keys, dot paths allowed, `id` always) over "full".',
+          'One page of a kind, with that kind\'s own typed `filters`, `sort`, `pagination` and `groupBy`; returns { meta, items }. `sort` is a stack, primary first: sort=[{orderBy:"name",direction:"asc"}]. Every scored entity accepts orderBy "dataQuality" (ascending = weakest identity first) plus dataStatus/dataGap filters, the enrichment worklist. A full page of a large kind can exceed the output limit: prefer `resultDetail: "compact"` (identity and status: scalar list fields, dataQuality status/score when the entity declares it required, no child collections or long notes) or `fields` (only those keys, dot paths allowed, `id` always) over "full".',
       }),
       search: mcpAction({
         op: kernelAction("search", "query"),

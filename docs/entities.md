@@ -1321,7 +1321,14 @@ complete-population summary. Selected reads retain authoritative filtering,
 sorting, pagination and counts in that one page read. Their caller validates
 actual loaded fields before schema defaults can insert values; a declared-optional
 list key may stay absent, as the complete list also omits it. Unknown fields
-fail before even an empty read. `resultDetail: "full"` and kinds without a
+fail before even an empty read. `resultDetail: "compact"` reads one key set
+per entity for both list and get, decided from declarations: non-media
+list-read fields that both published read schemas require, minus fields
+declared as arrays or records of objects (empty ones included) and `textarea`
+long text. Declared-optional keys (display labels, detail-only enrichment) are
+left out because either read may omit them. Nested objects keep only their
+scalar leaves, so `dataQuality` reads as status and score; `fields` selects
+anything compact drops. `resultDetail: "full"` and kinds without a
 progressive reader run the complete list. Product list readers start the page's
 USDA batch as soon as its barcodes load, so the external lookup overlaps the
 remaining enrichment reads.
