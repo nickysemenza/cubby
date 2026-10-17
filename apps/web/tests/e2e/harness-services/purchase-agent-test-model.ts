@@ -421,10 +421,14 @@ export default {
               // Pi's managed-effort models put the active level in the last
               // system message; the request-level value is only the default.
               effort:
-                body.messages?.findLast(
-                  (message) =>
-                    message.role === "system" && message.output_config?.effort,
-                )?.output_config?.effort ?? body.output_config?.effort,
+                body.messages
+                  ?.slice()
+                  .reverse()
+                  .find(
+                    (message) =>
+                      message.role === "system" &&
+                      message.output_config?.effort,
+                  )?.output_config?.effort ?? body.output_config?.effort,
             }
           : body.reasoning,
     };
