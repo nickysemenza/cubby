@@ -131,7 +131,10 @@
           "dependentTasksOutputFiles": "packages/wasm/**/*"
         }
       ],
-      "outputs": ["{projectRoot}/dist"]
+      "outputs": [
+        "{projectRoot}/.cloudflare/output",
+        "{projectRoot}/.cloudflare/web-build-provenance.json"
+      ]
     },
     // The required desktop browser lane. CUBBY_E2E_SHARD (`index/count`)
     // splits it across CI runners; the restored run bundle is the evidence of

@@ -1,6 +1,6 @@
 /* eslint-disable anti-slop/no-unsafe-dictionary-type, anti-slop/no-object-parameters, anti-slop/no-unknown-returns -- The scenario adapter forwards queue events and peer fixtures unchanged as JSON. */
 import type { RunPurpose } from "@cubby/schemas/run-fields";
-import type { TestHarness } from "wrangler";
+import type { TestHarness } from "./test-runtime";
 import { z } from "zod";
 import type { Fixture as GatewayFixture } from "../tests/e2e/harness-services/purchase-import-test-gateway";
 

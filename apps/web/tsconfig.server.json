@@ -7,7 +7,7 @@
     "src/start.ts",
     "src/lib/auth.ts",
     "src/features/ai/server-functions/ai-smoke.ts",
-    "worker-configuration.d.ts"
+    "worker-environment.d.ts"
   ],
   "exclude": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts"]
 }

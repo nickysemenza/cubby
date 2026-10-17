@@ -30,11 +30,11 @@ function dist(files: Record<string, string>) {
 describe("measureServerClosure", () => {
   it("admits preview fixtures while retaining production and injection guards", () => {
     const cwd = dist({
-      "dist/server/index.js":
+      ".cloudflare/output/v0/workers/default/bundle/index.js":
         'const b=()=>import("./assets/browser-operation-dispatch-1.js");',
-      "dist/server/assets/browser-operation-dispatch-1.js":
+      ".cloudflare/output/v0/workers/default/bundle/assets/browser-operation-dispatch-1.js":
         "export const adapter=1;",
-      "dist/server/assets/fixtures-1.js":
+      ".cloudflare/output/v0/workers/default/bundle/assets/fixtures-1.js":
         "export const weightedArrayElement=1;export const fromRegExp=1;",
     });
     const run = (preview: boolean) =>
@@ -55,7 +55,10 @@ describe("measureServerClosure", () => {
     const preview = run(true);
     expect(preview.status).toBe(0);
     writeFileSync(
-      path.join(cwd, "dist/server/assets/browser-operation-dispatch-1.js"),
+      path.join(
+        cwd,
+        ".cloudflare/output/v0/workers/default/bundle/assets/browser-operation-dispatch-1.js",
+      ),
       "globalThis.__SENTRY_ORCHESTRION_INJECT__=1;",
     );
     const injected = run(true);
@@ -66,9 +69,10 @@ describe("measureServerClosure", () => {
   });
   it("rejects a build whose renamed dispatch chunk escapes the budget scope", () => {
     const cwd = dist({
-      "dist/server/index.js":
+      ".cloudflare/output/v0/workers/default/bundle/index.js":
         'const b=()=>import("./assets/api-adapter-1.js");',
-      "dist/server/assets/api-adapter-1.js": "export const adapter=1;",
+      ".cloudflare/output/v0/workers/default/bundle/assets/api-adapter-1.js":
+        "export const adapter=1;",
     });
     const result = spawnSync(
       process.execPath,

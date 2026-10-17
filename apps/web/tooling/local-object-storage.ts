@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { createTestHarness } from "wrangler";
+import { createTestHarness } from "./test-runtime";
 import type { LocalStorageEnv } from "./dev/storage";
 
 /** Browser/native presigned URLs use the existing local adapter over an isolated R2 bucket. */

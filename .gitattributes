@@ -2,4 +2,3 @@
 # before build, typecheck and test). These remaining ones are committed.
 **/drizzle/meta/*.json linguist-generated
 **/migrations/meta/*.json linguist-generated
-**/worker-configuration.d.ts linguist-generated

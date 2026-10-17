@@ -1,6 +1,6 @@
 import type { RunPurpose } from "@cubby/schemas/run-fields";
 // Types and pure helpers only: worker-bindings.ts reaches this module, and
-// worker-configuration.d.ts types the Workflow bindings from there.
+// worker-environment.d.ts types the Workflow bindings from there.
 import { z } from "zod";
 
 /**

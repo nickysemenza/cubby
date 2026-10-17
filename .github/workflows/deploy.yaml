@@ -36,7 +36,7 @@ jobs:
           wasm: "restore"
           build-command: "pnpm --filter @cubby/web run build:cf"
           sentry-auth-token: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          deploy-command: "pnpm --filter @cubby/web exec wrangler deploy --config dist/server/wrangler.json"
+          deploy-command: "pnpm --filter @cubby/web exec cf deploy --prebuilt --mode production"
           production-direct-database-url: ${{ secrets.PRODUCTION_DIRECT_DATABASE_URL }}
           production-migration-through: ${{ vars.PRODUCTION_MIGRATION_THROUGH }}
           cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}

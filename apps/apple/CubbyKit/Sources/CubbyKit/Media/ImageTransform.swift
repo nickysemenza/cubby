@@ -12,7 +12,7 @@ public enum ImageTransform {
     /// stop sharing cache entries.
     public static let widths: [Int] = SharedConstants.imageWidths
 
-    /// The R2 bucket's public host, generated from `R2_PUBLIC_URL` in `apps/web/wrangler.jsonc`.
+    /// The R2 bucket's public host, generated from `R2_PUBLIC_URL` in `apps/web/cloudflare.config.ts`.
     private static let bucketHost = URL(string: SharedConstants.mediaOrigin)?.host?.lowercased() ?? ""
 
     /// Transform width for a rendered width in points: 2x for retina, snapped up to the next

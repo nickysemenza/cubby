@@ -17,7 +17,7 @@ import {
   WAYFINDING_DOMAINS,
   WAYFINDING_DOMAIN_PRESENTATION,
 } from "../../../../../packages/schemas/src/entity-definitions/definition.ts";
-import { readR2PublicUrlFromWrangler } from "../../../tooling/wrangler-public-config.ts";
+import { readR2PublicUrl } from "../../../tooling/cloudflare-public-config.ts";
 import { generatedHeader } from "../../artifacts.ts";
 import type { EntityArtifacts } from "../declarations.ts";
 
@@ -88,12 +88,12 @@ ${Object.entries(APPLE_APP_IDENTITIES)
         generatedHeader +
         "// swift-format-ignore-file\n\n" +
         "/// Constants declared once in TypeScript (`packages/shared/src/client-constants.ts`,\n" +
-        "/// `collection-tag.ts`, `apps/web/wrangler.jsonc`) and shared with the web client.\n" +
+        "/// `collection-tag.ts`, `apps/web/cloudflare.config.ts`) and shared with the web client.\n" +
         "public enum SharedConstants {\n" +
         "    /// Cloudflare image-transform rungs (`IMAGE_WIDTHS`).\n" +
         `    public static let imageWidths: [Int] = [${IMAGE_WIDTHS.join(", ")}]\n` +
-        "    /// The R2 bucket's public origin (`R2_PUBLIC_URL` in wrangler.jsonc).\n" +
-        `    public static let mediaOrigin = ${swiftString(readR2PublicUrlFromWrangler())}\n` +
+        "    /// The R2 bucket's public origin (`R2_PUBLIC_URL` in cloudflare.config.ts).\n" +
+        `    public static let mediaOrigin = ${swiftString(readR2PublicUrl())}\n` +
         "    /// The household's IANA time zone (`HOUSEHOLD_TIMEZONE`).\n" +
         `    public static let householdTimeZoneIdentifier = ${swiftString(HOUSEHOLD_TIMEZONE)}\n` +
         "    /// The task board lane for tasks with no project (`TASK_BOARD_INBOX_LABEL`).\n" +

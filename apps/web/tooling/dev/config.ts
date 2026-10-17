@@ -1,121 +1,113 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import path from "node:path";
-import { parse } from "jsonc-parser";
-import { z } from "zod";
+import {
+  bindings,
+  defineWorker,
+  exports,
+  triggers,
+  type WorkerConfig,
+} from "cf/config";
 import type { DevProfile } from "../../../../scripts/lib/dev-profile.ts";
 
-/** Derive local bindings from the deployed declarations, never its resource targets. */
-export function writeLocalDevConfig(profile: DevProfile): string {
-  const config = z
-    .record(z.string(), z.json())
-    .parse(
-      parse(readFileSync(path.join(profile.webRoot, "wrangler.jsonc"), "utf8")),
-    );
+/** Reuse binding declarations, with checkout-local targets and no production triggers. */
+export function localWorker(production: WorkerConfig, profile: DevProfile) {
   const name = `cubby-dev-${profile.id}`;
-  for (const key of [
-    "routes",
-    "placement",
-    "triggers",
-    "ai",
-    "vectorize",
-    "vars",
-    "services",
-    "hyperdrive",
-    "queues",
-    "observability",
-  ])
-    delete config[key];
-  Object.assign(config, {
-    name,
-    main: path.join(profile.webRoot, "tooling/dev/worker.ts"),
-    workers_dev: false,
-    preview_urls: false,
-    secrets: { required: [] },
-    vars: profile.vars,
-    observability: { enabled: true },
-    hyperdrive: ["HYPERDRIVE", "HYPERDRIVE_CACHED"].map((binding) => ({
-      binding,
-      id: "00000000000000000000000000000000",
-      localConnectionString: profile.databaseUrl,
-    })),
-    r2_buckets: [
-      { binding: "LOCAL_DEV_STORAGE", bucket_name: `${name}-storage` },
-      { binding: "USDA_RELEASES", bucket_name: usdaReleasesBucket(profile) },
-    ],
-    queues: {
-      producers: [
-        { binding: "BACKGROUND_QUEUE", queue: `${name}-background` },
-        { binding: "IMAGE_CLOUD_QUEUE", queue: `${name}-image-cloud` },
-        { binding: "TELEMETRY_QUEUE", queue: `${name}-telemetry` },
-        { binding: "PURCHASE_AGENT_QUEUE", queue: `${name}-purchase` },
-      ],
-      consumers: [
-        {
-          queue: `${name}-image-cloud`,
-          max_batch_size: 1,
-          max_batch_timeout: 0,
-          max_concurrency: 4,
-          max_retries: 3,
-        },
-        {
-          queue: `${name}-background`,
-          max_batch_size: 1,
-          max_batch_timeout: 0,
-          max_concurrency: 1,
-          max_retries: 3,
-        },
-        {
-          queue: `${name}-telemetry`,
-          max_batch_size: 100,
-          max_batch_timeout: 5,
-          max_concurrency: 1,
-          max_retries: 3,
-        },
-        // Offline development refuses the producer handoff (dev/worker.ts),
-        // so only the integrations profile delivers agent events.
-        {
-          queue: `${name}-purchase`,
-          max_batch_size: 10,
-          max_batch_timeout: 0,
-          max_retries: 3,
-        },
-      ],
-    },
-    workflows: [
-      {
-        binding: "AI_REFRESH",
-        name: `${name}-ai-refresh`,
-        class_name: "AiRefreshWorkflow",
-      },
-      {
-        binding: "SEARCH_INDEX_REPAIR",
-        name: `${name}-search-index-repair`,
-        class_name: "SearchIndexRepairWorkflow",
-      },
-      {
-        binding: "MAIL_DISCOVERY",
-        name: `${name}-mail-discovery`,
-        class_name: "MailDiscoveryWorkflow",
-      },
-    ],
-  });
-  if (profile.integration) {
-    config.ai = { binding: "AI", remote: true };
-    config.vectorize = [
-      {
-        binding: "VECTORIZE",
-        index_name: profile.integration.vectorizeIndex,
-        remote: true,
-      },
-    ];
+  const env = { ...production.env };
+  for (const key of ["AI", "VECTORIZE", "HYPERDRIVE", "HYPERDRIVE_CACHED"])
+    delete env[key];
+  for (const [key, value] of Object.entries(env)) {
+    if (value && value.type === "secret") delete env[key];
+    if (value && value.type === "durable-object")
+      env[key] = bindings.durableObject({ ...value, worker: name });
   }
-  const destination = path.join(profile.stateDir, "config/main.json");
-  mkdirSync(path.dirname(destination), { recursive: true });
-  writeFileSync(destination, `${JSON.stringify(config, null, 2)}\n`, {
-    mode: 0o600,
+  return defineWorker({
+    ...production,
+    name,
+    entrypoint: "tooling/dev/worker.ts",
+    domains: [],
+    placement: undefined,
+    observability: { enabled: true },
+    exports: {
+      ...production.exports,
+      AiRefreshWorkflow: exports.workflow({ name: `${name}-ai-refresh` }),
+      SearchIndexRepairWorkflow: exports.workflow({
+        name: `${name}-search-index-repair`,
+      }),
+      MailDiscoveryWorkflow: exports.workflow({
+        name: `${name}-mail-discovery`,
+      }),
+    },
+    triggers: [
+      triggers.queue({
+        name: `${name}-image-cloud`,
+        maxBatchSize: 1,
+        maxBatchTimeout: 0,
+        maxConcurrency: 4,
+        maxRetries: 3,
+      }),
+      triggers.queue({
+        name: `${name}-background`,
+        maxBatchSize: 1,
+        maxBatchTimeout: 0,
+        maxConcurrency: 1,
+        maxRetries: 3,
+      }),
+      triggers.queue({
+        name: `${name}-telemetry`,
+        maxBatchSize: 100,
+        maxBatchTimeout: 5,
+        maxConcurrency: 1,
+        maxRetries: 3,
+      }),
+      triggers.queue({
+        name: `${name}-purchase`,
+        maxBatchSize: 10,
+        maxBatchTimeout: 0,
+        maxRetries: 3,
+      }),
+    ],
+    env: {
+      ...env,
+      ...Object.fromEntries(
+        Object.entries(profile.vars).map(([key, value]) => [
+          key,
+          bindings.text(value),
+        ]),
+      ),
+      HYPERDRIVE: bindings.hyperdrive({
+        id: "00000000000000000000000000000000",
+        dev: { connectionString: profile.databaseUrl },
+      }),
+      HYPERDRIVE_CACHED: bindings.hyperdrive({
+        id: "00000000000000000000000000000000",
+        dev: { connectionString: profile.databaseUrl },
+      }),
+      LOCAL_DEV_STORAGE: bindings.r2({ name: `${name}-storage` }),
+      USDA_RELEASES: bindings.r2({ name: `${name}-usda-releases` }),
+      BACKGROUND_QUEUE: bindings.queue({ name: `${name}-background` }),
+      IMAGE_CLOUD_QUEUE: bindings.queue({ name: `${name}-image-cloud` }),
+      TELEMETRY_QUEUE: bindings.queue({ name: `${name}-telemetry` }),
+      PURCHASE_AGENT_QUEUE: bindings.queue({ name: `${name}-purchase` }),
+      AI_REFRESH: bindings.workflow({
+        name: `${name}-ai-refresh`,
+        worker: name,
+        exportName: "AiRefreshWorkflow",
+      }),
+      SEARCH_INDEX_REPAIR: bindings.workflow({
+        name: `${name}-search-index-repair`,
+        worker: name,
+        exportName: "SearchIndexRepairWorkflow",
+      }),
+      MAIL_DISCOVERY: bindings.workflow({
+        name: `${name}-mail-discovery`,
+        worker: name,
+        exportName: "MailDiscoveryWorkflow",
+      }),
+      ...(profile.integration && {
+        AI: bindings.ai({ dev: { remote: true } }),
+        VECTORIZE: bindings.vectorize({
+          name: profile.integration.vectorizeIndex,
+          dev: { remote: true },
+        }),
+      }),
+    },
   });
-  return destination;
 }
-
-const usdaReleasesBucket = (profile: DevProfile) =>
-  `cubby-dev-${profile.id}-usda-releases`;

@@ -8,7 +8,7 @@ import { IMAGE_WIDTHS } from "@cubby/shared/client-constants";
 // API responses untouched. The transform is done by CF's edge, not our worker,
 // so this works identically in dev (vite) and prod.
 //
-// Vite injects the public origin from wrangler.jsonc for client and SSR builds.
+// Vite injects the public origin from cloudflare.config.ts for client and SSR builds.
 // Keeping that deployment config authoritative prevents stored object keys from
 // acquiring a second, client-only hostname setting.
 //

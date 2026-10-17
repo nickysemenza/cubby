@@ -7,6 +7,7 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "^1.4.3",
+    "cf": "1.0.0-beta.18",
     "vitest": "5.0.5"
   },
   "packageManager": "pnpm@12.11.2"

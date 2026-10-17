@@ -11,6 +11,6 @@ export function shouldRetryRuntime(state: {
     !state.ready &&
     !state.cancelled &&
     state.attempt < 3 &&
-    /EADDRINUSE/u.test(state.logs)
+    /EADDRINUSE|Port \d+ is already in use/u.test(state.logs)
   );
 }

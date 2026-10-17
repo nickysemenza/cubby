@@ -20,7 +20,6 @@ import {
   renameSync,
 } from "node:fs";
 import net from "node:net";
-import { previewConfig } from "./preview-config";
 import { shouldRetryRuntime } from "./runtime-retry.ts";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -313,37 +312,24 @@ async function start(profile: DevProfile, preview: boolean): Promise<void> {
         );
       });
     for (let launchAttempt = 0; ; launchAttempt++) {
-      if (preview) {
-        const builtRoot = path.join(profile.webRoot, "dist/server");
-        writeFileSync(
-          path.join(profile.stateDir, "config/preview.json"),
-          JSON.stringify(
-            previewConfig(
-              JSON.parse(
-                readFileSync(path.join(builtRoot, "wrangler.json"), "utf8"),
-              ),
-              builtRoot,
-              profile,
-            ),
-          ),
+      // Preview consumes immutable Build Output; rebuild only if a retry changes bindings.
+      if (preview && launchAttempt > 0)
+        await run(
+          profile,
+          "pnpm",
+          ["--dir", profile.webRoot, "run", "build:cf"],
+          {
+            CUBBY_DEV_PREVIEW_BUILD: "true",
+          },
         );
-      }
-      const args = preview
-        ? [
-            "exec",
-            "wrangler",
-            "dev",
-            "--config",
-            path.join(profile.stateDir, "config/preview.json"),
-            "--port",
-            String(profile.port),
-            "--inspector-port",
-            String(profile.inspectorPort),
-            "--local",
-            "--persist-to",
-            path.join(profile.stateDir, "cloudflare"),
-          ]
-        : ["exec", "vite", "dev"];
+      const args = [
+        "exec",
+        "vite",
+        preview ? "preview" : "dev",
+        "--port",
+        String(profile.port),
+        "--strictPort",
+      ];
       child = spawn("pnpm", args, {
         cwd: profile.webRoot,
         // The runtime's lifecycle plugin exits if this supervisor dies.

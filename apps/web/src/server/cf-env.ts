@@ -62,24 +62,24 @@ export const getMailDiscoveryWorkflow = (): Env["MAIL_DISCOVERY"] | undefined =>
 /**
  * The background queue producer (`env.BACKGROUND_QUEUE`) on local or deployed
  * Workers, or undefined outside the Worker adapter. The binding
- * is generated from wrangler.jsonc; this accessor narrows it to the producer
+ * is declared in cloudflare.config.ts; this accessor narrows it to the producer
  * surface shared by production and tests.
  */
 export const getBackgroundQueue = (): BackgroundQueueProducer | undefined => {
-  // SAFETY: Wrangler generates Env bindings structurally from configuration;
+  // SAFETY: native configuration infers Env bindings structurally;
   // this adapter narrows that generated queue binding to Cubby's owned port.
   return cfEnv?.BACKGROUND_QUEUE as BackgroundQueueProducer | undefined;
 };
 
 /** The low-priority telemetry queue when configured in the Worker environment. */
 export const getTelemetryQueue = (): TelemetryQueueProducer | undefined => {
-  // SAFETY: Wrangler generates Env bindings structurally from configuration;
+  // SAFETY: native configuration infers Env bindings structurally;
   // this adapter narrows that generated queue binding to Cubby's owned port.
   return cfEnv?.TELEMETRY_QUEUE as TelemetryQueueProducer | undefined;
 };
 
 export const getImageCloudQueue = (): BackgroundQueueProducer | undefined => {
-  // SAFETY: Wrangler generates this binding; the port narrows its sendBatch surface.
+  // SAFETY: native configuration infers this binding; the port narrows sendBatch.
   return cfEnv?.IMAGE_CLOUD_QUEUE as BackgroundQueueProducer | undefined;
 };
 
@@ -87,7 +87,7 @@ export const getImageCloudQueue = (): BackgroundQueueProducer | undefined => {
 export const getPurchaseAgentQueue = ():
   | PurchaseAgentQueueProducer
   | undefined => {
-  // SAFETY: Wrangler generates this queue binding from wrangler.jsonc; this
+  // SAFETY: cloudflare.config.ts declares this queue binding; this
   // adapter narrows it to the single send method Cubby's producer owns.
   return cfEnv?.PURCHASE_AGENT_QUEUE as PurchaseAgentQueueProducer | undefined;
 };
@@ -157,7 +157,7 @@ export const getAiGateway = (gatewayId: string = CUBBY_AI_GATEWAY_ID) =>
 /**
  * The deterministic gateway peer that exists only in the workerd harness's
  * offline and purchase-agent profiles (`tooling/workerd-harness.ts`). It is deliberately
- * absent from wrangler.jsonc, so a deployed Worker can never resolve it and
+ * absent from cloudflare.config.ts, so a deployed Worker can never resolve it and
  * keeps the mandatory `env.AI` transport above.
  */
 export const getTestAiGateway = (): { fetch: typeof fetch } | undefined =>
@@ -171,8 +171,8 @@ export const getTestAiGateway = (): { fetch: typeof fetch } | undefined =>
 
 /**
  * The optional entity-vector index (`env.VECTORIZE`) from the Worker
- * environment. Narrowed to Cubby's owned surface because `wrangler types`
- * emits the legacy `VectorizeIndex` class, which omits `queryById`.
+ * environment. Narrowed to Cubby's owned surface because the inferred binding
+ * uses the legacy `VectorizeIndex` class, which omits `queryById`.
  */
 export const getVectorIndex = (): VectorizeIndexBinding | undefined => {
   // SAFETY: the generated binding is the v2 Vectorize index at runtime; this

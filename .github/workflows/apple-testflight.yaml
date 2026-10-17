@@ -81,8 +81,10 @@ jobs:
               - "apps/web/src/**"
               - "apps/web/generator/**"
               - "apps/web/tooling/checks/apple-preview-fixtures.ts"
-              - "apps/web/wrangler.jsonc"
-              - "apps/web/tooling/wrangler-public-config.ts"
+              - "apps/web/cloudflare.config.ts"
+              - "apps/web/tooling/cloudflare-public-config.ts"
+              - "apps/web/tooling/dev/config.ts"
+              - "scripts/lib/dev-profile.ts"
               - *notMarkdown
       - name: Report
         env:

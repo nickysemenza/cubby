@@ -2,7 +2,7 @@
   // `apps/web/generator` runs under this tsconfig (`pnpm generate`), so it is
   // type-checked here rather than by the root project.
   "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["node_modules", "dist", "artifacts"],
+  "exclude": ["node_modules", "dist", "artifacts", ".cloudflare"],
   "compilerOptions": {
     // The typecheck script uses one native checker to avoid duplicating the
     // large generic type graph. Measurements:

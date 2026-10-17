@@ -3,12 +3,33 @@ import { fileURLToPath } from "node:url";
 import { cloudflareTest } from "@cloudflare/vitest-plugin";
 import { defineConfig } from "vitest/config";
 
+import { testWorker } from "./cloudflare.config.ts";
+
 // Resolve the Worker suites and their Cloudflare plugin from this package.
 export default defineConfig({
   root: fileURLToPath(new URL(".", import.meta.url)),
   plugins: [
     cloudflareTest({
       miniflare: {
+        // The beta pool renames its runner without retargeting native self bindings.
+        durableObjects: Object.fromEntries(
+          Object.entries(testWorker.env).flatMap(([name, binding]) =>
+            binding.type === "durable-object"
+              ? [
+                  [
+                    name,
+                    {
+                      className: binding.exportName,
+                      useSQLite:
+                        new Map(Object.entries(testWorker.exports)).get(
+                          binding.exportName,
+                        )?.storage === "sqlite",
+                    },
+                  ],
+                ]
+              : [],
+          ),
+        ),
         outboundService: async (request) => {
           if (
             request.url === "https://auth.openai.com/api/accounts/oauth/token"
@@ -27,10 +48,12 @@ export default defineConfig({
           });
         },
       },
-      wrangler: {
-        configPath: fileURLToPath(
-          new URL("../web/wrangler.calendar-test.jsonc", import.meta.url),
-        ),
+      experimental: {
+        newConfig: {
+          configPath: fileURLToPath(
+            new URL("./cloudflare.config.ts", import.meta.url),
+          ),
+        },
       },
     }),
   ],

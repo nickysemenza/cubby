@@ -7,7 +7,7 @@ import type { HookHandler, Plugin } from "vite";
 import topLevelAwait from "vite-plugin-top-level-await";
 import wasm from "vite-plugin-wasm";
 import { defineConfig, type TestProjectConfiguration } from "vitest/config";
-import { readR2PublicUrlFromWrangler } from "./tooling/wrangler-public-config.ts";
+import { readR2PublicUrl } from "./tooling/cloudflare-public-config.ts";
 
 // Generated output and the @cubby/recipebridge WASM are never committed; bring
 // them current before any module graph (or TanStack's route scan) reads them.
@@ -171,7 +171,7 @@ export default defineConfig({
     __SOURCE_COMMIT__: JSON.stringify(gitCommit),
     __SOURCE_BRANCH__: JSON.stringify("test"),
     __BUILD_DATE__: JSON.stringify("2026-01-01T00:00:00.000Z"),
-    __R2_PUBLIC_URL__: JSON.stringify(readR2PublicUrlFromWrangler()),
+    __R2_PUBLIC_URL__: JSON.stringify(readR2PublicUrl()),
   },
   // https://github.com/Menci/vite-plugin-wasm#usage
   plugins: [wasmInlinedForVitest(), topLevelAwait()],

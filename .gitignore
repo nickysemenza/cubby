@@ -134,3 +134,6 @@ apps/web/.e2e/
 
 # Ephemeral lint-rule regression fixtures are not application/generator inputs.
 .lint-fixture-*/
+
+# Cloudflare Build Output and generated binding types.
+.cloudflare/

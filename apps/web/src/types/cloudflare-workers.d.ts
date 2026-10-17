@@ -1,4 +1,4 @@
-// Wrangler owns Env and binding/RPC types in worker-configuration.d.ts. The
+// Native configuration owns Env through worker-environment.d.ts. The
 // full Workers library cannot share this app's DOM type graph because both
 // runtimes define Element; these imported platform types keep the module
 // boundary aligned with the current Workers release without merging globals.
@@ -39,8 +39,11 @@ declare module "cloudflare:workers" {
 
 /** Local provider seam is absent from deployed Worker bindings. */
 interface Env {
+  DATABASE_URL?: string;
+  UPC_UPSTREAM_DISABLED?: string;
   E2E_GOOGLE_PROVIDER_URL?: string;
   GOOGLE_CLIENT_SECRET?: string;
+  NOTION_API_KEY?: string;
   /** Workerd harness only; see `RequestDbConnections.poolIdleTimeoutMs`. */
   CUBBY_TEST_POOL_IDLE_TIMEOUT_MS?: string;
   /** Workerd harness only; see `PurchaseAgentEnvironment.settlementPollMs`. */

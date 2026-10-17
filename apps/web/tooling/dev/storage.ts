@@ -79,7 +79,7 @@ function storageRoute(request: Request, env: LocalStorageEnv) {
 }
 
 /** Local-only S3/public delivery adapter; signatures and expiry are deliberately
- * ignored. Bytes remain in Wrangler's persistent R2 binding, including restarts.
+ * ignored. Bytes remain in Cloudflare's persistent R2 binding, including restarts.
  * Cloudflare image transforms serve the unchanged original locally. */
 export async function handleLocalStorageRequest(
   request: Request,

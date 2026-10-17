@@ -1,3 +1,7 @@
+import {
+  readBuildOutput,
+  writeWorkerConfig,
+} from "@cloudflare/build-output-utils";
 import { execFileSync } from "node:child_process";
 import { rmSync } from "node:fs";
 import path from "node:path";
@@ -16,16 +20,39 @@ const run = (command: string, args: string[], env = process.env) => {
   execFileSync(command, args, { cwd: webRoot, stdio: "inherit", env });
 };
 
-function buildCloudflare() {
+async function buildCloudflare() {
   run(process.execPath, ["../../scripts/ensure.ts", "wasm"]);
   run(process.execPath, ["../../scripts/ensure.ts", "generate"]);
-  rmSync(path.join(webRoot, "dist"), { recursive: true, force: true });
+  rmSync(path.join(webRoot, ".cloudflare/output"), {
+    recursive: true,
+    force: true,
+  });
   const source = webBuildSourceFingerprint(repoRoot);
-  run("pnpm", ["exec", "vite", "build"], {
+  run("pnpm", ["exec", "cf", "build"], {
     ...process.env,
     DEPLOY_TARGET: "cloudflare",
     NODE_ENV: "production",
   });
+  // Sentry owns maps. Keep bundle maps for Sentry/diagnostics, but do not
+  // upload them again through cf (the combined map exceeds Cloudflare's limit).
+  const output = await readBuildOutput(webRoot);
+  for (const [directoryName, worker] of Object.entries(output.workers)) {
+    const { manifest, ...config } = worker.config;
+    if (!manifest) continue;
+    await writeWorkerConfig({
+      root: webRoot,
+      directoryName,
+      config,
+      manifest: {
+        ...manifest,
+        modules: Object.fromEntries(
+          Object.entries(manifest.modules).filter(
+            ([, module]) => module.type !== "sourcemap",
+          ),
+        ),
+      },
+    });
+  }
   run("pnpm", ["exec", "tsx", "tooling/checks/check-client-bundle.ts"]);
   run("pnpm", ["exec", "tsx", "tooling/checks/check-server-closure.ts"]);
   console.log(
@@ -87,5 +114,5 @@ if (
     console.log(
       `[web build] ${await ensureWebBuild(repoRoot, buildCloudflare, process.env.CUBBY_E2E_PREBUILT_WEB === "1")}`,
     );
-  } else buildCloudflare();
+  } else await buildCloudflare();
 }

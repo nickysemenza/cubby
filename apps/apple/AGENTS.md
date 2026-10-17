@@ -140,16 +140,16 @@ and captured credential revisions across every await. See [DESIGN.md](DESIGN.md#
 None is committed; edit the generator or its inputs, never the output. A missing one means
 `pnpm generate` (or `build-rust.sh`) has not run in this checkout.
 
-| Output                                                                                                                   | Generator                                                                                              |
-| ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| `CubbyKit/Sources/CubbyKit/Generated/native-coverage.json`                                                               | `packages/schemas/src/native-coverage.ts`                                                              |
-| `Generated/{entity-manifest.json,EntityDescriptors,EntityVocabulary}.swift`, `CubbyAPISupport/Generated/EntityKey.swift` | `apps/web/generator/entities/render/swift-catalog.ts`                                                  |
-| `Generated/{OperationRoutes,ClientOperations,APITypes}.swift`, `Sources/CubbyAPI/openapi-generator-config.yaml`          | `apps/web/generator/http-api/native.ts`, `swift-operations.ts`                                         |
-| `Generated/entity-kernel.json`                                                                                           | `apps/web/generator/http-api/entity-kernel.ts`                                                         |
-| `Generated/SharedConstants.swift`                                                                                        | `packages/shared/src/client-constants.ts`, `apps/web/wrangler.jsonc`, `WAYFINDING_DOMAIN_PRESENTATION` |
-| `CubbyAPI` target                                                                                                        | swift-openapi-generator plugin, from `Sources/CubbyAPI/openapi.json` (written by `pnpm generate`)      |
-| `CubbyKit/Sources/CubbyFFI/cubby_ffi.swift`                                                                              | `uniffi-bindgen` via `scripts/ensure.ts apple-ffi`                                                     |
-| `Generated/PreviewFixtures/*.json`                                                                                       | `apps/web/tooling/checks/apple-preview-fixtures.ts` (edit its overrides)                               |
+| Output                                                                                                                   | Generator                                                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `CubbyKit/Sources/CubbyKit/Generated/native-coverage.json`                                                               | `packages/schemas/src/native-coverage.ts`                                                                    |
+| `Generated/{entity-manifest.json,EntityDescriptors,EntityVocabulary}.swift`, `CubbyAPISupport/Generated/EntityKey.swift` | `apps/web/generator/entities/render/swift-catalog.ts`                                                        |
+| `Generated/{OperationRoutes,ClientOperations,APITypes}.swift`, `Sources/CubbyAPI/openapi-generator-config.yaml`          | `apps/web/generator/http-api/native.ts`, `swift-operations.ts`                                               |
+| `Generated/entity-kernel.json`                                                                                           | `apps/web/generator/http-api/entity-kernel.ts`                                                               |
+| `Generated/SharedConstants.swift`                                                                                        | `packages/shared/src/client-constants.ts`, `apps/web/cloudflare.config.ts`, `WAYFINDING_DOMAIN_PRESENTATION` |
+| `CubbyAPI` target                                                                                                        | swift-openapi-generator plugin, from `Sources/CubbyAPI/openapi.json` (written by `pnpm generate`)            |
+| `CubbyKit/Sources/CubbyFFI/cubby_ffi.swift`                                                                              | `uniffi-bindgen` via `scripts/ensure.ts apple-ffi`                                                           |
+| `Generated/PreviewFixtures/*.json`                                                                                       | `apps/web/tooling/checks/apple-preview-fixtures.ts` (edit its overrides)                                     |
 
 - **Native coverage.** `packages/schemas/src/native-coverage.ts` is the single declaration of
   which manifest renderer, slot, and hero-action ids native draws. A new web-only id is
