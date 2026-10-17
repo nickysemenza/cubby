@@ -40,35 +40,76 @@ const boundEntity = (
 ): entity is keyof typeof ENTITY_SCHEMA_BINDINGS =>
   Object.hasOwn(ENTITY_SCHEMA_BINDINGS, entity);
 
-/** Top-level keys an object-like Zod schema can publish. */
-function schemaKeys(schema: z.core.$ZodType): string[] {
-  if (schema instanceof z.ZodObject) return Object.keys(schema.shape);
-  if (schema instanceof z.ZodUnion)
-    return [...new Set(schema.options.flatMap(schemaKeys))];
-  if (schema instanceof z.ZodIntersection)
-    return [
-      ...new Set([
-        ...schemaKeys(schema.def.left),
-        ...schemaKeys(schema.def.right),
-      ]),
-    ];
-  if (schema instanceof z.ZodPipe) return schemaKeys(schema.def.in);
+/** The published MCP read schema a get/list item is projected through. */
+function publishedSchema(entity: string, action: "get" | "list") {
+  if (!boundEntity(entity)) return null;
+  const binding = ENTITY_SCHEMA_BINDINGS[entity];
+  const schema: z.core.$ZodType =
+    action === "list" ? binding.mcpList : binding.mcpDetail;
+  return schema instanceof z.ZodObject ? schema : null;
+}
+
+/** Peel wrappers that do not change which keys a value can carry. */
+function unwrap(schema: z.core.$ZodType): z.core.$ZodType {
   if (
     schema instanceof z.ZodOptional ||
     schema instanceof z.ZodNullable ||
-    schema instanceof z.ZodDefault
+    schema instanceof z.ZodDefault ||
+    schema instanceof z.ZodReadonly ||
+    schema instanceof z.ZodCatch
   )
-    return schemaKeys(schema.def.innerType);
+    return unwrap(schema.def.innerType);
+  if (schema instanceof z.ZodPipe) return unwrap(schema.def.in);
+  if (schema instanceof z.ZodLazy) return unwrap(schema.def.getter());
+  // A path through an array addresses every element.
+  if (schema instanceof z.ZodArray) return unwrap(schema.def.element);
+  return schema;
+}
+
+/** The schemas published at `key` beneath an object-like schema. */
+function childSchemas(schema: z.core.$ZodType, key: string): z.core.$ZodType[] {
+  const node = unwrap(schema);
+  if (node instanceof z.ZodObject)
+    return Object.hasOwn(node.shape, key) ? [node.shape[key]] : [];
+  if (node instanceof z.ZodUnion)
+    return node.options.flatMap((option) => childSchemas(option, key));
+  if (node instanceof z.ZodIntersection)
+    return [
+      ...childSchemas(node.def.left, key),
+      ...childSchemas(node.def.right, key),
+    ];
   return [];
 }
 
-const allowedKeys = (entity: string, action: "get" | "list") => {
-  if (!boundEntity(entity)) return [];
-  const binding = ENTITY_SCHEMA_BINDINGS[entity];
-  return schemaKeys(action === "list" ? binding.mcpList : binding.mcpDetail);
-};
+/** Keys an object-like Zod schema publishes. */
+function schemaKeys(schema: z.core.$ZodType): string[] {
+  const node = unwrap(schema);
+  if (node instanceof z.ZodObject) return Object.keys(node.shape);
+  if (node instanceof z.ZodUnion)
+    return [...new Set(node.options.flatMap(schemaKeys))];
+  if (node instanceof z.ZodIntersection)
+    return [
+      ...new Set([...schemaKeys(node.def.left), ...schemaKeys(node.def.right)]),
+    ];
+  return [];
+}
 
-/** The selection a read command asked for, validated against the entity's published keys. */
+/** The first segment of `path` the schema does not publish, with the keys it does. */
+function unknownSegment(schema: z.core.$ZodType, path: string[]) {
+  let level = [schema];
+  for (const [index, key] of path.entries()) {
+    const next = level.flatMap((node) => childSchemas(node, key));
+    if (next.length === 0)
+      return {
+        path: path.slice(0, index + 1).join("."),
+        expected: [...new Set(level.flatMap(schemaKeys))],
+      };
+    level = next;
+  }
+  return null;
+}
+
+/** The selection a read command asked for, validated against the entity's published schema. */
 export function readSelection(command: {
   action: string;
   entity: string;
@@ -76,16 +117,24 @@ export function readSelection(command: {
   fields?: string[];
 }): ReadSelection | null {
   if (command.action !== "get" && command.action !== "list") return null;
+  const published = publishedSchema(command.entity, command.action);
   if (command.fields) {
-    const allowed = allowedKeys(command.entity, command.action);
     const paths = command.fields.map((field) => field.split("."));
-    const unknown = paths
-      .map(([head = ""]) => head)
-      .filter((head) => !allowed.includes(head));
+    const unknown = paths.flatMap((path) => {
+      const miss = published
+        ? unknownSegment(published, path)
+        : { path: path.join("."), expected: [] };
+      return miss ? [miss] : [];
+    });
     if (unknown.length > 0)
       throw createAppError(
         "MCP_FIELD_UNKNOWN",
-        `Unknown ${command.entity} field ${unknown.map((key) => `"${key}"`).join(", ")}; expected one of ${allowed.join(", ")}`,
+        unknown
+          .map(
+            (miss) =>
+              `Unknown ${command.entity} field "${miss.path}"; expected one of ${miss.expected.join(", ")}`,
+          )
+          .join("; "),
       );
     return { kind: "fields", paths };
   }
@@ -98,7 +147,9 @@ export function readSelection(command: {
       ? (["core", "relations", "derived", "quality"] as const).flatMap(
           (group) => listReadFields(listEntity)[group],
         )
-      : allowedKeys(command.entity, command.action),
+      : published
+        ? schemaKeys(published)
+        : [],
   };
 }
 
@@ -153,19 +204,31 @@ function selectItem(row: ListReadRow, selection: ReadSelection): ListReadRow {
 
 const projectable = z
   .object({
-    item: listReadRowSchema.nullable().optional(),
-    items: z.array(listReadRowSchema).optional(),
+    action: z.enum(["get", "list"]),
+    entity: z.string(),
+    item: z.unknown().optional(),
+    items: z.array(z.unknown()).optional(),
   })
   .passthrough();
 
-/** Project a get/list kernel result to the selection. */
+/**
+ * Project a get/list kernel result to the selection. Rows pass through the
+ * published MCP read schema first (the projection `resultDetail: "full"`
+ * returns), so a selection never exposes storage-only keys that schema strips.
+ */
 export function projectSelection(result: unknown, selection: ReadSelection) {
   const parsed = projectable.parse(result);
+  const published = publishedSchema(parsed.entity, parsed.action);
+  if (!published)
+    throw new Error(
+      `${parsed.entity} publishes no MCP ${parsed.action} schema to select from`,
+    );
+  // Field-selected list reads load only the selected columns.
+  const row = published.partial().pipe(listReadRowSchema);
+  const select = (raw: unknown) => selectItem(row.parse(raw), selection);
   return {
     ...parsed,
-    ...(parsed.items
-      ? { items: parsed.items.map((row) => selectItem(row, selection)) }
-      : {}),
-    ...(parsed.item ? { item: selectItem(parsed.item, selection) } : {}),
+    ...(parsed.items ? { items: parsed.items.map(select) } : {}),
+    ...(parsed.item ? { item: select(parsed.item) } : {}),
   };
 }

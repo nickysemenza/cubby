@@ -1,12 +1,19 @@
 import { testUserId } from "@cubby/schemas/testing";
-import { withTestDb } from "tooling/test-setup";
+import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { listReadFields } from "~/entity/model/list-read-schema";
+import { unwrapDb } from "~/server/db/helpers";
+import { entityExternalId } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
+import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { createMcpServer } from "~/server/mcp/server";
+import {
+  createProductFixture,
+  makeProductInput,
+} from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { callMcpTool, kernelRequestContext } from "../testing/mcp-test-utils";
@@ -115,5 +122,60 @@ describe("entity_read field selection", () => {
     expect(text).toContain("BAD_REQUEST");
     expect(text).toContain("notAField");
     expect(text).toContain("expenseTotal");
+  });
+
+  it("refuses an unknown nested segment and keeps valid nested paths", async () => {
+    await world();
+    const refused = await read({
+      action: "list",
+      entity: "purchase",
+      fields: ["financialReconciliation.notAField"],
+    });
+    expect(refused.isError).toBe(true);
+    const text = JSON.stringify(refused.content);
+    expect(text).toContain("MCP_FIELD_UNKNOWN");
+    expect(text).toContain("financialReconciliation.notAField");
+    const valid = await read({
+      action: "list",
+      entity: "purchase",
+      fields: ["financialReconciliation.status"],
+    });
+    expect(valid.isError).not.toBe(true);
+  });
+
+  // Selection must narrow the published MCP projection, never the raw kernel
+  // row: product externalIds child rows carry storage uuids the projection drops.
+  it("selects from the published projection, not the raw kernel row", async () => {
+    const created = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic selection product" }),
+      TEST_ACTOR,
+    );
+    await ensureExternalSources(ctx.db, ["synthetic"]);
+    await unwrapDb(ctx.db).insert(entityExternalId).values({
+      entityId: created.entityId,
+      entityKind: "product",
+      source: "synthetic",
+      kind: "retailer_sku",
+      externalId: "SYN-SKU-1",
+      isPrimary: true,
+    });
+    const uuid =
+      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+    for (const command of [
+      { action: "list", entity: "product", fields: ["externalIds"] },
+      {
+        action: "get",
+        entity: "product",
+        id: created.id,
+        fields: ["externalIds"],
+      },
+    ] as const) {
+      const result = await read(command);
+      expect(result.isError).not.toBe(true);
+      const text = JSON.stringify(result.structuredContent);
+      expect(text).toContain("SYN-SKU-1");
+      expect(text).not.toMatch(uuid);
+    }
   });
 });
