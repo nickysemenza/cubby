@@ -304,7 +304,7 @@ export async function projectScheduleReport(
         [{ orderBy: "name", direction: "asc" }],
         pagination,
         "page",
-        tree,
+        { tree },
       ),
     ),
     listAll((pagination) =>

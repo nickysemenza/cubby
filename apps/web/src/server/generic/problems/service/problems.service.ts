@@ -1613,6 +1613,7 @@ export const findTrackerProblems = async (
   const attentionItems = await computeAttentionItems(db);
   const exact = await runExactProblemPages(db, exactKeys, {
     diagnostic: { attentionItems },
+    fieldsFor: (key) => (isTrackerEntityProblemKey(key) ? ["id"] : undefined),
   });
   const index = indexAttentionItems(attentionItems);
   const page = (key: (typeof exactKeys)[number]): ExactProblemPage => {
@@ -1733,8 +1734,12 @@ export const findProblemByType = async (
   upcLookupClient: UpcLookupBatchPort,
   usdaClient: UsdaFoodBatchPort,
 ): Promise<{ type: ProblemKey; items: unknown[]; total: number }> => {
+  const attentionItems = isTrackerEntityProblemKey(key)
+    ? await computeAttentionItems(db)
+    : undefined;
   const result = await executeProblem(db, key, {
-    diagnostic: { upcLookupClient },
+    diagnostic: { upcLookupClient, attentionItems },
+    fields: isTrackerEntityProblemKey(key) ? ["id"] : undefined,
   });
   if (isFastEntityProblemKey(key)) {
     return {
@@ -1763,8 +1768,8 @@ export const findProblemByType = async (
       total: result.count,
     };
   }
-  if (key !== "projectsWithDateDrift" && isTrackerEntityProblemKey(key)) {
-    const index = indexAttentionItems(await computeAttentionItems(db));
+  if (attentionItems !== undefined && isTrackerEntityProblemKey(key)) {
+    const index = indexAttentionItems(attentionItems);
     return {
       type: key,
       items: presentTrackerProblem(key, result, index),
