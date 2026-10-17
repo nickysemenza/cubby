@@ -91,6 +91,16 @@ export function compileListReadSchema(
   return {
     schemas,
     fields: { ...fields, dependencies },
+    /**
+     * Declared optional, so a complete list row may legitimately omit them
+     * (detail-only keys a list schema shares with its output schema). A
+     * defaulted key is not here: its absence means a missed load.
+     */
+    omittable: new Set(
+      Object.keys(schema.shape).filter(
+        (key) => schema.shape[key] instanceof z.ZodOptional,
+      ),
+    ),
     project(row: ListReadRow, group: ListReadGroup): ListReadRow {
       const groupSchema = schemas[group];
       if (!groupSchema) throw new Error(`Missing list schema: ${group}`);
