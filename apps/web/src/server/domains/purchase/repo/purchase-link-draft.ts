@@ -52,11 +52,11 @@ export const expenseFiltersForScope = (
     case "vendorOrUnattached":
       return {
         vendorId,
-        vendorPresenceFilter: "none",
+        purchaseIdPresenceFilter: "none",
         search: term,
       };
     case "unattached":
-      return { vendorPresenceFilter: "none", search: term };
+      return { purchaseIdPresenceFilter: "none", search: term };
     case "any":
       return { search: term };
   }

@@ -1018,8 +1018,9 @@ A descriptor with `deriveSchema: true` also owns its filter field's Zod, which
 the generator emits into `generated<Entity>FilterFields` next to the field
 schemas; canonical modules spread that map and add only computed filters (a
 canonical key that shadows a generated one fails the identity test). The key
-is `field ?? columnId`. `text` derives an optional string (or the model
-field's read schema with `schemaFromRead`), `boolean` an optional boolean,
+is `field ?? columnId`. `text` derives an optional string (the model field's
+read schema with `schemaFromRead`, or a named value schema with `schemaRef`,
+such as expense's several OR-ed `expenseSearchTerms`), `boolean` an optional boolean,
 `presence` the shared presence filter, `multiselect` `oneOrMany` of
 the read schema (`schemaFromRead`), a named enum export (`schemaRef`), the
 static option values, or a plain string, and `range` the shared min/max or

@@ -165,7 +165,7 @@ export const problemFilterSemantics = {
       field: "vendorId",
       kind: "idMulti",
       brand: (value) => parseEntityId("vendor", value),
-      nullable: { field: "vendorPresenceFilter", label: "purchase" },
+      nullable: { field: "purchaseIdPresenceFilter", label: "vendor" },
     },
     { columnId: "lineKind", kind: "multiselect" },
     { columnId: "lineBasis", kind: "multiselect" },

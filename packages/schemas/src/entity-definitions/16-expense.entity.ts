@@ -1142,6 +1142,38 @@ Rules:
       productId: { via: "product" },
       purchaseId: { via: "purchase.vendor" },
       orderId: { via: "purchase.orderId" },
+      costSign: { type: "enum", options: ["negative", "positive"] },
+      // Belongs to a disposal Purchase (a relationship, not a negative line).
+      disposalPurchase: { type: "boolean" },
+      dateRelative: {
+        predicate: "multiselect",
+        reason: "Relative to the household's today",
+      },
+      ledgerPartyId: {
+        predicate: "idMulti",
+        reason:
+          "Matches any live attribution's party; attributions are a ledger field, not a declared relation",
+      },
+      projectFilter: {
+        predicate: "idMulti",
+        reason:
+          "Matches the expense's allocation shares, which split one expense across projects, categories, trades and cost types, so it is not one row value",
+      },
+      spendingCategoryFilter: {
+        predicate: "idMulti",
+        reason:
+          "Matches the expense's allocation shares, which split one expense across projects, categories, trades and cost types, so it is not one row value",
+      },
+      tradeFilter: {
+        predicate: "multiselect",
+        reason:
+          "Matches the expense's allocation shares, which split one expense across projects, categories, trades and cost types, so it is not one row value",
+      },
+      costTypeFilter: {
+        predicate: "multiselect",
+        reason:
+          "Matches the expense's allocation shares, which split one expense across projects, categories, trades and cost types, so it is not one row value",
+      },
     },
     sort: {
       fields: [
@@ -1337,6 +1369,12 @@ Rules:
         urlKey: "q",
         kind: "text",
         placeholder: "Search expenses...",
+        deriveSchema: true,
+        schemaRef: {
+          module: "@cubby/schemas/expense-fields",
+          export: "expenseSearchTerms",
+        },
+        stored: true,
       },
       {
         columnId: "date",
@@ -1376,6 +1414,7 @@ Rules:
       {
         columnId: "dateRelative",
         kind: "multiselect",
+        derived: true,
         placeholder: "Filter by relative date...",
         urlOnly: true,
       },
@@ -1384,7 +1423,7 @@ Rules:
         kind: "multiselect",
         placeholder: "Filter by cost type...",
         deriveSchema: true,
-        stored: true,
+        derived: "costTypeFilter",
         schemaRef: {
           module: "@cubby/schemas/expense-fields",
           export: "costTypeSchema",
@@ -1456,7 +1495,8 @@ Rules:
         kind: "multiselect",
         placeholder: "Filter by trade...",
         deriveSchema: true,
-        stored: true,
+        derived: "tradeFilter",
+        nullable: { field: "tradePresenceFilter", label: "trade" },
         schemaRef: {
           module: "@cubby/schemas/task-fields",
           export: "tradeSchema",
@@ -1483,6 +1523,12 @@ Rules:
         placeholder: "Filter by cost...",
         deriveSchema: true,
         stored: true,
+        wire: {
+          kind: "range",
+          from: "costMin",
+          to: "costMax",
+          presence: "costPresenceFilter",
+        },
         // Signed money: `costMax: 0` is the credits-only worklist.
         range: {
           describe: {
@@ -1524,12 +1570,14 @@ Rules:
       {
         columnId: "costSign",
         kind: "multiselect",
+        derived: true,
         placeholder: "Filter by cost direction...",
         urlOnly: true,
       },
       {
         columnId: "disposalPurchasePresenceFilter",
         kind: "presence",
+        derived: "disposalPurchase",
         placeholder: "Filter disposal purchase presence...",
         urlOnly: true,
       },
@@ -1539,6 +1587,12 @@ Rules:
         placeholder: "Filter by quantity...",
         deriveSchema: true,
         stored: true,
+        wire: {
+          kind: "range",
+          from: "productQuantityMin",
+          to: "productQuantityMax",
+          presence: "productQuantityPresenceFilter",
+        },
         // Signed, like cost: a negative quantity is a real $0 discard, and
         // `productQuantityMax: -1` is the "everything written off" worklist.
         range: {
@@ -1618,6 +1672,7 @@ Rules:
         placeholder: "Filter by spending category...",
         optionsKey: "spendingCategory",
         brandRef: { entity: "spendingCategory" },
+        derived: "spendingCategoryFilter",
         nullable: {
           field: "spendingCategoryPresenceFilter",
           label: "category",
@@ -1631,6 +1686,7 @@ Rules:
         placeholder: "Filter by project...",
         optionsKey: "project",
         brandRef: { entity: "project" },
+        derived: "projectFilter",
         nullable: { field: "projectPresenceFilter", label: "project" },
       },
       {
@@ -1649,12 +1705,16 @@ Rules:
         placeholder: "Filter by product id...",
         brandRef: { entity: "product" },
         urlOnly: true,
+        deriveSchema: true,
+        stored: { columns: ["productId"] },
       },
       {
         columnId: "productId",
         urlKey: "product",
         field: "productPresenceFilter",
         kind: "presence",
+        deriveSchema: true,
+        stored: true,
         placeholder: "Filter by product...",
         options: [
           { value: "has", label: "Has product", meta: true },
@@ -1669,12 +1729,14 @@ Rules:
         placeholder: "Filter by vendor...",
         optionsKey: "vendor",
         brandRef: { entity: "vendor" },
-        nullable: { field: "vendorPresenceFilter", label: "purchase" },
+        deriveSchema: true,
+        derived: true,
       },
       {
         columnId: "orderId",
         field: "orderIdPresenceFilter",
         kind: "presence",
+        derived: true,
         placeholder: "Filter by order id...",
         options: [
           { value: "has", label: "Has order id", meta: true },
@@ -1685,10 +1747,10 @@ Rules:
         columnId: "orderIdExact",
         field: "orderId",
         urlKey: "order",
-        kind: "idMulti",
+        kind: "multiselect",
         placeholder: "Filter by order id...",
-        brandRef: null,
         urlOnly: true,
+        derived: "orderId",
       },
       {
         // Expenses attributed to a ledger party (`ExpenseAttribution`).
@@ -1698,6 +1760,7 @@ Rules:
         brandRef: { entity: "ledgerParty" },
         currentMember: true,
         urlOnly: true,
+        derived: true,
       },
       {
         columnId: "purchaseIdFilter",
@@ -1708,6 +1771,8 @@ Rules:
         placeholder: "Filter by purchase id...",
         brandRef: { entity: "purchase" },
         urlOnly: true,
+        deriveSchema: true,
+        stored: { columns: ["purchaseId"] },
       },
       {
         columnId: "related:expense.transactions",
