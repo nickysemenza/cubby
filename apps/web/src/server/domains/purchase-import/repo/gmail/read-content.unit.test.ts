@@ -90,7 +90,7 @@ describe("fitMailRead minimum response", () => {
     mimeType: "application/pdf",
     checksum: "c".repeat(64),
   }));
-  const agentBytes = (value: Parameters<typeof mailReadAgentText>[0]) =>
+  const agentBytes = (value: { originalAttachment?: undefined } & object) =>
     new TextEncoder().encode(mailReadAgentText(value)).length;
 
   it("shortens the text body and reports it", () => {

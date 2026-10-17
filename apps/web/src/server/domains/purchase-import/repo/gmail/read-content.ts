@@ -131,6 +131,7 @@ export function mailReadContent(
       (compact?.links.length ?? 0) - MAIL_READ_MAX_LINKS,
     ),
     headersOmitted: false,
+    bodyShortened: false,
   };
 }
 

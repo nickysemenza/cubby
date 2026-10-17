@@ -502,9 +502,9 @@ export type MailAttachmentOriginal = z.infer<typeof mailAttachmentOriginal>;
  * with an original attachment's bytes moved out to media. The agent adapter
  * emits exactly this and the Email read cap measures exactly this.
  */
-export function mailReadAgentText(result: {
-  originalAttachment?: MailAttachmentOriginal | undefined;
-}): string {
+export function mailReadAgentText<
+  T extends { originalAttachment?: MailAttachmentOriginal | undefined },
+>(result: T): string {
   if (!result.originalAttachment) return JSON.stringify(result);
   const { dataBase64: _bytes, ...descriptor } = result.originalAttachment;
   return JSON.stringify({ ...result, originalAttachment: descriptor });
