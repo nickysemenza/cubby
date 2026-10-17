@@ -44,7 +44,7 @@ import {
   inArray,
   type InferSelectModel,
   or,
-  type SQL,
+  SQL,
   sql,
 } from "drizzle-orm";
 import type { PgSelect, PgTable } from "drizzle-orm/pg-core";
@@ -64,6 +64,7 @@ import {
   formatSearchTerm,
   householdDayRangeConditions,
   type ListReadIntent,
+  matchesStringValues,
   presenceCondition,
   rangeConditions,
   shortcodeSetCondition,
@@ -82,6 +83,11 @@ import {
   dataQualitySortResolver,
 } from "~/server/generic/data-quality/repo/sql";
 import { relatedWhereConditions } from "~/server/generic/entity-links/repo/related-view";
+import {
+  effectiveFieldInSql,
+  effectiveFieldSql,
+  inheritedFieldOfColumn,
+} from "~/server/generic/inheritance/effective-field";
 import {
   type HierarchyEntity,
   hierarchyDescendantsSql,
@@ -156,9 +162,14 @@ interface StoredDescriptorView {
     | Readonly<{ kind: "range"; from: string; to: string; presence?: string }>;
 }
 
-/** A stored column resolved to its table column and declared storage facts. */
+/**
+ * A stored column resolved to its table column and declared storage facts.
+ * `value` is what filters read: the column, or the effective value of a
+ * field that declares `resolution.inherit`.
+ */
 interface StoredColumn {
   readonly column: AnyColumn;
+  readonly value: AnyColumn | SQL;
   readonly kind: string;
   readonly nullable: boolean;
   /** The entity a foreign-key column points at, for `id`/`idMulti` filters. */
@@ -187,8 +198,13 @@ const storedColumns = (
       throw new Error(
         `${entity}.${descriptor.columnId} has no table column ${key} for its stored filter`,
       );
+    const inherited = inheritedFieldOfColumn(entity, stored.column);
     return {
       column,
+      value:
+        inherited === null
+          ? column
+          : effectiveFieldSql(entity, inherited, getTableName(table)),
       kind: stored.kind,
       nullable: stored.nullable,
       reference: stored.reference,
@@ -202,10 +218,10 @@ const textPredicate = (
   term: string | undefined,
 ): SQL | undefined =>
   or(
-    ...columns.map(({ column, kind }) =>
+    ...columns.map(({ value, kind }) =>
       kind === "text-array"
-        ? textArrayMatches(column, term)
-        : formatSearchTerm(column, term),
+        ? textArrayMatches(value, term)
+        : formatSearchTerm(value, term),
     ),
   );
 
@@ -214,13 +230,17 @@ const textPredicate = (
  * (nullable) column it is presence: `true` is NOT NULL, `false` is NULL.
  */
 const booleanPredicate = (
-  { column, kind }: StoredColumn,
+  { column, value, kind }: StoredColumn,
   flag: boolean | undefined,
 ): SQL | undefined =>
   kind === "boolean"
-    ? eqAny(column, flag)
+    ? value instanceof SQL
+      ? flag === undefined
+        ? undefined
+        : sql`${value} = ${flag}`
+      : eqAny(column, flag)
     : presenceCondition(
-        column,
+        value,
         flag === undefined ? undefined : flag ? "has" : "none",
       );
 
@@ -259,7 +279,7 @@ const requestedIdsSql = (
  */
 const referencePredicate = (
   entity: Entity,
-  { column, reference }: StoredColumn,
+  { column: { name }, value: column, reference }: StoredColumn,
   codes: readonly string[] | undefined,
   includeDescendants: boolean,
   presence: PresenceFilter,
@@ -269,7 +289,7 @@ const referencePredicate = (
   );
   if (!target)
     throw new Error(
-      `${entity} id filter over ${column.name} references ${String(reference)}, which has no shortcode table`,
+      `${entity} id filter over ${name} references ${String(reference)}, which has no shortcode table`,
     );
   // A reference to a soft-deleted record is no value, as the group key and
   // the related-path filters read it.
@@ -293,14 +313,19 @@ const referencePredicate = (
  * all), ORed with the generated Any value / No value.
  */
 const arrayPredicate = (
-  { column, nullable }: StoredColumn,
+  { value: column, nullable }: StoredColumn,
   values: readonly string[] | undefined,
   presence: PresenceFilter,
   all: boolean,
 ): SQL | undefined =>
   all && values !== undefined && values.length > 0
     ? or(
-        arrayContains(column, [...values]),
+        column instanceof SQL
+          ? sql`${column} @> ARRAY[${sql.join(
+              values.map((value) => sql`${value}`),
+              sql`, `,
+            )}]::text[]`
+          : arrayContains(column, [...values]),
         arrayOverlapOrPresence(column, undefined, presence, nullable),
       )
     : arrayOverlapOrPresence(column, values, presence, nullable);
@@ -658,17 +683,32 @@ const derivedFilterPredicates = (
         ),
       ];
     }
-    default:
+    default: {
+      // An inherited terminal resolves its matching records once (the set
+      // form) rather than walking ancestors per row.
+      const inherited =
+        field.terminal.kind === "field"
+          ? inheritedFieldOfColumn(field.target, field.terminal.column)
+          : null;
       return [
-        anyOrAll(
-          optionalTextList.parse(value),
-          (_leaf, column, items) =>
-            sql`${column} IN (${sql.join(
-              items.map((item) => sql`${item}`),
-              sql`, `,
-            )})`,
-        ),
+        anyOrAll(optionalTextList.parse(value), (leaf, column, items) => {
+          const list = sql.join(
+            items.map((item) => sql`${item}`),
+            sql`, `,
+          );
+          return (
+            (inherited === null
+              ? null
+              : effectiveFieldInSql(
+                  field.target,
+                  inherited,
+                  sql`${leaf}."id"`,
+                  list,
+                )) ?? sql`${column} IN (${list})`
+          );
+        }),
       ];
+    }
   }
 };
 
@@ -676,7 +716,7 @@ const nonEmpty = <T>(list: readonly T[] | undefined) =>
   list === undefined || list.length === 0 ? undefined : list;
 
 const dateRange = (
-  column: AnyColumn,
+  column: AnyColumn | SQL,
   from: string | undefined,
   to: string | undefined,
 ): Array<SQL | undefined> => [
@@ -801,11 +841,21 @@ export function declaredFilterPredicates<Filters extends object>(
                     descriptor.match !== null &&
                       matchAll.parse(values[descriptor.match.field]),
                   )
-                : eqAnyOrPresence(first.column, value, presence),
+                : first.value instanceof SQL
+                  ? or(
+                      nonEmpty(optionalTextList.parse(value)) === undefined
+                        ? undefined
+                        : matchesStringValues(
+                            first.value,
+                            optionalTextList.parse(value),
+                          ),
+                      presenceCondition(first.value, presence),
+                    )
+                  : eqAnyOrPresence(first.column, value, presence),
             ];
           case "presence":
             return [
-              presenceCondition(first.column, presenceFilter.parse(value)),
+              presenceCondition(first.value, presenceFilter.parse(value)),
             ];
           case "idMulti":
             return [
@@ -827,13 +877,13 @@ export function declaredFilterPredicates<Filters extends object>(
               presenceKey === undefined
                 ? undefined
                 : presenceCondition(
-                    first.column,
+                    first.value,
                     presenceFilter.parse(values[presenceKey]),
                   );
             if (descriptor.range?.kind !== "date")
               return [
                 ...rangeConditions(
-                  first.column,
+                  first.value,
                   {
                     [`${key}Min`]: optionalNumber.parse(values[from]),
                     [`${key}Max`]: optionalNumber.parse(values[to]),
@@ -849,8 +899,8 @@ export function declaredFilterPredicates<Filters extends object>(
             // A timestamp bounds whole household days; a date compares as is.
             return [
               ...(first.kind === "timestamp"
-                ? householdDayRangeConditions(first.column, low, high)
-                : dateRange(first.column, low, high)),
+                ? householdDayRangeConditions(first.value, low, high)
+                : dateRange(first.value, low, high)),
               rangePresence,
             ];
           }

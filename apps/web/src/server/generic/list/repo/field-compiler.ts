@@ -29,6 +29,10 @@ import { createAppError } from "~/server/errors/app-error";
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import { relatedSortExpression } from "~/server/generic/entity-links/repo/related-view";
 import {
+  effectiveFieldSql,
+  inheritedFieldOfColumn,
+} from "~/server/generic/inheritance/effective-field";
+import {
   hierarchyAncestorSql,
   hierarchyLevelSql,
 } from "~/server/generic/list/repo/hierarchy";
@@ -350,8 +354,20 @@ const viaParts = (entity: Entity, field: ViaField) => {
     from: sql`${sql.identifier(traversal.rootTable)} ${sql.raw(traversal.rootAlias)} ${traversal.joins}`,
     root: sql.raw(traversal.rootAlias),
     leaf,
+    leafAlias: traversal.leafAlias,
     leafTable: traversal.leafTable,
   };
+};
+
+/**
+ * A terminal column of a related record: its effective value when the field
+ * it stores is inherited (`resolution.inherit`), else the column.
+ */
+const terminalSql = (target: Entity, leaf: string, column: string): SQL => {
+  const inherited = inheritedFieldOfColumn(target, column);
+  return inherited === null
+    ? sql`${sql.raw(leaf)}.${sql.identifier(column)}`
+    : effectiveFieldSql(target, inherited, leaf);
 };
 
 /**
@@ -373,7 +389,7 @@ const relatedColumnSql = (
   if (first === undefined)
     throw new Error(`${entity} → ${path.target} has no relation step`);
   const firstAlias = sql.raw(first.alias);
-  return sql`(SELECT ${sql.raw(traversal.leafAlias)}.${sql.identifier(column)} FROM ${sql.identifier(first.relation ?? first.table)} ${firstAlias} ${renderJoins({ hops: rest })} WHERE (${first.condition})${
+  return sql`(SELECT ${terminalSql(path.target, traversal.leafAlias, column)} FROM ${sql.identifier(first.relation ?? first.table)} ${firstAlias} ${renderJoins({ hops: rest })} WHERE (${first.condition})${
     first.softDelete ? sql` AND ${firstAlias}."deletedAt" IS NULL` : sql``
   })`;
 };
@@ -405,12 +421,14 @@ export const relatedExistsSql = (
   outerId: AnyColumn,
   matches: (leaf: SQL, column: SQL) => SQL | undefined,
 ): SQL | undefined => {
-  const { from, root, leaf } = viaParts(entity, field);
-  const column = sql`${leaf}.${sql.identifier(
+  const { from, root, leaf, leafAlias } = viaParts(entity, field);
+  const column = terminalSql(
+    field.target,
+    leafAlias,
     field.terminal.kind === "field"
       ? field.terminal.column
       : (field.terminal.titleColumn ?? "id"),
-  )}`;
+  );
   const condition = matches(leaf, column);
   if (condition === undefined) return undefined;
   return sql`EXISTS (SELECT 1 FROM ${from} WHERE ${root}."id" = ${outerId} AND ${condition})`;
@@ -572,7 +590,7 @@ export const groupSql = (
     case "derived": {
       const raw =
         value.kind === "column"
-          ? sql`${sql.identifier(getTableName(table))}.${sql.identifier(value.column)}`
+          ? terminalSql(entity, `"${getTableName(table)}"`, value.column)
           : value.kind === "field"
             ? relatedColumnSql(entity, value, table, value.column)
             : derivedValueSql(entity, derived, key, context);

@@ -17,18 +17,14 @@ import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { effectiveExpenseTradeSql } from "~/server/domains/expense/repo/expense-inheritance";
 import { loadSelectedDescriptions } from "~/server/domains/image/repo/image-description-selection";
-import {
-  effectiveProjectLocationsSql,
-  effectiveTaskProjectSql,
-  effectiveTaskSubjectProductSql,
-  effectiveTaskTradeSql,
-} from "~/server/domains/task/repo/task-project-inheritance";
+import { effectiveTaskTradeSql } from "~/server/domains/task/repo/task-project-inheritance";
 import {
   getEmbeddingTextsForRefs,
   type SearchableEntityText,
 } from "~/server/generic/embedding/repo/entity-embedding";
 import { normalizeSearchText } from "~/server/generic/embedding/repo/semantic/text";
 import type { SemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
+import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
 
 interface SearchDocumentSource {
   entityKind: SearchableEntity;
@@ -292,11 +288,11 @@ async function getSearchDocumentSources(
       SELECT 'meal', m."id"::text, m."shortcode", COALESCE(NULLIF(m."name", ''), m."date"::text), m."date"::text, NULL, ARRAY[]::text[], ARRAY[m."date"::text]::text[]
       FROM "Meal" m WHERE m."deletedAt" IS NULL AND 'meal' IN (${types}) AND ${requested(sql`m."id"`)}`,
     project: sql`
-      SELECT 'project', p."id"::text, p."shortcode", p."name", concat_ws(' · ', p."kind", p."status"), p."emoji", ARRAY[]::text[], ARRAY[p."kind", p."status"]::text[] || ${effectiveProjectLocationsSql(sql`p."id"`)}
+      SELECT 'project', p."id"::text, p."shortcode", p."name", concat_ws(' · ', p."kind", p."status"), p."emoji", ARRAY[]::text[], ARRAY[p."kind", p."status"]::text[] || ${effectiveFieldSql("project", "locations", "p")}
       FROM "Project" p WHERE p."deletedAt" IS NULL AND 'project' IN (${types}) AND ${requested(sql`p."id"`)}`,
     task: sql`
       SELECT 'task', t."id"::text, t."shortcode", t."name", p."name", ${effectiveTaskTradeSql("t")}, ARRAY[]::text[], ARRAY[${effectiveTaskTradeSql("t")}, sp."name"]::text[]
-      FROM "Task" t LEFT JOIN "Project" p ON p."id" = ${effectiveTaskProjectSql("t")} AND p."deletedAt" IS NULL LEFT JOIN "Product" sp ON sp."id" = ${effectiveTaskSubjectProductSql("t")} AND sp."deletedAt" IS NULL
+      FROM "Task" t LEFT JOIN "Project" p ON p."id" = ${effectiveFieldSql("task", "projectId", "t")} AND p."deletedAt" IS NULL LEFT JOIN "Product" sp ON sp."id" = ${effectiveFieldSql("task", "subjectProductId", "t")} AND sp."deletedAt" IS NULL
       WHERE t."deletedAt" IS NULL AND 'task' IN (${types}) AND ${requested(sql`t."id"`)}`,
     vendor: sql`
       SELECT 'vendor', v."id"::text, v."shortcode", v."name", v."website", NULL, ARRAY[]::text[], ARRAY[v."website"]::text[]

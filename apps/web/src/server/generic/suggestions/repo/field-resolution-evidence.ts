@@ -41,11 +41,8 @@ import {
 } from "~/server/domains/inventory/repo/ownership";
 import { kitAncestorCteSql } from "~/server/domains/product/repo/kit-projection";
 import { purchaseEvidenceFieldResolutionsSql } from "~/server/domains/purchase/repo/purchase-evidence-policy";
-import {
-  effectiveTaskProjectSql,
-  effectiveProjectAssigneeSql,
-  eligibleParentTaskTradeSql,
-} from "~/server/domains/task/repo/task-project-inheritance";
+import { eligibleParentTaskTradeSql } from "~/server/domains/task/repo/task-project-inheritance";
+import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
 import { shortcodeLabels } from "~/server/generic/shortcode/repo/shortcode-labels";
 
 const categoryOrigin = purchaseOut.shape.spendingCategoryOrigin.unwrap();
@@ -118,6 +115,9 @@ async function ancestors(
   } else if (kind === "project" && field === "assigneeId") {
     value = sql`to_jsonb((SELECT l.shortcode FROM "LedgerParty" l WHERE l.id=p."assigneeId" AND l."deletedAt" IS NULL))`;
     assigned = sql`p."assigneeMode" = ${sqlEnumConstant(fieldResolutionSchema.shape.mode, fieldResolutionSchema.shape.mode.enum.explicit)}`;
+  } else if (kind === "task" && field === "assigneeId") {
+    value = sql`to_jsonb((SELECT l.shortcode FROM "LedgerParty" l WHERE l.id=p."assigneeId" AND l."deletedAt" IS NULL))`;
+    assigned = sql`p."assigneeMode" = ${sqlEnumConstant(fieldResolutionSchema.shape.mode, fieldResolutionSchema.shape.mode.enum.explicit)}`;
   } else if (
     kind === "task" &&
     (field === "projectId" || field === "subjectProductId")
@@ -134,7 +134,13 @@ async function ancestors(
     value = sql`to_jsonb(p.${trade})`;
     assigned = sql`p.${trade} IS NOT NULL`;
   }
-  const maxDepth = kind === "productCategory" ? 3 : kind === "task" ? 1 : 100;
+  // Task trade inherits from the parent task only (a different rule).
+  const maxDepth =
+    kind === "productCategory"
+      ? 3
+      : kind === "task" && field === "trade"
+        ? 1
+        : 100;
   const rows = await unwrapDb(db).execute(sql`
     WITH RECURSIVE ancestry AS (
       SELECT p.id,p.${parent} AS parent,p.shortcode,p.name,${value} AS value,${assigned} AS assigned,0 AS depth,ARRAY[p.id] AS visited
@@ -404,76 +410,39 @@ async function expenseCategorySteps(
 async function taskAssigneeSteps(
   db: Database,
   shortcode: string,
-  resolution: FieldResolution,
 ): Promise<{ steps: Step[]; fallbackSource: Evidence["fallbackSource"] }> {
   const entity = "task";
   const field = "assigneeId";
   const subject = { entity, id: shortcode } as const;
 
-  const parents = await unwrapDb(db).execute(sql`
-      SELECT parent.shortcode,parent.name,
-        to_jsonb((SELECT l.shortcode FROM "LedgerParty" l
-          WHERE l.id=CASE WHEN parent."assigneeMode"=${sqlEnumConstant(fieldResolutionSchema.shape.mode, fieldResolutionSchema.shape.mode.enum.explicit)} THEN parent."assigneeId"
-            ELSE ${effectiveProjectAssigneeSql(effectiveTaskProjectSql("parent"))} END
-          AND l."deletedAt" IS NULL)) AS value,
-        parent."assigneeMode"=${sqlEnumConstant(fieldResolutionSchema.shape.mode, fieldResolutionSchema.shape.mode.enum.explicit)} AS explicit
-      FROM "Task" t JOIN "Task" parent ON parent.id=t."parentTaskId" AND parent."deletedAt" IS NULL
-      WHERE t.shortcode=${shortcode} AND t."deletedAt" IS NULL`);
-  const parent = z
-    .object({
-      shortcode: z.string(),
-      name: z.string(),
-      value: z.json(),
-      explicit: z.boolean(),
-    })
-    .optional()
-    .parse(parents.rows[0]);
-  const parentProjects =
-    parent && !parent.explicit
-      ? await ancestors(
-          db,
-          "project",
-          sql`(SELECT ${effectiveTaskProjectSql("p")} FROM "Task" p WHERE p.shortcode=${parent.shortcode} AND p."deletedAt" IS NULL)`,
-          field,
-        )
-      : [];
+  // `resolution.inherit`: the nearest ancestor task that sets its own
+  // assignee, then the task's effective project default.
+  const tasks = await ancestors(
+    db,
+    "task",
+    sql`(SELECT id FROM "Task" WHERE shortcode=${shortcode} AND "deletedAt" IS NULL)`,
+    field,
+  );
   const projects = await ancestors(
     db,
     "project",
-    sql`(SELECT ${effectiveTaskProjectSql("t")} FROM "Task" t WHERE t.shortcode=${shortcode} AND t."deletedAt" IS NULL)`,
+    sql`(SELECT ${effectiveFieldSql("task", "projectId", "t")} FROM "Task" t WHERE t.shortcode=${shortcode} AND t."deletedAt" IS NULL)`,
     field,
   );
-  const parentAssigned =
-    parent && (parent.explicit || parentProjects.some((node) => node.assigned));
-  const assigneeSteps = (nodes: Node[]) =>
-    nodeSteps("project", nodes, subject).map((step) => ({
-      ...step,
-      nullLabel: "Nobody",
-    }));
+  const nobody = (steps: Step[]) =>
+    steps.map((step) => ({ ...step, nullLabel: "Nobody" }));
+  const ancestor = tasks.find((node) => node.depth > 0 && node.assigned);
   return {
     steps: [
-      selfStep(entity, resolution),
-      ...(parent
-        ? [
-            {
-              title: parent.name,
-              ref: { entityKind: "task" as const, entityId: parent.shortcode },
-              value: parent.value,
-              assigned: parent.explicit,
-              nullLabel: "Nobody",
-            },
-          ]
-        : []),
-      ...assigneeSteps(parentProjects),
-      ...assigneeSteps(projects),
+      ...nobody(nodeSteps("task", tasks, subject)),
+      ...nobody(nodeSteps("project", projects, subject)),
     ],
-    fallbackSource:
-      parentAssigned && parent
-        ? { entityKind: "task", entityId: parent.shortcode, name: parent.name }
-        : source(
-            "project",
-            projects.find((node) => node.assigned),
-          ),
+    fallbackSource: ancestor
+      ? source("task", ancestor)
+      : source(
+          "project",
+          projects.find((node) => node.assigned),
+        ),
   };
 }
 
@@ -670,7 +639,7 @@ async function fieldSteps(
     };
   }
   if (entity === "task" && field === "assigneeId")
-    return taskAssigneeSteps(db, shortcode, resolution);
+    return taskAssigneeSteps(db, shortcode);
   if (entity === "expense" && field === "spendingCategoryId")
     return expenseCategorySteps(db, shortcode, resolution);
   if (entity === "expense" && field === "projectId")
@@ -752,7 +721,7 @@ async function fieldSteps(
         ? await eligibleTaskTradeSource(db, shortcode, nodes)
         : source(
             "task",
-            nodes.find((node) => node.depth === 1 && node.assigned),
+            nodes.find((node) => node.depth > 0 && node.assigned),
           );
     const steps = nodeSteps("task", nodes, subject);
     if (field === "trade" && !fallbackSource) {
@@ -765,7 +734,7 @@ async function fieldSteps(
       const projects = await ancestors(
         db,
         "project",
-        sql`(SELECT ${effectiveTaskProjectSql("t")} FROM "Task" t WHERE t.shortcode=${shortcode} AND t."deletedAt" IS NULL)`,
+        sql`(SELECT ${effectiveFieldSql("task", "projectId", "t")} FROM "Task" t WHERE t.shortcode=${shortcode} AND t."deletedAt" IS NULL)`,
         "defaultTrade",
       );
       fallbackSource ??= source(

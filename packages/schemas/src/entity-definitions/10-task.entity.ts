@@ -236,6 +236,10 @@ export default defineEntity({
           reset: { assigneeMode: "inherit", assigneeId: null },
           none: { assigneeMode: "explicit", assigneeId: null },
           redundancy: "eligible",
+          inherit: {
+            mode: { field: "assigneeMode", inherit: "inherit" },
+            from: ["hierarchy", { path: "project.assigneeId" }],
+          },
         },
         explanation: {
           ruleId: "task.effective-assignee",
@@ -301,6 +305,14 @@ export default defineEntity({
           reset: { projectMode: "inherit", projectId: null },
           none: { projectMode: "explicit", projectId: null },
           redundancy: "eligible",
+          inherit: {
+            mode: {
+              field: "projectMode",
+              inherit: "inherit",
+              explicitIfSet: true,
+            },
+            from: ["hierarchy"],
+          },
         },
         explanation: {
           ruleId: "task.effective-project",
@@ -362,6 +374,14 @@ export default defineEntity({
           reset: { subjectProductMode: "inherit", subjectProductId: null },
           none: { subjectProductMode: "explicit", subjectProductId: null },
           redundancy: "eligible",
+          inherit: {
+            mode: {
+              field: "subjectProductMode",
+              inherit: "inherit",
+              explicitIfSet: true,
+            },
+            from: ["hierarchy"],
+          },
         },
         explanation: {
           ruleId: "task.effective-subject-product",
@@ -780,30 +800,12 @@ export default defineEntity({
       // Effective references, inherited from a parent task, by name.
       projectId: { via: "project" },
       subjectProductId: { via: "subject" },
-      assigneeId: { type: "text" },
+      assigneeId: { via: "assignee" },
       // Trade and due date, inherited from the parent task.
       effectiveTrade: { type: "text" },
       effectiveDueDate: { type: "date" },
       completion: { type: "enum", options: ["open", "done"] },
       topLevel: { type: "boolean" },
-      assigneeFilter: {
-        predicate: "idMulti",
-        negatable: true,
-        reason:
-          "Inherited from the parent task when the task names none, so it is not a column",
-      },
-      projectFilter: {
-        predicate: "idMulti",
-        negatable: true,
-        reason:
-          "Inherited from the parent task when the task names none, so it is not a column",
-      },
-      subjectProductFilter: {
-        predicate: "idMulti",
-        negatable: true,
-        reason:
-          "Inherited from the parent task when the task names none, so it is not a column",
-      },
       search: {
         predicate: "text",
         reason:
@@ -930,8 +932,7 @@ export default defineEntity({
         optionsKey: "ledgerParty",
         brandRef: { entity: "ledgerParty" },
         currentMember: true,
-        derived: "assigneeFilter",
-        nullable: { field: "assigneePresenceFilter", label: "assignee" },
+        derived: true,
       },
 
       {
@@ -1037,8 +1038,7 @@ export default defineEntity({
         placeholder: "Filter by project...",
         optionsKey: "project",
         brandRef: { entity: "project" },
-        derived: "projectFilter",
-        nullable: { field: "projectPresenceFilter", label: "project" },
+        derived: true,
       },
       {
         columnId: "productId",
@@ -1057,8 +1057,7 @@ export default defineEntity({
         placeholder: "Filter by product...",
         optionsKey: "taskProducts",
         brandRef: { entity: "product" },
-        derived: "subjectProductFilter",
-        nullable: { field: "subjectProductPresenceFilter", label: "product" },
+        derived: true,
       },
       {
         columnId: "parentTaskId",

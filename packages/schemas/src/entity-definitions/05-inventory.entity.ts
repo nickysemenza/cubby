@@ -507,11 +507,8 @@ export default defineEntity({
         type: "enum",
         options: [...inventoryValuationStatus.options],
       },
-      categoryFeature: {
-        predicate: "multiselect",
-        negatable: true,
-        reason: "Inherited through category ancestors; not a row value",
-      },
+      // The product category's effective feature.
+      categoryFeature: { via: "product.category.feature" },
       // Stock parked in the household-wide Unknown location.
       locationRole: { type: "boolean" },
       effectiveOwner: {

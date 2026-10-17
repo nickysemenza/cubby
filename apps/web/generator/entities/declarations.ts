@@ -232,11 +232,12 @@ export type EntityField = Readonly<{
     sourceDependencies?: readonly Readonly<{ path: string; label: string }>[];
   }> | null;
   resolution: Readonly<{
-    reset: Readonly<Record<string, EntityFieldResolutionValue>>;
+    reset?: Readonly<Record<string, EntityFieldResolutionValue>>;
     none: Readonly<Record<string, EntityFieldResolutionValue>> | null;
     redundancy: "eligible" | "intentional";
     confirm: Readonly<Record<string, EntityFieldResolutionValue>> | null;
     labels: Readonly<{ none?: string; unresolved?: string }> | null;
+    inherit?: EntityFieldInherit;
   }> | null;
   control: EntityFieldControl | null;
   display: Readonly<{
@@ -280,6 +281,17 @@ export type EntityField = Readonly<{
     update: z.ZodType | null;
   }>;
 }>;
+/** A field's declared fallback chain (`resolution.inherit`). */
+export type EntityFieldInherit = Readonly<{
+  mode?: Readonly<{
+    field: string;
+    inherit: string;
+    none?: readonly string[];
+    explicitIfSet?: true;
+  }>;
+  from: readonly ("hierarchy" | Readonly<{ path: string }>)[];
+}>;
+
 export type EntityStorageField = Readonly<{
   key: string;
   column: string;

@@ -27,12 +27,7 @@ import {
   setProjectExternalUrls,
   withProjectExternalUrls,
 } from "~/server/domains/project/repo/external-links";
-import {
-  effectiveTaskProjectSql,
-  effectiveProjectAssigneeSql,
-  effectiveProjectLocationsSql,
-  effectiveProjectTradeSql,
-} from "~/server/domains/task/repo/task-project-inheritance";
+import { effectiveProjectTradeSql } from "~/server/domains/task/repo/task-project-inheritance";
 import { createEntityReader } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -43,6 +38,7 @@ import {
 } from "~/server/generic/audit-log/repo/audit-log";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { replaceDependencyEdges } from "~/server/generic/entity-links/repo/dependency-edges";
+import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
 import { validateLiveEffectiveTrades } from "~/server/generic/inheritance/repo/inheritance-validation";
 /**
  * Project CRUD operations.
@@ -264,8 +260,8 @@ async function projectSettingsAfterParentChange(
           locations: string[];
           trade: ProjectOut["defaultTrade"];
         }>(sql`
-    SELECT ${effectiveProjectAssigneeSql(sql`${id}::uuid`)} AS "assigneeId",
-      ${effectiveProjectLocationsSql(sql`${id}::uuid`)} AS locations,
+    SELECT ${effectiveFieldSql("project", "assigneeId", { id: sql`${id}::uuid` })} AS "assigneeId",
+      ${effectiveFieldSql("project", "locations", { id: sql`${id}::uuid` })} AS locations,
       ${effectiveProjectTradeSql(sql`${id}::uuid`)} AS trade
   `)
       ).rows[0]
@@ -437,9 +433,16 @@ type ProjectQueryClient = DrizzleClient | DrizzleTransaction;
  */
 const fetchLiveProjectTasks = (dbc: ProjectQueryClient, ids: ProjectId[]) =>
   dbc
-    .select({ projectId: effectiveTaskProjectSql() })
+    .select({
+      projectId: effectiveFieldSql<ProjectId | null>("task", "projectId"),
+    })
     .from(task)
-    .where(and(inArray(effectiveTaskProjectSql(), ids), notDeleted(task)));
+    .where(
+      and(
+        inArray(effectiveFieldSql<ProjectId | null>("task", "projectId"), ids),
+        notDeleted(task),
+      ),
+    );
 
 /**
  * Live expenses under `ids`. Used by `deleteProjects`' PROJECT_HAS_EXPENSES

@@ -21,13 +21,11 @@ import {
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
-import { productCategoryFeature } from "@cubby/schemas/product-category-fields";
 import { and, asc, count, desc, eq, inArray, not, sql, sum } from "drizzle-orm";
 import { z } from "zod";
 
 import { projectListRows } from "~/entity/model/list-read-schema";
 import type { Database } from "~/server/db";
-import { categoryFeatureInSql } from "~/server/db/computed/product-category-sql";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   amountFromColumns,
@@ -221,14 +219,6 @@ const inventoryScaffold = listScaffold("inventory", inventoryEntry, {
     effectiveOwner: effectiveOwners.predicate((ids) =>
       ids.length === 0 ? sql`false` : inArray(inventoryEntry.id, ids),
     ),
-    categoryFeature: ({ values }) =>
-      categoryFeatureInSql(
-        sql`(SELECT p."categoryId" FROM "Product" p WHERE p."id" = ${inventoryEntry.productId})`,
-        values.flatMap((value) => {
-          const feature = productCategoryFeature.safeParse(value);
-          return feature.success ? [feature.data] : [];
-        }),
-      ),
     locationRole: gapCondition("inventory", "inventory_unknown_location"),
     valuation: inventoryValuations.value((valuations) =>
       inventoryValuationSql(valuations, inventoryEntry.id),

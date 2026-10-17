@@ -54,6 +54,7 @@ import {
   dependencyIdsFor,
   replaceDependencyEdges,
 } from "~/server/generic/entity-links/repo/dependency-edges";
+import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
 import { validateLiveEffectiveTrades } from "~/server/generic/inheritance/repo/inheritance-validation";
 /**
  * Task CRUD operations.
@@ -74,9 +75,6 @@ import {
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import {
-  effectiveTaskAssigneeSql,
-  effectiveTaskProjectSql,
-  effectiveTaskSubjectProductSql,
   effectiveTaskTradeSql,
   hydrateTaskInheritanceRows,
 } from "./task-project-inheritance";
@@ -274,9 +272,9 @@ const taskEffectiveValues = async (tx: DrizzleTransaction, id: TaskId) => {
     trade: Trade | null;
   }>(sql`
     SELECT
-      ${effectiveTaskAssigneeSql()} AS "assigneeId",
-      ${effectiveTaskProjectSql()} AS "projectId",
-      ${effectiveTaskSubjectProductSql()} AS "subjectProductId",
+      ${effectiveFieldSql("task", "assigneeId")} AS "assigneeId",
+      ${effectiveFieldSql("task", "projectId")} AS "projectId",
+      ${effectiveFieldSql("task", "subjectProductId")} AS "subjectProductId",
       ${effectiveTaskTradeSql()} AS "trade"
     FROM "Task"
     WHERE "id" = ${id} AND "deletedAt" IS NULL

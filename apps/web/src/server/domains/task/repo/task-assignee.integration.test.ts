@@ -285,7 +285,7 @@ describe("member assignee inheritance", () => {
     expect(actionable.next.map((row) => row.id)).toContain(task.output.id);
     const unassigned = await taskList(
       ctx.db,
-      { assigneePresenceFilter: "none" },
+      { assigneeIdPresenceFilter: "none" },
       [],
       { pageIndex: 0, pageSize: 20 },
     );

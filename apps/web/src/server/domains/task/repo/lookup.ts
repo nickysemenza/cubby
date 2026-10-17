@@ -1,15 +1,11 @@
-import type {
-  PaginationParams,
-  PresenceFilter,
-  SortParams,
-} from "@cubby/schemas/pagination";
+import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import {
   taskCompletionSchema,
   taskListItemOut,
   taskStatusSchema,
 } from "@cubby/schemas/project";
 import type { TaskFilters } from "@cubby/schemas/project";
-import { and, isNull, lt, lte, or, type SQL, sql } from "drizzle-orm";
+import { and, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 
 import { projectListRows } from "~/entity/model/list-read-schema";
@@ -21,7 +17,6 @@ import {
   type ListReadIntent,
   notDeleted,
   relations,
-  shortcodeSetCondition,
   uuidArrayParam,
 } from "~/server/db/helpers";
 import { product, task } from "~/server/db/schema";
@@ -32,8 +27,7 @@ import {
 } from "~/server/domains/task/repo/helpers";
 import { withDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import { shortcodeIdsSql } from "~/server/generic/list/repo/field-compiler";
-import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
+import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
@@ -44,59 +38,16 @@ import { parseCompleteListRead } from "~/server/generic/list/repo/list-read-adap
 
 import { taskDependencyIds, taskSubtaskCounts } from "./crud";
 import {
-  effectiveTaskAssigneeSql,
-  effectiveTaskProjectSql,
-  effectiveTaskSubjectProductSql,
   effectiveTaskTradeSql,
   hydrateTaskInheritanceRows,
 } from "./task-project-inheritance";
 
 const qb = new QueryBuilder();
 
-/** The live ids of the requested codes, widened to descendants on request. */
-const requestedIds = (
-  target: "ledgerParty" | "product" | "project",
-  {
-    values,
-    includeDescendants,
-  }: { values: readonly string[]; includeDescendants: boolean },
-) => {
-  const selected = shortcodeIdsSql(target, (shortcode) =>
-    shortcodeSetCondition(shortcode, values),
-  );
-  return target === "project" && includeDescendants
-    ? hierarchyDescendantsSql("project", selected)
-    : selected;
-};
-
-/**
- * An inherited reference matches the picked records, ORed with its Any value
- * / No value: "project A **or** unassigned" is one filter.
- */
-const inheritedReference =
-  (target: "ledgerParty" | "product" | "project", effective: () => SQL) =>
-  (value: {
-    values: readonly string[];
-    presence: PresenceFilter;
-    includeDescendants: boolean;
-  }) =>
-    or(
-      value.values.length > 0
-        ? sql`${effective()} IN ${requestedIds(target, value)}`
-        : undefined,
-      value.presence === undefined
-        ? undefined
-        : value.presence === "has"
-          ? sql`${effective()} IS NOT NULL`
-          : sql`${effective()} IS NULL`,
-    );
-
-// The effective project and subject product compile from their declared
-// `via` paths; the effective assignee is inherited, so it orders by name here.
+// The effective project, subject product and assignee compile from their
+// declared `via` paths through the inherited references.
 const taskScaffold = listScaffold("task", task, {
   derived: {
-    assigneeId: sql`(SELECT j."name" FROM "LedgerParty" j
-        WHERE j."id" = ${effectiveTaskAssigneeSql()} AND j."deletedAt" IS NULL)`,
     effectiveTrade: effectiveTaskTradeSql(),
     // Effective due date — `dueEndDate ?? dueDate` — so a ranged task still
     // inside its window isn't treated as overdue, matching the board/stat
@@ -106,16 +57,10 @@ const taskScaffold = listScaffold("task", task, {
       THEN ${taskCompletionSchema.enum.done}::text
       ELSE ${taskCompletionSchema.enum.open}::text END`,
     topLevel: isNull(task.parentTaskId),
-    assigneeFilter: inheritedReference("ledgerParty", effectiveTaskAssigneeSql),
-    projectFilter: inheritedReference("project", effectiveTaskProjectSql),
-    subjectProductFilter: inheritedReference(
-      "product",
-      effectiveTaskSubjectProductSql,
-    ),
     search: (term) =>
       or(
         formatSearchTerm(task.name, term),
-        sql`${effectiveTaskSubjectProductSql()} IN ${qb
+        sql`${effectiveFieldSql("task", "subjectProductId")} IN ${qb
           .select({ id: product.id })
           .from(product)
           .where(
@@ -146,7 +91,7 @@ export const buildTaskWhere = async (db: Database, filters: TaskFilters) => {
     taskScaffold.where(filters),
     scopedProjectIds
       ? scopedProjectIds.length > 0
-        ? sql`${effectiveTaskProjectSql()} = ANY(${uuidArrayParam(scopedProjectIds)})`
+        ? sql`${effectiveFieldSql("task", "projectId")} = ANY(${uuidArrayParam(scopedProjectIds)})`
         : sql`false`
       : undefined,
   );

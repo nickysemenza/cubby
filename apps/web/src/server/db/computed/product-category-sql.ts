@@ -9,6 +9,8 @@ import {
 import { type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { effectiveFieldInSql } from "~/server/generic/inheritance/effective-field";
+
 /** Constants below are inlined with `sql.raw` (not `.inlineParams()`): under the
  * relational `extras` API (`db.query.product.findFirst({ extras: {...} })`),
  * drizzle's `mapColumnsInSQLToAlias` (alias.js) rebuilds nested SQL via
@@ -29,30 +31,26 @@ function featureLiteral(feature: ProductCategoryFeature): SQL {
   return sql.raw(`'${feature}'`);
 }
 
-/** Resolve matching categories once; overrides stop propagation to descendants. */
+/** True when a category's effective feature (`resolution.inherit`) is one
+ * of `features`; false for no category or no feature. The taxonomy resolves
+ * once per query (the set form), not per row. */
 export const categoryFeatureInSql = (
   categoryIdExpr: SQL,
   features: readonly ProductCategoryFeature[],
 ) => {
   if (features.length === 0) return sql<boolean>`false`;
-  const literals = sql.join(features.map(featureLiteral), sql`, `);
-  return sql<boolean>`COALESCE(${categoryIdExpr} IN (
-    WITH RECURSIVE feature_categories AS (
-      SELECT c."id", 0 AS depth, ARRAY[c."id"] AS visited
-      FROM "ProductCategory" c
-      WHERE c."feature" IN (${literals}) AND c."deletedAt" IS NULL
-      UNION ALL
-      SELECT child."id", a.depth + 1, a.visited || child."id"
-      FROM feature_categories a
-      JOIN "ProductCategory" child ON child."parentId" = a."id"
-      WHERE child."deletedAt" IS NULL AND child."feature" IS NULL
-        AND a.depth < ${MAX_ANCESTOR_DEPTH}
-        AND NOT child."id" = ANY(a.visited)
-    ) SELECT "id" FROM feature_categories
-  ), false)`;
+  const matches = effectiveFieldInSql(
+    "productCategory",
+    "feature",
+    categoryIdExpr,
+    sql.join(features.map(featureLiteral), sql`, `),
+  );
+  if (matches === null)
+    throw new Error("productCategory.feature no longer inherits by hierarchy");
+  return matches;
 };
 
-/** True only when the closest non-null ancestor feature matches. */
+/** True only when the category's effective feature matches. */
 export const categoryFeatureSql = (
   categoryIdExpr: SQL,
   feature: ProductCategoryFeature,

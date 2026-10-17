@@ -152,7 +152,7 @@ describe("project and task saved views use ordinary server filters", () => {
   it("Inbox tasks are open, unassigned, and parentless", () => {
     expect(build("task", "inbox")).toEqual({
       status: ["not_started", "later", "in_progress", "blocked"],
-      projectPresenceFilter: "none",
+      projectIdPresenceFilter: "none",
       parentTaskPresenceFilter: "none",
     });
   });

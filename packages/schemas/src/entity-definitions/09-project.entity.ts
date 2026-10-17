@@ -281,6 +281,10 @@ Rules:
           reset: { locationsMode: "inherit", locations: [] },
           none: { locationsMode: "explicit", locations: [] },
           redundancy: "eligible",
+          inherit: {
+            mode: { field: "locationsMode", inherit: "inherit" },
+            from: ["hierarchy"],
+          },
         },
         explanation: {
           ruleId: "project.effective-locations",
@@ -342,6 +346,10 @@ Rules:
           reset: { assigneeMode: "inherit", assigneeId: null },
           none: { assigneeMode: "explicit", assigneeId: null },
           redundancy: "eligible",
+          inherit: {
+            mode: { field: "assigneeMode", inherit: "inherit" },
+            from: ["hierarchy"],
+          },
         },
         explanation: {
           ruleId: "project.effective-assignee",
@@ -806,8 +814,8 @@ Rules:
       "notionPageUrl",
     ],
     derived: {
-      // The effective assignee's name, inherited from a parent project.
-      assigneeId: { type: "text" },
+      // Orders by the effective assignee's name.
+      assigneeId: { via: "assignee" },
       // The effective start: the stored date, else the earliest task or
       // expense date in the subtree below an unset start.
       startDate: { type: "date" },
@@ -817,18 +825,6 @@ Rules:
         predicate: "text",
         reason:
           "Matches name, notes, or any effective location, which a project may inherit as a list",
-      },
-      effectiveLocations: {
-        predicate: "multiselect",
-        negatable: true,
-        reason:
-          "Effective locations are a list inherited from the nearest ancestor that sets its own",
-      },
-      effectiveAssignee: {
-        predicate: "idMulti",
-        negatable: true,
-        reason:
-          "The inherited assignee filters by its record while its sort value is the name",
       },
       attention: {
         predicate: "multiselect",
@@ -967,7 +963,7 @@ Rules:
     descriptors: [
       {
         columnId: "assigneeId",
-        derived: "effectiveAssignee",
+        derived: true,
         urlKey: "assignee",
         field: "assigneeId",
         kind: "idMulti",
@@ -975,7 +971,6 @@ Rules:
         optionsKey: "ledgerParty",
         brandRef: { entity: "ledgerParty" },
         currentMember: true,
-        nullable: { field: "assigneePresenceFilter", label: "assignee" },
       },
 
       {
@@ -1070,7 +1065,7 @@ Rules:
         deriveSchema: true,
         schemaDescription:
           "Any exact match against the effective (possibly inherited) locations",
-        derived: "effectiveLocations",
+        stored: { array: true },
         optionsKey: "projectLocations",
       },
       {

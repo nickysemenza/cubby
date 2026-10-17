@@ -40,7 +40,7 @@ const renderExplanation = (
   );
   const actions = [
     ...(field.resolution?.confirm ? ["Confirm"] : []),
-    ...(field.resolution ? ["Use inherited"] : []),
+    ...(field.resolution?.reset ? ["Use inherited"] : []),
     ...(field.resolution?.none
       ? [`Set to ${field.resolution.labels?.none ?? "none"}`]
       : []),

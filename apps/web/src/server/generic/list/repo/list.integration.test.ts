@@ -16,14 +16,10 @@ describe("list selection and relation loading", () => {
   const ctx = withTestDb();
   const scaffold = listScaffold("task", task, {
     derived: {
-      assigneeId: sql`NULL`,
       effectiveTrade: sql`NULL`,
       effectiveDueDate: sql`NULL`,
       completion: sql`NULL`,
       topLevel: sql`true`,
-      assigneeFilter: () => undefined,
-      projectFilter: () => undefined,
-      subjectProductFilter: () => undefined,
       search: () => undefined,
       dueRelative: () => undefined,
     },
@@ -120,14 +116,10 @@ describe("list selection and relation loading", () => {
     const table = alias(task, "listed_task");
     const page = await listScaffold("task", table, {
       derived: {
-        assigneeId: sql`NULL`,
         effectiveTrade: sql`NULL`,
         effectiveDueDate: sql`NULL`,
         completion: sql`NULL`,
         topLevel: sql`true`,
-        assigneeFilter: () => undefined,
-        projectFilter: () => undefined,
-        subjectProductFilter: () => undefined,
         search: () => undefined,
         dueRelative: () => undefined,
       },

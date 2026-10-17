@@ -2033,11 +2033,8 @@ Rules:
         reason:
           "The effective owner is resolved from inventory and acquisition evidence outside SQL",
       },
-      categoryFeature: {
-        predicate: "multiselect",
-        negatable: true,
-        reason: "Inherited through category ancestors; not a row value",
-      },
+      // The category's effective feature, inherited from its ancestors.
+      categoryFeature: { via: "category.feature" },
       externalIdSource: {
         predicate: "multiselect",
         negatable: true,
@@ -2370,10 +2367,9 @@ Rules:
         derived: true,
         field: "categoryFeatureFilter",
         kind: "multiselect",
+        label: "Category family",
         placeholder: "Filter category family...",
         optionsKey: "productCategoryFamilies",
-        // Its own No value, so "food or unclassified" stays one filter.
-        nullable: { field: "categoryPresenceFilter", label: "classification" },
       },
       {
         columnId: "categoryId",

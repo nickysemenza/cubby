@@ -16,8 +16,8 @@ import { getDb, notDeleted, uuidArrayParam } from "~/server/db/helpers";
 import { task } from "~/server/db/schema";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { effectiveTaskDueDateSql } from "~/server/domains/task/repo/helpers";
-import { effectiveTaskProjectSql } from "~/server/domains/task/repo/task-project-inheritance";
 import { dependencyIdsFor } from "~/server/generic/entity-links/repo/dependency-edges";
+import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
 
 import {
   EMPTY_PROJECT_CONTENT_DATES,
@@ -60,18 +60,22 @@ const projectExpenseStats = async (
 const projectTaskRollupRows = (db: Database, projectIds: ProjectId[]) =>
   getDb(db)
     .select({
-      projectId: effectiveTaskProjectSql("Task"),
+      projectId: effectiveFieldSql<ProjectId | null>(
+        "task",
+        "projectId",
+        "Task",
+      ),
       taskCount: sql<number>`count(*)::int`,
       doneTaskCount: sql<number>`count(*) filter (where ${task.status} = ${"done"})::int`,
     })
     .from(task)
     .where(
       and(
-        sql`${effectiveTaskProjectSql("Task")} = ANY(${uuidArrayParam(projectIds)})`,
+        sql`${effectiveFieldSql<ProjectId | null>("task", "projectId", "Task")} = ANY(${uuidArrayParam(projectIds)})`,
         notDeleted(task),
       ),
     )
-    .groupBy(effectiveTaskProjectSql("Task"));
+    .groupBy(effectiveFieldSql<ProjectId | null>("task", "projectId", "Task"));
 
 const mergeProjectOwnRollups = (
   projectIds: ProjectId[],
@@ -106,7 +110,7 @@ const mergeProjectOwnRollups = (
 };
 
 const projectTaskDateRows = (db: Database, projectIds?: ProjectId[]) => {
-  const projectId = effectiveTaskProjectSql();
+  const projectId = effectiveFieldSql<ProjectId | null>("task", "projectId");
   return getDb(db)
     .select({
       projectId,

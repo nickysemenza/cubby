@@ -13,32 +13,18 @@
   "gardenEntry": ["journalPlantingId"],
   "image": ["runId", "targetState"],
   "imageJob": ["submissionId"],
-  "inventory": ["categoryFeature", "effectiveOwner"],
+  "inventory": ["effectiveOwner"],
   "location": ["recountOverdue"],
   "planting": ["activeOn"],
   "product": [
     "anyGtin",
-    "categoryFeature",
     "effectiveOwner",
     "externalIdSource",
     "taskDue",
     "taskOpen",
     "taskStatus"
   ],
-  "productCategory": ["effectiveSpendingCategoryId"],
-  "project": [
-    "attention",
-    "dateRange",
-    "effectiveAssignee",
-    "effectiveLocations",
-    "search"
-  ],
-  "task": [
-    "assigneeFilter",
-    "dueRelative",
-    "projectFilter",
-    "search",
-    "subjectProductFilter"
-  ],
+  "project": ["attention", "dateRange", "search"],
+  "task": ["dueRelative", "search"],
   "wish": ["search"]
 }

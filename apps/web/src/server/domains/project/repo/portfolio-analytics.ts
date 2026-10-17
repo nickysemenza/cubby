@@ -38,7 +38,7 @@ import {
   executeExpenseDerivedBatch,
   expenseSelectionForWhere,
 } from "~/server/domains/expense/repo/expense-derived-read";
-import { effectiveTaskProjectSql } from "~/server/domains/task/repo/task-project-inheritance";
+import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
 
 import { buildDashboardProjectWhere } from "./dashboard-shared";
 import { EMPTY_PROJECT_SUBTREE_ROLLUP } from "./helpers";
@@ -172,19 +172,25 @@ export async function projectPortfolioAnalytics(
           .groupBy(sql`allocation.trade`),
         taskHeatmapRows: getDb(db)
           .select({
-            projectId: effectiveTaskProjectSql("Task"),
+            projectId: effectiveFieldSql<ProjectId | null>(
+              "task",
+              "projectId",
+              "Task",
+            ),
             openTaskCount: sql<number>`count(*)::int`,
           })
           .from(task)
           .where(
             and(
-              sql`${effectiveTaskProjectSql("Task")} = ANY(${uuidArrayParam(ids)})`,
+              sql`${effectiveFieldSql<ProjectId | null>("task", "projectId", "Task")} = ANY(${uuidArrayParam(ids)})`,
               notDeleted(task),
               ne(task.status, "done"),
               isNull(task.parentTaskId),
             ),
           )
-          .groupBy(effectiveTaskProjectSql("Task")),
+          .groupBy(
+            effectiveFieldSql<ProjectId | null>("task", "projectId", "Task"),
+          ),
       }),
     );
 
