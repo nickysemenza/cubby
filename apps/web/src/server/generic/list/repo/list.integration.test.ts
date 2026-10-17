@@ -134,7 +134,15 @@ describe("list selection and relation loading", () => {
         status: "pending",
       });
     const reader = listScaffold("email", email, {
-      derived: { linkState: sql`NULL` },
+      derived: {
+        linkState: sql`0`,
+        scopeLinkState: sql`NULL`,
+        linked: sql`false`,
+        reviewConflict: sql`false`,
+        purchaseId: () => undefined,
+        vendorId: () => undefined,
+        vendorAccountId: () => undefined,
+      },
     });
     for (const pageIndex of [0, 1, 4]) {
       const request = {

@@ -1,5 +1,6 @@
 import type { FinancialAccountFilters } from "@cubby/schemas/financial-account";
 import type { FinancialTransactionFilters } from "@cubby/schemas/financial-transaction";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ImageListFilters } from "@cubby/schemas/image";
 import {
   type IngredientFilters,
@@ -55,9 +56,9 @@ describe("buildWishWhere", () => {
   });
 
   it("filters candidates through the related view's productId", async () => {
-    expect(await where({ productId: ["PRD-0000"] })).toContain(
-      'JOIN "Product" t ON (related1."toEntityId" = t."id"',
-    );
+    expect(
+      await where({ productId: [parseShortcodeFor("product", "PRD-2345")] }),
+    ).toContain('JOIN "Product" t ON (related1."toEntityId" = t."id"');
   });
 
   it.each([
@@ -313,7 +314,9 @@ describe("buildRecipeWhere", () => {
     Promise.resolve(renderWhereSql(buildRecipeWhere(filters)));
 
   it("resolves cookbook codes against live cookbooks inside the query", async () => {
-    const rendered = await where({ cookbookId: ["CBK-0000"] });
+    const rendered = await where({
+      cookbookId: [parseShortcodeFor("cookbook", "CBK-2345")],
+    });
     expect(rendered).toMatch(
       /"cookbookId" in \(select ref\."id" from "Cookbook" ref/i,
     );

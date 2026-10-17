@@ -259,7 +259,15 @@ describe("Email data quality", () => {
     // Plain count reads need no completed-import membership or hydration.
     const plain = await countTestDbQueries(() =>
       listScaffold("email", email, {
-        derived: { linkState: sql`0` },
+        derived: {
+          linkState: sql`0`,
+          scopeLinkState: sql`NULL`,
+          linked: sql`false`,
+          reviewConflict: sql`false`,
+          purchaseId: () => undefined,
+          vendorId: () => undefined,
+          vendorAccountId: () => undefined,
+        },
       }).list(
         ctx.db,
         {
