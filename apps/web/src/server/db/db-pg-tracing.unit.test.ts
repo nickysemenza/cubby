@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { withDatabaseOperationMetrics } from "./db-observability";
 import {
   createPoolQueryOwnershipBoundary,
-  traceStandaloneClient,
+  tracePool,
   createPoolConnectAdapter,
   createPoolQueryAdapter,
   createObservedQuery,
@@ -35,10 +35,18 @@ describe("node-postgres tracing adapters", () => {
       .fn()
       .mockImplementationOnce(() => firstGate)
       .mockResolvedValue(queryResult());
-    const client = traceStandaloneClient(
-      fromPartial<pg.Client>({ query: rawQuery }),
+    const rawClient = fromPartial<pg.PoolClient>({
+      query: rawQuery,
+      release: vi.fn(),
+    });
+    const pool = tracePool(
+      fromPartial<pg.Pool>({
+        query: vi.fn(async () => queryResult()),
+        connect: vi.fn(async () => rawClient),
+      }),
       "strong",
     );
+    const client = await pool.connect();
     await withDatabaseOperationMetrics(async (metrics) => {
       const first = client.query("select first");
       const rejected = first.catch((error: Error) => error);
@@ -54,6 +62,7 @@ describe("node-postgres tracing adapters", () => {
       });
       expect(metrics.clientQueueDurationSumMs).toBeGreaterThan(0);
     });
+    client.release();
   });
 
   it("traces promise queries and records their returned rows", async () => {

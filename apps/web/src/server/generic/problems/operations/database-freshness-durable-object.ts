@@ -215,7 +215,7 @@ export class DatabaseFreshnessDurableObject
       throw new Error("Problem-count PostgreSQL backend is unavailable");
     }
     setCfEnv(this.env);
-    const [{ db, withRequestDbClient }, { createUpcLookupService }, service] =
+    const [{ db, withInvocationDb }, { createUpcLookupService }, service] =
       await Promise.all([
         import("~/server/db"),
         import("~/server/clients/upc"),
@@ -224,7 +224,7 @@ export class DatabaseFreshnessDurableObject
     return runWithExecutionCtx(
       { waitUntil: (task) => this.ctx.waitUntil(task) },
       () =>
-        withRequestDbClient(connectionString, () =>
+        withInvocationDb(connectionString, () =>
           service.findProblemCounts(db, createUpcLookupService(db)),
         ),
       this.env.APP_ORIGIN,
