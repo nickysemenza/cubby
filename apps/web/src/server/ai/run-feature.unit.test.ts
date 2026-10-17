@@ -618,7 +618,7 @@ describe("modelOptionsFor", () => {
       maxTokens: 100,
       thinkingEnabled: true,
       effort: "low",
-      toolChoice: { type: "tool", name: RESPOND_TOOL_NAME },
+      toolChoice: "auto",
     });
   });
 
