@@ -1,6 +1,6 @@
 # ADR 0017: Subscription-funded model fallback
 
-Status: Accepted design; not yet implemented.
+Status: Amended. The funding and gateway amendment below supersedes the original design for Pi agents and Tester Army.
 
 Production chat runs on the household's ChatGPT plan (Luna and Sol at ~$0
 marginal cost); Anthropic is nearly unused. An eligible Claude Max or Team plan
@@ -85,3 +85,36 @@ expiry.
   [ADR 0010](0010-mail-import-unattended-burn-down-interactive.md).
 - **A Cubby-side credit counter with a configured renewal day**: rejected in
   favor of the Console spend limit plus billing-reason grouping.
+
+## Funding and gateway amendment
+
+Pi coordinators and Tester Army favor quality and consume the Claude subscriber
+credit pool first, then the existing ChatGPT subscription, then paid Cloudflare
+Unified Billing. Paid fallback is explicitly authorized so exhaustion does not
+stop useful work. Opus leads; simple work can use the fast tier without a
+separate router. Fixed-model evaluation calls remain fixed so comparisons still
+measure the requested model.
+
+Use one gateway, `cubby`, for all billed production, local, CI and evaluation
+traffic. Environment metadata preserves attribution; shared gateway capacity is
+an accepted tradeoff for one credential setup. The previous testing-gateway
+split and testing allocation are superseded. Gateway credentials remain
+account-scoped and never made that split a security boundary.
+
+The subscriber key uses the named `subscriber-credit` BYOK alias, with
+`cf-aig-no-wholesale: true`. Leave the default Anthropic key unset so an
+unaliased paid request uses Unified Billing. Console workspace limits enforce
+credit-route capacity; promotional balance is not exposed to Cubby. Setup and
+billing-cycle limitations live in [Infrastructure](../infrastructure.md#claude-subscriber-credits).
+
+Quota fallback discards the failed generation and starts a fresh provider
+attempt. Pi buffers events until an attempt settles, so partial tool calls from
+an exhausted model cannot execute. Previously completed tool work remains in the
+durable transcript. Usage records retain the actual answering model and the
+failed attempts. Subscriber-credit calls have zero incremental charge and retain
+the standard API comparison under billing reason `subscriber_credit`.
+
+Ordinary invalid requests, invalid credentials and unknown provider failures
+retain their diagnostics instead of authorizing spend on another provider.
+The pre-existing ChatGPT OAuth transports remain separate from AI Gateway;
+billed Anthropic and OpenAI requests continue through the gateway.

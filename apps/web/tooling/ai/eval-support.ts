@@ -171,6 +171,7 @@ export async function evalSubscriptionOutputTokens(
 }
 
 export const subscriptionEvalModelWorker = (origin: string) => ({
+  fixedModel: true as const,
   main: "tooling/agent-eval-model.ts",
   vars: {
     ACCOUNT_ID: CF_ACCOUNT_ID,
@@ -198,6 +199,7 @@ function gatewayApiKey() {
 
 /** The harness model worker that bills each candidate through the Gateway. */
 export const liveEvalModelWorker = () => ({
+  fixedModel: true as const,
   main: "tooling/agent-eval-model.ts",
   vars: {
     ACCOUNT_ID: CF_ACCOUNT_ID,

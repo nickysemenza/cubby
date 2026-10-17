@@ -91,7 +91,7 @@ it("compares a shoe size and routes an unknown style code away from name noise",
     mark: "disagree-or-missing",
     labelValue: "C33223",
     productValue: null,
-    suggestion: { kind: "set_model", value: "C33223" },
+    suggestion: null,
   });
   expect(
     marks.filter((field) => field.suggestion?.kind === "add_to_name"),
@@ -210,14 +210,14 @@ it("compares fractional sizes and punctuation-insensitive identifiers without du
   expect(marks.filter((field) => field.suggestion)).toEqual([]);
 });
 
-it("adds a missing code as an identifier when the Product already has a model", () => {
+it("does not infer a printed code's type from an already populated model", () => {
   const marks = photoFieldCrossCheck(
     { name: "Acme Harbor", model: "ZQ-2468", identifiers: [] },
     ["ZQ2468 / AB7654 / AB7654"],
   );
   expect(marks.find((field) => field.field === "identifiers")).toMatchObject({
     labelValue: "AB7654",
-    suggestion: { kind: "add_identifier", value: "AB7654" },
+    suggestion: null,
   });
 });
 
@@ -254,7 +254,7 @@ it("treats a hyphenated style code as an identifier rather than a numeric size",
   ]);
   expect(marks.find((field) => field.field === "identifiers")).toMatchObject({
     labelValue: "AB-123",
-    suggestion: { kind: "set_model", value: "AB-123" },
+    suggestion: null,
   });
   expect(marks.find((field) => field.field === "size")?.mark).toBe("unknown");
   expect(marks.find((field) => field.field === "name")?.mark).toBe("unknown");
@@ -308,7 +308,7 @@ it("ignores provenance on its line without swallowing a colour on the next OCR l
   });
 });
 
-it("flags a model that contradicts the printed style code", () => {
+it("does not treat an unclassified printed code as a model contradiction", () => {
   const marks = photoFieldCrossCheck(
     {
       name: "Synthetic shell jacket blue XL",
@@ -320,10 +320,10 @@ it("flags a model that contradicts the printed style code", () => {
   );
   const model = marks.find((field) => field.field === "model");
   expect(model).toMatchObject({
-    mark: "disagree-or-missing",
-    labelValue: "SJ-104",
+    mark: "unknown",
+    labelValue: null,
     productValue: "SJ-999",
-    suggestion: { kind: "set_model", value: "SJ-104" },
+    suggestion: null,
   });
   expect(
     marks.find((field) => field.field === "identifiers")?.suggestion,

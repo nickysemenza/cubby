@@ -11,10 +11,19 @@ import {
   type GatewayResponseInfo,
   requestUrl,
   runUniversalGateway,
+  type InferenceFunding,
 } from "@cubby/shared/ai/gateway-request";
-import type { ChatGatewayProvider } from "@cubby/shared/ai/models";
-import { cubbyPiProviders } from "@cubby/shared/ai/pi-providers";
-import type { Provider } from "@earendil-works/pi-ai";
+import {
+  type ChatGatewayProvider,
+  type SupportedChatModel,
+  getChatModelConfig,
+  QUALITY_MODEL,
+} from "@cubby/shared/ai/models";
+import {
+  cubbyPiProviders,
+  fundedCubbyPiProviders,
+} from "@cubby/shared/ai/pi-providers";
+import type { AssistantMessage, Provider } from "@earendil-works/pi-ai";
 import { z } from "zod";
 
 import { type ContextRecorder, withContextCapture } from "./context-breakdown";
@@ -62,6 +71,10 @@ interface AgentFetchOptions extends Pick<
   GatewayFetchRoutes,
   "subscriptionRequired" | "subscriptionFallback" | "beforePaidRequest"
 > {
+  funding?: InferenceFunding;
+  fundingFallback?: boolean;
+  fixedModel?: PurchaseAgentEnvironment["fixedModel"];
+  onFundingRefusal?: (message: AssistantMessage) => Promise<void>;
   /** Pi may open before dispatch binds a Run; resolve its policy per request. */
   transportPolicy?: () => Pick<
     GatewayFetchRoutes,
@@ -93,6 +106,7 @@ export function createCubbyGatewayFetch(
   const routedFetch = () =>
     gatewayFetchThrough({
       provider: route,
+      funding: options.funding,
       rewriteQuery: (body) => withSequentialToolCalls(route, body),
       chatGpt: options.subscription,
       subscriptionRequired: options.subscriptionRequired,
@@ -105,7 +119,7 @@ export function createCubbyGatewayFetch(
         testModel &&
         (async (request) => {
           // A live test peer forwards these labels under its own environment.
-          const headers = new Headers(request.init?.headers);
+          const headers = new Headers(request.headers);
           headers.set("cf-aig-metadata", JSON.stringify(COORDINATOR_CALL));
           return testModel.fetch(
             new Request(requestUrl(request.input), {
@@ -145,10 +159,15 @@ export function createCubbyGatewayFetch(
 export function cubbyAgentProviders(
   input: AgentFetchOptions & { recorder: ContextRecorder },
 ): Provider[] {
-  return cubbyPiProviders((route, onUnbilledResponse) => {
+  const providers =
+    input.fundingFallback && !input.fixedModel
+      ? fundedCubbyPiProviders
+      : cubbyPiProviders;
+  return providers((route, onUnbilledResponse, funding) => {
     let finalTransport: AgentTransport | undefined;
     const routedFetch = createCubbyGatewayFetch(route, {
       ...input,
+      funding,
       onTransport: (transport) => {
         finalTransport = transport;
         input.onTransport?.(transport);
@@ -165,7 +184,16 @@ export function cubbyAgentProviders(
       },
       { recorder: input.recorder, scope: () => CONTEXT_SCOPE },
     );
-  });
+  }, input.onFundingRefusal);
+}
+
+/** Fixed peers rewrite Responses bodies, so protocol selection must happen first. */
+export function cubbyAgentModel(
+  pinned: SupportedChatModel,
+  fixedModel?: PurchaseAgentEnvironment["fixedModel"],
+) {
+  const modelId = fixedModel ? QUALITY_MODEL : pinned;
+  return { provider: getChatModelConfig(modelId).gatewayProvider, modelId };
 }
 
 /** One agent instance per Durable Object, so one recorder scope suffices. */

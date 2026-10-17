@@ -17,6 +17,7 @@ import {
   gatewayProviderUrl,
   type GatewayResponseObservers,
   runUniversalGateway,
+  runNativeGateway,
   type WorkersAiRunGateway,
   workersAiModel,
   workersAiRunRequest,
@@ -55,7 +56,10 @@ export interface GatewayCallOptions
     GatewayResponseObservers,
     Pick<
       GatewayFetchRoutes,
-      "subscriptionRequired" | "subscriptionFallback" | "beforePaidRequest"
+      | "subscriptionRequired"
+      | "subscriptionFallback"
+      | "beforePaidRequest"
+      | "funding"
     > {
   metadata: GatewayMetadata;
   collectPayload?: boolean;
@@ -193,6 +197,7 @@ export function gatewayFetch(
   };
   return gatewayFetchThrough({
     provider,
+    funding: opts.funding,
     onResponse: opts.onResponse,
     onErrorResponse: opts.onErrorResponse,
     onRecoveredErrorResponse: opts.onRecoveredErrorResponse,
@@ -233,6 +238,15 @@ export function gatewayFetch(
         return workersAiFetch(request, {
           id: aiGatewayId(controls.metadata.environment),
           ...controls,
+        });
+      if (opts.funding === "subscriber_credit")
+        return runNativeGateway({
+          accountId: CF_ACCOUNT_ID,
+          gatewayId: aiGatewayId(controls.metadata.environment),
+          token: requiredApiKey(),
+          provider,
+          request,
+          controls,
         });
       const gateway = getAiGateway(aiGatewayId(controls.metadata.environment));
       if (gateway)

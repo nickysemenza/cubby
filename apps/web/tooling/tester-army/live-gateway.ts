@@ -1,6 +1,6 @@
 import {
   type AiGatewayEnvironment,
-  CUBBY_EVALUATION_GATEWAY_ID,
+  CUBBY_AI_GATEWAY_ID,
   proxiedAiGatewayMetadata,
 } from "@cubby/shared/ai/gateway-metadata";
 import {
@@ -76,7 +76,7 @@ function forward(
         token: env.GATEWAY_TOKEN,
         model: workersAiModel(url.pathname.slice("/workers-ai/".length)),
         input: JSON.parse(new TextDecoder().decode(body)),
-        gateway: { id: CUBBY_EVALUATION_GATEWAY_ID, metadata, skipCache: true },
+        gateway: { id: CUBBY_AI_GATEWAY_ID, metadata, skipCache: true },
       });
     } catch (error) {
       // The run body carries the input as JSON, so it cannot pass bytes on.
@@ -89,6 +89,7 @@ function forward(
     return fetch(run.url, run.init);
   }
   const headers = strippedHeaders({ headers: request.headers });
+  headers.delete("x-cubby-inference-funding");
   // The placeholder host must not follow the request to the gateway.
   headers.delete("host");
   headers.set("cf-aig-authorization", `Bearer ${env.GATEWAY_TOKEN}`);
@@ -97,7 +98,7 @@ function forward(
   return fetch(
     gatewayProviderUrl({
       accountId: env.ACCOUNT_ID,
-      gatewayId: CUBBY_EVALUATION_GATEWAY_ID,
+      gatewayId: CUBBY_AI_GATEWAY_ID,
       provider: route,
       endpoint: `${url.pathname.slice(`/${route}/`.length)}${url.search}`,
     }),
@@ -120,6 +121,19 @@ export default {
       usage = {};
       return new Response(null, { status: 204 });
     }
+    // This Worker has only a Unified Billing token, never a ChatGPT session.
+    // Preserve the funding ladder by letting its owner choose the paid stage.
+    if (request.headers.get("x-cubby-inference-funding") === "subscription")
+      return Response.json(
+        {
+          error: {
+            code: "subscription_unavailable",
+            message:
+              "ChatGPT subscription is unavailable in the live gateway peer",
+          },
+        },
+        { status: 429 },
+      );
     // `/openai/responses`, `/anthropic/v1/messages`, `/workers-ai/...`
     const route = url.pathname.split("/")[1] ?? "unknown";
     let body =

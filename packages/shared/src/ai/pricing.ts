@@ -322,6 +322,7 @@ export const aiCostEvidenceSchema = z.object({
   billingReason: z.enum([
     "standard",
     "plan",
+    "subscriber_credit",
     "cache",
     "discount",
     "local",
@@ -412,7 +413,11 @@ export function accountAiUsage(
   usage: AiTokenUsage,
 ) {
   const reason = billing.billingReason;
-  const free = reason === "plan" || reason === "cache" || reason === "local";
+  const free =
+    reason === "plan" ||
+    reason === "subscriber_credit" ||
+    reason === "cache" ||
+    reason === "local";
   const rates = billing.adjustment?.rates;
   const ratesAmount =
     rates &&

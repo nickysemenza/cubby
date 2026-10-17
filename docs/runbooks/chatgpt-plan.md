@@ -4,9 +4,10 @@ Cubby's open-source deployment can connect an eligible ChatGPT account to power
 its Workers OpenAI Responses calls. Settings lists the account's displayable
 model catalog from `GET https://api.openai.com/v1/models`, preserving OpenAI's
 ordering and `visibility: "list"` rule. It has no model selectors: structured
-tasks and the purchase agent retain their existing Luna/Sol declarations.
-An unavailable model or subscription restriction fails the call with OpenAI's
-diagnostics; a connected account never silently falls back to paid API billing.
+tasks retain their declared models. Pi coordinators and Tester Army use the
+explicit funding order in [Infrastructure](../infrastructure.md#claude-subscriber-credits):
+Claude subscriber credits, ChatGPT subscription, then paid Unified Billing.
+Other calls retain their existing fail-closed subscription behavior.
 
 ## Connect
 
@@ -85,7 +86,8 @@ Every `AiUsage` row names its `transport` (`aiUsageTransportValues` in
 or `unknown`. The transport is selected before the request leaves
 (`GatewayCallOptions.onTransport`, the agent's `onSelected`), so a connected
 plan's failure — even one that throws before any HTTP response — records a
-failed `chatgpt` row and is never retried through the paid gateway. The
+failed `chatgpt` row. Only callers with an explicit funding fallback policy
+advance recognized quota refusals to the paid gateway. The
 telemetry writer records plan coverage for every `chatgpt` row while retaining
 its token evidence and standard-price comparison. `cache` means an application replay with no upstream call (the
 application response cache or a stored `AiAnalysis`); a Gateway response-cache

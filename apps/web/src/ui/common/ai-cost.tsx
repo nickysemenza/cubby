@@ -50,6 +50,7 @@ export function AiCost({
   const reasons = {
     standard: "Standard billing",
     plan: "Plan covered",
+    subscriber_credit: "Subscriber credits",
     cache: "Cached response",
     discount: "Discount applied",
     local: "On device",

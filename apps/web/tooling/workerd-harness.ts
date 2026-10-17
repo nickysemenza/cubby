@@ -161,6 +161,8 @@ export type WorkerdProfile = keyof typeof WORKERD_PROFILES;
 /** A model or gateway peer Worker that answers in place of the AI Gateway. */
 export type WorkerdModelWorker = {
   main: string;
+  /** Responses-only model comparison; ordinary live peers retain production routing. */
+  fixedModel?: true;
   vars?: Record<string, string>;
   secrets?: Record<string, string>;
 };
@@ -361,6 +363,9 @@ export async function workerdHarnessOptions(
           AI_GATEWAY_API_KEY: "",
           // A scripted Run settles in a test's time, not production's 10s poll.
           CUBBY_TEST_SETTLEMENT_POLL_MS: "25",
+          ...(options.models?.agent?.fixedModel && {
+            CUBBY_PURCHASE_AGENT_FIXED_MODEL: "openai-responses",
+          }),
           ...(options.poolIdleTimeoutMs !== undefined && {
             CUBBY_TEST_POOL_IDLE_TIMEOUT_MS: String(options.poolIdleTimeoutMs),
           }),

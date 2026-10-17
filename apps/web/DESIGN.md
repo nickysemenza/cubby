@@ -191,6 +191,22 @@ creating assignments.
 
 Specialist workflows such as photo review, import, calendar, Gantt, camera, reconciliation, and matrices keep their task-specific controls inside the shared frame. Preserve status wording and raw diagnostics where the product contract requires them.
 
+Photo review keeps a Label media slot even without a label photo: show Missing,
+or Unreadable when analysis completed without readable text. Pending/failed
+analysis stays explicit. Do not repeat absence beside every form field; use
+Not shown on label only where a field comparison needs it. Evidence compares
+the current saved Product, separately from selected Product changes. Show
+loading and failed saved-record reads explicitly; never substitute pending
+proposal values when saved evidence is unavailable. Label
+identifier types and issuers; an unclassified printed code is evidence, never
+an inferred model or external identifier based on which field is empty. Size
+and colour comparisons derived from the Product name say so. Show selected
+changes first, disclose unchanged fields, and name set/replace/clear outcomes.
+Confirmation summarizes selected detail changes independently of adding photos.
+Proposed text and expanded applied activity share the inline word diff: green
+insertions, red struck-through deletions, and explicit before/after text for
+assistive technology. Full review diffs wrap; compact incidental diffs truncate.
+
 RTable owns interactive record work: virtualization, pinned and resizable columns, in-session layouts, filters, selection, clipboard, grouping, inline editing, and aggregate footers. Desktop data rows retain 32px (`ROW_DENSITY`) so two-line values have readable separation. Every cell value gets the same 4px start padding; decorated cells render through `CellFrame`. A column is as narrow as its values: info, relation and resolution controls appear only on the hovered or focused row, over the cell's free edge, and reserve no width; a derived value reads muted, and suggestion marks stay visible. Quiet full-height column rules are fainter than the header boundary. Quality scores remain numerically sortable but their pills start at the same padding as other categorical values. Table thumbnail frames match the 32px row height and the image column reserves exactly that frame. The structural selection column is fixed at 32px; info controls use a 16px desktop footprint with a 10px glyph and preserve the coarse-pointer touch floor. Hover, inspected-current, and batch-selected states stay distinct, including pinned cells. The totals strip meets the table directly; a portaled empty toolbar must not leave a separator or spacer behind. The shared table fits columns to rendered headers, aggregate footers, and a bounded sample of current values, within their declared limits. Fits remain stable while inspecting or editing, manual resizing wins, and no column grows past its kind's cap to fit one long value, and spare width goes only to the record's identity, up to 240px ([column widths](docs/web-ui-reference.md#column-widths)). Header labels use their short form and wrap to two lines inside the 32px header rather than widening their column; a count of one entity's records is headed by that entity's icon and "#", and a column of links to one entity carries that entity's icon in its header rather than on every row. A header's sort arrow takes width only while the column is sorted, and its source icon appears on hover or focus. A clipped single-line value spills over its neighbours at the same row height on hover or focus; codes (barcodes, order ids) keep their first and last four characters, and other long labels keep their tail. Entity links stack their compact name over muted context, or wrap a long name to two lines, and quality scores drop "/100". Dates and timestamps use one `DateDisplay`: full date/year and timestamp clock time followed by muted relative text outside tables; in tables, the day stacks over a compact distance ("Oct 13" / "3 min ago"; months use "3 mo ago", and another year leads that line, "’25 · 1y ago"), and chip lists wrap to two lines, then count the rest as "+N"; secondary context is type hierarchy, never parentheses. A table view never becomes a stack of decorative cards on desktop. Phone rows use a semantic projection with a 44px minimum target.
 
 ### Data visualization

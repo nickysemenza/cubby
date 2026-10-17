@@ -52,6 +52,15 @@ JSONL routes    →  cancellable workflow streams
   Worker-only export behind one of those features; browser code must not call
   it, which `wasm-browser-exports.unit.test.ts` enforces, and
   `check-client-bundle.ts` checks each package lands in the right bundle.
+  Cookbook EPUB estimates and extraction use the same deployment options:
+  Sonnet 5 first, Haiku 4.5 for the second opinion, then Luna. Anthropic calls
+  require the gateway's `subscriber-credit` BYOK alias without wholesale
+  fallback; non-2xx responses reach the crate's existing retry/model ladder.
+  Luna tries ChatGPT subscription funding before paid gateway funding. The
+  forwarder folds completed or incomplete Responses SSE into the response JSON
+  expected by the extractor, preserving truncation output and usage. Only explicit subscription quota
+  or unavailable codes permit a paid rerun; other errors and cancellation stop
+  the call. Failed subscription attempts are recorded separately.
 - USDA data comes from one `USDA_RELEASE` SQLite Durable Object per USDA
   release in the web Worker, called over typed RPC
   ([ADR 0008](adr/0008-usda-release-durable-object.md)). The request-scoped
@@ -70,8 +79,9 @@ JSONL routes    →  cancellable workflow streams
   admits managed-credential traffic under an aggregate rolling window and
   concurrency cap, preserves streaming/provider headers, and shares 429
   cooldowns. ChatGPT subscription traffic bypasses Gateway admission. Local
-  integrations and live evaluations use the separate `cubby-testing`
-  gateway so they cannot consume production's admission budget. [ChatGPT setup](runbooks/chatgpt-plan.md) explains
+  integrations, live evaluations and production share `cubby`, with environment
+  metadata retaining attribution. Pi's funding order is documented in
+  [Infrastructure](infrastructure.md#claude-subscriber-credits). [ChatGPT setup](runbooks/chatgpt-plan.md) explains
   local authorization, the read-only account model catalog, limitations, and
   how each `AiUsage` row records its transport.
 

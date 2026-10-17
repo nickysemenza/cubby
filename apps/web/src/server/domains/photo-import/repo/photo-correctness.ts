@@ -215,40 +215,12 @@ export function photoFieldCrossCheck(
         : null,
     },
   ];
-  const knownIdentifierKeys = new Set(product.identifiers.map(comparisonKey));
-  const labelCodes = labelTerms.filter(
-    (term) => term.kind === "identifier" && !knownIdentifierKeys.has(term.key),
-  );
-  // A model absent from a label that prints an unknown code contradicts it;
-  // silence would let a pending model edit pass unchecked.
-  const contradictedModel =
-    product.model &&
-    labelCodes.length &&
-    !correctnessTokens(product.model).every(literalAgrees) &&
-    !labelCodes.some((term) => term.key === comparisonKey(product.model ?? ""))
-      ? labelCodes[0]!
-      : null;
   for (const field of ["manufacturer", "model"] as const) {
     const value = product[field] ?? null;
     const tokens = correctnessTokens(value ?? "").map((text) => ({
       text,
       mark: literalAgrees(text) ? ("agree" as const) : ("unknown" as const),
     }));
-    if (field === "model" && contradictedModel && value) {
-      result.push({
-        field,
-        source: "deterministic",
-        mark: "disagree-or-missing",
-        tokens: tokens.map((token) => ({
-          ...token,
-          mark: "disagree-or-missing" as const,
-        })),
-        labelValue: labelCodes.map((term) => term.printed).join(" / "),
-        productValue: value,
-        suggestion: { kind: "set_model", value: contradictedModel.printed },
-      });
-      continue;
-    }
     result.push({
       field,
       source: "deterministic",
@@ -301,13 +273,9 @@ export function photoFieldCrossCheck(
         .map((term) => term.printed)
         .join(" / ") || null,
     productValue: product.identifiers.join(" / ") || null,
-    suggestion:
-      missingCodes[0] && !contradictedModel
-        ? {
-            kind: product.model ? "add_identifier" : "set_model",
-            value: missingCodes[0].printed,
-          }
-        : null,
+    // OCR establishes the code, not its issuer or whether it is a model,
+    // style, or exact-variant identifier. Keep it as evidence until classified.
+    suggestion: null,
   });
   for (const field of ["color", "size"] as const) {
     const applies = (term: PrintedTerm) =>

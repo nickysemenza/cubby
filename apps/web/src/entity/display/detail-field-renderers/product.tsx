@@ -5,6 +5,7 @@ import {
 import { Link } from "@tanstack/react-router";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { ProductExternalIds } from "~/entity/components/product-external-ids";
 import {
   ProductGtin,
   productGtinLabel,
@@ -93,26 +94,7 @@ export const productDetailFields = {
   "product-external-ids": (product) => ({
     value:
       product.externalIds.length > 0 ? (
-        <div className="flex flex-wrap gap-x-2 gap-y-1 font-mono text-xs">
-          {product.externalIds.map((eid) => {
-            const label = `${eid.source} (${eid.kind.replaceAll("_", " ")}): ${eid.externalId}`;
-            return eid.url ? (
-              <a
-                key={eid.id}
-                href={eid.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary hover:underline"
-              >
-                {label}
-              </a>
-            ) : (
-              <span key={eid.id} className="text-muted-foreground">
-                {label}
-              </span>
-            );
-          })}
-        </div>
+        <ProductExternalIds identifiers={product.externalIds} />
       ) : undefined,
   }),
   // A collection tag links to its collection page; every other tag is a

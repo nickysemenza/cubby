@@ -12,16 +12,16 @@ applies to production paid inference independently.
    before merge, then verifies retained household data and `db:check
    --against-production`. Legacy nullable provenance stays unknown; no historical
    row or applied value is backfilled with a guessed version.
-2. Use the dedicated `cubby-testing` Gateway for live tools and integration
-   development; verify its provider routes/managed credentials before rollout. Production uses
-   `cubby`; subscription calls retain their existing transport. Cloudflare's
+2. Use `cubby` for live tools, integration development and production; verify
+   provider routes/managed credentials before rollout. Environment metadata
+   retains attribution; subscription calls retain their existing transport. Cloudflare's
    [200 requests/60 seconds/gateway limit](https://developers.cloudflare.com/ai-gateway/reference/limits/)
    concerns Unified Billing managed credentials, not BYOK. The production
    coordinator conservatively admits 180 starts/60 seconds and four streams;
    refresh's two-target cap reserves room for interactive traffic.
 3. Verify local/development work with synthetic repository examples before
    household activation: run `pnpm --dir apps/web eval:mail-prompts` through the
-   testing Gateway, plus the durable refresh regressions for affected features,
+   shared Gateway, plus the durable refresh regressions for affected features,
    legacy work, repeated activation, no-proposal completion and member decisions
    during inference. No live source belongs in repository fixtures, reports or
    PR text.

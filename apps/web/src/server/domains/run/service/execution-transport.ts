@@ -12,6 +12,7 @@ import {
 import {
   supportedDecisionModelSchema,
   providerFor,
+  supportedChatModelSchema,
 } from "@cubby/shared/ai/models";
 import { z } from "zod";
 
@@ -53,13 +54,18 @@ function runningOwnerMatches(
   );
 }
 
-async function selectedLunaExecution(
+async function selectedCoordinatorExecution(
   db: Database,
   runId: RunId,
   request: GatewayFetchRequest,
 ): Promise<boolean> {
   const body = await request.query();
-  if (request.endpoint === "responses" && body.model === "gpt-6-luna") {
+  if (
+    (request.endpoint === "responses" || request.endpoint === "v1/messages") &&
+    ["gpt-6-luna", "gpt-6-sol", "claude-opus-5-5"].includes(
+      z.string().parse(body.model),
+    )
+  ) {
     const selected = await readMailImportLineage(db, runId);
     if (!selected?.ledgerPartyId) return false;
     if (!runningOwnerMatches(selected, selected))
@@ -117,7 +123,7 @@ export function paidResearchPreflight(
   runId: RunId,
 ): NonNullable<GatewayFetchRoutes["beforePaidRequest"]> {
   return async (request) => {
-    if (await selectedLunaExecution(db, runId, request)) return;
+    if (await selectedCoordinatorExecution(db, runId, request)) return;
     const authority = await executionRequestForRun(db, runId, {
       requireRunning: true,
     });
@@ -146,24 +152,25 @@ export function paidResearchPreflight(
       return current;
     };
     const body = await request.query();
-    const quote =
-      request.endpoint === "responses"
-        ? await quoteAiChatRequestUsd({
-            provider: "openai",
-            model: z.string().parse(body.model),
-          })
-        : await quoteAiDecisionRequestUsd({
-            provider: providerFor(
-              supportedDecisionModelSchema.parse(
-                workersAiModel(request.endpoint),
-              ),
-            ),
-            model: supportedDecisionModelSchema.parse(
+    const chat =
+      request.endpoint === "responses" || request.endpoint === "v1/messages";
+    const quote = chat
+      ? await quoteAiChatRequestUsd({
+          provider: providerFor(supportedChatModelSchema.parse(body.model)),
+          model: supportedChatModelSchema.parse(body.model),
+        })
+      : await quoteAiDecisionRequestUsd({
+          provider: providerFor(
+            supportedDecisionModelSchema.parse(
               workersAiModel(request.endpoint),
             ),
-            questionCount: Object.keys(decisionQuestions.parse(body).questions)
-              .length,
-          });
+          ),
+          model: supportedDecisionModelSchema.parse(
+            workersAiModel(request.endpoint),
+          ),
+          questionCount: Object.keys(decisionQuestions.parse(body).questions)
+            .length,
+        });
     if (!quote)
       throw new Error(
         "Paid research allowance cannot price this model call's full billing bounds.",
@@ -182,7 +189,7 @@ export function paidResearchPreflight(
         current.purpose === "mail_import" ||
         isMailReclassifyRun(current) ||
         isAiRefreshMailRun(current)) &&
-      request.endpoint !== "responses" &&
+      !chat &&
       ["typesafe/jev", "@cf/cloudflare/clef"].includes(
         workersAiModel(request.endpoint),
       )
