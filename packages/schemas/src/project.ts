@@ -693,12 +693,27 @@ export type ExpenseAnalyzeComparison = z.infer<
   typeof expenseAnalyzeComparisonSchema
 >;
 
+/**
+ * `root` buckets the Spending Category axis by root category, plus the
+ * distinct `uncategorized` (no category resolved) and `unclassified` (receipt
+ * role unresolved) buckets, so the axis reconciles to the filtered net.
+ */
+export const expenseAnalyzeSpendingCategoryRollupSchema = z.enum([
+  "none",
+  "root",
+]);
+export type ExpenseAnalyzeSpendingCategoryRollup = z.infer<
+  typeof expenseAnalyzeSpendingCategoryRollupSchema
+>;
+
 export const expenseAnalyzeInput = z
   .object({
     filters: expenseFiltersSchema,
     rowDimension: expenseAnalyzeRowDimensionSchema,
     columnDimension: expenseAnalyzeColumnDimensionSchema.nullish(),
     comparison: expenseAnalyzeComparisonSchema.default("none"),
+    spendingCategoryRollup:
+      expenseAnalyzeSpendingCategoryRollupSchema.default("none"),
   })
   .superRefine((input, ctx) => {
     if (input.columnDimension === input.rowDimension) {
@@ -706,6 +721,17 @@ export const expenseAnalyzeInput = z
         code: z.ZodIssueCode.custom,
         path: ["columnDimension"],
         message: "Rows and columns must use different dimensions",
+      });
+    }
+    if (
+      input.spendingCategoryRollup === "root" &&
+      input.rowDimension !== "spendingCategory" &&
+      input.columnDimension !== "spendingCategory"
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["spendingCategoryRollup"],
+        message: "A root roll-up needs a Spending Category row or column",
       });
     }
     if (
@@ -801,6 +827,49 @@ export const expenseAnalyzeOut = z.discriminatedUnion("status", [
   expenseAnalyzeTooLargeOut,
 ]);
 export type ExpenseAnalyzeOut = z.infer<typeof expenseAnalyzeOut>;
+
+/** Ledger URL search params selecting a node's or path's rows. */
+const expenseFlowLedgerFilter = z.record(z.string(), z.string());
+
+export const expenseFlowSankeyNode = z.object({
+  id: z.string(),
+  column: z.enum(["funder", "project", "category"]),
+  label: z.string(),
+  /** Null for a grouped bucket (Other projects / Other categories, a funder). */
+  filter: expenseFlowLedgerFilter.nullable(),
+});
+export type ExpenseFlowSankeyNode = z.infer<typeof expenseFlowSankeyNode>;
+
+export const expenseFlowSankeyLink = z.object({
+  source: z.string(),
+  target: z.string(),
+  value: money,
+  filter: expenseFlowLedgerFilter.nullable(),
+});
+export type ExpenseFlowSankeyLink = z.infer<typeof expenseFlowSankeyLink>;
+
+export const expenseFlowSankeyPath = z.object({
+  funder: z.string(),
+  project: z.string(),
+  category: z.string(),
+  net: money,
+});
+export type ExpenseFlowSankeyPath = z.infer<typeof expenseFlowSankeyPath>;
+
+/**
+ * Funder → project bucket → root Spending Category over the analytics
+ * filters. Money is net per full path; links carry only positive paths, so
+ * every node's inflow equals its outflow, and `totals.linked +
+ * totals.nonPositive = totals.net`, the filtered net.
+ */
+export const expenseFlowSankeyOut = z.object({
+  nodes: z.array(expenseFlowSankeyNode),
+  links: z.array(expenseFlowSankeyLink),
+  /** Paths netting to zero or below; node ids name their buckets. */
+  nonPositivePaths: z.array(expenseFlowSankeyPath),
+  totals: z.object({ net: money, linked: money, nonPositive: money }),
+});
+export type ExpenseFlowSankeyOut = z.infer<typeof expenseFlowSankeyOut>;
 
 export const expenseFacetIdSchema = z.enum([
   "costType",

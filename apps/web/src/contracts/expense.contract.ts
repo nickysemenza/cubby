@@ -31,12 +31,13 @@ export const expenseContract = defineContract("expense", {
     output: schemas.expenseMonthlySummaryOut,
   }),
   analyze: query({
-    mcp: {
-      omit: "deferred_capability",
-      note: "Category grouping, arbitrary row/column pivots, and prior-period comparison; expense_analytics returns fixed aggregates",
-    },
     input: schemas.expenseAnalyzeInput,
     output: schemas.expenseAnalyzeOut,
+  }),
+  flowSankey: query({
+    mcp: { omit: "client_view" },
+    input: schemas.expenseFiltersSchema,
+    output: schemas.expenseFlowSankeyOut,
   }),
   facetCounts: query({
     mcp: { omit: "client_view" },

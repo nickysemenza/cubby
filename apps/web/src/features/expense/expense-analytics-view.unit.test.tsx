@@ -1,6 +1,7 @@
 import type {
   ExpenseAnalyticsOut,
   ExpenseAnalyzeReadyOut,
+  ExpenseFlowSankeyOut,
 } from "@cubby/schemas/project";
 import {
   act,
@@ -67,6 +68,13 @@ const analyze: ExpenseAnalyzeReadyOut = {
   },
 };
 
+const flow: ExpenseFlowSankeyOut = {
+  nodes: [],
+  links: [],
+  nonPositivePaths: [],
+  totals: { net: 0, linked: 0, nonPositive: 0 },
+};
+
 describe("expense analytics query lifecycle", () => {
   it("retries an initial failure and retains loaded analytics on refresh failure", async () => {
     let fail = true;
@@ -74,6 +82,7 @@ describe("expense analytics query lifecycle", () => {
     const restore = overrideStartDispatch(async (operation) => {
       operations.push(operation);
       if (operation === "expense.analyze") return { ok: true, data: analyze };
+      if (operation === "expense.flowSankey") return { ok: true, data: flow };
       if (operation !== "expense.analytics") {
         throw new Error(`Unexpected operation: ${operation}`);
       }
