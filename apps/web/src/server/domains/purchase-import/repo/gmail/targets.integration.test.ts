@@ -96,12 +96,11 @@ describe("Gmail sync targets", () => {
 
     const [target] = await listGmailSyncTargets(ctx.db);
 
-    // Gmail search ignores case, so either spelling may carry the query.
-    expect(
-      target?.scopedQueries.map(({ key, query }) => [key, query.toLowerCase()]),
-    ).toEqual([
-      ["merchant:synthetic market", '"synthetic market"'],
-      ["merchant:other shop", '"other shop"'],
+    // The query is the normalized merchant, independent of which charge
+    // spelling remains unallocated.
+    expect(target?.scopedQueries).toEqual([
+      { key: "merchant:synthetic market", query: '"synthetic market"' },
+      { key: "merchant:other shop", query: '"other shop"' },
     ]);
   });
 

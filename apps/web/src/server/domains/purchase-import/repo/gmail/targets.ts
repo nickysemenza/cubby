@@ -88,17 +88,24 @@ export async function listGmailSyncTargets(
   ]);
   const quote = (value: string) => `"${value.replaceAll('"', " ")}"`;
   // One search per distinct merchant (case- and space-insensitive): many
-  // unallocated charges share a merchant, and Gmail search ignores case.
-  const merchantQueries = (rows: readonly { merchant: string | null }[]) => {
-    const byKey = new Map<string, { key: string; query: string }>();
-    for (const charge of rows) {
-      const merchant = charge.merchant?.trim().replace(/\s+/gu, " ");
-      const key = merchant && `merchant:${merchant.toLowerCase()}`;
-      if (key && !byKey.has(key))
-        byKey.set(key, { key, query: quote(merchant) });
-    }
-    return [...byKey.values()];
-  };
+  // unallocated charges share a merchant, and Gmail search ignores case. The
+  // query derives from the normalized merchant alone, so allocating one
+  // spelling never changes the query text and resets its saved coverage.
+  const merchantQueries = (rows: readonly { merchant: string | null }[]) =>
+    [
+      ...new Set(
+        rows.flatMap((charge) => {
+          const merchant = charge.merchant
+            ?.trim()
+            .replace(/\s+/gu, " ")
+            .toLowerCase();
+          return merchant ? [merchant] : [];
+        }),
+      ),
+    ].map((merchant) => ({
+      key: `merchant:${merchant}`,
+      query: quote(merchant),
+    }));
   // A Vendor without a verified sender or website domain waits for research.
   const vendorQueries = vendors.flatMap((row) =>
     vendorMailQueries(row.id, vendorSearchTerms(row)),
