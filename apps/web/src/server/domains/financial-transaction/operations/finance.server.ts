@@ -10,8 +10,10 @@ import {
   previewFinancialBookingCorrection,
   commitFinancialBookingCorrection,
 } from "~/server/domains/financial-transaction/repo/financial-booking-correction";
+import { applyFinancialSettlementAllocation } from "~/server/domains/financial-transaction/repo/financial-settlement-allocation";
 import { previewFinancialStatementImport } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
 import { financialTransactionSourceOptions } from "~/server/domains/financial-transaction/repo/financial-transaction";
+import { convergeFinancialEvidence } from "~/server/domains/financial-transaction/service/financial-convergence";
 import { merchantVendorInferenceFor } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import {
   listMemberLogins,
@@ -38,6 +40,14 @@ export const ledgerPartyHandlers = implementOperationDomain(
 export const financialTransactionHandlers = implementOperationDomain(
   financialTransactionContract,
   {
+    allocateSettlement: (context, input) =>
+      applyFinancialSettlementAllocation(
+        context.db,
+        input,
+        context.actorContext,
+      ),
+    converge: (context, input) =>
+      convergeFinancialEvidence(context.db, input, context.actorContext),
     previewBookingCorrection: (context, input) =>
       previewFinancialBookingCorrection(context.db, input),
     commitBookingCorrection: (context, input) =>

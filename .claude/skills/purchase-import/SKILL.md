@@ -66,9 +66,11 @@ checksums, replay, money conservation and unresolved-identity review still apply
 
 ## Connect and converge evidence
 
-1. Connect Google with read-only Gmail access. Prioritize known Vendors and
-   unmatched financial transactions, then paginate all retained history,
-   including archives and unfamiliar vendors, excluding Spam and Trash. The decision model
+1. Connect Google with read-only Gmail access. Start with selected Vendor-history
+   approvals and unmatched financial transactions. Broad history is optional and
+   requires its own explicit approval; completing Vendor research never widens
+   that scope. Incremental new-mail discovery includes unfamiliar senders,
+   excluding Spam and Trash. The decision model
    routes relevant mail and escalates uncertainty to the relevance model; each
    message records which stage decided and why. An
    unrelated message retains only its provider identity and scan/classification

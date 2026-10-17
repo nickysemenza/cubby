@@ -66,8 +66,10 @@ import {
 import { GmailApiError } from "~/server/domains/purchase-import/repo/gmail/types";
 import {
   assertMailRunMembership,
+  assertMailRunReadAuthority,
   readMailRunSources,
 } from "~/server/domains/purchase-import/repo/mail-run-membership";
+import { assertRunVendorAuthorization } from "~/server/domains/run/repo/execution-context";
 import { publishEmailLinkDecision } from "~/server/generic/assessment/repo/assessment-email-link";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -82,13 +84,27 @@ import { clearUnrelatedOriginal } from "../repo/gmail/persistence";
 import { gmailProviderForUser } from "../repo/gmail/provider";
 import { GMAIL_PAGE_SIZE } from "../repo/gmail/sync";
 import { GmailAuthorizationError } from "../repo/gmail/tokens";
-import { recordMailFinancialReview } from "../repo/mail-financial-review";
+import {
+  assertMailFinancialEvidenceCurrent,
+  type PreparedMailFinancialEvent,
+} from "../repo/mail-financial-event";
+import {
+  recordMailFinancialEvidence,
+  recordMailFinancialReview,
+} from "../repo/mail-financial-review";
 import { ingestGmailMessages } from "../service/gmail/ingest";
+import { prepareMailFinancialEvent } from "../service/mail-financial-event";
 import {
   attachmentEvidenceFingerprint,
   prepareMailAttachmentDecisions,
   type PreparedMailAttachmentDecisions,
 } from "./mail-attachment-purpose";
+import {
+  applyMailSourceAdmissions,
+  mailAttributedToRecipient,
+  prepareMailSourceAdmissions,
+  type MailSourceAdmission,
+} from "./mail-source-admission";
 
 async function memberPartyIds(db: Database, userId: UserId) {
   const tx = getDb(db);
@@ -133,15 +149,21 @@ async function mailImportRun(db: Database, runId: RunId | null) {
 }
 
 /**
- * The member's own retained Email. A Mail import Run may touch only the Emails
- * it admitted as targets; a member may touch any Email from their mailboxes.
+ * The member's own retained Email. A Mail import Run may read its member's
+ * Emails from the mailboxes it admitted but write only the Emails on its
+ * roster; a member may touch any Email from their mailboxes.
  */
 async function ownedMail(
   db: Database,
   ref: MailMessageRef,
   actor: ActorContext,
   lock: "update" | "share",
-): Promise<{ mail: RetainedMail; importRunId: RunId | null }> {
+  access: "read" | "write" = "write",
+): Promise<{
+  mail: RetainedMail;
+  importRunId: RunId | null;
+  admitted: boolean;
+}> {
   const tx = getDb(db);
   const importRunId = await mailImportRun(db, actor.runId);
   const parties = await memberPartyIds(db, actor.userId);
@@ -160,9 +182,15 @@ async function ownedMail(
     throw new Error(
       `No retained Email ${ref.messageId} in mailbox ${ref.mailboxId} belongs to this member.`,
     );
-  if (importRunId) await assertMailRunMembership(tx, importRunId, mail.id);
-
-  return { mail, importRunId };
+  if (!importRunId) return { mail, importRunId, admitted: false };
+  if (access === "read")
+    return {
+      mail,
+      importRunId,
+      ...(await assertMailRunReadAuthority(tx, importRunId, mail)),
+    };
+  await assertMailRunMembership(tx, importRunId, mail.id);
+  return { mail, importRunId, admitted: true };
 }
 
 async function mailboxRow(db: Database, mail: RetainedMail) {
@@ -253,11 +281,11 @@ export async function readMail(
       });
     }
   }
-  const { mail, attachments, importRunId } = await withTransactionDatabase(
+  const { mail, attachments, admitted } = await withTransactionDatabase(
     db,
     async (tdb) => {
       const tx = getDb(tdb);
-      const owned = await ownedMail(tdb, input, actor, "share");
+      const owned = await ownedMail(tdb, input, actor, "share", "read");
       const message = await mailboxRow(tdb, owned.mail);
       if (
         !message ||
@@ -301,7 +329,7 @@ export async function readMail(
     content: mail.content,
     attachments: attachments.map(({ id: _id, ...row }) => row),
     originalAttachment: original,
-    boundToRun: importRunId !== null,
+    boundToRun: admitted,
     ...(await associationsForMail(db, mail)),
   });
 }
@@ -383,6 +411,12 @@ export async function linkOrderMail(
     actorUserId: string;
     /** `agent` for a `mail.resolve` session or Pi, `import` for a commit. */
     proposedBy: "agent" | "import";
+    /**
+     * False for an Email whose transaction is not attributed to its
+     * recipient: it may evidence the Purchase, but a forwarded copy never
+     * establishes the recipient's Vendor relationship.
+     */
+    attributed?: boolean;
     attachmentDecisions: PreparedMailAttachmentDecisions;
   },
 ) {
@@ -501,10 +535,11 @@ export async function linkOrderMail(
       },
       "automatic",
     );
-  await ensureMailVendorAccount(db, {
-    vendorId: chosen.vendorId,
-    ledgerPartyId: input.mail.ledgerPartyId,
-  });
+  if (input.attributed !== false)
+    await ensureMailVendorAccount(db, {
+      vendorId: chosen.vendorId,
+      ledgerPartyId: input.mail.ledgerPartyId,
+    });
   await attachRetainedSource(db, {
     orderMailId: input.mail.id,
     purchaseId: chosen.id,
@@ -714,11 +749,46 @@ export async function resolveMail(
   const input = mailResolveInput.parse(rawInput);
   const { disposition } = input;
   let attachmentDecisions: PreparedMailAttachmentDecisions | undefined;
-  if (disposition.kind === "linked") {
+  let admissions: MailSourceAdmission[] = [];
+  let financialEvent: PreparedMailFinancialEvent | undefined;
+  if (disposition.kind === "financial" && actor.runId) {
     const { mail } = await ownedMail(db, input, actor, "share");
+    const message = await mailboxRow(db, mail);
+    if (!message || mail.rawChecksum !== input.checksum)
+      throw new Error(
+        "This Email changed since it was read; read it again before resolving.",
+      );
+    const prepared = await prepareMailFinancialEvent(
+      db,
+      { emailId: parseEntityId("email", message.id) },
+      actor,
+      { decide: decisionPort },
+    );
+    if (prepared.status !== "verified")
+      throw new Error(
+        `Cubby cannot verify this Email's financial event: ${prepared.reason} Resolve it unresolved for member review.`,
+      );
+    financialEvent = prepared.preparation;
+  }
+  if (disposition.kind === "linked") {
+    const { mail, importRunId } = await ownedMail(
+      db,
+      input,
+      actor,
+      "share",
+      "read",
+    );
     if (mail.rawChecksum !== input.checksum)
       throw new Error(
         "This Email changed since it was read; read it again before resolving.",
+      );
+    if (importRunId)
+      admissions = await prepareMailSourceAdmissions(
+        db,
+        importRunId,
+        [input],
+        actor,
+        decisionPort,
       );
     attachmentDecisions = await prepareMailAttachmentDecisions(
       db,
@@ -751,6 +821,11 @@ export async function resolveMail(
         };
       }
     }
+    const importRun = await mailImportRun(tdb, actor.runId);
+    if (importRun)
+      await applyMailSourceAdmissions(tdb, importRun, admissions, {
+        requireAttribution: false,
+      });
     const { mail, importRunId } = await ownedMail(tdb, input, actor, "update");
     if (mail.rawChecksum !== input.checksum)
       throw new Error(
@@ -773,6 +848,7 @@ export async function resolveMail(
       const targets = await getDb(tdb)
         .select({
           id: purchase.id,
+          vendorId: purchase.vendorId,
           accountPartyId: vendorAccount.ledgerPartyId,
         })
         .from(purchase)
@@ -788,6 +864,12 @@ export async function resolveMail(
         .for("update", { of: purchase });
       if (targets.length !== ids.length)
         throw new Error("A reviewed Purchase no longer exists.");
+      if (actor.runId)
+        for (const target of targets) {
+          if (!target.vendorId)
+            throw new Error("A reviewed Purchase has no Vendor.");
+          await assertRunVendorAuthorization(tdb, actor.runId, target.vendorId);
+        }
       if (
         targets.some(
           (row) =>
@@ -826,6 +908,9 @@ export async function resolveMail(
             actorUserId: actor.userId,
             proposedBy: "agent",
             attachmentDecisions,
+            attributed: mailAttributedToRecipient(
+              admissions.find((admission) => admission.mail.id === mail.id),
+            ),
           }),
         );
       if (disposition.settlement) {
@@ -857,6 +942,40 @@ export async function resolveMail(
         purchaseIds: chosen.map((row) => row.shortcode),
         status: "completed" as const,
       };
+    }
+    if (disposition.kind === "financial") {
+      const message = await mailboxRow(tdb, mail);
+      if (!message) throw new Error("The reviewed Email no longer exists.");
+      const emailId = parseEntityId("email", message.id);
+      await recordMailFinancialEvidence(
+        tdb,
+        {
+          emailId,
+          checksum: input.checksum,
+          transactionId: disposition.transactionId,
+          reason: disposition.reason,
+          review: disposition.review,
+          event: financialEvent
+            ? await assertMailFinancialEvidenceCurrent(
+                tdb,
+                financialEvent,
+                actor,
+              )
+            : undefined,
+        },
+        actor,
+      );
+      await settleMail(
+        tdb,
+        {
+          mail,
+          importRunId,
+          status: "completed",
+          detail: `financial:${disposition.transactionId}`,
+        },
+        actor,
+      );
+      return { mail, purchaseIds: [], status: "completed" as const };
     }
     if (disposition.kind === "unresolved") {
       await settleMail(

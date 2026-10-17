@@ -14,6 +14,7 @@ export const workQueueHandlers = implementOperationDomain(workQueueContract, {
       (await context.currentParty())?.id ?? null,
       input,
       false,
+      context.actorContext,
     ),
   forRecord: async (context, input) =>
     readRecordWorkQueue(
@@ -21,6 +22,7 @@ export const workQueueHandlers = implementOperationDomain(workQueueContract, {
       (await context.currentParty())?.id ?? null,
       input.id,
       false,
+      context.actorContext,
     ),
   forMember: async (context, input) =>
     readWorkQueue(
@@ -28,5 +30,6 @@ export const workQueueHandlers = implementOperationDomain(workQueueContract, {
       (await context.currentParty())?.id ?? null,
       { ...input, waitingFor: [CURRENT_MEMBER_FILTER] },
       true,
+      context.actorContext,
     ),
 });

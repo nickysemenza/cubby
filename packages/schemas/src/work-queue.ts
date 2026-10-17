@@ -9,6 +9,7 @@ import { anyShortcodeSchema } from "./identifier-fields";
 import {
   ledgerPartyShortcode,
   nonEmptyTuple,
+  runShortcode,
   vendorShortcode,
 } from "./identifiers";
 import {
@@ -43,6 +44,7 @@ export const workQueueKindSchema = z.enum([
   "awaiting_posting",
 ]);
 export const workQueueSourceSchema = z.enum([
+  "execution",
   "research",
   "email",
   "finding",
@@ -51,6 +53,60 @@ export const workQueueSourceSchema = z.enum([
   "problem",
   "suggestion",
 ]);
+
+const workRecordRef = z.object({
+  entity: z.enum(shortcodeEntities),
+  id: anyShortcodeSchema(nonEmptyTuple(shortcodeEntities)),
+});
+
+/** One action's explanation, shared by queue, record and Run presentation.
+ * Current evidence owns these values; none is a separately persisted task state. */
+export const workExplanationSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  reason: z.string(),
+  category: workQueueKindSchema,
+  readiness: z.enum(["ready", "blocked", "unknown"]),
+  lifecycle: z.enum([
+    "open",
+    "running",
+    "paused",
+    "failed",
+    "completed",
+    "cancelled",
+  ]),
+  executor: z.enum(["automatic", "agent_session", "human", "unknown"]),
+  authority: workWaitingForSchema,
+  prerequisites: z.array(
+    z.object({
+      code: z.string(),
+      state: z.enum(["satisfied", "missing", "unknown"]),
+      reason: z.string(),
+      record: workRecordRef.nullable(),
+    }),
+  ),
+  effects: z.object({
+    certainty: z.enum(["known", "partial", "unknown"]),
+    changes: z.array(
+      z.object({
+        action: z.enum(["create", "link", "change", "remove"]),
+        record: workRecordRef.nullable(),
+        description: z.string(),
+      }),
+    ),
+  }),
+  unblocks: z.array(
+    z.object({
+      key: z.string(),
+      record: workRecordRef.nullable(),
+      reason: z.string(),
+    }),
+  ),
+  runs: z.array(
+    z.object({ id: runShortcode, relation: z.enum(["execution", "result"]) }),
+  ),
+});
+export type WorkExplanation = z.infer<typeof workExplanationSchema>;
 
 /** Saved views whose rows state their own data-quality gaps; the view's
  * `dataGaps` filter is the set of checks such a row can carry. */
@@ -115,13 +171,14 @@ export const workQueueRowSchema = problemRowSchema
     /** The record's own money (a Purchase's SUM(Expense.cost), an Expense's
      * cost, a transaction's signed amount); null when it has none. */
     amount: z.number().nullable(),
-    /** The record's own calendar day (purchase, expense, received, or
+    /** The record's own calendar day (purchase, expense, received, execution start, or
      * posted/transaction date) — never when it entered the queue, which
      * this read-time projection cannot know. */
     date: plainDate.nullable(),
     vendor: workQueueVendorSchema.nullable(),
     nextAction: z.string(),
     waitingFor: workWaitingForSchema,
+    explanations: z.array(workExplanationSchema).default([]),
     /** The source record's resolved thumbnails on household reads; empty for a
      * Problems diagnostic and for every member-only read. */
     displayImages: displayImagesField,
@@ -166,6 +223,7 @@ export const workQueueSortSchema = createSortParamsSchema(
 export const workQueuePageInput = z.object({
   ...mcpPaginationFields({ defaultPageSize: 25, maxPageSize: 100 }),
   query: z.string().max(500).optional(),
+  view: z.enum(["automatic", "research", "review", "waiting"]).optional(),
   kind: oneOrMany(workQueueKindSchema).optional(),
   source: oneOrMany(workQueueSourceSchema).optional(),
   /** Gap rows failing any of these checks; every other row drops out. */

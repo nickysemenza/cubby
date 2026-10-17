@@ -158,6 +158,7 @@
     "./financial-account-fields": "./src/financial-account-fields.ts",
     "./financial-reconciliation": "./src/financial-reconciliation.ts",
     "./financial-booking": "./src/financial-booking.ts",
+    "./financial-mail-event": "./src/financial-mail-event.ts",
     "./financial-transaction": "./src/financial-transaction.ts",
     "./financial-transaction-fields": "./src/financial-transaction-fields.ts",
     "./filter-options": "./src/filter-options.ts",

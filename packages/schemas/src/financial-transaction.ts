@@ -56,6 +56,9 @@ export const financialTransactionKind = z.enum(
 );
 export type FinancialTransactionKind = z.infer<typeof financialTransactionKind>;
 
+/** The same bounded candidate set reaches retrieval and declared ranking. */
+export const SETTLEMENT_CANDIDATE_LIMIT = 20;
+
 /**
  * Kinds that may carry a `purchaseId`, i.e. that can act as settlement evidence
  * for a Purchase.

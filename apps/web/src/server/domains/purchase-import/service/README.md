@@ -101,9 +101,23 @@ pending: nothing here starts Product research.
    disposal (which deletes the retained copy unless a reviewed decision or
    import uses it; the daily catch-up retries a disposal lost after its
    disposition, and a repeated `unrelated` resolve replays without the
-   copy). A Mail import Run may touch only the Emails it admitted, may
-   prepare only their mail sources, and is refused by every mail call once
-   it is cancelled, finished, retired or deleted. New preparations may not
+   copy). A Mail import Run may read its member's retained Emails from the
+   mailboxes it admitted, but writes (prepare, commit, resolve) only the Emails
+   on its roster (`mail-run-membership.ts`), and is refused by every mail call
+   once it is cancelled, finished, retired or deleted. Naming another original
+   in `prepare` or a `linked` resolve admits it to the roster
+   (`operations/mail-source-admission.ts`) only when the `mail-source-relation`
+   decision confidently finds the same purchase as a roster Email and
+   `mail-attribution` finds the recipient's own transaction, within the
+   roster's 50 Emails and the Run's execution claims. A Run the member did not
+   explicitly select (`trigger` other than `foreground`) prepares a Purchase
+   only from an Email attributed to its recipient: forwarding alone never
+   proves ownership, and an unattributed Email may still link to an existing
+   Purchase without creating the recipient's VendorAccount. Payment, refund and
+   transfer Emails reach `finance.converge`, whose mail branch uses the
+   checksum- and literal-verified `mail-financial-event` preparation
+   (`service/mail-financial-event.ts`, revalidated by
+   `repo/mail-financial-event.ts`). New preparations may not
    name the retired `browser_order` source kind; stored rows keep it.
 5. **Settlement**: Pi's settled submission reconciles the Run
    (`run-review.ts` `reconcileSettledRun`); the daily cron expires stale Runs

@@ -80,8 +80,10 @@ export default defineEntity({
         {
           id: "research-queue",
           label: "Research queue",
-          description: "Vendors missing a displayable logo",
-          filters: [{ id: "dataGaps", value: ["vendor_logo"] }],
+          description: "Vendors missing a website or displayable logo",
+          filters: [
+            { id: "dataGaps", value: ["vendor_website", "vendor_logo"] },
+          ],
           sort: [{ id: "dataQuality", desc: false }],
         },
         {

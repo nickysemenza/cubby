@@ -702,7 +702,9 @@ describe("scheduled Gmail discovery", () => {
       (await getDb(ctx.db).select().from(mailboxCursor))[0]?.coverage?.history
         .historyId,
     ).toBe("120");
-  });
+    // Sixty-one full PostgreSQL evidence publications exceed the ordinary test
+    // deadline; the assertions above guard batching and cursor correctness.
+  }, 30_000);
   it("pauses revoked authentication without moving the page or negatively classifying it, then reconnects", async () => {
     const state = await seed();
     const provider = gmail({

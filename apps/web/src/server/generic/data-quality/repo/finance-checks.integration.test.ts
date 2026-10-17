@@ -116,7 +116,7 @@ describe("data quality: finance and project entities", () => {
     });
   });
 
-  it("vendor: logo always expected; order evidence and website once transacted with", async () => {
+  it("vendor: website and logo expected before purchase; order evidence after purchase", async () => {
     const untransacted = await createRepoEntity(ctx, "vendor", {
       name: "DQ vendor untransacted",
     });
@@ -148,11 +148,30 @@ describe("data quality: finance and project entities", () => {
       gap.entityId,
       complete.entityId,
     ]);
-    // A vendor needs a logo before its first purchase, but not order evidence or a website.
+    // Discovery starts before a Purchase exists; website and logo research
+    // remain independent, while order evidence needs an actual purchase.
     expect(hydrated.get(untransacted.entityId)).toMatchObject({
       status: "needs_data",
-      gaps: [expect.objectContaining({ check: "vendor_logo" })],
+      gaps: expect.arrayContaining([
+        expect.objectContaining({ check: "vendor_logo" }),
+        expect.objectContaining({ check: "vendor_website" }),
+      ]),
     });
+    expect(
+      hydrated.get(untransacted.entityId)?.gaps.map((g) => g.check),
+    ).not.toContain("vendor_order_evidence");
+    const noWebsite = await setDataException(
+      ctx.db,
+      {
+        entityId: untransacted.output.id,
+        check: "vendor_website",
+        reason: "not_applicable",
+        note: "Synthetic local stall has no website; verified receipt senders remain separate evidence.",
+      },
+      ctx.actor,
+    );
+    expect(noWebsite.gaps.map((g) => g.check)).not.toContain("vendor_website");
+    expect(noWebsite.gaps.map((g) => g.check)).toContain("vendor_logo");
     const gapChecks = hydrated.get(gap.entityId)?.gaps.map((g) => g.check);
     expect(gapChecks).toContain("vendor_order_evidence");
     expect(gapChecks).toContain("vendor_logo");

@@ -1,5 +1,9 @@
-import type { ExecutionAuthorizationOwner } from "@cubby/schemas/execution-authorization";
-import { runShortcode } from "@cubby/schemas/identifiers";
+import { entityRefKey } from "@cubby/schemas/entity";
+import type {
+  ExecutionAuthorizationInput,
+  ExecutionAuthorizationOwner,
+} from "@cubby/schemas/execution-authorization";
+import { runShortcode, vendorShortcode } from "@cubby/schemas/identifiers";
 import {
   mailboxDiscoveryInput,
   mailboxDiscoveryProgress,
@@ -14,6 +18,29 @@ import { aiUsage, run } from "~/server/db/schema";
 import { readDiscoveryEmailAudit } from "~/server/domains/email/repo/discovery-email-audit";
 import { loadGmailCursor } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import { readExecutionAuthorizationEvidence } from "~/server/domains/run/repo/execution-authorization";
+import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
+
+async function publicAuthorizationScope(
+  db: Database,
+  scope: ExecutionAuthorizationInput["scope"],
+) {
+  if (scope.kind !== "vendor_backfill") return scope;
+  const codes = await lookupShortcodes(
+    db,
+    scope.vendors.map((selected) => ({
+      entity: "vendor",
+      id: selected.vendorId,
+    })),
+  );
+  return {
+    ...scope,
+    vendors: scope.vendors.map((selected) => ({
+      vendorId: vendorShortcode.parse(
+        codes.get(entityRefKey("vendor", selected.vendorId)),
+      ),
+    })),
+  };
+}
 
 /** A Workflow's persisted read needs its member owner, never an agent session. */
 export async function findOwnedMailDiscovery(
@@ -107,7 +134,7 @@ export async function loadMailDiscoveryRead(
       ? {
           runId: runShortcode.parse(evidence.root.shortcode),
           approvalFingerprint: evidence.ref.approvalFingerprint,
-          scope: evidence.approval.scope,
+          scope: await publicAuthorizationScope(db, evidence.approval.scope),
           meteredBudget: evidence.approval.meteredBudget,
           expiresAt: evidence.approval.expiresAt,
           status: runStatus.parse(evidence.root.status),

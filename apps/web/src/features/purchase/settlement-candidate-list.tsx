@@ -14,7 +14,7 @@ export type SettlementCandidate = typeof purchaseSettlementCandidate._output;
 /**
  * The reviewable candidate list. Which candidates tie, what each says, the order a suggestion
  * puts them in and every badge are the server's; this only draws them. "Suggest a match" is
- * offered while the server reports a tie (`suggestHint`), and the result orders and badges the
+ * offered when the server can compare several candidates (`suggestHint`), and the result orders and badges the
  * tied candidates, while selecting and allocating stay manual.
  */
 export function SettlementCandidateList({

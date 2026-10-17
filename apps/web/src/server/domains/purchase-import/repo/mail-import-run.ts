@@ -186,12 +186,19 @@ export async function admitMailImport(
         actorUserId: actorId,
         ledgerPartyId: partyId,
       });
+    let selectedVendorId: typeof run.$inferSelect.vendorId = null;
     if (input.parentRunId) {
       const [parent] = await tx
-        .select({ purpose: run.purpose, input: run.input })
+        .select({
+          purpose: run.purpose,
+          input: run.input,
+          vendorId: run.vendorId,
+        })
         .from(run)
         .where(eq(run.id, input.parentRunId));
       const policy = mailboxDiscoveryInput.safeParse(parent?.input);
+      if (policy.success && policy.data.vendorHistory)
+        selectedVendorId = parent?.vendorId ?? null;
       if (
         parent?.purpose === "mail_discovery" &&
         (!policy.success ||
@@ -258,6 +265,7 @@ export async function admitMailImport(
       actorLedgerPartyName: snapshot.ledgerPartyName,
       actorLedgerPartyKind: snapshot.ledgerPartyKind,
       parentRunId: input.parentRunId ?? null,
+      vendorId: selectedVendorId,
       cause: memberSelected ? "member_request" : "source_discovered",
       coordinatorModel: coordinatorModelFor("mail_import"),
       input: authorized,

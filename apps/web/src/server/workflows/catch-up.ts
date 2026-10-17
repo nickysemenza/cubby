@@ -44,6 +44,9 @@ export async function recoverMissedWork(
   db: Database,
   coordinatorRetireBefore = new Date(Date.now() - 24 * 60 * 60_000),
 ) {
+  await (
+    await import("~/server/generic/work-queue/service/work-advancement")
+  ).advanceAuthorizedWork(db);
   const [
     { repairImageProcessingWork },
     { expireStaleRuns },

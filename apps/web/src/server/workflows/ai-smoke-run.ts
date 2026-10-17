@@ -29,6 +29,7 @@ import {
   ENTITY_EMBEDDING_FEATURE,
   MAILBOX_TRIAGE_FEATURE,
   MAILBOX_RELEVANCE_FEATURE,
+  MAIL_FINANCIAL_EVENT_FEATURE,
   PURCHASE_IMPORT_EXTRACTION_FEATURE,
   PURCHASE_IMPORT_MAIL_FEATURE,
   PURCHASE_IMPORT_PRODUCT_IDENTITY_FEATURE,
@@ -69,6 +70,11 @@ import { loadPurchaseAuditBatch } from "~/server/domains/purchase-import/repo/au
 import { normalizeMessage } from "~/server/domains/purchase-import/repo/gmail/normalize";
 import { interpretMailRelevance } from "~/server/domains/purchase-import/service/gmail/relevance";
 import { chooseLineStage } from "~/server/domains/purchase-import/service/line-stage";
+import {
+  judgeMailAttributions,
+  judgeSameMailPurchase,
+  mailJudgmentEvidence,
+} from "~/server/domains/purchase-import/service/mail-source-judgment";
 import { getRecipeByID } from "~/server/domains/recipe/repo/crud";
 import { flowPromptInput } from "~/server/domains/recipe/repo/recipe-flow-state";
 import { assessRecipeFlowCandidate } from "~/server/domains/recipe/service/recipe-flow/recipe-flow.service";
@@ -79,6 +85,15 @@ import type { AuthenticatedStartOperationContext } from "~/server/operation-runt
 
 import { finishSmokeAttempt, withSmokeUsage } from "../ai/smoke-attempt";
 import { AI_SMOKE_CASES } from "../ai/smoke-catalog";
+
+/** A synthetic retained Email in the shape the mail judgments read. */
+const smokeMail = (bodyText: string) => ({
+  sender: "orders@kettle.example",
+  subject: "Synthetic order update",
+  rawChecksum: "c".repeat(64),
+  receivedAt: new Date("2026-09-20T12:00:00Z"),
+  content: { bodyText, bodyHtml: null, snippet: null },
+});
 
 const purchaseLine = (
   fixture: "standard" | "ambiguous",
@@ -494,6 +509,70 @@ async function runCase(
             { db, runId, operation: "smoke.mailAttachmentPurpose" },
           ),
         },
+      };
+    }
+    case "mailAttribution": {
+      const { fixture } = aiSmokeInputs.mailAttribution.parse(raw);
+      const forwarded = {
+        direct: null,
+        forwarded_relative:
+          "---------- Forwarded message ---------\nFrom: orders@kettle.example\nTo: relative@example.test\nHi, sharing my order so you know what I bought.",
+        self_forward:
+          "---------- Forwarded message ---------\nFrom: orders@kettle.example\nTo: me.personal@example.test\nForwarding my own order to my other address.",
+      }[fixture];
+      const [attribution] = await judgeMailAttributions(
+        [
+          smokeMail(
+            [
+              forwarded,
+              "Order SYN-1 confirmed. Synthetic kettle, $24.00, charged to your Visa ending 0000.",
+            ]
+              .filter(Boolean)
+              .join("\n"),
+          ),
+        ],
+        { db, runId, operation: "smoke.mailAttribution" },
+      );
+      return { result: { attribution } };
+    }
+    case "mailSourceRelation": {
+      const { fixture } = aiSmokeInputs.mailSourceRelation.parse(raw);
+      return {
+        result: {
+          samePurchase: await judgeSameMailPurchase(
+            [
+              smokeMail(
+                "Your order SYN-1 with a synthetic kettle has shipped.",
+              ),
+            ],
+            smokeMail(
+              fixture === "same_order"
+                ? "Order SYN-1 confirmed: synthetic kettle, $24.00."
+                : "Order SYN-2 confirmed: synthetic teapot, $18.00.",
+            ),
+            { db, runId, operation: "smoke.mailSourceRelation" },
+          ),
+        },
+      };
+    }
+    case "mailFinancialEvent": {
+      const { fixture } = aiSmokeInputs.mailFinancialEvent.parse(raw);
+      return {
+        result: await runStructuredFeature(
+          MAIL_FINANCIAL_EVENT_FEATURE,
+          MAIL_FINANCIAL_EVENT_FEATURE.request(
+            JSON.stringify(
+              mailJudgmentEvidence(
+                smokeMail(
+                  fixture === "reimbursement"
+                    ? "Synthetic Friend paid you $40.00 for dinner. Transaction ID SYN-P2P-77."
+                    : "Send money to friends with zero fees this month.",
+                ),
+              ),
+            ),
+          ),
+          { db, runId, operation: "smoke.mailFinancialEvent" },
+        ),
       };
     }
     case "mailboxTriage":

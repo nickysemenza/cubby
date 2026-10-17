@@ -11,7 +11,12 @@ import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { SectionHeading } from "~/ui/layout";
 
-import { GapChip, memberOptionsOf, WaitingForPill } from "./work-queue-display";
+import {
+  GapChip,
+  memberOptionsOf,
+  WaitingForPill,
+  WorkActionDetails,
+} from "./work-queue-display";
 
 const EMPTY_ROWS: WorkQueueRow[] = [];
 
@@ -59,6 +64,7 @@ export function RecordWorkQueue({ id }: { id: string }) {
             </LedgerCell>
             <LedgerCell slot="secondary" className="text-muted-foreground">
               {row.nextAction}
+              <WorkActionDetails explanations={row.explanations} />
             </LedgerCell>
             <LedgerCell as="div" slot="trailing">
               <WaitingForPill

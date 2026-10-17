@@ -33,6 +33,7 @@ describe("vendor identity and purchase account coverage", () => {
   it("queues one logo gap for a vendor with no purchases or accounts and clears it when fixed", async () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic new vendor",
+      website: "https://vendor.example.test",
     });
     const quality = (
       await loadDataQualities(ctx.db, "vendor", [vendor.id])

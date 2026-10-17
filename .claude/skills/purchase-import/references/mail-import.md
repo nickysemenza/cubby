@@ -43,6 +43,25 @@ Claude or Codex session researches it later through the Research queue.
      A supported link to an existing Purchase does not require another
      extraction preview. Unlinked related originals still need extraction;
      linking never manufactures itemization or resolves unknown Product facts.
+   - **A payment, refund, transfer, card repayment or reimbursement Email
+     without an order** (a payment app or bank notice): find the posted
+     Financial Transaction with `entity_read`. For a purchase payment,
+     `finance` `converge` with its FTX- code and the Email's EML- `id`; Cubby
+     books only what server evidence establishes. For a transfer, incoming
+     payment, reimbursement, card repayment or refund, `mail` `resolve` with
+     `financial`, the FTX- `transactionId` and a reason: Cubby associates the
+     Email, without spending, only when a current member-accepted mapping
+     proves this Email/checksum/transaction/account and its event amount and
+     direction agree. Provider identifier equality alone cannot establish a
+     cross-provider mapping. On `review_required` or a
+     refused association, `mail` `resolve` the Email `unresolved` with the
+     blocker.
+   - **A forwarded or shared copy of someone else's purchase**: forwarding
+     alone never proves the recipient bought it. Automatic import refuses an
+     Email whose transaction Cubby cannot attribute to the recipient; `mail`
+     `resolve` it `unresolved` naming the attribution gap so the member can
+     select it explicitly. Linking it to an existing Purchase as evidence is
+     fine and creates no vendor relationship.
    - **An order whose Purchase you cannot establish**: `mail` `resolve` with
      `unresolved` and the concrete gap.
    - **Not about a purchase**: `mail` `resolve` with `unrelated`. Cubby deletes
@@ -51,9 +70,14 @@ Claude or Codex session researches it later through the Research queue.
      unchanged repeats preserve the existing resolution without duplicating
      history. The prior prediction remains available for evaluation.
 4. When the order's original is missing (a shipment Email for an order you have
-   not seen), `mail` `search` by order number before deciding it is
-   unresolved. A search match waits for a later Mail import; it is not
-   evidence for this Email.
+   not seen), `mail` `search` by order number, sender or Vendor before
+   deciding it is unresolved, and read retained matches from the same
+   mailbox with `imports_read` `mail` for context. A search result alone is
+   not evidence. To import or link a supporting original of the same
+   purchase, name it in `prepare` or `resolve` like an admitted Email: Cubby
+   admits it to this Run only when its decisions establish the same purchase
+   and the recipient's own transaction, within the Run's limits; otherwise
+   the call refuses and the original waits for a later import.
 5. Claim the next Email. Stop with `stop_import_run_for_review` only for
    ambiguity that blocks every remaining Email.
 

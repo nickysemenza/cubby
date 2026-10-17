@@ -7,9 +7,8 @@ import { vendorAccount } from "~/server/db/schema";
 import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 /**
- * The member's VendorAccount for a Vendor, created disabled when order mail
- * is the first evidence of the relationship. Existing accounts keep their status
- * and history cursor.
+ * Retained purchase evidence establishes a member's vendor relationship,
+ * independently of login access or execution authority. Existing cursors survive.
  */
 export async function ensureMailVendorAccount(
   db: Database | DrizzleTransaction,
@@ -24,7 +23,6 @@ export async function ensureMailVendorAccount(
     values: () => ({
       vendorId: input.vendorId,
       ledgerPartyId: input.ledgerPartyId,
-      status: "disabled" as const,
     }),
   });
   return row;

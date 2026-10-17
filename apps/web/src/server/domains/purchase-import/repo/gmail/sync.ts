@@ -4,6 +4,7 @@ import {
   type MailboxCoverage,
   type MailboxPage,
   type MailboxScopedQuery,
+  type ScopedQueryPosition,
 } from "@cubby/schemas/mailbox-research";
 
 import { normalizeHistoryPage } from "~/server/domains/purchase-import/repo/gmail/normalize";
@@ -25,6 +26,36 @@ export const maxHistoryId = (
     return candidate > current ? candidate : current;
   }
 };
+
+/**
+ * One page of a vendor history Run's own frozen queries. It never reads or
+ * moves the shared mailbox cursor, so another objective's incomplete query
+ * cannot ride along.
+ */
+export async function listScopedGmailPage(
+  provider: GmailProvider,
+  positions: readonly ScopedQueryPosition[],
+) {
+  const nextScoped = positions.map((position) => ({ ...position }));
+  const position = nextScoped.find((query) => !query.completed);
+  if (!position) return { messageIds: [], nextScoped };
+  const request: Parameters<GmailProvider["listMessages"]>[0] = {
+    query: `(${position.query}) ${ELIGIBLE_MAIL_QUERY}`,
+    maxResults: GMAIL_PAGE_SIZE,
+  };
+  if (position.pageToken) request.pageToken = position.pageToken;
+  const page = await provider.listMessages(request);
+  position.pageToken = page.nextPageToken ?? null;
+  position.completed = !page.nextPageToken;
+  return {
+    messageIds: [
+      ...new Set(
+        (page.messages ?? []).map((message) => message.id).filter(Boolean),
+      ),
+    ],
+    nextScoped,
+  };
+}
 
 /** Persist this baseline before calling listGmailPage, including first connection. */
 export async function initializeMailboxCoverage(

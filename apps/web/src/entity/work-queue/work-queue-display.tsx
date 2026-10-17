@@ -3,18 +3,118 @@ import type {
   WorkQueueGap,
   WorkQueueMember,
   WorkWaitingFor,
+  WorkExplanation,
 } from "@cubby/schemas/work-queue";
 
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { renderOptionCell } from "~/entity/table/column-helpers";
 import { colorizeSelectOptions } from "~/lib/select-options";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { ChipCluster } from "~/ui/common/chip-cluster";
+import { Button } from "~/ui/primitives/button";
 import { EnumPill } from "~/ui/primitives/enum-pill";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "~/ui/primitives/popover";
+
+const WORK_EXECUTOR_LABELS = {
+  automatic: "Cubby / Pi",
+  agent_session: "Claude / Codex",
+  human: "Member",
+  unknown: "Executor not yet established",
+} satisfies Record<WorkExplanation["executor"], string>;
+
+export function WorkActionDetails({
+  explanations,
+}: {
+  explanations: WorkExplanation[];
+}) {
+  if (explanations.length === 0) return null;
+  // Virtualized queue rows have fixed heights; expanded content lives outside them.
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            aria-label="Action details"
+            className="shrink-0 max-md:min-h-11"
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ")
+                event.stopPropagation();
+            }}
+          />
+        }
+      >
+        Details
+      </PopoverTrigger>
+      <PopoverContent
+        aria-label="Action details"
+        align="start"
+        className="max-h-96 w-96 max-w-[calc(100vw-2rem)] overflow-y-auto text-sm"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <ul className="grid gap-3">
+          {explanations.map((action) => (
+            <li key={action.key} className="grid gap-1">
+              <span className="font-medium">{action.label}</span>
+              {action.reason !== action.label ? (
+                <span>{action.reason}</span>
+              ) : null}
+              <span className="text-muted-foreground">
+                {action.readiness} · {action.lifecycle} ·{" "}
+                {WORK_EXECUTOR_LABELS[action.executor]}
+              </span>
+              {action.prerequisites.map((prerequisite) => (
+                <span key={prerequisite.code}>
+                  {prerequisite.state}: {prerequisite.reason}
+                  {prerequisite.record ? (
+                    <EntityRefLink
+                      variant="byId"
+                      entityKind={prerequisite.record.entity}
+                      entityId={prerequisite.record.id}
+                    />
+                  ) : null}
+                </span>
+              ))}
+              {action.effects.changes.map((change) => (
+                <span
+                  key={`${change.action}:${change.record?.id ?? "none"}:${change.description}`}
+                >
+                  {change.description}
+                </span>
+              ))}
+              {action.effects.certainty !== "known" ? (
+                <span className="text-muted-foreground">
+                  {action.effects.certainty === "unknown"
+                    ? "Expected changes require an operation preview."
+                    : "The operation preview supplies the exact changes."}
+                </span>
+              ) : null}
+              {action.unblocks.map((dependency) => (
+                <span key={dependency.key}>
+                  Unblocks: {dependency.reason}
+                  {dependency.record ? (
+                    <EntityRefLink
+                      variant="byId"
+                      entityKind={dependency.record.entity}
+                      entityId={dependency.record.id}
+                    />
+                  ) : null}
+                </span>
+              ))}
+            </li>
+          ))}
+        </ul>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 /** One roster, so a member keeps the same color on every queue surface. */
 export const memberOptionsOf = (members: readonly WorkQueueMember[]) =>

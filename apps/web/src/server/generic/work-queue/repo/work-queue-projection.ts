@@ -11,6 +11,7 @@ import {
   expense,
   financialTransaction,
   purchase,
+  run,
 } from "~/server/db/retained-tables";
 
 type Candidate = Pick<
@@ -40,6 +41,12 @@ type RecordFacts = { amount: SQL; date: SQL; vendor: SQL };
  * SUM(Expense.cost) (README tenet), null when no line is priced.
  */
 const recordFacts = {
+  run: {
+    table: sql`${run}`,
+    amount: sql`NULL`,
+    date: householdDaySql(sql`"Run"."startedAt"`),
+    vendor: sql`"Run"."vendorId"`,
+  },
   purchase: {
     table: sql`${purchase}`,
     amount: sql`(SELECT sum(e.cost::numeric)::double precision FROM "Expense" e

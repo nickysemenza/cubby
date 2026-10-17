@@ -1,7 +1,4 @@
-export {
-  vendorAccountCursor,
-  vendorAccountStatus,
-} from "./vendor-account-fields";
+export { vendorAccountCursor } from "./vendor-account-fields";
 export {
   vendorAccountCreateInput,
   vendorAccountFilterFields,

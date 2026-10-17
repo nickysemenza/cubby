@@ -68,10 +68,12 @@ import {
   memberOptionsOf,
   WaitingForPill,
   waitingForLabel,
+  WorkActionDetails,
 } from "~/entity/work-queue/work-queue-display";
 import { workQueue } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { copyShortcodes } from "~/lib/clipboard";
 import { formatCount } from "~/lib/number-format";
+import { Picker } from "~/ui/combobox/picker";
 import { BulkActionBar } from "~/ui/data-table/bulk-action-bar";
 import {
   bulkActionPreview,
@@ -103,7 +105,7 @@ import {
 import { NoneValue } from "~/ui/primitives/none-value";
 
 const EMPTY_MEMBERS: WorkQueueMember[] = [];
-const INITIAL_VISIBILITY = { nextAction: false };
+const INITIAL_VISIBILITY = { nextAction: true };
 type QueueInput = z.infer<typeof workQueueHouseholdInput>;
 type QueueFilters = Pick<
   QueueInput,
@@ -114,6 +116,7 @@ type QueueFilters = Pick<
   | "kind"
   | "check"
   | "vendor"
+  | "view"
 >;
 // A work row is identified by its reason, independently of its source record.
 type QueueTableRow = Omit<WorkQueueRow, "id"> & {
@@ -263,9 +266,7 @@ function suggestionReviewHref(row: QueueTableRow) {
 function queueHref(row: QueueTableRow) {
   const review = suggestionReviewHref(row);
   if (review) return review;
-  // Run detail recovers pending execution on read (#1905); use passive Problems.
-  if (row.entity === null || row.recordId === null || row.entity === "run")
-    return "/problems";
+  if (row.entity === null || row.recordId === null) return "/problems";
   return isBrowserRoutedEntity(row.entity)
     ? `/${entities[row.entity].basePath}/${row.recordId}`
     : undefined;
@@ -286,7 +287,7 @@ function WorkRecordLink({ row }: { row: QueueTableRow }) {
         {row.name}
       </Link>
     );
-  if (row.entity === null || row.recordId === null || row.entity === "run") {
+  if (row.entity === null || row.recordId === null) {
     return (
       <Link
         to="/problems"
@@ -432,14 +433,28 @@ function queueColumns(
         header: "Next action",
         size: 320,
         meta: attachCubbyColumnMeta<QueueTableRow>({
-          mobile: { slot: "subtitle", priority: 1, label: "Next action" },
+          // Phone action controls sit above the card's stretched record link.
+          mobile: {
+            slot: "actions",
+            priority: 1,
+            label: "Next action",
+            interactive: true,
+          },
           cellData: textCellData<QueueTableRow>(
             "text",
             (row) => row.nextAction,
           ),
         }),
         cell: ({ row }) => (
-          <span title={row.original.nextAction}>{row.original.nextAction}</span>
+          <div className="flex min-w-0 items-center gap-1">
+            <span
+              className="hidden min-w-0 flex-1 truncate md:block"
+              title={row.original.nextAction}
+            >
+              {row.original.nextAction}
+            </span>
+            <WorkActionDetails explanations={row.original.explanations} />
+          </div>
         ),
       }),
     );
@@ -565,6 +580,7 @@ export function WorkQueuePage() {
 
 function WorkQueueTable() {
   const navigate = useNavigate();
+  const [view, setView] = useState<QueueInput["view"]>();
   const inspection = useEntityPreview(undefined, PREVIEW_OPTIONS);
   const tableState = useTableState({
     initialSort: "kind",
@@ -574,9 +590,13 @@ function WorkQueueTable() {
     urlSync: true,
     syncPaginationToUrl: false,
   });
+  const viewFilters = useCallback(
+    (state: TableStateReturn) => ({ ...buildQueueFilters(state), view }),
+    [view],
+  );
   const list = useInfiniteTableList({
     queryOptions: queueQueryPlan,
-    buildFilters: buildQueueFilters,
+    buildFilters: viewFilters,
     tableState,
   });
   const members = list.pages?.[0]?.members ?? EMPTY_MEMBERS;
@@ -593,7 +613,7 @@ function WorkQueueTable() {
     onRowHover: previewHover,
     onRowHoverEnd: previewHoverEnd,
   } = inspection;
-  const scope = JSON.stringify(buildQueueFilters(tableState));
+  const scope = JSON.stringify(viewFilters(tableState));
   const queryScope = JSON.stringify([scope, tableState.sorting]);
   const activeQueryScope = useRef(queryScope);
   activeQueryScope.current = queryScope;
@@ -657,6 +677,11 @@ function WorkQueueTable() {
     (row: CubbyRow<QueueTableRow>) => {
       const { entity, suggestionField } = row.original;
       if (canPreview(row)) previewClick(previewRow(row));
+      else if (entity === "run" && row.original.recordId)
+        void navigate({
+          to: entities.run.routes.detail,
+          params: entityDetailParams(row.original.recordId),
+        });
       else if (entity !== null && suggestionField !== undefined)
         void navigate({
           to: "/ai",
@@ -683,6 +708,25 @@ function WorkQueueTable() {
   const isLoading = useHydratedLoading(list.isLoading);
   return (
     <>
+      <Picker
+        mode="segmented"
+        label="Work view"
+        value={view ?? "all"}
+        options={[
+          { value: "all", label: "All work" },
+          { value: "automatic", label: "Automatic" },
+          { value: "research", label: "Research" },
+          { value: "review", label: "Review" },
+          { value: "waiting", label: "Waiting" },
+        ]}
+        onValueChange={(next) => {
+          setView(workQueueHouseholdInput.shape.view.safeParse(next).data);
+          tableState.setPagination({
+            pageIndex: 0,
+            pageSize: tableState.pagination.pageSize,
+          });
+        }}
+      />
       <RTable
         table={table}
         ariaLabel="Work queue"

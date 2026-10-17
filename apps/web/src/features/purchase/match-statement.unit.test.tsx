@@ -90,15 +90,16 @@ describe("MatchStatementDialog", () => {
               },
         };
       }
-      if (operation === "entity.mutate") {
+      if (operation === "financialTransaction.allocateSettlement") {
         updates(input);
         return {
           ok: true,
           data: {
-            action: "update",
-            entity: "financialTransaction",
-            item: transaction,
-            sideEffects: {},
+            transactionId: transaction.id,
+            allocations: [
+              { purchaseId: "PUR-2345", amount: 42.5 },
+              { purchaseId: "PUR-3456", amount: 48.5 },
+            ],
           },
         };
       }
@@ -137,16 +138,79 @@ describe("MatchStatementDialog", () => {
 
     await waitFor(() => expect(updates).toHaveBeenCalledOnce());
     expect(updates.mock.calls[0]?.[0]).toMatchObject({
-      entity: "financialTransaction",
-      action: "update",
-      id: "FTX-4K7M",
-      data: {
-        allocations: [
-          { purchaseId: "PUR-2345", amount: 42.5 },
-          { purchaseId: "PUR-3456", amount: 48.5 },
-        ],
-      },
+      transactionId: "FTX-4K7M",
+      priorAllocations: [],
+      allocations: [
+        { purchaseId: "PUR-2345", amount: 42.5 },
+        { purchaseId: "PUR-3456", amount: 48.5 },
+      ],
     });
+  });
+
+  it("keeps the selected graph and draft after a stale allocation refusal without retrying", async () => {
+    const saves = vi.fn();
+    const close = vi.fn();
+    restoreDispatch = overrideStartDispatch(async (operation, input) => {
+      if (operation === "purchase.settlementCandidates")
+        return {
+          ok: true,
+          data: {
+            ...review,
+            candidates: [
+              {
+                ...review.candidates[0],
+                proposedAllocations: [
+                  { purchaseId: "PUR-2345", amount: "91.00" },
+                ],
+              },
+            ],
+          },
+        };
+      if (operation === "purchase.checkSettlementAllocation")
+        return {
+          ok: true,
+          data: {
+            allocations: [{ purchaseId: "PUR-2345", amount: 91 }],
+            allocatedTotal: 91,
+            remaining: 0,
+            reason: null,
+          },
+        };
+      if (operation === "financialTransaction.allocateSettlement") {
+        saves(input);
+        return {
+          ok: false,
+          error: {
+            code: "BAD_REQUEST",
+            reason: "CONSTRAINT_VIOLATION",
+            message:
+              "Settlement allocations changed after this proposal. SQLSTATE 40001 synthetic detail",
+          },
+        };
+      }
+      throw new Error(`Unexpected operation ${operation}`);
+    });
+    render(
+      <MatchStatementDialog purchaseId="PUR-2345" open onOpenChange={close} />,
+      { wrapper: harness.wrapper },
+    );
+    fireEvent.click(await screen.findByRole("button", { name: /\$91\.00/ }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Save allocation" }),
+      ).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save allocation" }));
+    expect(
+      await screen.findByText(
+        "Settlement allocations changed after this proposal. SQLSTATE 40001 synthetic detail",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("textbox", { name: "Purchase code 1" }),
+    ).toHaveValue("PUR-2345");
+    expect(saves).toHaveBeenCalledOnce();
+    expect(close).not.toHaveBeenCalled();
   });
 
   // Regression: the dialog is mounted (closed) on every Purchase detail; a debounce input that

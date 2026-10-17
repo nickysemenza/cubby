@@ -74,7 +74,7 @@ async function transactionForBooking(
     return fail("A reimbursement must be an incoming credit.");
   return row;
 }
-async function bookingGraph(
+export async function bookingGraph(
   db: Database,
   purchaseId: typeof purchase.$inferSelect.id | null,
 ) {

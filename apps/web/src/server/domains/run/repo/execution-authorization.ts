@@ -12,6 +12,7 @@ import {
   type ExecutionAuthorizationReceipt,
   type ExecutionAuthorizationRef,
   type ExecutionAuthorizationRequest,
+  type ExecutionAuthorizationRequestedScope,
   type ExecutionAuthorizationReservation,
 } from "@cubby/schemas/execution-authorization";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -34,6 +35,39 @@ import {
 } from "~/server/db/schema";
 import { insertOperation } from "~/server/domains/run/repo/run-operation";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+
+/** The host-derived request for an approval's whole scope; a vendor scope names every approved Vendor. */
+export function requestedScopeFor(
+  scope: ExecutionAuthorizationInput["scope"],
+): ExecutionAuthorizationRequestedScope {
+  return scope.kind === "vendor_backfill"
+    ? {
+        mailboxId: scope.mailboxId,
+        discovery: scope.discovery,
+        vendorIds: scope.vendors.map((vendor) => vendor.vendorId),
+      }
+    : { mailboxId: scope.mailboxId, discovery: scope.discovery };
+}
+
+/** A request stays inside its approval: same mailbox and lane, and only approved Vendors. */
+export function approvalContainsScope(
+  scope: ExecutionAuthorizationInput["scope"],
+  requested: ExecutionAuthorizationRequestedScope,
+) {
+  if (
+    requested.mailboxId !== scope.mailboxId ||
+    requested.discovery !== scope.discovery
+  )
+    return false;
+  if (scope.kind !== "vendor_backfill")
+    return requested.vendorIds === undefined;
+  return (
+    !!requested.vendorIds?.length &&
+    requested.vendorIds.every((id) =>
+      scope.vendors.some((vendor) => vendor.vendorId === id),
+    )
+  );
+}
 
 /** Every receipt is completed and immutable; no leased job authorizes transport. */
 export const EXECUTION_AUTHORIZATION_RECEIPT_KIND = "execution_authorization";
@@ -204,8 +238,7 @@ async function receiptsFor(
       );
     if (
       receipt.kind === "metered_reservation" &&
-      (receipt.requestedScope.mailboxId !== approval.scope.mailboxId ||
-        receipt.requestedScope.discovery !== approval.scope.discovery ||
+      (!approvalContainsScope(approval.scope, receipt.requestedScope) ||
         receipt.periodKey !== periodKey(approval, new Date(receipt.reservedAt)))
     )
       throw new Error(
@@ -288,10 +321,7 @@ async function authorized<T>(
     const approval = await lockApproval(tx, request.ref, request.owner);
     if (now.getTime() >= new Date(approval.expiresAt).getTime())
       throw new Error("Execution approval has expired.");
-    if (
-      request.requestedScope.mailboxId !== approval.scope.mailboxId ||
-      request.requestedScope.discovery !== approval.scope.discovery
-    )
+    if (!approvalContainsScope(approval.scope, request.requestedScope))
       throw new Error(
         "Requested discovery scope is outside this execution approval.",
       );
@@ -486,7 +516,10 @@ export async function claimExecutionAuthorization(
       const claims = receipts.filter((receipt) => receipt.kind === "claim");
       if (claims.some((receipt) => JSON.stringify(receipt.claim) === identity))
         return { status: "already_claimed" };
-      if (approval.scope.kind === "pilot") {
+      if (
+        approval.scope.kind === "pilot" ||
+        approval.scope.kind === "vendor_backfill"
+      ) {
         const distinct = new Set(
           claims
             .filter((receipt) => receipt.claim.kind === input.claim.kind)

@@ -184,7 +184,11 @@ separate staging lifecycle. All caches and declarations belong to the worktree.
 
 `tooling/typecheck-repositories.ts` owns the repository source roster and derives producer
 roots, consumer exclusions and exact contract mappings from it. Boundary exports
-must remain independent of implementation-derived registry types. The resolved
+must remain independent of implementation-derived registry types. Consumers
+cross this boundary through the repository's `~/server/...` alias, which maps
+to its emitted declaration. A relative import bypasses that mapping and pulls
+repository implementation into the consumer; keep relative imports within the
+same producer. The resolved
 graph guard rejects repository source in its consumers, server composition in
 repositories, browser routes/components in the server, unresolved generated-contract
 imports, mixed nominal-handle copies and production source without a strict owner.

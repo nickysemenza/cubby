@@ -86,12 +86,14 @@ const pagePosition = z.object({
   pageToken: z.string().nullable(),
   completed: z.boolean(),
 });
+const scopedQueryPosition = mailboxScopedQuery.extend(pagePosition.shape);
+export type ScopedQueryPosition = z.infer<typeof scopedQueryPosition>;
 /** Tokens move only after that page's acquisition and research dispatch succeed. */
 export const mailboxCoverage = z.object({
   version: z.literal(1),
   baselineHistoryId: z.string().min(1),
   broad: pagePosition,
-  scoped: z.array(mailboxScopedQuery.extend(pagePosition.shape)),
+  scoped: z.array(scopedQueryPosition),
   history: z.object({
     historyId: z.string().min(1),
     pageToken: z.string().nullable(),
@@ -130,6 +132,13 @@ export const mailboxDiscoveryInput = z.object({
     .default("classification_only"),
   mailboxId: z.string().min(1),
   scopedQueries: z.array(mailboxScopedQuery),
+  /** One authorized Vendor generation freezes sender queries at first start. */
+  vendorHistory: z
+    .object({
+      generation: z.string().min(1),
+      resolvedAt: z.iso.datetime().nullable(),
+    })
+    .optional(),
 });
 export const mailboxDiscoveryProgress = z.object({
   ...workflowRecoveryProgress.shape,
@@ -143,6 +152,15 @@ export const mailboxDiscoveryProgress = z.object({
   unrelated: z.number().int().nonnegative().default(0),
   events: z.number().int().nonnegative().default(0),
   droppedEvents: z.number().int().nonnegative().default(0),
+  /** Vendor history only: this Run's frozen-query positions, never the shared mailbox cursor. */
+  vendorScoped: z.array(scopedQueryPosition).optional(),
+  /** Vendor history only: the frozen page awaiting processing. */
+  vendorPage: z
+    .object({
+      messageIds: z.array(z.string()),
+      nextScoped: z.array(scopedQueryPosition),
+    })
+    .optional(),
 });
 export type MailboxDiscoveryProgress = z.infer<typeof mailboxDiscoveryProgress>;
 /** Stateless relevance is resolved before original content enters a durable transcript. */
@@ -154,6 +172,32 @@ export const mailboxRelevanceDecision = z.object({
   reason: z.string().optional(),
 });
 export type MailboxRelevanceDecision = z.infer<typeof mailboxRelevanceDecision>;
+
+/** Model-copied literals for one Email's financial event; the host verifies each against the original. */
+export const mailFinancialEventModelOutput = z.strictObject({
+  kind: z.enum([
+    "none",
+    "purchase_payment",
+    "refund",
+    "incoming_payment",
+    "transfer",
+    "card_repayment",
+    "reimbursement",
+  ]),
+  confidence: z.enum(["high", "medium", "low"]),
+  amountText: z.string().max(80).nullable(),
+  currency: z
+    .string()
+    .regex(/^[A-Z]{3}$/u)
+    .nullable(),
+  sourceAccountLabel: z.string().max(200).nullable(),
+  providerEventId: z.string().max(200).nullable(),
+  occurredOn: z.string().max(80).nullable(),
+  counterpartyLabel: z.string().max(200).nullable(),
+});
+export type MailFinancialEventModelOutput = z.infer<
+  typeof mailFinancialEventModelOutput
+>;
 
 /** Full normalized original context retained only after purchase relevance is resolved. */
 export const retainedMailContent = z.object({
@@ -347,6 +391,24 @@ export const mailResolveDisposition = z.discriminatedUnion("kind", [
     ),
   z
     .object({
+      kind: z.literal("financial"),
+      transactionId: financialTransactionShortcode,
+      reason: z.string().trim().min(1).max(1_000),
+      review: z
+        .strictObject({
+          reviewedAccountId: financialAccountShortcode,
+          sourceAccountLabel: z.string().trim().min(1).max(320),
+        })
+        .optional()
+        .describe(
+          "A member's review: the transaction's account and its label as the Email shows it. Pi omits it.",
+        ),
+    })
+    .describe(
+      "The Email evidences this existing posted Financial Transaction without a Purchase: a transfer, incoming payment, reimbursement, card repayment or refund. Writes no spending. A member supplies the reviewed account. A Mail import Run may reuse only a current member-accepted Email/checksum/transaction/account association with matching event amount and direction; unqualified provider identifier equality does not establish cross-provider identity.",
+    ),
+  z
+    .object({
       kind: z.literal("unresolved"),
       reason: z.string().trim().min(1).max(1_000),
     })
@@ -372,7 +434,7 @@ export type MailResolveInput = z.infer<typeof mailResolveInput>;
 
 export const mailResolveOut = mailMessageRef.extend({
   status: emailStatus,
-  disposition: z.enum(["linked", "unresolved", "unrelated"]),
+  disposition: z.enum(["linked", "financial", "unresolved", "unrelated"]),
   purchaseIds: z.array(purchaseShortcode),
   financialAssociations: z.array(mailFinancialAssociation),
 });

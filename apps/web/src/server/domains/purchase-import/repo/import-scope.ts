@@ -120,13 +120,19 @@ export async function assertReviewedPreparationOriginal(
   return original;
 }
 
+export function parseMailSourceKey(externalKey: string) {
+  const [, mailboxId, messageId, attachmentId] =
+    /^gmail:(.+?):([^:]+)(?::attachment:(.+))?$/u.exec(externalKey) ?? [];
+  return { mailboxId, messageId, attachmentId };
+}
+
 /**
  * A mail-sourced order must name the member's own retained Email unchanged,
- * never a model-provided key or bytes. A Mail import Run may use only mail
- * sources of the Emails it admitted: any other kind would carry an arbitrary
- * key and checksum past that check.
+ * never a model-provided key or bytes. Validate before source judgments;
+ * the writer additionally requires roster membership through retainedMailSource.
+ * A Mail import Run cannot use another kind to bypass original validation.
  */
-export async function retainedMailSource(
+export async function readUnchangedMailSource(
   db: Database,
   scope: ImportScope,
   source: z.infer<typeof importSourceIdentity>,
@@ -137,10 +143,9 @@ export async function retainedMailSource(
       throw new Error("A Mail import Run imports only the Emails it admitted.");
     return null;
   }
-  const match = /^gmail:(.+?):([^:]+)(?::attachment:(.+))?$/u.exec(
+  const { mailboxId, messageId, attachmentId } = parseMailSourceKey(
     source.externalKey,
   );
-  const [, mailboxId, messageId, attachmentId] = match ?? [];
   const isAttachment = source.kind === "mail_attachment";
   if (!mailboxId || !messageId || Boolean(attachmentId) !== isAttachment)
     throw new Error(
@@ -188,7 +193,23 @@ export async function retainedMailSource(
     throw new Error(
       "Purchase import must use the member's retained Email unchanged.",
     );
-  if (scope.purpose === "mail_import")
-    await assertMailRunMembership(database, scope.runId, retained.mail.id);
   return retained.mail;
+}
+
+/** Writer authority adds roster membership to the original's deterministic checks. */
+export async function retainedMailSource(
+  db: Database,
+  scope: ImportScope,
+  source: z.infer<typeof importSourceIdentity>,
+  evidenceChecksum: string,
+): Promise<RetainedMailSource | null> {
+  const retained = await readUnchangedMailSource(
+    db,
+    scope,
+    source,
+    evidenceChecksum,
+  );
+  if (retained && scope.purpose === "mail_import")
+    await assertMailRunMembership(getDb(db), scope.runId, retained.id);
+  return retained;
 }

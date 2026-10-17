@@ -1,5 +1,10 @@
 # One product, however its evidence arrives
 
+This is the Product branch of [Evidence arrives in any order](import-journey.md).
+That journey also covers financial events with no Product, including transfers
+and reimbursements. [One view of the work](work-queue.md) owns executor routing
+and the shared explanation of prerequisites and effects.
+
 A Product is Cubby's record for one exact item variant. A black small shirt and
 a navy small shirt are different Products. Two physical copies of the same
 black small shirt share one Product; their inventory quantity records the
@@ -17,9 +22,9 @@ Connect read-only Gmail in Cubby Settings, import a Monarch CSV through the
 web or native statement review (or MCP), and capture own-item and label photos on iPhone or Mac.
 These sources can arrive in any order. Cubby should converge them on one exact
 Product, an itemized Purchase, and a truthful settlement allocation. A human
-reviews uncertain identity, grouped photos, and ambiguous charges. Pi interprets retained Email for unattended Mail import. Browser research and
-Product enrichment are member-directed [Burn-down](burn-down.md), using Claude
-or Codex and ordinary source-backed writes. Photo grouping proposes changes
+reviews uncertain identity, grouped photos, and ambiguous charges. The
+[shared work model](work-queue.md#choose-the-executor) routes import execution
+and interactive research. Photo grouping proposes changes
 for review; neither an agent nor a decision model substitutes for source
 evidence or approval.
 Every

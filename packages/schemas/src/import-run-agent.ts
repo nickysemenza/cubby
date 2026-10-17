@@ -63,6 +63,7 @@ const MAIL_IMPORT_MCP_ACTIONS = [
   "search.global",
   "imports_read.external_id_collisions",
   "product_enrichment.propose_match",
+  "finance.converge",
 ] as const satisfies readonly CubbyMcpToolAction[];
 
 const PHOTO_MCP_ACTIONS = [

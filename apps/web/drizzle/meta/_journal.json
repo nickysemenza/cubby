@@ -547,6 +547,13 @@
       "when": 1792180268946,
       "tag": "0077_card_field_suggestions",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1792193331224,
+      "tag": "0078_drop_vendor_account_status",
+      "breakpoints": true
     }
   ]
 }

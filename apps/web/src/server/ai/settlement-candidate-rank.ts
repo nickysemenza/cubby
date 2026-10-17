@@ -1,16 +1,15 @@
 /**
- * The bounded the decision model tie-break for the Purchase settlement review. When the
- * deterministic candidate ranking ties two or more statement transactions at
- * its top tier, a person may ask the decision model to order only those tied candidates.
- * The result is a suggestion: nothing here writes an allocation, and the
- * review's own allocate action remains the only write authority.
+ * Declared review-only ranking over the complete bounded candidate set. Split
+ * amounts, merchant aliases and different dates remain evidence for the model,
+ * rather than semantic exclusions made by the deterministic sort. A ranking
+ * never authorizes a settlement write.
  */
-import type { FinancialTransactionOut } from "@cubby/schemas/financial-transaction";
-import { financialTransactionShortcode } from "@cubby/schemas/identifiers";
 import {
-  type PurchaseSettlementSuggestOut,
-  tiedTopSettlementCandidates,
-} from "@cubby/schemas/purchase";
+  SETTLEMENT_CANDIDATE_LIMIT,
+  type FinancialTransactionOut,
+} from "@cubby/schemas/financial-transaction";
+import { financialTransactionShortcode } from "@cubby/schemas/identifiers";
+import { type PurchaseSettlementSuggestOut } from "@cubby/schemas/purchase";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { formatCurrency } from "~/lib/number-format";
@@ -55,7 +54,7 @@ export function renderSettlementSubject(subject: SettlementSubject): string {
 export const settlementSelectionSpec: AiSelectionSpec<TiedCandidate> = {
   feature: SETTLEMENT_CANDIDATE_RANK_FEATURE,
   rules:
-    "Choose the statement transaction most likely to be the payment for this vendor order. Compare the amount to the stated total, the transaction date to the order date, and the merchant text to the vendor. Use none when no listed transaction fits.",
+    "Choose the statement transaction most likely to be payment evidence for this vendor order. Compare literal amounts, residual money after accepted allocations, dates, account and merchant evidence. Split payments and processor names can differ permanently; amount or date equality alone is not identity proof. Preserve accepted allocations; never select by confidence alone. Use none when no listed transaction is supported. This is a review proposal, never write authority.",
   idOf: (candidate) => candidate.id,
   renderLine: ({ transaction }) =>
     [
@@ -64,14 +63,14 @@ export const settlementSelectionSpec: AiSelectionSpec<TiedCandidate> = {
       `transacted ${transaction.transactionDate}`,
       `merchant "${transaction.merchant ?? transaction.displayName}"`,
       `account "${transaction.accountName ?? "unknown"}"`,
+      `accepted allocations: ${transaction.allocations?.map((allocation) => `${allocation.purchaseId} ${money(allocation.amount)}`).join(", ") || "none"}`,
     ].join(" | "),
-  // Only top-tier ties reach the model; ten is the repo's own candidate cap.
-  maxCandidates: 10,
+  maxCandidates: SETTLEMENT_CANDIDATE_LIMIT,
 };
 
 /**
- * Pure read plus AI usage accounting. `openUsage` is only called once a tie
- * exists, so an unambiguous list costs no model call and no run row.
+ * Pure read plus AI usage accounting. A list with fewer than two candidates
+ * costs no model call and supplies no automatic write authority.
  */
 export async function suggestSettlementMatch(args: {
   subject: SettlementSubject;
@@ -80,11 +79,11 @@ export async function suggestSettlementMatch(args: {
   openUsage: () => Promise<AiSelectionUsage>;
   decisionPort?: DecisionPort;
 }): Promise<PurchaseSettlementSuggestOut> {
-  const tied = tiedTopSettlementCandidates(args.ranks);
+  const tied = args.ranks.slice(0, SETTLEMENT_CANDIDATE_LIMIT);
   if (tied.length < 2)
     return {
       status: "not_ambiguous",
-      note: "These charges are no longer tied, so there is nothing to suggest.",
+      note: "Fewer than two candidates remain; a sole candidate still requires evidence review.",
     };
 
   const candidates: TiedCandidate[] = [];
@@ -117,7 +116,7 @@ export async function suggestSettlementMatch(args: {
             : percent,
       };
     });
-    // Tied candidates by the model's probability, then the rest as the server listed them.
+    // Missing model probabilities retain the server's deterministic order.
     const rankedIds = new Set<string>(
       ranked.map((entry) => entry.transactionId),
     );
@@ -144,7 +143,7 @@ export async function suggestSettlementMatch(args: {
       ranked,
       displayOrder,
       note:
-        `Suggestion only. The decision model ordered the ${tied.length} equally ranked charges; nothing is saved until you allocate.` +
+        `Suggestion only. The decision model ordered ${tied.length} candidate transactions; nothing is saved until you allocate.` +
         (selectedTransactionId === null
           ? " The decision model found no clear match among them."
           : ""),

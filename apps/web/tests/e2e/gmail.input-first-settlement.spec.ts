@@ -293,6 +293,7 @@ test("reviews CSV charge groups and refunds against captured retailer orders", a
   expect((await allocationRows()).map((row) => row.amount)).toEqual([
     42.5, 42.5,
   ]);
+  const acceptedChargeAllocations = await allocationRows();
   await gotoDetailActions(
     page,
     `/purchases/${firstCode}#financial-settlement`,
@@ -305,9 +306,31 @@ test("reviews CSV charge groups and refunds against captured retailer orders", a
     name: "Match statement activity",
     exact: true,
   });
+  // An accepted charge stays reviewable for its own Purchase. Opening it must
+  // preserve both accepted splits, without redistributing or saving them.
+  await dialog.getByRole("button").filter({ hasText: "Charge" }).click();
+  expect(
+    (
+      await Promise.all(
+        [1, 2].map((index) =>
+          dialog
+            .getByRole("textbox", {
+              name: `Purchase code ${index}`,
+              exact: true,
+            })
+            .inputValue(),
+        ),
+      )
+    ).sort(),
+  ).toEqual([...purchaseCodes].sort());
+  for (const index of [1, 2])
+    await expect(
+      dialog.getByRole("spinbutton", { name: `Amount ${index}`, exact: true }),
+    ).toHaveValue("42.50");
   await expect(
-    dialog.getByRole("button").filter({ hasText: "Charge" }),
+    dialog.getByRole("textbox", { name: "Purchase code 3", exact: true }),
   ).toHaveCount(0);
+  expect(await allocationRows()).toEqual(acceptedChargeAllocations);
   await dialog.getByRole("button").filter({ hasText: "Refund" }).click();
   await expect(
     dialog.getByRole("spinbutton", { name: "Amount 1" }),
@@ -316,6 +339,7 @@ test("reviews CSV charge groups and refunds against captured retailer orders", a
   await expect(
     dialog.getByRole("button", { name: "Save allocation", exact: true }),
   ).toBeDisabled();
+  expect(await allocationRows()).toEqual(acceptedChargeAllocations);
   await dialog.getByRole("spinbutton", { name: "Amount 1" }).fill("-15.00");
   await dialog
     .getByRole("button", { name: "Save allocation", exact: true })

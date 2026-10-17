@@ -1,9 +1,11 @@
 # Burn-down
 
-Burn-down is member-directed research and reconciliation for Cubby's derived
-Research queue. Claude and Codex connect to Cubby through MCP, inspect a small
-worklist, and use the matching workflow skill to resolve supported gaps. The
-member's client supplies research and judgment; Cubby checks ownership,
+Burn-down is member-directed research and reconciliation from Cubby's derived
+Work queue. [One view of the work](work-queue.md) owns routing between automatic
+execution, Claude/Codex research, human review and waiting, including dependency
+and impact presentation. Claude and Codex connect to Cubby through MCP, inspect
+a small worklist, and use the matching workflow skill to resolve supported gaps.
+The member's client supplies research and judgment; Cubby checks ownership,
 identifiers, provenance, replay and safe writes. Work one record at a time, or
 prepare a bounded batch when each record is independently settled.
 
@@ -12,9 +14,9 @@ prepare a bounded batch when each record is independently settled.
 1. Connect the session to Cubby through a connector: Claude Code uses Cubby's
    claude.ai connector and Codex uses Cubby's ChatGPT connector, each signed in
    once with OAuth.
-2. Open the derived **Research queue** saved view. It is available on Products,
-   Purchases and Expenses; it is a view over current data, not a separate task
-   list.
+2. Start with `activity.work_queue` for the connected member's eligible work
+   plus shared research, or open the Work queue in Cubby. Entity Research queue
+   saved views narrow the same derived work; they are not separate task lists.
 3. Choose one record or a small bounded batch, then load the skill that owns
    the work:
    - [Product enrichment](../../.claude/skills/product-enrichment/SKILL.md) for
@@ -23,6 +25,16 @@ prepare a bounded batch when each record is independently settled.
      receipt, Email and settlement evidence.
    - [Photo inventory import](../../.claude/skills/photo-inventory-import/SKILL.md)
      for belongings and wardrobe photos.
+
+Vendor website and logo research follows the shared routing contract. The
+current Vendor Research queue selects missing logos only; website research
+coverage remains part of that contract's agreed direction. Reuse the Vendor's
+generic data exceptions when a website is unavailable or not applicable, or a
+logo is unavailable; retain the explanation and source evidence. Resolving
+research should make already-authorized dependent work eligible under the
+shared resumption contract, without making unrelated cosmetic gaps blockers.
+Until automatic resumption is supported by the connected runtime, report the
+remaining execution gap rather than claiming that a field update resumed it.
 
 Use the member's browser session when the work depends on a logged-in retailer
 page or web research. Use MCP for Cubby record reads and writes, and follow the

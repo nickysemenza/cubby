@@ -6,9 +6,11 @@ import {
   vendorShortcode,
   spendingCategoryShortcode,
   ledgerTransferShortcode,
+  emailShortcode,
 } from "./identifiers";
 import { tradeSchema } from "./task-fields";
 import { wholeCentAmount } from "./money";
+import { financialTransactionAllocationInput } from "./financial-transaction";
 
 export const financialBookingInput = z.object({
   transactionId: financialTransactionShortcode,
@@ -40,6 +42,43 @@ export const financialBookingResult = z.object({
 });
 export type FinancialBookingInput = z.infer<typeof financialBookingInput>;
 export type FinancialBookingPreview = z.infer<typeof financialBookingPreview>;
+
+export const financialConvergenceInput = z.strictObject({
+  transactionId: financialTransactionShortcode,
+  emailId: emailShortcode.optional(),
+});
+export const financialConvergenceResult = z.discriminatedUnion("status", [
+  z.object({
+    status: z.enum(["applied", "already_recorded"]),
+    purchaseId: purchaseShortcode,
+    expenseId: expenseShortcode.nullable(),
+  }),
+  z.object({ status: z.literal("review_required"), reason: z.string() }),
+]);
+export type FinancialConvergenceInput = z.infer<
+  typeof financialConvergenceInput
+>;
+
+export const financialWorkPreview = z.object({
+  transactionId: financialTransactionShortcode,
+  canApplyAutomatically: z.boolean(),
+  blocker: z.string().nullable(),
+  purchaseId: purchaseShortcode.nullable(),
+  vendorId: vendorShortcode.nullable(),
+  effect: z
+    .enum(["link_existing", "create_aggregate", "already_recorded"])
+    .nullable(),
+});
+export type FinancialWorkPreview = z.infer<typeof financialWorkPreview>;
+
+export const financialSettlementAllocationInput = z.strictObject({
+  transactionId: financialTransactionShortcode,
+  priorAllocations: z.array(financialTransactionAllocationInput),
+  allocations: z.array(financialTransactionAllocationInput),
+});
+export type FinancialSettlementAllocationInput = z.infer<
+  typeof financialSettlementAllocationInput
+>;
 
 export const financialBookingCorrectionInput = z.object({
   transactionId: financialTransactionShortcode,

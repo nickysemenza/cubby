@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { entityRefSchema } from "./entity";
 import { searchableEntities } from "./entity-manifest";
 import { imageId, locationId, parseEntityRef, recipeId } from "./identifiers";
 import { imageProcessingResult } from "./image-processing";
@@ -22,6 +23,7 @@ export const backgroundTaskKinds = [
   "image-processing.result",
   "image-metadata.extract",
   "maintenance.recover",
+  "work.advance",
   "maintenance.purchase-discovery",
   "calendar-feed.mark-dirty",
 ] as const;
@@ -118,6 +120,13 @@ export const maintenanceRecoverTaskSchema = z.object({
   coordinatorRetireBefore: z.iso.datetime().optional(),
 });
 
+/** A hint to recheck durable work intent, never authority to execute it. */
+export const workAdvanceTaskSchema = z.object({
+  kind: z.literal("work.advance"),
+  ...taskEnvelopeFields,
+  changed: z.array(entityRefSchema).max(100).optional(),
+});
+
 export const maintenancePurchaseDiscoveryTaskSchema = z.object({
   kind: z.literal("maintenance.purchase-discovery"),
   ...taskEnvelopeFields,
@@ -144,6 +153,7 @@ export const backgroundTaskSchema = z.discriminatedUnion("kind", [
   imageProcessingResultTaskSchema,
   imageMetadataExtractTaskSchema,
   maintenanceRecoverTaskSchema,
+  workAdvanceTaskSchema,
   maintenancePurchaseDiscoveryTaskSchema,
   calendarFeedMarkDirtyTaskSchema,
 ]);

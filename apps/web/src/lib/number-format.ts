@@ -39,6 +39,11 @@ function cachedNumberFormat(
   return formatter;
 }
 
+/** ISO 4217 minor-unit digits (USD 2, JPY 0) from the shared currency formatter. */
+export const currencyMinorDigits = (currency: string): number =>
+  cachedNumberFormat({ style: "currency", currency }).resolvedOptions()
+    .maximumFractionDigits ?? 2;
+
 /**
  * Format a number as USD currency (en-US, half away from zero) through the
  * Rust formatter shared with native.

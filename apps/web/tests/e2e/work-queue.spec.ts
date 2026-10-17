@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { agentConversationSchema } from "@cubby/schemas/agent-conversation";
 
 import {
   email,
@@ -251,14 +252,15 @@ test("Work queue scrolls, sorts, copies source codes and inspects independently"
   await expect(page).not.toHaveURL(/[?&]page(?:Size)?=/);
 });
 
-// Run detail currently recovers pending execution on a read. Queue navigation
-// must stay on the passive Problems surface until that detail contract is fixed.
-test("Work queue Run navigation stays on passive Problems", async ({
+// Failure mode: following a Run or observing it again recovers pending execution
+// instead of reading retained state, changing dispatch or starting an agent.
+test("Work queue Run navigation reads passive retained details", async ({
   page,
 }, testInfo) => {
   const name = uniqueName(testInfo, "Queue paused account");
   const member = await ensureMemberParty(page, name);
   const db = getFixtureDb();
+  const dispatchEventId = crypto.randomUUID();
   const paused = await insertWithShortcode(db, "run", {
     ledgerPartyId: member.id,
     actorUserId: await fixtureUserId(page),
@@ -271,6 +273,7 @@ test("Work queue Run navigation stays on passive Problems", async ({
     trigger: "manual",
     status: "paused_auth",
     agentSessionId: name,
+    dispatchEventId,
   });
   await gotoAuthenticatedPage(
     page,
@@ -280,24 +283,58 @@ test("Work queue Run navigation stays on passive Problems", async ({
     name: "account_sync · paused_auth",
     exact: true,
   });
-  await expect(source).toHaveAttribute("href", "/problems");
-  const runDetailReads: string[] = [];
+  await expect(source).toHaveAttribute("href", `/runs/${paused.shortcode}`);
+  const savedBefore = await getDb(db).query.run.findFirst({
+    where: eq(run.id, paused.id),
+  });
+  expect(savedBefore).toMatchObject({
+    status: "paused_auth",
+    dispatchEventId,
+    dispatchAttempts: 0,
+    coordinatorStartedAt: null,
+  });
+  const agentWrites: string[] = [];
   page.on("request", (request) => {
-    if (new URL(request.url()).pathname.includes(`/runs/${paused.shortcode}`))
-      runDetailReads.push(request.url());
+    if (
+      new URL(request.url()).pathname.startsWith(
+        `/api/import/runs/${paused.shortcode}/agent`,
+      ) &&
+      request.method() !== "GET"
+    )
+      agentWrites.push(`${request.method()} ${request.url()}`);
   });
   await source.click();
-  await expect(page).toHaveURL("/problems");
-  expect(runDetailReads).toEqual([]);
+  await expect(page).toHaveURL(`/runs/${paused.shortcode}`);
+  const absent = page.getByText(
+    "The agent conversation is not available yet.",
+    { exact: false },
+  );
+  await expect(absent).toBeVisible();
+  await expect(
+    page.getByRole("textbox", { name: "Agent prompt" }),
+  ).toBeDisabled();
+  await page.reload();
+  await expect(absent).toBeVisible();
+  const conversation = await page.request.get(
+    `/api/import/runs/${paused.shortcode}/agent`,
+  );
+  expect(conversation.ok(), await conversation.text()).toBe(true);
+  expect(agentConversationSchema.parse(await conversation.json())).toEqual({
+    status: "absent",
+    messages: [],
+    settlements: [],
+  });
+  expect(agentWrites).toEqual([]);
   const saved = await getDb(db).query.run.findFirst({
     where: eq(run.id, paused.id),
   });
-  expect(saved?.status).toBe("paused_auth");
+  expect(saved).toEqual(savedBefore);
 });
 
 // Failure modes: the queue sits inside a contained gutter instead of reaching
 // the workbench edges, a source record loses its thumbnail, categorical values
-// lose their labels, or the rule's next action disappears with its column.
+// lose their labels, the next action disappears, or keyboard activation of
+// Details bubbles to the row's inspector/navigation handler.
 test("Work queue rows show the source record's image, type and next action", async ({
   page,
   e2eRuntime,
@@ -349,15 +386,42 @@ test("Work queue rows show the source record's image, type and next action", asy
     row.getByRole("cell", { name: "Research", exact: true }),
   ).toHaveCount(2);
   await expect(
-    page.getByRole("columnheader", { name: "Next action", exact: true }),
-  ).toHaveCount(0);
-  // Research rows replace the reason with the record's current gaps; the
-  // rule's next action stays as the reason's description.
-  await expect(
-    row.getByTitle("Review missing facts and add verified evidence.", {
-      exact: true,
+    page.getByRole("columnheader").filter({
+      has: page.getByRole("button", {
+        name: "Sort by Next action",
+        exact: true,
+      }),
     }),
   ).toBeVisible();
+  await expect(
+    row.getByRole("cell").filter({
+      hasText: "Review missing facts and add verified evidence.",
+    }),
+  ).toBeVisible();
+  const queueUrl = page.url();
+  const details = row.getByRole("button", {
+    name: "Action details",
+    exact: true,
+  });
+  for (const key of ["Enter", "Space"]) {
+    await details.focus();
+    await page.keyboard.press(key);
+    const dialog = page.getByRole("dialog", {
+      name: "Action details",
+      exact: true,
+    });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText("Claude / Codex");
+    await expect(dialog).toContainText(
+      "Record verified facts or a supported data exception. Review the proposed fields before applying.",
+    );
+    await expect(page).toHaveURL(queueUrl);
+    await expect(
+      page.getByRole("complementary", { name: "Product inspector" }),
+    ).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+  }
   const table = await page.getByRole("table").boundingBox();
   const main = await page.getByRole("main").boundingBox();
   expect(table && main && main.width - table.width).toBeLessThanOrEqual(2);

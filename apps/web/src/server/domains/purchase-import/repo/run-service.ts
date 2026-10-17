@@ -1118,12 +1118,6 @@ export async function markRunFailed(
       ),
     )
     .returning({ vendorAccountId: runTable.vendorAccountId });
-  if (run?.vendorAccountId) {
-    await getDb(db)
-      .update(vendorAccount)
-      .set({ status: "active", updatedAt: new Date() })
-      .where(sql`${vendorAccount.id} = ${run.vendorAccountId}`);
-  }
   return { failed: Boolean(run), detail: input.detail ?? null };
 }
 
@@ -2205,15 +2199,6 @@ export async function controlRun(
             successorId,
             unresolvedTargets.map((target) => target.workKey),
           );
-        }
-        if (successorVendorAccountId) {
-          await tx
-            .update(vendorAccount)
-            .set({
-              status: "active",
-              updatedAt: new Date(),
-            })
-            .where(eq(vendorAccount.id, successorVendorAccountId));
         }
         return {
           publicId: input.runPublicId,
