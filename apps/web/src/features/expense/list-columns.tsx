@@ -81,8 +81,8 @@ function useExpenseFacetHints(filters: ExpenseFilters) {
  * row reports on exactly the rows below it.
  */
 function ExpenseLedgerSummary({ filters }: { filters: ExpenseFilters }) {
-  const analyticsQuery = useQuery({
-    ...expense.analytics.queryOptions(filters),
+  const summaryQuery = useQuery({
+    ...expense.spendSummary.queryOptions(filters),
     placeholderData: keepPreviousData,
   });
   return (
@@ -92,12 +92,8 @@ function ExpenseLedgerSummary({ filters }: { filters: ExpenseFilters }) {
           ? "allocation"
           : "ledger"
       }
-      loading={analyticsQuery.isPending || analyticsQuery.isPlaceholderData}
-      summary={
-        analyticsQuery.isPlaceholderData
-          ? undefined
-          : analyticsQuery.data?.summary
-      }
+      loading={summaryQuery.isPending || summaryQuery.isPlaceholderData}
+      summary={summaryQuery.isPlaceholderData ? undefined : summaryQuery.data}
       className="mb-4"
     />
   );
