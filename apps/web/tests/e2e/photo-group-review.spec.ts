@@ -1454,6 +1454,40 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
     ],
   });
   expect(changed.ok(), await changed.text()).toBeTruthy();
+  // Pending fields must never stand in for saved evidence during loading/failure.
+  const releaseCurrent = Promise.withResolvers<void>();
+  let failCurrent = true;
+  await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
+    if (!failCurrent) return route.continue();
+    if (
+      await unbatchFor(route, ["entity.detail", "photoImport.productEvidence"])
+    )
+      return;
+    const targetsCurrent = dispatchOperations(route.request()).some(
+      (operation) =>
+        operation.operation === "photoImport.productEvidence" ||
+        (operation.operation === "entity.detail" &&
+          z.object({ entity: z.literal("product") }).safeParse(operation.input)
+            .success),
+    );
+    if (!targetsCurrent) return route.continue();
+    await releaseCurrent.promise;
+    await route.fulfill({
+      status: 503,
+      body: "Synthetic saved product evidence unavailable",
+    });
+  });
+  await page.reload();
+  const modelRow = attach.locator('[data-cross-check="model"]');
+  try {
+    await expect(modelRow).toContainText("Loading current product");
+    await expect(modelRow).not.toContainText("SJ-999");
+  } finally {
+    releaseCurrent.resolve();
+  }
+  await expect(modelRow).toContainText("Current product unavailable");
+  await expect(modelRow).not.toContainText("SJ-999");
+  failCurrent = false;
   const inferred = page.waitForResponse(
     (response) =>
       response.request().postData()?.includes("photoImport.candidatesBatch") ===
@@ -1464,7 +1498,6 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
   await expect(
     attach.getByText("Checking existing Products…", { exact: true }),
   ).toHaveCount(0);
-  const modelRow = attach.locator('[data-cross-check="model"]');
   await expect(modelRow).toContainText("SJ-104");
   await expect(modelRow).not.toContainText("SJ-999");
   await expect(attach.getByLabel("Proposed model change")).toContainText(

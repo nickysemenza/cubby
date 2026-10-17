@@ -2,10 +2,7 @@ import type {
   ImageShortcode,
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
-import {
-  productCategoryShortcode,
-  productShortcode,
-} from "@cubby/schemas/identifiers";
+import { productCategoryShortcode } from "@cubby/schemas/identifiers";
 import type { ImageProcessingJobState } from "@cubby/schemas/image-processing";
 import type {
   PhotoGroupReview as PhotoGroupDecision,
@@ -905,17 +902,14 @@ const fieldLabel = (field: PhotoFieldCrossCheck["field"]) =>
 
 function FieldCrossChecks({
   checks,
-  name,
   product,
+  unavailable,
   identifiers,
   changedFields,
 }: {
   checks: readonly PhotoFieldCrossCheck[];
-  name?: string;
-  product?: Pick<
-    PhotoProductEvidence,
-    "name" | "manufacturer" | "model" | "identifiers"
-  >;
+  product?: Pick<PhotoProductEvidence, "name" | "manufacturer" | "model">;
+  unavailable: boolean;
   identifiers?: ReactNode;
   changedFields?: PhotoGroupDecision["productChanges"];
 }) {
@@ -938,13 +932,17 @@ function FieldCrossChecks({
       ),
     );
   const stored = (check: PhotoFieldCrossCheck) => {
-    if (check.field === "identifiers")
-      return (
-        identifiers ?? product?.identifiers?.join(" · ") ?? check.productValue
-      );
-    if (check.field === "manufacturer" || check.field === "model")
-      return product ? product[check.field] : check.productValue;
-    if (check.field === "name") return product?.name ?? name;
+    if (check.field === "identifiers") return identifiers;
+    if (
+      check.field === "manufacturer" ||
+      check.field === "model" ||
+      check.field === "name"
+    )
+      return product
+        ? product[check.field]
+        : unavailable
+          ? "Current product unavailable"
+          : "Loading current product…";
     return pending(check) ? "See current product name" : check.productValue;
   };
   return (
@@ -1508,19 +1506,6 @@ function ProductPanel({
         ) ?? check)
       : check,
   );
-  const selectedEvidence = useQuery({
-    ...photoImport.productEvidence.queryOptions({
-      runId,
-      productId:
-        product.kind === "existing" && product.existing
-          ? product.existing.id
-          : productShortcode.parse("PRD-4K7M"),
-    }),
-    enabled:
-      step === "identity" &&
-      product.kind === "existing" &&
-      Boolean(product.existing),
-  });
   const currentProduct = useQuery(
     entityDetailFor("product").queryOptions(
       product.kind === "existing" ? (product.existing?.id ?? "") : "",
@@ -1781,8 +1766,11 @@ function ProductPanel({
         <>
           <FieldCrossChecks
             checks={checks}
-            name={product.existing?.name}
-            product={selectedEvidence.data}
+            product={currentProduct.data ?? undefined}
+            unavailable={
+              currentProduct.isError ||
+              (currentProduct.isSuccess && !currentProduct.data)
+            }
             changedFields={proposal.review?.productChanges}
             identifiers={
               currentProduct.data ? (
@@ -1793,6 +1781,8 @@ function ProductPanel({
                 ) : (
                   "Not recorded"
                 )
+              ) : currentProduct.isError || currentProduct.isSuccess ? (
+                "Current product unavailable"
               ) : (
                 "Loading identifier types…"
               )
