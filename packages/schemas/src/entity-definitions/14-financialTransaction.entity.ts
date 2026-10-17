@@ -971,7 +971,6 @@ export default defineEntity({
       allocationIntegrity: { type: "enum", options: ["defect"] },
       sourceRefs: {
         predicate: "multiselect",
-        negatable: true,
         reason:
           "Matches a live settlement reference's source, together with externalId on the same reference",
       },

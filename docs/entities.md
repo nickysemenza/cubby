@@ -1460,7 +1460,7 @@ except Outerwear"). A declared `predicate` offers Exclude only with
 `negatable: true`, which asserts its SQL reads only the values it receives.
 One that reads request data prepared from the include values (an effective
 owner, an expense allocation share) or pairs with a sibling on one related
-row (an image's import-run target state) would ignore or mis-pair excluded
+row (an image's import-run target state, a transaction's settlement source) would ignore or mis-pair excluded
 values, so it keeps the key with the reason `Include only: <its reason>.`;
 clients disable "is not" with that line and the list rejects the key as
 `LIST_FILTER_EXCLUDE_UNSUPPORTED` with the same text. Web column state carries

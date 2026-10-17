@@ -35,6 +35,7 @@ import {
   type FilterSide,
   hasFilterValue,
   operatorFor,
+  selectedValues,
   sideValues,
   withMode,
   withSideValues,
@@ -185,7 +186,7 @@ function MultiselectEditor({
   const options = side === "is" ? roster : isNotRoster;
   const label = field.label ?? field.key;
   useEffect(() => {
-    field.onActivate?.(filter?.values ?? []);
+    field.onActivate?.(selectedValues(filter?.values ?? []));
   }, [field, filter?.values]);
   // Inside the picker's popup: anything beside it would sit behind the
   // popup's modal focus scope, unreachable while the list is open.
@@ -311,7 +312,7 @@ function FilterValueEditor({
       clearable
       className="w-full"
       onOpenChange={(open) => {
-        if (open) field.onActivate?.(filter?.values ?? []);
+        if (open) field.onActivate?.(selectedValues(filter?.values ?? []));
       }}
       onSearchChange={field.onSearchChange}
       isLoading={field.isLoading}
@@ -547,7 +548,8 @@ export function FilterBar({
   useEffect(() => {
     for (const field of fields) {
       const filter = filtersByField.get(field.key);
-      if (filter && isFieldActive(filter)) field.onActivate?.(filter.values);
+      if (filter && isFieldActive(filter))
+        field.onActivate?.(selectedValues(filter.values));
     }
   }, [fields, filtersByField]);
   const visibleChipFields = collapsed

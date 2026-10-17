@@ -94,6 +94,15 @@ export function activeSides(
   ];
 }
 
+/**
+ * Every picked value on either side, unprefixed: the ids a deferred roster
+ * loads so both sides' chips can name them.
+ */
+export const selectedValues = (values: readonly string[]): string[] => [
+  ...sideValues(values, "is"),
+  ...sideValues(values, "isNot"),
+];
+
 /** The values a side's picker shows: no mode tokens, excluded unprefixed. */
 export function sideValues(
   values: readonly string[],
