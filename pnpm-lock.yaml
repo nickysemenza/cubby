@@ -231,9 +231,6 @@ importers:
       '@types/node':
         specifier: ^26.6.5
         version: 26.6.5
-      '@types/picomatch':
-        specifier: ^4.0.3
-        version: 4.0.3
       '@types/proper-lockfile':
         specifier: ^4.1.4
         version: 4.1.4
@@ -261,9 +258,6 @@ importers:
       oxlint:
         specifier: 1.88.0
         version: 1.88.0
-      picomatch:
-        specifier: ^4.0.7
-        version: 4.0.7
       proper-lockfile:
         specifier: ^4.1.2
         version: 4.1.2

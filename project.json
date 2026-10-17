@@ -24,7 +24,7 @@
         "{workspaceRoot}/apps/web/cloudflare.config.ts",
         "{workspaceRoot}/apps/web/tooling/cloudflare-public-config.ts",
         "{workspaceRoot}/apps/web/tooling/dev/config.ts",
-        "{workspaceRoot}/scripts/lib/dev-profile.ts",
+        "{workspaceRoot}/apps/web/tooling/dev-services/dev-profile.ts",
         "{workspaceRoot}/apps/web/tsconfig.json",
         // The entity-declaration import-boundary override (import-boundary.ts).
         "{workspaceRoot}/.oxlintrc.json",
@@ -88,19 +88,6 @@
       "dependsOn": ["wasm", "generate"],
       "cache": true,
       "inputs": ["repo"]
-    },
-    // .github/ci-lanes.yml matches the Nx inputs of each CI lane's tasks.
-    "ci-lanes": {
-      "command": "node scripts/ci-lanes.ts --check",
-      "cache": true,
-      "inputs": [
-        "{workspaceRoot}/nx.json",
-        "{workspaceRoot}/**/project.json",
-        "{workspaceRoot}/**/package.json",
-        "{workspaceRoot}/scripts/ci-lanes.ts",
-        "{workspaceRoot}/scripts/ci-policy.ts",
-        "{workspaceRoot}/.github/ci-lanes.yml"
-      ]
     },
     "bindings": {
       "command": "pnpm --filter @cubby/web types:check",

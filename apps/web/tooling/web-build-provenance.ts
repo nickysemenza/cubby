@@ -5,10 +5,7 @@ import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { OutputWorkerSchema } from "@cloudflare/config";
 
-import {
-  type BuildSource,
-  sourceFingerprint,
-} from "../../../scripts/lib/source-fingerprint.ts";
+import { type BuildSource, sourceFingerprint } from "./source-fingerprint.ts";
 import { digestFiles, walkFiles } from "../../../scripts/lib/tree-digest.ts";
 
 const buildStampSchema = z.object({

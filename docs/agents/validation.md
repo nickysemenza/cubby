@@ -127,9 +127,9 @@ CI selects broad tiers from their declared inputs; avoid repeating the full
 PostgreSQL, fast, lint, Knip, or build suites locally as a gate. Use scoped lint
 while iterating; the commit hook owns staged lint/format. Run Knip for changed
 entry points/dependencies, generator validation for changed declarations, and
-workflow/routing checks for CI changes. `pnpm check:plan [base]` explains CI
-candidate lanes and matching changed files (default `origin/main`); it is not
-an instruction to run those lanes locally. CI uses its last green main as base.
+`actionlint` for CI workflow changes. CI starts every Linux lane and replays
+unchanged tasks from the Nx cache; that is not an instruction to run those
+lanes locally.
 
 One root agent owns any broad validation that the change needs. A subagent runs
 only focused tests and returns its result, command, duration, relevant output,
@@ -221,15 +221,14 @@ check:staged` runs the same entrypoint. Partial staging is preserved. Target
 run no package managers, dependency installation, generation, WASM, builds,
 typechecks, tests, or network work. Never run Oxfmt by hand; commit and let the
 hook format.
-`pnpm agent:setup` installs shared dispatchers under Git's common metadata
-directory. Linked worktrees inherit them; each runs `.husky/` from its own
-checkout. A missing lint-staged installation fails immediately with the local
+`pnpm agent:setup` points Git's shared `core.hooksPath` at the relative
+`.husky`, so every linked worktree runs the hooks from its own checkout. A missing lint-staged installation fails immediately with the local
 install command. Exported source archives without `.git` skip hook setup.
 Confirm staged-check output; a successful commit alone is not validation evidence.
 Fix reported lint issues explicitly and stage the intended corrections. Use the
 commit hook normally; bypass it only when the user explicitly requests that.
 
-The `commit-msg` hook and CI `Plan` job run the
+The `commit-msg` hook and the `CI passed` job run the
 [outward-text check](../../scripts/check-outward-text.ts) on commit messages
 and PR text respectively. They reject live entity codes; `4K7M` is the one
 allowed example body. Use synthetic examples when correcting a rejection.
@@ -244,13 +243,13 @@ local checks. Report local results and anything unrun without implying that a
 successful push proves correctness.
 
 `CI passed` must pass for the final PR head's content before merge. CI starts
-only the lanes whose inputs differ from the last green `main` run
-([ADR 0014](../adr/0014-path-routed-ci-lanes.md)). A passing result in the
+every Linux lane and path-filters only Rust and Apple
+([ADR 0020](../adr/0020-cache-routed-ci.md)). A passing result in the
 shared Nx remote cache for the same input hash satisfies a started lane's
 check only when the execution environment also matches; CI replays it in seconds
 ([ADR 0009](../adr/0009-content-hash-merge-gate.md),
 [CI](../ci.md#cache-keys-and-the-remote-cache)). A check that reads a new
-file belongs in its Nx target's inputs; `pnpm generate` then routes the lane. Local native results can replay only for the same actual toolchain/environment;
+file belongs in its Nx target's inputs. Local native results replay for the same declared Xcode major;
 local Mac web tests do not replace Linux validation. A green earlier
 commit with different content is not evidence. `main` runs CI after deployment
 starts, so post-merge CI does not replace this gate. A PR that adds a

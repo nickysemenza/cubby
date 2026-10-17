@@ -251,7 +251,7 @@ native PostgreSQL installation remain owned by their existing runners.
 - Every worktree's database, browser tests and local development share one
   container IntegreSQL (`cubby-test-<config>-integresql`) on the same
   PostgreSQL as local development (`cubby-dev-pg`,
-  `scripts/lib/shared-postgres.ts`), started on first use and reused
+  `apps/web/tooling/dev-services/shared-postgres.ts`), started on first use and reused
   afterwards. A common migration-keyed base template feeds each checkout's
   namespaced test pools and the shared dev-corpus template.
   All template layers use IntegreSQL's initializer election without a template

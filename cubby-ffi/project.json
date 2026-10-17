@@ -3,7 +3,7 @@
   "name": "cubby-ffi",
   "targets": {
     "rust": {
-      "command": "node ../scripts/check-rust.ts",
+      "command": "failed=0; cargo fmt --check || failed=1; cargo clippy --locked --profile ci --all-targets -- -D warnings || failed=1; cargo test --locked --profile ci || failed=1; exit $failed",
       "options": {
         "cwd": "{projectRoot}"
       },

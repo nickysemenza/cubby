@@ -31,14 +31,14 @@ beforeAll(() => {
       `PATH=${process.env.PATH ?? ""}`,
       `HOME=${process.env.HOME ?? ""}`,
       process.execPath,
-      path.join(repoRoot, "scripts/dev-db.ts"),
+      path.join(repoRoot, "apps/web/tooling/dev-services/dev-db.ts"),
       "up",
     ],
     { cwd: repoRoot, stdio: "inherit" },
   );
   if (started.status !== 0)
     throw new Error(
-      "Could not start the guarded native PostgreSQL on localhost:55432 (node scripts/dev-db.ts up)",
+      "Could not start the guarded native PostgreSQL on localhost:55432 (node apps/web/tooling/dev-services/dev-db.ts up)",
     );
 }, 240_000);
 const name = () => `cubby_sim_${randomBytes(8).toString("hex")}`;

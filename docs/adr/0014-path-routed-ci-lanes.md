@@ -1,8 +1,8 @@
 # ADR 0014: Start only the CI lanes whose inputs changed
 
-Status: Accepted. Amends [ADR 0009](0009-content-hash-merge-gate.md): the
-content-hashed Nx cache still decides whether a started lane reruns; this
-decides which lanes start.
+Status: Superseded by [ADR 0020](0020-cache-routed-ci.md). Amended
+[ADR 0009](0009-content-hash-merge-gate.md): the content-hashed Nx cache still
+decides whether a started lane reruns; this decided which lanes start.
 
 ## Context
 

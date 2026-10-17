@@ -1,7 +1,7 @@
 {
-  // Dependency-free CLIs use Node's native type stripping. The generator
-  // (apps/web/generator) imports web aliases and is checked by
-  // apps/web/tsconfig.json.
+  // Dependency-free CLIs and node:test files use Node's native type
+  // stripping, wherever they live. The generator (apps/web/generator) imports
+  // web aliases and is checked by apps/web/tsconfig.json.
   "compilerOptions": {
     "incremental": true,
     "target": "es2023",
@@ -23,5 +23,17 @@
     "noFallthroughCasesInSwitch": true,
     "noEmit": true
   },
-  "include": ["scripts/**/*.ts", "tools/oxlint/**/*.test.ts"]
+  "include": [
+    "scripts/**/*.ts",
+    "tools/oxlint/**/*.test.ts",
+    "apps/apple/tooling/**/*.ts",
+    "apps/apple/scripts/*.test.ts",
+    "apps/web/tooling/dev-services/**/*.ts",
+    "apps/web/tooling/source-fingerprint.ts",
+    "apps/web/tooling/dev/dev-runtime-retry.test.ts",
+    "apps/web/tooling/dev/dev-session.test.ts",
+    "apps/web/tooling/native-*.test.ts",
+    "apps/web/tooling/test-run-contract.test.ts",
+    "apps/web/tooling/tester-army/tester-army-startup.test.ts"
+  ]
 }

@@ -258,7 +258,7 @@ input. A cached app skips the large Swift package-clone and DerivedData
 restores; a miss keeps the shared compilation setup. FFI verification, project
 generation and the device runner remain necessary even with a cached app.
 
-Journeys are informational jobs in `ci.yaml`; [CI](ci.md#journeys) owns their
+Journeys are informational jobs in `journeys.yaml`; [CI](ci.md#journeys) owns their
 triggers, run modes, concurrency and runner budget. They run only by a journey
 dispatch or explicit PR labels; there is no scheduled matrix or changed-file
 selection of paid journeys. The labels select independent lanes:
@@ -271,8 +271,7 @@ selection of paid journeys. The labels select independent lanes:
 
 Only same-repository PRs run journeys, and labels remain active on subsequent
 pushes. Adding a label starts its journeys at once, alongside rather than after
-CI; the run rechecks the open PR, exact head, repository and current labels
-before selecting lanes, so removed labels cannot start paid work. A journey
+CI; a push reruns the journeys of the labels the PR carries then. A journey
 dispatch selects the requested catalog directly.
 
 No journey lane is required for merge. The GitHub reporter takes the PR number

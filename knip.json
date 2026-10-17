@@ -1,31 +1,28 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
-    // Root-level gate scripts. They are listed individually rather than as a
-    // `scripts/**` glob so knip still reports a genuinely orphaned script.
+    // Root-level gate scripts and Apple host tooling. They are listed
+    // individually rather than as a glob so knip still reports a genuinely
+    // orphaned script. Web tooling entries live in the apps/web workspace.
     ".": {
       "entry": [
         "neon.ts!",
-        "scripts/apple/apple.ts!",
-        "scripts/apple/apple-inputs.ts!",
-        "scripts/apple/apple-release.ts!",
-        "scripts/test-services.ts!",
+        "apps/apple/tooling/apple.ts!",
+        "apps/apple/tooling/apple-inputs.ts!",
+        "apps/apple/tooling/apple-release.ts!",
         "scripts/ensure.ts!",
-        "scripts/install-git-hooks.ts!",
         "scripts/design-tokens.ts!",
         // Reached from hooks, CI, or package scripts rather than an import
         // (production mode does not read those): .husky/commit-msg,
         // ci.yaml, and the Nx targets.
         "scripts/check-outward-text.ts!",
-        "scripts/ci-lanes.ts!",
-        "scripts/ci-policy.ts!",
-        "scripts/ci-environment.ts!",
-        "scripts/ci-summary.ts!",
-        "scripts/check-rust.ts!",
-        "scripts/stack-preflight.ts!",
-        "scripts/dev-db.ts!"
+        "scripts/stack-preflight.ts!"
       ],
-      "project": ["neon.ts!", "scripts/**/*.ts!"],
+      "project": [
+        "neon.ts!",
+        "scripts/**/*.ts!",
+        "apps/apple/tooling/**/*.ts!"
+      ],
       // Invoked as child commands beyond Knip's script parser; agent-device is
       // spawned by the simulator runner in apps/web/tooling/sim-e2e.ts.
       // neon-env is installed for interactive branch environment commands.
@@ -40,7 +37,7 @@
         // scripts/tsc.ts resolves its bin through import.meta.resolve.
         "tsrs"
       ],
-      // xcode-select: scripts/apple/apple-check.sh (the `apple` Nx targets) uses it
+      // xcode-select: apps/apple/tooling/apple-check.sh (the `apple` Nx targets) uses it
       // to detect a machine without Xcode (so it can skip, not fail). pkill:
       // apple.ts quits the running Mac app before relaunching. container: the
       // Apple test-service runtime. All are system tools, never npm
@@ -174,7 +171,7 @@
     "**/dist/**",
     "**/.wrangler/**",
     "**/.cloudflare/**",
-    "apps/apple/**",
+    "apps/apple/{App,CubbyKit,Generated,docs,e2e}/**",
     "apps/web/src/ui/primitives/context-menu.tsx"
   ],
   "ignoreDependencies": ["zod"],

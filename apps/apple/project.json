@@ -8,13 +8,24 @@
       "{workspaceRoot}/Cargo.{toml,lock}",
       "{workspaceRoot}/rust-toolchain.toml",
       "{workspaceRoot}/.cargo/**/*",
-      "{workspaceRoot}/scripts/{apple/apple-check.sh,apple/apple.ts,apple/apple-inputs.ts,ci-environment.ts,ensure.ts,rust-fingerprint.ts,lib/tree-digest.ts,lib/run.ts}",
-      { "runtime": "node scripts/ci-environment.ts apple" },
-      { "runtime": "node scripts/ci-environment.ts ffi" },
+      // apple-check.sh runs apple.ts, which loads its whole import graph.
+      "{workspaceRoot}/apps/apple/tooling/**/*.{sh,ts}",
+      "!{workspaceRoot}/apps/apple/tooling/**/*.test.ts",
+      "{workspaceRoot}/apps/web/tooling/{simulator-inventory-schema,mac-fixture-identity}.ts",
+      "{workspaceRoot}/apps/web/generator/artifacts.ts",
+      "{workspaceRoot}/packages/shared/src/apple-{client-version,app-identity}.ts",
+      "{workspaceRoot}/scripts/{ensure.ts,rust-fingerprint.ts,lib/tree-digest.ts,lib/run.ts}",
+      // The toolchain is declared, not observed, so a Linux runner computes
+      // the same key as a Mac and skips macOS for an unchanged pass. Minor
+      // Xcode updates within the declared major reuse passes.
+      "{workspaceRoot}/.xcode-version",
+      "{workspaceRoot}/.github/actions/setup-apple/**/*",
+      { "env": "CUBBY_FFI_PROFILE" },
+      { "env": "CARGO_BUILD_WARNINGS" },
+      { "env": "RUSTFLAGS" },
+      { "env": "CARGO_ENCODED_RUSTFLAGS" },
       "{projectRoot}/scripts/{prepare-project.sh,build-rust.sh,check-openapi-warnings.sh}",
       "{workspaceRoot}/packages/shared/golden-vectors/**/*",
-      "{workspaceRoot}/.github/workflows/ci.yaml",
-      "{workspaceRoot}/.github/actions/**/*",
       {
         "externalDependencies": []
       }
@@ -24,7 +35,7 @@
       "{projectRoot}/CubbyKit/**/*",
       "!{projectRoot}/CubbyKit/Sources/CubbyAPI/README.md",
       {
-        "runtime": "node scripts/apple/apple-inputs.ts host"
+        "runtime": "node apps/apple/tooling/apple-inputs.ts host"
       }
     ],
     "appleApp": [
@@ -33,34 +44,39 @@
       "!{projectRoot}/{AGENTS,DESIGN,ITERATION,README}.md",
       "!{projectRoot}/CubbyKit/Sources/CubbyAPI/README.md",
       "!{projectRoot}/CubbyKit/Tests/**/*",
+      // Host-side tooling and its tests; appleCommon names the files the
+      // build runs.
+      "!{projectRoot}/tooling/**/*",
+      "!{projectRoot}/scripts/*.test.ts",
       {
-        "runtime": "node scripts/apple/apple-inputs.ts app"
+        "runtime": "node apps/apple/tooling/apple-inputs.ts app"
       }
     ]
   },
   "targets": {
     "lint": {
-      "command": "bash scripts/apple/apple-check.sh lint",
+      "command": "bash apps/apple/tooling/apple-check.sh lint",
       "cache": true,
       "inputs": [
         "{projectRoot}/**/*.swift",
         "{projectRoot}/.swift-format",
-        "{workspaceRoot}/scripts/apple/apple-check.sh",
-        { "runtime": "node scripts/ci-environment.ts swift" },
+        "{workspaceRoot}/apps/apple/tooling/apple-check.sh",
+        // stdout only: some Swift builds print a driver version to stderr.
+        { "runtime": "swift --version 2>/dev/null" },
         {
           "externalDependencies": []
         }
       ]
     },
     "host-tests": {
-      "command": "bash scripts/apple/apple-check.sh host",
+      "command": "bash apps/apple/tooling/apple-check.sh host",
       "cache": true,
       "inputs": [
         "appleHost"
       ]
     },
     "simulator-build": {
-      "command": "bash scripts/apple/apple-check.sh app",
+      "command": "bash apps/apple/tooling/apple-check.sh app",
       "cache": true,
       "inputs": [
         "appleApp"

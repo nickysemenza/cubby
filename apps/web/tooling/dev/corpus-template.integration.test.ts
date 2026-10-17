@@ -7,7 +7,7 @@ import { Client } from "pg";
 import { expect, it } from "vitest";
 import { prepareDevDatabase, pruneCheckoutDatabases } from "./corpus-template";
 import { testServiceConfig } from "../test-service-config";
-import { resolveDevProfile } from "../../../../scripts/lib/dev-profile";
+import { resolveDevProfile } from "../dev-services/dev-profile";
 import { databaseIdentifier } from "../schema-template";
 
 // Failure modes: clone loses auth/audit/search/image rows; startup overwrites

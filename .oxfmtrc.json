@@ -44,6 +44,8 @@
     "apps/apple/**/*.ts",
     "apps/apple/**/*.tsx",
     "apps/apple/**/*.js",
-    "apps/apple/**/*.jsx"
+    "apps/apple/**/*.jsx",
+    "!apps/apple/tooling/**",
+    "!apps/apple/scripts/*.test.ts"
   ]
 }

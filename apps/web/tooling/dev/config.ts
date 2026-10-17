@@ -5,7 +5,7 @@ import {
   triggers,
   type WorkerConfig,
 } from "cf/config";
-import type { DevProfile } from "../../../../scripts/lib/dev-profile.ts";
+import type { DevProfile } from "../dev-services/dev-profile.ts";
 
 /** Reuse binding declarations, with checkout-local targets and no production triggers. */
 export function localWorker(production: WorkerConfig, profile: DevProfile) {

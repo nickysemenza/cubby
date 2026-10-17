@@ -98,11 +98,7 @@ function fixture(t: TestContext) {
   write("example file.ts", "export const value = 1;\n");
   ok("add", ".");
   ok("-c", "core.hooksPath=/dev/null", "commit", "-m", "Fixture baseline");
-  // Exercise the real prepare lifecycle command, including its installed dispatchers.
-  cpSync(
-    join(source, "scripts/install-git-hooks.ts"),
-    join(root, "scripts/install-git-hooks.ts"),
-  );
+  // Exercise the real prepare lifecycle command.
   const installed = spawnSync("sh", ["-c", manifest.scripts.prepare!], {
     cwd: root,
     env,

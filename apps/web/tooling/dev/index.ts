@@ -1,15 +1,15 @@
 import {
   processIdentity,
   processStatus,
-} from "../../../../scripts/lib/process-identity.ts";
+} from "../dev-services/process-identity.ts";
 import { createPostgresPool } from "../postgres-pool";
 import {
   devSessionSchema as sessionSchema,
   type DevSession as Session,
 } from "./state";
-import { localSimulatorServer } from "../../../../scripts/apple/lib/simulator-server.ts";
-import { devContainerBackend } from "../../../../scripts/lib/dev-container.ts";
-import { resolveOwnedDevProfile } from "../../../../scripts/lib/shared-postgres.ts";
+import { localSimulatorServer } from "../../../apple/tooling/lib/simulator-server.ts";
+import { devContainerBackend } from "../dev-services/dev-container.ts";
+import { resolveOwnedDevProfile } from "../dev-services/shared-postgres.ts";
 import { spawn, execFileSync, type ChildProcess } from "node:child_process";
 import {
   mkdirSync,
@@ -32,7 +32,7 @@ import {
   devProcessEnvironment,
   resolveDevProfile,
   type DevProfile,
-} from "../../../../scripts/lib/dev-profile.ts";
+} from "../dev-services/dev-profile.ts";
 
 const root = path.resolve(import.meta.dirname, "../../../..");
 interface DiagnosticChecks {
@@ -288,7 +288,10 @@ async function start(profile: DevProfile, preview: boolean): Promise<void> {
   };
   try {
     await phase("postgres", () =>
-      run(profile, process.execPath, ["scripts/dev-db.ts", "up"]),
+      run(profile, process.execPath, [
+        "apps/web/tooling/dev-services/dev-db.ts",
+        "up",
+      ]),
     );
     profile = await resolveOwnedDevProfile(root, selectedEnvironment);
     const address = new URL(profile.databaseUrl).host;
@@ -300,7 +303,10 @@ async function start(profile: DevProfile, preview: boolean): Promise<void> {
       run(profile, process.execPath, ["scripts/ensure.ts", "generate"]),
     );
     await phase("database", () =>
-      run(profile, process.execPath, ["scripts/dev-db.ts", "ready"]),
+      run(profile, process.execPath, [
+        "apps/web/tooling/dev-services/dev-db.ts",
+        "ready",
+      ]),
     );
     if (preview)
       await phase("build", async () => {
@@ -578,7 +584,7 @@ async function main(): Promise<void> {
   if (command === "reset") {
     await stop(profile);
     await run(profile, process.execPath, [
-      "scripts/dev-db.ts",
+      "apps/web/tooling/dev-services/dev-db.ts",
       "reset",
       ...(args.includes("--reseed") ? ["--reseed"] : []),
     ]);

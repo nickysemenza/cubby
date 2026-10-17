@@ -4,7 +4,7 @@ import { assertDatabase, JourneyIds, type DbCheck } from "./journey";
  * Deterministic proof, with no model call, that a journey's read-back bites:
  * the matching expectation passes, a deliberately wrong one (`wrong = true`)
  * fails, and a changed value fails. Run through a disposable Postgres:
- * `node scripts/test-services.ts -- pnpm --dir apps/web exec tsx tooling/tester-army/selfcheck.ts`
+ * `node apps/web/tooling/dev-services/test-services.ts -- pnpm --dir apps/web exec tsx tooling/tester-army/selfcheck.ts`
  */
 process.env.TESTER_ARMY_DB_TIMEOUT_MS = "400";
 // test-services hands over the database host it started (a container

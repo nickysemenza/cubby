@@ -44,7 +44,7 @@
     },
     // CUBBY_POSTGRES_SHARD (`index/count`) splits the files across CI runners.
     "postgres": {
-      "command": "pnpm exec node ../../scripts/test-services.ts -- vitest run --project integration --shard=${CUBBY_POSTGRES_SHARD:-1/1}",
+      "command": "pnpm exec node tooling/dev-services/test-services.ts -- vitest run --project integration --shard=${CUBBY_POSTGRES_SHARD:-1/1}",
       "options": {
         "cwd": "apps/web"
       },
@@ -79,7 +79,7 @@
     // build-cf's key includes HEAD for provenance, so as a dependency it
     // would rebuild before every cache hit here.
     "workerd-tests": {
-      "command": "pnpm exec tsx tooling/build-cf.ts --ensure && pnpm exec node ../../scripts/test-services.ts -- vitest run --project integration-workerd",
+      "command": "pnpm exec tsx tooling/build-cf.ts --ensure && pnpm exec node tooling/dev-services/test-services.ts -- vitest run --project integration-workerd",
       "options": {
         "cwd": "apps/web"
       },

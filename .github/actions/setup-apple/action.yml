@@ -1,6 +1,6 @@
 name: Setup Apple
 description: >-
-  Prepare a macOS runner for a native build: select Xcode 27, install the
+  Prepare a macOS runner for a native build: select the .xcode-version Xcode, install the
   workspace, optionally probe a cached Nx pass, restore or build the CubbyFFI
   slices, install the Apple tools with the SPM clone cache, and restore the
   shared simulator DerivedData.
@@ -39,11 +39,11 @@ runs:
   steps:
     # Select the released SDK before native builds and cache fingerprints; a
     # compiler upgrade must never restore objects built by the old one.
-    - name: Select Xcode 27
+    - name: Select Xcode
       id: toolchain
       shell: bash
       run: |
-        sudo xcode-select --switch /Applications/Xcode_27.app/Contents/Developer
+        sudo xcode-select --switch "/Applications/Xcode_$(cat .xcode-version).app/Contents/Developer"
         xcodebuild -version
         xcrun swift --version
         echo "hash=$(xcodebuild -version 2>&1 | shasum -a 256 | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
@@ -218,7 +218,7 @@ runs:
         path: ${{ steps.paths.outputs.value }}
         # The host-test phase leaves .build here; it is not an app source input.
         # v6 excludes entries published by interrupted or failed builds.
-        key: xcode-dd-v6-${{ runner.os }}-${{ steps.toolchain.outputs.hash }}-${{ steps.packages.outputs.hash }}-${{ hashFiles('apps/apple/project.yml', 'apps/apple/App/**', 'apps/apple/CubbyKit/**', '!apps/apple/CubbyKit/.build/**') }}-${{ hashFiles('scripts/apple/apple-check.sh', 'scripts/apple/apple.ts', 'apps/apple/scripts/prepare-project.sh') }}
+        key: xcode-dd-v6-${{ runner.os }}-${{ steps.toolchain.outputs.hash }}-${{ steps.packages.outputs.hash }}-${{ hashFiles('apps/apple/project.yml', 'apps/apple/App/**', 'apps/apple/CubbyKit/**', '!apps/apple/CubbyKit/.build/**') }}-${{ hashFiles('apps/apple/tooling/apple-check.sh', 'apps/apple/tooling/apple.ts', 'apps/apple/scripts/prepare-project.sh') }}
         # Keep incomplete entries from earlier generations out of the restore.
         restore-keys: |
           xcode-dd-v6-${{ runner.os }}-${{ steps.toolchain.outputs.hash }}-${{ steps.packages.outputs.hash }}-

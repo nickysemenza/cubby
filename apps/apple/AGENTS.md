@@ -209,7 +209,7 @@ None is committed; edit the generator or its inputs, never the output. A missing
 - `xcodegen generate --spec apps/apple/project.yml` (when `project.yml` changes)
 - App builds prepare the xcframework through the shared preparation entrypoint.
 - `swift format lint --strict --configuration apps/apple/.swift-format --recursive` (see
-  `scripts/apple/apple-check.sh`, the `apple:lint` Nx target) gates
+  `apps/apple/tooling/apple-check.sh`, the `apple:lint` Nx target) gates
   formatting; run
   `swift format --in-place --configuration apps/apple/.swift-format --recursive` to fix.
   Keep copied Markdown fixtures/resources in the native build inputs; [CI](../../docs/ci.md) owns the

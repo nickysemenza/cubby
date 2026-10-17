@@ -41,6 +41,10 @@
     "apps/web/wasm/**",
     "**/.cloudflare/**",
     "apps/apple/**",
+    "!apps/apple/tooling/",
+    "!apps/apple/tooling/**",
+    "!apps/apple/scripts/",
+    "!apps/apple/scripts/*.test.ts",
     "cubby-ffi/**"
   ],
   "rules": {
