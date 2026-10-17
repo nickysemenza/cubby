@@ -509,12 +509,17 @@ export const MCP_TOOLS = defineMcpTools({
 
   finance: {
     description:
-      "Apply uniquely supported financial evidence through server checks. Ambiguous or changed accepted facts remain review work.",
+      "Apply uniquely supported financial evidence, or a member's explicit booking of one posted transaction, through server checks. Ambiguous or changed accepted facts remain review work.",
     actions: {
       allocate_settlement: mcpAction({
         op: financialTransactionContract.ops.allocateSettlement,
         description:
           "Save explicitly reviewed Purchase settlement allocations only while the exact prior graph remains current. Read all current allocations first and preserve unrelated edges; stale proposals are refused without mutation. Model ranking alone does not authorize an allocation.",
+      }),
+      book_transaction: mcpAction({
+        op: financialTransactionContract.ops.bookTransaction,
+        description:
+          'Book one posted Financial Transaction into spending through the reviewed booking checks (the same preview/commit as the web review, in one call; replays an identical booking). Name `purchaseId` to book into an existing Purchase, or `vendorId` to book into a new lump Purchase dated the transaction day. Incoming credits (income) book only as `economicRole: "reimbursement"`, as a negative reimbursement Expense; a reimbursement naming neither resolves the Vendor its merchant names exactly (name or alias) and refuses an unknown merchant. Links the transaction to the Purchase; never creates a Vendor. Transfers and card repayments are refused.',
       }),
       converge: mcpAction({
         op: financialTransactionContract.ops.converge,

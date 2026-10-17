@@ -78,6 +78,11 @@ export const financialTransactionContract = defineContract(
       native: "Converge uniquely verified financial evidence",
       invalidates: ["financialTransaction", "purchase", "expense", "email"],
     }),
+    bookTransaction: mutation({
+      input: financialBookingInput,
+      output: financialBookingResult,
+      invalidates: ["financialTransaction", "purchase", "expense"],
+    }),
     previewBookingCorrection: query({
       mcp: {
         omit: "deferred_capability",
