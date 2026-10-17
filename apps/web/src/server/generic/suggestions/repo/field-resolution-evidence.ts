@@ -42,8 +42,8 @@ import {
 import { kitAncestorCteSql } from "~/server/domains/product/repo/kit-projection";
 import { purchaseEvidenceFieldResolutionsSql } from "~/server/domains/purchase/repo/purchase-evidence-policy";
 import { eligibleParentTaskTradeSql } from "~/server/domains/task/repo/task-project-inheritance";
+import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
 import { shortcodeLabels } from "~/server/generic/shortcode/repo/shortcode-labels";
-import { effectiveFieldSql } from "~/server/generic/list/repo/inheritance";
 
 const categoryOrigin = purchaseOut.shape.spendingCategoryOrigin.unwrap();
 type Evidence = NonNullable<FieldExplanationOutput["resolutionEvidence"]>;
@@ -136,7 +136,11 @@ async function ancestors(
   }
   // Task trade inherits from the parent task only (a different rule).
   const maxDepth =
-    kind === "productCategory" ? 3 : kind === "task" && field === "trade" ? 1 : 100;
+    kind === "productCategory"
+      ? 3
+      : kind === "task" && field === "trade"
+        ? 1
+        : 100;
   const rows = await unwrapDb(db).execute(sql`
     WITH RECURSIVE ancestry AS (
       SELECT p.id,p.${parent} AS parent,p.shortcode,p.name,${value} AS value,${assigned} AS assigned,0 AS depth,ARRAY[p.id] AS visited

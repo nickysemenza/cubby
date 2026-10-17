@@ -13,7 +13,7 @@ import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { location, plant, planting } from "~/server/db/schema";
 import { plantingDisplayName } from "~/server/domains/garden/repo/garden";
-import { effectiveFieldSql } from "~/server/generic/list/repo/inheritance";
+import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
 
 /** The planting lifecycle's milestone date columns, in the order they occur.
  * Shared by the "any milestone falls in range" read predicate and by

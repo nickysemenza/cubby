@@ -11,7 +11,7 @@ import { effectiveExpenseProjectSql } from "~/server/domains/expense/repo/expens
 import {
   effectiveFieldSql,
   inheritedFieldOfColumn,
-} from "~/server/generic/list/repo/inheritance";
+} from "~/server/generic/inheritance/effective-field";
 
 interface EdgeSpec {
   edgeKey: string;

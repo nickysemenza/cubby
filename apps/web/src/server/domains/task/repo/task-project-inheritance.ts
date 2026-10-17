@@ -30,9 +30,8 @@ import {
   inheritedFieldSql,
   inheritedSourceEntity,
   inheritedSourceSql,
-} from "~/server/generic/list/repo/inheritance";
+} from "~/server/generic/inheritance/effective-field";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-
 
 const taskColumn = (alias: string, column: string) =>
   sql.raw(`"${alias}"."${column}"`);
@@ -145,7 +144,7 @@ const taskResolutionExtras = (alias: string) => {
       WHERE parent."id" = ${parentId} AND parent."deletedAt" IS NULL)`,
   };
 };
-type InheritedSource = { source: number; id: string } | null;
+type InheritedSource = { position: number; id: string } | null;
 type ResolvedAssignment = {
   effectiveAssigneeId: LedgerPartyId | null;
   fallbackAssigneeId: LedgerPartyId | null;
@@ -180,7 +179,7 @@ const sourceOf = (
   entity: "task" | "project",
 ): string | null =>
   source !== null &&
-  inheritedSourceEntity("task", field, source.source) === entity
+  inheritedSourceEntity("task", field, source.position) === entity
     ? source.id
     : null;
 
@@ -228,11 +227,8 @@ async function assignmentReferences(
       extras.flatMap((row) =>
         (["assigneeId", "projectId", "subjectProductId"] as const).flatMap(
           (field) => {
-            const id = sourceOf(
-              sourceColumn(row, field),
-              field,
-              "task",
-            );
+            const id = sourceOf(sourceColumn(row, field), field, "task");
+            // SAFETY: a task `hierarchy` source names a Task row id.
             return id === null ? [] : [id as TaskId];
           },
         ),
@@ -355,25 +351,29 @@ function assignmentResolutions(
   const sourceOfField = (
     field: "assigneeId" | "projectId" | "subjectProductId",
     source: InheritedSource,
-  ): { label: string; entity: FieldResolution["sourceEntity"] } => {
+  ) => {
     const ancestor = sourceOf(source, field, "task");
-    const fromTask = ancestor === null ? undefined : refs.tasks.get(ancestor as TaskId);
+    const fromTask =
+      // SAFETY: a task `hierarchy` source names a Task row id.
+      ancestor === null ? undefined : refs.tasks.get(ancestor as TaskId);
     if (fromTask)
       return {
         label: ancestor === row.parentTaskId ? "Parent task" : "Ancestor task",
         entity: {
-          entityKind: "task",
+          entityKind: "task" as const,
           entityId: fromTask.shortcode,
           name: fromTask.name,
         },
       };
+    // SAFETY: the assignee's path source ends at a Project row.
     const projectId = sourceOf(source, field, "project") as ProjectId | null;
-    const fromProject = projectId === null ? undefined : refs.projects.get(projectId);
+    const fromProject =
+      projectId === null ? undefined : refs.projects.get(projectId);
     if (fromProject)
       return {
         label: "Project default",
         entity: {
-          entityKind: "project",
+          entityKind: "project" as const,
           entityId: fromProject.shortcode,
           name: fromProject.name,
         },

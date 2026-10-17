@@ -24,7 +24,7 @@ import {
 } from "~/server/generic/embedding/repo/entity-embedding";
 import { normalizeSearchText } from "~/server/generic/embedding/repo/semantic/text";
 import type { SemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
-import { effectiveFieldSql } from "~/server/generic/list/repo/inheritance";
+import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
 
 interface SearchDocumentSource {
   entityKind: SearchableEntity;

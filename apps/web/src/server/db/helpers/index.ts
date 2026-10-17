@@ -63,7 +63,6 @@ export {
   presenceCondition,
   rangeConditions,
   textArrayMatches,
-  textArraySql,
   uuidArrayParam,
 } from "~/server/db/helpers/query";
 // Relation loaders

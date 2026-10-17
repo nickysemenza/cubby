@@ -4,54 +4,43 @@ import {
   taskListItemOut,
   taskStatusSchema,
 } from "@cubby/schemas/project";
-
 import type { TaskFilters } from "@cubby/schemas/project";
-
 import { and, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 
-
 import { projectListRows } from "~/entity/model/list-read-schema";
-
 import { householdLocalDate } from "~/lib/household-date";
-
 import type { Database } from "~/server/db";
-
-import { formatSearchTerm, getDb, type ListReadIntent, notDeleted, relations, uuidArrayParam } from "~/server/db/helpers";
+import {
+  formatSearchTerm,
+  getDb,
+  type ListReadIntent,
+  notDeleted,
+  relations,
+  uuidArrayParam,
+} from "~/server/db/helpers";
 import { product, task } from "~/server/db/schema";
-
 import { matchingEmbeddedProjectIds } from "~/server/domains/project/repo/dashboard-shared";
-
 import {
   dbTaskToAPI,
   effectiveTaskDueDateSql,
 } from "~/server/domains/task/repo/helpers";
-
 import { withDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
-
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-
+import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
 import { listScaffold } from "~/server/generic/list/repo/list";
-
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-
 import {
   loadListGroup,
   wantsListGroup,
 } from "~/server/generic/list/repo/list-projection";
-
 import { parseCompleteListRead } from "~/server/generic/list/repo/list-read-adapters";
 
-
 import { taskDependencyIds, taskSubtaskCounts } from "./crud";
-
 import {
   effectiveTaskTradeSql,
   hydrateTaskInheritanceRows,
 } from "./task-project-inheritance";
-
-import { effectiveFieldSql } from "~/server/generic/list/repo/inheritance";
-
 
 const qb = new QueryBuilder();
 

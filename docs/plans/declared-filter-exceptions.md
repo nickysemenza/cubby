@@ -275,21 +275,19 @@ The field's `resolution` gains `inherit`. It is the one declaration of the
 fallback chain that `explanation.description` describes today in prose:
 
 ```ts
-// task assigneeId: today's chain, reproduced exactly
-// (task-project-inheritance.ts:104-131).
+// task assigneeId: the nearest ancestor task that sets its own, then the
+// task's effective project default (§14.1).
 resolution: {
   reset: { assigneeMode: "inherit", assigneeId: null },
   none:  { assigneeMode: "explicit", assigneeId: null },
   inherit: {
     mode: { field: "assigneeMode", inherit: "inherit" },
-    from: [{ path: "parentTask", read: "stored" },   // parent's own decision
-           { path: "parentTask.project.assigneeId" }, // parent's project default
-           { path: "project.assigneeId" }],          // own project default
+    from: ["hierarchy", { path: "project.assigneeId" }],
   },
 }
-// task projectId / subjectProductId: one parent level, as today.
+// task projectId / subjectProductId: the nearest ancestor task that sets its own.
 inherit: { mode: { field: "projectMode", inherit: "inherit", explicitIfSet: true },
-           from: [{ path: "parentTask", read: "stored" }] }
+           from: ["hierarchy"] }
 // productCategory feature: no mode field, so NULL inherits.
 resolution: { inherit: { from: ["hierarchy"] } }
 // productCategory spendingCategoryId: "blocked" is an explicit None.
@@ -300,28 +298,30 @@ inherit: { mode: { field: "spendingCategoryMode", inherit: "inherit", none: ["bl
 - `mode` absent means NULL inherits. With `mode`, the row's stored value wins
   unless the mode field holds the `inherit` value; a `none` value reads as
   NULL.
-- `explicitIfSet` keeps today's task rule that a non-NULL stored value wins
-  even in `inherit` mode (`task-project-inheritance.ts:140`).
+- `explicitIfSet` keeps the task rule that a non-NULL stored value wins even
+  in `inherit` mode.
 - `from` is ordered, and the first source that **decides** ends the chain. A
   value decides, and so does an explicit None. A source with no decision
   falls through. `"hierarchy"` is the nearest ancestor along
   `model.hierarchy.parentField` whose own value decides. It is cycle-guarded
-  and capped at `maxDepth`. `{ path, read: "stored" }` is the stored decision
-  one reference away, with no recursion. `{ path }` is the **effective** value
+  and capped at `maxDepth`. `{ path }` is the **effective** value
   of the field at the end of a to-one path, resolved by its own declaration. A
   reference along the path that is itself inherited (task `projectId`) is read
   effective.
-- A decides nothing new. Each field declares the chain its helper implements
-  today, so A changes no results (§14.1). Task fields keep one parent level
-  while project and category walk the hierarchy. Equivalence tests cover a
-  parent and child on different projects and a parent project whose default
-  is an explicit None.
-- A generator, `effectiveFieldSql(entity, field, alias)` in
-  `server/generic/list/repo/inheritance.ts`, emits the value. Repository reads
-  that compute `fieldResolutions` call it, so a read and a filter cannot
-  disagree ([Field resolution](../entities.md#field-resolution-and-overrides)).
-  It replaces the hand helpers listed in §2. Provenance (`sourceEntity`,
-  `storedValue`, `fallbackValue`) stays repository-owned.
+- Project, category and task fields all walk their hierarchy (§14.1). Task
+  results change where the old one-level chains stopped short (a grandchild
+  under an inheriting parent now reads the grandparent's project) or read
+  the parent's project default instead of the task's own (a parent and child
+  on different projects). Every other row reads as before; equivalence tests
+  pin both sets. The change is read-time only: no effective value is stored.
+- A generator in `server/generic/inheritance/effective-field.ts` is the only
+  implementation: `effectiveFieldSql` emits the value, `inheritedFieldSql`
+  the fallback, and `inheritedSourceSql` the source that decided and its
+  record. Reads, `fieldResolutions` provenance, filters, sorts and groups all
+  call it, so they cannot disagree
+  ([Field resolution](../entities.md#field-resolution-and-overrides)).
+  Repositories only format provenance labels. It replaces the hand helpers
+  listed in §2.
 
 **Compile path.** A filter, sort, or group on an inherited field reads
 `effectiveFieldSql`. A `via` step along an inherited reference (product →
@@ -625,14 +625,14 @@ compiler and clients read.
 #E values after all       (independent)
 ```
 
-| Issue | Scope                                                                                                                                                                                                     |
-| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A     | §3.2: `resolution.inherit` reproducing today's chains, `effectiveFieldSql`, effective `via` edges; rows 19–26; reads move to the generator; predicate baseline (if first to merge).                       |
-| B     | §3.1: `model.rows` (path, JSON, repository incl. prepared, relation), `via` from a row set, same-row compile, row-set Exclude/presence/Match all, `listTermExpanders`; rows 1–18, 40, 43 (16–18 after A). |
-| C     | §3.3: `anyOf`; rows 27–29; fold text `stored.columns`.                                                                                                                                                    |
-| D     | #2415 plus §3.4: tokens, token-aware web and Apple range editors, range No value OR, `dateInterval`; rows 30–33.                                                                                          |
-| E     | §3.5: rows 34–37 and 41, value `set` form and its `DerivedSqlArg` types.                                                                                                                                  |
-| F     | §3.6: `list.scope`, related scopes; ingredient scope and `projectScope` (after A and B).                                                                                                                  |
+| Issue | Scope                                                                                                                                                                                                                                  |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A     | §3.2: `resolution.inherit` (task fields converge on `"hierarchy"`), the inheritance generator, effective `via` edges; rows 19–26; every read and provenance of an inherited value moves to the generator (in sequential PRs if large). |
+| B     | §3.1: `model.rows` (path, JSON, repository incl. prepared, relation), `via` from a row set, same-row compile, row-set Exclude/presence/Match all, `listTermExpanders`; rows 1–18, 40, 43 (16–18 after A).                              |
+| C     | §3.3: `anyOf`; rows 27–29; fold text `stored.columns`.                                                                                                                                                                                 |
+| D     | #2415 plus §3.4: tokens, token-aware web and Apple range editors, range No value OR, `dateInterval`; rows 30–33.                                                                                                                       |
+| E     | §3.5: rows 34–37 and 41, value `set` form and its `DerivedSqlArg` types.                                                                                                                                                               |
+| F     | §3.6: `list.scope`, related scopes; ingredient scope and `projectScope` (after A and B).                                                                                                                                               |
 
 ## 10. Risks
 
@@ -699,7 +699,7 @@ reason.
 
 | Lane | Implementer (default lane)                  | Reviewer (one per PR)                                       | Owned files                                                                                                                                                                                                                                         | Depends on          | Validation owner                         |
 | ---- | ------------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | ---------------------------------------- |
-| A    | opus / medium; `gpt-6.1-sol` / low on Codex | `gpt-6.1-sol` / high (Opus impl) or fable / high (Sol impl) | `definition.ts` `resolution`, `generator/entities/list-fields.ts`, new `generic/list/repo/inheritance.ts`, `task-project-inheritance.ts`, product-category and task/project/inventory/product repos, calendar callers                               | none                | A's thread: equivalence tests, typecheck |
+| A    | opus / medium; `gpt-6.1-sol` / low on Codex | `gpt-6.1-sol` / high (Opus impl) or fable / high (Sol impl) | `definition.ts` `resolution`, `generator/entities/list-fields.ts`, new `generic/inheritance/effective-field.ts`, `task-project-inheritance.ts`, product-category and task/project/inventory/product repos, calendar callers                         | none                | A's thread: equivalence tests, typecheck |
 | B    | same                                        | same                                                        | `definition.ts` `model.rows`, `list-fields.ts` `compileVia`, `field-compiler.ts`, `traversal.ts`, new `generic/list/repo/terms.ts`, financial-account/-transaction, image, image-job, expense, product, project (attention), garden (journal) repos | A (rows 16–18 only) | B's thread                               |
 | C    | same                                        | same                                                        | filter descriptor schema (`anyOf`), project/task/wish/ingredient/recipe/location declarations and repos                                                                                                                                             | A                   | C's thread                               |
 | D    | same                                        | same                                                        | #2415 token resolver (entity kernel), `list.ts` range composition, `dateInterval` in `field-compiler.ts`, web range editor, Apple `EntityFilterSheet.swift` date editor, task/expense/location/planting declarations and repos, Problems            | none                | D's thread                               |
@@ -716,10 +716,12 @@ The orchestrator owns the plan-level acceptance in §12 and the single
 
 Approved by the user on 2026-10-17.
 
-1. **Task inheritance** keeps today's chains exactly (§3.2). Project and
-   subject product read one parent level. Assignee reads the parent's own
-   decision, then the parent's project default, then the task's own project
-   default. Nothing later converges task inheritance onto `"hierarchy"`.
+1. **Task inheritance** converges onto `"hierarchy"`, like project and
+   category (revised 2026-10-17, superseding "keep today's chains"). Each
+   inherited task field (project, subject product, assignee) reads the
+   nearest ancestor task that sets its own value; the assignee then falls
+   back to the task's effective project default. This fixes a grandchild
+   under an inheriting parent getting no project (§3.2).
 2. **Valuation status** splits today's `missing` into the disjoint
    `priceable` and `unpriceable` states, which a filter picks together (§3.5).
 3. **Category feature No value** means "no effective feature", not "no

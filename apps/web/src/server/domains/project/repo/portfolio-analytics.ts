@@ -38,11 +38,11 @@ import {
   executeExpenseDerivedBatch,
   expenseSelectionForWhere,
 } from "~/server/domains/expense/repo/expense-derived-read";
+import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
 
 import { buildDashboardProjectWhere } from "./dashboard-shared";
 import { EMPTY_PROJECT_SUBTREE_ROLLUP } from "./helpers";
 import { loadProjectSubtreeRollups, projectCompletionYear } from "./subtree";
-import { effectiveFieldSql } from "~/server/generic/list/repo/inheritance";
 
 const EMPTY_OUT: ProjectPortfolioAnalyticsOut = {
   costVsEstimate: [],
@@ -172,7 +172,11 @@ export async function projectPortfolioAnalytics(
           .groupBy(sql`allocation.trade`),
         taskHeatmapRows: getDb(db)
           .select({
-            projectId: effectiveFieldSql<ProjectId | null>("task", "projectId", "Task"),
+            projectId: effectiveFieldSql<ProjectId | null>(
+              "task",
+              "projectId",
+              "Task",
+            ),
             openTaskCount: sql<number>`count(*)::int`,
           })
           .from(task)
@@ -184,7 +188,9 @@ export async function projectPortfolioAnalytics(
               isNull(task.parentTaskId),
             ),
           )
-          .groupBy(effectiveFieldSql<ProjectId | null>("task", "projectId", "Task")),
+          .groupBy(
+            effectiveFieldSql<ProjectId | null>("task", "projectId", "Task"),
+          ),
       }),
     );
 

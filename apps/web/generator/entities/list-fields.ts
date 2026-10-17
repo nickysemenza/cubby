@@ -261,7 +261,7 @@ const compileInheritHops = (
   segments: readonly string[],
   byKey: ReadonlyMap<string, CompiledEntity>,
   context: string,
-): { hops: InheritHop[]; target: CompiledEntity } => {
+) => {
   let current = owner;
   const hops: InheritHop[] = [];
   for (const segment of segments) {
@@ -300,7 +300,7 @@ const compileInheritHops = (
 const compileInherit = (
   entity: CompiledEntity,
   byKey: ReadonlyMap<string, CompiledEntity>,
-): Record<string, CompiledInherit> => {
+) => {
   const compiled: Record<string, CompiledInherit> = {};
   for (const field of entity.fieldModel.fields) {
     const inherit = field.resolution?.inherit;
@@ -416,7 +416,8 @@ const assertAcyclicInherit = (
         `resolution.inherit reads itself: ${[...trail, node].join(" → ")}.`,
       );
     visiting.add(node);
-    const [entity, field] = node.split(".") as [string, string];
+    const dot = node.indexOf(".");
+    const [entity, field] = [node.slice(0, dot), node.slice(dot + 1)];
     for (const next of depends(entity, field)) visit(next, [...trail, node]);
     visiting.delete(node);
     done.add(node);

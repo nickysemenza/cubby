@@ -1,65 +1,49 @@
 import { type ExpenseId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-
 import { projectListItemOut } from "@cubby/schemas/project";
-
 import { MAX_PROJECT_TREE_DEPTH } from "@cubby/schemas/project";
-
 import type {
   ProjectAttentionItem,
   ProjectFilters,
   ProjectOptionsOut,
 } from "@cubby/schemas/project";
-
 import { and, asc, eq, inArray, or, type SQL, sql } from "drizzle-orm";
-
 import { QueryBuilder } from "drizzle-orm/pg-core";
-
 import { z } from "zod";
 
-
 import { projectListRows } from "~/entity/model/list-read-schema";
-
 import type { Database, DrizzleTransaction } from "~/server/db";
-
-import { getDb, formatSearchTerm, isTransaction, textArrayMatches, type ListReadIntent, notDeleted } from "~/server/db/helpers";
+import {
+  getDb,
+  formatSearchTerm,
+  isTransaction,
+  textArrayMatches,
+  type ListReadIntent,
+  notDeleted,
+} from "~/server/db/helpers";
 import { entityAttachment, image, project } from "~/server/db/schema";
-
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
-
 import { displayableImageWhere } from "~/server/domains/image/repo/image-displayability";
-
 import { withProjectExternalUrls } from "~/server/domains/project/repo/external-links";
-
 import { withDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
-
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-
+import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
 import { listPrepare } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
-
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-
 import {
   loadListGroup,
   wantsListGroup,
 } from "~/server/generic/list/repo/list-projection";
-
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 
-
 import { projectContentDates, projectDependencyIds } from "./analytics";
-
 import {
   computeAttentionItems,
   projectAttentionFilterTypes,
 } from "./attention";
-
 import { dashboardProjectDateCondition } from "./dashboard-shared";
-
 import { EMPTY_PROJECT_DATE_WINDOW, hydrateProjectRow } from "./helpers";
-
 import {
   aggregateSubtreeDates,
   loadProjectDateWindows,
@@ -68,9 +52,6 @@ import {
   type ProjectTree,
   projectCompletionYear,
 } from "./subtree";
-
-import { effectiveFieldSql } from "~/server/generic/list/repo/inheritance";
-
 
 const qb = new QueryBuilder();
 

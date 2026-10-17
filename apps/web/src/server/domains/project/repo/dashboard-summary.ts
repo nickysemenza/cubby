@@ -45,6 +45,7 @@ import {
 } from "~/server/domains/task/repo/helpers";
 import { hydrateTaskInheritanceRows } from "~/server/domains/task/repo/task-project-inheritance";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
+import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
 
 import { projectDependencyIds } from "./analytics";
 import { computeAttentionItems } from "./attention";
@@ -59,7 +60,6 @@ import {
   loadProjectSubtreeRollups,
   projectCompletionYear,
 } from "./subtree";
-import { effectiveFieldSql } from "~/server/generic/list/repo/inheritance";
 
 /**
  * Forward-looking committed-spend windows, in days from today. Mirrors the
@@ -251,17 +251,26 @@ export async function projectDashboardSummary(
           .from(task)
           .where(
             and(
-              inArray(effectiveFieldSql<ProjectId | null>("task", "projectId"), ids),
+              inArray(
+                effectiveFieldSql<ProjectId | null>("task", "projectId"),
+                ids,
+              ),
               notDeleted(task),
               isNull(task.parentTaskId),
             ),
           )
-          .groupBy(effectiveFieldSql<ProjectId | null>("task", "projectId"), task.status)
+          .groupBy(
+            effectiveFieldSql<ProjectId | null>("task", "projectId"),
+            task.status,
+          )
       : Promise.resolve([]),
     ids.length > 0
       ? getDb(db).query.task.findMany({
           where: and(
-            inArray(effectiveFieldSql<ProjectId | null>("task", "projectId", "task"), ids),
+            inArray(
+              effectiveFieldSql<ProjectId | null>("task", "projectId", "task"),
+              ids,
+            ),
             notDeleted(task),
             isNull(task.parentTaskId),
             inArray(task.status, ["not_started", "in_progress"]),
@@ -290,7 +299,9 @@ export async function projectDashboardSummary(
           task,
           and(
             notDeleted(task),
-            scopedOrInbox(effectiveFieldSql<ProjectId | null>("task", "projectId")),
+            scopedOrInbox(
+              effectiveFieldSql<ProjectId | null>("task", "projectId"),
+            ),
             isNull(task.dueDate),
             isNull(task.dueEndDate),
           ),

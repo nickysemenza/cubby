@@ -84,11 +84,11 @@ import {
   linkValues,
   liveLinks,
 } from "~/server/generic/entity-links/repo/entity-links";
+import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
 import { foldAssociation } from "~/server/generic/merge/repo/collisions";
 
 import { maxPlainDate } from "./helpers";
 import { collectDescendantIds, loadProjectDateWindows } from "./subtree";
-import { effectiveFieldSql } from "~/server/generic/list/repo/inheritance";
 
 export const EXPENSIVE_TOOL_THRESHOLD = 100;
 export const REUSED_CHEAP_TOOL_PROJECTS = 2;

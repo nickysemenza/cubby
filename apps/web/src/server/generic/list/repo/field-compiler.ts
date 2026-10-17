@@ -29,13 +29,13 @@ import { createAppError } from "~/server/errors/app-error";
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import { relatedSortExpression } from "~/server/generic/entity-links/repo/related-view";
 import {
+  effectiveFieldSql,
+  inheritedFieldOfColumn,
+} from "~/server/generic/inheritance/effective-field";
+import {
   hierarchyAncestorSql,
   hierarchyLevelSql,
 } from "~/server/generic/list/repo/hierarchy";
-import {
-  effectiveFieldSql,
-  inheritedFieldOfColumn,
-} from "~/server/generic/list/repo/inheritance";
 import {
   compileTraversal,
   renderJoins,
@@ -590,11 +590,7 @@ export const groupSql = (
     case "derived": {
       const raw =
         value.kind === "column"
-          ? terminalSql(
-              entity,
-              `"${getTableName(table)}"`,
-              value.column,
-            )
+          ? terminalSql(entity, `"${getTableName(table)}"`, value.column)
           : value.kind === "field"
             ? relatedColumnSql(entity, value, table, value.column)
             : derivedValueSql(entity, derived, key, context);

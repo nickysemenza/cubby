@@ -95,7 +95,7 @@ const pathFrom = (
   alias: string,
   depth: number,
   prefix: string,
-): { tables: SQL; where: SQL; leaf: string; target: Entity } => {
+) => {
   let current = entity;
   let currentAlias = alias;
   const tables: SQL[] = [];
@@ -188,7 +188,7 @@ const sourceSql = (
           SELECT ${select(node)}, ${ref(walk, "ih_depth")} + 1, ${ref(walk, "ih_visited")} || ${ref(node, "id")}
           FROM ${table} ${name(node)} JOIN ${name(walk)} ON ${ref(node, "id")} = ${ref(walk, source.parentColumn)}
           WHERE ${ref(walk, "ih_depth")} < ${sql.raw(String(source.maxDepth))}
-            AND NOT ${ref(node, "id")} = ANY(${ref(walk, "ih_visited")})${live(node, softDelete)}
+            AND array_position(${ref(walk, "ih_visited")}, ${ref(node, "id")}) IS NULL${live(node, softDelete)}
         )
         SELECT ${ownValue(chain, walk)} AS v, ${ref(walk, "id")} AS src FROM ${name(walk)}
         WHERE ${ownDecides(chain, walk)} ORDER BY ${ref(walk, "ih_depth")} LIMIT 1
@@ -208,7 +208,7 @@ const fallbackRowSql = (
   chain: GeneratedInherit,
   alias: string,
   depth: number,
-): { from: SQL; row: SQL } => {
+) => {
   const row = name(`ih${depth}u`);
   return {
     row,
@@ -266,6 +266,7 @@ export const effectiveFieldSql = <T = unknown>(
   field: string,
   row?: InheritedRow,
 ): SQL<T> =>
+  // SAFETY: T is the caller's name for the declared field's value type.
   atRow(entity, row, (alias, depth) =>
     effectiveSql(entity, field, alias, depth),
   ) as SQL<T>;
@@ -280,13 +281,14 @@ export const inheritedFieldSql = <T = unknown>(
   field: string,
   row?: InheritedRow,
 ): SQL<T> =>
+  // SAFETY: T is the caller's name for the declared field's value type.
   atRow(entity, row, (alias, depth) =>
     inheritedSql(entity, requireChain(entity, field), alias, depth),
   ) as SQL<T>;
 
 /**
  * Which declared source supplies the fallback and the record that decided
- * it: `{ source, id }` with `source` the 1-based index into
+ * it: `{ position, id }` with `position` the 1-based index into
  * `resolution.inherit.from` (a hierarchy source's record is the deciding
  * ancestor; a path source's is the record its chain decided at), or NULL
  * when no source decides. Provenance reads it as the source entity.
@@ -295,7 +297,8 @@ export const inheritedSourceSql = (
   entity: Entity,
   field: string,
   row?: InheritedRow,
-): SQL<{ source: number; id: string } | null> =>
+): SQL<{ position: number; id: string } | null> =>
+  // SAFETY: the subquery builds exactly this object, or NULL.
   atRow(entity, row, (alias, depth) => {
     const { from, row: decided } = fallbackRowSql(
       entity,
@@ -303,18 +306,18 @@ export const inheritedSourceSql = (
       alias,
       depth,
     );
-    return sql`(SELECT json_build_object('source', ${decided}.prio, 'id', ${decided}.src) FROM ${from})`;
-  }) as SQL<{ source: number; id: string } | null>;
+    return sql`(SELECT json_build_object('position', ${decided}.prio, 'id', ${decided}.src) FROM ${from})`;
+  }) as SQL<{ position: number; id: string } | null>;
 
 /** The entity whose record a declared source names in provenance. */
 export const inheritedSourceEntity = (
   entity: Entity,
   field: string,
-  source: number,
+  position: number,
 ): Entity => {
-  const declared = requireChain(entity, field).from[source - 1];
+  const declared = requireChain(entity, field).from[position - 1];
   if (declared === undefined)
-    throw new Error(`${entity}.${field} declares no source ${source}`);
+    throw new Error(`${entity}.${field} declares no source ${position}`);
   return declared.kind === "hierarchy"
     ? entity
     : (declared.hops.at(-1)?.target ?? entity);
@@ -350,7 +353,7 @@ export const effectiveFieldInSql = (
       SELECT ${ref(node, "id")}, ${set}."ih_depth" + 1, ${set}."ih_visited" || ${ref(node, "id")}
       FROM ${set} JOIN ${table} ${name(node)} ON ${ref(node, source.parentColumn)} = ${set}."id"
       WHERE NOT ${ownDecides(chain, node)} AND ${set}."ih_depth" < ${sql.raw(String(source.maxDepth))}
-        AND NOT ${ref(node, "id")} = ANY(${set}."ih_visited")${live(node, softDelete)}
+        AND array_position(${set}."ih_visited", ${ref(node, "id")}) IS NULL${live(node, softDelete)}
     ) SELECT "id" FROM ${set}
   ), false)`;
 };

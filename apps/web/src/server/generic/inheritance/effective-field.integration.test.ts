@@ -96,16 +96,10 @@ describe("inherited values", () => {
       [{ assigneeId: [w.b.shortcode] }, codes(w.p7)],
       [{ assigneeIdPresenceFilter: "none" }, codes(w.p3, w.p4, w.p5)],
       [{ assigneeIdPresenceFilter: "has" }, codes(w.p1, w.p2, w.p6, w.p7)],
-      [
-        { assigneeIdExclude: [w.a.shortcode] },
-        codes(w.p3, w.p4, w.p5, w.p7),
-      ],
+      [{ assigneeIdExclude: [w.a.shortcode] }, codes(w.p3, w.p4, w.p5, w.p7)],
       [{ location: ["Inherit garage"] }, codes(w.p1, w.p2, w.p6)],
       [{ location: ["Inherit shed"] }, codes(w.p7)],
-      [
-        { locationsExclude: ["Inherit garage"] },
-        codes(w.p3, w.p4, w.p5, w.p7),
-      ],
+      [{ locationsExclude: ["Inherit garage"] }, codes(w.p3, w.p4, w.p5, w.p7)],
     ];
     for (const [filters, expected] of cases)
       expect({ filters, ids: await listed(filters) }).toEqual({
@@ -272,10 +266,7 @@ describe("inherited values", () => {
         { projectId: [p1.shortcode] },
         codes(t1, t2, t3, t5, t6, t7, t8, t10, t12),
       ],
-      [
-        { projectId: [p1.shortcode], includeSubProjects: false },
-        codes(t5, t7),
-      ],
+      [{ projectId: [p1.shortcode], includeSubProjects: false }, codes(t5, t7)],
       [{ projectIdPresenceFilter: "none" }, codes(t11)],
       [
         { projectIdExclude: [p2.shortcode] },
@@ -356,10 +347,7 @@ describe("inherited values", () => {
     const categoryCases: Array<
       [Parameters<typeof listProductCategories>[1], string[]]
     > = [
-      [
-        { effectiveSpendingCategoryId: [s1.shortcode] },
-        codes(c1, c2, c3, c7),
-      ],
+      [{ effectiveSpendingCategoryId: [s1.shortcode] }, codes(c1, c2, c3, c7)],
       [
         {
           effectiveSpendingCategoryId: [s1.shortcode],
@@ -369,10 +357,7 @@ describe("inherited values", () => {
       ],
       [{ effectiveSpendingCategoryId: [s1c.shortcode] }, codes(c7)],
       // `blocked` is an explicit None that stops the walk.
-      [
-        { effectiveSpendingCategoryPresenceFilter: "none" },
-        codes(c4, c5, c6),
-      ],
+      [{ effectiveSpendingCategoryPresenceFilter: "none" }, codes(c4, c5, c6)],
       [{ effectiveSpendingCategoryExclude: [s1.shortcode] }, codes(c4, c5, c6)],
     ];
     for (const [filters, expected] of categoryCases)
@@ -436,25 +421,21 @@ describe("inherited values", () => {
         .filter((id) => stockIds.has(id))
         .sort();
     const p = products;
-    const productCases: Array<[Parameters<typeof productList>[1], string[]]> =
+    const productCases: Array<[Parameters<typeof productList>[1], string[]]> = [
+      [{ categoryFeatureFilter: ["food"] }, codes(p.c1, p.c2, p.c7)],
+      [{ categoryFeatureFilter: ["tools"] }, codes(p.c4, p.c6)],
       [
-        [{ categoryFeatureFilter: ["food"] }, codes(p.c1, p.c2, p.c7)],
-        [{ categoryFeatureFilter: ["tools"] }, codes(p.c4, p.c6)],
-        [
-          { categoryFeatureExclude: ["food"] },
-          codes(p.c3, p.c4, p.c5, p.c6, p.none),
-        ],
-        // Behavior change (plan §14.3): No value is "no effective feature",
-        // not "no category".
-        [
-          { categoryFeaturePresenceFilter: "none" },
-          codes(p.c3, p.c5, p.none),
-        ],
-        [
-          { categoryFeaturePresenceFilter: "has" },
-          codes(p.c1, p.c2, p.c4, p.c6, p.c7),
-        ],
-      ];
+        { categoryFeatureExclude: ["food"] },
+        codes(p.c3, p.c4, p.c5, p.c6, p.none),
+      ],
+      // Behavior change (plan §14.3): No value is "no effective feature",
+      // not "no category".
+      [{ categoryFeaturePresenceFilter: "none" }, codes(p.c3, p.c5, p.none)],
+      [
+        { categoryFeaturePresenceFilter: "has" },
+        codes(p.c1, p.c2, p.c4, p.c6, p.c7),
+      ],
+    ];
     for (const [filters, expected] of productCases) {
       expect({ filters, ids: await listedProducts(filters) }).toEqual({
         filters,

@@ -192,17 +192,6 @@ export const textArrayMatches = (
  * array when the column is nullable and zero-length otherwise; the outer
  * parens are load-bearing because `presenceCondition` negates the clause.
  */
-/**
- * A `text[]` literal of bound elements. Drizzle maps an array through a
- * column's encoder; against an expression it would bind the whole list as
- * one scalar.
- */
-export const textArraySql = (values: readonly string[]): SQL =>
-  sql`ARRAY[${sql.join(
-    values.map((value) => sql`${value}`),
-    sql`, `,
-  )}]::text[]`;
-
 export const arrayOverlapOrPresence = (
   column: AnyColumn | SQL,
   values: readonly string[] | undefined,
@@ -211,8 +200,12 @@ export const arrayOverlapOrPresence = (
 ): SQL | undefined =>
   or(
     values !== undefined && values.length > 0
-      ? column instanceof SQL
-        ? sql`${column} && ${textArraySql(values)}`
+      ? // Against an expression drizzle binds the list as one scalar.
+        column instanceof SQL
+        ? sql`${column} && ARRAY[${sql.join(
+            values.map((value) => sql`${value}`),
+            sql`, `,
+          )}]::text[]`
         : arrayOverlaps(column, [...values])
       : undefined,
     presenceCondition(

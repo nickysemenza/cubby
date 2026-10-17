@@ -49,12 +49,12 @@ import {
 } from "~/server/db/schema";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
+import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
 import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import {
   getOrphanedSearchDocumentRefs,
   type SearchDocumentCursor,
 } from "~/server/generic/search/repo/search-document";
-import { effectiveFieldSql } from "~/server/generic/list/repo/inheritance";
 
 async function softDeleteEntityEmbeddingsTx(
   tx: DrizzleTransaction,

@@ -116,7 +116,7 @@ describe("list selection and relation loading", () => {
     const table = alias(task, "listed_task");
     const page = await listScaffold("task", table, {
       derived: {
-          effectiveTrade: sql`NULL`,
+        effectiveTrade: sql`NULL`,
         effectiveDueDate: sql`NULL`,
         completion: sql`NULL`,
         topLevel: sql`true`,

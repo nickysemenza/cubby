@@ -54,6 +54,7 @@ import {
   dependencyIdsFor,
   replaceDependencyEdges,
 } from "~/server/generic/entity-links/repo/dependency-edges";
+import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
 import { validateLiveEffectiveTrades } from "~/server/generic/inheritance/repo/inheritance-validation";
 /**
  * Task CRUD operations.
@@ -77,7 +78,6 @@ import {
   effectiveTaskTradeSql,
   hydrateTaskInheritanceRows,
 } from "./task-project-inheritance";
-import { effectiveFieldSql } from "~/server/generic/list/repo/inheritance";
 
 type TaskUpdateAuditEntry = Exclude<AuditEntryInput, { action: "delete" }>;
 type TaskUpdateChanges = NonNullable<TaskUpdateAuditEntry["changes"]>;

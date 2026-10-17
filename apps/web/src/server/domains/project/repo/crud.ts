@@ -38,6 +38,7 @@ import {
 } from "~/server/generic/audit-log/repo/audit-log";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { replaceDependencyEdges } from "~/server/generic/entity-links/repo/dependency-edges";
+import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
 import { validateLiveEffectiveTrades } from "~/server/generic/inheritance/repo/inheritance-validation";
 /**
  * Project CRUD operations.
@@ -58,7 +59,6 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 import { projectDependencyIds } from "./analytics";
 import { hydrateProjectRow } from "./helpers";
 import { loadProjectSubtreeRollups, type ProjectTree } from "./subtree";
-import { effectiveFieldSql } from "~/server/generic/list/repo/inheritance";
 
 export const PROJECT_DELETE_EDGE_POLICY = {
   "Purchase.defaultProjectId": {
@@ -433,9 +433,16 @@ type ProjectQueryClient = DrizzleClient | DrizzleTransaction;
  */
 const fetchLiveProjectTasks = (dbc: ProjectQueryClient, ids: ProjectId[]) =>
   dbc
-    .select({ projectId: effectiveFieldSql<ProjectId | null>("task", "projectId") })
+    .select({
+      projectId: effectiveFieldSql<ProjectId | null>("task", "projectId"),
+    })
     .from(task)
-    .where(and(inArray(effectiveFieldSql<ProjectId | null>("task", "projectId"), ids), notDeleted(task)));
+    .where(
+      and(
+        inArray(effectiveFieldSql<ProjectId | null>("task", "projectId"), ids),
+        notDeleted(task),
+      ),
+    );
 
 /**
  * Live expenses under `ids`. Used by `deleteProjects`' PROJECT_HAS_EXPENSES

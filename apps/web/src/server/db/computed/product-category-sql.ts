@@ -9,7 +9,7 @@ import {
 import { type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { effectiveFieldInSql } from "~/server/generic/list/repo/inheritance";
+import { effectiveFieldInSql } from "~/server/generic/inheritance/effective-field";
 
 /** Constants below are inlined with `sql.raw` (not `.inlineParams()`): under the
  * relational `extras` API (`db.query.product.findFirst({ extras: {...} })`),

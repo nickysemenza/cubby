@@ -58,12 +58,12 @@ import {
   effectiveExpenseTradeSql,
 } from "~/server/domains/expense/repo/expense-inheritance";
 import { readTaskActionability } from "~/server/domains/task/repo/actionable";
+import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
 
 import {
   loadProjectSubtreeRollups,
   type ProjectSubtreeRollups,
 } from "./subtree";
-import { effectiveFieldSql } from "~/server/generic/list/repo/inheritance";
 
 /** `stalled_project`'s no-activity window. */
 const STALE_ACTIVITY_DAYS = 30;
@@ -185,7 +185,9 @@ export async function computeAttentionItems(
           notDeleted(task),
           ne(task.status, "done"),
           isNull(task.parentTaskId),
-          scopedOrInbox(effectiveFieldSql<ProjectId | null>("task", "projectId")),
+          scopedOrInbox(
+            effectiveFieldSql<ProjectId | null>("task", "projectId"),
+          ),
         ),
       ),
     options?.preloaded ?? loadProjectSubtreeRollups(db),

@@ -83,6 +83,7 @@ import {
 import { loadProductOwnershipTimelines } from "~/server/domains/product/repo/ownership";
 import { effectiveTaskTradeSql } from "~/server/domains/task/repo/task-project-inheritance";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
+import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
 
 import { buildDashboardProjectWhere } from "./dashboard-shared";
 import { loadProjectDateWindows, projectCompletionYear } from "./subtree";
@@ -98,7 +99,6 @@ import {
   REUSED_CHEAP_TOOL_PROJECTS,
   type ResourceMetrics,
 } from "./tools";
-import { effectiveFieldSql } from "~/server/generic/list/repo/inheritance";
 
 /**
  * Row cap. Applied AFTER counting, so `totals.matchingTools` stays truthful and
@@ -109,7 +109,10 @@ import { effectiveFieldSql } from "~/server/generic/list/repo/inheritance";
 const MAX_MATRIX_ROWS = 250;
 const effectiveExpenseProject = effectiveExpenseProjectSql();
 const effectiveExpenseTrade = effectiveExpenseTradeSql();
-const effectiveTaskProject = effectiveFieldSql<ProjectId | null>("task", "projectId");
+const effectiveTaskProject = effectiveFieldSql<ProjectId | null>(
+  "task",
+  "projectId",
+);
 const effectiveTaskTrade = effectiveTaskTradeSql();
 type ProjectDateWindows = Awaited<ReturnType<typeof loadProjectDateWindows>>;
 

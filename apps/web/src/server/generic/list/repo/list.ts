@@ -69,7 +69,6 @@ import {
   rangeConditions,
   shortcodeSetCondition,
   textArrayMatches,
-  textArraySql,
   unwrapDb,
 } from "~/server/db/helpers";
 import { createAppError } from "~/server/errors/app-error";
@@ -85,14 +84,14 @@ import {
 } from "~/server/generic/data-quality/repo/sql";
 import { relatedWhereConditions } from "~/server/generic/entity-links/repo/related-view";
 import {
-  type HierarchyEntity,
-  hierarchyDescendantsSql,
-} from "~/server/generic/list/repo/hierarchy";
-import {
   effectiveFieldInSql,
   effectiveFieldSql,
   inheritedFieldOfColumn,
-} from "~/server/generic/list/repo/inheritance";
+} from "~/server/generic/inheritance/effective-field";
+import {
+  type HierarchyEntity,
+  hierarchyDescendantsSql,
+} from "~/server/generic/list/repo/hierarchy";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
   lexicalEligibility,
@@ -322,7 +321,10 @@ const arrayPredicate = (
   all && values !== undefined && values.length > 0
     ? or(
         column instanceof SQL
-          ? sql`${column} @> ${textArraySql(values)}`
+          ? sql`${column} @> ARRAY[${sql.join(
+              values.map((value) => sql`${value}`),
+              sql`, `,
+            )}]::text[]`
           : arrayContains(column, [...values]),
         arrayOverlapOrPresence(column, undefined, presence, nullable),
       )

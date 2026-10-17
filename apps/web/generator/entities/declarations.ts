@@ -289,10 +289,7 @@ export type EntityFieldInherit = Readonly<{
     none?: readonly string[];
     explicitIfSet?: true;
   }>;
-  from: readonly (
-    | "hierarchy"
-    | Readonly<{ path: string }>
-  )[];
+  from: readonly ("hierarchy" | Readonly<{ path: string }>)[];
 }>;
 
 export type EntityStorageField = Readonly<{

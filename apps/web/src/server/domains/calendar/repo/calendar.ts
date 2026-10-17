@@ -56,6 +56,7 @@ import {
   hydrateTaskInheritanceRows,
 } from "~/server/domains/task/repo/task-project-inheritance";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
+import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
 import { resolveAllPresent } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
@@ -64,7 +65,6 @@ import {
   mapPlantingItems,
   plantingLinkedProjectSql,
 } from "./calendar-plantings";
-import { effectiveFieldSql } from "~/server/generic/list/repo/inheritance";
 
 const emptyDaySummary = (): CalendarDaySummary => ({
   actualSpend: 0,
@@ -179,7 +179,11 @@ const loadCalendarTasks = async (
       input.taskTrade
         ? inArray(effectiveTaskTradeSql("task"), [input.taskTrade].flat())
         : undefined,
-      projectScopeOn(effectiveFieldSql("task", "projectId", "task"), input, scope),
+      projectScopeOn(
+        effectiveFieldSql("task", "projectId", "task"),
+        input,
+        scope,
+      ),
     ),
     orderBy: (row, { asc }) => [asc(row.dueDate), asc(row.name)],
     ...relations.task.withProject,
@@ -605,7 +609,11 @@ export async function getCalendarSchedule(
                     [input.taskTrade].flat(),
                   )
                 : undefined,
-              projectScopeOn(effectiveFieldSql("task", "projectId", "Task"), input, scope),
+              projectScopeOn(
+                effectiveFieldSql("task", "projectId", "Task"),
+                input,
+                scope,
+              ),
             ),
           )
       : [],

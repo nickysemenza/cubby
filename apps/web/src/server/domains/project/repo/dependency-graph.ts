@@ -11,7 +11,7 @@ import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { entityLink, project, task } from "~/server/db/schema";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
-import { effectiveFieldSql } from "~/server/generic/list/repo/inheritance";
+import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
 
 type ProjectRow = {
   id: ProjectId;
@@ -74,7 +74,11 @@ const fetchGraphRows = async (db: Database): Promise<GraphRows> => {
           shortcode: task.shortcode,
           name: task.name,
           status: task.status,
-          projectId: effectiveFieldSql<ProjectId | null>("task", "projectId", "Task"),
+          projectId: effectiveFieldSql<ProjectId | null>(
+            "task",
+            "projectId",
+            "Task",
+          ),
           parentTaskId: task.parentTaskId,
           dueDate: task.dueDate,
           dueEndDate: task.dueEndDate,

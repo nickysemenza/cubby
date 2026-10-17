@@ -2,13 +2,13 @@ import { and, isNull, type SQL, sql } from "drizzle-orm";
 
 import { product } from "~/server/db/schema";
 import type { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
+import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
 
 import {
   isRetainingEdgeKey,
   PRODUCT_EDGE_ROLES,
   type ProductRetainingEdgeKey,
 } from "./edge-roles";
-import { effectiveFieldSql } from "~/server/generic/list/repo/inheritance";
 
 const noLiveProductLink = (
   t: typeof product,

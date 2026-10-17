@@ -777,10 +777,10 @@ describe("buildTaskWhere", () => {
   it("matches the inherited project, with sub-projects unless the toggle is off", async () => {
     const rendered = await where({ projectId: [project] });
     expect(rendered).toContain('"projectMode"');
-    expect(rendered).toContain("WITH RECURSIVE");
+    expect(rendered).toContain("WITH RECURSIVE descendants");
     expect(
       await where({ projectId: [project], includeSubProjects: false }),
-    ).not.toContain("WITH RECURSIVE");
+    ).not.toContain("WITH RECURSIVE descendants");
     expect(
       await where({ projectId: [project], projectIdPresenceFilter: "none" }),
     ).toMatch(/ or not exists/i);
