@@ -52,14 +52,15 @@ point of the cash-flow page.
 months over a 6-, 12-, or 24-month horizon. Inputs live in URL state; there are
 no stored presets because the view manifest declares only entity list views.
 
-- **Baseline**: per root category, the median of the 12 complete months before
-  the current one, empty months counting as $0, carried forward flat. A share
-  counts when it has no live project or sits on the Household project; other
-  project spend is forecast only by envelopes. A category with spend in fewer
-  than 3 of the 12 months is **Irregular** and carries its mean (trailing
-  total ÷ 12), since its median is almost always $0. `irregular=grouped`
-  (default) shows one Irregular row; `separate` shows each; both sum the same
-  cents.
+- **Baseline**: per root category, the mean (trailing total ÷ 12) of the 12
+  complete months before the current one, carried forward flat, so it
+  reconciles to trailing spend. A median would zero any category idle in half
+  the months, however large its spend; a one-off spike belongs in a project.
+  A share counts when it has no live project or sits on the Household project;
+  other project spend is forecast only by envelopes. A category with spend in
+  fewer than 3 of the 12 months is **Irregular**, a display grouping:
+  `irregular=grouped` (default) shows one Irregular row, `separate` shows each,
+  and both sum the same cents.
 - **Envelopes**: `in_progress` projects by default, `not_started` behind a
   toggle, `planning` only with an estimate; never the Household project or a
   project under an estimated ancestor. Remaining is

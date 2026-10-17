@@ -594,7 +594,7 @@ A Ledger Transfer whose sending and receiving party are the same, such as one pe
 _Avoid_: internal transfer, self-transfer, account transfer
 
 **Irregular category**:
-A root Spending Category with spend in fewer than 3 of the trailing 12 complete months. The cash-flow baseline carries it at its mean (trailing total ÷ 12) rather than its median, which would be $0.
+A root Spending Category with spend in fewer than 3 of the trailing 12 complete months. The cash-flow baseline groups these into one row by default; like every category, each carries its mean (trailing total ÷ 12).
 _Avoid_: one-off, rare spend, outlier
 
 **Source Claim**:

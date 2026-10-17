@@ -490,8 +490,8 @@ export function CashFlowView({
                     {row.irregular ? (
                       <span className="ml-2 text-xs text-muted-foreground">
                         {row.key === "irregular"
-                          ? "Categories with spend in fewer than 3 months, at their mean"
-                          : "Irregular, at its mean"}
+                          ? "Categories with spend in fewer than 3 months"
+                          : "Irregular"}
                       </span>
                     ) : null}
                   </TableCell>

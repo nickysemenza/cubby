@@ -53,7 +53,7 @@ const projectRow = (
 
 /**
  * Regular root: 6 of 12 months at $100 (one on the Household project), so
- * the median is $50 only when empty months count as zero, Household spend
+ * the mean is $50 only when empty months count as zero, Household spend
  * counts, and other-project spend does not. Two sparse roots are Irregular.
  */
 const fixture = async () => {
@@ -157,6 +157,32 @@ const project6 = (input: Partial<CashFlowProjectionInput> = {}) =>
   );
 
 describe("cashFlowProjection", () => {
+  it("carries a lumpy category at its mean so the baseline reconciles to trailing spend", async () => {
+    await fixture();
+    const lumpy = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: "Synthetic lumpy root",
+    });
+    // Active in 4 of 12 months: its median is $0, its mean is $100.
+    for (const month of ["2025-12", "2026-03", "2026-06", "2026-09"])
+      await spend(`lumpy ${month}`, 300, `${month}-15`, {
+        spendingCategoryId: lumpy.id,
+      });
+    const out = await project6({ irregular: "separate" });
+    expect(
+      out.baseline.find((entry) => entry.key === lumpy.shortcode),
+    ).toMatchObject({
+      irregular: false,
+      activeMonths: 4,
+      trailingTotal: 1200,
+      monthly: 100,
+    });
+    const trailing = out.baseline.reduce(
+      (sum, entry) => sum + entry.trailingTotal,
+      0,
+    );
+    expect(out.totals.baselineMonthly).toBeCloseTo(trailing / 12, 1);
+  });
+
   it("builds the baseline from Household and no-project spend with empty months as zero", async () => {
     const { regular } = await fixture();
     const out = await project6({ irregular: "separate" });
