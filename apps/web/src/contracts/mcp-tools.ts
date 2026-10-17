@@ -25,7 +25,10 @@ import { cookbookContract } from "~/contracts/cookbook.contract";
 import { dataQualityContract } from "~/contracts/data-quality.contract";
 import { entityGraphContract } from "~/contracts/entity-graph.contract";
 import { expenseContract } from "~/contracts/expense.contract";
-import { financialTransactionContract } from "~/contracts/finance.contract";
+import {
+  cashFlowContract,
+  financialTransactionContract,
+} from "~/contracts/finance.contract";
 import { householdContributionContract } from "~/contracts/household-contribution.contract";
 import { imageProcessingContract } from "~/contracts/image-processing.contract";
 import { imageUploadContract } from "~/contracts/image-upload.contract";
@@ -536,7 +539,7 @@ export const MCP_TOOLS = defineMcpTools({
 
   finance_read: {
     description:
-      "Statement-row, settlement, and contribution-ledger reads, plus expense matching against vendor exports. Financial Transactions are settlement evidence only; all spend is Expense.cost.",
+      "Statement-row, settlement, contribution-ledger, and cash-flow reads, plus expense matching against vendor exports. Financial Transactions are settlement evidence only; all spend is Expense.cost.",
     actions: {
       statement_rows: mcpAction({
         op: statementRowContract.ops.list,
@@ -573,6 +576,11 @@ export const MCP_TOOLS = defineMcpTools({
         op: householdContributionContract.ops.ledger,
         description:
           "The household-wide contribution ledger as of a date (today when omitted). Positions include Expenses and Ledger Transfers dated through that day; evidence-gap counts describe currently attached Financial Transaction evidence. Never records attribution, transfers, or evidence.",
+      }),
+      cash_flow: mcpAction({
+        op: cashFlowContract.ops.projection,
+        description:
+          "Forward monthly cash flow over horizonMonths (6, 12, 24), computed on read and never stored. Baseline: per root Spending Category, the median of the trailing 12 complete household months of landed spend with no project or on the standing Household project (empty months count as 0), carried flat; a category with spend in fewer than 3 of the 12 months is Irregular and carries its mean, grouped as one row or separate. Envelopes: remaining = max(0, estimate − subtree actual − committed) for in_progress projects (not_started with includeNotStarted, planning only with an estimate, none under an estimated ancestor), spread evenly to a future end date; otherwise unscheduled. Committed future Expenses land in their month, overdue ones in the current month, never also in an envelope. Scenarios are what-if inflows/outflows; inflows exist only as scenarios.",
       }),
       expense_match: mcpAction({
         op: expenseContract.ops.match,
