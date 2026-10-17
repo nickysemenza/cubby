@@ -18,7 +18,7 @@ import { executeEntity } from "~/server/entity-kernel";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import { readSettledQuestion } from "./settled-questions";
+import { readSettledQuestions } from "./settled-questions";
 
 const declines: DecisionPort = async (input) => {
   const keys = Object.keys(input.questions.selection.criteria);
@@ -72,18 +72,20 @@ describe("settled suggestion questions", () => {
       ports,
     );
   const read = async (
-    question: Question,
-    ports: Parameters<typeof readSettledQuestion>[2] = {
+    { entity, ...question }: Question,
+    ports: Parameters<typeof readSettledQuestions>[2] = {
       decisionPort: declines,
     },
-  ) =>
-    (
-      await readSettledQuestion(
-        ctx.db,
-        { ...question, basisMode: "suggested" },
-        ports,
-      )
-    ).outcome;
+  ) => {
+    const { results } = await readSettledQuestions(
+      ctx.db,
+      { entity, questions: [{ ...question, basisMode: "suggested" }] },
+      ports,
+    );
+    const [result] = results;
+    if (!result?.ok) throw new Error(result?.message ?? "No settled result");
+    return result.value.outcome;
+  };
   const gadget = (name: string): Question => ({
     entity: "product",
     field: "categoryId",
@@ -184,6 +186,28 @@ describe("settled suggestion questions", () => {
       name: "Synthetic attic insulation",
     });
     expect(await read(question)).toBeNull();
+  });
+
+  // Regression: a re-ask that declined again could not replace the obsolete
+  // signature, so the question reopened on every later read.
+  it("replaces the remembered inputs when a reopened question declines again", async () => {
+    await insertWithShortcode(ctx.db, "project", {
+      name: "Synthetic porch repaint",
+    });
+    const question: Question = {
+      entity: "task",
+      field: "projectId",
+      basis: { name: "Synthetic oil the hinges" },
+    };
+    await ask(question);
+    await insertWithShortcode(ctx.db, "project", {
+      name: "Synthetic gutter cleanout",
+    });
+    expect(await read(question)).toBeNull();
+
+    const again = await ask(question);
+    expect(again.outcomes?.projectId).toMatchObject({ answer: "none" });
+    expect(await read(question)).toEqual(again.outcomes?.projectId);
   });
 
   const resolveProduct = async (shortcode: string) => {

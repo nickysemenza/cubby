@@ -231,6 +231,9 @@ export interface FieldSuggestionSource {
   /** One id per page mount, grouping every call this page makes into one
    * `ai_suggest` run. Omit to share the actor's run for the hour. */
   readonly runKey?: string;
+  /** A reopened settled question's saved-input revision; see
+   * `fieldSuggestionsInput.inputRevision`. */
+  readonly inputRevision?: string;
 }
 
 /** Transport-injection seam, mirroring `LocationFieldWithAIOperations` and

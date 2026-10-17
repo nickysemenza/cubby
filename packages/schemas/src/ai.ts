@@ -8,6 +8,7 @@ import {
 import { vendorSpendingProfile } from "./spending-classification";
 import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import { z } from "zod";
+import { batchOutSchema } from "./batch";
 import { fieldResolutionsSchema } from "./field-resolution";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import { shortcodeEntities } from "./entity-manifest";
@@ -500,6 +501,12 @@ export const fieldSuggestionsInput = z.object({
   /** Pins the decision model so a session can replay one record through
    * each trial model; omitted samples the live traffic split. */
   decisionModel: supportedDecisionModelSchema.optional(),
+  /**
+   * Opaque saved-input revision from a settled read that reopened this
+   * question. The server ignores it; it keeps a browser cache entry for the
+   * question's older inputs from answering the reopened one.
+   */
+  inputRevision: z.string().optional(),
 });
 export type FieldSuggestionsInput = z.infer<typeof fieldSuggestionsInput>;
 
@@ -730,21 +737,41 @@ export type FieldSuggestionOutcome = z.infer<
   typeof fieldSuggestionOutcomeSchema
 >;
 
-/**
- * A single-field `suggestFields` question a list already asked. While its
- * basis, the field's decision policy and the decision inputs prepared from
- * saved data are unchanged, a remembered decline (`none`) or `no_signal`
- * answer is returned; otherwise null and the question is asked live.
- */
-export const settledSuggestionQuestionInput = fieldSuggestionsInput
-  .pick({ entity: true, basisMode: true, basis: true })
+/** The most questions one settled read prepares; a list page batches up to it. */
+export const SETTLED_SUGGESTION_QUESTION_MAX = 50;
+/** A single-field `suggestFields` question a list already asked. */
+export const settledSuggestionQuestion = fieldSuggestionsInput
+  .pick({ basisMode: true, basis: true })
   .extend({ field: z.string().min(1) });
-export type SettledSuggestionQuestionInput = z.infer<
-  typeof settledSuggestionQuestionInput
+export type SettledSuggestionQuestion = z.infer<
+  typeof settledSuggestionQuestion
 >;
-export const settledSuggestionQuestionOut = z.object({
-  outcome: fieldSuggestionOutcomeSchema.nullable(),
+export const settledSuggestionQuestionsInput = z.object({
+  entity: z.enum(shortcodeEntities),
+  questions: z
+    .array(settledSuggestionQuestion)
+    .min(1)
+    .max(SETTLED_SUGGESTION_QUESTION_MAX),
 });
+export type SettledSuggestionQuestionsInput = z.infer<
+  typeof settledSuggestionQuestionsInput
+>;
+/**
+ * While a question's basis, its field's decision policy and the decision
+ * inputs prepared from saved data are unchanged, its remembered decline
+ * (`none`) or `no_signal` outcome; otherwise null and the question is asked
+ * live. A reopened question also names the `inputRevision` its live ask
+ * carries, so a cached answer to the old inputs is never reused.
+ */
+export const settledSuggestionAnswer = z.object({
+  outcome: fieldSuggestionOutcomeSchema.nullable(),
+  revision: z.string().nullable(),
+});
+export type SettledSuggestionAnswer = z.infer<typeof settledSuggestionAnswer>;
+/** Positional with `questions`; one failed question never fails its siblings. */
+export const settledSuggestionQuestionsOut = batchOutSchema(
+  settledSuggestionAnswer,
+);
 
 /** Input for classifying one external identifier's `kind` from its shape and source. */
 export const externalIdKindSuggestionInput = z.object({

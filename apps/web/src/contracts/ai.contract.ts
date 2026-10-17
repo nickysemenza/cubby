@@ -19,8 +19,8 @@ import {
   fieldSuggestionsInput,
   fieldSuggestionsOut,
   fieldSuggestionsReviewOut,
-  settledSuggestionQuestionInput,
-  settledSuggestionQuestionOut,
+  settledSuggestionQuestionsInput,
+  settledSuggestionQuestionsOut,
   suggestionReviewListInput,
   suggestionReviewListOut,
   suggestionCountsInput,
@@ -43,7 +43,6 @@ import {
 } from "@cubby/schemas/ai";
 import { z as zod } from "zod";
 
-import { ENTITY_ROOT_TAGS } from "~/contracts/cache-policy";
 import {
   defineContract,
   mutation,
@@ -157,21 +156,18 @@ export const aiContract = defineContract("ai", {
     cache: { profile: "stable" },
     queryKeyOmit: ["runKey"],
   }),
-  settledSuggestionQuestion: query({
+  settledSuggestionQuestions: query({
     mcp: {
       omit: "client_view",
       note: "List pages skip re-asking declined suggestion questions",
     },
-    input: settledSuggestionQuestionInput,
-    output: settledSuggestionQuestionOut,
+    input: settledSuggestionQuestionsInput,
+    output: settledSuggestionQuestionsOut,
     readPolicy: "strong",
     transport: "post",
-    // A decline depends on saved data beyond its basis (rosters, linked
-    // records), so any entity write rechecks it, and member review reopens it.
-    cache: {
-      profile: "stable",
-      tags: [["ai", "settledSuggestionQuestion"], ...ENTITY_ROOT_TAGS],
-    },
+    // List pages batch this read and cache each question separately, tagged
+    // with the entity kinds its decision reads (`record-suggestions.tsx`).
+    cache: { profile: "stable", tags: [["ai", "settledSuggestionQuestion"]] },
   }),
   listSuggestionReviewQueue: query({
     input: suggestionReviewListInput,

@@ -5,6 +5,10 @@ import { z } from "zod";
 
 import { cachedCall } from "~/server/ai/adapters";
 import {
+  markPreparationIncomplete,
+  preparingWithoutProviders,
+} from "~/server/ai/evaluation-inputs";
+import {
   gatewayConfigured,
   gatewayFetch,
   type GatewayMetadata,
@@ -200,6 +204,12 @@ export async function embedQuery(
   if (!normalized) return null;
   const cached = queryEmbeddingCache.get(normalized);
   if (cached) return cached;
+  // A provider-free preparation (a settled-suggestion recheck) must not pay
+  // for an embedding; its prepared inputs are incomplete instead.
+  if (preparingWithoutProviders()) {
+    markPreparationIncomplete();
+    return null;
+  }
   const [embedding] = await embedTexts([normalized], {
     operation: "queryEmbedding",
     db: opts?.db,

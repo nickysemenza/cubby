@@ -2359,11 +2359,17 @@ resolution context. Deferred sibling projections and unrelated assignments do no
 restart it. The page-mount Run key attributes calls but is not part of that key,
 so remounts within the cache window reuse answers. A live decline (`none`) or
 `no_signal` answer is remembered per basis and the field's decision-policy
-stamps, with a signature of the decision inputs it read. The page reads each
-remembered question beside its stored Suggestions; the read re-prepares those
-inputs from saved data without calling the model, so a changed roster (a new
+stamps, with a signature of the decision inputs it read; a later decline of
+the same question replaces that signature. After the stored read, the page
+asks about the questions it left uncovered in batches of up to 50 through its
+database limiter. Each remembered question's inputs are re-prepared from saved
+data without the model or any paid provider call, so a changed roster (a new
 Category or Project), linked record or stock tally reopens it just as a basis
-edit does. Any entity write and any member review recheck mounted questions.
+edit does; inputs that need a provider (a cold query embedding) cannot be
+verified and are asked live. A reopened question's live ask carries the read's
+input revision, so an answer cached for its old inputs is not reused. Member
+reviews and writes to the entity kinds a question declares (its entity, the
+field's vocabulary, referenced basis records) recheck mounted questions.
 Questions with saved finance context (`entityId`), pinned-model replays and
 declines a member marked as a miss are always asked again.
 The page batches stored Suggestion reads and retains completed rows

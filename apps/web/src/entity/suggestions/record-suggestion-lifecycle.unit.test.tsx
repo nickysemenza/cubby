@@ -60,7 +60,12 @@ const stored: StoredSuggestionOperations = {
     applied: intent === "apply",
   }),
   reviewBatch: async () => [],
-  settled: async () => null,
+  settled: async ({ questions }) => ({
+    results: questions.map(() => ({
+      ok: true as const,
+      value: { outcome: null, revision: null },
+    })),
+  }),
 };
 let harness: ReturnType<typeof createBrowserTestHarness>;
 beforeEach(() => {
