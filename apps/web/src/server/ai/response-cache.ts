@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import type { UnparsedError } from "~/lib/error-utils";
 import type { AiChatRequest } from "~/server/ai/run-feature";
-import { getAiResponseCacheNamespace } from "~/server/cf-env";
+import { afterResponse, getAiResponseCacheNamespace } from "~/server/cf-env";
 
 import {
   AI_RESPONSE_CACHE_BATCH_SIZE,
@@ -307,12 +307,19 @@ export async function withAiResponseCache<T>(args: {
       );
       const value = JSON.stringify(result);
       if (new TextEncoder().encode(value).byteLength <= MAX_VALUE_BYTES) {
-        try {
-          await store.publish(key, token, value, CACHE_TTL_MS);
-        } catch (error) {
-          // SILENT: Cache persistence is best effort after a valid model result.
-          log.error("publish failed", { error });
-        }
+        // The answer does not wait on its cache write; the claim's lease covers
+        // concurrent readers until the publish lands.
+        await afterResponse(
+          Promise.resolve()
+            .then(() => store.publish(key, token, value, CACHE_TTL_MS))
+            .then(
+              () => undefined,
+              (error: unknown) => {
+                // SILENT: Cache persistence is best effort after a valid model result.
+                log.error("publish failed", { error });
+              },
+            ),
+        );
       } else {
         await store.release(key, token);
       }

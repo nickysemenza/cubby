@@ -218,4 +218,40 @@ describe("AI response cache", () => {
       }),
     ).toEqual({ choice: "fresh" });
   });
+
+  // Regression: the cache write sat between the model answer and the response.
+  it("answers before its cache write lands inside a Worker request", async () => {
+    const publish = vi.fn(() => new Promise<boolean>(() => {}));
+    const namespace = fromPartial<
+      NonNullable<ReturnType<typeof cfEnv.getAiResponseCacheNamespace>>
+    >({
+      getByName: () =>
+        fromPartial({
+          readOrClaim: () => ({ kind: "claimed" as const, token: "lease" }),
+          publish,
+        }),
+    });
+    const mock = vi
+      .spyOn(cfEnv, "getAiResponseCacheNamespace")
+      .mockReturnValue(namespace);
+    const deferred: Promise<unknown>[] = [];
+    try {
+      await expect(
+        cfEnv.runWithExecutionCtx(
+          { waitUntil: (task) => deferred.push(task) },
+          () =>
+            withAiResponseCache({
+              enabled: true,
+              keyInput: input(`deferred-${crypto.randomUUID()}`),
+              validate,
+              compute: async () => ({ choice: "one" }),
+            }),
+        ),
+      ).resolves.toEqual({ choice: "one" });
+      expect(deferred).toHaveLength(1);
+      await vi.waitFor(() => expect(publish).toHaveBeenCalledOnce());
+    } finally {
+      mock.mockRestore();
+    }
+  });
 });
