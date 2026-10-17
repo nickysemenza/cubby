@@ -41,12 +41,9 @@ import {
 } from "~/server/domains/inventory/repo/ownership";
 import { kitAncestorCteSql } from "~/server/domains/product/repo/kit-projection";
 import { purchaseEvidenceFieldResolutionsSql } from "~/server/domains/purchase/repo/purchase-evidence-policy";
-import {
-  effectiveTaskProjectSql,
-  effectiveProjectAssigneeSql,
-  eligibleParentTaskTradeSql,
-} from "~/server/domains/task/repo/task-project-inheritance";
+import { eligibleParentTaskTradeSql } from "~/server/domains/task/repo/task-project-inheritance";
 import { shortcodeLabels } from "~/server/generic/shortcode/repo/shortcode-labels";
+import { effectiveFieldSql } from "~/server/generic/list/repo/inheritance";
 
 const categoryOrigin = purchaseOut.shape.spendingCategoryOrigin.unwrap();
 type Evidence = NonNullable<FieldExplanationOutput["resolutionEvidence"]>;
@@ -414,7 +411,7 @@ async function taskAssigneeSteps(
       SELECT parent.shortcode,parent.name,
         to_jsonb((SELECT l.shortcode FROM "LedgerParty" l
           WHERE l.id=CASE WHEN parent."assigneeMode"=${sqlEnumConstant(fieldResolutionSchema.shape.mode, fieldResolutionSchema.shape.mode.enum.explicit)} THEN parent."assigneeId"
-            ELSE ${effectiveProjectAssigneeSql(effectiveTaskProjectSql("parent"))} END
+            ELSE ${effectiveFieldSql("project", "assigneeId", { id: effectiveFieldSql("task", "projectId", "parent") })} END
           AND l."deletedAt" IS NULL)) AS value,
         parent."assigneeMode"=${sqlEnumConstant(fieldResolutionSchema.shape.mode, fieldResolutionSchema.shape.mode.enum.explicit)} AS explicit
       FROM "Task" t JOIN "Task" parent ON parent.id=t."parentTaskId" AND parent."deletedAt" IS NULL
@@ -433,14 +430,14 @@ async function taskAssigneeSteps(
       ? await ancestors(
           db,
           "project",
-          sql`(SELECT ${effectiveTaskProjectSql("p")} FROM "Task" p WHERE p.shortcode=${parent.shortcode} AND p."deletedAt" IS NULL)`,
+          sql`(SELECT ${effectiveFieldSql("task", "projectId", "p")} FROM "Task" p WHERE p.shortcode=${parent.shortcode} AND p."deletedAt" IS NULL)`,
           field,
         )
       : [];
   const projects = await ancestors(
     db,
     "project",
-    sql`(SELECT ${effectiveTaskProjectSql("t")} FROM "Task" t WHERE t.shortcode=${shortcode} AND t."deletedAt" IS NULL)`,
+    sql`(SELECT ${effectiveFieldSql("task", "projectId", "t")} FROM "Task" t WHERE t.shortcode=${shortcode} AND t."deletedAt" IS NULL)`,
     field,
   );
   const parentAssigned =
@@ -765,7 +762,7 @@ async function fieldSteps(
       const projects = await ancestors(
         db,
         "project",
-        sql`(SELECT ${effectiveTaskProjectSql("t")} FROM "Task" t WHERE t.shortcode=${shortcode} AND t."deletedAt" IS NULL)`,
+        sql`(SELECT ${effectiveFieldSql("task", "projectId", "t")} FROM "Task" t WHERE t.shortcode=${shortcode} AND t."deletedAt" IS NULL)`,
         "defaultTrade",
       );
       fallbackSource ??= source(

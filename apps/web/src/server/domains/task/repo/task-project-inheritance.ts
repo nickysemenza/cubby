@@ -12,18 +12,24 @@ import type {
 import type { TaskCreateInput } from "@cubby/schemas/project";
 import { tradeSchema, type Trade } from "@cubby/schemas/task-fields";
 /**
- * Canonical SQL resolution for task and project inheritance.
+ * Task inheritance provenance and trade. Effective project, subject product
+ * and assignee values compile from their `resolution.inherit`
+ * (`effectiveFieldSql`); this module adds the `fieldResolutions` provenance
+ * (source, parent decision, fallback) and the task trade chain.
  *
  * These expressions deliberately use scalar correlated subqueries rather than
  * joins. Callers can use them from a Task, Expense, or report query without
- * accidentally changing row cardinality. The aliases are internal constants;
- * the optional task alias is only used by repository-owned call sites.
+ * accidentally changing row cardinality.
  */
 import { type SQL, and, inArray, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { ledgerParty, product, project, task } from "~/server/db/schema";
+import {
+  effectiveFieldSql,
+  inheritedFieldSql,
+} from "~/server/generic/list/repo/inheritance";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 const assignmentMode = fieldResolutionSchema.shape.mode.enum;
@@ -59,51 +65,28 @@ export const effectiveProjectTradeSql = (
   )
 `;
 
-/** The nearest explicit project locations, starting at `projectId`. */
-export const effectiveProjectLocationsSql = (
-  projectId: SQL,
-): SQL<string[]> => sql`
-  coalesce((
-    WITH RECURSIVE project_ancestors AS (
-      SELECT p."id", p."parentProjectId", p."locations", p."locationsMode", 0 AS depth
-      FROM "Project" p
-      WHERE p."id" = ${projectId} AND p."deletedAt" IS NULL
-      UNION ALL
-      SELECT parent."id", parent."parentProjectId", parent."locations", parent."locationsMode",
-        project_ancestors.depth + 1
-      FROM "Project" parent
-      JOIN project_ancestors ON parent."id" = project_ancestors."parentProjectId"
-      WHERE parent."deletedAt" IS NULL AND project_ancestors.depth < 100
-    )
-    SELECT "locations"
-    FROM project_ancestors
-    WHERE "locationsMode" = ${explicitModeSql}
-    ORDER BY depth
-    LIMIT 1
-  ), '{}'::text[])
-`;
+// Effective values compile from each field's `resolution.inherit`; the
+// helpers below add only the provenance a field resolution reports.
+const effectiveTaskProjectSql = (alias: string) =>
+  effectiveFieldSql<ProjectId | null>("task", "projectId", alias);
+const effectiveProjectAssigneeSql = (projectId: SQL) =>
+  effectiveFieldSql<LedgerPartyId | null>("project", "assigneeId", {
+    id: projectId,
+  });
 
-/** Nearest explicit live project default, including an explicit None. */
-const projectAssigneeResolutionSql = <Key extends "id" | "assigneeId">(
-  projectId: SQL,
-  field: Key,
-) => sql<(typeof project.$inferSelect)[Key] | null>`(
+/** The project whose own decision a project's effective assignee reads. */
+const projectAssigneeSourceSql = (projectId: SQL): SQL<ProjectId | null> => sql`(
   WITH RECURSIVE ancestors AS (
-    SELECT p."id", p."parentProjectId", p."assigneeId", p."assigneeMode", 0 AS depth
+    SELECT p."id", p."parentProjectId", p."assigneeMode", 0 AS depth
     FROM "Project" p WHERE p."id" = ${projectId} AND p."deletedAt" IS NULL
     UNION ALL
-    SELECT p."id", p."parentProjectId", p."assigneeId", p."assigneeMode", ancestors.depth + 1
+    SELECT p."id", p."parentProjectId", p."assigneeMode", ancestors.depth + 1
     FROM "Project" p JOIN ancestors ON p."id" = ancestors."parentProjectId"
     WHERE p."deletedAt" IS NULL AND ancestors.depth < 100
-  ) SELECT ${sql.identifier(field)} FROM ancestors WHERE "assigneeMode" = ${explicitModeSql} ORDER BY depth LIMIT 1
+  ) SELECT "id" FROM ancestors WHERE "assigneeMode" = ${explicitModeSql} ORDER BY depth LIMIT 1
 )`;
-export const effectiveProjectAssigneeSql = (
-  projectId: SQL,
-): SQL<LedgerPartyId | null> =>
-  projectAssigneeResolutionSql(projectId, "assigneeId");
-const projectAssigneeSourceSql = (projectId: SQL): SQL<ProjectId | null> =>
-  projectAssigneeResolutionSql(projectId, "id");
 
+/** The assignee the parent decides: its own, else its project's default. */
 const parentTaskAssigneeSql = (
   alias: string,
 ): SQL<LedgerPartyId | null> => sql`(
@@ -119,52 +102,6 @@ const parentTaskAssigneeIsNoneSql = (alias: string) => sql<boolean>`EXISTS (
         AND ${effectiveProjectAssigneeSql(effectiveTaskProjectSql("parent"))} IS NULL)
     )
 )`;
-const fallbackTaskAssigneeSql = (
-  alias: string,
-): SQL<LedgerPartyId | null> => sql`CASE
-  WHEN ${parentTaskAssigneeIsNoneSql(alias)} THEN NULL
-  ELSE coalesce(${parentTaskAssigneeSql(alias)}, ${effectiveProjectAssigneeSql(effectiveTaskProjectSql(alias))}) END`;
-export const effectiveTaskAssigneeSql = (
-  alias = "Task",
-): SQL<LedgerPartyId | null> => sql`CASE
-  WHEN ${taskColumn(alias, "assigneeMode")} = ${explicitModeSql} THEN ${taskColumn(alias, "assigneeId")}
-  ELSE ${fallbackTaskAssigneeSql(alias)} END`;
-
-/** Effective task project: an explicit value (including NULL) or live parent. */
-export const effectiveTaskProjectSql = (
-  alias = "Task",
-): SQL<ProjectId | null> => {
-  const mode = taskColumn(alias, "projectMode");
-  const value = taskColumn(alias, "projectId");
-  const parentId = taskColumn(alias, "parentTaskId");
-  return sql`
-    CASE WHEN ${mode} = ${explicitModeSql} OR ${value} IS NOT NULL THEN ${value}
-    ELSE (
-      SELECT CASE WHEN parent."projectMode" = ${explicitModeSql} OR parent."projectId" IS NOT NULL THEN parent."projectId"
-        ELSE NULL END
-      FROM "Task" parent
-      WHERE parent."id" = ${parentId} AND parent."deletedAt" IS NULL
-    ) END
-  `;
-};
-
-/** Effective task subject product: an explicit value (including NULL) or live parent. */
-export const effectiveTaskSubjectProductSql = (
-  alias = "Task",
-): SQL<ProductId | null> => {
-  const mode = taskColumn(alias, "subjectProductMode");
-  const value = taskColumn(alias, "subjectProductId");
-  const parentId = taskColumn(alias, "parentTaskId");
-  return sql`
-    CASE WHEN ${mode} = ${explicitModeSql} OR ${value} IS NOT NULL THEN ${value}
-    ELSE (
-      SELECT CASE WHEN parent."subjectProductMode" = ${explicitModeSql} OR parent."subjectProductId" IS NOT NULL THEN parent."subjectProductId"
-        ELSE NULL END
-      FROM "Task" parent
-      WHERE parent."id" = ${parentId} AND parent."deletedAt" IS NULL
-    ) END
-  `;
-};
 
 /**
  * Task trade can come from its own explicit choice, a parent task only when
@@ -188,9 +125,17 @@ export const effectiveTaskTradeSql = (alias = "Task"): SQL<Trade | null> =>
  */
 const taskInheritanceReadExtras = (alias = "Task") => ({
   effectiveProjectId: effectiveTaskProjectSql(alias),
-  effectiveSubjectProductId: effectiveTaskSubjectProductSql(alias),
+  effectiveSubjectProductId: effectiveFieldSql<ProductId | null>(
+    "task",
+    "subjectProductId",
+    alias,
+  ),
   effectiveTrade: effectiveTaskTradeSql(alias),
-  effectiveAssigneeId: effectiveTaskAssigneeSql(alias),
+  effectiveAssigneeId: effectiveFieldSql<LedgerPartyId | null>(
+    "task",
+    "assigneeId",
+    alias,
+  ),
 });
 
 type AssignmentMode = "inherit" | "explicit";
@@ -207,21 +152,29 @@ type TaskAssignment = {
 
 const taskResolutionExtras = (alias: string) => {
   const parentId = taskColumn(alias, "parentTaskId");
-  const parentProject = sql<ProjectId | null>`(SELECT ${effectiveTaskProjectSql("parent")}
-    FROM "Task" parent WHERE parent."id" = ${parentId} AND parent."deletedAt" IS NULL)`;
-  const parentProduct = sql<ProductId | null>`(SELECT ${effectiveTaskSubjectProductSql("parent")}
-    FROM "Task" parent WHERE parent."id" = ${parentId} AND parent."deletedAt" IS NULL)`;
   const parentTrade = eligibleParentTaskTradeSql(alias);
   return {
     ...taskInheritanceReadExtras(alias),
     assigneeSourceProjectId: projectAssigneeSourceSql(
       effectiveTaskProjectSql(alias),
     ),
-    fallbackAssigneeId: fallbackTaskAssigneeSql(alias),
+    fallbackAssigneeId: inheritedFieldSql<LedgerPartyId | null>(
+      "task",
+      "assigneeId",
+      alias,
+    ),
     parentAssigneeId: parentTaskAssigneeSql(alias),
     parentAssigneeIsNone: parentTaskAssigneeIsNoneSql(alias),
-    fallbackProjectId: parentProject,
-    fallbackSubjectProductId: parentProduct,
+    fallbackProjectId: inheritedFieldSql<ProjectId | null>(
+      "task",
+      "projectId",
+      alias,
+    ),
+    fallbackSubjectProductId: inheritedFieldSql<ProductId | null>(
+      "task",
+      "subjectProductId",
+      alias,
+    ),
     fallbackTrade: sql<Trade | null>`coalesce(${parentTrade}, ${effectiveProjectTradeSql(effectiveTaskProjectSql(alias))})`,
     parentTrade,
     parentShortcode: sql<

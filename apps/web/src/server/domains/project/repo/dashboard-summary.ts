@@ -43,11 +43,7 @@ import {
   dbTaskToAPI,
   effectiveTaskDueDateSql,
 } from "~/server/domains/task/repo/helpers";
-import {
-  effectiveTaskProjectSql,
-  effectiveProjectLocationsSql,
-  hydrateTaskInheritanceRows,
-} from "~/server/domains/task/repo/task-project-inheritance";
+import { hydrateTaskInheritanceRows } from "~/server/domains/task/repo/task-project-inheritance";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 
 import { projectDependencyIds } from "./analytics";
@@ -63,6 +59,7 @@ import {
   loadProjectSubtreeRollups,
   projectCompletionYear,
 } from "./subtree";
+import { effectiveFieldSql } from "~/server/generic/list/repo/inheritance";
 
 /**
  * Forward-looking committed-spend windows, in days from today. Mirrors the
@@ -167,7 +164,7 @@ export async function projectDashboardSummary(
       .where(notDeleted(project)),
     getDb(db)
       .selectDistinct({
-        location: sql<string>`unnest(${effectiveProjectLocationsSql(sql`${project.id}`)})`,
+        location: sql<string>`unnest(${effectiveFieldSql("project", "locations")})`,
       })
       .from(project)
       .where(notDeleted(project)),
@@ -247,24 +244,24 @@ export async function projectDashboardSummary(
     ids.length > 0
       ? getDb(db)
           .select({
-            projectId: effectiveTaskProjectSql(),
+            projectId: effectiveFieldSql<ProjectId | null>("task", "projectId"),
             status: task.status,
             count: sql<number>`count(*)::int`,
           })
           .from(task)
           .where(
             and(
-              inArray(effectiveTaskProjectSql(), ids),
+              inArray(effectiveFieldSql<ProjectId | null>("task", "projectId"), ids),
               notDeleted(task),
               isNull(task.parentTaskId),
             ),
           )
-          .groupBy(effectiveTaskProjectSql(), task.status)
+          .groupBy(effectiveFieldSql<ProjectId | null>("task", "projectId"), task.status)
       : Promise.resolve([]),
     ids.length > 0
       ? getDb(db).query.task.findMany({
           where: and(
-            inArray(effectiveTaskProjectSql("task"), ids),
+            inArray(effectiveFieldSql<ProjectId | null>("task", "projectId", "task"), ids),
             notDeleted(task),
             isNull(task.parentTaskId),
             inArray(task.status, ["not_started", "in_progress"]),
@@ -293,7 +290,7 @@ export async function projectDashboardSummary(
           task,
           and(
             notDeleted(task),
-            scopedOrInbox(effectiveTaskProjectSql()),
+            scopedOrInbox(effectiveFieldSql<ProjectId | null>("task", "projectId")),
             isNull(task.dueDate),
             isNull(task.dueEndDate),
           ),

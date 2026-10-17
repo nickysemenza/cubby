@@ -52,7 +52,6 @@ import { getRecipeCoverImageUrlsByShortcodes } from "~/server/domains/recipe/rep
 import { getTasksByIDs } from "~/server/domains/task/repo/crud";
 import { dbTaskToAPI } from "~/server/domains/task/repo/helpers";
 import {
-  effectiveTaskProjectSql,
   effectiveTaskTradeSql,
   hydrateTaskInheritanceRows,
 } from "~/server/domains/task/repo/task-project-inheritance";
@@ -65,6 +64,7 @@ import {
   mapPlantingItems,
   plantingLinkedProjectSql,
 } from "./calendar-plantings";
+import { effectiveFieldSql } from "~/server/generic/list/repo/inheritance";
 
 const emptyDaySummary = (): CalendarDaySummary => ({
   actualSpend: 0,
@@ -179,7 +179,7 @@ const loadCalendarTasks = async (
       input.taskTrade
         ? inArray(effectiveTaskTradeSql("task"), [input.taskTrade].flat())
         : undefined,
-      projectScopeOn(effectiveTaskProjectSql("task"), input, scope),
+      projectScopeOn(effectiveFieldSql("task", "projectId", "task"), input, scope),
     ),
     orderBy: (row, { asc }) => [asc(row.dueDate), asc(row.name)],
     ...relations.task.withProject,
@@ -605,7 +605,7 @@ export async function getCalendarSchedule(
                     [input.taskTrade].flat(),
                   )
                 : undefined,
-              projectScopeOn(effectiveTaskProjectSql("Task"), input, scope),
+              projectScopeOn(effectiveFieldSql("task", "projectId", "Task"), input, scope),
             ),
           )
       : [],

@@ -667,11 +667,50 @@ const buildMetadataSchemas = () => {
         .default(null),
       /** Declarative assignment semantics for fields whose effective read value
        * may differ from stored intent. UI cleanup actions execute these exact
-       * ordinary update patches; repositories remain the authority that
-       * computes `fieldResolutions`. */
+       * ordinary update patches; `inherit` declares the effective value that
+       * reads, filters, sorts and groups compile (`effectiveFieldSql`), and
+       * repositories own `fieldResolutions` provenance. */
       resolution: z
         .strictObject({
-          reset: z.record(z.string(), z.json()),
+          /** Absent for a field that only inherits: clients get no actions. */
+          reset: z.record(z.string(), z.json()).optional(),
+          /**
+           * The fallback chain. Without `mode`, NULL inherits. With `mode`,
+           * the row's stored value wins unless the mode field holds
+           * `inherit`; a `none` mode value reads as NULL, and
+           * `explicitIfSet` lets a non-NULL stored value win in any mode.
+           * `from` is ordered and the first source that decides (a value or
+           * an explicit None) ends the chain: `"hierarchy"` is the nearest
+           * live ancestor whose own value decides (cycle-guarded, capped at
+           * `model.hierarchy.maxDepth`); `{ path, read: "stored" }` is the
+           * same field's stored decision one to-one reference away; `{ path
+           * }` is the effective value of the field a to-one path ends at.
+           * A reference along a path that is itself inherited reads
+           * effective.
+           */
+          inherit: z
+            .strictObject({
+              mode: z
+                .strictObject({
+                  field: nonEmptyString(),
+                  inherit: nonEmptyString(),
+                  none: z.array(nonEmptyString()).min(1).optional(),
+                  explicitIfSet: z.literal(true).optional(),
+                })
+                .optional(),
+              from: z
+                .array(
+                  z.union([
+                    z.literal("hierarchy"),
+                    z.strictObject({
+                      path: nonEmptyString(),
+                      read: z.literal("stored").optional(),
+                    }),
+                  ]),
+                )
+                .min(1),
+            })
+            .optional(),
           none: z
             .record(z.string(), z.json())
             .nullable()

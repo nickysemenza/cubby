@@ -2270,6 +2270,7 @@ export const compileEntity = (
     // Resolved across entities by `compileListFields`.
     listFields: {
       derived: {},
+      inherit: {},
       hierarchy: null,
       subtree: {},
       grouping: [],

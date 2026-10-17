@@ -67,10 +67,7 @@ import {
 import { getCategoryFeature } from "~/server/domains/product-category/repo/product-category";
 import { getProductCoverImageUrlsByProductIds } from "~/server/domains/product/repo/crud";
 import { loadProductOwnershipTimelines } from "~/server/domains/product/repo/ownership";
-import {
-  effectiveTaskProjectSql,
-  effectiveTaskTradeSql,
-} from "~/server/domains/task/repo/task-project-inheritance";
+import { effectiveTaskTradeSql } from "~/server/domains/task/repo/task-project-inheritance";
 import { linkRelationAdapter } from "~/server/entity-kernel/repo/relation-mutation-adapter";
 import {
   emptyPreflight,
@@ -91,6 +88,7 @@ import { foldAssociation } from "~/server/generic/merge/repo/collisions";
 
 import { maxPlainDate } from "./helpers";
 import { collectDescendantIds, loadProjectDateWindows } from "./subtree";
+import { effectiveFieldSql } from "~/server/generic/list/repo/inheritance";
 
 export const EXPENSIVE_TOOL_THRESHOLD = 100;
 export const REUSED_CHEAP_TOOL_PROJECTS = 2;
@@ -98,7 +96,7 @@ export const MAX_TRADE_SUGGESTIONS = 20;
 export const MAX_SUGGESTIONS_PER_TRADE = 5;
 const effectiveExpenseProject = effectiveExpenseProjectSql();
 const effectiveExpenseTrade = effectiveExpenseTradeSql();
-const effectiveTaskProject = effectiveTaskProjectSql();
+const effectiveTaskProject = effectiveFieldSql("task", "projectId");
 const effectiveTaskTrade = effectiveTaskTradeSql();
 
 /** Project-resource features that land in the `'tools'` bucket — everything

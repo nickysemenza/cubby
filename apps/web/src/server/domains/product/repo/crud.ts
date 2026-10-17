@@ -1,11 +1,16 @@
 import type { ActorContext } from "@cubby/schemas/context";
+
 import { entityRefKey } from "@cubby/schemas/entity";
+
 import {
   isCollectionPatch,
   type ValueCollectionPatch,
 } from "@cubby/schemas/entity-collection";
+
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
+
 import type { EntityLinkKind } from "@cubby/schemas/entity-links";
+
 import {
   displayGtin,
   type ExternalIdInput,
@@ -15,6 +20,7 @@ import {
   GTIN_SOURCE,
   storedExternalIdUrl,
 } from "@cubby/schemas/external-id";
+
 import type {
   IngredientId,
   PlantId,
@@ -22,33 +28,38 @@ import type {
   ProductId,
   ProductCategoryId,
 } from "@cubby/schemas/identifiers";
+
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+
 import type { ImageOut } from "@cubby/schemas/image";
+
 import { preferredImageUrl } from "@cubby/schemas/image-summary";
+
 import {
   type PaginationParams,
   type ListGroupSummary,
   presenceFilter,
   type SortParams,
 } from "@cubby/schemas/pagination";
+
 import type {
   ProductBulkStockTrackedInput,
   ProductFilters,
   ProductPickerItemOut,
 } from "@cubby/schemas/product";
+
 import {
   impliedProductFeature,
   type ProductCreateInput,
   type ProductTopLevelOut,
   type ProductUpdateInput,
 } from "@cubby/schemas/product";
-import {
-  productCategoryFeature,
-  type ProductCategorySummary,
-} from "@cubby/schemas/product-category-fields";
+import { type ProductCategorySummary } from "@cubby/schemas/product-category-fields";
 import { productQuantityVarianceState } from "@cubby/schemas/product-fields";
 import { taskStatusSchema } from "@cubby/schemas/project";
+
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
+
 import {
   and,
   asc,
@@ -61,45 +72,32 @@ import {
   sum,
   type SQL,
 } from "drizzle-orm";
+
 import { QueryBuilder } from "drizzle-orm/pg-core";
+
 import { groupBy, uniq } from "es-toolkit";
+
 import { z } from "zod";
 
+
 import { projectListRows } from "~/entity/model/list-read-schema";
+
 import { startOperationDefinition } from "~/lib/start-operation-observability";
+
 import type { USDAClient } from "~/server/clients/usda";
+
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
+
 import {
   productAcquisitionDateFilterSql,
   productExpenseCountFilterSql,
   productExpenseTotalFilterSql,
 } from "~/server/db/computed/expense-aggregate-sql";
-import {
-  categorySummarySql,
-  categoryStockTrackingSql,
-  categoryFeatureInSql,
-  categoryFeatureSql,
-  productStockTrackedSql,
-} from "~/server/db/computed/product-category-sql";
+
+import { categorySummarySql, categoryStockTrackingSql, categoryFeatureSql, productStockTrackedSql } from "~/server/db/computed/product-category-sql";
 import { getProductClassificationEvidence } from "~/server/db/computed/product-classification-evidence";
-import {
-  assertNoDependents,
-  associatePendingImages,
-  countWhere,
-  formatSearchTerm,
-  getDb,
-  idSetPresence,
-  imageJoinBindings,
-  insertAndReturn,
-  type ListReadIntent,
-  mapImages,
-  notDeleted,
-  presenceCondition,
-  relations,
-  textArrayMatches,
-  updateLiveAndReturn,
-  withTransaction,
-} from "~/server/db/helpers";
+
+import { assertNoDependents, associatePendingImages, countWhere, formatSearchTerm, getDb, idSetPresence, imageJoinBindings, insertAndReturn, type ListReadIntent, mapImages, notDeleted, relations, textArrayMatches, updateLiveAndReturn, withTransaction } from "~/server/db/helpers";
 import {
   cookbook,
   device,
@@ -120,90 +118,126 @@ import {
   productUnitMappings,
   task,
 } from "~/server/db/schema";
+
 import { loadImageAnalysisSummaries } from "~/server/domains/image/repo/image-analysis-summary";
+
 import { productHasDisplayableImageSql } from "~/server/domains/image/repo/image-displayability";
+
 import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-read-projection";
+
 import {
   loadProductOwners,
   productIdsByOwner,
 } from "~/server/domains/inventory/repo/ownership";
+
 import { loadCategoryStockTracking } from "~/server/domains/inventory/repo/stock-tracking";
+
 import {
   enrichProductRowsWithInventoryValuations,
   loadInventoryValuations,
 } from "~/server/domains/inventory/repo/valuation";
+
 import { loadLocationAncestorsWithIds } from "~/server/domains/location/repo/tree";
+
 import {
   resolveProductCategory,
   loadCategorySummaries,
 } from "~/server/domains/product-category/repo/product-category";
+
 import {
   currentProductConversionCoverageCondition,
   markProductConversionCoverageInputStale,
 } from "~/server/domains/product/repo/conversion-coverage";
+
 import {
   loadPrimaryGtins,
   productHasGtin,
   productMatchesGtinTerm,
 } from "~/server/domains/product/repo/gtin";
-import { effectiveTaskSubjectProductSql } from "~/server/domains/task/repo/task-project-inheritance";
+
 import {
   resolveEntityDisplayImageLists,
   resolveEntityDisplayImages,
 } from "~/server/entity-kernel/repo/entity-display-image";
+
 import { patchEntityRows } from "~/server/entity-kernel/repo/entity-patch";
+
 import { createEntityReader } from "~/server/entity-kernel/repo/repository";
+
 import { createAppError } from "~/server/errors/app-error";
+
 import { findPgError } from "~/server/errors/db-errors";
+
 import {
   computeChanges,
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
+
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
+
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
+
 import {
   ensureExternalSources,
   lockExternalIdentifierParents,
 } from "~/server/generic/entity-links/repo/entity-external-ids";
+
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
+
 import { validateLiveInheritedPolicies } from "~/server/generic/inheritance/repo/inheritance-validation";
+
 import {
   listPrepare,
   listReadValue,
 } from "~/server/generic/list/repo/field-compiler";
+
 import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
+
 import { resolveEstablishedManufacturer } from "~/server/generic/list/repo/label-canonical";
+
 import { listScaffold } from "~/server/generic/list/repo/list";
+
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
+
 import {
   expectedQuantityLabel,
   quantityVarianceLabel,
   unitPriceLabel,
 } from "~/server/generic/list/repo/list-display-labels";
+
 import {
   loadListGroup,
   wantsListGroup,
 } from "~/server/generic/list/repo/list-projection";
+
 import { deleteByPolicy } from "~/server/generic/removal/repo/dispositions";
+
 import {
   resolveAllOrThrow,
   resolveAllPresent,
   resolveLiveShortcodes,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
+
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+
 import { deriveProductQuantitySummary } from "~/server/lib/product-quantity-summary";
+
 import { observeOperationPhase } from "~/server/observability/observed-request";
 
+
 import { assertProductCategoryChange } from "./classification";
+
 import {
   PRODUCT_DELETE_EDGE_POLICY,
   isRetainingEdgeKey,
   type ProductRetainingEdgeKey,
 } from "./edge-roles";
+
 import {
   enrichProductListItems,
   prefetchProductFoods,
 } from "./list-enrichment";
+
 import {
   dbProductToAPI,
   splitProductImages,
@@ -218,7 +252,9 @@ import {
   productFieldResolutions,
   productImageShortcodesOf,
 } from "./mappers";
+
 import { ownershipExitExpensePredicate } from "./ownership";
+
 import {
   hasDerivedProductPriceSql,
   effectiveProductPriceSql,
@@ -228,6 +264,7 @@ import {
   loadProductPricing,
   resolveProductPricing,
 } from "./pricing";
+
 import {
   enrichProductRowsWithQuantityLedger,
   expectedQuantityFilterSql,
@@ -241,9 +278,13 @@ import {
   quantityVarianceSql,
   comparableQuantityHistoryFilterSql,
 } from "./quantity-ledger";
+
 import { productStockContext } from "./stock-context";
+
 import type { ProductDeepDB, ProductListDB } from "./types";
+
 import { unitMappingColumns } from "./unit-mappings";
+
 import {
   assertNoCanonicalPriceMapping,
   ensureSlotPrimaries,
@@ -259,6 +300,9 @@ import {
   productGalleryIntent,
   syncProductUnitMappings,
 } from "./update-helpers";
+
+import { effectiveFieldSql } from "~/server/generic/list/repo/inheritance";
+
 
 const qb = new QueryBuilder();
 
@@ -376,12 +420,12 @@ const productHasTask = ({
   return inArray(
     product.id,
     qb
-      .select({ productId: effectiveTaskSubjectProductSql() })
+      .select({ productId: effectiveFieldSql("task", "subjectProductId") })
       .from(task)
       .where(
         and(
           notDeleted(task),
-          isNotNull(effectiveTaskSubjectProductSql()),
+          isNotNull(effectiveFieldSql("task", "subjectProductId")),
           taskStatusFilter.length > 0
             ? inArray(task.status, taskStatusFilter)
             : undefined,
@@ -511,19 +555,6 @@ const productScaffold = listScaffold("product", product, {
     effectiveOwner: ownedProducts.predicate((ids) =>
       ids.length === 0 ? sql`false` : inArray(product.id, ids),
     ),
-    categoryFeature: ({ values, presence }) =>
-      or(
-        values.length === 0
-          ? undefined
-          : categoryFeatureInSql(
-              sql`${product.categoryId}`,
-              values.flatMap((value) => {
-                const feature = productCategoryFeature.safeParse(value);
-                return feature.success ? [feature.data] : [];
-              }),
-            ),
-        presenceCondition(product.categoryId, presence),
-      ),
     externalIdSource: ({ values, presence }) =>
       or(
         values.length === 0

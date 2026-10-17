@@ -48,12 +48,7 @@ import {
   plantingDisplayName,
 } from "~/server/domains/plant/repo/windows";
 import { loadAllGtins } from "~/server/domains/product/repo/gtin";
-import {
-  effectiveProjectLocationsSql,
-  effectiveTaskProjectSql,
-  effectiveTaskSubjectProductSql,
-  effectiveTaskTradeSql,
-} from "~/server/domains/task/repo/task-project-inheritance";
+import { effectiveTaskTradeSql } from "~/server/domains/task/repo/task-project-inheritance";
 import { embeddingTextHash } from "~/server/generic/embedding/repo/semantic/hash";
 import {
   buildCookbookEmbeddingText,
@@ -79,6 +74,7 @@ import {
 import type { SemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
+import { effectiveFieldSql } from "~/server/generic/list/repo/inheritance";
 
 /** Mirrors `GARDEN_ENTRY_KIND_LABELS` in `domains/garden/repo/garden.ts` — that map is
  * private to the garden module, and `kind` is a plain `text` column here, not
@@ -682,7 +678,9 @@ async function getProjectEmbeddingTexts(
           : undefined,
       ),
       extras: {
-        resolvedLocations: effectiveProjectLocationsSql(sql`"project"."id"`).as(
+        resolvedLocations: effectiveFieldSql<string[]>("project", "locations", {
+          id: sql`"project"."id"`,
+        }).as(
           "resolvedLocations",
         ),
       },
@@ -722,8 +720,8 @@ async function getTaskEmbeddingTexts(
       subjectProductName: product.name,
     })
     .from(task)
-    .leftJoin(project, eq(effectiveTaskProjectSql(), project.id))
-    .leftJoin(product, eq(effectiveTaskSubjectProductSql(), product.id))
+    .leftJoin(project, eq(effectiveFieldSql("task", "projectId"), project.id))
+    .leftJoin(product, eq(effectiveFieldSql("task", "subjectProductId"), product.id))
     .where(
       and(
         notDeleted(task),

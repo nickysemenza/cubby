@@ -48,16 +48,13 @@ import {
   wish,
 } from "~/server/db/schema";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
-import {
-  effectiveTaskProjectSql,
-  effectiveTaskSubjectProductSql,
-} from "~/server/domains/task/repo/task-project-inheritance";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
 import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import {
   getOrphanedSearchDocumentRefs,
   type SearchDocumentCursor,
 } from "~/server/generic/search/repo/search-document";
+import { effectiveFieldSql } from "~/server/generic/list/repo/inheritance";
 
 async function softDeleteEntityEmbeddingsTx(
   tx: DrizzleTransaction,
@@ -193,7 +190,7 @@ export async function findTaskEmbeddingRefsForProducts(
   if (productIds.length === 0) return [];
   const result = await unwrapDb(db).execute<SearchableEntityRef>(sql`
     SELECT 'task' AS "entityKind", t."id"::text AS "entityId" FROM "Task" t
-    WHERE t."deletedAt" IS NULL AND ${effectiveTaskSubjectProductSql("t")} = ANY(${uuidArrayParam(productIds)})
+    WHERE t."deletedAt" IS NULL AND ${effectiveFieldSql("task", "subjectProductId", "t")} = ANY(${uuidArrayParam(productIds)})
     UNION ALL
     SELECT 'expense', e."id"::text FROM "Expense" e WHERE e."deletedAt" IS NULL AND e."productId" = ANY(${uuidArrayParam(productIds)})
   `);
@@ -363,7 +360,7 @@ export async function findTrackerEmbeddingRefsForProjects(
     )
     SELECT 'project' AS "entityKind", p."id"::text AS "entityId" FROM "Project" p JOIN affected a ON a."id" = p."id" WHERE p."deletedAt" IS NULL
     UNION ALL
-    SELECT 'task', t."id"::text FROM "Task" t WHERE t."deletedAt" IS NULL AND ${effectiveTaskProjectSql("t")} IN (SELECT "id" FROM affected)
+    SELECT 'task', t."id"::text FROM "Task" t WHERE t."deletedAt" IS NULL AND ${effectiveFieldSql("task", "projectId", "t")} IN (SELECT "id" FROM affected)
     UNION ALL
     SELECT DISTINCT 'expense', allocation."expenseId"::text FROM (${expenseDerivedReadSql("projects")}) allocation WHERE allocation."projectId" IN (SELECT "id" FROM affected)
   `);

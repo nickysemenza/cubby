@@ -248,6 +248,21 @@ const filterJSON = (
 
 type Field = CompiledEntity["fieldModel"]["fields"][number];
 
+/** An inherit-only resolution has no client actions; its chain stays server-side. */
+const resolutionJSON = (
+  resolution: CompiledEntity["fieldModel"]["fields"][number]["resolution"],
+) => {
+  if (resolution?.reset === undefined) return null;
+  const { inherit: _inherit, labels, reset, ...rest } = resolution;
+  return {
+    ...rest,
+    reset,
+    labels: labels
+      ? { none: labels.none ?? null, unresolved: labels.unresolved ?? null }
+      : null,
+  };
+};
+
 const explanationJSON = (explanation: Field["explanation"]) =>
   explanation === null
     ? null
@@ -340,17 +355,7 @@ const fieldJSON = (
     nullable: field.nullable,
     reference: referenceJSON(field.reference, entityKey, where),
     explanation: explanationJSON(field.explanation),
-    resolution: field.resolution
-      ? {
-          ...field.resolution,
-          labels: field.resolution.labels
-            ? {
-                none: field.resolution.labels.none ?? null,
-                unresolved: field.resolution.labels.unresolved ?? null,
-              }
-            : null,
-        }
-      : null,
+    resolution: resolutionJSON(field.resolution),
     ...fieldControlJSON(field.control),
     ...fieldControlInputJSON(field.control),
     valueSchema: valueSchemaForField(context, field, where, entityForPrefix),

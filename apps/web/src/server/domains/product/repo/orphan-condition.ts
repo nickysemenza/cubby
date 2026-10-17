@@ -1,7 +1,6 @@
 import { and, isNull, type SQL, sql } from "drizzle-orm";
 
 import { product } from "~/server/db/schema";
-import { effectiveTaskSubjectProductSql } from "~/server/domains/task/repo/task-project-inheritance";
 import type { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
 
 import {
@@ -9,6 +8,7 @@ import {
   PRODUCT_EDGE_ROLES,
   type ProductRetainingEdgeKey,
 } from "./edge-roles";
+import { effectiveFieldSql } from "~/server/generic/list/repo/inheritance";
 
 const noLiveProductLink = (
   t: typeof product,
@@ -46,7 +46,7 @@ const PRODUCT_RETAINING_NOT_EXISTS = {
   )`,
   "Task.subjectProductId": (t) => sql`NOT EXISTS (
     SELECT 1 FROM "Task" dq_orphan_task
-    WHERE ${effectiveTaskSubjectProductSql("dq_orphan_task")} = ${t.id}
+    WHERE ${effectiveFieldSql("task", "subjectProductId", "dq_orphan_task")} = ${t.id}
       AND dq_orphan_task."deletedAt" IS NULL
   )`,
   "EntityLink[projectTool].to": (t) => noLiveProductLink(t, "projectTool"),

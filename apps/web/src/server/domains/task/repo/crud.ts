@@ -74,12 +74,10 @@ import {
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import {
-  effectiveTaskAssigneeSql,
-  effectiveTaskProjectSql,
-  effectiveTaskSubjectProductSql,
   effectiveTaskTradeSql,
   hydrateTaskInheritanceRows,
 } from "./task-project-inheritance";
+import { effectiveFieldSql } from "~/server/generic/list/repo/inheritance";
 
 type TaskUpdateAuditEntry = Exclude<AuditEntryInput, { action: "delete" }>;
 type TaskUpdateChanges = NonNullable<TaskUpdateAuditEntry["changes"]>;
@@ -274,9 +272,9 @@ const taskEffectiveValues = async (tx: DrizzleTransaction, id: TaskId) => {
     trade: Trade | null;
   }>(sql`
     SELECT
-      ${effectiveTaskAssigneeSql()} AS "assigneeId",
-      ${effectiveTaskProjectSql()} AS "projectId",
-      ${effectiveTaskSubjectProductSql()} AS "subjectProductId",
+      ${effectiveFieldSql("task", "assigneeId")} AS "assigneeId",
+      ${effectiveFieldSql("task", "projectId")} AS "projectId",
+      ${effectiveFieldSql("task", "subjectProductId")} AS "subjectProductId",
       ${effectiveTaskTradeSql()} AS "trade"
     FROM "Task"
     WHERE "id" = ${id} AND "deletedAt" IS NULL

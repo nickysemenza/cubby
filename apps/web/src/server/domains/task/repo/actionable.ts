@@ -85,10 +85,8 @@ import {
 
 import { taskSubtaskCounts } from "./crud";
 import { taskList } from "./lookup";
-import {
-  effectiveTaskProjectSql,
-  hydrateTaskInheritanceRows,
-} from "./task-project-inheritance";
+import { hydrateTaskInheritanceRows } from "./task-project-inheritance";
+import { effectiveFieldSql } from "~/server/generic/list/repo/inheritance";
 
 /** The subset of a live, non-done task's fields the chain walk needs. */
 type OpenTaskNode = {
@@ -439,7 +437,7 @@ export async function readTaskActionability(db: Database) {
         shortcode: task.shortcode,
         name: task.name,
         status: task.status,
-        projectId: effectiveTaskProjectSql(),
+        projectId: effectiveFieldSql<ProjectId | null>("task", "projectId"),
         parentTaskId: task.parentTaskId,
       })
       .from(task)

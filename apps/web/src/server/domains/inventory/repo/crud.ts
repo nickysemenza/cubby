@@ -1,17 +1,24 @@
 import type { Amount } from "@cubby/schemas/codec";
+
 import type { ActorContext } from "@cubby/schemas/context";
+
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
+
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
+
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
+
 import type {
   InventoryId,
   LocationId,
   ProductId,
 } from "@cubby/schemas/identifiers";
+
 import {
   inventoryDisplayName,
   inventoryListItemOut,
 } from "@cubby/schemas/inventory";
+
 import type {
   InventoryPlacement,
   inventoryFiltersSchema,
@@ -21,14 +28,16 @@ import {
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
-import { productCategoryFeature } from "@cubby/schemas/product-category-fields";
 import { and, asc, count, desc, eq, inArray, not, sql, sum } from "drizzle-orm";
 import { z } from "zod";
 
+
 import { projectListRows } from "~/entity/model/list-read-schema";
+
 import type { Database } from "~/server/db";
-import { categoryFeatureInSql } from "~/server/db/computed/product-category-sql";
+
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
+
 import {
   amountFromColumns,
   amountToColumns,
@@ -41,41 +50,57 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
+
 import { inventoryEntry, location, product } from "~/server/db/schema";
+
 import {
   effectiveProductPriceSql,
   loadProductPricing,
 } from "~/server/domains/product/repo/pricing";
+
 import { createEntityReader } from "~/server/entity-kernel/repo/repository";
+
 import { createAppError } from "~/server/errors/app-error";
+
 import {
   computeChanges,
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
+
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
+
 import {
   dataQualitySortResolver,
   gapCondition,
 } from "~/server/generic/data-quality/repo/sql";
+
 import {
   ListContext,
   listPrepare,
 } from "~/server/generic/list/repo/field-compiler";
+
 import { listScaffold } from "~/server/generic/list/repo/list";
+
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
+
 import {
   loadListGroup,
   wantsListGroup,
 } from "~/server/generic/list/repo/list-projection";
+
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
+
 import { deleteByPolicy } from "~/server/generic/removal/repo/dispositions";
+
 import { lexicalRelevance } from "~/server/generic/search/repo/search-lexical";
+
 
 import {
   inventoryEntryBaseFields,
   inventoryEntryOwnershipFields,
   dbInventoryEntryListValues,
 } from "./mappers";
+
 
 // InventoryEntry has no incoming foreign keys. Keep the empty policy explicit
 // so a newly introduced reference must be classified before kernel deletion
@@ -88,32 +113,41 @@ import {
   placementCondition,
   stockOnly,
 } from "~/server/db/computed/inventory-placement";
+
 import {
   assertValidRawInventoryOwnership,
   inventoryOwnershipSlotCondition,
   type InventoryRawOwnership,
 } from "~/server/domains/inventory/repo/slot";
+
 import type {
   CreateInventoryEntryData,
   InventoryEntryDeepDB,
   UpdateInventoryEntryData,
 } from "~/server/domains/inventory/repo/types";
+
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
+
 import { assertLiveTargets, inventoryAuditRow } from "./helpers";
+
 import { dbInventoryEntryToAPI, requireLoadedProductPricing } from "./mappers";
+
 import {
   assertIndividualOwner,
   inventoryIdsByEffectiveOwner,
   loadInventoryOwnershipTraces,
 } from "./ownership";
+
 import { applyInventoryOwnershipInTransaction } from "./ownership-mutations";
+
 import {
   type InventoryValuations,
   inventoryValuationSql,
   loadInventoryValuations,
   loadLiveInventoryValuations,
 } from "./valuation";
+
 
 export const checkUniqueProductDuplicate = async (
   db: Database,
@@ -221,14 +255,6 @@ const inventoryScaffold = listScaffold("inventory", inventoryEntry, {
     effectiveOwner: effectiveOwners.predicate((ids) =>
       ids.length === 0 ? sql`false` : inArray(inventoryEntry.id, ids),
     ),
-    categoryFeature: ({ values }) =>
-      categoryFeatureInSql(
-        sql`(SELECT p."categoryId" FROM "Product" p WHERE p."id" = ${inventoryEntry.productId})`,
-        values.flatMap((value) => {
-          const feature = productCategoryFeature.safeParse(value);
-          return feature.success ? [feature.data] : [];
-        }),
-      ),
     locationRole: gapCondition("inventory", "inventory_unknown_location"),
     valuation: inventoryValuations.value((valuations) =>
       inventoryValuationSql(valuations, inventoryEntry.id),
@@ -954,3 +980,4 @@ export const deleteInventoryEntries = (
   });
 
 import { withDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
+
