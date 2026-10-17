@@ -145,7 +145,9 @@ describe("buildFinancialTransactionWhere", () => {
   });
 
   it("filters purchases through live allocations, not the mirror column", async () => {
-    const rendered = await where({ purchaseId: ["PUR-0000"] });
+    const rendered = await where({
+      purchaseId: [parseShortcodeFor("purchase", "PUR-2345")],
+    });
     expect(rendered).toContain('"FinancialTransactionAllocation"');
     expect(rendered).not.toContain('"FinancialTransaction"."purchaseId"');
     expect(await where({ purchasePresenceFilter: "none" })).toMatch(
@@ -154,9 +156,11 @@ describe("buildFinancialTransactionWhere", () => {
   });
 
   it("resolves account codes inside the query", async () => {
-    expect(await where({ accountId: ["FAC-0000"] })).toMatch(
-      /"accountId" in \(select ref\."id" from "FinancialAccount" ref/i,
-    );
+    expect(
+      await where({
+        accountId: [parseShortcodeFor("financialAccount", "FAC-2345")],
+      }),
+    ).toMatch(/"accountId" in \(select ref\."id" from "FinancialAccount" ref/i);
   });
 
   it("matches merchant OR raw description (declared stored text filter)", async () => {
@@ -264,9 +268,9 @@ describe("buildPurchaseWhereClause", () => {
     Promise.resolve(renderWhereSql(buildPurchaseWhereClause(filters)));
 
   it("resolves vendor codes against live vendors inside the query", async () => {
-    expect(await where({ vendorId: ["VND-0000"] })).toMatch(
-      /"vendorId" in \(select ref\."id" from "Vendor" ref/i,
-    );
+    expect(
+      await where({ vendorId: [parseShortcodeFor("vendor", "VND-2345")] }),
+    ).toMatch(/"vendorId" in \(select ref\."id" from "Vendor" ref/i);
   });
 
   it("bounds the expense total of priced purchases only", async () => {
