@@ -1,6 +1,6 @@
 import { entityRefKey } from "@cubby/schemas/entity";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -52,6 +52,7 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { taxonomyShortcode } from "../../../../tooling/product-category-fixtures";
 import {
+  entityDisplayImagePresenceSql,
   resolveEntityDisplayImages,
   resolveEntityAttachments,
   withDisplayImages,
@@ -1036,6 +1037,11 @@ describe("entity display image resolver", () => {
       );
       expect(rows[0]?.displayImages).toEqual([expectedDisplayImage(photo)]);
       expect(rows[1]?.displayImages).toEqual([]);
+      // Image-presence filters read the same inherited relation.
+      const presence = await getDb(ctx.db).execute(sql`SELECT
+        ${entityDisplayImagePresenceSql("project", sql`${owner.id}::uuid`)} AS owner,
+        ${entityDisplayImagePresenceSql("project", sql`${unrelated.id}::uuid`)} AS unrelated`);
+      expect(presence.rows).toEqual([{ owner: true, unrelated: false }]);
     });
   });
 
