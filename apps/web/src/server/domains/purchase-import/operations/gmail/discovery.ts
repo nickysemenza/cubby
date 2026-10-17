@@ -52,6 +52,7 @@ import {
 } from "../../repo/gmail/persistence";
 import { gmailProviderForUser } from "../../repo/gmail/provider";
 import {
+  creditScopedPage,
   initializeMailboxCoverage,
   listGmailPage,
   mergeMailboxQueries,
@@ -446,7 +447,7 @@ export async function saveMailDiscoveryBatch(
           ledgerPartyId: claimed.ledgerPartyId,
           mailboxId: claimed.input.mailboxId,
           from: page.startCoverage,
-          to: page.nextCoverage,
+          to: creditScopedPage(page, ingested.orderMailIds.length, new Date()),
         }))
       )
         throw new Error("Mailbox page coverage changed before checkpoint");

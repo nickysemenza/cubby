@@ -8,6 +8,7 @@ import { imageOut } from "./field-primitives.js";
 import { money } from "@cubby/schemas/money";
 import { plainDate } from "@cubby/schemas/base-entity";
 import { z } from "zod";
+import { mailSearchState } from "../mail-search-fields.js";
 import {
   vendorAgentHints,
   vendorDomainList,
@@ -56,6 +57,11 @@ export default defineEntity({
           title: "Spending classification",
         },
         {
+          kind: "slot",
+          id: "mail-search",
+          title: "Mail search",
+        },
+        {
           kind: "relation",
           id: "emails",
           title: "Emails",
@@ -99,7 +105,7 @@ export default defineEntity({
           "defaultSpendingCategoryEmoji",
         ],
         media: ["logo", "displayImages"],
-        derived: ["purchaseCount", "spend", "latestPurchaseDate"],
+        derived: ["purchaseCount", "spend", "latestPurchaseDate", "mailSearch"],
         quality: ["dataQuality"],
       },
       totals: [
@@ -572,6 +578,45 @@ export default defineEntity({
         },
       },
       {
+        key: "mailSearch",
+        kind: "enum",
+        nullable: true,
+        display: {
+          columnLabel: "Mail search",
+          list: true,
+          detail: true,
+          width: "sm",
+          valueOptions: [
+            {
+              value: "not_started",
+              label: "Not started",
+              color: "var(--slate)",
+            },
+            {
+              value: "in_progress",
+              label: "In progress",
+              color: "var(--warning)",
+            },
+            { value: "done", label: "Done", color: "var(--positive)" },
+          ],
+        },
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Mail discovery search coverage" }],
+        },
+        explanation: {
+          ruleId: "vendor.mail-search",
+          description:
+            "Mail search aggregates this vendor's sender and website searches across every connected mailbox: done when each current search has finished in every mailbox, in progress once any has a finished page, not started otherwise, and blank for a vendor with no verified sender or website.",
+          readPath: "mailSearch",
+        },
+        validation: {
+          read: mailSearchState.nullable(),
+          create: null,
+          update: null,
+        },
+      },
+      {
         key: "logo",
         kind: "json",
         nullable: true,
@@ -707,6 +752,8 @@ export default defineEntity({
       spend: { type: "number" },
       purchaseCount: { type: "number" },
       latestPurchaseDate: { type: "date" },
+      // Mail discovery's searches for this vendor, from MailboxCursor coverage.
+      mailSearch: { type: "enum", options: mailSearchState.options },
       // No default spending category yet.
       needsClassification: { type: "boolean" },
       // A displayable logo image.
@@ -718,6 +765,7 @@ export default defineEntity({
         "name",
         "purchaseCount",
         "latestPurchaseDate",
+        "mailSearch",
         "createdAt",
         "updatedAt",
       ],
@@ -773,6 +821,7 @@ export default defineEntity({
       "purchaseCount",
       "spend",
       "latestPurchaseDate",
+      "mailSearch",
       "logo",
       "createdAt",
       "updatedAt",
@@ -889,6 +938,18 @@ export default defineEntity({
           module: "~/entity/filter-behavior",
           export: "resolveLatestPurchaseDate",
         },
+      },
+      {
+        columnId: "mailSearch",
+        kind: "multiselect",
+        derived: true,
+        placeholder: "Filter mail search...",
+        deriveSchema: true,
+        options: [
+          { value: "not_started", label: "Not started" },
+          { value: "in_progress", label: "In progress" },
+          { value: "done", label: "Done" },
+        ],
       },
       {
         columnId: "logo",

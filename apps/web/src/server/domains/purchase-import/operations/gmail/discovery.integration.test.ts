@@ -261,7 +261,14 @@ describe("scheduled Gmail discovery", () => {
     expect(cursor?.coverage).toMatchObject({
       broad: { pageToken: null, completed: false },
       history: { historyId: "130", pageToken: null },
-      scoped: [{ completed: true, pageToken: null }],
+      scoped: [
+        {
+          completed: true,
+          pageToken: null,
+          completedAt: expect.any(String),
+          emailCount: expect.any(Number),
+        },
+      ],
     });
   });
 
@@ -349,13 +356,20 @@ describe("scheduled Gmail discovery", () => {
     });
     expect(message?.runId).not.toBeNull();
     expect(events).toHaveLength(1);
-    expect(
-      (await getDb(ctx.db).select().from(mailboxCursor))[0]?.coverage?.scoped[0]
-        ?.pageToken,
-    ).toBe("page-two");
+    const search = async () =>
+      (await getDb(ctx.db).select().from(mailboxCursor))[0]?.coverage
+        ?.scoped[0];
+    // The page credits its retained Email to the search it advanced; an
+    // unfinished search has no finish time yet.
+    expect(await search()).toMatchObject({
+      pageToken: "page-two",
+      emailCount: 1,
+    });
+    expect(await search()).not.toHaveProperty("completedAt");
     await saveMailDiscoveryBatch(ctx.db, state.params, 0, seam);
     expect(await getDb(ctx.db).select().from(orderMail)).toHaveLength(1);
     expect(events).toHaveLength(1);
+    expect((await search())?.emailCount).toBe(1);
   });
 
   it("establishes new-mail coverage without scanning history when nothing is targeted", async () => {

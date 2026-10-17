@@ -39,6 +39,7 @@ const vendor = vendorOut.parse({
   purchaseCount: 1,
   spend: 24,
   latestPurchaseDate: "2026-06-16",
+  mailSearch: null,
   logo: null,
   createdAt: new Date("2026-01-01T00:00:00Z"),
   updatedAt: new Date("2026-01-01T00:00:00Z"),

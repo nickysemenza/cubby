@@ -42,6 +42,8 @@ export const reportSlots = [
   "project.analytics",
   "project.schedule",
   "location.contents-valuation",
+  // Each of a Vendor's Mail searches in each connected mailbox.
+  "vendor.mail-search",
   "meal.composition",
   "product.labels",
   "product.runs",

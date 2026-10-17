@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { mailSearchProgress } from "./mailbox-research";
+
 const mailboxId = z.string().min(1);
 
 /** Stored switch: automatic Mail import runs only for listed mailboxes. */
@@ -18,7 +20,13 @@ export const aiBudgetStatus = z.strictObject({
 export type AiBudgetStatus = z.infer<typeof aiBudgetStatus>;
 
 export const mailImportStatus = z.strictObject({
-  mailboxes: z.array(z.strictObject({ mailboxId, enabled: z.boolean() })),
+  mailboxes: z.array(
+    z.strictObject({
+      mailboxId,
+      enabled: z.boolean(),
+      searches: mailSearchProgress,
+    }),
+  ),
   budget: aiBudgetStatus,
 });
 export type MailImportStatus = z.infer<typeof mailImportStatus>;

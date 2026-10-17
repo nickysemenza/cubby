@@ -244,6 +244,7 @@ export const nativeCoverage = {
       "project.analytics",
       "project.schedule",
       "location.contents-valuation",
+      "vendor.mail-search",
       // The server's recipes (scale, cost) and portions, edited with report commands that carry
       // the exact meal operation: add a recipe, change its scale, remove it (confirmed), set or
       // remove a portion, mark it eaten, record the yield. Non-recipe foods and moving a portion

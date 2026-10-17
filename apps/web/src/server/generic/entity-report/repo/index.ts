@@ -58,6 +58,7 @@ import {
   type ReportViewer,
 } from "./records";
 import type { RunReportSlot } from "./run";
+import { vendorMailSearchReport } from "./vendor";
 
 /** Run service imports remain outside every other report's closure. */
 const runBuilder = (slot: RunReportSlot) =>
@@ -156,6 +157,7 @@ const REPORTS = {
     locationId,
     locationContentsValuationReport,
   ),
+  "vendor.mail-search": reportBuilder(vendorMailSearchReport),
   // Costs the batch for its portions, so the meal service stays off every other report's closure.
   "meal.composition": reportBuilder(
     async (db, id, _viewer, _actor, _cursor, services) => {

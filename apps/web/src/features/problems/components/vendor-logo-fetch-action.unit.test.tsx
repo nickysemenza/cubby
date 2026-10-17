@@ -35,6 +35,7 @@ const fetchedVendor = vendorOut.parse({
   purchaseCount: 0,
   spend: 0,
   latestPurchaseDate: null,
+  mailSearch: null,
   logo: null,
   createdAt: new Date("2026-08-27T00:00:00.000Z"),
   updatedAt: new Date("2026-08-27T00:00:00.000Z"),

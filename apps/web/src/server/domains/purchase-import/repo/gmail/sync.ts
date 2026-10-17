@@ -78,6 +78,25 @@ export function mergeMailboxQueries(
   return next;
 }
 
+/**
+ * The coverage to commit for a processed page: a targeted page adds the
+ * Emails it retained to its search and stamps the search's finish time.
+ * Deterministic but for `now`, so a replayed page commits the same counts.
+ */
+export function creditScopedPage(
+  page: Pick<MailboxPage, "nextCoverage" | "scopedKey">,
+  retained: number,
+  now: Date,
+): MailboxCoverage {
+  const next = mailboxCoverage.parse(page.nextCoverage);
+  const position = next.scoped.find((query) => query.key === page.scopedKey);
+  if (!position) return next;
+  position.emailCount = (position.emailCount ?? 0) + retained;
+  if (position.completed) position.completedAt = now.toISOString();
+  // Re-parse so key order matches a stored read; the checkpoint compares JSON.
+  return mailboxCoverage.parse(next);
+}
+
 /** One provider page. The caller durably commits nextCoverage after processing it. */
 export async function listGmailPage(
   provider: GmailProvider,
@@ -110,6 +129,7 @@ export async function listGmailPage(
       events: [],
       startCoverage,
       nextCoverage,
+      scopedKey: position.key,
     };
   }
   const position = nextCoverage.history;
