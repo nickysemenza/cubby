@@ -480,8 +480,8 @@ Named BYOK uses the native Anthropic endpoint: Universal `gateway.run()` does
 not honor the alias in its payload. The Worker authenticates native passthrough
 with its `AI_GATEWAY_API_KEY` secret (a Cloudflare inference token, not the
 Anthropic key). Reuse the existing Worker secret; deploying this feature does
-not provision or overwrite it from a GitHub Actions token. Check the deployed
-secret names with `wrangler secret list` before adding provisioning changes.
+not provision or overwrite it from a GitHub Actions token. Use the [secret listing command](#secrets-and-plaintext-variables) before
+adding provisioning changes.
 Managed paid calls retain the binding. Missing native authentication fails with an explicit diagnostic.
 
 Console spend limits reset on the first of the calendar month, while promotional
