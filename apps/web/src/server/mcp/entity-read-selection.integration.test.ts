@@ -3,10 +3,18 @@ import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { listEntities } from "~/entity/generated/entity-lists.gen";
+import { listEnrichmentGroups } from "~/entity/model/list-read-fields";
 import { listReadFields } from "~/entity/model/list-read-schema";
 import { unwrapDb } from "~/server/db/helpers";
 import { entityExternalId } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
+import {
+  buildKernelContext,
+  seedReferenceUniverse,
+} from "~/server/entity-kernel/reference-universe.fixtures";
+import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
+import { generatedMcpEntityActionEntities } from "~/server/generated/entity-kernel-entities.gen";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { createMcpServer } from "~/server/mcp/server";
@@ -16,7 +24,11 @@ import {
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
-import { callMcpTool, kernelRequestContext } from "../testing/mcp-test-utils";
+import {
+  callMcpTool,
+  kernelRequestContext,
+  withTestClient,
+} from "../testing/mcp-test-utils";
 import type { ToolArguments } from "./tools/tool-registration";
 
 const rows = z.object({
@@ -235,4 +247,77 @@ describe("entity_read field selection", () => {
     });
     expect(item["externalIds"]).toHaveLength(2);
   });
+
+  // Regression: compact asked the selected-field reader for a field it never
+  // loaded (financialTransaction sourceRefsLabel), and `fields` re-parsed rows
+  // through `.partial()`, which throws on refined object schemas. The client
+  // validates every structured result against the published outputSchema.
+  it("serves compact and field selections for every entity_read kind", async () => {
+    await seedReferenceUniverse(ctx.db);
+    const entityKernel = entityKernelContextSchema.parse(
+      buildKernelContext(ctx.db),
+    );
+    const listed = new Set<string>(generatedMcpEntityActionEntities.list);
+    const failures = await withTestClient(
+      createMcpServer(),
+      kernelRequestContext(entityKernel),
+      { entityKernel },
+      async (client) => {
+        await client.listTools();
+        const failed: string[] = [];
+        const call = async (command: ToolArguments) => {
+          const label = `${String(command["action"])} ${String(command["entity"])} ${JSON.stringify(command["fields"] ?? command["resultDetail"])}`;
+          try {
+            const result = await client.callTool({
+              name: "entity_read",
+              arguments: command,
+            });
+            if (result.isError)
+              failed.push(`${label}: ${JSON.stringify(result.content)}`);
+            return result;
+          } catch (error) {
+            failed.push(`${label}: ${String(error)}`);
+            return null;
+          }
+        };
+        for (const entity of listEntities) {
+          if (!listed.has(entity)) continue;
+          const declared = listReadFields(entity);
+          const fields = [
+            ...declared.core.filter((field) => field !== "id").slice(0, 1),
+            ...listEnrichmentGroups.flatMap((group) =>
+              declared[group].slice(0, 1),
+            ),
+          ];
+          let id: string | undefined;
+          for (const selection of [{ resultDetail: "compact" }, { fields }]) {
+            const result = await call({ action: "list", entity, ...selection });
+            id ??= z
+              .string()
+              .optional()
+              .parse(
+                rows.safeParse(result?.structuredContent).data?.items[0]?.[
+                  "id"
+                ],
+              );
+          }
+          if (!id) continue;
+          // A get selects from the published detail schema, not the list one.
+          const detail: z.core.$ZodType =
+            ENTITY_SCHEMA_BINDINGS[entity].mcpDetail;
+          const detailFields =
+            detail instanceof z.ZodObject
+              ? fields.filter((field) => Object.hasOwn(detail.shape, field))
+              : [];
+          for (const selection of [
+            { resultDetail: "compact" },
+            { fields: detailFields },
+          ])
+            await call({ action: "get", entity, id, ...selection });
+        }
+        return failed;
+      },
+    );
+    expect(failures).toEqual([]);
+  }, 180_000); // Four reads per entity across the full matrix.
 });

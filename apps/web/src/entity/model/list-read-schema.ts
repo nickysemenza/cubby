@@ -42,13 +42,18 @@ export function selectListReadRows(
   const read = ENTITY_LIST_READ_SCHEMAS[entity];
   const groups = listGroupsForFields(entity, fields);
   return rows.map((row) => {
-    // Check raw mapped values before a group's schema can insert defaults.
-    selectListReadFields(row, fields);
+    // An optional field the complete list also omits stays absent; every
+    // other field must be loaded. Check raw mapped values before a group's
+    // schema can insert defaults.
+    const loaded = fields.filter(
+      (field) => !read.omittable.has(field) || Object.hasOwn(row, field),
+    );
+    selectListReadFields(row, loaded);
     const validated = Object.assign(
       read.project(row, "core"),
       ...groups.map((group) => read.project(row, group)),
     );
-    return selectListReadFields(validated, fields);
+    return selectListReadFields(validated, loaded);
   });
 }
 

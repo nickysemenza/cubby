@@ -270,8 +270,19 @@ export function projectSelection(result: unknown, selection: ReadSelection) {
     throw new Error(
       `${parsed.entity} publishes no MCP ${parsed.action} schema to select from`,
     );
-  // Field-selected list reads load only the selected columns.
-  const row = published.partial().pipe(listReadRowSchema);
+  // Field-selected list reads load only the selected columns, so every key is
+  // optional. Rebuild from the shape: `.partial()` throws on refined objects,
+  // and object-level refinements check whole records, not selections.
+  const row = z
+    .object(
+      Object.fromEntries(
+        Object.entries(published.shape).map(([key, value]) => [
+          key,
+          value.optional(),
+        ]),
+      ),
+    )
+    .pipe(listReadRowSchema);
   const select = (raw: unknown) => selectItem(row.parse(raw), selection);
   return {
     ...parsed,
