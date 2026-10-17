@@ -136,8 +136,9 @@
       "project": ["src/**/*.ts!"]
     },
     "apps/nx-cache": {
-      // Loaded by the Worker's static HTML, outside the TypeScript import graph.
+      // Native config names the Worker entry as a string; static HTML loads the dashboard.
       "entry": [
+        "src/index.ts!",
         "public/dashboard.js!",
         "cloudflare.config.ts!",
         "vite.config.ts!"
