@@ -568,20 +568,6 @@
       "when": 1792215266419,
       "tag": "0080_run_operation_audit_cover",
       "breakpoints": true
-    },
-    {
-      "idx": 81,
-      "version": "7",
-      "when": 1792263285327,
-      "tag": "0081_spending_category_stock_tracked",
-      "breakpoints": true
-    },
-    {
-      "idx": 82,
-      "version": "7",
-      "when": 1792263910249,
-      "tag": "0082_entity_source_url_with_record",
-      "breakpoints": true
     }
   ]
 }

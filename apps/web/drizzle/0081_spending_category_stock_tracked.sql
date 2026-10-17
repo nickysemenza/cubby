@@ -1,1 +1,0 @@
-ALTER TABLE "SpendingCategory" ADD COLUMN "stockTracked" boolean;
