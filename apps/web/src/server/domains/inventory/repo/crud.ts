@@ -83,6 +83,7 @@ import { lexicalRelevance } from "~/server/generic/search/repo/search-lexical";
 
 import {
   inventoryEntryBaseFields,
+  inventoryEntryOwnershipFields,
   dbInventoryEntryListValues,
 } from "./mappers";
 
@@ -445,15 +446,18 @@ const hydrateInventoryListRows = async (
       }),
     ]),
   );
-  const coreRow = (row: (typeof entries)[number]) => ({
-    ...inventoryEntryBaseFields(
-      row,
-      valuations?.get(row.id) ?? null,
-      dataQualities?.get(row.id),
-      ownership?.get(row.id),
-    ),
-    displayName: titleById.get(row.id),
-  });
+  const coreRow = (row: (typeof entries)[number]) => {
+    const trace = ownership?.get(row.id);
+    return {
+      ...inventoryEntryBaseFields(
+        row,
+        valuations?.get(row.id) ?? null,
+        dataQualities?.get(row.id),
+      ),
+      ...(trace ? inventoryEntryOwnershipFields(trace) : {}),
+      displayName: titleById.get(row.id),
+    };
+  };
   let candidates = entries.map(coreRow);
   if (wantsListGroup(projection, "relations")) {
     const rows = entries.length

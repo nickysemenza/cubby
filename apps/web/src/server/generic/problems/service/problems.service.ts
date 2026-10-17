@@ -734,7 +734,7 @@ const inventoryLocations = (row: ExactProblemPresentationRow) =>
   );
 
 type FastExactPresenter = {
-  fields: readonly string[] | undefined;
+  fields: readonly string[];
   present: (
     row: unknown,
     hydration: FastProblemHydration | undefined,
@@ -1160,7 +1160,6 @@ const isFastEntityProblemKey = (
 
 for (const key of FAST_ENTITY_PROBLEM_KEYS) {
   const fields = fastExactPresenters[key].fields;
-  if (!fields) continue;
   const source = problemQueryDeclarations().find(
     (entry) => entry.key === key,
   )?.source;

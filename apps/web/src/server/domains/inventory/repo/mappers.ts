@@ -67,23 +67,28 @@ export const inventoryEntryBaseFields = <Q extends DataQuality | undefined>(
   entry: InventoryEntryBaseDB,
   valuation: number | null,
   dataQuality: Q,
-  { ownership, steps }: InventoryOwnershipTrace = unresolvedOwnership(entry),
 ) => ({
   id: parseShortcodeFor("inventory", entry.shortcode),
   amount: parseInventoryAmount(entry),
   valuation,
   verifiedAt: entry.verifiedAt,
   placement: entry.placement,
-  // The effective owner, like Project/Task assignees; `fieldResolutions`
-  // carries the stored intent and the inherited fallback.
+  createdAt: entry.createdAt,
+  updatedAt: entry.updatedAt,
+  dataQuality,
+});
+
+/** Unloaded evidence must remain absent so selected reads cannot publish a
+ * plausible unresolved owner in place of a missing dependency. */
+export const inventoryEntryOwnershipFields = ({
+  ownership,
+  steps,
+}: InventoryOwnershipTrace) => ({
   ownerLedgerPartyId: ownership.effectiveOwner?.id ?? null,
   effectiveOwnership: ownership,
   fieldResolutions: {
     ownerLedgerPartyId: inventoryOwnerResolution(ownership, steps),
   },
-  createdAt: entry.createdAt,
-  updatedAt: entry.updatedAt,
-  dataQuality,
 });
 
 /** `loadProductPricing` returns one row per requested Product; fail loudly if
@@ -117,11 +122,9 @@ export const dbInventoryEntryToAPI: (
   const { product, location } = inventoryentry;
 
   return {
-    ...inventoryEntryBaseFields(
-      inventoryentry,
-      valuation,
-      dataQuality,
-      ownership,
+    ...inventoryEntryBaseFields(inventoryentry, valuation, dataQuality),
+    ...inventoryEntryOwnershipFields(
+      ownership ?? unresolvedOwnership(inventoryentry),
     ),
     location: {
       id: parseShortcodeFor("location", location.shortcode),
@@ -175,12 +178,8 @@ export const dbInventoryEntryListValues = <Q extends DataQuality | undefined>(
   const { product, location } = inventoryentry;
 
   return {
-    ...inventoryEntryBaseFields(
-      inventoryentry,
-      valuation,
-      dataQuality,
-      ownership,
-    ),
+    ...inventoryEntryBaseFields(inventoryentry, valuation, dataQuality),
+    ...(ownership ? inventoryEntryOwnershipFields(ownership) : {}),
     location: {
       id: parseShortcodeFor("location", location.shortcode),
       name: location.name,

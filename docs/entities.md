@@ -1267,8 +1267,7 @@ USDA batch as soon as its barcodes load, so the external lookup overlaps the
 remaining enrichment reads.
 
 Fast Problems cards derive selected fields from their required presenter
-schemas, using the same ownership and transitive loader dependencies. Consumers
-without an established narrower shape retain complete reads. The inventory
+schemas, using the same ownership and transitive loader dependencies. The inventory
 price-path card requires its embedded product's effective price explicitly.
 Shared group loaders may declare their consumer fields: selected reads load
 them only when one of those fields is requested; full and group reads retain
