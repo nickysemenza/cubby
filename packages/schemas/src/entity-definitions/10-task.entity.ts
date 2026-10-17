@@ -238,11 +238,7 @@ export default defineEntity({
           redundancy: "eligible",
           inherit: {
             mode: { field: "assigneeMode", inherit: "inherit" },
-            from: [
-              { path: "parent", read: "stored" },
-              { path: "parent.project.assigneeId" },
-              { path: "project.assigneeId" },
-            ],
+            from: ["hierarchy", { path: "project.assigneeId" }],
           },
         },
         explanation: {
@@ -315,7 +311,7 @@ export default defineEntity({
               inherit: "inherit",
               explicitIfSet: true,
             },
-            from: [{ path: "parent", read: "stored" }],
+            from: ["hierarchy"],
           },
         },
         explanation: {
@@ -384,7 +380,7 @@ export default defineEntity({
               inherit: "inherit",
               explicitIfSet: true,
             },
-            from: [{ path: "parent", read: "stored" }],
+            from: ["hierarchy"],
           },
         },
         explanation: {

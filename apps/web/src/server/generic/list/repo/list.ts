@@ -89,6 +89,7 @@ import {
   hierarchyDescendantsSql,
 } from "~/server/generic/list/repo/hierarchy";
 import {
+  effectiveFieldInSql,
   effectiveFieldSql,
   inheritedFieldOfColumn,
 } from "~/server/generic/list/repo/inheritance";
@@ -680,17 +681,32 @@ const derivedFilterPredicates = (
         ),
       ];
     }
-    default:
+    default: {
+      // An inherited terminal resolves its matching records once (the set
+      // form) rather than walking ancestors per row.
+      const inherited =
+        field.terminal.kind === "field"
+          ? inheritedFieldOfColumn(field.target, field.terminal.column)
+          : null;
       return [
-        anyOrAll(
-          optionalTextList.parse(value),
-          (_leaf, column, items) =>
-            sql`${column} IN (${sql.join(
-              items.map((item) => sql`${item}`),
-              sql`, `,
-            )})`,
-        ),
+        anyOrAll(optionalTextList.parse(value), (leaf, column, items) => {
+          const list = sql.join(
+            items.map((item) => sql`${item}`),
+            sql`, `,
+          );
+          return (
+            (inherited === null
+              ? null
+              : effectiveFieldInSql(
+                  field.target,
+                  inherited,
+                  sql`${leaf}."id"`,
+                  list,
+                )) ?? sql`${column} IN (${list})`
+          );
+        }),
       ];
+    }
   }
 };
 

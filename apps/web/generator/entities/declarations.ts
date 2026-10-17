@@ -291,7 +291,7 @@ export type EntityFieldInherit = Readonly<{
   }>;
   from: readonly (
     | "hierarchy"
-    | Readonly<{ path: string; read?: "stored" }>
+    | Readonly<{ path: string }>
   )[];
 }>;
 

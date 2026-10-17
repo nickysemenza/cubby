@@ -164,7 +164,7 @@ export async function projectDashboardSummary(
       .where(notDeleted(project)),
     getDb(db)
       .selectDistinct({
-        location: sql<string>`unnest(${effectiveFieldSql("project", "locations")})`,
+        location: sql<string>`unnest(${effectiveFieldSql("project", "locations", { id: sql`${project.id}` })})`,
       })
       .from(project)
       .where(notDeleted(project)),

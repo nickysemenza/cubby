@@ -2367,6 +2367,7 @@ Rules:
         derived: true,
         field: "categoryFeatureFilter",
         kind: "multiselect",
+        label: "Category family",
         placeholder: "Filter category family...",
         optionsKey: "productCategoryFamilies",
       },

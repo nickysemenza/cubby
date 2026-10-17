@@ -682,11 +682,9 @@ const buildMetadataSchemas = () => {
            * `from` is ordered and the first source that decides (a value or
            * an explicit None) ends the chain: `"hierarchy"` is the nearest
            * live ancestor whose own value decides (cycle-guarded, capped at
-           * `model.hierarchy.maxDepth`); `{ path, read: "stored" }` is the
-           * same field's stored decision one to-one reference away; `{ path
-           * }` is the effective value of the field a to-one path ends at.
-           * A reference along a path that is itself inherited reads
-           * effective.
+           * `model.hierarchy.maxDepth`); `{ path }` is the effective value
+           * of the field a to-one path ends at. A reference along a path
+           * that is itself inherited reads effective.
            */
           inherit: z
             .strictObject({
@@ -702,10 +700,7 @@ const buildMetadataSchemas = () => {
                 .array(
                   z.union([
                     z.literal("hierarchy"),
-                    z.strictObject({
-                      path: nonEmptyString(),
-                      read: z.literal("stored").optional(),
-                    }),
+                    z.strictObject({ path: nonEmptyString() }),
                   ]),
                 )
                 .min(1),

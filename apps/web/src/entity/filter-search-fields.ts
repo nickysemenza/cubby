@@ -38,7 +38,10 @@ export const problemFilterSemantics = {
       columnId: "categoryFeature",
       field: "categoryFeatureFilter",
       kind: "multiselect",
-      nullable: { field: "categoryPresenceFilter", label: "classification" },
+      nullable: {
+        field: "categoryFeaturePresenceFilter",
+        label: "category family",
+      },
     },
     {
       columnId: "categoryId",

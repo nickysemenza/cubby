@@ -228,9 +228,12 @@ describe("product list declared filters", () => {
       [{ categoryFilter: [taxonomyShortcode("tools")] }, [w.driver]],
       [{ categoryFeatureFilter: ["food"] }, [w.flour]],
       [{ categoryIdPresenceFilter: "none" }, [w.misc, w.kit, w.bit, w.tote]],
-      // The family filter keeps its own No value: "food or unclassified".
+      // No value is "no effective feature": here, unclassified products.
       [
-        { categoryFeatureFilter: ["food"], categoryPresenceFilter: "none" },
+        {
+          categoryFeatureFilter: ["food"],
+          categoryFeaturePresenceFilter: "none",
+        },
         [w.flour, w.misc, w.kit, w.bit, w.tote],
       ],
       [{ locationIdFilter: [w.garage.id] }, [w.driver]],

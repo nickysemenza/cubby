@@ -25,12 +25,13 @@ const page = { pageIndex: 0, pageSize: 100 };
  * Inherited values (`resolution.inherit`) compile one effective value for
  * reads, filters, sorts and groups. Each case's expected rows are the ones
  * the hand-written predicates returned before the declaration replaced them
- * (plan rows 19–26). Failure modes: task project or subject product walks
- * past one parent level; a task assignee skips the parent's own decision,
- * its project default, or an explicit None default that stops the chain; a
- * deleted parent still donates; project and category walks stop at the
- * parent or ignore an explicit None (`blocked`); Exclude drops rows with no
- * value; a read disagrees with its filter.
+ * (plan rows 19–26), except the task rows named as intended changes.
+ * Failure modes: a task field stops at the parent instead of the nearest
+ * deciding ancestor; a task assignee skips its effective project default
+ * or an explicit None default; a deleted parent still donates; project and
+ * category walks stop at the parent or ignore an explicit None (`blocked`);
+ * Exclude drops rows with no value; a read, its provenance, and its filter
+ * disagree.
  */
 describe("inherited values", () => {
   const ctx = withTestDb();
@@ -113,7 +114,7 @@ describe("inherited values", () => {
       });
   });
 
-  it("filters tasks by today's inheritance chains and reads the same values", async () => {
+  it("reads, explains and filters tasks by the nearest deciding ancestor", async () => {
     const w = await projectWorld();
     const subject = await createProductFixture(
       db(),
@@ -207,50 +208,87 @@ describe("inherited values", () => {
       ]),
     );
     const { a, b, p1, p2, p3, p4, p6, p7 } = w;
+    // Each task field reads the nearest ancestor task that sets its own
+    // value; the assignee then falls back to the task's effective project
+    // default. Rows marked "changed" are the intended differences from the
+    // old one-level chains (#2606); every other row reads as before.
     expect(Object.fromEntries(effective)).toEqual({
       [t1.shortcode]: [p2.shortcode, a.shortcode, product],
       [t2.shortcode]: [p2.shortcode, a.shortcode, product],
-      // Behavior change: the parent's project default reads the parent's
-      // effective project (the old SQL shadowed its alias and read only the
-      // parent's own decision).
-      [t3.shortcode]: [null, a.shortcode, null],
-      [t4.shortcode]: [p3.shortcode, a.shortcode, product],
+      // Changed: a grandchild under an inheriting parent reads the
+      // grandparent's project and product (was none).
+      [t3.shortcode]: [p2.shortcode, a.shortcode, product],
+      // Changed: parent and child on different projects; the child's own
+      // project default (an explicit None) decides, not the parent's.
+      [t4.shortcode]: [p3.shortcode, null, product],
       [t5p.shortcode]: [p3.shortcode, null, null],
-      [t5.shortcode]: [p1.shortcode, null, null],
+      // Changed: the parent's project None no longer blocks the child's
+      // own project default.
+      [t5.shortcode]: [p1.shortcode, a.shortcode, null],
       [t6.shortcode]: [p2.shortcode, b.shortcode, product],
       [t7.shortcode]: [p1.shortcode, null, null],
-      [t8.shortcode]: [null, b.shortcode, null],
+      // Changed: a grandchild under an inheriting parent (was none).
+      [t8.shortcode]: [p2.shortcode, b.shortcode, product],
       [t9.shortcode]: [p4.shortcode, null, null],
-      [t10.shortcode]: [p7.shortcode, a.shortcode, product],
+      // Changed: its own project P7's default, not the parent's P2's.
+      [t10.shortcode]: [p7.shortcode, b.shortcode, product],
+      // A deleted parent donates nothing.
       [t11.shortcode]: [null, null, null],
       [t12.shortcode]: [p6.shortcode, a.shortcode, null],
     });
+    // Provenance names the record that decided, from the same rule.
+    const resolutions = new Map(
+      (await listed({})).map((row) => [row.id, row.fieldResolutions]),
+    );
+    expect(resolutions.get(t3.shortcode)?.projectId).toMatchObject({
+      mode: "inherit",
+      source: "Ancestor task",
+      sourceEntity: { entityKind: "task", entityId: t1.shortcode },
+      value: p2.shortcode,
+      fallbackValue: p2.shortcode,
+    });
+    expect(resolutions.get(t8.shortcode)?.assigneeId).toMatchObject({
+      source: "Parent task",
+      sourceEntity: { entityKind: "task", entityId: t6.shortcode },
+    });
+    expect(resolutions.get(t5.shortcode)?.assigneeId).toMatchObject({
+      source: "Project default",
+      sourceEntity: { entityKind: "project", entityId: p1.shortcode },
+      value: a.shortcode,
+    });
+    expect(resolutions.get(t11.shortcode)?.projectId).toMatchObject({
+      source: "Unassigned",
+      sourceEntity: null,
+    });
     const cases: Array<[Parameters<typeof taskList>[1], string[]]> = [
-      [{ assigneeId: [a.shortcode] }, codes(t1, t2, t3, t4, t10, t12)],
-      [{ assigneeId: [b.shortcode] }, codes(t6, t8)],
-      [{ assigneeIdPresenceFilter: "none" }, codes(t5p, t5, t7, t9, t11)],
+      [{ assigneeId: [a.shortcode] }, codes(t1, t2, t3, t5, t12)],
+      [{ assigneeId: [b.shortcode] }, codes(t6, t8, t10)],
+      [{ assigneeIdPresenceFilter: "none" }, codes(t4, t5p, t7, t9, t11)],
       [
         { assigneeIdExclude: [a.shortcode] },
-        codes(t5p, t5, t6, t7, t8, t9, t11),
+        codes(t4, t5p, t6, t7, t8, t9, t10, t11),
       ],
-      [{ projectId: [p1.shortcode] }, codes(t1, t2, t5, t6, t7, t10, t12)],
+      [
+        { projectId: [p1.shortcode] },
+        codes(t1, t2, t3, t5, t6, t7, t8, t10, t12),
+      ],
       [
         { projectId: [p1.shortcode], includeSubProjects: false },
         codes(t5, t7),
       ],
-      [{ projectIdPresenceFilter: "none" }, codes(t3, t8, t11)],
+      [{ projectIdPresenceFilter: "none" }, codes(t11)],
       [
         { projectIdExclude: [p2.shortcode] },
-        codes(t3, t4, t5p, t5, t7, t8, t9, t10, t11),
+        codes(t4, t5p, t5, t7, t9, t10, t11),
       ],
-      [{ subjectProductId: [product] }, codes(t1, t2, t4, t6, t10)],
+      [{ subjectProductId: [product] }, codes(t1, t2, t3, t4, t6, t8, t10)],
       [
         { subjectProductIdPresenceFilter: "none" },
-        codes(t3, t5p, t5, t7, t8, t9, t11, t12),
+        codes(t5p, t5, t7, t9, t11, t12),
       ],
       [
         { subjectProductIdExclude: [product] },
-        codes(t3, t5p, t5, t7, t8, t9, t11, t12),
+        codes(t5p, t5, t7, t9, t11, t12),
       ],
     ];
     for (const [filters, expected] of cases)

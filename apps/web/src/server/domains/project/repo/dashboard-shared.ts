@@ -53,7 +53,7 @@ export function dashboardKindLocationConditions(
     // SQL-valued inherited arrays need an explicit PostgreSQL text[] operand;
     // passing a JS array to a raw expression becomes a row constructor.
     filters.locations && filters.locations.length > 0
-      ? sql`${effectiveFieldSql("project", "locations")} && ARRAY[${sql.join(
+      ? sql`${effectiveFieldSql("project", "locations", { id: sql`${project.id}` })} && ARRAY[${sql.join(
           filters.locations.map((value) => sql`${value}`),
           sql`, `,
         )}]::text[]`

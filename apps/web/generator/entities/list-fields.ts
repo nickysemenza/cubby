@@ -129,11 +129,11 @@ type InheritHop = Readonly<{ field: string; column: string; target: string }>;
 /** A compiled `resolution.inherit` source, in declared order. */
 type InheritSource =
   | Readonly<{ kind: "hierarchy"; parentColumn: string; maxDepth: number }>
-  | Readonly<{ kind: "stored"; hops: readonly InheritHop[] }>
   | Readonly<{
       kind: "effective";
       hops: readonly InheritHop[];
       field: string;
+      column: string;
     }>;
 
 /**
@@ -357,26 +357,6 @@ const compileInherit = (
         };
       }
       const segments = source.path.split(".");
-      if (source.read === "stored") {
-        const { hops, target } = compileInheritHops(
-          entity,
-          segments,
-          byKey,
-          `${context}.from ${source.path}`,
-        );
-        if (hops.length !== 1)
-          throw new EntityDeclarationError(
-            `${context}.from ${source.path}: a stored decision is one reference away.`,
-          );
-        const targetField = target.fieldModel.fields.find(
-          ({ key }) => key === field.key,
-        );
-        if (targetField?.resolution?.inherit === undefined)
-          throw new EntityDeclarationError(
-            `${context}.from ${source.path}: ${target.key}.${field.key} declares no inherit, so it has no stored decision.`,
-          );
-        return { kind: "stored", hops };
-      }
       const terminal = segments.at(-1)!;
       const { hops, target } = compileInheritHops(
         entity,
@@ -384,14 +364,14 @@ const compileInherit = (
         byKey,
         `${context}.from ${source.path}`,
       );
-      if (
-        hops.length === 0 ||
-        !target.fieldModel.storage.some(({ key }) => key === terminal)
-      )
+      const column = target.fieldModel.storage.find(
+        ({ key }) => key === terminal,
+      )?.column;
+      if (hops.length === 0 || column === undefined)
         throw new EntityDeclarationError(
           `${context}.from ${source.path} must end at a stored field of a related record.`,
         );
-      return { kind: "effective", hops, field: terminal };
+      return { kind: "effective", hops, field: terminal, column };
     });
     compiled[field.key] = {
       column: stored.column,
@@ -423,7 +403,7 @@ const assertAcyclicInherit = (
           reads.push(`${current}.${hop.field}`);
         current = hop.target;
       }
-      if (source.kind === "effective") reads.push(`${current}.${source.field}`);
+      reads.push(`${current}.${source.field}`);
       return reads;
     });
   };
