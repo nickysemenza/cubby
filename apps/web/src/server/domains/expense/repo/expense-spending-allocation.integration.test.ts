@@ -322,6 +322,30 @@ describe("joint expense spending allocation", () => {
           incomplete: false,
         }),
       ]);
+    const unresolved = await order("manual");
+    await line("Synthetic unresolved line", 2, "unclassified", {
+      purchaseId: unresolved.id,
+    });
+    const unresolvedFee = await line(
+      "Synthetic unresolved-order fee",
+      0.5,
+      "fee",
+      {
+        purchaseId: unresolved.id,
+      },
+    );
+    // The order's category applies, but an unresolved role keeps it incomplete.
+    expect(
+      (await loadExpenseSpendingAllocations(ctx.db, [unresolvedFee.id])).get(
+        unresolvedFee.id,
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        spendingCategoryId: categories[0]!.id,
+        basis: "default",
+        incomplete: true,
+      }),
+    ]);
     // A statement-sourced Purchase category is evidence, never an input.
     expect(map.get(sourced.id)).toEqual([
       expect.objectContaining({

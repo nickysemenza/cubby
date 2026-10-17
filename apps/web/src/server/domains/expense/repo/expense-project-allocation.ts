@@ -249,7 +249,13 @@ export const expenseJointAllocationSql = (
           WHEN r.remainder_rank <= abs(r.source_cents) - r.assigned_cents THEN 1 ELSE 0 END)
       END::bigint AS attributed_cents, r.basis,
       r.source_cents IS NULL OR r.basis = 'default' OR r.has_unpriced_principal OR r.has_unclassified AS incomplete,
-      r."spendingCategoryId" IS NULL OR r.has_unpriced_principal OR r.has_unclassified AS category_incomplete
+      r."spendingCategoryId" IS NULL OR r.has_unpriced_principal OR r.has_unclassified
+        -- Unresolved roles are read from principals, so an order with none
+        -- checks them directly before its own category counts as complete.
+        OR (r.basis = 'default' AND EXISTS (SELECT 1 FROM "Expense" unknown_role
+          WHERE unknown_role."purchaseId" = r."purchaseId" AND unknown_role."deletedAt" IS NULL
+            AND unknown_role."lineKind" = ${expenseLineKindSchema.enum.unclassified}))
+        AS category_incomplete
     FROM adjustment_ranked r
   )
   SELECT a."expenseId", a."purchaseId", a."principalExpenseId", a."projectId",

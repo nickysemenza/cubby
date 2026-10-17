@@ -401,10 +401,8 @@ const allocatedShareResolution = <K extends "trades" | "costTypes">(
     storedValue: key === "costTypes" ? row.costType : null,
     value: values.length === 1 ? values[0]! : null,
     fallbackValue: null,
-    source: expenseSpendingCategoryAllocationSource(
-      values.length === 1,
-      allocations.every((a) => a.basis === "default"),
-    ),
+    // Purchases carry no trade or cost-type default to name as a source.
+    source: expenseSpendingCategoryAllocationSource(values.length === 1, false),
     sourceEntity: null,
     matchesFallback: true,
     canReset: false,

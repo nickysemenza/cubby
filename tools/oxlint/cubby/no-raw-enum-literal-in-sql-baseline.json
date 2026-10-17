@@ -19,7 +19,7 @@
   "apps/web/src/server/domains/expense/repo/expense-category-resolution.integration.test.ts": 3,
   "apps/web/src/server/domains/expense/repo/expense-category-resolution.ts": 34,
   "apps/web/src/server/domains/expense/repo/expense-inheritance.ts": 9,
-  "apps/web/src/server/domains/expense/repo/expense-project-allocation.ts": 9,
+  "apps/web/src/server/domains/expense/repo/expense-project-allocation.ts": 10,
   "apps/web/src/server/domains/financial-transaction/repo/financial-booking.ts": 3,
   "apps/web/src/server/domains/financial-transaction/repo/financial-transfer-pairing.ts": 1,
   "apps/web/src/server/domains/household-contribution/repo/allocation.ts": 11,
