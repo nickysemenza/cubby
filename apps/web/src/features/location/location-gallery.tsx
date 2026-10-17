@@ -3,657 +3,423 @@ import type {
   InventoryItemForTree,
   LocationType,
 } from "@cubby/schemas/location";
-import { countLabel } from "@cubby/shared/pluralize";
-import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
-import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
+
+import { EntityQualityFact } from "~/entity/display/data-quality-value";
+import { EntityIcon } from "~/entity/entities";
+import { useLocationTree } from "~/entity/hooks/use-location-tree";
+import { LocationBreadcrumb } from "~/entity/presentation/location-breadcrumb";
 import {
-  type RefCallback,
-  useCallback,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-
-import { location } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
-import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
+  ProductImageSummariesProvider,
+  useHydratedProductImages,
+} from "~/entity/presentation/product-image-summaries";
+import { formatCurrency } from "~/lib/number-format";
+import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
-import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
+import { ImageWithPreview } from "~/ui/primitives/image-with-preview";
+import {
+  Visualization,
+  visualizationState,
+} from "~/ui/visualizations/visualization";
 
-import { LocationIcon } from "../../entity/presentation/location-icons";
-import { ProductImageSummariesProvider } from "../../entity/presentation/product-image-summaries";
-import { type EmptyFilter, GalleryHeader } from "./gallery-header";
+import { GalleryHeader, type EmptyFilter } from "./gallery-header";
 import { GallerySidebar } from "./gallery-sidebar";
-import { GalleryUnifiedView } from "./gallery-unified-view";
-import { LocationGalleryCard } from "./location-gallery-card";
-import { buildLocationGalleryData } from "./location-gallery-data";
+import {
+  filterLocationTree,
+  indexLocations,
+  locationPath,
+} from "./location-browser-model";
+import { LocationVisual } from "./location-visual";
 
-type InventoryItem = InventoryItemForTree;
-interface LocationFilterResult {
-  filtered: InfLocation[];
-  matchingIds: Set<string>;
-}
-interface GalleryStats {
-  locationCount: number;
-  itemCount: number;
-}
-
-/** Find all location IDs matching search term (searches location names and product names) */
-function findMatchingIds(
-  locations: InfLocation[],
-  inventoryByLocation: Map<string, InventoryItem[]>,
-  searchTerm: string,
-): Set<string> {
-  if (!searchTerm) return new Set();
-
-  const term = searchTerm.toLowerCase();
-  const matches = new Set<string>();
-
-  function search(locs: InfLocation[]) {
-    for (const loc of locs) {
-      // Check location name
-      if (loc.name.toLowerCase().includes(term)) {
-        matches.add(loc.id);
-      }
-
-      // Check product names in inventory
-      const inventory = inventoryByLocation.get(loc.id) ?? [];
-      for (const item of inventory) {
-        if (item.productName.toLowerCase().includes(term)) {
-          matches.add(loc.id);
-          break;
-        }
-      }
-
-      if (loc.children) {
-        search(loc.children);
-      }
-    }
-  }
-
-  search(locations);
-  return matches;
-}
-
-/** Build a map from location ID to its ancestor path (for breadcrumbs) */
-function buildAncestorMap(
-  locations: InfLocation[],
-): Map<string, InfLocation[]> {
-  const map = new Map<string, InfLocation[]>();
-
-  function traverse(locs: InfLocation[], ancestors: InfLocation[]) {
-    for (const loc of locs) {
-      map.set(loc.id, ancestors);
-      if (loc.children) {
-        traverse(loc.children, [...ancestors, loc]);
-      }
-    }
-  }
-
-  traverse(locations, []);
-  return map;
-}
-
-/** Filter locations by type, returning both filtered tree and IDs that actually match */
-function filterLocationsByType(
-  locations: InfLocation[],
-  typeFilter: LocationType | null,
-): LocationFilterResult {
-  const matchingIds = new Set<string>();
-
-  if (!typeFilter) return { filtered: locations, matchingIds };
-
-  function filter(locs: InfLocation[]): InfLocation[] {
-    const result: InfLocation[] = [];
-
-    for (const loc of locs) {
-      const filteredChildren = loc.children ? filter(loc.children) : [];
-      const matchesType = loc.type === typeFilter;
-      const hasMatchingChildren = filteredChildren.length > 0;
-
-      if (matchesType) {
-        matchingIds.add(loc.id);
-      }
-
-      if (matchesType || hasMatchingChildren) {
-        result.push({
-          ...loc,
-          children: filteredChildren.length > 0 ? filteredChildren : undefined,
-        });
-      }
-    }
-
-    return result;
-  }
-
-  return { filtered: filter(locations), matchingIds };
-}
-
-/** Filter locations by empty/non-empty status, returning both filtered tree and IDs that actually match */
-function filterLocationsByEmpty(
-  locations: InfLocation[],
-  emptyFilter: EmptyFilter,
-  inventoryByLocation: Map<string, InventoryItem[]>,
-): LocationFilterResult {
-  const matchingIds = new Set<string>();
-
-  if (emptyFilter === "all") return { filtered: locations, matchingIds };
-
-  function filter(locs: InfLocation[]): InfLocation[] {
-    const result: InfLocation[] = [];
-
-    for (const loc of locs) {
-      const filteredChildren = loc.children ? filter(loc.children) : [];
-      const hasItems = (inventoryByLocation.get(loc.id)?.length ?? 0) > 0;
-      const matchesFilter = emptyFilter === "withItems" ? hasItems : !hasItems;
-      const hasMatchingChildren = filteredChildren.length > 0;
-
-      if (matchesFilter) {
-        matchingIds.add(loc.id);
-      }
-
-      if (matchesFilter || hasMatchingChildren) {
-        result.push({
-          ...loc,
-          children: filteredChildren.length > 0 ? filteredChildren : undefined,
-        });
-      }
-    }
-
-    return result;
-  }
-
-  return { filtered: filter(locations), matchingIds };
-}
-
-/** Find all location IDs matching type filter (without structural removal) */
-function findTypeMatchingIds(
-  locations: InfLocation[],
-  typeFilter: LocationType | null,
-): Set<string> {
-  const matchingIds = new Set<string>();
-  if (!typeFilter) return matchingIds;
-
-  function collect(locs: InfLocation[]) {
-    for (const loc of locs) {
-      if (loc.type === typeFilter) {
-        matchingIds.add(loc.id);
-      }
-      if (loc.children) {
-        collect(loc.children);
-      }
-    }
-  }
-
-  collect(locations);
-  return matchingIds;
-}
-
-/** Find all location IDs matching empty filter (without structural removal) */
-function findEmptyMatchingIds(
-  locations: InfLocation[],
-  emptyFilter: EmptyFilter,
-  inventoryByLocation: Map<string, InventoryItem[]>,
-): Set<string> {
-  const matchingIds = new Set<string>();
-  if (emptyFilter === "all") return matchingIds;
-
-  function collect(locs: InfLocation[]) {
-    for (const loc of locs) {
-      const hasItems = (inventoryByLocation.get(loc.id)?.length ?? 0) > 0;
-      const matchesFilter = emptyFilter === "withItems" ? hasItems : !hasItems;
-      if (matchesFilter) {
-        matchingIds.add(loc.id);
-      }
-      if (loc.children) {
-        collect(loc.children);
-      }
-    }
-  }
-
-  collect(locations);
-  return matchingIds;
-}
-
-/** Calculate gallery stats */
-function calculateStats(
-  locations: InfLocation[],
-  inventoryByLocation: Map<string, InventoryItem[]>,
-): GalleryStats {
-  let locationCount = 0;
-  let itemCount = 0;
-
-  function traverse(locs: InfLocation[]) {
-    for (const loc of locs) {
-      locationCount++;
-      const items = inventoryByLocation.get(loc.id) ?? [];
-      itemCount += items.length;
-      if (loc.children) traverse(loc.children);
-    }
-  }
-
-  traverse(locations);
-  return { locationCount, itemCount };
-}
-
-/**
- * Main gallery container component.
- * Orchestrates sidebar, header, and gallery views.
- */
 export function LocationGallery() {
+  const query = useLocationTree();
+  const hydrated = useHydrated();
+  const state = visualizationState({
+    data: hydrated ? query.data : undefined,
+    isLoading: !hydrated || query.isLoading,
+    error: hydrated ? query.error : null,
+    empty: query.data?.length === 0,
+    onRetry: () => void query.refetch(),
+  });
+  return (
+    <Visualization
+      state={state}
+      message="No locations yet."
+      subMessage="Create a location to start browsing your household."
+    >
+      {query.data && <LocationBrowser data={query.data} />}
+    </Visualization>
+  );
+}
+
+/** A compact outline indexes one continuous gallery; disclosure only hides contents. */
+export function LocationBrowser({ data }: { data: InfLocation[] }) {
+  const index = useMemo(() => indexLocations(data), [data]);
   const isMobile = useIsMobile();
-
-  // Gallery state (session-only; nothing here persists across reloads)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const toggleSidebar = useCallback(() => {
-    setSidebarCollapsed((prev) => !prev);
-  }, []);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [locationTypeFilter, setLocationTypeFilter] =
-    useState<LocationType | null>(null);
-  const [emptyFilter, setEmptyFilter] = useState<EmptyFilter>("all");
-  const [hideNonMatching, setHideNonMatching] = useState(false);
-
-  // Track active location for sidebar highlighting
-  const [activeLocationId, setActiveLocationId] = useState<string>();
-
-  // Refs for scroll targeting and intersection observation
-  const locationRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
-  const observerRef = useRef<IntersectionObserver | null>(null);
-
-  // Callback ref for main content - creates observer when element mounts
-  const mainContentRef = useCallback((element: HTMLDivElement | null) => {
-    // Cleanup previous observer
-    if (observerRef.current) {
-      observerRef.current.disconnect();
-      observerRef.current = null;
-    }
-
-    if (!element) return;
-
-    // Create new observer with this element as root
-    observerRef.current = new IntersectionObserver(
-      (entries) => {
-        // Find the entry closest to the top of the viewport
-        let topEntry: IntersectionObserverEntry | null = null;
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            if (
-              !topEntry ||
-              entry.boundingClientRect.top < topEntry.boundingClientRect.top
-            ) {
-              topEntry = entry;
-            }
-          }
-        }
-        if (topEntry) {
-          const locationId = topEntry.target.getAttribute("data-location-id");
-          if (locationId) {
-            setActiveLocationId(locationId);
-          }
-        }
-      },
-      {
-        root: element,
-        rootMargin: "-50px 0px -70% 0px",
-        threshold: 0,
-      },
-    );
-
-    // Observe any elements that were already registered
-    locationRefs.current.forEach((el) => {
-      if (el && observerRef.current) {
-        observerRef.current.observe(el);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>();
+  const collapsed = sidebarCollapsed ?? isMobile;
+  const [query, setQuery] = useState("");
+  const [type, setType] = useState<LocationType | null>(null);
+  const [status, setStatus] = useState<EmptyFilter>("all");
+  const [selected, setSelected] = useState<string>();
+  const overviewRef = useRef<HTMLElement>(null);
+  const sectionRefs = useRef(new Map<string, HTMLElement>());
+  const priorSelection = useRef<string | undefined>(undefined);
+  const [expanded, setExpanded] = useState(() => index.initiallyExpanded);
+  const filtered = useMemo(
+    () => filterLocationTree(data, { query, type, status }),
+    [data, query, type, status],
+  );
+  const visibleIndex = useMemo(
+    () => indexLocations(filtered.locations),
+    [filtered.locations],
+  );
+  const selectedId =
+    selected && visibleIndex.byId.has(selected) ? selected : undefined;
+  const entries = useMemo(() => {
+    const result: { location: InfLocation; depth: number }[] = [];
+    const visit = (locations: InfLocation[], depth: number) => {
+      for (const location of locations) {
+        result.push({ location, depth });
+        visit(location.children ?? [], depth + 1);
       }
+    };
+    visit(filtered.locations, 0);
+    return result;
+  }, [filtered.locations]);
+  const path = locationPath(selectedId, index);
+
+  useEffect(() => {
+    const viewport = overviewRef.current;
+    if (!viewport) return;
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      // Sections stay in document order; find the current heading without
+      // measuring every location on each frame of a large gallery scroll.
+      let low = 0;
+      let high = entries.length - 1;
+      let active = entries[0]?.location.id;
+      while (low <= high) {
+        const middle = Math.floor((low + high) / 2);
+        const id = entries[middle]?.location.id;
+        const section = id ? sectionRefs.current.get(id) : undefined;
+        if (section && section.offsetTop <= viewport.scrollTop + 2) {
+          active = id;
+          low = middle + 1;
+        } else high = middle - 1;
+      }
+      setSelected(active);
+    };
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    viewport.addEventListener("scroll", schedule, { passive: true });
+    const resize = () => {
+      viewport.style.setProperty(
+        "--gallery-height",
+        `${viewport.clientHeight}px`,
+      );
+      schedule();
+    };
+    const observer = new ResizeObserver(resize);
+    observer.observe(viewport);
+    for (const section of sectionRefs.current.values())
+      observer.observe(section);
+    resize();
+    return () => {
+      viewport.removeEventListener("scroll", schedule);
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+    };
+  }, [entries]);
+
+  useEffect(() => {
+    if (overviewRef.current) overviewRef.current.scrollTop = 0;
+  }, [query, type, status]);
+
+  // Filtered paths are temporary. Clearing filters must not turn the same
+  // selected search result into a new manual expansion.
+  useEffect(() => {
+    if (priorSelection.current === selectedId) return;
+    priorSelection.current = selectedId;
+    if (!selectedId || filtered.active) return;
+    setExpanded((previous) => {
+      const ancestors = locationPath(selectedId, index).slice(0, -1);
+      if (ancestors.every((node) => previous.has(node.id))) return previous;
+      return new Set([...previous, ...ancestors.map((node) => node.id)]);
     });
-  }, []);
+  }, [selectedId, index, filtered.active]);
 
-  // Callback ref factory - observes elements as they mount
-  const createLocationRef = useCallback(
-    (locationId: string): RefCallback<HTMLDivElement> => {
-      return (element) => {
-        const prevElement = locationRefs.current.get(locationId);
-
-        // Unobserve previous element if it existed
-        if (prevElement && observerRef.current) {
-          observerRef.current.unobserve(prevElement);
-        }
-
-        if (element) {
-          locationRefs.current.set(locationId, element);
-          // Observe new element
-          if (observerRef.current) {
-            observerRef.current.observe(element);
-          }
-        } else {
-          locationRefs.current.delete(locationId);
-        }
-      };
-    },
-    [],
-  );
-
-  // Fetch location tree
-  const { data: locations, isLoading: locationsLoading } = useQuery(
-    location.makeTree.queryOptions(),
-  );
-
-  // `makeTree` already contains the gallery's minimal inventory projection and
-  // persisted valuations. Derive the lookup once instead of auto-paginating
-  // the entire inventory table through `inventory.list`.
-  const { inventoryByLocation, productIds: inventoryProductIds } = useMemo(
-    () => buildLocationGalleryData(locations ?? []),
-    [locations],
-  );
-
-  // Find matching IDs for type filter (always needed for fading)
-  const typeMatchingIds = useMemo(
-    () => findTypeMatchingIds(locations ?? [], locationTypeFilter),
-    [locations, locationTypeFilter],
-  );
-
-  // Find matching IDs for empty filter (always needed for fading)
-  const emptyMatchingIds = useMemo(
-    () =>
-      findEmptyMatchingIds(locations ?? [], emptyFilter, inventoryByLocation),
-    [locations, emptyFilter, inventoryByLocation],
-  );
-
-  // Conditionally filter locations - only structurally remove if hideNonMatching is ON
-  const displayLocations = useMemo(() => {
-    if (!hideNonMatching) return locations ?? [];
-
-    // Apply structural filtering when hideNonMatching is enabled
-    const { filtered: byType } = filterLocationsByType(
-      locations ?? [],
-      locationTypeFilter,
-    );
-    const { filtered } = filterLocationsByEmpty(
-      byType,
-      emptyFilter,
-      inventoryByLocation,
-    );
-    return filtered;
-  }, [
-    locations,
-    locationTypeFilter,
-    emptyFilter,
-    inventoryByLocation,
-    hideNonMatching,
-  ]);
-
-  // Calculate stats - always use unfiltered locations so counts stay consistent
-  const stats = useMemo(
-    () => calculateStats(locations ?? [], inventoryByLocation),
-    [locations, inventoryByLocation],
-  );
-
-  // Build ancestor map for breadcrumbs (use unfiltered locations for complete paths)
-  const { ancestorMap, locationMap } = useMemo(() => {
-    const ancestors = buildAncestorMap(locations ?? []);
-    const locMap = new Map<string, InfLocation>();
-
-    function flatten(locs: InfLocation[]) {
-      for (const loc of locs) {
-        locMap.set(loc.id, loc);
-        if (loc.children) flatten(loc.children);
-      }
+  const select = (id?: string) => {
+    const viewport = overviewRef.current;
+    const target = id ? sectionRefs.current.get(id) : undefined;
+    if (viewport) {
+      viewport.scrollTo({
+        top: target
+          ? viewport.scrollTop +
+            target.getBoundingClientRect().top -
+            viewport.getBoundingClientRect().top
+          : 0,
+        behavior: "instant",
+      });
     }
-    flatten(locations ?? []);
-
-    return { ancestorMap: ancestors, locationMap: locMap };
-  }, [locations]);
-
-  // Get breadcrumb path for active location
-  const breadcrumbPath = useMemo(() => {
-    if (!activeLocationId) return [];
-    const ancestors = ancestorMap.get(activeLocationId) ?? [];
-    const current = locationMap.get(activeLocationId);
-    return current ? [...ancestors, current] : ancestors;
-  }, [activeLocationId, ancestorMap, locationMap]);
-
-  // Find matching location IDs for search
-  const searchMatchingIds = useMemo(
-    () => findMatchingIds(displayLocations, inventoryByLocation, searchTerm),
-    [displayLocations, inventoryByLocation, searchTerm],
-  );
-
-  // Precompute faded IDs - locations that don't match all active filters
-  const fadedIds = useMemo(() => {
-    const hasActiveFilter =
-      locationTypeFilter !== null ||
-      emptyFilter !== "all" ||
-      Boolean(searchTerm);
-
-    if (!hasActiveFilter) return new Set<string>();
-
-    const faded = new Set<string>();
-
-    function checkLocation(locs: InfLocation[]) {
-      for (const loc of locs) {
-        const matchesAll =
-          (!locationTypeFilter || typeMatchingIds.has(loc.id)) &&
-          (emptyFilter === "all" || emptyMatchingIds.has(loc.id)) &&
-          (!searchTerm || searchMatchingIds.has(loc.id));
-
-        if (!matchesAll) faded.add(loc.id);
-        if (loc.children) checkLocation(loc.children);
-      }
-    }
-
-    checkLocation(displayLocations);
-    return faded;
-  }, [
-    displayLocations,
-    locationTypeFilter,
-    emptyFilter,
-    searchTerm,
-    typeMatchingIds,
-    emptyMatchingIds,
-    searchMatchingIds,
-  ]);
-
-  // Scroll to location handler
-  const scrollToLocation = useCallback((locationId: string) => {
-    const element = locationRefs.current.get(locationId);
-    if (element) {
-      element.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }, []);
-
-  // Hydration-stable: the server renders this branch with no tree, while the
-  // client's first render already has the streamed one. See useHydratedLoading.
-  const isLoading = useHydratedLoading(locationsLoading);
-
-  if (isLoading) {
-    return (
-      <div className="flex h-[600px] items-center justify-center">
-        <SimpleLoading text="Loading gallery..." />
-      </div>
-    );
-  }
-
-  if (!displayLocations.length) {
-    return (
-      <div className="flex h-[400px] flex-col items-center justify-center text-muted-foreground">
-        <span className="text-lg">No locations found</span>
-        {locationTypeFilter && (
-          <button
-            type="button"
-            onClick={() => setLocationTypeFilter(null)}
-            className="mt-2 text-sm text-primary hover:underline"
-          >
-            Clear type filter
-          </button>
-        )}
-      </div>
-    );
-  }
-
-  if (isMobile) {
-    return (
-      <ProductImageSummariesProvider productIds={inventoryProductIds}>
-        <MobileGalleryDrillDown
-          locations={displayLocations}
-          inventoryByLocation={inventoryByLocation}
-        />
-      </ProductImageSummariesProvider>
-    );
-  }
+    setSelected(id ?? entries[0]?.location.id);
+    target?.querySelector<HTMLElement>("h2")?.focus({ preventScroll: true });
+    if (isMobile) setSidebarCollapsed(true);
+  };
+  const toggle = (id: string) =>
+    setExpanded((previous) => {
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const clear = () => {
+    setQuery("");
+    setType(null);
+    setStatus("all");
+  };
 
   return (
-    <ProductImageSummariesProvider productIds={inventoryProductIds}>
-      <div className="flex h-[calc(100vh-12rem)] overflow-hidden border border-[var(--border)] bg-background">
-        {/* Sidebar */}
+    <section
+      aria-label="Location browser"
+      className="min-w-0 border-y border-border"
+    >
+      <GalleryHeader
+        query={query}
+        onQueryChange={setQuery}
+        type={type}
+        onTypeChange={setType}
+        status={status}
+        onStatusChange={setStatus}
+        onClear={clear}
+      />
+      <div className="flex min-w-0 flex-col md:h-[min(70vh,48rem)] md:min-h-80 md:flex-row">
         <GallerySidebar
-          locations={displayLocations}
-          searchTerm={searchTerm}
-          onLocationClick={scrollToLocation}
-          isCollapsed={sidebarCollapsed}
-          onToggleCollapse={toggleSidebar}
-          activeLocationId={activeLocationId}
-          searchMatchingIds={searchMatchingIds}
-          fadedIds={fadedIds}
+          locations={filtered.locations}
+          query={query}
+          filtering={filtered.active}
+          selectedId={selectedId}
+          onSelect={select}
+          expandedIds={filtered.active ? visibleIndex.branchIds : expanded}
+          onToggle={toggle}
+          collapsed={collapsed}
+          onToggleCollapse={() => setSidebarCollapsed(!collapsed)}
         />
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className="flex min-w-0 flex-wrap items-center gap-1 border-b border-border px-3 text-xs">
+            <button
+              type="button"
+              onClick={() => select()}
+              className="min-h-11 shrink-0 hover:underline sm:min-h-7"
+            >
+              All locations
+            </button>
+            {path.length > 0 && (
+              <span aria-hidden className="text-muted-foreground">
+                /
+              </span>
+            )}
+            <LocationBreadcrumb
+              segments={path.map((node) => ({
+                id: node.id,
+                name: node.name,
+                type: node.type,
+              }))}
+              onSegmentClick={(id) => select(id)}
+              className="max-sm:[&_button]:min-h-11 [@media(pointer:coarse)]:[&_button]:min-h-11"
+              compact
+            />
+          </div>
+          <section
+            ref={overviewRef}
+            aria-label="Location overview"
+            className="relative h-[min(70vh,48rem)] min-h-80 min-w-0 overflow-y-auto overscroll-contain px-3 md:h-auto md:min-h-0 md:flex-1"
+          >
+            {filtered.locations.length === 0 ? (
+              <div className="py-6 text-xs text-muted-foreground">
+                <h2 className="font-medium text-foreground">
+                  No matching locations
+                </h2>
+                <p className="mt-1">
+                  Try another name, type, or contents filter.
+                </p>
+              </div>
+            ) : (
+              <div className="pb-[var(--gallery-height,70vh)]">
+                {entries.map(({ location, depth }) => (
+                  <section
+                    key={location.id}
+                    ref={(element) => {
+                      if (element)
+                        sectionRefs.current.set(location.id, element);
+                      else sectionRefs.current.delete(location.id);
+                    }}
+                    aria-label={location.name}
+                    style={{ marginLeft: Math.min(depth, 3) * 12 }}
+                    className="border-b border-border py-2"
+                  >
+                    <LocationOverview location={location} query={query} />
+                  </section>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
+    </section>
+  );
+}
 
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <GalleryHeader
-            searchTerm={searchTerm}
-            onSearchChange={setSearchTerm}
-            locationTypeFilter={locationTypeFilter}
-            onTypeFilterChange={setLocationTypeFilter}
-            emptyFilter={emptyFilter}
-            onEmptyFilterChange={setEmptyFilter}
-            hideNonMatching={hideNonMatching}
-            onHideNonMatchingChange={setHideNonMatching}
-            breadcrumbPath={breadcrumbPath}
-            onBreadcrumbClick={scrollToLocation}
-            stats={stats}
-          />
-
-          <div ref={mainContentRef} className="flex-1 overflow-y-auto px-4">
-            <GalleryUnifiedView
-              locations={displayLocations}
-              inventoryByLocation={inventoryByLocation}
-              searchTerm={searchTerm}
-              searchMatchingIds={searchMatchingIds}
-              fadedIds={fadedIds}
-              createLocationRef={createLocationRef}
+const LocationOverview = memo(function LocationOverview({
+  location,
+  query,
+}: {
+  location: InfLocation;
+  query: string;
+}) {
+  const [showContents, setShowContents] = useState(false);
+  const items = location.inventoryItems ?? [];
+  const term = query.trim().toLocaleLowerCase();
+  const matchingItems = term
+    ? items.filter((item) =>
+        item.productName.toLocaleLowerCase().includes(term),
+      )
+    : items;
+  const open = showContents || (Boolean(term) && matchingItems.length > 0);
+  return (
+    <>
+      <div className="flex min-w-0 items-start gap-2">
+        <LocationVisual
+          location={location}
+          variant="compact"
+          size={32}
+          showChildCount={false}
+        />
+        <div className="min-w-0 flex-1">
+          <h2
+            tabIndex={-1}
+            className="text-sm font-semibold [overflow-wrap:anywhere]"
+          >
+            {location.name}
+          </h2>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <span>
+              {location.directItemCount ?? items.length} items here ·{" "}
+              {location.totalItemCount ?? items.length} total
+            </span>
+            {location.valuation && (
+              <span>{formatCurrency(location.valuation.totalValuation)}</span>
+            )}
+            <EntityQualityFact
+              entity="location"
+              id={location.id}
+              quality={location.dataQuality}
             />
           </div>
         </div>
+        <Link
+          to="/locations/$shortcode"
+          params={{ shortcode: location.id }}
+          className="flex min-h-11 shrink-0 items-center text-xs underline underline-offset-2 sm:min-h-7"
+        >
+          Open record
+        </Link>
       </div>
+      {location.images.length > 1 && (
+        <div className="mt-2 flex gap-2 overflow-x-auto">
+          {location.images.map((image) => (
+            <ImageWithPreview
+              key={image.id}
+              src={image.url}
+              alt={`${location.name} photo`}
+              to="/images/$shortcode"
+              params={{ shortcode: image.id }}
+              size={64}
+            />
+          ))}
+        </div>
+      )}
+      {items.length > 0 && (
+        <div className="mt-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-expanded={open}
+            disabled={Boolean(term) && matchingItems.length > 0}
+            onClick={() => setShowContents(!showContents)}
+            className="w-full justify-between px-2"
+          >
+            <span>{open ? "Hide contents" : "Show contents"}</span>
+            <span className="text-2xs text-muted-foreground tabular-nums">
+              {items.length} here
+            </span>
+          </Button>
+          {open &&
+            (matchingItems.length ? (
+              <InventoryContents items={matchingItems} />
+            ) : (
+              <p className="px-2 py-3 text-xs text-muted-foreground">
+                {term
+                  ? "No matching contents here."
+                  : "No inventory entries here."}
+              </p>
+            ))}
+        </div>
+      )}
+    </>
+  );
+});
+
+function InventoryContents({ items }: { items: InventoryItemForTree[] }) {
+  const productIds = useMemo(
+    () => items.map((item) => item.productId),
+    [items],
+  );
+  return (
+    <ProductImageSummariesProvider productIds={productIds}>
+      <ul className="grid grid-cols-1 gap-x-3 sm:grid-cols-2">
+        {items.map((item) => (
+          <InventoryContentsRow key={item.id} item={item} />
+        ))}
+      </ul>
     </ProductImageSummariesProvider>
   );
 }
 
-/**
- * Mobile drill-down gallery. Shows a 2-column grid of location cards.
- * Tapping a location with children drills into it; leaf locations navigate to detail.
- */
-function MobileGalleryDrillDown({
-  locations,
-  inventoryByLocation,
-}: {
-  locations: InfLocation[];
-  inventoryByLocation: Map<string, InventoryItem[]>;
-}) {
-  const navigate = useNavigate();
-  const [path, setPath] = useState<InfLocation[]>([]);
-
-  // Current level: root or drilled-in children
-  const currentLocations =
-    path.length === 0 ? locations : (path[path.length - 1]!.children ?? []);
-
-  const handleTap = useCallback(
-    (location: InfLocation) => {
-      if (location.children && location.children.length > 0) {
-        setPath((prev) => [...prev, location]);
-      } else {
-        navigate({
-          to: "/locations/$shortcode",
-          params: { shortcode: location.id },
-        });
-      }
-    },
-    [navigate],
-  );
-
-  const handleBack = useCallback(() => {
-    setPath((prev) => prev.slice(0, -1));
-  }, []);
-
+function InventoryContentsRow({ item }: { item: InventoryItemForTree }) {
+  const images = useHydratedProductImages(item.productId);
   return (
-    <Stack gap="md">
-      {/* Breadcrumb navigation */}
-      {path.length > 0 && (
-        <Row align="center" gap="xs" className="text-sm">
-          <Button variant="ghost" onClick={handleBack}>
-            <CaretLeftIcon className="size-4" />
-            Back
-          </Button>
-          <Row align="center" gap="xs" className="text-muted-foreground">
-            <button
-              type="button"
-              className="hover:text-foreground"
-              onClick={() => setPath([])}
-            >
-              All
-            </button>
-            {path.map((loc, i) => (
-              <Row as="span" key={loc.id} align="center" gap="xs">
-                <span>/</span>
-                <button
-                  type="button"
-                  className="hover:text-foreground"
-                  onClick={() => setPath((prev) => prev.slice(0, i + 1))}
-                >
-                  {loc.name}
-                </button>
-              </Row>
-            ))}
-          </Row>
-        </Row>
-      )}
-
-      {/* 2-column card grid */}
-      {currentLocations.length > 0 ? (
-        <div className="grid grid-cols-2 gap-2">
-          {currentLocations.map((location) => {
-            const hasChildren = (location.children?.length ?? 0) > 0;
-            return (
-              <button
-                type="button"
-                key={location.id}
-                className="text-left"
-                onClick={() => handleTap(location)}
-              >
-                <LocationGalleryCard
-                  location={location}
-                  inventoryItems={inventoryByLocation.get(location.id) ?? []}
-                />
-                {hasChildren && (
-                  <Description as="div" size="2xs" className="mt-1 text-center">
-                    {countLabel(location.children!.length, "sub-location")}
-                  </Description>
-                )}
-              </button>
-            );
-          })}
-        </div>
+    <li className="flex min-w-0 items-center gap-2 border-t border-border px-2 py-1">
+      {images[0] ? (
+        <ImageWithPreview
+          src={images[0].url}
+          alt={item.productName}
+          to="/products/$shortcode"
+          params={{ shortcode: item.productId }}
+          size={32}
+        />
       ) : (
-        <div className="flex flex-col items-center justify-center py-6 text-muted-foreground">
-          <LocationIcon
-            type="room"
-            product={null}
-            className="mb-2 size-8 opacity-40"
-          />
-          <span>No locations here</span>
-        </div>
+        <EntityIcon
+          entity="inventory"
+          size={14}
+          className="shrink-0 text-muted-foreground"
+        />
       )}
-    </Stack>
+      <Link
+        to="/inventory/$shortcode"
+        params={{ shortcode: item.id }}
+        title={item.productName}
+        className="flex min-h-11 min-w-0 flex-1 items-center text-xs hover:underline sm:min-h-7"
+      >
+        <span className="truncate">{item.productName}</span>
+      </Link>
+      <span className="shrink-0 text-2xs text-muted-foreground tabular-nums">
+        {item.amount.value} {item.amount.unit}
+      </span>
+    </li>
   );
 }
