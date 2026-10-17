@@ -365,6 +365,9 @@ export const mailReadContent = z.object({
   linksOmitted: z.number().int().min(0).default(0),
   /** `headers` left out because they alone overflow the response cap. */
   headersOmitted: z.boolean().default(false),
+  /** The body text or HTML page was cut further to fit the response cap;
+   * an HTML read continues from `nextOffset`. */
+  bodyShortened: z.boolean().default(false),
 });
 export type MailReadContent = z.infer<typeof mailReadContent>;
 
@@ -493,6 +496,19 @@ export const mailAttachmentOriginal = z.strictObject({
   dataBase64: z.string().max(Math.ceil(MAIL_ATTACHMENT_MAX_BYTES / 3) * 4),
 });
 export type MailAttachmentOriginal = z.infer<typeof mailAttachmentOriginal>;
+
+/**
+ * The text the purchase agent receives for a tool result: the result as JSON
+ * with an original attachment's bytes moved out to media. The agent adapter
+ * emits exactly this and the Email read cap measures exactly this.
+ */
+export function mailReadAgentText(result: {
+  originalAttachment?: MailAttachmentOriginal | undefined;
+}): string {
+  if (!result.originalAttachment) return JSON.stringify(result);
+  const { dataBase64: _bytes, ...descriptor } = result.originalAttachment;
+  return JSON.stringify({ ...result, originalAttachment: descriptor });
+}
 
 /**
  * `accepted`: an import accepted the Email as the Purchase's source.

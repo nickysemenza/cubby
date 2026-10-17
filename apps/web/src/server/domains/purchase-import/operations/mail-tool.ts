@@ -279,10 +279,12 @@ export async function readMail(
     ) {
       const { readEmailOriginalTransient } =
         await import("../repo/gmail/real-time");
-      return mailReadOut.parse({
-        ...(await readEmailOriginalTransient(db, input, actor)),
-        ...(await associationsForMail(db, source.email)),
-      });
+      return fitMailRead(
+        mailReadOut.parse({
+          ...(await readEmailOriginalTransient(db, input, actor)),
+          ...(await associationsForMail(db, source.email)),
+        }),
+      );
     }
   }
   const { mail, attachments, admitted } = await withTransactionDatabase(

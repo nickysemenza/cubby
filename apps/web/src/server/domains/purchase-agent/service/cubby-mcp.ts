@@ -1,6 +1,7 @@
 import {
   MAIL_READ_RESPONSE_MAX_BYTES,
   mailAttachmentOriginal,
+  mailReadAgentText,
 } from "@cubby/schemas/mailbox-research";
 import type { Context } from "@earendil-works/chord";
 import { Type, type JsonObject } from "@earendil-works/pi-ai";
@@ -67,7 +68,8 @@ const callResult = z.object({
   isError: z.boolean().optional(),
 });
 
-function toolResult(raw: unknown): ToolExecutionResult {
+/** A Cubby MCP call result as the agent's tool output. */
+export function cubbyToolResult(raw: unknown): ToolExecutionResult {
   const parsed = callResult.parse(raw);
   const content: NonNullable<ToolExecutionResult["output"]> = [];
   for (const block of parsed.content) {
@@ -80,17 +82,14 @@ function toolResult(raw: unknown): ToolExecutionResult {
   // them as media rather than as base64 text.
   const original = attachmentResult.safeParse(parsed.structuredContent);
   if (original.success) {
-    const { dataBase64, ...descriptor } = original.data.originalAttachment;
+    const { dataBase64, mimeType } = original.data.originalAttachment;
     return {
       output: [
         {
           type: "text",
-          text: JSON.stringify({
-            ...original.data,
-            originalAttachment: descriptor,
-          }),
+          text: mailReadAgentText(original.data),
         },
-        { type: "image", data: dataBase64, mimeType: descriptor.mimeType },
+        { type: "image", data: dataBase64, mimeType },
       ],
       isError: parsed.isError === true,
     };
@@ -138,7 +137,7 @@ export function cubbyMcpExtension(
           ? { outputLimits: EMAIL_READ_OUTPUT_LIMITS }
           : {}),
         execute: async (args, api, context) =>
-          toolResult(
+          cubbyToolResult(
             await (
               await connected()
             ).callTool(

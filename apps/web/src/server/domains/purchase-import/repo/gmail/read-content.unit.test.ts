@@ -4,10 +4,13 @@
  * an HTML read carries the compact text too and its JSON-escaped page
  * overflows the purchase agent's output cap, which then cuts it again.
  */
-import { MAIL_READ_RESPONSE_MAX_BYTES } from "@cubby/schemas/mailbox-research";
+import {
+  MAIL_READ_RESPONSE_MAX_BYTES,
+  mailReadAgentText,
+} from "@cubby/schemas/mailbox-research";
 import { describe, expect, it } from "vitest";
 
-import { mailReadContent } from "./read-content";
+import { fitMailRead, mailReadContent } from "./read-content";
 
 const mail = (bodyHtml: string, bodyText: string | null = null) => ({
   snippet: null,
@@ -74,5 +77,62 @@ describe("mailReadContent response bound", () => {
     );
     expect(read.truncated).toBe(true);
     expect(serialized(read)).toBeLessThan(MAIL_READ_RESPONSE_MAX_BYTES);
+  });
+});
+
+// Failure: with every link and header gone, a full body plus many attachment
+// descriptors still overflows the cap, or associations alone do and an
+// oversized payload goes out anyway.
+describe("fitMailRead minimum response", () => {
+  const descriptors = Array.from({ length: 100 }, (_, index) => ({
+    attachmentId: `synthetic-attachment-${index}-${"x".repeat(150)}`,
+    filename: `synthetic-receipt-${index}-${"y".repeat(800)}.pdf`,
+    mimeType: "application/pdf",
+    checksum: "c".repeat(64),
+  }));
+  const agentBytes = (value: Parameters<typeof mailReadAgentText>[0]) =>
+    new TextEncoder().encode(mailReadAgentText(value)).length;
+
+  it("shortens the text body and reports it", () => {
+    const text = "Synthetic line item $1.00\n".repeat(6_000);
+    const content = mailReadContent(
+      { snippet: null, bodyText: text, bodyHtml: null },
+      {},
+    );
+    const fitted = fitMailRead({ content, attachments: descriptors });
+    expect(agentBytes(fitted)).toBeLessThanOrEqual(
+      MAIL_READ_RESPONSE_MAX_BYTES,
+    );
+    expect(fitted.content).toMatchObject({
+      bodyShortened: true,
+      truncated: true,
+    });
+    expect(text.startsWith(fitted.content.bodyText ?? "-")).toBe(true);
+    expect(fitted.content.bodyText?.length).toBeGreaterThan(0);
+  });
+
+  it("shortens an HTML page and continues it from an earlier nextOffset", () => {
+    const html = `<table>${'<td class="c">cell</td>'.repeat(8_000)}</table>`;
+    const content = mailReadContent(mail(html), { includeHtml: true });
+    const fitted = fitMailRead({ content, attachments: descriptors });
+    expect(agentBytes(fitted)).toBeLessThanOrEqual(
+      MAIL_READ_RESPONSE_MAX_BYTES,
+    );
+    const next = fitted.content.nextOffset ?? 0;
+    expect(next).toBeLessThan(content.nextOffset ?? 0);
+    expect(fitted.content.bodyHtml).toBe(html.slice(0, next));
+    expect(fitted.content.bodyShortened).toBe(true);
+  });
+
+  it("refuses a read whose associations alone overflow the cap", () => {
+    const content = mailReadContent(mail("<p>Synthetic</p>"), {});
+    const purchaseAssociations = Array.from({ length: 6_000 }, (_, index) => ({
+      purchaseId: `PUR-${index}`,
+      purchaseDeleted: false,
+      kind: "linked",
+    }));
+    expect(() => fitMailRead({ content, purchaseAssociations })).toThrow(
+      /response cap/,
+    );
   });
 });

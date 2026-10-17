@@ -196,6 +196,8 @@ export const AppErrors = {
   // A mail read or review the member's own data refuses (no matching event,
   // dismissed pair, foreign attachment); the message names the fix.
   MAIL_REQUEST_REFUSED: "BAD_REQUEST",
+  // An Email read whose fixed metadata alone overflows the agent response cap.
+  MAIL_READ_TOO_LARGE: "BAD_REQUEST",
 
   // Generic database constraint violations (translated centrally from Postgres
   // error codes — see server/errors/db-errors.ts)

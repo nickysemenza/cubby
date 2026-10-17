@@ -4,11 +4,14 @@ import {
   MAIL_READ_TEXT_MAX_BYTES,
   type MailReadContent,
   type MailReadInput,
+  type MailAttachmentOriginal,
   type MailReadOut,
+  mailReadAgentText,
   type RetainedMailContent,
 } from "@cubby/schemas/mailbox-research";
 
 import { wasm } from "~/lib/wasm";
+import { createAppError } from "~/server/errors/app-error";
 
 const MAIL_READ_MAX_LINKS = 40;
 
@@ -134,20 +137,54 @@ export function mailReadContent(
 // Room for the MCP envelope around a read's serialized result.
 const ENVELOPE_BYTES = 1_000;
 
+const agentBytes = (read: { originalAttachment?: MailAttachmentOriginal }) =>
+  encoder.encode(mailReadAgentText(read)).length + ENVELOPE_BYTES;
+
+/** `content` with its body cut to `budget` JSON-escaped bytes, or null when nothing fits. */
+function shortenBody(
+  content: MailReadContent,
+  budget: number,
+): MailReadContent | null {
+  if (budget < 1) return null;
+  if (content.bodyHtml !== null) {
+    const pageBytes = encoder.encode(content.bodyHtml).length;
+    const start = (content.nextOffset ?? content.htmlBytes ?? 0) - pageBytes;
+    const page = jsonPage(content.bodyHtml, 0, budget);
+    if (page.nextOffset === null) return content;
+    return {
+      ...content,
+      bodyHtml: page.text,
+      nextOffset: start + page.nextOffset,
+      truncated: true,
+      bodyShortened: true,
+    };
+  }
+  if (content.bodyText === null) return null;
+  const page = jsonPage(content.bodyText, 0, budget);
+  if (page.nextOffset === null) return content;
+  return {
+    ...content,
+    bodyText: page.text,
+    truncated: true,
+    bodyShortened: true,
+  };
+}
+
 /**
- * Bound a whole Email read, metadata included, under the agent's response
- * cap: trailing links go first, then headers, each reported as omitted. An
- * original attachment's bytes reach the agent as media, outside the text.
+ * Bound a whole Email read under the agent's response cap, measured on the
+ * exact text the agent adapter emits (`mailReadAgentText`): trailing links go
+ * first, then headers, then the body is cut (an HTML page continues from an
+ * earlier `nextOffset`), each reported. Purchase associations are never
+ * trimmed; a read whose remaining metadata alone overflows is refused.
  */
-export function fitMailRead<T extends Pick<MailReadOut, "content">>(
-  read: T & { originalAttachment?: unknown },
-): T {
-  const size = (candidate: T) =>
-    encoder.encode(
-      JSON.stringify({ ...candidate, originalAttachment: undefined }),
-    ).length + ENVELOPE_BYTES;
+export function fitMailRead<
+  T extends Pick<MailReadOut, "content"> & {
+    originalAttachment?: MailAttachmentOriginal;
+  },
+>(read: T): T {
   const fits = (candidate: T) =>
-    size(candidate) <= MAIL_READ_RESPONSE_MAX_BYTES;
+    agentBytes(candidate) <= MAIL_READ_RESPONSE_MAX_BYTES;
+  if (fits(read)) return read;
   const { links } = read.content;
   const withLinks = (kept: number, base: T): T => ({
     ...base,
@@ -157,7 +194,6 @@ export function fitMailRead<T extends Pick<MailReadOut, "content">>(
       linksOmitted: base.content.linksOmitted + links.length - kept,
     },
   });
-  if (fits(read)) return read;
   let base: T = read;
   if (!fits(withLinks(0, base)) && base.content.headers)
     base = {
@@ -171,5 +207,19 @@ export function fitMailRead<T extends Pick<MailReadOut, "content">>(
     if (fits(withLinks(mid, base))) low = mid;
     else high = mid - 1;
   }
-  return withLinks(low, base);
+  let fitted = withLinks(low, base);
+  const body = fitted.content.bodyHtml ?? fitted.content.bodyText;
+  let budget =
+    body === null ? 0 : encoder.encode(JSON.stringify(body)).length - 2;
+  while (!fits(fitted)) {
+    budget -= agentBytes(fitted) - MAIL_READ_RESPONSE_MAX_BYTES;
+    const content = shortenBody(fitted.content, budget);
+    if (content === null)
+      throw createAppError(
+        "MAIL_READ_TOO_LARGE",
+        `This Email read is ${agentBytes(fitted)} bytes without links or headers, over the ${MAIL_READ_RESPONSE_MAX_BYTES}-byte response cap even with its body cut; its Purchase associations or attachment list alone are too large.`,
+      );
+    fitted = { ...fitted, content };
+  }
+  return fitted;
 }
