@@ -589,6 +589,10 @@ _Avoid_: reimbursement, ownership percentage
 A project-neutral movement between Ledger Parties. A transfer is distinct from the statement records that may evidence it.
 _Avoid_: Expense, contribution line, duplicate bank movement
 
+**Internal move**:
+A Ledger Transfer whose sending and receiving party are the same, such as one person moving money between two of their own accounts. It is recorded for completeness and reported apart from transfers sent and received.
+_Avoid_: internal transfer, self-transfer, account transfer
+
 **Source Claim**:
 An assertion that an external source supports an Expense or transfer fact, including the source amount and any explicit decision about a discrepancy.
 _Avoid_: imported truth, automatic match

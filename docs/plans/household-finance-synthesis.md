@@ -1,303 +1,164 @@
 # Household finance synthesis
 
-Status: **proposed**. Design agreed 2026-09-22 after a review of the finance
-ledger's current state and a grilling pass on scope. Nothing here is
-implemented yet. Phase 1 needs no schema change; Phase 2 needs none either.
+Status: **in progress** under
+[#2347](https://github.com/nickysemenza/cubby/issues/2347). Refreshed
+2026-10-17 onto Spending Category after a second grilling pass. No schema
+change or migration is needed.
 
 ## 1. Summary
 
-Cubby already records where household money went — line-level `Expense` rows,
+Cubby records where household money went at line level: `Expense` rows,
 project attribution, settlement evidence, and funders derived from account
-ownership. What it cannot yet do is _synthesize_ that record: slice spend by
-product category, show how money flows from funder to project to category, or
-project spend forward. This plan adds that read-side layer in two phases.
+ownership. A bank or aggregator feed sees a mixed retailer order as one charge;
+Cubby splits it into food, renovation, supplies and so on. This plan turns that
+record into answers:
 
-**Phase 1 — read-side foundations**
+- Where did money go, by Spending Category and by project?
+- Who paid for it?
+- What will we spend per month going forward?
 
-- Root product category as an expense analytics dimension, built on the
-  existing tax/shipping allocator.
-- A historical Sankey: funder → project bucket → root category.
-- An estimate-accuracy diagnostic as a Problems detector.
-- One-step acceptance of a suggested transfer pair, including same-owner pairs.
-- Deep links from contribution-ledger gaps to the place they are fixed.
+Delivered already (#1443 and follow-ups): the `SpendingCategory` tree, the
+joint tax/shipping allocator that carries both project and Spending Category
+(`expenseJointAllocationSql`), the `spendingCategoryId` filter with
+`includeSubSpendingCategories`, and the `expense.analyze` pivot.
 
-**Phase 2 — cash-flow projection**
+Remaining, in one PR:
 
-- A `/cash-flow` page and matching MCP read: a monthly forward view built from
-  a category run-rate baseline, live project envelopes, dated `future`
-  expenses, and URL-state scenarios.
+1. A root-level Spending Category breakdown on the expense analytics view, read
+   through `expense.analyze`, which becomes an MCP read.
+2. A `spend_below_estimate` project attention rule.
+3. One-step acceptance of a suggested transfer pair, with same-owner pairs
+   reported as internal moves.
+4. A historical Sankey: funder → project bucket → Spending Category.
+5. A `/cash-flow` page and `finance_read.cash_flow` MCP read.
 
-Neither phase adds a money-bearing table, stores a balance, or introduces a
-time series. All spend figures remain `SUM(Expense.cost)`.
+All spend figures remain `SUM(Expense.cost)`. Nothing adds a money-bearing
+table, stores a balance, or introduces a time series.
 
-## 2. Why
+## 2. Decision log
 
-Findings from the current dataset that shaped the design:
+| #   | Decision                  | Choice                                                                                                                                                                                                         |
+| --- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Category taxonomy         | Spending Category, not Product Category. Views over `Expense` show only categories with Expense rows, so transaction-only categories need no flag.                                                             |
+| 2   | Category grain            | Root Spending Category everywhere; children are reached through Ledger filters with subcategories included.                                                                                                    |
+| 3   | Unresolved buckets        | **Uncategorized**: no category resolved (null `spendingCategoryId`, including a Purchase with no principal line). **Unclassified**: receipt role unresolved (`lineKind = unclassified`). No other bucket.      |
+| 4   | Breakdown read            | `expense.analyze` with a root roll-up option on the `spendingCategory` dimension, not a second breakdown on `expenseAnalytics`. `expense.analyze` leaves `deferred_capability` and becomes an MCP read.        |
+| 5   | Cost type label           | The existing cost-type donut is titled **Spending by Cost Type**; the new section is **Spending by Spending Category**.                                                                                        |
+| 6   | Calibration               | A project attention rule `spend_below_estimate`: `done`, `costEstimate > 0`, no ancestor with its own estimate, subtree spend below 10% of the estimate. Diagnostic only; it never scales a forecast.          |
+| 7   | Transfer-pair accept      | A kernel command exposed as `finance.accept_transfer_pair` and an Accept action on suggestion rows (transfer-pair read and work queue).                                                                        |
+| 8   | Same-owner pairs          | Recorded as a `LedgerTransfer` with `fromPartyId = toPartyId`: an **internal move**. The contribution ledger reports internal moves apart from transfers sent and received.                                    |
+| 9   | Unowned account in a pair | Refuse, naming the account; ownership must be set first.                                                                                                                                                       |
+| 10  | Sankey basis              | Net per funder → project → category path, Credits included. Paths that net to zero or below are omitted from links and listed under the chart.                                                                 |
+| 11  | Sankey caps               | Top 8 projects and top 8 categories by flow; the rest are grouped as Other projects / Other categories. No project and Uncategorized/Unclassified stay distinct nodes.                                         |
+| 12  | Multi-funder expenses     | Split by the contribution ledger's funder weights; Unknown funder is an explicit node.                                                                                                                         |
+| 13  | Baseline                  | Per root category, median of the trailing 12 complete months of landed spend not attributed to a project other than the Household project, excluding `future`; empty months count as $0. Carried forward flat. |
+| 14  | Irregular categories      | A category with spend in fewer than 3 of the 12 months is **Irregular**. A URL toggle `irregular=grouped\|separate` (default grouped) shows them as one row or as their own rows; both reconcile.              |
+| 15  | Envelopes                 | Remaining = `max(0, estimate − subtree actual − subtree committed)`, spread evenly from the current month to a future `endDate`; otherwise **unscheduled**.                                                    |
+| 16  | Which projects count      | `in_progress` by default; `not_started` behind a toggle defaulting off; `planning` only with an estimate. A project under an ancestor with an estimate is excluded.                                            |
+| 17  | Scenarios                 | URL state only, `{ label, date, amount, direction: inflow \| outflow, recurrence: once \| monthly, until? }`, up to 20. Inflows exist only as scenarios. Structural presets are declared views.                |
+| 18  | Forward Sankey            | Rejected: a Sankey over forecast figures hides timing, which is the point of the page.                                                                                                                         |
+| 19  | Gap deep links            | Dropped. The household page already links each gap to its expense; no bulk-fix need exists.                                                                                                                    |
+| 20  | Sankey renderer           | `@nivo/sankey` at the installed Nivo version, as a specialized renderer inside `Visualization`, lazy-loaded.                                                                                                   |
 
-1. **The household/renovation split already exists** through the Household
-   project and import-time triage, but analytics group only by cost type,
-   effective trade, project, and vendor. "Food versus supplies versus
-   electronics" inside household spend is not queryable, even though almost
-   every product-linked line carries a category.
-2. **Product category is now a tree** (`ProductCategory.parentId`, a dozen
-   roots). The root level is the right grain for spend questions; children are
-   drill-down.
-3. **Tax and shipping are already allocated** across a purchase's principal
-   lines by `expenseProjectAllocationSql`. Category analytics must reuse that
-   allocator rather than add a second one.
-4. **Estimates and actuals rarely meet.** Most completed projects that carry a
-   `costEstimate` have subtree actuals well under a tenth of it; the spend was
-   recorded elsewhere. A historical overrun factor computed today would be
-   noise, so calibration ships as a diagnostic that finds the misattribution,
-   never as a forecast multiplier.
-5. **Forward dates are sparse.** Nearly every task due date is in the past,
-   only a handful of expenses are marked `future`, and few projects carry an
-   end date. A projection cannot rely on task-date phasing.
-6. **Funding attribution has visible gaps** (expenses with no allocation path
-   to a charge, and accounts with no owner). A flow diagram with an explicit
-   Unknown-funder node makes that gap legible and shows it shrink.
-7. **Transfer evidence has no one-step accept.** `finance_read.transfer_pairs`
-   proposes candidates, but recording one takes separate writes, and transfers
-   between two accounts with the same owner have no documented treatment.
+## 3. Category breakdown
 
-## 3. Decision log
+`expenseAnalyzeInput` gains an option that rolls the `spendingCategory` row or
+column dimension up to root categories through `hierarchyDescendantsSql`.
+Uncategorized and Unclassified are distinct buckets, and the buckets reconcile
+to the filtered net. The weight rule stays intact: filters apply to final
+allocation rows and never change which principal receives an ancillary cent.
 
-| #   | Decision                    | Choice                                                                                                                                                                                                                           |
-| --- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Scope                       | All five candidate items in one plan, two phases. Recurring-outflow detection is folded into the Phase 2 baseline method, not a separate feature.                                                                                |
-| 2   | What the projection answers | Household cash flow ("what will we spend per month"), with project burn as one component.                                                                                                                                        |
-| 3   | Calibration                 | Diagnostic only: a Problems detector plus an estimate/actual column. Never scales a forecast.                                                                                                                                    |
-| 4   | Category grain              | Root category, drill-down to children. Explicit **Uncategorized** bucket so totals reconcile.                                                                                                                                    |
-| 5   | Category money basis        | Landed cost: principal plus its allocated share of tax/shipping, via one allocator that carries both project and root category.                                                                                                  |
-| 6   | Receipt adjustments bucket  | Only what the allocator cannot place: ancillary lines on a purchase with no principal line, or with no purchase.                                                                                                                 |
-| 7   | Sankey                      | Historical, not forecast. Funder → project bucket → root category, on the expense analytics view, sharing the Ledger's filters.                                                                                                  |
-| 8   | Sankey negatives            | Links use gross outflow; refunds/credits reported in a note beneath the chart.                                                                                                                                                   |
-| 9   | Sankey node caps            | Top 8 projects by flow, remainder grouped as "Other projects"; categories at root level plus Uncategorized and Receipt adjustments.                                                                                              |
-| 10  | Multi-funder expenses       | Split proportionally with the contribution ledger's weights.                                                                                                                                                                     |
-| 11  | Same-owner transfer pairs   | Recorded as a normal `LedgerTransfer` with `fromPartyId = toPartyId` for completeness; reported separately as internal moves.                                                                                                    |
-| 12  | Unowned account in a pair   | Refuse, naming the account; ownership must be set first.                                                                                                                                                                         |
-| 13  | Baseline method             | Per root category, median of the trailing 12 complete months of landed non-project spend, carried forward flat. Empty months count as $0; categories active in fewer than 3 months fold into Uncategorized.                      |
-| 14  | Envelope placement          | Remaining = estimate − actual − committed. Spread evenly from the current month to the project's `endDate` when set and in the future; otherwise **unscheduled**.                                                                |
-| 15  | Which projects count        | `in_progress` by default; `not_started` behind a toggle defaulting off; `planning` only if it has an estimate. A project under an ancestor with an estimate is excluded.                                                         |
-| 16  | Scenario storage            | URL/page state only. Structural presets (horizon, toggles, category subset) are declared views in `view-manifest.ts`; scenario values never enter the repository. `AppSettings` is the upgrade path if URL-only proves annoying. |
-| 17  | Scenario shape              | `{ label, date, amount, direction: inflow \| outflow, recurrence: once \| monthly, until? }`. Inflows exist only as scenarios; the page never claims to show real income.                                                        |
-| 18  | Surfaces                    | Category chart + filter and the Sankey on `expense-analytics-view.tsx`; projection on a new `/cash-flow` route; calibration on the Problems page.                                                                                |
-| 19  | MCP                         | `get_cash_flow_projection` (read), `accept_financial_transfer_pair` (mutation), category breakdown added to `project_overview.expense_analytics`. Gap deep links are web-only.                                                   |
-| 20  | Forward Sankey              | **Rejected.** Forward figures are baseline, envelopes, and scenarios; a Sankey over them hides timing, which is the point of the page.                                                                                           |
+`expense-analytics-view.tsx` adds **Spending by Spending Category** with
+`RankedBarBreakdown`. A bar click opens the Ledger filtered to that category
+with subcategories included.
 
-## 4. Phase 1 — read-side foundations
+## 4. Attention rule
 
-### 4.1 Category key on the allocator
+`spend_below_estimate` joins `stalled`, `missing_budget`, and
+`blocked_no_next_action` in `apps/web/src/server/domains/project/repo/attention.ts`,
+reusing `loadProjectSubtreeRollups` so subtree semantics match the budget
+strip. The finding means "spend was recorded elsewhere or the estimate is
+wrong"; it does not guess which.
 
-`expenseProjectAllocationSql` (`apps/web/src/server/domains/expense/repo/expense-project-allocation.ts`)
-distributes ancillary cents across a purchase's live principal lines and emits
-`(expenseId, projectId, attributedCents, basis)`. Extend each output row with
-`rootCategoryId`: the root of the receiving principal line's
-`Product.categoryId`, resolved through a recursive walk of
-`ProductCategory.parentId`. A principal with no product, or a product with no
-category, yields `null`, which consumers render as Uncategorized. Ancillary
-rows the allocator cannot place keep a distinguishable basis so consumers can
-render Receipt adjustments.
+## 5. Transfer pairs
 
-The weight CTE's rule stays intact: the denominator sees every live principal
-in the purchase, and filters apply only to final rows. Category must not change
-which principal receives a cent.
+`finance.accept_transfer_pair` takes the outflow and inflow
+`FinancialTransaction` ids from a suggestion. Preconditions, each refused as
+data with the raw reason: opposite signs, equal absolute amounts, different
+accounts, both accounts owned, neither transaction already carrying
+`ledgerTransferId`. In one database transaction it creates a `LedgerTransfer`
+from the outflow account's owner to the inflow account's owner, dated the
+earlier transaction date, then sets `ledgerTransferId` on both transactions.
 
-### 4.2 Category analytics and filter
+`householdContributionLedger` excludes internal moves from
+`transfersSent`/`transfersReceived` and reports a per-party
+`internalMoves { count, amount }`. Positions are unchanged.
 
-- `expenseAnalytics` (`apps/web/src/server/domains/expense/repo/analytics.ts`) gains a
-  `byRootCategory` breakdown over the allocator rows, with children available
-  for drill-down.
-- The expense filter fields (`packages/schemas/src/project.ts`) gain
-  `productCategoryId`, matching the selected node and its descendants. The
-  analytics view already syncs its filters with the Ledger view, so a category
-  click writes back to the Ledger.
-- `expense-analytics-view.tsx` gets a root-category breakdown chart next to the
-  trade and vendor charts.
-- `project_overview.expense_analytics` returns the same breakdown.
+## 6. Sankey
 
-### 4.3 Historical Sankey
+`expenseFlowSankey(filters)` returns nodes and net links for the analytics
+filters: funder (member parties, household, Unknown funder, split by
+contribution-ledger weights) → project bucket (Household, top 8, Other
+projects, No project) → root Spending Category (top 8, Other categories,
+Uncategorized, Unclassified). Non-positive paths are returned separately and
+listed under the chart. A link click applies its filters to the Ledger.
 
-A new read, `expenseFlowSankey(filters)`, returns nodes and gross-outflow
-links for the current Ledger filters:
+## 7. Cash-flow projection
 
-1. **Funder**: each member party, the household party (joint accounts), and
-   Unknown funder. Derived with the contribution ledger's allocation
-   (`apps/web/src/server/domains/household-contribution/repo/allocation.ts`), split by
-   its weights.
-2. **Project bucket**: the Household project, the top 8 other projects by flow,
-   Other projects, and No project.
-3. **Root category**: from 4.1, plus Uncategorized and Receipt adjustments.
+`cashFlowProjection(input)` lives under
+`apps/web/src/server/domains/cash-flow/`. Months are household-local.
 
-Render with `@nivo/sankey` aligned to the installed Nivo packages. A
-link click applies the corresponding funder/project/category filters to the
-Ledger. A note under the chart states the refund/credit total excluded from
-links.
+Input: `horizonMonths` (6, 12, 24; default 12), `includeNotStarted` (default
+false), `irregular` (`grouped` default), optional root `categoryIds`, and up to
+20 scenarios.
 
-### 4.4 Estimate-accuracy detector
+Output: `months[]` with baseline by category, envelopes by project, committed,
+scenario outflow and inflow, and net; `unscheduled[]` with each project's
+estimate, actual, committed, remaining, end date and whether it carries
+`spend_below_estimate`; `totals` with horizon outflow, unscheduled total,
+beyond-horizon envelope remainder, and net after scenarios.
 
-A Problems detector for completed projects whose estimate is far from their
-recorded spend: `status = done`, `costEstimate > 0`, no ancestor with its own
-estimate, and subtree actual below 10% of the estimate. Each finding links to
-the project. It reuses `loadProjectSubtreeRollups`
-(`apps/web/src/server/domains/project/repo/subtree.ts`) so subtree semantics match the
-budget strip. The finding means "spend was recorded elsewhere or the estimate
-is wrong"; the detector does not guess which.
+Committed `future` expenses land in their own month; one dated before the
+current month lands in the current month as overdue. Committed rows are already
+subtracted from envelope remaining, so nothing is counted twice.
 
-### 4.5 Accept a transfer pair
+The `/cash-flow` route sits in the Finance domain: monthly stacked bars
+(baseline, envelopes, committed, outflow scenarios; inflow scenarios below the
+axis; a net line), headline totals, an unscheduled table, inline scenario
+editing, and links from each segment to its source.
 
-New repo mutation in `apps/web/src/server/domains/ledger-transfer/repo.ts`, exposed as
-`accept_financial_transfer_pair` and a web action on suggestion rows:
+## 8. Invariants
 
-- Input: the outflow and inflow `FinancialTransaction` ids from a suggestion.
-- Preconditions, each refused with the raw reason: opposite signs, equal
-  absolute amounts, different accounts, both accounts owned, neither
-  transaction already carrying `ledgerTransferId`.
-- Effect, in one database transaction: create a `LedgerTransfer` from the
-  outflow account's owner to the inflow account's owner, dated the earlier of
-  the two transaction dates, then set `ledgerTransferId` on both transactions.
-  The existing one-positive/one-negative evidence indexes enforce the pairing.
+- Spend remains `SUM(Expense.cost)`; breakdown, Sankey, and baseline reconcile
+  to the filtered net (the Sankey after its listed non-positive paths).
+- No stored balance, projection, or scenario; every figure is computed on read.
+- No time-series table or net worth; that stays gated on amending the
+  trusted-household tenet.
 
-Same-owner pairs are accepted and produce a transfer with
-`fromPartyId = toPartyId`.
+## 9. Validation
 
-### 4.6 Reporting same-owner transfers
+Focused integration tests for failures the type system cannot catch:
 
-`householdContributionLedger`
-(`apps/web/src/server/domains/household-contribution/repo/reports.ts`) excludes
-`fromPartyId = toPartyId` rows from `transfersSent`/`transfersReceived` and
-adds a per-party `internalTransfers { count, amount }`. Position is unaffected
-either way (sent and received cancel), but excluding them keeps the sent and
-received totals meaningful. `transferNet` and the reconciliation checks are
-unchanged.
-
-### 4.7 Gap deep links
-
-On the household contribution page:
-
-| Gap code                        | Link target                                                                                    |
-| ------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `missing_funders`               | Financial-transactions list filtered to unallocated charges near the expense's date and amount |
-| `funder_account_unowned`        | The account's detail page, where the Owner picker lives                                        |
-| `beneficiary_assumed_household` | None — a status, not a worklist                                                                |
-
-## 5. Phase 2 — cash-flow projection
-
-### 5.1 Read model
-
-`cashFlowProjection(input)` in a new `apps/web/src/server/repo/cash-flow.ts`.
-Months are household-local (`householdLocalDate`).
-
-Input:
-
-- `horizonMonths`: 6, 12, or 24 (default 12)
-- `includeNotStarted`: boolean (default false)
-- `categoryIds`: optional root-category subset
-- `scenarios`: up to 20 scenario rows (decision 17)
-
-Output:
-
-- `months[]`, each with `baseline` by root category, `envelopes` by project,
-  `committed`, `scenarioOutflow`, `scenarioInflow`, and `net`
-- `unscheduled[]`: project, estimate, subtree actual, committed, remaining,
-  end date, and an estimate-accuracy flag from 4.4
-- `totals`: horizon outflow, unscheduled total, beyond-horizon envelope
-  remainder, net after scenarios
-
-### 5.2 Baseline
-
-Over the trailing 12 complete months (current partial month excluded), take
-landed spend from allocator rows that are not attributed to any project other
-than the Household project, and not `future`. Group by root category; each
-category's monthly figure is the median of its 12 values, with empty months
-counted as $0. A category active in fewer than 3 of the 12 months folds into
-Uncategorized. Project spend is excluded from the baseline so envelopes are the
-only forecast for project work.
-
-### 5.3 Envelopes
-
-For each counted project (decision 15), remaining =
-`max(0, estimate − subtree actual − subtree committed)`. If `endDate` is after
-the current month, spread remaining evenly from the current month through the
-end month; months past the horizon go to the beyond-horizon total. If `endDate`
-is missing or in the past, the project goes to `unscheduled`.
-
-### 5.4 Committed rows
-
-`future = true` expenses land in their own month. A committed row dated before
-the current month lands in the current month, labelled overdue. Committed rows
-are already subtracted from envelope remaining, so they are never counted twice.
-
-### 5.5 Scenarios and presets
-
-Scenario rows live in the URL as a compact, zod-validated search param. The
-page edits them inline; bookmarking is how a scenario set is saved. Structural
-presets — horizon, the not-started toggle, category subsets — are declared
-views in `apps/web/src/entity/model/view-manifest.ts`. Scenario amounts and dates
-are never committed to the repository.
-
-### 5.6 Page
-
-Route `/cash-flow`:
-
-- Monthly stacked bars for the horizon: baseline by root category, scheduled
-  envelopes, committed rows, outflow scenarios. Inflow scenarios render below
-  the axis; a net line sits on top.
-- Headline figures: horizon outflow, unscheduled total, net after scenarios.
-- The unscheduled envelopes table beneath the chart.
-- Every segment links to its source: a baseline category opens the Ledger
-  filtered to that category and window; an envelope opens the project.
-
-### 5.7 MCP
-
-`get_cash_flow_projection` takes the same input as the page, scenarios
-included, and returns the read model unchanged.
-
-## 6. Invariants
-
-- Spend remains `SUM(Expense.cost)`. The allocator redistributes ancillary
-  cents among lines of the same purchase and never creates or drops money; the
-  category breakdown, Sankey, and baseline all reconcile to the filtered net.
-- No stored balance, projection, or scenario. Every Phase 2 figure is computed
-  on read.
-- Nothing here adds a time-series table or touches net worth; that remains
-  gated on amending the trusted-household tenet.
-
-## 7. Validation
-
-Focused repo integration tests, each for a regression the type system cannot
-catch:
-
-- Allocator: the category key never changes which principal receives an
-  ancillary cent; category totals reconcile to project totals for the same
-  filters.
-- Baseline: median with empty months counted as zero; the fewer-than-3-months
-  fold; project spend excluded.
-- Envelopes: subtree-estimate exclusion; even spread to `endDate`; the
-  unscheduled and beyond-horizon remainders; committed rows not double-counted.
-- Accept pair: a refused precondition persists nothing; partial evidence never
-  persists; same-owner pairs are accepted.
-- Ledger report: same-owner transfers are excluded from sent/received and
-  appear in `internalTransfers`; positions are unchanged.
-- Sankey: link totals reconcile to gross filtered outflow; multi-funder splits
-  follow ledger weights.
+- Root roll-up reconciles to the filtered net, with distinct Uncategorized and
+  Unclassified buckets, and never changes ancillary placement.
+- Attention: the rule fires on the subtree threshold and respects the
+  estimated-ancestor exclusion.
+- Accept pair: each refused precondition persists nothing; a same-owner pair
+  becomes an internal move; the ledger excludes it from sent/received with
+  positions unchanged.
+- Sankey: link totals plus listed non-positive paths reconcile to the filtered
+  net; multi-funder splits follow ledger weights.
+- Cash flow: median with empty months as zero; the Irregular rule in both
+  modes; project spend excluded; envelope spread, unscheduled and beyond-horizon
+  remainders; committed rows not double-counted.
 
 No tests for chart rendering.
 
-## 8. Documentation to change when code lands
+## 10. Later
 
-- `README.md` capabilities: the Financial accounts section gains category
-  analytics, the Sankey, transfer-pair acceptance, and the cash-flow page.
-- [Finance analytics and cash-flow work](https://github.com/nickysemenza/cubby/issues/2347): close completed
-  slices once their acceptance criteria are met; preserve any deferred remainder.
-
-## 9. Later, enabled by this plan
-
-- **Series detection.** Per-vendor or per-product recurrence (subscriptions,
-  regular grocery runs) as a sharper baseline than a category median.
-- **Calibration as a multiplier.** Once the detector's findings are worked down
-  and completed projects carry real subtree actuals, an estimate-accuracy factor
-  can scale envelopes.
-- **Persisted scenarios** in `AppSettings`, if URL-only proves limiting.
-- **Recorded income.** Unlinked `income` transactions would replace scenario
-  inflows with real ones.
+- **Series detection**: per-vendor or per-product recurrence as a sharper
+  baseline than a category median.
+- **Calibration as a multiplier** once `spend_below_estimate` findings are
+  worked down.
+- **Persisted scenarios** in `AppSettings` if URL-only proves limiting.
+- **Recorded income** replacing scenario inflows.
