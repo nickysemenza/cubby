@@ -264,6 +264,8 @@ relation preserves the canonical absent, mixed-unit and installed-stock rules;
 record-scoped queue and ordinary Product reads retain indexed scalar lookups.
 Unsupported evidence fields fall back to their canonical reads, and unused
 relations are omitted.
+Positive-stock applicability guards resolve unavailable stock to false before
+kit accounting or disposal reconciliation; the underlying quantity stays null.
 
 Entity reports declare lazy dependencies in `server/generic/entity-report/repo/`.
 Each batch memoizes dependency promises by declaration identity, preserving
