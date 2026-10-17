@@ -414,6 +414,7 @@ Rules:
         resolution: {
           reset: { defaultTrade: null },
           redundancy: "eligible",
+          inherit: { from: ["hierarchy"] },
         },
         explanation: {
           ruleId: "project.effective-default-trade",

@@ -66,6 +66,7 @@ import { projectListRows } from "~/entity/model/list-read-schema";
 import { startOperationDefinition } from "~/lib/start-operation-observability";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
+import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import {
   productAcquisitionDateFilterSql,
   productExpenseCountFilterSql,
@@ -74,7 +75,6 @@ import {
 import {
   categorySummarySql,
   categoryStockTrackingSql,
-  productStockTrackedSql,
 } from "~/server/db/computed/product-category-sql";
 import { getProductClassificationEvidence } from "~/server/db/computed/product-classification-evidence";
 import {
@@ -160,7 +160,6 @@ import {
   lockExternalIdentifierParents,
 } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
-import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 import { validateLiveInheritedPolicies } from "~/server/generic/inheritance/repo/inheritance-validation";
 import {
   listPrepare,
@@ -492,10 +491,7 @@ const productScaffold = listScaffold("product", product, {
     ),
     // ADR 0013: the undecided worklist reads the effective decision, so a
     // category default takes its members out of it.
-    stockTrackedDecided: sql`${productStockTrackedSql(
-      sql`${product.stockTracked}`,
-      sql`${product.categoryId}`,
-    )} IS NOT NULL`,
+    stockTrackedDecided: sql`${effectiveFieldSql("product", "stockTracked")} IS NOT NULL`,
     miscBucket: sql`lower(${product.name}) LIKE 'misc:%'`,
     unknownQuantityLines: hasUnknownQuantityLinesSql(product.id),
     priced: listReadValue(

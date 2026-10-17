@@ -2,10 +2,10 @@ import type { FieldResolution } from "@cubby/schemas/field-resolution";
 import type { ProductCategoryId, ProductId } from "@cubby/schemas/identifiers";
 import { and, inArray, sql } from "drizzle-orm";
 
+import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import {
   type CategoryStockTracking,
   categoryStockTrackingSql,
-  productStockTrackedSql,
 } from "~/server/db/computed/product-category-sql";
 import { type Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
@@ -85,10 +85,7 @@ export const receivableProductIds = async (
       and(
         inArray(product.id, [...new Set(ids)]),
         notDeleted(product),
-        sql`${productStockTrackedSql(
-          sql`${product.stockTracked}`,
-          sql`${product.categoryId}`,
-        )} IS DISTINCT FROM false`,
+        sql`${effectiveFieldSql("product", "stockTracked")} IS DISTINCT FROM false`,
       ),
     );
   return new Set(rows.map((row) => row.id));

@@ -25,13 +25,13 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { createAppError } from "~/server/errors/app-error";
-import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
-import { relatedSortExpression } from "~/server/generic/entity-links/repo/related-view";
 import {
   effectiveFieldSql,
   inheritedFieldOfColumn,
-} from "~/server/generic/inheritance/repo/effective-field";
+} from "~/server/db/computed/effective-field";
+import { createAppError } from "~/server/errors/app-error";
+import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
+import { relatedSortExpression } from "~/server/generic/entity-links/repo/related-view";
 import {
   hierarchyAncestorSql,
   hierarchyLevelSql,

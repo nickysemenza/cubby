@@ -11,6 +11,7 @@ import { QueryBuilder } from "drizzle-orm/pg-core";
 import { projectListRows } from "~/entity/model/list-read-schema";
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
+import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import {
   formatSearchTerm,
   getDb,
@@ -27,7 +28,6 @@ import {
 } from "~/server/domains/task/repo/helpers";
 import { withDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {

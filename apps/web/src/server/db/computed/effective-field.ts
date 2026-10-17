@@ -357,3 +357,89 @@ export const effectiveFieldInSql = (
     ) SELECT "id" FROM ${set}
   ), false)`;
 };
+
+/**
+ * The record whose decision a row's effective value is: `{ position, id }`
+ * with `position` 0 for the row's own value or the 1-based source index, or
+ * NULL when nothing decides. Provenance reads it to tell a direct value
+ * from an inherited one.
+ */
+export const effectiveSourceSql = (
+  entity: Entity,
+  field: string,
+  row?: InheritedRow,
+): SQL<{ position: number; id: string } | null> =>
+  // SAFETY: the subquery builds exactly this object, or NULL.
+  atRow(entity, row, (alias, depth) => {
+    const chain = requireChain(entity, field);
+    const decided = name(`ih${depth}s`);
+    return sql`(SELECT json_build_object('position', ${decided}.prio, 'id', ${decided}.src) FROM (SELECT 0 AS prio, ${ownValue(chain, alias)} AS v, ${ref(alias, "id")} AS src WHERE ${ownDecides(chain, alias)}${sql.join(
+      chain.from.map(
+        (source, index) =>
+          sql` UNION ALL ${sourceSql(entity, chain, source, index + 1, alias, depth)}`,
+      ),
+      sql``,
+    )}) ${decided} ORDER BY ${decided}.prio LIMIT 1)`;
+  }) as SQL<{ position: number; id: string } | null>;
+
+/**
+ * Each live record a hierarchy chain reads, the row first: `{ id, depth,
+ * value, decides }` ordered by depth, cycle-guarded and capped at
+ * `maxDepth` like the walk itself. Explanations show it as the ladder of
+ * places a value could come from. Only a chain that inherits through its
+ * hierarchy first has a ladder.
+ */
+export const inheritanceLadderSql = (
+  entity: Entity,
+  field: string,
+  rowId: SQL,
+): SQL => {
+  const chain = requireChain(entity, field);
+  const source = chain.from[0];
+  if (source?.kind !== "hierarchy")
+    throw new Error(
+      `${entity}.${field} does not inherit through its hierarchy`,
+    );
+  const { table, softDelete } = tableOf(entity);
+  const walk = "ih0l";
+  const node = "ih0m";
+  const columns = [
+    "id",
+    source.parentColumn,
+    chain.column,
+    ...(chain.mode === null ? [] : [chain.mode.column]),
+  ].filter((column, index, all) => all.indexOf(column) === index);
+  const select = sql.join(
+    columns.map((column) => ref(node, column)),
+    sql`, `,
+  );
+  return sql`(
+    WITH RECURSIVE ${name(walk)} AS (
+      SELECT ${select}, 0 AS ih_depth, ARRAY[${ref(node, "id")}] AS ih_visited
+      FROM ${table} ${name(node)} WHERE ${ref(node, "id")} = ${rowId}${live(node, softDelete)}
+      UNION ALL
+      SELECT ${select}, ${ref(walk, "ih_depth")} + 1, ${ref(walk, "ih_visited")} || ${ref(node, "id")}
+      FROM ${table} ${name(node)} JOIN ${name(walk)} ON ${ref(node, "id")} = ${ref(walk, source.parentColumn)}
+      WHERE ${ref(walk, "ih_depth")} < ${sql.raw(String(source.maxDepth))}
+        AND array_position(${ref(walk, "ih_visited")}, ${ref(node, "id")}) IS NULL${live(node, softDelete)}
+    )
+    SELECT ${ref(walk, "id")} AS id, ${ref(walk, "ih_depth")} AS depth,
+      ${ownValue(chain, walk)} AS value, ${ownDecides(chain, walk)} AS decides
+    FROM ${name(walk)}
+  )`;
+};
+
+/**
+ * Whether `field` inherits through its entity's hierarchy first, and the
+ * entity it references (null for a plain value), for readers that show a
+ * ladder; null when the field declares no such chain.
+ */
+export const hierarchyInheritance = (
+  entity: Entity,
+  field: string,
+): { reference: Entity | null } | null => {
+  const chain = chainOf(entity, field);
+  return chain?.from[0]?.kind === "hierarchy"
+    ? { reference: chain.reference }
+    : null;
+};

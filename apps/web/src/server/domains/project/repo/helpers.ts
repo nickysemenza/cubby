@@ -37,43 +37,30 @@ export type ProjectRow = {
   updatedAt: Date;
 };
 
-/** Resolve project-only inherited settings from the already-loaded tree. */
+/**
+ * A project's inherited settings, read from the projects its declared
+ * chains (`resolution.inherit`) chose when the tree loaded: `effective`
+ * for the value, `withoutOwn` for what it would inherit without its own.
+ */
 const resolveInheritedProjectSettings = (
   row: ProjectRow,
   byId: ReadonlyMap<ProjectId, ProjectParentRow>,
+  which: "effective" | "withoutOwn",
 ) => {
-  let current: ProjectParentRow | ProjectRow | undefined = row;
-  const seen = new Set<ProjectId>();
-  let assignee: ProjectParentRow | null = null;
-  let assigneeResolved = false;
-  let locations: string[] | null = null;
-  let defaultTrade: ProjectOut["defaultTrade"] = null;
-  let locationsSource: string | null = null;
-  let tradeSource: string | null = null;
-  while (current && !seen.has(current.id)) {
-    seen.add(current.id);
-    if (!assigneeResolved && current.assigneeMode === "explicit") {
-      assignee = byId.get(current.id) ?? null;
-      assigneeResolved = true;
-    }
-    if (locations === null && current.locationsMode === "explicit") {
-      locations = current.locations;
-      locationsSource = current.shortcode;
-    }
-    if (defaultTrade === null && current.defaultTrade !== null) {
-      defaultTrade = current.defaultTrade;
-      tradeSource = current.shortcode;
-    }
-    current = current.parentProjectId
-      ? byId.get(current.parentProjectId)
-      : undefined;
-  }
+  const sources = byId.get(row.id)?.sources;
+  const from = (field: keyof ProjectParentRow["sources"]) => {
+    const id = sources?.[field][which] ?? null;
+    return id === null ? undefined : byId.get(id);
+  };
+  const assignee = from("assigneeId") ?? null;
+  const locations = from("locations");
+  const trade = from("defaultTrade");
   return {
     assignee,
-    locations: locations ?? [],
-    defaultTrade,
-    locationsSource,
-    tradeSource,
+    locations: locations?.locations ?? [],
+    defaultTrade: trade?.defaultTrade ?? null,
+    locationsSource: locations?.shortcode ?? null,
+    tradeSource: trade?.shortcode ?? null,
   };
 };
 
@@ -180,17 +167,8 @@ const dbProjectToAPI = <Q extends DataQuality | undefined>({
   rowsByShortcode: ReadonlyMap<string, ProjectParentRow>;
   dataQuality: Q;
 }): Omit<ProjectOut, "dataQuality"> & { dataQuality: Q } => {
-  const resolved = resolveInheritedProjectSettings(row, rowsById);
-  const fallback = resolveInheritedProjectSettings(
-    {
-      ...row,
-      assigneeMode: "inherit",
-      assigneeId: null,
-      locationsMode: "inherit",
-      defaultTrade: null,
-    },
-    rowsById,
-  );
+  const resolved = resolveInheritedProjectSettings(row, rowsById, "effective");
+  const fallback = resolveInheritedProjectSettings(row, rowsById, "withoutOwn");
   const reference = (shortcode: string | null) =>
     shortcode
       ? {

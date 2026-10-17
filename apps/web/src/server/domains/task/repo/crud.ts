@@ -24,6 +24,7 @@ import { uniq } from "es-toolkit";
 import { type ListReadRow } from "~/entity/model/list-read-fields";
 import { selectListReadFields } from "~/entity/model/list-read-schema";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
+import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   associatePendingImages,
@@ -54,7 +55,6 @@ import {
   dependencyIdsFor,
   replaceDependencyEdges,
 } from "~/server/generic/entity-links/repo/dependency-edges";
-import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 import { validateLiveEffectiveTrades } from "~/server/generic/inheritance/repo/inheritance-validation";
 /**
  * Task CRUD operations.

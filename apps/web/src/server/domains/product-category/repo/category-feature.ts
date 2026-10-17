@@ -4,7 +4,7 @@ import {
 } from "@cubby/schemas/product-category-fields";
 import { type SQL, sql } from "drizzle-orm";
 
-import { effectiveFieldInSql } from "~/server/generic/inheritance/repo/effective-field";
+import { effectiveFieldInSql } from "~/server/db/computed/effective-field";
 
 // The feature is inlined with `sql.raw`, never bound: under drizzle's
 // relational `extras` a bound value breaks the textual identity a SELECT and

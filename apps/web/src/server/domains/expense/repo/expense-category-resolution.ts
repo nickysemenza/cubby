@@ -69,9 +69,11 @@ function redirectedCategory(
   )} ELSE ${value} END`;
 }
 
-/** Same nearest-ancestor policy for classification and navigation. An omitted
- * root builds a catalog that a bulk allocation can share across its rows. */
-export function productCategorySpendingAncestorsSql(
+/** The category mapping walk expense classification reads, with a review's
+ * draft values projected in, so it cannot use the declared chain over stored
+ * rows (`resolution.inherit`, #2616). An omitted root builds a catalog that a
+ * bulk allocation can share across its rows. */
+function productCategorySpendingAncestorsSql(
   categoryId: SQL | undefined,
   draft?: ExpenseSpendingCategoryResolutionDraft,
 ): SQL {

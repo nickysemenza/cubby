@@ -30,11 +30,11 @@ import {
 import { QueryBuilder } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
+import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { buildSearchConditions, getDb, notDeleted } from "~/server/db/helpers";
 import { project, task } from "~/server/db/schema";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { effectiveTaskDueDateSql } from "~/server/domains/task/repo/helpers";
-import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 
 import { loadProjectDateWindows, projectCompletionYear } from "./subtree";
 

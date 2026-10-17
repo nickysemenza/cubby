@@ -27,11 +27,28 @@ import {
   productCategorySummary,
 } from "@cubby/schemas/product-category-fields";
 import type { categoryMappingSchema } from "@cubby/schemas/spending-classification";
-import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  getTableColumns,
+  inArray,
+  isNotNull,
+  sql,
+} from "drizzle-orm";
 import type { z } from "zod";
 
 import type { ListReadRow } from "~/entity/model/list-read-fields";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import {
+  effectiveFieldSql,
+  inheritedFieldSql,
+  inheritedSourceSql,
+} from "~/server/db/computed/effective-field";
+import {
+  type CategoryStockTracking,
+  categoryStockTrackingSql,
+} from "~/server/db/computed/product-category-sql";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { buildPartialUpdateValues } from "~/server/db/helpers";
 import { notDeleted, unwrapDb, withTransaction } from "~/server/db/helpers";
@@ -90,14 +107,16 @@ const PRODUCT_CATEGORY_DELETE_EDGE_POLICY = {
 
 type CategoryRow = typeof productCategory.$inferSelect;
 
+type CategoryFacts = {
+  feature: string | null;
+  featureFallback: string | null;
+  featureSource: { id: string; title: string } | null;
+  stockFallback: CategoryStockTracking | null;
+};
+
 type CategoryPathRow = {
   root: string;
-  path: Array<{
-    id: string;
-    name: string;
-    feature: string | null;
-    stockTracked: boolean | null;
-  }>;
+  path: Array<{ id: string; name: string }>;
 };
 
 // The raw root name: the list's RQB data query and its count read the same
@@ -115,53 +134,31 @@ const parseFeature = (feature: string | null): ProductCategoryFeature | null =>
   productCategoryFeature.nullable().parse(feature);
 
 /**
- * Maps a category with parent links to the compact, root-first Product shape.
- * The bounded walk also keeps an accidentally-corrupt stored cycle from making
- * a product read non-terminating.
+ * Each category's inherited facts from the declared chains
+ * (`resolution.inherit`): its effective feature, the feature and stock
+ * decision it would inherit, and the categories that made them.
  */
-type CategorySummaryNode = {
-  shortcode: string;
-  name: string;
-  feature: ProductCategoryFeature | null;
-  parent?: CategorySummaryNode | null;
+const inheritedFactsFor = async (
+  db: Database | DrizzleTransaction,
+  ids: readonly string[],
+): Promise<Map<string, CategoryFacts>> => {
+  if (ids.length === 0) return new Map();
+  const featureSource = inheritedSourceSql("productCategory", "feature", "c");
+  const rows = await unwrapDb(db).execute<CategoryFacts & { id: string }>(sql`
+    SELECT c."id",
+      ${effectiveFieldSql("productCategory", "feature", "c")} AS feature,
+      ${inheritedFieldSql("productCategory", "feature", "c")} AS "featureFallback",
+      (SELECT json_build_object('id', s."shortcode", ${"title"}::text, s."name") FROM "ProductCategory" s
+        WHERE s."id" = (${featureSource}->>'id')::uuid) AS "featureSource",
+      ${categoryStockTrackingSql(sql`c."parentId"`)} AS "stockFallback"
+    FROM "ProductCategory" c
+    WHERE c."id" IN (${sql.join(
+      ids.map((id) => sql`${id}::uuid`),
+      sql`, `,
+    )})
+  `);
+  return new Map(rows.rows.map(({ id, ...facts }) => [id, facts]));
 };
-
-export const mapCategorySummary = (
-  node: CategorySummaryNode,
-): ProductCategorySummary => {
-  const path: Array<{ id: ProductCategoryShortcode; name: string }> = [];
-  let feature: ProductCategoryFeature | null = null;
-  let current: CategorySummaryNode | null | undefined = node;
-  let depth = 0;
-  while (current && depth < MAX_PRODUCT_CATEGORY_DEPTH) {
-    path.unshift({
-      id: parseShortcodeFor("productCategory", current.shortcode),
-      name: current.name,
-    });
-    feature ??= current.feature;
-    current = current.parent;
-    depth += 1;
-  }
-  return productCategorySummary.parse({
-    id: parseShortcodeFor("productCategory", node.shortcode),
-    name: node.name,
-    path,
-    feature,
-  });
-};
-
-/**
- * The binding a category resolves to: its own, else the nearest ancestor's.
- * `path` is root-first, so search from the leaf end — a nested binding
- * (Tools › Tool consumables) must win over the root's.
- */
-const closestPathFeature = (
-  path: CategoryPathRow["path"],
-): ProductCategoryFeature | null =>
-  parseFeature(
-    [...path].reverse().find(({ feature }) => feature !== null)?.feature ??
-      null,
-  );
 
 const pathsFor = async (
   db: Database | DrizzleTransaction,
@@ -170,7 +167,7 @@ const pathsFor = async (
   if (ids.length === 0) return new Map();
   const rows = await unwrapDb(db).execute<CategoryPathRow>(sql`
     WITH RECURSIVE ancestors AS (
-      SELECT c."id" AS root, c."id", c."parentId", c."shortcode", c."name", c."feature", c."stockTracked", 0 AS depth,
+      SELECT c."id" AS root, c."id", c."parentId", c."shortcode", c."name", 0 AS depth,
              ARRAY[c."id"] AS visited
       FROM "ProductCategory" c
       WHERE c."id" IN (${sql.join(
@@ -179,7 +176,7 @@ const pathsFor = async (
       )})
         AND c."deletedAt" IS NULL
       UNION ALL
-      SELECT a.root, parent."id", parent."parentId", parent."shortcode", parent."name", parent."feature", parent."stockTracked", a.depth + 1,
+      SELECT a.root, parent."id", parent."parentId", parent."shortcode", parent."name", a.depth + 1,
              a.visited || parent."id"
       FROM ancestors a
       JOIN "ProductCategory" parent ON parent."id" = a."parentId"
@@ -187,7 +184,7 @@ const pathsFor = async (
         AND a.depth < ${MAX_PRODUCT_CATEGORY_DEPTH - 1}
         AND NOT parent."id" = ANY(a.visited)
     )
-    SELECT root, json_agg(json_build_object('id', shortcode, 'name', name, 'feature', feature, 'stockTracked', "stockTracked") ORDER BY depth DESC) AS path
+    SELECT root, json_agg(json_build_object('id', shortcode, 'name', name) ORDER BY depth DESC) AS path
     FROM ancestors
     GROUP BY root
   `);
@@ -269,14 +266,11 @@ const spendingCategoryResolution = (
 
 const categoryResolutions = (
   row: CategoryRow,
-  path: CategoryPathRow["path"],
+  facts: CategoryFacts | undefined,
 ): FieldResolutions => {
-  const source = path
-    .slice(0, -1)
-    .reverse()
-    .find((ancestor) => ancestor.feature !== null);
   const storedValue = parseFeature(row.feature);
-  const fallbackValue = parseFeature(source?.feature ?? null);
+  const fallbackValue = parseFeature(facts?.featureFallback ?? null);
+  const source = facts?.featureSource ?? null;
   const value = storedValue ?? fallbackValue;
   return {
     feature: {
@@ -287,13 +281,13 @@ const categoryResolutions = (
       source:
         storedValue !== null
           ? "Permanent feature binding"
-          : (source?.name ?? "No ancestor feature"),
+          : (source?.title ?? "No ancestor feature"),
       sourceEntity:
         storedValue === null && source
           ? {
               entityKind: "productCategory",
               entityId: source.id,
-              name: source.name,
+              name: source.title,
             }
           : null,
       matchesFallback: value === fallbackValue,
@@ -301,26 +295,7 @@ const categoryResolutions = (
     },
     stockTracked: resolveStockTrackingField(
       row.stockTracked,
-      (() => {
-        const ancestors = path.slice(0, -1).reverse();
-        const nearest = ancestors.find(
-          (ancestor) => ancestor.stockTracked !== null,
-        );
-        return ancestors.length === 0
-          ? null
-          : {
-              id: nearest?.id ?? null,
-              name: nearest?.name ?? null,
-              value: nearest?.stockTracked ?? null,
-              evaluation: ancestors.map((ancestor) => ({
-                entityKind: "productCategory" as const,
-                entityId: ancestor.id,
-                name: ancestor.name,
-                value: ancestor.stockTracked,
-                assigned: ancestor.stockTracked !== null,
-              })),
-            };
-      })(),
+      facts?.stockFallback ?? null,
       "category decision",
     ),
   };
@@ -336,9 +311,8 @@ const hydrateRead = async (
     load: () =>
       Promise.all([
         loadCategoryConnections(db, ids),
-        loadListGroup(projection, ["relations", "derived"], () =>
-          pathsFor(db, ids),
-        ),
+        loadListGroup(projection, "relations", () => pathsFor(db, ids)),
+        loadListGroup(projection, "derived", () => inheritedFactsFor(db, ids)),
         loadListGroup(projection, "derived", () => productCountsFor(db, ids)),
         lookupEntityReferences(
           db,
@@ -355,7 +329,16 @@ const hydrateRead = async (
       ]),
     mapRow: (
       row,
-      { loaded: [mappings, paths, productCounts, spendingCategories, parents] },
+      {
+        loaded: [
+          mappings,
+          paths,
+          facts,
+          productCounts,
+          spendingCategories,
+          parents,
+        ],
+      },
     ) => {
       const path = paths?.get(row.id) ?? [];
       const parent = row.parentId ? parents?.get(row.parentId) : undefined;
@@ -385,7 +368,7 @@ const hydrateRead = async (
       if (wantsListGroup(projection, "derived"))
         Object.assign(result, {
           fieldResolutions: {
-            ...categoryResolutions(row, path),
+            ...categoryResolutions(row, facts?.get(row.id)),
             effectiveSpendingCategory: spendingCategoryResolution(
               mappings.get(row.id),
             ),
@@ -711,26 +694,23 @@ const refuseBoundCategories = async (
     throw new Error("A category with a behavior binding cannot be deleted");
 };
 
+// A category's effective feature (`resolution.inherit`), read wherever the
+// list SELECTs categories.
+const effectiveFeature = effectiveFieldSql<string | null>(
+  "productCategory",
+  "feature",
+);
+
 /** The inherited behavior binding for one category; null means no binding. */
 export async function getCategoryFeature(
   db: Database | DrizzleTransaction,
   categoryId: ProductCategoryId | null,
 ): Promise<ProductCategoryFeature | null> {
   if (!categoryId) return null;
-  const rows = await unwrapDb(db).execute<{
-    feature: ProductCategoryFeature | null;
-  }>(sql`
-    WITH RECURSIVE ancestors AS (
-      SELECT c."id", c."parentId", c."feature", 0 AS depth, ARRAY[c."id"] AS visited
-      FROM "ProductCategory" c WHERE c."id" = ${categoryId}::uuid AND c."deletedAt" IS NULL
-      UNION ALL
-      SELECT parent."id", parent."parentId", parent."feature", a.depth + 1, a.visited || parent."id"
-      FROM ancestors a JOIN "ProductCategory" parent ON parent."id" = a."parentId"
-      WHERE parent."deletedAt" IS NULL AND a.depth < ${MAX_PRODUCT_CATEGORY_DEPTH - 1}
-        AND NOT parent."id" = ANY(a.visited)
-    ) SELECT "feature" FROM ancestors WHERE "feature" IS NOT NULL ORDER BY depth LIMIT 1
-  `);
-  return rows.rows[0]?.feature ?? null;
+  const rows = await unwrapDb(db).execute<{ feature: string | null }>(
+    sql`SELECT ${effectiveFieldSql("productCategory", "feature", { id: sql`${categoryId}::uuid` })} AS feature`,
+  );
+  return parseFeature(rows.rows[0]?.feature ?? null);
 }
 
 /** SQL predicate: true only when the closest feature binding equals `feature`. */
@@ -767,7 +747,7 @@ export async function resolveProductCategory(
 
 export async function listProductCategoryTreeOptions(db: Database) {
   const rows = await unwrapDb(db)
-    .select()
+    .select({ ...getTableColumns(productCategory), effectiveFeature })
     .from(productCategory)
     .where(notDeleted(productCategory))
     .orderBy(asc(productCategory.sortOrder), asc(productCategory.name));
@@ -789,7 +769,7 @@ export async function listProductCategoryTreeOptions(db: Database) {
       ancestorIds: path
         .slice(0, -1)
         .map(({ id }) => parseShortcodeFor("productCategory", id)),
-      feature: closestPathFeature(path),
+      feature: parseFeature(row.effectiveFeature),
     };
   });
 }
@@ -812,7 +792,7 @@ export async function loadCategorySummaries(
   db: Database | DrizzleTransaction,
 ): Promise<Map<ProductCategoryId, ProductCategorySummary>> {
   const rows = await unwrapDb(db)
-    .select()
+    .select({ ...getTableColumns(productCategory), effectiveFeature })
     .from(productCategory)
     .where(notDeleted(productCategory));
   const paths = await pathsFor(
@@ -829,7 +809,7 @@ export async function loadCategorySummaries(
           id: parseShortcodeFor("productCategory", id),
           name,
         })),
-        feature: closestPathFeature(path),
+        feature: parseFeature(row.effectiveFeature),
       });
       return [parseEntityId("productCategory", row.id), summary] as const;
     }),

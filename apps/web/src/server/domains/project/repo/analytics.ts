@@ -12,12 +12,12 @@ import type { ExpenseId, ProjectId } from "@cubby/schemas/identifiers";
 import { and, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
+import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { getDb, notDeleted, uuidArrayParam } from "~/server/db/helpers";
 import { task } from "~/server/db/schema";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { effectiveTaskDueDateSql } from "~/server/domains/task/repo/helpers";
 import { dependencyIdsFor } from "~/server/generic/entity-links/repo/dependency-edges";
-import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 
 import {
   EMPTY_PROJECT_CONTENT_DATES,
