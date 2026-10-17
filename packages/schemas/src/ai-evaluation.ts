@@ -1,7 +1,6 @@
 import { assessmentChildHandle } from "./assessment-reference";
 import { workflowRecoveryProgress } from "./workflow-runs";
 import { z } from "zod";
-import { executionAuthorizationRef } from "./execution-authorization";
 
 export const SUGGESTION_AUTO_APPLY_THRESHOLD = 0.85;
 
@@ -119,7 +118,6 @@ export const aiRefreshRunInput = z.object({
   kind: z.literal("ai_refresh"),
   discovery: z.boolean().default(false),
   activation: aiRefreshActivation,
-  executionAuthorization: executionAuthorizationRef.optional(),
   emails: z
     .array(z.object({ emailId: z.uuid(), checksum: z.string().nullable() }))
     .max(200)

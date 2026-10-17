@@ -9,7 +9,6 @@ import {
   type ReclassifyEmailsOut,
   type RerunEmailPreviewOut,
 } from "@cubby/schemas/email-actions";
-import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
   mailTriagePreviewInput,
   mailTriagePreviewOut,
@@ -24,7 +23,6 @@ import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { listAiUsageForRun } from "~/server/ai/repo/ai-usage";
 import type { Database } from "~/server/db";
 import { normalizeMessage } from "~/server/domains/purchase-import/repo/gmail/normalize";
-import { latestExecutionAuthorization } from "~/server/domains/run/repo/execution-context";
 import { type WorkflowLauncher } from "~/server/workflows/runs/launcher";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
@@ -33,7 +31,6 @@ import { recordEmailCandidateObservation } from "../../repo/gmail/observations";
 import { gmailProviderForUser } from "../../repo/gmail/provider";
 import {
   finishReclassifyRun,
-  newestRunId,
   ownedEmailRows,
   ownedEmails,
   startPreparedReclassifyRuns,
@@ -59,49 +56,6 @@ type IngestPorts = Pick<
   Parameters<typeof ingestGmailMessages>[2],
   "triage" | "relevance" | "candidateChoice" | "storage"
 >;
-/** Backfill, else continuous; an expired or revoked approval is unusable, not fatal. */
-export async function mailboxApproval(
-  db: Database,
-  owner: { userId: ActorContext["userId"]; ledgerPartyId: string },
-  mailboxId: string,
-  options: { minimumBudgetMicroUSD?: number; newest?: boolean } = {},
-) {
-  const refused: string[] = [];
-  const candidates: Awaited<ReturnType<typeof latestExecutionAuthorization>>[] =
-    [];
-  for (const kind of ["backfill", "continuous"] as const) {
-    try {
-      const ref = await latestExecutionAuthorization(
-        db,
-        {
-          ...owner,
-          ledgerPartyId: parseEntityId("ledgerParty", owner.ledgerPartyId),
-        },
-        mailboxId,
-        kind,
-        options.minimumBudgetMicroUSD,
-      );
-      if (ref && !options.newest) return ref;
-      if (ref) candidates.push(ref);
-    } catch (error) {
-      refused.push(
-        `${kind}: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-  }
-  if (candidates.length) {
-    const latestId = await newestRunId(
-      db,
-      candidates.flatMap((ref) => (ref ? [ref.runId] : [])),
-    );
-    const selected = candidates.find((ref) => ref?.runId === latestId);
-    if (selected) return selected;
-  }
-  throw new Error(
-    `Reclassify needs a usable Gmail execution approval for mailbox ${mailboxId}${refused.length ? ` (${refused.join("; ")})` : ""}.`,
-  );
-}
-
 /** Freeze member-requested work; Gmail and model IO belong to the Workflow. */
 export async function reclassifyEmails(
   db: Database,
@@ -117,18 +71,7 @@ export async function reclassifyEmails(
       (email) => `${email.ledgerPartyId}\u0000${email.mailboxId}`,
     ),
   );
-  // Settle every mailbox's authority before creating any requested work.
-  const batches = await Promise.all(
-    groups.map(async (group) => ({
-      group,
-      approval: await mailboxApproval(
-        db,
-        { userId: actor.userId, ledgerPartyId: group[0]!.ledgerPartyId },
-        group[0]!.mailboxId,
-      ),
-    })),
-  );
-  const created = await startPreparedReclassifyRuns(db, actor, batches);
+  const created = await startPreparedReclassifyRuns(db, actor, groups);
   for (const item of created)
     await launchWorkflowRun(
       db,
@@ -156,17 +99,7 @@ export async function rerunEmailPreview(
     throw new Error("Email evidence changed; refresh before rerunning.");
   if (email.classification !== "related")
     throw new Error("Only a related Email has an extraction preview.");
-  const created = await startReclassifyRun(
-    db,
-    actor,
-    "preview",
-    [email],
-    await mailboxApproval(
-      db,
-      { userId: actor.userId, ledgerPartyId: email.ledgerPartyId },
-      email.mailboxId,
-    ),
-  );
+  const created = await startReclassifyRun(db, actor, "preview", [email]);
   try {
     const preview = await extractEmailCandidatePreview(
       db,
@@ -237,17 +170,9 @@ export async function previewMailTriage(
       `No live Gmail Email owned by this member: ${input.mailboxId} ${input.messageId}`,
     );
   const { email } = row;
-  const created = await startReclassifyRun(
-    db,
-    actor,
-    "triage_preview",
-    [email],
-    await mailboxApproval(
-      db,
-      { userId: actor.userId, ledgerPartyId: email.ledgerPartyId },
-      email.mailboxId,
-    ),
-  );
+  const created = await startReclassifyRun(db, actor, "triage_preview", [
+    email,
+  ]);
   const startedAt = Date.now();
   try {
     const provider = await gmailProviderForUser(

@@ -3,10 +3,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  executionAuthorizationInput,
-  executionAuthorizationReceipt,
-} from "@cubby/schemas/execution-authorization";
-import {
   parseEntityId,
   runEntityId,
   runShortcode,
@@ -32,7 +28,6 @@ import {
 } from "tooling/purchase-agent-script";
 import { TEST_HOME_SHORTCODE, withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { z } from "zod";
 
 import { GMAIL_READONLY_SCOPE } from "~/lib/google-auth-constants";
 import { setCfEnv } from "~/server/cf-env";
@@ -44,14 +39,12 @@ import {
   imageProcessingJob,
   importSourceOrder,
   inventoryEntry,
-  mailboxCursor,
   email as emailTable,
   orderMail,
   photoGroupProposal,
   product,
   purchase,
   run as runTable,
-  runOperation,
   session,
 } from "~/server/db/schema";
 import { updateImageProcessingSettings } from "~/server/domains/image-processing/service/image-processing-maintenance";
@@ -61,7 +54,7 @@ import {
   resolvePhotoGroupConcern,
 } from "~/server/domains/photo-import/repo/run/proposals";
 import { commitPhotoGroup } from "~/server/domains/photo-import/repo/run/writer";
-import { issueExecutionAuthorization } from "~/server/domains/run/repo/execution-authorization";
+import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createImageFixture,
@@ -77,7 +70,7 @@ import {
 import { startMailImport } from "./mail-import-run";
 import {
   authorizePurchaseAgent,
-  authorizeSyntheticBackfill,
+  enableSyntheticMailImport,
   startScenarioHarness,
   waitFor,
   workerdDiagnostic,
@@ -574,7 +567,7 @@ describe("current purchase-agent system boundaries", () => {
       "2026-09-21T12:00:00Z",
       "Synthetic service shop purchase inquiry. Exact order, itemization, date and amount absent.",
     );
-    await authorizeSyntheticBackfill(ctx, party.id, mailboxId);
+    await enableSyntheticMailImport(ctx, mailboxId);
     const events: PurchaseAgentEvent[] = [];
     const queue = {
       send: async (event: PurchaseAgentEvent) => {
@@ -863,7 +856,7 @@ describe("current purchase-agent system boundaries", () => {
     ).toHaveLength(2);
   }, 60_000);
 
-  it("provider discovery: classifies archived Gmail without Pi, then imports only the explicitly selected Email", async () => {
+  it("provider discovery: searches the known Vendor's mail and imports only the related Email automatically", async () => {
     const database = getDb(ctx.db);
     const mailboxId = "synthetic-google-user";
     const sourceText =
@@ -887,30 +880,7 @@ describe("current purchase-agent system boundaries", () => {
       scope: GMAIL_READONLY_SCOPE,
       accessTokenExpiresAt: new Date(Date.now() + 3_600_000),
     });
-    const approve = (
-      scope: z.input<typeof executionAuthorizationInput>["scope"],
-      period: "lifetime" | "utc_calendar_month",
-    ) =>
-      issueExecutionAuthorization(
-        ctx.db,
-        ctx.actor,
-        executionAuthorizationInput.parse({
-          kind: "execution_authorization",
-          version: 1,
-          owner: { userId: ctx.actor.userId, ledgerPartyId: party.id },
-          scope,
-          meteredBudget: { period, limitMicroUSD: 1_000_000 },
-          expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
-        }),
-      );
-    const approval = await approve(
-      { kind: "backfill", mailboxId, discovery: "all_history" },
-      "lifetime",
-    );
-    const continuousApproval = await approve(
-      { kind: "continuous", mailboxId, discovery: "new_mail" },
-      "utc_calendar_month",
-    );
+    await setMailImport(ctx.db, { mailboxId, enabled: true });
     const gmailMessage = (
       id: string,
       thread: string,
@@ -1055,6 +1025,7 @@ describe("current purchase-agent system boundaries", () => {
         messages: [unrelated, original],
         pages: [[unrelated.id], [unrelated.id, original.id]],
         history: [],
+        query: '("example.test") -in:spam -in:trash',
       },
     });
 
@@ -1100,79 +1071,11 @@ describe("current purchase-agent system boundaries", () => {
             eq(runTable.ledgerPartyId, party.id),
           ),
         );
-    await waitFor(
-      async () => {
-        const rows = await database
-          .select()
-          .from(emailTable)
-          .where(eq(emailTable.mailboxId, mailboxId));
-        return (
-          rows.length === 2 &&
-          rows.every((email) => email.classification !== null)
-        );
-      },
-      "Classification-only discovery did not record both Emails.",
-      30_000,
-    );
-    expect(await mailRuns()).toEqual([]);
-    const [selectedEmail] = await database
-      .select()
-      .from(emailTable)
-      .where(
-        and(
-          eq(emailTable.mailboxId, mailboxId),
-          eq(emailTable.messageId, original.id),
-        ),
-      );
-    if (!selectedEmail?.orderMailId)
-      throw new Error("Synthetic selected Email missing");
-    const origin = scenario.origin;
-    const emailImport = (expectedChecksum: string) =>
-      fetch(`${origin}/api/v1/purchaseImport/emailImport`, {
-        method: "POST",
-        headers: {
-          cookie: `better-auth.session_token=${encodeURIComponent(`${token}.${signature}`)}`,
-          origin,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          items: [{ id: selectedEmail.shortcode, expectedChecksum }],
-        }),
-      });
-    const refusal = async (response: Response) => ({
-      ok: response.ok,
-      body: await response.text(),
-    });
-    // A stale selection and an original whose content is gone are refused
-    // before any Run is admitted.
-    expect(await refusal(await emailImport("b".repeat(64)))).toEqual({
-      ok: false,
-      body: expect.stringMatching(/changed/iu),
-    });
-    const [retainedOriginal] = await database
-      .select({ content: orderMail.content })
-      .from(orderMail)
-      .where(eq(orderMail.id, selectedEmail.orderMailId));
-    if (!retainedOriginal)
-      throw new Error("Synthetic retained original missing");
-    await database
-      .update(orderMail)
-      .set({ content: { snippet: null, bodyText: null, bodyHtml: null } })
-      .where(eq(orderMail.id, selectedEmail.orderMailId));
-    expect(await refusal(await emailImport(selectedEmail.checksum))).toEqual({
-      ok: false,
-      body: expect.stringMatching(/content.*unavailable/iu),
-    });
-    await database
-      .update(orderMail)
-      .set({ content: retainedOriginal.content })
-      .where(eq(orderMail.id, selectedEmail.orderMailId));
-    expect(await mailRuns()).toEqual([]);
-    const manualResponse = await emailImport(selectedEmail.checksum);
-    expect(manualResponse.status).toBe(200);
+    // Discovery pages the Vendor's website-domain search, classifies both
+    // messages and admits only the related original to Pi.
     await waitFor(
       async () => (await mailRuns()).length === 1,
-      "Explicit Email import was not admitted.",
+      "Automatic discovery did not admit the related Email.",
       30_000,
     );
     const [admitted] = await mailRuns();
@@ -1180,7 +1083,13 @@ describe("current purchase-agent system boundaries", () => {
     await waitForStatus(admitted!.id, "completed");
     expect(await scenario.violations()).toEqual([]);
     const importRun = await runRow(admitted!.id);
-    expect(importRun.parentRunId).toBeNull();
+    expect(importRun).toMatchObject({
+      trigger: "discovery",
+      cause: "source_discovered",
+    });
+    expect((await runRow(importRun.parentRunId!)).purpose).toBe(
+      "mail_discovery",
+    );
     const [discoveryRow] = await database
       .select()
       .from(runTable)
@@ -1194,53 +1103,21 @@ describe("current purchase-agent system boundaries", () => {
       .limit(1);
     if (!discoveryRow) throw new Error("Synthetic discovery missing");
     await waitFor(
-      async () => {
-        const [cursor] = await database
-          .select()
-          .from(mailboxCursor)
-          .where(
-            and(
-              eq(mailboxCursor.ledgerPartyId, party.id),
-              eq(mailboxCursor.mailboxId, mailboxId),
-            ),
-          );
-        return (
-          cursor?.coverage?.broad.completed === true &&
-          (await runRow(discoveryRow.id)).status === "completed"
-        );
-      },
-      "Gmail Workflow did not checkpoint complete broad pagination.",
+      async () =>
+        (
+          await database
+            .select()
+            .from(runTable)
+            .where(eq(runTable.purpose, "mail_discovery"))
+        ).every((row) => row.status === "completed"),
+      "Gmail discovery passes did not complete.",
       30_000,
     );
     const discovery = await runRow(discoveryRow.id);
     expect(discovery.purpose).toBe("mail_discovery");
     expect(mailboxDiscoveryInput.parse(discovery.input).executionPolicy).toBe(
-      "classification_only",
+      "import",
     );
-    const discoveryAuthorization = mailboxDiscoveryInput.parse(
-      discovery.input,
-    ).executionAuthorization;
-    if (!discoveryAuthorization)
-      throw new Error("Synthetic discovery authorization missing");
-    const discoveryApproval = await runRow(discoveryAuthorization.runId);
-    const discoverySnapshot = executionAuthorizationInput.parse(
-      discoveryApproval.input,
-    );
-    expect(discoverySnapshot.owner).toEqual({
-      userId: ctx.actor.userId,
-      ledgerPartyId: party.id,
-    });
-    expect(discoverySnapshot.scope).toEqual({
-      kind: "backfill",
-      mailboxId,
-      discovery: "all_history",
-    });
-    expect(discoveryAuthorization.approvalFingerprint).toBe(
-      await sha256Hex(JSON.stringify(discoverySnapshot)),
-    );
-    expect(
-      mailResearchRunInput.parse(importRun.input).executionAuthorization,
-    ).toBeUndefined();
     expect(await mailRuns()).toHaveLength(1);
 
     // Only the related original is retained; the unrelated message keeps
@@ -1248,7 +1125,6 @@ describe("current purchase-agent system boundaries", () => {
     const retained = await database.select().from(orderMail);
     expect(retained).toHaveLength(1);
     expect(retained[0]).toMatchObject({
-      id: selectedEmail.orderMailId,
       ledgerPartyId: party.id,
       content: { bodyText: sourceText },
     });
@@ -1303,26 +1179,8 @@ describe("current purchase-agent system boundaries", () => {
     );
     expect(await database.select().from(inventoryEntry)).toEqual([]);
 
-    // Provider traffic: a profile baseline, then both pages of the
-    // Spam/Trash-excluded listing; the continuous grant resumes from it.
-    await waitFor(
-      async () =>
-        google
-          .requests()
-          .some(
-            (request) =>
-              request.path.endsWith("/history") &&
-              request.query.startHistoryId === "100",
-          ),
-      "Separately authorized continuous discovery did not reach the saved history baseline.",
-    );
-    const [historyRun] = await database
-      .select()
-      .from(runTable)
-      .where(eq(runTable.clientKey, `mailbox-continuation:${discovery.id}`));
-    expect(
-      mailboxDiscoveryInput.parse(historyRun?.input).executionAuthorization,
-    ).toEqual(continuousApproval);
+    // Provider traffic: a profile baseline, then both pages of the Vendor's
+    // Spam/Trash-excluded domain search.
     const requests = google.requests();
     const baselineIndex = requests.findIndex((request) =>
       request.path.endsWith("/profile"),
@@ -1336,7 +1194,7 @@ describe("current purchase-agent system boundaries", () => {
         .filter(
           (request) =>
             request.path.endsWith("/messages") &&
-            request.query.q === "-in:spam -in:trash",
+            request.query.q === '("example.test") -in:spam -in:trash',
         )
         .map((request) => request.query.pageToken ?? null),
     ).toEqual([null, "synthetic-page-1"]);
@@ -1356,25 +1214,14 @@ describe("current purchase-agent system boundaries", () => {
         .map((entry) => entry.matched),
     ).toEqual(["unrelated", "related"]);
 
-    // Member-selected Luna leaves the discovery grant unspent.
-    expect(importRun).toMatchObject({
-      trigger: "foreground",
-      cause: "member_request",
-    });
-    const reservations = (
-      await database
-        .select({ result: runOperation.result })
-        .from(runOperation)
-        .where(
-          and(
-            eq(runOperation.runId, approval.runId),
-            eq(runOperation.kind, "execution_authorization"),
-          ),
-        )
-    )
-      .map(({ result }) => executionAuthorizationReceipt.parse(result))
-      .filter((receipt) => receipt.kind === "metered_reservation");
-    expect(reservations).toEqual([]);
+    // Targeted pages interleave with new mail from the saved baseline.
+    expect(
+      requests.some(
+        (request) =>
+          request.path.endsWith("/history") &&
+          request.query.startHistoryId === "100",
+      ),
+    ).toBe(true);
   }, 120_000);
 });
 

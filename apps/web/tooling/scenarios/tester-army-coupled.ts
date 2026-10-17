@@ -20,7 +20,7 @@ import {
 } from "~/server/db/schema";
 import {
   authorizePurchaseAgent,
-  authorizeSyntheticBackfill,
+  enableSyntheticMailImport,
 } from "~/server/domains/purchase-import/repo/purchase-agent-workerd.fixtures";
 import type {
   PhotoImportFinalizeInput,
@@ -73,9 +73,8 @@ export async function seedCoupledJourneys(
   if (!member) throw new Error("Synthetic member party was not seeded");
   // MCP delegation and photo grouping both require the member's agent grant.
   await authorizePurchaseAgent(db, userId);
-  await authorizeSyntheticBackfill(
+  await enableSyntheticMailImport(
     { db, actor: buildKernelContext(db, testUserId(userId)).actorContext },
-    parseEntityId("ledgerParty", member.id),
     COUPLED_MAILBOX_ID,
   );
 

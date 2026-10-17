@@ -1,4 +1,3 @@
-import { executionAuthorizationInput } from "@cubby/schemas/execution-authorization";
 import { runShortcode, userId } from "@cubby/schemas/identifiers";
 import { mailboxDiscoveryInput } from "@cubby/schemas/mailbox-research";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
@@ -11,7 +10,7 @@ import { type JSONType, z } from "zod";
 import { setCfEnv } from "~/server/cf-env";
 import { account, user } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
-import { runApproval, run as runTable } from "~/server/db/schema";
+import { appSettings, runApproval, run as runTable } from "~/server/db/schema";
 import { retainedMailFixture } from "~/server/domains/purchase-import/operations/order-import.fixtures";
 import { admitMailImport } from "~/server/domains/purchase-import/repo/mail-import-run";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
@@ -163,10 +162,10 @@ describe("Run lifecycle through MCP", () => {
   });
 });
 
-// Failure modes: paid execution approval or discovery is unreachable through
-// MCP; an MCP caller without a member link, or naming a mailbox it does not
-// own, writes a grant or launches discovery.
-describe("Mail execution approval and discovery through MCP", () => {
+// Failure modes: the Mail import switch or discovery is unreachable through
+// MCP; an MCP caller without a member link, naming a mailbox it does not own,
+// or acting as a delegated agent turns import on or launches discovery.
+describe("Mail import switch and discovery through MCP", () => {
   const ctx = withTestDb("mcp");
   const mailboxId = "synthetic-mcp-approval-mailbox";
   const launched: WorkflowRunParams[] = [];
@@ -218,21 +217,14 @@ describe("Mail execution approval and discovery through MCP", () => {
       userId: ctx.actor.userId,
       updatedAt: new Date(),
     });
-  const approval = (mailbox = mailboxId) => ({
-    action: "approve_execution",
-    scope: {
-      kind: "pilot",
-      mailboxId: mailbox,
-      discovery: "targeted",
-      candidateLimit: 60,
-      productLimit: 10,
-    },
-    meteredBudget: { period: "lifetime", limitMicroUSD: 10_000_000 },
-    expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+  const enable = (mailbox = mailboxId) => ({
+    action: "set_mail_import",
+    mailboxId: mailbox,
+    enabled: true,
   });
 
-  it("issues an execution authorization and starts discovery for an owned mailbox", async () => {
-    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+  it("turns Mail import on and starts discovery for an owned mailbox", async () => {
+    await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic MCP approval member",
       kind: "member",
       userId: ctx.actor.userId,
@@ -242,17 +234,21 @@ describe("Mail execution approval and discovery through MCP", () => {
       name: "Synthetic MCP discovery vendor",
     });
     expect(
-      (await call("imports_read", { action: "execution_mailboxes" }))
-        .structuredContent,
-    ).toEqual({ mailboxes: [{ mailboxId }] });
-    const approved = await call("run", approval());
-    expect(approved.isError).not.toBe(true);
-    const [root] = await getDb(ctx.db).select().from(runTable);
-    expect(executionAuthorizationInput.parse(root?.input)).toMatchObject({
-      owner: { userId: ctx.actor.userId, ledgerPartyId: party.id },
-      scope: { kind: "pilot", mailboxId },
+      (await call("imports_read", { action: "mail_import" })).structuredContent,
+    ).toMatchObject({ mailboxes: [{ mailboxId, enabled: false }] });
+    expect(
+      (
+        await call("run", {
+          action: "discover_mail",
+          mailboxId,
+        })
+      ).isError,
+    ).toBe(true);
+    const enabled = await call("run", enable());
+    expect(enabled.isError).not.toBe(true);
+    expect(enabled.structuredContent).toMatchObject({
+      mailboxes: [{ mailboxId, enabled: true }],
     });
-    expect(approved.structuredContent).toMatchObject({ runId: root?.id });
 
     const discovered = await call("run", {
       action: "discover_mail",
@@ -267,13 +263,13 @@ describe("Mail execution approval and discovery through MCP", () => {
       .where(eq(runTable.purpose, "mail_discovery"));
     expect(mailboxDiscoveryInput.parse(discovery?.input)).toMatchObject({
       mailboxId,
-      executionAuthorization: approved.structuredContent,
+      executionPolicy: "import",
     });
   });
 
   it("refuses a caller without a member link and a mailbox the member does not own", async () => {
     await connect(mailboxId);
-    expect((await call("run", approval())).isError).toBe(true);
+    expect((await call("run", enable())).isError).toBe(true);
     expect(
       (await call("run", { action: "discover_mail", mailboxId })).isError,
     ).toBe(true);
@@ -283,7 +279,7 @@ describe("Mail execution approval and discovery through MCP", () => {
       userId: ctx.actor.userId,
     });
     expect(
-      (await call("run", approval("synthetic-unowned-mailbox"))).isError,
+      (await call("run", enable("synthetic-unowned-mailbox"))).isError,
     ).toBe(true);
     expect(
       (
@@ -319,17 +315,12 @@ describe("Mail execution approval and discovery through MCP", () => {
     });
   };
 
-  it("refuses a Run-delegated agent granting a paid execution budget", async () => {
+  it("refuses a Run-delegated agent turning on Mail import", async () => {
     const run = await agentRun("mail_import");
     await connect(mailboxId);
-    const refused = await call("run", approval(), run.id);
+    const refused = await call("run", enable(), run.id);
     expect(refused.isError).toBe(true);
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(runTable)
-        .where(eq(runTable.purpose, "background")),
-    ).toEqual([]);
+    expect(await getDb(ctx.db).select().from(appSettings)).toEqual([]);
   });
 
   // Replaces the old "lifecycle refuses approve" assertion: approval is now an

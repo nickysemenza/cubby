@@ -10,6 +10,7 @@ import { workflowRecoveryProgress } from "@cubby/schemas/workflow-runs";
 import { z } from "zod";
 
 import { findErrorCause } from "~/lib/error-diagnostics";
+import { AiBudgetExhaustedError, readAiBudget } from "~/server/ai/budget";
 import {
   aiEvaluationProgress,
   claimAiEvaluation,
@@ -19,7 +20,6 @@ import {
   PENDING_AI_STATES,
 } from "~/server/ai/repo/ai-evaluation-requests";
 import type { Database } from "~/server/db";
-import { reclassificationSnapshot } from "~/server/domains/purchase-import/repo/gmail/reclassification-work";
 import {
   executeReclassificationTarget,
   type ReclassificationPorts,
@@ -28,7 +28,7 @@ import {
   aiEvaluationsForRun,
   completeRecoveredAiWorkRun,
   guardAiEvaluationAttempt,
-  pauseRunForExecutionAuthorization,
+  pauseRunForAiWork,
   readAiEvaluation,
   readAiEvaluationReceipt,
   readRun,
@@ -39,7 +39,6 @@ import {
   type AiEvaluationRow,
   type RunRow,
 } from "~/server/domains/run/repo/ai-work-state";
-import { ExecutionBudgetError } from "~/server/domains/run/repo/execution-authorization";
 import { buildCrudServices } from "~/server/http/request-context";
 import { isWorkflowRunPurpose } from "~/server/workflows/runs/contract";
 import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
@@ -182,14 +181,10 @@ export async function executeAiWorkTarget(
     );
     const budget = findErrorCause(
       error,
-      (cause): cause is ExecutionBudgetError =>
-        cause instanceof ExecutionBudgetError,
+      (cause): cause is AiBudgetExhaustedError =>
+        cause instanceof AiBudgetExhaustedError,
     );
-    const unauthorized =
-      Boolean(budget) ||
-      /execution approval|execution authorization|approval.*(?:expired|revoked|budget)|mailbox.*connected/i.test(
-        message,
-      );
+    const unauthorized = Boolean(budget) || /mailbox.*connected/i.test(message);
     const paused = (await readRunStatus(db, item.runId)) === "paused";
     const fenced = /attempt is obsolete|generation or Run is obsolete/.test(
       message,
@@ -213,16 +208,12 @@ export async function executeAiWorkTarget(
               : "retry_wait",
         attempts: waiting ? item.attempts - 1 : item.attempts,
         error: message,
-        nextAttemptAt: new Date(
-          Date.now() + 60_000 * Math.max(1, item.attempts),
-        ),
-        ...(budget && item.executionKind === "mail_reclassify"
-          ? { minimumBudgetMicroUSD: budget.minimumBudgetMicroUSD }
-          : {}),
+        nextAttemptAt: budget
+          ? new Date(budget.status.windowEnd)
+          : new Date(Date.now() + 60_000 * Math.max(1, item.attempts)),
       },
     );
-    if (unauthorized)
-      await pauseRunForExecutionAuthorization(db, item.runId, message);
+    if (unauthorized) await pauseRunForAiWork(db, item.runId, message);
   }
   const continuations = z
     .object({ continuationRunIds: z.array(z.uuid()) })
@@ -359,6 +350,11 @@ function aiWorkProgress(
 }
 
 /** Existing catch-up/nightly callers repair lost dispatch independently of refresh activation. */
+const aiBudgetSpent = async (db: Database) => {
+  const budget = await readAiBudget(db);
+  return budget.spentUsd >= budget.limitUsd;
+};
+
 export async function recoverManualAiWork(
   db: Database,
   launcher: WorkflowLauncher = productionWorkflowLauncher,
@@ -434,35 +430,13 @@ export async function recoverManualAiWork(
       }
       continue;
     }
-    if (owner.status === "paused_auth" && owner.purpose === "mail_reclassify") {
-      const { mailboxApproval } =
-        await import("~/server/domains/purchase-import/service/gmail/reclassify");
-      const { mailReclassifyRunInput } =
-        await import("@cubby/schemas/run-fields");
-      const input = mailReclassifyRunInput.parse(owner.input);
-      try {
-        if (!owner.ledgerPartyId) continue;
-        const minimumBudgetMicroUSD = Math.max(
-          0,
-          ...items
-            .filter((item) => PENDING_AI_STATES.includes(item.state))
-            .map(
-              (item) =>
-                reclassificationSnapshot.parse(item.snapshot)
-                  .minimumBudgetMicroUSD ?? 0,
-            ),
-        );
-        await mailboxApproval(
-          db,
-          { userId: owner.actorUserId, ledgerPartyId: owner.ledgerPartyId },
-          input.mailboxId,
-          { minimumBudgetMicroUSD, newest: true },
-        );
-      } catch {
-        // SILENT: authority waits for a later approval wake; retained work stays paused.
-        continue;
-      }
-    }
+    // A budget pause resumes only once a later window has budget.
+    if (
+      owner.status === "paused_auth" &&
+      owner.purpose === "mail_reclassify" &&
+      (await aiBudgetSpent(db))
+    )
+      continue;
     if (isWorkflowRunPurpose(owner.purpose))
       await launchWorkflowRun(
         db,

@@ -1,4 +1,3 @@
-import { aiRefreshRunInput } from "@cubby/schemas/ai-evaluation";
 import { userId } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 
@@ -29,7 +28,6 @@ export async function refreshEmailEvaluation(
     loadEmailRefreshTarget(db, evaluation),
     readAiRefreshActivation(db),
   ]);
-  const input = aiRefreshRunInput.parse(owner?.input);
   if (
     !current ||
     !owner ||
@@ -88,7 +86,6 @@ export async function refreshEmailEvaluation(
       JSON.stringify({
         reason: "source_unavailable_or_protected",
         outcome,
-        authorization: Boolean(input.executionAuthorization),
       }),
     ),
   );

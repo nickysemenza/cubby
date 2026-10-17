@@ -69,7 +69,6 @@ import {
   assertMailRunReadAuthority,
   readMailRunSources,
 } from "~/server/domains/purchase-import/repo/mail-run-membership";
-import { assertRunVendorAuthorization } from "~/server/domains/run/repo/execution-context";
 import { publishEmailLinkDecision } from "~/server/generic/assessment/repo/assessment-email-link";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -864,12 +863,6 @@ export async function resolveMail(
         .for("update", { of: purchase });
       if (targets.length !== ids.length)
         throw new Error("A reviewed Purchase no longer exists.");
-      if (actor.runId)
-        for (const target of targets) {
-          if (!target.vendorId)
-            throw new Error("A reviewed Purchase has no Vendor.");
-          await assertRunVendorAuthorization(tdb, actor.runId, target.vendorId);
-        }
       if (
         targets.some(
           (row) =>

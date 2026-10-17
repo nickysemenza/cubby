@@ -163,12 +163,6 @@ export async function handleBackgroundTask(
     }
     case "image-metadata.extract":
       return ports.extractImageMetadata(db, task.imageId);
-    case "work.advance": {
-      await (
-        await import("~/server/generic/work-queue/service/work-advancement")
-      ).advanceAuthorizedWork(db, task.changed);
-      return "succeeded";
-    }
     case "maintenance.recover": {
       const { recoverMissedWork } = await import("~/server/workflows/catch-up");
       await recoverMissedWork(

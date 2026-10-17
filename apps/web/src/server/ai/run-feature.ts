@@ -58,6 +58,7 @@ import {
   type PiCallTarget,
   type SharedEffort,
 } from "~/server/ai/adapters";
+import { withAiBudget } from "~/server/ai/budget";
 import type { GatewayCallOptions, GatewayMetadata } from "~/server/ai/gateway";
 import { wrapAiGatewayError } from "~/server/ai/gateway-error";
 import type {
@@ -268,7 +269,11 @@ export function planStructuredRun<T = unknown>(
       collectPayload: spec.collectPayload,
       subscriptionRequired: ctx.subscriptionRequired,
       subscriptionFallback: ctx.subscriptionFallback,
-      beforePaidRequest: ctx.beforePaidRequest,
+      beforePaidRequest: withAiBudget(
+        ctx.db,
+        spec.feature,
+        ctx.beforePaidRequest,
+      ),
     },
   };
 }

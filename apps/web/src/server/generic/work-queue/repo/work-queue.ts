@@ -385,7 +385,7 @@ async function workQueueProjection(
       where: sql`"Run"."deletedAt" IS NULL AND (("Run".status = ${runStatus.enum.running} AND ("Run".purpose IN (${sql.join(
         WORKFLOW_RUN_PURPOSES.map((purpose) => sql`${purpose}`),
         sql`, `,
-      )}) OR "Run"."dispatchEventId" IS NOT NULL)) OR ("Run".status = ${runStatus.enum.needs_review} AND "Run"."failureCode" IN ('vendor_history_prerequisite', 'vendor_history_mailbox_busy', 'vendor_history_authorization')))`,
+      )}) OR "Run"."dispatchEventId" IS NOT NULL)) OR ("Run".status = ${runStatus.enum.needs_review} AND "Run"."failureCode" IN ('execution_limit')))`,
       details: {
         source: "execution",
         kind: "repair",
@@ -673,7 +673,7 @@ async function queryWorkQueue(
         SELECT 1 FROM "Run" waiting
         WHERE waiting.shortcode = routed.id AND waiting."deletedAt" IS NULL
           AND (waiting.status IN (${runStatus.enum.paused}, ${runStatus.enum.paused_auth}, ${runStatus.enum.paused_offline}, ${runStatus.enum.paused_approval})
-            OR waiting."failureCode" IN ('vendor_history_prerequisite', 'vendor_history_mailbox_busy', 'vendor_history_authorization'))
+            OR waiting."failureCode" IN ('execution_limit'))
       ))
     )`);
       break;

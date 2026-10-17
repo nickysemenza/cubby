@@ -1,5 +1,4 @@
 import { mailReclassificationCheckpoint } from "@cubby/schemas/email-actions";
-import { executionAuthorizationInput } from "@cubby/schemas/execution-authorization";
 import { mailReclassifyRunInput } from "@cubby/schemas/run-fields";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -16,7 +15,6 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 import { workflowInstanceId } from "~/server/workflows/runs/contract";
 
 import { ensureRun } from "../repo/ensure-run";
-import { issueExecutionAuthorization } from "../repo/execution-authorization";
 
 const ctx = withTestDb();
 
@@ -36,18 +34,6 @@ it("continues an interrupted Email lease through the actual Workflow event-wait 
     userId: ctx.actor.userId,
     updatedAt: new Date(),
   });
-  const authorization = await issueExecutionAuthorization(
-    ctx.db,
-    ctx.actor,
-    executionAuthorizationInput.parse({
-      kind: "execution_authorization",
-      version: 1,
-      owner: { userId: ctx.actor.userId, ledgerPartyId: party.id },
-      scope: { kind: "backfill", mailboxId, discovery: "all_history" },
-      meteredBudget: { period: "lifetime", limitMicroUSD: 1_000_000 },
-      expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
-    }),
-  );
   const selected = await insertWithShortcode(ctx.db, "email", {
     ledgerPartyId: party.id,
     mailboxId,
@@ -66,7 +52,6 @@ it("continues an interrupted Email lease through the actual Workflow event-wait 
       kind: "mail_reclassify",
       mode: "relevance",
       mailboxId,
-      executionAuthorization: authorization,
       emails: [{ emailId: selected.id, checksum: selected.checksum }],
     }),
     progress: {
@@ -77,7 +62,7 @@ it("continues an interrupted Email lease through the actual Workflow event-wait 
       attempt: 1,
     },
   });
-  await prepareReclassification(ctx.db, id, [selected], authorization);
+  await prepareReclassification(ctx.db, id, [selected]);
   const [owner] = await getDb(ctx.db).select().from(run).where(eq(run.id, id));
   const [item] = await requestedAiEvaluations(ctx.db, id);
   if (!owner || !item) throw new Error("Synthetic durable roster is missing");

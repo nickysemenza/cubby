@@ -146,10 +146,10 @@ The contracts above are deployed. Remaining live acceptance work belongs in
 [the acceptance issue](https://github.com/nickysemenza/cubby/issues/2137). Deployment, stored fields
 and terminal Runs alone do not establish source-specific acceptance: blocked
 bindings still need public writer/readback verification, and missing original
-preparations remain evidence gaps. Historical restart readiness requires
-authorized scope and transport/coverage evidence; missing evidence stays unknown,
-never reconstructed from current defaults. Continuous financial processing needs
-acceptance beyond classification-only discovery. Existing-Purchase attachment and
+preparations remain evidence gaps. Historical restart readiness requires the
+Mail import switch and transport/coverage evidence; missing evidence stays
+unknown, never reconstructed from current defaults. Continuous financial
+processing needs its own acceptance beyond discovery. Existing-Purchase attachment and
 accepted-source reconciliation preserve money and stock and refuse ambiguous or
 changed original bindings.
 

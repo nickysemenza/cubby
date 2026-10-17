@@ -423,19 +423,14 @@ export async function discoverAiRefresh(
         const batch = group.slice(start, start + EMAIL_RECLASSIFY_LIMIT);
         const first = batch[0]!;
         if (!first.ownerUserId) continue;
-        const { mailboxApproval } =
-          await import("~/server/domains/purchase-import/service/gmail/reclassify");
-        const owner = {
-          userId: userId.parse(first.ownerUserId),
-          ledgerPartyId: first.item.ledgerPartyId,
-        };
-        let approval: Awaited<ReturnType<typeof mailboxApproval>> | undefined;
-        let authorizationError: string | undefined;
-        try {
-          approval = await mailboxApproval(db, owner, first.item.mailboxId);
-        } catch (error) {
-          authorizationError = scrubErrorMessage(String(error));
-        }
+        const { mailImportEnabled } =
+          await import("~/server/domains/purchase-import/repo/mail-import-settings");
+        const authorizationError = (await mailImportEnabled(
+          db,
+          first.item.mailboxId,
+        ))
+          ? undefined
+          : "Mail import is off for this mailbox.";
         const dependencies = dependencyStamps(activation.manifest, [
           "mailbox-triage",
           "mailbox-relevance",
@@ -443,7 +438,6 @@ export async function discoverAiRefresh(
         const key = await sha256Hex(
           JSON.stringify({
             dependencies,
-            authorization: approval ?? null,
             mailboxId: first.item.mailboxId,
             sources: batch.map(({ item }) => ({
               id: item.id,
@@ -469,7 +463,6 @@ export async function discoverAiRefresh(
                   checksum: item.checksum,
                   contentClearedAt: item.contentClearedAt,
                   orderMailId: item.orderMailId,
-                  authorization: approval ?? null,
                 }),
               ),
               optionFingerprint: "",
@@ -481,7 +474,7 @@ export async function discoverAiRefresh(
         );
         const runId = await scheduleEvaluationRun(
           db,
-          buildActorContext(owner.userId, "system"),
+          buildActorContext(userId.parse(first.ownerUserId), "system"),
           {
             purpose: "ai_refresh",
             trigger: "scheduled",
@@ -497,7 +490,6 @@ export async function discoverAiRefresh(
             input: aiRefreshRunInput.parse({
               kind: "ai_refresh",
               activation,
-              executionAuthorization: approval,
               mailboxId: first.item.mailboxId,
               emails: batch.map(({ item }) => ({
                 emailId: item.id,

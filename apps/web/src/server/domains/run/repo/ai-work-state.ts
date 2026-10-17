@@ -92,21 +92,11 @@ export async function recordAiEvaluationAttemptFailure(
     attempts: number;
     error: string;
     nextAttemptAt: Date;
-    minimumBudgetMicroUSD?: number;
   },
 ) {
-  const { minimumBudgetMicroUSD, ...values } = set;
   await getDb(db)
     .update(aiEvaluation)
-    .set({
-      ...values,
-      deadlineAt: null,
-      ...(minimumBudgetMicroUSD === undefined
-        ? {}
-        : {
-            snapshot: sql`jsonb_set(${aiEvaluation.snapshot}, '{minimumBudgetMicroUSD}', to_jsonb(${minimumBudgetMicroUSD}::bigint))`,
-          }),
-    })
+    .set({ ...set, deadlineAt: null })
     .where(
       and(
         eq(aiEvaluation.id, item.id),
@@ -116,7 +106,8 @@ export async function recordAiEvaluationAttemptFailure(
     );
 }
 
-export async function pauseRunForExecutionAuthorization(
+/** Waits for the next budget window or a reconnected mailbox; recovery resumes it. */
+export async function pauseRunForAiWork(
   db: Database,
   runId: RunRow["id"],
   message: string,
@@ -126,7 +117,7 @@ export async function pauseRunForExecutionAuthorization(
     .set({
       status: "paused_auth",
       endedAt: null,
-      failureCode: "execution_authorization_unavailable",
+      failureCode: "execution_limit",
       dispatchError: message,
     })
     .where(

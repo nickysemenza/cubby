@@ -15,9 +15,7 @@ export {
   hasImportRunReports,
 } from "./activity-fields";
 export type { RunPurpose } from "./activity-fields";
-import type { ExecutionAuthorizationInput } from "./execution-authorization.js";
 import type { PhotoInventoryRunInput } from "./photo-run-input.js";
-import { executionAuthorizationRef } from "./execution-authorization.js";
 import { plainDate } from "./base-entity.js";
 import { financialTransactionNonZeroAmount } from "./financial-transaction-fields.js";
 import { vendorAccountCursor } from "./vendor-account-fields.js";
@@ -104,7 +102,6 @@ export const mailDiscoveryRunProgress = mailboxDiscoveryProgress;
 export type MailDiscoveryRunProgress = z.infer<typeof mailDiscoveryRunProgress>;
 /** Original retained sources; interpreted order identity remains a research decision. */
 export const mailResearchRunInput = z.object({
-  executionAuthorization: executionAuthorizationRef.optional(),
   kind: z.literal("mail_research"),
   sources: z
     .array(
@@ -118,7 +115,6 @@ export const mailResearchRunInput = z.object({
 });
 export type MailResearchRunInput = z.infer<typeof mailResearchRunInput>;
 export const productResearchRunInput = z.object({
-  executionAuthorization: executionAuthorizationRef.optional(),
   kind: z.literal("product_research"),
   instructionRevision: z.number().int().positive(),
   products: z
@@ -134,7 +130,6 @@ export const productResearchRunInput = z.object({
 export type ProductResearchRunInput = z.infer<typeof productResearchRunInput>;
 /** Purchase validation freezes recorded context and optional original-source preference. */
 export const purchaseValidationResearchRunInput = z.strictObject({
-  executionAuthorization: executionAuthorizationRef.optional(),
   kind: z.literal("purchase_validation_research"),
   instructionRevision: z.number().int().positive(),
   purchases: z
@@ -249,7 +244,6 @@ export const researchObjective = z.discriminatedUnion("kind", [
   }),
 ]);
 export const researchObjectivesRunInput = z.strictObject({
-  executionAuthorization: executionAuthorizationRef.optional(),
   kind: z.literal("research_objectives"),
   instructionRevision: z.number().int().positive(),
   objectives: z.array(researchObjective).min(1).max(50),
@@ -343,7 +337,6 @@ export type SuggestionSweepRunProgress = z.infer<
 export const mailReclassifyRunInput = z.strictObject({
   kind: z.literal("mail_reclassify"),
   mode: z.enum(["relevance", "preview", "triage_preview"]),
-  executionAuthorization: executionAuthorizationRef.optional(),
   mailboxId: z.string().min(1),
   emails: z
     .array(z.strictObject({ emailId: z.uuid(), checksum: z.string() }))
@@ -367,7 +360,6 @@ export const isAiRefreshMailRun = (run: {
   );
 };
 export type RunInput =
-  | ExecutionAuthorizationInput
   | MailReclassifyRunInput
   | ResearchObjectivesRunInput
   | MailResearchRunInput

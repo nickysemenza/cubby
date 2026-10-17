@@ -1,5 +1,4 @@
 import { mailReclassificationCheckpoint } from "@cubby/schemas/email-actions";
-import { executionAuthorizationInput } from "@cubby/schemas/execution-authorization";
 import { mailReclassifyRunInput } from "@cubby/schemas/run-fields";
 import { and, eq, sql } from "drizzle-orm";
 import { reclassifyForTest as reclassifyEmails } from "tooling/ai-work";
@@ -9,7 +8,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import { aiEvaluationRequest, email, run } from "~/server/db/schema";
-import { issueExecutionAuthorization } from "~/server/domains/run/repo/execution-authorization";
 import { loadMailReclassificationRead } from "~/server/domains/run/repo/run-reclassification-read";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
@@ -47,18 +45,6 @@ describe("durable member reclassification recovery", () => {
       userId: ctx.actor.userId,
       updatedAt: new Date(),
     });
-    await issueExecutionAuthorization(
-      ctx.db,
-      ctx.actor,
-      executionAuthorizationInput.parse({
-        kind: "execution_authorization",
-        version: 1,
-        owner: { userId: ctx.actor.userId, ledgerPartyId: party.id },
-        scope: { kind: "backfill", mailboxId, discovery: "all_history" },
-        meteredBudget: { period: "lifetime", limitMicroUSD: 1_000_000 },
-        expiresAt: new Date(Date.now() + 60_000).toISOString(),
-      }),
-    );
     const originals = new Map<string, GmailMessage>();
     const getMessage = vi.fn<GmailProvider["getMessage"]>(async (id) => {
       const original = originals.get(id);

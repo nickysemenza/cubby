@@ -79,7 +79,7 @@ describe("durable Gmail page acquisition", () => {
       provider,
       "google-subject",
       coverage,
-      "all_history",
+      "targeted",
     );
     expect(calls).toEqual([
       "baseline",
@@ -101,7 +101,7 @@ describe("durable Gmail page acquisition", () => {
     expect(recent.nextCoverage.history.historyId).toBe("110");
   });
 
-  it("whole history is unbounded by date and scoped completion never completes it", async () => {
+  it("targeted search never falls through to whole-mailbox history", async () => {
     const listMessages = vi.fn(
       async (_request: Parameters<GmailProvider["listMessages"]>[0]) => ({
         messages: [],
@@ -115,26 +115,17 @@ describe("durable Gmail page acquisition", () => {
       provider,
       "google-subject",
       coverage,
-      "all_history",
+      "targeted",
     );
     expect(scoped.nextCoverage.scoped[0]?.completed).toBe(true);
-    expect(scoped.nextCoverage.broad.completed).toBe(false);
-    const history = await listGmailPage(
+    const done = await listGmailPage(
       provider,
       "google-subject",
       scoped.nextCoverage,
-      "new_mail",
+      "targeted",
     );
-    await listGmailPage(
-      provider,
-      "google-subject",
-      history.nextCoverage,
-      "all_history",
-    );
-    expect(listMessages.mock.calls.at(-1)?.[0]).toMatchObject({
-      query: "-in:spam -in:trash",
-      maxResults: 25,
-    });
+    expect(done.messageIds).toEqual([]);
+    expect(listMessages).toHaveBeenCalledOnce();
   });
 
   it("checkpoints history page tokens without advancing its start until all history pages are processed", async () => {
@@ -204,7 +195,7 @@ describe("durable Gmail page acquisition", () => {
       provider,
       "google-subject",
       coverage,
-      "all_history",
+      "targeted",
     );
     expect(scan.messageIds).toEqual(["archived"]);
     expect(listMessages).toHaveBeenCalledWith({

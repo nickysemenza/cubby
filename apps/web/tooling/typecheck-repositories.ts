@@ -116,6 +116,7 @@ export const repositoryOwners = [
   "src/server/domains/purchase-import/repo/gmail/targets.ts",
   "src/server/domains/purchase-import/repo/gmail/types.ts",
   "src/server/domains/purchase-import/repo/gmail/vendor-identity.ts",
+  "src/server/domains/purchase-import/repo/gmail/vendor-mail-scope.ts",
   "src/server/domains/purchase-import/repo/import-scope.ts",
   "src/server/domains/purchase-import/repo/mail-run-membership.ts",
   "src/server/domains/purchase-import/repo/mail-source-identity.ts",

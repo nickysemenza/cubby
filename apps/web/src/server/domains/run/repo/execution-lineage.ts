@@ -69,19 +69,3 @@ export async function readMailImportLineage(db: Database, id: RunId) {
     .limit(1);
   return row;
 }
-
-export async function readLiveRunOwner(db: Database, runId: RunId) {
-  const [row] = await getDb(db)
-    .select({
-      status: run.status,
-      purpose: run.purpose,
-      retiredAt: run.retiredAt,
-      input: run.input,
-      actorUserId: run.actorUserId,
-      ledgerPartyId: run.ledgerPartyId,
-    })
-    .from(run)
-    .where(and(eq(run.id, runId), notDeleted(run)))
-    .limit(1);
-  return row;
-}

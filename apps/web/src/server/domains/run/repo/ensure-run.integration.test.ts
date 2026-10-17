@@ -1,9 +1,4 @@
 import { buildActorContext } from "@cubby/schemas/context";
-import { executionAuthorizationRef } from "@cubby/schemas/execution-authorization";
-import {
-  mailResearchRunInput,
-  productResearchRunInput,
-} from "@cubby/schemas/run-fields";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { count, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -16,7 +11,6 @@ import {
   type PreviewEntityPorts,
   previewEntity,
 } from "~/server/entity-kernel/preview";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { aiCallRunInput, ensureRun, systemActor } from "./ensure-run";
 
@@ -31,55 +25,6 @@ const runCount = async (db: Parameters<typeof getDb>[0]) => {
 
 describe("ephemeral AI runs", () => {
   const ctx = withTestDb("mcp");
-
-  // Automatic descendants must share one spend/candidate budget while their
-  // causal lineage still points to the actual work that discovered them.
-  it("carries execution authority through research descendants without replacing the causal parent", async () => {
-    await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Synthetic research member",
-      kind: "member",
-      userId: ctx.actor.userId,
-    });
-    const approvalRoot = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "background",
-    });
-    const authorization = executionAuthorizationRef.parse({
-      runId: approvalRoot,
-      approvalFingerprint: "a".repeat(64),
-    });
-    const source = mailResearchRunInput.parse({
-      kind: "mail_research",
-      sources: [{ orderMailId: crypto.randomUUID(), checksum: "b".repeat(64) }],
-    });
-    const parent = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "mail_import",
-      trigger: "discovery",
-      input: { ...source, executionAuthorization: authorization },
-    });
-    const child = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "product_enrichment",
-      trigger: "discovery",
-      parentRunId: parent,
-      input: productResearchRunInput.parse({
-        kind: "product_research",
-        instructionRevision: 1,
-        products: [
-          {
-            productId: crypto.randomUUID(),
-            contextFingerprint: "c".repeat(64),
-          },
-        ],
-      }),
-    });
-    const [saved] = await getDb(ctx.db)
-      .select()
-      .from(runTable)
-      .where(eq(runTable.id, child));
-    expect(saved?.parentRunId).toBe(parent);
-    expect(productResearchRunInput.parse(saved?.input)).toMatchObject({
-      executionAuthorization: authorization,
-    });
-  });
 
   it("preserves an unfinished keyed Run when its asynchronous starter replays", async () => {
     const input = {

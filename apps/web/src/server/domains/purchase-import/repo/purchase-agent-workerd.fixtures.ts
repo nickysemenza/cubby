@@ -1,5 +1,4 @@
-import { executionAuthorizationInput } from "@cubby/schemas/execution-authorization";
-import { type LedgerPartyId, runEntityId } from "@cubby/schemas/identifiers";
+import { runEntityId } from "@cubby/schemas/identifiers";
 import { sleep } from "@cubby/shared/retry";
 import { and, eq } from "drizzle-orm";
 import {
@@ -25,7 +24,7 @@ import {
   ensurePurchaseAgentOAuthClient,
   PURCHASE_AGENT_OAUTH_CLIENT_ID,
 } from "~/server/domains/purchase-import/repo/agent-auth";
-import { issueExecutionAuthorization } from "~/server/domains/run/repo/execution-authorization";
+import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
 
 type Db = TestDbContext["db"];
 
@@ -43,10 +42,9 @@ export async function waitFor(
   throw new Error(message);
 }
 
-/** Scripted inference uses real durable admission and synthetic funds. */
-export async function authorizeSyntheticBackfill(
+/** A connected synthetic mailbox with automatic Mail import on. */
+export async function enableSyntheticMailImport(
   context: Pick<TestDbContext, "db" | "actor">,
-  memberId: LedgerPartyId,
   mailboxId: string,
 ) {
   const database = getDb(context.db);
@@ -68,18 +66,7 @@ export async function authorizeSyntheticBackfill(
       userId: context.actor.userId,
       updatedAt: new Date(),
     });
-  return issueExecutionAuthorization(
-    context.db,
-    context.actor,
-    executionAuthorizationInput.parse({
-      kind: "execution_authorization",
-      version: 1,
-      owner: { userId: context.actor.userId, ledgerPartyId: memberId },
-      scope: { kind: "backfill", mailboxId, discovery: "all_history" },
-      meteredBudget: { period: "lifetime", limitMicroUSD: 10_000_000 },
-      expiresAt: new Date(Date.now() + 60 * 60_000).toISOString(),
-    }),
-  );
+  await setMailImport(context.db, { mailboxId, enabled: true });
 }
 
 /** The member's active Purchase Agent grant, which MCP delegation requires. */

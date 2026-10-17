@@ -310,13 +310,12 @@ sessions also research wardrobe details through MCP.
 
 ```mermaid
 flowchart TB
-  Gmail["Gmail discovery / backfill"] --> Classify["Rules → Jev / Clef"]
+  Gmail["Gmail discovery<br/>Known Vendors + new mail"] --> Classify["Rules → Jev / Clef"]
   Classify --> Email["Email: metadata + Relevance<br/>Optional retained content"]
   Email --> Accuracy["Independent accuracy review<br/>Classification and import costs"]
   Email --> Manual["Member chooses one Email<br/>Run import + cost estimate"]
   Manual --> Pi["Pi Mail import<br/>Public MCP tools"]
-  Email -. "automatic admission stays disabled<br/>during classification-only backfill" .-> Gate["Later member decision"]
-  Gate -. "may enable authorized import" .-> Pi
+  Email -. "Mail import switch on<br/>within the AI budget" .-> Pi
 
   Retailer["Retailer history / export"] --> Client["Claude / Codex client<br/>Browser, connectors and MCP"]
   Receipt["Receipt photo / document"] --> Client

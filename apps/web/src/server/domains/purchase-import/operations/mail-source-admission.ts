@@ -26,7 +26,6 @@ import {
   aiCallRunInput,
   ensureRun,
 } from "~/server/domains/run/repo/ensure-run";
-import { claimRunExecution } from "~/server/domains/run/repo/execution-context";
 
 import {
   judgeMailAttributions,
@@ -50,8 +49,8 @@ const ANCHOR_LIMIT = 3;
 /**
  * Before the writer's transaction: judge every named source the Run needs a
  * decision for. Refuses a supporting original that is not confidently the
- * same purchase or the recipient's own transaction; spends only within the
- * Run's execution authorization.
+ * same purchase or the recipient's own transaction; paid judgment draws from
+ * the household AI budget.
  */
 export async function prepareMailSourceAdmissions(
   db: Database,
@@ -155,11 +154,6 @@ export async function prepareMailSourceAdmissions(
       throw new Error(
         "Cubby could not establish that the supporting Email is the same purchase as an Email this Run admitted.",
       );
-    await claimRunExecution(db, runId, {
-      kind: "candidate",
-      mailboxId: mail.mailboxId,
-      messageId: mail.messageId,
-    });
     admissions.push({ mail, supporting: true, attribution });
   }
   return admissions;

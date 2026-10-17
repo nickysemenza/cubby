@@ -55,7 +55,6 @@ export async function continueChangedReclassification(
         kind: "mail_reclassify",
         mode: "relevance",
         mailboxId: current.mailboxId,
-        executionAuthorization: snapshot.executionAuthorization,
         emails: [{ emailId: current.id, checksum: current.checksum }],
       },
       progress: {
@@ -66,13 +65,7 @@ export async function continueChangedReclassification(
         results: [],
       },
     });
-    await prepareReclassification(
-      db,
-      id,
-      [current],
-      snapshot.executionAuthorization,
-      snapshot.decisionModel,
-    );
+    await prepareReclassification(db, id, [current], snapshot.decisionModel);
     const targets = await getDb(db)
       .select({ id: aiEvaluation.id })
       .from(aiEvaluationRequest)
@@ -105,7 +98,6 @@ export async function continueChangedReclassification(
       db,
       owner.id,
       [current],
-      snapshot.executionAuthorization,
       snapshot.decisionModel,
     );
     const [next] = await getDb(db)
