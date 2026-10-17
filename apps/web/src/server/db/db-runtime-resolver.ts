@@ -15,6 +15,7 @@ export interface RequestDatabaseRuntimeScope {
   connections: RequestDbConnections;
   runtimes: Partial<Record<RequestDbRole, DatabaseRuntime>>;
   clientOrdinal?: number;
+  closed?: boolean;
 }
 
 type DatabaseRuntimeFactory = (
@@ -48,6 +49,8 @@ export class DatabaseRuntimeResolver {
   resolve(role: RequestDbRole): DatabaseRuntime {
     const scope = this.#requestScope();
     if (scope) {
+      if (scope.closed)
+        throw new Error("Database invocation scope has completed");
       const existing = scope.runtimes[role];
       if (existing) return existing;
 

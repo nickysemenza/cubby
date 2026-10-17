@@ -10,7 +10,7 @@ import {
 } from "cloudflare:workers";
 
 import { setCfEnv } from "~/server/cf-env";
-import { withRequestDbClient, type Database } from "~/server/db";
+import { withInvocationDb, type Database } from "~/server/db";
 import { recordDatabaseWrite } from "~/server/db/freshness/client";
 import type { SearchDocumentCursor } from "~/server/generic/search/repo/search-document";
 import { withInvocationTrace } from "~/server/observability/tracing";
@@ -37,7 +37,7 @@ const progress = (
 });
 
 const withFreshDb = async <T>(env: Env, run: (db: Database) => Promise<T>) =>
-  withRequestDbClient(env.HYPERDRIVE.connectionString, async () => {
+  withInvocationDb(env.HYPERDRIVE.connectionString, async () => {
     const { db } = await import("~/server/db");
     return run(db);
   });

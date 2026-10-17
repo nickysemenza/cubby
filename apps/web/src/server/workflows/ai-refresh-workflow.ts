@@ -8,7 +8,7 @@ import {
 import { z } from "zod";
 
 import { getAiGatewayEgress, setCfEnv } from "../cf-env";
-import { withRequestDbClient } from "../db";
+import { withInvocationDb } from "../db";
 import { isWorkflowRunPurpose, type WorkflowRunParams } from "./runs/contract";
 import {
   claimWorkflowRun,
@@ -31,7 +31,7 @@ export class AiRefreshWorkflow extends WorkflowEntrypoint<
     const withDb = async <T>(
       work: (db: typeof import("../db").db) => Promise<T>,
     ) =>
-      withRequestDbClient(this.env.HYPERDRIVE.connectionString, async () =>
+      withInvocationDb(this.env.HYPERDRIVE.connectionString, async () =>
         work((await import("../db")).db),
       );
     try {

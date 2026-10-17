@@ -29,9 +29,9 @@ const censusGroup = z.object({
 });
 
 // Request pools can legitimately retain young idle clients for pg-pool's idle
-// timeout (shortened here; production's is ten seconds). A background
-// standalone client has no such idle timer: repeated freshness writes must not
-// accumulate old idle sockets indefinitely. Each quiet window outlasts the
+// timeout (shortened here; production's is ten seconds). Background pools
+// close at scope completion: repeated freshness writes must not accumulate
+// old idle sockets indefinitely. Each quiet window outlasts the
 // pool's idle timeout, so only a socket nothing will ever close remains.
 const POOL_IDLE_TIMEOUT_MS = 500;
 const QUIET_MS = 3 * POOL_IDLE_TIMEOUT_MS;

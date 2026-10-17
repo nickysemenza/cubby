@@ -419,14 +419,6 @@ export const tracePool = (pool: pg.Pool, role: RequestDbRole): pg.Pool => {
   return pool;
 };
 
-export const traceStandaloneClient = (
-  client: pg.Client,
-  role: RequestDbRole,
-): pg.Client => {
-  transactionState.set(client, false);
-  return traceClient(client, role);
-};
-
 export const acquireTracedConnection = (
   pool: pg.Pool,
   inTransaction: boolean,

@@ -36,7 +36,7 @@ import {
   startOperationTraceName,
 } from "./lib/start-operation-observability";
 import { runWithExecutionCtx, setCfEnv } from "./server/cf-env";
-import { withRequestDb, withRequestDbClient } from "./server/db";
+import { withRequestDb, withInvocationDb } from "./server/db";
 import {
   requestOperations,
   serverTimingHeader,
@@ -584,9 +584,9 @@ const handler = {
           return;
         }
 
-        // Serial queue work does not need a local pg.Pool. Use one Worker-side
-        // client for the whole invocation; Hyperdrive still owns the origin DB pool.
-        await withRequestDbClient(env.HYPERDRIVE.connectionString, async () => {
+        // A task can launch independent maintenance transactions concurrently.
+        // Lease separate clients and close the bounded pools after the batch.
+        await withInvocationDb(env.HYPERDRIVE.connectionString, async () => {
           if (batch.queue === "cubby-telemetry") {
             const [{ db }, { processTelemetryQueueBatch }] = await Promise.all([
               import("./server/db"),
@@ -666,7 +666,7 @@ const handler = {
           "daily-maintenance",
           async () => {
             try {
-              await withRequestDbClient(
+              await withInvocationDb(
                 env.HYPERDRIVE.connectionString,
                 async () => {
                   const [
@@ -726,7 +726,7 @@ const handler = {
             // wakeup was lost — the cue to look, not a sweep that would hide it.
             // (The vector-reconcile job below IS a repair — see its comment.)
             try {
-              await withRequestDbClient(
+              await withInvocationDb(
                 env.HYPERDRIVE.connectionString,
                 async () => {
                   const [{ db }, { countAwaitingWork }] = await Promise.all([
@@ -785,7 +785,7 @@ const handler = {
                     span.setAttribute("cubby.vectorReconcile.skipped", true);
                     return;
                   }
-                  await withRequestDbClient(
+                  await withInvocationDb(
                     env.HYPERDRIVE.connectionString,
                     async () => {
                       const [

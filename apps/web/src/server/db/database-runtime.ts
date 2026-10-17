@@ -10,6 +10,8 @@ export type DatabaseClient = PgDatabase<NodePgQueryResultHKT, typeof schema>;
 export interface DatabaseRuntime {
   readonly client: DatabaseClient;
   withConnection<T>(fn: (client: DatabaseClient) => Promise<T>): Promise<T>;
+  /** Present when this runtime owns connection resources. */
+  close?(): Promise<void>;
 }
 
 // Keep resolver callbacks lazy: the same handle follows the active request role.

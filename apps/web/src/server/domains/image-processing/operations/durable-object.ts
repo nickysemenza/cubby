@@ -10,7 +10,7 @@ import { createLogger } from "@cubby/worker-tracing";
 import { DurableObject } from "cloudflare:workers";
 import { z } from "zod";
 
-import { db, withRequestDbClient } from "~/server/db";
+import { db, withInvocationDb } from "~/server/db";
 
 import {
   COMPANION_LEASE_MS,
@@ -132,7 +132,7 @@ export class ImageProcessingDurableObject
     if (!target) return false;
     const { assignImageProcessingExecutor } =
       await import("~/server/domains/image-processing/repo/image-processing-history");
-    const assigned = await withRequestDbClient(
+    const assigned = await withInvocationDb(
       this.env.HYPERDRIVE.connectionString,
       async () => {
         const assigned = await assignImageProcessingExecutor(db, {
@@ -184,7 +184,7 @@ export class ImageProcessingDurableObject
       // is a creation hint; a later hello refreshes versions and liveness.
       const { upsertDeviceFromHello } =
         await import("~/server/domains/device/repo/device-participation");
-      const { automaticWork, remotePaused } = await withRequestDbClient(
+      const { automaticWork, remotePaused } = await withInvocationDb(
         this.env.HYPERDRIVE.connectionString,
         () =>
           upsertDeviceFromHello(db, {
@@ -230,7 +230,7 @@ export class ImageProcessingDurableObject
     const { findImageProcessingDeviceAssignment } =
       await import("~/server/domains/image-processing/repo/image-processing-history");
     const assignment = deviceId
-      ? await withRequestDbClient(this.env.HYPERDRIVE.connectionString, () =>
+      ? await withInvocationDb(this.env.HYPERDRIVE.connectionString, () =>
           findImageProcessingDeviceAssignment(db, {
             jobId: result.jobId,
             attemptId: result.attemptId,
@@ -300,7 +300,7 @@ export class ImageProcessingDurableObject
       return;
     const { claimCompanionImageCommand } =
       await import("~/server/domains/image-processing/service/image-processing.service");
-    const command = await withRequestDbClient(
+    const command = await withInvocationDb(
       this.env.HYPERDRIVE.connectionString,
       () =>
         claimCompanionImageCommand(db, {

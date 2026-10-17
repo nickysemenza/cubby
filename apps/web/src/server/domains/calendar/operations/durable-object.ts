@@ -213,13 +213,11 @@ export class CalendarFeedDurableObject
     if (!this.env.HYPERDRIVE?.connectionString)
       throw new Error("Calendar PostgreSQL write backend is unavailable");
     setCfEnv(this.env);
-    const { db, withRequestDbClient } = await import("~/server/db");
+    const { db, withInvocationDb } = await import("~/server/db");
     return runWithExecutionCtx(
       { waitUntil: (task) => this.ctx.waitUntil(task) },
       () =>
-        withRequestDbClient(this.env.HYPERDRIVE.connectionString, () =>
-          run(db),
-        ),
+        withInvocationDb(this.env.HYPERDRIVE.connectionString, () => run(db)),
       origin,
     );
   }

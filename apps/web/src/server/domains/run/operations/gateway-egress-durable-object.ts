@@ -150,21 +150,18 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
       )) ?? {};
     const keys = Object.keys(pending);
     if (!keys.length) return;
-    const { withRequestDbClient, db } = await import("~/server/db");
-    await withRequestDbClient(
-      this.env.HYPERDRIVE.connectionString,
-      async () => {
-        const { recoverManualAiWork } = await import("../service/ai-work");
-        await recoverManualAiWork(
-          db,
-          undefined,
-          keys.includes("authorization") ? undefined : keys,
-        );
-        await (
-          await import("~/server/generic/work-queue/service/work-advancement")
-        ).advanceAuthorizedWork(db);
-      },
-    );
+    const { withInvocationDb, db } = await import("~/server/db");
+    await withInvocationDb(this.env.HYPERDRIVE.connectionString, async () => {
+      const { recoverManualAiWork } = await import("../service/ai-work");
+      await recoverManualAiWork(
+        db,
+        undefined,
+        keys.includes("authorization") ? undefined : keys,
+      );
+      await (
+        await import("~/server/generic/work-queue/service/work-advancement")
+      ).advanceAuthorizedWork(db);
+    });
     await this.ctx.blockConcurrencyWhile(async () => {
       const current =
         (await this.ctx.storage.get<Record<string, string>>(

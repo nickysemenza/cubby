@@ -326,7 +326,7 @@ native PostgreSQL installation remain owned by their existing runners.
 | File                                                                          | Purpose                                           |
 | ----------------------------------------------------------------------------- | ------------------------------------------------- |
 | [apps/web/src/cf-server.ts](../apps/web/src/cf-server.ts)                     | Worker entry; wraps requests in `withRequestDb()` |
-| [apps/web/src/server/db.ts](../apps/web/src/server/db.ts)                     | Per-request `pg.Pool`                             |
+| [apps/web/src/server/db.ts](../apps/web/src/server/db.ts)                     | Request pools and scoped background pool cleanup  |
 | [apps/web/src/lib/recipebridge-cf.ts](../apps/web/src/lib/recipebridge-cf.ts) | WASM via `?init` (Workers SSR)                    |
 | [apps/web/cloudflare.config.ts](../apps/web/cloudflare.config.ts)             | Bindings, vars, compat flags, secret names        |
 

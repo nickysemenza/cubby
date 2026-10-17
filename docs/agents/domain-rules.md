@@ -126,6 +126,12 @@ orchestrate, and repos alone call `getDb`; transactions use `withTransaction`.
 Its callback receives a Drizzle transaction directly. Use
 `withTransactionDatabase` when a called domain module needs a transaction-bound
 `Database`; `getDb` accepts that facade, not a raw Drizzle transaction.
+Background Queue invocations, Durable Object work and Workflow steps use
+`withInvocationDb`: the bounded pools lease independent transaction clients and
+close when the awaited scope finishes. Never share one standalone client across
+concurrent transaction branches; serial SQL statements do not isolate commits.
+Late continuations must open their own awaited scope. Cleanup errors are logged
+with their original diagnostics and do not turn committed work into a retry.
 The repository helper is the sanctioned client-resolution boundary. The handle
 itself carries only nominal identity. Runtime registration must survive module
 reloads, and transaction detection uses native `rollback` presence rather than

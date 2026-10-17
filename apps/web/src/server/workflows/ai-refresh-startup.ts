@@ -6,7 +6,7 @@ import type { z } from "zod";
 import { activateAiRefresh } from "../ai/repo/ai-refresh";
 import { setCfEnv } from "../cf-env";
 import type { Database } from "../db";
-import { withRequestDbClient } from "../db";
+import { withInvocationDb } from "../db";
 import { getDb } from "../db/helpers";
 import { run } from "../db/schema";
 import { workflowInstanceId } from "./runs/contract";
@@ -27,7 +27,7 @@ export async function observeAiRefreshFeatures(
   observationEpoch: number,
 ) {
   setCfEnv(env);
-  return withRequestDbClient(env.HYPERDRIVE.connectionString, async () => {
+  return withInvocationDb(env.HYPERDRIVE.connectionString, async () => {
     const { db } = await import("../db");
     const activation = await activateAiRefresh(db, __GIT_COMMIT__, {
       enabled: env.AI_REFRESH_ENABLED === "true",

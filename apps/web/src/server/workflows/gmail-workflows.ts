@@ -5,7 +5,7 @@ import {
 } from "cloudflare:workers";
 
 import { setCfEnv } from "~/server/cf-env";
-import { withRequestDbClient, type Database } from "~/server/db";
+import { withInvocationDb, type Database } from "~/server/db";
 import { recordDatabaseWrite } from "~/server/db/freshness/client";
 import { withInvocationTrace } from "~/server/observability/tracing";
 import type { MailDiscoveryWorkflow as MailDiscoveryEntrypoint } from "~/server/worker-bindings";
@@ -20,7 +20,7 @@ import type { DurableSteps } from "~/server/workflows/runs/step";
 const stepDb =
   (env: Env, source: string) =>
   async <T>(work: (db: Database) => Promise<T>): Promise<T> =>
-    withRequestDbClient(env.HYPERDRIVE.connectionString, async () => {
+    withInvocationDb(env.HYPERDRIVE.connectionString, async () => {
       const { db } = await import("~/server/db");
       const result = await work(db);
       await recordDatabaseWrite(source);

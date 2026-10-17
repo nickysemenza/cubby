@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import { createLogger } from "@cubby/worker-tracing";
 import { drizzle as drizzleNodePostgres } from "drizzle-orm/node-postgres";
 import pg from "pg";
 
@@ -15,7 +16,6 @@ import {
   acquireTracedConnection,
   type RequestDbRole,
   tracePool,
-  traceStandaloneClient,
 } from "./db/db-pg-tracing";
 import {
   DatabaseRuntimeResolver,
@@ -28,6 +28,7 @@ export { Database };
 export type { RequestDbConnections };
 
 const requestDbStore = new AsyncLocalStorage<RequestDatabaseRuntimeScope>();
+const log = createLogger("db");
 
 const runtimeForClient = (client: DatabaseClient): DatabaseRuntime => ({
   client,
@@ -42,6 +43,7 @@ const runtimeForPool = (
   const client = drizzleNodePostgres({ client: tracedPool, schema });
   return {
     client,
+    close: () => pool.end(),
     withConnection: async (fn) => {
       const connection = await acquireTracedConnection(tracedPool, false);
       try {
@@ -84,34 +86,35 @@ export const withRequestDb = async <T>(
 };
 
 /**
- * Background-invocation scope. One connected client is shared by one Queue
- * invocation or one Workflow step. Release the client when its awaited work
- * finishes, including inside long-lived Durable Objects; Hyperdrive keeps its
- * origin pool. Never carry this scope across Workflow steps.
+ * Background work leases independent clients from the same bounded pools as
+ * requests. A standalone client cannot isolate concurrent transactions by
+ * serializing individual statements. Close every opened pool when the awaited
+ * invocation or Workflow step finishes; never carry clients across steps.
  */
-export const withRequestDbClient = async <T>(
+export const withInvocationDb = async <T>(
   connectionString: string,
   fn: () => Promise<T>,
 ): Promise<T> => {
-  const Client = createDatabaseClientConstructor("strong");
-  const client = traceStandaloneClient(
-    new Client({ connectionString }),
-    "strong",
-  );
+  const holder: RequestDatabaseRuntimeScope = {
+    connections: {
+      strong: connectionString,
+      boundedStale: connectionString,
+    },
+    runtimes: {},
+  };
   try {
-    await client.connect();
-    const runtime = runtimeForClient(drizzleNodePostgres({ client, schema }));
-    const holder: RequestDatabaseRuntimeScope = {
-      connections: {
-        strong: connectionString,
-        boundedStale: connectionString,
-      },
-      runtimes: { strong: runtime },
-      clientOrdinal: 1,
-    };
     return await requestDbStore.run(holder, fn);
   } finally {
-    await client.end();
+    holder.closed = true;
+    const closed = await Promise.allSettled(
+      Object.values(holder.runtimes).map((runtime) => runtime.close?.()),
+    );
+    for (const result of closed) {
+      if (result.status === "rejected")
+        log.error("Failed closing invocation database pool", {
+          error: result.reason,
+        });
+    }
   }
 };
 

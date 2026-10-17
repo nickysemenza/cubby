@@ -42,8 +42,8 @@ function withHostDatabase<T>(
   assertNotInMaintenance(env);
   setCfEnv(env);
   return runWithExecutionCtx(ctx, async () => {
-    const { db, withRequestDbClient } = await import("~/server/db");
-    return withRequestDbClient(env.HYPERDRIVE.connectionString, async () =>
+    const { db, withInvocationDb } = await import("~/server/db");
+    return withInvocationDb(env.HYPERDRIVE.connectionString, async () =>
       fn(
         db,
         await import("../repo/run-service"),
