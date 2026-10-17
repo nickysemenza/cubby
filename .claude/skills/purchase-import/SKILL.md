@@ -218,7 +218,12 @@ same outcome without prescribing an agent runtime.
    groceries, tools, and supplies are stocked items, never `expense_only`,
    and so is software and any subscription the household tracks or that
    ships goods (a software license, a seed club, pet-food autoship): resolve
-   those to their Product.
+   those to their Product. An `expense_only` line has no Product to classify
+   it, and a vendor default only covers food, restaurant and coffee vendors,
+   so after commit give the rest (paid labor, a venue, tickets) a Spending
+   Category with a reviewed `spending_classification_read.preview` then
+   `spending_classification_write.apply` (`action: "expenses"`); left alone it
+   lands in Uncategorized.
 5. Call `purchase_import.commit` with the preparation revision and every line
    resolution. Do not use generic entity creation for imported Products or
    Expenses. A commit never starts Product research; unresolved Product facts
@@ -276,6 +281,12 @@ correction creates a linked successor run and new decision revision.
 
 Create or update the Vendor deliberately, then configure:
 
+- `spendingProfile`: `food_retail` for a grocer or food and drink seller,
+  `mixed_retail` for a store that sells food among other goods, `restaurant`
+  or `coffee_shop`. Food Product Categories only map to a Spending Category at
+  food and mixed retailers, so an `unspecified` grocer leaves its food lines
+  Uncategorized. Change an existing Vendor's profile through a reviewed
+  `spending_classification` preview and apply (`action: "vendor"`).
 - `orderEvidence`: `online_account`, `receipt_only`, or `not_expected`. It says
   where to look, never whether item lines are wanted; the resolved
   `itemizationExpectation` (transaction, then vendor, then category) decides
@@ -340,9 +351,11 @@ Money a non-member sends back for a cost the household fronted is a Credit: a
 `reimbursement` Expense on the Purchase it repaid, booked from the incoming
 transaction with `finance.book_transaction`. A repayment between members is a
 Ledger Transfer. A vendor refund is a negative Expense on its order. None of
-them is a new Purchase of goods. For a group trip or a shared-expense export
-(Splitwise and similar), load
-[household-ledger.md](references/household-ledger.md).
+them is a new Purchase of goods. Record a return as a negative principal line
+for the returned item (its Product, or an explicit Spending Category); a
+refund adjustment on an order whose items were bought stays Uncategorized by
+design. For a group trip or a shared-expense export (Splitwise and similar),
+load [household-ledger.md](references/household-ledger.md).
 
 ## Enrichment
 
