@@ -23,7 +23,9 @@ import { z } from "zod";
 
 import { createEntityMutationPort } from "~/entity/editing/use-entity-commands";
 import { installFeatures } from "~/features/registry";
+import { rippleFor } from "~/integrations/tanstack-query/cache-tags";
 import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 import type { EntityBrowserMutationInput } from "~/server/entity-kernel/contracts";
@@ -62,7 +64,14 @@ const emptyStoredSuggestionOperations: StoredSuggestionOperations = {
     applied: intent === "apply",
   }),
   reviewBatch: async () => [],
-  settled: async () => [],
+  settled: async () => null,
+};
+const decline = {
+  kind: "evaluated" as const,
+  answer: "none" as const,
+  confidence: "high" as const,
+  probability: 0.9,
+  alternatives: [],
 };
 const food = {
   assessmentId: "00000000-0000-4000-8000-000000000001",
@@ -248,7 +257,7 @@ describe("record suggestions", () => {
             ok: true as const,
           })),
       ),
-      settled: async () => [],
+      settled: async () => null,
     };
     const suggestFields = vi.fn((_input: FieldSuggestionsInput) => undefined);
     const operations: EntitySuggestionsOperations = {
@@ -358,18 +367,8 @@ describe("record suggestions", () => {
       }),
     };
     const settled = vi.fn<StoredSuggestionOperations["settled"]>(
-      async ({ questions }) =>
-        questions.map((question) =>
-          question.basis.name === "Synthetic gadget"
-            ? {
-                kind: "evaluated" as const,
-                answer: "none" as const,
-                confidence: "high" as const,
-                probability: 0.9,
-                alternatives: [],
-              }
-            : null,
-        ),
+      async (question) =>
+        question.basis.name === "Synthetic gadget" ? decline : null,
     );
     const stored = { ...emptyStoredSuggestionOperations, settled };
     const List = ({ name }: { name: string }) => (
@@ -398,6 +397,59 @@ describe("record suggestions", () => {
       ),
     );
     expect(settled).toHaveBeenCalledTimes(2);
+  });
+
+  // Regression: a component-local memory kept suppressing a decline after a
+  // member review reopened it.
+  it("re-asks a remembered decline after a review invalidates it", async () => {
+    const asked = vi.fn();
+    const operations: EntitySuggestionsOperations = {
+      suggestFields: ai.suggestFields.withTransport(async ({ input }) => {
+        asked(input.basis.name);
+        return { suggestions: { categoryId: null }, outcomes: {} };
+      }),
+    };
+    let remembered = true;
+    const settled = vi.fn<StoredSuggestionOperations["settled"]>(async () =>
+      remembered ? decline : null,
+    );
+    render(
+      <RecordSuggestionsProvider
+        entity="product"
+        records={[
+          {
+            id,
+            name: "Synthetic gadget",
+            manufacturer: null,
+            categoryId: null,
+          },
+        ]}
+        fieldKeys={["categoryId"]}
+        operations={operations}
+        storedSuggestionOperations={{
+          ...emptyStoredSuggestionOperations,
+          settled,
+        }}
+      >
+        <span>rows</span>
+      </RecordSuggestionsProvider>,
+      { wrapper: harness.wrapper },
+    );
+    await waitFor(() => expect(settled).toHaveBeenCalledTimes(1));
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    await waitFor(() => expect(harness.queryClient.isFetching()).toBe(0));
+    expect(asked).not.toHaveBeenCalled();
+
+    remembered = false;
+    await act(() =>
+      invalidateOperationTags(
+        harness.queryClient,
+        rippleFor(["settledSuggestions"]),
+      ),
+    );
+    await waitFor(() =>
+      expect(asked).toHaveBeenCalledExactlyOnceWith("Synthetic gadget"),
+    );
   });
 
   // Regression: deriving a basis and a query observer per row during SSR cost

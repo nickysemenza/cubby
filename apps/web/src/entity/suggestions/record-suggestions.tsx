@@ -2,13 +2,10 @@ import type {
   FieldSuggestion,
   FieldSuggestionOutcome,
   FieldSuggestionsOut,
-  SettledSuggestionQuestionsInput,
+  SettledSuggestionQuestionInput,
   SuggestionReviewRow,
 } from "@cubby/schemas/ai";
-import {
-  SETTLED_SUGGESTION_QUESTION_MAX,
-  SUGGESTION_LIST_LIMIT_MAX,
-} from "@cubby/schemas/ai";
+import { SUGGESTION_LIST_LIMIT_MAX } from "@cubby/schemas/ai";
 import type {
   AssessmentReviewBatchOut,
   AssessmentReviewOut,
@@ -222,10 +219,10 @@ export interface StoredSuggestionOperations {
   reviewBatch: (input: {
     items: Parameters<StoredSuggestionOperations["review"]>[0][];
   }) => Promise<AssessmentReviewBatchOut>;
-  /** Remembered declines, aligned with `questions`; null asks live. */
+  /** A remembered decline for one question; null asks live. */
   settled: (
-    input: SettledSuggestionQuestionsInput,
-  ) => Promise<(FieldSuggestionOutcome | null)[]>;
+    input: SettledSuggestionQuestionInput,
+  ) => Promise<FieldSuggestionOutcome | null>;
 }
 
 type PendingPageInput = Parameters<StoredSuggestionOperations["list"]>[0];
@@ -271,23 +268,8 @@ const productionStoredSuggestionOperations: StoredSuggestionOperations = {
   ),
   review: (input) => assessment.review.call(input),
   reviewBatch: (input) => assessment.reviewBatch.call(input),
-  settled: async ({ entity, questions }) => {
-    const chunks = [];
-    for (
-      let offset = 0;
-      offset < questions.length;
-      offset += SETTLED_SUGGESTION_QUESTION_MAX
-    )
-      chunks.push(
-        questions.slice(offset, offset + SETTLED_SUGGESTION_QUESTION_MAX),
-      );
-    const results = await Promise.all(
-      chunks.map((chunk) =>
-        ai.settledSuggestionQuestions.call({ entity, questions: chunk }),
-      ),
-    );
-    return results.flatMap((result) => result.outcomes);
-  },
+  settled: async (input) =>
+    (await ai.settledSuggestionQuestion.call(input)).outcome,
 };
 
 const recordPublicId = (record: unknown) => {
@@ -805,27 +787,30 @@ type StoredPageRead = {
 };
 const firstStoredPageQuery = (results: UseQueryResult<StoredPageRead>[]) =>
   results[0];
-type SettledQuestion = SettledSuggestionQuestionsInput["questions"][number];
-type SettledRead = {
-  ids: readonly string[];
-  outcomes: readonly (FieldSuggestionOutcome | null)[];
-};
-const firstSettledQuery = (results: UseQueryResult<SettledRead>[]) =>
-  results[0];
 /** A single-field question the server can answer from remembered declines;
  * a question that reads saved record context (`entityId`) is always live. */
 function settledQuestionOf(
+  entity: StandardEntity,
   source: FieldSuggestionSource,
-): { id: string; question: SettledQuestion } | null {
+): { id: string; question: SettledSuggestionQuestionInput } | null {
   const [field] = source.targets;
   if (source.entityId || source.targets.length !== 1 || !field) return null;
   const question = {
+    entity,
     field,
     basisMode: source.basisMode,
     basis: source.basis,
   };
   return { id: JSON.stringify(question), question };
 }
+const combineSettledQueries = (
+  results: UseQueryResult<{ outcome: FieldSuggestionOutcome | null }>[],
+) =>
+  results.map(({ data, isError, isFetching }) => ({
+    outcome: data?.outcome,
+    isError,
+    isFetching,
+  }));
 const SETTLED_IDLE = {
   isFetching: false,
   isPending: false,
@@ -851,11 +836,12 @@ const NO_RECORDS: readonly unknown[] = [];
 type PageRequest = ReturnType<typeof requestsForRecords>[number];
 
 /**
- * Declines and signal-less answers are remembered server-side per basis, so a
- * revisit asks only questions whose basis or decision policy changed.
- * Completed reads persist for the mount; only unseen questions wait, and an
- * unread question still claims its field so nested editors wait for this row's
- * answer instead of asking on their own.
+ * Declines and signal-less answers are remembered server-side, so a revisit
+ * asks only questions whose basis or saved decision inputs changed. Each
+ * question is its own subscribed query (the transport batches them), so entity
+ * writes and member reviews that invalidate its tags recheck it. An unread
+ * question still claims its field so nested editors wait for this row's answer
+ * instead of asking on their own.
  */
 function useSettledQuestions(
   entity: StandardEntity,
@@ -863,61 +849,41 @@ function useSettledQuestions(
   candidateRequests: readonly PageRequest[],
   operations: StoredSuggestionOperations,
 ) {
-  const [known] = useState(
-    () => new Map<string, FieldSuggestionOutcome | null>(),
-  );
-  const unknownQuestions = new Map<string, SettledQuestion>();
+  const questions = new Map<string, SettledSuggestionQuestionInput>();
   for (const { source } of pageRequests) {
-    const settled = settledQuestionOf(source);
-    if (settled && !known.has(settled.id))
-      unknownQuestions.set(settled.id, settled.question);
+    const settled = settledQuestionOf(entity, source);
+    if (settled) questions.set(settled.id, settled.question);
   }
-  const unknownIds = [...unknownQuestions.keys()];
-  const reads: UseQueryOptions<SettledRead>[] =
-    unknownIds.length > 0
-      ? [
-          {
-            queryKey: [
-              "ai",
-              "settled-suggestion-questions",
-              entity,
-              unknownIds,
-            ] as const,
-            queryFn: async (): Promise<SettledRead> => ({
-              ids: unknownIds,
-              outcomes: await operations.settled({
-                entity,
-                questions: [...unknownQuestions.values()],
-              }),
-            }),
-            retry: false,
-            meta: { silentErrors: true },
-          },
-        ]
-      : [];
-  const query = useQueries({ queries: reads, combine: firstSettledQuery });
-  const read = query?.data;
-  if (read)
-    read.ids.forEach((questionId, index) =>
-      known.set(questionId, read.outcomes[index] ?? null),
-    );
-  // A failed read asks live rather than withholding suggestions.
-  else if (query?.isError)
-    for (const questionId of unknownIds) known.set(questionId, null);
+  const ids = [...questions.keys()];
+  const results = useQueries({
+    queries: [...questions.values()].map((question) => {
+      const options = ai.settledSuggestionQuestion.queryOptions(question);
+      return {
+        ...options,
+        queryFn: async () => ({ outcome: await operations.settled(question) }),
+        retry: false,
+        meta: { ...options.meta, silentErrors: true },
+      };
+    }),
+    combine: combineSettledQueries,
+  });
+  const byId = new Map(ids.map((id, index) => [id, results[index]!]));
   const settledRequests: (PageRequest & {
     outcome: FieldSuggestionOutcome | undefined;
   })[] = [];
   const requests = candidateRequests.filter((request) => {
-    const settled = settledQuestionOf(request.source);
+    const settled = settledQuestionOf(entity, request.source);
     if (!settled) return true;
-    const outcome = known.get(settled.id);
+    const result = byId.get(settled.id);
+    // A failed read asks live rather than withholding suggestions.
+    const outcome = result?.isError ? null : result?.outcome;
     if (outcome !== null) settledRequests.push({ ...request, outcome });
     return outcome === null;
   });
   return {
     requests,
     settledRequests,
-    isFetching: query?.isFetching ?? false,
+    isFetching: results.some((result) => result.isFetching),
   };
 }
 
@@ -1090,13 +1056,13 @@ function BoundRecordSuggestions({
         return stored.has(key) || accepted.has(key);
       }),
   );
-  const settled = useSettledQuestions(
+  const settledQuestions = useSettledQuestions(
     entity,
     pageRequests,
     candidateRequests,
     storedSuggestionOperations,
   );
-  const { requests } = settled;
+  const { requests } = settledQuestions;
   // Identical records can share one query, while each row retains its own review state.
   const sources = [
     ...new Map(
@@ -1123,7 +1089,7 @@ function BoundRecordSuggestions({
     sources.map((source, index) => [JSON.stringify(source), queries[index]!]),
   );
   const rows = new Map<string, SuggestionRow>();
-  for (const { record, source, outcome } of settled.settledRequests) {
+  for (const { record, source, outcome } of settledQuestions.settledRequests) {
     const field = source.targets[0]!;
     rows.set(
       record.id,
@@ -1377,7 +1343,7 @@ function BoundRecordSuggestions({
     (!hydrated && allRecords.length > 0 && targets.targets.length > 0) ||
     ((storedQuery?.isFetching ?? false) &&
       readyRecords.length < records.length) ||
-    settled.isFetching ||
+    settledQuestions.isFetching ||
     queries.some((query) => query.isFetching || query.isPending);
   const failures =
     queries.filter((query) => query.isError).length +
@@ -1387,7 +1353,7 @@ function BoundRecordSuggestions({
   // first basis field that would unblock a request, e.g. "name".
   const unasked =
     requests.length === 0 &&
-    settled.settledRequests.length === 0 &&
+    settledQuestions.settledRequests.length === 0 &&
     readyRecords.length > 0 &&
     targets.targets.length > 0 &&
     stored.size === 0 &&

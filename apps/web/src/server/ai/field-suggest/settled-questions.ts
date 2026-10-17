@@ -2,12 +2,22 @@ import {
   fieldSuggestionOutcomeSchema,
   type FieldSuggestionOutcome,
   type FieldSuggestionsInput,
-  type SettledSuggestionQuestionsInput,
+  type SettledSuggestionQuestionInput,
 } from "@cubby/schemas/ai";
 import type { AiRefreshManifest } from "@cubby/schemas/ai-evaluation";
+import { runEntityId } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, eq, inArray, isNull, notExists, sql } from "drizzle-orm";
+import { and, eq, isNull, notExists, sql } from "drizzle-orm";
+import { z } from "zod";
 
+import {
+  type CapturedInput,
+  withAiInputs,
+} from "~/server/ai/evaluation-inputs";
+import {
+  suggestFields,
+  type SuggestFieldsPorts,
+} from "~/server/ai/field-suggest/suggest-fields";
 import {
   dependencyStamps,
   fieldDependencyKeys,
@@ -21,16 +31,34 @@ import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
 /**
  * A declined or signal-less field question is remembered in the shared
  * `AiAnalysis` cache, keyed by the client basis plus the field's decision
- * policy stamps, so list pages stop re-asking it on every visit. Vocabulary
- * changes that leave the basis unchanged are revisited by AI refresh
- * discovery, not by this memory.
+ * policy stamps, so list pages stop re-asking it on every visit.
+ *
+ * The basis is not everything a decision reads: rosters (a new Category or
+ * Project), linked records (a Product's category behind an inventory
+ * location question) and stock tallies come from saved data. So the memory
+ * also keeps a signature of the decision inputs the answer was computed from,
+ * and a read re-prepares those inputs on the live roster/rendering path
+ * without calling the model (the same preparation AI refresh discovery
+ * fingerprints). Any change to what the model would have read reopens the
+ * question. AI refresh discovery never sees these drafts; this check is what
+ * revisits them.
  */
 const SETTLED_QUESTION = {
   entityKind: "global",
   feature: "field-suggestion.settled-question",
   model: "any",
-  promptVersion: "1",
+  promptVersion: "2",
 } as const;
+
+/** Preparation records no usage, so it needs no real Run. */
+const PREPARATION_RUN = runEntityId.parse(
+  "00000000-0000-4000-8000-000000000000",
+);
+
+const rememberedSchema = z.object({
+  outcome: fieldSuggestionOutcomeSchema,
+  signature: z.string(),
+});
 
 type FieldQuestion = Pick<FieldSuggestionsInput, "basisMode" | "basis"> & {
   entity: string;
@@ -54,19 +82,46 @@ export const fieldQuestionKey = (
     }),
   );
 
-/** Only answers that a re-ask with the same basis would repeat are remembered. */
+/** Only answers that a re-ask with the same inputs would repeat are remembered. */
 export const isSettledOutcome = (outcome: FieldSuggestionOutcome) =>
   outcome.kind === "evaluated"
     ? outcome.answer === "none"
     : outcome.reason === "no_signal";
 
+/** The outcome's kind plus every decision input this field's answer read. */
+export const settledSignature = (
+  question: Pick<FieldQuestion, "entity" | "field">,
+  outcome: FieldSuggestionOutcome,
+  inputs: readonly CapturedInput[],
+) =>
+  sha256Hex(
+    canonicalJson({
+      kind: outcome.kind,
+      reason: outcome.kind === "skipped" ? outcome.reason : null,
+      inputs: inputs
+        .filter(
+          (call) =>
+            call.operation ===
+            `suggestFields.${question.entity}.${question.field}`,
+        )
+        .map((call) => call.fingerprint)
+        .sort(),
+    }),
+  );
+
 /** One statement per question; a repeated settle of a key adds no row. */
 export async function rememberSettledQuestions(
   db: Database,
-  entries: readonly { key: string; outcome: FieldSuggestionOutcome }[],
+  entries: readonly {
+    key: string;
+    outcome: FieldSuggestionOutcome;
+    signature: string;
+  }[],
 ) {
-  for (const { key, outcome } of entries) {
-    const result = JSON.stringify(outcome);
+  for (const { key, outcome, signature } of entries) {
+    const result = JSON.stringify(
+      rememberedSchema.parse({ outcome, signature }),
+    );
     await getDb(db).execute(sql`
       INSERT INTO "AiAnalysis"
         ("entityKind", "entityId", "feature", "model", "promptVersion", "inputFingerprint", "result")
@@ -85,22 +140,19 @@ export async function rememberSettledQuestions(
   }
 }
 
-/** A member's recorded miss on the remembered decline re-opens the question. */
-export async function readSettledQuestions(
+/**
+ * The remembered outcome while its basis, policy and prepared decision inputs
+ * are unchanged; a member's recorded miss on the decline also reopens it.
+ */
+export async function readSettledQuestion(
   db: Database,
-  input: SettledSuggestionQuestionsInput,
-) {
+  input: SettledSuggestionQuestionInput,
+  ports: Pick<SuggestFieldsPorts, "decisionPort" | "registry"> = {},
+): Promise<{ outcome: FieldSuggestionOutcome | null }> {
   const manifest = await producingAiManifest(db);
-  const keys = await Promise.all(
-    input.questions.map((question) =>
-      fieldQuestionKey({ ...question, entity: input.entity }, manifest),
-    ),
-  );
-  const rows = await getDb(db)
-    .select({
-      key: aiAnalysis.inputFingerprint,
-      result: aiAnalysis.result,
-    })
+  const key = await fieldQuestionKey(input, manifest);
+  const [row] = await getDb(db)
+    .select({ result: aiAnalysis.result })
     .from(aiAnalysis)
     .where(
       and(
@@ -109,7 +161,7 @@ export async function readSettledQuestions(
         eq(aiAnalysis.feature, SETTLED_QUESTION.feature),
         eq(aiAnalysis.model, SETTLED_QUESTION.model),
         eq(aiAnalysis.promptVersion, SETTLED_QUESTION.promptVersion),
-        inArray(aiAnalysis.inputFingerprint, [...new Set(keys)]),
+        eq(aiAnalysis.inputFingerprint, key),
         isNull(aiAnalysis.deletedAt),
         notExists(
           getDb(db)
@@ -117,19 +169,43 @@ export async function readSettledQuestions(
             .from(feedback)
             .where(
               and(
-                sql`${feedback.assessmentId}::text = ${aiAnalysis.result}->>'assessmentId'`,
+                sql`${feedback.assessmentId}::text = ${aiAnalysis.result}->'outcome'->>'assessmentId'`,
                 eq(feedback.authority, "member"),
                 eq(feedback.verdict, "wrong"),
               ),
             ),
         ),
       ),
-    );
-  const byKey = new Map(
-    rows.map((row) => [
-      row.key,
-      fieldSuggestionOutcomeSchema.parse(row.result),
-    ]),
+    )
+    .limit(1);
+  const remembered = row ? rememberedSchema.safeParse(row.result) : null;
+  if (!remembered?.success) return { outcome: null };
+  const prepared = await withAiInputs(
+    true,
+    () =>
+      suggestFields(
+        db,
+        PREPARATION_RUN,
+        {
+          entity: input.entity,
+          basisMode: input.basisMode,
+          basis: input.basis,
+          targets: [input.field],
+        },
+        { ...ports, recordUsage: false },
+      ),
+    // SILENT: a question preparation refuses is asked live, which reports
+    // the raw diagnostic on its own surface.
+  ).catch(() => null);
+  const preparedOutcome = prepared?.result.outcomes?.[input.field];
+  if (!prepared || !preparedOutcome) return { outcome: null };
+  const signature = await settledSignature(
+    input,
+    preparedOutcome,
+    prepared.inputs,
   );
-  return { outcomes: keys.map((key) => byKey.get(key) ?? null) };
+  return {
+    outcome:
+      signature === remembered.data.signature ? remembered.data.outcome : null,
+  };
 }

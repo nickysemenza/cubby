@@ -33,6 +33,7 @@ export type RippleKey =
   | "maintenance"
   | "problemsSearch"
   | "recommendations"
+  | "settledSuggestions"
   | "collection"
   | "connectedApps"
   | "orphanedOAuth"

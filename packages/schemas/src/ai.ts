@@ -730,31 +730,20 @@ export type FieldSuggestionOutcome = z.infer<
   typeof fieldSuggestionOutcomeSchema
 >;
 
-/** The most single-field questions one settled-question read accepts. */
-export const SETTLED_SUGGESTION_QUESTION_MAX = 250;
 /**
- * Single-field `suggestFields` questions a list already asked. A question
- * whose last answer was a decline (`none`) or `no_signal` returns that outcome
- * while its basis and the field's decision policy are unchanged; every other
- * question returns null and is asked live.
+ * A single-field `suggestFields` question a list already asked. While its
+ * basis, the field's decision policy and the decision inputs prepared from
+ * saved data are unchanged, a remembered decline (`none`) or `no_signal`
+ * answer is returned; otherwise null and the question is asked live.
  */
-export const settledSuggestionQuestionsInput = z.object({
-  entity: z.enum(shortcodeEntities),
-  questions: z
-    .array(
-      fieldSuggestionsInput
-        .pick({ basisMode: true, basis: true })
-        .extend({ field: z.string().min(1) }),
-    )
-    .min(1)
-    .max(SETTLED_SUGGESTION_QUESTION_MAX),
-});
-export type SettledSuggestionQuestionsInput = z.infer<
-  typeof settledSuggestionQuestionsInput
+export const settledSuggestionQuestionInput = fieldSuggestionsInput
+  .pick({ entity: true, basisMode: true, basis: true })
+  .extend({ field: z.string().min(1) });
+export type SettledSuggestionQuestionInput = z.infer<
+  typeof settledSuggestionQuestionInput
 >;
-/** Aligned with `questions`. */
-export const settledSuggestionQuestionsOut = z.object({
-  outcomes: z.array(fieldSuggestionOutcomeSchema.nullable()),
+export const settledSuggestionQuestionOut = z.object({
+  outcome: fieldSuggestionOutcomeSchema.nullable(),
 });
 
 /** Input for classifying one external identifier's `kind` from its shape and source. */

@@ -183,6 +183,8 @@ export const ripple = {
   maintenance: exactRippleTags([["maintenance"], ["problems"], ["search"]]),
   problemsSearch: exactRippleTags([["problems"], ["search"]]),
   recommendations: exactRippleTags([["recommendations"]]),
+  /** A member review can reopen a remembered decline. */
+  settledSuggestions: exactRippleTags([["ai", "settledSuggestionQuestion"]]),
   collection: exactRippleTags([["collection"]]),
   connectedApps: exactRippleTags([["oauth", "connectedApps"]]),
   orphanedOAuth: exactRippleTags([["oauth", "orphaned"]]),

@@ -39,8 +39,9 @@ import { suggestExternalIdKind } from "~/server/ai/external-id-kind";
 import {
   fieldQuestionKey,
   isSettledOutcome,
-  readSettledQuestions,
+  readSettledQuestion,
   rememberSettledQuestions,
+  settledSignature,
 } from "~/server/ai/field-suggest/settled-questions";
 import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
 import {
@@ -437,8 +438,9 @@ export const inferFieldAssessments = async (
           : originalJudgment.outcome;
   }
   // A pinned model replays one record for grading; only live answers settle
-  // a question. Answers that read saved record context can change without a
-  // basis edit, so they are never remembered.
+  // a question. A saved record's own context (`entityId`) keeps its finance
+  // review fingerprint instead. Everything else the answer read beyond the
+  // basis is pinned by the input signature and rechecked on read.
   if (!input.decisionModel && !input.entityId) {
     const settled = await Promise.all(
       Object.entries(output.outcomes ?? {})
@@ -449,6 +451,11 @@ export const inferFieldAssessments = async (
         .map(async ([field, outcome]) => ({
           key: await fieldQuestionKey({ ...input, field }, manifest),
           outcome,
+          signature: await settledSignature(
+            { entity: input.entity, field },
+            outcome,
+            captured.inputs,
+          ),
         })),
     );
     if (settled.length)
@@ -547,8 +554,8 @@ export const aiHandlers = implementOperationDomain(aiContract, {
   },
   applyFinanceCategorySuggestion: (context, input) =>
     applyFinanceCategorySuggestion(context, input),
-  settledSuggestionQuestions: (context, input) =>
-    readSettledQuestions(context.db, input),
+  settledSuggestionQuestion: (context, input) =>
+    readSettledQuestion(context.db, input),
   listSuggestionReviewQueue: (context, input) =>
     listSuggestions(context.db, input),
   suggestionCounts: (context, input) => suggestionCounts(context.db, input),
