@@ -1212,6 +1212,44 @@ describe("public mail tool", () => {
     ).toBeLessThan(MAIL_READ_RESPONSE_MAX_BYTES);
   });
 
+  // Failure: links and headers ride on top of a full text page, so the
+  // whole read overflows the agent's cap and Pi cuts trailing links and
+  // Purchase associations without saying so.
+  it("keeps a link-heavy Email read under the response cap and counts dropped links", async () => {
+    const party = await member();
+    const tracking = (index: number) =>
+      `https://click.shop.example/t/${index}/${"q".repeat(3_000)}`;
+    const items = Array.from(
+      { length: 3_000 },
+      (_, index) => `<p>Synthetic gadget line ${index} costs $${index}.99</p>`,
+    );
+    const links = Array.from(
+      { length: 60 },
+      (_, index) => `<a href="${tracking(index)}">Track parcel ${index}</a>`,
+    );
+    const bodyHtml = `<html><body>${items.join("")}${links.join("")}<p>Order total $4321.00</p></body></html>`;
+    const mail = await retainedMailFixture(ctx.db, {
+      ledgerPartyId: party.id,
+      mailboxId,
+      messageId: "synthetic-link-heavy",
+      checksum: "e".repeat(64),
+      content: { snippet: null, bodyText: null, bodyHtml },
+    });
+
+    const read = await readMail(
+      ctx.db,
+      { mailboxId, messageId: mail.messageId },
+      ctx.actor,
+    );
+
+    expect(new TextEncoder().encode(JSON.stringify(read)).length).toBeLessThan(
+      MAIL_READ_RESPONSE_MAX_BYTES,
+    );
+    expect(read.content.links.length).toBeGreaterThan(0);
+    expect(read.content.linksOmitted).toBeGreaterThan(0);
+    expect(read.purchaseAssociations).toEqual([]);
+  });
+
   describe("read attachment originals", () => {
     async function fixture(bytes: Uint8Array = receiptBytes) {
       const party = await member();

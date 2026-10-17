@@ -1,8 +1,10 @@
 import {
   MAIL_READ_HTML_PAGE_MAX_BYTES,
+  MAIL_READ_RESPONSE_MAX_BYTES,
   MAIL_READ_TEXT_MAX_BYTES,
   type MailReadContent,
   type MailReadInput,
+  type MailReadOut,
   type RetainedMailContent,
 } from "@cubby/schemas/mailbox-research";
 
@@ -11,42 +13,58 @@ import { wasm } from "~/lib/wasm";
 const MAIL_READ_MAX_LINKS = 40;
 
 const encoder = new TextEncoder();
-const decoder = new TextDecoder();
 
-const isContinuation = (byte: number | undefined) =>
-  byte !== undefined && (byte & 0xc0) === 0x80;
+const utf8Length = (codePoint: number) =>
+  codePoint < 0x80 ? 1 : codePoint < 0x800 ? 2 : codePoint < 0x10000 ? 3 : 4;
 
-const utf8Length = (lead: number) =>
-  lead < 0x80 ? 1 : lead < 0xe0 ? 2 : lead < 0xf0 ? 3 : 4;
+const shortEscapes = new Set([0x08, 0x09, 0x0a, 0x0c, 0x0d]);
 
 /** Bytes a character occupies inside a JSON string literal. */
-function jsonLength(lead: number) {
-  if (lead === 0x22 || lead === 0x5c) return 2;
-  if (lead >= 0x20) return utf8Length(lead);
-  return [0x08, 0x09, 0x0a, 0x0c, 0x0d].includes(lead) ? 2 : 6;
+function jsonLength(codePoint: number) {
+  if (codePoint === 0x22 || codePoint === 0x5c) return 2;
+  if (codePoint < 0x20) return shortEscapes.has(codePoint) ? 2 : 6;
+  // JSON.stringify escapes a lone surrogate as \uXXXX.
+  if (codePoint >= 0xd800 && codePoint <= 0xdfff) return 6;
+  return utf8Length(codePoint);
 }
 
 /**
- * A page of whole characters from `offset` whose JSON-escaped size fits
- * `maxBytes`. It holds at least one character, so paging by `nextOffset`
- * always progresses and concatenates back to the original.
+ * A page of whole characters starting at UTF-8 byte `offset` (moved back to
+ * its character's start) whose JSON-escaped size fits `maxBytes`. It holds at
+ * least one character, so paging by `nextOffset` always progresses and
+ * concatenates back to the original. It walks code points, not a Uint8Array:
+ * the byte-indexed loop intermittently ended early under Node 26's Maglev JIT
+ * (mail-tool integration suite, passing with --no-maglev).
  */
-function jsonPage(bytes: Uint8Array, offset: number, maxBytes: number) {
-  let start = Math.min(offset, bytes.length);
-  while (start > 0 && isContinuation(bytes[start])) start -= 1;
-  let end = start;
+function jsonPage(text: string, offset: number, maxBytes: number) {
+  let byte = 0;
+  let index = 0;
+  let start: { byte: number; index: number } | null = null;
   let size = 0;
-  while (end < bytes.length) {
-    const lead = bytes[end] ?? 0;
-    const cost = jsonLength(lead);
-    if (end > start && size + cost > maxBytes) break;
+  for (const char of text) {
+    const codePoint = char.codePointAt(0) ?? 0;
+    const bytes = utf8Length(codePoint);
+    if (start === null && byte + bytes <= offset) {
+      byte += bytes;
+      index += char.length;
+      continue;
+    }
+    start ??= { byte, index };
+    const cost = jsonLength(codePoint);
+    if (index > start.index && size + cost > maxBytes)
+      return {
+        text: text.slice(start.index, index),
+        start: start.byte,
+        nextOffset: byte,
+      };
     size += cost;
-    end += utf8Length(lead);
+    byte += bytes;
+    index += char.length;
   }
   return {
-    text: decoder.decode(bytes.subarray(start, end)),
-    start,
-    nextOffset: end < bytes.length ? end : null,
+    text: start === null ? "" : text.slice(start.index),
+    start: start?.byte ?? byte,
+    nextOffset: null,
   };
 }
 
@@ -63,7 +81,9 @@ export function mailReadContent(
   content: RetainedMailContent,
   input: Pick<MailReadInput, "includeHtml" | "offset" | "maxBytes">,
 ): MailReadContent {
-  const html = content.bodyHtml ? encoder.encode(content.bodyHtml) : null;
+  const htmlBytes = content.bodyHtml
+    ? encoder.encode(content.bodyHtml).length
+    : null;
   const compact = content.bodyHtml
     ? wasm.compact_email_html(content.bodyHtml)
     : null;
@@ -74,9 +94,9 @@ export function mailReadContent(
     (plain === null || compact.readable_chars > readableChars(plain));
   const body = compacted ? compact.text : plain;
   const page =
-    input.includeHtml && html
+    input.includeHtml && htmlBytes !== null
       ? jsonPage(
-          html,
+          content.bodyHtml ?? "",
           input.offset ?? 0,
           input.maxBytes ?? MAIL_READ_HTML_PAGE_MAX_BYTES,
         )
@@ -84,7 +104,7 @@ export function mailReadContent(
   // An HTML page replaces the text so the response stays under the agent cap.
   const textPage =
     page === null && body !== null
-      ? jsonPage(encoder.encode(body), 0, MAIL_READ_TEXT_MAX_BYTES)
+      ? jsonPage(body, 0, MAIL_READ_TEXT_MAX_BYTES)
       : null;
   const truncated =
     page === null
@@ -97,11 +117,59 @@ export function mailReadContent(
     bodyHtml: page?.text ?? null,
     nextOffset: page?.nextOffset ?? null,
     ...(content.headers ? { headers: content.headers } : {}),
-    htmlBytes: html?.length ?? null,
+    htmlBytes,
     compacted,
     truncated,
     links: (compact?.links ?? [])
       .slice(0, MAIL_READ_MAX_LINKS)
       .map(({ href, text }) => ({ href, text })),
+    linksOmitted: Math.max(
+      0,
+      (compact?.links.length ?? 0) - MAIL_READ_MAX_LINKS,
+    ),
+    headersOmitted: false,
   };
+}
+
+// Room for the MCP envelope around a read's serialized result.
+const ENVELOPE_BYTES = 1_000;
+
+/**
+ * Bound a whole Email read, metadata included, under the agent's response
+ * cap: trailing links go first, then headers, each reported as omitted. An
+ * original attachment's bytes reach the agent as media, outside the text.
+ */
+export function fitMailRead<T extends Pick<MailReadOut, "content">>(
+  read: T & { originalAttachment?: unknown },
+): T {
+  const size = (candidate: T) =>
+    encoder.encode(
+      JSON.stringify({ ...candidate, originalAttachment: undefined }),
+    ).length + ENVELOPE_BYTES;
+  const fits = (candidate: T) =>
+    size(candidate) <= MAIL_READ_RESPONSE_MAX_BYTES;
+  const { links } = read.content;
+  const withLinks = (kept: number, base: T): T => ({
+    ...base,
+    content: {
+      ...base.content,
+      links: links.slice(0, kept),
+      linksOmitted: base.content.linksOmitted + links.length - kept,
+    },
+  });
+  if (fits(read)) return read;
+  let base: T = read;
+  if (!fits(withLinks(0, base)) && base.content.headers)
+    base = {
+      ...base,
+      content: { ...base.content, headers: undefined, headersOmitted: true },
+    };
+  let low = 0;
+  let high = links.length;
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2);
+    if (fits(withLinks(mid, base))) low = mid;
+    else high = mid - 1;
+  }
+  return withLinks(low, base);
 }

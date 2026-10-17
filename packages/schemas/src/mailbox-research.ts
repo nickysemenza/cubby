@@ -361,6 +361,10 @@ export const mailReadContent = z.object({
   truncated: z.boolean(),
   /** Cue-bearing links first, from the HTML body. */
   links: z.array(z.object({ href: z.string(), text: z.string() })).default([]),
+  /** Links left out to keep the read under MAIL_READ_RESPONSE_MAX_BYTES. */
+  linksOmitted: z.number().int().min(0).default(0),
+  /** `headers` left out because they alone overflow the response cap. */
+  headersOmitted: z.boolean().default(false),
 });
 export type MailReadContent = z.infer<typeof mailReadContent>;
 
@@ -535,6 +539,7 @@ export const mailReadOut = mailMessageRef.extend({
     .default([]),
   financialAssociations: z.array(mailFinancialAssociation).default([]),
 });
+export type MailReadOut = z.infer<typeof mailReadOut>;
 export const mailSearchOut = z.object({
   status: z.enum(["ok", "mailbox_required", "gmail_reconnect_required"]),
   mailboxes: z.array(z.string()),

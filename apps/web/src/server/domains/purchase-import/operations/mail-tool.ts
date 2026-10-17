@@ -82,7 +82,7 @@ import { ensureMailVendorAccount } from "../repo/gmail/mail-account";
 import { recordEmailClassificationObservation } from "../repo/gmail/observations";
 import { clearUnrelatedOriginal } from "../repo/gmail/persistence";
 import { gmailProviderForUser } from "../repo/gmail/provider";
-import { mailReadContent } from "../repo/gmail/read-content";
+import { fitMailRead, mailReadContent } from "../repo/gmail/read-content";
 import { GMAIL_PAGE_SIZE } from "../repo/gmail/sync";
 import { GmailAuthorizationError } from "../repo/gmail/tokens";
 import {
@@ -328,7 +328,7 @@ export async function readMail(
         attachmentRef: requested.id,
       })
     : undefined;
-  return mailReadOut.parse({
+  const read = mailReadOut.parse({
     mailboxId: mail.mailboxId,
     messageId: mail.messageId,
     threadId: mail.threadId,
@@ -342,6 +342,7 @@ export async function readMail(
     boundToRun: admitted,
     ...(await associationsForMail(db, mail)),
   });
+  return fitMailRead(read);
 }
 
 /** Retained evidence files become Purchase documents; printable labels stay with the Email. */
