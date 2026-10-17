@@ -327,6 +327,66 @@ export const settlementReferenceAbsentSql = (purchaseAlias: string) =>
       AND ${settlementReferencePredicate("sr_ft", "sr_fa")}
   )`;
 
+const settlementKindList = purchaseSettlementKinds
+  .map((kind) => `'${kind}'`)
+  .join(", ");
+
+/**
+ * One row per Purchase with every input the bulk data-quality predicates read,
+ * from one grouped Expense scan and one grouped settlement scan, instead of a
+ * correlated scalar per candidate row and check. Each column mirrors the
+ * correlated helper of the same meaning above (liveness, incurred-only rule,
+ * COALESCE default, cast); `purchase-checks-bulk.integration.test.ts` pins
+ * that parity. Only live Purchases have a row; bulk readers already own
+ * liveness. Exception fingerprints keep the correlated helpers: a double
+ * `sum` can round differently in another scan order, and stored fingerprints
+ * must keep matching.
+ */
+export const purchaseQualityFilterReadSql = () =>
+  sql.raw(`SELECT p."id" AS "entityId",
+    COALESCE(e."expenseCount", 0)::int AS "expenseCount",
+    COALESCE(e."settleableUnpricedCount", 0)::int AS "settleableUnpricedCount",
+    COALESCE(e."settleableTotal", 0)::double precision AS "settleableTotal",
+    COALESCE(e."vendorTotal", 0)::double precision AS "vendorTotal",
+    COALESCE(e."vendorCount", 0)::int AS "vendorCount",
+    COALESCE(e."vendorUnpricedCount", 0)::int AS "vendorUnpricedCount",
+    COALESCE(s."hasSettlement", false) AS "hasSettlement",
+    (CASE WHEN COALESCE(s."hasOutstanding", false) THEN COALESCE(s."projectedTotal", 0)
+      ELSE COALESCE(s."postedTotal", 0) END)::double precision AS "comparisonTotal",
+    COALESCE(s."postedRefundTotal", 0)::double precision AS "postedRefundTotal",
+    COALESCE(s."hasSettlementReference", false) AS "hasSettlementReference"
+  FROM "Purchase" p
+  LEFT JOIN (
+    SELECT qe."purchaseId",
+      count(*) AS "expenseCount",
+      count(*) FILTER (WHERE qe."cost" IS NULL AND qe."future" = false) AS "settleableUnpricedCount",
+      sum(qe."cost") FILTER (WHERE qe."future" = false) AS "settleableTotal",
+      sum(qe."cost"::numeric) FILTER (WHERE qe."economicRole" = 'vendor') AS "vendorTotal",
+      count(*) FILTER (WHERE qe."economicRole" = 'vendor') AS "vendorCount",
+      count(*) FILTER (WHERE qe."economicRole" = 'vendor' AND qe."cost" IS NULL) AS "vendorUnpricedCount"
+    FROM "Expense" qe
+    WHERE qe."deletedAt" IS NULL AND qe."purchaseId" IS NOT NULL
+    GROUP BY qe."purchaseId"
+  ) e ON e."purchaseId" = p."id"
+  LEFT JOIN (
+    SELECT qa."purchaseId",
+      bool_or(qft."kind" IN (${settlementKindList}) AND qft."status" <> 'void') AS "hasSettlement",
+      bool_or(qft."kind" IN (${settlementKindList}) AND qft."status" IN ('expected', 'pending')) AS "hasOutstanding",
+      sum(qa."amount") FILTER (WHERE qft."kind" IN (${settlementKindList}) AND qft."status" <> 'void') AS "projectedTotal",
+      sum(qa."amount") FILTER (WHERE qft."kind" IN (${settlementKindList}) AND qft."status" = 'posted') AS "postedTotal",
+      sum(qa."amount") FILTER (WHERE ${postedRefundPredicate("qft")}) AS "postedRefundTotal",
+      -- The correlated form inner-joins a live account; a missing one is no evidence.
+      bool_or(qfa."id" IS NOT NULL AND ${settlementReferencePredicate("qft", "qfa")}) AS "hasSettlementReference"
+    FROM "FinancialTransactionAllocation" qa
+    JOIN "FinancialTransaction" qft
+      ON qft."id" = qa."transactionId" AND qft."deletedAt" IS NULL
+    LEFT JOIN "FinancialAccount" qfa
+      ON qfa."id" = qft."accountId" AND qfa."deletedAt" IS NULL
+    WHERE qa."deletedAt" IS NULL
+    GROUP BY qa."purchaseId"
+  ) s ON s."purchaseId" = p."id"
+  WHERE p."deletedAt" IS NULL`);
+
 /**
  * Compute settlement status from already-aggregated live, non-void rows.
  * Purchase reads and Problems detection share this function so their

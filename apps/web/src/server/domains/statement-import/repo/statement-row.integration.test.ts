@@ -16,6 +16,7 @@ import {
   previewStatementCsv,
 } from "~/server/workflows/statement-csv-import";
 
+import { statementImportMembers } from "./statement-import-membership";
 import {
   deleteStatementRows,
   findStatementRowDrift,
@@ -521,6 +522,11 @@ describe("statement row ledger", () => {
       rowCountStored: 2,
     });
     expect(await findIncompleteStatementImports(ctx.db)).toEqual([]);
+    // First-batch ownership and recorded membership name the same pair once.
+    const members = await getDb(ctx.db).execute(
+      sql`SELECT count(*)::int AS rows, count(DISTINCT (member."importId", member."statementRowId"))::int AS pairs FROM ${statementImportMembers} member`,
+    );
+    expect(members.rows).toEqual([{ rows: 3, pairs: 3 }]);
     expect((await listStatementImports(ctx.db)).data).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

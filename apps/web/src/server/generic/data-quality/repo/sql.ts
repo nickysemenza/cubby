@@ -59,6 +59,39 @@ export const qualityFilterJoin = (entity: ScoredEntity, t: ScoredTable) => {
     : undefined;
 };
 
+/**
+ * One MATERIALIZED bulk quality relation per entity for a multi-branch
+ * statement. Inlining `qualityFilterSource` in every UNION arm re-plans and
+ * re-aggregates the same relation per arm; `source` joins the shared CTE under
+ * the same `dq_filter` alias and `ctes` emits each used relation once.
+ */
+export const statementQualityRelations = () => {
+  const used = new Set<ScoredEntity>();
+  const name = (entity: ScoredEntity) => sql.identifier(`quality_${entity}`);
+  return {
+    source(
+      entity: ScoredEntity,
+      t: ScoredTable = entryFor(entity).table,
+    ): PgTable | SQL {
+      if (!entryFor(entity).filterRead) return t;
+      used.add(entity);
+      return sql`${t} LEFT JOIN ${name(entity)} dq_filter ON dq_filter."entityId" = ${t.id}`;
+    },
+    ctes(): SQL[] {
+      return [...used].flatMap((entity) => {
+        const relation = entryFor(entity).filterRead?.();
+        return relation
+          ? [sql`${name(entity)} AS MATERIALIZED (${relation})`]
+          : [];
+      });
+    },
+  };
+};
+
+export type StatementQualityRelations = ReturnType<
+  typeof statementQualityRelations
+>;
+
 export const qualityFilterSource = (
   entity: ScoredEntity,
   t: ScoredTable = entryFor(entity).table,

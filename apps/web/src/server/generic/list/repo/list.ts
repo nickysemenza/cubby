@@ -1009,6 +1009,9 @@ export interface ListPage {
   orderBy: SQL[];
   limit: number;
   offset: number;
+  /** The bulk quality relation `where`/`orderBy` read; a custom row select
+   * that builds its own FROM must LEFT JOIN it. */
+  qualityJoin?: { relation: SQL; on: SQL };
 }
 
 interface ListRequest<Filters extends object> {
@@ -1548,6 +1551,8 @@ export function listScaffold<
         throw new Error(
           `${entity} counts its own FROM; pass its joins to group the list`,
         );
+      const qualityJoin =
+        readsQuality && scored ? qualityFilterJoin(scored, table) : undefined;
       const page: ListPage = {
         where,
         // A count never orders, and skipped the prepares a derived sort reads.
@@ -1566,6 +1571,7 @@ export function listScaffold<
               ],
         limit: take,
         offset: skip,
+        ...(qualityJoin ? { qualityJoin } : {}),
       };
       const load = spec.load;
       const loadIds = load
@@ -1610,10 +1616,7 @@ export function listScaffold<
               .select(getTableColumns(root))
               .from(root)
               .$dynamic();
-            const join =
-              readsQuality && scored
-                ? qualityFilterJoin(scored, table)
-                : undefined;
+            const join = clauses.qualityJoin;
             const selected = join
               ? query.leftJoin(join.relation, join.on)
               : query;

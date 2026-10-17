@@ -279,8 +279,15 @@ const emailQualityRead = (ids?: SQL, predicate?: SQL) => {
   return sql`
   SELECT candidate.id AS "entityId", membership."ledgerPartyId" IS NOT NULL AS "completedImport",
     ${emailRetainedContentSql(sql`candidate`, sql`quality_original`)} AS "retainedContent",
-    ${memberClassificationWithResolutionSql(sql`candidate`, sql`member_review.classification`)} AS "memberClassification"
+    ${memberClassificationWithResolutionSql(sql`candidate`, sql`member_review.classification`)} AS "memberClassification",
+    linked_state.linked AS "linked"
   FROM "Email" candidate
+  -- One evaluation per related Email for both checks that read it; the helper
+  -- binds the unaliased "Email" root, which this lateral names for the same row.
+  LEFT JOIN LATERAL (
+    SELECT ${emailLinkedSql()} AS linked FROM "Email"
+    WHERE "Email".id = candidate.id AND "Email".classification = ${mailboxClassification.enum.related}
+  ) linked_state ON true
   LEFT JOIN "OrderMail" quality_original ON quality_original.id=candidate."orderMailId"
   LEFT JOIN (${emailMemberReviewReadSql(ids)}) member_review ON member_review."entityId" = candidate.id
   LEFT JOIN (

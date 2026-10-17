@@ -128,11 +128,16 @@ import {
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import { gapCondition } from "~/server/generic/data-quality/repo/sql";
+import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
+import {
+  gapCondition,
+  qualityFilterSource,
+} from "~/server/generic/data-quality/repo/sql";
 import {
   validateProductPolicy,
   validateLiveInheritedPolicies,
 } from "~/server/generic/inheritance/repo/inheritance-validation";
+import { listReadValue } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
@@ -582,8 +587,16 @@ const syncPurchaseImages = async (
  * `expected_mismatch` exception, which only the gap condition applies, so an
  * excepted mismatch has no verdict.
  */
-const reconciliationSql = (): SQL => {
+const reconciliationSql = (read?: QualityReadContext): SQL => {
   const tolerance = cents(RECONCILIATION_TOLERANCE);
+  // A bulk read binds the precomputed vendor aggregate and refund total.
+  const bulk = read?.derivedAlias ? sql.identifier(read.derivedAlias) : null;
+  const aggregate = bulk
+    ? sql`SELECT ${bulk}."vendorTotal" AS total, ${bulk}."vendorCount" AS "expenseCount", ${bulk}."vendorUnpricedCount" AS "unpricedCount"`
+    : sql.raw(vendorExpenseAggregateSql('"Purchase"'));
+  const refund = bulk
+    ? sql`${bulk}."postedRefundTotal"`
+    : purchasePostedRefundTotal;
   // One vendor-expense scan feeds every verdict; the delta and refund are
   // whole cents, as `reconcilePurchase` compares them. Mirrors its
   // zero-expense guard: once the totals fail to match, a purchase with no
@@ -593,13 +606,13 @@ const reconciliationSql = (): SQL => {
     WHEN abs(verdict.delta) <= ${tolerance} THEN ${purchaseReconciliation.enum.match}::text
     WHEN verdict."unpricedCount" = 0 AND verdict.delta < ${-tolerance}
       AND verdict.refund = verdict.delta THEN ${purchaseReconciliation.enum.refund_adjusted}::text
-    WHEN ${gapCondition("purchase", "paperwork_mismatch", purchase)} THEN ${purchaseReconciliation.enum.mismatch}::text
+    WHEN ${gapCondition("purchase", "paperwork_mismatch", purchase, read)} THEN ${purchaseReconciliation.enum.mismatch}::text
   END FROM (
     SELECT ${purchase.statedTotal} AS stated,
       floor((agg.total * 100)::numeric + 0.5) - floor((${purchase.statedTotal} * 100)::numeric + 0.5) AS delta,
       agg."expenseCount", agg."unpricedCount",
-      floor((${purchasePostedRefundTotal} * 100)::numeric + 0.5) AS refund
-    FROM (${sql.raw(vendorExpenseAggregateSql('"Purchase"'))}) agg
+      floor((${refund} * 100)::numeric + 0.5) AS refund
+    FROM (${aggregate}) agg
   ) verdict)`;
 };
 
@@ -617,14 +630,20 @@ const purchaseScaffold = listScaffold("purchase", purchase, {
       WHEN ${purchaseUnpricedExpenseCount} > 0 THEN ${purchaseExpenseStatus.enum.unpriced}::text
       ELSE ${purchaseExpenseStatus.enum.priced}::text END`,
     hasDocuments: sql`${purchaseDocumentCount} > 0`,
-    financialReconciliation: sql`CASE WHEN ${gapCondition("purchase", "settlement_mismatch")} THEN ${purchaseFinancialReconciliation.enum.mismatch}::text END`,
-    reconciliation: reconciliationSql(),
+    financialReconciliation: listReadValue(
+      (read) =>
+        sql`CASE WHEN ${gapCondition("purchase", "settlement_mismatch", undefined, read)} THEN ${purchaseFinancialReconciliation.enum.mismatch}::text END`,
+    ),
+    reconciliation: listReadValue(reconciliationSql),
   },
 });
 
-/** The complete WHERE for a purchase list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
-export const buildPurchaseWhereClause = (filters: PurchaseFilters) =>
-  purchaseScaffold.where(filters);
+/** The complete WHERE for a purchase list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts.
+ * A `readContext` binds the bulk quality relation its caller joins. */
+export const buildPurchaseWhereClause = (
+  filters: PurchaseFilters,
+  readContext?: QualityReadContext,
+) => purchaseScaffold.where(filters, { readContext });
 
 export const purchaseListRead = async (
   db: Database,
@@ -658,8 +677,8 @@ export const purchaseListRead = async (
     db,
     { filters, sorts, pagination, readIntent, projection },
     {
-      select: (page) =>
-        getDb(db)
+      select: (page) => {
+        const query = getDb(db)
           .select({
             ...core,
             ...listGroupFields(projection, "relations", () => ({
@@ -685,10 +704,14 @@ export const purchaseListRead = async (
             })),
           })
           .from(purchase)
+          .$dynamic();
+        const join = page.qualityJoin;
+        return (join ? query.leftJoin(join.relation, join.on) : query)
           .where(page.where)
           .orderBy(...page.orderBy)
           .limit(page.limit)
-          .offset(page.offset),
+          .offset(page.offset);
+      },
       hydrate: (rows) =>
         hydrateListRead(db, "purchase", rows, projection, {
           media: true,
@@ -806,10 +829,8 @@ export const purchaseListSummary = async (
     .where(
       and(
         notDeleted(expense),
-        inArray(
-          expense.purchaseId,
-          getDb(db).select({ id: purchase.id }).from(purchase).where(where),
-        ),
+        // Quality filters read the bulk relation joined by this FROM.
+        sql`${expense.purchaseId} IN (SELECT ${purchase.id} FROM ${qualityFilterSource("purchase")} WHERE ${where ?? sql`true`})`,
       ),
     );
   return {
