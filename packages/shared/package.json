@@ -31,7 +31,7 @@
     "./ai/pi-providers": "./src/ai/pi-providers.ts"
   },
   "scripts": {
-    "typecheck": "node ../../scripts/ensure.ts generate && tsc --noEmit",
+    "typecheck": "node ../../scripts/ensure.ts generate && node ../../scripts/tsc.ts --noEmit",
     "test": "node ../../scripts/ensure.ts generate && vitest run",
     "test:watch": "vitest"
   },

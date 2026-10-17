@@ -12,16 +12,12 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { checkTypecheckBoundaries } from "./checks/typecheck-boundaries.ts";
+import { typeChecker as compiler } from "../../../scripts/tsc.ts";
 import { repositoryPrograms } from "./typecheck-repositories.ts";
 
 const app = resolve(import.meta.dirname, "..");
-const compiler = join(
-  dirname(fileURLToPath(import.meta.resolve("typescript/package.json"))),
-  "bin/tsc",
-);
 const pending = join(app, "artifacts/server-contracts.pending");
 const output = join(app, "artifacts/server-contracts");
 

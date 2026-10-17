@@ -11,7 +11,7 @@
     "check:plan": "node scripts/ci-lanes.ts --explain",
     "check:staged": "sh .husky/pre-commit",
     "check:all": "NX_DAEMON=false nx run-many --projects=cubby-checks,@cubby/web --outputStyle=stream --targets=generate,design-tokens,types,lint,format,knip,ci-lanes,bindings,script-tests,workers-tests",
-    "typecheck": "node scripts/ensure.ts generate && pnpm -r --workspace-concurrency=2 typecheck && tsc --noEmit -p tsconfig.json",
+    "typecheck": "node scripts/ensure.ts generate && pnpm -r --workspace-concurrency=2 typecheck && node scripts/tsc.ts --noEmit -p tsconfig.json",
     "typecheck:web": "pnpm --filter @cubby/web typecheck:app",
     "generate": "node scripts/design-tokens.ts && node scripts/ci-lanes.ts && node scripts/ensure.ts generate --force",
     "generate:if-stale": "node scripts/design-tokens.ts && node scripts/ensure.ts generate",
@@ -70,6 +70,7 @@
     "oxlint": "1.88.0",
     "picomatch": "^4.0.7",
     "proper-lockfile": "^4.1.2",
+    "tsrs": "0.16.0-ts7.1.0-dev.20260929",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "zod": "^4.6.7"
