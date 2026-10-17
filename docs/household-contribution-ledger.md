@@ -59,8 +59,9 @@ not apply later transfers: transfers are household-global.
 ## Presentation and unknowns
 
 Client labels are derived from party kind. Route-capable entity references elsewhere in the app are links; on this ledger page, Ledger Parties and Ledger Transfers still render as plain text — that is a presentation choice for this module now, not a routing limitation, since both gained their own browser list and detail pages (`/ledger-parties`, `/ledger-transfers`). Recorded Expense attributions win for their role. Without recorded funders,
-reports derive funding from positive payment allocations; without recorded
-beneficiaries, they use the singleton Household party. Missing, partial,
+reports derive funding from positive payment allocations, or from incoming
+allocations when a Purchase has no outgoing payment (a guest's repayment credits
+the receiving account's owner); without recorded beneficiaries, they use the singleton Household party. Missing, partial,
 unavailable, and null-attributed evidence remains an explicit gap.
 
 ## Import boundary
@@ -107,9 +108,11 @@ when the survivor has none and refuse conflicting explicit purchasers. Source id
 purchaser attribution does not change beneficiaries or inventory ownership.
 
 Account `fundingPeriods` independently selects the funding party at each payment's
-transaction date, not its posting date or the Purchase date. Inclusive periods
+transaction date, not the Purchase date. A statement row with only a posting date
+uses it when one period covers the 14 preceding days as well; nearer a boundary
+the charge may predate it, so the party remains unknown. Inclusive periods
 must not overlap. An empty history keeps the existing `ledgerPartyId` fallback;
-gaps in a nonempty history and missing transaction dates remain unknown. Expense
+gaps in a nonempty history remain unknown. Expense
 funder rows override that derivation. Existing account inventory defaults keep
 using their existing undated party and are unaffected by funding history.
 

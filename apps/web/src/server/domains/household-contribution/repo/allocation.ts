@@ -18,7 +18,7 @@ import {
 } from "~/server/db/schema";
 import { expenseDerivedCostsSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { effectiveExpenseProjectSql } from "~/server/domains/expense/repo/expense-inheritance";
-import { accountFundingPartySql } from "~/server/domains/financial-account/repo/funding-sql";
+import { paymentFundingPartySql } from "~/server/domains/financial-account/repo/funding-sql";
 
 /**
  * Where a row's party came from. One boolean could not carry this once funder
@@ -31,7 +31,7 @@ type AllocationBasis =
   | "derived_from_payment"
   /** Beneficiary defaulted to the singleton household party. */
   | "assumed_household"
-  /** Paid, but every paying account has `ledgerPartyId IS NULL`. */
+  /** Paid from an account with no funding party known for that payment. */
   | "unowned_account"
   /** Funder of a future expense: not due yet, so nobody has paid it. */
   | "not_yet_paid"
@@ -136,17 +136,20 @@ export async function loadExpenseAllocations(
       LEFT JOIN ${ledgerParty} p
         ON p.id = a."ledgerPartyId" AND p."deletedAt" IS NULL
 
-    /* Net signed cents per PAYING PARTY for each expense's linked Purchase.
-       Grouping by the owning party rather than the account is what collapses
-       two of one party's cards into a single allocationKey — duplicate keys
-       would make the remainder tie-break non-deterministic. Every unowned
-       account collapses into the one NULL group for the same reason. */
-    ), funder_party_gross AS (
+    /* Outgoing and incoming cents per PAYING PARTY for each expense's linked
+       Purchase. Grouping by the owning party rather than the account is what
+       collapses two of one party's cards into a single allocationKey —
+       duplicate keys would make the remainder tie-break non-deterministic.
+       Every unowned account collapses into the one NULL group for the same
+       reason. */
+    ), funder_party_flow AS (
       SELECT
         e."expenseId",
-        ${accountFundingPartySql(sql`fa`, sql`ft."transactionDate"`)} AS owner_party_id,
-        sum(round(fta.amount::numeric * 100))
-          FILTER (WHERE fta.amount > 0)::bigint AS gross_cents
+        ${paymentFundingPartySql(sql`fa`, sql`ft`)} AS owner_party_id,
+        coalesce(sum(round(fta.amount::numeric * 100))
+          FILTER (WHERE fta.amount > 0), 0)::bigint AS gross_cents,
+        coalesce(sum(round(-fta.amount::numeric * 100))
+          FILTER (WHERE fta.amount < 0), 0)::bigint AS inflow_cents
       FROM scoped_expense e
       JOIN ${financialTransactionAllocation} fta
         ON fta."purchaseId" = e."purchaseId" AND fta."deletedAt" IS NULL
@@ -157,7 +160,7 @@ export async function loadExpenseAllocations(
        AND ft.status <> 'void'
       JOIN ${financialAccount} fa
         ON fa.id = ft."accountId" AND fa."deletedAt" IS NULL
-      GROUP BY e."expenseId", ${accountFundingPartySql(sql`fa`, sql`ft."transactionDate"`)}
+      GROUP BY e."expenseId", ${paymentFundingPartySql(sql`fa`, sql`ft`)}
 
     /* Weight by GROSS outlay — the sum of positive allocations — not by the net.
        Allocation amounts are signed (purchase +, refund/income -, adjustment
@@ -168,10 +171,23 @@ export async function loadExpenseAllocations(
        party), so every one of its expenses reported missing_funders — 155 of
        them, recovering to within $0.47 of the same total once weighted gross.
 
-       A party with no positive allocation still contributes nothing, so if every
-       party drops out this arm is empty and arm D fires. That is also why
+       A Purchase with no outgoing settlement at all (a guest's settle-up
+       repayment received into a member's wallet) has no outlay to weight, so
+       it weights by money received instead: the receiving party is whose
+       position the negative Expense changes. Only that whole-purchase case
+       switches basis; a mixed purchase keeps gross outlay.
+
+       A party with zero weight contributes nothing, so if every party drops
+       out this arm is empty and arm D fires. That is also why
        weight / total_weight can never divide by zero: a zero-weight partition
        has no row to aggregate over. */
+    ), funder_weight AS (
+      SELECT
+        f."expenseId",
+        f.owner_party_id,
+        CASE WHEN bool_or(f.gross_cents > 0) OVER (PARTITION BY f."expenseId")
+          THEN f.gross_cents ELSE f.inflow_cents END AS weight_cents
+      FROM funder_party_flow f
     ), funder_derived AS (
       SELECT
         e."expenseId",
@@ -181,14 +197,14 @@ export async function loadExpenseAllocations(
         'funder'::text AS role,
         n.owner_party_id AS "ledgerPartyId",
         coalesce(p.shortcode, '~unowned-account') AS "allocationKey",
-        n.gross_cents AS weight,
+        n.weight_cents AS weight,
         CASE WHEN n.owner_party_id IS NOT NULL
           THEN 'derived_from_payment' ELSE 'unowned_account' END AS basis
       FROM scoped_expense e
-      JOIN funder_party_gross n ON n."expenseId" = e."expenseId"
+      JOIN funder_weight n ON n."expenseId" = e."expenseId"
       LEFT JOIN ${ledgerParty} p
         ON p.id = n.owner_party_id AND p."deletedAt" IS NULL
-      WHERE n.gross_cents > 0
+      WHERE n.weight_cents > 0
         AND NOT EXISTS (
           SELECT 1 FROM ${expenseAttribution} a
           WHERE a."expenseId" = e."expenseId"
@@ -263,8 +279,8 @@ export async function loadExpenseAllocations(
         )
         AND (
           (r.role = 'funder' AND NOT EXISTS (
-            SELECT 1 FROM funder_party_gross n
-            WHERE n."expenseId" = e."expenseId" AND n.gross_cents > 0
+            SELECT 1 FROM funder_weight n
+            WHERE n."expenseId" = e."expenseId" AND n.weight_cents > 0
           ))
           OR
           (r.role = 'beneficiary' AND NOT EXISTS (
