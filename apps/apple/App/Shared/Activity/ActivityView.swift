@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Activity: what this device is doing now, and the way into the household's Runs and Image
 /// jobs. Server work lists through the generic Run and Image job lists; only device-local
-/// progress (with Cancel) and the automatic-work switch are this screen's own.
+/// progress (with Stop) and the automatic-work switch are this screen's own.
 struct ActivityView: View {
     @Environment(AppModel.self) private var appModel
 
@@ -114,7 +114,7 @@ private struct LocalActivityRow: View {
             }
             Spacer(minLength: 0)
             if activity.isCancellable {
-                Button("Cancel", role: .destructive, action: onCancel)
+                Button("Stop", role: .destructive, action: onCancel)
                     .buttonStyle(.borderless)
             }
         }
@@ -156,7 +156,7 @@ struct LocalActivityDetailView: View {
                 }
                 if activity.isCancellable {
                     Section {
-                        Button("Cancel", role: .destructive) {
+                        Button("Stop", role: .destructive) {
                             appModel.backgroundActivity.cancel(id: activity.id)
                         }
                     }

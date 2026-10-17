@@ -50,6 +50,9 @@ public final class HeroActionModel: Identifiable {
         values[key] = value
     }
 
+    /// Whether the person has set any field; server defaults and seeds do not count.
+    public var hasEdits: Bool { !edited.isEmpty }
+
     /// Fields whose `showWhen` toggle is on (or that have none).
     public var visibleFields: [HeroActionField] {
         plan.fields.filter { field in

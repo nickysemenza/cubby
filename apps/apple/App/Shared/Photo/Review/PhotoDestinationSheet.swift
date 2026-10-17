@@ -18,6 +18,7 @@ struct PhotoDestinationSheet: View {
     /// A2: reverse-geocodes each group's representative photo so its row can add "· photo ·
     /// <city>" evidence once known.
     @State private var provenance = PhotoCaptureProvenance()
+    @State private var draftDismissal = DraftDismissalState()
 
     /// `.bottomBar` is iOS/tvOS/watchOS-only; macOS has no equivalent placement, so this bar's
     /// items fall back to the window toolbar there.
@@ -34,7 +35,9 @@ struct PhotoDestinationSheet: View {
             reviewContent
         }
         .nativeSheet(.photoReview)
-        .interactiveDismissDisabled(manifest.isCommitting)
+        .draftDismissal(
+            $draftDismissal, isDirty: manifest.hasStagedChanges, isSaving: manifest.isCommitting
+        ) { dismiss() }
         .task {
             manifest.startAnalysis(client: appModel.client, matches: appModel.photoMatches)
         }
@@ -213,7 +216,12 @@ struct PhotoDestinationSheet: View {
     @ToolbarContentBuilder
     private var reviewToolbar: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            Button("Cancel") { dismiss() }.disabled(manifest.isCommitting)
+            Button("Cancel") {
+                draftDismissal.request(
+                    isDirty: manifest.hasStagedChanges, isSaving: manifest.isCommitting,
+                    dismiss: dismiss)
+            }
+            .disabled(manifest.isCommitting)
         }
         if developerOverlays {
             ToolbarItem { CopyDiagnosticsButton { reviewDiagnostics } }

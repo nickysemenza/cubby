@@ -148,7 +148,7 @@ final class LibraryMetadataSync {
     }
 
     /// Cancels an in-flight run and keeps it cancelled — `AppModel`'s cancel handler for the
-    /// Activity screen's "Cancel" action (`isCancellable: true`). Sticky until the user flips
+    /// Activity screen's "Stop" action (`isCancellable: true`). Sticky until the user flips
     /// participation or signs back in (see `cancelledByUser`); a plain "cancel the task" here would
     /// let the next thermal/power notification silently restart the run underneath the user.
     func cancel() {

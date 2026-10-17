@@ -66,7 +66,9 @@ struct StraysView: View {
             }
             .navigationTitle("Found elsewhere")
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }.disabled(resolving)
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(resolving ? "Moving…" : "Move here") { Task { await resolve() } }
                         .disabled(resolving || session.strays.isEmpty)
