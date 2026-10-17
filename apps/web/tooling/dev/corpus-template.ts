@@ -108,8 +108,11 @@ export async function pruneCheckoutDatabases(
       name === resolveDevProfile(checkout, {}).name
     ) {
       // No FORCE: a connection arriving after the catalog read prevents deletion.
+      // IF EXISTS: concurrent collectors read the same abandoned name.
       try {
-        await admin.query(`DROP DATABASE ${databaseIdentifier(name)}`);
+        await admin.query(
+          `DROP DATABASE IF EXISTS ${databaseIdentifier(name)}`,
+        );
       } catch (error) {
         if (
           !(error instanceof Error && "code" in error && error.code === "55006")
@@ -149,11 +152,15 @@ export async function prepareDevDatabase(
             connectionString: templateConnectionUrl(config),
           });
           // The corpus uploads its three PNGs through the normal storage seam.
-          // Clones restore those bundled bytes into their own R2 binding.
+          // Clones restore those bundled bytes into their own R2 binding;
+          // `cubby_dev_fixture_upload` records what the seed actually stored.
+          const uploads: [path: string, bytes: number][] = [];
           const storage = createServer(async (request, response) => {
-            for await (const _chunk of request) {
-              /* Drain the upload. */
-            }
+            let bytes = 0;
+            for await (const chunk of request)
+              bytes += Buffer.from(chunk).length;
+            if (request.method === "PUT")
+              uploads.push([request.url ?? "", bytes]);
             response.end();
           });
           storage.listen(0, "127.0.0.1");
@@ -205,6 +212,14 @@ export async function prepareDevDatabase(
             console.log(
               `[dev-template] corpus (including three local image uploads): ${Math.round(performance.now() - corpusStart)} ms`,
             );
+            await pool.query(
+              "CREATE TABLE cubby_dev_fixture_upload (path text PRIMARY KEY, bytes integer NOT NULL)",
+            );
+            for (const [path, bytes] of uploads)
+              await pool.query(
+                "INSERT INTO cubby_dev_fixture_upload VALUES ($1, $2)",
+                [path, bytes],
+              );
             await seedUpcLookupFixture(pool);
             await pool.query(
               `CREATE TABLE cubby_dev_fixture (pack text PRIMARY KEY, version integer NOT NULL, state text NOT NULL)`,

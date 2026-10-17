@@ -1,9 +1,16 @@
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { Client } from "pg";
+import { afterEach, beforeEach, expect, it } from "vitest";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
-import { createServer } from "node:http";
-import { once } from "node:events";
-import { afterAll, beforeAll, beforeEach, afterEach, expect, it } from "vitest";
+import { resolveDevProfile } from "../dev-services/dev-profile";
+import { prepareDevDatabase } from "../dev/corpus-template";
+import { DEV_USER_EMAIL } from "../dev/state";
 import { createPostgresPool } from "../postgres-pool";
-import { TEST_USER_ID, withTestDb } from "../test-setup";
+import { databaseIdentifier } from "../schema-template";
+import { testServiceConfig } from "../test-service-config";
+import { TEST_USER_ID } from "../test-setup";
 import { readHouseholdCoverage, seedCorpus } from "./corpus";
 import { seedNativeQa } from "./native-qa";
 
@@ -12,44 +19,36 @@ import { seedNativeQa } from "./native-qa";
 // fixture work dispatches live providers. PostgreSQL read-back owns these checks.
 // Curated chronology must move together with the reference day, and every
 // synthetic member must have the same user-backed identity as production.
-const ctx = withTestDb();
+//
+// The household is read from a clone of the dev corpus template, which seeds
+// through `seedCorpus` once per template hash; reseeding it here per run cost
+// ~50s and duplicated `corpus-template.integration.test.ts`.
 let queue: ReturnType<typeof captureBackgroundQueue>;
 beforeEach(() => {
   queue = captureBackgroundQueue();
 });
 afterEach(() => queue.restore());
-const objects = new Map<string, Buffer>();
-const storage = createServer(async (request, response) => {
-  const chunks: Buffer[] = [];
-  for await (const chunk of request) chunks.push(Buffer.from(chunk));
-  if (request.method === "PUT")
-    objects.set(request.url ?? "", Buffer.concat(chunks));
-  response.end();
-});
-let storageOrigin = "";
-beforeAll(async () => {
-  storage.listen(0, "127.0.0.1");
-  await once(storage, "listening");
-  const address = storage.address();
-  if (!address || typeof address === "string")
-    throw new Error("Storage did not listen");
-  storageOrigin = `http://127.0.0.1:${address.port}`;
-});
-afterAll(
-  () =>
-    new Promise<void>((resolve, reject) =>
-      storage.close((error) => (error ? reject(error) : resolve())),
-    ),
-);
 
 it("seeds a complete connected household with real stored images and skips a completed seed", async () => {
-  const pool = createPostgresPool({ connectionString: ctx.databaseUrl });
+  const config = testServiceConfig();
+  const port = ["localhost", "127.0.0.1"].includes(config.host)
+    ? 55432
+    : config.port;
+  const base = `postgresql://postgres:password@${config.host}:${port}`;
+  const checkout = realpathSync(
+    mkdtempSync(join(tmpdir(), "cubby-household-contract-")),
+  );
+  const name = resolveDevProfile(checkout, {}).name;
+  const admin = new Client({ connectionString: `${base}/postgres` });
+  await admin.connect();
+  await prepareDevDatabase(name, checkout, `${base}/${name}`);
+  const pool = createPostgresPool({ connectionString: `${base}/${name}` });
   try {
+    // The seed and its reseed share the template's storage settings.
     const options = {
-      storageOrigin,
-      bucket: "household-test",
-      keyPrefix: "household",
-      referenceDate: "2026-10-12",
+      storageOrigin: "http://127.0.0.1:9",
+      bucket: "cubby-local",
+      keyPrefix: "cubby-local",
     };
     const refusedPool = createPostgresPool({
       connectionString:
@@ -62,13 +61,19 @@ it("seeds a complete connected household with real stored images and skips a com
     } finally {
       await refusedPool.end();
     }
+    const [seedUser = ""] = (
+      await pool.query<{ id: string }>(
+        'SELECT id FROM "user" WHERE email = $1',
+        [DEV_USER_EMAIL],
+      )
+    ).rows.map((row) => row.id);
+    expect(seedUser).not.toBe("");
     await expect(
-      seedCorpus(pool, TEST_USER_ID, {
+      seedCorpus(pool, seedUser, {
         ...options,
         storageOrigin: "https://example.com",
       }),
     ).rejects.toThrow("local test/dev origin");
-    await seedCorpus(pool, TEST_USER_ID, options);
     const coverage = await readHouseholdCoverage(pool);
     expect(coverage.filter((row) => row.status === "missing")).toEqual([]);
     expect(
@@ -94,16 +99,18 @@ it("seeds a complete connected household with real stored images and skips a com
       (SELECT count(*)::int FROM "LedgerParty" p LEFT JOIN "user" u ON u.id = p."userId" WHERE p.kind = 'member' AND u.id IS NULL) AS orphan_members`);
     for (const value of Object.values(inconsistent.rows[0]))
       expect(value).toBe(0);
-    const images = await pool.query(
-      'SELECT key FROM "Image" WHERE "storageStatus" = \'available\'',
+    // Every available Image points at bytes the seed PUT to storage.
+    const images = await pool.query<{ key: string; bytes: number | null }>(
+      `SELECT i.key, u.bytes FROM "Image" i
+         LEFT JOIN cubby_dev_fixture_upload u ON u.path = '/cubby-local/' || i.key
+        WHERE i."storageStatus" = 'available'`,
     );
     expect(images.rowCount).toBeGreaterThan(2);
-    for (const { key } of images.rows)
-      expect(objects.get(`/household-test/${key}`)?.length).toBeGreaterThan(0);
+    for (const { bytes } of images.rows) expect(bytes).toBeGreaterThan(0);
     const inventory = await pool.query(
       'SELECT sum("amountValue")::text AS amount FROM "InventoryEntry"',
     );
-    await seedCorpus(pool, TEST_USER_ID, options);
+    await seedCorpus(pool, seedUser, options);
     expect(await readHouseholdCoverage(pool)).toEqual(coverage);
     expect(
       (
@@ -131,14 +138,19 @@ it("seeds a complete connected household with real stored images and skips a com
         .rows[0].count,
     ).toBeGreaterThan(0);
     await pool.query("UPDATE cubby_household_fixture SET state = 'failed'");
-    await expect(seedCorpus(pool, TEST_USER_ID, options)).rejects.toThrow(
+    await expect(seedCorpus(pool, seedUser, options)).rejects.toThrow(
       "reset the ephemeral database",
     );
     expect(await readHouseholdCoverage(pool)).toEqual(coverage);
-    const qaIds = await seedNativeQa(pool, TEST_USER_ID);
+    const qaIds = await seedNativeQa(pool, seedUser);
     expect(qaIds.PRODUCT_ID).toBeTruthy();
     expect(qaIds.RECIPE_ID).toBeTruthy();
   } finally {
     await pool.end();
+    await admin.query(
+      `DROP DATABASE IF EXISTS ${databaseIdentifier(name)} WITH (FORCE)`,
+    );
+    await admin.end();
+    rmSync(checkout, { recursive: true, force: true });
   }
 }, 120_000);

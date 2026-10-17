@@ -196,10 +196,27 @@ function isExportDeclaration(node: ESTree.Node): boolean {
   );
 }
 
+// Reading scopeManager runs scope analysis, so a program without a top-level
+// `export { … }` list skips it. Read the AST, not the text: comments may sit
+// between `export` and `{`.
+let exportListProgram: ESTree.Program | undefined;
+let programHasExportList = false;
+
 function isNamedInExportList(
   declaration: ESTree.Node,
   sourceCode: SourceCode,
 ): boolean {
+  if (sourceCode.ast !== exportListProgram) {
+    exportListProgram = sourceCode.ast;
+    programHasExportList = sourceCode.ast.body.some(
+      (statement) =>
+        statement.type === "ExportNamedDeclaration" &&
+        statement.declaration === null &&
+        statement.source === null &&
+        statement.specifiers.length > 0,
+    );
+  }
+  if (!programHasExportList) return false;
   return sourceCode.scopeManager
     .getDeclaredVariables(declaration)
     .some((variable) =>

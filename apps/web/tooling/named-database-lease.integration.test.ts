@@ -16,10 +16,16 @@ import { leaseNamedDatabase } from "./test-database-lease";
 const adminUrl = "postgresql://postgres:password@localhost:55432/postgres";
 
 // The guard admits only this endpoint. CI publishes it from
-// native PostgreSQL service containers; locally it is the dev database service,
-// which this suite starts the same way the native runners do before leasing.
+// native PostgreSQL service containers; locally it is the shared PostgreSQL
+// that `test-services.ts` already started (`CUBBY_TEST_SERVICES`). A direct
+// Vitest run starts it the same way the native runners do before leasing.
 beforeAll(() => {
-  if (process.env.CI || process.env.CUBBY_SIM_DB_EXTERNAL === "1") return;
+  if (
+    process.env.CI ||
+    process.env.CUBBY_SIM_DB_EXTERNAL === "1" ||
+    process.env.CUBBY_TEST_SERVICES
+  )
+    return;
   const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
   // `env -i`: the test environment's DATABASE_URL and service overrides
   // would fail the dev profile's override checks; the container CLI needs
@@ -42,6 +48,9 @@ beforeAll(() => {
     );
 }, 240_000);
 const name = () => `cubby_sim_${randomBytes(8).toString("hex")}`;
+// Only the watchdog case observes migration; the lifecycle cases lease an
+// empty database.
+const skipMigrations = async () => undefined;
 async function exists(databaseName: string) {
   const admin = createPostgresPool({ connectionString: adminUrl });
   try {
@@ -57,7 +66,7 @@ async function exists(databaseName: string) {
 
 it("drops a named database on close, once", async () => {
   const { lease } = await leaseNamedDatabase(
-    { adminUrl, name: name(), retention: "drop" },
+    { adminUrl, name: name(), retention: "drop", migrate: skipMigrations },
     async () => undefined,
   );
   expect(await exists(lease.name)).toBe(true);
@@ -69,7 +78,12 @@ it("drops a named database on close, once", async () => {
 it("retains writes and preserves the holder's database on a colliding acquisition", async () => {
   const databaseName = name();
   const { lease } = await leaseNamedDatabase(
-    { adminUrl, name: databaseName, retention: "retain" },
+    {
+      adminUrl,
+      name: databaseName,
+      retention: "retain",
+      migrate: skipMigrations,
+    },
     async ({ databaseUrl }) => {
       const client = new Client({ connectionString: databaseUrl });
       await client.connect();
@@ -84,7 +98,12 @@ it("retains writes and preserves the holder's database on a colliding acquisitio
     await lease.close();
     await expect(
       leaseNamedDatabase(
-        { adminUrl, name: databaseName, retention: "drop" },
+        {
+          adminUrl,
+          name: databaseName,
+          retention: "drop",
+          migrate: skipMigrations,
+        },
         async () => undefined,
       ),
     ).rejects.toThrow(/already exists/u);
@@ -113,7 +132,12 @@ it("drops a named database whose setup fails even when retention was requested",
   const databaseName = name();
   await expect(
     leaseNamedDatabase(
-      { adminUrl, name: databaseName, retention: "retain" },
+      {
+        adminUrl,
+        name: databaseName,
+        retention: "retain",
+        migrate: skipMigrations,
+      },
       async () => {
         throw new Error("synthetic native seed failure");
       },

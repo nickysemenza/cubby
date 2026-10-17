@@ -34,7 +34,22 @@ export const noForbiddenTermInSymbolNamesRule = defineRule({
     },
   },
   createOnce(context) {
-    const ownedIdentifiers = new Set<ESTree.Identifier>();
+    // Built on a file's first candidate name: reading scopeManager runs scope
+    // analysis, which most files never need.
+    let ownedIdentifiers: Set<ESTree.Identifier> | null = null;
+    const isOwned = (node: ESTree.Identifier) => {
+      if (ownedIdentifiers === null) {
+        ownedIdentifiers = new Set();
+        for (const scope of context.sourceCode.scopeManager.scopes) {
+          for (const variable of scope.variables) {
+            for (const identifier of variable.identifiers) {
+              ownedIdentifiers.add(identifier);
+            }
+          }
+        }
+      }
+      return ownedIdentifiers.has(node);
+    };
 
     const reportForbiddenSymbolName = (
       node: ESTree.Node & { name: string },
@@ -49,16 +64,10 @@ export const noForbiddenTermInSymbolNamesRule = defineRule({
 
     return {
       Program() {
-        for (const scope of context.sourceCode.scopeManager.scopes) {
-          for (const variable of scope.variables) {
-            for (const identifier of variable.identifiers) {
-              ownedIdentifiers.add(identifier);
-            }
-          }
-        }
+        ownedIdentifiers = null;
       },
       Identifier(node) {
-        if (!ownedIdentifiers.has(node)) return;
+        if (!containsForbiddenSymbolName(node.name) || !isOwned(node)) return;
         const parent = node.parent;
         if (
           parent.type === "ImportSpecifier" &&

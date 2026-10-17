@@ -237,7 +237,14 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 - Migration rehearsals: [shared lease and journal boundaries](validation-tests.md#migration-rehearsals).
 - Disposable IntegreSQL databases: `apps/web/tooling/test-database-lease.ts`
   (`prepareTemplate`, `leaseDatabase`, one template per namespace). Vitest
-  keeps `withTestDb`; browser workers use `createE2EDatabase`.
+  keeps `withTestDb`; browser workers use `createE2EDatabase`. A per-test
+  fixture whose seed costs more than a clone (~250 ms under parallel load) uses
+  `ctx.fixture(key, seed)` (`apps/web/tooling/test-fixture-template.ts`):
+  seeded once per run, cloned per test. Cheaper setup stays in the test body,
+  on the per-file DELETE reset.
+- The synthetic household: clone the dev corpus template
+  (`prepareDevDatabase`, `apps/web/tooling/dev/corpus-template.ts`) rather than
+  calling `seedCorpus` again in Vitest.
 - A running Cubby Worker for tests: `apps/web/tooling/workerd-runtime.ts`
   (`openWorkerdRuntime`) under a `WORKERD_PROFILES` profile
   (`apps/web/tooling/workerd-harness.ts`); browser specs wrap it in

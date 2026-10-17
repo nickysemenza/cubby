@@ -444,7 +444,9 @@ manifest and lockfile own install settings and pins.
 Generated/WASM/native preparation is owned by `scripts/ensure.ts` and the
 commands that consume its outputs. Missing output must be restored even when
 inputs are unchanged; a cheap marker that overlooks incomplete packages is
-unsafe. Shared Cargo target output uses content fingerprints and the tracked
+unsafe. Outside Nx, `wasm` and `generate` skip starting Nx only when their
+marker matches the stat of every declared input and the bytes of every output,
+recorded after an Nx run during which neither changed. Shared Cargo target output uses content fingerprints and the tracked
 workspace lockfile. Check a local Cargo path patch before diagnosing an upstream
 API mismatch as an installer problem.
 
