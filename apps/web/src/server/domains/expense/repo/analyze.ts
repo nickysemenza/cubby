@@ -698,18 +698,27 @@ function entityFacetQuery(
     .orderBy(spec.label);
 }
 
-function presenceFacetQuery(
+/**
+ * A live vendor through a live purchase: the relationship the vendor filter's
+ * Any value / No value reads, so a facet count matches the rows it selects.
+ */
+const hasLiveVendor = sql`EXISTS (
+  SELECT 1 FROM "Purchase" p
+  JOIN "Vendor" v ON v."id" = p."vendorId" AND v."deletedAt" IS NULL
+  WHERE p."id" = ${expense.purchaseId} AND p."deletedAt" IS NULL
+)`;
+
+function vendorPresenceFacetQuery(
   db: Database,
   where: SQL | undefined,
-  column: typeof expense.purchaseId,
   allocationScope?: ExpenseAllocationProjectScope,
   prepared?: ExpenseDerivedBatchRead,
 ) {
   const read = prepared ?? expenseDerivedCostRead(db, allocationScope);
   return read
     .select({
-      any: sql<number>`count(*) filter (where ${column} is not null)::int`,
-      none: sql<number>`count(*) filter (where ${column} is null)::int`,
+      any: sql<number>`count(*) filter (where ${hasLiveVendor})::int`,
+      none: sql<number>`count(*) filter (where NOT ${hasLiveVendor})::int`,
     })
     .where(where);
 }
@@ -1201,7 +1210,7 @@ export async function loadExpenseFacetCounts(
           queries[`presence_${id}`] =
             id === "project"
               ? projectPresenceFacetQuery(db, where, scope, read)
-              : presenceFacetQuery(db, where, expense.purchaseId, scope, read);
+              : vendorPresenceFacetQuery(db, where, scope, read);
         } else queries[key] = orderIdFacetQuery(db, where, scope, read);
       }
       return queries;

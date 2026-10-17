@@ -184,6 +184,55 @@ describe("expense workflows — analyzer orchestration", () => {
   });
 });
 
+describe("expense vendor presence", () => {
+  const ctx = withTestDb();
+
+  // Regression: the facet counted raw `purchaseId` nullness while the filter
+  // reads a live vendor through a live purchase.
+  it("counts and filters a soft-deleted purchase as no vendor", async () => {
+    const shop = await createRepoEntity(ctx, "vendor", { name: "Facet shop" });
+    const [live, gone] = await Promise.all(
+      ["2026-06-02", "2026-06-03"].map((date) =>
+        createRepoEntity(ctx, "purchase", {
+          vendorId: shop.output.id,
+          date,
+        }),
+      ),
+    );
+    for (const [name, charge] of [
+      ["Facet live", live!],
+      ["Facet gone", gone!],
+    ] as const)
+      await createRepoEntity(ctx, "expense", {
+        date: "2026-06-02",
+        name,
+        trade: "plumbing",
+        cost: 5,
+        purchaseId: charge.output.id,
+      });
+    await getDb(ctx.db)
+      .update(purchase)
+      .set({ deletedAt: new Date() })
+      .where(eq(purchase.id, await purchaseUuid(ctx.db, gone!.output.id)));
+    const filters = { dateFrom: "2026-06-01", dateTo: "2026-06-30" };
+    const { facets } = await expenseFacetCountsWorkflow(ctx.db, {
+      filters,
+      facetIds: ["vendor"],
+    });
+    expect(facets[0]?.options.slice(0, 2)).toEqual([
+      { value: "__any__", label: null, count: 1 },
+      { value: "__none__", label: null, count: 1 },
+    ]);
+    const { data } = await expenseList(
+      ctx.db,
+      { ...filters, purchaseIdPresenceFilter: "none" },
+      [],
+      { pageIndex: 0, pageSize: 10 },
+    );
+    expect(data.map((row) => row.name)).toEqual(["Facet gone"]);
+  });
+});
+
 /** Folded purchases are tombstoned but must remain resolvable for assertions. */
 const purchaseUuid = async (
   db: Database,

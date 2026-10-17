@@ -280,15 +280,17 @@ const expenseScaffold = listScaffold("expense", expense, {
 export const buildExpenseWhereClause = async (
   db: Database,
   filters: ExpenseFilters,
-  options?: { omitAllocationScope?: boolean },
+  options?: { omitAllocationScope?: boolean; context?: ListContext },
 ): Promise<SQL | undefined> => {
   const selected = options?.omitAllocationScope
     ? withoutAllocation(filters)
     : filters;
-  const context = await expenseScaffold.context(db, {
-    filters: selected,
-    readIntent: "count",
-  });
+  const context =
+    options?.context ??
+    (await expenseScaffold.context(db, {
+      filters: selected,
+      readIntent: "count",
+    }));
   return and(
     expenseScaffold.where(selected, [], { context }),
     // A project page's embedded scope, when no allocation filter carries it.
@@ -306,16 +308,17 @@ export const expenseListRead = async (
   projection: ListProjection,
   readIntent: ListReadIntent = "page",
 ) => {
-  const where = await buildExpenseWhereClause(db, filters);
-  const page = expenseScaffold.list(
-    db,
-    { filters, sorts, pagination, readIntent, projection },
-    {
-      where,
-      load: (where) => loadExpensePage(db, where, projection),
-      hydrate: (rows) => hydrateExpenseRows(db, rows, projection),
-    },
-  );
+  const request = { filters, sorts, pagination, readIntent, projection };
+  // One context serves the where and the list, so the allocation membership
+  // resolves once.
+  const context = await expenseScaffold.context(db, request);
+  const where = await buildExpenseWhereClause(db, filters, { context });
+  const page = expenseScaffold.list(db, request, {
+    context,
+    where,
+    load: (where) => loadExpensePage(db, where, projection),
+    hydrate: (rows) => hydrateExpenseRows(db, rows, projection),
+  });
   if (readIntent !== "page" || projection.kind !== "full") return page;
   const [result, [sum]] = await Promise.all([
     page,
