@@ -152,7 +152,23 @@ export interface AiRunContext<T = unknown> extends Pick<
    * settles must not be free to keep re-prompting a paid model forever).
    */
   validate?: (output: T) => { ok: true } | { ok: false; issues: string[] };
+  /**
+   * Receives the model that produced the returned answer, which the funding
+   * ladder may choose over the feature's declared model. A cache hit reports
+   * the model that originally answered, so stored provenance survives later
+   * ladder changes.
+   */
+  onAnswered?: (model: SupportedChatModel) => void;
 }
+
+interface Answered<T> {
+  value: T;
+  model: SupportedChatModel;
+}
+const answeredEntry = z.object({
+  value: z.unknown(),
+  model: supportedChatModelSchema,
+});
 
 /** The call-site fields a usage row takes from an {@link AiRunContext}. */
 type UsageCallContext = Pick<
@@ -751,7 +767,7 @@ export async function runStructuredFeature<T>(
     callCtx: UsageCallContext & {
       applicationCacheStatus?: ApplicationCacheStatus;
     },
-  ): Promise<T> => {
+  ): Promise<Answered<T>> => {
     let responseFailure: GatewayResponseFailure | undefined;
     const recoveredFailures: GatewayResponseFailure[] = [];
     // Unknown until the transport selects itself before the request leaves.
@@ -836,7 +852,7 @@ export async function runStructuredFeature<T>(
           },
         );
       }
-      return value;
+      return { value, model: answeredBy(message) };
     } catch (error) {
       // A failed call is still a call on its transport — a connected ChatGPT
       // plan's failure stays `chatgpt` even when no response ever arrived —
@@ -896,12 +912,25 @@ export async function runStructuredFeature<T>(
     request,
   };
   if (spec.effort !== undefined) keyInput.effort = spec.effort;
-  return withAiResponseCache({
+  let hitModel: SupportedChatModel | undefined;
+  const answer = await withAiResponseCache<Answered<T>>({
     enabled: spec.cache && ports === productionStructuredRunPorts,
     force: ctx.force,
     keyInput,
-    validate,
-    onHit: (durationMs) => recordApplicationCacheHit(spec, ctx, durationMs),
+    // Entries carry their answering model; an older bare value fails this
+    // parse and is recomputed once.
+    validate: (cached) => {
+      const entry = answeredEntry.parse(cached);
+      hitModel = entry.model;
+      return { value: validate(entry.value), model: entry.model };
+    },
+    // A replayed answer is booked under the model that originally produced it.
+    onHit: (durationMs) =>
+      recordApplicationCacheHit(
+        { ...spec, model: hitModel ?? spec.model },
+        ctx,
+        durationMs,
+      ),
     compute: async (applicationCacheStatus) => {
       const callContext = { ...ctx, applicationCacheStatus };
       const firstResult = await placeCall(
@@ -910,13 +939,13 @@ export async function runStructuredFeature<T>(
         callContext,
       );
       if (!ctx.validate) return firstResult;
-      const firstValidation = ctx.validate(firstResult);
+      const firstValidation = ctx.validate(firstResult.value);
       if (firstValidation.ok) return firstResult;
       const repairRequest: AiChatRequest = {
         systemPrompts: request.systemPrompts,
         messages: [
           ...request.messages,
-          buildRepairTurn(firstValidation.issues, firstResult),
+          buildRepairTurn(firstValidation.issues, firstResult.value),
         ],
       };
       const repairCallContext = { ...callContext, force: true };
@@ -925,13 +954,15 @@ export async function runStructuredFeature<T>(
         planStructuredRun(spec, repairCallContext),
         repairCallContext,
       );
-      const repairValidation = ctx.validate(repairedResult);
+      const repairValidation = ctx.validate(repairedResult.value);
       if (repairValidation.ok) return repairedResult;
       throw new Error(
         `Structured output for "${spec.feature}" is invalid after one repair attempt: ${repairValidation.issues.join("; ")}`,
       );
     },
   });
+  ctx.onAnswered?.(answer.model);
+  return answer.value;
 }
 
 /** What an embedding call reports while its request is in flight. */

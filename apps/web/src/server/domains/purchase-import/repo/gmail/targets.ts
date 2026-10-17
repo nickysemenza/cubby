@@ -1,5 +1,6 @@
+import { parseBankDescriptor } from "@cubby/schemas/financial-transaction-fields";
 import type { MailboxScopedQuery } from "@cubby/schemas/mailbox-research";
-import { and, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, or } from "drizzle-orm";
 
 import { account } from "~/server/db/auth.schema";
 import { type Database } from "~/server/db/database";
@@ -58,6 +59,7 @@ export async function listGmailSyncTargets(
     getDb(db)
       .select({
         merchant: financialTransaction.merchant,
+        rawDescription: financialTransaction.rawDescription,
         ledgerPartyId: financialAccount.ledgerPartyId,
       })
       .from(financialTransaction)
@@ -82,7 +84,10 @@ export async function listGmailSyncTargets(
         and(
           notDeleted(financialTransaction),
           isNull(financialTransactionAllocation.id),
-          isNotNull(financialTransaction.merchant),
+          or(
+            isNotNull(financialTransaction.merchant),
+            isNotNull(financialTransaction.rawDescription),
+          ),
         ),
       ),
   ]);
@@ -91,7 +96,11 @@ export async function listGmailSyncTargets(
   // unallocated charges share a merchant, and Gmail search ignores case. The
   // query derives from the normalized merchant alone, so allocating one
   // spelling never changes the query text and resets its saved coverage.
-  const merchantQueries = (rows: readonly { merchant: string | null }[]) =>
+  // A charge without a provider merchant searches its cleaned bank
+  // descriptor instead (`parseBankDescriptor`), keyed apart from merchants.
+  const merchantQueries = (
+    rows: readonly { merchant: string | null; rawDescription: string | null }[],
+  ) =>
     [
       ...new Set(
         rows.flatMap((charge) => {
@@ -99,12 +108,16 @@ export async function listGmailSyncTargets(
             ?.trim()
             .replace(/\s+/gu, " ")
             .toLowerCase();
-          return merchant ? [merchant] : [];
+          if (merchant) return [`merchant:${merchant}`];
+          const descriptor = parseBankDescriptor(
+            charge.rawDescription,
+          ).merchant;
+          return descriptor ? [`descriptor:${descriptor}`] : [];
         }),
       ),
-    ].map((merchant) => ({
-      key: `merchant:${merchant}`,
-      query: quote(merchant),
+    ].map((key) => ({
+      key,
+      query: quote(key.slice(key.indexOf(":") + 1)),
     }));
   // A Vendor without a verified sender or website domain waits for research.
   const vendorQueries = vendors.flatMap((row) =>

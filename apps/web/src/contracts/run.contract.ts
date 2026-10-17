@@ -13,9 +13,9 @@ import {
 } from "@cubby/schemas/mail-import-settings";
 import {
   mailboxDiscoveryStartOutput,
-  mailboxDiscoveryInput,
-  mailboxDiscoveryProgress,
-  mailboxCoverage,
+  mailboxDiscoveryProgressSummary,
+  mailboxCoverageSummary,
+  mailboxQueryListSummary,
   discoveryEmailAuditPage,
 } from "@cubby/schemas/mailbox-research";
 import { runTargetDeviceWorkState } from "@cubby/schemas/photo-import-run";
@@ -336,21 +336,25 @@ export const runContract = defineContract("run", {
       ),
       /** Durable publication receipts; absent on legacy Runs. */
       mailReclassification: mailReclassificationRead.nullable(),
-      /** Persisted Workflow evidence; mailbox coverage may advance after this Run. */
+      /**
+       * Persisted Workflow evidence; mailbox coverage may advance after this
+       * Run. Query lists are summarized: hundreds of entries would swamp a
+       * status read.
+       */
       mailDiscovery: z
         .object({
           scope: z.object({
             mailboxId: z.string(),
-            scopedQueries: mailboxDiscoveryInput.shape.scopedQueries.nullable(),
+            scopedQueries: mailboxQueryListSummary.nullable(),
             executionPolicy: z
               .enum(["classification_only", "import"])
               .nullable(),
           }),
           emails: discoveryEmailAuditPage,
-          checkpoint: mailboxDiscoveryProgress.nullable(),
+          checkpoint: mailboxDiscoveryProgressSummary.nullable(),
           mailbox: z.object({
             historyId: z.string().nullable(),
-            coverage: mailboxCoverage.nullable(),
+            coverage: mailboxCoverageSummary.nullable(),
           }),
           failureCode: z.string().nullable(),
           error: z.string().nullable(),

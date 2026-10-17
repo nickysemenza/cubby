@@ -39,7 +39,7 @@ export async function completeCloudImageDescription(
     (await ensureRun(db, systemActor(), {
       purpose: "background",
     }));
-  const { result, fingerprint } = await describe(db, {
+  const { result, fingerprint, model } = await describe(db, {
     imageId: input.imageId,
     attemptId: input.attemptId,
     runId,
@@ -54,10 +54,7 @@ export async function completeCloudImageDescription(
         kind: "describe_image",
         status: "completed",
         description: result,
-        runtime: {
-          platform: "cloud",
-          model: IMAGE_DESCRIPTION_FEATURE.model,
-        },
+        runtime: { platform: "cloud", model },
       },
     },
     cloudAnalysis: {
@@ -67,9 +64,11 @@ export async function completeCloudImageDescription(
       resultSchemaRevision: IMAGE_CLOUD_DESCRIPTION_RESULT_SCHEMA_REVISION,
       inputFingerprint: fingerprint,
     },
+    // The analysis identity above stays on the declared model; the runtime
+    // records the model that answered.
     runtime: {
-      provider: providerFor(IMAGE_DESCRIPTION_FEATURE.model),
-      model: IMAGE_DESCRIPTION_FEATURE.model,
+      provider: providerFor(model),
+      model,
       feature: "image-description",
     },
   });

@@ -3,6 +3,9 @@ import { runShortcode } from "@cubby/schemas/identifiers";
 import {
   mailboxDiscoveryInput,
   mailboxDiscoveryProgress,
+  summarizeDiscoveryProgress,
+  summarizeMailboxCoverage,
+  summarizeQueryList,
 } from "@cubby/schemas/mailbox-research";
 import { and, eq, sql } from "drizzle-orm";
 
@@ -83,13 +86,18 @@ export async function loadMailDiscoveryRead(
     ),
     scope: {
       mailboxId: input.mailboxId,
-      scopedQueries: input.scopedQueries ?? null,
+      scopedQueries: input.scopedQueries
+        ? summarizeQueryList(input.scopedQueries)
+        : null,
       executionPolicy: input.executionPolicy ?? null,
     },
     checkpoint: row.progress
-      ? mailboxDiscoveryProgress.parse(row.progress)
+      ? summarizeDiscoveryProgress(mailboxDiscoveryProgress.parse(row.progress))
       : null,
-    mailbox,
+    mailbox: {
+      historyId: mailbox.historyId,
+      coverage: mailbox.coverage && summarizeMailboxCoverage(mailbox.coverage),
+    },
     failureCode: row.failureCode,
     error: row.dispatchError,
     usage: {

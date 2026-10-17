@@ -35,11 +35,13 @@ member's instruction), photo uploads and a member's own
 `purchase_import.prepare`; nothing else on MCP starts research
 ([ADR 0010](../adr/0010-mail-import-unattended-burn-down-interactive.md)).
 `imports_read.run_status` reads one Run. An owned `mail_discovery` Run includes
-`mailDiscovery`: its frozen mailbox/query scope, persisted Workflow checkpoint,
+`mailDiscovery`: its frozen mailbox scope, persisted Workflow checkpoint,
 current mailbox coverage, recorded AI-call usage/retries and failure diagnostics.
 Current mailbox coverage can advance after that Run; the Workflow checkpoint
 belongs to that Run. Unpriced calls remain counted. Missing checkpoint/coverage
-stays null. `imports_read.mail_import` reads each connected mailbox's Mail import
+stays null. Query lists are summarized (counts plus the first or next pending
+queries) and an in-flight page reads as message/event counts, so a status read
+stays bounded however many searches a mailbox has. `imports_read.mail_import` reads each connected mailbox's Mail import
 switch and the current AI budget window. These reads never
 load or resume a Workflow. Discovery has no coordinator conversation, so its owned
 `imports_read.run_transcript` returns `absent`; that is not evidence it never ran.

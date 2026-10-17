@@ -620,3 +620,66 @@ export const discoveryEmailAuditPage = z.object({
     }),
   ),
 });
+
+const QUERY_SAMPLE = 10;
+/** A bounded view of a long query list: counts plus the first few entries. */
+export const mailboxQueryListSummary = z.object({
+  total: z.number().int().nonnegative(),
+  sample: z.array(mailboxScopedQuery).max(QUERY_SAMPLE),
+});
+export const mailboxCoverageSummary = mailboxCoverage
+  .omit({ scoped: true })
+  .extend({
+    scoped: z.object({
+      total: z.number().int().nonnegative(),
+      completed: z.number().int().nonnegative(),
+      pending: z.number().int().nonnegative(),
+      /** The next pending queries in search order. */
+      nextPending: z.array(scopedQueryPosition).max(QUERY_SAMPLE),
+    }),
+  });
+export const mailboxDiscoveryProgressSummary = mailboxDiscoveryProgress
+  .omit({ page: true })
+  .extend({
+    page: z
+      .object({
+        messageCount: z.number().int().nonnegative(),
+        eventCount: z.number().int().nonnegative(),
+      })
+      .nullable(),
+  });
+
+export const summarizeQueryList = (
+  queries: readonly MailboxScopedQuery[],
+): z.infer<typeof mailboxQueryListSummary> => ({
+  total: queries.length,
+  sample: queries
+    .slice(0, QUERY_SAMPLE)
+    .map(({ key, query }) => ({ key, query })),
+});
+export const summarizeMailboxCoverage = ({
+  scoped,
+  ...coverage
+}: MailboxCoverage): z.infer<typeof mailboxCoverageSummary> => {
+  const pending = scoped.filter((query) => !query.completed);
+  return {
+    ...coverage,
+    scoped: {
+      total: scoped.length,
+      completed: scoped.length - pending.length,
+      pending: pending.length,
+      nextPending: pending.slice(0, QUERY_SAMPLE),
+    },
+  };
+};
+export const summarizeDiscoveryProgress = ({
+  page,
+  ...progress
+}: z.infer<typeof mailboxDiscoveryProgress>): z.infer<
+  typeof mailboxDiscoveryProgressSummary
+> => ({
+  ...progress,
+  page: page
+    ? { messageCount: page.messageIds.length, eventCount: page.events.length }
+    : null,
+});

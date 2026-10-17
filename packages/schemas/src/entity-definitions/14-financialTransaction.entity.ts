@@ -10,6 +10,7 @@ import {
   financialTransactionAllocations,
   financialTransactionItemization,
   financialTransactionNonZeroAmount,
+  descriptorProcessors,
   financialTransactionSourceRefs,
   merchantVendorInference,
 } from "@cubby/schemas/financial-transaction-fields";
@@ -969,6 +970,12 @@ export default defineEntity({
       },
       // The allocation-integrity data-quality gap.
       allocationIntegrity: { type: "enum", options: ["defect"] },
+      // The payment processor named by the raw descriptor's prefix, derived
+      // on read (`descriptorProcessors`).
+      descriptorProcessor: {
+        type: "enum",
+        options: descriptorProcessors.map((processor) => processor.value),
+      },
       sourceRefs: {
         predicate: "multiselect",
         reason:
@@ -1136,6 +1143,13 @@ export default defineEntity({
         kind: "multiselect",
         derived: true,
         placeholder: "Filter allocation integrity...",
+        urlOnly: true,
+      },
+      {
+        columnId: "descriptorProcessor",
+        kind: "multiselect",
+        derived: true,
+        placeholder: "Filter payment processor...",
         urlOnly: true,
       },
       {
