@@ -10,7 +10,7 @@
     "./release": "./src/release/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "typecheck": "node ../../scripts/tsc.ts --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "release:build": "tsx scripts/build-release.ts"

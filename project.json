@@ -55,6 +55,7 @@
       "dependsOn": ["wasm", "generate"],
       "inputs": [
         "repo",
+        { "env": "CUBBY_TYPECHECKER" },
         {
           "dependentTasksOutputFiles": "packages/wasm/**/*"
         }

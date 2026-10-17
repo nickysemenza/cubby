@@ -303,7 +303,7 @@ export function createRepositoryPrograms(
       expected.some((file) => !existsSync(join(repositoryCache, file)))
     )
       rmSync(repositoryBuildInfo, { force: true });
-    compile(["--build", repositoryConfig, "--checkers", "1", ...args]);
+    compile(["--build", repositoryConfig, ...args]);
     // A stopped process may have committed compiler state before this inventory.
     if (inventory?.revision !== revision()) {
       const graph = new Set(

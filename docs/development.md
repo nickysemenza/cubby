@@ -158,6 +158,15 @@ published signatures stay unchanged skip consumers. Shared contract edits check
 the affected programs. Cold checking can take longer because shared types are
 checked more than once; peak edit memory and parallel worktrees take priority.
 
+Every typecheck runs the compiler that `scripts/tsc.ts` selects. Locally it is
+[tsrs](https://github.com/oxc-project/tsrs), a Rust port of TypeScript 7 that
+reports the same diagnostics and emits the same declaration bytes; a cold
+`pnpm typecheck` takes about 20 seconds instead of four minutes. CI's
+TypeScript gate sets `CUBBY_TYPECHECKER=tsgo` to keep TypeScript's own checker
+as the merge authority; set it locally to reproduce a CI-only type error. Only
+tsgo runs with `--checkers 1`: its heap grows with each parallel checker, while
+tsrs's parallel checkers peak below one tsgo checker.
+
 Runtime Vite imports continue to load real source. Compiler paths alone redirect
 HTTP handlers, SSR dispatch, server functions and middleware to the annotated
 boundary declarations. The repository producer uses a schema-free native

@@ -6,6 +6,8 @@ import { globSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseSync } from "oxc-parser";
 
+import { typeChecker } from "../../../../scripts/tsc.ts";
+
 // An implementation reached through this global script invalidates the whole
 // app after edits to its dependencies. Inspect the compiler's resolved graph,
 // including type-only and dynamic imports, rather than just the entry spelling.
@@ -29,8 +31,9 @@ if (process.argv.includes("--check")) {
   }
 
   const files = execFileSync(
-    resolve(import.meta.dirname, "../../../../node_modules/.bin/tsc"),
+    process.execPath,
     [
+      typeChecker,
       "--listFilesOnly",
       "-p",
       resolve(import.meta.dirname, "tsconfig.worker-types.json"),

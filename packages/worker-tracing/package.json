@@ -12,7 +12,7 @@
     "./scrub-error-message": "./src/scrub-error-message.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "typecheck": "node ../../scripts/tsc.ts --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
   },

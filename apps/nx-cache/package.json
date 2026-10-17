@@ -6,7 +6,7 @@
     "build": "vite build",
     "deploy": "cf deploy",
     "test": "node --test tests/*.test.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "node ../../scripts/tsc.ts --noEmit"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "2.0.0-beta.v.1",
