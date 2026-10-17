@@ -25,8 +25,7 @@ import {
 
 // Failure modes: a vendor without purchases escapes logo work, duplicate
 // problem/research branches produce two tasks for one logo, assigning an
-// account leaves Purchase quality/work stale, a receipt-only vendor's Purchase
-// asks for an account it never has, or a shared vendor mixes members'
+// account leaves Purchase quality/work stale, or a shared vendor mixes members'
 // purchases and counts (including deleted rows) in account previews.
 describe("vendor identity and purchase account coverage", () => {
   const ctx = withTestDb();
@@ -82,7 +81,6 @@ describe("vendor identity and purchase account coverage", () => {
   it("lowers Purchase quality for a missing account and clears its work after assignment", async () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic guest vendor",
-      orderEvidence: "online_account",
     });
     const member = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic guest member",
@@ -129,30 +127,32 @@ describe("vendor identity and purchase account coverage", () => {
     );
   });
 
-  it("expects an account only on an online-account vendor's Purchase", async () => {
-    const vendorWith = (name: string, orderEvidence?: "not_expected" | "receipt_only") =>
-      insertWithShortcode(ctx.db, "vendor", { name, ...(orderEvidence ? { orderEvidence } : {}) });
-    const settleUp = await vendorWith("Synthetic shared-expense app", "not_expected");
-    const receipt = await vendorWith("Synthetic receipt vendor", "receipt_only");
-    const unclassified = await vendorWith("Synthetic unclassified vendor");
-    const purchases = await Promise.all(
-      [settleUp, receipt, unclassified].map((vendor) =>
-        insertWithShortcode(ctx.db, "purchase", {
-          vendorId: vendor.id,
-          displayLabel: "Synthetic purchase",
-          date: "2026-09-01",
-        }),
-      ),
-    );
-    const quality = await loadDataQualities(
-      ctx.db,
-      "purchase",
-      purchases.map((purchase) => purchase.id),
-    );
-    for (const purchase of purchases)
-      expect(
-        quality.get(purchase.id)?.gaps.map((gap) => gap.check),
-      ).not.toContain("purchase_vendor_account");
+  it("expects no vendor account on a Purchase from a vendor with no order evidence", async () => {
+    const settleUp = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic shared-expense app",
+      orderEvidence: "not_expected",
+    });
+    const unclassified = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic unclassified vendor",
+    });
+    const purchaseFrom = (vendorId: typeof settleUp.id) =>
+      insertWithShortcode(ctx.db, "purchase", {
+        vendorId,
+        displayLabel: "Synthetic settle-up",
+        date: "2026-09-01",
+      });
+    const settleUpPurchase = await purchaseFrom(settleUp.id);
+    const unclassifiedPurchase = await purchaseFrom(unclassified.id);
+    const quality = await loadDataQualities(ctx.db, "purchase", [
+      settleUpPurchase.id,
+      unclassifiedPurchase.id,
+    ]);
+    expect(
+      quality.get(settleUpPurchase.id)?.gaps.map((gap) => gap.check),
+    ).not.toContain("purchase_vendor_account");
+    expect(
+      quality.get(unclassifiedPurchase.id)?.gaps.map((gap) => gap.check),
+    ).toContain("purchase_vendor_account");
   });
 
   it("previews only each account's latest three live purchases and counts all its purchases", async () => {

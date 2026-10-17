@@ -1898,8 +1898,7 @@ export default defineEntity({
           weight: 1,
           exceptions: "forbidden",
           label: "Missing vendor account",
-          message:
-            "This vendor's orders live in a member's online account, but the Purchase is not assigned to one.",
+          message: "Purchase is not assigned to a member's vendor account.",
         },
         {
           id: "purchase_date",

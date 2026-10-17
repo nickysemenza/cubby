@@ -1506,7 +1506,6 @@ describe("member actionable Work queue", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic receipt policy vendor",
       itemizationExpectation: "required",
-      orderEvidence: "online_account",
     });
     const lumpOrder = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
@@ -1546,7 +1545,7 @@ describe("member actionable Work queue", () => {
     // No document is expected; missing account attribution and item lines
     // both remain actionable on this Purchase.
     expect(receipt?.reason).toBe(
-      "This vendor's orders live in a member's online account, but the Purchase is not assigned to one. The order is not yet broken into item lines with their Products.",
+      "Purchase is not assigned to a member's vendor account. The order is not yet broken into item lines with their Products.",
     );
   });
 });

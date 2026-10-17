@@ -51,14 +51,13 @@ const expectsOrderId = (t: Purchase) => sql`EXISTS (
   WHERE dq_order."purchaseId" = ${t.id} AND dq_order."orderKey" LIKE '%/order/%'
 )`;
 
-// Only a vendor whose orders live in a member's online account expects the
-// Purchase to name that account. Receipt-only, no-order (a shared-expense
-// settle-up container) and unclassified vendors do not; an unclassified vendor
-// is already its own `vendor_order_evidence` gap.
-const expectsVendorAccount = (t: Purchase) => sql`EXISTS (
-  SELECT 1 FROM "Vendor" dq_v
-  WHERE dq_v.id = ${t.vendorId} AND dq_v."deletedAt" IS NULL
-    AND dq_v."orderEvidence" = ${sqlEnumConstant(vendorOrderEvidence, "online_account")}
+// A vendor declared to have no orders (a shared-expense settle-up container)
+// has no member account to record.
+const expectsVendorAccount = (t: Purchase) => sql`NOT EXISTS (
+  SELECT 1 FROM "Vendor" dq_vendor
+  WHERE dq_vendor.id = ${t.vendorId}
+    AND dq_vendor."deletedAt" IS NULL
+    AND dq_vendor."orderEvidence" = ${sqlEnumConstant(vendorOrderEvidence, "not_expected")}
 )`;
 
 const hasExpenses = (t: Purchase) => sql`EXISTS (
