@@ -66,7 +66,6 @@ function moduleMockCall(
     !("computed" in callee)
   )
     return false;
-  if (!isTestFrameworkObject(sourceCode, callee.object)) return false;
   const property = callee.property;
   const method = callee.computed
     ? property.type === "Literal" &&
@@ -78,7 +77,12 @@ function moduleMockCall(
     : property.type === "Identifier"
       ? property.name
       : null;
-  return method !== null && moduleMockMethods.has(method);
+  // Resolving the object runs scope analysis; only a mock-named call pays.
+  return (
+    method !== null &&
+    moduleMockMethods.has(method) &&
+    isTestFrameworkObject(sourceCode, callee.object)
+  );
 }
 
 /** Ban test framework module mocking in favor of real dependency seams. */

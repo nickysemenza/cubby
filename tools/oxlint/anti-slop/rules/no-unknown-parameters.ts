@@ -196,10 +196,21 @@ function isExportDeclaration(node: ESTree.Node): boolean {
   );
 }
 
+// Reading scopeManager runs scope analysis, so a file whose text has no
+// `export {` list skips it; a match in a comment or string only costs time.
+const EXPORT_LIST = /\bexport\s*(?:type\s*)?\{/u;
+let exportListText: string | undefined;
+let textHasExportList = false;
+
 function isNamedInExportList(
   declaration: ESTree.Node,
   sourceCode: SourceCode,
 ): boolean {
+  if (sourceCode.text !== exportListText) {
+    exportListText = sourceCode.text;
+    textHasExportList = EXPORT_LIST.test(exportListText);
+  }
+  if (!textHasExportList) return false;
   return sourceCode.scopeManager
     .getDeclaredVariables(declaration)
     .some((variable) =>

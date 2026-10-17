@@ -63,6 +63,14 @@ function isStableConstVariable(
   );
 }
 
+/** The syntax-only half of {@link hasKnownEvidence}; needs no scope analysis. */
+function mayHaveKnownEvidence(expression: ESTree.Expression): boolean {
+  return (
+    isKnownEvidenceExpression(expression) ||
+    unwrapExpression(expression).type === "Identifier"
+  );
+}
+
 function hasKnownEvidence(
   sourceCode: SourceCode,
   expression: ESTree.Expression,
@@ -225,6 +233,8 @@ export const noKnownValueWideningRule = defineRule({
       },
       AssignmentExpression(node) {
         if (node.operator !== "=" || node.left.type !== "Identifier") return;
+        // Resolving the binding runs scope analysis; skip values that cannot report.
+        if (!mayHaveKnownEvidence(node.right)) return;
         const variable = resolveVariable(context.sourceCode, node.left);
         if (variable === null) return;
         const declarator = variableDeclarator(variable);
