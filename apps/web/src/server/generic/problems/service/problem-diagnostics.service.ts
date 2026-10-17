@@ -35,7 +35,10 @@ import {
   findInvalidFinancialJson,
   findProvisionalFinancialAccounts,
 } from "~/server/generic/problems/repo/detectors-financial";
-import { findOpenRunFindings } from "~/server/generic/problems/repo/detectors-import";
+import {
+  countOpenRunFindings,
+  findOpenRunFindingsPage,
+} from "~/server/generic/problems/repo/detectors-import";
 import {
   countDependencyCycles,
   countReferentialLivenessViolations,
@@ -229,9 +232,11 @@ async function runUpcProposals(
 /** Exhaustive adapter registry: a new DiagnosticKey cannot be silently raw. */
 export const diagnosticAdapters = {
   "import-findings": {
-    sample: (db, _options, limit) =>
-      healthySample(findOpenRunFindings(db), limit),
-    count: async (db) => healthyCount((await findOpenRunFindings(db)).length),
+    sample: async (db, _options, limit) => {
+      const page = await findOpenRunFindingsPage(db, limit);
+      return { items: page.items, ...healthyCount(page.count) };
+    },
+    count: async (db) => healthyCount(await countOpenRunFindings(db)),
   },
   "duplicate-product-identities": {
     sample: (db, _options, limit) =>

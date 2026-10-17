@@ -1310,6 +1310,15 @@ loading unused list enrichment.
 Focused raw Problems consumers and count/continuation
 reads retain their existing contracts.
 
+SQL-backed diagnostics carry the sample/count intent to their canonical
+repository: count membership without loading presentation payloads, and limit
+sample rows before hydration while retaining the exact population total.
+Algorithmic detectors may require the complete input to establish membership;
+truncating that input would change the result. Finding samples use the same
+active/retired eligibility predicate as counts and complete reads, ordered by
+creation time then ID. Only selected proposed fixes are parsed; a malformed
+selected fix still fails visibly, while counts do not depend on its payload.
+
 The shared list scaffold selects relation-loaded page IDs with a window count,
 so a nonempty page evaluates its canonical filter once for both selection and
 the exact total. The ordered SQL rows determine graph-loading order. An empty
