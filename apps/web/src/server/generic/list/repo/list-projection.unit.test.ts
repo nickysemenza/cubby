@@ -64,12 +64,17 @@ describe("list projection group execution", () => {
     };
     const executed: string[] = [];
     const [relations, quality] = await Promise.all([
-      loadListGroup(projection, ["relations", "derived"], async () => {
-        executed.push("relations");
-        return new Map([
-          ["synthetic", { name: "Synthetic relation", count: 2 }],
-        ]);
-      }),
+      loadListGroup(
+        projection,
+        ["relations", "derived"],
+        async () => {
+          executed.push("relations");
+          return new Map([
+            ["synthetic", { name: "Synthetic relation", count: 2 }],
+          ]);
+        },
+        ["consumerField"],
+      ),
       loadListGroup(projection, "quality", async () => {
         executed.push("quality");
         throw new Error("Unrequested quality must not execute");
@@ -91,7 +96,9 @@ describe("list projection group execution", () => {
       await loadListGroup({ kind: "base" }, "relations", load),
     ).toBeUndefined();
     expect(
-      await loadListGroup({ kind: "full" }, ["relations", "derived"], load),
+      await loadListGroup({ kind: "full" }, ["relations", "derived"], load, [
+        "consumerField",
+      ]),
     ).toBe(1);
     expect(executions).toBe(1);
   });

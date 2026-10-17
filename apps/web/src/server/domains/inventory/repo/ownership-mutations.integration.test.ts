@@ -12,6 +12,7 @@ import { buildEntity } from "tooling/factories/build";
 import { raceUniqueInsert, TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
+import { selectListReadRows } from "~/entity/model/list-read-schema";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { amountFromColumns } from "~/server/db/helpers";
 import {
@@ -30,7 +31,9 @@ import {
   createInventoryEntry,
   deleteInventoryEntries,
   inventoryentryList,
+  inventoryentryListRead,
 } from "~/server/domains/inventory/repo/crud";
+import * as ownershipReads from "~/server/domains/inventory/repo/ownership";
 import {
   loadEffectiveInventoryOwnershipById,
   loadProductOwners,
@@ -49,6 +52,7 @@ import { createLocation } from "~/server/domains/location/repo/crud";
 import { createProduct } from "~/server/domains/product/repo/crud";
 import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-products";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
+import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
@@ -143,6 +147,78 @@ describe("inventory ownership mutations", () => {
     }
     return { purchase, expenses };
   };
+
+  // Selected identity/price reads must not resolve acquisition ownership, but
+  // selecting any ownership field must retain the complete inherited evidence.
+  it("loads inherited ownership only for its selected consumers", async () => {
+    const owner = await createLedgerParty(
+      ctx.db,
+      { name: "Selected inventory owner", kind: "member", notes: null },
+      TEST_ACTOR,
+    );
+    const subject = await createSubject("Selected inventory");
+    await addPurchase({
+      label: "selected inventory acquisition",
+      lines: [
+        {
+          name: "Selected acquisition",
+          ownerId: owner.output.id,
+          productId: subject.product.id,
+        },
+      ],
+    });
+    const filters = { productIdFilter: [subject.product.id] };
+    const page = { pageIndex: 0, pageSize: 12 };
+    const full = await inventoryentryList(ctx.db, filters, [], page);
+    expect(full.data[0]?.ownerLedgerPartyId).toBe(owner.output.id);
+    const read = async (fields: readonly string[]) => {
+      const projection = selectedListProjection("inventory", fields);
+      const result = await inventoryentryListRead(
+        ctx.db,
+        filters,
+        [],
+        page,
+        projection,
+      );
+      return {
+        count: result.count,
+        data: selectListReadRows("inventory", result.data, fields),
+      };
+    };
+    const ownership = vi.spyOn(ownershipReads, "loadInventoryOwnershipTraces");
+    try {
+      const fields = ["id", "amount", "product", "location"];
+      const selected = await read(fields);
+      expect(selected.count).toBe(full.count);
+      expect(selected.data).toEqual(
+        selectListReadRows("inventory", full.data, fields),
+      );
+      expect(ownership).not.toHaveBeenCalled();
+      for (const field of [
+        "ownerLedgerPartyId",
+        "effectiveOwnership",
+        "fieldResolutions",
+      ]) {
+        ownership.mockClear();
+        const requested = ["id", field];
+        expect((await read(requested)).data).toEqual(
+          selectListReadRows("inventory", full.data, requested),
+        );
+        expect(ownership).toHaveBeenCalledOnce();
+      }
+      ownership.mockResolvedValue(new Map());
+      for (const fields of [
+        ["id", "effectiveOwnership"],
+        ["id", "product", "effectiveOwnership"],
+      ]) {
+        await expect(read(fields)).rejects.toThrow(
+          "Requested record field was not loaded: effectiveOwnership",
+        );
+      }
+    } finally {
+      ownership.mockRestore();
+    }
+  });
 
   // Replacement itemization can persist the ledger's implicit unknown shares.
   // Those rows must not suppress account defaults or change financial history.
