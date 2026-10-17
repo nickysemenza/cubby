@@ -290,7 +290,10 @@ export async function previewFinancialStatementImport(
     account: boolean,
     possible: number,
   ): FinancialStatementImportPreviewOut["rows"][number]["status"] =>
-    (!row.importFingerprint && (fingerprintCounts.get(externalId) ?? 0) > 1) ||
+    // Rows keyed by the legacy ref (no fingerprint or no row position) share it
+    // when identical, so creating both would drop one real charge.
+    ((!row.importFingerprint || row.rowPosition === undefined) &&
+      (fingerprintCounts.get(externalId) ?? 0) > 1) ||
     Boolean(
       row.providerTransactionId &&
       (duplicateProviderIds?.has(row.providerTransactionId) ||

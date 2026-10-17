@@ -132,7 +132,7 @@ export type PurchaseImportRunExecution = z.infer<
 >;
 
 const LINE_COST_TYPE =
-  "The line's accounting role: materials for consumed or installed goods, tools for equipment that outlives the job, services for labor, travel, delivery, taxes, fees, and other non-material charges.";
+  "The line's accounting role: materials for consumed or installed goods, tools for equipment that outlives the job, services for labor, travel, delivery, taxes, fees, and other non-material charges. Event tickets, airfare and other travel, lodging, rides, labor and prepared food are services.";
 export const extractedPurchaseLine = z.object({
   title: z.string().trim().min(1).max(500),
   amount: money,

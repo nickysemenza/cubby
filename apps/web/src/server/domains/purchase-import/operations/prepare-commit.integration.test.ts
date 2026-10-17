@@ -756,10 +756,15 @@ describe("caller-driven purchase import writes", () => {
                 lineKind: "tax",
                 costType: "services",
               },
-              { ...service(3, "Synthetic seat cushion") },
+              { ...service(3, "Synthetic seat upgrade") },
+              {
+                ...service(4, "Synthetic printed itinerary"),
+                costType: "materials",
+              },
             ]),
           },
           resolutions: [
+            { kind: "expense_only" as const },
             { kind: "expense_only" as const },
             { kind: "expense_only" as const },
           ],
@@ -774,8 +779,10 @@ describe("caller-driven purchase import writes", () => {
     expect(Object.fromEntries(lines.map((l) => [l.name, l.costType]))).toEqual({
       "Synthetic award fare": "services",
       "Synthetic departure tax": "services",
-      // An extractor that states no cost type keeps the materials default.
-      "Synthetic seat cushion": "materials",
+      // A principal line resolved without a Product is a service unless the
+      // extraction stated otherwise.
+      "Synthetic seat upgrade": "services",
+      "Synthetic printed itinerary": "materials",
     });
   });
 

@@ -370,6 +370,8 @@ describe("vendor repository — mergeVendors", () => {
       merged: 1,
       purchasesRepointed: 2,
       purchasesFolded: 0,
+      vendorAccountsMoved: 0,
+      vendorAccountsFolded: 0,
       carriedFields: [],
     });
 
@@ -427,6 +429,8 @@ describe("vendor repository — mergeVendors", () => {
       merged: 1,
       purchasesRepointed: 0,
       purchasesFolded: 1,
+      vendorAccountsMoved: 0,
+      vendorAccountsFolded: 0,
       carriedFields: [],
     });
 

@@ -1239,9 +1239,12 @@ describe("public mail tool", () => {
         .update(emailTable)
         .set({ ledgerPartyId: otherOwner.id })
         .where(eq(emailTable.orderMailId, f.mail.id));
-      await expect(readMail(ctx.db, f.input, ctx.actor)).rejects.toThrow(
-        /retained Email/iu,
-      );
+      await expect(readMail(ctx.db, f.input, ctx.actor)).rejects.toMatchObject({
+        code: "NOT_FOUND",
+        message: expect.stringMatching(
+          /^No retained Email .+ in mailbox .+ belongs to this member\.$/u,
+        ),
+      });
     });
 
     it("rejects another retained message's attachment reference before reading bytes", async () => {

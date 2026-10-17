@@ -26,6 +26,7 @@ import {
   purchase,
   product,
   vendor as vendorTable,
+  vendorAccount,
   runFinding,
   run as runTable,
   sourceOrderObservation,
@@ -1020,6 +1021,151 @@ describe("reviewed accepted source Product association", () => {
       orders: [
         {
           stableOrderId: "merged-retailer-replay",
+          vendorId: keeper.shortcode,
+          source: {
+            kind: importSourceKind.exclude(["browser_order"]).parse(claim.kind),
+            externalKey: claim.externalKey,
+            checksum: w.association.checksum,
+          },
+          extraction: w.association.originalOrder.extraction,
+        },
+      ],
+    });
+    expect(result.committed.items[0]?.outcome).toBe("replayed");
+    expect(await w.snapshot()).toEqual(before);
+    expect(await w.db.select().from(importSourceOrder)).toHaveLength(1);
+  });
+
+  // A duplicate Vendor holding a member's VendorAccount used to refuse the
+  // merge (`block-vendor-accounts`), stranding its claims, Runs and mail.
+  it("folds a merged Vendor's member account into the keeper's and replays its claimed source", async () => {
+    const w = await world();
+    const keeper = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic canonical retailer",
+      orderEmailSenders: ["orders@canonical.example.test"],
+    });
+    await w.db
+      .update(vendorTable)
+      .set({
+        orderEmailSenders: [
+          "orders@canonical.example.test",
+          "receipts@photo.example.test",
+        ],
+        browserDomains: ["photo.example.test"],
+        aliases: ["Synthetic photo shop"],
+      })
+      .where(eq(vendorTable.id, w.vendor.id));
+    const keeperAccount = await insertWithShortcode(ctx.db, "vendorAccount", {
+      vendorId: keeper.id,
+      ledgerPartyId: w.party.id,
+    });
+    const newerCursor = {
+      newestOrderAt: "2026-09-02T00:00:00.000Z",
+      orderIdsOnNewestDate: ["SYNTHETIC-PHOTO-ITEM"],
+      backfillBeforeOrderAt: null,
+      earliestAvailableOrderAt: null,
+    };
+    const loserAccount = await insertWithShortcode(ctx.db, "vendorAccount", {
+      vendorId: w.vendor.id,
+      ledgerPartyId: w.party.id,
+      cursor: newerCursor,
+    });
+    const claim = await w.db.query.importSourceClaim.findFirst();
+    if (!claim || !w.association.originalOrder)
+      throw new Error("Synthetic accepted source missing");
+    await w.db
+      .update(purchase)
+      .set({ vendorAccountId: loserAccount.id })
+      .where(eq(purchase.id, w.association.purchaseId));
+    await w.db
+      .update(importSourceClaim)
+      .set({ vendorAccountId: loserAccount.id })
+      .where(eq(importSourceClaim.id, claim.id));
+    await w.db
+      .update(runTable)
+      .set({ vendorId: w.vendor.id, vendorAccountId: loserAccount.id })
+      .where(eq(runTable.id, claim.firstRunId!));
+    const mail = await retainedMailFixture(ctx.db, {
+      ledgerPartyId: w.party.id,
+      messageId: "synthetic-merged-vendor-mail",
+      checksum: "d".repeat(64),
+    });
+    await w.db
+      .update(orderMail)
+      .set({ vendorId: w.vendor.id })
+      .where(eq(orderMail.id, mail.id));
+
+    const { mergeSummary } = await mergeVendors(
+      ctx.db,
+      { keepId: keeper.shortcode, mergeIds: [w.vendor.shortcode] },
+      ctx.actor,
+    );
+    expect(mergeSummary).toMatchObject({
+      vendorAccountsFolded: 1,
+      vendorAccountsMoved: 0,
+    });
+
+    const accounts = await w.db.query.vendorAccount.findMany({
+      where: eq(vendorAccount.ledgerPartyId, w.party.id),
+    });
+    expect(
+      accounts.filter((row) => row.deletedAt === null).map((row) => row.id),
+    ).toEqual([keeperAccount.id]);
+    expect(accounts.find((row) => row.id === keeperAccount.id)?.cursor).toEqual(
+      newerCursor,
+    );
+    const [movedPurchase] = await w.db
+      .select({ vendorAccountId: purchase.vendorAccountId })
+      .from(purchase)
+      .where(eq(purchase.id, w.association.purchaseId));
+    expect(movedPurchase?.vendorAccountId).toBe(keeperAccount.id);
+    const [movedClaim] = await w.db
+      .select({ vendorAccountId: importSourceClaim.vendorAccountId })
+      .from(importSourceClaim)
+      .where(eq(importSourceClaim.id, claim.id));
+    expect(movedClaim?.vendorAccountId).toBe(keeperAccount.id);
+    const [movedRun] = await w.db
+      .select({
+        vendorId: runTable.vendorId,
+        vendorAccountId: runTable.vendorAccountId,
+      })
+      .from(runTable)
+      .where(eq(runTable.id, claim.firstRunId!));
+    expect(movedRun).toEqual({
+      vendorId: keeper.id,
+      vendorAccountId: keeperAccount.id,
+    });
+    const [movedMail] = await w.db
+      .select({ vendorId: orderMail.vendorId })
+      .from(orderMail)
+      .where(eq(orderMail.id, mail.id));
+    expect(movedMail?.vendorId).toBe(keeper.id);
+    const [kept] = await w.db
+      .select({
+        aliases: vendorTable.aliases,
+        orderEmailSenders: vendorTable.orderEmailSenders,
+        browserDomains: vendorTable.browserDomains,
+      })
+      .from(vendorTable)
+      .where(eq(vendorTable.id, keeper.id));
+    expect(kept?.aliases).toEqual(
+      expect.arrayContaining([
+        "Synthetic photo retailer",
+        "Synthetic photo shop",
+      ]),
+    );
+    expect(kept?.orderEmailSenders).toEqual([
+      "orders@canonical.example.test",
+      "receipts@photo.example.test",
+    ]);
+    expect(kept?.browserDomains).toEqual(["photo.example.test"]);
+
+    const before = await w.snapshot();
+    const result = await memberImport(ctx.db, ctx.actor, {
+      key: "merged-account-replay",
+      orders: [
+        {
+          stableOrderId: "merged-account-replay",
           vendorId: keeper.shortcode,
           source: {
             kind: importSourceKind.exclude(["browser_order"]).parse(claim.kind),

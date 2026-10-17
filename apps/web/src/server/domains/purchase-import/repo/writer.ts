@@ -1904,8 +1904,14 @@ export async function importVendorOrder(
             lineKind: identity.lineKind,
             lineBasis: "item_line",
             // Optional so stored extractions and source snapshots keep their
-            // shape; a line whose source states no role stays materials.
-            costType: line.costType ?? "materials",
+            // shape. A principal line resolved without a Product (tickets,
+            // fares, lodging, labor) is a service unless the source says
+            // otherwise; any other unstated line stays materials.
+            costType:
+              line.costType ??
+              (identity.expenseOnly && identity.lineKind === "principal"
+                ? "services"
+                : "materials"),
             trade: null,
             economicRole: "vendor",
             productId,

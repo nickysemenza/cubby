@@ -521,6 +521,39 @@ describe("financial repositories — critical invariants", () => {
       "indistinguishable_duplicate",
     ]);
 
+    // A fingerprint without row positions still falls back to the shared
+    // legacy ref, so identical rows cannot both be created.
+    const fingerprinted = {
+      ...row,
+      date: "2025-01-15",
+      amount: -12.34,
+      originalStatement: "FINGERPRINTED LINE",
+      importFingerprint: "fp-1",
+    };
+    const fingerprintedDuplicates = await previewFinancialStatementImport(
+      ctx.db,
+      {
+        rows: [fingerprinted, { ...fingerprinted, key: "row-2" }],
+      },
+    );
+    expect(fingerprintedDuplicates.rows.map((item) => item.status)).toEqual([
+      "indistinguishable_duplicate",
+      "indistinguishable_duplicate",
+    ]);
+    const positioned = await previewFinancialStatementImport(ctx.db, {
+      rows: [
+        { ...fingerprinted, rowPosition: 0 },
+        { ...fingerprinted, key: "row-2", rowPosition: 1 },
+      ],
+    });
+    expect(positioned.rows.map((item) => item.status)).toEqual([
+      "ready_to_create",
+      "ready_to_create",
+    ]);
+    expect(positioned.rows[0]!.proposed.sourceRef.externalId).not.toBe(
+      positioned.rows[1]!.proposed.sourceRef.externalId,
+    );
+
     const unresolved = await previewFinancialStatementImport(ctx.db, {
       rows: [
         {
