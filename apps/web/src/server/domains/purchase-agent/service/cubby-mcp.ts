@@ -1,4 +1,8 @@
-import { mailAttachmentOriginal } from "@cubby/schemas/mailbox-research";
+import {
+  MAIL_READ_RESPONSE_MAX_BYTES,
+  mailAttachmentOriginal,
+  mailReadAgentText,
+} from "@cubby/schemas/mailbox-research";
 import type { Context } from "@earendil-works/chord";
 import { Type, type JsonObject } from "@earendil-works/pi-ai";
 import {
@@ -23,6 +27,13 @@ const MCP_TOOL_PREFIX = "mcp__cubby__";
 // Cubby's MCP handler serves only the modern era. A pin fails loudly instead
 // of falling back to the `initialize` handshake the handler rejects.
 const MCP_PROTOCOL_VERSION = "2026-07-28";
+// `imports_read.mail` sizes its compact text or raw HTML page under
+// MAIL_READ_RESPONSE_MAX_BYTES; pi's default 50 KB head cap would cut a long
+// order's last item lines and totals.
+const EMAIL_READ_OUTPUT_LIMITS = {
+  maxBytes: MAIL_READ_RESPONSE_MAX_BYTES,
+  maxLines: 10_000,
+};
 
 /** The private Cubby MCP server's transport for one run. */
 function cubbyMcpFetch(services: () => RunServices): typeof fetch {
@@ -57,7 +68,8 @@ const callResult = z.object({
   isError: z.boolean().optional(),
 });
 
-function toolResult(raw: unknown): ToolExecutionResult {
+/** A Cubby MCP call result as the agent's tool output. */
+export function cubbyToolResult(raw: unknown): ToolExecutionResult {
   const parsed = callResult.parse(raw);
   const content: NonNullable<ToolExecutionResult["output"]> = [];
   for (const block of parsed.content) {
@@ -70,17 +82,14 @@ function toolResult(raw: unknown): ToolExecutionResult {
   // them as media rather than as base64 text.
   const original = attachmentResult.safeParse(parsed.structuredContent);
   if (original.success) {
-    const { dataBase64, ...descriptor } = original.data.originalAttachment;
+    const { dataBase64, mimeType } = original.data.originalAttachment;
     return {
       output: [
         {
           type: "text",
-          text: JSON.stringify({
-            ...original.data,
-            originalAttachment: descriptor,
-          }),
+          text: mailReadAgentText(original.data),
         },
-        { type: "image", data: dataBase64, mimeType: descriptor.mimeType },
+        { type: "image", data: dataBase64, mimeType },
       ],
       isError: parsed.isError === true,
     };
@@ -124,8 +133,11 @@ export function cubbyMcpExtension(
         // MCP tool input schemas are always JSON-Schema objects.
         parameters: Type.Unsafe<JsonObject>(tool.inputSchema),
         replay: "safe",
+        ...(tool.name === "imports_read"
+          ? { outputLimits: EMAIL_READ_OUTPUT_LIMITS }
+          : {}),
         execute: async (args, api, context) =>
-          toolResult(
+          cubbyToolResult(
             await (
               await connected()
             ).callTool(

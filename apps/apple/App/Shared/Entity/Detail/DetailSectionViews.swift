@@ -713,10 +713,10 @@ struct FieldExplanationLabel: View {
                             Array(
                                 groupedSources(
                                     resolved.verifications,
-                                    identity: { source in
+                                    record: { source in
                                         source.sourceEntity.map { "\($0.entityKind.rawValue):\($0.entityId)" }
-                                            ?? source.url
-                                    }
+                                    },
+                                    url: \.url
                                 ).enumerated()), id: \.offset
                         ) { _, group in
                             if let first = group.first {
@@ -1581,25 +1581,6 @@ struct EntitySourceRow: View {
             }
         }
     }
-}
-
-/// Preserve citation order while consolidating repeated references to the same document.
-func groupedSources<Source>(_ sources: [Source], identity: (Source) -> String?) -> [[Source]] {
-    var indices: [String: Int] = [:]
-    var groups: [[Source]] = []
-    for source in sources {
-        guard let key = identity(source) else {
-            groups.append([source])
-            continue
-        }
-        if let index = indices[key] {
-            groups[index].append(source)
-        } else {
-            indices[key] = groups.count
-            groups.append([source])
-        }
-    }
-    return groups
 }
 
 struct EntitySourceDocument: View {

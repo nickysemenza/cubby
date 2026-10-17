@@ -30,7 +30,6 @@ import {
 } from "@cubby/schemas/vendor-import-fields";
 import {
   and,
-  arrayContains,
   asc,
   desc,
   eq,
@@ -40,6 +39,7 @@ import {
   lte,
   sql,
 } from "drizzle-orm";
+import { uniqBy } from "es-toolkit";
 
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
@@ -50,7 +50,6 @@ import {
   type ListReadIntent,
   lockAndValidateForDelete,
   notDeleted,
-  unwrapDb,
   withTransaction,
 } from "~/server/db/helpers";
 import { entityAttachment, image, purchase, vendor } from "~/server/db/schema";
@@ -61,9 +60,9 @@ import {
 } from "~/server/domains/image/repo/image-displayability";
 import { foldChargeInto } from "~/server/domains/purchase/repo/purchase";
 import { assertReviewedSpendingClassification } from "~/server/domains/spending-category/repo/spending-classification-review-authorization";
+import { foldVendorAccountsInto } from "~/server/domains/vendor-account/repo/vendor-account";
 import { agentHintsLabel } from "~/server/entity-kernel/repo/detail-display-labels";
 import { patchEntityRows } from "~/server/entity-kernel/repo/entity-patch";
-import { recordEntitySources } from "~/server/entity-kernel/repo/entity-source";
 import {
   replaceSingularAttachment,
   singularAttachmentImageIds,
@@ -174,15 +173,15 @@ export const VENDOR_MERGE_EDGE_POLICY = {
       "Stored-value accounts must be reassigned explicitly before merging vendors; each provider and owner holds at most one live balance.",
   },
   "Run.vendorId": {
-    code: "block-runs",
-    effect: "block",
-    description: "Historical import runs prevent an ambiguous vendor merge.",
+    code: "repoint-runs",
+    effect: "repoint",
+    description: "A merged vendor's import runs name the surviving vendor.",
   },
   "VendorAccount.vendorId": {
-    code: "block-vendor-accounts",
-    effect: "block",
+    code: "fold-member-accounts",
+    effect: "move-dedupe",
     description:
-      "Vendor accounts must be reassigned explicitly before merging vendors.",
+      "A merged vendor's member account moves to the survivor; when the survivor already has one for that member, its purchases, runs and source claims re-point there, the later sync cursor is kept, and the duplicate account is retired.",
   },
   "MerchantVendorRule.vendorId": {
     code: "block-merchant-rules",
@@ -191,9 +190,9 @@ export const VENDOR_MERGE_EDGE_POLICY = {
       "Confirmed merchant rules must be reconciled before merging vendors.",
   },
   "OrderMail.vendorId": {
-    code: "block-order-mail",
-    effect: "block",
-    description: "Classified order mail prevents an ambiguous vendor merge.",
+    code: "repoint-order-mail",
+    effect: "repoint",
+    description: "A merged vendor's classified order mail names the survivor.",
   },
   "Purchase.vendorId": {
     code: "repoint-or-fold-by-order",
@@ -716,82 +715,6 @@ export const findOrCreateVendor = async (
   return row.id;
 };
 
-/** The bare address of a From header such as `"Store" <orders@store.example>`. */
-const senderAddress = (sender: string | null): string | null => {
-  const address = (/<([^>]+)>/u.exec(sender ?? "")?.[1] ?? sender ?? "")
-    .trim()
-    .toLowerCase();
-  return address.includes("@") ? address : null;
-};
-
-/**
- * An imported order's Vendor (terminology "Sender proof", "Vendor alias"): an
- * Email from an exact sender address one Vendor records proves that Vendor,
- * and the merchant name it shows becomes an alias with the Email as its
- * Source. Otherwise the exact name or alias, else a new Vendor. A shared
- * domain is never proof.
- */
-export const resolveImportVendor = async (
-  db: Database | DrizzleTransaction,
-  input: { name: string; sender: string | null; evidence: string | null },
-  actor: ActorContext,
-): Promise<VendorId> => {
-  const name = input.name.trim();
-  const address = senderAddress(input.sender);
-  const proven = address
-    ? await unwrapDb(db)
-        .select({ id: vendor.id, name: vendor.name, aliases: vendor.aliases })
-        .from(vendor)
-        .where(
-          and(
-            notDeleted(vendor),
-            arrayContains(vendor.orderEmailSenders, [address]),
-          ),
-        )
-    : [];
-  const [owner] = proven;
-  if (!owner || proven.length > 1) return findOrCreateVendor(db, name);
-  const known = [owner.name, ...owner.aliases].map((value) =>
-    value.toLowerCase(),
-  );
-  if (known.includes(name.toLowerCase())) return owner.id;
-  // Sender proof never takes a name another Vendor already answers to: that
-  // alias would make the name ambiguous (or misroute it) for every later lookup.
-  const [named] = await resolveNames(db, "vendor", [{ name }], {
-    create: false,
-  });
-  const others = named?.row ? [named.row, ...named.candidates] : [];
-  if (others.length > 0)
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      `The order Email from ${address} proves Vendor "${owner.name}", but the merchant name "${name}" belongs to ${others
-        .map(({ shortcode }) => shortcode)
-        .join(", ")}; name the order's vendorId explicitly.`,
-    );
-  const aliases = [...owner.aliases, name];
-  await unwrapDb(db)
-    .update(vendor)
-    .set({ aliases })
-    .where(eq(vendor.id, owner.id));
-  await logAuditEntry(db, actor, {
-    entityKind: "vendor",
-    entityId: owner.id,
-    action: "update",
-    changes: { aliases: { from: owner.aliases, to: aliases } },
-  });
-  await recordEntitySources(db, {
-    entityKind: "vendor",
-    entityId: owner.id,
-    sources: [
-      {
-        quote: `Order Email ${input.evidence ?? "(unknown message)"} from ${address} names the merchant "${name}".`,
-      },
-    ],
-    recorder: actor,
-  });
-  return owner.id;
-};
-
 export const createVendor = async (
   db: Database,
   data: VendorCreateInput,
@@ -1092,6 +1015,8 @@ export const mergeVendors = async (
       merged: 0,
       purchasesRepointed: plan.repointed.length,
       purchasesFolded: plan.folded.length,
+      vendorAccountsMoved: 0,
+      vendorAccountsFolded: 0,
       carriedFields: Object.keys(plan.carried),
     };
 
@@ -1102,10 +1027,47 @@ export const mergeVendors = async (
     // The losers' names stay Vendor aliases so imports keep finding the keeper.
     let aliasChange: { from: string[]; to: string[] } | undefined;
     const named = await tx
-      .select({ id: vendor.id, name: vendor.name, aliases: vendor.aliases })
+      .select({
+        id: vendor.id,
+        name: vendor.name,
+        aliases: vendor.aliases,
+        orderEmailSenders: vendor.orderEmailSenders,
+        browserDomains: vendor.browserDomains,
+      })
       .from(vendor)
       .where(inArray(vendor.id, [keepId, ...losers]));
     const keeperNamed = named.find(({ id }) => id === keepId);
+    // Mail discovery and browser imports find the keeper by the losers'
+    // senders and domains too.
+    const unionChanges: Partial<
+      Record<
+        "orderEmailSenders" | "browserDomains",
+        { from: string[]; to: string[] }
+      >
+    > = {};
+    if (keeperNamed) {
+      for (const key of ["orderEmailSenders", "browserDomains"] as const) {
+        const union = uniqBy(
+          [
+            ...keeperNamed[key],
+            ...named
+              .filter(({ id }) => id !== keepId)
+              .flatMap((row) => row[key]),
+          ],
+          (value) => value.toLowerCase(),
+        );
+        if (union.length !== keeperNamed[key].length)
+          unionChanges[key] = { from: keeperNamed[key], to: union };
+      }
+      if (unionChanges.orderEmailSenders || unionChanges.browserDomains)
+        await tx
+          .update(vendor)
+          .set({
+            orderEmailSenders: unionChanges.orderEmailSenders?.to,
+            browserDomains: unionChanges.browserDomains?.to,
+          })
+          .where(eq(vendor.id, keepId));
+    }
     if (keeperNamed) {
       const seen = new Set([keeperNamed.name.toLowerCase()]);
       const aliases = [
@@ -1126,6 +1088,7 @@ export const mergeVendors = async (
     }
 
     const loserLogos: string[] = [];
+    let accountFold = { moved: 0, folded: 0 };
     await applyMergePolicy(tx, {
       entity: "vendor",
       policy: VENDOR_MERGE_EDGE_POLICY,
@@ -1146,6 +1109,13 @@ export const mergeVendors = async (
           });
           // The keeper's food context and default now classify these lines.
           await validateProductPolicy(tx, { vendorId: keepId });
+        },
+        "VendorAccount.vendorId": async () => {
+          accountFold = await foldVendorAccountsInto(tx, {
+            keepVendorId: keepId,
+            loserVendorIds: losers,
+            actor,
+          });
         },
         // Detach every loser logo before tombstoning, then give the survivor
         // the carried one, so a logo that was not carried is eligible for the
@@ -1171,11 +1141,16 @@ export const mergeVendors = async (
       carriedOver?: { from: null; to: VendorMergePlan["carried"] };
       foldedCharges?: { from: null; to: PurchaseId[] };
       aliases?: { from: string[]; to: string[] };
+      orderEmailSenders?: { from: string[]; to: string[] };
+      browserDomains?: { from: string[]; to: string[] };
     };
     const survivorChanges: VendorMergeSurvivorChanges = {
       mergedFrom: { from: null, to: losers },
     };
     if (aliasChange) survivorChanges.aliases = aliasChange;
+    Object.assign(survivorChanges, unionChanges);
+    planSummary.vendorAccountsMoved = accountFold.moved;
+    planSummary.vendorAccountsFolded = accountFold.folded;
     if (Object.keys(plan.carried).length > 0) {
       survivorChanges.carriedOver = { from: null, to: plan.carried };
     }

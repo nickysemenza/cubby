@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { EntityId, ShortcodeFor } from "@cubby/schemas/identifiers";
 import {
@@ -17,6 +18,11 @@ import { uniq } from "es-toolkit";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import {
+  inheritedFieldSql,
+  inheritedSourceSql,
+} from "~/server/db/computed/effective-field";
+import type { CategoryStockTracking } from "~/server/db/computed/product-category-sql";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   buildPartialUpdateValues,
@@ -27,6 +33,7 @@ import {
 import { productCategory } from "~/server/db/schema";
 import { spendingCategory } from "~/server/db/schema";
 import { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
+import { resolveStockTrackingField } from "~/server/domains/inventory/repo/stock-tracking";
 import { loadCategoryConnections } from "~/server/domains/product-category/repo/category-connections";
 import { assertReviewedSpendingClassification } from "~/server/domains/spending-category/repo/spending-classification-review-authorization";
 import {
@@ -59,6 +66,54 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 const scaffold = listScaffold("spendingCategory", spendingCategory);
 export const buildSpendingCategoryWhere = scaffold.where;
 type Row = typeof spendingCategory.$inferSelect;
+
+const inheritedStockTracking = z.object({
+  id: z.string(),
+  fallback: z.boolean().nullable(),
+  source: z.object({ id: z.string() }).nullable(),
+});
+
+/** Each row's declared stock-tracking fallback and the ancestor that decided it. */
+async function stockTrackingFor(
+  db: Database | DrizzleTransaction,
+  rows: readonly Row[],
+) {
+  if (rows.length === 0) return new Map<string, CategoryStockTracking>();
+  const inherited = z.array(inheritedStockTracking).parse(
+    await unwrapDb(db)
+      .select({
+        id: spendingCategory.id,
+        fallback: inheritedFieldSql("spendingCategory", "stockTracked"),
+        source: inheritedSourceSql("spendingCategory", "stockTracked"),
+      })
+      .from(spendingCategory)
+      .where(
+        inArray(
+          spendingCategory.id,
+          rows.map((row) => row.id),
+        ),
+      ),
+  );
+  const sources = await lookupEntityReferences(
+    db,
+    "spendingCategory",
+    inherited.map((row) => row.source?.id),
+  );
+  return new Map(
+    inherited.map((row) => {
+      const source = row.source ? sources.get(row.source.id) : undefined;
+      return [
+        row.id,
+        {
+          value: row.fallback,
+          id: source?.id ?? null,
+          name: source?.name ?? null,
+        },
+      ];
+    }),
+  );
+}
+
 const hydrate = (
   db: Database | DrizzleTransaction,
   rows: Row[],
@@ -81,25 +136,36 @@ const hydrate = (
           "spendingCategory",
           rows.map((row) => row.parentId),
         ),
+        stockTrackingFor(db, rows),
       ]),
-    mapRow: (row, { loaded: [mappings, categories, parents] }) => ({
-      ...row,
-      id: parseShortcodeFor("spendingCategory", row.shortcode),
-      parentId: row.parentId ? (parents.get(row.parentId)?.id ?? null) : null,
-      productCategories: categories.flatMap((category) => {
-        const mapping = mappings.get(category.id);
-        return mapping?.category?.id === row.shortcode
-          ? [
-              {
-                id: parseShortcodeFor("productCategory", category.code),
-                name: `${mapping.path}${mapping.state === "inherited" ? " (inherited)" : ""}`,
-                emoji: category.emoji,
-                inherited: mapping.state === "inherited",
-              },
-            ]
-          : [];
-      }),
-    }),
+    mapRow: (row, { loaded: [mappings, categories, parents, tracking] }) => {
+      const stockTracked = resolveStockTrackingField(
+        row.stockTracked,
+        tracking.get(row.id) ?? null,
+        "category decision",
+        "spendingCategory",
+      );
+      return {
+        ...row,
+        id: parseShortcodeFor("spendingCategory", row.shortcode),
+        stockTracked: z.boolean().nullable().parse(stockTracked.value),
+        fieldResolutions: { stockTracked },
+        parentId: row.parentId ? (parents.get(row.parentId)?.id ?? null) : null,
+        productCategories: categories.flatMap((category) => {
+          const mapping = mappings.get(category.id);
+          return mapping?.category?.id === row.shortcode
+            ? [
+                {
+                  id: parseShortcodeFor("productCategory", category.code),
+                  name: `${mapping.path}${mapping.state === "inherited" ? " (inherited)" : ""}`,
+                  emoji: category.emoji,
+                  inherited: mapping.state === "inherited",
+                },
+              ]
+            : [];
+        }),
+      };
+    },
   });
 const listRead = (
   db: Database,
@@ -133,13 +199,7 @@ const crud = createEntityCrud({
       parentId?: EntityId<"spendingCategory"> | null;
     },
   ) => buildPartialUpdateValues(data),
-  auditUpdateFields: [
-    "name",
-    "aliases",
-    "parentId",
-    "itemizationExpectation",
-    "productExpectation",
-  ],
+  auditUpdateFields: [...entityFieldModels.spendingCategory.audit],
 });
 export const getSpendingCategoryByShortcode = crud.getByShortcode;
 /** The category and every live ancestor above it. */

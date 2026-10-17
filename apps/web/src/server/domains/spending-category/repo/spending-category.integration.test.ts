@@ -3,8 +3,10 @@ import {
   type SpendingCategoryId,
 } from "@cubby/schemas/identifiers";
 import { and, eq, inArray } from "drizzle-orm";
+import { TEST_ACTOR } from "tooling/test-setup";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { unwrapDb } from "~/server/db/helpers";
 import {
@@ -16,12 +18,17 @@ import {
   spendingCategory,
   vendor,
 } from "~/server/db/schema";
+import { receivableProductIds } from "~/server/domains/inventory/repo/stock-tracking";
 import {
   entityKernelContextSchema,
   executeEntity,
 } from "~/server/entity-kernel";
 import { findReferentialLivenessViolations } from "~/server/generic/problems/repo/detectors-integrity";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import {
+  createProductFixture,
+  makeProductInput,
+} from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import {
@@ -347,5 +354,159 @@ describe("spending category merge", () => {
       .from(spendingCategory)
       .where(eq(spendingCategory.id, groceries.id));
     expect(loser?.deletedAt).toBeNull();
+  });
+});
+
+// Failure: stock-tracking decisions change without an audit trail because the
+// repository's audit roster drifts from the declaration's.
+describe("spending category stock tracking", () => {
+  const ctx = withTestDb();
+  const context = () =>
+    entityKernelContextSchema.parse({
+      ...createTestRequestContext(ctx.db, {
+        auth: { userId: ctx.actor.userId },
+      }),
+      actorContext: ctx.actor,
+    });
+
+  it("audits an update that changes only stockTracked", async () => {
+    const tools = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: `Synthetic tools ${crypto.randomUUID()}`,
+    });
+    await executeEntity(context(), {
+      action: "update",
+      entity: "spendingCategory",
+      id: tools.shortcode,
+      data: { stockTracked: false },
+    });
+    const audits = await unwrapDb(ctx.db)
+      .select({ action: auditLog.action, changes: auditLog.changes })
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.entityKind, "spendingCategory"),
+          eq(auditLog.entityId, tools.id),
+          eq(auditLog.action, "update"),
+        ),
+      );
+    expect(audits).toEqual([
+      {
+        action: "update",
+        changes: { stockTracked: { from: null, to: false } },
+      },
+    ]);
+  });
+
+  // Failure: a child that stores no decision under a parent storing false
+  // reads null while the arrival gate treats it as false, provenance names no
+  // parent, and "Use inherited" has no reset to apply.
+  it("reads, explains, resets, and gates arrivals on the inherited decision", async () => {
+    const parent = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: `Synthetic groceries ${crypto.randomUUID()}`,
+      stockTracked: false,
+    });
+    const child = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: `Synthetic produce ${crypto.randomUUID()}`,
+      parentId: parent.id,
+    });
+    const resolution = z.object({
+      mode: z.string(),
+      value: z.boolean().nullable(),
+      storedValue: z.boolean().nullable(),
+      canReset: z.boolean(),
+      sourceEntity: z.object({ entityId: z.string() }).nullable(),
+    });
+    const read = z.object({
+      item: z.object({
+        stockTracked: z.boolean().nullable(),
+        fieldResolutions: z.object({ stockTracked: resolution }),
+      }),
+    });
+    const get = async () =>
+      read.parse(
+        await executeEntity(context(), {
+          action: "get",
+          entity: "spendingCategory",
+          id: child.shortcode,
+          missing: "error",
+        }),
+      ).item;
+
+    const inherited = await get();
+    expect(inherited.stockTracked).toBe(false);
+    expect(inherited.fieldResolutions.stockTracked).toEqual({
+      mode: "inherit",
+      value: false,
+      storedValue: null,
+      canReset: false,
+      sourceEntity: expect.objectContaining({ entityId: parent.shortcode }),
+    });
+    const listed = z
+      .object({
+        items: z.array(
+          z.object({ id: z.string(), stockTracked: z.boolean().nullable() }),
+        ),
+      })
+      .parse(
+        await executeEntity(context(), {
+          action: "list",
+          entity: "spendingCategory",
+          filters: {},
+          pagination: { pageIndex: 0, pageSize: 200 },
+        }),
+      );
+    expect(
+      listed.items.find((item) => item.id === child.shortcode)?.stockTracked,
+    ).toBe(false);
+
+    const shop = await insertWithShortcode(ctx.db, "vendor", {
+      name: `Synthetic market ${crypto.randomUUID()}`,
+    });
+    const order = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: shop.id,
+      date: "2026-09-03",
+    });
+    const apples = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic apples", stockTracked: null }),
+      TEST_ACTOR,
+    );
+    await insertWithShortcode(ctx.db, "expense", {
+      lineKind: "principal",
+      purchaseId: order.id,
+      productId: apples.entityId,
+      name: "Synthetic apples",
+      cost: 4,
+      date: "2026-09-03",
+      costType: "materials",
+      trade: "other",
+      spendingCategoryId: child.id,
+    });
+    expect(
+      await receivableProductIds(ctx.db, [apples.entityId], order.id),
+    ).toEqual(new Set());
+
+    await executeEntity(context(), {
+      action: "update",
+      entity: "spendingCategory",
+      id: child.shortcode,
+      data: { stockTracked: true },
+    });
+    expect((await get()).fieldResolutions.stockTracked).toMatchObject({
+      mode: "explicit",
+      value: true,
+      canReset: true,
+    });
+    expect(
+      await receivableProductIds(ctx.db, [apples.entityId], order.id),
+    ).toEqual(new Set([apples.entityId]));
+
+    await executeEntity(context(), {
+      action: "update",
+      entity: "spendingCategory",
+      id: child.shortcode,
+      data: { stockTracked: null },
+    });
+    expect((await get()).stockTracked).toBe(false);
   });
 });

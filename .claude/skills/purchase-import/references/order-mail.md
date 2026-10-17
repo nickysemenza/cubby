@@ -67,6 +67,11 @@ final purchase email may separately list **items to return**; exclude those
 specific lines even if they remain visible on the original order-detail page
 and the email reports a real total for other retained items.
 
+Its `content.bodyText` is compact text converted from the HTML body; check
+`content.truncated` before trusting a total, and page raw HTML with
+`includeHtml` only when the text lost a needed detail: an HTML read replaces the
+text, and each page's `content.nextOffset` is the next `offset` (null at the end).
+
 `imports_read.mail` returns the Email's `id` (`EML-` code), checksum and the
 complete persisted `purchaseIds` and `purchaseAssociations`, each with
 `purchaseDeleted` and `kind`: `accepted` (an import accepted this Email as the

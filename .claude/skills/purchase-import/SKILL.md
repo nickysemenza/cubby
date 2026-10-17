@@ -1,6 +1,6 @@
 ---
 name: purchase-import
-description: Support Cubby purchase imports when learning a vendor, importing an order Email, receipt or vendor export, resolving order Email, or reconciling financial settlement.
+description: Support Cubby purchase imports when learning a vendor, importing an order Email, receipt or vendor export, resolving order Email, reconciling financial settlement, or booking shared-cost repayments.
 ---
 
 # Purchase-import support
@@ -156,13 +156,16 @@ same outcome without prescribing an agent runtime.
 ## Vendor export
 
 1. Resolve the Vendor (`vendorId`, or `vendor.name`). A name resolves by
-   Sender proof first (a mail source from an exact sender address one Vendor
-   records, which also saves the name as a Vendor alias), then by the Vendor's
-   exact name or alias ignoring case; only an unmatched name creates a Vendor,
-   and a name two Vendors share is refused. A similar name or shared domain
-   never matches: merge real duplicates, which keeps the merged names as
-   aliases. Sender proof refuses a merchant name another Vendor already answers
-   to; pass that order's `vendorId`. `entity.resolve {entity:"vendor", names}`
+   Sender proof first (an exact sender address one Vendor records, or a sender
+   at the website domain of exactly one Vendor; either saves the name as a
+   Vendor alias), then by the Vendor's exact name or alias ignoring case. A
+   shared mail, storefront, payment or relay domain never matches, and a name
+   two Vendors share is refused. A new Vendor beside a similar-name or
+   same-domain candidate is refused until `vendor.distinctFrom` names each
+   with a Source; prepare returns them as `vendorCandidates`. Merge real
+   duplicates, which keeps the merged names as aliases. Sender proof refuses a
+   merchant name another Vendor already answers to; pass that order's
+   `vendorId`. `entity.resolve {entity:"vendor", names}`
    shows a name's Vendor without creating one.
 2. Collect one preparation payload per order: stable source identity, header, printed
    grand total and currency, item and adjustment lines, shipment state,
@@ -322,6 +325,19 @@ email/order lines for items and prefer matching existing photo-created Products
 when variant evidence agrees. Keep historical Expense attribution separate from
 current inventory ownership. Reconciliation never receives that inventory again.
 Record a historical acquisition (a known quantity whose earlier purchase is missing) as an Expense with `cost: null`, no `date`, and the known `productQuantity`; never invent price or date, and it receives no inventory.
+
+Statement previews carry `importFingerprint` and `rowPosition` on every row so
+two identical same-day charges keep distinct source references.
+
+## Repayments and shared costs
+
+Money a non-member sends back for a cost the household fronted is a Credit: a
+`reimbursement` Expense on the Purchase it repaid, booked from the incoming
+transaction with `finance.book_transaction`. A repayment between members is a
+Ledger Transfer. A vendor refund is a negative Expense on its order. None of
+them is a new Purchase of goods. For a group trip or a shared-expense export
+(Splitwise and similar), load
+[household-ledger.md](references/household-ledger.md).
 
 ## Enrichment
 

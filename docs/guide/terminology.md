@@ -617,8 +617,12 @@ _Avoid_: aggregate order, unitemized receipt
 A party's cumulative outlay and transfer movement less attributed consumption. It is a reconciliation position, not an automatic claim that someone owes money.
 _Avoid_: debt, settlement balance
 
+**Attribution gap**:
+An Expense role or Ledger Transfer the contribution reports cannot state from recorded or derived evidence. An assumed-household beneficiary and a not-yet-paid funder are reported with the gaps but are fallbacks, not missing data.
+_Avoid_: attribution error, unattributed expense
+
 **Credit**:
-A negative Expense that changes actual cost, such as a vendor refund. A person-to-person repayment is a Ledger Transfer.
+A negative Expense that changes actual cost, such as a vendor refund or a non-member's repayment of a cost the household fronted, such as a friend's share of a group trip. A repayment between members is a Ledger Transfer.
 _Avoid_: contribution
 
 **Meal preparation**:
@@ -744,7 +748,7 @@ A member's purchasing relationship with one Vendor, including guest checkout and
 _Avoid_: vendor login, payment account
 
 **Sender proof**:
-An order Email arriving from a sender address already recorded on a Vendor, which proves that Vendor regardless of the merchant name the Email shows. A shared domain alone is not Sender proof.
+An order Email arriving from a sender address already recorded on a Vendor, which proves that Vendor regardless of the merchant name the Email shows. A sender at the registrable website domain of exactly one Vendor also proves it; a shared mail, storefront, payment or relay domain never does.
 _Avoid_: domain match
 
 **Research queue**:

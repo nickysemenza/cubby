@@ -4,6 +4,7 @@ import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
   VendorAccountId,
   VendorAccountShortcode,
+  VendorId,
 } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
@@ -14,6 +15,7 @@ import type {
   VendorAccountUpdateData,
 } from "@cubby/schemas/vendor-account";
 import { vendorAccountOut } from "@cubby/schemas/vendor-account";
+import { vendorAccountCursor } from "@cubby/schemas/vendor-account-fields";
 import {
   and,
   count,
@@ -39,6 +41,7 @@ import {
   onDb,
 } from "~/server/entity-kernel/repo/repository";
 import { createEntityReader } from "~/server/entity-kernel/repo/repository";
+import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
@@ -48,6 +51,8 @@ import {
   wantsListGroup,
 } from "~/server/generic/list/repo/list-projection";
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
+import { finalizeMerge } from "~/server/generic/merge/repo/core";
+import { applyMergePolicy } from "~/server/generic/removal/repo/dispositions";
 import {
   lookupEntityReferences,
   resolveOrThrow,
@@ -72,6 +77,165 @@ const VENDOR_ACCOUNT_DELETE_EDGE_POLICY = {
     description: "Replay-safe source claims retain their vendor-account scope.",
   },
 } as const satisfies IncomingEdgePolicy<"vendorAccount", OperationDisposition>;
+
+/**
+ * Folding a duplicate member account into the surviving one. Source claims
+ * stay unique by member, kind and key; the account only scopes them, so a
+ * repoint cannot collide.
+ */
+const VENDOR_ACCOUNT_FOLD_EDGE_POLICY = {
+  "Purchase.vendorAccountId": {
+    code: "repoint-purchases",
+    effect: "repoint",
+    description:
+      "Purchases fetched through the duplicate account name the surviving account.",
+  },
+  "Run.vendorAccountId": {
+    code: "repoint-runs",
+    effect: "repoint",
+    description: "Import runs move their scope to the surviving account.",
+  },
+  "ImportSourceClaim.vendorAccountId": {
+    code: "repoint-source-claims",
+    effect: "repoint",
+    description: "Replay-safe source claims scope to the surviving account.",
+  },
+} as const satisfies IncomingEdgePolicy<"vendorAccount", OperationDisposition>;
+
+const ACTIVE_RUN_STATUSES = [
+  "running",
+  "paused_auth",
+  "paused_offline",
+  "paused_approval",
+] as const;
+
+const newestOrderAt = (cursor: unknown) =>
+  vendorAccountCursor.safeParse(cursor).data?.newestOrderAt ?? "";
+
+const laterCursor = (
+  a: typeof vendorAccount.$inferSelect.cursor,
+  b: typeof vendorAccount.$inferSelect.cursor,
+) => (newestOrderAt(b) > newestOrderAt(a) ? b : a);
+
+/**
+ * A Vendor merge's `fold-member-accounts`: each loser account moves to the
+ * keeper, or, when the keeper already has an account for that member, folds
+ * into it (references re-pointed, later sync cursor kept, duplicate retired).
+ */
+export async function foldVendorAccountsInto(
+  tx: DrizzleTransaction,
+  args: {
+    keepVendorId: VendorId;
+    loserVendorIds: readonly VendorId[];
+    actor: ActorContext;
+  },
+): Promise<{ moved: number; folded: number }> {
+  const accounts = await tx
+    .select()
+    .from(vendorAccount)
+    .where(
+      and(
+        inArray(vendorAccount.vendorId, [
+          args.keepVendorId,
+          ...args.loserVendorIds,
+        ]),
+        notDeleted(vendorAccount),
+      ),
+    )
+    .orderBy(vendorAccount.createdAt)
+    .for("update");
+  const survivors = new Map(
+    accounts
+      .filter((account) => account.vendorId === args.keepVendorId)
+      .map((account) => [account.ledgerPartyId, account]),
+  );
+  let moved = 0;
+  let folded = 0;
+  for (const account of accounts) {
+    if (account.vendorId === args.keepVendorId) continue;
+    const survivor = survivors.get(account.ledgerPartyId);
+    if (!survivor) {
+      await tx
+        .update(vendorAccount)
+        .set({ vendorId: args.keepVendorId })
+        .where(eq(vendorAccount.id, account.id));
+      await logAuditEntry(tx, args.actor, {
+        entityKind: "vendorAccount",
+        entityId: account.id,
+        action: "update",
+        changes: {
+          vendorId: { from: account.vendorId, to: args.keepVendorId },
+        },
+      });
+      survivors.set(account.ledgerPartyId, {
+        ...account,
+        vendorId: args.keepVendorId,
+      });
+      moved++;
+      continue;
+    }
+    // `Run_one_active_vendor_account_key`: one live Run per account.
+    const active = await tx
+      .select({ vendorAccountId: run.vendorAccountId })
+      .from(run)
+      .where(
+        and(
+          inArray(run.vendorAccountId, [survivor.id, account.id]),
+          inArray(run.status, [...ACTIVE_RUN_STATUSES]),
+        ),
+      );
+    if (new Set(active.map((row) => row.vendorAccountId)).size > 1)
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        `Both vendor accounts ${survivor.shortcode} and ${account.shortcode} have an active import Run; finish or stop one before merging their vendors.`,
+      );
+    await applyMergePolicy(tx, {
+      entity: "vendorAccount",
+      policy: VENDOR_ACCOUNT_FOLD_EDGE_POLICY,
+      keepId: parseEntityId("vendorAccount", survivor.id),
+      loserIds: [parseEntityId("vendorAccount", account.id)],
+      liveOnly: false,
+    });
+    const cursor = laterCursor(survivor.cursor, account.cursor);
+    const inventoryOwnerDefaultEnabled =
+      survivor.inventoryOwnerDefaultEnabled ||
+      account.inventoryOwnerDefaultEnabled;
+    const survivorChanges = {
+      mergedFrom: { from: null, to: [account.id] },
+      ...(cursor !== survivor.cursor
+        ? { cursor: { from: survivor.cursor, to: cursor } }
+        : {}),
+      ...(inventoryOwnerDefaultEnabled !== survivor.inventoryOwnerDefaultEnabled
+        ? {
+            inventoryOwnerDefaultEnabled: {
+              from: survivor.inventoryOwnerDefaultEnabled,
+              to: inventoryOwnerDefaultEnabled,
+            },
+          }
+        : {}),
+    };
+    await tx
+      .update(vendorAccount)
+      .set({ cursor, inventoryOwnerDefaultEnabled })
+      .where(eq(vendorAccount.id, survivor.id));
+    survivors.set(account.ledgerPartyId, {
+      ...survivor,
+      cursor,
+      inventoryOwnerDefaultEnabled,
+    });
+    await finalizeMerge(tx, {
+      entity: "vendorAccount",
+      table: vendorAccount,
+      keepId: parseEntityId("vendorAccount", survivor.id),
+      loserIds: [parseEntityId("vendorAccount", account.id)],
+      removal: "soft",
+      actor: args.actor,
+      survivorChanges,
+    });
+    folded++;
+  }
+  return { moved, folded };
+}
 
 type VendorAccountRow = typeof vendorAccount.$inferSelect & {
   displayName: string;

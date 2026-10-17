@@ -125,12 +125,12 @@ export const MCP_TOOLS = defineMcpTools({
       get: mcpAction({
         op: kernelAction("get", "query"),
         description:
-          'One record by its shortcode. `missing: "null"` returns null instead of an error. `resultDetail: "full"` returns the complete projection — for a Product the detailed media read; the default summary is identity plus status.',
+          'One record by its shortcode. `missing: "null"` returns null instead of an error. `resultDetail: "full"` returns the complete projection — for a Product the detailed media read; the default summary is identity plus status; "compact" is the declared list fields without nested child collections. `fields` returns only those keys (dot paths like "financialReconciliation.status"; `id` always) of the full projection.',
       }),
       list: mcpAction({
         op: kernelAction("list", "query"),
         description:
-          'One page of a kind, with that kind\'s own typed `filters`, `sort`, `pagination` and `groupBy`; returns { meta, items }. `sort` is a stack, primary first: sort=[{orderBy:"name",direction:"asc"}]. Every scored entity accepts orderBy "dataQuality" (ascending = weakest identity first) plus dataStatus/dataGap filters, the enrichment worklist.',
+          'One page of a kind, with that kind\'s own typed `filters`, `sort`, `pagination` and `groupBy`; returns { meta, items }. `sort` is a stack, primary first: sort=[{orderBy:"name",direction:"asc"}]. Every scored entity accepts orderBy "dataQuality" (ascending = weakest identity first) plus dataStatus/dataGap filters, the enrichment worklist. A full page of a large kind can exceed the output limit: prefer `resultDetail: "compact"` (declared list fields, no nested child collections) or `fields` (only those keys, dot paths allowed, `id` always) over "full".',
       }),
       search: mcpAction({
         op: kernelAction("search", "query"),
@@ -517,12 +517,17 @@ export const MCP_TOOLS = defineMcpTools({
 
   finance: {
     description:
-      "Apply uniquely supported financial evidence through server checks. Ambiguous or changed accepted facts remain review work.",
+      "Apply uniquely supported financial evidence, or a member's explicit booking of one posted transaction, through server checks. Ambiguous or changed accepted facts remain review work.",
     actions: {
       allocate_settlement: mcpAction({
         op: financialTransactionContract.ops.allocateSettlement,
         description:
           "Save explicitly reviewed Purchase settlement allocations only while the exact prior graph remains current. Read all current allocations first and preserve unrelated edges; stale proposals are refused without mutation. Model ranking alone does not authorize an allocation.",
+      }),
+      book_transaction: mcpAction({
+        op: financialTransactionContract.ops.bookTransaction,
+        description:
+          'Book one posted Financial Transaction into spending through the reviewed booking checks (the same preview/commit as the web review, in one call; replays an identical booking). Name `purchaseId` to book into an existing Purchase, or `vendorId` to book into a new lump Purchase dated the transaction day. Incoming credits (income) book only as `economicRole: "reimbursement"`, as a negative reimbursement Expense; a reimbursement naming neither resolves the Vendor its merchant names exactly (name or alias) and refuses an unknown merchant. Links the transaction to the Purchase; never creates a Vendor. Transfers and card repayments are refused.',
       }),
       accept_transfer_pair: mcpAction({
         op: financialTransactionContract.ops.acceptTransferPair,
@@ -619,7 +624,7 @@ export const MCP_TOOLS = defineMcpTools({
       mail: mcpAction({
         op: purchaseImportContract.ops.mailRead,
         description:
-          "Read one retained Email: headers, body, links, attachments and checksum. acceptedSourceOrders supplies owned accepted-order handles and source identities for prepare_reconciliation, separately from lifecycle Purchase links. Pass attachmentId for original PDF/image bytes (at most 3 MiB). Start research from this original and its links.",
+          "Read one retained Email: headers, body as compact text (HTML converted when richer than the text part; `compacted`, `truncated`, `htmlBytes` report it), cue-first links, attachments and checksum. Raw HTML is never returned by default; includeHtml returns one raw HTML page instead of the compact text, starting at offset 0 and continuing from each page's nextOffset (null at the end). acceptedSourceOrders supplies owned accepted-order handles and source identities for prepare_reconciliation, separately from lifecycle Purchase links. Pass attachmentId for original PDF/image bytes (at most 3 MiB). Start research from this original and its links.",
       }),
       mail_triage_preview: mcpAction({
         op: purchaseImportContract.ops.mailTriagePreview,
@@ -825,7 +830,7 @@ export const MCP_TOOLS = defineMcpTools({
       prepare: mcpAction({
         op: purchaseImportContract.ops.prepare,
         description:
-          "Persist an immutable proposed purchase import. Each order names its Vendor (`vendorId`, or `vendor.name` to reuse or create an exact-name Vendor) and its source: a retained Email (`mail_message`, key `gmail:<mailboxId>:<messageId>` and the checksum imports_read.mail returned), a receipt photo, or a vendor export. Without `_runExecution.run`, a member's preparation opens its own import Run and returns its RUN- code. Returns stable order and line ids plus existing Product candidates to reuse before creating one. Never writes Purchases, Expenses, or Products.",
+          "Persist an immutable proposed purchase import. Each order names its Vendor (`vendorId`, or `vendor.name` to reuse the Vendor its sender or website domain proves or an exact-name Vendor, else create one; similar candidates need `vendor.distinctFrom`) and its source: a retained Email (`mail_message`, key `gmail:<mailboxId>:<messageId>` and the checksum imports_read.mail returned), a receipt photo, or a vendor export. Without `_runExecution.run`, a member's preparation opens its own import Run and returns its RUN- code. Returns stable order and line ids plus existing Vendor candidates (`vendorCandidates`) and Product candidates to reuse before creating one. Never writes Purchases, Expenses, or Products.",
       }),
       commit: mcpAction({
         op: purchaseImportContract.ops.commit,

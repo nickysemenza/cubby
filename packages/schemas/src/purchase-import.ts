@@ -40,6 +40,14 @@ const distinctFromProduct = <Id extends z.ZodType<string>>(productId: Id) =>
     quote: z.string().trim().min(1).max(ENTITY_SOURCE_QUOTE_MAX),
   });
 
+/** A Distinct-from decision for a new Vendor beside a similar existing one. */
+const distinctFromVendor = z.object({
+  vendorId: vendorShortcode,
+  url: z.url(),
+  quote: z.string().trim().min(1).max(ENTITY_SOURCE_QUOTE_MAX),
+});
+export type DistinctFromVendor = z.infer<typeof distinctFromVendor>;
+
 const newProductResolution = z
   .object({
     kind: z.literal("new"),
@@ -132,7 +140,7 @@ export type PurchaseImportRunExecution = z.infer<
 >;
 
 const LINE_COST_TYPE =
-  "The line's accounting role: materials for consumed or installed goods, tools for equipment that outlives the job, services for labor, travel, delivery, taxes, fees, and other non-material charges.";
+  "The line's accounting role: materials for consumed or installed goods, tools for equipment that outlives the job, services for labor, travel, delivery, taxes, fees, and other non-material charges. Event tickets, airfare and other travel, lodging, rides, labor and prepared food are services.";
 export const extractedPurchaseLine = z.object({
   title: z.string().trim().min(1).max(500),
   amount: money,
@@ -733,10 +741,19 @@ const preparedImportOrderInput = z
         "The existing Vendor this order was bought from. Omit only when the import Run already names the Vendor.",
       ),
     vendor: z
-      .object({ name: z.string().trim().min(1).max(200) })
+      .object({
+        name: z.string().trim().min(1).max(200),
+        distinctFrom: z
+          .array(distinctFromVendor)
+          .max(20)
+          .optional()
+          .describe(
+            "Reviewed vendorCandidates this seller is not, each with a Source showing the difference.",
+          ),
+      })
       .optional()
       .describe(
-        "A Vendor named exactly as the source names the seller, when no existing Vendor matches; Cubby reuses an exact-name Vendor.",
+        "The seller as the source names it. Cubby reuses the Vendor its exact sender proves, the one Vendor whose website domain sent the Email (shared mail, storefront, payment and relay domains never count), or an exact name/alias; a new Vendor beside a similar-name or same-domain candidate needs distinctFrom.",
       ),
     targetPurchaseId: purchaseShortcode.nullable().optional(),
     stableOrderId: stableImportItemId,
@@ -818,6 +835,18 @@ export const preparedProductCandidate = z.object({
   matchReason: z.string().max(300).optional(),
 });
 
+/** An existing Vendor an order's named seller might be (see `vendor.distinctFrom`). */
+export const preparedVendorCandidate = z.object({
+  vendorId: vendorShortcode,
+  name: z.string(),
+  website: z.string().nullable(),
+  exactNameMatch: z.boolean(),
+  /** The Vendor's website registrable domain is the order Email sender's. */
+  websiteDomainMatch: z.boolean(),
+  matchReason: z.string().max(300).optional(),
+});
+export type PreparedVendorCandidate = z.infer<typeof preparedVendorCandidate>;
+
 export const preparePurchaseImportOut = z.object({
   runId: runShortcode,
   operationId: importOperationId,
@@ -831,6 +860,7 @@ export const preparePurchaseImportOut = z.object({
       orderId: z.string().nullable(),
       targetFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
       evidenceFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+      vendorCandidates: z.array(preparedVendorCandidate).max(20).default([]),
       lines: z.array(
         z.object({
           stableLineId: stableImportItemId,

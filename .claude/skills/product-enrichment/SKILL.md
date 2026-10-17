@@ -74,7 +74,9 @@ Keep the member's source/tool restrictions in every worker brief. A logged-out
 public preview does not establish that authenticated evidence is unavailable;
 check the requested signed-in browser live. Missing browser tooling is an
 execution limitation, not evidence for an unavailable exception.
-Do not begin with generic name search when usable purchase sources exist. Use
+Do not begin with generic name search when usable purchase sources exist. For groceries and other receipt-titled items, the purchase's own receipt or
+order-page line is the identity Source: cite it with `sourceEntity` (the Purchase)
+and quote the line verbatim; a retailer page then adds the image and identifiers. Use
 broader search for unavailable sources or facts those sources cannot establish.
 
 Prove the exact variant before writing: accepted purchased-item URL, existing external-ID URL, deterministic

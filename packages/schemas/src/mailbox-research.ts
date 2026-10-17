@@ -293,6 +293,16 @@ export const mailTriagePreviewOut = z.object({
 });
 export type MailTriagePreviewOut = z.infer<typeof mailTriagePreviewOut>;
 
+/**
+ * The purchase agent's output cap for an Email read. A read's serialized
+ * response (text or HTML page, plus metadata) stays below it, so the agent
+ * never cuts a read before its last line or total.
+ */
+export const MAIL_READ_RESPONSE_MAX_BYTES = 200_000;
+
+/** Raw HTML page bound for `includeHtml` reads, measured JSON-escaped. */
+export const MAIL_READ_HTML_PAGE_MAX_BYTES = 100_000;
+
 export const mailReadInput = mailMessageRef.extend({
   attachmentId: z
     .string()
@@ -301,8 +311,65 @@ export const mailReadInput = mailMessageRef.extend({
     .max(200)
     .optional()
     .describe("A provider attachment id from the message's attachment list."),
+  includeHtml: z
+    .boolean()
+    .optional()
+    .describe(
+      "Return one page of the raw HTML body instead of the compact text. Omitted: only compact text.",
+    ),
+  offset: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe(
+      "UTF-8 byte offset of the raw HTML page (includeHtml): 0, or the previous page's nextOffset.",
+    ),
+  maxBytes: z
+    .number()
+    .int()
+    .min(1)
+    .max(MAIL_READ_HTML_PAGE_MAX_BYTES)
+    .optional()
+    .describe(
+      `JSON-escaped UTF-8 bytes of raw HTML per page (includeHtml), default ${MAIL_READ_HTML_PAGE_MAX_BYTES}. A page always holds at least one whole character.`,
+    ),
 });
 export type MailReadInput = z.infer<typeof mailReadInput>;
+
+/** Compact text body bound, measured JSON-escaped; below MAIL_READ_RESPONSE_MAX_BYTES. */
+export const MAIL_READ_TEXT_MAX_BYTES = 120_000;
+
+/**
+ * What a read returns: the body as compact text (HTML converted when the text
+ * part is empty or poorer), or, when `includeHtml` pages it, one raw HTML page
+ * in place of that text.
+ */
+export const mailReadContent = z.object({
+  snippet: z.string().nullable(),
+  bodyText: z.string().nullable(),
+  /** One raw HTML page, only when `includeHtml` asked for it. */
+  bodyHtml: z.string().nullable(),
+  /** Exact `offset` of the next HTML page; null at the end or without a page. */
+  nextOffset: z.number().int().nullable(),
+  headers: z.record(z.string(), z.string()).optional(),
+  /** UTF-8 size of the stored HTML body. */
+  htmlBytes: z.number().int().nullable(),
+  /** `bodyText` was converted from the HTML body. */
+  compacted: z.boolean(),
+  /** Some body text or the HTML page stops before the end of the original. */
+  truncated: z.boolean(),
+  /** Cue-bearing links first, from the HTML body. */
+  links: z.array(z.object({ href: z.string(), text: z.string() })).default([]),
+  /** Links left out to keep the read under MAIL_READ_RESPONSE_MAX_BYTES. */
+  linksOmitted: z.number().int().min(0).default(0),
+  /** `headers` left out because they alone overflow the response cap. */
+  headersOmitted: z.boolean().default(false),
+  /** The body text or HTML page was cut further to fit the response cap;
+   * an HTML read continues from `nextOffset`. */
+  bodyShortened: z.boolean().default(false),
+});
+export type MailReadContent = z.infer<typeof mailReadContent>;
 
 export const mailSearchInput = z.object({
   mailboxId: z.string().trim().min(1).max(320).optional(),
@@ -431,6 +498,19 @@ export const mailAttachmentOriginal = z.strictObject({
 export type MailAttachmentOriginal = z.infer<typeof mailAttachmentOriginal>;
 
 /**
+ * The text the purchase agent receives for a tool result: the result as JSON
+ * with an original attachment's bytes moved out to media. The agent adapter
+ * emits exactly this and the Email read cap measures exactly this.
+ */
+export function mailReadAgentText<
+  T extends { originalAttachment?: MailAttachmentOriginal | undefined },
+>(result: T): string {
+  if (!result.originalAttachment) return JSON.stringify(result);
+  const { dataBase64: _bytes, ...descriptor } = result.originalAttachment;
+  return JSON.stringify({ ...result, originalAttachment: descriptor });
+}
+
+/**
  * `accepted`: an import accepted the Email as the Purchase's source.
  * `linked`: a reviewed link on one of its order events. Both are links;
  * Relevance and import outcome are separate facts (`entity_read` on email).
@@ -449,7 +529,7 @@ export const mailReadOut = mailMessageRef.extend({
   sender: z.string().nullable(),
   subject: z.string().nullable(),
   receivedAt: z.iso.datetime().nullable(),
-  content: retainedMailContent,
+  content: mailReadContent,
   attachments: z.array(
     z.object({
       attachmentId: z.string(),
@@ -475,6 +555,7 @@ export const mailReadOut = mailMessageRef.extend({
     .default([]),
   financialAssociations: z.array(mailFinancialAssociation).default([]),
 });
+export type MailReadOut = z.infer<typeof mailReadOut>;
 export const mailSearchOut = z.object({
   status: z.enum(["ok", "mailbox_required", "gmail_reconnect_required"]),
   mailboxes: z.array(z.string()),

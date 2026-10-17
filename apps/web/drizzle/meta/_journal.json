@@ -582,6 +582,13 @@
       "when": 1792251472662,
       "tag": "0082_retire_execution_approvals",
       "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1792264010992,
+      "tag": "0083_spending_category_stock_and_dual_target_sources",
+      "breakpoints": true
     }
   ]
 }

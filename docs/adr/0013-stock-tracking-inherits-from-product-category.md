@@ -19,7 +19,11 @@ the same way `feature` and the spending mapping do. A Product's own decision
 wins; with none, the nearest category decision applies; with neither, the
 Product is undecided. Only an explicit or inherited not-tracked decision keeps
 an arriving order from asking to be received; tracked and undecided Products,
-and lines with no Product yet, still ask. "Not on a shelf" filters on the
+and lines with no Product yet, still ask, except that an undecided Product on a
+line whose effective Spending Category (or its nearest deciding ancestor) is
+not stock-tracked, or with no such decision bought from a `food_retail`
+Vendor, stays quiet. That Spending Category flag gates only this prompt; it
+never decides the Product's own stock tracking. "Not on a shelf" filters on the
 effective value.
 
 A category default is a member's explicit decision made once for a kind of

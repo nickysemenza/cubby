@@ -23,9 +23,11 @@ import {
   type GmailAttachmentPayload,
   type GmailOrderMailAttachment,
 } from "~/server/domains/purchase-import/repo/gmail/types";
+import { createAppError } from "~/server/errors/app-error";
 
 import { recordEmailRetrievalFailure } from "./observations";
 import { gmailProviderForUser } from "./provider";
+import { mailReadContent } from "./read-content";
 
 export async function exactMemberEmail(
   db: Database,
@@ -34,7 +36,8 @@ export async function exactMemberEmail(
   lock?: "update",
 ) {
   if (actor.runId)
-    throw new Error(
+    throw createAppError(
+      "MAIL_REQUEST_REFUSED",
       "Only a member without a Run can refetch an Email original; admitted Run evidence stays frozen.",
     );
   const query = getDb(db)
@@ -68,7 +71,8 @@ export async function exactMemberEmail(
     .limit(1);
   const [email] = await query;
   if (!email)
-    throw new Error(
+    throw createAppError(
+      "EMAIL_NOT_FOUND",
       "No live Email in this exact connected mailbox belongs to this member.",
     );
   if (!lock) return email.email;
@@ -85,7 +89,11 @@ export async function exactMemberEmail(
       ),
     )
     .for("no key update");
-  if (!owner) throw new Error("Email member owner changed before locking.");
+  if (!owner)
+    throw createAppError(
+      "MAIL_EVIDENCE_STALE",
+      "Email member owner changed before locking.",
+    );
   const [connected] = await getDb(db)
     .select({ id: account.id })
     .from(account)
@@ -98,7 +106,10 @@ export async function exactMemberEmail(
     )
     .for("update");
   if (!connected)
-    throw new Error("Email connected account changed before locking.");
+    throw createAppError(
+      "MAIL_EVIDENCE_STALE",
+      "Email connected account changed before locking.",
+    );
   if (reference.runId)
     await getDb(db)
       .select({ id: run.id })
@@ -121,7 +132,8 @@ export async function exactMemberEmail(
     .for("update")
     .limit(1);
   if (!current || current.runId !== reference.runId)
-    throw new Error(
+    throw createAppError(
+      "MAIL_EVIDENCE_STALE",
       "Email original assignment or ownership changed before locking.",
     );
   return current;
@@ -225,12 +237,15 @@ export async function readEmailOriginalTransient(
     sender: normalized.mail.headers.from ?? null,
     subject: normalized.mail.headers.subject ?? null,
     receivedAt: normalized.mail.internalDate,
-    content: {
-      snippet: normalized.mail.snippet,
-      bodyText: normalized.mail.bodyText,
-      bodyHtml: normalized.mail.bodyHtml,
-      headers: normalized.mail.headers,
-    },
+    content: mailReadContent(
+      {
+        snippet: normalized.mail.snippet,
+        bodyText: normalized.mail.bodyText,
+        bodyHtml: normalized.mail.bodyHtml,
+        headers: normalized.mail.headers,
+      },
+      input,
+    ),
     attachments: normalized.attachments
       .filter((part) => part.attachmentId !== null)
       .map((part) => ({

@@ -3,6 +3,7 @@ import {
   ledgerPartyContract,
 } from "~/contracts/finance.contract";
 import {
+  bookFinancialTransaction,
   previewFinancialBooking,
   commitFinancialBooking,
 } from "~/server/domains/financial-transaction/repo/financial-booking";
@@ -51,6 +52,8 @@ export const financialTransactionHandlers = implementOperationDomain(
       acceptFinancialTransferPair(context.db, input, context.actorContext),
     converge: (context, input) =>
       convergeFinancialEvidence(context.db, input, context.actorContext),
+    bookTransaction: (context, input) =>
+      bookFinancialTransaction(context.db, input, context.actorContext),
     previewBookingCorrection: (context, input) =>
       previewFinancialBookingCorrection(context.db, input),
     commitBookingCorrection: (context, input) =>

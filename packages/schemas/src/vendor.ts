@@ -109,6 +109,10 @@ export const vendorMergeSummaryOut = z.object({
    * doesn't already carry.
    */
   purchasesFolded: z.number().int().nonnegative(),
+  /** Member accounts moved to the survivor (it had none for that member). */
+  vendorAccountsMoved: z.number().int().nonnegative(),
+  /** Member accounts folded into the survivor's account for the same member. */
+  vendorAccountsFolded: z.number().int().nonnegative(),
   carriedFields: z.array(z.string()),
 });
 export type VendorMergeSummaryOut = z.infer<typeof vendorMergeSummaryOut>;

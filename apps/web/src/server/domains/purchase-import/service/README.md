@@ -96,7 +96,10 @@ pending: nothing here starts Product research.
 4. **Writes**: `imports_read.mail` reads a retained Email (`mail-tool.ts`
    `readMail`); `purchase_import.prepare/commit` (`import-orders.ts`) import an
    order through `writer.ts`, and a mail-sourced commit (message or
-   attachment) links and settles the Email as the Purchase's confirmation;
+   attachment) links and settles the Email as the Purchase's confirmation,
+   and a commit that creates Products starts a `scheduled` category
+   suggestion sweep for them when AI refresh is active
+   (`import-category-sweep.ts`);
    `mail.resolve` records a lifecycle link, an unresolved gap or an unrelated
    disposal (which deletes the retained copy unless a reviewed decision or
    import uses it; the daily catch-up retries a disposal lost after its

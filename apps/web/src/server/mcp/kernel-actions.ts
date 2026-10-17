@@ -74,6 +74,13 @@ import {
   type McpBatchConfig,
   runMcpBatch,
 } from "./batch";
+import {
+  entitySelectedResultSchema,
+  projectSelection,
+  readSelection,
+  type ReadSelection,
+  selectionListFields,
+} from "./entity-field-selection";
 import { getEntityKernelContext } from "./kernel-context";
 import type { ToolExtra } from "./tools/tool-registration";
 
@@ -106,13 +113,14 @@ type BatchExecution = Parameters<typeof runMcpBatch>[1]["execution"];
 type McpEntityCommand = Exclude<EntityCommand, { action: "listRelation" }>;
 
 const commandWithDetail = z.looseObject({
-  resultDetail: z.enum(["summary", "full"]).optional(),
+  resultDetail: z.enum(["summary", "compact", "full"]).optional(),
+  fields: z.array(z.string()).optional(),
 });
 
 const kernelCommand = (
   command: z.output<typeof commandWithDetail>,
 ): McpEntityCommand => {
-  const { resultDetail: _resultDetail, ...rest } = command;
+  const { resultDetail: _resultDetail, fields: _fields, ...rest } = command;
   const parsed = entityCommandSchema.parse(rest);
   if (parsed.action === "listRelation")
     throw new Error("listRelation is not an entity tool command");
@@ -127,6 +135,7 @@ export type McpEntityExecutor = (
   context: ReturnType<typeof getEntityKernelContext>,
   command: McpEntityCommand,
   detail?: ResultDetail,
+  selection?: ReadSelection | null,
 ) => Promise<z.output<z.ZodType>>;
 
 type ResultDetail = NonNullable<
@@ -144,7 +153,27 @@ const hasListReader = (
  * complete row (data quality, pricing, USDA, media); every other command and
  * an entity without a progressive reader run the full kernel operation.
  */
-const executeMcpEntity: McpEntityExecutor = async (context, command, detail) =>
+const executeMcpEntity: McpEntityExecutor = async (
+  context,
+  command,
+  detail,
+  selection,
+) => {
+  if (!selection) return executeDetail(context, command, detail);
+  // A selection the list reader can serve reads only its fields' groups.
+  if (command.action === "list" && hasListReader(command.entity)) {
+    const fields = selectionListFields(command.entity, selection);
+    if (fields)
+      return ENTITY_LIST_READ_OPERATIONS[command.entity].listFields(
+        context,
+        { ...command, filters: command.filters ?? {} },
+        fields,
+      );
+  }
+  return executeEntity(context, command);
+};
+
+const executeDetail: McpEntityExecutor = async (context, command, detail) =>
   detail === "summary" &&
   command.action === "list" &&
   hasListReader(command.entity)
@@ -238,13 +267,23 @@ const commandAction = (
     const command = commandWithDetail.parse(raw);
     const detail = command.resultDetail ?? "summary";
     const context = getEntityKernelContext(extra);
+    const selection = readSelection({
+      ...z.object({ action: z.string(), entity: z.string() }).parse(command),
+      resultDetail: command.resultDetail,
+      fields: command.fields,
+    });
     const project = (result: z.output<z.ZodType>) =>
-      // SAFETY: every kernel result names its entity; the projection reads only
-      // the manifest title field for it and the published output re-parses.
-      projectEntityResult(
-        command,
-        result as Parameters<typeof projectEntityResult>[1],
-      );
+      selection
+        ? projectSelection(result, selection)
+        : // SAFETY: every kernel result names its entity; the projection reads
+          // only the manifest title field for it and the published output re-parses.
+          projectEntityResult(
+            {
+              ...command,
+              resultDetail: detail === "full" ? "full" : "summary",
+            },
+            result as Parameters<typeof projectEntityResult>[1],
+          );
     if (options.coverage)
       return executeWithCoverage(
         execute,
@@ -257,7 +296,9 @@ const commandAction = (
       z
         .object({ action: z.string(), entity: z.string() })
         .passthrough()
-        .parse(await execute(context, kernelCommand(command), detail)),
+        .parse(
+          await execute(context, kernelCommand(command), detail, selection),
+        ),
     );
   },
 });
@@ -359,13 +400,21 @@ export const createKernelMcpActions = (
       execute,
       "get",
       entityMcpGetCommandSchema,
-      z.union([generatedMcpEntityGetResultSchema, entitySummaryResultSchema]),
+      z.union([
+        generatedMcpEntityGetResultSchema,
+        entitySummaryResultSchema,
+        entitySelectedResultSchema,
+      ]),
     ),
     list: commandAction(
       execute,
       "list",
       entityMcpListCommandSchema,
-      z.union([generatedMcpEntityListResultSchema, entitySummaryResultSchema]),
+      z.union([
+        generatedMcpEntityListResultSchema,
+        entitySummaryResultSchema,
+        entitySelectedResultSchema,
+      ]),
     ),
     search: commandAction(
       execute,

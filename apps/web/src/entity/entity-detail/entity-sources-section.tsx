@@ -198,9 +198,14 @@ function EntitySourcesList({
     }
   >();
   for (const [index, source] of sources.entries()) {
-    const key = source.sourceEntity
+    const record = source.sourceEntity
       ? `${source.sourceEntity.entityKind}:${source.sourceEntity.entityId}`
-      : (source.url ?? `citation:${index}`);
+      : null;
+    // A record cited with an external page is its own group: it shows both.
+    const key =
+      record && source.url
+        ? `${record}|${source.url}`
+        : (record ?? source.url ?? `citation:${index}`);
     const group = groups.get(key) ?? {
       target: source,
       citations: [],

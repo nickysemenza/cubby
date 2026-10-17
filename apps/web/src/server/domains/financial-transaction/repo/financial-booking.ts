@@ -32,6 +32,7 @@ import { spendingClassificationRevision } from "~/server/domains/expense/repo/ex
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { createPurchase } from "~/server/domains/purchase/repo/purchase";
 import { refreshDerivedSearchRefs } from "~/server/entity-kernel/repo/mutation-side-effects";
+import { resolveNames } from "~/server/entity-kernel/resolve";
 import { createAppError } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -457,4 +458,46 @@ export async function loadFinancialBookingLineage(
     )
     .orderBy(ledgerSourceClaim.id);
   return { lines, attributions, sourceClaims };
+}
+
+/**
+ * `finance.book_transaction`: preview and commit one booking in a single call.
+ * A reimbursement naming neither Purchase nor Vendor books into a new lump
+ * Purchase for the Vendor its merchant names exactly (name or alias); an
+ * unknown merchant is refused rather than inventing a Vendor.
+ */
+export async function bookFinancialTransaction(
+  db: Database,
+  raw: FinancialBookingInput,
+  actor: ActorContext,
+) {
+  const input = financialBookingInput.parse(raw);
+  if (
+    !input.purchaseId &&
+    !input.vendorId &&
+    input.economicRole === "reimbursement"
+  ) {
+    const row = await transactionForBooking(db, input);
+    const merchant = row.merchant?.trim();
+    if (!merchant)
+      return fail(
+        "This transaction names no merchant; pass vendorId or purchaseId to book it.",
+      );
+    const [named] = await resolveNames(db, "vendor", [{ name: merchant }], {
+      create: false,
+    });
+    if (!named?.row)
+      return fail(
+        `No Vendor is named "${merchant}" by name or alias; pass vendorId or purchaseId to book it.`,
+      );
+    if (named.candidates.length > 0)
+      return fail(
+        `Merchant "${merchant}" matches ${[named.row, ...named.candidates]
+          .map(({ shortcode }) => shortcode)
+          .join(", ")}; pass the intended vendorId.`,
+      );
+    input.vendorId = parseShortcodeFor("vendor", named.row.shortcode);
+  }
+  const review = await previewFinancialBooking(db, input);
+  return commitFinancialBooking(db, review, actor);
 }

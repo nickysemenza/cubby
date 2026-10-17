@@ -2,7 +2,10 @@
  * checks happen after fetch; provider failures overwrite prior evidence; foreign
  * attachment or changed response ids escape the exact-message fence. */
 import { runEntityId } from "@cubby/schemas/identifiers";
-import { MAIL_ATTACHMENT_MAX_BYTES } from "@cubby/schemas/mailbox-research";
+import {
+  MAIL_ATTACHMENT_MAX_BYTES,
+  MAIL_READ_RESPONSE_MAX_BYTES,
+} from "@cubby/schemas/mailbox-research";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -22,6 +25,7 @@ import {
 } from "~/server/db/schema";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
+import { readMail } from "../../operations/mail-tool";
 import * as providers from "./provider";
 import { readEmailOriginalTransient } from "./real-time";
 import { GmailApiError, type GmailProvider } from "./types";
@@ -138,6 +142,34 @@ describe("exact owned transient Gmail original", () => {
       [],
     );
   });
+  // Failure: a member's transient read of an unretained Email skips the
+  // response fitting, so long tracking links overflow the agent cap.
+  it("fits a link-heavy transient read under the response cap", async () => {
+    const { getMessage } = await fixture();
+    const links = Array.from(
+      { length: 60 },
+      (_, index) =>
+        `<a href="https://click.shop.example/t/${index}/${"q".repeat(3_000)}">Track ${index}</a>`,
+    );
+    const items = Array.from(
+      { length: 3_000 },
+      (_, index) => `<p>Synthetic gadget line ${index} costs $${index}.99</p>`,
+    );
+    const html = `<html><body>${items.join("")}${links.join("")}</body></html>`;
+    getMessage.mockImplementation(async (id) => ({
+      id,
+      payload: {
+        mimeType: "text/html",
+        body: { data: Buffer.from(html).toString("base64url") },
+      },
+    }));
+    const read = await readMail(ctx.db, input, ctx.actor);
+    expect(
+      new TextEncoder().encode(JSON.stringify(read)).length,
+    ).toBeLessThanOrEqual(MAIL_READ_RESPONSE_MAX_BYTES);
+    expect(read.content.linksOmitted).toBeGreaterThan(0);
+  });
+
   it("reads only a listed attachment as bounded transient bytes with its actual checksum", async () => {
     const { getAttachment } = await fixture();
     const before = await evidence();

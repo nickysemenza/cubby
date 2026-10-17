@@ -8,12 +8,20 @@ import { getDb } from "~/server/db/helpers";
 import {
   expense,
   financialTransaction,
+  financialTransactionAllocation,
   purchase as purchaseTable,
 } from "~/server/db/schema";
 import { getPurchaseByID } from "~/server/domains/purchase/repo/purchase";
+import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { createMcpServer } from "~/server/mcp/server";
+import {
+  callMcpTool,
+  kernelRequestContext,
+} from "~/server/testing/mcp-test-utils";
 
 import {
+  bookFinancialTransaction,
   commitFinancialBooking,
   previewFinancialBooking,
 } from "./financial-booking";
@@ -310,6 +318,169 @@ describe("reviewed booking category and refund capacity", () => {
     expect(preview.action).toBe("create_aggregate");
     expect(await getPurchaseByID(ctx.db, purchase.id)).toMatchObject({
       expenseTotal: 110,
+    });
+  });
+});
+
+// Agents booked reimbursements by hand-creating Expenses and setting
+// FTX.purchaseId; finance.book_transaction runs the reviewed booking instead.
+describe("finance.book_transaction", () => {
+  const ctx = withTestDb();
+  async function fixture() {
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic shared lodge",
+      aliases: ["SYNTHETIC LODGE CO"],
+    });
+    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      date: "2026-09-01",
+      defaultTrade: "other",
+    });
+    await insertWithShortcode(ctx.db, "expense", {
+      purchaseId: purchase.id,
+      name: "Synthetic lodge stay",
+      cost: 100,
+      date: "2026-09-01",
+      costType: "services",
+      trade: "other",
+      lineKind: "principal",
+      lineBasis: "item_line",
+      economicRole: "vendor",
+    });
+    const account = await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic booking checking",
+      identity: { kind: "cash" },
+    });
+    await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      purchaseId: purchase.shortcode,
+      kind: "purchase",
+      status: "posted",
+      amount: 100,
+      postedDate: "2026-09-01",
+      merchant: "SYNTHETIC LODGE CO",
+    });
+    const income = async (merchant = "SYNTHETIC LODGE CO") =>
+      (
+        await createRepoEntity(ctx, "financialTransaction", {
+          accountId: account.output.id,
+          kind: "income",
+          status: "posted",
+          amount: -40,
+          postedDate: "2026-09-05",
+          merchant,
+        })
+      ).output.id;
+    return { vendor, purchase, income };
+  }
+  const reimbursements = (
+    purchaseId: NonNullable<typeof expense.$inferSelect.purchaseId>,
+  ) =>
+    getDb(ctx.db)
+      .select({
+        cost: expense.cost,
+        economicRole: expense.economicRole,
+        bookingTransactionCode: expense.bookingTransactionCode,
+      })
+      .from(expense)
+      .where(eq(expense.purchaseId, purchaseId));
+
+  it("books posted income as a reimbursement into an existing Purchase over MCP", async () => {
+    const { purchase, income } = await fixture();
+    const transactionId = await income();
+    const result = await callMcpTool(
+      createMcpServer(),
+      "finance",
+      {
+        action: "book_transaction",
+        transactionId,
+        purchaseId: purchase.shortcode,
+        economicRole: "reimbursement",
+      },
+      kernelRequestContext(kernelCtx(ctx)),
+    );
+    expect(result.isError).not.toBe(true);
+    expect(await reimbursements(purchase.id)).toContainEqual({
+      cost: -40,
+      economicRole: "reimbursement",
+      bookingTransactionCode: transactionId,
+    });
+    const linked = await getDb(ctx.db)
+      .select({ purchaseId: financialTransactionAllocation.purchaseId })
+      .from(financialTransactionAllocation)
+      .innerJoin(
+        financialTransaction,
+        eq(
+          financialTransaction.id,
+          financialTransactionAllocation.transactionId,
+        ),
+      )
+      .where(eq(financialTransaction.shortcode, transactionId));
+    expect(linked).toEqual([{ purchaseId: purchase.id }]);
+    expect(
+      (await getPurchaseByID(ctx.db, purchase.id)).financialReconciliation,
+    ).toMatchObject({ status: "match", delta: 0 });
+  });
+
+  it("creates a lump Purchase for the merchant's Vendor when none is named", async () => {
+    const { vendor, purchase, income } = await fixture();
+    const transactionId = await income();
+    const booked = await bookFinancialTransaction(
+      ctx.db,
+      financialBookingInput.parse({
+        transactionId,
+        economicRole: "reimbursement",
+      }),
+      ctx.actor,
+    );
+    expect(booked.purchaseId).not.toBe(purchase.shortcode);
+    const [lump] = await getDb(ctx.db)
+      .select({
+        id: purchaseTable.id,
+        vendorId: purchaseTable.vendorId,
+        date: purchaseTable.date,
+      })
+      .from(purchaseTable)
+      .where(eq(purchaseTable.shortcode, booked.purchaseId));
+    expect(lump).toMatchObject({ vendorId: vendor.id, date: "2026-09-05" });
+    expect(await reimbursements(lump!.id)).toEqual([
+      {
+        cost: -40,
+        economicRole: "reimbursement",
+        bookingTransactionCode: transactionId,
+      },
+    ]);
+    // An unknown merchant is refused rather than inventing a Vendor.
+    await expect(
+      bookFinancialTransaction(
+        ctx.db,
+        financialBookingInput.parse({
+          transactionId: await income("SYNTHETIC UNKNOWN PAYER"),
+          economicRole: "reimbursement",
+        }),
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: expect.stringContaining("SYNTHETIC UNKNOWN PAYER"),
+    });
+  });
+
+  it("refuses income without the reimbursement role", async () => {
+    const { purchase, income } = await fixture();
+    await expect(
+      bookFinancialTransaction(
+        ctx.db,
+        financialBookingInput.parse({
+          transactionId: await income(),
+          purchaseId: purchase.shortcode,
+        }),
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message:
+        "Classify this incoming credit explicitly as a reimbursement before booking it.",
     });
   });
 });

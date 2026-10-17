@@ -1,5 +1,6 @@
 import {
   MAIL_ATTACHMENT_MAX_BYTES,
+  MAIL_READ_RESPONSE_MAX_BYTES,
   mailResolveInput,
 } from "@cubby/schemas/mailbox-research";
 /**
@@ -1146,6 +1147,109 @@ describe("public mail tool", () => {
     });
   });
 
+  // Failure: a long retailer Email reaches the agent as raw HTML, so the
+  // agent's 50 KB head cap cuts its last item line and grand total.
+  it("reads a long retailer Email as compact text that keeps its last line and total", async () => {
+    const party = await member();
+    const style = `<style>${".c{color:#123456;padding:0 4px;margin:0}".repeat(400)}</style>`;
+    const row = (index: number) =>
+      `<tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#333333;padding:8px 12px;border-bottom:1px solid #eeeeee"><table role="presentation" style="width:100%;border-collapse:collapse"><tr><td style="padding:0;mso-line-height-rule:exactly;line-height:18px">Synthetic widget ${index}</td><td style="text-align:right;padding:0;font-weight:bold;line-height:18px">$${index}.25</td></tr></table></td></tr>`;
+    const rows = Array.from({ length: 400 }, (_, index) => row(index + 1));
+    const bodyHtml = `<html><head>${style}</head><body><img src="https://pixel.example.test/open.gif" width="1" height="1"><table role="presentation">${rows.join("")}<tr><td>Grand total $9876.54</td></tr></table></body></html>`;
+    expect(new TextEncoder().encode(bodyHtml).length).toBeGreaterThan(170_000);
+    const mail = await retainedMailFixture(ctx.db, {
+      ledgerPartyId: party.id,
+      mailboxId,
+      messageId: "synthetic-long-retailer",
+      checksum: "f".repeat(64),
+      content: { snippet: null, bodyText: null, bodyHtml },
+    });
+
+    const read = await readMail(
+      ctx.db,
+      { mailboxId, messageId: mail.messageId },
+      ctx.actor,
+    );
+
+    expect(read.content.bodyText).toContain("$400.25");
+    expect(read.content.bodyText).toContain("Grand total $9876.54");
+    expect(read.content.bodyHtml).toBeNull();
+    expect(read.content).toMatchObject({
+      compacted: true,
+      truncated: false,
+      htmlBytes: new TextEncoder().encode(bodyHtml).length,
+    });
+    expect(new TextEncoder().encode(JSON.stringify(read)).length).toBeLessThan(
+      50_000,
+    );
+
+    const page = await readMail(
+      ctx.db,
+      {
+        mailboxId,
+        messageId: mail.messageId,
+        includeHtml: true,
+        offset: 10,
+        maxBytes: 20,
+      },
+      ctx.actor,
+    );
+    expect(page.content.bodyHtml).toBe(bodyHtml.slice(10, 30));
+    expect(page.content).toMatchObject({
+      bodyText: null,
+      nextOffset: 30,
+      truncated: true,
+    });
+
+    const firstPage = await readMail(
+      ctx.db,
+      { mailboxId, messageId: mail.messageId, includeHtml: true },
+      ctx.actor,
+    );
+    expect(firstPage.content.nextOffset).toBeGreaterThan(0);
+    expect(
+      new TextEncoder().encode(JSON.stringify(firstPage)).length,
+    ).toBeLessThan(MAIL_READ_RESPONSE_MAX_BYTES);
+  });
+
+  // Failure: links and headers ride on top of a full text page, so the
+  // whole read overflows the agent's cap and Pi cuts trailing links and
+  // Purchase associations without saying so.
+  it("keeps a link-heavy Email read under the response cap and counts dropped links", async () => {
+    const party = await member();
+    const tracking = (index: number) =>
+      `https://click.shop.example/t/${index}/${"q".repeat(3_000)}`;
+    const items = Array.from(
+      { length: 3_000 },
+      (_, index) => `<p>Synthetic gadget line ${index} costs $${index}.99</p>`,
+    );
+    const links = Array.from(
+      { length: 60 },
+      (_, index) => `<a href="${tracking(index)}">Track parcel ${index}</a>`,
+    );
+    const bodyHtml = `<html><body>${items.join("")}${links.join("")}<p>Order total $4321.00</p></body></html>`;
+    const mail = await retainedMailFixture(ctx.db, {
+      ledgerPartyId: party.id,
+      mailboxId,
+      messageId: "synthetic-link-heavy",
+      checksum: "e".repeat(64),
+      content: { snippet: null, bodyText: null, bodyHtml },
+    });
+
+    const read = await readMail(
+      ctx.db,
+      { mailboxId, messageId: mail.messageId },
+      ctx.actor,
+    );
+
+    expect(new TextEncoder().encode(JSON.stringify(read)).length).toBeLessThan(
+      MAIL_READ_RESPONSE_MAX_BYTES,
+    );
+    expect(read.content.links.length).toBeGreaterThan(0);
+    expect(read.content.linksOmitted).toBeGreaterThan(0);
+    expect(read.purchaseAssociations).toEqual([]);
+  });
+
   describe("read attachment originals", () => {
     async function fixture(bytes: Uint8Array = receiptBytes) {
       const party = await member();
@@ -1239,9 +1343,12 @@ describe("public mail tool", () => {
         .update(emailTable)
         .set({ ledgerPartyId: otherOwner.id })
         .where(eq(emailTable.orderMailId, f.mail.id));
-      await expect(readMail(ctx.db, f.input, ctx.actor)).rejects.toThrow(
-        /retained Email/iu,
-      );
+      await expect(readMail(ctx.db, f.input, ctx.actor)).rejects.toMatchObject({
+        code: "NOT_FOUND",
+        message: expect.stringMatching(
+          /^No retained Email .+ in mailbox .+ belongs to this member\.$/u,
+        ),
+      });
     });
 
     it("rejects another retained message's attachment reference before reading bytes", async () => {

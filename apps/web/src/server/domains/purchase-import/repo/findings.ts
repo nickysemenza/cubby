@@ -1,7 +1,11 @@
 import { auditEntitySchema } from "@cubby/schemas/audit";
 import type { ActorContext } from "@cubby/schemas/context";
 import { costTypeSchema } from "@cubby/schemas/expense-fields";
-import { parseEntityId, runEntityId } from "@cubby/schemas/identifiers";
+import {
+  parseEntityId,
+  runEntityId,
+  type ProductId,
+} from "@cubby/schemas/identifiers";
 import {
   resolveRunFindingInput,
   resolveRunFindingOut,
@@ -28,7 +32,7 @@ import {
 import { isEqual } from "es-toolkit";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
-import { notDeleted, withTransaction } from "~/server/db/helpers";
+import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import {
   expense,
   auditLog,
@@ -596,6 +600,34 @@ export async function resolveRunFinding(
  * resolving vacuously. This is checked fresh on every call rather than cached,
  * so it stays correct regardless of how many partial receives happened first.
  */
+/** Re-check the open arrival prompts of every Purchase with a line for this Product. */
+export async function settleArrivedFindingsForProduct(
+  db: Database,
+  productId: ProductId,
+  actor: ActorContext,
+) {
+  const purchases = await getDb(db)
+    .selectDistinct({ id: runFinding.entityId })
+    .from(runFinding)
+    .innerJoin(
+      expense,
+      and(
+        eq(expense.purchaseId, runFinding.entityId),
+        eq(expense.productId, productId),
+        notDeleted(expense),
+      ),
+    )
+    .where(
+      and(
+        eq(runFinding.entityKind, "purchase"),
+        eq(runFinding.kind, "arrived"),
+        eq(runFinding.status, "open"),
+      ),
+    );
+  for (const { id } of purchases)
+    await resolveArrivedFindingsForPurchase(db, { purchaseId: id }, actor);
+}
+
 export async function resolveArrivedFindingsForPurchase(
   db: Database,
   input: { purchaseId: string },
@@ -643,6 +675,7 @@ export async function resolveArrivedFindingsForPurchase(
       ...(await receivableProductIds(
         tx,
         productLines.flatMap(({ productId }) => (productId ? [productId] : [])),
+        parseEntityId("purchase", input.purchaseId),
       )),
     ];
     const stocked = await tx

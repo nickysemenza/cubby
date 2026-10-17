@@ -3,6 +3,7 @@ import type { ExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import {
   type LedgerPartyId,
   parseEntityId,
+  type ProductId,
   type VendorId,
   runEntityId,
 } from "@cubby/schemas/identifiers";
@@ -22,9 +23,11 @@ import {
   type PurchaseImportRunExecution,
 } from "@cubby/schemas/purchase-import";
 import { sha256Hex } from "@cubby/shared/sha256";
+import { createLogger } from "@cubby/worker-tracing";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import type { DecisionPort } from "~/server/ai/decision-model";
 import type { Database } from "~/server/db";
 import {
@@ -79,10 +82,13 @@ import { sourceOrderKey } from "~/server/domains/purchase-import/repo/source-ord
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { executeAtomicOperation } from "~/server/domains/run/repo/operation";
 import { readOperation } from "~/server/domains/run/repo/run-operation";
-import { resolveImportVendor } from "~/server/domains/vendor/repo/vendor";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { ensureMailVendorAccount } from "../repo/gmail/mail-account";
+import {
+  importVendorCandidates,
+  resolveImportVendor,
+} from "../repo/import-vendor";
 import {
   amazonAsin,
   importVendorOrder,
@@ -145,9 +151,12 @@ async function importRunScope(
   return loadImportScope(db, runId, actor);
 }
 
+const log = createLogger("purchase-import");
+
 /**
- * An order's Vendor: named by id, proven by its Email's sender or found by
- * exact name or alias (`resolveImportVendor`), else the import Run's own.
+ * An order's Vendor: named by id, matched or created from its named seller
+ * (`resolveImportVendor`), else the import Run's own. A named seller also
+ * returns the candidates it was matched against, read before any creation.
  */
 async function preparedOrderVendor(
   db: Database,
@@ -155,23 +164,28 @@ async function preparedOrderVendor(
   scope: ImportScope,
   mail: RetainedMailSource | null | undefined,
   actor: ActorContext,
-): Promise<VendorId> {
+) {
+  const seller = order.vendor
+    ? {
+        name: order.vendor.name,
+        sender: mail?.sender ?? null,
+        evidence: mail ? order.source.externalKey : null,
+        distinctFrom: order.vendor.distinctFrom,
+      }
+    : null;
+  const vendorCandidates = seller
+    ? (await importVendorCandidates(db, seller)).map(
+        ({ candidate }) => candidate,
+      )
+    : [];
   const vendorId = order.vendorId
     ? await resolveOrThrow(db, "vendor", order.vendorId)
-    : order.vendor
-      ? await resolveImportVendor(
-          db,
-          {
-            name: order.vendor.name,
-            sender: mail?.sender ?? null,
-            evidence: mail ? order.source.externalKey : null,
-          },
-          actor,
-        )
+    : seller
+      ? await resolveImportVendor(db, seller, actor)
       : scope.vendorId;
   if (!vendorId)
     throw new Error("Name each order's Vendor (vendorId or vendor.name).");
-  return vendorId;
+  return { vendorId, vendorCandidates };
 }
 
 /**
@@ -585,7 +599,7 @@ export async function preparePurchaseImport(
         const outputOrders = [];
         const sourceOrders = new Set<string>();
         for (const order of input.orders) {
-          const vendorId = await preparedOrderVendor(
+          const { vendorId, vendorCandidates } = await preparedOrderVendor(
             transactionDb,
             order,
             scope,
@@ -759,6 +773,7 @@ export async function preparePurchaseImport(
             orderId: candidate.orderId,
             targetFingerprint,
             evidenceFingerprint,
+            vendorCandidates,
             lines: outputLines,
           });
         }
@@ -816,6 +831,10 @@ export async function commitPurchaseImport(
   rawInput: CommitPurchaseImportInput,
   actor: ActorContext,
   decisionPort?: DecisionPort,
+  followUps: {
+    /** Best-effort work on the Products this commit created; never fails it. */
+    onProductsCreated?: (productIds: ProductId[]) => Promise<void>;
+  } = {},
 ) {
   const input = commitPurchaseImportInput.parse(rawInput);
   const scope = await importRunScope(db, actor, input._runExecution, false);
@@ -971,6 +990,7 @@ export async function commitPurchaseImport(
         // Mail orders whose line thumbnails are fetched after commit.
         const thumbnailWork: Parameters<typeof attachOrderLineThumbnails>[1][] =
           [];
+        const createdProductIds: ProductId[] = [];
         let requiresReview = false;
         // Adjustment lines (tax/shipping/discount/etc.) never carry a
         // Product, so the caller's resolution roster is keyed to principal
@@ -1093,6 +1113,8 @@ export async function commitPurchaseImport(
             // unassigned principal lines get Other.
             {
               applyUnassignedPurposeFallback: input.defaultTrade === undefined,
+              onProductCreated: (productId) =>
+                createdProductIds.push(productId),
               resolveReversal: (index, line) =>
                 chooseLineStage(
                   transactionDb,
@@ -1192,7 +1214,12 @@ export async function commitPurchaseImport(
             updatedAt: new Date(),
           })
           .where(eq(runTable.id, scope.runId));
-        return { result: publicResult, requiresReview, thumbnailWork };
+        return {
+          result: publicResult,
+          requiresReview,
+          thumbnailWork,
+          createdProductIds,
+        };
       });
     },
   );
@@ -1202,6 +1229,14 @@ export async function commitPurchaseImport(
   if (transactionResult.requiresReview) {
     await finalizeReviewRun(db, scope.runId, input._runExecution.operationId);
   }
+  const createdProductIds = transactionResult.createdProductIds ?? [];
+  if (createdProductIds.length > 0 && followUps.onProductsCreated)
+    await followUps.onProductsCreated(createdProductIds).catch((error) =>
+      log.warn("Post-commit Product follow-up failed", {
+        runId: scope.runId,
+        error: scrubErrorMessage(String(error)),
+      }),
+    );
   return transactionResult.result;
 }
 

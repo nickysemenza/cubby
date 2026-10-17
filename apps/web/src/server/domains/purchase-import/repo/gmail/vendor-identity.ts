@@ -1,19 +1,8 @@
-import { getDomain } from "tldts";
+import { vendorWebsiteDomain } from "~/lib/vendor/domains";
 
 export type VendorMailIdentity = {
   website: string | null;
   orderEmailSenders: readonly string[];
-};
-
-const vendorWebsiteDomain = (website: string | null): string | null => {
-  if (!website) return null;
-  try {
-    const url = new URL(website);
-    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
-    return getDomain(url.hostname, { allowPrivateDomains: true });
-  } catch {
-    return null;
-  }
 };
 
 export const vendorSearchTerms = (vendor: VendorMailIdentity): string[] => {
