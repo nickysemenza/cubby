@@ -53,6 +53,13 @@ it("restarts a credit-refused generation on the subscription with its actual mod
   ]);
 });
 
+/** The paid step answers on the plan's model through the gateway. */
+const openAiCompleted = () =>
+  new Response(
+    `data: ${JSON.stringify({ type: "response.completed", response: { id: "synthetic-paid", status: "completed", output: [], usage: { input_tokens: 100, output_tokens: 10, total_tokens: 110 } } })}\n\n`,
+    { headers: { "content-type": "text/event-stream" } },
+  );
+
 const syntheticAnthropicEvent = z.looseObject({ type: z.string() });
 function anthropicStream(events: z.infer<typeof syntheticAnthropicEvent>[]) {
   return new Response(
@@ -150,7 +157,7 @@ it("discards a partial tool call before falling through both included funding ro
           { error: { code: "usage_limit_reached" } },
           { status: 429 },
         );
-      return anthropicStream(anthropicDone);
+      return openAiCompleted();
     },
     async (message) => {
       refused.push(message.model);
@@ -196,7 +203,7 @@ it.each(["error", "response.failed"])(
             headers: { "content-type": "text/event-stream" },
           });
         }
-        return anthropicStream(anthropicDone);
+        return openAiCompleted();
       },
     ))
       models.setProvider(provider);
@@ -205,6 +212,49 @@ it.each(["error", "response.failed"])(
     const response = await models.completeSimple(model, { messages: [] });
     expect(response.errorMessage).toBeUndefined();
     expect(attempts).toEqual(["subscriber_credit", "subscription", "paid"]);
+  },
+);
+
+// A request the plan cannot carry is a funding refusal, not a model error.
+it.each([
+  [true, ["subscriber_credit", "subscription", "paid"]],
+  [false, ["subscriber_credit", "subscription"]],
+] as const)(
+  "advances past an unsupported plan request only when paid is allowed (paid=%s)",
+  async (paid, expected) => {
+    const attempts: string[] = [];
+    const models = createModels();
+    for (const provider of fundedCubbyPiProviders(
+      (_route, _unbilled, funding) => async () => {
+        attempts.push(String(funding));
+        if (funding === "subscriber_credit")
+          return Response.json(
+            { error: { message: "Your credit balance is too low" } },
+            { status: 400 },
+          );
+        if (funding === "subscription")
+          return Response.json(
+            {
+              error: {
+                type: "invalid_request_error",
+                param: "input",
+                code: "subscription_sharing_unsupported_capability",
+              },
+            },
+            { status: 400 },
+          );
+        return openAiCompleted();
+      },
+      undefined,
+      { paid },
+    ))
+      models.setProvider(provider);
+    const model = models.getModel("openai", "gpt-6-luna");
+    if (!model) throw new Error("Missing Luna");
+    const response = await models.completeSimple(model, { messages: [] });
+    expect(attempts).toEqual(expected);
+    expect(response.model).toBe("gpt-6-sol");
+    expect(Boolean(response.errorMessage)).toBe(!paid);
   },
 );
 

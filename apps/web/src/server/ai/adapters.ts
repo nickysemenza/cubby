@@ -4,7 +4,11 @@ import {
   type OpenAiEffort,
   type SupportedChatModel,
 } from "@cubby/shared/ai/models";
-import { cubbyPiProviders } from "@cubby/shared/ai/pi-providers";
+import {
+  cubbyPiProviders,
+  fundedCubbyPiProviders,
+  type GatewayFetchFor,
+} from "@cubby/shared/ai/pi-providers";
 import {
   createModels,
   type Api,
@@ -68,14 +72,17 @@ export interface PiCallTarget {
 export function piCallTarget(
   model: SupportedChatModel,
   call: GatewayCallOptions,
+  /** Present: run the household funding ladder instead of `model` alone. */
+  funded?: { paid: boolean },
 ): PiCallTarget {
   const { gatewayProvider } = getChatModelConfig(model);
   const models = createModels();
   let failedFetch: { error: UnparsedError } | undefined;
-  for (const provider of cubbyPiProviders((route, onUnbilledResponse) => {
+  const fetchFor: GatewayFetchFor = (route, onUnbilledResponse, funding) => {
     let finalTransport: "gateway" | "chatgpt" | undefined;
     const routedFetch = gatewayFetch(route, {
       ...call,
+      ...(funding && { funding }),
       onTransport: (transport) => {
         finalTransport = transport;
         call.onTransport?.(transport);
@@ -93,9 +100,11 @@ export function piCallTarget(
         throw error;
       }
     };
-  })) {
+  };
+  for (const provider of funded
+    ? fundedCubbyPiProviders(fetchFor, undefined, funded)
+    : cubbyPiProviders(fetchFor))
     models.setProvider(provider);
-  }
   const resolved = models.getModel(gatewayProvider, model);
   if (!resolved) {
     throw new Error(

@@ -9,6 +9,7 @@ import type { OpenAiEffort } from "@cubby/shared/ai/models";
 import {
   getChatModelConfig,
   providerFor,
+  supportedChatModelSchema,
   type SupportedChatModel,
   type SupportedEmbeddingModel,
 } from "@cubby/shared/ai/models";
@@ -61,6 +62,7 @@ import {
 import { withAiBudget } from "~/server/ai/budget";
 import type { GatewayCallOptions, GatewayMetadata } from "~/server/ai/gateway";
 import { wrapAiGatewayError } from "~/server/ai/gateway-error";
+import { MODEL_FOR_TIER } from "~/server/ai/policy/feature-identity";
 import type {
   AiChatFeature,
   AiFeature,
@@ -247,10 +249,15 @@ export function recordApplicationCacheHit(
 export interface StructuredRunPlan {
   model: SupportedChatModel;
   call: GatewayCallOptions;
+  /** Present: the household funding ladder answers (`fundedChatAttempts`). */
+  funded?: { paid: boolean };
 }
 
 export function planStructuredRun<T = unknown>(
-  spec: Pick<AiChatFeature, "feature" | "model" | "cache" | "collectPayload">,
+  spec: Pick<
+    AiChatFeature,
+    "feature" | "model" | "tier" | "cache" | "collectPayload"
+  >,
   ctx: AiRunContext<T>,
 ): StructuredRunPlan {
   const metadata: GatewayMetadata = {
@@ -262,6 +269,14 @@ export function planStructuredRun<T = unknown>(
 
   return {
     model: spec.model,
+    // A tier's declared model rides the funding ladder; a pinned model (an
+    // evaluation comparing models) stays fixed.
+    ...(spec.model === MODEL_FOR_TIER[spec.tier] && {
+      funded: {
+        paid:
+          !ctx.subscriptionRequired || ctx.subscriptionFallback === "budgeted",
+      },
+    }),
     call: {
       ...(spec.cache
         ? cachedCall({ metadata, force: ctx.force })
@@ -300,6 +315,7 @@ export interface StructuredRunPorts {
   callTarget: (
     model: SupportedChatModel,
     call: GatewayCallOptions,
+    funded?: { paid: boolean },
   ) => PiCallTarget;
 }
 
@@ -636,6 +652,7 @@ async function placeStructuredCall<T>(args: {
   ports: StructuredRunPorts;
   model: SupportedChatModel;
   call: GatewayCallOptions;
+  funded?: { paid: boolean };
   request: AiChatRequest;
   schema: z.ZodType<T>;
   maxTokens: number;
@@ -644,7 +661,7 @@ async function placeStructuredCall<T>(args: {
   onResponse: (message: AssistantMessage) => void;
 }): Promise<{ value: T; message: AssistantMessage }> {
   const { tool, optionalPaths } = respondToolFor(args.schema);
-  const target = args.ports.callTarget(args.model, args.call);
+  const target = args.ports.callTarget(args.model, args.call, args.funded);
   const context: Context = {
     systemPrompt: args.request.systemPrompts.join("\n\n"),
     messages: await toPiMessages(args.request.messages),
@@ -762,6 +779,7 @@ export async function runStructuredFeature<T>(
         ports,
         model: plan.model,
         call,
+        funded: plan.funded,
         request: callRequest,
         schema: spec.schema,
         maxTokens: spec.maxTokens,
@@ -771,12 +789,18 @@ export async function runStructuredFeature<T>(
         },
       });
       if (callCtx.db) {
-        await recordFeatureUsage(spec, callCtx, {
-          ...messageUsage(message, gateway),
-          transport,
-          durationMs: Math.round(performance.now() - startedAt),
-          applicationCacheStatus: callCtx.applicationCacheStatus,
-        });
+        // The funding ladder may answer with another model than the tier's.
+        const answered = supportedChatModelSchema.safeParse(message.model);
+        await recordFeatureUsage(
+          answered.success ? { ...spec, model: answered.data } : spec,
+          callCtx,
+          {
+            ...messageUsage(message, gateway),
+            transport,
+            durationMs: Math.round(performance.now() - startedAt),
+            applicationCacheStatus: callCtx.applicationCacheStatus,
+          },
+        );
       }
       return value;
     } catch (error) {
