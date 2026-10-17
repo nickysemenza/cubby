@@ -23,7 +23,7 @@ const sourceFields = {
   sourceEntity: sourceEntityCode
     .optional()
     .describe(
-      "Cubby record where the fact was seen; use its shortcode instead of a Cubby URL.",
+      "Cubby record where the fact was seen; use its shortcode instead of a Cubby URL. May accompany url when the record led to an external page.",
     ),
   url: z
     .url()
@@ -60,11 +60,6 @@ const hasTargetOrQuote = (source: {
 const targetOrQuote = {
   message: "A source needs a url, sourceEntity or quote",
 };
-const oneTarget = (source: { url?: string; sourceEntity?: string }) =>
-  source.url === undefined || source.sourceEntity === undefined;
-const exclusiveTarget = {
-  message: "Use either url or sourceEntity for a source",
-};
 
 /**
  * One Source a caller supplies with a write (terminology "Source"): where a fact
@@ -82,8 +77,7 @@ export const entitySourceInput = z
       ),
     ...sourceFields,
   })
-  .refine(hasTargetOrQuote, targetOrQuote)
-  .refine(oneTarget, exclusiveTarget);
+  .refine(hasTargetOrQuote, targetOrQuote);
 export type EntitySourceInput = z.infer<typeof entitySourceInput>;
 
 export const entitySourceInputs = z
@@ -95,12 +89,7 @@ export const entitySourceInputs = z
 
 /** A source about the whole record (image attach): no field scope. */
 export const entityRecordSourceInputs = z
-  .array(
-    z
-      .strictObject(sourceFields)
-      .refine(hasTargetOrQuote, targetOrQuote)
-      .refine(oneTarget, exclusiveTarget),
-  )
+  .array(z.strictObject(sourceFields).refine(hasTargetOrQuote, targetOrQuote))
   .max(50)
   .describe("Where this file was found; recorded on the target record.");
 

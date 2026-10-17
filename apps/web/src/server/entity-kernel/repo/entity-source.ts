@@ -132,7 +132,9 @@ export async function recordEntitySources(
   assertEntitySourceFieldPaths(args.entityKind, args.sources);
   const client = unwrapDb(db);
   for (const source of args.sources) {
-    const sourceCode = source.sourceEntity ?? internalSourceCode(source.url);
+    // An internal Cubby URL is the record it names, never a second target.
+    const internalCode = internalSourceCode(source.url);
+    const sourceCode = source.sourceEntity ?? internalCode;
     const target = sourceCode
       ? await resolveEntityIdentity(db, sourceCode)
       : null;
@@ -161,7 +163,7 @@ export async function recordEntitySources(
       entityId: args.entityId,
       entityKind: args.entityKind,
       fieldPath: source.fieldPath ?? null,
-      url: sourceCode ? null : (source.url ?? null),
+      url: internalCode ? null : (source.url ?? null),
       sourceEntityId,
       sourceEntityKind,
       quote: source.quote ?? null,
