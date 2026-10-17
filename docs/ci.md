@@ -215,7 +215,7 @@ profile's optimized dependencies add compilation work without useful runtime sav
 Cargo still needs check metadata and linked test artifacts, and the default
 and browser/native feature sets remain separate checks. Both targets share
 `target/ci` and run sequentially to avoid Cargo's target-directory lock.
-Their broad `gate` inputs include the root profile and workflow; `rustc -V`
+Their `rustGate` inputs include the root profile and workflow; `rustc -V`
 still keys the floating compiler.
 
 The Rust job uses an explicit, pinned `Swatinem/rust-cache` step with prefix

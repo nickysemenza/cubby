@@ -8,7 +8,12 @@
       "{workspaceRoot}/Cargo.{toml,lock}",
       "{workspaceRoot}/rust-toolchain.toml",
       "{workspaceRoot}/.cargo/**/*",
-      "{workspaceRoot}/apps/apple/tooling/{apple-check.sh,apple.ts,apple-inputs.ts}",
+      // apple-check.sh runs apple.ts, which loads its whole import graph.
+      "{workspaceRoot}/apps/apple/tooling/**/*.{sh,ts}",
+      "!{workspaceRoot}/apps/apple/tooling/**/*.test.ts",
+      "{workspaceRoot}/apps/web/tooling/{simulator-inventory-schema,mac-fixture-identity}.ts",
+      "{workspaceRoot}/apps/web/generator/artifacts.ts",
+      "{workspaceRoot}/packages/shared/src/apple-{client-version,app-identity}.ts",
       "{workspaceRoot}/scripts/{ensure.ts,rust-fingerprint.ts,lib/tree-digest.ts,lib/run.ts}",
       // The toolchain is declared, not observed, so a Linux runner computes
       // the same key as a Mac and skips macOS for an unchanged pass. Minor
