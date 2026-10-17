@@ -29,6 +29,7 @@ import {
 } from "~/server/domains/expense/repo/analyze";
 import { loadVendorAttributionDefaults } from "~/server/domains/expense/repo/attribution-defaults";
 import { expenseChargeContextWorkflow } from "~/server/domains/expense/repo/charge-context";
+import { expenseFlowSankey } from "~/server/domains/expense/repo/flow-sankey";
 import { expenseList } from "~/server/domains/expense/repo/lookup";
 import {
   buildExpenseWhereClause,
@@ -153,6 +154,7 @@ const expenseAnalyzeDefinition = workflow<Database, ExpenseAnalyzeInput>(
         input.rowDimension,
         input.columnDimension,
         projectScope,
+        input.spendingCategoryRollup,
       ),
     previous: (
       { context },
@@ -166,6 +168,7 @@ const expenseAnalyzeDefinition = workflow<Database, ExpenseAnalyzeInput>(
             input.rowDimension,
             input.columnDimension,
             projectScope,
+            input.spendingCategoryRollup,
           )
         : Promise.resolve(null),
   })
@@ -298,6 +301,7 @@ export const expenseHandlers = implementOperationDomain(expenseContract, {
   analytics: (context, input) => expenseAnalytics(context.db, input),
   monthlySummary: (context, input) => expenseMonthlySummary(context.db, input),
   analyze: (context, input) => expenseAnalyzeWorkflow(context.db, input),
+  flowSankey: (context, input) => expenseFlowSankey(context.db, input),
   facetCounts: (context, input) =>
     expenseFacetCountsWorkflow(context.db, input),
   tradeAffinity: (context) => expenseTradeAffinity(context.db),

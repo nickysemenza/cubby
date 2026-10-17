@@ -68,6 +68,9 @@ import {
 /** `stalled_project`'s no-activity window. */
 const STALE_ACTIVITY_DAYS = 30;
 
+/** `spend_below_estimate` fires when subtree actual spend is under this share. */
+const SPEND_BELOW_ESTIMATE_PERCENT = 10;
+
 /**
  * List-facing names for project-grain attention rules. Both Problems and the
  * Project list reuse this mapping instead of copying detector predicates.
@@ -75,6 +78,7 @@ const STALE_ACTIVITY_DAYS = 30;
 export const projectAttentionFilterTypes = {
   stalled: "stalled_project",
   missing_budget: "missing_budget",
+  spend_below_estimate: "spend_below_estimate",
   blocked_no_next_action: "blocked_work",
 } as const;
 
@@ -337,6 +341,54 @@ export async function computeAttentionItems(
     }
   };
   appendMissingBudgets();
+
+  // 3b. spend_below_estimate — a `done` project with its own estimate, no
+  // estimated ancestor (an ancestor's estimate already covers this subtree),
+  // and subtree actual spend under the threshold. Reads the same subtree
+  // rollup as the budget strip. It cannot tell whether spend landed elsewhere
+  // or the estimate was wrong, so it names both.
+  const appendSpendBelowEstimate = () => {
+    const rowsById = new Map(allProjectRows.map((row) => [row.id, row]));
+    const hasEstimatedAncestor = (parentId: ProjectId | null): boolean => {
+      const seen = new Set<ProjectId>();
+      let current = parentId;
+      while (current !== null && !seen.has(current)) {
+        seen.add(current);
+        const parent = rowsById.get(current);
+        if (!parent) return false;
+        if (parent.costEstimate !== null) return true;
+        current = parent.parentProjectId;
+      }
+      return false;
+    };
+    for (const row of allProjectRows) {
+      if (!projectInScope(row.id) || row.status !== "done") continue;
+      const costEstimate = row.costEstimate;
+      if (costEstimate === null || costEstimate <= 0) continue;
+      if (hasEstimatedAncestor(row.parentProjectId)) continue;
+      const actualSpend = subtreeRollups.get(row.id)?.actualSpent ?? 0;
+      if (actualSpend * 100 >= costEstimate * SPEND_BELOW_ESTIMATE_PERCENT)
+        continue;
+      items.push(
+        attentionItem({
+          type: "spend_below_estimate",
+          severity: "info",
+          name: row.name,
+          entityKind: "project",
+          entityId: row.shortcode,
+          date: null,
+          amount: actualSpend,
+          href: `/projects/${row.shortcode}`,
+          facts: {
+            costEstimate,
+            actualSpend,
+            thresholdPercent: SPEND_BELOW_ESTIMATE_PERCENT,
+          },
+        }),
+      );
+    }
+  };
+  appendSpendBelowEstimate();
 
   // 4. past_due_planned_expense
   const appendPastDueExpenses = () => {

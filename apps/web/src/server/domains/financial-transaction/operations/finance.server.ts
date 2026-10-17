@@ -13,6 +13,7 @@ import {
 import { applyFinancialSettlementAllocation } from "~/server/domains/financial-transaction/repo/financial-settlement-allocation";
 import { previewFinancialStatementImport } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
 import { financialTransactionSourceOptions } from "~/server/domains/financial-transaction/repo/financial-transaction";
+import { acceptFinancialTransferPair } from "~/server/domains/financial-transaction/repo/financial-transfer-accept";
 import { convergeFinancialEvidence } from "~/server/domains/financial-transaction/service/financial-convergence";
 import { merchantVendorInferenceFor } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import {
@@ -46,6 +47,8 @@ export const financialTransactionHandlers = implementOperationDomain(
         input,
         context.actorContext,
       ),
+    acceptTransferPair: (context, input) =>
+      acceptFinancialTransferPair(context.db, input, context.actorContext),
     converge: (context, input) =>
       convergeFinancialEvidence(context.db, input, context.actorContext),
     previewBookingCorrection: (context, input) =>

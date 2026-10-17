@@ -54,6 +54,8 @@ describe("buildFinancialTransferPairSuggestions", () => {
         candidates: [
           expect.objectContaining({
             transactionId: transactionShortcode("FTX-INFLOW"),
+            outflowTransactionId: transactionShortcode("FTX-OUTFLOW"),
+            inflowTransactionId: transactionShortcode("FTX-INFLOW"),
             amount: 120,
             dateDistanceDays: 2,
             fromAccountId: accountShortcode("FAC-A"),

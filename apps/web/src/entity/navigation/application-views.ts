@@ -9,6 +9,7 @@ import {
 import { ArrowsLeftRightIcon } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
 import { BookOpenTextIcon } from "@phosphor-icons/react/dist/csr/BookOpenText";
 import { CalendarBlankIcon } from "@phosphor-icons/react/dist/csr/CalendarBlank";
+import { ChartLineIcon } from "@phosphor-icons/react/dist/csr/ChartLine";
 import { ChefHatIcon } from "@phosphor-icons/react/dist/csr/ChefHat";
 import { CreditCardIcon } from "@phosphor-icons/react/dist/csr/CreditCard";
 import { CubeFocusIcon } from "@phosphor-icons/react/dist/csr/CubeFocus";
@@ -198,6 +199,13 @@ export const activityViews = [
         label: "Contributions",
         description: "Review shared costs and household positions.",
         icon: ArrowsLeftRightIcon,
+      },
+      {
+        to: "/cash-flow",
+        label: "Cash flow",
+        description:
+          "Project monthly spend from baseline, estimates and plans.",
+        icon: ChartLineIcon,
       },
       {
         to: "/statement-rows",

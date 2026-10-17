@@ -679,12 +679,27 @@ export type ExpenseAnalyzeComparison = z.infer<
   typeof expenseAnalyzeComparisonSchema
 >;
 
+/**
+ * `root` buckets the Spending Category axis by root category, plus the
+ * distinct `uncategorized` (no category resolved) and `unclassified` (receipt
+ * role unresolved) buckets, so the axis reconciles to the filtered net.
+ */
+export const expenseAnalyzeSpendingCategoryRollupSchema = z.enum([
+  "none",
+  "root",
+]);
+export type ExpenseAnalyzeSpendingCategoryRollup = z.infer<
+  typeof expenseAnalyzeSpendingCategoryRollupSchema
+>;
+
 export const expenseAnalyzeInput = z
   .object({
     filters: expenseFiltersSchema,
     rowDimension: expenseAnalyzeRowDimensionSchema,
     columnDimension: expenseAnalyzeColumnDimensionSchema.nullish(),
     comparison: expenseAnalyzeComparisonSchema.default("none"),
+    spendingCategoryRollup:
+      expenseAnalyzeSpendingCategoryRollupSchema.default("none"),
   })
   .superRefine((input, ctx) => {
     if (input.columnDimension === input.rowDimension) {
@@ -692,6 +707,17 @@ export const expenseAnalyzeInput = z
         code: z.ZodIssueCode.custom,
         path: ["columnDimension"],
         message: "Rows and columns must use different dimensions",
+      });
+    }
+    if (
+      input.spendingCategoryRollup === "root" &&
+      input.rowDimension !== "spendingCategory" &&
+      input.columnDimension !== "spendingCategory"
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["spendingCategoryRollup"],
+        message: "A root roll-up needs a Spending Category row or column",
       });
     }
     if (
@@ -787,6 +813,49 @@ export const expenseAnalyzeOut = z.discriminatedUnion("status", [
   expenseAnalyzeTooLargeOut,
 ]);
 export type ExpenseAnalyzeOut = z.infer<typeof expenseAnalyzeOut>;
+
+/** Ledger URL search params selecting a node's or path's rows. */
+const expenseFlowLedgerFilter = z.record(z.string(), z.string());
+
+export const expenseFlowSankeyNode = z.object({
+  id: z.string(),
+  column: z.enum(["funder", "project", "spendingCategory"]),
+  label: z.string(),
+  /** Null for a grouped bucket (Other projects / Other categories, a funder). */
+  filter: expenseFlowLedgerFilter.nullable(),
+});
+export type ExpenseFlowSankeyNode = z.infer<typeof expenseFlowSankeyNode>;
+
+export const expenseFlowSankeyLink = z.object({
+  source: z.string(),
+  target: z.string(),
+  value: money,
+  filter: expenseFlowLedgerFilter.nullable(),
+});
+export type ExpenseFlowSankeyLink = z.infer<typeof expenseFlowSankeyLink>;
+
+export const expenseFlowSankeyPath = z.object({
+  funder: z.string(),
+  project: z.string(),
+  category: z.string(),
+  net: money,
+});
+export type ExpenseFlowSankeyPath = z.infer<typeof expenseFlowSankeyPath>;
+
+/**
+ * Funder → project bucket → root Spending Category over the analytics
+ * filters. Money is net per full path; links carry only positive paths, so
+ * every node's inflow equals its outflow, and `totals.linked +
+ * totals.nonPositive = totals.net`, the filtered net.
+ */
+export const expenseFlowSankeyOut = z.object({
+  nodes: z.array(expenseFlowSankeyNode),
+  links: z.array(expenseFlowSankeyLink),
+  /** Paths netting to zero or below; node ids name their buckets. */
+  nonPositivePaths: z.array(expenseFlowSankeyPath),
+  totals: z.object({ net: money, linked: money, nonPositive: money }),
+});
+export type ExpenseFlowSankeyOut = z.infer<typeof expenseFlowSankeyOut>;
 
 export const expenseFacetIdSchema = z.enum([
   "costType",
@@ -1414,6 +1483,10 @@ export const projectAttentionTypeValues = [
   "overdue_task",
   "stalled_project",
   "missing_budget",
+  // A finished project whose recorded subtree spend is far below its own
+  // estimate: spend landed elsewhere or the estimate was wrong. Diagnostic
+  // only; it never scales a forecast.
+  "spend_below_estimate",
   "past_due_planned_expense",
   "unclassified_expense",
   "blocked_work",
@@ -1450,6 +1523,11 @@ const attentionFacts = {
     spend: money,
     actualSpend: money,
     committedSpend: money,
+  }),
+  spend_below_estimate: z.object({
+    costEstimate: money,
+    actualSpend: money,
+    thresholdPercent: z.number().positive(),
   }),
   past_due_planned_expense: z.object({
     plannedFor: plainDate,
@@ -1535,6 +1613,7 @@ export const projectAttentionItemSchema = z.discriminatedUnion("type", [
   attentionMember("overdue_task"),
   attentionMember("stalled_project"),
   attentionMember("missing_budget"),
+  attentionMember("spend_below_estimate"),
   attentionMember("past_due_planned_expense"),
   attentionMember("unclassified_expense"),
   attentionMember("blocked_work"),
@@ -1589,6 +1668,8 @@ export const describeAttentionItem = (
       return `${name} has had no project, task, or expense activity in ${item.facts.thresholdDays}+ days`;
     case "missing_budget":
       return `${name} has $${item.facts.spend.toFixed(0)} in spend but no budget estimate`;
+    case "spend_below_estimate":
+      return `${name} is done with $${item.facts.actualSpend.toFixed(0)} recorded against a $${item.facts.costEstimate.toFixed(0)} estimate (under ${item.facts.thresholdPercent}%): spend was recorded elsewhere or the estimate is wrong`;
     case "past_due_planned_expense":
       return `${name} was planned for ${item.facts.plannedFor} but hasn't been logged as spent`;
     case "unclassified_expense":
