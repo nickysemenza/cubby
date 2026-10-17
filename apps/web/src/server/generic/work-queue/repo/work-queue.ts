@@ -54,7 +54,6 @@ import {
   financialAccount,
   financialTransaction,
   product,
-  purchase,
   vendor,
   run as runTable,
   assessmentState as suggestionTable,
@@ -80,7 +79,9 @@ import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import {
   gapCondition,
-  qualityFilterSource,
+  qualityFilterContext,
+  statementQualityRelations,
+  type StatementQualityRelations,
 } from "~/server/generic/data-quality/repo/sql";
 import { resolveLiveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { attentionStatePredicate } from "~/server/generic/work-queue/repo/work-attention";
@@ -154,6 +155,7 @@ async function workQueueProjection(
   scope: WorkQueueScope,
   problemSelections: WorkProblemSelections,
   readContexts: Partial<Record<Entity, QualityReadContext>>,
+  quality: StatementQualityRelations,
 ): Promise<SQL> {
   const selections: SQL[] = [];
   // Skips building a branch the scope would drop anyway.
@@ -207,12 +209,13 @@ async function workQueueProjection(
     selections.push(
       ...workQueueCandidate(scope, {
         entity: "purchase",
-        table: sql`${purchase}`,
+        table: quality.source("purchase"),
         id: sql`"Purchase".shortcode`,
         name: sql`coalesce("Purchase"."displayLabel", "Purchase"."orderId", 'Purchase')`,
         owners: workPurchaseSourceOwners(sql`"Purchase".id`),
         where: buildPurchaseWhereClause(
           purchaseFiltersSchema.parse(purchaseGaps),
+          qualityFilterContext("purchase"),
         ),
         details: research,
         key: "research:purchase",
@@ -242,7 +245,7 @@ async function workQueueProjection(
     selections.push(
       ...workQueueCandidate(scope, {
         entity: "email",
-        table: qualityFilterSource("email"),
+        table: quality.source("email"),
         id: sql`"Email".shortcode`,
         name: sql`coalesce("Email".subject, 'Email')`,
         owners: sql`ARRAY["Email"."ledgerPartyId"]`,
@@ -283,12 +286,12 @@ async function workQueueProjection(
     selections.push(
       ...workQueueCandidate(scope, {
         entity: "purchase",
-        table: sql`${purchase}`,
+        table: quality.source("purchase"),
         id: sql`"Purchase".shortcode`,
         name: sql`coalesce("Purchase"."displayLabel", "Purchase"."orderId", 'Purchase')`,
         owners: workPurchaseOwners(sql`"Purchase".id`),
-        where: sql`(${buildPurchaseWhereClause(purchaseFiltersSchema.parse(viewFilters("purchase", "unsettled")))})
-        AND NOT (${gapCondition("purchase", "settlement_mismatch")})`,
+        where: sql`(${buildPurchaseWhereClause(purchaseFiltersSchema.parse(viewFilters("purchase", "unsettled")), qualityFilterContext("purchase"))})
+        AND NOT (${gapCondition("purchase", "settlement_mismatch", undefined, qualityFilterContext("purchase"))})`,
         details: {
           source: "reconciliation",
           kind: sql`CASE WHEN ${deferred} THEN ${workQueueKindSchema.enum.awaiting_posting} ELSE ${workQueueKindSchema.enum.repair} END`,
@@ -334,11 +337,14 @@ async function workQueueProjection(
       selections.push(
         ...workQueueCandidate(scope, {
           entity: "purchase",
-          table: sql`${purchase}`,
+          table: quality.source("purchase"),
           id: sql`"Purchase".shortcode`,
           name: sql`coalesce("Purchase"."displayLabel", "Purchase"."orderId", 'Purchase')`,
           owners: workPurchaseOwners(sql`"Purchase".id`),
-          where: buildPurchaseWhereClause(purchaseFiltersSchema.parse(filters)),
+          where: buildPurchaseWhereClause(
+            purchaseFiltersSchema.parse(filters),
+            qualityFilterContext("purchase"),
+          ),
           details: settlementDetails,
           key: definition.key,
         }),
@@ -626,6 +632,7 @@ async function queryWorkQueue(
       )`;
     },
   };
+  const quality = statementQualityRelations();
   const projection = await workQueueProjection(
     db,
     {
@@ -637,6 +644,7 @@ async function queryWorkQueue(
     },
     problemSelections,
     { product: productReadContext },
+    quality,
   );
   // All sources, including findings, defer planned purchases before counts
   // and paging. An empty purchase is unknown, not implicitly planned.
@@ -750,7 +758,11 @@ async function queryWorkQueue(
   // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- JSON property names below are the response contract, not vocabulary values.
   const result = await getDb(db).execute(sql`
     WITH ${needsPriceEvidence ? sql`work_product_price AS MATERIALIZED (${productPriceEvidenceSql()}),` : sql``}
-    ${needsOnHandEvidence ? sql`work_product_on_hand AS MATERIALIZED (${onHandUnitsReadSql()}),` : sql``} members AS (
+    ${needsOnHandEvidence ? sql`work_product_on_hand AS MATERIALIZED (${onHandUnitsReadSql()}),` : sql``}
+    ${sql.join(
+      quality.ctes().map((cte) => sql`${cte},`),
+      sql` `,
+    )} members AS (
       SELECT id, shortcode, name FROM "LedgerParty" WHERE kind = ${ledgerPartyKind.enum.member} AND "deletedAt" IS NULL
     ), candidates AS (${projection}), routed AS MATERIALIZED (
       SELECT candidates.*, CASE

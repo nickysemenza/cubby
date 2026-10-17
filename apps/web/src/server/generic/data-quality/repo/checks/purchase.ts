@@ -9,6 +9,7 @@ import {
   postedRefundTotalSql,
   purchaseFinancialComparisonTotalSql,
   purchaseFinancialMismatchRawSql,
+  purchaseQualityFilterReadSql,
   settleableExpenseTotalSql,
   settleableUnpricedExpenseCountSql,
   settlementReferenceAbsentSql,
@@ -28,9 +29,18 @@ import {
   purchaseHasPrimaryDocumentSql,
   effectivePurchaseItemizationExpectationSql,
 } from "~/server/domains/purchase/repo/purchase-evidence-policy";
-import { defineEntityChecks } from "~/server/generic/data-quality/repo/registry";
+import {
+  defineEntityChecks,
+  type QualityReadContext,
+} from "~/server/generic/data-quality/repo/registry";
 
 type Purchase = typeof purchase;
+
+/** A bulk read's precomputed `purchaseQualityFilterReadSql` column, if bound. */
+const filtered = (context: QualityReadContext | undefined, column: string) =>
+  context?.derivedAlias
+    ? sql`${sql.identifier(context.derivedAlias)}.${sql.identifier(column)}`
+    : undefined;
 
 /** The quoted alias the reconciliation raw-SQL helpers correlate on. */
 const aliasOf = (t: Purchase) => `"${getTableName(t)}"`;
@@ -60,10 +70,15 @@ const expectsVendorAccount = (t: Purchase) => sql`NOT EXISTS (
     AND dq_vendor."orderEvidence" = ${sqlEnumConstant(vendorOrderEvidence, "not_expected")}
 )`;
 
-const hasExpenses = (t: Purchase) => sql`EXISTS (
+const hasExpenses = (t: Purchase, context?: QualityReadContext) => {
+  const count = filtered(context, "expenseCount");
+  return count
+    ? sql`${count} > 0`
+    : sql`EXISTS (
   SELECT 1 FROM "Expense" dq_e
   WHERE dq_e."purchaseId" = ${t.id} AND dq_e."deletedAt" IS NULL
 )`;
+};
 
 const expenseCount = (t: Purchase) => sql`(
   SELECT count(*)::int FROM "Expense" dq_e
@@ -100,7 +115,17 @@ const tolerance = sql.raw(String(cents(RECONCILIATION_TOLERANCE)));
  * `dataGap=` filter disagreed with the hydrated object it filters), the
  * delta beyond tolerance, and posted refunds not fully explaining it.
  */
-const paperworkMismatch = (t: Purchase) => {
+const paperworkMismatch = (t: Purchase, context?: QualityReadContext) => {
+  const vendorTotal = filtered(context, "vendorTotal");
+  if (vendorTotal) {
+    const delta = sql`(floor((${vendorTotal} * 100)::numeric + 0.5) - floor((${t.statedTotal} * 100)::numeric + 0.5))`;
+    return sql`(${t.statedTotal} IS NOT NULL
+      AND ${filtered(context, "vendorCount")} > 0
+      AND abs(${delta}) > ${tolerance}
+      AND NOT (${filtered(context, "vendorUnpricedCount")} = 0
+        AND ${delta} < ${sql.raw(`-${cents(RECONCILIATION_TOLERANCE)}`)}
+        AND floor((${filtered(context, "postedRefundTotal")} * 100)::numeric + 0.5) = ${delta}))`;
+  }
   const delta = sql`(floor((dq_paperwork.total * 100)::numeric + 0.5) - floor((${t.statedTotal} * 100)::numeric + 0.5))`;
   const fullyPriced = sql`dq_paperwork."unpricedCount" = 0`;
   const refundAdjusted = sql`(${fullyPriced} AND ${delta} < ${sql.raw(`-${cents(RECONCILIATION_TOLERANCE)}`)}
@@ -116,6 +141,7 @@ const paperworkMismatch = (t: Purchase) => {
 export const purchaseChecks = defineEntityChecks({
   entity: "purchase",
   table: purchase,
+  filterRead: purchaseQualityFilterReadSql,
   related: {
     product: (t, productId) => sql`EXISTS (
       SELECT 1 FROM "Expense" dq_pe
@@ -151,7 +177,7 @@ export const purchaseChecks = defineEntityChecks({
       fingerprint: (t) => [hasPrimaryDocument(t), statedCents(t)],
     },
     empty_expenses: {
-      missing: (t) => sql`NOT ${hasExpenses(t)}`,
+      missing: (t, context) => sql`NOT ${hasExpenses(t, context)}`,
       fingerprint: (t) => [expenseCount(t)],
     },
     purchase_spending_category_origin: {
@@ -180,7 +206,8 @@ export const purchaseChecks = defineEntityChecks({
       ],
     },
     unpriced_expense: {
-      missing: (t) => sql`${unpricedExpenseCount(t)} > 0`,
+      missing: (t, context) =>
+        sql`${filtered(context, "settleableUnpricedCount") ?? unpricedExpenseCount(t)} > 0`,
       fingerprint: (t) => [unpricedExpenseCount(t)],
     },
     paperwork_mismatch: {
@@ -194,7 +221,12 @@ export const purchaseChecks = defineEntityChecks({
       ],
     },
     settlement_reference: {
-      missing: (t) => sql.raw(settlementReferenceAbsentSql(aliasOf(t))),
+      missing: (t, context) => {
+        const present = filtered(context, "hasSettlementReference");
+        return present
+          ? sql`NOT ${present}`
+          : sql.raw(settlementReferenceAbsentSql(aliasOf(t)));
+      },
       fingerprint: (t) => [
         sql`NOT (${sql.raw(settlementReferenceAbsentSql(aliasOf(t)))})`,
       ],
@@ -203,8 +235,16 @@ export const purchaseChecks = defineEntityChecks({
       // Settlement evidence and the expense ledger can both be correct while
       // a source leaves a small residual; the raw verdict stays a financial
       // fact and only a reasoned exception removes it from the worklist.
-      missing: (t) =>
-        sql`(${sql.raw(purchaseFinancialMismatchRawSql(aliasOf(t)))})`,
+      missing: (t, context) => {
+        const settleable = filtered(context, "settleableTotal");
+        if (!settleable)
+          return sql`(${sql.raw(purchaseFinancialMismatchRawSql(aliasOf(t)))})`;
+        // purchaseFinancialMismatchRawSql over the precomputed inputs.
+        return sql`(${filtered(context, "settleableUnpricedCount")} = 0
+          AND ${filtered(context, "hasSettlement")}
+          AND floor(${filtered(context, "comparisonTotal")} * 100 + 0.5)
+            IS DISTINCT FROM floor((${settleable}) * 100 + 0.5))`;
+      },
       // Same inputs, in the same order, as the stored fingerprints written by
       // `purchaseFinancialMismatchFingerprintRawSql`.
       fingerprint: (t) => [

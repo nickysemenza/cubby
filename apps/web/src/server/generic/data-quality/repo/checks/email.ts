@@ -12,7 +12,7 @@ import {
   emailRetainedContentSql,
 } from "~/server/domains/email/repo/email-sql";
 
-import { defineEntityChecks } from "../registry";
+import { defineEntityChecks, type QualityReadContext } from "../registry";
 
 type Email = typeof email;
 
@@ -20,6 +20,11 @@ type Email = typeof email;
 // renders an interpolated column unqualified, which would bind to a same-named
 // inner column. No entity rolls Email quality up under an alias.
 const { related, uncertain, unrelated } = mailboxClassification.enum;
+
+const linked = (context?: QualityReadContext) =>
+  context?.derivedAlias
+    ? sql`${sql.identifier(context.derivedAlias)}."linked"`
+    : emailLinkedSql();
 
 /** Settled automated negatives require no member review; their observations
  * remain available to independent accuracy sampling. */
@@ -53,8 +58,8 @@ export const emailChecks = defineEntityChecks({
         }`,
     },
     email_preview_missing: {
-      expected: (t: Email) =>
-        sql`${t.classification} = ${related} AND NOT ${emailLinkedSql()}`,
+      expected: (t: Email, context) =>
+        sql`${t.classification} = ${related} AND NOT ${linked(context)}`,
       missing: () => sql`NOT EXISTS (
         SELECT 1 FROM "EmailCandidateObservation" preview
         WHERE preview."emailId" = "Email"."id"
@@ -64,7 +69,7 @@ export const emailChecks = defineEntityChecks({
     email_not_imported: {
       expected: (t: Email) => sql`${t.classification} = ${related}`,
       missing: (_t: Email, context) =>
-        sql`NOT ${emailLinkedSql()} AND NOT ${
+        sql`NOT ${linked(context)} AND NOT ${
           context?.derivedAlias
             ? sql`${sql.identifier(context.derivedAlias)}."completedImport"`
             : emailHasCompletedImportSql()

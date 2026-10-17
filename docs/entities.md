@@ -1743,17 +1743,25 @@ does not change exception identity.
 
 Purchase paperwork-mismatch predicates share one vendor-Expense aggregate for
 the total, line count and unpriced count. The reconciliation module owns their
-common live vendor-line scope and numeric sum. Exception fingerprints retain
-the same scalar evidence and rounding, so the optimized verdict does not
-reopen an accepted mismatch.
+common live vendor-line scope and numeric sum. Bulk reads (list quality
+filters and score sorts, Work queue branches) join one Purchase quality
+relation that groups Expense and settlement-allocation inputs once per
+statement instead of a correlated scalar per row and check; the reconciliation
+verdict filters read it through the same context when a caller binds it.
+Exception fingerprints retain the same scalar evidence and rounding, so the
+optimized verdict does not reopen an accepted mismatch. Custom list row
+selects apply the scaffold's quality join from the page clauses.
+`filter-read-parity.integration.test.ts` pins every bulk relation's checks,
+statuses and read-aware verdicts to the record-level SQL.
 
 An Email's completed-import check matches a live, completed Mail import Run
 owned by the same member with the original in its source list. Bulk filtering,
 score sorting, and bounded hydration join a shared, deduplicated Email quality
 relation before evaluating the check, so ordinary join planning can spill rather
 than rescanning a source set per Email when a hashed SubPlan exceeds memory.
-The data-quality registry owns both the relation and the predicate context;
-list reads and Work queue counts use the same binding. Plain lists and counts
+The relation also carries the Email's linked state, evaluated once for the
+checks that read it. The data-quality registry owns both the relation and the
+predicate context; list reads and Work queue counts use the same binding. Plain lists and counts
 join no quality relation unless quality filtering or score sorting needs it.
 Single-record predicates retain JSON containment. Historical source JSON allows
 extra fields, excludes missing keys and malformed source arrays, and distinguishes
