@@ -4,14 +4,14 @@ import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { is, type SQL, sql } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 
+import {
+  effectiveFieldSql,
+  inheritedFieldOfColumn,
+} from "~/server/db/computed/effective-field";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import * as schema from "~/server/db/schema";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { effectiveExpenseProjectSql } from "~/server/domains/expense/repo/expense-inheritance";
-import {
-  effectiveFieldSql,
-  inheritedFieldOfColumn,
-} from "~/server/generic/inheritance/repo/effective-field";
 
 interface EdgeSpec {
   edgeKey: string;

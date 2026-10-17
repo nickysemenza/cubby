@@ -23,42 +23,22 @@ import { tradeSchema, type Trade } from "@cubby/schemas/task-fields";
 import { type SQL, and, inArray, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { getDb, notDeleted } from "~/server/db/helpers";
-import { ledgerParty, product, project, task } from "~/server/db/schema";
 import {
   effectiveFieldSql,
   inheritedFieldSql,
   inheritedSourceEntity,
   inheritedSourceSql,
-} from "~/server/generic/inheritance/repo/effective-field";
+} from "~/server/db/computed/effective-field";
+import { getDb, notDeleted } from "~/server/db/helpers";
+import { ledgerParty, product, project, task } from "~/server/db/schema";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 const taskColumn = (alias: string, column: string) =>
   sql.raw(`"${alias}"."${column}"`);
 
-/** The nearest live project default trade, starting at `projectId`. */
-export const effectiveProjectTradeSql = (
-  projectId: SQL,
-): SQL<Trade | null> => sql`
-  (
-    WITH RECURSIVE project_ancestors AS (
-      SELECT p."id", p."parentProjectId", p."defaultTrade", 0 AS depth
-      FROM "Project" p
-      WHERE p."id" = ${projectId} AND p."deletedAt" IS NULL
-      UNION ALL
-      SELECT parent."id", parent."parentProjectId", parent."defaultTrade",
-        project_ancestors.depth + 1
-      FROM "Project" parent
-      JOIN project_ancestors ON parent."id" = project_ancestors."parentProjectId"
-      WHERE parent."deletedAt" IS NULL AND project_ancestors.depth < 100
-    )
-    SELECT "defaultTrade"
-    FROM project_ancestors
-    WHERE "defaultTrade" IS NOT NULL
-    ORDER BY depth
-    LIMIT 1
-  )
-`;
+/** A project's effective default trade (`resolution.inherit`). */
+const effectiveProjectTradeSql = (projectId: SQL): SQL<Trade | null> =>
+  effectiveFieldSql<Trade | null>("project", "defaultTrade", { id: projectId });
 
 // Effective values and their sources compile from each field's
 // `resolution.inherit`; trade below is a different rule (#2616).

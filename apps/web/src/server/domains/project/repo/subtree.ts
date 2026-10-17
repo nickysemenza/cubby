@@ -24,11 +24,15 @@ import {
   type ProjectDateWindow,
   type ProjectStatus,
 } from "@cubby/schemas/project";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
+import {
+  effectiveSourceSql,
+  inheritedSourceSql,
+} from "~/server/db/computed/effective-field";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { ledgerParty, project } from "~/server/db/schema";
 
@@ -71,6 +75,24 @@ export type ProjectParentRow = {
   locations: string[];
   locationsMode: "inherit" | "explicit";
   defaultTrade: ProjectOut["defaultTrade"];
+  /**
+   * The project whose own decision each inherited setting reads
+   * (`resolution.inherit`), and the one it would fall back to without its
+   * own; null when nothing decides.
+   */
+  sources: Record<
+    "assigneeId" | "locations" | "defaultTrade",
+    { effective: ProjectId | null; withoutOwn: ProjectId | null }
+  >;
+};
+
+const inheritedSources = () => {
+  const of = (field: "assigneeId" | "locations" | "defaultTrade") =>
+    sql`json_build_object('effective', ${effectiveSourceSql("project", field)}->>'id', 'withoutOwn', ${inheritedSourceSql("project", field)}->>'id')`;
+  return sql<ProjectParentRow["sources"]>`json_build_object(
+    'assigneeId', ${of("assigneeId")},
+    'locations', ${of("locations")},
+    'defaultTrade', ${of("defaultTrade")})`;
 };
 
 /**
@@ -96,6 +118,7 @@ async function allProjectParentRows(db: Database): Promise<ProjectParentRow[]> {
       locations: project.locations,
       locationsMode: project.locationsMode,
       defaultTrade: project.defaultTrade,
+      sources: inheritedSources(),
     })
     .from(project)
     .leftJoin(

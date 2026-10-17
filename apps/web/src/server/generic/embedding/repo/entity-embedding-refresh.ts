@@ -11,6 +11,7 @@ import type {
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { locationAiDescriptionExtras } from "~/server/db/computed/location-ai-description";
 import { categorySummarySql } from "~/server/db/computed/product-category-sql";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
@@ -74,7 +75,6 @@ import {
 import type { SemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
-import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 
 /** Mirrors `GARDEN_ENTRY_KIND_LABELS` in `domains/garden/repo/garden.ts` — that map is
  * private to the garden module, and `kind` is a plain `text` column here, not

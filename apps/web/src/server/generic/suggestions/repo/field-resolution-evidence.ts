@@ -1,5 +1,6 @@
 import { type Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import { entityManifest } from "@cubby/schemas/entity-manifest";
 import type { ReportRecordRow } from "@cubby/schemas/entity-report";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
@@ -14,13 +15,17 @@ import {
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { purchaseOut } from "@cubby/schemas/purchase";
 import { itemizationExpectation } from "@cubby/schemas/purchase-evidence-policy";
-import { spendingCategoryMappingMode } from "@cubby/schemas/spending-classification";
 import { humanize, parseShortcode } from "@cubby/shared";
 import { and, eq, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import { formatCurrency } from "~/lib/number-format";
 import type { Database } from "~/server/db";
+import {
+  effectiveFieldSql,
+  hierarchyInheritance,
+  inheritanceLadderSql,
+} from "~/server/db/computed/effective-field";
 import {
   getDb,
   notDeleted,
@@ -42,7 +47,6 @@ import { categoryFeatureSql } from "~/server/domains/product-category/repo/categ
 import { kitAncestorCteSql } from "~/server/domains/product/repo/kit-projection";
 import { purchaseEvidenceFieldResolutionsSql } from "~/server/domains/purchase/repo/purchase-evidence-policy";
 import { eligibleParentTaskTradeSql } from "~/server/domains/task/repo/task-project-inheritance";
-import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 import { shortcodeLabels } from "~/server/generic/shortcode/repo/shortcode-labels";
 
 const categoryOrigin = purchaseOut.shape.spendingCategoryOrigin.unwrap();
@@ -85,71 +89,56 @@ type Step = {
 const source = (kind: AncestryKind, node: Node | undefined) =>
   node ? { entityKind: kind, entityId: node.shortcode, name: node.name } : null;
 
-/** Match canonical inheritance's bounded traversal; expose only public identities. */
+/**
+ * The places a hierarchy value could come from, the record first, with each
+ * one's own value and whether it decides. A declared chain
+ * (`resolution.inherit`) reads the generator's ladder, so the explanation
+ * walks exactly what the value walks; task trade, a different rule (#2616),
+ * keeps its own one-parent walk.
+ */
 async function ancestors(
   db: Database,
   kind: AncestryKind,
   start: SQL,
   field: string,
 ): Promise<Node[]> {
-  const config =
+  const table = sql.identifier(
     kind === "project"
-      ? { table: "Project", parent: "parentProjectId" }
+      ? "Project"
       : kind === "task"
-        ? { table: "Task", parent: "parentTaskId" }
-        : { table: "ProductCategory", parent: "parentId" };
-  const table = sql.identifier(config.table);
-  const parent = sql.identifier(config.parent);
-  let value: SQL;
-  let assigned: SQL;
-  if (kind === "productCategory" && field === "feature") {
-    const column = sql.identifier(field);
-    value = sql`to_jsonb(p.${column})`;
-    assigned = sql`p.${column} IS NOT NULL`;
-  } else if (kind === "productCategory") {
-    value = sql`jsonb_build_object('mode',p."spendingCategoryMode",'category',(SELECT c.shortcode FROM "SpendingCategory" c WHERE c.id=p."spendingCategoryId" AND c."deletedAt" IS NULL))`;
-    assigned = sql`p."spendingCategoryMode" <> ${sqlEnumConstant(spendingCategoryMappingMode, spendingCategoryMappingMode.enum.inherit)}`;
-  } else if (kind === "project" && field === "locations") {
-    value = sql`to_jsonb(p.locations)`;
-    assigned = sql`p."locationsMode" = ${sqlEnumConstant(fieldResolutionSchema.shape.mode, fieldResolutionSchema.shape.mode.enum.explicit)}`;
-  } else if (kind === "project" && field === "assigneeId") {
-    value = sql`to_jsonb((SELECT l.shortcode FROM "LedgerParty" l WHERE l.id=p."assigneeId" AND l."deletedAt" IS NULL))`;
-    assigned = sql`p."assigneeMode" = ${sqlEnumConstant(fieldResolutionSchema.shape.mode, fieldResolutionSchema.shape.mode.enum.explicit)}`;
-  } else if (kind === "task" && field === "assigneeId") {
-    value = sql`to_jsonb((SELECT l.shortcode FROM "LedgerParty" l WHERE l.id=p."assigneeId" AND l."deletedAt" IS NULL))`;
-    assigned = sql`p."assigneeMode" = ${sqlEnumConstant(fieldResolutionSchema.shape.mode, fieldResolutionSchema.shape.mode.enum.explicit)}`;
-  } else if (
-    kind === "task" &&
-    (field === "projectId" || field === "subjectProductId")
-  ) {
-    const target = field === "projectId" ? sql`"Project"` : sql`"Product"`;
-    const column = sql.identifier(field);
-    const mode = sql.identifier(
-      field === "projectId" ? "projectMode" : "subjectProductMode",
-    );
-    value = sql`to_jsonb((SELECT c.shortcode FROM ${target} c WHERE c.id=p.${column} AND c."deletedAt" IS NULL))`;
-    assigned = sql`p.${mode} = ${sqlEnumConstant(fieldResolutionSchema.shape.mode, fieldResolutionSchema.shape.mode.enum.explicit)} OR p.${column} IS NOT NULL`;
-  } else {
-    const trade = sql.identifier(kind === "project" ? "defaultTrade" : "trade");
-    value = sql`to_jsonb(p.${trade})`;
-    assigned = sql`p.${trade} IS NOT NULL`;
-  }
-  // Task trade inherits from the parent task only (a different rule).
-  const maxDepth =
-    kind === "productCategory"
-      ? 3
-      : kind === "task" && field === "trade"
-        ? 1
-        : 100;
-  const rows = await unwrapDb(db).execute(sql`
-    WITH RECURSIVE ancestry AS (
-      SELECT p.id,p.${parent} AS parent,p.shortcode,p.name,${value} AS value,${assigned} AS assigned,0 AS depth,ARRAY[p.id] AS visited
-      FROM ${table} p WHERE p.id=${start} AND p."deletedAt" IS NULL
+        ? "Task"
+        : "ProductCategory",
+  );
+  // Project trade explanations read the project default trade.
+  const chainField =
+    kind === "project" && field === "trade" ? "defaultTrade" : field;
+  const declared = hierarchyInheritance(kind, chainField);
+  if (declared === null) {
+    if (kind !== "task" || field !== "trade")
+      throw new Error(`${kind}.${field} declares no hierarchy inheritance`);
+    const rows = await unwrapDb(db).execute(sql`
+      SELECT p.shortcode,p.name,to_jsonb(p.trade) AS value,p.trade IS NOT NULL AS assigned,0 AS depth
+      FROM "Task" p WHERE p.id=${start} AND p."deletedAt" IS NULL
       UNION ALL
-      SELECT p.id,p.${parent},p.shortcode,p.name,${value},${assigned},a.depth+1,a.visited||p.id
-      FROM ancestry a JOIN ${table} p ON p.id=a.parent
-      WHERE p."deletedAt" IS NULL AND a.depth<${maxDepth} AND NOT p.id=ANY(a.visited)
-    ) SELECT shortcode,name,value,assigned,depth FROM ancestry ORDER BY depth`);
+      SELECT parent.shortcode,parent.name,to_jsonb(parent.trade),parent.trade IS NOT NULL,1
+      FROM "Task" p JOIN "Task" parent ON parent.id=p."parentTaskId" AND parent."deletedAt" IS NULL
+      WHERE p.id=${start} AND p."deletedAt" IS NULL
+      ORDER BY 5`);
+    return z.array(nodeSchema).parse(rows.rows);
+  }
+  const target =
+    declared.reference === null ? null : entityManifest[declared.reference];
+  const shown =
+    kind === "productCategory" && chainField === "spendingCategoryId"
+      ? // The mapping shows its mode beside the category, so a block reads as one.
+        sql`jsonb_build_object('mode',p."spendingCategoryMode",'category',(SELECT c.shortcode FROM "SpendingCategory" c WHERE c.id=l.value AND c."deletedAt" IS NULL))`
+      : target?.dbTable
+        ? sql`to_jsonb((SELECT c.shortcode FROM ${sql.identifier(target.dbTable)} c WHERE c.id=l.value${target.softDelete ? sql` AND c."deletedAt" IS NULL` : sql``}))`
+        : sql`to_jsonb(l.value)`;
+  const rows = await unwrapDb(db).execute(sql`
+    SELECT p.shortcode,p.name,${shown} AS value,l.decides AS assigned,l.depth
+    FROM ${inheritanceLadderSql(kind, chainField, start)} l JOIN ${table} p ON p.id=l.id
+    ORDER BY l.depth`);
   return z.array(nodeSchema).parse(rows.rows);
 }
 

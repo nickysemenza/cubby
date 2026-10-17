@@ -52,6 +52,11 @@ import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
+  effectiveFieldInSql,
+  effectiveFieldSql,
+  inheritedFieldOfColumn,
+} from "~/server/db/computed/effective-field";
+import {
   arrayOverlapOrPresence,
   auditDateWhereConditions,
   buildOrderBy,
@@ -83,11 +88,6 @@ import {
   dataQualitySortResolver,
 } from "~/server/generic/data-quality/repo/sql";
 import { relatedWhereConditions } from "~/server/generic/entity-links/repo/related-view";
-import {
-  effectiveFieldInSql,
-  effectiveFieldSql,
-  inheritedFieldOfColumn,
-} from "~/server/generic/inheritance/repo/effective-field";
 import {
   type HierarchyEntity,
   hierarchyDescendantsSql,

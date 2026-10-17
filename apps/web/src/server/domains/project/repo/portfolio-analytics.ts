@@ -28,6 +28,7 @@ import type {
 import { and, asc, isNotNull, isNull, ne, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
+import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import {
   EXPENSE_MONTH_BUCKET,
   expenseShareAggregateFields,
@@ -38,7 +39,6 @@ import {
   executeExpenseDerivedBatch,
   expenseSelectionForWhere,
 } from "~/server/domains/expense/repo/expense-derived-read";
-import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 
 import { buildDashboardProjectWhere } from "./dashboard-shared";
 import { EMPTY_PROJECT_SUBTREE_ROLLUP } from "./helpers";

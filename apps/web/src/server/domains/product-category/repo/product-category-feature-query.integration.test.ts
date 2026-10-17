@@ -2,8 +2,8 @@ import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { effectiveFieldInSql } from "~/server/db/computed/effective-field";
 import {
-  categoryStockTrackedSql,
   categoryStockTrackingSql,
   categorySummarySql,
 } from "~/server/db/computed/product-category-sql";
@@ -142,6 +142,13 @@ describe("batched category feature lookup", () => {
             ${`synthetic-${index}`}, ${`Synthetic category ${index}`}, ${node.tracked},
             ${node.deleted ? new Date(0) : null})`);
       }
+      const trackedIn = (value: boolean) =>
+        effectiveFieldInSql(
+          "productCategory",
+          "stockTracked",
+          sql`candidate."id"`,
+          sql.raw(String(value)),
+        );
       const result = await tx.execute<{
         candidate: string | null;
         tracking: {
@@ -151,17 +158,19 @@ describe("batched category feature lookup", () => {
           evaluation: unknown[];
         } | null;
         tracked: boolean | null;
+        inherited: { value: boolean | null; evaluation: unknown[] } | null;
       }>(sql`SELECT candidate."id" AS candidate,
           ${categoryStockTrackingSql(sql`candidate."id"`)} AS tracking,
-          ${categoryStockTrackedSql(sql`candidate."id"`)} AS tracked
+          ${categoryStockTrackingSql(sql`candidate."id"`, { inherited: true })} AS inherited,
+          CASE WHEN ${trackedIn(true)} THEN true WHEN ${trackedIn(false)} THEN false END AS tracked
         FROM (
           SELECT "id" FROM "ProductCategory"
           UNION ALL SELECT NULL::uuid
           UNION ALL SELECT ${id(99)}::uuid
         ) candidate`);
       expect(result.rows).toHaveLength(nodes.length + 2);
-      // The batched filter predicate and the per-row explained read are two
-      // walks of one rule.
+      // The batched set form and the per-row explained read are two walks of
+      // one declared rule.
       for (const row of result.rows)
         expect(row.tracked).toBe(row.tracking?.value ?? null);
       const byId = new Map(result.rows.map((row) => [row.candidate, row]));
@@ -180,6 +189,17 @@ describe("batched category feature lookup", () => {
           },
         );
       }
+      // A category that decides nothing inherits exactly its effective value,
+      // along its own capped chain: the over-deep fourth level inherits
+      // nothing, though its parent decides (#2624 review).
+      for (const [index, node] of nodes.entries()) {
+        if (node.deleted || node.tracked !== null) continue;
+        const row = byId.get(id(index));
+        expect(row?.inherited?.value ?? null, `category ${index}`).toBe(
+          row?.tracking?.value ?? null,
+        );
+      }
+      expect(byId.get(id(5))?.inherited?.evaluation).toHaveLength(2);
       expect(byId.get(null)?.tracking ?? null).toBeNull();
       expect(byId.get(id(99))?.tracking ?? null).toBeNull();
     });

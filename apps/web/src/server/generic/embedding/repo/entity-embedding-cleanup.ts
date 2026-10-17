@@ -20,6 +20,7 @@ import {
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import {
   notDeleted,
   unwrapDb,
@@ -49,7 +50,6 @@ import {
 } from "~/server/db/schema";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
-import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import {
   getOrphanedSearchDocumentRefs,

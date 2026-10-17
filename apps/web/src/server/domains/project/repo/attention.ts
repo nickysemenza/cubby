@@ -47,6 +47,7 @@ import {
 } from "~/lib/household-date";
 import { effectiveTaskDueDate } from "~/lib/task-dates";
 import type { Database } from "~/server/db";
+import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { expense, task } from "~/server/db/schema";
 import {
@@ -58,7 +59,6 @@ import {
   effectiveExpenseTradeSql,
 } from "~/server/domains/expense/repo/expense-inheritance";
 import { readTaskActionability } from "~/server/domains/task/repo/actionable";
-import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 
 import {
   loadProjectSubtreeRollups,

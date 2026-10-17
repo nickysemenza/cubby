@@ -53,24 +53,32 @@ establish reuse of the resolution framework.
 
 An inherited value has one implementation: the field's `resolution.inherit`
 declaration (`packages/schemas/src/entity-definitions/definition.ts`) and its
-generator, `server/generic/inheritance/repo/effective-field.ts`. `mode` says when the
+generator, `server/db/computed/effective-field.ts`. `mode` says when the
 row's own stored value decides (absent: NULL inherits; a `none` mode value is
 an explicit None); `from` lists the ordered sources, and the first that
 decides (a value or an explicit None) ends the chain: `"hierarchy"` is the
 nearest live ancestor along `model.hierarchy` whose own value decides
 (cycle-guarded, capped at `maxDepth`), and `{ path }` the effective value of
-the field a to-one path ends at. Project and category fields, and task project,
-subject product and assignee, walk their hierarchy; the task assignee then
-falls back to its effective project's default.
+the field a to-one path ends at. Project assignee, locations and default
+trade, product category feature, spending mapping and stock tracking, and
+task project, subject product and assignee walk their hierarchy; the task
+assignee then falls back to its effective project's default, and a
+Product's stock tracking reads its category's (ADR 0013).
 
 `effectiveFieldSql` is the value every read, list row, filter, sort and group
-uses; `inheritedFieldSql` the fallback; `inheritedSourceSql` the source and
-record that decided, which `fieldResolutions.sourceEntity` names. A stored
+uses; `inheritedFieldSql` the fallback; `effectiveSourceSql` and
+`inheritedSourceSql` the record that decided the value or the fallback,
+which `fieldResolutions.sourceEntity` names; `inheritanceLadderSql` every
+record a hierarchy chain reads, for "why this value" explanations. A stored
 filter over an inherited field, a `via` path ending at one, and a relation
 edge whose foreign key is one all read the effective value; a hierarchy-only
 chain filters in the top-down set form (`effectiveFieldInSql`), resolved once
 per query. Repositories format provenance labels and nothing else; never
-hand-write an ancestor walk or fallback for a declared field.
+hand-write an ancestor walk or fallback for a declared field. Fields whose
+rule does not fit this shape (task trade, expense project, trade and
+spending category, inventory owner, product price, recipe servings,
+itemization expectation) keep their own resolution until #2616 declares a
+variant or records why not.
 
 A new field is complete when its normal reads and supported filters/sorts agree
 on the effective value, reset restores inheritance, and source changes update

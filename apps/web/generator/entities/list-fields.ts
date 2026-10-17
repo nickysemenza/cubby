@@ -143,6 +143,8 @@ type InheritSource =
  */
 type CompiledInherit = Readonly<{
   column: string;
+  /** The entity the field references, for readers that show its record. */
+  reference: string | null;
   empty: "array" | null;
   mode: Readonly<{
     column: string;
@@ -375,6 +377,7 @@ const compileInherit = (
     });
     compiled[field.key] = {
       column: stored.column,
+      reference: stored.reference,
       empty: stored.nullable ? null : "array",
       mode,
       from,
