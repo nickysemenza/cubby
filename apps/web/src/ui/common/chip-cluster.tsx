@@ -71,9 +71,10 @@ export function ChipCluster({
       (top, index) => index === 0 || top - (tops[index - 1] ?? top) > 4,
     ).length;
     const overflows = element.scrollHeight > element.clientHeight + 1;
-    if ((lines <= MAX_LINES && !overflows) || shown === 0) return;
+    if ((lines <= MAX_LINES && !overflows) || shown <= 1) return;
     // Something sits on a third line, or two tall lines overflow the row:
-    // drop one chip and measure again until the chips and their "+N" fit.
+    // drop one chip and measure again. Keep the last named value; its
+    // bounded wrapper truncates instead of replacing the value with "+1".
     setFit({ key: layoutKey, shown: shown - 1 });
   }, [shown, layoutKey]);
 
@@ -85,6 +86,7 @@ export function ChipCluster({
       title={items.map((item) => item.label).join(", ")}
       className={cn(
         "flex max-h-7 min-w-0 flex-wrap content-center items-center gap-x-1 gap-y-0.5 overflow-hidden leading-3 whitespace-normal",
+        shown === 1 && "flex-nowrap",
         className,
       )}
     >
@@ -94,7 +96,14 @@ export function ChipCluster({
         </span>
       )}
       {items.slice(0, shown).map((item) => (
-        <span key={item.key} data-chip="" className="flex max-w-full min-w-0">
+        <span
+          key={item.key}
+          data-chip=""
+          className={cn(
+            "flex max-w-full min-w-0",
+            shown === 1 && "max-h-7 overflow-hidden",
+          )}
+        >
           {item.node}
         </span>
       ))}
