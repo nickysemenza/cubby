@@ -1,12 +1,12 @@
 # Declared filter exceptions: removing hand-written predicates
 
-Status: **proposed**, awaiting the user's approval. Written 2026-10-17 against
+Status: **approved** 2026-10-17, with the decisions in
+[§14](#14-decisions). Written 2026-10-17 against
 `main` at `4069ae097`. Tracking: the parent issue and its sub-issues (§9).
 Execution: one PR per sub-issue, in the order in [§9](#9-work-breakdown), each
 in its own session. Each issue keeps scope and acceptance; this plan owns the
 design they share. Where an issue body and this plan differ, this plan
-governs. Nothing in §9 starts until the user approves this plan and answers
-the questions in [§14](#14-open-questions). Delete this plan when the parent
+governs. Delete this plan when the parent
 closes, after moving durable rules into [`docs/entities.md`](../entities.md).
 
 ## 1. Summary
@@ -137,7 +137,7 @@ MCP, or saved-view key or value change ([§8](#8-migration-rules)).
 | 31  | expense `dateRelative`                        | `16-expense.entity.ts:1148`    | `date` vs today (`expense/repo/lookup.ts:194-205`)                                                      | §3.4 `date` range with tokens (wire)                                     |
 | 32  | location `recountOverdue`                     | `04-location.entity.ts:602`    | `lastBulkInventory` older than N days or never (`location/repo/crud.ts:720`)                            | §3.4 range with tokens + No value (wire)                                 |
 | 33  | planting `activeOn`                           | `19-planting.entity.ts:539`    | interval `[start, finishedOn]` contains a day (`garden/repo/garden.ts:806`)                             | §3.4 `dateInterval` value                                                |
-| 34  | inventory `valuationStatus`                   | `05-inventory.entity.ts:505`   | prepared valuations; `missing` overlaps `priceable` (`inventory/repo/crud.ts:251`)                      | §3.5 disjoint enum value (wire; Q2)                                      |
+| 34  | inventory `valuationStatus`                   | `05-inventory.entity.ts:505`   | prepared valuations; `missing` overlaps `priceable` (`inventory/repo/crud.ts:251`)                      | §3.5 disjoint enum value (wire; §14.2)                                   |
 | 35  | product `quantityVarianceState`               | `00-product.entity.ts:2045`    | on-hand vs expected where comparable (`product/repo/crud.ts:547`)                                       | §3.5 enum value, NULL when not comparable (wire)                         |
 | 36  | product `expectedQuantityRange`               | `00-product.entity.ts:2040`    | set-based kit walk (`crud.ts:529`)                                                                      | §3.5 range over `ledgerExpectedQuantity` with a set form                 |
 | 37  | purchase `reconciliation`                     | `12-purchase.entity.ts:1184`   | verdict ORs; mismatch is the `paperwork_mismatch` gap (`purchase/repo/purchase.ts:573`)                 | §3.5 enum value, if the verdicts prove disjoint (§8)                     |
@@ -312,10 +312,9 @@ inherit: { mode: { field: "spendingCategoryMode", inherit: "inherit", none: ["bl
   reference along the path that is itself inherited (task `projectId`) is read
   effective.
 - A decides nothing new. Each field declares the chain its helper implements
-  today, so A changes no results. Task fields keep one parent level while
-  project and category walk the hierarchy. Normalizing task inheritance onto
-  `"hierarchy"` is a separate decision (Q1). Its equivalence tests must cover
-  a parent and child on different projects and a parent project whose default
+  today, so A changes no results (§14.1). Task fields keep one parent level
+  while project and category walk the hierarchy. Equivalence tests cover a
+  parent and child on different projects and a parent project whose default
   is an explicit None.
 - A generator, `effectiveFieldSql(entity, field, alias)` in
   `server/generic/list/repo/inheritance.ts`, emits the value. Repository reads
@@ -408,7 +407,7 @@ Five predicates are one row value, or can be made one:
 
 - **inventory `valuationStatus`** becomes a prepared `type: "enum"` value with
   disjoint options `valued`, `priceable`, `unpriceable`. Today's `missing` is
-  `priceable` plus `unpriceable` (Q2).
+  `priceable` plus `unpriceable` (§14.2).
 - **product `quantityVarianceState`** becomes a `listReadValue`
   `type: "enum"` (`matched`, `mismatched`) that is NULL when stock or
   comparable ledger history is missing. The read context still flows.
@@ -526,7 +525,7 @@ sets carry app-computed data (§3.1, §3.5).
   "has no identifier" for a NOT NULL column (product `externalIdSource`).
   Equivalence fixtures include mixed-share expenses, plus an empty row set
   with a picked sibling and with an Any value sibling. Inherited fields read
-  presence on the effective value (see Q3 for product `categoryFeature`).
+  presence on the effective value (product `categoryFeature`: §14.3).
 - **Match all.** On a row-set field, each picked value gets its own `EXISTS`,
   and each carries the sibling include conditions, so "external ids `ACME-1` and
   `ACME-2` on Plaid aliases" means two Plaid aliases. Single-valued inherited fields never
@@ -593,9 +592,7 @@ compiler and clients read.
   `categoryFeatureInSql`, sibling prepares, `allocationLead` (B),
   `buildIngredientListWhere`, `matchingEmbeddedProjectIds` list callers).
 - **Behavior changes** are named in the PR and in the equivalence test's
-  expected diff, never silent: task inheritance normalization, only if Q1
-  approves it (A otherwise reproduces today's chains), product
-  `categoryFeature` No value (Q3), recount age measured in whole household
+  expected diff, never silent: product `categoryFeature` No value (§14.3), recount age measured in whole household
   days instead of elapsed time (D), the product Open preset unioning with a
   picked Done status (B), expense trade presence (today it reads
   `Expense.trade`; after, it reads share trade, so the equivalence test
@@ -711,33 +708,23 @@ disjoint regions. The later lane rebases onto the merged one before review.
 The orchestrator owns the plan-level acceptance in §12 and the single
 `APPLE_CLIENT_COMPATIBILITY_VERSION` bump.
 
-## 14. Open questions
+## 14. Decisions
 
-1. **Normalize task inheritance?** A reproduces today's task chains exactly.
-   Project and subject product read one parent level. Assignee reads the
-   parent's own decision, then the **parent's** project default, then the
-   task's own project default. Normalizing onto `"hierarchy"` (nearest
-   deciding ancestor, then own project) would change results in two cases.
-   First, a parent on project A with a child explicitly on project B: today
-   the child inherits A's default, normalized it would inherit B's. Second, a
-   parent whose project default is an explicit None: today that None blocks
-   the child's own project fallback. Recommended: keep today's chains in A,
-   and decide normalization separately.
-2. **Valuation status options.** `missing` becomes two disjoint states,
-   Priceable and Unpriceable, that a filter picks together. Recommended. The
-   alternative is No value on `valuation` plus a separate `priceable` boolean.
-3. **Category feature No value.** Today "No value" means "no category"
-   (`presenceCondition(product.categoryId)`). Generically it means "no
-   effective feature". Recommended: accept, so the filter reads its own field.
-4. **Same row by default.** All include filters through one row set share a
-   row, and independence needs a second row-set declaration. Recommended. The
-   alternative is an explicit `sameRow` flag per row set.
-5. **Related scopes (§3.6).** Replace `projectScope` with a nested project
-   filter record (recommended), or keep it repository-applied as a declared
-   exception with a reason.
-6. **Prepared row sets for app-computed filters.** Project `attention` and
-   gardenEntry `journalPlantingId` move to repository row sets (§3.1), and
-   `completionYear` to a prepared value (§3.5). That gains Exclude, presence,
-   and, for completion year, sort and group, but the rows are still
-   repository-supplied. Recommended: move them. The alternative is to keep
-   them as declared predicates (9 stays).
+Approved by the user on 2026-10-17.
+
+1. **Task inheritance** keeps today's chains exactly (§3.2). Project and
+   subject product read one parent level. Assignee reads the parent's own
+   decision, then the parent's project default, then the task's own project
+   default. Nothing later converges task inheritance onto `"hierarchy"`.
+2. **Valuation status** splits today's `missing` into the disjoint
+   `priceable` and `unpriceable` states, which a filter picks together (§3.5).
+3. **Category feature No value** means "no effective feature", not "no
+   category" (§3.2, §4).
+4. **Same row by default.** All include filters through one row set match the
+   same row. Independent matching needs a second row-set declaration (§3.1).
+5. **`projectScope`** becomes a nested project filter record compiled through
+   the project scaffold (§3.6).
+6. **App-computed filters** move to prepared data. Project `attention` and
+   gardenEntry `journalPlantingId` become repository row sets (§3.1), and
+   `completionYear` becomes a prepared value (§3.5). 6 predicates stay
+   (§3.7).
