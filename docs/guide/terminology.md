@@ -550,8 +550,8 @@ Entirely unattributed Expense beneficiaries (no rows or only null-party rows, in
 _Avoid_: belongs to, assigned to, buyer
 
 **Inherited**:
-A value a record takes from another record rather than storing itself (a parent task, a category ancestor, purchase evidence). Every client marks it with the same tree icon until someone sets or confirms a value; the three states read Inherited, Set here, and None, and "Use inherited" returns a set value to inheriting.
-_Avoid_: derived, computed, default
+A value a record takes from another record rather than storing itself (a parent task, a category ancestor, purchase evidence). Every client marks it with the same tree icon until someone sets or confirms a value; the three states read Inherited, Set here, and None. "Use inherited" returns a set value to inheriting and "Set to None" (or the field's declared None label, such as "Set to Household") records an explicit None; a client offers only the actions that would change the field.
+_Avoid_: derived, computed, default; "Clear value" and "Use no value" for either action
 
 **My stuff**:
 The Inventory entries whose Owner is the viewing member. Wardrobe is My stuff narrowed to apparel, and other narrowed views (tools, books) work the same way; another member's stuff is the same view with that member as Owner.
