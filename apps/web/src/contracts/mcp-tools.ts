@@ -601,7 +601,7 @@ export const MCP_TOOLS = defineMcpTools({
       mail: mcpAction({
         op: purchaseImportContract.ops.mailRead,
         description:
-          "Read one retained Email: headers, body, links, attachments and checksum. acceptedSourceOrders supplies owned accepted-order handles and source identities for prepare_reconciliation, separately from lifecycle Purchase links. Pass attachmentId for original PDF/image bytes (at most 3 MiB). Start research from this original and its links.",
+          "Read one retained Email: headers, body as compact text (HTML converted when richer than the text part; `compacted`, `truncated`, `htmlBytes` report it), cue-first links, attachments and checksum. Raw HTML is never returned by default; pass includeHtml with offset/maxBytes to page it. acceptedSourceOrders supplies owned accepted-order handles and source identities for prepare_reconciliation, separately from lifecycle Purchase links. Pass attachmentId for original PDF/image bytes (at most 3 MiB). Start research from this original and its links.",
       }),
       mail_triage_preview: mcpAction({
         op: purchaseImportContract.ops.mailTriagePreview,

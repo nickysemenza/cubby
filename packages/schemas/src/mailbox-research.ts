@@ -312,6 +312,9 @@ export const mailTriagePreviewOut = z.object({
 });
 export type MailTriagePreviewOut = z.infer<typeof mailTriagePreviewOut>;
 
+/** Raw HTML page bound for `includeHtml` reads. */
+export const MAIL_READ_HTML_PAGE_MAX_BYTES = 100_000;
+
 export const mailReadInput = mailMessageRef.extend({
   attachmentId: z
     .string()
@@ -320,8 +323,53 @@ export const mailReadInput = mailMessageRef.extend({
     .max(200)
     .optional()
     .describe("A provider attachment id from the message's attachment list."),
+  includeHtml: z
+    .boolean()
+    .optional()
+    .describe(
+      "Also return one page of the raw HTML body. Omitted: only compact text.",
+    ),
+  offset: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe("UTF-8 byte offset of the raw HTML page (includeHtml)."),
+  maxBytes: z
+    .number()
+    .int()
+    .min(1)
+    .max(MAIL_READ_HTML_PAGE_MAX_BYTES)
+    .optional()
+    .describe(
+      `UTF-8 bytes of raw HTML per page (includeHtml), default ${MAIL_READ_HTML_PAGE_MAX_BYTES}.`,
+    ),
 });
 export type MailReadInput = z.infer<typeof mailReadInput>;
+
+/** Compact text body bound; the purchase agent's tool output cap sits above it. */
+export const MAIL_READ_TEXT_MAX_BYTES = 120_000;
+
+/**
+ * What a read returns: the body as compact text (HTML converted when the text
+ * part is empty or poorer), never raw HTML unless `includeHtml` pages it.
+ */
+export const mailReadContent = z.object({
+  snippet: z.string().nullable(),
+  bodyText: z.string().nullable(),
+  /** One raw HTML page, only when `includeHtml` asked for it. */
+  bodyHtml: z.string().nullable(),
+  headers: z.record(z.string(), z.string()).optional(),
+  /** UTF-8 size of the stored HTML body. */
+  htmlBytes: z.number().int().nullable(),
+  /** `bodyText` was converted from the HTML body. */
+  compacted: z.boolean(),
+  /** Some body text or the HTML page stops before the end of the original. */
+  truncated: z.boolean(),
+  /** Cue-bearing links first, from the HTML body. */
+  links: z.array(z.object({ href: z.string(), text: z.string() })).default([]),
+});
+export type MailReadContent = z.infer<typeof mailReadContent>;
 
 export const mailSearchInput = z.object({
   mailboxId: z.string().trim().min(1).max(320).optional(),
@@ -468,7 +516,7 @@ export const mailReadOut = mailMessageRef.extend({
   sender: z.string().nullable(),
   subject: z.string().nullable(),
   receivedAt: z.iso.datetime().nullable(),
-  content: retainedMailContent,
+  content: mailReadContent,
   attachments: z.array(
     z.object({
       attachmentId: z.string(),

@@ -26,6 +26,7 @@ import {
 
 import { recordEmailRetrievalFailure } from "./observations";
 import { gmailProviderForUser } from "./provider";
+import { mailReadContent } from "./read-content";
 
 export async function exactMemberEmail(
   db: Database,
@@ -225,12 +226,15 @@ export async function readEmailOriginalTransient(
     sender: normalized.mail.headers.from ?? null,
     subject: normalized.mail.headers.subject ?? null,
     receivedAt: normalized.mail.internalDate,
-    content: {
-      snippet: normalized.mail.snippet,
-      bodyText: normalized.mail.bodyText,
-      bodyHtml: normalized.mail.bodyHtml,
-      headers: normalized.mail.headers,
-    },
+    content: mailReadContent(
+      {
+        snippet: normalized.mail.snippet,
+        bodyText: normalized.mail.bodyText,
+        bodyHtml: normalized.mail.bodyHtml,
+        headers: normalized.mail.headers,
+      },
+      input,
+    ),
     attachments: normalized.attachments
       .filter((part) => part.attachmentId !== null)
       .map((part) => ({
