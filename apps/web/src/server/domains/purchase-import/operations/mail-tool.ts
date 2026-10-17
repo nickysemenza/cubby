@@ -70,6 +70,7 @@ import {
   readMailRunSources,
 } from "~/server/domains/purchase-import/repo/mail-run-membership";
 import { assertRunVendorAuthorization } from "~/server/domains/run/repo/execution-context";
+import { createAppError } from "~/server/errors/app-error";
 import { publishEmailLinkDecision } from "~/server/generic/assessment/repo/assessment-email-link";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -142,7 +143,8 @@ async function mailImportRun(db: Database, runId: RunId | null) {
     .limit(1);
   if (row?.purpose !== "mail_import") return null;
   if (row.status !== "running" || row.retiredAt || row.deletedAt)
-    throw new Error(
+    throw createAppError(
+      "MAIL_REQUEST_REFUSED",
       `This Mail import Run is no longer running (${row.deletedAt ? "deleted" : row.retiredAt ? "retired" : row.status}).`,
     );
   return row.id;
@@ -179,7 +181,8 @@ async function ownedMail(
     lock,
   );
   if (!mail)
-    throw new Error(
+    throw createAppError(
+      "EMAIL_NOT_FOUND",
       `No retained Email ${ref.messageId} in mailbox ${ref.mailboxId} belongs to this member.`,
     );
   if (!importRunId) return { mail, importRunId, admitted: false };
@@ -229,7 +232,8 @@ async function associationsForMail(
       ),
     )
     .limit(1);
-  if (!message) throw new Error("The Email no longer exists.");
+  if (!message)
+    throw createAppError("EMAIL_NOT_FOUND", "The Email no longer exists.");
   const id = parseEntityId("email", message.id);
   const purchases = await readEmailPurchaseAssociations(db, id);
   return {
@@ -293,7 +297,10 @@ export async function readMail(
         ["excluded", "deleted"].includes(message.status) ||
         message.classification === "unrelated"
       )
-        throw new Error("This Email is no longer retained for purchases.");
+        throw createAppError(
+          "MAIL_EVIDENCE_STALE",
+          "This Email is no longer retained for purchases.",
+        );
       const rows = await tx
         .select({
           id: orderMailAttachment.id,
@@ -311,7 +318,10 @@ export async function readMail(
     ? attachments.find((row) => row.attachmentId === input.attachmentId)
     : undefined;
   if (input.attachmentId && !requested)
-    throw new Error("That attachment does not belong to this Email.");
+    throw createAppError(
+      "MAIL_REQUEST_REFUSED",
+      "That attachment does not belong to this Email.",
+    );
   const original = requested
     ? await loadMailAttachmentOriginal(db, {
         orderMailId: mail.id,
@@ -349,7 +359,8 @@ async function attachRetainedSource(
     .from(orderMailAttachment)
     .where(eq(orderMailAttachment.orderMailId, input.orderMailId));
   if (rows.length !== input.prepared.decisions.size)
-    throw new Error(
+    throw createAppError(
+      "MAIL_EVIDENCE_STALE",
       "Email attachments changed after their purpose was reviewed; retry the link.",
     );
   for (const attachment of rows) {
@@ -358,7 +369,8 @@ async function attachRetainedSource(
       !decision ||
       decision.fingerprint !== attachmentEvidenceFingerprint(attachment)
     )
-      throw new Error(
+      throw createAppError(
+        "MAIL_EVIDENCE_STALE",
         "Email attachment evidence changed after its purpose was reviewed; retry the link.",
       );
   }
@@ -421,7 +433,8 @@ export async function linkOrderMail(
   },
 ) {
   if (input.mail.rawChecksum !== input.attachmentDecisions.mailChecksum)
-    throw new Error(
+    throw createAppError(
+      "MAIL_EVIDENCE_STALE",
       "Email evidence changed after its attachment purposes were reviewed; retry the link.",
     );
   const tx = getDb(db);
@@ -449,12 +462,19 @@ export async function linkOrderMail(
     )
     .for("update", { of: purchase })
     .limit(1);
-  if (!chosen) throw new Error("That Purchase no longer exists.");
+  if (!chosen)
+    throw createAppError(
+      "PURCHASE_NOT_FOUND",
+      "That Purchase no longer exists.",
+    );
   if (
     chosen.accountPartyId &&
     chosen.accountPartyId !== input.mail.ledgerPartyId
   )
-    throw new Error("The Email and the Purchase belong to different members.");
+    throw createAppError(
+      "MAIL_REQUEST_REFUSED",
+      "The Email and the Purchase belong to different members.",
+    );
   const sourceKey = await sha256Hex(
     JSON.stringify({
       purchaseId: chosen.id,
@@ -503,7 +523,8 @@ export async function linkOrderMail(
     )
     .limit(1);
   if (dismissed)
-    throw new Error(
+    throw createAppError(
+      "MAIL_REQUEST_REFUSED",
       "A member dismissed this Email for that Purchase; review the Email before linking it.",
     );
   // One accepted Purchase per event: an existing link elsewhere stays the
@@ -519,7 +540,8 @@ export async function linkOrderMail(
     )
     .limit(1);
   if (other && other.purchaseId !== chosen.id)
-    throw new Error(
+    throw createAppError(
+      "MAIL_REQUEST_REFUSED",
       "This Email event is already linked to another Purchase; review it before relinking.",
     );
   if (!other)
@@ -597,7 +619,10 @@ export async function settleMail(
       .where(identity)
       .limit(1);
     if (!initialEmail)
-      throw new Error("Email assignment changed before settlement.");
+      throw createAppError(
+        "MAIL_EVIDENCE_STALE",
+        "Email assignment changed before settlement.",
+      );
     const [ownerRun] = initialEmail.runId
       ? await tx
           .select({ id: runTable.id, ledgerPartyId: runTable.ledgerPartyId })
@@ -611,14 +636,18 @@ export async function settleMail(
       .where(identity)
       .for("update");
     if (!originalEmail || originalEmail.runId !== initialEmail.runId)
-      throw new Error("Email assignment changed before settlement.");
+      throw createAppError(
+        "MAIL_EVIDENCE_STALE",
+        "Email assignment changed before settlement.",
+      );
     if (
       !input.mail.id &&
       (originalEmail.checksum !== input.mail.rawChecksum ||
         originalEmail.classification !== "unrelated" ||
         originalEmail.orderMailId !== null)
     )
-      throw new Error(
+      throw createAppError(
+        "MAIL_EVIDENCE_STALE",
         "This disposed Email changed; read it again before resolving.",
       );
     const settled: Partial<typeof emailTable.$inferInsert> = {
@@ -661,7 +690,10 @@ export async function settleMail(
       .returning({ id: emailTable.id });
     if (input.importRunId && input.mail.id) {
       if (settledEmails.length !== 1)
-        throw new Error("Email assignment changed before settlement.");
+        throw createAppError(
+          "MAIL_EVIDENCE_STALE",
+          "Email assignment changed before settlement.",
+        );
       const emailId = settledEmails[0]!.id;
       const fingerprint = await sha256Hex(
         JSON.stringify({
@@ -755,7 +787,8 @@ export async function resolveMail(
     const { mail } = await ownedMail(db, input, actor, "share");
     const message = await mailboxRow(db, mail);
     if (!message || mail.rawChecksum !== input.checksum)
-      throw new Error(
+      throw createAppError(
+        "MAIL_EVIDENCE_STALE",
         "This Email changed since it was read; read it again before resolving.",
       );
     const prepared = await prepareMailFinancialEvent(
@@ -765,7 +798,8 @@ export async function resolveMail(
       { decide: decisionPort },
     );
     if (prepared.status !== "verified")
-      throw new Error(
+      throw createAppError(
+        "MAIL_REQUEST_REFUSED",
         `Cubby cannot verify this Email's financial event: ${prepared.reason} Resolve it unresolved for member review.`,
       );
     financialEvent = prepared.preparation;
@@ -779,7 +813,8 @@ export async function resolveMail(
       "read",
     );
     if (mail.rawChecksum !== input.checksum)
-      throw new Error(
+      throw createAppError(
+        "MAIL_EVIDENCE_STALE",
         "This Email changed since it was read; read it again before resolving.",
       );
     if (importRunId)
@@ -828,14 +863,19 @@ export async function resolveMail(
       });
     const { mail, importRunId } = await ownedMail(tdb, input, actor, "update");
     if (mail.rawChecksum !== input.checksum)
-      throw new Error(
+      throw createAppError(
+        "MAIL_EVIDENCE_STALE",
         "This Email changed since it was read; read it again before resolving.",
       );
     if (disposition.kind === "linked") {
       if (!attachmentDecisions)
-        throw new Error("Email attachment purposes were not reviewed.");
+        throw createAppError(
+          "MAIL_REQUEST_REFUSED",
+          "Email attachment purposes were not reviewed.",
+        );
       if (disposition.settlement && disposition.event !== "refunded")
-        throw new Error(
+        throw createAppError(
+          "MAIL_REQUEST_REFUSED",
           "Settlement evidence requires a refunded lifecycle event.",
         );
       const ids = await Promise.all(
@@ -844,7 +884,10 @@ export async function resolveMail(
         ),
       );
       if (new Set(ids).size !== ids.length)
-        throw new Error("Purchase links must resolve to distinct Purchases.");
+        throw createAppError(
+          "MAIL_REQUEST_REFUSED",
+          "Purchase links must resolve to distinct Purchases.",
+        );
       const targets = await getDb(tdb)
         .select({
           id: purchase.id,
@@ -863,11 +906,17 @@ export async function resolveMail(
         .orderBy(purchase.id)
         .for("update", { of: purchase });
       if (targets.length !== ids.length)
-        throw new Error("A reviewed Purchase no longer exists.");
+        throw createAppError(
+          "PURCHASE_NOT_FOUND",
+          "A reviewed Purchase no longer exists.",
+        );
       if (actor.runId)
         for (const target of targets) {
           if (!target.vendorId)
-            throw new Error("A reviewed Purchase has no Vendor.");
+            throw createAppError(
+              "MAIL_REQUEST_REFUSED",
+              "A reviewed Purchase has no Vendor.",
+            );
           await assertRunVendorAuthorization(tdb, actor.runId, target.vendorId);
         }
       if (
@@ -876,7 +925,8 @@ export async function resolveMail(
             row.accountPartyId && row.accountPartyId !== mail.ledgerPartyId,
         )
       )
-        throw new Error(
+        throw createAppError(
+          "MAIL_REQUEST_REFUSED",
           "The Email and a Purchase belong to different members.",
         );
       const [dismissed] = await getDb(tdb)
@@ -895,7 +945,8 @@ export async function resolveMail(
         )
         .limit(1);
       if (dismissed)
-        throw new Error(
+        throw createAppError(
+          "MAIL_REQUEST_REFUSED",
           "A member dismissed this Email for a reviewed Purchase.",
         );
       const chosen = [];
@@ -915,7 +966,11 @@ export async function resolveMail(
         );
       if (disposition.settlement) {
         const message = await mailboxRow(tdb, mail);
-        if (!message) throw new Error("The reviewed Email no longer exists.");
+        if (!message)
+          throw createAppError(
+            "EMAIL_NOT_FOUND",
+            "The reviewed Email no longer exists.",
+          );
         await recordMailFinancialReview(
           tdb,
           {
@@ -945,7 +1000,11 @@ export async function resolveMail(
     }
     if (disposition.kind === "financial") {
       const message = await mailboxRow(tdb, mail);
-      if (!message) throw new Error("The reviewed Email no longer exists.");
+      if (!message)
+        throw createAppError(
+          "EMAIL_NOT_FOUND",
+          "The reviewed Email no longer exists.",
+        );
       const emailId = parseEntityId("email", message.id);
       await recordMailFinancialEvidence(
         tdb,
@@ -1054,7 +1113,8 @@ export async function linkImportedMail(
     .for("update")
     .limit(1);
   if (!mail)
-    throw new Error(
+    throw createAppError(
+      "MAIL_EVIDENCE_STALE",
       "The imported Email changed or was disposed of; read it again.",
     );
   await linkOrderMail(db, {
@@ -1145,7 +1205,10 @@ export async function searchMail(
       nextPageToken: null,
     };
   if (!connected.some((row) => row.mailboxId === mailboxId))
-    throw new Error("That Google mailbox is not connected to this member.");
+    throw createAppError(
+      "MAIL_REQUEST_REFUSED",
+      "That Google mailbox is not connected to this member.",
+    );
   const [party] = await memberPartyIds(db, actor.userId);
   if (!party) throw new Error("Only a household member can search Email.");
   try {

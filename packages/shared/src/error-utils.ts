@@ -189,6 +189,11 @@ export const AppErrors = {
   INVENTORY_STALE: "CONFLICT",
   // A long-running external logo fetch raced a vendor website edit.
   VENDOR_STALE: "CONFLICT",
+  // Retained Email evidence changed since the caller read it.
+  MAIL_EVIDENCE_STALE: "CONFLICT",
+  // A mail read or review the member's own data refuses (no matching event,
+  // dismissed pair, foreign attachment); the message names the fix.
+  MAIL_REQUEST_REFUSED: "BAD_REQUEST",
 
   // Generic database constraint violations (translated centrally from Postgres
   // error codes — see server/errors/db-errors.ts)

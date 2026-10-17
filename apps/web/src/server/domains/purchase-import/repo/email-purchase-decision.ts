@@ -32,6 +32,7 @@ import {
   foldPurchaseLinks,
   readEmailPurchaseEvidence,
 } from "~/server/domains/email/repo/email-purchase-links";
+import { createAppError } from "~/server/errors/app-error";
 import { isUniqueViolation } from "~/server/errors/db-errors";
 import { publishEmailLinkDecision } from "~/server/generic/assessment/repo/assessment-email-link";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -83,7 +84,8 @@ async function decideOnce(
   options: NonNullable<Parameters<typeof decideEmailPurchase>[3]>,
 ) {
   if (actor.runId)
-    throw new Error(
+    throw createAppError(
+      "MAIL_REQUEST_REFUSED",
       "Only a member reviews an Email's Purchase link; agents use mail.resolve.",
     );
   const purchaseId = await resolveOrThrow(db, "purchase", input.purchaseId);
@@ -114,14 +116,19 @@ async function decideOnce(
         .limit(1);
     const [found] = await ownedEmail();
     if (!found)
-      throw new Error(
+      throw createAppError(
+        "EMAIL_NOT_FOUND",
         "Only the Email's owner can link or dismiss it for a Purchase.",
       );
     const orderMailId = found.email.orderMailId;
     if (options.originalId && orderMailId !== options.originalId)
-      throw new Error("Email original changed; request a fresh Assessment");
+      throw createAppError(
+        "MAIL_EVIDENCE_STALE",
+        "Email original changed; request a fresh Assessment",
+      );
     if (!orderMailId)
-      throw new Error(
+      throw createAppError(
+        "MAIL_REQUEST_REFUSED",
         "This Email has no retained order events to link; retrieve its original first.",
       );
     const [target] = await tx
@@ -140,7 +147,11 @@ async function decideOnce(
       .where(and(eq(purchase.id, purchaseId), notDeleted(purchase)))
       .for("update", { of: purchase })
       .limit(1);
-    if (!target) throw new Error(`${input.purchaseId} no longer exists.`);
+    if (!target)
+      throw createAppError(
+        "PURCHASE_NOT_FOUND",
+        `${input.purchaseId} no longer exists.`,
+      );
     const [original] = await tx
       .select({ rawChecksum: orderMail.rawChecksum })
       .from(orderMail)
@@ -153,17 +164,24 @@ async function decideOnce(
       .for("update")
       .limit(1);
     if (!original || original.rawChecksum !== input.expectedChecksum)
-      throw new Error("Email evidence changed; refresh before deciding.");
+      throw createAppError(
+        "MAIL_EVIDENCE_STALE",
+        "Email evidence changed; refresh before deciding.",
+      );
     const [owned] = await ownedEmail().for("update", { of: emailTable });
     if (
       !owned ||
       owned.email.orderMailId !== orderMailId ||
       owned.email.checksum !== input.expectedChecksum
     )
-      throw new Error("Email evidence changed; refresh before deciding.");
+      throw createAppError(
+        "MAIL_EVIDENCE_STALE",
+        "Email evidence changed; refresh before deciding.",
+      );
     const email = owned.email;
     if (target.accountPartyId && target.accountPartyId !== email.ledgerPartyId)
-      throw new Error(
+      throw createAppError(
+        "MAIL_REQUEST_REFUSED",
         "The Email and the Purchase belong to different members.",
       );
 
@@ -177,7 +195,8 @@ async function decideOnce(
       input.decision === "dismissed" &&
       evidence.some((row) => row.kind === "accepted")
     )
-      throw new Error(
+      throw createAppError(
+        "MAIL_REQUEST_REFUSED",
         `An import accepted this Email as ${input.purchaseId}'s source; correct the Purchase through reconciliation instead.`,
       );
     // The order events this pair rests on: suggested ones and ones already
@@ -208,13 +227,17 @@ async function decideOnce(
         .limit(2);
       const [only] = active;
       if (!only || active.length > 1)
-        throw new Error(
+        throw createAppError(
+          "MAIL_REQUEST_REFUSED",
           `This Email has ${active.length === 0 ? "no" : "several"} order events and none matches ${input.purchaseId}; link it with mail.resolve, which names the event.`,
         );
       events.set(only.id, { proposedBy: "member", kind: "manual" });
     }
     if (events.size === 0)
-      throw new Error(`Nothing links this Email to ${input.purchaseId}.`);
+      throw createAppError(
+        "MAIL_REQUEST_REFUSED",
+        `Nothing links this Email to ${input.purchaseId}.`,
+      );
 
     if (input.decision === "linked") {
       await ensureMailVendorAccount(tx, {

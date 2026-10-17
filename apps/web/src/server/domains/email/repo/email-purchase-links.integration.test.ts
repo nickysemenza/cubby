@@ -1771,6 +1771,34 @@ describe("Email Purchase links", () => {
     );
   });
 
+  it("refuses a link without a matching order event as a client error", async () => {
+    const f = await retainedReviewFixture();
+    await getDb(ctx.db)
+      .update(orderMailEvent)
+      .set({ supersededAt: new Date() })
+      .where(eq(orderMailEvent.id, f.event.id));
+    const message = `This Email has no order events and none matches ${f.purchase.shortcode}; link it with mail.resolve, which names the event.`;
+    await expect(
+      decide(f.email, f.purchase, f.checksum, "linked"),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST", message });
+    const viaMcp = await callMcpTool(
+      createMcpServer(),
+      "mail",
+      {
+        action: "decide_purchase",
+        id: f.email,
+        expectedChecksum: f.checksum,
+        purchaseId: f.purchase.shortcode,
+        decision: "linked",
+      },
+      kernelRequestContext(kernelCtx(ctx)),
+    );
+    expect(viaMcp.isError).toBe(true);
+    const text = JSON.stringify(viaMcp.content);
+    expect(text).toContain("BAD_REQUEST");
+    expect(text).toContain("none matches");
+  });
+
   it("lets only the Email's owner decide, and reads another member's Email as metadata", async () => {
     const f = await retainedReviewFixture();
     const owner = await insertWithShortcode(ctx.db, "ledgerParty", {
@@ -1787,7 +1815,10 @@ describe("Email Purchase links", () => {
       .where(eq(orderMail.id, f.source.id));
     await expect(
       decide(f.email, f.purchase, f.checksum, "linked"),
-    ).rejects.toThrow(/owner/u);
+    ).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      message: expect.stringMatching(/owner/u),
+    });
     const report = await buildEntityReport(
       ctx.db,
       { slot: "email.review", id: f.email },
