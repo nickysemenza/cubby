@@ -664,7 +664,12 @@ async function placeStructuredCall<T>(args: {
   const { tool, optionalPaths } = respondToolFor(args.schema);
   const target = args.ports.callTarget(args.model, args.call, args.funded);
   const context: Context = {
-    systemPrompt: args.request.systemPrompts.join("\n\n"),
+    // Claude thinking models take tool_choice "auto" (a forced choice 400s),
+    // so the instruction carries the requirement.
+    systemPrompt: [
+      ...args.request.systemPrompts,
+      `Give your final answer only by calling the ${tool.name} tool.`,
+    ].join("\n\n"),
     messages: await toPiMessages(args.request.messages),
     tools: [tool],
   };

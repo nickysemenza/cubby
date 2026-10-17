@@ -331,6 +331,46 @@ it("sends PDF user content and nested tool results as Anthropic documents", asyn
   );
 });
 
+// Structured runs force their respond tool on OpenAI; Opus always thinks and
+// rejects a forced tool_choice (400), so the credit attempt asks with "auto".
+it("relaxes a forced tool call to auto on the credit attempt", async () => {
+  let body: unknown;
+  const models = createModels();
+  for (const provider of fundedCubbyPiProviders(
+    () => async (_input, init) => {
+      body = JSON.parse(String(init?.body));
+      return new Response("synthetic stop", { status: 401 });
+    },
+    undefined,
+    { paid: false },
+  ))
+    models.setProvider(provider);
+  const model = models.getModel("openai", "gpt-6-luna");
+  if (!model) throw new Error("Missing Luna");
+  await models.complete(
+    model,
+    {
+      messages: [],
+      tools: [
+        {
+          name: "respond",
+          description: "Synthetic respond tool",
+          parameters: { type: "object", properties: {} },
+        },
+      ],
+    },
+    // SAFETY: the OpenAI-shaped options structured runs pass to the ladder.
+    {
+      toolChoice: { type: "function", name: "respond" },
+      reasoningEffort: "medium",
+    } as never,
+  );
+  expect(body).toMatchObject({
+    model: "claude-opus-5-5",
+    tool_choice: { type: "auto" },
+  });
+});
+
 describe("cubbyPiProviders OpenAI route", () => {
   // pi-ai's only binary content is an image, so a PDF receipt would reach
   // the Responses API as `input_image` with a PDF data URL, which it rejects;

@@ -185,6 +185,9 @@ export function chatCompletionOptionsFor(
         toolChoice: { type: "tool", name: toolName },
       };
       if (adaptiveThinkingFor(model)) {
+        // Thinking rejects a forced tool_choice (400); the single respond
+        // tool still answers under "auto".
+        options.toolChoice = "auto";
         options.thinkingEnabled = true;
         if (args.effort) {
           // SAFETY: `args.effort` is `OpenAiEffort | AnthropicEffort` (see

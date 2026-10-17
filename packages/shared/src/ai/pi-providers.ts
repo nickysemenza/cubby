@@ -467,7 +467,9 @@ function fundingOptions(
   return route === "anthropic"
     ? {
         ...common,
-        ...(name ? { toolChoice: { type: "tool", name } } : {}),
+        // Claude's thinking models reject a forced tool_choice (400); the
+        // single respond tool still answers under "auto".
+        ...(name ? { toolChoice: "auto" } : {}),
         // OpenAI's "none"/"minimal" have no Anthropic value; "low" is closest.
         effort:
           requested === "none" || requested === "minimal" ? "low" : requested,
