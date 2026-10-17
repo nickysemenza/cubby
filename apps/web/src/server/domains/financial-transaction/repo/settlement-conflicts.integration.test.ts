@@ -1,8 +1,8 @@
 import { financialTransactionUpdateData } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { eq } from "drizzle-orm";
 import { seedEmailLinkDecision } from "tooling/shared-assessment-fixtures";
 import { withTestDb } from "tooling/test-setup";
-import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
 import { getDb, insertAndReturn } from "~/server/db/helpers";
@@ -353,19 +353,27 @@ describe("settlement conflicts", () => {
         lastRunId: run.id,
       })
       .returning({ id: importSourceClaim.id });
-    await getDb(ctx.db).insert(purchasePaymentEvidence).values({
-      purchaseId: order.id,
-      sourceClaimId: claim!.id,
-      amount: 13.59,
-      chargedAt: new Date("2026-09-14T12:00:00Z"),
-      tender: "stored_value",
-      evidenceIndex: 0,
-    });
+    await getDb(ctx.db)
+      .insert(purchasePaymentEvidence)
+      .values({
+        purchaseId: order.id,
+        sourceClaimId: claim!.id,
+        amount: 13.59,
+        chargedAt: new Date("2026-09-14T12:00:00Z"),
+        tender: "stored_value",
+        evidenceIndex: 0,
+      });
 
     expect(
-      await purchasePaymentAccountsRelationAdapter.list(ctx.db, order.shortcode),
+      await purchasePaymentAccountsRelationAdapter.list(
+        ctx.db,
+        order.shortcode,
+      ),
     ).toEqual([
-      expect.objectContaining({ accountId: giftCard.shortcode, source: "evidence" }),
+      expect.objectContaining({
+        accountId: giftCard.shortcode,
+        source: "evidence",
+      }),
     ]);
     await expect(
       allocate(
