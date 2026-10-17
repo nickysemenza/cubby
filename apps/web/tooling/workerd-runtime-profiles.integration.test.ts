@@ -3,9 +3,9 @@ import { randomUUID } from "node:crypto";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { pollUntil } from "@cubby/shared/retry";
 import { describe, expect, it } from "vitest";
-import type { TestHarness } from "wrangler";
 
 import { scenarioControls } from "./purchase-agent-workerd-harness";
+import type { TestHarness } from "./test-runtime";
 import { withTestDb } from "./test-setup";
 import type { WorkerdProfile } from "./workerd-harness";
 import { openWorkerdRuntime } from "./workerd-runtime";

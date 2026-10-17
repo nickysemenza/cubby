@@ -1,6 +1,6 @@
 {
   "extends": "./tsconfig.json",
-  "include": ["src/**/*.ts", "src/**/*.tsx", "worker-configuration.d.ts"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "worker-environment.d.ts"],
   "exclude": [
     "node_modules",
     "dist",

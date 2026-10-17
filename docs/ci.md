@@ -153,11 +153,11 @@ consuming the request body. Build time saved and transfer speed are not inferred
 R2 storage uses hourly maxima from `states.r2CombinedStorage`, with the
 observation hour shown; these delayed observations are not an exact live tally.
 
-Wrangler provisions the `EVENTS`, `ANALYTICS_SQL` and static `ASSETS` bindings
+cf provisions the `EVENTS`, `ANALYTICS_SQL` and static `ASSETS` bindings
 with the existing cache Worker deployment. Analytics SQL requires the account's
 Analytics Engine entitlement; it uses the Worker's account scope without an
 additional API secret. Statistics start at deployment, without backfilling
-historical requests. Local Wrangler serves the page and cache but reports
+historical requests. Local Vite serves the page and cache but reports
 `ANALYTICS_SQL needs to be run remotely`; use the package tests for synthetic
 analytics coverage and hosted binding queries for live metrics.
 
@@ -175,14 +175,14 @@ The web deployment job supplies the same Nx cache credentials as CI. Its
 cookbook packages, with a real build on a miss or unavailable cache. The cache
 Worker's own deployment does not depend on itself. Web compilation stays fresh
 for the merged commit: it embeds source identity and uploads source maps, so a
-PR's `dist` cannot simply be deployed as main. Current-main checks remain both
+PR's Build Output cannot simply be deployed as main. Current-main checks remain both
 before build and before publication.
 
 Sentry owns browser and Worker source-map uploads. The SSR build explicitly
-emits maps, while Wrangler's duplicate upload is disabled to avoid Cloudflare's
-compressed source-map size limit. Client maps are deleted after Sentry's upload;
-server maps remain available for generated output references and Wrangler path
-validation, outside the public asset directory.
+emits maps. Client maps are deleted after Sentry's upload; server maps remain
+in the Build Output Worker bundle for diagnostics, outside the public asset directory.
+The build excludes sourcemap entries from the native Build Output manifest to
+avoid a duplicate Cloudflare upload that exceeds its compressed map limit.
 
 ## Local verification
 
@@ -565,7 +565,9 @@ GitHub can disable public-repository schedules after 60 inactive days; the
 `.github/workflows/deploy.yaml` deploys the web Worker on every `main` push,
 without waiting for post-merge CI. Required PR checks gate merging. It uses
 `.github/actions/deploy-worker` to build once, apply committed production migrations
-with the existing runner, then deploy `dist/server/wrangler.json` directly. It checks
+with the existing runner, then run `cf deploy --prebuilt --mode production`
+against `.cloudflare/output/v0/`. The Cloudflare Vite plugin v2 builds this
+output from `cloudflare.config.ts`. It checks
 current main before building and again after migration, before deployment.
 Keep build, migration and deployment as named steps in the existing action;
 avoid standalone wrappers and multi-operation command inputs.
@@ -588,8 +590,9 @@ source/configuration, dependency inputs, Node version, setup action, or its own
 workflow changes. Manual dispatch can retry a deployment. It checks out current
 `main` when the serialized job starts, so rerunning an old workflow cannot
 roll the service back and a later docs-only push cannot suppress a pending
-cache change. It uses a filtered install and plain `wrangler deploy` on
-`ubuntu-slim`, with no separate build step. Both workflows keep credentials in
+cache change. It uses a filtered install and the package's `cf deploy` command on
+`ubuntu-slim`; cf builds the Vite Worker and its `public/` dashboard assets
+before deploying, with no separate workflow build step. Both workflows keep credentials in
 the deployment step's environment and serialize their own service deployments.
 
 ## Branch protection and measurement

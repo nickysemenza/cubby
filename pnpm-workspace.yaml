@@ -37,8 +37,8 @@ overrides:
   # unmet exact @better-fetch/fetch peer. Keep this equal to better-auth in
   # apps/web; Renovate bumps both in the same grouped PR.
   "@better-auth/core": 1.7.9
-  # Keep Vite and Wrangler on a compatible pair for local auxiliary Workers.
-  "@cloudflare/vite-plugin": 1.64.0
+  # Native Cloudflare configuration and Build Output are a single cutover.
+  "@cloudflare/vite-plugin": 2.0.0-beta.v.1
   # GHSA-6qxp-vccf-f47h: bind MCP OAuth credentials to their issuer.
   "@modelcontextprotocol/sdk": ^1.32.1
   # Patched recursive brace parsing used by Nx and transitive minimatch.

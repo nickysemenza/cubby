@@ -22,8 +22,7 @@ export function workerSentryOptions(env: Env): Sentry.CloudflareOptions {
     dataCollection: SENTRY_DATA_COLLECTION,
     release: `cubby@${__GIT_COMMIT__}`,
     // Covers queue/cron events without request URLs. Deployed previews retain
-    // production reporting (NODE_ENV stays "production" there;
-    // only `preview:cf`'s local `wrangler dev` overrides it to "development")
+    // production reporting (NODE_ENV stays "production" there)
     // because they access the production database.
     environment: resolveWorkerSentryEnvironment(env),
     // Keep the scrubber as defense in depth for manually attached request data,

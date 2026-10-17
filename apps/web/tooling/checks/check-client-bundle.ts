@@ -1,19 +1,23 @@
 /**
- * Verifies no server-only code leaked into the client bundle (dist/client).
+ * Verifies no server-only code leaked into the client bundle (native Build Output assets).
  *
  * The only remaining guard (after the service worker's removal) that
  * drizzle/HYPERDRIVE never reach a browser — the isomorphic transport split
  * must strip them from every client-bound chunk.
  */
 
+import {
+  getWorkerAssetsDir,
+  getWorkerBundleDir,
+} from "@cloudflare/build-output-utils";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { walkFiles } from "../../../../scripts/lib/tree-digest.ts";
 
-const CLIENT_DIR = path.resolve("dist/client");
-const WORKER_DIR = path.resolve("dist/server");
+const CLIENT_DIR = getWorkerAssetsDir(process.cwd());
+const WORKER_DIR = getWorkerBundleDir(process.cwd());
 const SERVER_ONLY_MARKERS = ["drizzle-orm", "HYPERDRIVE"];
 
 async function serverCodeLeaks(files: readonly string[]): Promise<string[]> {

@@ -1,9 +1,5 @@
-// Types only. worker-configuration.d.ts types the Worker's Durable Object and
-// Workflow bindings from here (tooling/checks/worker-type-imports.ts rewrites
-// Wrangler's `import("./src/cf-server")`). That file is a global script, and
-// tsc re-checks the whole program after an edit to anything it reaches, so
-// each binding names a type-only RPC interface whose module imports nothing
-// but schema types (`git show 18f8bd430:docs/reports/local-check-performance.md`).
+// Type-only RPC contracts keep global Worker environment inference isolated from
+// runtime implementations. worker-environment.d.ts checks this map against exports.
 import type { Rpc } from "@cloudflare/workers-types";
 import type { SearchIndexRepairCounters } from "@cubby/schemas/maintenance";
 import type { WorkflowEvent, WorkflowStep } from "cloudflare:workers";
@@ -58,3 +54,28 @@ export type AiGatewayEgressDurableObject =
     Rpc.DurableObjectBranded;
 
 export type AiRefreshWorkflow = MailDiscoveryWorkflow;
+
+export interface WorkerRpc {
+  AiGatewayEgressDurableObject: AiGatewayEgressDurableObject;
+  AiResponseCacheDurableObject: AiResponseCacheDurableObject;
+  ChatGptPlanDurableObject: ChatGptPlanDurableObject;
+  CalendarFeedDurableObject: CalendarFeedDurableObject;
+  DatabaseFreshnessDurableObject: DatabaseFreshnessDurableObject;
+  ImageProcessingDurableObject: ImageProcessingDurableObject;
+  PurchaseImportRunAgent: PurchaseImportRunAgent;
+  UsdaReleaseDurableObject: UsdaReleaseDurableObject;
+  SearchIndexRepairWorkflow: SearchIndexRepairWorkflow;
+  MailDiscoveryWorkflow: MailDiscoveryWorkflow;
+  AiRefreshWorkflow: AiRefreshWorkflow;
+}
+
+type Worker = typeof import("../../cloudflare.config").productionWorker;
+type LiveExport = {
+  [E in keyof Worker["exports"]]: Worker["exports"][E] extends {
+    state: "deleted";
+  }
+    ? never
+    : E;
+}[keyof Worker["exports"]];
+/** A new live export must supply its isolated RPC contract. */
+export type ConfiguredWorkerRpc = { [E in LiveExport]: WorkerRpc[E] };

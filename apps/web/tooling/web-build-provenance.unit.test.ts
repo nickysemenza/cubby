@@ -34,7 +34,7 @@ function fixture() {
   };
   put(
     ".gitignore",
-    "apps/web/dist/\npackages/wasm/\n.env*\nartifacts/\n*.gen.ts\n",
+    "apps/web/.cloudflare/\npackages/wasm/\n.env*\nartifacts/\n*.gen.ts\n",
   );
   put("apps/web/src/example.ts");
   put("apps/web/vite.config.ts");
@@ -55,14 +55,62 @@ function fixture() {
     ],
     { cwd: root },
   );
-  put("apps/web/dist/client/main.js");
-  put("apps/web/dist/server/index.js");
+  put("apps/web/.cloudflare/output/v0/config.json", '{"version":0}');
+  put(
+    "apps/web/.cloudflare/output/v0/workers/default/worker.config.json",
+    JSON.stringify({
+      name: "synthetic-worker",
+      compatibilityDate: "2026-09-19",
+      manifest: {
+        type: "complete",
+        mainModule: "synthetic-worker.js",
+        modules: { "synthetic-worker.js": { type: "esm" } },
+      },
+    }),
+  );
+  put("apps/web/.cloudflare/output/v0/workers/default/assets/main.js");
+  put(
+    "apps/web/.cloudflare/output/v0/workers/default/bundle/synthetic-worker.js",
+  );
   put("packages/wasm/worker/recipebridge_bg.wasm");
   put("packages/wasm/browser/recipebridge_bg.wasm");
   put("packages/wasm/cookbook/recipebridge_cookbook_bg.wasm");
   return { root, put };
 }
 describe("web build freshness", () => {
+  // Native output has no dist intermediates; neither stamp writes nor hidden
+  // deployed assets may escape the integrity check.
+  it("reuses native output without hashing its own stamp and rejects changed dot assets", () => {
+    const { root, put } = fixture();
+    put(
+      "apps/web/.cloudflare/output/v0/workers/default/assets/.well-known/example.json",
+      "first",
+    );
+    writeWebBuildProvenance(root);
+    expect(readWebBuildProvenance(root).sourceFresh).toBe(true);
+    writeWebBuildProvenance(root);
+    expect(readWebBuildProvenance(root).sourceFresh).toBe(true);
+    put(
+      "apps/web/.cloudflare/output/v0/workers/default/assets/.well-known/example.json",
+      "changed",
+    );
+    expect(readWebBuildProvenance(root).details.reason).toBe(
+      "build-output-changed",
+    );
+  });
+  // Deployable binding/config changes must invalidate the checked artifact too.
+  it("rejects a modified Cloudflare Build Output configuration", () => {
+    const { root, put } = fixture();
+    writeWebBuildProvenance(root);
+    put("apps/web/.cloudflare/output/v0/config.json", "changed binding target");
+    expect(readWebBuildProvenance(root).details.reason).toBe(
+      "build-output-changed",
+    );
+    expect(() => webBuildNeedsBuild(root, true)).toThrow(
+      /build-output-changed/u,
+    );
+  });
+
   // Preview builds compile a different app mode and must not satisfy a normal
   // E2E build request merely because their source files are unchanged.
   it("rejects reuse across preview and ordinary build modes", () => {
@@ -91,7 +139,9 @@ describe("web build freshness", () => {
       /source changed during.*build/iu,
     );
     expect(
-      existsSync(path.join(root, "apps/web/dist/web-build-provenance.json")),
+      existsSync(
+        path.join(root, "apps/web/.cloudflare/web-build-provenance.json"),
+      ),
     ).toBe(false);
     const current = webBuildSourceFingerprint(root);
     writeWebBuildProvenance(root, current);
@@ -105,7 +155,7 @@ describe("web build freshness", () => {
         throw new Error("unexpected build");
       }),
     ).resolves.toBe("reused");
-    rmSync(path.join(root, "apps/web/dist/web-build-provenance.json"));
+    rmSync(path.join(root, "apps/web/.cloudflare/web-build-provenance.json"));
     const cacheModes: boolean[] = [];
     await expect(
       ensureWebBuild(root, (force) => {
@@ -161,16 +211,27 @@ describe("web build freshness", () => {
       /missing-build-stamp/u,
     );
     writeWebBuildProvenance(root);
-    put("apps/web/dist/client/main.js", "tampered output");
+    put(
+      "apps/web/.cloudflare/output/v0/workers/default/assets/main.js",
+      "tampered output",
+    );
     expect(() => webBuildNeedsBuild(root, true)).toThrow(
       /build-output-changed/u,
     );
     writeWebBuildProvenance(root);
-    rmSync(path.join(root, "apps/web/dist/server/index.js"));
+    rmSync(
+      path.join(
+        root,
+        "apps/web/.cloudflare/output/v0/workers/default/bundle/synthetic-worker.js",
+      ),
+    );
     expect(() => webBuildNeedsBuild(root, true)).toThrow(
       /missing-build-output/u,
     );
-    put("apps/web/dist/web-build-provenance.json", '{"schemaVersion":1}');
+    put(
+      "apps/web/.cloudflare/web-build-provenance.json",
+      '{"schemaVersion":1}',
+    );
     expect(() => webBuildNeedsBuild(root, true)).toThrow(
       /invalid-build-stamp/u,
     );

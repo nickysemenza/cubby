@@ -153,7 +153,9 @@ gigabytes behind. After 30 minutes without an HTTP request or a watched file
 change, the runtime stops the supervisor (`CUBBY_DEV_IDLE_MINUTES`, `0` keeps
 it). An open HMR socket is not activity: forgotten preview panes and test
 browsers hold one indefinitely. A runtime whose supervisor was killed closes
-itself within 15 seconds. Built preview (`wrangler dev`) has neither exit.
+itself within 15 seconds. Built preview (`pnpm --dir apps/web preview:cf`)
+uses the same supervisor and runs `vite preview` against the native Build Output.
+The lifecycle plugin's idle and orphan checks currently apply to HMR only.
 
 ## Tooling layout
 
@@ -303,7 +305,7 @@ For billed AI/provider work, use `pnpm dev integrations`. AI requests use the
 shared `cubby` gateway with `environment=development`; the Vectorize binding
 remains isolated: `CUBBY_DEV_VECTORIZE_INDEX` must start with `cubby-dev-<id>`.
 Set `CUBBY_DEV_AI_GATEWAY_API_KEY` explicitly when REST authentication requires
-a token. Wrangler must be authenticated for those bindings. This profile runs the local purchase agent
+a token. cf must be authenticated for those bindings. This profile runs the local purchase agent
 with remote AI and callbacks to the local Cubby Worker; PostgreSQL and storage
 remain local. Stop a running offline session before switching profiles.
 Integration mode supports HMR development. Built preview currently supports
@@ -331,13 +333,14 @@ Validate those transformations against the deployed boundary when relevant.
 Port probes do not reserve ports. If Vite/workerd exits with `EADDRINUSE`
 before readiness, the supervisor reaps that launch, selects fresh app
 and inspector ports, re-resolves all origin-derived settings and rewrites the
-session discovery file and built-preview JSON bindings before relaunching. It retries at most three times;
+session discovery file before relaunching. Preview retries rebuild the native
+Worker output with the newly resolved bindings. It retries at most three times;
 other failures and exits after readiness are reported directly.
 
 The printed resource explorer exposes local bindings; the inspector URL exposes
 the Worker debugging target. To inspect PostgreSQL directly, use the connection
 shown by `pnpm dev status`. `pnpm --filter @cubby/web preview:cf` builds and runs the
-same offline profile through Wrangler with its persistent resources.
+same offline profile through Vite preview with its persistent resources.
 
 ## Native iteration and validation
 
@@ -403,6 +406,11 @@ pnpm --dir apps/web test:e2e --last-failed
 pnpm --dir apps/web test:e2e:affected
 pnpm --dir apps/web test:e2e:watch
 ```
+
+The Cloudflare Vite plugin v2 emits `.cloudflare/output/v0/` from
+`cloudflare.config.ts`; the test runtime reads that output rather than a
+generated Wrangler config. Its public Wrangler harness API remains available
+for binding access, Durable Object controls, Workflow introspection and logs.
 
 `test:e2e:affected` reuses the current
 fingerprint-checked web build or rebuilds it, then runs Playwright's

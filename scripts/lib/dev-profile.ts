@@ -252,10 +252,7 @@ export function devProcessEnvironment(profile: DevProfile): NodeJS.ProcessEnv {
     PORT: String(profile.port),
     CUBBY_DEV_INSPECTOR_PORT: String(profile.inspectorPort),
     DEPLOY_TARGET: "cloudflare",
-    WRANGLER_SEND_METRICS: "false",
-    WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: profile.databaseUrl,
-    WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE_CACHED:
-      profile.databaseUrl,
+    CF_SEND_TELEMETRY: "false",
     CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE:
       profile.databaseUrl,
     CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE_CACHED:

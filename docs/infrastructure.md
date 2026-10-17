@@ -32,7 +32,7 @@ dependency.
 
 The checked-in provider configurations are:
 
-- [`apps/web/wrangler.jsonc`](../apps/web/wrangler.jsonc)
+- [`apps/web/cloudflare.config.ts`](../apps/web/cloudflare.config.ts)
 - [`.github/workflows/deploy.yaml`](../.github/workflows/deploy.yaml)
 
 ## Cloudflare
@@ -41,7 +41,7 @@ Account ID: `9f10f078d35d86c78dedece2300a6b88`.
 
 ### Main Worker
 
-[`apps/web/wrangler.jsonc`](../apps/web/wrangler.jsonc) owns Worker bindings,
+[`apps/web/cloudflare.config.ts`](../apps/web/cloudflare.config.ts) owns Worker bindings,
 Durable Objects, Workflows, queues, placement, asset routing, crons and plaintext
 variables. Deploy creates/updates those resources. This page records provider
 state and reconstruction constraints that configuration cannot reproduce.
@@ -66,26 +66,26 @@ snapshot of one historical Run and a read never grants execution.
 One-time creation commands that cannot be inferred or safely rerun by deploy:
 
 ```bash
-pnpm --dir apps/web exec wrangler queues create cubby-background
-pnpm --dir apps/web exec wrangler queues create cubby-image-cloud
-pnpm --dir apps/web exec wrangler queues create cubby-telemetry
-pnpm --dir apps/web exec wrangler queues create cubby-purchase-agent
-pnpm --dir apps/web exec wrangler vectorize create \
+pnpm --dir apps/web exec cf queues create --queue-name cubby-background
+pnpm --dir apps/web exec cf queues create --queue-name cubby-image-cloud
+pnpm --dir apps/web exec cf queues create --queue-name cubby-telemetry
+pnpm --dir apps/web exec cf queues create --queue-name cubby-purchase-agent
+pnpm --dir apps/web exec cf vectorize create \
+  --name cubby-openai-text-embedding-3-small-1536 \
+  --index-config-dimensions 1536 --index-config-metric cosine
+pnpm --dir apps/web exec cf vectorize metadata-index create \
   cubby-openai-text-embedding-3-small-1536 \
-  --dimensions=1536 --metric=cosine
-pnpm --dir apps/web exec wrangler vectorize create-metadata-index \
-  cubby-openai-text-embedding-3-small-1536 \
-  --property-name=entityType --type=string
+  --property-name entityType --index-type string
 ```
 
 The Workflow, Durable Object namespaces, bindings, consumers, crons, and route
-are created or updated by `wrangler deploy` from the checked-in configuration.
+are created or updated by `cf deploy` from the checked-in configuration's Build Output.
 
 ### Purchase agent
 
 The purchase agent coordinates import runs inside Worker `cubby`: an Agents
 SDK `Agent` hosting a pi-durable conversation through `PiHarness`. Its
-checked-in configuration is part of `apps/web/wrangler.jsonc`:
+checked-in configuration is part of `apps/web/cloudflare.config.ts`:
 
 - SQLite Durable Object class `PurchaseImportRunAgent` (binding
   `PURCHASE_IMPORT_RUN`), one instance named `import-run:<Run.id>` or
@@ -195,8 +195,11 @@ the class between Workers or replacing it does not carry them over: terminate
 the Runs whose coordinator is active (`running` and `paused_*`) before such a
 deploy. A queue has one consumer; to move `cubby-purchase-agent` to another
 Worker, remove the old consumer first
-(`wrangler queues consumer remove cubby-purchase-agent <worker>`); events wait
+(`cf queues consumers delete <consumer-id> --queue-id <queue-id>`); events wait
 in the queue until the new consumer deploys.
+Resolve these provider IDs with `cf queues list` and
+`cf queues consumers list --queue-id <queue-id>`; the delete command does not
+accept a queue or Worker name.
 
 After deployment, authorize each member once from Settings and verify the
 client/grant without printing token values:
@@ -255,24 +258,25 @@ connection string:
 | `HYPERDRIVE`        | `adc9757dfffd45bc94d5c2a66b2ad410` | Authoritative reads and writes; caching disabled; origin connection limit 12                          |
 | `HYPERDRIVE_CACHED` | `427dd7a2876c4dccbe056d37fa7374ff` | Cache-eligible reads; 60-second max age, 15-second stale-while-revalidate; origin connection limit 12 |
 
-The IDs are checked into `apps/web/wrangler.jsonc`; the origin connection
+The IDs are checked into `apps/web/cloudflare.config.ts`; the origin connection
 string and cache/connection-limit settings are provider-side state. Recreate
-with a direct Neon URL, never a pooled URL:
+with direct Neon origin credentials, never a pooled hostname. Prepare private
+JSON request files with `name`, `origin` (`scheme`, `host`, `port`, `database`,
+`user`, `password`), and `origin_connection_limit`; keep those files outside Git
+and command output:
 
 ```bash
-pnpm --dir apps/web exec wrangler hyperdrive create cubby-db \
-  --connection-string="postgres://REDACTED"
-pnpm --dir apps/web exec wrangler hyperdrive create cubby-db-cached \
-  --connection-string="postgres://REDACTED"
+pnpm --dir apps/web exec cf hyperdrive create --body @/private/path/strong.json
+pnpm --dir apps/web exec cf hyperdrive create --body @/private/path/cached.json
 ```
 
 After recreation, update the checked-in IDs and reapply the connection limits
 and cached binding policy. Inspect live state before deployment:
 
 ```bash
-pnpm --dir apps/web exec wrangler hyperdrive get \
+pnpm --dir apps/web exec cf hyperdrive get \
   adc9757dfffd45bc94d5c2a66b2ad410
-pnpm --dir apps/web exec wrangler hyperdrive get \
+pnpm --dir apps/web exec cf hyperdrive get \
   427dd7a2876c4dccbe056d37fa7374ff
 ```
 
@@ -302,8 +306,8 @@ Set deployed Worker secrets interactively so their values do not enter shell
 history:
 
 ```bash
-pnpm --dir apps/web exec wrangler secret put NAME --config wrangler.jsonc
-pnpm --dir apps/web exec wrangler secret list --config wrangler.jsonc
+pnpm --dir apps/web exec wrangler secret put NAME --name cubby
+pnpm --dir apps/web exec cf workers secrets list --worker cubby
 ```
 
 | Name                   | Storage                        | Purpose                                                       |
@@ -353,7 +357,7 @@ The production dependency is intentionally small:
    - Authorized JavaScript origin `https://cubby.nickysemenza.com`
    - Authorized redirect URI
      `https://cubby.nickysemenza.com/api/auth/callback/google`
-5. Its client ID is committed in `apps/web/wrangler.jsonc` as
+5. Its client ID is committed in `apps/web/cloudflare.config.ts` as
    `GOOGLE_CLIENT_ID`; its client secret is stored in the `cubby` Worker.
 
 Enable and verify the API with `gcloud`:
@@ -621,9 +625,10 @@ report via `Sentry.init`/`withSentry`. The plugin does not inject the release
 into chunks (`release.inject: false`): stamping the commit into every chunk
 would change every client asset's content on every deploy, so each deploy would
 re-upload them all. Client `.map` files are deleted from
-`dist/client/` afterward so none are served as Worker static assets. Server
-maps remain in `dist/server/`: Cloudflare output can reference them with
-`sourceMappingURL`, and Wrangler requires those files when deploying. Map sources are
+the Build Output assets directory afterward so none are served as Worker static assets. Server
+maps remain in the Build Output Worker bundle for diagnostics. The build removes sourcemap
+entries from the native Build Output manifest so `cf deploy --prebuilt` does
+not upload them again; the combined map exceeds Cloudflare's upload limit. Map sources are
 rewritten to repo-relative paths (`apps/web/src/...`, `packages/*/src/...`) so
 a single Sentry GitHub code mapping (repo root -> repo root on `main`) resolves
 stack frames from both the client bundle and the Worker bundle. The upload needs a `SENTRY_AUTH_TOKEN`
@@ -633,7 +638,7 @@ network upload. `SENTRY_IGNORED_ERRORS` (`apps/web/src/lib/sentry-noise.ts`)
 lists known-noise messages dropped via `ignoreErrors` before Sentry ingests
 them, so they never consume the free-plan error quota.
 
-Production Wrangler configuration owns Workers Observability trace persistence
+The production Cloudflare configuration owns Workers Observability trace persistence
 and sampling. Cloudflare is the only trace
 destination; no Jaeger, Grafana Tempo, or Sentry trace exporter is configured.
 Sentry continues to capture errors on web, Apple, and auxiliary Workers.
@@ -658,7 +663,7 @@ not as a repository secret. Required repository or environment secrets are:
 
 The Cloudflare token should be scoped to the checked-in account and only the
 resource types the deployment workflow manages. Production deploys always
-build before invoking Wrangler. Preview deploys are not supported; production
+build before invoking `cf deploy --prebuilt --mode production`. Preview deploys are not supported; production
 is the only deployed environment.
 
 ## Apple platform

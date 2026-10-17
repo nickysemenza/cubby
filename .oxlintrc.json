@@ -39,7 +39,7 @@
     "apps/web/src/ui/primitives/**",
     "apps/web/src/routeTree.gen.ts",
     "apps/web/wasm/**",
-    "**/worker-configuration.d.ts",
+    "**/.cloudflare/**",
     "apps/apple/**",
     "cubby-ffi/**"
   ],

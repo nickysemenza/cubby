@@ -31,7 +31,7 @@ function fixture() {
     mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
     writeFileSync(path.join(root, file), text);
   };
-  put(".gitignore", "apps/web/dist/\npackages/wasm/\n");
+  put(".gitignore", "apps/web/.cloudflare/\npackages/wasm/\n");
   put("apps/web/src/example.ts");
   execFileSync("git", ["init", "--quiet"], { cwd: root });
   execFileSync("git", ["add", "."], { cwd: root });
@@ -52,10 +52,23 @@ function fixture() {
   put("packages/wasm/worker/recipebridge_bg.wasm");
   put("packages/wasm/browser/recipebridge_bg.wasm");
   put("packages/wasm/cookbook/recipebridge_cookbook_bg.wasm");
+  put("apps/web/.cloudflare/output/v0/config.json", "{}");
+  put(
+    "apps/web/.cloudflare/output/v0/workers/default/worker.config.json",
+    JSON.stringify({
+      name: "synthetic-worker",
+      compatibilityDate: "2026-09-19",
+      manifest: {
+        type: "complete",
+        mainModule: "index.js",
+        modules: { "index.js": { type: "esm" } },
+      },
+    }),
+  );
   const build = () => {
     const source = webBuildSourceFingerprint(root);
-    put("apps/web/dist/client/main.js");
-    put("apps/web/dist/server/index.js");
+    put("apps/web/.cloudflare/output/v0/workers/default/assets/main.js");
+    put("apps/web/.cloudflare/output/v0/workers/default/bundle/index.js");
     writeWebBuildProvenance(root, source);
   };
   return { root, put, build };
@@ -92,11 +105,11 @@ it("rejects a concurrent source edit and recovers on the following watch build",
       builds++;
       if (builds === 1) {
         const source = webBuildSourceFingerprint(root);
-        put("apps/web/dist/client/main.js");
-        put("apps/web/dist/server/index.js");
+        put("apps/web/.cloudflare/output/v0/workers/default/assets/main.js");
+        put("apps/web/.cloudflare/output/v0/workers/default/bundle/index.js");
         put("apps/web/src/example.ts", "edited while compiling");
         missingRejectedStamp = !existsSync(
-          path.join(root, "apps/web/dist/web-build-provenance.json"),
+          path.join(root, "apps/web/.cloudflare/web-build-provenance.json"),
         );
         writeWebBuildProvenance(root, source);
       }

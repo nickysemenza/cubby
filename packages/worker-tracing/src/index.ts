@@ -10,8 +10,8 @@
  * Spans created here auto-nest under the request's root span (and, across a
  * service-binding subrequest, under the calling worker's trace — the CF platform
  * propagates context automatically), and persist in Workers Observability.
- * Requires `observability.traces.enabled` in wrangler.jsonc and
- * a `compatibility_date >= 2026-06-16`.
+ * Requires `observability.traces.enabled` in cloudflare.config.ts and
+ * a `compatibilityDate >= 2026-06-16`.
  *
  * `enterSpan` ends the span when the callback returns *or its returned promise
  * settles*, which covers every call site here — including work handed to

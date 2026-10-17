@@ -25,7 +25,7 @@ applies to production paid inference independently.
    legacy work, repeated activation, no-proposal completion and member decisions
    during inference. No live source belongs in repository fixtures, reports or
    PR text.
-4. Enable the Wrangler flag in a reviewed deployment. Requests and nightly
+4. Enable the Cloudflare configuration flag in a reviewed deployment. Requests and nightly
    maintenance nudge the production Gateway singleton. It checks its own
    deployment version in Durable Object storage before opening Neon once to
    compare the exact compiled feature manifest.

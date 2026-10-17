@@ -30,9 +30,10 @@ function dist(files: Record<string, string>) {
 describe("measureServerClosure", () => {
   it("rejects a build whose renamed dispatch chunk escapes the budget scope", () => {
     const cwd = dist({
-      "dist/server/index.js":
+      ".cloudflare/output/v0/workers/default/bundle/index.js":
         'const b=()=>import("./assets/api-adapter-1.js");',
-      "dist/server/assets/api-adapter-1.js": "export const adapter=1;",
+      ".cloudflare/output/v0/workers/default/bundle/assets/api-adapter-1.js":
+        "export const adapter=1;",
     });
     const result = spawnSync(
       process.execPath,

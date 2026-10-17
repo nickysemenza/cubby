@@ -1,14 +1,11 @@
 import { fromPartial } from "@total-typescript/shoehorn";
 import { setCfEnv } from "../src/server/cf-env";
 import type { BackgroundQueueProducer } from "../src/server/workflows/background-queue-types";
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { R2Bucket } from "@cloudflare/workers-types";
 import { usdaReleaseObjectName } from "@cubby/usda/release";
-import { createTestHarness, type TestHarnessOptions } from "wrangler";
-import { z } from "zod";
 
 import { SYNTHETIC_USDA_RELEASE } from "../../../scripts/lib/dev-profile.ts";
 import {
@@ -18,6 +15,11 @@ import {
 
 import { seedUsdaRelease } from "./dev/usda-synthetic-release";
 import { COUPLED_WORKER_BUILDS, ensureWorkerBuilds } from "./worker-builds";
+import {
+  builtWorkerTestConfig,
+  createTestHarness,
+  type TestHarnessOptions,
+} from "./test-runtime";
 
 const webRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -181,25 +183,6 @@ export interface WorkerdHarnessOptions {
   poolIdleTimeoutMs?: number;
 }
 
-const consumerSchema = z.object({ queue: z.string() }).loose();
-const compiledConfigSchema = z
-  .object({
-    main: z.string().optional(),
-    compatibility_date: z.string(),
-    ai: z.json().optional(),
-    vectorize: z.json().optional(),
-    hyperdrive: z.array(z.object({}).loose()).optional(),
-    services: z
-      .array(z.object({ binding: z.string(), service: z.string() }).loose())
-      .optional(),
-    assets: z.object({}).loose().optional(),
-    queues: z
-      .object({ consumers: z.array(consumerSchema).optional() })
-      .loose()
-      .optional(),
-  })
-  .loose();
-
 const UNREACHABLE = "http://127.0.0.1:9";
 
 /**
@@ -209,25 +192,17 @@ const UNREACHABLE = "http://127.0.0.1:9";
  * Worker's queue consumers and the profile's routes disagree, so a renamed
  * or added production consumer cannot silently stop running in tests.
  */
-function compiledWebWorkerConfig(
+async function compiledWebWorkerConfig(
   options: WorkerdHarnessOptions,
   profile: WorkerdProfileDefinition,
 ) {
-  const source = path.join(webRoot, "dist/server/wrangler.json");
-  let raw: string;
-  try {
-    raw = readFileSync(source, "utf8");
-  } catch (error) {
+  const compiled = await builtWorkerTestConfig(webRoot).catch((error) => {
     throw new Error(
       "Build the web Cloudflare bundle before starting workerd (pnpm --dir apps/web build:cf)",
       { cause: error },
     );
-  }
-  const {
-    ai: _ai,
-    vectorize: _vectorize,
-    ...config
-  } = compiledConfigSchema.parse(JSON.parse(raw));
+  });
+  const { ai: _ai, vectorize: _vectorize, ...config } = compiled;
 
   const routes = new Map<string, QueueRoute>(Object.entries(profile.queues));
   const consumers = config.queues?.consumers ?? [];
@@ -246,9 +221,6 @@ function compiledWebWorkerConfig(
     ...binding,
     localConnectionString: options.databaseUrl,
   }));
-  // The inline config is rooted at apps/web, not dist/server.
-  config.main = `dist/server/${config.main ?? "index.js"}`;
-  if (config.assets) config.assets.directory = "dist/client";
   config.services = [
     ...(config.services ?? []),
     ...(profile.purchaseAgentPeers
@@ -346,9 +318,9 @@ function peerWorkers(
 }
 
 /** The harness options for one profile: the built web Worker, then its peers. */
-export function workerdHarnessOptions(
+export async function workerdHarnessOptions(
   options: WorkerdHarnessOptions,
-): TestHarnessOptions {
+): Promise<TestHarnessOptions> {
   const profile: WorkerdProfileDefinition = WORKERD_PROFILES[options.profile];
   if (profile.googleProvider !== (options.googleProviderUrl !== undefined))
     throw new Error(
@@ -358,7 +330,7 @@ export function workerdHarnessOptions(
     throw new Error(
       `The ${options.profile} workerd profile has no model peers to replace`,
     );
-  const config = compiledWebWorkerConfig(options, profile);
+  const config = await compiledWebWorkerConfig(options, profile);
   const storage = options.objectStorage ?? {
     endpoint: UNREACHABLE,
     publicUrl: UNREACHABLE,
@@ -471,7 +443,7 @@ export async function startWorkerdHarness(options: WorkerdHarnessOptions) {
   await using cleanup = new AsyncDisposableStack();
   if (WORKERD_PROFILES[options.profile].harnessLock)
     cleanup.defer(await holdWorkerdHarness());
-  const harnessOptions = workerdHarnessOptions(options);
+  const harnessOptions = await workerdHarnessOptions(options);
   // The test process's module `db` binds its pool to the database URL present
   // at first import. Load it before the environment names the borrowed
   // database: a first import during the harness (Better Auth's startup seed

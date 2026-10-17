@@ -29,7 +29,7 @@ inputs:
     default: ""
   deploy-command:
     description: >-
-      Shell command that deploys the package, using its own wrangler
+      Shell command that deploys the package, using its package-local cf CLI
       devDependency.
     required: true
   cloudflare-api-token:

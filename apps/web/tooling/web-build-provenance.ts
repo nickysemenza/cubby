@@ -3,6 +3,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
+import { OutputWorkerSchema } from "@cloudflare/config";
 
 import {
   type BuildSource,
@@ -59,15 +60,25 @@ export function gitRevision(repoRoot: string) {
   };
 }
 
-// upload-artifact omits hidden files from the bundle consumed by E2E.
+// Skip tool-private dotfiles within generated WASM packages.
 const filesUnder = (target: string): string[] =>
   walkFiles(target, { skip: (name) => name.startsWith(".") });
 
 function buildFingerprint(repoRoot: string): BuildFingerprint {
   const webRoot = path.join(repoRoot, "apps/web");
+  const outputRoot = path.join(webRoot, ".cloudflare/output/v0");
+  const workerRoot = path.join(outputRoot, "workers/default");
+  const workerConfigPath = path.join(workerRoot, "worker.config.json");
+  const worker = OutputWorkerSchema.parse(
+    JSON.parse(readFileSync(workerConfigPath, "utf8")),
+  );
+  if (!worker.manifest)
+    throw new Error(`Missing built Worker manifest: ${workerConfigPath}`);
   const required = [
-    path.join(webRoot, "dist/client"),
-    path.join(webRoot, "dist/server/index.js"),
+    path.join(outputRoot, "config.json"),
+    workerConfigPath,
+    path.join(workerRoot, "bundle", worker.manifest.mainModule),
+    path.join(workerRoot, "assets"),
     // The wasm packages (scripts/ensure.ts wasm --build), bundled whole.
     path.join(repoRoot, "packages/wasm/worker"),
     path.join(repoRoot, "packages/wasm/browser"),
@@ -79,11 +90,13 @@ function buildFingerprint(repoRoot: string): BuildFingerprint {
         `Missing web build output: ${path.relative(repoRoot, target)}`,
       );
   }
-  // Only deployed code and generated WASM enter this digest. The dist/server
-  // directory also contains Wrangler variables and local .dev.vars files.
+  // Native output owns deployed configuration, modules and assets, including
+  // dot-prefixed assets. The provenance stamp lives outside this tree.
   const files = [
-    ...required.flatMap(filesUnder),
-    ...filesUnder(path.join(webRoot, "dist/server/assets")),
+    ...walkFiles(outputRoot),
+    ...filesUnder(path.join(repoRoot, "packages/wasm/worker")),
+    ...filesUnder(path.join(repoRoot, "packages/wasm/browser")),
+    ...filesUnder(path.join(repoRoot, "packages/wasm/cookbook")),
     ...filesUnder(path.join(repoRoot, "packages/wasm/package.json")),
   ].sort();
   return {
@@ -93,7 +106,7 @@ function buildFingerprint(repoRoot: string): BuildFingerprint {
 }
 
 function stampPath(repoRoot: string): string {
-  return path.join(repoRoot, "apps/web/dist/web-build-provenance.json");
+  return path.join(repoRoot, "apps/web/.cloudflare/web-build-provenance.json");
 }
 
 const AGENT_SKILLS =

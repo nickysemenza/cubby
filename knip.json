@@ -59,6 +59,7 @@
         "src/server.ts!",
         "src/cf-server.ts!",
         "vite.config.ts!",
+        "cloudflare.config.ts!",
         "e2e.config.ts!",
         "src/styles.css!",
         "src/lib/recipebridge-cf.ts!",
@@ -71,7 +72,7 @@
         // Type-only port existence checks; nothing imports them by design.
         "src/entity/generated/entity-port-checks.gen.ts!",
         "src/server/generated/entity-port-checks.gen.ts!",
-        // Read only through `import()` types in the global worker-configuration.d.ts.
+        // Read only through `import()` types in the global worker-environment.d.ts.
         "src/server/worker-bindings.ts!",
         // Opt-in `live-eval` vitest project (billed model evals).
         "src/**/*.live-eval.ts!",
@@ -123,7 +124,7 @@
     },
     "apps/web-worker-tests": {
       // Reached through vitest.config.ts's @cubby/recipebridge alias.
-      "entry": ["recipebridge-workerd.ts"]
+      "entry": ["recipebridge-workerd.ts", "cloudflare.config.ts!"]
     },
     "packages/schemas": {
       "entry": [
@@ -136,7 +137,11 @@
     },
     "apps/nx-cache": {
       // Loaded by the Worker's static HTML, outside the TypeScript import graph.
-      "entry": ["public/dashboard.js!"]
+      "entry": [
+        "public/dashboard.js!",
+        "cloudflare.config.ts!",
+        "vite.config.ts!"
+      ]
     },
     "packages/shared": {
       "entry": ["src/index.ts!", "src/**/*.test.ts!"],
@@ -165,6 +170,7 @@
     ".claude/**",
     "**/dist/**",
     "**/.wrangler/**",
+    "**/.cloudflare/**",
     "apps/apple/**",
     "apps/web/src/ui/primitives/context-menu.tsx"
   ],

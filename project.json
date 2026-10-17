@@ -21,8 +21,10 @@
         // Purchase-import prompt sources (apps/web/generator/agent-prompts.ts).
         "{workspaceRoot}/.claude/skills/purchase-import/references/*.md",
         // The R2 public origin generated into `SharedConstants.swift`.
-        "{workspaceRoot}/apps/web/wrangler.jsonc",
-        "{workspaceRoot}/apps/web/tooling/wrangler-public-config.ts",
+        "{workspaceRoot}/apps/web/cloudflare.config.ts",
+        "{workspaceRoot}/apps/web/tooling/cloudflare-public-config.ts",
+        "{workspaceRoot}/apps/web/tooling/dev/config.ts",
+        "{workspaceRoot}/scripts/lib/dev-profile.ts",
         "{workspaceRoot}/apps/web/tsconfig.json",
         // The entity-declaration import-boundary override (import-boundary.ts).
         "{workspaceRoot}/.oxlintrc.json",

@@ -21,6 +21,7 @@ export * from "../../src/cf-server";
 
 type LocalDevEnv = Env &
   LocalStorageEnv & {
+    DATABASE_URL: string;
     CUBBY_DEV_ID: string;
     CUBBY_DEV_DB_NAME: string;
     CUBBY_DEV_PROFILE: "offline" | "integrations";

@@ -2,6 +2,21 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { shouldRetryRuntime } from "../apps/web/tooling/dev/runtime-retry.ts";
 
+test("retries Vite's strict-port collision without treating other startup errors as collisions", () => {
+  const state = { exited: true, ready: false, cancelled: false, attempt: 0 };
+  assert.equal(
+    shouldRetryRuntime({
+      ...state,
+      logs: "Error: Port 3007 is already in use",
+    }),
+    true,
+  );
+  assert.equal(
+    shouldRetryRuntime({ ...state, logs: "Error: Failed to load config" }),
+    false,
+  );
+});
+
 test("only retries an exited, pre-ready address collision within the budget", () => {
   assert.equal(
     shouldRetryRuntime({

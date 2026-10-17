@@ -10,7 +10,7 @@ deduplication are dependency maintenance, not validation gates.
   Its React Email dependencies are transitive, not directly imported.
 - `@triplit/logger` is runtime-only but declares a TypeScript peer range that
   lags the compiler Cubby verifies.
-- Wrangler and Sentry declare different Workers Types peer majors. Regenerate
+- Wrangler and Sentry declare different Workers Types peer majors. Check inferred
   bindings and typecheck when changing either; the workspace owns the accepted range.
 - Sentry's bundler plugin requires Babel 7; its package extension supplies that
   major separately from Vite's Babel 8 dependency.

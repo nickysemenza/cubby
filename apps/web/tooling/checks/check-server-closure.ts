@@ -1,5 +1,5 @@
 /**
- * Budgets the Worker bundle (dist/server) so request-path growth fails the
+ * Budgets the Worker bundle (native Build Output) so request-path growth fails the
  * build instead of being found in a later performance sweep.
  *
  * "Entry" is the static import closure loaded for every Worker invocation.
@@ -22,6 +22,7 @@
  *   documents) needed by one route family: import them where used.
  */
 
+import { getWorkerBundleDir } from "@cloudflare/build-output-utils";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -178,7 +179,7 @@ const invokedPath = process.argv[1]
   ? pathToFileURL(path.resolve(process.argv[1])).href
   : undefined;
 if (invokedPath === import.meta.url) {
-  const serverRoot = path.resolve("dist/server");
+  const serverRoot = getWorkerBundleDir(process.cwd());
   const faker = findBundledFaker(serverRoot);
   if (faker.length > 0)
     throw new Error(

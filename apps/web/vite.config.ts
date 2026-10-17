@@ -1,3 +1,4 @@
+import { getWorkerAssetsDir } from "@cloudflare/build-output-utils";
 import { execFileSync, execSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,9 +16,8 @@ import {
 import wasm from "vite-plugin-wasm";
 import { createServerFunctionIdGenerator } from "./tooling/server-function-id.ts";
 import { resolveDevProfile } from "../../scripts/lib/dev-profile.ts";
-import { writeLocalDevConfig } from "./tooling/dev/config.ts";
 import { devLifecycle } from "./tooling/dev/lifecycle.ts";
-import { readR2PublicUrlFromWrangler } from "./tooling/wrangler-public-config.ts";
+import { readR2PublicUrl } from "./tooling/cloudflare-public-config.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Generated output is never committed; bring it current before any module
@@ -51,15 +51,15 @@ const sourceDate = execFileSync(
 const sourceBranch =
   process.env.CUBBY_SOURCE_BRANCH ||
   execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf-8" }).trim();
-const wranglerR2PublicUrl = readR2PublicUrlFromWrangler();
+const productionR2PublicUrl = readR2PublicUrl();
 /**
  * The client's transform gate must name the host the SERVER stamps on image
  * URLs, or `transformedImageUrl` passes every URL through untouched. Builds
- * take wrangler.jsonc; local development takes the supervisor's local origin
+ * take cloudflare.config.ts; local development takes the supervisor's local origin
  * so image transformations and storage URLs agree with the Worker.
  */
 const resolveR2PublicUrl = (localOrigin: string | undefined) =>
-  localOrigin ?? wranglerR2PublicUrl;
+  localOrigin ?? productionR2PublicUrl;
 
 const clientCodeSplittingGroups = [
   {
@@ -289,15 +289,20 @@ export default defineConfig(async ({ command }) => {
   if (profile) {
     deployPlugin.push(
       cloudflare({
-        configPath: writeLocalDevConfig(profile),
         viteEnvironment: { name: "ssr" },
-        // The plugin and Wrangler CLI append v3; the programmatic proxy does not.
         persistState: { path: path.join(profile.stateDir, "cloudflare") },
+        types: { generate: false },
         inspectorPort: profile.inspectorPort,
         remoteBindings: profile.profile === "integrations",
       }),
     );
-  } else deployPlugin.push(cloudflare({ viteEnvironment: { name: "ssr" } }));
+  } else
+    deployPlugin.push(
+      cloudflare({
+        viteEnvironment: { name: "ssr" },
+        types: { generate: false },
+      }),
+    );
 
   const serverPort = Number(process.env.PORT) || 3000;
 
@@ -346,7 +351,7 @@ export default defineConfig(async ({ command }) => {
       },
       ssr: {
         build: {
-          // Emit maps for Sentry even though Wrangler's duplicate upload is off.
+          // Sentry consumes these maps; build-cf excludes them from cf upload.
           sourcemap: true,
           // Vite leaves server output unminified by default; minified, the
           // Worker upload drops from ~30 MB to ~16 MB. Names are kept so error
@@ -453,9 +458,9 @@ export default defineConfig(async ({ command }) => {
       // `@sentry/tanstackstart-react`, which the SSR build resolves to
       // `cfSentryShim` (no such export). Maps are uploaded once per Vite
       // environment from its own output dir. Delete client maps so none ship
-      // as public assets; retain server maps because Cloudflare output can
-      // reference them and Wrangler validates those paths before deployment. Map sources are output-relative (`../../src/x.ts` from
-      // dist/server, `../../../src/x.ts` from dist/client/assets); rewriting
+      // as public assets. Server maps stay in the non-public Worker bundle
+      // for Sentry and diagnostics; build-cf removes their upload manifest entries.
+      // Map sources are output-relative; rewriting
       // them repo-relative (`apps/web/src/x.ts`, `packages/schemas/src/y.ts`)
       // lets one Sentry code mapping (repo root -> repo root on main) resolve
       // browser and Worker frames. Without SENTRY_AUTH_TOKEN (PR/preview CI) the plugin warns,
@@ -496,7 +501,9 @@ export default defineConfig(async ({ command }) => {
                         .split(path.sep)
                         .join("/")
                     : source,
-                filesToDeleteAfterUpload: ["./dist/client/**/*.map"],
+                filesToDeleteAfterUpload: [
+                  `${getWorkerAssetsDir(__dirname)}/**/*.map`,
+                ],
               },
             }),
           ]

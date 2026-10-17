@@ -1,4 +1,4 @@
-import type { TestHarness } from "wrangler";
+import type { TestHarness } from "./test-runtime";
 
 import { scrubErrorMessage } from "../src/lib/error-diagnostics";
 

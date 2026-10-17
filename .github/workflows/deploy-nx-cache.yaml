@@ -38,7 +38,7 @@ jobs:
       - uses: ./.github/actions/setup-node-with-deps
         with:
           workspace-filter: "@cubby/nx-cache"
-      - run: pnpm --filter @cubby/nx-cache exec wrangler deploy
+      - run: pnpm --filter @cubby/nx-cache run deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: "9f10f078d35d86c78dedece2300a6b88"

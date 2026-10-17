@@ -102,7 +102,7 @@ loads itself into its Durable Object:
 2. Upload them to the `cubby-usda-releases` bucket under `YYYY-MM/`, the
    manifest last (`cf r2 objects put YYYY-MM/<file> --bucket-name
    cubby-usda-releases --file <path>`).
-3. Set `USDA_ACTIVE_RELEASE` in `apps/web/wrangler.jsonc` and deploy. Reads
+3. Set `USDA_ACTIVE_RELEASE` in `apps/web/cloudflare.config.ts` and deploy. Reads
    fail with the load's progress until the release is ready.
 4. Open `/api/debug/usda-release` signed in (or with `x-api-key`): the first
    request starts the load and every request reports shard progress, size,
@@ -314,7 +314,7 @@ native PostgreSQL installation remain owned by their existing runners.
 | [apps/web/src/cf-server.ts](../apps/web/src/cf-server.ts)                     | Worker entry; wraps requests in `withRequestDb()` |
 | [apps/web/src/server/db.ts](../apps/web/src/server/db.ts)                     | Per-request `pg.Pool`                             |
 | [apps/web/src/lib/recipebridge-cf.ts](../apps/web/src/lib/recipebridge-cf.ts) | WASM via `?init` (Workers SSR)                    |
-| [apps/web/wrangler.jsonc](../apps/web/wrangler.jsonc)                         | Bindings, vars, compat flags, secret names        |
+| [apps/web/cloudflare.config.ts](../apps/web/cloudflare.config.ts)             | Bindings, vars, compat flags, secret names        |
 
 - **Hyperdrive.** Both bindings use one Neon origin. Account-side configuration
   and reconstruction live in [infrastructure](infrastructure.md#postgresql-and-hyperdrive);
@@ -330,8 +330,28 @@ native PostgreSQL installation remain owned by their existing runners.
   - The daily cron only _asserts_ that the awaiting counts are zero.
 - Inventory and location valuation are computed on every read. Search
   projections are written inside the entity write transaction.
-- Secrets are set with `wrangler secret put`. Production is the only deployed
+- Secrets are set with `wrangler secret put NAME --name cubby`. Production is the only deployed
   environment.
+
+`build:cf` runs the Cloudflare Vite plugin v2 build. The native
+`cloudflare.config.ts` supplies typed bindings, exports and triggers; the plugin
+emits deployable Build Output under `apps/web/.cloudflare/output/v0/`, including
+the Worker bundle and copied static assets. Deployment reuses this output with
+`cf deploy --prebuilt --mode production`. The plugin writes directly into this
+output tree; there is no separate `dist` bundle.
+
+`Env` is inferred directly from the production configuration in
+`worker-environment.d.ts`; local text values stay strings, and
+`worker-bindings.ts` supplies isolated RPC contracts checked against live exports.
+Vite's separate generated global types are disabled. `types:check` guards the
+global declaration's importer graph against backend implementations.
+
+Programmatic tests read the same Build Output through Cloudflare's public
+reader and config converter. Wrangler remains behind `tooling/test-runtime.ts`
+for its test harness, including Workflow introspection, Durable Object eviction
+and structured logs; it also supplies live tail and interactive single-secret
+operations and the name-based queue maintenance commands in the migration
+runbook. It does not own builds, deployment or local dev startup.
 
 ## Auth and HTTP API
 

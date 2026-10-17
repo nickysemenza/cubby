@@ -56,7 +56,7 @@ function purchaseAgentEnvironment(
   runId: string,
 ): PurchaseAgentEnvironment {
   // SAFETY: the workerd harness adds this service binding to the Worker; it
-  // is deliberately absent from wrangler.jsonc, so production never has it.
+  // is deliberately absent from cloudflare.config.ts, so production never has it.
   const { CUBBY_PURCHASE_AGENT_TEST_MODEL: testModel } = env as Env & {
     CUBBY_PURCHASE_AGENT_TEST_MODEL?: PurchaseAgentEnvironment["testModel"];
   };
