@@ -18,10 +18,8 @@ const moduleRuleTypes = {
   wasm: "CompiledWasm",
   text: "Text",
   data: "Data",
-  python: "PythonModule",
-  "python-requirement": "PythonRequirement",
 } satisfies Record<
-  Exclude<ModuleType, "json" | "sourcemap">,
+  Exclude<ModuleType, "json" | "sourcemap" | "python" | "python-requirement">,
   ModuleRule["type"]
 >;
 
@@ -50,9 +48,13 @@ export async function builtWorkerTestConfig(root: string) {
   }));
   for (const [name, module] of Object.entries(manifest.modules)) {
     if (module.type === "sourcemap") continue;
-    if (module.type === "json")
+    if (
+      module.type === "json" ||
+      module.type === "python" ||
+      module.type === "python-requirement"
+    )
       throw new Error(
-        `The test harness cannot represent native JSON module ${name} from ${built.configPath}`,
+        `The test harness cannot represent native ${module.type} module ${name} from ${built.configPath}`,
       );
     const type = moduleRuleTypes[module.type];
     rules.find((rule) => rule.type === type)?.globs.push(name);
