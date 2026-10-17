@@ -1,4 +1,4 @@
-import { isNotNull, sql } from "drizzle-orm";
+import { and, isNotNull, sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
 import { task } from "~/server/db/schema";
@@ -8,7 +8,18 @@ import { listScaffold } from "./list";
 
 describe("listScaffold", () => {
   const scaffold = listScaffold("task", task, {
-    derived: { assigneeId: sql`NULL` },
+    derived: {
+      assigneeId: sql`NULL`,
+      effectiveTrade: sql`NULL`,
+      effectiveDueDate: sql`NULL`,
+      completion: sql`NULL`,
+      topLevel: sql`true`,
+      assigneeFilter: () => undefined,
+      projectFilter: () => undefined,
+      subjectProductFilter: () => undefined,
+      search: () => undefined,
+      dueRelative: () => undefined,
+    },
   });
 
   describe("where", () => {
@@ -18,17 +29,12 @@ describe("listScaffold", () => {
       );
     });
 
-    it("ANDs in caller-supplied computed conditions alongside declared predicates", () => {
-      const sql = renderWhereSql(
-        scaffold.where({ status: "done" }, [isNotNull(task.name)]),
-      );
-      expect(sql).toContain('"status"');
-      expect(sql).toContain('"name"');
-    });
-
     it("intersects the uncapped SearchDocument eligibility predicate with the scoped list", () => {
       const sql = renderWhereSql(
-        scaffold.where({ searchQuery: "short task" }, [isNotNull(task.name)]),
+        and(
+          scaffold.where({ searchQuery: "short task" }),
+          isNotNull(task.name),
+        ),
       );
       expect(sql).toContain('"SearchDocument"');
       expect(sql).toContain('"entityKind"');

@@ -593,6 +593,17 @@ Rules:
       inventoryEntries: { type: "number" },
       // The direct stock value the compact list cell renders.
       valuation: { type: "number" },
+      // Holds live stock (a fixture wired into the wall is not stock).
+      hasInventory: { type: "boolean" },
+      // A displayable image (PDF attachments don't count).
+      hasImage: { type: "boolean" },
+      hasChildren: { type: "boolean" },
+      hasAiDescription: { type: "boolean" },
+      recountOverdue: {
+        predicate: "range",
+        reason:
+          "Last recounted more than N days ago, or never: a relative age a saved view can pin",
+      },
     },
     sort: {
       fields: [
@@ -708,6 +719,7 @@ Rules:
         columnId: "image",
         field: "imagePresenceFilter",
         kind: "presence",
+        derived: "hasImage",
         placeholder: "Filter images...",
         options: [
           { value: "has", label: "Has image", meta: true },
@@ -718,6 +730,7 @@ Rules:
         columnId: "lastBulkInventory",
         kind: "range",
         wire: { kind: "param", name: "lastBulkInventoryOlderThanDays" },
+        derived: "recountOverdue",
         placeholder: "Filter recounts...",
         options: [
           {
@@ -741,6 +754,7 @@ Rules:
         columnId: "children",
         field: "childPresenceFilter",
         kind: "presence",
+        derived: "hasChildren",
         placeholder: "Filter children...",
         options: [
           { value: "has", label: "Has children", meta: true },
@@ -751,6 +765,7 @@ Rules:
         columnId: "aiDescription",
         field: "aiDescriptionPresenceFilter",
         kind: "presence",
+        derived: "hasAiDescription",
         placeholder: "Filter descriptions...",
         options: [
           { value: "has", label: "Has description", meta: true },
@@ -789,7 +804,8 @@ Rules:
         placeholder: "Filter product...",
         optionsKey: "locationProducts",
         brandRef: { entity: "product" },
-        nullable: { field: "productPresenceFilter", label: "product" },
+        deriveSchema: true,
+        stored: { columns: ["productId"] },
       },
       {
         columnId: "parent",
@@ -797,11 +813,13 @@ Rules:
         kind: "idMulti",
         placeholder: "Filter parent...",
         brandRef: { entity: "location" },
-        nullable: { field: "parentPresenceFilter", label: "parent" },
+        deriveSchema: true,
+        stored: { columns: ["parentId"] },
       },
       {
         columnId: "inventoryEntries",
         kind: "range",
+        derived: true,
         wire: {
           kind: "range",
           from: "directItemCountMin",
@@ -829,6 +847,7 @@ Rules:
       {
         columnId: "valuation",
         kind: "range",
+        derived: true,
         wire: { kind: "range", from: "valuationMin", to: "valuationMax" },
         placeholder: "Filter valuation...",
         options: [
@@ -858,6 +877,14 @@ Rules:
             expand: { valuationMin: 500 },
           },
         ],
+      },
+      {
+        columnId: "inventory",
+        field: "inventoryPresenceFilter",
+        kind: "presence",
+        placeholder: "Filter inventory presence...",
+        urlOnly: true,
+        derived: "hasInventory",
       },
       {
         columnId: "related:location.ingredients",

@@ -1430,19 +1430,18 @@ else. `currentMember: true` marks a Ledger Party filter that accepts `@me` and o
 Choices the clients cannot offer are disabled with their reason (§7 of the
 [list-fields plan](plans/manifest-driven-list-fields.md)).
 
-Hand-written predicates passed to `<entity>Scaffold.where(filters, [...])`,
-including the elements of and pushes onto a condition list named in the same
-file, are counted per file by the `cubby/no-hand-written-filter-predicate` Oxlint
-rule against `tools/oxlint/cubby/no-hand-written-filter-predicate-baseline.json`.
-The baseline only shrinks: declaring a predicate lowers its file's count, and
-a new one must be declared instead. A filter that cannot be declared is a
-declared exception with its reason. Email's urlOnly
+Every list filter predicate compiles from its declaration: `scaffold.where`
+takes the filters and a read context, and no hand-written condition. A
+filter that cannot be a stored column or a `via` path is a `model.derived`
+`predicate` whose `reason` lives in the declaration. A list's static row
+scope (ingredient lists never show recipe-scoped rows) and a project page's
+embedded `projectScope` (an object, not a filter descriptor) are ANDed with
+`where` by the repository. Email's urlOnly
 `purchaseId`/`vendorId`/`vendorAccountId` declare `singleValue: { reason }`
 (`linkState` is relative to one scope record): their schemas accept one value,
 the native picker chooses one record, and the repository rejects more than one
 across the three. Each is also a `model.derived` predicate over the one scope
-record they resolve. Every other filter that cannot be a stored column or a `via`
-path is a `model.derived` predicate whose `reason` lives in the declaration.
+record they resolve.
 
 A `stored` descriptor names the standard predicate over stored columns, and
 `declaredFilterPredicates` composes it for the repository: `stored: true`
@@ -1486,9 +1485,14 @@ one shape:
   `valuationStatus` statuses overlap). `predicate` names the descriptor kind
   it serves, and the SQL receives that kind's parsed value: a trimmed string
   (`text`), `{ values, presence }` (`multiselect`/`idMulti`, with the
-  descriptor's declared `nullable`), a boolean, a presence, or `{ from, to,
-  presence, param }` (`range`; `param` is a range whose presets name one
-  state).
+  descriptor's declared `nullable`; `idMulti` adds `includeDescendants`), a
+  boolean, a presence, or `{ from, to, presence, param }` (`range`; `param`
+  is the one request parameter of a range whose presets name a state or an
+  age, such as location's `lastBulkInventoryOlderThanDays`).
+
+A stored `text` filter ORs several terms when its value is a list, and a text
+descriptor's `schemaRef` names that value schema (expense's
+`expenseSearchTerms`).
 
 Every compiled sort part orders NULLS LAST in both directions, as stored
 columns do, unless the part declares `{ sql, nulls: "high" }` (empties first
@@ -1531,7 +1535,8 @@ A compiled id filter resolves its shortcodes inside the list query, through
 `shortcodeIdsSql`, rather than in a lookup before it: an unknown or
 soft-deleted code matches nothing (#2333).
 
-An id filter (stored or `via`) whose target declares `model.hierarchy` matches
+An id filter (stored, `via`, or an `idMulti` predicate over an inherited
+reference, by its `brandRef`) whose target declares `model.hierarchy` matches
 the selected records and their live descendants through
 `hierarchyDescendantsSql` (`server/generic/list/repo/hierarchy.ts`), the one
 recursive-descendant generator repositories also call directly. The compiler
@@ -1540,8 +1545,10 @@ each such filter; absent reads as on, and `false` limits the filter to the
 selected records. It replaced the hand-written pairs: inventory's
 `locationSubtreeFilter` is `locationIdFilter` with `includeSubLocations`, and
 project's parent filter is the stored `parentProjectId` with
-`includeSubProjects`. Task's `includeSubProjects` still calls the generator
-by hand.
+`includeSubProjects`. A predicate receives the toggle as `includeDescendants`
+on its `idMulti` value: task's effective project, expense's allocated project
+and spending category, a product category's effective spending category, and
+an image's import run.
 
 Searchable entities use persisted `SearchDocument` rows for lexical and
 embedding input. The spec generates search capability gates, while projection

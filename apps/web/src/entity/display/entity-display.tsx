@@ -839,7 +839,12 @@ function relationCountFilter(entity: Entity, field: DisplayField) {
   return spec
     ? {
         to: entities[target].routes.list,
-        urlKey: filterUrlKey(spec),
+        // The count follows the direct reference, so the list opens with the
+        // filter's "Include sub-…" toggle off.
+        search: (id: string) => ({
+          [filterUrlKey(spec)]: id,
+          ...(spec.subtree === undefined ? {} : { [spec.subtree]: "false" }),
+        }),
         plural: entityPluralLabel(target).toLocaleLowerCase(),
       }
     : null;
@@ -862,7 +867,7 @@ function cohortFilterAction<TRecord extends object>(
       <EntityRefLink
         variant="filter"
         to={countFilter.to}
-        search={{ [countFilter.urlKey]: recordId.data.id }}
+        search={countFilter.search(recordId.data.id)}
         label={`Show all ${countFilter.plural}`}
         className={LEDGER_FILTER_ACTION_CLASS}
       />
@@ -2086,7 +2091,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
                   variant="filter"
                   display="value"
                   to={countFilter.to}
-                  search={{ [countFilter.urlKey]: recordId.data.id }}
+                  search={countFilter.search(recordId.data.id)}
                   label={`Show ${value.raw} ${countFilter.plural}`}
                   className="tabular-nums"
                 >

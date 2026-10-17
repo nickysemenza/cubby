@@ -12,7 +12,11 @@ import {
 } from "@cubby/schemas/ledger-party";
 import type { MealFilters } from "@cubby/schemas/meal";
 import type { ProductFilters } from "@cubby/schemas/product";
-import type { ExpenseFilters, ProjectFilters } from "@cubby/schemas/project";
+import type {
+  ExpenseFilters,
+  ProjectFilters,
+  TaskFilters,
+} from "@cubby/schemas/project";
 import type { PurchaseFilters } from "@cubby/schemas/purchase";
 import type { VendorFilters } from "@cubby/schemas/vendor";
 import type { WishFilters } from "@cubby/schemas/wish";
@@ -32,6 +36,7 @@ import { buildProjectWhere } from "~/server/domains/project/repo/lookup";
 import { buildPurchaseWhereClause } from "~/server/domains/purchase/repo/purchase";
 import { buildRecipeWhere } from "~/server/domains/recipe/repo/crud";
 import type { RecipeFilters } from "~/server/domains/recipe/repo/internal-types";
+import { buildTaskWhere } from "~/server/domains/task/repo/lookup";
 import { buildVendorWhereClause } from "~/server/domains/vendor/repo/vendor";
 import { buildWishWhere } from "~/server/domains/wish/repo";
 import { mockWhereDatabase, renderWhereSql } from "~/server/testing/mock-db";
@@ -365,6 +370,39 @@ describe("buildLocationWhere", () => {
       contains: '"AiAnalysis"',
     },
   ])("still narrows by $name", async ({ filters, contains }) => {
+    expect(await where(filters)).toContain(contains);
+  });
+
+  it("includes sub-locations under a parent unless the toggle is off", async () => {
+    const parent = parseShortcodeFor("location", "LOC-2345");
+    expect(await where({ parentId: [parent] })).toContain("WITH RECURSIVE");
+    expect(
+      await where({ parentId: [parent], includeSubLocations: false }),
+    ).not.toContain("WITH RECURSIVE");
+  });
+
+  it.each([
+    {
+      name: "recount age (never recounted counts)",
+      filters: { lastBulkInventoryOlderThanDays: 30 },
+      contains: '"lastBulkInventory" is null or',
+    },
+    {
+      name: "direct item count",
+      filters: { directItemCountMin: 2 },
+      contains: '"InventoryEntry" ie',
+    },
+    {
+      name: "inventory presence",
+      filters: { inventoryPresenceFilter: "none" } as const,
+      contains: 'NOT COALESCE(("Location"."id" in',
+    },
+    {
+      name: "product presence",
+      filters: { productPresenceFilter: "has" } as const,
+      contains: '"productId" IN (SELECT ref."id" FROM "Product" ref',
+    },
+  ])("compiles $name from its declaration", async ({ filters, contains }) => {
     expect(await where(filters)).toContain(contains);
   });
 
@@ -729,4 +767,47 @@ describe("buildExpenseWhereClause", () => {
       expect(await where(filters)).toContain(contains);
     },
   );
+});
+
+describe("buildTaskWhere", () => {
+  const where = (filters: TaskFilters) =>
+    buildTaskWhere(mockWhereDatabase(), filters).then(renderWhereSql);
+  const project = parseShortcodeFor("project", "PRJ-2345");
+
+  it("matches the inherited project, with sub-projects unless the toggle is off", async () => {
+    const rendered = await where({ projectId: [project] });
+    expect(rendered).toContain('parent."projectId"');
+    expect(rendered).toContain("WITH RECURSIVE");
+    expect(
+      await where({ projectId: [project], includeSubProjects: false }),
+    ).not.toContain("WITH RECURSIVE");
+    expect(
+      await where({ projectId: [project], projectPresenceFilter: "none" }),
+    ).toMatch(/ or \(?\s*CASE WHEN/i);
+  });
+
+  it.each([
+    {
+      name: "search (name or inherited subject product)",
+      filters: { search: "filter" },
+      contains: '"Product"."name" ilike',
+    },
+    {
+      name: "completion",
+      filters: { completion: "open" as const },
+      contains: "::text END IN (",
+    },
+    {
+      name: "topLevelOnly",
+      filters: { topLevelOnly: true },
+      contains: '"Task"."parentTaskId" is null',
+    },
+    {
+      name: "inherited due date",
+      filters: { dueFrom: "2026-01-01" },
+      contains: '"dueEndDate"',
+    },
+  ])("compiles $name from its declaration", async ({ filters, contains }) => {
+    expect(await where(filters)).toContain(contains);
+  });
 });

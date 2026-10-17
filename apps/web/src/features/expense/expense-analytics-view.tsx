@@ -141,9 +141,14 @@ export function ExpenseAnalyticsView() {
         search: (prev) => {
           const nextSearch = {
             ...prev,
-            // A project bucket is one exact project, while this URL-only scope
-            // deliberately widens the Ledger to its descendants.
-            subprojects: filter.project ? undefined : prev.subprojects,
+            // A project bucket is one exact project; otherwise the Ledger
+            // keeps the default sub-project subtree.
+            includeSubProjects: filter.project
+              ? "false"
+              : prev.includeSubProjects,
+            includeSubSpendingCategories: filter.spendingCategory
+              ? "false"
+              : prev.includeSubSpendingCategories,
             // Exact month bounds supersede a relative date preset.
             date: filter.dateFrom || filter.dateTo ? undefined : prev.date,
             ...filter,
@@ -177,10 +182,7 @@ export function ExpenseAnalyticsView() {
  */
 export function ProjectExpenseAnalytics({ projectId }: { projectId: string }) {
   const navigate = useNavigate();
-  const scope = useMemo(
-    () => ({ project: projectId, subprojects: "true" }),
-    [projectId],
-  );
+  const scope = useMemo(() => ({ project: projectId }), [projectId]);
   const filters = useMemo(() => parseExpenseFilters(scope), [scope]);
   const [analyzeConfig, setAnalyzeConfig] = useState(
     DEFAULT_EXPENSE_ANALYZE_CONFIG,
@@ -191,7 +193,10 @@ export function ProjectExpenseAnalytics({ projectId }: { projectId: string }) {
         to: "/expenses",
         search: {
           ...scope,
-          subprojects: filter.project ? undefined : scope.subprojects,
+          includeSubProjects: filter.project ? "false" : undefined,
+          includeSubSpendingCategories: filter.spendingCategory
+            ? "false"
+            : undefined,
           ...filter,
           view: "table",
         },

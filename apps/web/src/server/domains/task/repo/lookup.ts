@@ -1,48 +1,38 @@
-import type { EntityId } from "@cubby/schemas/identifiers";
 import type {
   PaginationParams,
   PresenceFilter,
   SortParams,
 } from "@cubby/schemas/pagination";
-import { taskListItemOut } from "@cubby/schemas/project";
-import type { TaskFilters } from "@cubby/schemas/project";
-import { parseShortcode } from "@cubby/shared";
 import {
-  and,
-  eq,
-  gte,
-  isNull,
-  lt,
-  lte,
-  ne,
-  or,
-  type SQL,
-  sql,
-} from "drizzle-orm";
+  taskCompletionSchema,
+  taskListItemOut,
+  taskStatusSchema,
+} from "@cubby/schemas/project";
+import type { TaskFilters } from "@cubby/schemas/project";
+import { and, isNull, lt, lte, or, type SQL, sql } from "drizzle-orm";
+import { QueryBuilder } from "drizzle-orm/pg-core";
 
 import { projectListRows } from "~/entity/model/list-read-schema";
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import {
-  anyOfCondition,
-  eqAnyOrPresence,
   formatSearchTerm,
   getDb,
   type ListReadIntent,
   notDeleted,
-  presenceCondition,
   relations,
+  shortcodeSetCondition,
   uuidArrayParam,
 } from "~/server/db/helpers";
 import { product, task } from "~/server/db/schema";
 import { matchingEmbeddedProjectIds } from "~/server/domains/project/repo/dashboard-shared";
-import type { ProjectTree } from "~/server/domains/project/repo/subtree";
 import {
   dbTaskToAPI,
   effectiveTaskDueDateSql,
 } from "~/server/domains/task/repo/helpers";
 import { withDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
+import { shortcodeIdsSql } from "~/server/generic/list/repo/field-compiler";
 import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
@@ -51,7 +41,6 @@ import {
   wantsListGroup,
 } from "~/server/generic/list/repo/list-projection";
 import { parseCompleteListRead } from "~/server/generic/list/repo/list-read-adapters";
-import { resolveAllPresent } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { taskDependencyIds, taskSubtaskCounts } from "./crud";
 import {
@@ -62,93 +51,45 @@ import {
   hydrateTaskInheritanceRows,
 } from "./task-project-inheritance";
 
-/**
- * The `task.projectId` WHERE condition for a `projectId` + `includeSubProjects`
- * filter pair: a plain equality match, or — when `includeSubProjects` is set —
- * a match over the project plus every live descendant along the declared
- * project hierarchy. Shared by
- * `taskList` and `getTaskBoard` so the subtree-expansion logic lives in one
- * place.
- *
- * `presence` is the header filter's `(none)` / `Has project` sentinel, OR-ed
- * with the selection rather than ANDed against it: `{projectId: [A],
- * presence: "none"}` means "project A **or** unassigned". That's why it can't
- * just be a separate condition in the caller's list — an AND there is the bug
- * this replaced. `undefined` when neither is given (no condition added).
- */
-function buildTaskProjectCondition(
-  projectId: TaskFilters["projectId"],
-  projectIds: EntityId<"project">[],
-  includeSubProjects: boolean,
-  presence?: PresenceFilter,
-): SQL | undefined {
-  const effectiveProjectId = effectiveTaskProjectSql();
-  const presenceCond =
-    presence === "has"
-      ? sql`${effectiveProjectId} IS NOT NULL`
-      : presence === "none"
-        ? sql`${effectiveProjectId} IS NULL`
-        : undefined;
-  const selectedCodes = projectId ? [projectId].flat() : [];
-  if (selectedCodes.length === 0) return presenceCond;
-  if (projectIds.length === 0) return presenceCond ?? sql`false`;
-  return or(
-    includeSubProjects
-      ? sql`${effectiveProjectId} IN ${hierarchyDescendantsSql("project", projectIds)}`
-      : sql`${effectiveProjectId} = ANY(${uuidArrayParam(projectIds)})`,
-    presenceCond,
-  );
-}
+const qb = new QueryBuilder();
 
-async function resolveTaskFilterReferences(
-  db: Database,
-  filters: TaskFilters,
-  tree?: ProjectTree,
-) {
-  const parentTaskCodes = filters.parentTaskId
-    ? [filters.parentTaskId].flat()
-    : [];
-  const [
-    selectedProjectIds,
-    parentTaskIds,
-    scopedProjectIds,
-    subjectProductIds,
-  ] = await Promise.all([
-    tree
-      ? Promise.resolve(
-          (filters.projectId ? [filters.projectId].flat() : []).flatMap(
-            (code) => {
-              const canonical = parseShortcode(code)?.shortcode;
-              const row = canonical
-                ? tree.rowsByShortcode.get(canonical)
-                : undefined;
-              return row ? [row.id] : [];
-            },
-          ),
-        )
-      : resolveAllPresent(
-          db,
-          "project",
-          filters.projectId ? [filters.projectId].flat() : [],
-        ),
-    resolveAllPresent(db, "task", parentTaskCodes),
-    filters.projectScope
-      ? matchingEmbeddedProjectIds(db, filters.projectScope)
-      : Promise.resolve(null),
-    resolveAllPresent(
-      db,
-      "product",
-      filters.subjectProductId ? [filters.subjectProductId].flat() : [],
-    ),
-  ]);
-  return {
-    projectIds: selectedProjectIds,
-    parentTaskCodes,
-    parentTaskIds,
-    scopedProjectIds,
-    subjectProductIds,
-  };
-}
+/** The live ids of the requested codes, widened to descendants on request. */
+const requestedIds = (
+  target: "ledgerParty" | "product" | "project",
+  {
+    values,
+    includeDescendants,
+  }: { values: readonly string[]; includeDescendants: boolean },
+) => {
+  const selected = shortcodeIdsSql(target, (shortcode) =>
+    shortcodeSetCondition(shortcode, values),
+  );
+  return target === "project" && includeDescendants
+    ? hierarchyDescendantsSql("project", selected)
+    : selected;
+};
+
+/**
+ * An inherited reference matches the picked records, ORed with its Any value
+ * / No value: "project A **or** unassigned" is one filter.
+ */
+const inheritedReference =
+  (target: "ledgerParty" | "product" | "project", effective: () => SQL) =>
+  (value: {
+    values: readonly string[];
+    presence: PresenceFilter;
+    includeDescendants: boolean;
+  }) =>
+    or(
+      value.values.length > 0
+        ? sql`${effective()} IN ${requestedIds(target, value)}`
+        : undefined,
+      value.presence === undefined
+        ? undefined
+        : value.presence === "has"
+          ? sql`${effective()} IS NOT NULL`
+          : sql`${effective()} IS NULL`,
+    );
 
 // The effective project and subject product compile from their declared
 // `via` paths; the effective assignee is inherited, so it orders by name here.
@@ -156,157 +97,59 @@ const taskScaffold = listScaffold("task", task, {
   derived: {
     assigneeId: sql`(SELECT j."name" FROM "LedgerParty" j
         WHERE j."id" = ${effectiveTaskAssigneeSql()} AND j."deletedAt" IS NULL)`,
+    effectiveTrade: effectiveTaskTradeSql(),
+    // Effective due date — `dueEndDate ?? dueDate` — so a ranged task still
+    // inside its window isn't treated as overdue, matching the board/stat
+    // tiles. A task with both due columns null falls out of any window.
+    effectiveDueDate: effectiveTaskDueDateSql(),
+    completion: sql`CASE WHEN ${task.status} = ${taskStatusSchema.enum.done}
+      THEN ${taskCompletionSchema.enum.done}::text
+      ELSE ${taskCompletionSchema.enum.open}::text END`,
+    topLevel: isNull(task.parentTaskId),
+    assigneeFilter: inheritedReference("ledgerParty", effectiveTaskAssigneeSql),
+    projectFilter: inheritedReference("project", effectiveTaskProjectSql),
+    subjectProductFilter: inheritedReference(
+      "product",
+      effectiveTaskSubjectProductSql,
+    ),
+    search: (term) =>
+      or(
+        formatSearchTerm(task.name, term),
+        sql`${effectiveTaskSubjectProductSql()} IN ${qb
+          .select({ id: product.id })
+          .from(product)
+          .where(
+            and(notDeleted(product), formatSearchTerm(product.name, term)),
+          )}`,
+      ),
+    dueRelative: ({ values }) =>
+      or(
+        ...values.map((relative) =>
+          relative === "beforeToday"
+            ? lt(effectiveTaskDueDateSql(), householdLocalDate())
+            : lte(effectiveTaskDueDateSql(), householdLocalDate()),
+        ),
+      ),
   },
 });
 
-/** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
-export const buildTaskWhere = async (
-  db: Database,
-  filters: TaskFilters,
-  tree?: ProjectTree,
-) => {
-  const assigneeIds = await resolveAllPresent(
-    db,
-    "ledgerParty",
-    filters.assigneeId ? [filters.assigneeId].flat() : [],
-  );
-  const effectiveAssignee = effectiveTaskAssigneeSql();
-  const assigneePresence =
-    filters.assigneePresenceFilter === "has"
-      ? sql`${effectiveAssignee} IS NOT NULL`
-      : filters.assigneePresenceFilter === "none"
-        ? sql`${effectiveAssignee} IS NULL`
-        : undefined;
-  const assigneeCondition =
-    filters.assigneeId && [filters.assigneeId].flat().length
-      ? or(
-          assigneeIds.length
-            ? sql`${effectiveAssignee} = ANY(${uuidArrayParam(assigneeIds)})`
-            : sql`false`,
-          assigneePresence,
-        )
-      : assigneePresence;
-  const dbClient = getDb(db);
-  const {
-    projectIds,
-    parentTaskCodes,
-    parentTaskIds,
-    scopedProjectIds,
-    subjectProductIds,
-  } = await resolveTaskFilterReferences(db, filters, tree);
-  const projectCondition = buildTaskProjectCondition(
-    filters.projectId,
-    projectIds,
-    filters.includeSubProjects === true,
-    filters.projectPresenceFilter,
-  );
-  const subjectProductCondition = () =>
-    filters.subjectProductId &&
-    [filters.subjectProductId].flat().length > 0 &&
-    subjectProductIds.length === 0 &&
-    !filters.subjectProductPresenceFilter
-      ? sql`false`
-      : (() => {
-          const effectiveSubject = effectiveTaskSubjectProductSql();
-          const match =
-            subjectProductIds.length > 0
-              ? sql`${effectiveSubject} = ANY(${uuidArrayParam(subjectProductIds)})`
-              : undefined;
-          const presence =
-            filters.subjectProductPresenceFilter === "has"
-              ? sql`${effectiveSubject} IS NOT NULL`
-              : filters.subjectProductPresenceFilter === "none"
-                ? sql`${effectiveSubject} IS NULL`
-                : undefined;
-          return match && presence ? or(match, presence) : (match ?? presence);
-        })();
-  const parentTaskCondition = () =>
-    parentTaskCodes.length > 0 &&
-    parentTaskIds.length === 0 &&
-    !filters.parentTaskPresenceFilter
-      ? sql`false`
-      : eqAnyOrPresence(
-          task.parentTaskId,
-          parentTaskIds,
-          filters.parentTaskPresenceFilter,
-        );
-  const searchCondition = () => {
-    if (!filters.search) return undefined;
-    const subjectProductNameMatches = dbClient
-      .select({ id: product.id })
-      .from(product)
-      .where(
-        and(
-          notDeleted(product),
-          formatSearchTerm(product.name, filters.search),
-        ),
-      );
-    return or(
-      formatSearchTerm(task.name, filters.search),
-      sql`${effectiveTaskSubjectProductSql()} IN ${subjectProductNameMatches}`,
-    );
-  };
-  const scopeCondition = () =>
+/**
+ * The complete WHERE for this entity's list. `getEntityCounts` calls it with
+ * `{}` — see repo/dashboard.ts. `projectScope` is a project page's embedded
+ * scope (the projects its own filters select), not a list filter.
+ */
+export const buildTaskWhere = async (db: Database, filters: TaskFilters) => {
+  const scopedProjectIds = filters.projectScope
+    ? await matchingEmbeddedProjectIds(db, filters.projectScope)
+    : null;
+  return and(
+    taskScaffold.where(filters),
     scopedProjectIds
       ? scopedProjectIds.length > 0
         ? sql`${effectiveTaskProjectSql()} = ANY(${uuidArrayParam(scopedProjectIds)})`
         : sql`false`
-      : undefined;
-  const dueConditions = () => [
-    filters.dueFrom
-      ? gte(effectiveTaskDueDateSql(), filters.dueFrom)
       : undefined,
-    filters.dueTo ? lte(effectiveTaskDueDateSql(), filters.dueTo) : undefined,
-    anyOfCondition(filters.dueRelative, (relative) =>
-      relative === "beforeToday"
-        ? lt(effectiveTaskDueDateSql(), householdLocalDate())
-        : lte(effectiveTaskDueDateSql(), householdLocalDate()),
-    ),
-    presenceCondition(
-      task.dueDate,
-      filters.duePresenceFilter,
-      and(isNull(task.dueDate), isNull(task.dueEndDate)),
-    ),
-  ];
-  const completionCondition = () =>
-    anyOfCondition(filters.completion, (completion) =>
-      completion === "open" ? ne(task.status, "done") : eq(task.status, "done"),
-    );
-
-  // `status` is declared stored; trade is resolved below instead of reading the
-  // applies them via `declaredFilterPredicates` before the conditions below.
-  return taskScaffold.where(filters, [
-    searchCondition(),
-    // Carries `projectPresenceFilter` too — it ORs with the id selection, so
-    // it can't be a sibling condition here (that AND is what made
-    // "project A or unassigned" inexpressible).
-    assigneeCondition,
-    projectCondition,
-    subjectProductCondition(),
-    filters.topLevelOnly ? isNull(task.parentTaskId) : undefined,
-    parentTaskCondition(),
-    scopeCondition(),
-    filters.trade
-      ? sql`${effectiveTaskTradeSql()} IN (${sql.join(
-          [filters.trade].flat().map((value) => sql`${value}`),
-          sql`, `,
-        )})`
-      : undefined,
-    // Filter on the EFFECTIVE due date — `dueEndDate ?? dueDate` — so a
-    // ranged task still inside its window isn't treated as overdue, matching
-    // the "overdue" semantics used on the board/stat tiles.
-    //
-    // A task with BOTH due columns null falls out of any window by plain SQL
-    // comparison semantics — `coalesce(NULL, NULL) >= x` is NULL, not true —
-    // that's intended, not a bug to work around (the identical rule is
-    // documented for `expense.date` in `expense/lookup.ts`'s
-    // `buildExpenseWhereClause`). The dashboard surfaces the count of rows
-    // hidden this way as `hiddenByDate.tasks`.
-    ...dueConditions(),
-    // Completion scope: undefined/"all" adds no condition (today's default,
-    // unchanged) — see taskCompletionSchema.
-    completionCondition(),
-  ]);
+  );
 };
 
 export const taskListRead = async (
@@ -316,9 +159,8 @@ export const taskListRead = async (
   pagination: PaginationParams,
   projection: ListProjection,
   readIntent: ListReadIntent = "page",
-  tree?: ProjectTree,
 ) => {
-  const whereClause = await buildTaskWhere(db, filters, tree);
+  const whereClause = await buildTaskWhere(db, filters);
   return taskScaffold.list(
     db,
     { filters, sorts, pagination, readIntent, projection },
@@ -402,17 +244,8 @@ export const taskList = (
   sorts: SortParams[],
   pagination: PaginationParams,
   readIntent: ListReadIntent = "page",
-  tree?: ProjectTree,
 ) =>
   parseCompleteListRead(
     taskListItemOut,
-    taskListRead(
-      db,
-      filters,
-      sorts,
-      pagination,
-      { kind: "full" },
-      readIntent,
-      tree,
-    ),
+    taskListRead(db, filters, sorts, pagination, { kind: "full" }, readIntent),
   );

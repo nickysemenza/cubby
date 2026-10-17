@@ -781,6 +781,35 @@ export default defineEntity({
       projectId: { via: "project" },
       subjectProductId: { via: "subject" },
       assigneeId: { type: "text" },
+      // Trade and due date, inherited from the parent task.
+      effectiveTrade: { type: "text" },
+      effectiveDueDate: { type: "date" },
+      completion: { type: "enum", options: ["open", "done"] },
+      topLevel: { type: "boolean" },
+      assigneeFilter: {
+        predicate: "idMulti",
+        reason:
+          "Inherited from the parent task when the task names none, so it is not a column",
+      },
+      projectFilter: {
+        predicate: "idMulti",
+        reason:
+          "Inherited from the parent task when the task names none, so it is not a column",
+      },
+      subjectProductFilter: {
+        predicate: "idMulti",
+        reason:
+          "Inherited from the parent task when the task names none, so it is not a column",
+      },
+      search: {
+        predicate: "text",
+        reason:
+          "Searches the task name and its inherited subject product's name",
+      },
+      dueRelative: {
+        predicate: "multiselect",
+        reason: "Relative to the household's today",
+      },
     },
     sort: {
       fields: [
@@ -898,6 +927,7 @@ export default defineEntity({
         optionsKey: "ledgerParty",
         brandRef: { entity: "ledgerParty" },
         currentMember: true,
+        derived: "assigneeFilter",
         nullable: { field: "assigneePresenceFilter", label: "assignee" },
       },
 
@@ -907,6 +937,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Search tasks...",
         deriveSchema: true,
+        derived: "search",
       },
       {
         columnId: "status",
@@ -943,6 +974,7 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by trade...",
         deriveSchema: true,
+        derived: "effectiveTrade",
         schemaRef: {
           module: "@cubby/schemas/task-fields",
           export: "tradeSchema",
@@ -961,6 +993,7 @@ export default defineEntity({
           to: "dueTo",
           presence: "duePresenceFilter",
         },
+        derived: "effectiveDueDate",
         placeholder: "Filter by due date...",
         options: [
           { value: "has", label: "Has due date", meta: true },
@@ -977,6 +1010,7 @@ export default defineEntity({
       {
         columnId: "dueRelative",
         kind: "multiselect",
+        derived: true,
         placeholder: "Filter by relative due date...",
         options: [{ value: "beforeToday", label: "Before today" }],
         urlOnly: true,
@@ -984,6 +1018,7 @@ export default defineEntity({
       {
         columnId: "completion",
         kind: "multiselect",
+        derived: true,
         placeholder: "Filter task completion...",
         options: [
           { value: "open", label: "Open" },
@@ -999,6 +1034,7 @@ export default defineEntity({
         placeholder: "Filter by project...",
         optionsKey: "project",
         brandRef: { entity: "project" },
+        derived: "projectFilter",
         nullable: { field: "projectPresenceFilter", label: "project" },
       },
       {
@@ -1018,6 +1054,7 @@ export default defineEntity({
         placeholder: "Filter by product...",
         optionsKey: "taskProducts",
         brandRef: { entity: "product" },
+        derived: "subjectProductFilter",
         nullable: { field: "subjectProductPresenceFilter", label: "product" },
       },
       {
@@ -1029,6 +1066,14 @@ export default defineEntity({
         optionsKey: "parentTask",
         brandRef: { entity: "task" },
         nullable: { field: "parentTaskPresenceFilter", label: "parent task" },
+      },
+      {
+        // The task board and actionable list read top-level tasks only.
+        columnId: "topLevelOnly",
+        kind: "boolean",
+        placeholder: "Top-level tasks only",
+        urlOnly: true,
+        derived: "topLevel",
       },
       {
         columnId: "related:task.blockedBy",

@@ -293,7 +293,7 @@ export async function resolveEmailScope(
 export const buildEmailWhere = (
   filters: EmailFilters,
   context: ListContext = ListContext.empty,
-) => scaffold.where(filters, [], { context });
+) => scaffold.where(filters, { context });
 
 /** Accepted import evidence, else the import Run's own status. */
 const OUTCOME = emailImportOutcome.enum;

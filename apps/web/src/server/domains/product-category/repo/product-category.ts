@@ -55,6 +55,7 @@ import {
 } from "~/server/entity-kernel/repo/repository";
 import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
+import { shortcodeIdsSql } from "~/server/generic/list/repo/field-compiler";
 import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
@@ -113,11 +114,18 @@ const categoryMapping = () =>
 const scaffold = listScaffold("productCategory", productCategory, {
   derived: {
     needsClassification: sql`(${categoryMapping()}->>'state' = 'unmapped')`,
-    effectiveSpendingCategoryId: ({ values }) =>
-      shortcodeSetCondition(
-        sql`(${categoryMapping()}->'category'->>'id')`,
-        values,
-      ),
+    // The mapping names its category by shortcode.
+    effectiveSpendingCategoryId: ({ values, includeDescendants }) => {
+      const selected = shortcodeIdsSql("spendingCategory", (shortcode) =>
+        shortcodeSetCondition(shortcode, values),
+      );
+      return sql`(${categoryMapping()}->'category'->>'id') IN (
+        SELECT sc."shortcode" FROM "SpendingCategory" sc WHERE sc."id" IN ${
+          includeDescendants
+            ? hierarchyDescendantsSql("spendingCategory", selected)
+            : selected
+        })`;
+    },
   },
 });
 

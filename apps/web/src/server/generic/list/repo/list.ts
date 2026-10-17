@@ -382,7 +382,7 @@ const predicateValue = (
               from: undefined,
               to: undefined,
               presence: undefined,
-              param: optionalText.parse(value),
+              param: rangeBound.parse(value),
             };
       return Object.values(range).every((part) => part === undefined)
         ? undefined
@@ -432,7 +432,20 @@ const derivedFilterPredicates = (
   if (field.shape === "predicate") {
     const parsed = predicateValue(descriptor, values, value, presence);
     if (parsed === undefined) return [];
-    return [derivedPredicateSql(entity, derived, derivedKey, context, parsed)];
+    return [
+      derivedPredicateSql(
+        entity,
+        derived,
+        derivedKey,
+        context,
+        descriptor.kind === "idMulti" && typeof parsed === "object"
+          ? {
+              ...parsed,
+              includeDescendants: subtreeToggle(entity, key, values),
+            }
+          : parsed,
+      ),
+    ];
   }
   if (field.shape === "value") {
     const expression = () =>
@@ -641,9 +654,8 @@ const suggestionPredicate = (
  * multiselect declared `array` is an overlap with the same presence rule,
  * boolean is equality or presence, presence checks NULL, ranges are
  * inclusive bounds, and an id filter matches a foreign key by the referenced
- * row's shortcode. Anything richer (joins, OR groups across filters,
- * resolved ids) stays hand-written next to this spread in the repository's
- * where builder.
+ * row's shortcode. Anything richer (joins, OR groups across filters) is a
+ * `model.derived` value or predicate whose SQL the repository supplies.
  */
 export function declaredFilterPredicates<Filters extends object>(
   entity: Entity,
@@ -782,11 +794,7 @@ export function declaredFilterPredicates<Filters extends object>(
  *
  * A repository (`defineRepository`) keeps its own joins, cross-entity
  * subqueries, `readIntent` branches and row mappers, and only swaps in these
- * three calls. `where` still takes a
- * `computed` array for everything that isn't a declared stored predicate —
- * related-view conditions, presence over a subquery, resolved-shortcode
- * conditions, OR-groups, `sql\`false\`` guards — exactly what a where-builder
- * already threads through `buildSearchConditions`'s `extraConditions`.
+ * three calls. Every filter predicate is declared; `where` takes none by hand.
  */
 /** Entities with a declared sort roster — the only ones `orderBy` can serve. */
 type SortableEntity = keyof typeof generatedEntitySort;
@@ -1188,13 +1196,13 @@ export function listScaffold<
     },
 
     /**
-     * `computed` is every condition that isn't a declared stored, derived or
-     * related-view predicate —
-     * append it exactly where the repo's own extra conditions already live.
+     * Every list filter compiles from the declaration (stored, `model.derived`,
+     * related views, quality, audit dates, ids, search); there is no
+     * hand-written predicate argument. A list's static row scope is ANDed
+     * with this by its repository.
      */
     where<Filters extends object>(
       filters: Filters,
-      computed: Array<SQL | undefined> = [],
       {
         context = ListContext.empty,
         readContext,
@@ -1230,7 +1238,6 @@ export function listScaffold<
                 ),
               ]
             : []),
-          ...computed,
         ],
       );
     },
@@ -1324,7 +1331,7 @@ export function listScaffold<
       const filtered =
         "where" in spec
           ? spec.where
-          : scaffold.where(request.filters, [], { context });
+          : scaffold.where(request.filters, { context });
       const nesting = listNestingFromFilters(request.filters);
       const parent = nesting.scope === "flat" ? null : treeParent();
       if (parent && spec.count)

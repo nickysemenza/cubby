@@ -31,6 +31,7 @@ const rosterFilters = (filters: z.infer<typeof locationFiltersSchema>) => ({
   itemTypeFilter: filters.itemTypeFilter,
   parentId: filters.parentId,
   parentPresenceFilter: filters.parentPresenceFilter,
+  includeSubLocations: filters.includeSubLocations,
   inventoryPresenceFilter: filters.inventoryPresenceFilter,
   productId: filters.productId,
   productPresenceFilter: filters.productPresenceFilter,

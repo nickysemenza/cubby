@@ -272,7 +272,7 @@ export const buildProjectListQuery = async (
   const loadedTree = context.has(projectCompletion)
     ? context.get(projectCompletion).tree
     : preparedTree;
-  const whereClause = projectScaffold.where(filters, [], { context });
+  const whereClause = projectScaffold.where(filters, { context });
 
   const orderByArray = projectScaffold.orderBy(sorts, {}, filters);
 

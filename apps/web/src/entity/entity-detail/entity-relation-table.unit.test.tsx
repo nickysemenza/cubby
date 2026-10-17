@@ -68,6 +68,13 @@ describe("planRelationSection", () => {
     expect(plan.seed).toEqual({ intent: "capture", field: "productId" });
   });
 
+  it("switches off a hierarchical filter's subtree toggle for the direct relation", () => {
+    // A project's Tasks section follows the task's own project, not the
+    // generated default-on "Include sub-projects" expansion.
+    expect(planFor("project", "tasks").subtree).toBe("includeSubProjects");
+    expect(planFor("product", "stocked-at").subtree).toBeNull();
+  });
+
   it("honours the declared sort and limit, and falls back to the target's default sort", () => {
     // The product tasks relation is where the old client-side "open work
     // first" ordering lived; the declaration now owns it as `dueDate desc`.

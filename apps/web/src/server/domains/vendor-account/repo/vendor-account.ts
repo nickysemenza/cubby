@@ -218,7 +218,7 @@ type VendorAccountReferencePatch = {
 };
 
 export const buildVendorAccountWhere = (filters: VendorAccountFilters) =>
-  scaffold.where(filters, []);
+  scaffold.where(filters);
 
 export const listVendorAccountsRead = (
   db: Database,

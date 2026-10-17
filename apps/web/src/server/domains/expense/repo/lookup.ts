@@ -22,7 +22,7 @@ import {
   relations,
   shortcodeSetCondition,
 } from "~/server/db/helpers";
-import { expense, purchase } from "~/server/db/schema";
+import { expense, purchase, spendingCategory } from "~/server/db/schema";
 import {
   expenseDerivedMembershipSql,
   expenseDerivedValueSql,
@@ -41,6 +41,7 @@ import {
   listPrepare,
   shortcodeIdsSql,
 } from "~/server/generic/list/repo/field-compiler";
+import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import {
   declaredFilterPredicates,
   listScaffold,
@@ -87,7 +88,8 @@ export const resolveExpenseProjectAllocationScope = async (
   const codes = filters.projectId ? [filters.projectId].flat() : [];
   const ids = await resolveAllPresent(db, "project", codes);
   let selectedIds = ids;
-  if (ids.length > 0 && filters.includeSubProjects) {
+  // The generated "Include sub-projects" toggle reads absent as on.
+  if (ids.length > 0 && filters.includeSubProjects !== false) {
     const { childrenByParent } = await loadProjectTree(db);
     selectedIds = uniq(
       ids.flatMap((id) => {
@@ -106,11 +108,21 @@ export const resolveExpenseProjectAllocationScope = async (
   const categoryCodes = filters.spendingCategoryId
     ? [filters.spendingCategoryId].flat()
     : [];
-  const categoryIds = await resolveAllPresent(
-    db,
-    "spendingCategory",
-    categoryCodes,
-  );
+  const selectedCategoryIds = (
+    await resolveAllPresent(db, "spendingCategory", categoryCodes)
+  ).map((id) => parseEntityId("spendingCategory", id));
+  const categoryIds =
+    selectedCategoryIds.length > 0 &&
+    filters.includeSubSpendingCategories !== false
+      ? (
+          await getDb(db)
+            .select({ id: spendingCategory.id })
+            .from(spendingCategory)
+            .where(
+              sql`${spendingCategory.id} IN ${hierarchyDescendantsSql("spendingCategory", selectedCategoryIds)}`,
+            )
+        ).map((row) => row.id)
+      : selectedCategoryIds;
   const membershipProjectIds = filters.projectScope
     ? await matchingEmbeddedProjectIds(db, filters.projectScope)
     : undefined;
@@ -132,9 +144,7 @@ export const resolveExpenseProjectAllocationScope = async (
     membershipProjectIds,
     projectIds: projectIds.length > 0 ? projectIds : undefined,
     presence: filters.projectPresenceFilter,
-    spendingCategoryIds: categoryCodes.length
-      ? categoryIds.map((id) => parseEntityId("spendingCategory", id))
-      : undefined,
+    spendingCategoryIds: categoryCodes.length ? categoryIds : undefined,
     categoryPresence: filters.spendingCategoryPresenceFilter,
     trades: trades.length ? trades : undefined,
     costTypes: costTypes.length ? costTypes : undefined,
@@ -152,6 +162,7 @@ const allocationKeys = [
   "includeSubProjects",
   "spendingCategoryId",
   "spendingCategoryPresenceFilter",
+  "includeSubSpendingCategories",
   "trade",
   "costType",
   "projectScope",
@@ -292,7 +303,7 @@ export const buildExpenseWhereClause = async (
       readIntent: "count",
     }));
   return and(
-    expenseScaffold.where(selected, [], { context }),
+    expenseScaffold.where(selected, { context }),
     // A project page's embedded scope, when no allocation filter carries it.
     allocationLead(selected) === "projectScope"
       ? await allocationMembership(db, filters)

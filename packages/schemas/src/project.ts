@@ -285,14 +285,12 @@ export type TaskBulkReorderInput = z.infer<typeof taskBulkReorderInput>;
 export const taskFilterFields = {
   ...taskBaseFilterFields,
   assigneeId: partyFilterList(ledgerPartyShortcode).optional(),
-  assigneePresenceFilter: presenceFilter,
   projectId: entityFilterList(projectShortcode).optional(),
   subjectProductId: entityFilterList(productShortcode).optional(),
   topLevelOnly: z.boolean().optional(),
   /** Only these parents' live subtasks. */
   parentTaskId: entityFilterList(taskShortcode).optional(),
   parentTaskPresenceFilter: presenceFilter,
-  includeSubProjects: z.boolean().optional(),
   dueFrom: plainDate.optional().describe("Inclusive lower bound on due date"),
   dueTo: plainDate.optional().describe("Inclusive upper bound on due date"),
   duePresenceFilter: presenceFilter,
@@ -300,8 +298,6 @@ export const taskFilterFields = {
   completion: oneOrMany(taskCompletionSchema)
     .optional()
     .describe('Undefined = "all" (today\'s default, unchanged)'),
-  projectPresenceFilter: presenceFilter,
-  subjectProductPresenceFilter: presenceFilter,
   projectScope: embeddedProjectScopeSchema.optional(),
 };
 export const taskFiltersSchema = z.object(taskFilterFields);
@@ -459,9 +455,6 @@ export const expenseFilterFields = {
   /** Expenses attributed to the given ledger part(ies) (`ExpenseAttribution`). */
   ledgerPartyId: partyFilterList(ledgerPartyShortcode).optional(),
   projectId: entityFilterList(projectShortcode).optional(),
-  // Only meaningful alongside `projectId`: expands the filter to the project
-  // plus every live descendant (sub-project subtree).
-  includeSubProjects: z.boolean().optional(),
   /**
    * Substring match on `notes`. Deliberately its OWN field rather than folded
    * into `search`, for the same reason `vendorId` is: `buildSearchConditions`
