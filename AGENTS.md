@@ -77,9 +77,12 @@ architecture, commands, testing, and deployment. Read only the relevant heading.
 Use one owning skill; add another only for a distinct concern.
 
 - Unresolved material design decisions: `grilling`; approved briefs proceed.
-- Web UI: `impeccable` and `apps/web/DESIGN.md`; broad sweeps:
-  `cubby-ui-design-audit`. Refinement: `better-ui` or `emil-design-eng`.
-- Apple UI: `axiom-design` then `axiom-swiftui`; add the relevant platform skill.
+- Web UI: `impeccable` (Operate mode) and `apps/web/DESIGN.md`; broad sweeps:
+  `cubby-ui-design-audit`. Static detail polish (radius, alignment, hit
+  areas): `better-ui`. Motion and interaction feel: `emil-design-eng`.
+- Apple UI: `axiom-design` then `axiom-swiftui` (Claude names them
+  `axiom:axiom-*`); add the relevant platform skill.
+- Module seams and interfaces for a generic runtime: `codebase-design`.
 - Plans: `cubby-adversarial-plan-review`. PR fixes/CI:
   `cubby-pr-ci-maintenance`. Decision evaluation: `decision-grading`.
 - Household operations: the matching meal, maintenance, garden, photo,

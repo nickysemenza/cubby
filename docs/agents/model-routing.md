@@ -43,6 +43,10 @@ Sol implementation gets a Fable review). From T3 use `delegate_task` with the
 reviewer's provider and model, role `review`; from plain Claude Code reach Sol
 through the `codex:codex-rescue` agent (`/codex:rescue`). Give it a
 self-contained brief (goal, diff range, risks) and address its real findings.
+The brief tells the reviewer to load `code-review`, whose standards sources are
+`AGENTS.md`, [generic paths](generic-paths.md), [domain rules](domain-rules.md),
+and [validation](validation.md); a diff touching visible web UI also loads
+`impeccable` (critique) against `apps/web/DESIGN.md`.
 Follow-up review targets fixes and unresolved objections; expand the scope when
 a fix changes another contract. Reuse unchanged validation evidence.
 A production migration or major infrastructure change (CI, deploy, the Worker

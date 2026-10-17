@@ -488,3 +488,10 @@ patchedDependencies:
   agent-device@0.21.27: patches/agent-device@0.21.27.patch
   agents@0.28.1: patches/agents@0.28.1.patch
   pg-cloudflare@1.4.1: patches/pg-cloudflare@1.4.1.patch
+permissions:
+  "@tanstack/devtools-vite":
+    skills: true
+  "@tanstack/react-start":
+    skills: true
+  "@tanstack/react-table":
+    skills: true
