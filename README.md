@@ -35,6 +35,9 @@ agent sessions over MCP.
   (`log-household-maintenance`).
 - **Who paid for what.** A contribution ledger compares each member's
   spending, transfers and consumption.
+- **Where the money went.** Spend by Spending Category and a funder → project
+  → category money flow, split line by line rather than per charge
+  ([finance analytics](docs/household-finance-analytics.md)).
 - **What will we spend?** A cash-flow projection carries recent monthly spend
   forward and adds project estimates, planned expenses and what-if scenarios.
 - **Wishlist.** Things we want, each with candidate products and a price range.

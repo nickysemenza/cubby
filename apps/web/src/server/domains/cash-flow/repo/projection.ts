@@ -196,8 +196,8 @@ const COUNTED_STATUSES = new Set<ProjectStatus>([
 ]);
 
 /**
- * Forward monthly cash flow, computed on read (decisions 13–17 of
- * docs/plans/household-finance-synthesis.md). `today` exists for tests; the
+ * Forward monthly cash flow, computed on read ("Cash flow" in
+ * docs/household-finance-analytics.md). `today` exists for tests; the
  * operation always passes the household's current day.
  */
 export async function cashFlowProjection(

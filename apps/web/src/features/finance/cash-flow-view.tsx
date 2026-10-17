@@ -322,7 +322,7 @@ function Legend({ data }: { data: CashFlowProjectionOut }) {
 }
 
 /**
- * Forward monthly cash flow (household-finance-synthesis §7). Every figure is
+ * Forward monthly cash flow (docs/household-finance-analytics.md). Every figure is
  * computed by `cashFlow.projection`; this view only arranges it.
  */
 export function CashFlowView({
