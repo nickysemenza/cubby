@@ -1,0 +1,1 @@
+CREATE INDEX "Run_live_status_failure_purpose_idx" ON "Run" USING btree ("status","failureCode","purpose") WHERE "Run"."deletedAt" IS NULL;

@@ -781,6 +781,12 @@ export default defineEntity({
     ],
     indexes: [
       {
+        // Current execution and repair reads must not scan retained Run payloads.
+        name: "Run_live_status_failure_purpose_idx",
+        on: ["status", "failureCode", "purpose"],
+        where: "{deletedAt} IS NULL",
+      },
+      {
         name: "Run_party_started_idx",
         on: ["ledgerPartyId", { column: "startedAt", desc: true }],
       },
