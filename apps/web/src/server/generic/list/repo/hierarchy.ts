@@ -27,9 +27,10 @@ const hierarchyOf = (entity: Entity) => {
 
 /**
  * Parenthesized, uncorrelated id subquery holding the selected live records
- * and their live descendants along the declared `model.hierarchy`, at most
- * `maxDepth` levels below each selected record. The visited-array guard keeps
- * a stored parent cycle from looping. `selected` is a list of ids or a
+ * and all their live descendants along the declared `model.hierarchy`. It is
+ * not capped at `maxDepth` (writes do not enforce it), so a level section's
+ * "Filter to this" returns every row the section counts; the visited-array
+ * guard keeps a stored parent cycle from looping. `selected` is a list of ids or a
  * parenthesized id subquery (a shortcode lookup the list compiler builds).
  * `descendantsOnly` drops the selected records themselves; a cycle back to a
  * selected record still stops at the visited guard, so it never reappears.
@@ -39,7 +40,7 @@ export const hierarchyDescendantsSql = <E extends HierarchyEntity>(
   selected: readonly EntityId<E>[] | SQL,
   { descendantsOnly = false }: { descendantsOnly?: boolean } = {},
 ): SQL<EntityId<E>> => {
-  const { table, column, maxDepth, softDelete } = hierarchyOf(entity);
+  const { table, column, softDelete } = hierarchyOf(entity);
   if (Array.isArray(selected) && selected.length === 0)
     return sql<EntityId<E>>`(SELECT NULL::uuid WHERE false)`;
   const roots = Array.isArray(selected)
@@ -60,8 +61,7 @@ export const hierarchyDescendantsSql = <E extends HierarchyEntity>(
         UNION ALL
         SELECT child."id", d.depth + 1, d.visited || child."id"
         FROM descendants d JOIN ${name} child ON child.${parent} = d."id"
-        WHERE d.depth < ${sql.raw(String(maxDepth))}
-          AND NOT child."id" = ANY(d.visited)${live("child")}
+        WHERE NOT child."id" = ANY(d.visited)${live("child")}
       ) SELECT "id" FROM descendants${descendantsOnly ? sql` WHERE depth > 0` : sql``}
     )`;
 };

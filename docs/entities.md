@@ -783,8 +783,10 @@ unsupported with a reason. Executable queries, runtime option providers,
 heterogeneous trees (rows of another entity nested under a row), dialogs, and
 workflows remain handwritten. A self-referencing hierarchy is declared once:
 `model.hierarchy` (`parentField`, `maxDepth`) names a readable single
-reference to the entity itself and the depth its descendant expansion stops
-at ([Filters and search](#filters-and-search)). `presentation.list.tree` opts
+reference to the entity itself and the depth a well-formed tree reaches,
+which bounds tree displays and the Group by levels; filter descendant
+expansion is cycle-guarded but not depth-capped, since writes do not enforce
+`maxDepth` ([Filters and search](#filters-and-search)). `presentation.list.tree` opts
 a hierarchy into tree nesting and requires it; location, task, and project
 declare a hierarchy without a tree. Nesting is a server scope, never client stitching: every list
 read of a tree entity (`entity.listBase`, `entity_read.list`, HTTP) accepts

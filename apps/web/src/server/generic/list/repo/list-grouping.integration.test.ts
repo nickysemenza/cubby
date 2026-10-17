@@ -304,6 +304,14 @@ describe("server list grouping", () => {
     expect(result.meta.groups).toEqual([
       { key: root.id, label: "Deep root", count: 2, subtree: true },
     ]);
+    // Its header filter reaches both rows, however deep.
+    const filtered = await executeEntity(kernel(), {
+      action: "list",
+      entity: "inventory",
+      filters: { ids, locationIdFilter: [root.id], includeSubLocations: true },
+      pagination: { pageIndex: 0, pageSize: 10 },
+    });
+    expect(filtered.meta.totalCount).toBe(2);
   });
 
   it("rejects a level on a field with no hierarchy, without a groupBy, or past its levels", async () => {

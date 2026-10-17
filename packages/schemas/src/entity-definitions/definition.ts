@@ -847,8 +847,9 @@ const buildMetadataSchemas = () => {
 
   /**
    * A self-reference that makes the entity a tree. Filters on a reference to
-   * it include descendants, walking at most `maxDepth` levels below each
-   * selected record.
+   * it include every descendant (cycle-guarded, not depth-capped). `maxDepth`
+   * is the depth a well-formed tree reaches: it bounds tree displays and the
+   * hierarchy levels Group by offers.
    */
   const entityHierarchyMetadataSchema = z
     .object({
