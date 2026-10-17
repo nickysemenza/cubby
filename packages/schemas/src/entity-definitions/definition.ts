@@ -819,7 +819,9 @@ const buildMetadataSchemas = () => {
    * orders and groups by. `via` is a related path of relation keys,
    * optionally ending in a field of the last entity; the list compiler builds
    * it. `type` is a value whose SQL the repository passes to `listScaffold`.
-   * `predicate` is a filter-only declared exception and carries its reason.
+   * `predicate` is a filter-only declared exception and carries its reason;
+   * `negatable` declares that its SQL reads only the values it receives, so
+   * a value filter's generated Exclude key is its negation.
    */
   const entityDerivedFieldMetadataSchema = z.union([
     z.object({ via: nonEmptyString() }).strict(),
@@ -841,6 +843,7 @@ const buildMetadataSchemas = () => {
         ]),
         options: z.array(nonEmptyString()).min(1).optional(),
         reason: nonEmptyString(),
+        negatable: z.literal(true).optional(),
       })
       .strict(),
   ]);

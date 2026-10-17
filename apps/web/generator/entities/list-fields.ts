@@ -59,6 +59,8 @@ type CompiledListField =
       reason: string;
       sort: string;
       group: string;
+      /** Why a value filter over it cannot exclude, or null when `negatable`. */
+      exclude: string | null;
     }>;
 
 type GroupOption = Readonly<{ value: string; label: string }>;
@@ -264,6 +266,7 @@ const toggleDescriptor = (
     nullable: null,
     sentinels: null,
     match: null,
+    exclude: null,
     subtree: null,
     currentMember: false,
     singleValue: null,
@@ -305,6 +308,32 @@ const withViaKeys = (
       ).toLowerCase(),
     },
     match: bound.many ? { field: `${descriptor.columnId}Match` } : null,
+  };
+};
+
+/**
+ * Every compiled value filter gets a generated Exclude key: the negation of
+ * the predicate its include builds, so rows with no value stay. A declared
+ * predicate that is not `negatable` keeps the key with the reason it cannot
+ * exclude. A URL-only scope is not a filter a person edits, so it has none.
+ */
+const withExcludeKey = (
+  descriptor: FilterDescriptor,
+  bound: CompiledListField | undefined,
+): FilterDescriptor => {
+  if (
+    (descriptor.kind !== "multiselect" && descriptor.kind !== "idMulti") ||
+    descriptor.urlOnly ||
+    descriptor.singleValue !== null ||
+    (descriptor.stored === null && bound === undefined)
+  )
+    return descriptor;
+  return {
+    ...descriptor,
+    exclude: {
+      field: `${descriptor.columnId}Exclude`,
+      reason: bound?.shape === "predicate" ? bound.exclude : null,
+    },
   };
 };
 
@@ -581,6 +610,10 @@ export const compileListFields = (
                 reason: entry.reason,
                 sort: `Filter only: ${entry.reason.replace(/\.$/, "")}.`,
                 group: `Filter only: ${entry.reason.replace(/\.$/, "")}.`,
+                exclude:
+                  entry.negatable === true
+                    ? null
+                    : `Include only: ${entry.reason.replace(/\.$/, "")}.`,
               };
     }
     const sort = entity.fieldModel.sort;
@@ -595,14 +628,17 @@ export const compileListFields = (
     const toggles: FilterDescriptor[] = [];
     const compiled: FilterDescriptor[] = [];
     for (const declared of entity.filterDescriptors) {
-      const descriptor = withViaKeys(declared, derived, byKey, context);
-      compiled.push(descriptor);
       const bound =
-        descriptor.derived === null ? undefined : derived[descriptor.derived];
-      if (descriptor.derived !== null && bound === undefined)
+        declared.derived === null ? undefined : derived[declared.derived];
+      if (declared.derived !== null && bound === undefined)
         throw new EntityDeclarationError(
-          `${context}.filters ${descriptor.columnId} is derived but names no model.derived entry ${descriptor.derived}.`,
+          `${context}.filters ${declared.columnId} is derived but names no model.derived entry ${declared.derived}.`,
         );
+      const descriptor = withExcludeKey(
+        withViaKeys(declared, derived, byKey, context),
+        bound,
+      );
+      compiled.push(descriptor);
       if (
         bound !== undefined &&
         !compatibleKinds(bound).includes(descriptor.kind)
@@ -635,10 +671,12 @@ export const compileListFields = (
         toggles.push(toggle);
     }
     const filterDescriptors = [...compiled, ...toggles];
-    const urlKeys = filterDescriptors.map(({ urlKey }) => urlKey);
+    const urlKeys = filterDescriptors.flatMap(({ urlKey, exclude }) =>
+      exclude === null ? [urlKey] : [urlKey, exclude.field],
+    );
     if (new Set(urlKeys).size !== urlKeys.length)
       throw new EntityDeclarationError(
-        `${context}.filters: a generated hierarchy toggle repeats a declared URL key.`,
+        `${context}.filters: a generated hierarchy toggle or Exclude key repeats a declared URL key.`,
       );
     const hierarchy = entity.fieldModel.hierarchy;
     const parentColumn =

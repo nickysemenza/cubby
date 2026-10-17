@@ -70,6 +70,7 @@ import {
   textArrayMatches,
   unwrapDb,
 } from "~/server/db/helpers";
+import { createAppError } from "~/server/errors/app-error";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import {
@@ -146,6 +147,7 @@ interface StoredDescriptorView {
   }> | null;
   readonly nullable: Readonly<{ field: string }> | null;
   readonly match: Readonly<{ field: string }> | null;
+  readonly exclude: Readonly<{ field: string; reason: string | null }> | null;
   readonly range: Readonly<{ kind: "number" | "date" }> | null;
   readonly derived: string | null;
   readonly wire:
@@ -318,7 +320,8 @@ const subtreeToggle = (
 
 /**
  * The request keys a descriptor's predicate reads: its value (a range its
- * bounds and presence) and its Any value / No value and Match all keys.
+ * bounds and presence) and its Any value / No value, Match all and Exclude
+ * keys.
  */
 const descriptorValueKeys = (descriptor: StoredDescriptorView): string[] => [
   ...(descriptor.wire.kind === "range"
@@ -330,7 +333,55 @@ const descriptorValueKeys = (descriptor: StoredDescriptorView): string[] => [
     : [descriptor.wire.name]),
   ...(descriptor.nullable ? [descriptor.nullable.field] : []),
   ...(descriptor.match ? [descriptor.match.field] : []),
+  ...(descriptor.exclude ? [descriptor.exclude.field] : []),
 ];
+
+/**
+ * One filter request per excluded value list: the descriptor's value key set
+ * to the excluded values, beside its "Include sub-…" toggle, so the include
+ * predicate it builds is the one to negate. Excluding a hierarchy node
+ * therefore excludes its descendants unless the toggle is off. A filter
+ * whose declaration cannot exclude fails with the reason it derives, the
+ * same text every client shows on its disabled "is not".
+ */
+const excludedFilterRequests = (
+  entity: Entity,
+  values: ListFilterValues,
+): ListFilterValues[] =>
+  descriptorsFor(entity).flatMap((descriptor) => {
+    if (descriptor.exclude === null) return [];
+    const excluded = nonEmpty(
+      optionalTextList.parse(values[descriptor.exclude.field]),
+    );
+    if (excluded === undefined) return [];
+    if (descriptor.exclude.reason !== null)
+      throw createAppError(
+        "LIST_FILTER_EXCLUDE_UNSUPPORTED",
+        `Cannot exclude ${entity} by "${descriptor.columnId}": ${descriptor.exclude.reason}`,
+      );
+    const key = descriptor.field ?? descriptor.columnId;
+    const toggle = Object.entries(
+      generatedEntityListFields[entity].subtree,
+    ).find(([filter]) => filter === key)?.[1];
+    return [
+      {
+        [key]: excluded,
+        ...(descriptor.wire.kind === "param"
+          ? { [descriptor.wire.name]: excluded }
+          : {}),
+        ...(toggle === undefined ? {} : { [toggle]: values[toggle] }),
+      },
+    ];
+  });
+
+/**
+ * "Is not": the rows the include predicate does not match. NULL counts as
+ * not matching, so a row with no value stays (`IS NULL OR NOT IN`); pair it
+ * with the presence filter to drop empty rows.
+ */
+const excludedPredicate = (
+  include: ReadonlyArray<SQL | undefined>,
+): SQL | undefined => flagCondition(false, () => and(...include));
 
 /**
  * Any value / No value over a derived value: a boolean reads true as a value
@@ -663,11 +714,11 @@ export function declaredFilterPredicates<Filters extends object>(
   filters: Filters,
   derivedInput?: DerivedFilterInput,
 ): Array<SQL | undefined> {
-  const values = listFilterValues.parse(filters);
   const hasSuggestTargets = fieldModelFor(entity)?.fields.some(
     (field) => field.control?.suggest != null,
   );
-  return [
+  const values = listFilterValues.parse(filters);
+  const include = (values: ListFilterValues): Array<SQL | undefined> => [
     hasSuggestTargets
       ? suggestionPredicate(
           entity,
@@ -784,6 +835,12 @@ export function declaredFilterPredicates<Filters extends object>(
             );
         }
       }),
+  ];
+  return [
+    ...include(values),
+    ...excludedFilterRequests(entity, values).map((excluded) =>
+      excludedPredicate(include(excluded)),
+    ),
   ];
 }
 

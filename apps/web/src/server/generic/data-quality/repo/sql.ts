@@ -347,10 +347,14 @@ const oneOrManyList = <T extends z.ZodType<string>>(schema: T) =>
     .transform((value) => (value === undefined ? [] : [value].flat()));
 
 /** Only the two keys this module owns; every other filter passes through. */
+// `dataQualityExclude` / `dataGapsExclude` are the filters' generated
+// Exclude keys (named for their column ids).
 const dataQualityFilterValues = z
   .object({
     dataStatus: oneOrManyList(dataQualityStatus),
     dataGap: oneOrManyList(z.string()),
+    dataQualityExclude: oneOrManyList(dataQualityStatus),
+    dataGapsExclude: oneOrManyList(z.string()),
   })
   .passthrough();
 
@@ -359,7 +363,12 @@ export const hasDataQualityFilter = <Filters extends object>(
   filters: Filters,
 ): boolean => {
   const values = dataQualityFilterValues.parse(filters);
-  return values.dataStatus.length > 0 || values.dataGap.length > 0;
+  return (
+    values.dataStatus.length > 0 ||
+    values.dataGap.length > 0 ||
+    values.dataQualityExclude.length > 0 ||
+    values.dataGapsExclude.length > 0
+  );
 };
 
 /**
@@ -375,33 +384,41 @@ export const dataQualityFilterPredicates = <Filters extends object>(
   context?: QualityReadContext,
 ): SQL[] => {
   const values = dataQualityFilterValues.parse(filters);
-  const predicates: SQL[] = [];
-  if (values.dataStatus.length > 0) {
-    predicates.push(
-      orGroup(
-        values.dataStatus.map((status) =>
-          statusCondition(entity, status, t, context),
-        ),
-      ),
-    );
-  }
+  const statuses = (picked: readonly DataQualityStatus[]) =>
+    picked.length === 0
+      ? []
+      : [
+          orGroup(
+            picked.map((status) => statusCondition(entity, status, t, context)),
+          ),
+        ];
   const own = dataChecksByEntity[entity];
   const related = relatedDataQualityEntities[entity].map(
     (target) => dataChecksByEntity[target],
   );
-  const conditions = values.dataGap.flatMap((value) => {
-    const ownCheck = own.safeParse(value);
-    if (ownCheck.success)
-      return [gapCondition(entity, ownCheck.data, t, context)];
-    const relatedCheck = related
-      .map((schema) => schema.safeParse(value))
-      .find((parsed) => parsed.success);
-    return relatedCheck?.success
-      ? [relatedGapCondition(entity, relatedCheck.data, t)]
-      : [];
-  });
-  if (conditions.length > 0) predicates.push(orGroup(conditions));
-  return predicates;
+  const gaps = (picked: readonly string[]) => {
+    const conditions = picked.flatMap((value) => {
+      const ownCheck = own.safeParse(value);
+      if (ownCheck.success)
+        return [gapCondition(entity, ownCheck.data, t, context)];
+      const relatedCheck = related
+        .map((schema) => schema.safeParse(value))
+        .find((parsed) => parsed.success);
+      return relatedCheck?.success
+        ? [relatedGapCondition(entity, relatedCheck.data, t)]
+        : [];
+    });
+    return conditions.length > 0 ? [orGroup(conditions)] : [];
+  };
+  // Exclude negates the include predicate; an unassessed row stays.
+  const excluded = (include: SQL[]) =>
+    include.length === 0 ? [] : [sql`NOT COALESCE((${include[0]}), false)`];
+  return [
+    ...statuses(values.dataStatus),
+    ...gaps(values.dataGap),
+    ...excluded(statuses(values.dataQualityExclude)),
+    ...excluded(gaps(values.dataGapsExclude)),
+  ];
 };
 
 const DATA_QUALITY_SORT = "dataQuality";

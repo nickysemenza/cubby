@@ -20,6 +20,8 @@ export interface FilterConfig {
   matchAll?: boolean;
   /** A hierarchical reference: the editor shows its "Include sub-…" toggle. */
   subtree?: { label: string };
+  /** A value filter with an Exclude key: the editor offers is | is not. */
+  exclude?: { reason: string | null };
   /** Client-side facet hints are opt-in because most Cubby tables are server-backed. */
   facetCount?: boolean;
   /** Deferred/server-backed option roster activation and search controls. */

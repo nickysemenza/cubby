@@ -41,7 +41,9 @@ const page = { pageIndex: 0, pageSize: 50 };
  * empties first; a field that kept its resolver's NULL placement (empties
  * first under desc) flips to last; a count read rejects a sort it never runs;
  * generated Any value / No value narrows instead of ORing beside picked
- * values; Match all matches any.
+ * values; Match all matches any; Exclude drops rows with no value (a plain
+ * `NOT IN`), keeps a hierarchy node's descendants, cannot combine with an
+ * include, or silently ignores a predicate that cannot negate.
  */
 describe("compiled list fields", () => {
   const ctx = withTestDb();
@@ -241,6 +243,165 @@ describe("compiled list fields", () => {
         subjectsPresenceFilter: "none",
       }),
     ).toEqual(["Match baking and bread", "Match no subjects"]);
+  });
+
+  it("excludes values and their descendants, keeping rows with no value", async () => {
+    // Stored self-reference: excluding a parent drops its subtree only.
+    const household = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: "Exclude household",
+    });
+    await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: "Exclude utilities",
+      parentId: household.id,
+    });
+    const named = async (
+      filters: Parameters<typeof listSpendingCategories>[1],
+    ) =>
+      (await listSpendingCategories(ctx.db, filters, [], page)).data
+        .map((row) => row.name)
+        .filter((name) => name.startsWith("Exclude"))
+        .sort();
+    expect(await named({ parentIdExclude: [household.shortcode] })).toEqual([
+      "Exclude household",
+    ]);
+
+    // Related path ending in a hierarchy: inventory → product.category.
+    const clothing = await createRepoEntity(ctx, "productCategory", {
+      name: "Exclude clothing",
+    });
+    const outerwear = await createRepoEntity(ctx, "productCategory", {
+      name: "Exclude outerwear",
+      parentId: clothing.output.id,
+    });
+    const anoraks = await createRepoEntity(ctx, "productCategory", {
+      name: "Exclude anoraks",
+      parentId: outerwear.output.id,
+    });
+    const shelf = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({
+        name: "Exclude shelf",
+        type: "shelf",
+        parentId: TEST_HOME_SHORTCODE,
+      }),
+      ctx.actor,
+    );
+    const stock = async (
+      name: string,
+      categoryId?: typeof clothing.output.id,
+    ) => {
+      const product = await createProductFixture(
+        ctx.db,
+        makeProductInput(categoryId ? { name, categoryId } : { name }),
+        ctx.actor,
+      );
+      return createInventoryFixture(
+        ctx.db,
+        {
+          productId: product.id,
+          locationId: shelf.id,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+    };
+    const sweater = await stock("Exclude sweater", clothing.output.id);
+    const parka = await stock("Exclude parka", outerwear.output.id);
+    const anorak = await stock("Exclude anorak", anoraks.output.id);
+    const loose = await stock("Exclude loose item");
+    const ours = new Set([sweater.id, parka.id, anorak.id, loose.id]);
+    const ids = async (filters: Parameters<typeof inventoryentryList>[1]) =>
+      (await inventoryentryList(ctx.db, filters, [], page)).data
+        .map((row) => row.id)
+        .filter((id) => ours.has(id))
+        .sort();
+
+    // The uncategorized item is not Outerwear, and neither is a sweater; an
+    // anorak is, through its parent.
+    expect(await ids({ categoryExclude: [outerwear.output.id] })).toEqual(
+      [sweater.id, loose.id].sort(),
+    );
+    expect(
+      await ids({
+        categoryExclude: [outerwear.output.id],
+        includeSubProductCategories: false,
+      }),
+    ).toEqual([sweater.id, anorak.id, loose.id].sort());
+    // Clothing except Outerwear.
+    expect(
+      await ids({
+        categoryFilter: [clothing.output.id],
+        categoryExclude: [outerwear.output.id],
+      }),
+    ).toEqual([sweater.id]);
+    // The presence filter drops the empty row.
+    expect(
+      await ids({
+        categoryExclude: [outerwear.output.id],
+        categoryPresenceFilter: "has",
+      }),
+    ).toEqual([sweater.id]);
+
+    // Stored text array: none of the excluded subjects.
+    for (const [name, subjects] of [
+      ["Exclude baking and bread", ["baking", "bread"]],
+      ["Exclude baking only", ["baking"]],
+      ["Exclude no subjects", []],
+    ] as const)
+      await insertWithShortcode(ctx.db, "cookbook", {
+        name,
+        subjects: [...subjects],
+        sourceLabel: name,
+        rawJson: makeCookbookExtraction(),
+      });
+    expect(
+      (
+        await cookbookList(ctx.db, { subjectsExclude: ["bread"] }, [], page)
+      ).data
+        .map((row) => row.name)
+        .filter((name) => name.startsWith("Exclude"))
+        .sort(),
+    ).toEqual(["Exclude baking only", "Exclude no subjects"]);
+  });
+
+  it("negates a negatable predicate and rejects one that is not", async () => {
+    const renovation = (
+      await createRepoEntity(ctx, "project", { name: "Exclude renovation" })
+    ).output;
+    const kitchen = (
+      await createRepoEntity(ctx, "project", {
+        name: "Exclude kitchen",
+        parentProjectId: renovation.id,
+      })
+    ).output;
+    const task = async (name: string, projectId?: typeof kitchen.id) =>
+      (
+        await createRepoEntity(ctx, "task", {
+          name,
+          trade: "other",
+          ...(projectId ? { projectId } : {}),
+        })
+      ).output.id;
+    const inKitchen = await task("Exclude kitchen task", kitchen.id);
+    const loose = await task("Exclude loose task");
+    const ours = new Set([inKitchen, loose]);
+    // The inherited-project predicate is negatable: a sub-project's task is
+    // excluded with its parent, a task with no project stays.
+    expect(
+      (
+        await taskList(ctx.db, { projectIdExclude: [renovation.id] }, [], page)
+      ).data
+        .map((row) => row.id)
+        .filter((id) => ours.has(id)),
+    ).toEqual([loose]);
+
+    // Expense allocation filters read data prepared from the include values,
+    // so negating them would silently ignore the excluded ones.
+    await expect(
+      expenseList(ctx.db, { projectIdExclude: [renovation.id] }, [], page),
+    ).rejects.toThrow(
+      /Cannot exclude expense by "projectId": Include only: Matches the expense's allocation shares/,
+    );
   });
 
   it("includes every level below a selected project", async () => {

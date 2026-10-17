@@ -11,6 +11,7 @@ type DesktopGroupItem =
       title: string;
       count: number;
       onFilter?: () => void;
+      onHide?: () => void;
     }
   /** groupRowIndex: position within the row's group, so zebra striping can
    *  restart at each section header instead of running through it. */
@@ -39,6 +40,7 @@ export function useDesktopGroupedRows<TItem extends RowData>(
         title: section.label,
         count: section.count,
         onFilter: section.onFilter,
+        onHide: section.onHide,
       },
       ...section.items.map(({ rowIndex }, groupRowIndex) => ({
         kind: "row" as const,

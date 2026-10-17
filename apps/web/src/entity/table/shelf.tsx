@@ -355,6 +355,7 @@ export function ShelfGrid<T>({
                   title={section.label}
                   count={section.count}
                   onFilter={section.onFilter}
+                  onHide={section.onHide}
                   className="sticky top-[var(--app-chrome-top)] z-10 mb-3 rounded-md border"
                 />
                 <div className={shelfGridClass(compact)}>

@@ -1183,6 +1183,7 @@ export default defineEntity({
       financialReconciliation: { type: "enum", options: ["mismatch"] },
       reconciliation: {
         predicate: "multiselect",
+        negatable: true,
         reason:
           "Needs review reads the paperwork_mismatch gap, which honours a recorded expected_mismatch exception, so the states are not one row value",
       },

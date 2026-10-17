@@ -150,6 +150,8 @@ export const manifestWire = {
       sentinels: "[LabeledOption]~",
       presenceParam: "string~",
       matchParam: "string~",
+      excludeParam: "string~",
+      excludeReason: "string~",
       subtreeParam: "string~",
       currentMember: "boolean",
       singleValue: "boolean~",

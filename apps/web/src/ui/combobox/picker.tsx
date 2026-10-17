@@ -1309,6 +1309,8 @@ function SegmentedPicker<TId extends string>({
           ref={index === 0 ? inputRef : undefined}
           value={item.id}
           aria-label={rowAriaLabel(item)}
+          // A disabled choice stays visible; its reason is the caller's line.
+          disabled={item.presentation?.disabledReason != null}
           // Phone touch floor; desktop segments stay compact (DESIGN.md).
           className="min-h-11 min-w-11 gap-1.5 md:min-h-0 md:min-w-0"
         >

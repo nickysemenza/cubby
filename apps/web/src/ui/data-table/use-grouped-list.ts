@@ -7,12 +7,14 @@ import { useMemo } from "react";
  * A list grouped by a declared `model.grouping` choice. `groups` are the
  * server's sections of the whole filtered set, in page order; `onFilter` sets
  * a section's value as the field's include filter, present only when the
- * field has a declared filter.
+ * field has a declared filter. `hide` returns a section's Hide action (its
+ * value as the field's excluded value), or undefined when it cannot hide.
  */
 export interface GroupConfig {
   choice: GeneratedGroupChoice;
   groups: readonly ListGroupSummary[];
   onFilter?: (group: ListGroupSummary) => void;
+  hide?: (group: ListGroupSummary) => (() => void) | undefined;
 }
 
 export interface GroupSection<T> {
@@ -23,6 +25,8 @@ export interface GroupSection<T> {
   items: T[];
   /** Applies "Filter to this"; absent when the section has no filter value. */
   onFilter?: () => void;
+  /** Hides the section, keeping the grouping; absent when it cannot. */
+  onHide?: () => void;
 }
 
 /**
@@ -51,6 +55,7 @@ export function groupSections<T>(
         (group.key !== FILTER_NONE || config.choice.filter?.noValue)
           ? () => config.onFilter?.(group)
           : undefined,
+      onHide: config.hide?.(group),
     };
     let taken = 0;
     while (index < items.length) {

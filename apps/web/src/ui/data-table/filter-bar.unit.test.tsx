@@ -1,3 +1,4 @@
+import { FILTER_NOT_PREFIX } from "@cubby/schemas/filter-sentinel-fields";
 import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
@@ -14,6 +15,7 @@ import {
   type Filter,
   type FilterBarField,
   nextPickedValues,
+  selectedValues,
 } from "./filter-bar-core";
 
 const fields: FilterBarField[] = [
@@ -412,5 +414,15 @@ describe("nextPickedValues", () => {
       "home",
       FILTER_NONE,
     ]);
+  });
+});
+
+describe("selectedValues", () => {
+  it("loads excluded ids unprefixed beside included ones", () => {
+    // A deferred roster matches literal ids; a prefixed one would leave the
+    // "is not" chip showing a bare shortcode after a reload.
+    expect(
+      selectedValues(["home", FILTER_EXACT, `${FILTER_NOT_PREFIX}attic`]),
+    ).toEqual(["home", "attic"]);
   });
 });

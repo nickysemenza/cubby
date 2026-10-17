@@ -111,6 +111,12 @@ export type FilterDescriptor = Readonly<{
   nullable: Readonly<{ field: string; label: string }> | null;
   /** The Match all request key of a multi-valued compiled filter. */
   match: Readonly<{ field: string }> | null;
+  /**
+   * The Exclude request key of a value filter, and the reason derived from
+   * the declaration when the filter cannot exclude (a predicate that is not
+   * `negatable`): clients disable "is not" with it and the list rejects it.
+   */
+  exclude: Readonly<{ field: string; reason: string | null }> | null;
   /** The generated "Include sub-…" toggle's request key. */
   subtree: string | null;
   /** Accepts `@me` (ADR 0018). */

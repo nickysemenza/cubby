@@ -1,3 +1,4 @@
+import { EyeSlashIcon } from "@phosphor-icons/react/dist/csr/EyeSlash";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 
 import { cn } from "~/lib/utils";
@@ -13,18 +14,24 @@ interface SectionHeaderProps {
   count: number;
   /** "Filter to this": present only when the grouped field has a declared filter. */
   onFilter?: () => void;
+  /** "Hide": excludes the section's value, keeping the grouping. */
+  onHide?: () => void;
   className?: string;
 }
 
+const ACTION_CLASS =
+  "inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-xs text-muted-foreground opacity-0 transition-opacity group-hover/section:opacity-100 hover:bg-background hover:text-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none pointer-coarse:opacity-100";
+
 /**
  * Header of one grouped-list section: a neutral band with the section's
- * label and its count over the whole filtered set. "Filter to this" reveals on
- * hover and stays reachable by keyboard.
+ * label and its count over the whole filtered set. "Filter to this" and
+ * "Hide" reveal on hover and stay reachable by keyboard.
  */
 export function SectionHeader({
   title,
   count,
   onFilter,
+  onHide,
   className,
 }: SectionHeaderProps) {
   return (
@@ -41,16 +48,23 @@ export function SectionHeader({
       <span className="text-xs text-muted-foreground tabular-nums">
         {count}
       </span>
-      {onFilter ? (
-        <button
-          type="button"
-          onClick={onFilter}
-          className="ml-auto inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-xs text-muted-foreground opacity-0 transition-opacity group-hover/section:opacity-100 hover:bg-background hover:text-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none pointer-coarse:opacity-100"
-        >
-          <FunnelIcon aria-hidden className="size-3.5" />
-          Filter to this
-          <span className="sr-only">: {title}</span>
-        </button>
+      {onFilter || onHide ? (
+        <div className="ml-auto flex items-center gap-0.5">
+          {onFilter ? (
+            <button type="button" onClick={onFilter} className={ACTION_CLASS}>
+              <FunnelIcon aria-hidden className="size-3.5" />
+              Filter to this
+              <span className="sr-only">: {title}</span>
+            </button>
+          ) : null}
+          {onHide ? (
+            <button type="button" onClick={onHide} className={ACTION_CLASS}>
+              <EyeSlashIcon aria-hidden className="size-3.5" />
+              Hide
+              <span className="sr-only">: {title}</span>
+            </button>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );

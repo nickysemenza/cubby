@@ -54,6 +54,61 @@ struct EntityListSectionsTests {
         #expect(inventory.filtering(state, to: none, of: placement) == nil)
     }
 
+    // Hide keeps the grouping: the section's value joins the excluded values beside any include
+    // values, a level section takes its descendants with it, and the no-value section narrows
+    // presence rather than excluding.
+    @Test func hidingASectionExcludesItsValue() throws {
+        let category = try #require(inventory.groupChoice("category"))
+        let state = EntityFilterState([
+            "categoryFilter": ["PCT-CLOTHING"], "categoryExclude": ["PCT-SOCKS"],
+            "includeSubProductCategories": ["false"],
+        ])
+        let outerwear = EntityListSection(id: "PCT-OUTER", label: "Outerwear", count: 2, rows: [])
+        let hidden = try #require(inventory.hiding(state, section: outerwear, of: category))
+        #expect(
+            hidden
+                == EntityFilterState([
+                    "categoryFilter": ["PCT-CLOTHING"], "categoryExclude": ["PCT-SOCKS", "PCT-OUTER"],
+                    "includeSubProductCategories": ["false"],
+                ]))
+        #expect(inventory.hiding(hidden, section: outerwear, of: category) == hidden)
+
+        let level = EntityListSection(id: "PCT-OUTER", label: "Outerwear", count: 3, subtree: true, rows: [])
+        #expect(
+            inventory.hiding(state, section: level, of: category)
+                == EntityFilterState([
+                    "categoryFilter": ["PCT-CLOTHING"], "categoryExclude": ["PCT-SOCKS", "PCT-OUTER"],
+                ]))
+
+        let none = EntityListSection(
+            id: EntityListSection.noValueKey, label: "No category", count: 1, rows: [])
+        let picked = EntityFilterState([
+            "categoryFilter": ["PCT-CLOTHING"], "categoryPresenceFilter": ["none"],
+        ])
+        #expect(
+            inventory.hiding(picked, section: none, of: category)
+                == EntityFilterState(["categoryFilter": ["PCT-CLOTHING"]]))
+        #expect(
+            inventory.hiding(EntityFilterState(), section: none, of: category)
+                == EntityFilterState(["categoryPresenceFilter": ["has"]]))
+
+        // Placement declares no No value, so its no-value section cannot hide.
+        let placement = try #require(inventory.groupChoice("placement"))
+        #expect(inventory.hiding(state, section: none, of: placement) == nil)
+    }
+
+    // A filter whose predicate cannot be negated keeps its exclude key with a reason; Hide is
+    // not offered rather than sending a request the server rejects.
+    @Test func hidingIsUnavailableWhenTheFilterCannotExclude() throws {
+        let expense = EntityCatalog[.expense]
+        let costType = try #require(expense.groupChoice("costType"))
+        let filter = try #require(expense.filters.first { $0.columnId == costType.filter?.columnId })
+        #expect(filter.excludeParam != nil)
+        #expect(filter.excludeReason != nil)
+        let section = EntityListSection(id: "materials", label: "Materials", count: 1, rows: [])
+        #expect(expense.hiding(EntityFilterState(), section: section, of: costType) == nil)
+    }
+
     @Test func listInputCarriesTheGroupByChoice() throws {
         let input = try inventory.listInput(
             page: 1, pageSize: 20, sort: nil, filters: EntityFilterState(), groupBy: "category")
@@ -63,6 +118,12 @@ struct EntityListSectionsTests {
             page: 1, pageSize: 20, sort: nil, filters: EntityFilterState(), groupBy: "category",
             groupLevel: 2)
         #expect(leveled["groupLevel"] == 2)
+
+        // A hidden section reaches the kernel body as the exclude key's value list.
+        let hidden = try inventory.listInput(
+            page: 1, pageSize: 20, sort: nil,
+            filters: EntityFilterState(["categoryExclude": ["PCT-OUTER", "PCT-SOCKS"]]), groupBy: "category")
+        #expect(hidden["filters"]?["categoryExclude"] == ["PCT-OUTER", "PCT-SOCKS"])
     }
 
     // Levels come from the declaration: a related record whose entity nests offers them, a value

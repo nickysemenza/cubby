@@ -21,8 +21,8 @@ struct EntityShelfView: View {
     var subtitleOverride: ((EntityRow) -> String?)? = nil
     /// The list's Group by sections; each gets a header pinned while its cards scroll.
     var sections: [EntityListSection]? = nil
-    /// "Filter to this" for a section, nil when the section has no filter value.
-    var sectionFilter: ((EntityListSection) -> (() -> Void)?)? = nil
+    /// A section header's "Filter to this" and "Hide"; none when absent.
+    var sectionActions: ((EntityListSection) -> EntityListSectionHeader.Actions)? = nil
 
     @Environment(AppModel.self) private var appModel
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -66,7 +66,7 @@ struct EntityShelfView: View {
                     } header: {
                         EntityListSectionHeader(
                             section: section, entity: descriptor.key,
-                            onFilter: sectionFilter?(section))
+                            actions: sectionActions?(section) ?? .init())
                     }
                 }
             }

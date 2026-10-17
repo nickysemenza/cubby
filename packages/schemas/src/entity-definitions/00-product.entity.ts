@@ -2028,10 +2028,12 @@ Rules:
       },
       categoryFeature: {
         predicate: "multiselect",
+        negatable: true,
         reason: "Inherited through category ancestors; not a row value",
       },
       externalIdSource: {
         predicate: "multiselect",
+        negatable: true,
         reason:
           "External identifiers are rows keyed by source with no declared relation",
       },

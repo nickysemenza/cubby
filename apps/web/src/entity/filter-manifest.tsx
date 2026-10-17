@@ -97,6 +97,7 @@ const specFilterConfig = (
     filterType: filterTypeForKind(spec.kind),
     options: resolveSpecOptions(spec, runtimeOptions),
     matchAll: spec.match === undefined ? undefined : true,
+    exclude: spec.exclude && { reason: spec.exclude.reason },
     subtree: subtreeControl(spec, specs),
     onActivate: deferred?.onActivate,
     onSearchChange: deferred?.onSearchChange,

@@ -1166,6 +1166,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
                 title={item.title}
                 count={item.count}
                 onFilter={item.onFilter}
+                onHide={item.onHide}
               />
             </TableCell>
           </TableRow>

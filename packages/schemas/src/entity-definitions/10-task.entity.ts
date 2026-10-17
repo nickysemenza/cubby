@@ -788,16 +788,19 @@ export default defineEntity({
       topLevel: { type: "boolean" },
       assigneeFilter: {
         predicate: "idMulti",
+        negatable: true,
         reason:
           "Inherited from the parent task when the task names none, so it is not a column",
       },
       projectFilter: {
         predicate: "idMulti",
+        negatable: true,
         reason:
           "Inherited from the parent task when the task names none, so it is not a column",
       },
       subjectProductFilter: {
         predicate: "idMulti",
+        negatable: true,
         reason:
           "Inherited from the parent task when the task names none, so it is not a column",
       },

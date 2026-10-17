@@ -29,13 +29,16 @@ import {
 import { Switch } from "~/ui/primitives/switch";
 
 import {
+  activeSides,
   type Filter,
   type FilterBarField,
+  type FilterSide,
   hasFilterValue,
-  nextPickedValues,
   operatorFor,
-  pickerValues,
+  selectedValues,
+  sideValues,
   withMode,
+  withSideValues,
 } from "./filter-bar-core";
 import { sortableColumns, SortSection } from "./mobile-sort-sheet";
 import type { CubbyTable as Table } from "./table-features";
@@ -69,27 +72,38 @@ function visibleOptions(field: FilterBarField, filter: Filter | undefined) {
 /**
  * The chip's value text. "any" is the declared-but-inactive state, per
  * DESIGN.md; an active Any value reads "has a value" so the two never look
- * alike. Picked values join with "or", or "and" under Match all.
+ * alike. Picked values join with "or", or "and" under Match all; excluded
+ * values read "is not …". Without a `side` the text covers both sides.
  */
 export function filterSummary(
   field: FilterBarField,
   filter: Filter | undefined,
+  side?: FilterSide,
 ): string {
   if (filter === undefined || !isFieldActive(filter)) return "any";
   if (field.type === "text") return filter.values[0] ?? "any";
-  if (filter.values.includes(FILTER_ANY)) return "has a value";
   const labels = new Map(
     visibleOptions(field, filter).map((option) => [option.value, option.label]),
   );
-  const picked = filter.values
-    .filter(
-      (value) =>
-        value !== FILTER_NONE && value !== FILTER_ALL && value !== FILTER_EXACT,
-    )
+  const excluded = sideValues(filter.values, "isNot")
+    .map((value) => labels.get(value) ?? value)
+    .join(" or ");
+  const isNot = excluded ? `is not ${excluded}` : "";
+  if (side === "isNot") return isNot || "any";
+  const included = sideValues(filter.values, "is");
+  const picked = included
+    .filter((value) => value !== FILTER_NONE && value !== FILTER_ANY)
     .map((value) => labels.get(value) ?? value)
     .join(filter.values.includes(FILTER_ALL) ? " and " : " or ");
-  if (!filter.values.includes(FILTER_NONE)) return picked;
-  return picked ? `${picked} or no value` : "no value";
+  const is = included.includes(FILTER_ANY)
+    ? "has a value"
+    : !included.includes(FILTER_NONE)
+      ? picked
+      : picked
+        ? `${picked} or no value`
+        : "no value";
+  if (side === "is") return is || "any";
+  return [is, isNot].filter(Boolean).join(" · ");
 }
 
 /**
@@ -104,29 +118,90 @@ const MATCH_OPTIONS = [
   { value: "all", label: "Match all" },
 ];
 
+/**
+ * The is | is not control: which side of the filter the picker edits. Both
+ * sides keep their values, so "Clothing" and "not Outerwear" combine. A
+ * filter that cannot exclude shows "is not" disabled with its reason.
+ */
+function SideControl({
+  label,
+  side,
+  reason,
+  onSideChange,
+}: {
+  label: string;
+  side: FilterSide;
+  reason: string | null;
+  onSideChange: (side: FilterSide) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <Picker
+        mode="segmented"
+        label={`${label} is or is not`}
+        options={[
+          { value: "is", label: "is" },
+          {
+            value: "isNot",
+            label: "is not",
+            ...(reason === null ? {} : { disabledReason: reason }),
+          },
+        ]}
+        value={side}
+        onValueChange={(value) => {
+          if (value === "is" || value === "isNot") onSideChange(value);
+        }}
+      />
+      {reason !== null && (
+        <p className="px-1 text-xs text-muted-foreground">{reason}</p>
+      )}
+    </div>
+  );
+}
+
 function MultiselectEditor({
   field,
   filter,
+  initialSide = "is",
   onApply,
   onClear,
 }: {
   field: FilterBarField;
   filter: Filter | undefined;
+  initialSide?: FilterSide;
   onApply: (values: string[]) => void;
   onClear: () => void;
 }) {
   const [draft, setDraft] = useState<string[]>(() => filter?.values ?? []);
-  const options = visibleOptions(field, filter);
+  const [side, setSide] = useState<FilterSide>(initialSide);
+  const roster = visibleOptions(field, filter);
+  // Any value / No value belong to the "is" side.
+  const isNotRoster = useMemo(
+    () =>
+      roster.filter(
+        (option) => option.value !== FILTER_ANY && option.value !== FILTER_NONE,
+      ),
+    [roster],
+  );
+  const options = side === "is" ? roster : isNotRoster;
   const label = field.label ?? field.key;
   useEffect(() => {
-    field.onActivate?.(filter?.values ?? []);
+    field.onActivate?.(selectedValues(filter?.values ?? []));
   }, [field, filter?.values]);
   // Inside the picker's popup: anything beside it would sit behind the
   // popup's modal focus scope, unreachable while the list is open.
   const header =
-    field.matchAll || field.subtree ? (
+    field.matchAll || field.subtree || field.exclude ? (
       <>
-        {field.matchAll && (
+        {field.exclude && (
+          <SideControl
+            label={label}
+            side={side}
+            reason={field.exclude.reason}
+            onSideChange={setSide}
+          />
+        )}
+        {field.matchAll && side === "is" && (
           <Picker
             mode="segmented"
             label={`Match ${label}`}
@@ -156,8 +231,8 @@ function MultiselectEditor({
       openOnMount
       label={`Filter ${label}`}
       options={options}
-      values={pickerValues(draft)}
-      onValuesChange={(values) => setDraft(nextPickedValues(draft, values))}
+      values={sideValues(draft, side)}
+      onValuesChange={(values) => setDraft(withSideValues(draft, side, values))}
       onSearchChange={field.onSearchChange}
       isLoading={field.isLoading}
       header={header}
@@ -168,7 +243,12 @@ function MultiselectEditor({
             variant="ghost"
             size="sm"
             className="text-muted-foreground"
-            onClick={onClear}
+            onClick={() => {
+              // Clear empties this side; the other side's chip stays.
+              const rest = withSideValues(draft, side, []);
+              if (activeSides(rest).length) onApply(rest);
+              else onClear();
+            }}
           >
             Clear
           </Button>
@@ -185,11 +265,14 @@ function MultiselectEditor({
 function FilterValueEditor({
   field,
   filter,
+  side,
   setValues,
   clear,
 }: {
   field: FilterBarField;
   filter: Filter | undefined;
+  /** The side a chip opens on; the editor can switch it. */
+  side?: FilterSide;
   setValues: (values: string[]) => void;
   clear: () => void;
 }) {
@@ -213,6 +296,7 @@ function FilterValueEditor({
       <MultiselectEditor
         field={field}
         filter={filter}
+        initialSide={side}
         onApply={setValues}
         onClear={clear}
       />
@@ -228,7 +312,7 @@ function FilterValueEditor({
       clearable
       className="w-full"
       onOpenChange={(open) => {
-        if (open) field.onActivate?.(filter?.values ?? []);
+        if (open) field.onActivate?.(selectedValues(filter?.values ?? []));
       }}
       onSearchChange={field.onSearchChange}
       isLoading={field.isLoading}
@@ -249,10 +333,14 @@ function FilterEditor(props: Parameters<typeof FilterValueEditor>[0]) {
   );
 }
 
-/** One declared-filter chip: `<b>Label</b> value|any`, opens its editor on click. */
+/**
+ * One declared-filter chip: `<b>Label</b> value|any`, or `<b>Label</b> is not
+ * value` for the excluded side, and opens its editor on that side.
+ */
 function FilterChip({
   field,
   filter,
+  side,
   open,
   onOpenChange,
   setValues,
@@ -260,14 +348,15 @@ function FilterChip({
 }: {
   field: FilterBarField;
   filter: Filter | undefined;
+  side: FilterSide;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   setValues: (values: string[]) => void;
   clear: () => void;
 }) {
   const label = field.label ?? field.key;
-  const summary = filterSummary(field, filter);
-  const active = isFieldActive(filter);
+  const summary = filterSummary(field, filter, side);
+  const active = activeSides(filter?.values).includes(side);
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger
@@ -298,6 +387,7 @@ function FilterChip({
         <FilterEditor
           field={field}
           filter={filter}
+          side={side}
           setValues={setValues}
           clear={clear}
         />
@@ -458,7 +548,8 @@ export function FilterBar({
   useEffect(() => {
     for (const field of fields) {
       const filter = filtersByField.get(field.key);
-      if (filter && isFieldActive(filter)) field.onActivate?.(filter.values);
+      if (filter && isFieldActive(filter))
+        field.onActivate?.(selectedValues(filter.values));
     }
   }, [fields, filtersByField]);
   const visibleChipFields = collapsed
@@ -487,25 +578,34 @@ export function FilterBar({
         />
       )}
 
-      {visibleChipFields.map((field) => (
-        <FilterChip
-          key={field.key}
-          field={field}
-          filter={filtersByField.get(field.key)}
-          open={editingKey === field.key && !moreOpen}
-          onOpenChange={(open) => setEditingKey(open ? field.key : null)}
-          setValues={(values) => {
-            setValues(field, values);
-            // Apply commits and closes; a text/combobox editor commits per
-            // keystroke and stays open until dismissed.
-            if (field.type === "multiselect") setEditingKey(null);
-          }}
-          clear={() => {
-            clear(field);
-            setEditingKey(null);
-          }}
-        />
-      ))}
+      {visibleChipFields.flatMap((field) => {
+        const filter = filtersByField.get(field.key);
+        // Each active side gets its own chip; an inactive field shows one.
+        const sides = activeSides(filter?.values);
+        return (sides.length ? sides : (["is"] as const)).map((side) => {
+          const key = `${field.key}:${side}`;
+          return (
+            <FilterChip
+              key={key}
+              field={field}
+              filter={filter}
+              side={side}
+              open={editingKey === key && !moreOpen}
+              onOpenChange={(open) => setEditingKey(open ? key : null)}
+              setValues={(values) => {
+                setValues(field, values);
+                // Apply commits and closes; a text/combobox editor commits per
+                // keystroke and stays open until dismissed.
+                if (field.type === "multiselect") setEditingKey(null);
+              }}
+              clear={() => {
+                clear(field);
+                setEditingKey(null);
+              }}
+            />
+          );
+        });
+      })}
 
       {overflowChipFields.length > 0 &&
         (() => {

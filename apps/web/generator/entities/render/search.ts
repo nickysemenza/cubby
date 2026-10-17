@@ -95,6 +95,14 @@ export const renderSearchArtifacts = (
           (descriptor) =>
             `${JSON.stringify(descriptor.urlKey)}:${searchCodec(descriptor, alias)},`,
         ),
+        // An Exclude key lists values only: no Any / No value or Match all.
+        ...filterDescriptors.flatMap(({ exclude, ...descriptor }) =>
+          exclude === null || exclude.reason !== null
+            ? []
+            : [
+                `${JSON.stringify(exclude.field)}:${searchCodec({ ...descriptor, exclude: null, nullable: null, match: null }, alias)},`,
+              ],
+        ),
       ];
       const dialog = entity.route?.create === "dialog";
       // Declared list views: `view` is an enum over their ids when there is
@@ -157,6 +165,9 @@ export const renderSearchArtifacts = (
       const keys = [
         ...(primarySearch ? [primarySearch.key] : []),
         ...filterDescriptors.map(({ urlKey }) => urlKey),
+        ...filterDescriptors.flatMap(({ exclude }) =>
+          exclude === null || exclude.reason !== null ? [] : [exclude.field],
+        ),
         ...tableKeys,
         ...(dialog ? ["create"] : []),
         ...(viewIds.length > 1 ? ["view"] : []),

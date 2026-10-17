@@ -504,11 +504,13 @@ export default defineEntity({
       amount: { type: "number" },
       valuationStatus: {
         predicate: "multiselect",
+        negatable: true,
         reason:
           "Missing includes priceable entries, so the statuses overlap and are not one row value",
       },
       categoryFeature: {
         predicate: "multiselect",
+        negatable: true,
         reason: "Inherited through category ancestors; not a row value",
       },
       // Stock parked in the household-wide Unknown location.

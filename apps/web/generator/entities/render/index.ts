@@ -240,13 +240,15 @@ const renderDerivedFilterFields = (
       );
     return `definition.model.fields[${index}].validation.read`;
   };
-  const valueEntry = (descriptor: FilterDescriptor): string => {
-    const name = descriptor.field ?? descriptor.columnId;
+  const valueEntry = (
+    descriptor: FilterDescriptor,
+    as?: Readonly<{ name: string; description: string }>,
+  ): string => {
+    const name = as?.name ?? descriptor.field ?? descriptor.columnId;
     const key = JSON.stringify(name);
+    const description = as?.description ?? descriptor.schemaDescription;
     const describe =
-      descriptor.schemaDescription === null
-        ? ""
-        : `.describe(${JSON.stringify(descriptor.schemaDescription)})`;
+      description === null ? "" : `.describe(${JSON.stringify(description)})`;
     switch (descriptor.kind) {
       case "text": {
         if (!descriptor.schemaFromRead) needs.z = true;
@@ -313,8 +315,9 @@ const renderDerivedFilterFields = (
       const label =
         descriptor.nullable?.label ??
         (descriptor.label ?? descriptor.columnId).toLowerCase();
-      // The generated Any value / No value and Match all keys ride beside
-      // the value key, so a request can say "has a value" or "all of these".
+      // The generated Any value / No value, Match all and Exclude keys ride
+      // beside the value key, so a request can say "has a value", "all of
+      // these" or "none of these".
       if (descriptor.nullable !== null) needs.presence = true;
       if (descriptor.match !== null) needs.z = true;
       return [
@@ -328,6 +331,19 @@ const renderDerivedFilterFields = (
           ? []
           : [
               `${JSON.stringify(descriptor.match.field)}:z.enum(["any","all"]).optional().describe(${JSON.stringify(`all: every picked ${label}`)})`,
+            ]),
+        // The Exclude key takes the value key's schema; a filter that cannot
+        // exclude keeps it so the list rejects it with the reason.
+        ...(descriptor.exclude === null
+          ? []
+          : [
+              valueEntry(descriptor, {
+                name: descriptor.exclude.field,
+                description:
+                  descriptor.exclude.reason === null
+                    ? `Exclude rows matching any of these ${label} values; rows with no value stay`
+                    : `Unsupported: ${descriptor.exclude.reason}`,
+              }),
             ]),
       ];
     });
@@ -1354,7 +1370,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         " * (null when it can), and the hierarchy levels it can group at\n" +
         " * (0 exactly when `levelReason` says why).\n" +
         " */\n" +
-        'export type GeneratedListField = { readonly shape: "via"; readonly path: string; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity; readonly terminal: { readonly kind: "record"; readonly titleColumn: string | null } | { readonly kind: "field"; readonly column: string; readonly fieldKind: string }; readonly many: boolean; readonly sort: string | null; readonly group: string | null } | { readonly shape: "value"; readonly type: "text" | "number" | "date" | "boolean" | "enum"; readonly options: readonly string[] | null; readonly sort: null; readonly group: null } | { readonly shape: "predicate"; readonly predicate: "text" | "multiselect" | "idMulti" | "boolean" | "presence" | "range"; readonly options: readonly string[] | null; readonly reason: string; readonly sort: string; readonly group: string };\n\n' +
+        'export type GeneratedListField = { readonly shape: "via"; readonly path: string; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity; readonly terminal: { readonly kind: "record"; readonly titleColumn: string | null } | { readonly kind: "field"; readonly column: string; readonly fieldKind: string }; readonly many: boolean; readonly sort: string | null; readonly group: string | null } | { readonly shape: "value"; readonly type: "text" | "number" | "date" | "boolean" | "enum"; readonly options: readonly string[] | null; readonly sort: null; readonly group: null } | { readonly shape: "predicate"; readonly predicate: "text" | "multiselect" | "idMulti" | "boolean" | "presence" | "range"; readonly options: readonly string[] | null; readonly reason: string; readonly sort: string; readonly group: string; readonly exclude: string | null };\n\n' +
         "type GroupOptions = readonly { readonly value: string; readonly label: string }[] | null;\n" +
         "/** One Group by choice: `value` is null exactly when `reason` is set. */\n" +
         'export type GeneratedGroupChoice = { readonly key: string; readonly label: string; readonly noValueLabel: string; readonly reason: string | null; readonly value: { readonly kind: "column"; readonly column: string; readonly options: GroupOptions } | { readonly kind: "record"; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity; readonly titleColumn: string } | { readonly kind: "field"; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity; readonly column: string; readonly options: GroupOptions } | { readonly kind: "derived"; readonly options: GroupOptions } | null; readonly filter: { readonly columnId: string; readonly noValue: boolean; readonly subtree: string | null } | null; readonly levels: number; readonly levelReason: string | null };\n\n' +
@@ -1453,7 +1469,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         "  columnId: string; field: string | null; urlKey: string; kind: string; placeholder: string;\n" +
         "  options: readonly EntityInspectorOption[] | null; optionsRef: EntityPortSourceRef | null; optionsKey: string | null;\n" +
         '  label: string | null; schemaDescription: string | null; deriveSchema: boolean; schemaFromRead: boolean; brandRef: { entity: string } | null; expandRef: EntityPortSourceRef | null; schemaRef: EntityPortSourceRef | null; stored: { columns: readonly string[]; array: boolean } | null; derived: string | null; range: { kind: "number" | "date"; int: boolean; nonnegative: boolean; finite: boolean; describe: { lower: string; upper: string } | null } | null;\n' +
-        "  urlOnly: boolean; nullable: { field: string; label: string } | null; match: { field: string } | null; subtree: string | null; currentMember: boolean; singleValue: string | null; sentinels: readonly { value: string; label: string }[] | null;\n" +
+        "  urlOnly: boolean; nullable: { field: string; label: string } | null; match: { field: string } | null; exclude: { field: string; reason: string | null } | null; subtree: string | null; currentMember: boolean; singleValue: string | null; sentinels: readonly { value: string; label: string }[] | null;\n" +
         '  wire: { kind: "param"; name: string } | { kind: "range"; from: string; to: string; presence?: string };\n' +
         "};\n" +
         "type EntityPortSourceRoster = {\n" +
