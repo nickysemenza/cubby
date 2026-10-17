@@ -207,9 +207,14 @@ describe("inventory ownership mutations", () => {
         expect(ownership).toHaveBeenCalledOnce();
       }
       ownership.mockResolvedValue(new Map());
-      await expect(read(["id", "effectiveOwnership"])).rejects.toThrow(
-        "Requested record field was not loaded: effectiveOwnership",
-      );
+      for (const fields of [
+        ["id", "effectiveOwnership"],
+        ["id", "product", "effectiveOwnership"],
+      ]) {
+        await expect(read(fields)).rejects.toThrow(
+          "Requested record field was not loaded: effectiveOwnership",
+        );
+      }
     } finally {
       ownership.mockRestore();
     }

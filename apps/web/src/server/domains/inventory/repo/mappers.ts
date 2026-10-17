@@ -78,8 +78,7 @@ export const inventoryEntryBaseFields = <Q extends DataQuality | undefined>(
   dataQuality,
 });
 
-/** Unloaded evidence must remain absent so selected reads cannot publish a
- * plausible unresolved owner in place of a missing dependency. */
+/** Map loaded ownership; list callers omit this block when evidence is unloaded. */
 export const inventoryEntryOwnershipFields = ({
   ownership,
   steps,
