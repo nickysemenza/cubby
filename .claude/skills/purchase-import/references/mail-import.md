@@ -71,6 +71,11 @@ Claude or Codex session researches it later through the Research queue.
      fine and creates no vendor relationship.
    - **An order whose Purchase you cannot establish**: `mail` `resolve` with
      `unresolved` and the concrete gap.
+   - **A payment notice `finance` `converge` returns review-required for**
+     (a provider wallet such as Amazon Pay naming a card label but no
+     member-accepted account): resolve it `unresolved` at once with the raw
+     converge reason; do not retry. Only a member's `financial` disposition
+     with `review` settles it.
    - **Not about a purchase**: `mail` `resolve` with `unrelated`. Cubby deletes
      its unprotected retained copy. Confirming an automated unrelated decision
      still records the member's checksum-bound resolution after disposal;
@@ -84,9 +89,17 @@ Claude or Codex session researches it later through the Research queue.
    purchase, name it in `prepare` or `resolve` like an admitted Email: Cubby
    admits it to this Run only when its decisions establish the same purchase
    and the recipient's own transaction, within the Run's limits; otherwise
-   the call refuses and the original waits for a later import.
+   the call refuses with a CONFLICT naming the missing link. When no admitted
+   Email shares an identifier with it (an order confirmation traced from an
+   admitted carrier notice), name the connecting Emails in `via`, nearest the
+   admitted Email first: a shipping Email naming both the tracking number and
+   the order number bridges them. Each Email on the path is judged against the
+   one before it and joins the Run, so resolve it too.
 5. Claim the next Email. Stop with `stop_import_run_for_review` only for
-   ambiguity that blocks every remaining Email.
+   ambiguity that blocks every remaining Email. Once every admitted Email is
+   imported, linked, excluded or resolved, the Run completes; any `unresolved`
+   Email instead puts it in review under one `unresolved_targets` finding that
+   lists each Email with your reason.
 
 Reuse an existing Product before creating one: compare manufacturer, model,
 size, color, bundle contents and other distinguishing attributes. A related
@@ -108,6 +121,13 @@ delegated identity for subsequent calls.
 
 On input validation failure, read the reported field path and correct that
 field before another call. An unchanged payload repeats the same failure.
+
+A `prepare` under a new `operationId` that repeats orders this Run already
+prepared (a retried coordinator) returns that earlier preparation, whose
+`operationId` is the one `commit` names. Changed orders reusing a prepared
+`itemOperationId` conflict; prepare changed evidence under new item ids.
+Line `candidates` list only Products sharing the item's identity; tax,
+shipping and other non-principal lines have none.
 Input rejection has not prepared an order. For an interrupted write whose
 outcome is unknown, stop for member review with the original operation id and
 diagnostic. The member can read its durable result through

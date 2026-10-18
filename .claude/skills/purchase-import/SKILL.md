@@ -359,9 +359,11 @@ current inventory ownership. Reconciliation never receives that inventory again.
 Record a historical acquisition (a known quantity whose earlier purchase is missing) as an Expense with `cost: null`, no `date`, and the known `productQuantity`; never invent price or date, and it receives no inventory.
 
 A card's primary cardholder and dated authorized users decide who a charge
-belongs to. A card with neither cannot attribute a Purchase's purchaser, and a
-payment convergence on it returns review-required ("a dated, confirmed funding
-account"). Confirm the holder with the member and set it before retrying.
+belongs to. A card with neither cannot attribute a Purchase's purchaser.
+Payment convergence returns review-required ("a dated, confirmed funding
+account") unless the household or the member funds the charge date and the
+member owns the account, is its primary cardholder, or is an authorized user
+then. Confirm the holder or funding period with the member before retrying.
 
 Statement previews carry `importFingerprint` and `rowPosition` on every row so
 two identical same-day charges keep distinct source references.
