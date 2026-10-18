@@ -19,7 +19,7 @@ export async function scheduleStatementSuggestions(
 /**
  * Generation and labelling run as a Sweep's statement step. A message queued
  * by the retired queue chain before deploy is acknowledged without work.
- * TODO(#2722 follow-up): drop the two task kinds after one deploy.
+ * TODO(#2749): drop the two task kinds after one deploy.
  */
 export async function retiredStatementSuggestionTask() {
   return "skipped" as const;
