@@ -176,8 +176,7 @@ the shared infinite pager loads more work on scroll. Checkboxes select
 record-backed work independently of the source record inspector. Copy codes
 uses source shortcodes, deduplicating records with multiple work reasons;
 aggregate Problems rows have no shortcode and are not selectable. Pending
-Suggestions appear as one row per entity and field with their count, opening
-the filtered AI Review list. Research and Email rows show one warning-toned
+Suggestions open the Suggestions page scoped to their family or record. Research and Email rows show one warning-toned
 chip per failed check (destructive for defects), its message as tooltip and
 screen-reader text, wrapping to two lines then "+N"; other rows keep reason
 text. Vendor links its record, Amount uses the sign-toned currency cell, and

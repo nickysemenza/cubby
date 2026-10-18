@@ -3,10 +3,14 @@ import type { FinancialTransactionKind } from "@cubby/schemas/financial-transact
 import type { FinancialTransactionShortcode } from "@cubby/schemas/identifiers";
 import type {
   StatementSuggestionOut,
-  StatementTransactionApplication,
   StatementTransactionAction,
+  StatementTransactionApplication,
   statementTransactionField,
 } from "@cubby/schemas/statement-suggestion";
+import type {
+  SuggestionActionVerb,
+  SuggestionListRow,
+} from "@cubby/schemas/suggestion-list";
 import type { z } from "zod";
 
 export type ReviewItem = z.input<typeof assessmentReviewInput>;
@@ -14,7 +18,7 @@ export type StatementTransactionField = z.infer<
   typeof statementTransactionField
 >;
 
-/** The member's pick for one suggestion, before it becomes a review item. */
+/** The member's pick for one statement suggestion, before it becomes a review item. */
 export type StatementChoice = {
   action: StatementTransactionAction;
   /** Attach target; absent means the first candidate. */
@@ -22,6 +26,10 @@ export type StatementChoice = {
   fields?: StatementTransactionField[];
   kindOverride?: FinancialTransactionKind;
 };
+
+/** Whether the server offers `verb` on this row (owner-only verbs included). */
+export const offers = (row: SuggestionListRow, verb: SuggestionActionVerb) =>
+  row.actions.some((action) => action.verb === verb);
 
 /**
  * The application the server applies for a choice. A create lists every
@@ -36,18 +44,15 @@ function statementApplication(
     choice.kindOverride && choice.kindOverride !== suggestion.create?.kind
       ? choice.kindOverride
       : undefined;
+  const target =
+    choice.transactionId ?? suggestion.candidates[0]?.transactionId;
   return {
     kind: "statement_transaction",
     action: choice.action,
-    // An attach always names its target; the server refuses an unnamed one
-    // when several candidates are live.
-    ...(choice.action === "attach" &&
-    (choice.transactionId ?? suggestion.candidates[0]?.transactionId)
-      ? {
-          transactionId:
-            choice.transactionId ?? suggestion.candidates[0]!.transactionId,
-        }
-      : {}),
+    // An attach always names its target, even with one candidate: the server
+    // refuses an unnamed one when several candidates are live, and a target
+    // read at review time cannot drift to another candidate later.
+    ...(choice.action === "attach" && target ? { transactionId: target } : {}),
     fields: choice.action === "attach" ? (choice.fields ?? []) : [],
     ...(choice.action === "create" && kindOverride ? { kindOverride } : {}),
     rejectedCandidateIds:
@@ -72,8 +77,8 @@ function isRecommendedAsIs(
   return true;
 }
 
-/** One `assessment.reviewBatch` item applying the member's choice. */
-export function applyItem(
+/** One review item applying the member's statement choice. */
+export function statementApplyItem(
   suggestion: StatementSuggestionOut,
   choice: StatementChoice = { action: suggestion.recommended },
 ): ReviewItem {
@@ -95,7 +100,9 @@ export function applyItem(
 }
 
 /** Dismiss: settle without applying; the charge stays suppressed on every later pass. */
-export function dismissItem(suggestion: StatementSuggestionOut): ReviewItem {
+export function statementDismissItem(
+  suggestion: StatementSuggestionOut,
+): ReviewItem {
   return {
     assessmentId: suggestion.assessmentId,
     operationId: crypto.randomUUID(),
@@ -110,5 +117,57 @@ export function dismissItem(suggestion: StatementSuggestionOut): ReviewItem {
       candidateKey: `${suggestion.source}:${suggestion.chargeKey}`,
       fingerprint: suggestion.fingerprint,
     },
+  };
+}
+
+const base = (row: SuggestionListRow) => ({
+  assessmentId: row.assessmentId,
+  operationId: crypto.randomUUID(),
+  correction: { present: false as const },
+  ...(row.fingerprint ? { expectedFingerprint: row.fingerprint } : {}),
+  reason: null,
+  evidence: null,
+});
+
+/** Accept the row as suggested; null when its family reviews elsewhere (the Workbench). */
+export function acceptItem(
+  row: SuggestionListRow,
+  statementChoice?: StatementChoice,
+): ReviewItem | null {
+  if (!offers(row, "accept")) return null;
+  if (row.family === "statement_transaction")
+    return statementApplyItem(row.evidence, statementChoice);
+  return { ...base(row), verdict: "correct", intent: "apply" };
+}
+
+/** Wrong: the suggestion was mistaken; it applies nothing. */
+export function wrongItem(row: SuggestionListRow): ReviewItem | null {
+  if (!offers(row, "reject")) return null;
+  return { ...base(row), verdict: "wrong", intent: "history" };
+}
+
+/** Dismiss without judging; a statement charge stays suppressed after. */
+export function dismissItem(row: SuggestionListRow): ReviewItem {
+  if (row.family === "statement_transaction")
+    return statementDismissItem(row.evidence);
+  return { ...base(row), verdict: "dismissed", intent: "history" };
+}
+
+/**
+ * Dismiss and never suggest it again, or null when the family has no lasting
+ * suppression for this row. A statement Dismiss already suppresses its charge.
+ */
+export function neverSuggestItem(row: SuggestionListRow): ReviewItem | null {
+  if (row.family === "statement_transaction")
+    return statementDismissItem(row.evidence);
+  if (row.family !== "recommendation" || !offers(row, "never_suggest"))
+    return null;
+  const suppression = row.evidence.review.suppression;
+  if (!suppression) return null;
+  return {
+    ...base(row),
+    verdict: "dismissed",
+    intent: "history",
+    suppression,
   };
 }

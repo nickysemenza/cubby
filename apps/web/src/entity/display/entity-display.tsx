@@ -93,6 +93,7 @@ import {
   InheritedMarker,
   resolutionPolicyFor,
 } from "../fields/field-resolution";
+import { CategoryLabelById } from "../presentation/category-label";
 import { readPathValue } from "../read-path";
 import { compactFieldRendererFor } from "./compact-field-renderers";
 import {
@@ -574,6 +575,10 @@ function referenceLink(
   const routed = referenceMediaEntity(entity);
   if (routed === null)
     return <span className="font-mono text-xs">{item.name ?? item.id}</span>;
+  // A compact category reference reads as its full-path pill, like the
+  // category's own list cell (`compactFieldRendererFor`).
+  if (compact && routed === "productCategory")
+    return <CategoryLabelById id={item.id} />;
   return (
     <EntityRefLink
       variant="chip"
@@ -600,6 +605,15 @@ export function renderSuggestedListFieldValue<TRecord extends { id: string }>(
     (candidate) => candidate.key === fieldKey,
   );
   if (!field) return String(value ?? "—");
+  const readKey = field.readKey ?? field.key;
+  // A domain renderer (a category's full-path pill) wins over the generic
+  // reference link. It sees only the proposed value: the row's own resolved
+  // projection describes the current value, not this one.
+  const domain = compactFieldRendererFor(entity, fieldKey)?.(
+    { [field.key]: value, [readKey]: value },
+    { label },
+  );
+  if (domain !== undefined) return domain;
   const referenceId = z.string().safeParse(value);
   if (field.reference && referenceId.success) {
     // SAFETY: the entity reference target is declared by this field's
@@ -616,7 +630,6 @@ export function renderSuggestedListFieldValue<TRecord extends { id: string }>(
     );
   }
   if (label) return <span className="min-w-0 truncate">{label}</span>;
-  const readKey = field.readKey ?? field.key;
   return renderCompactFieldValue(
     entity,
     { ...record, [readKey]: value },

@@ -150,6 +150,7 @@ export const desktopNav: NavNode[] = [
     tier: "developer",
     children: [
       { to: "/design", label: "Design", icon: PaletteIcon },
+      { to: "/suggestions", label: "Suggestions", icon: ListChecksIcon },
       { to: "/ai", label: "AI", icon: SparkleIcon },
       { to: "/search/debug", label: "Search debug", icon: MagnifyingGlassIcon },
       { to: "/mcp", label: "MCP tools", icon: PlugIcon },

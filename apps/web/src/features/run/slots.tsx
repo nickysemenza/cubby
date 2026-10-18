@@ -43,8 +43,8 @@ export function RunSuggestions({ record }: { record: RunOut }) {
         status={record.status}
       />
       <Link
-        to="/ai"
-        search={{ tab: "review", runId: record.id }}
+        to="/suggestions"
+        search={{ runId: record.id }}
         className="text-sm font-medium text-primary underline-offset-2 hover:underline"
       >
         Review this sweep's Suggestions

@@ -1,0 +1,397 @@
+import type { SuggestionListRow } from "@cubby/schemas/suggestion-list";
+import { humanize } from "@cubby/shared";
+import { countLabel } from "@cubby/shared/pluralize";
+import type { ReactNode } from "react";
+import { match } from "ts-pattern";
+
+import { fieldEnumOptions } from "~/entity/display/enum-field-display";
+import {
+  SuggestionBody,
+  suggestionBasisLabels,
+} from "~/entity/suggestions/suggestion-body";
+import { renderOptionCell } from "~/entity/table/column-helpers";
+import { formatCurrency } from "~/lib/number-format";
+import { DateDisplay } from "~/ui/common/date-display";
+import { Button } from "~/ui/primitives/button";
+import { Checkbox } from "~/ui/primitives/checkbox";
+
+import {
+  acceptItem,
+  statementApplyItem,
+  wrongItem,
+  type StatementTransactionField,
+} from "./suggestion-review";
+import { useSuggestionReview } from "./suggestion-review-context";
+import { FieldValue, RecordLink } from "./suggestion-values";
+
+const KIND_OPTIONS = fieldEnumOptions("financialTransaction", "kind");
+const FIELD_LABELS = {
+  amount: "amount",
+  postedDate: "posted date",
+  status: "status",
+} satisfies Record<StatementTransactionField, string>;
+
+function EvidenceBox({
+  title,
+  children,
+}: {
+  title: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="min-w-0 rounded-md border bg-card px-2.5 py-2">
+      <h4 className="mb-1 text-2xs font-semibold tracking-wide text-muted-foreground uppercase">
+        {title}
+      </h4>
+      {children}
+    </section>
+  );
+}
+
+/** Label/value facts; a null value leaves its row out. */
+function Facts({ rows }: { rows: [string, ReactNode][] }) {
+  return (
+    <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs">
+      {rows
+        .filter(([, value]) => value !== null && value !== undefined)
+        .map(([label, value]) => (
+          <div key={label} className="contents">
+            <dt className="text-muted-foreground">{label}</dt>
+            <dd className="min-w-0">{value}</dd>
+          </div>
+        ))}
+    </dl>
+  );
+}
+
+type StatementRow = Extract<
+  SuggestionListRow,
+  { family: "statement_transaction" }
+>;
+
+/** The charge beside each candidate it could be, with what attaching would copy. */
+function StatementEvidence({ row }: { row: StatementRow }) {
+  const charge = row.evidence;
+  const { draft, setDraft, review, outcome } = useSuggestionReview();
+  const rowDraft = draft(row.id);
+  const busy = outcome(row.id)?.state === "pending";
+  const toggle = (
+    transactionId: string,
+    field: StatementTransactionField,
+    checked: boolean,
+  ) => {
+    const current = rowDraft.fields[transactionId] ?? [];
+    setDraft(row.id, {
+      fields: {
+        ...rowDraft.fields,
+        [transactionId]: checked
+          ? [...current, field]
+          : current.filter((value) => value !== field),
+      },
+    });
+  };
+  const kind = rowDraft.kind ?? charge.create?.kind;
+  return (
+    <div className="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1fr)]">
+      <EvidenceBox title="Statement charge">
+        <Facts
+          rows={[
+            ["Descriptor", charge.rawDescription],
+            ["Merchant", charge.merchant],
+            [
+              "Amount",
+              <span key="amount" className="tabular-nums">
+                {formatCurrency(charge.amount)}
+              </span>,
+            ],
+            ["Date", <DateDisplay key="date" start={charge.statementDate} />],
+            ["Status", humanize(charge.providerStatus)],
+            ["Account", <RecordLink key="account" record={row.record} />],
+            [
+              "Owner",
+              charge.ownerId ? (
+                <RecordLink
+                  key="owner"
+                  record={{ entity: "ledgerParty", id: charge.ownerId }}
+                />
+              ) : null,
+            ],
+            // Verbatim provider evidence; it sets no spending category.
+            [`${humanize(charge.source)} category`, charge.sourceCategory],
+          ]}
+        />
+      </EvidenceBox>
+      <EvidenceBox
+        title={
+          charge.candidates.length
+            ? charge.candidates.length === 1
+              ? "Candidate"
+              : `${charge.candidates.length} candidates`
+            : charge.recommended === "void"
+              ? "Hold"
+              : "New transaction"
+        }
+      >
+        {charge.candidates.length ? (
+          <ul
+            className="flex flex-col gap-2"
+            aria-label="Candidate transactions"
+          >
+            {charge.candidates.map((candidate, index) => {
+              const ticked = rowDraft.fields[candidate.transactionId] ?? [];
+              const recommended =
+                charge.recommended === "attach" && index === 0;
+              return (
+                <li
+                  key={candidate.transactionId}
+                  className="flex flex-col gap-1 border-b pb-2 last:border-b-0 last:pb-0"
+                >
+                  <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                    <RecordLink
+                      record={{
+                        entity: "financialTransaction",
+                        id: candidate.transactionId,
+                      }}
+                    />
+                    <span className="tabular-nums">
+                      {formatCurrency(candidate.amount)}
+                      {candidate.amount === charge.amount ? " =" : ""}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {humanize(candidate.status)}
+                      {(candidate.postedDate ?? candidate.transactionDate)
+                        ? ` · ${candidate.postedDate ?? candidate.transactionDate}`
+                        : ""}
+                    </span>
+                    {candidate.label ? (
+                      <span className="text-muted-foreground italic">
+                        Decision model: {candidate.label.same} ·{" "}
+                        {candidate.label.confidence}
+                        {candidate.label.model
+                          ? ` (${candidate.label.model})`
+                          : ""}
+                        ; advisory
+                      </span>
+                    ) : null}
+                  </div>
+                  {candidate.diff.length ? (
+                    <div className="flex flex-wrap items-center gap-3 text-xs">
+                      {candidate.diff.map((field) => (
+                        <label
+                          key={field}
+                          className="inline-flex items-center gap-1"
+                        >
+                          <Checkbox
+                            checked={ticked.includes(field)}
+                            disabled={busy}
+                            onCheckedChange={(checked) =>
+                              toggle(candidate.transactionId, field, checked)
+                            }
+                          />
+                          Apply {FIELD_LABELS[field]}
+                        </label>
+                      ))}
+                    </div>
+                  ) : null}
+                  {!recommended ? (
+                    <div>
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() =>
+                          void review([row], () =>
+                            statementApplyItem(charge, {
+                              action: "attach",
+                              transactionId: candidate.transactionId,
+                              fields: [...ticked],
+                            }),
+                          )
+                        }
+                      >
+                        Attach to this candidate
+                      </Button>
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        ) : charge.create ? (
+          <Facts
+            rows={[
+              ["Kind", renderOptionCell(kind, KIND_OPTIONS)],
+              [
+                "Amount",
+                <span key="amount" className="tabular-nums">
+                  {formatCurrency(charge.create.amount)}
+                </span>,
+              ],
+              ["Status", humanize(charge.create.status)],
+            ]}
+          />
+        ) : (
+          <p className="text-xs text-muted-foreground">No transaction.</p>
+        )}
+        {charge.supersedeTransactionId ? (
+          <p className="mt-1 text-xs">
+            Settles hold{" "}
+            <RecordLink
+              record={{
+                entity: "financialTransaction",
+                id: charge.supersedeTransactionId,
+              }}
+            />
+          </p>
+        ) : null}
+        {charge.voidTransactionId ? (
+          <p className="mt-1 text-xs">
+            Voids hold{" "}
+            <RecordLink
+              record={{
+                entity: "financialTransaction",
+                id: charge.voidTransactionId,
+              }}
+            />
+            , which no later statement shows.
+          </p>
+        ) : null}
+      </EvidenceBox>
+      <EvidenceBox title="Why">
+        <div className="flex flex-col gap-1 text-xs">
+          <p>
+            {charge.clean
+              ? "Clean: deterministic evidence and no competing candidate."
+              : "Needs review before it is accepted."}
+          </p>
+          {charge.create ? (
+            // TODO(#2739): show the kind votes, counterparty and transfer
+            // evidence once the judgment carries them.
+            <p className="text-muted-foreground">
+              Kind {kind ? humanize(kind) : "unknown"}
+              {rowDraft.kind && rowDraft.kind !== charge.create.kind
+                ? " (changed by you)"
+                : ` from ${charge.create.kindSource === "sign" ? "the amount sign" : charge.create.kindSource}`}
+            </p>
+          ) : null}
+          {charge.siblings > 0 ? (
+            <p className="text-warning-ink">
+              {countLabel(charge.siblings, "similar unmatched charge")}
+            </p>
+          ) : null}
+          {charge.model ? (
+            <p className="text-muted-foreground">Labelled by {charge.model}</p>
+          ) : null}
+        </div>
+      </EvidenceBox>
+    </div>
+  );
+}
+
+type FieldRow = Extract<SuggestionListRow, { family: "field" }>;
+
+function FieldEvidence({ row }: { row: FieldRow }) {
+  const suggestion = row.evidence;
+  const { review, outcome } = useSuggestionReview();
+  const state = outcome(row.id);
+  const value = (raw: unknown, suggested = false) => (
+    <FieldValue
+      entity={suggestion.entity}
+      recordId={suggestion.recordId}
+      field={suggestion.field}
+      value={raw}
+      suggested={suggested}
+    />
+  );
+  return (
+    <div className="max-w-xl">
+      <SuggestionBody
+        current={
+          suggestion.kind === "correction"
+            ? value(suggestion.currentValue)
+            : null
+        }
+        proposed={value(suggestion.suggestedValue, true)}
+        probability={suggestion.confidence}
+        runnerUp={
+          suggestion.runnerUpValue === null
+            ? null
+            : {
+                label: value(suggestion.runnerUpValue),
+                probability: suggestion.runnerUpConfidence,
+              }
+        }
+        basis={suggestionBasisLabels(suggestion.entity, suggestion.field)}
+        provenance={{
+          model: suggestion.model,
+          runId: suggestion.runId,
+          at: suggestion.createdAt,
+        }}
+        saving={state?.state === "pending"}
+        failure={state?.state === "failed" ? state.error : undefined}
+        onAccept={() => void review([row], (target) => acceptItem(target))}
+        onReject={() => void review([row], wrongItem)}
+      />
+    </div>
+  );
+}
+
+type ConnectionRow = Extract<SuggestionListRow, { family: "recommendation" }>;
+
+function ConnectionEvidence({ row }: { row: ConnectionRow }) {
+  const proposal = row.evidence;
+  const lines = [
+    ...proposal.evidence.reasons.map((text) => ({ text, tone: "" })),
+    ...proposal.evidence.contradictions.map((text) => ({
+      text: `Conflict: ${text}`,
+      tone: "text-destructive",
+    })),
+    ...proposal.evidence.unknowns.map((text) => ({
+      text: `Unknown: ${text}`,
+      tone: "text-muted-foreground",
+    })),
+  ];
+  return (
+    <div className="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
+      <EvidenceBox title={proposal.label}>
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs">
+          <RecordLink record={row.record} />
+          <span aria-hidden className="text-muted-foreground">
+            →
+          </span>
+          {row.other ? <RecordLink record={row.other} /> : null}
+        </div>
+      </EvidenceBox>
+      <EvidenceBox title="Basis">
+        {lines.length ? (
+          <ul className="flex flex-col gap-0.5 text-xs">
+            {lines.map((line) => (
+              <li key={line.text} className={line.tone}>
+                {line.text}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-xs text-muted-foreground">No stated basis.</p>
+        )}
+      </EvidenceBox>
+    </div>
+  );
+}
+
+/** A row's own evidence, opened beneath it. */
+export function SuggestionEvidence({ row }: { row: SuggestionListRow }) {
+  return (
+    <div className="px-3 py-2.5 pl-12">
+      {match(row)
+        .with({ family: "statement_transaction" }, (statement) => (
+          <StatementEvidence row={statement} />
+        ))
+        .with({ family: "field" }, (field) => <FieldEvidence row={field} />)
+        .with({ family: "recommendation" }, (connection) => (
+          <ConnectionEvidence row={connection} />
+        ))
+        .exhaustive()}
+    </div>
+  );
+}
