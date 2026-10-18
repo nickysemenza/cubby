@@ -308,7 +308,7 @@ describe("mail research admission", () => {
         },
         ctx.actor,
       ),
-    ).rejects.toMatchObject({ code: "EMAIL_NOT_FOUND" });
+    ).rejects.toMatchObject({ code: "NOT_FOUND", reason: "EMAIL_NOT_FOUND" });
     const { reviewAssessment } =
       await import("~/server/generic/assessment/repo/assessment-review");
     const { kernelCtx } =
