@@ -10,6 +10,7 @@ import { getDb, notDeleted } from "~/server/db/helpers";
 import {
   expense,
   emailFinancialAssociation,
+  ledgerParty,
   orderMail,
   purchase as purchaseTable,
   runFinding,
@@ -100,6 +101,129 @@ describe("server verified financial convergence", () => {
     ).toMatchObject({ status: "review_required" });
     expect(await liveCosts()).toEqual([{ cost: 30 }]);
   });
+  // A household-funded card owned by another member's party refused its
+  // primary cardholder: access read only the owner, never the card's people.
+  it.each([
+    ["the primary cardholder, by charge date", "cardholder", "2026-09-01"],
+    ["the primary cardholder, by a lag-safe posting date", "cardholder", null],
+    ["an authorized user on the charge date", "authorized", "2026-09-01"],
+  ] as const)(
+    "books a household-funded card for %s",
+    async (_, role, transactionDate) => {
+      const household = await createRepoEntity(ctx, "ledgerParty", {
+        name: "Synthetic household",
+        kind: "household",
+      });
+      const holder = await createRepoEntity(ctx, "ledgerParty", {
+        name: "Synthetic holder",
+        kind: "member",
+      });
+      await getDb(ctx.db)
+        .update(ledgerParty)
+        .set({ userId: ctx.actor.userId })
+        .where(eq(ledgerParty.shortcode, holder.output.id));
+      const owner = await createRepoEntity(ctx, "ledgerParty", {
+        name: "Synthetic account owner",
+        kind: "member",
+      });
+      const account = await createRepoEntity(ctx, "financialAccount", {
+        name: "Synthetic shared card",
+        identity: { kind: "credit_card", issuer: null, network: "visa" },
+        ledgerPartyId: owner.output.id,
+        primaryCardholderId:
+          role === "cardholder" ? holder.output.id : owner.output.id,
+        authorizedUsers:
+          role === "authorized"
+            ? [
+                {
+                  ledgerPartyId: holder.output.id,
+                  validFrom: "2026-08-01",
+                  validTo: null,
+                },
+              ]
+            : [],
+        fundingPeriods: [
+          {
+            ledgerPartyId: household.output.id,
+            validFrom: "2026-08-01",
+            validTo: null,
+          },
+        ],
+        provisional: false,
+      });
+      const transaction = await createRepoEntity(ctx, "financialTransaction", {
+        accountId: account.output.id,
+        kind: "purchase",
+        amount: 25,
+        status: "posted",
+        transactionDate,
+        postedDate: "2026-09-03",
+        merchant: "Synthetic store",
+        sourceRefs: [
+          { source: "synthetic-bank", externalId: "synthetic-card-charge" },
+        ],
+        allocations: [],
+      });
+      expect(
+        await convergeFinancialTransaction(
+          ctx.db,
+          { transactionId: transaction.output.id },
+          ctx.actor,
+        ),
+      ).not.toMatchObject({
+        status: "review_required",
+        reason: expect.stringContaining("funding account"),
+      });
+    },
+  );
+
+  it("still refuses a household-funded card the member neither owns nor holds", async () => {
+    const household = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Synthetic household",
+      kind: "household",
+    });
+    const owner = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Synthetic account owner",
+      kind: "member",
+    });
+    const account = await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic other card",
+      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      ledgerPartyId: owner.output.id,
+      fundingPeriods: [
+        {
+          ledgerPartyId: household.output.id,
+          validFrom: "2026-08-01",
+          validTo: null,
+        },
+      ],
+      provisional: false,
+    });
+    const transaction = await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      kind: "purchase",
+      amount: 25,
+      status: "posted",
+      transactionDate: "2026-09-01",
+      postedDate: "2026-09-03",
+      merchant: "Synthetic store",
+      sourceRefs: [
+        { source: "synthetic-bank", externalId: "synthetic-other-charge" },
+      ],
+      allocations: [],
+    });
+    expect(
+      await convergeFinancialTransaction(
+        ctx.db,
+        { transactionId: transaction.output.id },
+        ctx.actor,
+      ),
+    ).toMatchObject({
+      status: "review_required",
+      reason: expect.stringContaining("funding account"),
+    });
+  });
+
   // A newly accepted Email adds a source ref after booking. Replay must keep
   // that verified provenance without blessing unrelated edits to booked money.
   it("replays automatic booking after adding a later exact financial Email", async () => {
