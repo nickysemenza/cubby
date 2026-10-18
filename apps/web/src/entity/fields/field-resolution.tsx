@@ -33,17 +33,32 @@ import { cn } from "~/lib/utils";
 import type { BulkAction } from "~/ui/data-table/bulk-actions.types";
 import { Button } from "~/ui/primitives/button";
 
-const resolutionRecordSchema = z.looseObject({
+const resolutionRecordSchema = z.object({
   id: z.string().optional(),
   fieldResolutions: fieldResolutionsSchema.optional(),
 });
 const resolutionPatchSchema = z.record(z.string(), z.json());
 type ResolutionPatch = z.output<typeof resolutionPatchSchema>;
 
+// Not loose: a fixed-shape parse reads only these two keys, while a loose one
+// copies every key of the row — and every table cell reads this.
+const parseResolutionRecord = (record: unknown) => {
+  const parsed = resolutionRecordSchema.safeParse(record);
+  return parsed.success ? parsed.data : null;
+};
+
 function fieldResolutionEntryFor(record: unknown, field: string) {
-  const parsedRecord = resolutionRecordSchema.safeParse(record);
-  if (!parsedRecord.success || !parsedRecord.data.fieldResolutions) return null;
-  const resolutions = parsedRecord.data.fieldResolutions;
+  return resolutionEntryIn(
+    parseResolutionRecord(record)?.fieldResolutions,
+    field,
+  );
+}
+
+function resolutionEntryIn(
+  resolutions: z.output<typeof fieldResolutionsSchema> | undefined,
+  field: string,
+) {
+  if (!resolutions) return null;
   const key =
     [field, `${field}Id`].find((candidate) => resolutions[candidate]) ??
     Object.keys(resolutions).find(
@@ -57,12 +72,10 @@ function redundantResetPatch(
   entity: StandardEntity,
   record: unknown,
 ): ResolutionPatch | null {
-  const parsedRecord = resolutionRecordSchema.safeParse(record);
-  if (!parsedRecord.success || !parsedRecord.data.fieldResolutions) return null;
+  const resolutions = parseResolutionRecord(record)?.fieldResolutions;
+  if (!resolutions) return null;
   const patch: ResolutionPatch = {};
-  for (const [field, resolution] of Object.entries(
-    parsedRecord.data.fieldResolutions,
-  )) {
+  for (const [field, resolution] of Object.entries(resolutions)) {
     if (
       resolution.mode !== "explicit" ||
       !resolution.matchesFallback ||
@@ -125,9 +138,10 @@ export function fieldResolutionFor(
   record: unknown,
   field: string,
 ): FieldResolution | null {
-  const parsedRecord = resolutionRecordSchema.safeParse(record);
-  if (!parsedRecord.success || !parsedRecord.data.fieldResolutions) return null;
-  return fieldResolutionEntryFor(parsedRecord.data, field)?.resolution ?? null;
+  return (
+    resolutionEntryIn(parseResolutionRecord(record)?.fieldResolutions, field)
+      ?.resolution ?? null
+  );
 }
 
 /** Whether a resolution tells the reader anything the value doesn't. An empty
@@ -260,8 +274,8 @@ export const resolutionActionClassName =
   "h-auto min-w-0 p-0 text-xs underline decoration-border underline-offset-4 hover:decoration-current";
 
 function recordRef(record: unknown) {
-  const parsed = resolutionRecordSchema.safeParse(record);
-  return parsed.success ? parseShortcode(parsed.data.id ?? "") : null;
+  const parsed = parseResolutionRecord(record);
+  return parsed ? parseShortcode(parsed.id ?? "") : null;
 }
 
 /** Compact provenance for values whose stored assignment differs from the

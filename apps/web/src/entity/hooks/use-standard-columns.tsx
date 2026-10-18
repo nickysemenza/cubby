@@ -12,6 +12,7 @@ import type { EntityActionSubject } from "~/entity/actions/entity-actions";
 import { createEntityDisplayColumns } from "~/entity/display/entity-display";
 import { browserEntityDefinition, getSortableFields } from "~/entity/entities";
 import { identityWidthClassName } from "~/entity/entity-list/identity-list-config";
+import { readRecordField } from "~/entity/entity-references";
 import { featureRegistry } from "~/entity/feature-registry";
 import { manifestFilterConfig } from "~/entity/filter-manifest";
 import {
@@ -56,6 +57,8 @@ interface BaseListRow {
   /** Universal server-resolved entity identity imagery. */
   displayImages?: DisplayImageSummary[];
 }
+
+const titleValueSchema = z.string().nullish().catch(null);
 
 interface UseStandardColumnsOptions<TData extends BaseListRow> {
   /** The entity type */
@@ -246,11 +249,7 @@ export function useStandardColumns<TData extends BaseListRow>({
         expandable,
         rowLink,
         getValue: (row: TData) =>
-          z
-            .string()
-            .nullish()
-            .catch(null)
-            .parse(z.looseObject({}).parse(row)[titleField]) ?? null,
+          readRecordField(row, titleField, titleValueSchema) ?? null,
       }),
       quality: createEntityDisplayColumns(entity, columnHelper, undefined, {
         only: ["dataQuality"],

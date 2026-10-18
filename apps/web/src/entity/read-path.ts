@@ -1,5 +1,3 @@
-import { z } from "zod";
-
 /**
  * Evaluates a manifest `display.readPath` against a row: dotted keys, `[n]`
  * indexing, and a `[]` projection that maps the rest of the path over an
@@ -29,8 +27,6 @@ function parseSteps(path: string): readonly Step[] {
   return steps;
 }
 
-const recordSchema = z.record(z.string(), z.unknown());
-
 // oxlint-disable-next-line anti-slop/no-unknown-returns -- A row path is untyped by construction; the caller parses the projected value.
 function walk(value: unknown, steps: readonly Step[]): unknown {
   let current = value;
@@ -47,8 +43,13 @@ function walk(value: unknown, steps: readonly Step[]): unknown {
       current = Array.isArray(current) ? current[step.index] : undefined;
       continue;
     }
-    const record = recordSchema.safeParse(current);
-    current = record.success ? record.data[step.key] : undefined;
+    // An own-property read of a plain object (what `z.record` accepted), not a
+    // `z.record` parse: that copied the object at every step of every cell's
+    // path.
+    if (typeof current !== "object" || Array.isArray(current)) return undefined;
+    const prototype: unknown = Object.getPrototypeOf(current);
+    if (prototype !== Object.prototype && prototype !== null) return undefined;
+    current = Object.getOwnPropertyDescriptor(current, step.key)?.value;
   }
   return current;
 }

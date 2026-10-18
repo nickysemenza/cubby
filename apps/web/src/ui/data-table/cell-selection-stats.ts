@@ -40,10 +40,13 @@ export function getCellSelectionStats<TData extends RowData>(
   let mixedOrNonNumeric = false;
 
   for (const row of rows) {
+    // Indexed once per row: a drag-select recomputes this per hovered cell,
+    // and a per-column scan made it rows × columns².
+    const cells = new Map(
+      row.getAllCells().map((cell) => [cell.column.id, cell]),
+    );
     for (const column of columns) {
-      const cell = row
-        .getAllCells()
-        .find((candidate) => candidate.column.id === column.id);
+      const cell = cells.get(column.id);
       if (!cell?.getIsSelected()) continue;
       cellCount += 1;
 
