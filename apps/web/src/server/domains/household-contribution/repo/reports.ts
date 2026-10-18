@@ -20,10 +20,7 @@ import {
   ledgerTransfer,
 } from "~/server/db/schema";
 import { expenseDerivedCostsSql } from "~/server/domains/expense/repo/expense-derived-read";
-import {
-  collectDescendantIds,
-  loadProjectTree,
-} from "~/server/domains/project/repo/subtree";
+import { loadProjectSubtreeIds } from "~/server/domains/project/repo/subtree";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { splitExpenseSpend } from "~/server/lib/spend";
 
@@ -392,13 +389,8 @@ export async function projectContribution(
   if (!projectIds) {
     const projectId = await resolveOrThrow(db, "project", input.projectId);
     projectIds = [projectId];
-    if (input.includeSubprojects) {
-      const tree = await loadProjectTree(db);
-      projectIds = [
-        projectId,
-        ...collectDescendantIds(tree.childrenByParent, projectId),
-      ];
-    }
+    if (input.includeSubprojects)
+      projectIds = await loadProjectSubtreeIds(db, [projectId]);
   }
   const scope = {
     projectIds,

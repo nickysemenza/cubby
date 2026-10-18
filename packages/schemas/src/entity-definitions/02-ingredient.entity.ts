@@ -38,6 +38,9 @@ export default defineEntity({
       ],
     },
     list: {
+      // A recipe's own ingredient rows (a recipe used as an ingredient) are
+      // never listed or counted.
+      scope: ["recipeId"],
       savedViews: [
         {
           id: "needs-a-product",
@@ -375,7 +378,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Filter by ingredient name...",
         deriveSchema: true,
-        stored: { columns: ["name", "aliases"] },
+        anyOf: ["name", "aliases"],
         schemaDescription: "Filter by ingredient name or alias (substring)",
       },
       {
@@ -444,13 +447,11 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by related meals id...",
         brandRef: { entity: "meal" },
-        urlOnly: true,
       },
       {
         columnId: "mealPresenceFilter",
         kind: "presence",
         placeholder: "Filter related meals presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:ingredient.eaters",
@@ -465,13 +466,11 @@ export default defineEntity({
         placeholder: "Filter by related eaters id...",
         brandRef: { entity: "ledgerParty" },
         currentMember: true,
-        urlOnly: true,
       },
       {
         columnId: "eaterPresenceFilter",
         kind: "presence",
         placeholder: "Filter related eaters presence...",
-        urlOnly: true,
       },
     ],
   },

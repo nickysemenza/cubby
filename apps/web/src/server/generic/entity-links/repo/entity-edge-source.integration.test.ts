@@ -1,8 +1,9 @@
+import { eq } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { imageSighting } from "~/server/db/schema";
+import { imageSighting, purchase } from "~/server/db/schema";
 import { createOrReuseAttachedImage } from "~/server/domains/image/repo/image";
 import { mergeProducts } from "~/server/domains/product/repo/merge";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -137,8 +138,25 @@ describe("entity edge source", () => {
       makeLocationInput({ name: "Edge empty child", parentId: parent.id }),
       TEST_ACTOR,
     );
+    // An edge counts only while its other endpoint is live.
+    const [kept, dropped] = await Promise.all([
+      insertWithShortcode(ctx.db, "vendor", { name: "Synthetic kept vendor" }),
+      insertWithShortcode(ctx.db, "vendor", {
+        name: "Synthetic dropped vendor",
+      }),
+    ]);
+    await insertWithShortcode(ctx.db, "purchase", { vendorId: kept.id });
+    const removed = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: dropped.id,
+    });
+    await getDb(ctx.db)
+      .update(purchase)
+      .set({ deletedAt: new Date() })
+      .where(eq(purchase.id, removed.id));
     const orphans = await findOrphanEntities(ctx.db, { limit: 200 });
     const codes = orphans.items.map((entry) => entry.id);
+    expect(codes).not.toContain(kept.shortcode);
+    expect(codes).toContain(dropped.shortcode);
     expect(codes).toContain(lonely.id);
     expect(codes).not.toContain(shelf.id);
     expect(codes).not.toContain(parent.id);

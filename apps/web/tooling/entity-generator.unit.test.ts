@@ -1398,7 +1398,7 @@ describe("typed entity compiler", () => {
     expect(() => withListOrder(1.5)).toThrow("expected int");
   });
 
-  it("validates stored filter shapes against the storage model", () => {
+  it("validates stored and anyOf filter shapes against the storage model", () => {
     const fields = [
       { key: "name", kind: "text" },
       { key: "tags", kind: "text-array", nullable: true },
@@ -1413,7 +1413,7 @@ describe("typed entity compiler", () => {
       },
     ];
     type RawDescriptor = EntityDeclaration["filters"]["descriptors"][number];
-    const stored = (
+    const compiled = (
       descriptor: Pick<RawDescriptor, "columnId" | "kind"> &
         Partial<RawDescriptor>,
     ) =>
@@ -1423,6 +1423,7 @@ describe("typed entity compiler", () => {
           model: {
             ...model,
             fields,
+            derived: { label: { type: "text" }, total: { type: "number" } },
             storage: [
               "name",
               "tags",
@@ -1443,18 +1444,16 @@ describe("typed entity compiler", () => {
             ],
           },
         },
-      ])[0]?.filterDescriptors[0]?.stored;
-    expect(stored({ columnId: "name", kind: "text" })).toEqual({
-      columns: ["name"],
-      array: false,
-    });
-    expect(
-      stored({
-        columnId: "search",
-        kind: "text",
-        stored: { columns: ["name", "tags"] },
-      }),
-    ).toEqual({ columns: ["name", "tags"], array: false });
+      ])[0]?.filterDescriptors[0];
+    const stored = (descriptor: Parameters<typeof compiled>[0]) =>
+      compiled(descriptor)?.stored;
+    const anyOf = (keys: string[], kind: RawDescriptor["kind"] = "text") =>
+      compiled({ columnId: "search", kind, stored: undefined, anyOf: keys });
+    expect(anyOf(["name", "tags", "label"])?.anyOf).toEqual([
+      { key: "name", source: "field" },
+      { key: "tags", source: "field" },
+      { key: "label", source: "derived" },
+    ]);
     expect(
       stored({
         columnId: "tags",
@@ -1476,20 +1475,24 @@ describe("typed entity compiler", () => {
     ).toEqual({ columns: ["parentId"], array: false });
     const rejected: Array<[Parameters<typeof stored>[0], string]> = [
       [
-        { columnId: "name", kind: "text", deriveSchema: false },
+        { columnId: "at", kind: "boolean", deriveSchema: false },
         "stored requires deriveSchema",
       ],
       [
-        { columnId: "name", kind: "text", stored: { columns: ["missing"] } },
+        { columnId: "at", kind: "boolean", stored: { columns: ["missing"] } },
         "needs a stored model field missing",
       ],
       [
         {
           columnId: "flag",
           kind: "boolean",
-          stored: { columns: ["flag", "name"] },
+          stored: { columns: ["flag", "at"] },
         },
-        "several fields only for a text filter",
+        "stored names one field",
+      ],
+      [
+        { columnId: "name", kind: "text" },
+        "declares the fields it matches as anyOf, not stored",
       ],
       [
         { columnId: "tags", kind: "multiselect", optionsKey: "tags" },
@@ -1527,6 +1530,26 @@ describe("typed entity compiler", () => {
     ];
     for (const [descriptor, message] of rejected)
       expect(() => stored(descriptor)).toThrow(message);
+    const rejectedAnyOf: Array<
+      [string[], RawDescriptor["kind"] | undefined, string]
+    > = [
+      [["name"], "multiselect", "anyOf applies only to a text filter"],
+      [["missing"], undefined, "names no stored model field"],
+      [["flag"], undefined, "is a boolean field"],
+      [["name", "name"], undefined, "repeats a field"],
+      [["total"], undefined, "anyOf total is not text"],
+    ];
+    for (const [keys, kind, message] of rejectedAnyOf)
+      expect(() => anyOf(keys, kind)).toThrow(message);
+    expect(() =>
+      compiled({
+        columnId: "search",
+        kind: "text",
+        stored: undefined,
+        anyOf: ["name"],
+        derived: "label",
+      }),
+    ).toThrow("either anyOf or one derived entry");
   });
 
   // Regression: Run's purpose filter was a hand copy of the field's options.

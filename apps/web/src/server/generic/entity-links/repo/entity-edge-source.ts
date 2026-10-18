@@ -254,6 +254,16 @@ const branchSql = (spec: EntityEdgeSpec, filter: EdgeFilter): SQL => {
   WHERE ${sql.join(conditions, sql` AND `)}`;
 };
 
+/** The arms' raw rows, before either endpoint's identity is checked. */
+const edgeArmsSql = (
+  specs: readonly EntityEdgeSpec[],
+  filter: EdgeFilter = null,
+): SQL =>
+  sql.join(
+    specs.map((spec) => branchSql(spec, filter)),
+    sql` UNION ALL `,
+  );
+
 /**
  * The live edge source: both endpoints must be live identities. The target's
  * kind must match the arm's, because a polymorphic column such as
@@ -265,10 +275,7 @@ const entityEdgeSourceSql = (
   filter: EdgeFilter = null,
 ): SQL => sql`SELECT edge.*, source_entity."shortcode" AS "sourceCode",
     target_entity."shortcode" AS "targetCode"
-  FROM (${sql.join(
-    specs.map((spec) => branchSql(spec, filter)),
-    sql` UNION ALL `,
-  )}) edge
+  FROM (${edgeArmsSql(specs, filter)}) edge
   JOIN "Entity" source_entity ON source_entity."id" = edge."sourceId"
     AND source_entity."deletedAt" IS NULL
   JOIN "Entity" target_entity ON target_entity."id" = edge."targetId"
@@ -472,20 +479,36 @@ export async function findOrphanEntities(
       spec.source.kind === "identity" ||
       checkedKinds.has(spec.source.sourceKind),
   );
+  // Edges are checked only where they touch a candidate, and only for the
+  // other endpoint's liveness: joining every edge to both identities hashed
+  // the whole Entity table twice.
   const result = await unwrapDb(db).execute(sql`
-    WITH edge AS (${entityEdgeSourceSql(specs)}),
-    connected AS (
-      -- A same-kind edge (a location's parent) counts only for its target: a
-      -- location that merely sits in the tree is still empty.
-      SELECT "sourceId" AS id FROM edge WHERE "sourceKind" <> "targetKind"
-      UNION SELECT "targetId" FROM edge
-    ),
-    orphan AS (
+    WITH edge AS (${edgeArmsSql(specs)}),
+    candidate AS MATERIALIZED (
       SELECT e."id", e."kind", e."shortcode", e."createdAt"
       FROM "Entity" e
       WHERE e."kind" IN (${kinds}) AND e."deletedAt" IS NULL
         AND e."shortcode" IS NOT NULL
-        AND NOT EXISTS (SELECT 1 FROM connected c WHERE c.id = e."id")
+    ),
+    connected AS (
+      SELECT edge."targetId" AS id FROM edge
+      JOIN candidate c ON c."id" = edge."targetId" AND c."kind" = edge."targetKind"
+      WHERE EXISTS (SELECT 1 FROM "Entity" source_entity
+        WHERE source_entity."id" = edge."sourceId" AND source_entity."deletedAt" IS NULL)
+      UNION
+      -- A same-kind edge (a location's parent) counts only for its target: a
+      -- location that merely sits in the tree is still empty.
+      SELECT edge."sourceId" FROM edge
+      JOIN candidate c ON c."id" = edge."sourceId"
+      WHERE edge."sourceKind" <> edge."targetKind"
+        AND EXISTS (SELECT 1 FROM "Entity" target_entity
+          WHERE target_entity."id" = edge."targetId"
+            AND target_entity."kind" = edge."targetKind"
+            AND target_entity."deletedAt" IS NULL)
+    ),
+    orphan AS (
+      SELECT c.* FROM candidate c
+      WHERE NOT EXISTS (SELECT 1 FROM connected k WHERE k.id = c."id")
     )
     SELECT o.*, count(*) OVER ()::int AS "total"
     FROM orphan o

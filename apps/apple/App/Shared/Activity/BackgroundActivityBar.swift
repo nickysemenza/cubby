@@ -62,10 +62,10 @@ struct BackgroundActivityBar: View {
     @ViewBuilder private var progressIndicator: some View {
         if let aggregateProgress {
             ProgressView(value: aggregateProgress)
-                .frame(width: 28)
+                .fieldGuideIconSlot(width: 28)
                 .animation(reduceMotion ? nil : .default, value: aggregateProgress)
         } else {
-            ProgressView().frame(width: 28)
+            ProgressView().fieldGuideIconSlot(width: 28)
         }
     }
 

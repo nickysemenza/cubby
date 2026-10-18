@@ -117,8 +117,8 @@ constraint widening to commit (blocking every entity insert for that window);
 verify bookkeeping is unchanged before retrying. After a successful commit,
 keep maintenance on and roll forward if the deploy fails. Then merge, verify
 the deployed server, resume queue delivery, delete `MAINTENANCE_MODE`, and
-expect older native builds to receive 426 until they update to the bumped
-compatibility version. Old long `IPR-` ids and `/runs/jobs/…` links stop
+expect older native builds' writes to receive 426 until they update to the
+bumped compatibility version. Old long `IPR-` ids and `/runs/jobs/…` links stop
 resolving by design.
 
 ## Label-review retirement

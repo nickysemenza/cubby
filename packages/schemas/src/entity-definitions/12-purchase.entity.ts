@@ -1358,7 +1358,6 @@ export default defineEntity({
         kind: "multiselect",
         derived: true,
         placeholder: "Filter financial reconciliation...",
-        urlOnly: true,
       },
       {
         columnId: "purchase",
@@ -1368,7 +1367,7 @@ export default defineEntity({
         placeholder: "Search order id or label...",
         deriveSchema: true,
         schemaDescription: "Substring match on order id or human display label",
-        stored: { columns: ["orderId", "displayLabel"] },
+        anyOf: ["orderId", "displayLabel"],
       },
       {
         columnId: "displayLabel",
@@ -1377,7 +1376,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Search display label...",
         deriveSchema: true,
-        stored: true,
+        anyOf: ["displayLabel"],
         schemaDescription: "Substring match on the human display label only",
       },
       {
@@ -1522,7 +1521,6 @@ export default defineEntity({
         field: "orderId",
         kind: "multiselect",
         placeholder: "Filter by order id...",
-        urlOnly: true,
         deriveSchema: true,
         stored: { columns: ["orderId"] },
       },
@@ -1531,14 +1529,12 @@ export default defineEntity({
         urlKey: "lineTotalMin",
         kind: "text",
         placeholder: "Minimum expense total...",
-        urlOnly: true,
       },
       {
         columnId: "expenseTotalMax",
         urlKey: "lineTotalMax",
         kind: "text",
         placeholder: "Maximum expense total...",
-        urlOnly: true,
       },
       {
         columnId: "related:purchase.expenses",
@@ -1552,13 +1548,11 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by related expenses id...",
         brandRef: { entity: "expense" },
-        urlOnly: true,
       },
       {
         columnId: "expensePresenceFilter",
         kind: "presence",
         placeholder: "Filter related expenses presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:purchase.transactions",
@@ -1572,13 +1566,11 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by related financial transactions id...",
         brandRef: { entity: "financialTransaction" },
-        urlOnly: true,
       },
       {
         columnId: "financialTransactionPresenceFilter",
         kind: "presence",
         placeholder: "Filter related financial transactions presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:purchase.products",
@@ -1592,13 +1584,11 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by related products id...",
         brandRef: { entity: "product" },
-        urlOnly: true,
       },
       {
         columnId: "productPresenceFilter",
         kind: "presence",
         placeholder: "Filter related products presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:purchase.projects",
@@ -1615,13 +1605,11 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by project id...",
         brandRef: { entity: "project" },
-        urlOnly: true,
       },
       {
         columnId: "projectPresenceFilter",
         kind: "presence",
         placeholder: "Filter project presence...",
-        urlOnly: true,
       },
     ],
   },

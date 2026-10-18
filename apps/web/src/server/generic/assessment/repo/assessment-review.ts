@@ -9,6 +9,7 @@ import {
 } from "@cubby/schemas/assessment";
 import { correctEmailRelevanceInput } from "@cubby/schemas/email-actions";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { statementTransactionApplication } from "@cubby/schemas/statement-suggestion";
 import { getErrorMessage } from "@cubby/shared";
 import { and, eq, or, sql } from "drizzle-orm";
 import { isEqual } from "es-toolkit";
@@ -69,7 +70,7 @@ type Handler = {
     context: EntityKernelContext,
     state: typeof assessmentState.$inferSelect,
     input: Review,
-  ) => Promise<void>;
+  ) => Promise<z.infer<typeof assessmentReviewOut>["applicationResult"] | void>;
 };
 /** Each family validates its own subject and uses its transaction-bound domain mutation. */
 const assessmentFamilies = {
@@ -262,13 +263,35 @@ const assessmentFamilies = {
       );
     },
   },
+  statement_transaction: {
+    subject: assessmentSubjects.statement_transaction,
+    target: assessmentProjectionTargets.statement_transaction,
+    // The domain write appends settlement refs, which supersede pending
+    // suggestions by trigger; the handler marks its own state applied first.
+    transactionBound: true,
+    actions: ["correct", "wrong", "uncertain", "dismissed"],
+    apply: async (db, context, state, input) => {
+      if (input.application?.kind !== "statement_transaction")
+        throw new Error(
+          "Applying a Transaction suggestion requires the chosen statement action",
+        );
+      const { applyStatementTransactionSuggestion } =
+        await import("~/server/domains/statement-import/repo/statement-suggestion-apply");
+      await applyStatementTransactionSuggestion(db, context, state, {
+        application: input.application,
+        corrected: input.correction.present,
+      });
+    },
+  },
   recommendation: {
     subject: assessmentSubjects.recommendation,
     target: assessmentProjectionTargets.recommendation,
-    transactionBound: true,
-    actions: ["wrong", "uncertain", "dismissed"],
-    apply: async () => {
-      throw new Error("Recommendation Feedback has no domain application");
+    transactionBound: false,
+    actions: ["correct", "wrong", "uncertain", "dismissed"],
+    apply: async (db, context, state, input) => {
+      const { applyEntityConnection } =
+        await import("~/server/domains/connection/repo/entity-connections");
+      return applyEntityConnection(db, context, state, input);
     },
   },
 } satisfies Record<AssessmentFamily, Handler>;
@@ -341,6 +364,13 @@ export async function reviewAssessment(
         throw new Error(
           "Suppression differs from the declared recommendation scope",
         );
+    } else if (prediction.subject.kind === "statement_transaction") {
+      if (
+        input.suppression.scope !== "statement_transaction" ||
+        input.suppression.candidateKey !==
+          `${prediction.subject.source}:${prediction.subject.chargeKey}`
+      )
+        throw new Error("Suppression differs from the statement charge");
     } else if (prediction.subject.kind === "product_pair") {
       if (
         input.suppression.scope !== "product_pair" ||
@@ -375,6 +405,13 @@ export async function reviewAssessment(
     throw new Error(
       "Product merge application requires a Product pair Assessment",
     );
+  if (
+    input.application?.kind === "statement_transaction" &&
+    prediction.family !== "statement_transaction"
+  )
+    throw new Error(
+      "Statement application requires a Transaction suggestion Assessment",
+    );
   if (input.intent === "apply" && prediction.family === "email_relevance") {
     const subject = assessmentSubjects.email_relevance.parse(
       prediction.subject,
@@ -390,6 +427,17 @@ export async function reviewAssessment(
       );
     if (prediction.family === "image_description")
       z.string().parse(input.correction.value);
+    // A different choice is a Wrong verdict whose correction is that choice.
+    if (
+      prediction.family === "statement_transaction" &&
+      !isEqual(
+        statementTransactionApplication.parse(input.correction.value),
+        input.application,
+      )
+    )
+      throw new Error(
+        "A corrected Transaction suggestion must apply the corrected action",
+      );
   }
   const event = await recordFeedback(db, {
     ...input,
@@ -411,7 +459,7 @@ export async function reviewAssessment(
     };
   }
   if (input.intent === "apply") {
-    const outcome = {
+    const outcome: z.infer<typeof assessmentReviewOut> = {
       assessmentId: prediction.id,
       feedbackId: event.id,
       status: "applied",
@@ -438,11 +486,17 @@ export async function reviewAssessment(
         .limit(1);
       if (receipt) {
         assertApplicationReceipt(receipt, event, "assessment_application");
-        if (!isEqual(assessmentReviewOut.parse(receipt.receipt), outcome))
+        const priorOutcome = assessmentReviewOut.parse(receipt.receipt);
+        if (
+          !isEqual(
+            { ...priorOutcome, applicationResult: undefined },
+            { ...outcome, applicationResult: undefined },
+          )
+        )
           throw new Error(
             "Application receipt does not match this command outcome",
           );
-        return outcome;
+        return priorOutcome;
       }
       if (input.application?.kind === "saved_field") {
         await acknowledgeSavedField(transactionDb, context, prediction, {
@@ -452,6 +506,11 @@ export async function reviewAssessment(
           commandFeedback: event,
         });
       } else {
+        if (prediction.family === "field") {
+          const { assertConnectionFieldFresh } =
+            await import("~/server/domains/connection/repo/field-connections");
+          await assertConnectionFieldFresh(transactionDb, prediction.id);
+        }
         const query = getDb(transactionDb)
           .select()
           .from(assessmentState)
@@ -477,12 +536,13 @@ export async function reviewAssessment(
         )
           throw new Error("Assessment evidence fingerprint changed");
         family.target.parse(state);
-        await family.apply(
+        const applicationResult = await family.apply(
           transactionDb,
           { ...context, db: transactionDb },
           state,
           input,
         );
+        if (applicationResult) outcome.applicationResult = applicationResult;
         if (!family.transactionBound)
           await getDb(transactionDb)
             .update(assessmentState)

@@ -1,6 +1,9 @@
 import { auditEntitySchema } from "@cubby/schemas/audit";
 import { entitySchema } from "@cubby/schemas/entity";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import {
+  entityFieldModels,
+  type EntityFieldModel,
+} from "@cubby/schemas/entity-fields";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import {
   fieldResolutionsSchema,
@@ -154,7 +157,10 @@ export const resolutionIsInherited = (resolution: FieldResolution) =>
   resolution.mode === "inherit" && resolution.value !== null;
 
 /** The manifest's resolution policy for a field, when it declares one. */
-export function resolutionPolicyFor(entity: string, field: string) {
+export function resolutionPolicyFor(
+  entity: string,
+  field: string,
+): EntityFieldModel["fields"][number]["resolution"] {
   const parsed = entitySchema.safeParse(entity);
   if (!parsed.success) return null;
   return (

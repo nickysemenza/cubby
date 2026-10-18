@@ -309,6 +309,7 @@ const renderDerivedFilterFields = (
       (descriptor) =>
         descriptor.deriveSchema ||
         descriptor.stored !== null ||
+        descriptor.anyOf !== null ||
         descriptor.derived !== null,
     )
     .flatMap((descriptor) => {
@@ -993,12 +994,13 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
   };
   const fieldModels = Object.fromEntries(
     entities.map(({ key, fieldModel }) => {
-      // `derived`/`hierarchy`/`grouping` are emitted compiled, in
+      // `derived`/`rows`/`hierarchy`/`grouping` are emitted compiled, in
       // entity-list-fields.gen.ts.
       const {
         sort: _sort,
         intents: _intents,
         derived: _derived,
+        rows: _rows,
         hierarchy: _hierarchy,
         grouping: _grouping,
         ...rest
@@ -1380,20 +1382,37 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         " * (null when it can), and the hierarchy levels it can group at\n" +
         " * (0 exactly when `levelReason` says why).\n" +
         " */\n" +
-        'export type GeneratedListField = { readonly shape: "via"; readonly path: string; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity; readonly terminal: { readonly kind: "record"; readonly titleColumn: string | null } | { readonly kind: "field"; readonly column: string; readonly fieldKind: string }; readonly many: boolean; readonly sort: string | null; readonly group: string | null } | { readonly shape: "value"; readonly type: "text" | "number" | "date" | "dateInterval" | "boolean" | "enum"; readonly options: readonly string[] | null; readonly sort: null; readonly group: string | null } | { readonly shape: "predicate"; readonly predicate: "text" | "multiselect" | "idMulti" | "boolean" | "presence" | "range"; readonly options: readonly string[] | null; readonly reason: string; readonly sort: string; readonly group: string; readonly exclude: string | null };\n\n' +
+        'export type GeneratedListField = { readonly shape: "via"; readonly path: string; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity; readonly terminal: { readonly kind: "record"; readonly titleColumn: string | null } | { readonly kind: "field"; readonly column: string; readonly fieldKind: string }; readonly many: boolean; readonly sort: string | null; readonly group: string | null } | { readonly shape: "rows"; readonly path: string; readonly rows: string; readonly terminal: { readonly kind: "column"; readonly column: string; readonly fieldKind: string | null; readonly options: GroupOptions } | { readonly kind: "record"; readonly target: Entity; readonly titleColumn: string | null; readonly column: string | null }; readonly sort: string; readonly group: string } | { readonly shape: "value"; readonly type: "text" | "number" | "date" | "dateInterval" | "boolean" | "enum"; readonly options: readonly string[] | null; readonly sort: null; readonly group: string | null } | { readonly shape: "predicate"; readonly predicate: "text" | "multiselect" | "idMulti" | "boolean" | "presence" | "range"; readonly options: readonly string[] | null; readonly reason: string; readonly sort: string; readonly group: string; readonly exclude: string | null };\n\n' +
+        "/** A compiled `model.rows` row set: an FK path (narrowed by `where`), a JSON array of records, or a repository relation. */\n" +
+        'export type GeneratedRowSet = { readonly label: string; readonly storage: { readonly kind: "path"; readonly steps: readonly RelationshipPathStep[]; readonly where: Readonly<Record<string, string>> } | { readonly kind: "json"; readonly column: string; readonly keys: readonly string[] } | { readonly kind: "relation"; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity } | { readonly kind: "repository"; readonly columns: Readonly<Record<string, Entity | null>>; readonly types: Readonly<Record<string, string>> } };\n\n' +
+        "/** Every `listTermExpanders` key a text filter declares. */\n" +
+        `export type GeneratedListTermKey = ${
+          [
+            ...new Set(
+              entities.flatMap(({ listFields }) =>
+                Object.values(listFields.terms),
+              ),
+            ),
+          ]
+            .sort()
+            .map((key) => JSON.stringify(key))
+            .join(" | ") || "never"
+        };\n\n` +
         "type InheritHop = { readonly field: string; readonly column: string; readonly target: Entity };\n" +
         "/** A field's compiled `resolution.inherit`, rendered by `effectiveFieldSql`. */\n" +
-        'export type GeneratedInherit = { readonly column: string; readonly reference: Entity | null; readonly empty: "array" | null; readonly mode: { readonly column: string; readonly inherit: string; readonly none: readonly string[]; readonly explicitIfSet: boolean } | null; readonly from: readonly ({ readonly kind: "hierarchy"; readonly parentColumn: string; readonly maxDepth: number } | { readonly kind: "effective"; readonly hops: readonly InheritHop[]; readonly field: string; readonly column: string })[] };\n\n' +
+        'export type GeneratedInherit = { readonly column: string; readonly reference: Entity | null; readonly empty: "array" | null; readonly mode: { readonly column: string; readonly inherit: string; readonly none: readonly string[]; readonly explicitIfSet: boolean } | null; readonly from: readonly ({ readonly kind: "hierarchy"; readonly parentColumn: string; readonly maxDepth: number; readonly whileSame: { readonly field: string; readonly column: string } | null } | { readonly kind: "effective"; readonly hops: readonly InheritHop[]; readonly field: string; readonly column: string })[] };\n\n' +
         "type GroupOptions = readonly { readonly value: string; readonly label: string }[] | null;\n" +
         "/** One Group by choice: `value` is null exactly when `reason` is set. */\n" +
         'export type GeneratedGroupChoice = { readonly key: string; readonly label: string; readonly noValueLabel: string; readonly reason: string | null; readonly value: { readonly kind: "column"; readonly column: string; readonly options: GroupOptions } | { readonly kind: "record"; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity; readonly titleColumn: string } | { readonly kind: "field"; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity; readonly column: string; readonly options: GroupOptions } | { readonly kind: "derived"; readonly options: GroupOptions } | null; readonly filter: { readonly columnId: string; readonly noValue: boolean; readonly subtree: string | null } | null; readonly levels: number; readonly levelReason: string | null };\n\n' +
+        "/** A related list scope (`presentation.list.scopes`): the entity whose list filter record its key holds, and the path to that entity's records. */\n" +
+        'export type GeneratedListScope = { readonly filters: Entity; readonly via: Extract<GeneratedListField, { shape: "via" | "rows" }> };\n\n' +
         renderRecord({
           name: "generatedEntityListFields",
           entries: Object.fromEntries(
             entities.map(({ key, listFields }) => [key, listFields]),
           ),
           satisfies:
-            "Record<Entity, { derived: Record<string, GeneratedListField>; inherit: Record<string, GeneratedInherit>; hierarchy: { parentField: string; column: string; maxDepth: number } | null; subtree: Record<string, string>; grouping: readonly GeneratedGroupChoice[] }>",
+            "Record<Entity, { derived: Record<string, GeneratedListField>; rows: Record<string, GeneratedRowSet>; terms: Record<string, GeneratedListTermKey>; inherit: Record<string, GeneratedInherit>; hierarchy: { parentField: string; column: string; maxDepth: number } | null; subtree: Record<string, string>; grouping: readonly GeneratedGroupChoice[]; scope: readonly string[]; scopes: Record<string, GeneratedListScope> }>",
           comment: "// Generated list fields stay one entity per line.",
         }) +
         "\n" +
@@ -1402,6 +1421,14 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         "export type GeneratedDerivedValueKey<E extends Entity> = {\n" +
         '  [K in keyof DerivedOf<E>]: DerivedOf<E>[K] extends { shape: "value" } ? K : never;\n' +
         "}[keyof DerivedOf<E>] & string;\n" +
+        "/** Row sets whose relation the repository passes to `listScaffold`. */\n" +
+        "export type GeneratedRepositoryRowSetKey<E extends Entity> = {\n" +
+        '  [K in keyof (typeof generatedEntityListFields)[E]["rows"]]: (typeof generatedEntityListFields)[E]["rows"][K] extends { storage: { kind: "repository" } } ? K : never;\n' +
+        '}[keyof (typeof generatedEntityListFields)[E]["rows"]] & string;\n' +
+        "/** Related scope keys whose target list scaffold the repository passes to `listScaffold`. */\n" +
+        'export type GeneratedListScopeKey<E extends Entity> = keyof (typeof generatedEntityListFields)[E]["scopes"] & string;\n' +
+        "/** The entity whose list filter record a related scope key holds. */\n" +
+        'export type GeneratedListScopeTarget<E extends Entity, K extends GeneratedListScopeKey<E>> = (typeof generatedEntityListFields)[E]["scopes"][K] extends { readonly filters: infer T extends Entity } ? T : never;\n' +
         "/** Derived keys whose filter predicate the repository passes to `listScaffold`. */\n" +
         "export type GeneratedDerivedPredicateKey<E extends Entity> = {\n" +
         '  [K in keyof DerivedOf<E>]: DerivedOf<E>[K] extends { shape: "predicate" } ? K : never;\n' +
@@ -1481,8 +1508,8 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         "type EntityFilterDescriptorMetadata = {\n" +
         "  columnId: string; field: string | null; urlKey: string; kind: string; placeholder: string;\n" +
         "  options: readonly EntityInspectorOption[] | null; optionsRef: EntityPortSourceRef | null; optionsKey: string | null;\n" +
-        '  label: string | null; schemaDescription: string | null; deriveSchema: boolean; schemaFromRead: boolean; brandRef: { entity: string } | null; expandRef: EntityPortSourceRef | null; schemaRef: EntityPortSourceRef | null; stored: { columns: readonly string[]; array: boolean } | null; derived: string | null; range: { kind: "number" | "date"; int: boolean; nonnegative: boolean; finite: boolean; describe: { lower: string; upper: string } | null } | null;\n' +
-        "  urlOnly: boolean; nullable: { field: string; label: string } | null; match: { field: string } | null; exclude: { field: string; reason: string | null } | null; subtree: string | null; currentMember: boolean; singleValue: string | null; sentinels: readonly { value: string; label: string }[] | null;\n" +
+        '  label: string | null; schemaDescription: string | null; deriveSchema: boolean; schemaFromRead: boolean; brandRef: { entity: string } | null; expandRef: EntityPortSourceRef | null; schemaRef: EntityPortSourceRef | null; stored: { columns: readonly string[]; array: boolean } | null; anyOf: readonly { key: string; source: "field" | "derived" }[] | null; derived: string | null; range: { kind: "number" | "date"; int: boolean; nonnegative: boolean; finite: boolean; describe: { lower: string; upper: string } | null } | null;\n' +
+        "  nullable: { field: string; label: string } | null; match: { field: string } | null; exclude: { field: string; reason: string | null } | null; subtree: string | null; currentMember: boolean; singleValue: string | null; exclusiveGroup: string | null; aliasOf: string | null; sentinels: readonly { value: string; label: string }[] | null;\n" +
         '  wire: { kind: "param"; name: string } | { kind: "range"; from: string; to: string; presence?: string };\n' +
         "};\n" +
         "type EntityPortSourceRoster = {\n" +

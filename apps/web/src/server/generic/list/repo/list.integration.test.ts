@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { email, task } from "~/server/db/schema";
+import { projectScaffold } from "~/server/domains/project/repo/lookup";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { listScaffold } from "./list";
@@ -20,8 +21,8 @@ describe("list selection and relation loading", () => {
       effectiveDueDate: sql`NULL`,
       completion: sql`NULL`,
       topLevel: sql`true`,
-      search: () => undefined,
     },
+    scopes: { projectScope: () => projectScaffold },
   });
 
   it("uses one FROM context and preserves the selected order across graph loading", async () => {
@@ -119,8 +120,8 @@ describe("list selection and relation loading", () => {
         effectiveDueDate: sql`NULL`,
         completion: sql`NULL`,
         topLevel: sql`true`,
-        search: () => undefined,
       },
+      scopes: { projectScope: () => projectScaffold },
     }).list(
       ctx.db,
       { filters: {}, sorts: [], pagination: { pageIndex: 0, pageSize: 2 } },

@@ -515,6 +515,7 @@ const compileFieldModel = (
       output: [],
       sort: null,
       derived: {},
+      rows: {},
       hierarchy: null,
       grouping: [],
       intents: null,
@@ -833,6 +834,7 @@ const compileFieldModel = (
     output: policy("output"),
     sort,
     derived,
+    rows: model.rows,
     hierarchy,
     grouping: model.grouping ?? [],
     intents: compileEditIntents(model.intents, fieldKeys, `${context}.intents`),
@@ -992,14 +994,6 @@ const resolveFilterRange = (
   };
 };
 
-/**
- * A stored filter is composed by the repository from the declaration alone,
- * so every shape it can take must be one the standard predicates handle:
- * several columns only for a text search, `array` only for a multiselect
- * over a `text-array` column (which in turn needs it), and a boolean filter
- * over a column that is not boolean reads as presence (`true` is NOT NULL),
- * which only means something on a nullable column.
- */
 /** A stored id filter matches a foreign key by the referenced row's shortcode. */
 const validateStoredReference = (
   value: RawFilterDescriptor,
@@ -1018,6 +1012,14 @@ const validateStoredReference = (
     );
 };
 
+/**
+ * A stored filter is composed by the repository from the declaration alone,
+ * so every shape it can take must be one the standard predicates handle: one
+ * column (a text filter over columns declares `anyOf`), `array` only for a
+ * multiselect over a `text-array` column (which in turn needs it), and a
+ * boolean filter over a column that is not boolean reads as presence
+ * (`true` is NOT NULL), which only means something on a nullable column.
+ */
 const validateStoredFilter = (
   value: RawFilterDescriptor,
   kind: FilterDescriptor["kind"],
@@ -1026,6 +1028,10 @@ const validateStoredFilter = (
 ): FilterDescriptor["stored"] => {
   const raw = value.stored ?? false;
   if (raw === false) return null;
+  if (kind === "text")
+    throw new EntityDeclarationError(
+      `${context} is a text filter, so it declares the fields it matches as anyOf, not stored.`,
+    );
   if (!(value.deriveSchema ?? false))
     throw new EntityDeclarationError(
       `${context} stored requires deriveSchema.`,
@@ -1041,16 +1047,16 @@ const validateStoredFilter = (
       );
     return field;
   });
-  if (columns.length > 1 && kind !== "text")
+  if (columns.length > 1)
     throw new EntityDeclarationError(
-      `${context} stored columns span several fields only for a text filter.`,
+      `${context} stored names one field; a text filter over several declares anyOf.`,
     );
   const arrayColumn = fields.some((field) => field.kind === "text-array");
   if (array && !(kind === "multiselect" && arrayColumn))
     throw new EntityDeclarationError(
       `${context} stored.array applies only to a multiselect over a text-array field.`,
     );
-  if (arrayColumn && kind !== "text" && !array)
+  if (arrayColumn && !array)
     throw new EntityDeclarationError(
       `${context} stored over a text-array field needs stored.array.`,
     );
@@ -1063,6 +1069,46 @@ const validateStoredFilter = (
       `${context} stored boolean over a non-boolean field reads as presence, so the field must be nullable.`,
     );
   return { columns, array };
+};
+
+/**
+ * A text filter's `anyOf` members: each a stored text (or `text[]`) field,
+ * else a `model.derived` key whose shape `compileListFields` checks.
+ */
+const validateAnyOf = (
+  value: RawFilterDescriptor,
+  kind: FilterDescriptor["kind"],
+  storage: readonly EntityStorageField[],
+  derivedKeys: readonly string[],
+  context: string,
+): FilterDescriptor["anyOf"] => {
+  if (value.anyOf === undefined) return null;
+  if (kind !== "text")
+    throw new EntityDeclarationError(
+      `${context} anyOf applies only to a text filter.`,
+    );
+  if (value.derived !== undefined)
+    throw new EntityDeclarationError(
+      `${context} matches either anyOf or one derived entry, not both.`,
+    );
+  if (!(value.deriveSchema ?? false))
+    throw new EntityDeclarationError(`${context} anyOf requires deriveSchema.`);
+  if (new Set(value.anyOf).size !== value.anyOf.length)
+    throw new EntityDeclarationError(`${context} anyOf repeats a field.`);
+  return value.anyOf.map((key) => {
+    const field = storage.find((candidate) => candidate.key === key);
+    if (field !== undefined) {
+      if (field.kind !== "text" && field.kind !== "text-array")
+        throw new EntityDeclarationError(
+          `${context} anyOf ${key} is a ${field.kind} field; a text filter matches text or text-array fields.`,
+        );
+      return { key, source: "field" as const };
+    }
+    if (derivedKeys.includes(key)) return { key, source: "derived" as const };
+    throw new EntityDeclarationError(
+      `${context} anyOf ${key} names no stored model field or model.derived entry.`,
+    );
+  });
 };
 
 /**
@@ -1119,16 +1165,11 @@ const validateFilterReference = (
   context: string,
 ): void => {
   const isIdentifier = kind === "idMulti";
-  if (isIdentifier && !value.urlOnly && value.brandRef == null) {
+  // Every id filter is a Filters-menu picker, so its URL values stay
+  // shortcode-native and a detail page can find it as a back-filter.
+  if (isIdentifier && value.brandRef == null) {
     throw new EntityDeclarationError(
-      `${context} rendered ${kind} filters require brandRef so browser URL values stay shortcode-native.`,
-    );
-  }
-  // A URL-only id filter still names the entity it scopes by, so a detail
-  // page can find it as a back-filter; `brandRef: null` marks a non-entity id.
-  if (isIdentifier && value.brandRef === undefined) {
-    throw new EntityDeclarationError(
-      `${context} ${kind} filters must declare brandRef (null for an id that names no entity).`,
+      `${context} ${kind} filters require brandRef so browser URL values stay shortcode-native.`,
     );
   }
   if (value.brandRef != null && !isIdentifier) {
@@ -1143,9 +1184,9 @@ const validateFilterReference = (
     throw new EntityDeclarationError(
       `${context} currentMember (@me) applies only to an idMulti filter over ledgerParty.`,
     );
-  if (value.singleValue !== undefined && (!isIdentifier || !value.urlOnly))
+  if (value.singleValue !== undefined && !isIdentifier)
     throw new EntityDeclarationError(
-      `${context} singleValue applies only to a urlOnly idMulti scope filter.`,
+      `${context} singleValue applies only to an idMulti scope filter.`,
     );
 };
 
@@ -1212,8 +1253,7 @@ const storedPresence = (
     throw new EntityDeclarationError(
       `${context} is compiled, so its Any value / No value key is generated; remove nullable.`,
     );
-  if ((kind !== "multiselect" && kind !== "idMulti") || value.urlOnly)
-    return null;
+  if (kind !== "multiselect" && kind !== "idMulti") return null;
   const field = storage.find(({ key }) => key === stored.columns[0]);
   return field?.nullable || field?.kind === "text-array"
     ? { field: `${value.columnId}PresenceFilter`, label: label.toLowerCase() }
@@ -1224,6 +1264,7 @@ const filterDescriptor = (
   value: RawFilterDescriptor,
   fields: readonly EntityField[],
   storage: readonly EntityStorageField[],
+  derivedKeys: readonly string[],
   context: string,
 ): FilterDescriptor => {
   const parsedKind = filterKinds.find((candidate) => candidate === value.kind);
@@ -1248,6 +1289,7 @@ const filterDescriptor = (
     throw new EntityDeclarationError(
       `${context} is either stored or derived, not both.`,
     );
+  const anyOf = validateAnyOf(value, parsedKind, storage, derivedKeys, context);
   const range = resolveFilterRange(value, parsedKind, modelField, context);
   return {
     columnId: value.columnId,
@@ -1266,6 +1308,7 @@ const filterDescriptor = (
     expandRef: value.expandRef ?? null,
     schemaRef: value.schemaRef ?? null,
     stored,
+    anyOf,
     derived:
       value.derived === undefined
         ? null
@@ -1273,7 +1316,6 @@ const filterDescriptor = (
           ? value.columnId
           : value.derived,
     range,
-    urlOnly: value.urlOnly ?? false,
     nullable: storedPresence(
       value,
       parsedKind,
@@ -1284,16 +1326,17 @@ const filterDescriptor = (
     ),
     // A multiselect over a `text[]` column holds several values per row, so
     // it can match all of the picked ones.
-    match:
-      stored?.array && !value.urlOnly
-        ? { field: `${value.columnId}Match` }
-        : null,
+    match: stored?.array ? { field: `${value.columnId}Match` } : null,
     exclude: null,
     subtree: null,
     currentMember: value.currentMember === true,
     singleValue: value.singleValue?.reason ?? null,
+    exclusiveGroup: value.singleValue?.group ?? null,
+    aliasOf: null,
     sentinels: value.sentinels ?? null,
     wire: filterWire(value, parsedKind, range, modelField),
+    // Server-only: `compileListFields` moves it into `listFields.terms`.
+    ...(value.terms === undefined ? {} : { terms: value.terms }),
   };
 };
 
@@ -1745,10 +1788,10 @@ const validateRouteCreate = (
 type SavedView = CompiledEntity["inspector"]["list"]["savedViews"][number];
 
 /**
- * A saved view is applied by writing real column-filter state, so each pinned
- * filter must be a column-hosted descriptor of this entity with a value the
- * control can hold. A typo'd id, a urlOnly descriptor or a range preset that
- * expands to nothing would leave the view lit while selecting every row; the
+ * A saved view is applied by writing real filter state, so each pinned filter
+ * must be a descriptor of this entity with a value the control can hold. A
+ * typo'd id or a range preset that expands to nothing would leave the view
+ * lit while selecting every row; the
  * layout and sort may only name columns the list actually has.
  */
 const validateSavedViews = (
@@ -1795,10 +1838,6 @@ const validateSavedViews = (
           `${where} pins filter ${filter.id} twice.`,
         );
       filterIds.add(filter.id);
-      if (descriptor.urlOnly)
-        throw new EntityDeclarationError(
-          `${where} pins urlOnly filter ${filter.id}, which no column hosts.`,
-        );
       const values = Array.isArray(filter.value)
         ? filter.value
         : [filter.value];
@@ -1961,9 +2000,9 @@ const suggestionFilterDescriptors = (
       expandRef: null,
       schemaRef: null,
       stored: null,
+      anyOf: null,
       derived: null,
       range: null,
-      urlOnly: false,
       nullable: { field: "suggestionPresenceFilter", label: "suggestion" },
       sentinels: null,
       match: null,
@@ -1971,6 +2010,8 @@ const suggestionFilterDescriptors = (
       subtree: null,
       currentMember: false,
       singleValue: null,
+      exclusiveGroup: null,
+      aliasOf: null,
       wire: { kind: "param", name: "suggestionKind" },
     },
   ];
@@ -2030,9 +2071,21 @@ export const compileEntity = (
       value,
       declaredFieldModel.fields,
       declaredFieldModel.storage,
+      Object.keys(declaredFieldModel.derived),
       `${context}.filters.descriptors[${index}]`,
     ),
   );
+  for (const descriptor of declaredDescriptors) {
+    const group = descriptor.exclusiveGroup;
+    if (
+      group !== null &&
+      declaredDescriptors.filter((peer) => peer.exclusiveGroup === group)
+        .length < 2
+    )
+      throw new EntityDeclarationError(
+        `${context}.filters ${descriptor.columnId} is alone in singleValue group ${group}; a group shares one value between several scopes.`,
+      );
+  }
   const policyGapKinds = classificationPolicyGapKinds(
     declaration.capabilities.classificationPolicies,
     context,
@@ -2103,13 +2156,13 @@ export const compileEntity = (
           brandRef: null,
           schemaRef: null,
           stored: null,
+          anyOf: null,
           derived: null,
           range: null,
           expandRef: {
             module: "~/entity/filter-behavior",
             export: "resolveCreatedDate",
           },
-          urlOnly: false,
           nullable: null,
           sentinels: null,
           match: null,
@@ -2117,6 +2170,8 @@ export const compileEntity = (
           subtree: null,
           currentMember: false,
           singleValue: null,
+          exclusiveGroup: null,
+          aliasOf: null,
           wire: { kind: "range", from: "createdFrom", to: "createdTo" },
         },
         {
@@ -2140,13 +2195,13 @@ export const compileEntity = (
           brandRef: null,
           schemaRef: null,
           stored: null,
+          anyOf: null,
           derived: null,
           range: null,
           expandRef: {
             module: "~/entity/filter-behavior",
             export: "resolveUpdatedDate",
           },
-          urlOnly: false,
           nullable: null,
           sentinels: null,
           match: null,
@@ -2154,6 +2209,8 @@ export const compileEntity = (
           subtree: null,
           currentMember: false,
           singleValue: null,
+          exclusiveGroup: null,
+          aliasOf: null,
           wire: { kind: "range", from: "updatedFrom", to: "updatedTo" },
         },
       ]
@@ -2273,13 +2330,21 @@ export const compileEntity = (
     filterSchema,
     filterAudit,
     filterDescriptors: filterDescriptorsWithAudit,
+    listScopes: {
+      scope: declaration.presentation.list.scope,
+      scopes: declaration.presentation.list.scopes,
+    },
     // Resolved across entities by `compileListFields`.
     listFields: {
       derived: {},
+      rows: {},
+      terms: {},
       inherit: {},
       hierarchy: null,
       subtree: {},
       grouping: [],
+      scope: [],
+      scopes: {},
     },
     bulkUpdateFields,
     ports,

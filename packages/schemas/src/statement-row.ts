@@ -474,6 +474,8 @@ export const statementRowSummaryOut = z.object({
   superseded: z.number().int(),
   amountTotal: money,
   unmatchedAmount: money,
+  /** Distinct provider charges behind the unmatched observations. */
+  unmatchedCharges: z.number().int(),
 });
 
 export const statementImportListOut = z.object({

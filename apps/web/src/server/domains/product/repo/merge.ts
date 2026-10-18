@@ -84,6 +84,7 @@ import { lockExternalIdentifierParents } from "~/server/generic/entity-links/rep
 import {
   linkQuantity,
   liveLinks,
+  repointLinkEnd,
 } from "~/server/generic/entity-links/repo/entity-links";
 import { validateLiveInheritedPolicies } from "~/server/generic/inheritance/repo/inheritance-validation";
 import {
@@ -1587,17 +1588,14 @@ export const mergeProducts = async (
           });
         },
         "EntityLink[purchaseProduct].to": async () => {
-          summary.purchaseLinksMoved = await foldAssociation(tx, {
-            column: "productId",
-            table: entityLink,
-            repointValues: (productId) => ({ toEntityId: productId }),
-            softDeleteValues: (deletedAt) => ({ deletedAt }),
-            rows: plan.purchases.rows,
+          const result = await repointLinkEnd(tx, {
+            kind: "purchaseProduct",
+            end: "to",
             keepId,
-            slotKey: (row) => row.purchaseId,
+            loserIds: plan.loserIds,
             now,
-            plan: plan.purchases.collision,
           });
+          summary.purchaseLinksMoved = result.moved;
         },
         "EntityLink[wishCandidate].to": async () => {
           summary.wishCandidatesMoved = await foldAssociation(tx, {

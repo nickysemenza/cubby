@@ -11,16 +11,16 @@ import type {
 import type { TaskCreateInput } from "@cubby/schemas/project";
 import { tradeSchema, type Trade } from "@cubby/schemas/task-fields";
 /**
- * Task inheritance provenance and trade. Effective project, subject product
- * and assignee values compile from their `resolution.inherit`
+ * Task inheritance provenance. Effective project, subject product, assignee
+ * and trade values compile from their `resolution.inherit`
  * (`effectiveFieldSql`); this module adds the `fieldResolutions` provenance
- * (source, parent decision, fallback) and the task trade chain.
+ * (source, parent decision, fallback).
  *
  * These expressions deliberately use scalar correlated subqueries rather than
  * joins. Callers can use them from a Task, Expense, or report query without
  * accidentally changing row cardinality.
  */
-import { type SQL, and, inArray, sql } from "drizzle-orm";
+import { and, inArray, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import {
@@ -33,30 +33,8 @@ import { getDb, notDeleted } from "~/server/db/helpers";
 import { ledgerParty, product, project, task } from "~/server/db/schema";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
-const taskColumn = (alias: string, column: string) =>
-  sql.raw(`"${alias}"."${column}"`);
-
-/** A project's effective default trade (`resolution.inherit`). */
-const effectiveProjectTradeSql = (projectId: SQL): SQL<Trade | null> =>
-  effectiveFieldSql<Trade | null>("project", "defaultTrade", { id: projectId });
-
-// Effective values and their sources compile from each field's
-// `resolution.inherit`; trade below is a different rule (#2616).
 const effectiveTaskProjectSql = (alias: string) =>
   effectiveFieldSql<ProjectId | null>("task", "projectId", alias);
-/**
- * Task trade can come from its own explicit choice, a parent task only when
- * both effective projects match, then the effective project's default trade.
- */
-export const eligibleParentTaskTradeSql = (alias = "Task"): SQL<Trade | null> =>
-  sql`(SELECT parent."trade" FROM "Task" parent
-    WHERE parent."id" = ${taskColumn(alias, "parentTaskId")}
-      AND parent."deletedAt" IS NULL AND parent."trade" IS NOT NULL
-      AND ${effectiveTaskProjectSql("parent")} IS NOT DISTINCT FROM ${effectiveTaskProjectSql(alias)})`;
-
-export const effectiveTaskTradeSql = (alias = "Task"): SQL<Trade | null> =>
-  sql`coalesce(${taskColumn(alias, "trade")}, ${eligibleParentTaskTradeSql(alias)},
-    ${effectiveProjectTradeSql(effectiveTaskProjectSql(alias))})`;
 
 /**
  * Select-list additions for readers that hydrate Task rows outside the normal
@@ -71,7 +49,7 @@ const taskInheritanceReadExtras = (alias = "Task") => ({
     "subjectProductId",
     alias,
   ),
-  effectiveTrade: effectiveTaskTradeSql(alias),
+  effectiveTrade: effectiveFieldSql<Trade | null>("task", "trade", alias),
   effectiveAssigneeId: effectiveFieldSql<LedgerPartyId | null>(
     "task",
     "assigneeId",
@@ -91,71 +69,61 @@ type TaskAssignment = {
   trade: Trade | null;
 };
 
-const taskResolutionExtras = (alias: string) => {
-  const parentId = taskColumn(alias, "parentTaskId");
-  const parentTrade = eligibleParentTaskTradeSql(alias);
-  return {
-    ...taskInheritanceReadExtras(alias),
-    fallbackAssigneeId: inheritedFieldSql<LedgerPartyId | null>(
-      "task",
-      "assigneeId",
-      alias,
-    ),
-    assigneeSource: inheritedSourceSql("task", "assigneeId", alias),
-    projectSource: inheritedSourceSql("task", "projectId", alias),
-    subjectProductSource: inheritedSourceSql("task", "subjectProductId", alias),
-    fallbackProjectId: inheritedFieldSql<ProjectId | null>(
-      "task",
-      "projectId",
-      alias,
-    ),
-    fallbackSubjectProductId: inheritedFieldSql<ProductId | null>(
-      "task",
-      "subjectProductId",
-      alias,
-    ),
-    fallbackTrade: sql<Trade | null>`coalesce(${parentTrade}, ${effectiveProjectTradeSql(effectiveTaskProjectSql(alias))})`,
-    parentTrade,
-    parentShortcode: sql<
-      string | null
-    >`(SELECT parent."shortcode" FROM "Task" parent
-      WHERE parent."id" = ${parentId} AND parent."deletedAt" IS NULL)`,
-    parentName: sql<string | null>`(SELECT parent."name" FROM "Task" parent
-      WHERE parent."id" = ${parentId} AND parent."deletedAt" IS NULL)`,
-  };
-};
+const taskResolutionExtras = (alias: string) => ({
+  ...taskInheritanceReadExtras(alias),
+  fallbackAssigneeId: inheritedFieldSql<LedgerPartyId | null>(
+    "task",
+    "assigneeId",
+    alias,
+  ),
+  assigneeSource: inheritedSourceSql("task", "assigneeId", alias),
+  projectSource: inheritedSourceSql("task", "projectId", alias),
+  subjectProductSource: inheritedSourceSql("task", "subjectProductId", alias),
+  tradeSource: inheritedSourceSql("task", "trade", alias),
+  fallbackProjectId: inheritedFieldSql<ProjectId | null>(
+    "task",
+    "projectId",
+    alias,
+  ),
+  fallbackSubjectProductId: inheritedFieldSql<ProductId | null>(
+    "task",
+    "subjectProductId",
+    alias,
+  ),
+  fallbackTrade: inheritedFieldSql<Trade | null>("task", "trade", alias),
+});
 type InheritedSource = { position: number; id: string } | null;
+type InheritedField = "assigneeId" | "projectId" | "subjectProductId" | "trade";
 type ResolvedAssignment = {
   effectiveAssigneeId: LedgerPartyId | null;
   fallbackAssigneeId: LedgerPartyId | null;
   assigneeSource: InheritedSource;
   projectSource: InheritedSource;
   subjectProductSource: InheritedSource;
+  tradeSource: InheritedSource;
   effectiveProjectId: ProjectId | null;
   effectiveSubjectProductId: ProductId | null;
   effectiveTrade: Trade | null;
   fallbackProjectId: ProjectId | null;
   fallbackSubjectProductId: ProductId | null;
   fallbackTrade: Trade | null;
-  parentTrade: Trade | null;
-  parentShortcode: string | null;
-  parentName: string | null;
 };
 
 const sourceColumn = (
   row: ResolvedAssignment,
-  field: "assigneeId" | "projectId" | "subjectProductId",
+  field: InheritedField,
 ): InheritedSource =>
-  field === "assigneeId"
-    ? row.assigneeSource
-    : field === "projectId"
-      ? row.projectSource
-      : row.subjectProductSource;
+  ({
+    assigneeId: row.assigneeSource,
+    projectId: row.projectSource,
+    subjectProductId: row.subjectProductSource,
+    trade: row.tradeSource,
+  })[field];
 
 /** The record a declared source decided at, when that source names `entity`. */
 const sourceOf = (
   source: InheritedSource,
-  field: "assigneeId" | "projectId" | "subjectProductId",
+  field: InheritedField,
   entity: "task" | "project",
 ): string | null =>
   source !== null &&
@@ -176,6 +144,7 @@ async function assignmentReferences(
           row.effectiveProjectId,
           row.fallbackProjectId,
           sourceOf(row.assigneeSource, "assigneeId", "project"),
+          sourceOf(row.tradeSource, "trade", "project"),
         ].filter((id): id is ProjectId => id !== null),
       ),
     ]),
@@ -205,13 +174,13 @@ async function assignmentReferences(
   const taskIds = [
     ...new Set(
       extras.flatMap((row) =>
-        (["assigneeId", "projectId", "subjectProductId"] as const).flatMap(
-          (field) => {
-            const id = sourceOf(sourceColumn(row, field), field, "task");
-            // SAFETY: a task `hierarchy` source names a Task row id.
-            return id === null ? [] : [id as TaskId];
-          },
-        ),
+        (
+          ["assigneeId", "projectId", "subjectProductId", "trade"] as const
+        ).flatMap((field) => {
+          const id = sourceOf(sourceColumn(row, field), field, "task");
+          // SAFETY: a task `hierarchy` source names a Task row id.
+          return id === null ? [] : [id as TaskId];
+        }),
       ),
     ),
   ];
@@ -274,35 +243,15 @@ function referenceResolution(
 function tradeResolution(
   row: TaskAssignment,
   extra: ResolvedAssignment,
-  parent: FieldResolution["sourceEntity"],
-  projectCode: string | null,
-  projectName: string | null,
+  source: Readonly<{ label: string; entity: FieldResolution["sourceEntity"] }>,
 ): FieldResolution {
   return {
     mode: row.trade === null ? "inherit" : "explicit",
     storedValue: row.trade,
     value: extra.effectiveTrade,
     fallbackValue: extra.fallbackTrade,
-    source:
-      row.trade !== null
-        ? "Task override"
-        : extra.parentTrade
-          ? "Parent task"
-          : extra.fallbackTrade
-            ? "Project default"
-            : "No trade source",
-    sourceEntity:
-      row.trade !== null
-        ? null
-        : extra.parentTrade
-          ? parent
-          : projectCode
-            ? {
-                entityKind: "project",
-                entityId: projectCode,
-                name: projectName,
-              }
-            : null,
+    source: row.trade !== null ? "Task override" : source.label,
+    sourceEntity: row.trade !== null ? null : source.entity,
     matchesFallback: row.trade !== null && row.trade === extra.fallbackTrade,
     canReset: row.trade !== null && extra.fallbackTrade !== null,
   };
@@ -317,20 +266,14 @@ function assignmentResolutions(
     id ? (refs.projects.get(id)?.shortcode ?? null) : null;
   const productCode = (id: ProductId | null) =>
     id ? (refs.products.get(id)?.shortcode ?? null) : null;
-  const parent = extra.parentShortcode
-    ? {
-        entityKind: "task" as const,
-        entityId: extra.parentShortcode,
-        name: extra.parentName,
-      }
-    : null;
   const assigneeCode = (id: LedgerPartyId | null) =>
     id ? (refs.assignees.get(id)?.shortcode ?? null) : null;
   // The declared source that decided: an ancestor task (`hierarchy`) or,
-  // for the assignee, the effective project's default.
+  // for the assignee and trade, the effective project's default.
   const sourceOfField = (
-    field: "assigneeId" | "projectId" | "subjectProductId",
+    field: InheritedField,
     source: InheritedSource,
+    none = "Unassigned",
   ) => {
     const ancestor = sourceOf(source, field, "task");
     const fromTask =
@@ -345,7 +288,7 @@ function assignmentResolutions(
           name: fromTask.name,
         },
       };
-    // SAFETY: the assignee's path source ends at a Project row.
+    // SAFETY: the assignee's and trade's path sources end at a Project row.
     const projectId = sourceOf(source, field, "project") as ProjectId | null;
     const fromProject =
       projectId === null ? undefined : refs.projects.get(projectId);
@@ -358,7 +301,7 @@ function assignmentResolutions(
           name: fromProject.name,
         },
       };
-    return { label: "Unassigned", entity: null };
+    return { label: none, entity: null };
   };
   return {
     assigneeId: referenceResolution(
@@ -385,11 +328,7 @@ function assignmentResolutions(
     trade: tradeResolution(
       row,
       extra,
-      parent,
-      projectCode(extra.effectiveProjectId),
-      extra.effectiveProjectId
-        ? (refs.projects.get(extra.effectiveProjectId)?.name ?? null)
-        : null,
+      sourceOfField("trade", extra.tradeSource, "No trade source"),
     ),
   };
 }
@@ -426,15 +365,13 @@ export async function hydrateTaskInheritanceRows<
       assigneeSource: null,
       projectSource: null,
       subjectProductSource: null,
+      tradeSource: null,
       effectiveProjectId: null,
       effectiveSubjectProductId: row.subjectProductId,
       effectiveTrade: row.trade,
       fallbackProjectId: null,
       fallbackSubjectProductId: null,
       fallbackTrade: null,
-      parentTrade: null,
-      parentShortcode: null,
-      parentName: null,
     });
   }
   const byId = new Map(extras.map((row) => [row.id, row]));

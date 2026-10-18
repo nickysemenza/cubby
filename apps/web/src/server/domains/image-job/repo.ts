@@ -33,18 +33,7 @@ import {
 
 type ImageJobRow = typeof imageProcessingJob.$inferSelect;
 
-const scaffold = listScaffold("imageJob", imageProcessingJob, {
-  derived: {
-    // A job joins every submission that scheduled or retried it, not only
-    // its first.
-    submissionId: (submissionId) => sql`${imageProcessingJob.id} IN (
-        SELECT membership."jobId"
-        FROM "ImageProcessingSubmissionJob" membership
-        JOIN "ImageProcessingSubmission" submission ON submission.id = membership."submissionId"
-        WHERE submission."publicId" = ${submissionId}
-      )`,
-  },
-});
+const scaffold = listScaffold("imageJob", imageProcessingJob);
 
 type Facts = {
   chargedCost: number;

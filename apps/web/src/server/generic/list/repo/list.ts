@@ -8,7 +8,11 @@ import { suggestionStatus } from "@cubby/schemas/ai";
 import { scoredEntities, type ScoredEntity } from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
+import {
+  generatedEntityListFields,
+  type GeneratedListScopeKey,
+  type GeneratedListScopeTarget,
+} from "@cubby/schemas/entity-list-fields";
 import {
   entityInspectorMetadata,
   entityManifest,
@@ -43,6 +47,7 @@ import {
   getTableName,
   inArray,
   type InferSelectModel,
+  isNull,
   or,
   SQL,
   sql,
@@ -93,6 +98,7 @@ import {
   hierarchyDescendantsSql,
 } from "~/server/generic/list/repo/hierarchy";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
+import { listTermExpanders } from "~/server/generic/list/repo/terms";
 import {
   lexicalEligibility,
   lexicalRelevance,
@@ -119,6 +125,10 @@ import {
   ListContext,
   type ListPrepare,
   relatedExistsSql,
+  type AnyRowsSql,
+  rowSetSql,
+  rowsPrepare,
+  type RowsSqlArg,
   shortcodeIdsSql,
 } from "./field-compiler";
 import { wantsListGroup } from "./list-projection";
@@ -153,6 +163,12 @@ interface StoredDescriptorView {
     columns: readonly string[];
     array: boolean;
   }> | null;
+  readonly anyOf:
+    | readonly Readonly<{
+        key: string;
+        source: "field" | "derived";
+      }>[]
+    | null;
   readonly nullable: Readonly<{ field: string }> | null;
   readonly match: Readonly<{ field: string }> | null;
   readonly exclude: Readonly<{ field: string; reason: string | null }> | null;
@@ -183,48 +199,43 @@ const descriptorsFor = (entity: Entity): readonly StoredDescriptorView[] =>
 const fieldModelFor = (entity: Entity) =>
   Object.entries(entityFieldModels).find(([key]) => key === entity)?.[1];
 
-const storedColumns = (
+const storedColumn = (
   entity: Entity,
   table: PgTable,
   descriptor: StoredDescriptorView,
-): StoredColumn[] => {
+  key: string,
+): StoredColumn => {
   const storage = fieldModelFor(entity)?.storage ?? [];
   const columns: Record<string, AnyColumn> = getTableColumns(table);
-  return (descriptor.stored?.columns ?? []).map((key) => {
-    const stored = storage.find(({ key: k }) => k === key);
-    const column =
-      columns[key] ??
-      Object.values(columns).find((c) => c.name === stored?.column);
-    if (!column || !stored)
-      throw new Error(
-        `${entity}.${descriptor.columnId} has no table column ${key} for its stored filter`,
-      );
-    const inherited = inheritedFieldOfColumn(entity, stored.column);
-    return {
-      column,
-      value:
-        inherited === null
-          ? column
-          : effectiveFieldSql(entity, inherited, getTableName(table)),
-      kind: stored.kind,
-      nullable: stored.nullable,
-      reference: stored.reference,
-    };
-  });
+  const stored = storage.find(({ key: k }) => k === key);
+  const column =
+    columns[key] ??
+    Object.values(columns).find((c) => c.name === stored?.column);
+  if (!column || !stored)
+    throw new Error(
+      `${entity}.${descriptor.columnId} has no table column ${key} for its stored filter`,
+    );
+  const inherited = inheritedFieldOfColumn(entity, stored.column);
+  return {
+    column,
+    value:
+      inherited === null
+        ? column
+        : effectiveFieldSql(entity, inherited, getTableName(table)),
+    kind: stored.kind,
+    nullable: stored.nullable,
+    reference: stored.reference,
+  };
 };
 
-/** `formatSearchTerm` over every declared column, `text[]` columns by element. */
+/** `formatSearchTerm` over a stored column, a `text[]` column by element. */
 const textPredicate = (
-  columns: readonly StoredColumn[],
-  term: string | undefined,
+  { value, kind }: StoredColumn,
+  term: string,
 ): SQL | undefined =>
-  or(
-    ...columns.map(({ value, kind }) =>
-      kind === "text-array"
-        ? textArrayMatches(value, term)
-        : formatSearchTerm(value, term),
-    ),
-  );
+  kind === "text-array"
+    ? textArrayMatches(value, term)
+    : formatSearchTerm(value, term);
 
 /**
  * A boolean filter over a boolean column is equality; over any other
@@ -484,8 +495,98 @@ const predicateValue = (
 /** Derived SQL and prepared request data a scaffold passes to its filters. */
 interface DerivedFilterInput {
   readonly derived: AnyDerivedSql;
+  /** Repository row sets' relations. */
+  readonly rows?: AnyRowsSql;
   readonly context: ListContext;
 }
+
+/**
+ * A condition over a `model.derived` value: a set value tests its relation
+ * once per condition; any other value tests its per-row scalar.
+ */
+const derivedValueTest =
+  (
+    entity: Entity,
+    table: PgTable & { id: AnyColumn },
+    key: string,
+    input: DerivedFilterInput | undefined,
+  ): ValueTest =>
+  (condition) => {
+    const derived = input?.derived ?? {};
+    const set = derivedValueSet(derived, key);
+    if (set === null)
+      return condition(
+        derivedValueSql(
+          entity,
+          derived,
+          key,
+          input?.context ?? ListContext.empty,
+        ),
+      );
+    const matched = condition(sql`value_set."value"`);
+    return matched === undefined
+      ? undefined
+      : sql`${table.id} IN (SELECT value_set."id" FROM (${set}) value_set WHERE ${matched})`;
+  };
+
+/**
+ * A text term against a `model.derived` entry: a `via` path matches when any
+ * related record's field (or title) does, a value when it contains the term.
+ */
+const derivedTextMatch = (
+  entity: Entity,
+  table: PgTable & { id: AnyColumn },
+  key: string,
+  term: string,
+  input: DerivedFilterInput | undefined,
+): SQL | undefined => {
+  const field = derivedFieldsOf(entity)[key];
+  if (field?.shape === "via")
+    return relatedExistsSql(entity, field, table.id, (_leaf, column) =>
+      formatSearchTerm(column, term),
+    );
+  if (field?.shape === "value")
+    return derivedValueTest(
+      entity,
+      table,
+      key,
+      input,
+    )((column) => formatSearchTerm(column, term));
+  throw new Error(`${entity}.model.derived.${key} cannot match text`);
+};
+
+/**
+ * A text filter declared `anyOf`: each term matches when any member field
+ * does, and several terms OR (an agent guessing at synonyms).
+ */
+const anyOfPredicate = (
+  entity: Entity,
+  table: PgTable & { id: AnyColumn },
+  descriptor: StoredDescriptorView,
+  members: NonNullable<StoredDescriptorView["anyOf"]>,
+  values: ListFilterValues,
+  input: DerivedFilterInput | undefined,
+): SQL | undefined =>
+  or(
+    ...(
+      optionalTextList.parse(values[descriptor.field ?? descriptor.columnId]) ??
+      []
+    )
+      .map((term) => term.trim())
+      .filter((term) => term !== "")
+      .map((term) =>
+        or(
+          ...members.map(({ key, source }) =>
+            source === "field"
+              ? textPredicate(
+                  storedColumn(entity, table, descriptor, key),
+                  term,
+                )
+              : derivedTextMatch(entity, table, key, term, input),
+          ),
+        ),
+      ),
+  );
 
 /**
  * The predicate of a filter descriptor declared `derived`: a related path
@@ -532,21 +633,13 @@ const derivedFilterPredicates = (
     ];
   }
   if (field.shape === "value") {
-    // A set value tests its relation once per condition; any other value
-    // tests its per-row scalar.
-    const set = derivedValueSet(derived, derivedKey);
-    const test: ValueTest = (condition) => {
-      if (set === null)
-        return condition(derivedValueSql(entity, derived, derivedKey, context));
-      const matched = condition(sql`value_set."value"`);
-      return matched === undefined
-        ? undefined
-        : sql`${table.id} IN (SELECT value_set."id" FROM (${set}) value_set WHERE ${matched})`;
-    };
+    const test = derivedValueTest(entity, table, derivedKey, input);
     switch (descriptor.kind) {
       case "text": {
         const term = optionalText.parse(value)?.trim();
-        return term ? [test((column) => formatSearchTerm(column, term))] : [];
+        return term
+          ? [derivedTextMatch(entity, table, derivedKey, term, input)]
+          : [];
       }
       case "boolean":
         // An UNKNOWN value counts as not met, as `flagCondition` reads it.
@@ -618,6 +711,10 @@ const derivedFilterPredicates = (
       }
     }
   }
+  if (field.shape === "rows")
+    throw new Error(
+      `${entity}.${descriptor.columnId} goes through row set ${field.rows}, which compiles as one group`,
+    );
   /** Whether a related row (with a value, for a field terminal) exists. */
   const relatedPresence = (presence: PresenceFilter): SQL | undefined => {
     if (presence === undefined) return undefined;
@@ -675,12 +772,9 @@ const derivedFilterPredicates = (
       return [relatedPresence(presenceFilter.parse(value))];
     case "text": {
       const term = optionalText.parse(value)?.trim();
-      if (!term) return [];
-      return [
-        relatedExistsSql(entity, field, table.id, (_leaf, column) =>
-          formatSearchTerm(column, term),
-        ),
-      ];
+      return term
+        ? [derivedTextMatch(entity, table, derivedKey, term, input)]
+        : [];
     }
     case "boolean": {
       const flag = optionalBoolean.parse(value);
@@ -722,6 +816,230 @@ const derivedFilterPredicates = (
     }
   }
 };
+
+/**
+ * One filter's conditions on a row of its row set: `any` for its picked
+ * values and Any value / No value together, or under Match all one
+ * condition per picked value beside its presence. `absent` is true when the
+ * filter also admits a record with no row (it asked for No value).
+ */
+interface RowCondition {
+  readonly any: SQL | undefined;
+  readonly all: readonly SQL[] | null;
+  readonly presence: SQL | undefined;
+  readonly absent: boolean;
+}
+
+/**
+ * The filters through one declared row set (`model.rows`), compiled as one
+ * group: every include condition holds on the same row, in one `EXISTS`.
+ * No value also matches a record with no row at all when every condition
+ * in the group admits absence, so "source is Plaid and no external id"
+ * needs a Plaid alias. Match all gives each picked value its own `EXISTS`,
+ * each carrying the sibling conditions. Exclude reaches here as a request
+ * holding only the excluded values, so its negation is independent of the
+ * group.
+ */
+const rowSetPredicates = (
+  entity: Entity,
+  table: PgTable,
+  rows: string,
+  descriptors: readonly (StoredDescriptorView & { derived: string })[],
+  values: ListFilterValues,
+  input: DerivedFilterInput | undefined,
+): SQL | undefined => {
+  const set = rowSetSql(
+    entity,
+    rows,
+    getTableName(table),
+    input?.rows,
+    input?.context,
+  );
+  const conditions = descriptors.flatMap((descriptor): RowCondition[] => {
+    const field = derivedFieldsOf(entity)[descriptor.derived];
+    if (field?.shape !== "rows") return [];
+    const key = descriptor.field ?? descriptor.columnId;
+    const value =
+      values[descriptor.wire.kind === "param" ? descriptor.wire.name : key];
+    const column = set.column(field);
+    const terminal = field.terminal;
+    const target =
+      terminal.kind === "record"
+        ? Object.keys(SHORTCODE_TABLE).find(
+            (entry): entry is ShortcodeEntity => entry === terminal.target,
+          )
+        : undefined;
+    if (terminal.kind === "record" && target === undefined)
+      throw new Error(
+        `${entity}.${field.path} targets an entity without shortcodes`,
+      );
+    // A reference to a soft-deleted record counts as no value.
+    const live =
+      target === undefined
+        ? sql`${column} IS NOT NULL`
+        : sql`${column} IN ${shortcodeIdsSql(target, () => sql`true`)}`;
+    const presenceSql = (presence: PresenceFilter) =>
+      presence === undefined
+        ? undefined
+        : presence === "has"
+          ? live
+          : sql`NOT COALESCE((${live}), false)`;
+    const presence =
+      descriptor.kind === "presence"
+        ? presenceFilter.parse(value)
+        : descriptor.nullable
+          ? presenceFilter.parse(values[descriptor.nullable.field])
+          : undefined;
+    const condition = (any: SQL | undefined): RowCondition[] =>
+      any === undefined && presence === undefined
+        ? []
+        : [
+            {
+              any: or(any, presenceSql(presence)),
+              all: null,
+              presence: presenceSql(presence),
+              absent: presence === "none",
+            },
+          ];
+    switch (descriptor.kind) {
+      case "presence":
+        return condition(undefined);
+      case "text": {
+        const term = optionalText.parse(value)?.trim();
+        if (!term) return [];
+        const expander = Object.entries(
+          generatedEntityListFields[entity].terms,
+        ).find(([filter]) => filter === key)?.[1];
+        const terms = expander ? listTermExpanders[expander](term) : [term];
+        return condition(
+          or(...terms.map((candidate) => formatSearchTerm(column, candidate))),
+        );
+      }
+      case "boolean": {
+        const flag = optionalBoolean.parse(value);
+        return flag === undefined ? [] : condition(sql`${column} = ${flag}`);
+      }
+      // Bounds on the shared row. A related view's range (product tasks by
+      // due date) leaves its presence key to the view, which reads "has any
+      // related record", not "has a value".
+      case "range": {
+        if (descriptor.wire.kind !== "range") return [];
+        const [low, high] = [
+          rangeBound.parse(values[descriptor.wire.from]),
+          rangeBound.parse(values[descriptor.wire.to]),
+        ];
+        const bounds = and(
+          low === undefined ? undefined : sql`${column} >= ${low}`,
+          high === undefined ? undefined : sql`${column} <= ${high}`,
+        );
+        return bounds === undefined
+          ? []
+          : [{ any: bounds, all: null, presence: undefined, absent: false }];
+      }
+      default: {
+        const picked = nonEmpty(optionalTextList.parse(value));
+        const matches = (items: readonly string[]) =>
+          target === undefined
+            ? sql`${column} IN (${sql.join(
+                items.map((item) => sql`${item}`),
+                sql`, `,
+              )})`
+            : sql`${column} IN ${requestedIdsSql(
+                target,
+                items,
+                subtreeToggle(entity, key, values),
+              )}`;
+        const all =
+          descriptor.match !== null &&
+          matchAll.parse(values[descriptor.match.field]);
+        if (picked === undefined || !all)
+          return condition(picked === undefined ? undefined : matches(picked));
+        return [
+          {
+            any: or(matches(picked), presenceSql(presence)),
+            all: picked.map((item) => matches([item])),
+            presence: presenceSql(presence),
+            absent: presence === "none",
+          },
+        ];
+      }
+    }
+  });
+  if (conditions.length === 0) return undefined;
+  // No row at all also matches when every condition asks for No value.
+  const matches = (condition: SQL | undefined, absent: boolean) =>
+    absent ? set.matchesOrEmpty(condition) : set.matches(condition);
+  const everyValue = conditions.filter(({ all }) => all !== null);
+  if (everyValue.length === 0)
+    return matches(
+      and(...conditions.map(({ any }) => any)),
+      conditions.every(({ absent }) => absent),
+    );
+  // Each value of a Match all filter needs its own row, which also holds
+  // every sibling's any-of condition (another Match all filter's included).
+  return and(
+    ...everyValue.map((condition) => {
+      const others = conditions.filter((other) => other !== condition);
+      const siblings = and(...others.map(({ any }) => any));
+      return or(
+        and(
+          ...(condition.all ?? []).map((each) =>
+            set.matches(and(each, siblings)),
+          ),
+        ),
+        condition.presence === undefined
+          ? undefined
+          : matches(
+              and(condition.presence, siblings),
+              condition.absent && others.every(({ absent }) => absent),
+            ),
+      );
+    }),
+  );
+};
+
+/**
+ * Every request key the filters and related scopes through one row set (or
+ * one of its terminals) read, with the filters' "Include sub-…" toggles:
+ * what a repository row set drops from the request that bounds its own
+ * relation, which cannot read itself, and which of its columns a request
+ * reads.
+ */
+export const rowSetFilterKeys = (
+  entity: Entity,
+  rows: string,
+  terminal?: string,
+): string[] => [
+  ...descriptorsFor(entity).flatMap((descriptor) => {
+    const field =
+      descriptor.derived === null
+        ? undefined
+        : derivedFieldsOf(entity)[descriptor.derived];
+    if (
+      field?.shape !== "rows" ||
+      field.rows !== rows ||
+      (terminal !== undefined && field.path !== `${rows}.${terminal}`)
+    )
+      return [];
+    const toggle = Object.entries(
+      generatedEntityListFields[entity].subtree,
+    ).find(
+      ([filter]) => filter === (descriptor.field ?? descriptor.columnId),
+    )?.[1];
+    return [
+      ...descriptorValueKeys(descriptor),
+      ...(toggle === undefined ? [] : [toggle]),
+    ];
+  }),
+  ...Object.entries(generatedEntityListFields[entity].scopes).flatMap(
+    ([key, { via }]) =>
+      via.shape === "rows" &&
+      via.rows === rows &&
+      (terminal === undefined || via.path === `${rows}.${terminal}`)
+        ? [key]
+        : [],
+  ),
+];
 
 const nonEmpty = <T>(list: readonly T[] | undefined) =>
   list === undefined || list.length === 0 ? undefined : list;
@@ -825,10 +1143,10 @@ const suggestionPredicate = (
 };
 
 /**
- * The predicates a repository owes to descriptors declared `stored`: the
- * standard column predicate for each descriptor kind over the declared
- * stored columns. Text is a substring match ORed across its columns (a
- * `text[]` column matches by element), enum filters are equality or
+ * The predicates of every declared filter. Text is a substring match ORed
+ * across its `anyOf` fields (a `text[]` column matches by element, a `via`
+ * path by any related record). A `stored` filter is the standard column
+ * predicate for its kind: enum filters are equality or
  * membership with the declared nullable presence filter ORed in, a
  * multiselect declared `array` is an overlap with the same presence rule,
  * boolean is equality or presence, presence checks NULL, ranges are
@@ -846,6 +1164,15 @@ export function declaredFilterPredicates<Filters extends object>(
     (field) => field.control?.suggest != null,
   );
   const values = listFilterValues.parse(filters);
+  const derivedDescriptors = descriptorsFor(entity).filter(
+    (descriptor): descriptor is StoredDescriptorView & { derived: string } =>
+      descriptor.derived !== null,
+  );
+  /** The row set a derived descriptor's `via` starts at, if any. */
+  const rowSetOf = ({ derived }: { derived: string }) => {
+    const field = derivedFieldsOf(entity)[derived];
+    return field?.shape === "rows" ? field.rows : null;
+  };
   const include = (values: ListFilterValues): Array<SQL | undefined> => [
     hasSuggestTargets
       ? suggestionPredicate(
@@ -855,13 +1182,8 @@ export function declaredFilterPredicates<Filters extends object>(
           presenceFilter.parse(values.suggestionPresenceFilter),
         )
       : undefined,
-    ...descriptorsFor(entity)
-      .filter(
-        (
-          descriptor,
-        ): descriptor is StoredDescriptorView & { derived: string } =>
-          descriptor.derived !== null,
-      )
+    ...derivedDescriptors
+      .filter((descriptor) => rowSetOf(descriptor) === null)
       .flatMap((descriptor) =>
         derivedFilterPredicates(
           entity,
@@ -871,27 +1193,46 @@ export function declaredFilterPredicates<Filters extends object>(
           derivedInput,
         ),
       ),
+    ...descriptorsFor(entity).map((descriptor) =>
+      descriptor.anyOf === null
+        ? undefined
+        : anyOfPredicate(
+            entity,
+            table,
+            descriptor,
+            descriptor.anyOf,
+            values,
+            derivedInput,
+          ),
+    ),
+    ...[...new Set(derivedDescriptors.map(rowSetOf))].flatMap((rows) =>
+      rows === null
+        ? []
+        : [
+            rowSetPredicates(
+              entity,
+              table,
+              rows,
+              derivedDescriptors.filter(
+                (descriptor) => rowSetOf(descriptor) === rows,
+              ),
+              values,
+              derivedInput,
+            ),
+          ],
+    ),
     ...descriptorsFor(entity)
       .filter((descriptor) => descriptor.stored !== null)
       .flatMap((descriptor): Array<SQL | undefined> => {
         const key = descriptor.field ?? descriptor.columnId;
-        const columns = storedColumns(entity, table, descriptor);
-        const [first] = columns;
-        if (first === undefined) return [];
+        const [column] = descriptor.stored?.columns ?? [];
+        if (column === undefined) return [];
+        const first = storedColumn(entity, table, descriptor, column);
         const value = values[key];
         const presence = descriptor.nullable
           ? presenceFilter.parse(values[descriptor.nullable.field])
           : undefined;
         switch (descriptor.kind) {
-          case "text":
-            // Several terms OR (an agent guessing at synonyms).
-            return [
-              or(
-                ...(optionalTextList.parse(value) ?? []).map((term) =>
-                  textPredicate(columns, term.trim()),
-                ),
-              ),
-            ];
           case "boolean":
             return [booleanPredicate(first, optionalBoolean.parse(value))];
           case "multiselect":
@@ -1219,17 +1560,59 @@ const loadGroupSummaries = async (
     }));
 };
 
-interface ListScaffoldOptions<E extends Entity> {
-  /** SQL for every declared `model.derived` value and predicate. */
-  derived: DerivedSqlArg<E>;
+/**
+ * The list a related scope (`presentation.list.scopes`) nests: its prepared
+ * data for the nested filter record, and the live records that record
+ * selects.
+ */
+export interface NestedListScaffold<T extends Entity> {
+  readonly entity: T;
+  context(
+    db: Database | DrizzleTransaction,
+    request: ListContextRequest<ListFilterValues>,
+  ): Promise<ListContext>;
+  matchingIds(
+    filters: ListFilterValues,
+    options: { context: ListContext },
+  ): SQL;
 }
 
-/** `options` is required exactly when the entity declares derived SQL. */
-type ListScaffoldArgs<E extends Entity> = [keyof DerivedSqlArg<E>] extends [
+/**
+ * The target list of every related scope the entity declares, read when a
+ * request first sets the scope: the target's repository may import this
+ * one's, so its scaffold need not exist yet when this one is built.
+ */
+type ScopesArg<E extends Entity> = {
+  readonly [K in GeneratedListScopeKey<E>]: () => NestedListScaffold<
+    GeneratedListScopeTarget<E, K>
+  >;
+};
+
+/**
+ * SQL for every declared `model.derived` value and predicate, the relation
+ * of every repository row set (`model.rows`), and the target list of every
+ * related scope; each key is required exactly when the entity declares one.
+ */
+type ListScaffoldOptions<E extends Entity> = ([keyof DerivedSqlArg<E>] extends [
   never,
 ]
+  ? { derived?: DerivedSqlArg<E> }
+  : { derived: DerivedSqlArg<E> }) &
+  ([keyof RowsSqlArg<E>] extends [never]
+    ? { rows?: RowsSqlArg<E> }
+    : { rows: RowsSqlArg<E> }) &
+  ([GeneratedListScopeKey<E>] extends [never]
+    ? { scopes?: ScopesArg<E> }
+    : { scopes: ScopesArg<E> });
+
+/** `options` is required exactly when the entity declares SQL it reads. */
+type ListScaffoldArgs<E extends Entity> = [
+  keyof DerivedSqlArg<E> | keyof RowsSqlArg<E> | GeneratedListScopeKey<E>,
+] extends [never]
   ? [options?: ListScaffoldOptions<E>]
   : [options: ListScaffoldOptions<E>];
+
+const scopeValue = listFilterValues.optional();
 
 /**
  * `entity`/`table` scope the helpers to one entity's list. Call once per
@@ -1247,7 +1630,32 @@ export function listScaffold<
   },
 >(entity: E, table: T, ...[options]: ListScaffoldArgs<E>) {
   const derivedSql: AnyDerivedSql = options?.derived ?? {};
+  const rowsSql: AnyRowsSql = options?.rows ?? {};
   const derivedFields = derivedFieldsOf(entity);
+  const listFields = generatedEntityListFields[entity];
+  // The static scope: declared columns pinned to NULL on every read.
+  const tableColumns: AnyColumn[] = Object.values(getTableColumns(table));
+  const staticScope = listFields.scope.map((name) => {
+    const column = tableColumns.find((candidate) => candidate.name === name);
+    if (column === undefined)
+      throw new Error(`${entity}.presentation.list.scope: no column ${name}`);
+    return isNull(column);
+  });
+  const nestedScaffolds: Readonly<
+    Record<string, () => NestedListScaffold<Entity>>
+  > = options?.scopes ?? {};
+  /** Each related scope the request sets, with its nested filter record. */
+  const requestedScopes = (values: ListFilterValues) =>
+    Object.entries(listFields.scopes).flatMap(([key, scope]) => {
+      const value = scopeValue.parse(values[key]);
+      if (value === undefined) return [];
+      const nested = nestedScaffolds[key]?.();
+      if (nested === undefined || nested.entity !== scope.filters)
+        throw new Error(
+          `${entity}.presentation.list.scopes.${key} needs the ${scope.filters} list scaffold in listScaffold's scopes argument`,
+        );
+      return [{ via: scope.via, nested, value }];
+    });
   const fieldModel = fieldModelFor(entity);
   const readGroups = Object.entries(entitySummary).find(
     ([key]) => key === entity,
@@ -1341,6 +1749,21 @@ export function listScaffold<
     return new Map(rows.map((row) => [row.code, row.count]));
   };
   const scaffold = {
+    entity,
+
+    /**
+     * The live records `filters` selects, as an id subquery: what a related
+     * scope of another list matches through its path.
+     */
+    matchingIds(
+      filters: ListFilterValues,
+      { context }: { context: ListContext },
+    ): SQL {
+      return sql`(SELECT ${table.id} FROM ${table} WHERE ${
+        scaffold.where(filters, { context }) ?? sql`true`
+      })`;
+    },
+
     /**
      * Loads, once, the request data the requested derived fields read: a
      * field's `prepare` runs only when the request filters, sorts, groups or
@@ -1354,13 +1777,19 @@ export function listScaffold<
       seeded: ReadonlyArray<readonly [ListPrepare<unknown>, unknown]> = [],
     ): Promise<ListContext> {
       const values = listFilterValues.parse(request.filters);
+      // An active filter reads its derived entry, or every derived member of
+      // its `anyOf`.
       const filtered = new Set(
-        descriptorsFor(entity).flatMap(({ derived, ...descriptor }) =>
-          derived !== null &&
-          descriptorValueKeys({ derived, ...descriptor }).some(
+        descriptorsFor(entity).flatMap((descriptor) =>
+          descriptorValueKeys(descriptor).some(
             (key) => values[key] !== undefined,
           )
-            ? [derived]
+            ? [
+                ...(descriptor.derived === null ? [] : [descriptor.derived]),
+                ...(descriptor.anyOf ?? []).flatMap(({ key, source }) =>
+                  source === "derived" ? [key] : [],
+                ),
+              ]
             : [],
         ),
       );
@@ -1373,11 +1802,20 @@ export function listScaffold<
               listGroupByFromFilters(request.filters)?.key === key ||
               projects(key, request.projection ?? { kind: "full" }))),
       );
+      const scopes = requestedScopes(values);
       const prepares = new Set(
-        requested.flatMap((key) => {
-          const prepare = derivedPrepare(derivedSql, key);
-          return prepare === null ? [] : [prepare];
-        }),
+        [
+          ...requested.map((key) => {
+            const field = derivedFields[key];
+            return field?.shape === "rows"
+              ? rowsPrepare(rowsSql, field.rows)
+              : derivedPrepare(derivedSql, key);
+          }),
+          // A related scope through a row set reads that set.
+          ...scopes.map(({ via }) =>
+            via.shape === "rows" ? rowsPrepare(rowsSql, via.rows) : null,
+          ),
+        ].filter((prepare) => prepare !== null),
       );
       const seeds = new Map<ListPrepare<unknown>, unknown>(seeded);
       const loaded = await Promise.all(
@@ -1390,14 +1828,23 @@ export function listScaffold<
           ],
         ),
       );
-      return new ListContext(new Map(loaded));
+      // A related scope's list prepares its own data, only when the request
+      // sets that scope.
+      const nested = await Promise.all(
+        scopes.map(({ nested, value }) =>
+          nested.context(db, { filters: value, readIntent: "count" }),
+        ),
+      );
+      return nested.reduce(
+        (context, scope) => context.with(scope),
+        new ListContext(new Map(loaded)),
+      );
     },
 
     /**
      * Every list filter compiles from the declaration (stored, `model.derived`,
-     * related views, quality, audit dates, ids, search); there is no
-     * hand-written predicate argument. A list's static row scope is ANDed
-     * with this by its repository.
+     * related views, quality, audit dates, ids, search), and so do the list's
+     * declared scopes; there is no hand-written predicate argument.
      */
     where<Filters extends object>(
       filters: Filters,
@@ -1427,6 +1874,28 @@ export function listScaffold<
           ...relatedWhereConditions(entity, filters, table.id),
           // The kernel's `filters.ids` restriction, by canonical shortcode.
           listIdsCondition(table.shortcode, filters),
+          ...staticScope,
+          ...requestedScopes(listFilterValues.parse(filters)).map(
+            ({ via, nested, value }) => {
+              const scopeContext = context.withRead(undefined);
+              const ids = nested.matchingIds(value, { context: scopeContext });
+              if (via.shape === "via")
+                return relatedExistsSql(
+                  entity,
+                  via,
+                  table.id,
+                  (leaf) => sql`${leaf}."id" IN ${ids}`,
+                );
+              const set = rowSetSql(
+                entity,
+                via.rows,
+                getTableName(table),
+                rowsSql,
+                scopeContext,
+              );
+              return set.matches(sql`${set.column(via)} IN ${ids}`);
+            },
+          ),
           ...(searchable
             ? [
                 lexicalEligibility(
@@ -1450,6 +1919,7 @@ export function listScaffold<
     ): Array<SQL | undefined> {
       return declaredFilterPredicates(entity, table, filters, {
         derived: derivedSql,
+        rows: rowsSql,
         context,
       });
     },

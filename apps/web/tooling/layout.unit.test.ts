@@ -62,7 +62,7 @@ const CROWDED_FOLDERS = {
   "apps/web/src/features/recipe": 51,
   "apps/web/src/lib": 89,
   "apps/web/src/server/domains/product/repo": 43,
-  "apps/web/src/ui/data-table": 52,
+  "apps/web/src/ui/data-table": 51,
   "apps/web/src/ui/primitives": 50,
 } satisfies Record<string, number>;
 

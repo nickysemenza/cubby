@@ -5,14 +5,14 @@ import {
   imageJobBaseFilterFields,
   imageJobOut,
 } from "./generated/imageJob.gen";
-import { createPaginatedResponseSchema } from "./pagination";
+import { createPaginatedResponseSchema, oneOrMany } from "./pagination";
 
 export { imageJobOut, type ImageJobOut } from "./generated/imageJob.gen";
 
 export const imageJobFilterFields = {
   ...imageJobBaseFilterFields,
-  /** Jobs that joined this submission (`IPS-…`), including later retries. */
-  submissionId: activitySubmissionId.optional(),
+  /** Jobs that joined any of these submissions (`IPS-…`), including later retries. */
+  submissionId: oneOrMany(activitySubmissionId).optional(),
 };
 export const imageJobFilters = z.object(imageJobFilterFields);
 export type ImageJobFilters = z.infer<typeof imageJobFilters>;

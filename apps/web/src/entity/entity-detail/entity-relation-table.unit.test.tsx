@@ -97,8 +97,8 @@ describe("planRelationSection", () => {
   });
 
   it("uses an explicit many-reference prefill when the filter key is not writable", () => {
-    // Planting's Journal section filters gardenEntry by the derived,
-    // urlOnly `journalPlantingId` descriptor (direct + in-window whole-area
+    // Planting's Journal section filters gardenEntry by the derived
+    // `journalPlantingId` descriptor (direct + in-window whole-area
     // entries) — that key is not itself a create field on gardenEntry. The
     // section's explicit manifest prefill points at GardenEntry.plantingIds,
     // which the `full` create intent carries (`capture` doesn't). The create

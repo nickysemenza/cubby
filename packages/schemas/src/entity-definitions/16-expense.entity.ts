@@ -86,6 +86,11 @@ export default defineEntity({
       ],
     },
     list: {
+      // A project page's embedded expense list: expenses with any allocation
+      // share in a project its project filters select.
+      scopes: {
+        projectScope: { via: "allocationShares.project", filters: "project" },
+      },
       savedViews: [
         {
           id: "research-queue",
@@ -1134,6 +1139,23 @@ Rules:
       "productQuantity",
       "purchaseId",
     ],
+    rows: {
+      attributions: {
+        label: "Attributions",
+        path: [{ edge: "ExpenseAttribution.expenseId", direction: "incoming" }],
+      },
+      // The expense's computed allocation shares, one per project, spending
+      // category, trade and cost type it splits into.
+      allocationShares: {
+        label: "Allocation shares",
+        repository: {
+          project: { reference: "project" },
+          spendingCategory: { reference: "spendingCategory" },
+          trade: "text",
+          costType: "text",
+        },
+      },
+    },
     derived: {
       // The allocated spending categories' names.
       spendingCategoryId: { type: "text" },
@@ -1145,31 +1167,12 @@ Rules:
       costSign: { type: "enum", options: ["negative", "positive"] },
       // Belongs to a disposal Purchase (a relationship, not a negative line).
       disposalPurchase: { type: "boolean" },
-      ledgerPartyId: {
-        predicate: "idMulti",
-        reason:
-          "Matches any live attribution's party; attributions are a ledger field, not a declared relation",
-      },
-      projectFilter: {
-        predicate: "idMulti",
-        reason:
-          "Matches the expense's allocation shares, which split one expense across projects, categories, trades and cost types, so it is not one row value",
-      },
-      spendingCategoryFilter: {
-        predicate: "idMulti",
-        reason:
-          "Matches the expense's allocation shares, which split one expense across projects, categories, trades and cost types, so it is not one row value",
-      },
-      tradeFilter: {
-        predicate: "multiselect",
-        reason:
-          "Matches the expense's allocation shares, which split one expense across projects, categories, trades and cost types, so it is not one row value",
-      },
-      costTypeFilter: {
-        predicate: "multiselect",
-        reason:
-          "Matches the expense's allocation shares, which split one expense across projects, categories, trades and cost types, so it is not one row value",
-      },
+      ledgerPartyId: { via: "attributions.ledgerParty" },
+      // All four match on the same allocation share.
+      projectFilter: { via: "allocationShares.project" },
+      spendingCategoryFilter: { via: "allocationShares.spendingCategory" },
+      tradeFilter: { via: "allocationShares.trade" },
+      costTypeFilter: { via: "allocationShares.costType" },
     },
     sort: {
       fields: [
@@ -1370,7 +1373,7 @@ Rules:
           module: "@cubby/schemas/expense-fields",
           export: "expenseSearchTerms",
         },
-        stored: true,
+        anyOf: ["name"],
       },
       {
         columnId: "date",
@@ -1399,13 +1402,11 @@ Rules:
         columnId: "dateFrom",
         kind: "text",
         placeholder: "Expense date from...",
-        urlOnly: true,
       },
       {
         columnId: "dateTo",
         kind: "text",
         placeholder: "Expense date to...",
-        urlOnly: true,
       },
       {
         columnId: "costType",
@@ -1548,27 +1549,23 @@ Rules:
         columnId: "costMin",
         kind: "text",
         placeholder: "Minimum cost...",
-        urlOnly: true,
       },
       {
         columnId: "costMax",
         kind: "text",
         placeholder: "Maximum cost...",
-        urlOnly: true,
       },
       {
         columnId: "costSign",
         kind: "multiselect",
         derived: true,
         placeholder: "Filter by cost direction...",
-        urlOnly: true,
       },
       {
         columnId: "disposalPurchasePresenceFilter",
         kind: "presence",
         derived: "disposalPurchase",
         placeholder: "Filter disposal purchase presence...",
-        urlOnly: true,
       },
       {
         columnId: "productQuantity",
@@ -1624,13 +1621,11 @@ Rules:
         columnId: "productQuantityMin",
         kind: "text",
         placeholder: "Minimum product quantity...",
-        urlOnly: true,
       },
       {
         columnId: "productQuantityMax",
         kind: "text",
         placeholder: "Maximum product quantity...",
-        urlOnly: true,
       },
       {
         // Its own field, never folded into `search`: notes carry an import's
@@ -1639,19 +1634,17 @@ Rules:
         columnId: "notesSearch",
         kind: "text",
         placeholder: "Search notes...",
-        urlOnly: true,
         deriveSchema: true,
         schemaDescription: "Substring match on notes",
-        stored: { columns: ["notes"] },
+        anyOf: ["notes"],
       },
       {
         columnId: "urlSearch",
         kind: "text",
         placeholder: "Search url...",
-        urlOnly: true,
         deriveSchema: true,
         schemaDescription: "Substring match on url",
-        stored: { columns: ["url"] },
+        anyOf: ["url"],
       },
       {
         columnId: "spendingCategoryId",
@@ -1686,7 +1679,6 @@ Rules:
         kind: "idMulti",
         placeholder: "Filter by product id...",
         brandRef: { entity: "product" },
-        urlOnly: true,
         deriveSchema: true,
         stored: { columns: ["productId"] },
       },
@@ -1731,7 +1723,6 @@ Rules:
         urlKey: "order",
         kind: "multiselect",
         placeholder: "Filter by order id...",
-        urlOnly: true,
         derived: "orderId",
       },
       {
@@ -1741,7 +1732,6 @@ Rules:
         placeholder: "Filter by attributed party...",
         brandRef: { entity: "ledgerParty" },
         currentMember: true,
-        urlOnly: true,
         derived: true,
       },
       {
@@ -1752,7 +1742,6 @@ Rules:
         kind: "idMulti",
         placeholder: "Filter by purchase id...",
         brandRef: { entity: "purchase" },
-        urlOnly: true,
         deriveSchema: true,
         stored: { columns: ["purchaseId"] },
       },
@@ -1768,13 +1757,11 @@ Rules:
         kind: "idMulti",
         placeholder: "Filter by related purchase transactions id...",
         brandRef: { entity: "financialTransaction" },
-        urlOnly: true,
       },
       {
         columnId: "financialTransactionPresenceFilter",
         kind: "presence",
         placeholder: "Filter related purchase transactions presence...",
-        urlOnly: true,
       },
     ],
   },

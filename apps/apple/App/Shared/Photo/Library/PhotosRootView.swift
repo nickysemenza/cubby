@@ -173,6 +173,7 @@ private struct PhotoLibraryBrowser: View {
     @State private var loading: Task<Void, Never>?
     @State private var selectionError: String?
     @State private var loadingSelection = false
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// Reference-type caches held stable across renders by `@State`: mutating their contents
     /// during `body` is safe (only reassigning the `@State` binding itself would invalidate the
     /// view), and — unlike a tracked `@State` value — updating them never itself triggers a
@@ -191,6 +192,37 @@ private struct PhotoLibraryBrowser: View {
         [GridItem(.adaptive(minimum: minimumTileWidth, maximum: max(160, minimumTileWidth)), spacing: 3)]
     }
     private var library: PhotoLibraryStore { appModel.photoLibrary }
+
+    #if os(iOS)
+        private var selectionBar: some View {
+            let layout =
+                dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: FieldGuideTokens.Space.sm))
+                : AnyLayout(HStackLayout(spacing: FieldGuideTokens.Space.md))
+            return layout {
+                Text("\(ids.count) selected")
+                    .font(.fieldGuideLabel)
+                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                if loadingSelection {
+                    ProgressView(value: library.selectionProgress)
+                        .frame(minWidth: 70, maxWidth: .infinity)
+                        .accessibilityLabel("Downloading selected photos")
+                    Button("Cancel") {
+                        loading?.cancel(); loadingSelection = false
+                    }
+                } else {
+                    if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: FieldGuideTokens.Space.sm) }
+                    Button(picker ? "Choose photos" : "Add to…") { prepareSelection() }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(ids.isEmpty || (!picker && analysisStore == nil))
+                        .accessibilityIdentifier(picker ? "photos.choose" : "photos.addTo")
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, FieldGuideTokens.Space.md)
+            .padding(.vertical, FieldGuideTokens.Space.sm)
+        }
+    #endif
     private var matches: PhotoMatchStore { appModel.photoMatches }
     private var ids: [String] { picker ? pickerIDs : library.selectedIDs }
 
@@ -271,30 +303,10 @@ private struct PhotoLibraryBrowser: View {
         .navigationTitle("Photos")
         .fieldGuideScreen()
         #if os(iOS)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
+            // The system bar supplies the scroll-edge treatment, so the bar carries no material.
+            .safeAreaBar(edge: .bottom) {
                 if library.hasFullAccess && !ids.isEmpty {
-                    HStack(spacing: FieldGuideTokens.Space.md) {
-                        Text("\(ids.count) selected")
-                        .font(.fieldGuideLabel)
-                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                        Spacer(minLength: 8)
-                        if loadingSelection {
-                            ProgressView(value: library.selectionProgress)
-                            .frame(width: 70)
-                            .accessibilityLabel("Downloading selected photos")
-                            Button("Cancel") {
-                                loading?.cancel(); loadingSelection = false
-                            }
-                        } else {
-                            Button(picker ? "Choose photos" : "Add to…") { prepareSelection() }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(ids.isEmpty || (!picker && analysisStore == nil))
-                            .accessibilityIdentifier(picker ? "photos.choose" : "photos.addTo")
-                        }
-                    }
-                    .padding(.horizontal, FieldGuideTokens.Space.md)
-                    .padding(.vertical, FieldGuideTokens.Space.sm)
-                    .background(.regularMaterial)
+                    selectionBar
                 }
             }
         #endif
@@ -758,15 +770,14 @@ private struct PhotoLibraryCell: View {
     }
 
     private var detailsButton: some View {
+        // Clear glass over the photo; the hit area is 44pt on both platforms around the 32pt mark.
         Button(action: onShowDetails) {
-            Image(systemName: "info.circle.fill")
-                .font(.system(size: 24))
+            Image(systemName: "info")
+                .font(.body.weight(.semibold))
                 .foregroundStyle(.white)
                 .frame(width: 32, height: 32)
-                .background(.ultraThinMaterial, in: Circle())
-                #if os(iOS)
-                    .frame(width: 44, height: 44)
-                #endif
+                .glassEffect(.clear.interactive(), in: .circle)
+                .frame(width: FieldGuideTokens.touchTarget, height: FieldGuideTokens.touchTarget)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

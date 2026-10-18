@@ -73,7 +73,12 @@ export class AiRefreshWorkflow extends WorkflowEntrypoint<
                 const cursor = await readAiDiscoveryCursor(db);
                 return (
                   cursor.revision === current.revision &&
-                  !(cursor.fieldDone && cursor.emailDone)
+                  !(
+                    cursor.fieldDone &&
+                    cursor.emailDone &&
+                    cursor.productDone &&
+                    cursor.connectionDone
+                  )
                 );
               }),
           );

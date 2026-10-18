@@ -1,4 +1,9 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
+import {
+  assessmentFamily,
+  feedbackAuthority,
+  feedbackVerdict,
+} from "@cubby/schemas/assessment";
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   dataCheck,
@@ -7,6 +12,7 @@ import {
 } from "@cubby/schemas/data-quality";
 import { entityRefKey, entitySchema, type Entity } from "@cubby/schemas/entity";
 import { entityFieldByKey } from "@cubby/schemas/entity-fields";
+import { entityGraphRootSchema } from "@cubby/schemas/entity-graph";
 import {
   shortcodeEntities,
   type ShortcodeEntity,
@@ -41,7 +47,7 @@ import {
   type WorkQueueRow,
 } from "@cubby/schemas/work-queue";
 import { CURRENT_MEMBER_FILTER, parseShortcode } from "@cubby/shared";
-import { or, sql, type SQL } from "drizzle-orm";
+import { inArray, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
@@ -58,12 +64,16 @@ import {
   run as runTable,
   assessmentState as suggestionTable,
 } from "~/server/db/schema";
+import { readEntityConnectionsBatch } from "~/server/domains/connection/repo/entity-connections";
 import { buildEmailWhere } from "~/server/domains/email/repo/email";
 import { buildExpenseWhereClause } from "~/server/domains/expense/repo/lookup";
 import { buildFinancialTransactionWhere } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { buildProductWhere } from "~/server/domains/product/repo/crud";
 import { productPriceEvidenceSql } from "~/server/domains/product/repo/pricing";
-import { onHandUnitsReadSql } from "~/server/domains/product/repo/quantity-ledger";
+import {
+  expectedQuantityReadSql,
+  onHandUnitsReadSql,
+} from "~/server/domains/product/repo/quantity-ledger";
 import { activeFindingSql } from "~/server/domains/purchase-import/repo/finding-expiry";
 import { obsoleteExecutionFindingSql } from "~/server/domains/purchase-import/repo/run-retirement";
 import { buildPurchaseWhereClause } from "~/server/domains/purchase/repo/purchase";
@@ -72,6 +82,10 @@ import {
   purchasePostingStartSql,
   transactionPostingStartSql,
 } from "~/server/domains/purchase/repo/settlement-grace";
+import {
+  pendingSuggestion,
+  suggestionField,
+} from "~/server/domains/statement-import/repo/statement-charge";
 import { buildVendorWhereClause } from "~/server/domains/vendor/repo/vendor";
 import { resolvePublicEntityDisplayImageLists } from "~/server/entity-kernel/repo/entity-display-image";
 import { reviewableSuggestionSql } from "~/server/generic/assessment/repo/suggestion-review";
@@ -157,6 +171,59 @@ async function workQueueProjection(
   quality: StatementQualityRelations,
 ): Promise<SQL> {
   const selections: SQL[] = [];
+  if (!scope.check) {
+    // Use the same currentness check as Relations before counting or paginating Work.
+    const pending = await getDb(db)
+      .execute(sql`SELECT DISTINCT root.kind AS "entityKind", root.shortcode AS "entityId"
+      FROM "AssessmentState" current JOIN "Assessment" prediction ON prediction.id=current.id
+      JOIN "Entity" root ON root.id=current."recordId" AND root.kind=current.entity
+      WHERE current.active AND current.status=${suggestionStatus.enum.pending}
+        AND prediction.subject->>'scope' LIKE 'connection.%'
+        AND root."deletedAt" IS NULL AND root."mergedIntoId" IS NULL
+        ${scope.record ? sql`AND root.kind=${scope.record.entity} AND root.shortcode=${scope.record.id}` : sql``}`);
+    const sources = z.array(entityGraphRootSchema).parse(pending.rows);
+    const freshIds: string[] = [];
+    for (let offset = 0; offset < sources.length; offset += 250) {
+      const groups = await readEntityConnectionsBatch(
+        db,
+        sources.slice(offset, offset + 250),
+      );
+      freshIds.push(
+        ...groups
+          .flat()
+          .filter(
+            (proposal) => proposal.integration.kind === "connection-review",
+          )
+          .map((proposal) => proposal.review.assessmentId),
+      );
+    }
+    const record = scope.record
+      ? sql`AND root.kind = ${scope.record.entity} AND root.shortcode = ${scope.record.id}`
+      : sql``;
+    selections.push(sql`SELECT root.kind::text AS entity, root.shortcode::text AS id,
+      coalesce(document.title, root.shortcode)::text AS name,
+      'connection:' || root.id::text AS key, ${workQueueSourceSchema.enum.suggestion}::text AS source, ${workQueueKindSchema.enum.review}::text AS kind,
+      count(*)::text || ' pending connection candidates' AS reason,
+      'Review the proposed connection and its evidence in Relations.'::text AS "nextAction",
+      ARRAY[]::uuid[] AS owners, true AS shared, NULL::text AS "problemKey", ${NO_FACT_COLUMNS}
+      FROM "AssessmentState" current
+      JOIN "Assessment" prediction ON prediction.id = current.id
+      JOIN "Entity" root ON root.id = current."recordId" AND root.kind = current.entity
+      LEFT JOIN "SearchDocument" document ON document."entityId" = root.id AND document."entityKind" = root.kind AND document."deletedAt" IS NULL
+      WHERE current.family = ${assessmentFamily.enum.recommendation} AND current.active AND current.status = ${suggestionStatus.enum.pending}
+        AND ${freshIds.length ? inArray(sql`current.id`, freshIds) : sql`false`}
+        AND prediction.subject->>'scope' LIKE 'connection.%'
+        AND root."deletedAt" IS NULL AND root."mergedIntoId" IS NULL ${record}
+        AND NOT EXISTS (SELECT 1 FROM "Feedback" reviewed WHERE reviewed."assessmentId" = prediction.id
+          AND reviewed.authority = ${feedbackAuthority.enum.member} AND reviewed.verdict IN (${feedbackVerdict.enum.wrong}, ${feedbackVerdict.enum.dismissed}))
+        AND NOT EXISTS (SELECT 1 FROM "AssessmentState" hidden WHERE hidden.active AND hidden.entity = current.entity
+          AND hidden."recordId" = current."recordId" AND hidden.suppression->>'scope' = prediction.subject->>'scope'
+          AND hidden.suppression->>'candidateKey' = prediction.subject->>'candidateKey'
+          AND (hidden.suppression->>'fingerprint' IS NULL OR hidden.suppression->>'fingerprint' = prediction.fingerprint))
+        AND EXISTS (SELECT 1 FROM "Entity" target WHERE target.shortcode = prediction.evidence->'candidate'->${"target"}->>'entityId'
+          AND target.kind = prediction.evidence->'candidate'->${"target"}->>'entityKind' AND target."deletedAt" IS NULL AND target."mergedIntoId" IS NULL)
+      GROUP BY root.kind, root.shortcode, root.id, document.title`);
+  }
   // Skips building a branch the scope would drop anyway.
   const admits = (entity: Entity, carriesGaps = false) =>
     (!scope.check || carriesGaps) &&
@@ -263,7 +330,28 @@ async function workQueueProjection(
   // One row per suggested field, never one per Suggestion: the Review list
   // is where each is accepted or rejected. It names no record, so a record
   // read never includes it.
-  if (scopeAdmitsUnrecorded(scope))
+  if (scopeAdmitsUnrecorded(scope)) {
+    const guarded = await getDb(db)
+      .execute(sql`SELECT DISTINCT data->'connectionEvidence'->'candidate'->${"source"} AS source FROM ${suggestionTable}
+      WHERE ${suggestionTable.family}=${assessmentFamily.enum.field} AND ${suggestionTable.status}=${suggestionStatus.enum.pending}
+        AND ${suggestionTable.data} ? 'connectionEvidence'`);
+    const sources = z
+      .array(z.object({ source: entityGraphRootSchema }))
+      .parse(guarded.rows)
+      .map((row) => row.source);
+    const freshFieldIds: string[] = [];
+    for (let offset = 0; offset < sources.length; offset += 250) {
+      const groups = await readEntityConnectionsBatch(
+        db,
+        sources.slice(offset, offset + 250),
+      );
+      freshFieldIds.push(
+        ...groups
+          .flat()
+          .filter((proposal) => proposal.integration.kind === "field-review")
+          .map((proposal) => proposal.review.assessmentId),
+      );
+    }
     selections.push(sql`SELECT ${suggestionTable.entity}::text AS entity, NULL::text AS id,
     ${suggestionTable.entity} || '.' || ${suggestionTable.field} AS name,
     'suggestion:' || ${suggestionTable.entity} || '.' || ${suggestionTable.field} AS key,
@@ -273,7 +361,9 @@ async function workQueueProjection(
     ARRAY[]::uuid[] AS owners, true AS shared, NULL::text AS "problemKey", ${NO_FACT_COLUMNS}
     FROM ${suggestionTable} LEFT JOIN ${runTable} ON ${runTable.id} = ${suggestionTable.runId}
     WHERE ${suggestionTable.status} = ${suggestionStatus.enum.pending} AND ${suggestionTable.family} = ${"field"} AND ${reviewableSuggestionSql}
+      AND (NOT coalesce(${suggestionTable.data} ? 'connectionEvidence', false) OR ${freshFieldIds.length ? inArray(suggestionTable.id, freshFieldIds) : sql`false`})
     GROUP BY ${suggestionTable.entity}, ${suggestionTable.field}`);
+  }
 
   // The declared unsettled view owns missing payment evidence. Receipt
   // research remains independent; settlement authority includes every tender.
@@ -413,6 +503,30 @@ async function workQueueProjection(
         nextAction: "Claim the account using provider evidence.",
       },
       key: "account:provisional",
+    }),
+    // One row per account, never one per charge: the statement Suggestions
+    // view groups and bulk-accepts them.
+    ...workQueueCandidate(scope, {
+      entity: "financialAccount",
+      table: sql`"FinancialAccount" JOIN (
+        SELECT (${suggestionField("accountId")})::uuid AS account,
+          count(*)::int AS total,
+          count(*) FILTER (WHERE (${suggestionField("clean")})::boolean)::int AS clean
+        FROM "AssessmentState" s WHERE ${pendingSuggestion()}
+        GROUP BY 1
+      ) statement_suggestions ON statement_suggestions.account = "FinancialAccount".id`,
+      id: sql`"FinancialAccount".shortcode`,
+      name: sql`"FinancialAccount".name`,
+      owners: sql`ARRAY["FinancialAccount"."ledgerPartyId"]`,
+      where: sql`"FinancialAccount"."deletedAt" IS NULL`,
+      details: {
+        source: "statement_suggestion",
+        kind: "review",
+        reason: sql`statement_suggestions.total || CASE WHEN statement_suggestions.total = 1 THEN ' transaction suggestion' ELSE ' transaction suggestions' END || ' (' || statement_suggestions.clean || ' ready to accept)'`,
+        nextAction:
+          "Review the statement Suggestions for this account; accept the clean ones as a group.",
+      },
+      key: "statement_suggestion",
     }),
   );
 
@@ -615,10 +729,17 @@ async function queryWorkQueue(
     candidateConditions.push(sql`kind IN (${textList(kinds)})`);
   let needsPriceEvidence = false;
   let needsOnHandEvidence = false;
+  let needsExpectedEvidence = false;
   const productReadContext: QualityReadContext = {
     derivedValue: record
       ? undefined
       : (field, entityId) => {
+          if (field === "expectedQuantity") {
+            needsExpectedEvidence = true;
+            // Text keeps the double exact through the map; the catalog walk
+            // replaces one kit recursion per stocked Product.
+            return sql`((SELECT jsonb_object_agg("id", "value"::text) FROM work_product_expected) ->> ${entityId}::text)::double precision`;
+          }
           if (field !== "onHandUnits") return undefined;
           needsOnHandEvidence = true;
           return sql`((SELECT jsonb_object_agg("productId", "onHandUnits") FROM work_product_on_hand) ->> ${entityId}::text)::double precision`;
@@ -758,6 +879,7 @@ async function queryWorkQueue(
   const result = await getDb(db).execute(sql`
     WITH ${needsPriceEvidence ? sql`work_product_price AS MATERIALIZED (${productPriceEvidenceSql()}),` : sql``}
     ${needsOnHandEvidence ? sql`work_product_on_hand AS MATERIALIZED (${onHandUnitsReadSql()}),` : sql``}
+    ${needsExpectedEvidence ? sql`work_product_expected AS MATERIALIZED (${expectedQuantityReadSql()}),` : sql``}
     ${sql.join(
       quality.ctes().map((cte) => sql`${cte},`),
       sql` `,
@@ -788,7 +910,7 @@ async function queryWorkQueue(
           WHEN ${members} THEN jsonb_build_object('kind', ${members}::text, 'members', (SELECT jsonb_agg(jsonb_build_object('id', member.shortcode, 'name', member.name) ORDER BY member.name, member.shortcode) FROM members member WHERE member.id = ANY(page.owners)))
           ELSE jsonb_build_object('kind', ${unresolved}::text, 'reason', 'Current private source ownership is not established.') END
       ) || CASE WHEN "problemKey" IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('problemKey', "problemKey") END
-        || CASE WHEN source = ${workQueueSourceSchema.enum.suggestion} THEN jsonb_build_object('suggestionField', split_part(key, '.', 2)) ELSE '{}'::jsonb END ORDER BY position) FROM page), '[]'::jsonb) AS items
+        || CASE WHEN source = ${workQueueSourceSchema.enum.suggestion} AND key LIKE 'suggestion:%' THEN jsonb_build_object('suggestionField', split_part(key, '.', 2)) ELSE '{}'::jsonb END ORDER BY position) FROM page), '[]'::jsonb) AS items
   `);
   const row = z
     .object({

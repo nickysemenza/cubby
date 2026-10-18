@@ -200,8 +200,11 @@ query rather than a pipeline rebuilt each session. It is not an importer: it
 resolves no account, links no Purchase, creates no transaction, and makes no
 match.
 
-`finance_read.statement_rows({matchState:"unmatched"})` is the worklist — a provider row
-with no live transaction carrying its source ref. To close one, append that ref
+`finance_read.statement_rows({matchState:"unmatched"})` is the worklist — a provider
+charge with no live transaction carrying any of its source refs. Match state is
+per charge: every re-export observation of one charge (same v1 identity)
+inherits an ignore, supersession or match recorded on any of them, and
+`summary.unmatchedCharges` counts distinct charges. To close one, append that ref
 to the right transaction with `entity.update financialTransaction` (read–merge–write
 on `sourceRefs`); the row flips to `matched` on the next read, with no write to
 the row itself. `statement_rows.update` takes a `{filter}` selector for the long
@@ -227,6 +230,44 @@ Three reconciliation traps:
   migration script, not a reason to fork the write path permanently. Reconcile
   afterwards either way with `finance_read.drift` — a row present in the
   ledger but absent from every export is the signature.
+
+### Working the backlog through Transaction suggestions
+
+Recording rows queues a pass that turns each unmatched charge into one
+Transaction suggestion (`finance_read.statement_suggestions`,
+`finance_read.statement_suggestion_groups`); `statement_rows.refresh_suggestions`
+reruns it after hand edits to transactions or accounts. Burn the backlog group
+by group (account × month):
+
+1. Accept `clean: true` suggestions in batches of up to 100 with
+   `entity.review_assessments`: verdict `correct`, intent `apply`,
+   `expectedFingerprint`, and `application {kind: "statement_transaction",
+   action: <recommended>}`.
+2. Read every other suggestion before choosing. An attach candidate's model
+   `label` is advisory — confirm the descriptors yourself, and below about $20
+   read both. Attach to a different candidate, tick `fields`, override the
+   kind, or create anyway (`rejectedCandidateIds` listing every candidate) as
+   verdict `wrong` with `correction {present: true, value: <the same
+   application>}`.
+3. A charge with `siblings` has a same-amount charge from another export: the
+   pair may be one charge whose descriptor firmed up. Supersede the thinner row
+   (`statement_rows.update` with `supersededByExternalId`) before creating
+   either.
+4. Dismiss charges that should never become transactions with verdict
+   `dismissed` and suppression `{scope: "statement_transaction", candidateKey:
+   "<source>:<chargeKey>", fingerprint}`; prefer `disposition: "ignored"` with a
+   reason when the whole row is out of scope, because that also settles every
+   observation.
+
+A refusal (evidence changed, a live candidate, a stale hold, an attach with
+several candidates and no named `transactionId`) writes nothing. Labelling
+republishes a suggestion under a new assessment id, so a stale-Assessment
+error means re-list the group and review the replacement. Supersede suggestions settle a hold this ledger
+recorded from a provider-pending row: the posted amount may exceed the hold by
+up to the larger of 25% or $20 within seven days, and the review shows the new
+amount. A void suggestion is the one absence judgment: a hold recorded from
+pending rows, with no posted twin, missing from a later export that covers its
+account seven days past it. Voiding keeps the transaction and its refs.
 
 ## Purchases and refunds
 

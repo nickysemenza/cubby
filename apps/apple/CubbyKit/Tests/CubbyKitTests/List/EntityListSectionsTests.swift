@@ -97,18 +97,6 @@ struct EntityListSectionsTests {
         #expect(inventory.hiding(state, section: none, of: placement) == nil)
     }
 
-    // A filter whose predicate cannot be negated keeps its exclude key with a reason; Hide is
-    // not offered rather than sending a request the server rejects.
-    @Test func hidingIsUnavailableWhenTheFilterCannotExclude() throws {
-        let expense = EntityCatalog[.expense]
-        let costType = try #require(expense.groupChoice("costType"))
-        let filter = try #require(expense.filters.first { $0.columnId == costType.filter?.columnId })
-        #expect(filter.excludeParam != nil)
-        #expect(filter.excludeReason != nil)
-        let section = EntityListSection(id: "materials", label: "Materials", count: 1, rows: [])
-        #expect(expense.hiding(EntityFilterState(), section: section, of: costType) == nil)
-    }
-
     @Test func listInputCarriesTheGroupByChoice() throws {
         let input = try inventory.listInput(
             page: 1, pageSize: 20, sort: nil, filters: EntityFilterState(), groupBy: "category")

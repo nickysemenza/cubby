@@ -638,14 +638,13 @@ export default defineEntity({
         brandRef: { entity: "location" },
       },
       {
-        // URL-only scope consumed by dependent Garden Entry planting
-        // pickers: plantings whose active span contains the day.
+        // Also consumed by dependent Garden Entry planting pickers:
+        // plantings whose active span contains the day.
         columnId: "activeOn",
         kind: "range",
         wire: { kind: "param", name: "activeOn" },
         derived: "activeSpan",
         placeholder: "Filter plantings active on...",
-        urlOnly: true,
       },
       {
         // Plantings whose active span overlaps the window ("active this
@@ -655,7 +654,6 @@ export default defineEntity({
         wire: { kind: "range", from: "activeFrom", to: "activeTo" },
         derived: true,
         placeholder: "Filter plantings active between...",
-        urlOnly: true,
       },
       {
         columnId: "plantId",
@@ -687,7 +685,6 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by garden entry...",
         brandRef: { entity: "gardenEntry" },
-        urlOnly: true,
         deriveSchema: true,
         derived: true,
       },

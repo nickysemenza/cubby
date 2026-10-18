@@ -673,7 +673,6 @@ Rules:
         kind: "idMulti",
         placeholder: "Filter by related recipe id...",
         brandRef: { entity: "recipe" },
-        urlOnly: true,
       },
       {
         columnId: "related:meal.foodProducts",
@@ -687,13 +686,11 @@ Rules:
         kind: "idMulti",
         placeholder: "Filter by related food products id...",
         brandRef: { entity: "product" },
-        urlOnly: true,
       },
       {
         columnId: "foodProductPresenceFilter",
         kind: "presence",
         placeholder: "Filter related food products presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:meal.foodIngredients",
@@ -707,13 +704,11 @@ Rules:
         kind: "idMulti",
         placeholder: "Filter by related food ingredients id...",
         brandRef: { entity: "ingredient" },
-        urlOnly: true,
       },
       {
         columnId: "foodIngredientPresenceFilter",
         kind: "presence",
         placeholder: "Filter related food ingredients presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:meal.eaters",
@@ -728,13 +723,11 @@ Rules:
         placeholder: "Filter by related eaters id...",
         brandRef: { entity: "ledgerParty" },
         currentMember: true,
-        urlOnly: true,
       },
       {
         columnId: "eaterPresenceFilter",
         kind: "presence",
         placeholder: "Filter related eaters presence...",
-        urlOnly: true,
       },
     ],
   },

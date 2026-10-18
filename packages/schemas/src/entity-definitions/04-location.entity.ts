@@ -791,7 +791,7 @@ Rules:
         placeholder: "Filter by location name...",
         deriveSchema: true,
         schemaDescription: "Filter by location name (substring)",
-        stored: { columns: ["name", "aliases"] },
+        anyOf: ["name", "aliases"],
       },
       {
         columnId: "type",
@@ -895,7 +895,6 @@ Rules:
         field: "inventoryPresenceFilter",
         kind: "presence",
         placeholder: "Filter inventory presence...",
-        urlOnly: true,
         derived: "hasInventory",
       },
       {
@@ -910,13 +909,11 @@ Rules:
         kind: "idMulti",
         placeholder: "Filter by related ingredients id...",
         brandRef: { entity: "ingredient" },
-        urlOnly: true,
       },
       {
         columnId: "ingredientPresenceFilter",
         kind: "presence",
         placeholder: "Filter related ingredients presence...",
-        urlOnly: true,
       },
     ],
   },

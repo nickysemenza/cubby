@@ -292,11 +292,11 @@ export default defineEntity({
         field: "nameFilter",
         kind: "text",
         placeholder: "Search USDA foods...",
-        urlOnly: true,
         wire: { kind: "param", name: "nameFilter" },
       },
       {
         columnId: "dataTypeFilter",
+        label: "Type",
         field: "dataTypeFilter",
         kind: "multiselect",
         placeholder: "Filter by USDA data type...",
@@ -306,29 +306,28 @@ export default defineEntity({
         })),
         // USDA's standalone read keeps dataTypeFilter scalar and uses dataTypes
         // for plural values; the generic derived select schema is one-or-many.
-        urlOnly: true,
         wire: { kind: "param", name: "dataTypeFilter" },
       },
       {
         columnId: "foodsOnly",
+        label: "Records",
         kind: "boolean",
         placeholder: "Filter to foods...",
         options: [
           { value: "true", label: "Foods only" },
           { value: "false", label: "All records" },
         ],
-        urlOnly: true,
         wire: { kind: "param", name: "foodsOnly" },
       },
       {
         columnId: "linkedProductsOnly",
+        label: "Linked products",
         kind: "boolean",
         placeholder: "Filter by linked products...",
         options: [
           { value: "true", label: "Linked to products" },
           { value: "false", label: "Any linkage" },
         ],
-        urlOnly: true,
         wire: { kind: "param", name: "linkedProductsOnly" },
       },
     ],

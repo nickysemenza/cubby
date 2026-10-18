@@ -93,6 +93,7 @@ const actionCapability = {
   "entity.review_assessments": "member_decision",
   "statement_rows.record": "generic_mutation",
   "statement_rows.update": "generic_mutation",
+  "statement_rows.refresh_suggestions": "generic_mutation",
   "statement_rows.delete": "generic_mutation",
   "mail.search": "prepare",
   "mail.correct_relevance": "generic_mutation",
@@ -149,6 +150,7 @@ const actionCapability = {
   "data_exception.clear": "generic_mutation",
   "spending_classification_write.apply": "generic_mutation",
   "spending_classification_write.apply_category_suggestion": "member_decision",
+  "entity.discover_connections": "member_decision",
 } as const satisfies Record<CubbyMcpMutationAction, Capability>;
 
 const isMutationAction = (action: string): action is CubbyMcpMutationAction =>

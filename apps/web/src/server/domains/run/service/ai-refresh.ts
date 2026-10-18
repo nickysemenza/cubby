@@ -87,6 +87,11 @@ import {
   readRun,
   storeAiEvaluationResult,
 } from "../repo/ai-work-state";
+import {
+  connectionDiscoveryRecords,
+  connectionSourceFingerprint,
+  scheduleConnectionRefresh,
+} from "../repo/connection-refresh";
 import { systemActor } from "../repo/ensure-run";
 import {
   makeSweepSuggestion,
@@ -287,6 +292,35 @@ const fieldCursorFor = (pending: readonly FieldRefreshCursor[]) =>
 const emailCursorFor = (rows: readonly { item: { id: string } }[]) =>
   rows.length === EMAIL_RECLASSIFY_LIMIT * 2 ? rows.at(-1)!.item.id : null;
 
+async function scheduleConnectionDiscovery(
+  db: Database,
+  cursor: Awaited<ReturnType<typeof readAiDiscoveryCursor>>,
+  ports: AiRefreshPorts,
+) {
+  const rows = cursor.connectionDone
+    ? []
+    : await connectionDiscoveryRecords(
+        db,
+        cursor.connection,
+        EMAIL_RECLASSIFY_LIMIT,
+      );
+  const runs: string[] = [];
+  for (const row of rows) {
+    const run = await scheduleConnectionRefresh(
+      db,
+      row.source,
+      ports.context?.actorContext,
+    );
+    if (run) runs.push(run);
+  }
+  return {
+    runs,
+    done: cursor.connectionDone || rows.length < EMAIL_RECLASSIFY_LIMIT,
+    cursor:
+      rows.length === EMAIL_RECLASSIFY_LIMIT ? (rows.at(-1)?.id ?? null) : null,
+  };
+}
+
 /** Preparation enumerates evidence using live renderers; no model calls happen here. */
 export async function discoverAiRefresh(
   db: Database,
@@ -298,7 +332,10 @@ export async function discoverAiRefresh(
   let cursor = await readAiDiscoveryCursor(db);
   if (
     cursor.revision !== activation.revision ||
-    (cursor.fieldDone && cursor.emailDone && cursor.productDone)
+    (cursor.fieldDone &&
+      cursor.emailDone &&
+      cursor.productDone &&
+      cursor.connectionDone)
   )
     cursor = {
       revision: activation.revision,
@@ -308,6 +345,8 @@ export async function discoverAiRefresh(
       emailDone: false,
       productDone: false,
       product: null,
+      connectionDone: false,
+      connection: null,
     };
   const pending = cursor.fieldDone
     ? []
@@ -513,6 +552,12 @@ export async function discoverAiRefresh(
     ports,
   );
   for (const productRun of productDiscovery.runs) runs.add(productRun);
+  const connectionDiscovery = await scheduleConnectionDiscovery(
+    db,
+    cursor,
+    ports,
+  );
+  for (const connectionRun of connectionDiscovery.runs) runs.add(connectionRun);
   await saveAiDiscoveryCursor(db, {
     revision: activation.revision,
     productDone: productDiscovery.productDone,
@@ -522,6 +567,8 @@ export async function discoverAiRefresh(
       cursor.emailDone || candidates.length < EMAIL_RECLASSIFY_LIMIT * 2,
     field: fieldCursorFor(pending),
     email: emailCursorFor(candidates),
+    connectionDone: connectionDiscovery.done,
+    connection: connectionDiscovery.cursor,
   });
   return [...runs];
 }
@@ -551,6 +598,42 @@ export async function executeAiRefreshTarget(
     )
       throw new Error("AI evaluation Worker prompt manifest is obsolete");
     const target = aiEvaluationTarget.parse(claimed.target);
+    if (target.kind === "connection") {
+      const { entityGraphRootSchema } =
+        await import("@cubby/schemas/entity-graph");
+      const source = entityGraphRootSchema.parse(claimed.snapshot);
+      if (
+        source.entityKind !== target.entity ||
+        (await connectionSourceFingerprint(db, source)) !==
+          claimed.provenance.inputFingerprint
+      )
+        throw new Error(
+          "Connection discovery source changed before evaluation",
+        );
+      const { prepareEntityConnections } =
+        await import("~/server/domains/connection/service/entity-connections");
+      const publish = await prepareEntityConnections(
+        db,
+        kernel(db, ports, claimed.runId),
+        source,
+        {
+          suggestPorts: ports.suggestPorts,
+          productIdentityPorts: ports.productIdentityPorts,
+        },
+      );
+      await publishAiEvaluation(db, id, token, async (transactionDb) => {
+        if (
+          (await connectionSourceFingerprint(transactionDb, source)) !==
+          claimed.provenance.inputFingerprint
+        )
+          throw new Error(
+            "Connection discovery source changed during evaluation",
+          );
+        await publish(transactionDb);
+        return { source, discovered: true };
+      });
+      return true;
+    }
     if (target.kind === "email") {
       const { refreshEmailEvaluation } =
         await import("~/server/domains/purchase-import/service/gmail/refresh-evaluation");

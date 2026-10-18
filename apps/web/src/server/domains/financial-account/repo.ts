@@ -8,7 +8,6 @@ import {
   type FinancialAccountOut,
   type FinancialAccountUpdateData,
   financialAccountCardNumbers,
-  financialAccountFiltersSchema,
   financialAccountIdentity,
   financialAccountIdentityKind,
   financialAccountOut,
@@ -20,7 +19,6 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import {
-  oneOrManyValues,
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
@@ -30,7 +28,6 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   buildPartialUpdateValues,
-  matchesStringValues,
   notDeleted,
   unwrapDb,
   withTransaction,
@@ -61,7 +58,6 @@ import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import { listPrepare } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
@@ -258,21 +254,6 @@ const hydrateAccountsRead = async (
     }),
   });
 
-const sourceAliasesSql = sql`jsonb_array_elements(CASE
-  WHEN jsonb_typeof("FinancialAccount"."sourceAliases") = 'array'
-  THEN "FinancialAccount"."sourceAliases" ELSE '[]'::jsonb END) alias`;
-
-// A `source` filter matches `externalAccountId` on the same alias, so it reads
-// that sibling filter.
-const aliasAccountIds = listPrepare(async (_db, filters) => {
-  const ids = oneOrManyValues(
-    financialAccountFiltersSchema
-      .pick({ externalAccountId: true })
-      .parse(filters).externalAccountId,
-  );
-  return ids === undefined ? undefined : [...ids];
-});
-
 const financialAccountScaffold = listScaffold(
   "financialAccount",
   financialAccount,
@@ -281,28 +262,6 @@ const financialAccountScaffold = listScaffold(
       transactionCount: financialAccountTransactionCount,
       identityKind: sql`"FinancialAccount"."identity"->>${"kind"}`,
       hasSourceAlias: sql`jsonb_array_length("FinancialAccount"."sourceAliases") > 0`,
-      // Any card the account has ever presented, not just today's primary:
-      // a receipt's digits are the usual reason someone filters by last four.
-      last4: (last4) => sql`EXISTS (
-        SELECT 1 FROM jsonb_array_elements(CASE
-          WHEN jsonb_typeof("FinancialAccount"."cardNumbers") = 'array'
-          THEN "FinancialAccount"."cardNumbers" ELSE '[]'::jsonb END) card
-        WHERE card->>'last4' = ${last4}
-      )`,
-      // `matchesStringValues`, NOT sql`expr = ANY(${arr})`: drizzle expands a
-      // JS array in a template into a row constructor (`ANY(($1, $2))`),
-      // which postgres rejects.
-      source: aliasAccountIds.predicate(
-        (externalAccountIds, { values }) => sql`EXISTS (
-          SELECT 1 FROM ${sourceAliasesSql}
-          WHERE ${matchesStringValues(sql`alias->>${"source"}`, [...values])}
-            AND ${matchesStringValues(sql`alias->>'externalAccountId'`, externalAccountIds)}
-        )`,
-      ),
-      externalAccountId: ({ values }) => sql`EXISTS (
-        SELECT 1 FROM ${sourceAliasesSql}
-        WHERE ${matchesStringValues(sql`alias->>'externalAccountId'`, [...values])}
-      )`,
     },
   },
 );

@@ -16,6 +16,7 @@ struct Thumb: View {
     var emoji: String? = nil
 
     @Environment(\.displayScale) private var displayScale
+    @ScaledMetric(relativeTo: .body) private var glyphScale: CGFloat = 1
     @Environment(\.colorScheme) private var colorScheme
     @State private var useCanonicalURL = false
 
@@ -66,13 +67,16 @@ struct Thumb: View {
             processors: [ImageProcessors.Resize(size: CGSize(width: pixels, height: pixels))])
     }
 
+    /// The fallback glyph grows with Dynamic Type but stays inside the fixed thumbnail slot.
+    private var glyphSize: CGFloat { min(size * 0.34 * glyphScale, size * 0.6) }
+
     @ViewBuilder private var glyph: some View {
         Group {
             if let emoji, !emoji.isEmpty {
-                Text(emoji).font(.system(size: size * 0.34))
+                Text(emoji).font(.system(size: glyphSize))
             } else {
                 Image(systemName: symbol.isEmpty ? "square.dashed" : symbol)
-                    .font(.system(size: size * 0.34))
+                    .font(.system(size: glyphSize))
             }
         }.foregroundStyle(FieldGuideTokens.graphiteSecondary)
     }

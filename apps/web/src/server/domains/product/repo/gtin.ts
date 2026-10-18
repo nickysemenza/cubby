@@ -19,7 +19,6 @@ import {
 import { parseEntityId, type ProductId } from "@cubby/schemas/identifiers";
 import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
 
-import { wasm } from "~/lib/wasm";
 import { entityExternalId } from "~/server/db/external-identifier-tables";
 import { product } from "~/server/db/generated/identity-storage-tables.gen";
 import { ilikeContains, notDeleted } from "~/server/db/helpers/predicates";
@@ -27,6 +26,7 @@ import {
   repositoryQueries,
   type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
+import { listTermExpanders } from "~/server/generic/list/repo/terms";
 
 const liveGtinRows = (db: RepositoryQueryInput, ids: ProductId[]) =>
   repositoryQueries(db)
@@ -114,7 +114,7 @@ export const loadAllGtins = async (
  * the package, which for a stored GTIN-14 is usually a suffix of it.
  */
 export const productMatchesGtinTerm = (term: string): SQL => {
-  const terms = [...new Set(wasm.product_code_search_terms(term.trim()))];
+  const terms = listTermExpanders.productCode(term.trim());
   return sql`EXISTS (
     SELECT 1 FROM "EntityExternalId" pei
     WHERE pei."entityId" = ${product.id}

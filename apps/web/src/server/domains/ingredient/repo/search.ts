@@ -518,14 +518,14 @@ const ingredientScaffold = listScaffold("ingredient", ingredient, {
 
 /**
  * The complete WHERE for an ingredient list. `getEntityCounts` calls it with
- * `{}` — see repo/dashboard.ts. Recipe-scoped ingredient rows (a recipe used
- * as an ingredient) are never listed.
+ * `{}` — see repo/dashboard.ts. The declared list scope keeps a recipe's own
+ * ingredient rows out.
  *
  * Named `...ListWhere` rather than `buildIngredientWhere`: that name is already
  * taken by the name-matching helper in ingredient/internal-types.ts.
  */
 export const buildIngredientListWhere = (filters: IngredientFilters) =>
-  and(ingredientScaffold.where(filters), isNull(ingredient.recipeId));
+  ingredientScaffold.where(filters);
 
 const ingredientListImpl = async (
   db: Database,

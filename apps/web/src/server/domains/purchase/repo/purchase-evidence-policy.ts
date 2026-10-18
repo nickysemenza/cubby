@@ -81,27 +81,26 @@ const evidenceFieldResolutionsSql = (values: {
     'mode',CASE WHEN policy.allocated THEN 'allocated' WHEN policy.stored IS NOT NULL THEN 'explicit' ELSE 'inherit' END,
     'storedValue',policy.stored,'value',policy.value,'fallbackValue',policy.fallback,
     'source',policy.source,'sourceEntity',policy."sourceEntity",
-    'matchesFallback',policy.value = policy.fallback,'canReset',policy.stored IS NOT NULL
+    'matchesFallback',policy.value IS NOT DISTINCT FROM policy.fallback,'canReset',policy.stored IS NOT NULL
   )) FROM (SELECT ${values.stored} AS stored,${values.value} AS value,${values.fallback} AS fallback,
     ${values.source} AS source,${values.sourceEntity} AS "sourceEntity",${values.allocated ?? sql`false`} AS allocated) policy
 )`;
 
 /** The Vendor read's `fieldResolutions.itemizationExpectation`: the stored
- * value is the override, and the order-evidence default reads `unknown` when
- * the evidence implies nothing. */
+ * value is the override, and the fallback is exactly what the Purchase ladder
+ * reads at the Vendor rung. When order evidence implies nothing the value and
+ * fallback stay NULL (labelled Unclassified), never `unknown`: an explicit
+ * `unknown` stops the ladder before the spending category, so it must not
+ * read as a redundant override that a reset could clear. */
 export const vendorEvidenceFieldResolutionsSql = (
   alias: string,
 ): SQL<FieldResolutions> => {
   const stored = column(alias, "itemizationExpectation");
   const implied = vendorOrderEvidenceItemizationSql(alias);
-  const unclassified = sqlEnumConstant(
-    itemizationExpectation,
-    itemizationExpectation.enum.unknown,
-  );
   return evidenceFieldResolutionsSql({
     stored,
-    value: sql`COALESCE(${vendorItemizationPolicySql(alias)},${unclassified})`,
-    fallback: sql`COALESCE(${implied},${unclassified})`,
+    value: vendorItemizationPolicySql(alias),
+    fallback: implied,
     source: sql`CASE WHEN ${stored} IS NOT NULL THEN 'vendor override'
       WHEN ${implied} IS NOT NULL THEN 'order evidence' ELSE 'unclassified policy' END`,
     sourceEntity: sql`NULL::jsonb`,
@@ -184,17 +183,40 @@ export const purchaseListsItemsSql = (alias: string): SQL => sql`(
  * productless goods line is a lump, not an itemization. Totals stay with
  * `paperwork_mismatch` and `settlement_mismatch`; this axis is the line shape
  * only. */
-export const purchaseHasItemizationSql = (alias: string): SQL => sql`(
+export const purchaseHasItemizationSql = (
+  alias: string,
+  // Bulk reads bind `purchaseItemizationLineFactsSql` columns instead.
+  lines?: { unclassified: SQL; unlinkedRequired: SQL },
+): SQL => sql`(
   ${purchaseListsItemsSql(alias)}
-  AND NOT EXISTS (SELECT 1 FROM "Expense" ep_unclassified
+  AND NOT ${
+    lines?.unclassified ??
+    sql`EXISTS (SELECT 1 FROM "Expense" ep_unclassified
     WHERE ep_unclassified."purchaseId" = ${column(alias, "id")}
       AND ep_unclassified."deletedAt" IS NULL
-      AND ep_unclassified."lineKind" = ${expenseLineKindSchema.enum.unclassified})
-  AND NOT EXISTS (SELECT 1 FROM "Expense" ep_unlinked
+      AND ep_unclassified."lineKind" = ${expenseLineKindSchema.enum.unclassified})`
+  }
+  AND NOT ${
+    lines?.unlinkedRequired ??
+    sql`EXISTS (SELECT 1 FROM "Expense" ep_unlinked
     WHERE ep_unlinked."purchaseId" = ${column(alias, "id")} AND ep_unlinked."deletedAt" IS NULL
-      AND ep_unlinked.future = false AND ep_unlinked."productId" IS NULL
-      AND ${expenseProductExpectedSql("ep_unlinked")})
+      AND ${unlinkedRequiredLineSql("ep_unlinked")})`
+  }
 )`;
+
+/**
+ * `purchaseHasItemizationSql`'s line facts for every Purchase in one grouped
+ * scan. Per Purchase, the correlated form probed Expense with a BitmapAnd of
+ * its `purchaseId` and `productId IS NULL` indexes, re-reading every
+ * productless line of the ledger for each order.
+ */
+export const purchaseItemizationLineFactsSql = (): SQL => sql`SELECT
+    ep_line."purchaseId",
+    bool_or(ep_line."lineKind" = ${expenseLineKindSchema.enum.unclassified}) AS "hasUnclassified",
+    coalesce(bool_or(${unlinkedRequiredLineSql("ep_line")}), false) AS "hasUnlinkedRequired"
+  FROM "Expense" ep_line
+  WHERE ep_line."deletedAt" IS NULL AND ep_line."purchaseId" IS NOT NULL
+  GROUP BY ep_line."purchaseId"`;
 
 /** An accepted missing-evidence gap reopens when new documents or ledger lines
  * arrive, even when the new material still needs extraction or review. The
@@ -236,6 +258,11 @@ const expenseProductExpectationSql = (alias: string): SQL => sql`(CASE
 
 export const expenseProductExpectedSql = (alias: string): SQL =>
   sql`(${expenseProductExpectationSql(alias)} = 'required')`;
+
+/** An incurred line still missing the Product its policy requires. */
+const unlinkedRequiredLineSql = (alias: string): SQL =>
+  sql`(${column(alias, "future")} = false AND ${column(alias, "productId")} IS NULL
+    AND ${expenseProductExpectedSql(alias)})`;
 
 const purchaseBookingSql = (alias: string): SQL => sql`(SELECT CASE
   WHEN count(*) = 0 THEN 'missing'

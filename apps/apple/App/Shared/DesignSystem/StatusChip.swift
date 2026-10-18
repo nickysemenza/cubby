@@ -28,7 +28,7 @@ struct StatusChip: View {
 
     var body: some View {
         Text(text)
-            .font(.caption2.weight(.medium))
+            .font(.caption.weight(.medium))
             .foregroundStyle(
                 isNeutral
                     ? FieldGuideTokens.graphite

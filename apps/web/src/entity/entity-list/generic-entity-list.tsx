@@ -38,7 +38,6 @@ import {
   type TimelineEntity,
   timelineEntities,
 } from "~/entity/generated/entity-timelines.gen";
-import { useDeferredReferenceFilterOptions } from "~/entity/hooks/use-deferred-reference-filter-options";
 import {
   type BaseListRow,
   type EntityListTreeConfig,
@@ -76,7 +75,6 @@ import { Button } from "~/ui/primitives/button";
 
 import { EntityShelf } from "./entity-shelf";
 import { listNested, nestSearchValue } from "./list-nesting";
-import { ListScopeChips } from "./list-scope-chips";
 import {
   type ListNavigate,
   type ListSearch,
@@ -321,11 +319,7 @@ function ServerListBody({
           },
     [entity, navigate, nested, parts.tree],
   );
-  const referenceFilterOptions = useDeferredReferenceFilterOptions(entity);
-  const filterOptions = useFilterOptions({
-    ...referenceFilterOptions,
-    ...parts.list?.filterOptions,
-  });
+  const filterOptions = useFilterOptions({ ...parts.list?.filterOptions });
   // Cards and Compact keep the same query, filtering, ordering, and page as
   // List. A search changes the roster, never the chosen presentation.
   const renderedView = view;
@@ -407,15 +401,6 @@ function ServerListBody({
     )
       list.workbench.table.resetRowSelection();
   }, [list.workbench.table, renderedView]);
-  const scopeChips = (
-    <ListScopeChips
-      entity={entity}
-      search={context.search}
-      onClear={(urlKey) =>
-        context.navigate({ [urlKey]: undefined }, { replace: true })
-      }
-    />
-  );
   const sweepEntity = z.enum(shortcodeEntities).safeParse(entity);
   const sweepAction = sweepEntity.success ? (
     <SuggestionSweepAction
@@ -423,15 +408,7 @@ function ServerListBody({
       filters={list.currentFilters}
     />
   ) : null;
-  const contextualStatus =
-    workbenchProps.contextualStatus === undefined ? (
-      scopeChips
-    ) : (
-      <>
-        {scopeChips}
-        {workbenchProps.contextualStatus}
-      </>
-    );
+  const { contextualStatus } = workbenchProps;
 
   const body = (
     <>

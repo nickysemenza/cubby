@@ -47,11 +47,13 @@ public protocol CompanionImageDescribing: Sendable {
 #endif
 @Generable
 @available(iOS 27.0, macOS 27.0, *)
-private struct GeneratedCompanionImageClaim {
-    @Guide(description: "One short factual claim directly visible in the supplied image")
-    var text: String
+private enum GeneratedCutoutEligibility {
+    case eligible, ineligible, review
 }
 
+// Shape is load-bearing. A free-text eligibility was filled with the guide text, and claims as
+// `{text}` objects let greedy decoding write `}]}```json{` inside the last claim and run to the
+// 8192-token context limit (~4 min) on some photos; the enum and plain strings decode cleanly.
 @Generable
 @available(iOS 27.0, macOS 27.0, *)
 private struct GeneratedCompanionImageDescription {
@@ -61,10 +63,11 @@ private struct GeneratedCompanionImageDescription {
         description:
             "eligible only for one clear tangible foreground object; ineligible for people, documents, scenes, groups, or multiple objects; review when uncertain"
     )
-    var cutoutEligibility: String
+    var cutoutEligibility: GeneratedCutoutEligibility
     @Guide(
-        description: "At most five factual claims based only on visible image evidence", .maximumCount(5))
-    var claims: [GeneratedCompanionImageClaim]
+        description: "At most five short factual claims based only on visible image evidence",
+        .maximumCount(5))
+    var claims: [String]
 }
 
 /// Uses Foundation Models' actual image attachment API. It never substitutes OCR text, labels,
@@ -102,21 +105,51 @@ public struct FoundationModelsImageDescriber: CompanionImageDescribing {
                 infer identity, ownership, provenance, or hidden attributes. A transparent cutout
                 is eligible only when the image has one clear tangible foreground object.
                 """)
-        let response = try await session.respond(
-            generating: GeneratedCompanionImageDescription.self,
-            options: GenerationOptions(samplingMode: .greedy)
-        ) {
-            "Evaluate this image for Cubby's catalog."
-            Attachment(image).label("source image")
+        let response: LanguageModelSession.Response<GeneratedCompanionImageDescription>
+        do {
+            response = try await session.respond(
+                generating: GeneratedCompanionImageDescription.self,
+                options: GenerationOptions(samplingMode: .greedy)
+            ) {
+                "Evaluate this image for Cubby's catalog."
+                Attachment(image).label("source image")
+            }
+        } catch let error as LanguageModelError {
+            throw Self.failure(error)
         }
         let generated = response.content
-        let eligibility = CompanionCutoutEligibility(rawValue: generated.cutoutEligibility) ?? .review
+        let eligibility: CompanionCutoutEligibility =
+            switch generated.cutoutEligibility {
+            case .eligible: .eligible
+            case .ineligible: .ineligible
+            case .review: .review
+            }
         return CompanionImageDescription(
             description: generated.description, cutoutEligibility: eligibility,
-            claims: generated.claims.map { CompanionImageClaim(text: $0.text) })
+            claims: generated.claims.map { CompanionImageClaim(text: $0) })
+    }
+
+    /// Greedy sampling makes a model failure deterministic for the same image and prompt, so only
+    /// capacity failures are worth another attempt.
+    private static func failure(_ error: LanguageModelError) -> CompanionImageDescriptionFailure {
+        let (code, retryable): (String, Bool) =
+            switch error {
+            case .contextSizeExceeded: ("context_size_exceeded", false)
+            case .rateLimited: ("rate_limited", true)
+            case .guardrailViolation: ("guardrail_violation", false)
+            case .refusal: ("refusal", false)
+            case .unsupportedCapability: ("unsupported_capability", false)
+            case .unsupportedTranscriptContent: ("unsupported_transcript_content", false)
+            case .unsupportedGenerationGuide: ("unsupported_generation_guide", false)
+            case .unsupportedLanguageOrLocale: ("unsupported_language_or_locale", false)
+            case .timeout: ("timeout", true)
+            @unknown default: ("model_error", true)
+            }
+        return .model(reason: "\(code): \(error.localizedDescription)", retryable: retryable)
     }
 }
 
 public enum CompanionImageDescriptionFailure: Error, Sendable {
     case unavailable
+    case model(reason: String, retryable: Bool)
 }

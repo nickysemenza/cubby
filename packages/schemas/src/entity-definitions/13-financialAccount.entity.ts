@@ -535,6 +535,10 @@ export default defineEntity({
       "ledgerPartyId",
       "inventoryOwnerDefaultEnabled",
     ],
+    rows: {
+      cards: { label: "Card numbers", json: "cardNumbers" },
+      aliases: { label: "Source aliases", json: "sourceAliases" },
+    },
     derived: {
       transactionCount: { type: "number" },
       identityKind: {
@@ -549,20 +553,11 @@ export default defineEntity({
       },
       // At least one source alias.
       hasSourceAlias: { type: "boolean" },
-      last4: {
-        predicate: "text",
-        reason:
-          "Matches any card the account has ever presented, not only today's primary",
-      },
-      source: {
-        predicate: "multiselect",
-        reason:
-          "Matches a source alias, together with externalAccountId on the same alias",
-      },
-      externalAccountId: {
-        predicate: "multiselect",
-        reason: "Matches the external account id of any source alias",
-      },
+      // Any card the account has ever presented, not only today's primary.
+      last4: { via: "cards.last4" },
+      // Both match on the same alias.
+      source: { via: "aliases.source" },
+      externalAccountId: { via: "aliases.externalAccountId" },
     },
     sort: {
       fields: [
@@ -700,7 +695,6 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by provider...",
         brandRef: { entity: "vendor" },
-        urlOnly: true,
         deriveSchema: true,
         stored: true,
       },
@@ -710,7 +704,6 @@ export default defineEntity({
         placeholder: "Filter by ledger party...",
         brandRef: { entity: "ledgerParty" },
         currentMember: true,
-        urlOnly: true,
         deriveSchema: true,
         stored: true,
       },
@@ -721,7 +714,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Search accounts...",
         deriveSchema: true,
-        stored: true,
+        anyOf: ["name"],
       },
       {
         columnId: "identity",
@@ -763,23 +756,20 @@ export default defineEntity({
       {
         columnId: "last4",
         derived: true,
-        kind: "text",
+        kind: "multiselect",
         placeholder: "Filter by last four digits...",
-        urlOnly: true,
       },
       {
         columnId: "source",
         derived: true,
         kind: "multiselect",
         placeholder: "Filter by source...",
-        urlOnly: true,
       },
       {
         columnId: "externalAccountId",
         derived: true,
         kind: "multiselect",
         placeholder: "Filter by external account id...",
-        urlOnly: true,
       },
       {
         columnId: "related:financialAccount.transactions",
@@ -793,13 +783,11 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by related transactions id...",
         brandRef: { entity: "financialTransaction" },
-        urlOnly: true,
       },
       {
         columnId: "financialTransactionPresenceFilter",
         kind: "presence",
         placeholder: "Filter related transactions presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:financialAccount.purchases",
@@ -813,13 +801,11 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by related purchases id...",
         brandRef: { entity: "purchase" },
-        urlOnly: true,
       },
       {
         columnId: "purchasePresenceFilter",
         kind: "presence",
         placeholder: "Filter related purchases presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:financialAccount.vendors",
@@ -833,13 +819,11 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by related vendors id...",
         brandRef: { entity: "vendor" },
-        urlOnly: true,
       },
       {
         columnId: "vendorPresenceFilter",
         kind: "presence",
         placeholder: "Filter related vendors presence...",
-        urlOnly: true,
       },
     ],
   },

@@ -18,14 +18,12 @@ import type {
 } from "@cubby/schemas/wish";
 import { wishListItemOut } from "@cubby/schemas/wish";
 import { wishPriceRange } from "@cubby/schemas/wish-fields";
-import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
-  formatSearchTerm,
-  ilikeContains,
   getDb,
   notDeleted,
   unwrapDb,
@@ -230,14 +228,6 @@ const hydrateWishesRead = (
     },
   });
 
-// The candidate subqueries use a SQL alias (`p`), so keep their field refs raw
-// rather than interpolate `product.name` (which would retain Product's table
-// name instead of the alias).
-const candidateProductSearch = (term: string) => {
-  const pattern = ilikeContains(term);
-  return sql`(p."name" ILIKE ${pattern} OR p."manufacturer" ILIKE ${pattern} OR p."model" ILIKE ${pattern})`;
-};
-
 /**
  * Low / high effective price across a wish's live candidate alternatives.
  *
@@ -270,18 +260,6 @@ const wishPriceMid = sql`((${wishPriceLow} + ${wishPriceHigh}) / 2)`;
 const wishScaffold = listScaffold("wish", wish, {
   derived: {
     priceRange: wishPriceMid,
-    search: (term) =>
-      or(
-        formatSearchTerm(wish.name, term),
-        formatSearchTerm(wish.notes, term),
-        sql`EXISTS (
-          SELECT 1 FROM "EntityLink" wc
-          JOIN "Product" p ON p."id" = wc."toEntityId" AND p."deletedAt" IS NULL
-          WHERE wc."fromEntityId" = ${wish.id}
-            AND wc."deletedAt" IS NULL AND wc."kind" = 'wishCandidate'
-            AND ${candidateProductSearch(term)}
-        )`,
-      ),
   },
 });
 

@@ -11,6 +11,7 @@ import { productList } from "~/server/domains/product/repo/crud";
 import { projectList } from "~/server/domains/project/repo/lookup";
 import { taskList } from "~/server/domains/task/repo/lookup";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { loadFieldResolutionEvidence } from "~/server/generic/suggestions/repo/field-resolution-evidence";
 import {
   createInventoryFixture,
   createLocationFixture,
@@ -287,6 +288,153 @@ describe("inherited values", () => {
         filters,
         ids: expected,
       });
+  });
+
+  /**
+   * Task trade walks its ancestors only while they share the task's
+   * effective project (`whileSame`), then reads that project's default.
+   * Failure modes: an ancestor on another project donates; the walk skips
+   * past a different-project ancestor to a matching one above it; a
+   * grandparent's trade is ignored under an inheriting parent (the old
+   * one-parent rule, the intended change); the project default skips the
+   * project hierarchy; the filter reads the stored column; provenance or
+   * the explanation names a different record than the value.
+   */
+  it("reads, explains and filters task trade along same-project ancestors", async () => {
+    const insertProject = (
+      name: string,
+      defaultTrade: "building" | "plumbing" | null,
+      parent?: { id: string },
+    ) =>
+      insertWithShortcode(db(), "project", {
+        name,
+        parentProjectId: (parent?.id ?? null) as never,
+        defaultTrade,
+      });
+    const pa = await insertProject("Trade PA", "building");
+    const pac = await insertProject("Trade PA child", null, pa);
+    const pb = await insertProject("Trade PB", "plumbing");
+    const insertTask = (
+      name: string,
+      values: {
+        parent?: { id: string };
+        project?: { id: string };
+        trade?: "electrical" | "landscaping";
+      },
+    ) =>
+      insertWithShortcode(db(), "task", {
+        name,
+        parentTaskId: (values.parent?.id ?? null) as never,
+        projectMode: values.project ? "explicit" : "inherit",
+        projectId: (values.project?.id ?? null) as never,
+        trade: values.trade ?? null,
+      });
+    const t1 = await insertTask("Trade T1", {
+      project: pa,
+      trade: "electrical",
+    });
+    const t2 = await insertTask("Trade T2", { parent: t1 });
+    const t3 = await insertTask("Trade T3", { parent: t2 });
+    const t4 = await insertTask("Trade T4", { parent: t1, project: pb });
+    const t5 = await insertTask("Trade T5", { parent: t4 });
+    const t6 = await insertTask("Trade T6", { parent: t1, project: pac });
+    const t7 = await insertTask("Trade T7", {
+      parent: t1,
+      trade: "landscaping",
+    });
+    // Same project as T1, but under T4 on another project: the walk stops.
+    const t8 = await insertTask("Trade T8", { parent: t4, project: pa });
+    const gone = await insertTask("Trade deleted parent", {
+      project: pa,
+      trade: "electrical",
+    });
+    await getDb(db())
+      .update(taskTable)
+      .set({ deletedAt: new Date() })
+      .where(eq(taskTable.id, gone.id));
+    const t9 = await insertTask("Trade T9", { parent: gone, project: pa });
+    const tasks = [t1, t2, t3, t4, t5, t6, t7, t8, t9];
+    const ids = new Set(tasks.map((row) => row.shortcode));
+    const listed = async (filters: Parameters<typeof taskList>[1]) =>
+      (await taskList(db(), filters, [], page)).data.filter((row) =>
+        ids.has(row.id),
+      );
+    const codes = (...rows: { shortcode: string }[]) =>
+      rows.map((row) => row.shortcode).sort();
+    const rows = await listed({});
+    expect(Object.fromEntries(rows.map((row) => [row.id, row.trade]))).toEqual({
+      [t1.shortcode]: "electrical",
+      [t2.shortcode]: "electrical",
+      // Changed: the grandparent's trade, as its inheriting parent reads
+      // (was the project default "building").
+      [t3.shortcode]: "electrical",
+      [t4.shortcode]: "plumbing",
+      [t5.shortcode]: "plumbing",
+      // Another project: its default, inherited from PA.
+      [t6.shortcode]: "building",
+      [t7.shortcode]: "landscaping",
+      [t8.shortcode]: "building",
+      [t9.shortcode]: "building",
+    });
+    const resolutions = new Map(
+      rows.map((row) => [row.id, row.fieldResolutions?.trade]),
+    );
+    expect(resolutions.get(t2.shortcode)).toMatchObject({
+      mode: "inherit",
+      source: "Parent task",
+      sourceEntity: { entityKind: "task", entityId: t1.shortcode },
+      fallbackValue: "electrical",
+    });
+    expect(resolutions.get(t3.shortcode)).toMatchObject({
+      source: "Ancestor task",
+      sourceEntity: { entityKind: "task", entityId: t1.shortcode },
+      value: "electrical",
+      fallbackValue: "electrical",
+    });
+    // The project that set the default, as the assignee's provenance names.
+    expect(resolutions.get(t6.shortcode)).toMatchObject({
+      source: "Project default",
+      sourceEntity: { entityKind: "project", entityId: pa.shortcode },
+      fallbackValue: "building",
+    });
+    expect(resolutions.get(t7.shortcode)).toMatchObject({
+      mode: "explicit",
+      source: "Task override",
+      fallbackValue: "electrical",
+      canReset: true,
+    });
+    const explained = await loadFieldResolutionEvidence(
+      db(),
+      "task",
+      t3.shortcode,
+      "trade",
+      resolutions.get(t3.shortcode) ?? null,
+    );
+    expect(explained.evidence?.fallbackSource).toMatchObject({
+      entityKind: "task",
+      entityId: t1.shortcode,
+    });
+    const blocked = await loadFieldResolutionEvidence(
+      db(),
+      "task",
+      t5.shortcode,
+      "trade",
+      resolutions.get(t5.shortcode) ?? null,
+    );
+    expect(blocked.evidence?.fallbackSource).toMatchObject({
+      entityKind: "project",
+      entityId: pb.shortcode,
+    });
+    const cases: Array<[Parameters<typeof taskList>[1], string[]]> = [
+      [{ trade: ["electrical"] }, codes(t1, t2, t3)],
+      [{ trade: ["building"] }, codes(t6, t8, t9)],
+      [{ tradeExclude: ["building", "electrical"] }, codes(t4, t5, t7)],
+    ];
+    for (const [filters, expected] of cases)
+      expect({
+        filters,
+        ids: (await listed(filters)).map((row) => row.id).sort(),
+      }).toEqual({ filters, ids: expected });
   });
 
   it("filters categories, products and inventory by inherited category values", async () => {

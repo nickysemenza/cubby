@@ -14,7 +14,12 @@ import {
   nonEmptyTuple,
 } from "./identifiers";
 import { shortcodeEntities } from "./entity-manifest";
+import {
+  statementTransactionApplication,
+  statementTransactionJudgment,
+} from "./statement-suggestion";
 import { z } from "zod";
+import { entityGraphRootSchema } from "./entity-graph";
 
 /** Unknown historical values stay nullable; corrections explicitly distinguish absent from JSON null. */
 export const assessmentCorrection = z.discriminatedUnion("present", [
@@ -28,6 +33,7 @@ export const assessmentFamily = z.enum([
   "image_description",
   "product_pair",
   "recommendation",
+  "statement_transaction",
 ]);
 export const feedbackVerdict = z.enum([
   "correct",
@@ -84,6 +90,14 @@ export const assessmentSubjects = {
     scope: z.string(),
     candidateKey: z.string(),
   }),
+  /** One provider charge: every observation sharing its v1 identity. */
+  statement_transaction: z.object({
+    kind: z.literal("statement_transaction"),
+    entity: z.literal("statementRow"),
+    recordId: z.uuid(),
+    source: z.string().min(1),
+    chargeKey: z.string().min(1),
+  }),
 };
 export const assessmentSubject = z.discriminatedUnion("kind", [
   assessmentSubjects.field,
@@ -92,6 +106,7 @@ export const assessmentSubject = z.discriminatedUnion("kind", [
   assessmentSubjects.image_description,
   assessmentSubjects.product_pair,
   assessmentSubjects.recommendation,
+  assessmentSubjects.statement_transaction,
 ]);
 
 /** Internal event authority is never a public entity, shortcode, or search target. */
@@ -123,6 +138,11 @@ export const assessmentProjectionTargets = {
   }),
   product_pair: z.object({ entity: z.literal("product"), recordId: z.uuid() }),
   recommendation: publicAssessmentTarget,
+  /** StatementRow has no shortcode; the target names the canonical observation. */
+  statement_transaction: z.object({
+    entity: z.literal("statementRow"),
+    recordId: z.uuid(),
+  }),
 };
 
 export const assessmentJudgments = {
@@ -144,6 +164,7 @@ export const assessmentJudgments = {
   image_description: z.string().nullable(),
   product_pair: z.object({ actionable: z.boolean(), conflict: z.boolean() }),
   recommendation: z.object({ candidateKey: z.string() }),
+  statement_transaction: statementTransactionJudgment,
 };
 
 export const assessmentProducer = z.object({
@@ -224,6 +245,7 @@ export const assessmentReviewInput = feedbackEvent
           kind: z.literal("saved_field"),
           recordId: anyShortcodeSchema(nonEmptyTuple(shortcodeEntities)),
         }),
+        statementTransactionApplication,
       ])
       .optional(),
   });
@@ -232,6 +254,12 @@ export const assessmentReviewOut = z.object({
   feedbackId: assessmentChildHandle,
   status: z.string(),
   applied: z.boolean(),
+  applicationResult: z
+    .object({
+      source: entityGraphRootSchema,
+      destination: entityGraphRootSchema,
+    })
+    .optional(),
 });
 export const assessmentReviewBatchInput = z.object({
   items: z.array(assessmentReviewInput).min(1).max(100),

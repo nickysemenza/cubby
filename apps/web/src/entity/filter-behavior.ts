@@ -90,7 +90,13 @@ export const resolveProductTaskFilter = (value: string | undefined) => {
   if (value === "has" || value === "none") {
     return { taskPresenceFilter: value };
   }
-  if (value === "open") return { taskOpenOnly: true };
+  // Open is every status but done, so it unions with a picked status.
+  if (value === "open")
+    return {
+      taskStatusFilter: taskStatusSchema.options.filter(
+        (status) => status !== "done",
+      ),
+    };
   if (taskStatusSchema.safeParse(value).success) {
     return { taskStatusFilter: value };
   }

@@ -100,6 +100,11 @@ enum PhotoLibraryStages {
         let count: Int?
         let total: Int?
 
+        var isFailed: Bool {
+            if case .failed = state { return true }
+            return false
+        }
+
         /// "13,222 / 89,906 · ~3m · 15%" — the ETA only when one is known, the percent last.
         func caption(eta: String? = nil) -> String? {
             guard let count else { return nil }
@@ -468,6 +473,7 @@ private struct PhotoLibraryStagePanel: View {
     let barWidth: CGFloat
     @State private var expanded = false
     @State private var eta = PhotoStageETA()
+    @Environment(\.dynamicTypeSize) private var textSize
 
     private var allSettled: Bool {
         stages.allSatisfy {
@@ -506,7 +512,7 @@ private struct PhotoLibraryStagePanel: View {
         if let text = status.text {
             HStack(spacing: 6) {
                 statusIndicator
-                Text(text).font(.caption).monospacedDigit().lineLimit(1)
+                Text(text).font(.caption).monospacedDigit()
                 Spacer(minLength: 0)
             }
             .foregroundStyle(.secondary)
@@ -531,12 +537,27 @@ private struct PhotoLibraryStagePanel: View {
         }
     }
 
+    /// A failure's raw message is never truncated, so it takes its own line under the stage
+    /// label rather than squeezing beside it; accessibility sizes stack every stage the same way.
     private func stageRow(_ stage: PhotoLibraryStages.Stage) -> some View {
-        HStack(spacing: 6) {
-            stageGlyph(stage.state)
-            Text(stage.label).font(.caption).lineLimit(1)
-            Spacer(minLength: 0)
-            trailingContent(for: stage)
+        Group {
+            if textSize.isAccessibilitySize || stage.isFailed {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        stageGlyph(stage.state)
+                        Text(stage.label).font(.caption)
+                    }
+                    trailingContent(for: stage)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                HStack(spacing: 6) {
+                    stageGlyph(stage.state)
+                    Text(stage.label).font(.caption)
+                    Spacer(minLength: 0)
+                    trailingContent(for: stage)
+                }
+            }
         }
         .foregroundStyle(.secondary)
         .help(stageHelp(stage))
@@ -566,9 +587,10 @@ private struct PhotoLibraryStagePanel: View {
     @ViewBuilder private func trailingContent(for stage: PhotoLibraryStages.Stage) -> some View {
         switch stage.state {
         case .off(let reason):
-            Text(reason).font(.caption2).lineLimit(1)
+            Text(reason).font(.caption2)
         case .failed(let message):
-            Text(message).font(.caption2).foregroundStyle(FieldGuideTokens.destructive).lineLimit(1)
+            Text(message).font(.caption2).foregroundStyle(FieldGuideTokens.destructive)
+                .fixedSize(horizontal: false, vertical: true)
         default:
             if let caption = stage.caption(eta: etaText(for: stage)) {
                 if stage.id == "local" {

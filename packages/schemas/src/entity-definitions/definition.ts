@@ -131,9 +131,10 @@ export type CompiledEntityPresentation = Omit<
       actions: readonly string[];
     };
   };
+  // `scope` and `scopes` compile into the server's list fields only.
   list: Omit<
     EntityPresentation["list"],
-    "timeline" | "shelf" | "actions" | "tree"
+    "timeline" | "shelf" | "actions" | "tree" | "scope" | "scopes"
   > & {
     actions: readonly string[];
     /** `list.tree` resolved against `model.hierarchy`. */
@@ -682,9 +683,11 @@ const buildMetadataSchemas = () => {
            * `from` is ordered and the first source that decides (a value or
            * an explicit None) ends the chain: `"hierarchy"` is the nearest
            * live ancestor whose own value decides (cycle-guarded, capped at
-           * `model.hierarchy.maxDepth`); `{ path }` is the effective value
-           * of the field a to-one path ends at. A reference along a path
-           * that is itself inherited reads effective.
+           * `model.hierarchy.maxDepth`); `{ hierarchy: { whileSame } }` is
+           * that walk, stopped at the first ancestor whose effective
+           * `whileSame` field differs from the row's; `{ path }` is the
+           * effective value of the field a to-one path ends at. A reference
+           * along a path that is itself inherited reads effective.
            */
           inherit: z
             .strictObject({
@@ -700,6 +703,11 @@ const buildMetadataSchemas = () => {
                 .array(
                   z.union([
                     z.literal("hierarchy"),
+                    z.strictObject({
+                      hierarchy: z.strictObject({
+                        whileSame: nonEmptyString(),
+                      }),
+                    }),
                     z.strictObject({ path: nonEmptyString() }),
                   ]),
                 )
@@ -851,8 +859,9 @@ const buildMetadataSchemas = () => {
   /**
    * A list field that is not a table column, or the value a stored field
    * orders and groups by. `via` is a related path of relation keys,
-   * optionally ending in a field of the last entity; the list compiler builds
-   * it. `type` is a value whose SQL the repository passes to `listScaffold`;
+   * optionally ending in a field of the last entity, or a `model.rows` row
+   * set and one terminal (its column, or an entity its row references); the
+   * list compiler builds it. `type` is a value whose SQL the repository passes to `listScaffold`;
    * a `dateInterval` is the two-part `[start, end]` (NULL `end` is open)
    * that range filters test for overlap and a one-date filter for
    * containment.
@@ -905,6 +914,53 @@ const buildMetadataSchemas = () => {
     })
     .strict();
 
+  /**
+   * A to-many set of rows a `via` may start at (`<row>.<column>`, or
+   * `<row>.<entity>` for a reference the row holds). It is not an entity: it
+   * has no shortcode, manifest entry, or relation section. `path` walks
+   * foreign-key edges to a child or shared table, narrowed by `where` column
+   * equalities on the row table; `json` reads a JSONB array of records on the
+   * row; `repository` is a relation the repository passes to `listScaffold`
+   * as SQL selecting `"owner"` (the list row's id) and each declared column
+   * (a reference column holds the referenced record's id), optionally from a
+   * `listPrepare`. `relation` names a stored-path relation to an entity, whose
+   * stored fields are the row's columns, so its filters share one related
+   * record. Every include filter through one row set matches the same row;
+   * independent matching needs a second row set over the same storage.
+   */
+  const entityRowSetMetadataSchema = z.union([
+    z
+      .object({
+        label: nonEmptyString(),
+        path: z
+          .array(
+            z
+              .object({
+                edge: nonEmptyString(),
+                direction: z.enum(["incoming", "outgoing"]),
+              })
+              .strict(),
+          )
+          .min(1),
+        where: z.record(nonEmptyString(), nonEmptyString()).optional(),
+      })
+      .strict(),
+    z.object({ label: nonEmptyString(), json: nonEmptyString() }).strict(),
+    z.object({ label: nonEmptyString(), relation: nonEmptyString() }).strict(),
+    z
+      .object({
+        label: nonEmptyString(),
+        repository: z.record(
+          derivedKey,
+          z.union([
+            z.enum(["text", "number", "date", "boolean"]),
+            z.object({ reference: nonEmptyString() }).strict(),
+          ]),
+        ),
+      })
+      .strict(),
+  ]);
+
   const entityFieldModelMetadataSchema = z
     .object({
       fields: z.array(entityFieldMetadataSchema),
@@ -922,6 +978,10 @@ const buildMetadataSchemas = () => {
       sort: entityFieldModelSortMetadataSchema.optional(),
       derived: z
         .record(derivedKey, entityDerivedFieldMetadataSchema)
+        .optional()
+        .default({}),
+      rows: z
+        .record(derivedKey, entityRowSetMetadataSchema)
         .optional()
         .default({}),
       hierarchy: entityHierarchyMetadataSchema.optional(),
@@ -1466,6 +1526,30 @@ const buildMetadataSchemas = () => {
             .optional()
             .default(null),
           /**
+           * Stored fields pinned to NULL on every list and count read: the
+           * list's static row scope (an ingredient list holds standalone rows,
+           * never a recipe's own). It shows no chip, and a request cannot
+           * lift it.
+           */
+          scope: z.array(fieldKey).optional().default([]),
+          /**
+           * Related scopes: a request key whose value is the `filters`
+           * entity's own list filter record, matched through `via` (a path or
+           * a row-set terminal that leads to that entity). A project page
+           * scopes its task and expense lists by the projects its filters
+           * select. A scope is not a filter descriptor: no chip, Exclude,
+           * any-of, sort or group.
+           */
+          scopes: z
+            .record(
+              nonEmptyString(),
+              z
+                .object({ via: nonEmptyString(), filters: nonEmptyString() })
+                .strict(),
+            )
+            .optional()
+            .default({}),
+          /**
            * Nest the table under the declared `model.hierarchy`: each row
            * sits under its parent. The server pages the roots and each
            * parent's children (`nesting` on every list read); a row whose
@@ -1536,6 +1620,8 @@ const buildMetadataSchemas = () => {
             initialFilter,
             savedViews,
             primarySearch,
+            scope,
+            scopes,
             tree,
             links,
             timeline,
@@ -1551,6 +1637,8 @@ const buildMetadataSchemas = () => {
                 : { subtitle: shelfSubtitleOverride },
             initialFilter,
             primarySearch,
+            scope,
+            scopes,
             tree,
             actions: extraActions,
             links,
@@ -2182,12 +2270,12 @@ const buildMetadataSchemas = () => {
       /** A named schema for select/multiselect values (an enum export). */
       schemaRef: sourceRefMetadataSchema.nullable().optional(),
       /**
-       * The filter is the standard predicate over stored columns, so the
+       * The filter is the standard predicate over a stored column, so the
        * repository composes it from the declaration. `true` reads the column
-       * named by `columnId`; `columns` names one or more stored fields when
-       * the descriptor id is virtual (`search`) or the match spans columns;
-       * `array` marks a multiselect over a `text-array` column (overlap, not
-       * membership).
+       * named by `columnId`; `columns` names the stored field when the
+       * descriptor id is virtual; `array` marks a multiselect over a
+       * `text-array` column (overlap, not membership). A text filter
+       * declares `anyOf` instead.
        */
       stored: z
         .union([
@@ -2199,6 +2287,21 @@ const buildMetadataSchemas = () => {
             })
             .strict(),
         ])
+        .optional(),
+      /**
+       * A text filter that matches when any of these list fields does: a
+       * stored model field (its effective value when inherited, a `text[]`
+       * field by element) or a `model.derived` key (a `via` path, to-many as
+       * `EXISTS`, or a `type: "text"` value).
+       */
+      anyOf: z
+        .array(
+          nonEmptyString().regex(
+            /^[A-Za-z_][A-Za-z0-9_]*$/,
+            "must be an identifier",
+          ),
+        )
+        .min(1)
         .optional(),
       /**
        * The filter compiles through a `model.derived` entry (a related path, a
@@ -2215,6 +2318,12 @@ const buildMetadataSchemas = () => {
           ),
         ])
         .optional(),
+      /**
+       * A text filter's term expander, an entry of the server's
+       * `listTermExpanders`: the trimmed input becomes the terms the filter
+       * ORs as contains-matches (a barcode in its other encodings).
+       */
+      terms: nonEmptyString().optional(),
       /** Range bounds; `kind` is inferred from the model field when omitted. */
       range: z
         .object({
@@ -2231,7 +2340,6 @@ const buildMetadataSchemas = () => {
         .strict()
         .nullable()
         .optional(),
-      urlOnly: z.boolean({ error: "must be a boolean" }).optional(),
       /**
        * The Any value / No value request key of a hand-written value filter.
        * A compiled (`stored`/`derived`) filter over a nullable field gets it
@@ -2250,9 +2358,16 @@ const buildMetadataSchemas = () => {
       /**
        * A declared exception to any-of: the filter accepts one value, and
        * `reason` says why (Email's scope record anchors `linkState`).
-       * Clients pick one record.
+       * Clients pick one record. Filters naming the same `group` share that
+       * one value: picking one clears the rest.
        */
-      singleValue: z.object({ reason: nonEmptyString() }).strict().optional(),
+      singleValue: z
+        .object({
+          reason: nonEmptyString(),
+          group: nonEmptyString().optional(),
+        })
+        .strict()
+        .optional(),
       /**
        * Named states an `idMulti` filter accepts beside entity codes (an
        * Owner filter's `@household`). Clients offer each as a meta option;

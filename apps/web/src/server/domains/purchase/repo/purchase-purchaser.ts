@@ -1,117 +1,99 @@
-import {
-  financialTransactionStatus,
-  purchaseSettlementKinds,
-} from "@cubby/schemas/financial-transaction";
 import type { LedgerPartyShortcode } from "@cubby/schemas/identifiers";
 import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
-import { importSourceKind } from "@cubby/schemas/purchase-import";
-import { sql } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 
-import { purchaseAssociatedEmailsSql } from "~/server/domains/email/repo/email-sql";
-import { purchaseSettlementConflictSql } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
-
-/** Correlated to Purchase; inherited attribution is never persisted. */
-export const purchasePurchaserSql = sql<LedgerPartyShortcode | null>`(
-  WITH payment_accounts AS (
-    SELECT DISTINCT fa.id, fa."primaryCardholderId", fa."authorizedUsers"
-    FROM "FinancialTransactionAllocation" allocation
-    JOIN "FinancialTransaction" ft ON ft.id = allocation."transactionId"
-      AND ft."deletedAt" IS NULL AND ft.status <> ${financialTransactionStatus.enum.void}
-      AND ft.kind IN (${sql.join(
-        purchaseSettlementKinds.map((kind) => sql`${kind}`),
-        sql`, `,
-      )})
-    JOIN "FinancialAccount" fa ON fa.id = ft."accountId" AND fa."deletedAt" IS NULL
-    WHERE allocation."purchaseId" = "Purchase".id AND allocation."deletedAt" IS NULL
-      AND allocation.amount > 0
-  ), sole_users AS (
-    SELECT party.shortcode
-    FROM payment_accounts account
-    JOIN "LedgerParty" party ON party.id = account."primaryCardholderId"
-      AND party."deletedAt" IS NULL AND party.kind = ${ledgerPartyKind.enum.member}
-    WHERE "Purchase".date IS NOT NULL AND NOT EXISTS (
-      SELECT 1 FROM jsonb_array_elements(account."authorizedUsers") membership
-      WHERE (membership->>'validFrom' IS NULL OR (membership->>'validFrom')::date <= "Purchase".date)
-        AND (membership->>'validTo' IS NULL OR "Purchase".date <= (membership->>'validTo')::date)
-    )
-  ), evidence_parties AS (
-    SELECT party.shortcode
-    FROM "VendorAccount" account
-    JOIN "LedgerParty" party ON party.id = account."ledgerPartyId"
-      AND party."deletedAt" IS NULL AND party.kind = ${ledgerPartyKind.enum.member}
-    WHERE account.id = "Purchase"."vendorAccountId" AND account."deletedAt" IS NULL
-    UNION
-    SELECT party.shortcode
-    FROM (${purchaseAssociatedEmailsSql(sql`"Purchase".id`, "ignore")}) "Email"
-    JOIN "LedgerParty" party ON party.id = "Email"."ledgerPartyId"
-      AND party."deletedAt" IS NULL AND party.kind = ${ledgerPartyKind.enum.member}
-  )
-  SELECT CASE
-    WHEN "Purchase"."purchaserOverrideId" IS NOT NULL THEN
-      (SELECT shortcode FROM "LedgerParty" WHERE id = "Purchase"."purchaserOverrideId" AND "deletedAt" IS NULL)
-    -- A settlement_party_conflict is a disagreement between the paying
-    -- account and the order's member, not attribution for either.
-    WHEN ${purchaseSettlementConflictSql("party", '"Purchase"')} THEN NULL
-    WHEN (SELECT count(*) FROM payment_accounts) > 0
-      AND (SELECT count(*) FROM payment_accounts) = (SELECT count(*) FROM sole_users)
-      AND (SELECT count(DISTINCT shortcode) FROM sole_users) = 1
-      THEN (SELECT min(shortcode) FROM sole_users)
-    WHEN (SELECT count(*) FROM evidence_parties) = 1 THEN (SELECT min(shortcode) FROM evidence_parties)
-    ELSE NULL END
-)`;
+import {
+  purchaseMailMembersSql,
+  purchaseMembersSql,
+  purchaseRowSql,
+  settlementPartyConflictSql,
+  settlementTransactionSql,
+} from "~/server/domains/financial-transaction/repo/settlement-conflicts";
 
 /**
- * `("id", "value")` for every Purchase with an effective purchaser, as
- * `purchasePurchaserSql` displays it. Each branch reads one source the
- * resolver can decide by — the override, cards the party holds, its Vendor
- * Accounts, its mailbox's accepted import sources and reviewed Email links —
- * from the party's side through indexed edges, so a filter's
- * `"value" IN (…)` reaches the party lookup and only that party's candidates
- * pay for the resolver, which confirms each one. The branches are a superset
- * of the resolver's decisions, so the set agrees with the column row for row.
+ * `(id, value)`: the effective purchaser shortcode of each purchase in
+ * `purchases` (a `purchaseRowSql`-shaped relation), or NULL. Precedence: the
+ * explicit override; unknown when a settlement_party_conflict exists (a
+ * disagreement between the paying account and the order's member, not
+ * attribution for either); the one member who alone could use every paying
+ * card on the order date; the one member its Vendor Account and Email
+ * evidence name. Inherited attribution is never persisted.
+ *
+ * One definition for the column and the filter: over one correlated row it
+ * reads that purchase's edges through their indexes; over every Purchase it
+ * resolves each source in one pass, so a filter costs the same for a member
+ * on nearly every order as for one on a few.
  */
+const purchasePurchasersSql = (purchases: SQL) => sql`
+  WITH purchase AS MATERIALIZED (${purchases}),
+  mail AS MATERIALIZED (${purchaseMailMembersSql(sql`SELECT * FROM purchase`)}),
+  settled AS (
+    SELECT allocation."purchaseId", allocation.amount, purchase.date,
+      account.id AS account_id, account."deletedAt" AS account_deleted_at,
+      account."authorizedUsers",
+      holder.shortcode AS holder,
+      ${settlementPartyConflictSql(sql.raw("account"), sql.raw("ft"), sql`order_member.member`)} AS conflict
+    FROM purchase
+    JOIN "FinancialTransactionAllocation" allocation
+      ON allocation."purchaseId" = purchase.id AND allocation."deletedAt" IS NULL
+    JOIN "FinancialTransaction" ft
+      ON ft.id = allocation."transactionId" AND ${settlementTransactionSql(sql.raw("ft"))}
+    JOIN "FinancialAccount" account ON account.id = ft."accountId"
+    JOIN (${purchaseMembersSql(sql`SELECT * FROM purchase`, sql`SELECT * FROM mail`)}) order_member
+      ON order_member.id = purchase.id
+    LEFT JOIN "LedgerParty" holder ON holder.id = account."primaryCardholderId"
+      AND holder."deletedAt" IS NULL AND holder.kind = ${ledgerPartyKind.enum.member}
+  ), paying AS (
+    -- A paying card is a live account with a positive allocation; its holder
+    -- alone uses it when no authorized user's period covers the order date.
+    SELECT settled.*, settled.holder IS NOT NULL AND settled.date IS NOT NULL AND NOT EXISTS (
+      SELECT 1 FROM jsonb_array_elements(settled."authorizedUsers") membership
+      WHERE (membership->>'validFrom' IS NULL OR (membership->>'validFrom')::date <= settled.date)
+        AND (membership->>'validTo' IS NULL OR settled.date <= (membership->>'validTo')::date)
+    ) AS sole
+    FROM settled
+    WHERE settled.amount > 0 AND settled.account_deleted_at IS NULL
+  ), cards AS (
+    SELECT "purchaseId",
+      count(DISTINCT account_id) AS accounts,
+      count(DISTINCT account_id) FILTER (WHERE sole) AS sole_accounts,
+      count(DISTINCT holder) FILTER (WHERE sole) AS holders,
+      min(holder) FILTER (WHERE sole) AS holder
+    FROM paying GROUP BY "purchaseId"
+  ), evidence AS (
+    SELECT "purchaseId", CASE WHEN count(*) = 1 THEN min(shortcode) END AS shortcode
+    FROM (
+      SELECT purchase.id AS "purchaseId", party.shortcode
+      FROM purchase
+      JOIN "VendorAccount" account ON account.id = purchase."vendorAccountId" AND account."deletedAt" IS NULL
+      JOIN "LedgerParty" party ON party.id = account."ledgerPartyId"
+        AND party."deletedAt" IS NULL AND party.kind = ${ledgerPartyKind.enum.member}
+      UNION
+      SELECT "purchaseId", shortcode FROM mail
+    ) party
+    GROUP BY "purchaseId"
+  )
+  SELECT purchase.id, CASE
+    WHEN purchase."purchaserOverrideId" IS NOT NULL THEN override_party.shortcode
+    WHEN EXISTS (SELECT 1 FROM settled WHERE settled."purchaseId" = purchase.id AND settled.conflict) THEN NULL
+    WHEN cards.accounts > 0 AND cards.accounts = cards.sole_accounts AND cards.holders = 1 THEN cards.holder
+    ELSE evidence.shortcode
+  END AS value
+  FROM purchase
+  LEFT JOIN "LedgerParty" override_party
+    ON override_party.id = purchase."purchaserOverrideId" AND override_party."deletedAt" IS NULL
+  LEFT JOIN cards ON cards."purchaseId" = purchase.id
+  LEFT JOIN evidence ON evidence."purchaseId" = purchase.id
+`;
+
+/** Correlated to Purchase. */
+export const purchasePurchaserSql = sql<LedgerPartyShortcode | null>`(
+  SELECT purchaser.value FROM (${purchasePurchasersSql(purchaseRowSql(sql`"Purchase"`))}) purchaser
+)`;
+
+/** `("id", "value")` for every Purchase with an effective purchaser, as `purchasePurchaserSql` reads it. */
 export const purchasePurchaserSetSql = sql`
-  SELECT "Purchase".id, candidate.value
-  FROM (
-    SELECT purchase.id, party.shortcode AS value
-    FROM "LedgerParty" party
-    JOIN "Purchase" purchase ON purchase."purchaserOverrideId" = party.id
-    UNION
-    SELECT purchase.id, party.shortcode
-    FROM "LedgerParty" party
-    JOIN "VendorAccount" account ON account."ledgerPartyId" = party.id
-    JOIN "Purchase" purchase ON purchase."vendorAccountId" = account.id
-    UNION
-    SELECT allocation."purchaseId", party.shortcode
-    FROM "LedgerParty" party
-    JOIN "FinancialAccount" card ON card."primaryCardholderId" = party.id
-    JOIN "FinancialTransaction" ft ON ft."accountId" = card.id
-    JOIN "FinancialTransactionAllocation" allocation ON allocation."transactionId" = ft.id
-    UNION
-    -- An accepted source whose claim family holds one of the party's mail claims.
-    SELECT accepted."purchaseId", party.shortcode
-    FROM "LedgerParty" party
-    JOIN "ImportSourceClaim" claim ON claim."ledgerPartyId" = party.id
-      AND claim.kind IN (${importSourceKind.enum.mail_message}, ${importSourceKind.enum.mail_attachment})
-    JOIN "ImportSourceOrder" accepted
-      ON accepted."sourceClaimId" = coalesce(claim."canonicalClaimId", claim.id)
-    UNION
-    SELECT accepted."purchaseId", party.shortcode
-    FROM "LedgerParty" party
-    JOIN "ImportSourceClaim" claim ON claim."ledgerPartyId" = party.id
-      AND claim.kind IN (${importSourceKind.enum.mail_message}, ${importSourceKind.enum.mail_attachment})
-    JOIN "ImportSourceClaim" family
-      ON family."canonicalClaimId" = coalesce(claim."canonicalClaimId", claim.id)
-    JOIN "ImportSourceOrder" accepted ON accepted."sourceClaimId" = family.id
-    UNION
-    SELECT decision."purchaseId", party.shortcode
-    FROM "LedgerParty" party
-    JOIN "Email" email ON email."ledgerPartyId" = party.id
-    JOIN "OrderMailEvent" event ON event."orderMailId" = email."orderMailId"
-    JOIN "AssessmentEmailLink" decision ON decision."eventId" = event.id
-  ) candidate
-  JOIN "Purchase" ON "Purchase".id = candidate.id
-  -- COALESCE keeps the rows "=" keeps, but escapes the planner's 0.5%
-  -- equality guess, which turned the list's IN into a nested-loop scan.
-  WHERE coalesce(${purchasePurchaserSql} = candidate.value, false)
+  SELECT purchaser.id, purchaser.value
+  FROM (${purchasePurchasersSql(sql`${purchaseRowSql(sql`"Purchase"`)} FROM "Purchase"`)}) purchaser
+  WHERE purchaser.value IS NOT NULL
 `;

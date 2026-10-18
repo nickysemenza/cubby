@@ -66,6 +66,13 @@ export const aiExecutionKind = z.enum([
 export type AiExecutionKind = z.infer<typeof aiExecutionKind>;
 export const aiEvaluationTarget = z.discriminatedUnion("kind", [
   z.object({
+    kind: z.literal("connection"),
+    entity: z.string(),
+    recordId: z.uuid(),
+    field: z.null(),
+    assessmentIds: z.array(assessmentChildHandle).max(0),
+  }),
+  z.object({
     kind: z.literal("product_pair"),
     entity: z.literal("product"),
     recordId: z.uuid(),

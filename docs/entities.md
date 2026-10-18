@@ -58,30 +58,61 @@ row's own stored value decides (absent: NULL inherits; a `none` mode value is
 an explicit None); `from` lists the ordered sources, and the first that
 decides (a value or an explicit None) ends the chain: `"hierarchy"` is the
 nearest live ancestor along `model.hierarchy` whose own value decides
-(cycle-guarded, capped at `maxDepth`), and `{ path }` the effective value of
-the field a to-one path ends at. Project assignee, locations and default
-trade, product category feature, spending mapping and stock tracking, and
-task project, subject product and assignee walk their hierarchy; the task
-assignee then falls back to its effective project's default, and a
-Product's stock tracking reads its category's (ADR 0013).
+(cycle-guarded, capped at `maxDepth`); `{ hierarchy: { whileSame } }` is that
+walk stopped at the first ancestor whose effective `whileSame` field differs
+from the row's; and `{ path }` the effective value of the field a to-one path
+ends at. Project assignee, locations and default trade, product category
+feature, spending mapping and stock tracking, and task project, subject
+product and assignee walk their hierarchy; the task assignee then falls back
+to its effective project's default, and a Product's stock tracking reads its
+category's (ADR 0013). Task trade walks only ancestors on the task's
+effective project (`whileSame: "projectId"`), then reads that project's
+default trade.
 
 `effectiveFieldSql` is the value every read, list row, filter, sort and group
 uses; `inheritedFieldSql` the fallback; `effectiveSourceSql` and
 `inheritedSourceSql` the record that decided the value or the fallback,
 which `fieldResolutions.sourceEntity` names; `inheritanceLadderSql` every
-record a hierarchy chain reads, for "why this value" explanations. A stored
+record a hierarchy chain reads, for "why this value" explanations, ending
+at the ancestor a `whileSame` walk stops at (`eligible` false). A stored
 filter over an inherited field, a `via` path ending at one, and a relation
 edge whose foreign key is one all read the effective value (a batched
 traversal that walks such an edge toward its source may join a statement-local
 relation of each row's effective value, so the match is an equality join
-rather than a per-pair walk); a hierarchy-only
+rather than a per-pair walk); an unconditional hierarchy-only
 chain filters in the top-down set form (`effectiveFieldInSql`), resolved once
 per query. Repositories format provenance labels and nothing else; never
-hand-write an ancestor walk or fallback for a declared field. Fields whose
-rule does not fit this shape (task trade, expense project, trade and
-spending category, inventory owner, product price, recipe servings,
-itemization expectation) keep their own resolution until #2616 declares a
-variant or records why not. A set-valued fallback is outside `resolution.inherit`:
+hand-write an ancestor walk or fallback for a declared field.
+
+These fields keep their own resolution because their rule is not
+inheritance, or would need more than a small step kind (#2616):
+
+- Expense `projectId` and `trade`: only principal lines resolve (other lines
+  read no project, or their own trade); a Purchase's default project counts
+  only when that Project is live (its default trade needs only a live
+  Purchase); and a food line's last project fallback is a
+  classification policy, the designated household Project chosen by
+  shortcode when the Product's category feature is food. The allocation
+  join form (`principalExpenseInheritanceSql`) must equal the scalar one.
+  Declaring them needs a row gate, per-step conditions and a fixed-record
+  step.
+- Expense `spendingCategoryId`: a ladder of override, vendor food context,
+  category mapping, purchase and vendor defaults whose category step reads
+  draft values projected into the walk for review previews.
+- Inventory `ownerLedgerPartyId`: resolved in JS from acquisition evidence.
+- Product `price`: a derived kit or expense price, not inherited.
+- Recipe `servings`: derived from the record's own yield when measured in
+  servings (`resolveRecipeServingValue`, shared with older embedded reads).
+- Purchase and financial transaction `itemizationExpectation`: a policy
+  ladder across vendor and category.
+
+Project subtree expansion has two forms. A caller that needs only ids reads
+`loadProjectSubtreeIds` (`hierarchyDescendantsSql`, the list filter's
+expansion). A caller that already loaded the project tree for its rows,
+estimates, rollups or date windows walks that tree with
+`collectDescendantIds` instead of a second query; project tree pages walk
+their filtered children map, which is not the stored hierarchy.
+A set-valued fallback is outside `resolution.inherit`:
 Purchase `paymentAccounts` stores only explicit `purchasePaymentAccount` links
 and otherwise derives its accounts on read from payment evidence
 (`purchasePayingAccountIdsSql`), like derived funding beside explicit
@@ -505,8 +536,8 @@ already declares one over the same path or the relation sets
 `inverseOmit: "<reason>"`. A `many` relation over a single incoming FK gets a
 stored `idMulti` back-filter on its target when none names this entity, so
 the generated predicate serves it without repository code. Every
-id/idMulti filter declares `brandRef` (`null` for an id that names no
-entity), so URL-only related-view filters stay usable as back-filters.
+idMulti filter declares a `brandRef`, so its URL values stay shortcode-native
+and related-view filters stay usable as back-filters.
 A relation section's create button seeds the descriptor's field on the new
 record: the descriptor key itself when it is a create field there, otherwise
 the one reference field on the target whose `reference.entity` equals the
@@ -1047,8 +1078,8 @@ Filter descriptors are typed metadata. Static choices stay in the declaration;
 icon-bearing option lists, identifier brands, and compound preset expansion use
 explicit `{ module, export }` references. The compiler rejects unsupported
 kinds/properties and duplicate columns or derived URL keys. `audit: true`
-expands the standard created/updated date filters. A `stored` or `derived`
-descriptor compiles its predicate in the list scaffold; any other descriptor's
+expands the standard created/updated date filters. A `stored`, `anyOf` or
+`derived` descriptor compiles its predicate in the list scaffold; any other descriptor's
 SQL stays in the repository's filter builder
 ([Filters and search](#filters-and-search)).
 
@@ -1478,8 +1509,8 @@ A filter declaration compiles its Zod-field binding and canonical URL keys used
 by shared route search-parameter assembly, inspector metadata, and generated
 contract cases. Static and deferred controls still live in the explicit filter
 catalog; compound presets retain explicit codecs and option loaders. A
-descriptor declared `stored` or `derived` compiles its predicate; the compiler
-infers no database behavior from any other URL key.
+descriptor declared `stored`, `anyOf` or `derived` compiles its predicate; the
+compiler infers no database behavior from any other URL key.
 
 Every value filter is any-of: `multiselect` and `idMulti` (a single-option
 flag is a `boolean`), and a single value in a URL, saved view, or MCP call
@@ -1494,7 +1525,8 @@ on the nullable presence field; its label is presentation copy, not part of
 the filter's query semantics. A filter over several values per row (a
 `text[]` column or a `via` path through a list) also generates
 `<columnId>Match` (`any`/`all`), the Match all control, which appears nowhere
-else. `currentMember: true` marks a Ledger Party filter that accepts `@me` and offers Me
+else. A rosterless multiselect takes typed values, with or without Any value
+/ No value. `currentMember: true` marks a Ledger Party filter that accepts `@me` and offers Me
 ([ADR 0018](adr/0018-current-member-filter-token.md)). Any value and No value
 lead a filter's value list above a divider; No value combines with picked
 values, and picking Any value clears them, since it already includes them.
@@ -1506,7 +1538,27 @@ cover household questions, and a rare cross-filter one is a second query or
 the agent's. The Work queue and calendar pages read their own pipelines, not
 the entity list.
 
-Every compiled value filter (a non-URL-only `multiselect`/`idMulti` over a
+Every declared filter is a list Filters-menu entry. One no list column hosts
+(a relation scope such as expenses' `productId`) gets its field from the
+descriptor — `label`, else the noun its placeholder names, and Yes/No for a
+presence or boolean filter without options — and its value rides in the
+table's filter state beside the column-hosted ones, through the same URL
+codec and server builder. Only a client-filtered table keeps column-less ids
+out of TanStack's state. A declared `label` also wins over a hosting column's
+header; a related view's text search is generated as "<Target> search" so it
+never shares a name with the relation's record picker. Every list loads a
+deferred roster for each reference filter (`useEntityList`); a caller's
+`optionsKey` list wins when supplied. A multiselect with nothing to pick
+from takes typed, comma-separated values. A URL value list escapes a comma
+inside a value (`joinFilterList` / `splitFilterList`), so a picked tag
+`quick, easy` stays one value. Two declarations of one request field — a
+list column's filter and an older deep-link key for it — compile to one
+`aliasOf` the other: the codec decodes the alias into the column filter's
+state and writes only the canonical key.
+`singleValue.group` names scopes that share one value (Email's Purchase,
+Vendor and Vendor account): picking one in the menu replaces the others.
+
+Every compiled value filter (a `multiselect`/`idMulti` over a
 stored column or a `model.derived` entry, plus the generic data-quality and
 pending-suggestion filters) also generates `<columnId>Exclude`, "is not",
 with the value key's schema; the filter record stays flat, so URLs, saved
@@ -1521,9 +1573,8 @@ filter's own "Include sub-…" toggle. Include and exclude combine ("Clothing
 except Outerwear"). A declared `predicate` offers Exclude only with
 `negatable: true`, which asserts its SQL reads only the values it receives.
 One that reads request data prepared from the include values (an effective
-owner, an expense allocation share) or pairs with a sibling on one related
-row (an image's import-run target state, a transaction's settlement source) would ignore or mis-pair excluded
-values, so it keeps the key with the reason `Include only: <its reason>.`;
+owner) would ignore excluded values, so it keeps
+the key with the reason `Include only: <its reason>.`;
 clients disable "is not" with that line and the list rejects the key as
 `LIST_FILTER_EXCLUDE_UNSUPPORTED` with the same text. Web column state carries
 excluded values with `FILTER_NOT_PREFIX` (`__not__:`) beside the included
@@ -1540,23 +1591,32 @@ same request with the same text, unmasked
 
 Every list filter predicate compiles from its declaration: `scaffold.where`
 takes the filters and a read context, and no hand-written condition. A
-filter that cannot be a stored column or a `via` path is a `model.derived`
-`predicate` whose `reason` lives in the declaration. A list's static row
-scope (ingredient lists never show recipe-scoped rows) and a project page's
-embedded `projectScope` (an object, not a filter descriptor) are ANDed with
-`where` by the repository. Email's urlOnly
+filter that cannot be a stored column, a `via` path, or a row set is a
+`model.derived` `predicate` whose `reason` lives in the declaration. A list's
+static row scope and a project page's embedded scope are
+[declared scopes](#declared-list-scopes) that compile into `where` too, so no
+repository ANDs a condition beside it. Email's
 `purchaseId`/`vendorId`/`vendorAccountId` declare `singleValue: { reason }`
 (`linkState` is relative to one scope record): their schemas accept one value,
-the native picker chooses one record, and the repository rejects more than one
+the web and native pickers choose one record, and the repository rejects more than one
 across the three. Each is also a `model.derived` predicate over the one scope
 record they resolve.
 
-A `stored` descriptor names the standard predicate over stored columns, and
-`declaredFilterPredicates` composes it for the repository: `stored: true`
-reads the column named by `columnId`; `stored: { columns }` lists one or more
-stored fields when the descriptor id is virtual (`search`) or a text match
-spans columns (ORed, a `text[]` column matched by element); `stored: { array:
-true }` marks a multiselect over a `text[]` column as an overlap. Enum filters
+A text filter declares `anyOf`, the list fields it matches when any one does,
+and `declaredFilterPredicates` ORs a case-insensitive substring match across
+them. A member is a stored `text` or `text[]` field (matched by element, and
+read as its effective value when it declares `resolution.inherit`, so project
+search finds an inherited location) or a `model.derived` key: a `via` path to
+a text field or a titled record (to-many as `EXISTS`, so wish search matches
+any live candidate's name, manufacturer or model, and task search the
+effective subject product's name) or a `type: "text"` value. A multi-field
+search is that declared list, never a predicate. `anyOf` does not sort or
+group, and a text filter never declares `stored`.
+
+A `stored` descriptor names the standard predicate over one stored column:
+`stored: true` reads the column named by `columnId`; `stored: { columns }`
+names it when the descriptor id is virtual; `stored: { array: true }` marks a
+multiselect over a `text[]` column as an overlap. Enum filters
 OR their declared `nullable` presence in, a boolean over a nullable
 non-boolean column reads as presence (`true` is NOT NULL), and ranges are
 inclusive bounds: a range reads its `wire` keys (`from`/`to`, and `presence`
@@ -1600,6 +1660,13 @@ one shape:
   single record can sort.`); in `model.grouping` it stays a disabled Group by
   choice showing its reason. A list request sorting or grouping by it (or by
   a `predicate`) fails with that reason over HTTP and MCP.
+- `{ via: "<rows>.<terminal>" }` starts at a `model.rows` row set (below) and
+  takes one terminal: a column of the row (a JSON item key), or an entity the
+  row references (`importTargets.run`), which filters by shortcode and gets
+  the "Include sub-…" toggle when it declares `model.hierarchy`. A row set is
+  to-many, so it filters but never sorts or groups (`Goes through a list of
+  Import targets. …`), and its value filters generate Any value / No value,
+  Match all, and Exclude.
 - `{ type }` is a repository value: the repository passes its SQL as
   `listScaffold(entity, table, { derived })`, whose argument type is
   generated, so a declared key without SQL fails typecheck. A compound value
@@ -1634,6 +1701,21 @@ one shape:
   boolean, a presence, or `{ from, to, presence, param }` (`range`; `param`
   is the one request parameter of a range whose presets name a state).
 
+A predicate stays only when the filter value itself defines membership, so no
+value or row set exists apart from the request, or when its replacement needs
+a contract only that filter would use. Computing outside SQL does not qualify
+on its own: prepared values and prepared row sets carry app-computed data.
+Removing one adds an integration test that runs the old SQL beside the
+compiled filter over one synthetic fixture and compares row ids, with any
+intended behavior change in its expected diff, and deletes the old SQL in the
+same PR. Six remain, each with its `reason`:
+
+| Predicate                                         | Why it stays                                                                                                                                                                                                                                                                                                   |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| product, inventory `effectiveOwner`               | Its values mix Ledger Party references with owner states (`@household`, `@unknown`), resolved in app code over every live entry (`inventory/repo/ownership.ts`). A row set would need a column that holds a reference or a state, used by these two filters alone; the predicate receives the resolved id set. |
+| project `dateRange`                               | The project's own dates overlap, or a dated task through its effective project, or an expense through its allocation shares: a deliberate non-recursive approximation (`dashboardProjectDateCondition`). It could become `anyOf` over a `dateInterval` and two row-set paths.                                  |
+| email `purchaseId`, `vendorId`, `vendorAccountId` | The filter value defines membership: each resolves one scope record (`singleValue`) whose evidence SQL decides which Emails belong and anchors `linkState`, and each is the filter a `derived`-provenance relation names.                                                                                      |
+
 A stored `text` filter ORs several terms when its value is a list, and a text
 descriptor's `schemaRef` names that value schema (expense's
 `expenseSearchTerms`).
@@ -1664,17 +1746,12 @@ SQL that needs request data (inventory valuations, an Email list's scope) wraps 
 `scaffold.context(db, request)` loads each needed prepare at most once, and
 only when the request filters, sorts, groups, or projects on a field that
 reads it; a caller that already holds a prepare's data passes it as
-`context(db, request, [[handle, data]])` (project attention). `where`/`orderBy`/`filterPredicates` stay synchronous and take that
+`context(db, request, [[handle, data]])` (project attention items). `where`/`orderBy`/`filterPredicates` stay synchronous and take that
 context, `list` builds it unless `spec.context` passes one, and `hydrate`
-receives it. A predicate that must match on the same related row as a sibling
-filter (an account alias's `source` with its `externalAccountId`, an image's
-import `runId` with its `targetState`) reads the sibling's value through a
-prepare; the sibling keeps its own independent predicate, which the combined
-one implies. A list's static row scope (ingredient lists never show
-recipe-scoped rows) is ANDed with `where` by the repository; it is not a
-filter. The generated `generatedEntityListFields` map
+receives it. The generated `generatedEntityListFields` map
 (`@cubby/schemas/entity-list-fields`) carries each entity's derived shapes,
-hierarchy, subtree toggles, and Group by choices.
+row sets, term expanders, inherited fields, hierarchy, subtree toggles, Group
+by choices, and declared scopes.
 
 A compiled id filter resolves its shortcodes inside the list query, through
 `shortcodeIdsSql`, rather than in a lookup before it: an unknown or
@@ -1690,8 +1767,9 @@ selected records. It replaced the hand-written pairs: inventory's
 `locationSubtreeFilter` is `locationIdFilter` with `includeSubLocations`, and
 project's parent filter is the stored `parentProjectId` with
 `includeSubProjects`. A predicate receives the toggle as `includeDescendants`
-on its `idMulti` value: expense's allocated project and spending category, and
-an image's import run. An inherited reference (task project, a product
+on its `idMulti` value: expense's allocated project and spending category. A
+row-set terminal reference (an image's import run) gets the toggle like a
+`via` path. An inherited reference (task project, a product
 category's effective spending category) is a `via` path through its effective
 edge and gets the toggle like any other.
 
@@ -1707,6 +1785,99 @@ write transaction, then publishes one embedding wave after commit; a change
 to projection SQL itself does not rewrite persisted rows — run the streaming
 "Repair index" maintenance action after such a change.
 
+### Row sets and same-row matching
+
+`model.rows` names a to-many set of rows a `via` can start at. A row set is
+not an entity: it has no shortcode, manifest entry, or relation section, and
+its key may not repeat a relation or `model.derived` key. `path` walks
+foreign-key edges (`compileTraversal`) to a child or shared table, and
+`where` narrows it by column equalities on the row table (product
+`barcodes` is `EntityExternalId` rows with `source = 'gtin'`; soft-deleted
+rows never match). `json` reads a JSONB array of records on the row
+(financial account `aliases`), whose item keys the generator checks against
+the field's read schema. A path row set's table, `where` columns and
+terminals are checked when its SQL renders (`rowSetSql` in
+`field-compiler.ts`), since the generator cannot see the database schema.
+`repository` declares the columns of a relation the repository passes as
+`listScaffold(entity, table, { derived, rows })`, SQL selecting `"owner"`
+(the list row's id) and each column, a `{ reference }` column holding the
+referenced record's id; the argument type is generated, so a declared row
+set without SQL fails typecheck. It compiles to an uncorrelated
+`id IN (SELECT "owner" FROM relation WHERE …)` and renders only when a
+filter reads it. A relation may come from a `listPrepare` (`prepare.rows`):
+expense `allocationShares` bounds its computed shares by the request's
+other row filters (`rowSetFilterKeys` names the keys to leave out) and
+allocates only the dimensions a filter reads (expense analytics, which
+allocate the shares themselves, drop the allocation filters their scope
+expresses — any-of values ORed with their presence — and keep the group for
+Match all and Exclude); project `attentionItems`
+renders `VALUES` from the attention rules' items; gardenEntry
+`journalPlantings` is SQL (live journal links, plus whole-area entries at a
+planting's location inside its window). `relation` names a stored-path
+relation to an entity (product `subjectTasks` over `tasks`, which joins on
+the task's effective subject product), whose stored fields are the row's
+columns: an enum field's filter offers its options, and a date or number
+field's takes bounds on the shared row. A related view's range column
+(product tasks by due date) leaves its presence key to the view ("has any
+task"), so an undated task still counts. A row-set filter keeps a
+presence key it was already published under (expense
+`projectPresenceFilter`); others get the generated
+`<columnId>PresenceFilter`.
+
+Every include filter through one row set matches the same row: the
+compiler builds one `EXISTS` for the group, so account `source` Plaid with
+`externalAccountId` `ACME-0042` means one Plaid alias holding that id. To
+match independently, declare a second row set over the same storage.
+Exclude negates its own values, independent of the group: no row holds an
+excluded value, and a record with no rows stays. Any value joins the shared
+row like a picked value (the column is not NULL; a reference is live). No
+value matches a row in the shared `EXISTS` whose column is NULL, or a record
+with no rows at all when every condition in the group asks for No value, so
+an account with no aliases matches `externalAccountId` No value but not
+`source` Plaid with it. Match all gives each picked value its own `EXISTS`,
+each carrying the group's other conditions.
+
+A text filter over a row set may declare `terms: "<key>"`, an entry of
+`listTermExpanders` (`server/generic/list/repo/terms.ts`) that turns the
+input into the terms it ORs as contains-matches; product `upcFilter` names
+`productCode`, every barcode encoding of the typed digits. Its key union is
+generated from the declarations, so an undeclared or unused expander fails
+typecheck. The compiler moves `terms` off the client descriptor.
+
+### Declared list scopes
+
+`presentation.list.scope` is a list's static row scope: stored fields pinned
+to NULL, the shape ingredient's `resolve.scope` uses (ingredient
+`["recipeId"]`: a recipe's own ingredient rows are never listed, searched, or
+counted). `scaffold.where` ANDs it into every list, count, and Problems read,
+so `getEntityCounts` reads it through the same `buildXWhere`. It shows no
+chip, and no request lifts it, `filters.ids` included.
+
+`presentation.list.scopes` declares related scopes: a request key whose value
+is another entity's list filter record, matched through `via`, a path or a
+row-set terminal that leads to that entity. A project page scopes its task
+list through `project` (the effective project, so subtasks that inherit it
+match) and its expense list through `allocationShares.project` (any share, so
+a fee shared onto the project matches). `projectScope` therefore holds the
+project list's own filter keys a project page sets (`status`, `kind`,
+`location`, `search`, `dateFrom`/`dateTo`, `completionYear`, picked from
+`projectFiltersSchema`): its `search` matches as the project list's does
+(name, notes, effective locations), and native filter state flattens it one
+level (`projectScopeKind`). The scope
+compiles to `EXISTS` over the path to a record in the target scaffold's
+`matchingIds`, the live records its `where` selects. The repository passes
+that scaffold as
+`listScaffold(entity, table, { scopes: { projectScope: () => projectScaffold } })`,
+a thunk because the target's repository may import this one; the argument
+type is generated, so a declared scope without its scaffold fails typecheck.
+`scaffold.context` builds the target's context, and the row set a row-set
+scope reads, only when the request sets the scope, so a list without one
+never loads project prepares. A scope is not a filter descriptor: it has no
+menu entry, chip, Exclude, any-of, sort, or group, and its key may not repeat
+a filter's. Expense analytics keep it in their where beside the allocation
+filters their own scope expresses, since it selects whole expenses as the
+list does.
+
 ## Child storage
 
 An entity's `children` declares its physical child tables using
@@ -1721,6 +1892,10 @@ PostgreSQL generated column; it cannot also declare a default or update callback
 Retained mail stores text presence this way, preserving the nullable and
 space-trimming rules as content changes. Email quality reads this scalar rather
 than decompressing original bodies during list and Work queue filtering.
+
+A filter over child or shared rows (import targets, settlement references,
+barcodes) reads them through a `model.rows` row set
+([row sets](#row-sets-and-same-row-matching)), not a declared predicate.
 
 Mail, statement-import, and image-processing storage belongs to the explicit
 module registry (`child-tables/modules.ts`) because those rows are not owned
@@ -2042,8 +2217,16 @@ for example, `Purchase.products` combines detachable `explicit` evidence from
 product-linked Expense, including exits, adjustments, unknown quantities, and
 planned lines. Counts, filters, inverse navigation, and graph traversal use the
 same deduplicated union. Movement roles and planned status are backend evidence;
-an explicit-only link is Linked and does not establish acquisition or ownership.
-Acquisition dates and pricing retain their narrower acquisition rules.
+an unconfirmed explicit-only link is Linked and does not establish acquisition or
+ownership. Existing links remain unconfirmed. Explicit acquisition confirmation
+(`EntityLink.acquisitionConfirmed`, allowed only on `purchaseProduct`) establishes
+Acquired with unknown item cost and quantity; it creates no Expense or inventory.
+The purchase date locates its timeline marker as order context, never delivery;
+confirmation supplies no ledger date or ownership interval. Exact Expense binding
+remains separate, and itemized acquiring Expenses remain authoritative. The
+unpurchased quality check accepts confirmed live purchase links or real acquiring
+Expenses, excluding plans. Acquisition dates and pricing retain their narrower
+acquisition rules.
 Mutable sources additionally name a typed item schema, adapter, and
 transport exposure. The compiler rejects duplicate relation/source keys,
 unresolvable mutation sources, invalid inverses, and stale generated bindings.

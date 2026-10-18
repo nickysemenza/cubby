@@ -1,3 +1,5 @@
+import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
+import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { and, sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
@@ -5,7 +7,7 @@ import type { Database } from "~/server/db";
 import { inventoryEntry, location, purchase, run } from "~/server/db/schema";
 import { renderWhereSql } from "~/server/testing/mock-db";
 
-import { listPrepare } from "./field-compiler";
+import { listPrepare, rowSetSql } from "./field-compiler";
 import { listScaffold } from "./list";
 
 /**
@@ -225,5 +227,51 @@ describe("list field compiler", () => {
       ),
     ).toBe("prepared_valuation asc nulls last");
     expect(loads).toBe(1);
+  });
+
+  // A row set's table, `where` columns and terminals are checked when its
+  // SQL renders, not by the generator, which cannot see the schema.
+  it("resolves every declared row set's columns and references", () => {
+    for (const entity of allEntities)
+      for (const field of Object.values(
+        generatedEntityListFields[entity].derived,
+      )) {
+        const table = entityManifest[entity].dbTable;
+        if (field.shape !== "rows" || table === null) continue;
+        // A repository relation's columns are its own SQL's.
+        const storage = Object.entries(
+          generatedEntityListFields[entity].rows,
+        ).find(([key]) => key === field.rows)?.[1].storage.kind;
+        if (storage === "repository") continue;
+        const set = rowSetSql(entity, field.rows, table);
+        expect(() =>
+          renderWhereSql(set.matches(sql`${set.column(field)} IS NULL`)),
+        ).not.toThrow();
+      }
+  });
+
+  // A relation row set's entity field that inherits (task project) filters
+  // by its effective value, as a `via` terminal does; a plain field reads
+  // its column.
+  it("reads a relation row set's inherited field effectively", () => {
+    const set = rowSetSql("product", "subjectTasks", "Product");
+    const column = (name: string) =>
+      renderWhereSql(
+        set.column({
+          shape: "rows",
+          path: `subjectTasks.${name}`,
+          rows: "subjectTasks",
+          terminal: {
+            kind: "column",
+            column: name,
+            fieldKind: null,
+            options: null,
+          },
+          sort: "",
+          group: "",
+        }),
+      );
+    expect(column("status")).toBe('rs1."status"');
+    expect(column("projectId")).not.toBe('rs1."projectId"');
   });
 });

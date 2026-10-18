@@ -12,7 +12,11 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import { browserEntityDefinition, entities } from "~/entity/entities";
-import { getEntityFilters } from "~/entity/filter-manifest";
+import {
+  getEntityFilters,
+  manifestFilterFields,
+  menuOnlyFilterSpecs,
+} from "~/entity/filter-manifest";
 import {
   buildFiltersFromManifest,
   FILTER_EXACT,
@@ -21,6 +25,7 @@ import {
   summarizeListState,
 } from "~/entity/filters";
 import type { ListGroupState } from "~/entity/hooks/progressive-list";
+import { useDeferredReferenceFilterOptions } from "~/entity/hooks/use-deferred-reference-filter-options";
 import { useInfiniteTableList } from "~/entity/hooks/use-infinite-table-list";
 import type { RowLinkResolver } from "~/entity/table/column-helpers";
 import type { ServerListWorkbenchModel } from "~/entity/table/list-workbench";
@@ -413,6 +418,17 @@ export function useEntityList<
     onInspectRow ?? (previewOptions ? inspection.inspectRow : undefined);
 
   const effectiveDeletable = useContractDeletable(entity, deletable);
+  // Every reference filter loads its live roster here, so an embedded list
+  // (Linked transactions) offers pickers without wiring rosters itself.
+  // A caller's own `filterOptions` win.
+  const referenceFilterOptions = useDeferredReferenceFilterOptions(entity);
+  const resolvedFilterOptions = useMemo(
+    () =>
+      filterOptions
+        ? { ...referenceFilterOptions, ...filterOptions }
+        : referenceFilterOptions,
+    [filterOptions, referenceFilterOptions],
+  );
 
   const hasUnitMappings =
     browserEntityDefinition(entity).list?.hasUnitMappings ?? false;
@@ -424,12 +440,10 @@ export function useEntityList<
       const resolvedFilters = {
         ...buildFiltersFromManifest(
           getEntityFilters(entity),
-          // `allFilters`, not `columnFilters` — a URL-only scope (`?productId=`)
-          // never enters the table's state, but still has to reach the server.
           // Reads raw state rather than `getColumnFilter`, which deliberately
           // throws on an array — the builder is the one caller that handles
           // both shapes, per each spec's `kind`.
-          filterGetterFromColumnFilters(ts.allFilters),
+          filterGetterFromColumnFilters(ts.columnFilters),
         ),
         ...scopeFilters,
       };
@@ -634,7 +648,7 @@ export function useEntityList<
     data,
     columns: customColumns,
     filters,
-    filterOptions,
+    filterOptions: resolvedFilterOptions,
     initialColumnVisibility,
     ...worklistColumns,
     state: presentationState,
@@ -657,6 +671,39 @@ export function useEntityList<
     setColumnVisibility,
     rowContentVersion,
   } = presentation;
+
+  // A declared filter no column hosts (a relation scope such as expenses'
+  // `productId`) still gets a Filters-menu field. A scope the caller fixes
+  // or hides stays out, as does the primary search, which has its own input.
+  const scopeKeys = Object.keys(scopeFilters ?? {}).join("|");
+  const hiddenFilterKey = (hiddenFilterColumns ?? []).join("|");
+  const activeKey = tableState.columnFilters
+    .map((filter) => filter.id)
+    .join("|");
+  const filterFields = useMemo(() => {
+    const specs = getEntityFilters(entity);
+    const menu = new Set(
+      menuOnlyFilterSpecs(specs, {
+        hostedIds: new Set(allColumns.visit(listReadColumnId)),
+        excludedKeys: new Set([
+          ...scopeKeys.split("|"),
+          ...hiddenFilterKey.split("|"),
+          entitySummary[entity].primarySearch?.key,
+        ]),
+        activeIds: new Set(activeKey.split("|")),
+      }),
+    );
+    return manifestFilterFields(specs, resolvedFilterOptions, (spec) =>
+      menu.has(spec),
+    );
+  }, [
+    activeKey,
+    allColumns,
+    entity,
+    hiddenFilterKey,
+    resolvedFilterOptions,
+    scopeKeys,
+  ]);
 
   useEffect(() => {
     const fields = allColumns
@@ -817,6 +864,7 @@ export function useEntityList<
     onColumnVisibilityChange: setColumnVisibility,
     scrollRestorationId: entity,
     serverTotals,
+    filterFields,
     rowContentVersion: progressiveContentVersion,
   });
 

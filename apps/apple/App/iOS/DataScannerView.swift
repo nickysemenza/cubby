@@ -10,26 +10,44 @@ struct ScannerSlot: View {
     let onRead: (String) -> Void
     /// Labels the camera floats over each recognized code; nil leaves the viewfinder bare.
     var annotate: ((String) -> ShelfAnnotation?)? = nil
-    @State private var authorized = AVCaptureDevice.authorizationStatus(for: .video) == .authorized
+    @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var status = AVCaptureDevice.authorizationStatus(for: .video)
 
     var body: some View {
         if DataScannerViewController.isSupported {
-            if authorized {
+            switch status {
+            case .authorized:
                 DataScannerView(onRead: onRead, annotate: annotate)
-            } else {
+            case .denied, .restricted:
+                // The system prompt never reappears once answered; only Settings can grant access.
+                ContentUnavailableView {
+                    Label("Camera access is off", systemImage: "camera")
+                } description: {
+                    Text(
+                        status == .restricted
+                            ? "Camera access is restricted on this device. Check Settings, or type or paste a code below."
+                            : "Turn on Camera for Cubby in Settings to scan barcodes, or type or paste a code below."
+                    )
+                } actions: {
+                    Button("Open Settings") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                    }
+                    .accessibilityIdentifier("scanner.openSettings")
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    if phase == .active { status = AVCaptureDevice.authorizationStatus(for: .video) }
+                }
+            default:
                 ContentUnavailableView {
                     Label("Camera", systemImage: "camera")
                 } description: {
                     Text("Allow camera access to scan barcodes.")
                 } actions: {
-                    Button("Allow") {
-                        Task { authorized = await AVCaptureDevice.requestAccess(for: .video) }
-                    }
+                    Button("Allow") { Task { await requestAccess() } }
                 }
                 .task {
-                    if AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined {
-                        authorized = await AVCaptureDevice.requestAccess(for: .video)
-                    }
+                    if status == .notDetermined { await requestAccess() }
                 }
             }
         } else {
@@ -39,6 +57,11 @@ struct ScannerSlot: View {
                 description: Text("Type or paste a code below.")
             )
         }
+    }
+
+    private func requestAccess() async {
+        _ = await AVCaptureDevice.requestAccess(for: .video)
+        status = AVCaptureDevice.authorizationStatus(for: .video)
     }
 }
 

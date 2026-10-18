@@ -237,8 +237,8 @@ inheriting record. Scalar edits retain explicit-write meaning.
   member; a login without a linked live member matches no tasks.
 - Project site names: own names or explicit None → parent’s resolved names.
   Project trade: own default → nearest ancestor default.
-- Task trade: own choice → parent task trade when effective projects match →
-  effective project default. Principal expense trade: own choice → purchase trade
+- Task trade: own choice → nearest ancestor task trade while ancestors share
+  the task's effective project → effective project default. Principal expense trade: own choice → purchase trade
   default → effective project default. Adjustment expense trade: own choice →
   its principals' trades through the joint allocation. An unresolved required trade blocks writes;
   Other is available only as a deliberate classification.
@@ -550,8 +550,8 @@ Entirely unattributed Expense beneficiaries (no rows or only null-party rows, in
 _Avoid_: belongs to, assigned to, buyer
 
 **Inherited**:
-A value a record takes from another record rather than storing itself (a parent task, a category ancestor, purchase evidence). Every client marks it with the same tree icon until someone sets or confirms a value; the three states read Inherited, Set here, and None, and "Use inherited" returns a set value to inheriting.
-_Avoid_: derived, computed, default
+A value a record takes from another record rather than storing itself (a parent task, a category ancestor, purchase evidence). Every client marks it with the same tree icon until someone sets or confirms a value; the three states read Inherited, Set here, and None. "Use inherited" returns a set value to inheriting ("Clear value" when there is nothing to inherit, so the reset only empties it) and "Set to none" (or the field's declared None label, such as "Set to Household") records an explicit None; a client offers only the actions that would change the field.
+_Avoid_: derived, computed, default; "Use no value"
 
 **My stuff**:
 The Inventory entries whose Owner is the viewing member. Wardrobe is My stuff narrowed to apparel, and other narrowed views (tools, books) work the same way; another member's stuff is the same view with that member as Owner.
@@ -657,6 +657,17 @@ A computed judgment about a record, field or relationship, based on specified
 evidence. It may support a Suggestion or a Problem; it is not a confirmed
 household fact.
 
+**Connection candidate**:
+A proposed, specifically named relationship between existing records, with
+evidence and an explicit effect of acceptance. It is an Assessment, not a
+generic similarity link. [Connection discovery](entity-connections.md) owns
+discovery and review behavior.
+
+**Acquisition candidate**:
+A Connection candidate proposing that a particular Purchase or Expense
+acquired a Product. Repeat purchases of the same exact variant are separate
+acquisition events; item cost and quantity can remain unknown.
+
 **Feedback**:
 The household's review of an Assessment, including its verdict and any
 corrected value, reason or supporting evidence. Feedback supplies evidence for
@@ -674,9 +685,18 @@ The contradictory facts need resolving before deciding whether records are
 duplicates.
 
 **Suggestion**:
-A classification or field value that has been computed for a record but not
+A classification, field value or record change that has been computed but not
 yet accepted by the household, with a confidence.
 _Avoid_: proposal, Jev suggestion, recommendation
+
+**Transaction suggestion**:
+A Suggestion, computed from one unmatched statement charge, to create a
+Financial Transaction, attach the charge to an existing one, supersede a
+recorded hold with its posted row, or void a hold a later export no longer
+contains. It is a Suggestion with the `statement_transaction` Assessment
+family; nothing is written until it is reviewed. A clean one is
+bulk-acceptable.
+_Avoid_: statement proposal, auto-match
 
 **Decision model**:
 The closed-set classifier behind every Suggestion and Mail triage: Jev or

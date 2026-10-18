@@ -96,6 +96,13 @@ export type FilterDescriptor = Readonly<{
   schemaRef: SourceRef | null;
   stored: Readonly<{ columns: readonly string[]; array: boolean }> | null;
   /**
+   * The list fields a text filter matches any of: a stored model field or a
+   * `model.derived` key (`via` or a text value).
+   */
+  anyOf:
+    | readonly Readonly<{ key: string; source: "field" | "derived" }>[]
+    | null;
+  /**
    * The `model.derived` key the filter compiles through (`columnId` unless
    * the declaration names another), or null for a stored/hand-written filter.
    */
@@ -107,7 +114,6 @@ export type FilterDescriptor = Readonly<{
     finite: boolean;
     describe: Readonly<{ lower: string; upper: string }> | null;
   }> | null;
-  urlOnly: boolean;
   /** The Any value / No value request key (`presenceFilter`). */
   nullable: Readonly<{ field: string; label: string }> | null;
   /** The Match all request key of a multi-valued compiled filter. */
@@ -124,8 +130,20 @@ export type FilterDescriptor = Readonly<{
   currentMember: boolean;
   /** The declared reason this filter accepts one value, not an any-of. */
   singleValue: string | null;
+  /** Single-value scopes that share one value between them. */
+  exclusiveGroup: string | null;
+  /**
+   * The list-column filter this one duplicates (the same request field
+   * under an older deep-link key); the URL codec reads it into that state.
+   */
+  aliasOf: string | null;
   sentinels: readonly Readonly<{ value: string; label: string }>[] | null;
   wire: FilterWire;
+  /**
+   * The declared `listTermExpanders` key of a text filter; server-only, so
+   * `compileListFields` moves it into `listFields.terms`.
+   */
+  terms?: string;
 }>;
 /**
  * A date range filter's bound keys, which accept relative date tokens and
@@ -308,7 +326,11 @@ type EntityFieldInherit = Readonly<{
     none?: readonly string[];
     explicitIfSet?: true;
   }>;
-  from: readonly ("hierarchy" | Readonly<{ path: string }>)[];
+  from: readonly (
+    | "hierarchy"
+    | Readonly<{ hierarchy: Readonly<{ whileSame: string }> }>
+    | Readonly<{ path: string }>
+  )[];
 }>;
 
 export type EntityStorageField = Readonly<{
@@ -347,6 +369,8 @@ export type EntityFieldModel = Readonly<{
   derived: Readonly<
     Record<string, EntityFieldModelMetadata["derived"][string]>
   >;
+  /** `model.rows`: to-many row sets a `via` may start at. */
+  rows: Readonly<Record<string, EntityFieldModelMetadata["rows"][string]>>;
   hierarchy: Readonly<{ parentField: string; maxDepth: number }> | null;
   /** `model.grouping`: the Group by choices, compiled in `list-fields.ts`. */
   grouping: readonly string[];
@@ -455,6 +479,13 @@ export type CompiledEntity = Readonly<{
     merge: OperationOwner;
   }>;
   fieldModel: EntityFieldModel;
+  /** `presentation.list.scope`/`scopes` as declared; server-only. */
+  listScopes: Readonly<{
+    scope: readonly string[];
+    scopes: Readonly<
+      Record<string, Readonly<{ via: string; filters: string }>>
+    >;
+  }>;
   /** Compiled `model.derived`, hierarchy, and generated subtree toggles. */
   listFields: CompiledEntityListFields;
   /** The entity's own table, or null for a table-less entity (usda-food). */

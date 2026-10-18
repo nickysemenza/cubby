@@ -44,7 +44,6 @@ import {
 } from "@cubby/schemas/product";
 import { type ProductCategorySummary } from "@cubby/schemas/product-category-fields";
 import { productQuantityVarianceState } from "@cubby/schemas/product-fields";
-import { taskStatusSchema } from "@cubby/schemas/project";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import {
   and,
@@ -52,7 +51,6 @@ import {
   eq,
   inArray,
   isNotNull,
-  ne,
   or,
   sql,
   sum,
@@ -83,7 +81,6 @@ import {
   countWhere,
   formatSearchTerm,
   getDb,
-  idSetPresence,
   imageJoinBindings,
   insertAndReturn,
   type ListReadIntent,
@@ -335,62 +332,6 @@ const productHasUsdaKey = sql`(${product.fdc_id} IS NOT NULL OR ${product.labelN
       AND pei."source" = ${GTIN_SOURCE}
       AND pei."deletedAt" IS NULL))`;
 
-const productTaskKeys = z.object({
-  // An empty list is no status filter, as the compiler reads it.
-  taskStatusFilter: z
-    .union([taskStatusSchema, z.array(taskStatusSchema)])
-    .optional()
-    .catch(undefined)
-    .transform((value) => (value === undefined ? [] : [value].flat())),
-  taskOpenOnly: z.boolean().optional().catch(undefined),
-  taskDueFrom: z.string().optional().catch(undefined),
-  taskDueTo: z.string().optional().catch(undefined),
-});
-
-// Status, open, and due constrain ONE task. Each key's predicate reads all
-// three from the request, and only the first present key renders the subquery.
-const productTasks = listPrepare(async (_db, filters) =>
-  productTaskKeys.parse(filters),
-);
-
-/** Products with a live task, whose effective subject is the product, matching every task key. */
-const productHasTask = ({
-  taskStatusFilter,
-  taskOpenOnly,
-  taskDueFrom,
-  taskDueTo,
-}: z.output<typeof productTaskKeys>) => {
-  if (
-    taskStatusFilter.length === 0 &&
-    !taskOpenOnly &&
-    taskDueFrom === undefined &&
-    taskDueTo === undefined
-  )
-    return undefined;
-  return inArray(
-    product.id,
-    qb
-      .select({ productId: effectiveFieldSql("task", "subjectProductId") })
-      .from(task)
-      .where(
-        and(
-          notDeleted(task),
-          isNotNull(effectiveFieldSql("task", "subjectProductId")),
-          taskStatusFilter.length > 0
-            ? inArray(task.status, taskStatusFilter)
-            : undefined,
-          taskOpenOnly ? ne(task.status, "done") : undefined,
-          taskDueFrom === undefined
-            ? undefined
-            : sql`${task.dueDate} >= ${taskDueFrom}`,
-          taskDueTo === undefined
-            ? undefined
-            : sql`${task.dueDate} <= ${taskDueTo}`,
-        ),
-      ),
-  );
-};
-
 const productScaffold = listScaffold("product", product, {
   derived: {
     location: sql.raw(
@@ -466,9 +407,12 @@ const productScaffold = listScaffold("product", product, {
     )})`,
     kitAccounting: listReadValue((read) => {
       const onHand = onHandUnitsFilterSql(product.id, read);
+      const expected =
+        read?.derivedValue?.("expectedQuantity", product.id) ??
+        expectedQuantityFilterSql(product.id);
       // Unknown stock is not applicable; make that false before expensive kit work.
       return sql`((${onHand} > 0) IS TRUE AND ${partsAccountedKitsSql} > 0
-        AND ${onHand} + ${partsAccountedKitsSql} > ${expectedQuantityFilterSql(product.id)})`;
+        AND ${onHand} + ${partsAccountedKitsSql} > ${expected})`;
     }),
     ownershipReconciliation: listReadValue(
       (read) => sql`(${inArray(product.id, productIdsWithRecordedDisposal)}
@@ -498,44 +442,8 @@ const productScaffold = listScaffold("product", product, {
       (read) =>
         sql`(${product.price} IS NOT NULL OR ${hasDerivedProductPriceSql(product.id, read)})`,
     ),
-    anyGtin: (term) => productMatchesGtinTerm(term),
     effectiveOwner: ownedProducts.predicate((ids) =>
       ids.length === 0 ? sql`false` : inArray(product.id, ids),
-    ),
-    externalIdSource: ({ values, presence }) =>
-      or(
-        values.length === 0
-          ? undefined
-          : inArray(
-              product.id,
-              qb
-                .select({ productId: entityExternalId.entityId })
-                .from(entityExternalId)
-                .where(
-                  and(
-                    notDeleted(entityExternalId),
-                    inArray(entityExternalId.source, [...values]),
-                  ),
-                ),
-            ),
-        idSetPresence(
-          product.id,
-          presence,
-          qb
-            .select({ productId: entityExternalId.entityId })
-            .from(entityExternalId)
-            .where(notDeleted(entityExternalId)),
-        ),
-      ),
-    taskStatus: productTasks.predicate((keys) => productHasTask(keys)),
-    taskOpen: productTasks.predicate((keys) =>
-      keys.taskStatusFilter.length === 0 ? productHasTask(keys) : undefined,
-    ),
-    // Presence is the related view's `taskPresenceFilter`.
-    taskDue: productTasks.predicate((keys) =>
-      keys.taskStatusFilter.length === 0 && !keys.taskOpenOnly
-        ? productHasTask(keys)
-        : undefined,
     ),
   },
 });

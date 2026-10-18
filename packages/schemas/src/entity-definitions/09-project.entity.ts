@@ -35,6 +35,16 @@ export default defineEntity({
     edit: {
       sections: [
         {
+          id: "defaults",
+          title: "Defaults",
+          fields: ["locations", "assigneeId", "defaultTrade"],
+        },
+        {
+          id: "budget",
+          title: "Budget",
+          fields: ["costEstimate"],
+        },
+        {
           id: "schedule",
           title: "Schedule",
           fields: ["startDate", "endDate"],
@@ -814,6 +824,14 @@ Rules:
       "googleDriveFolderUrl",
       "notionPageUrl",
     ],
+    rows: {
+      // The project's tracker attention items, one per rule it trips,
+      // computed by the attention rules the dashboard and Problems share.
+      attentionItems: {
+        label: "Attention items",
+        repository: { type: "text" },
+      },
+    },
     derived: {
       // Orders by the effective assignee's name.
       assigneeId: { via: "assignee" },
@@ -822,17 +840,8 @@ Rules:
       startDate: { type: "date" },
       // A displayable image (PDF attachments don't count).
       image: { type: "boolean" },
-      search: {
-        predicate: "text",
-        reason:
-          "Matches name, notes, or any effective location, which a project may inherit as a list",
-      },
-      attention: {
-        predicate: "multiselect",
-        negatable: true,
-        reason:
-          "Tracker membership comes from the attention rules over tasks and budgets",
-      },
+      // Tracker membership, from the attention rules over tasks and budgets.
+      attention: { via: "attentionItems.type" },
       dateRange: {
         predicate: "range",
         reason:
@@ -994,7 +1003,7 @@ Rules:
         kind: "text",
         placeholder: "Filter by project name...",
         deriveSchema: true,
-        derived: "search",
+        anyOf: ["name", "notes", "locations"],
       },
       {
         columnId: "status",
@@ -1087,7 +1096,6 @@ Rules:
           module: "~/entity/filter-behavior",
           export: "resolveDateRange",
         },
-        urlOnly: true,
       },
       {
         columnId: "completionYear",
@@ -1096,7 +1104,6 @@ Rules:
         kind: "multiselect",
         placeholder: "Filter by completion year...",
         optionsKey: "projectCompletionYears",
-        urlOnly: true,
       },
       {
         columnId: "parent",
@@ -1121,13 +1128,11 @@ Rules:
         kind: "idMulti",
         placeholder: "Filter by related blocked by id...",
         brandRef: { entity: "project" },
-        urlOnly: true,
       },
       {
         columnId: "projectPresenceFilter",
         kind: "presence",
         placeholder: "Filter related blocked by presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:project.tasks",
@@ -1141,13 +1146,11 @@ Rules:
         kind: "idMulti",
         placeholder: "Filter by related tasks id...",
         brandRef: { entity: "task" },
-        urlOnly: true,
       },
       {
         columnId: "taskPresenceFilter",
         kind: "presence",
         placeholder: "Filter related tasks presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:project.expenses",
@@ -1161,13 +1164,11 @@ Rules:
         kind: "idMulti",
         placeholder: "Filter by related expenses id...",
         brandRef: { entity: "expense" },
-        urlOnly: true,
       },
       {
         columnId: "expensePresenceFilter",
         kind: "presence",
         placeholder: "Filter related expenses presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:project.taskProducts",
@@ -1181,13 +1182,11 @@ Rules:
         kind: "idMulti",
         placeholder: "Filter by related task products id...",
         brandRef: { entity: "product" },
-        urlOnly: true,
       },
       {
         columnId: "taskProductPresenceFilter",
         kind: "presence",
         placeholder: "Filter related task products presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:project.purchasedProducts",
@@ -1201,13 +1200,11 @@ Rules:
         kind: "idMulti",
         placeholder: "Filter by related purchased products id...",
         brandRef: { entity: "product" },
-        urlOnly: true,
       },
       {
         columnId: "purchasedProductPresenceFilter",
         kind: "presence",
         placeholder: "Filter related purchased products presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:project.usedTools",
@@ -1221,13 +1218,11 @@ Rules:
         kind: "idMulti",
         placeholder: "Filter by related reusable resources id...",
         brandRef: { entity: "product" },
-        urlOnly: true,
       },
       {
         columnId: "usedToolPresenceFilter",
         kind: "presence",
         placeholder: "Filter related reusable resources presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:project.vendors",
@@ -1241,13 +1236,11 @@ Rules:
         kind: "idMulti",
         placeholder: "Filter by related vendors id...",
         brandRef: { entity: "vendor" },
-        urlOnly: true,
       },
       {
         columnId: "vendorPresenceFilter",
         kind: "presence",
         placeholder: "Filter related vendors presence...",
-        urlOnly: true,
       },
     ],
   },

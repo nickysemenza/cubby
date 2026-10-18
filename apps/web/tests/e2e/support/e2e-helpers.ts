@@ -638,3 +638,20 @@ export async function expectCalendarFeedDirtied(
     })
     .toMatch(/^(dirty|published)$/);
 }
+
+/**
+ * Dismisses every open popover. A filter editor opened from the Filters
+ * menu sits inside the menu's popover, so one Escape can leave the menu open.
+ * Focus leaves first: Escape on a focused clearable picker clears its value.
+ */
+export async function closePopovers(page: Page) {
+  const popovers = page.locator('[data-slot="popover-content"]');
+  await expect(async () => {
+    await page.evaluate(() => {
+      const focused = document.activeElement;
+      if (focused instanceof HTMLElement) focused.blur();
+    });
+    if ((await popovers.count()) > 0) await page.keyboard.press("Escape");
+    await expect(popovers).toHaveCount(0, { timeout: 500 });
+  }).toPass({ timeout: 5000 });
+}

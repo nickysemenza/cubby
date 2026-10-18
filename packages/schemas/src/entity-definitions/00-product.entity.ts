@@ -1983,6 +1983,19 @@ Rules:
       "price",
       "labelNutrition",
     ],
+    rows: {
+      barcodes: {
+        label: "Barcodes",
+        path: [{ edge: "EntityExternalId.entityId", direction: "incoming" }],
+        where: { source: "gtin" },
+      },
+      identifiers: {
+        label: "External identifiers",
+        path: [{ edge: "EntityExternalId.entityId", direction: "incoming" }],
+      },
+      // Tasks whose effective subject is the product.
+      subjectTasks: { label: "Tasks", relation: "tasks" },
+    },
     derived: {
       // The first live stock location by name, across all inventory.
       location: { type: "text" },
@@ -2025,11 +2038,8 @@ Rules:
       miscBucket: { type: "boolean" },
       unknownQuantityLines: { type: "boolean" },
       priced: { type: "boolean" },
-      anyGtin: {
-        predicate: "text",
-        reason:
-          "Matches any of the product's barcodes, not only the primary one its column shows",
-      },
+      // Any of the product's barcodes, not only the primary its column shows.
+      anyGtin: { via: "barcodes.externalId" },
       effectiveOwner: {
         predicate: "idMulti",
         reason:
@@ -2037,27 +2047,10 @@ Rules:
       },
       // The category's effective feature, inherited from its ancestors.
       categoryFeature: { via: "category.feature" },
-      externalIdSource: {
-        predicate: "multiselect",
-        negatable: true,
-        reason:
-          "External identifiers are rows keyed by source with no declared relation",
-      },
-      taskStatus: {
-        predicate: "multiselect",
-        reason:
-          "A task's product is its own subject or one inherited from its parent task",
-      },
-      taskOpen: {
-        predicate: "boolean",
-        reason:
-          "A task's product is its own subject or one inherited from its parent task",
-      },
-      taskDue: {
-        predicate: "range",
-        reason:
-          "A task's product is its own subject or one inherited from its parent task",
-      },
+      externalIdSource: { via: "identifiers.source" },
+      // Both match on the same task, whose effective subject is the product.
+      taskStatus: { via: "subjectTasks.status" },
+      taskDue: { via: "subjectTasks.dueDate" },
     },
     sort: {
       fields: [
@@ -2279,7 +2272,7 @@ Rules:
         kind: "text",
         placeholder: "Filter by name...",
         deriveSchema: true,
-        stored: true,
+        anyOf: ["name"],
         schemaDescription: "Filter by product name",
       },
       {
@@ -2296,16 +2289,16 @@ Rules:
         field: "manufacturerFilter",
         kind: "text",
         placeholder: "Search manufacturer...",
-        urlOnly: true,
         deriveSchema: true,
         schemaDescription: "Filter by manufacturer",
-        stored: { columns: ["manufacturer"] },
+        anyOf: ["manufacturer"],
       },
       {
         columnId: "primaryGtin",
         derived: "anyGtin",
         field: "upcFilter",
         kind: "text",
+        terms: "productCode",
         placeholder: "Filter by UPC...",
         deriveSchema: true,
         schemaDescription:
@@ -2317,7 +2310,7 @@ Rules:
         kind: "text",
         placeholder: "Filter by model...",
         deriveSchema: true,
-        stored: true,
+        anyOf: ["model"],
         schemaDescription:
           "Filter by model number — a tool's real identity when the name is generic.",
       },
@@ -2543,7 +2536,7 @@ Rules:
         kind: "text",
         placeholder: "Search notes...",
         deriveSchema: true,
-        stored: true,
+        anyOf: ["notes"],
       },
       {
         columnId: "notesPresence",
@@ -2564,7 +2557,6 @@ Rules:
         kind: "multiselect",
         placeholder: "Filter by external ID source...",
         optionsKey: "externalIdSources",
-        nullable: { field: "externalIdPresenceFilter", label: "external ID" },
       },
       {
         columnId: "purchaseDate",
@@ -2626,7 +2618,6 @@ Rules:
         field: "pricePresenceFilter",
         kind: "presence",
         placeholder: "Filter price presence...",
-        urlOnly: true,
         derived: true,
       },
       {
@@ -2634,7 +2625,6 @@ Rules:
         field: "miscBucketFilter",
         kind: "presence",
         placeholder: "Filter misc buckets...",
-        urlOnly: true,
         derived: true,
       },
       {
@@ -2642,7 +2632,6 @@ Rules:
         field: "unknownQuantityLinesFilter",
         kind: "presence",
         placeholder: "Filter lines with no quantity...",
-        urlOnly: true,
         derived: true,
       },
       {
@@ -2650,15 +2639,6 @@ Rules:
         field: "taskStatusFilter",
         kind: "multiselect",
         placeholder: "Filter task status...",
-        urlOnly: true,
-        derived: true,
-      },
-      {
-        columnId: "taskOpen",
-        field: "taskOpenOnly",
-        kind: "boolean",
-        placeholder: "Filter open tasks...",
-        urlOnly: true,
         derived: true,
       },
       {
@@ -2831,7 +2811,6 @@ Rules:
         kind: "idMulti",
         placeholder: "Filter by kit...",
         brandRef: { entity: "product" },
-        urlOnly: true,
       },
       {
         // Kits containing a component: parents on its `productComponent` links.
@@ -2840,20 +2819,17 @@ Rules:
         kind: "idMulti",
         placeholder: "Filter by component...",
         brandRef: { entity: "product" },
-        urlOnly: true,
       },
       {
         columnId: "usedOnProjectId",
         kind: "idMulti",
         placeholder: "Filter by related used on projects id...",
         brandRef: { entity: "project" },
-        urlOnly: true,
       },
       {
         columnId: "usedOnProjectPresenceFilter",
         kind: "presence",
         placeholder: "Filter related used on projects presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:product.purchases",
@@ -2877,13 +2853,11 @@ Rules:
         kind: "idMulti",
         placeholder: "Filter by related expenses id...",
         brandRef: { entity: "expense" },
-        urlOnly: true,
       },
       {
         columnId: "expensePresenceFilter",
         kind: "presence",
         placeholder: "Filter related expenses presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:product.inventory",
@@ -2897,13 +2871,11 @@ Rules:
         kind: "idMulti",
         placeholder: "Filter by related inventory id...",
         brandRef: { entity: "inventory" },
-        urlOnly: true,
       },
       {
         columnId: "relatedInventoryPresenceFilter",
         kind: "presence",
         placeholder: "Filter related inventory presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:product.wishes",
@@ -2917,13 +2889,11 @@ Rules:
         kind: "idMulti",
         placeholder: "Filter by related wishlist candidates id...",
         brandRef: { entity: "wish" },
-        urlOnly: true,
       },
       {
         columnId: "wishPresenceFilter",
         kind: "presence",
         placeholder: "Filter related wishlist candidates presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:product.tasks",
@@ -2971,7 +2941,6 @@ Rules:
         kind: "idMulti",
         placeholder: "Filter by related tasks id...",
         brandRef: { entity: "task" },
-        urlOnly: true,
       },
       {
         columnId: "related:product.meals",
@@ -2985,13 +2954,11 @@ Rules:
         kind: "idMulti",
         placeholder: "Filter by related meals id...",
         brandRef: { entity: "meal" },
-        urlOnly: true,
       },
       {
         columnId: "mealPresenceFilter",
         kind: "presence",
         placeholder: "Filter related meals presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:product.eaters",
@@ -3006,13 +2973,11 @@ Rules:
         placeholder: "Filter by related eaters id...",
         brandRef: { entity: "ledgerParty" },
         currentMember: true,
-        urlOnly: true,
       },
       {
         columnId: "eaterPresenceFilter",
         kind: "presence",
         placeholder: "Filter related eaters presence...",
-        urlOnly: true,
       },
     ],
   },

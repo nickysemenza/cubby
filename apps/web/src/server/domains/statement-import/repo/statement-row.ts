@@ -37,6 +37,11 @@ import {
 } from "~/server/db/schema";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { previewFinancialStatementImport } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
+import {
+  CHARGE_STATE,
+  LIVE_REFS,
+  chargeKeyOf,
+} from "~/server/domains/statement-import/repo/statement-charge";
 import { statementImportMembers } from "~/server/domains/statement-import/repo/statement-import-membership";
 import {
   statementRowExternalId,
@@ -56,36 +61,24 @@ import {
 } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
-/**
- * Every live settlement reference with its transaction's shortcode — the
- * `(source, externalId)` pairs a statement row matches on.
- *
- * Joined once and hashed rather than probed per row: cost scales with the
- * references (~6k) rather than with StatementRow (~34k).
- *
- * LOAD-BEARING: joining without DISTINCT is safe because the live
- * `EntityExternalId_source_kind_externalId_key` unique allows one live owner
- * per `(source, 'settlement_ref', externalId)`. The transaction must be live
- * too: its references are soft-deleted with it, and the join says so again.
- */
-const LIVE_REFS = sql`(
-  SELECT fx."source" AS source, fx."externalId" AS "externalId", ft.shortcode
-  FROM "EntityExternalId" fx
-  JOIN "FinancialTransaction" ft ON ft."id" = fx."entityId" AND ft."deletedAt" IS NULL
-  WHERE fx."kind" = 'settlement_ref' AND fx."deletedAt" IS NULL
-)`;
-
+// `cs` carries the charge-level state: repeated observations of one charge
+// inherit each other's ignore, supersession and match.
 const FROM_WITH_REFS = sql`FROM "StatementRow"
   LEFT JOIN ${LIVE_REFS} lr
     ON lr.source = "StatementRow"."source"
-   AND lr."externalId" = "StatementRow"."externalId"`;
+   AND lr."externalId" = "StatementRow"."externalId"
+  LEFT JOIN ${CHARGE_STATE} cs
+    ON cs.source = "StatementRow"."source"
+   AND cs."chargeKey" = ${chargeKeyOf('"StatementRow"')}`;
 
-const matchedTransaction = sql<string | null>`lr.shortcode`;
+const matchedTransaction = sql<
+  string | null
+>`COALESCE(lr.shortcode, cs.shortcode)`;
 
 const matchStateSql = sql<string>`CASE
-  WHEN ${statementRow.disposition} = 'ignored' THEN 'ignored'
-  WHEN ${statementRow.supersededByRowId} IS NOT NULL THEN 'superseded'
-  WHEN lr.shortcode IS NOT NULL THEN 'matched'
+  WHEN cs.ignored THEN 'ignored'
+  WHEN cs.superseded THEN 'superseded'
+  WHEN COALESCE(lr.shortcode, cs.shortcode) IS NOT NULL THEN 'matched'
   ELSE 'unmatched'
 END`;
 
@@ -320,6 +313,7 @@ export async function getStatementRowSummary(
     superseded: number;
     amountTotal: string;
     unmatchedAmount: string;
+    unmatchedCharges: number;
   }>(sql`
     SELECT
       count(*)::int AS total,
@@ -328,9 +322,11 @@ export async function getStatementRowSummary(
       count(*) FILTER (WHERE ms = 'ignored')::int AS ignored,
       count(*) FILTER (WHERE ms = 'superseded')::int AS superseded,
       COALESCE(sum(amount), 0) AS "amountTotal",
-      COALESCE(sum(amount) FILTER (WHERE ms = 'unmatched'), 0) AS "unmatchedAmount"
+      COALESCE(sum(amount) FILTER (WHERE ms = 'unmatched'), 0) AS "unmatchedAmount",
+      count(DISTINCT charge) FILTER (WHERE ms = 'unmatched')::int AS "unmatchedCharges"
     FROM (
-      SELECT ${matchStateSql} AS ms, ${statementRow.amount} AS amount
+      SELECT ${matchStateSql} AS ms, ${statementRow.amount} AS amount,
+        "StatementRow".source || ':' || ${chargeKeyOf('"StatementRow"')} AS charge
       ${FROM_WITH_REFS}
       WHERE ${where}
     ) t
@@ -344,6 +340,7 @@ export async function getStatementRowSummary(
     superseded: Number(row?.superseded ?? 0),
     amountTotal: Number(row?.amountTotal ?? 0),
     unmatchedAmount: Number(row?.unmatchedAmount ?? 0),
+    unmatchedCharges: Number(row?.unmatchedCharges ?? 0),
   };
 }
 

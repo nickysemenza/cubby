@@ -16,32 +16,29 @@ struct RootView: View {
     }
 
     private var content: some View {
-        Group {
-            if model.requestTrace.clientUpdateRequired {
-                UpdateRequiredView()
-            } else {
-                phaseContent
+        phaseContent
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if model.requestTrace.clientUpdateRequired { UpdateAvailableBanner() }
             }
-        }
-        .confirmationDialog(
-            "Share sign-in with the command line?",
-            isPresented: cliAuthPrompt,
-            presenting: model.navigator.pendingCliAuth
-        ) { request in
-            Button("Share sign-in") {
-                Task { await model.approveCliAuth(request) }
+            .confirmationDialog(
+                "Share sign-in with the command line?",
+                isPresented: cliAuthPrompt,
+                presenting: model.navigator.pendingCliAuth
+            ) { request in
+                Button("Share sign-in") {
+                    Task { await model.approveCliAuth(request) }
+                }
+                Button("Don't share", role: .cancel) {
+                    model.navigator.pendingCliAuth = nil
+                }
+            } message: { _ in
+                Text(
+                    "The command line gets a copy of this install's session. Its logout signs out here too."
+                )
             }
-            Button("Don't share", role: .cancel) {
-                model.navigator.pendingCliAuth = nil
+            .alert(model.cliAuthNotice ?? "", isPresented: cliAuthNoticeBinding) {
+                Button("OK") {}
             }
-        } message: { _ in
-            Text(
-                "The command line gets a copy of this install's session. Its logout signs out here too."
-            )
-        }
-        .alert(model.cliAuthNotice ?? "", isPresented: cliAuthNoticeBinding) {
-            Button("OK") {}
-        }
     }
 
     private var cliAuthPrompt: Binding<Bool> {

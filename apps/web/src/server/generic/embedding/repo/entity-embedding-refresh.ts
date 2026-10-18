@@ -8,6 +8,7 @@ import type {
   SearchableEntity,
   SearchableEntityRef,
 } from "@cubby/schemas/search";
+import type { Trade } from "@cubby/schemas/task-fields";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -49,7 +50,6 @@ import {
   plantingDisplayName,
 } from "~/server/domains/plant/repo/windows";
 import { loadAllGtins } from "~/server/domains/product/repo/gtin";
-import { effectiveTaskTradeSql } from "~/server/domains/task/repo/task-project-inheritance";
 import { embeddingTextHash } from "~/server/generic/embedding/repo/semantic/hash";
 import {
   buildCookbookEmbeddingText,
@@ -713,7 +713,7 @@ async function getTaskEmbeddingTexts(
       id: task.id,
       name: task.name,
       status: task.status,
-      trade: effectiveTaskTradeSql(),
+      trade: effectiveFieldSql<Trade | null>("task", "trade"),
       projectName: project.name,
       subjectProductName: product.name,
     })

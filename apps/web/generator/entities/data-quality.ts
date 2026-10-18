@@ -229,9 +229,9 @@ export const compileDataQuality = (
     expandRef: null,
     schemaRef: null,
     stored: null,
+    anyOf: null,
     derived: null,
     range: null,
-    urlOnly: false,
     nullable: null,
     sentinels: null,
     match: null,
@@ -239,6 +239,8 @@ export const compileDataQuality = (
     subtree: null,
     currentMember: false,
     singleValue: null,
+    exclusiveGroup: null,
+    aliasOf: null,
   } as const;
   const statusDescriptor: FilterDescriptor = {
     ...descriptorBase,

@@ -20,7 +20,7 @@ struct RelationshipDepthPicker: View {
             }
             .pickerStyle(.segmented)
             .frame(minHeight: FieldGuideTokens.touchTarget)
-            .disabled(model.activity != .idle)
+            .disabled(model.connectionControlsDisabled)
             Text("Depth counts declared relationship hops.")
                 .font(.caption)
                 .foregroundStyle(.secondary)

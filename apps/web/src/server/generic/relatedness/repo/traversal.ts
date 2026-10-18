@@ -136,6 +136,58 @@ const edgeIndex = (): ReadonlyMap<string, EdgeSpec> => {
 
 const EDGES = edgeIndex();
 
+/**
+ * One schema table's column names and its foreign-key columns by the table
+ * they reference: what a row set's `where` and terminal resolve against.
+ */
+interface TableFacts {
+  readonly columns: ReadonlySet<string>;
+  readonly references: ReadonlyMap<string, readonly string[]>;
+}
+
+const TABLES: ReadonlyMap<string, TableFacts> = new Map(
+  Object.values(schema)
+    .filter((value): value is Extract<typeof value, PgTable> =>
+      is(value, PgTable),
+    )
+    .map((table) => {
+      const config = getTableConfig(table);
+      const references = new Map<string, string[]>();
+      for (const foreignKey of config.foreignKeys) {
+        const reference = foreignKey.reference();
+        const target = getTableConfig(reference.foreignTable).name;
+        references.set(target, [
+          ...(references.get(target) ?? []),
+          ...reference.columns.map((column) => column.name),
+        ]);
+      }
+      return [
+        config.name,
+        {
+          columns: new Set(config.columns.map((column) => column.name)),
+          references,
+        },
+      ];
+    }),
+);
+
+export const tableFacts = (name: string): TableFacts => {
+  const facts = TABLES.get(name);
+  if (facts === undefined) throw new Error(`No schema table ${name}`);
+  return facts;
+};
+
+/** The one foreign-key column of `table` that references `target`'s table. */
+export const referenceColumn = (table: string, target: Entity): string => {
+  const [column, ...others] =
+    tableFacts(table).references.get(entityTable(target)) ?? [];
+  if (column === undefined || others.length > 0)
+    throw new Error(
+      `${table} needs exactly one foreign key to ${target}, found ${[column, ...others].filter(Boolean).join(", ") || "none"}`,
+    );
+  return column;
+};
+
 const softDeleteForTable = (tableName: string): boolean => {
   const entity = allEntities.find(
     (candidate) => entityManifest[candidate].dbTable === tableName,

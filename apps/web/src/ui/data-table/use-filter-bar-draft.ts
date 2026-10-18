@@ -106,8 +106,8 @@ export function useFilterBarDraft({
       ...previousByField.keys(),
       ...nextByField.keys(),
     ]);
-    // Everything but typing commits on the interaction; only a text field
-    // waits for the debounce.
+    // Everything but typing commits on the interaction; only a text or
+    // typed-values field waits for the debounce.
     const commitImmediately = [...changedFields].some((fieldKey) => {
       const previous = previousByField.get(fieldKey);
       const next = nextByField.get(fieldKey);
@@ -118,7 +118,7 @@ export function useFilterBarDraft({
         return false;
       }
       const field = fields.find((candidate) => candidate.key === fieldKey);
-      return !next || field?.type !== "text";
+      return !next || (field?.type !== "text" && !field?.freeText);
     });
 
     if (commitImmediately) {

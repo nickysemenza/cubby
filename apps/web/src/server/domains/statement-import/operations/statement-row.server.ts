@@ -8,6 +8,14 @@ import {
   recordStatementRows,
   updateStatementRows,
 } from "~/server/domains/statement-import/repo/statement-row";
+import {
+  listStatementSuggestionGroups,
+  listStatementSuggestions,
+} from "~/server/domains/statement-import/repo/statement-suggestion-read";
+import {
+  refreshStatementSuggestions,
+  scheduleStatementSuggestions,
+} from "~/server/domains/statement-import/service/statement-suggestion-generation";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import {
   commitStatementCsv,
@@ -21,8 +29,17 @@ export const statementRowHandlers = implementOperationDomain(
       previewStatementCsv(context.db, context.actorContext, input),
     commitCsv: (context, input) =>
       commitStatementCsv(context.db, context.actorContext, input),
-    record: (context, input) =>
-      recordStatementRows(context.db, input, context.actorContext),
+    record: async (context, input) => {
+      const recorded = await recordStatementRows(
+        context.db,
+        input,
+        context.actorContext,
+      );
+      // New evidence may settle, or need, a transaction.
+      if (recorded.inserted && recorded.batchId)
+        await scheduleStatementSuggestions(context.db, recorded.batchId);
+      return recorded;
+    },
     list: (context, input) =>
       listStatementRows(
         context.db,
@@ -38,5 +55,10 @@ export const statementRowHandlers = implementOperationDomain(
       updateStatementRows(context.db, input, context.actorContext),
     delete: (context, input) =>
       deleteStatementRows(context.db, input.selector, context.actorContext),
+    suggestions: (context, input) =>
+      listStatementSuggestions(context.db, input),
+    suggestionGroups: (context) => listStatementSuggestionGroups(context.db),
+    refreshSuggestions: (context, input) =>
+      refreshStatementSuggestions(context.db, input),
   },
 );

@@ -10,7 +10,7 @@ struct EntityFieldSuggestionSection: View {
     @State private var actionTask: Task<Void, Never>?
 
     var body: some View {
-        Section("Suggestions") {
+        Section {
             Button(review.response == nil ? "Suggest fields" : "Review fresh suggestions") {
                 perform { try await review.request() }
             }
@@ -27,38 +27,38 @@ struct EntityFieldSuggestionSection: View {
                     if let proposal = review.proposal(field.key) {
                         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                             Text(field.label).font(.headline)
-                            Text("Current: \(currentText(field))").foregroundStyle(.secondary)
                             Text(proposal.label ?? proposal.value ?? "")
-                            if let detail = proposal.detail { Text(detail).foregroundStyle(.secondary) }
-                            if let evidence = proposal.financeReview?.evidence {
-                                Text(
-                                    "\(evidence.principalLineCount) lines across \(evidence.distinctPurchaseCount) purchases; \(evidence.unknownCategoryLineCount) without a product category"
-                                ).font(.caption)
-                                ForEach(evidence.categories, id: \.id) { category in
-                                    NavigationLink(
-                                        category.name,
-                                        value: Route.entityDetail(.productCategory, id: category.id))
-                                }
-                            }
-                            if !proposal.alternatives.isEmpty {
-                                DisclosureGroup("Alternatives") {
-                                    ForEach(proposal.alternatives, id: \.value) { alternative in
-                                        VStack(alignment: .leading) {
-                                            Text(alternative.label)
-                                            if let detail = alternative.detail {
-                                                Text(detail).font(.caption).foregroundStyle(.secondary)
+                            Text("Currently \(currentText(field))").font(.caption).foregroundStyle(.secondary)
+                            DisclosureGroup("Why") {
+                                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+                                    if let detail = proposal.detail {
+                                        Text(detail).foregroundStyle(.secondary)
+                                    }
+                                    Text(proposal.reasoning).foregroundStyle(.secondary)
+                                    if let evidence = proposal.financeReview?.evidence {
+                                        Text(
+                                            "\(evidence.principalLineCount) lines across \(evidence.distinctPurchaseCount) purchases; \(evidence.unknownCategoryLineCount) without a product category"
+                                        )
+                                        ForEach(evidence.categories, id: \.id) { category in
+                                            NavigationLink(
+                                                category.name,
+                                                value: Route.entityDetail(.productCategory, id: category.id))
+                                        }
+                                    }
+                                    if !proposal.alternatives.isEmpty {
+                                        Text("Alternatives").font(.subheadline.weight(.semibold))
+                                        ForEach(proposal.alternatives, id: \.value) { alternative in
+                                            VStack(alignment: .leading) {
+                                                Text(alternative.label)
+                                                if let detail = alternative.detail {
+                                                    Text(detail).foregroundStyle(.secondary)
+                                                }
                                             }
                                         }
                                     }
                                 }
+                                .font(.caption)
                             }
-                            Text(proposal.reasoning).font(.caption).foregroundStyle(.secondary)
-                            Text(
-                                proposal.financeReview == nil
-                                    ? "Use in draft changes this editor. Save commits the choice."
-                                    : "Based on saved record and linked items. Apply saves the reviewed field immediately."
-                            )
-                            .font(.caption).foregroundStyle(.secondary)
                             HStack {
                                 Button(
                                     proposal.financeReview == nil ? "Use in draft" : "Apply and save"
@@ -102,8 +102,24 @@ struct EntityFieldSuggestionSection: View {
                 }
             }
             if review.isApplying { LoadingIndicator(label: "Saving reviewed fields") }
+        } header: {
+            Text("Suggestions")
+        } footer: {
+            if let footer { Text(footer) }
         }
         .onDisappear { actionTask?.cancel() }
+    }
+
+    /// What the two verbs do, said once for the section rather than under every card.
+    private var footer: String? {
+        let proposals = review.fields.compactMap { review.proposal($0.key) }
+        guard !proposals.isEmpty else { return nil }
+        let draft = proposals.contains { $0.financeReview == nil }
+        let saved = proposals.contains { $0.financeReview != nil }
+        return [
+            draft ? "Use in draft changes this editor; Save commits it." : nil,
+            saved ? "Apply and save writes the reviewed field immediately." : nil,
+        ].compactMap(\.self).joined(separator: " ")
     }
 
     private func outcomeText(_ key: String) -> String {

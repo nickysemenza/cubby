@@ -81,6 +81,9 @@ export default defineEntity({
       ],
     },
     list: {
+      // A project page's embedded task list: tasks whose effective project
+      // its project filters select.
+      scopes: { projectScope: { via: "project", filters: "project" } },
       savedViews: [
         {
           id: "my-tasks",
@@ -501,11 +504,17 @@ export default defineEntity({
         resolution: {
           reset: { trade: null },
           redundancy: "eligible",
+          inherit: {
+            from: [
+              { hierarchy: { whileSame: "projectId" } },
+              { path: "project.defaultTrade" },
+            ],
+          },
         },
         explanation: {
           ruleId: "task.effective-trade",
           description:
-            "A task trade override wins; otherwise the matching parent task or project default supplies it.",
+            "A task trade override wins; otherwise the nearest ancestor task on the same effective project, then that project's default trade, supplies it.",
           projections: {
             list: "fieldResolutions.trade.value",
             detail: "fieldResolutions.trade.value",
@@ -806,11 +815,7 @@ export default defineEntity({
       effectiveDueDate: { type: "date" },
       completion: { type: "enum", options: ["open", "done"] },
       topLevel: { type: "boolean" },
-      search: {
-        predicate: "text",
-        reason:
-          "Searches the task name and its inherited subject product's name",
-      },
+      subjectName: { via: "subject.name" },
     },
     sort: {
       fields: [
@@ -937,7 +942,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Search tasks...",
         deriveSchema: true,
-        derived: "search",
+        anyOf: ["name", "subjectName"],
       },
       {
         columnId: "status",
@@ -1016,7 +1021,6 @@ export default defineEntity({
           { value: "open", label: "Open" },
           { value: "done", label: "Done" },
         ],
-        urlOnly: true,
       },
       {
         columnId: "projectId",
@@ -1035,7 +1039,6 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by product id...",
         brandRef: { entity: "product" },
-        urlOnly: true,
       },
       {
         columnId: "subjectProductId",
@@ -1062,7 +1065,6 @@ export default defineEntity({
         columnId: "topLevelOnly",
         kind: "boolean",
         placeholder: "Top-level tasks only",
-        urlOnly: true,
         derived: "topLevel",
       },
       {
@@ -1077,13 +1079,11 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by related blocked by id...",
         brandRef: { entity: "task" },
-        urlOnly: true,
       },
       {
         columnId: "blockedByTaskPresenceFilter",
         kind: "presence",
         placeholder: "Filter related blocked by presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:task.parent",
@@ -1100,13 +1100,11 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by related parent task id...",
         brandRef: { entity: "task" },
-        urlOnly: true,
       },
       {
         columnId: "parentTaskPresenceFilter",
         kind: "presence",
         placeholder: "Filter related parent task presence...",
-        urlOnly: true,
       },
     ],
   },

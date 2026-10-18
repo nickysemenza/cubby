@@ -1,6 +1,10 @@
 import CubbyKit
 import SwiftUI
 
+#if os(macOS)
+    import AppKit
+#endif
+
 /// One editor control for one catalog field, chosen by `controlKind` × `kind`. Errors from the last save render as the row's footer.
 struct EntityFieldControl: View {
     let field: FieldDescriptor
@@ -35,36 +39,20 @@ struct EntityFieldControl: View {
     @ViewBuilder
     private var footer: some View {
         if let resolved = model.resolutionForEditor(field) {
-            HStack(spacing: FieldGuideTokens.Space.xs) {
-                Text(
-                    "Effective: \(EntityFieldValue.text(resolved.effectiveValue, field: field) ?? resolved.emptyLabel(field: field))"
-                )
-                if resolved.isInherited { InheritedMarker() }
-            }
-            .font(.caption).foregroundStyle(.secondary)
-            EntityFieldResolutionLabel(resolved: resolved, field: field)
-            // Set to <none> stays available below whatever the saved mode, so it is not repeated.
-            let actions = resolved.actions(field: field).filter { $0.kind != .setNone }
-            ForEach(actions) { action in
-                Button(action.label) { model.stageResolution(action.kind, for: key) }
-                    .accessibilityIdentifier(
-                        "editor.\(model.descriptor.key.rawValue).\(key).\(action.kind == .useInherited ? "reset" : action.kind.rawValue)"
-                    )
-            }
-            if !actions.isEmpty {
-                Text("Save commits the change.").font(.caption).foregroundStyle(.secondary)
-            }
+            resolutionLine(resolved)
         } else if let original = model.original,
-            FieldResolutionPresentation(raw: original, field: field) != nil
+            let saved = FieldResolutionPresentation(raw: original, field: field)
         {
-            Text("Saved resolution is out of date for this draft. Save to refresh.")
-                .font(.caption).foregroundStyle(.secondary)
-        }
-        if let policy = field.resolution, policy.none != nil {
-            Button(policy.labels?.none.map { "Set to \($0)" } ?? "Use no value") {
-                model.stageResolutionNone(key)
+            resolutionLine(saved, stale: true)
+        } else if model.isCreate, let policy = field.resolution, policy.none != nil {
+            // A new record inherits by default; an explicit None must stay reachable before save.
+            HStack {
+                Spacer()
+                resolutionMenu {
+                    Button(noneLabel(policy)) { model.stageResolutionNone(key) }
+                        .accessibilityIdentifier("editor.\(model.descriptor.key.rawValue).\(key).none")
+                }
             }
-            .accessibilityIdentifier("editor.\(model.descriptor.key.rawValue).\(key).none")
         }
         if let error = model.fieldErrors[key] {
             Text(error)
@@ -72,6 +60,111 @@ struct EntityFieldControl: View {
                 .foregroundStyle(FieldGuideTokens.destructive)
                 .accessibilityLabel("\(field.label) error: \(error)")
         }
+    }
+
+    // MARK: - Resolution
+
+    /// One secondary line under the control: the state marker, the effective value and where it
+    /// comes from, and a menu holding only the links that would change the field. A staged link
+    /// is an ordinary draft edit, so Save needs no separate notice.
+    ///
+    /// `stale`: the draft differs from the saved record, so the server's effective value may no
+    /// longer hold (a reparent changes the source). Reset and Set to none stay offered from the
+    /// saved policy, staged as their plain patches; Confirm is withheld because it pins the saved
+    /// effective value.
+    @ViewBuilder
+    private func resolutionLine(_ resolved: FieldResolutionPresentation, stale: Bool = false) -> some View {
+        let state = resolved.state(field: field)
+        let offered = resolved.actions(field: field).filter { !stale || $0.kind != .confirm }
+        let staged =
+            stale
+            ? offered.first { action in
+                action.payload.allSatisfy { (model.draft[$0.key] ?? .null) == $0.value }
+            }
+            : nil
+        let actions = offered.filter { $0 != staged }
+        let caption =
+            stale
+            ? staged.map { "\($0.label) on save" } ?? "Inheritance updates when saved"
+            : resolutionCaption(resolved, hasActions: !actions.isEmpty)
+        if let caption {
+            HStack(spacing: FieldGuideTokens.Space.xs) {
+                Image(systemName: state.systemImage).imageScale(.small).accessibilityHidden(true)
+                Text(caption).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: FieldGuideTokens.Space.sm)
+                if !actions.isEmpty {
+                    resolutionMenu {
+                        ForEach(actions) { action in
+                            Button(actionLabel(action, resolved: resolved)) {
+                                if stale {
+                                    model.stage(action.payload)
+                                } else {
+                                    model.stageResolution(action.kind, for: key)
+                                }
+                            }
+                            .accessibilityIdentifier(
+                                "editor.\(model.descriptor.key.rawValue).\(key).\(action.kind == .useInherited ? "reset" : action.kind == .setNone ? "none" : action.kind.rawValue)"
+                            )
+                        }
+                    }
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    /// The control shows the stored value, so an inherited value is named here with its source.
+    /// A plain Set here value with nothing to change needs no caption.
+    private func resolutionCaption(_ resolved: FieldResolutionPresentation, hasActions: Bool) -> String? {
+        switch resolved.resolution.mode {
+        case .inherit:
+            guard let value = valueText(resolved.effectiveValue) else {
+                return hasActions ? "Nothing to inherit" : nil
+            }
+            return "\(value), inherited from \(resolved.sourceEntity?.name ?? resolved.resolution.source)"
+        case .allocated:
+            return resolved.sourceText
+        case .none:
+            return resolved.emptyLabel(field: field)
+        case .explicit:
+            let state = resolved.state(field: field)
+            return state.tone == .set && !hasActions ? nil : state.label
+        }
+    }
+
+    /// Use inherited names the value it brings back, so the menu says what Save will apply.
+    private func actionLabel(_ action: FieldResolutionAction, resolved: FieldResolutionPresentation) -> String
+    {
+        guard action.kind == .useInherited, let fallback = valueText(resolved.fallbackValue) else {
+            return action.label
+        }
+        return "\(action.label) (\(fallback))"
+    }
+
+    private func valueText(_ value: JSONValue) -> String? {
+        if field.reference != nil, let id = value.stringValue {
+            return model.original.flatMap {
+                FieldResolutionPresentation.referenceName(in: $0, field: field, effectiveID: id)
+            } ?? pickedTitles[id] ?? id
+        }
+        return EntityFieldValue.text(value, field: field)
+    }
+
+    private func noneLabel(_ policy: FieldResolutionDescriptor) -> String {
+        "Set to \(policy.labels?.none ?? "none")"
+    }
+
+    private func resolutionMenu(@ViewBuilder content: () -> some View) -> some View {
+        Menu(content: content) {
+            Image(systemName: "ellipsis.circle")
+                .imageScale(.large)
+                .frame(minWidth: FieldGuideTokens.touchTarget, minHeight: FieldGuideTokens.touchTarget)
+                .contentShape(Rectangle())
+        }
+        .menuIndicator(.hidden)
+        .buttonStyle(.borderless)
+        .accessibilityLabel("\(field.label) inheritance")
     }
 
     private var label: String {
@@ -97,10 +190,14 @@ struct EntityFieldControl: View {
     private var control: some View {
         switch field.controlKind {
         case .text:
-            LabeledContent(label) {
-                TextField(label, text: stringBinding, prompt: Text(field.placeholder ?? "None"))
-                    .multilineTextAlignment(.trailing)
-                    .labelsHidden()
+            if key == model.descriptor.recordEmojiField {
+                emojiControl
+            } else {
+                LabeledContent(label) {
+                    TextField(label, text: stringBinding, prompt: Text(field.placeholder ?? "None"))
+                        .multilineTextAlignment(.trailing)
+                        .labelsHidden()
+                }
             }
         case .textarea:
             VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
@@ -230,21 +327,60 @@ struct EntityFieldControl: View {
         }
     }
 
+    /// The record emoji: one large glyph, keeping only the last character typed or picked, so a
+    /// replacement needs no deleting first. Mac opens the system Emoji & Symbols palette.
+    private var emojiControl: some View {
+        LabeledContent(label) {
+            HStack(spacing: FieldGuideTokens.Space.sm) {
+                #if os(macOS)
+                    Button("Emoji & Symbols", systemImage: "face.smiling") {
+                        NSApp.orderFrontCharacterPalette(nil)
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                #endif
+                TextField(
+                    label,
+                    text: Binding(
+                        get: { value.stringValue ?? "" },
+                        set: { entry in
+                            model.draft[key] = entry.last.map { .string(String($0)) } ?? .null
+                        }),
+                    prompt: Text(field.placeholder ?? "None").font(.body)
+                )
+                .font(value.stringValue?.isEmpty == false ? .largeTitle : .body)
+                .multilineTextAlignment(.trailing)
+                .labelsHidden()
+                .accessibilityIdentifier("editor.\(model.descriptor.key.rawValue).\(key)")
+            }
+        }
+    }
+
     private var moneyControl: some View {
         LabeledContent(label) {
-            TextField(
-                label,
-                value: Binding(
-                    get: { value.doubleValue },
-                    set: { model.draft[key] = $0.map(JSONValue.number) ?? .null }),
-                // Entry parses a plain amount; the stored dollars display through `ValueFormat`.
-                format: .number.precision(.fractionLength(0...2)).locale(Locale(identifier: "en_US")),
-                prompt: Text(field.placeholder ?? "$0.00")
-            )
-            .multilineTextAlignment(.trailing)
-            .labelsHidden()
-            .accessibilityIdentifier("editor.\(model.descriptor.key.rawValue).\(key)")
+            HStack(spacing: FieldGuideTokens.Space.xs) {
+                Text(verbatim: "$").foregroundStyle(.secondary).accessibilityHidden(true)
+                moneyField
+            }
         }
+    }
+
+    private var moneyField: some View {
+        TextField(
+            label,
+            value: Binding(
+                get: { value.doubleValue },
+                set: { model.draft[key] = $0.map(JSONValue.number) ?? .null }),
+            // Entry parses a plain amount; the stored dollars display through `ValueFormat`.
+            format: .number.precision(.fractionLength(0...2)).locale(Locale(identifier: "en_US")),
+            prompt: Text(field.placeholder ?? "0.00")
+        )
+        .multilineTextAlignment(.trailing)
+        .labelsHidden()
+        .accessibilityIdentifier("editor.\(model.descriptor.key.rawValue).\(key)")
+        #if os(iOS)
+            .keyboardType(.decimalPad)
+        #endif
     }
 
     private func singleReference(_ reference: FieldReference) -> some View {
@@ -365,7 +501,7 @@ struct EntityFieldControl: View {
     }
 
     private var tokenControl: some View {
-        tokenEditor(
+        TokenListRow(
             title: label, singular: field.label.lowercased(),
             entryID: "editor.\(model.descriptor.key.rawValue).\(key).add",
             tokens: value.arrayValue?.compactMap(\.stringValue) ?? [],
@@ -379,13 +515,13 @@ struct EntityFieldControl: View {
     private var productTagsControl: some View {
         let split = CollectionTag.split(value.arrayValue?.compactMap(\.stringValue) ?? [])
         return VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
-            tokenEditor(
+            TokenListRow(
                 title: "Tags", singular: "tag",
                 entryID: "editor.\(model.descriptor.key.rawValue).\(key).add",
                 tokens: split.tags, draft: $newToken,
                 normalize: { $0.trimmingCharacters(in: .whitespaces) }
             ) { writeProductTags(tags: $0, collections: split.collections) }
-            tokenEditor(
+            TokenListRow(
                 title: "Collections", singular: "collection",
                 entryID: "editor.\(model.descriptor.key.rawValue).\(key).collection.add",
                 tokens: split.collections,
@@ -401,38 +537,6 @@ struct EntityFieldControl: View {
 
     /// A list of removable tokens with an entry field. `normalize` shapes a typed entry; an empty
     /// or repeated one is ignored.
-    private func tokenEditor(
-        title: String, singular: String, entryID: String,
-        tokens: [String], draft: Binding<String>, normalize: @escaping (String) -> String,
-        commit: @escaping ([String]) -> Void
-    ) -> some View {
-        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-            Text(title).font(.fieldGuideLabel).foregroundStyle(.secondary)
-            ForEach(tokens, id: \.self) { token in
-                HStack {
-                    Text(token)
-                    Spacer()
-                    Button("Remove", systemImage: "xmark.circle.fill") {
-                        commit(tokens.filter { $0 != token })
-                    }
-                    .labelStyle(.iconOnly)
-                    .foregroundStyle(.secondary)
-                    .buttonStyle(.borderless)
-                    .accessibilityLabel("Remove \(token)")
-                }
-                .frame(minHeight: FieldGuideTokens.touchTarget)
-            }
-            TextField("Add \(singular)", text: draft)
-                .accessibilityIdentifier(entryID)
-                .onSubmit {
-                    let entry = normalize(draft.wrappedValue)
-                    guard !entry.isEmpty, !tokens.contains(entry) else { return }
-                    commit(tokens + [entry])
-                    draft.wrappedValue = ""
-                }
-        }
-    }
-
     // MARK: - Dates
 
     /// A `date` control writes `yyyy-MM-dd` for a `date` field and an ISO instant for a
@@ -490,5 +594,60 @@ struct EntityFieldControl: View {
         Binding(
             get: { value.stringValue ?? "" },
             set: { model.draft[key] = $0.isEmpty ? .null : .string($0) })
+    }
+}
+
+/// A token list as one standard labelled row (the names, or None) that discloses its removable
+/// tokens and entry field, so it lines up with the editor's other `LabeledContent` rows.
+private struct TokenListRow: View {
+    let title: String
+    let singular: String
+    let entryID: String
+    let tokens: [String]
+    @Binding var draft: String
+    let normalize: (String) -> String
+    let commit: ([String]) -> Void
+    @State private var expanded = false
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $expanded) {
+            ForEach(tokens, id: \.self) { token in
+                HStack {
+                    Text(token)
+                    Spacer()
+                    Button("Remove", systemImage: "xmark.circle.fill") {
+                        commit(tokens.filter { $0 != token })
+                    }
+                    .labelStyle(.iconOnly)
+                    .foregroundStyle(.secondary)
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Remove \(token)")
+                }
+                .frame(minHeight: FieldGuideTokens.touchTarget)
+            }
+            TextField("Add \(singular)", text: $draft)
+                .accessibilityIdentifier(entryID)
+                .onSubmit {
+                    let entry = normalize(draft)
+                    guard !entry.isEmpty, !tokens.contains(entry) else { return }
+                    commit(tokens + [entry])
+                    draft = ""
+                }
+        } label: {
+            LabeledContent(title) {
+                Text(tokens.isEmpty ? "None" : tokens.joined(separator: ", "))
+                    .foregroundStyle(tokens.isEmpty ? .secondary : FieldGuideTokens.graphite)
+                    .lineLimit(2)
+            }
+        }
+    }
+}
+
+#Preview {
+    @Previewable @State var draft = ""
+    Form {
+        TokenListRow(
+            title: "Locations", singular: "location", entryID: "preview.add",
+            tokens: ["Main stage", "Camp"], draft: $draft, normalize: { $0 }, commit: { _ in })
     }
 }

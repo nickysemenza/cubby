@@ -953,6 +953,13 @@ export default defineEntity({
       "sourceRefs",
       "notes",
     ],
+    rows: {
+      settlementRefs: {
+        label: "Settlement references",
+        path: [{ edge: "EntityExternalId.entityId", direction: "incoming" }],
+        where: { kind: "settlement_ref" },
+      },
+    },
     derived: {
       merchant: { type: "text" },
       // Allocated to a live Purchase (not the mirror column, which is NULL
@@ -976,15 +983,9 @@ export default defineEntity({
         type: "enum",
         options: descriptorProcessors.map((processor) => processor.value),
       },
-      sourceRefs: {
-        predicate: "multiselect",
-        reason:
-          "Matches a live settlement reference's source, together with externalId on the same reference",
-      },
-      externalId: {
-        predicate: "multiselect",
-        reason: "Matches the external id of any live settlement reference",
-      },
+      // Both match on the same live settlement reference.
+      sourceRefs: { via: "settlementRefs.source" },
+      externalId: { via: "settlementRefs.externalId" },
     },
     sort: {
       fields: [
@@ -1143,14 +1144,12 @@ export default defineEntity({
         kind: "multiselect",
         derived: true,
         placeholder: "Filter allocation integrity...",
-        urlOnly: true,
       },
       {
         columnId: "descriptorProcessor",
         kind: "multiselect",
         derived: true,
         placeholder: "Filter payment processor...",
-        urlOnly: true,
       },
       {
         columnId: "transaction",
@@ -1160,7 +1159,7 @@ export default defineEntity({
         placeholder: "Search transactions...",
         deriveSchema: true,
         schemaDescription: "Substring match on merchant or raw description",
-        stored: { columns: ["merchant", "rawDescription"] },
+        anyOf: ["merchant", "rawDescription"],
       },
       {
         columnId: "kind",
@@ -1226,7 +1225,6 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by purchase...",
         brandRef: { entity: "purchase" },
-        urlOnly: true,
         derived: "purchase",
       },
       {
@@ -1268,20 +1266,18 @@ export default defineEntity({
         kind: "multiselect",
         derived: true,
         placeholder: "Filter by external id...",
-        urlOnly: true,
       },
       {
         columnId: "merchant",
         kind: "text",
         placeholder: "Filter by merchant...",
         deriveSchema: true,
-        stored: true,
+        anyOf: ["merchant"],
       },
       {
         columnId: "transactionDate",
         kind: "range",
         placeholder: "Filter by transaction date...",
-        urlOnly: true,
         deriveSchema: true,
         stored: true,
       },
@@ -1311,37 +1307,31 @@ export default defineEntity({
         columnId: "amountMin",
         kind: "text",
         placeholder: "Minimum amount...",
-        urlOnly: true,
       },
       {
         columnId: "amountMax",
         kind: "text",
         placeholder: "Maximum amount...",
-        urlOnly: true,
       },
       {
         columnId: "transactionDateFrom",
         kind: "text",
         placeholder: "Transaction date from...",
-        urlOnly: true,
       },
       {
         columnId: "transactionDateTo",
         kind: "text",
         placeholder: "Transaction date to...",
-        urlOnly: true,
       },
       {
         columnId: "postedDateFrom",
         kind: "text",
         placeholder: "Posted date from...",
-        urlOnly: true,
       },
       {
         columnId: "postedDateTo",
         kind: "text",
         placeholder: "Posted date to...",
-        urlOnly: true,
       },
       {
         columnId: "related:financialTransaction.vendor",
@@ -1355,13 +1345,11 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by related vendor id...",
         brandRef: { entity: "vendor" },
-        urlOnly: true,
       },
       {
         columnId: "vendorPresenceFilter",
         kind: "presence",
         placeholder: "Filter related vendor presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:financialTransaction.expenses",
@@ -1375,13 +1363,11 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by related expenses id...",
         brandRef: { entity: "expense" },
-        urlOnly: true,
       },
       {
         columnId: "expensePresenceFilter",
         kind: "presence",
         placeholder: "Filter related expenses presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:financialTransaction.products",
@@ -1395,13 +1381,11 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by related products id...",
         brandRef: { entity: "product" },
-        urlOnly: true,
       },
       {
         columnId: "productPresenceFilter",
         kind: "presence",
         placeholder: "Filter related products presence...",
-        urlOnly: true,
       },
     ],
   },

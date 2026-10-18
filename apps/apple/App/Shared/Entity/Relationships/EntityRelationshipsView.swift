@@ -7,6 +7,8 @@ import SwiftUI
 struct EntityRelationshipsSection: View {
     let model: EntityRelationshipsModel
     let onAccepted: (RelationshipAcceptance) -> Void
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(AppModel.self) private var appModel
 
     var body: some View {
         Group {
@@ -15,10 +17,11 @@ struct EntityRelationshipsSection: View {
             {
                 LoadingIndicator(label: "Loading relationships")
             } else {
+                connections
                 recommendations
                 if let graph = model.graph {
                     RelationshipDepthPicker(model: model)
-                    EmbeddedGraphExplorer(graph: graph).id(graph.root)
+                    EmbeddedGraphExplorer(graph: graph).id(graph)
                     completion
                 }
             }
@@ -43,6 +46,70 @@ struct EntityRelationshipsSection: View {
         .onChange(of: model.acceptError) { _, error in
             if let error {
                 Diagnostics.report(RelationshipDisplayError(error), context: "relationships.accept")
+            }
+        }
+        .onChange(of: model.connectionError) { _, error in
+            if let error {
+                Diagnostics.report(RelationshipDisplayError(error), context: "relationships.connections")
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active, model.activity == .idle, !model.connectionControlsDisabled {
+                model.requestRefresh()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var connections: some View {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
+            Text("Suggested connections").font(.headline)
+            Button {
+                requestConnectionDiscovery(model: model)
+            } label: {
+                Label(
+                    model.isFindingConnections ? "Finding connections…" : "Find connections",
+                    systemImage: "magnifyingglass"
+                )
+                .frame(minHeight: FieldGuideTokens.touchTarget)
+            }
+            .disabled(model.connectionControlsDisabled)
+            .accessibilityIdentifier("relationships.findConnections")
+            if let runID = model.discoveryRunID {
+                if model.isFindingConnections {
+                    ProgressView("Discovery Run: \(model.discoveryRunStatus ?? "starting")")
+                }
+                Button("Open discovery Run", systemImage: "arrow.up.right.square") {
+                    appModel.navigator.openRecord(.init(key: .run, id: runID))
+                }
+                .frame(minHeight: FieldGuideTokens.touchTarget)
+                if !model.isFindingConnections, model.discoveryRunStatus != "completed" {
+                    Button("Retry discovery status") { requestConnectionDiscoveryObservation(model: model) }
+                        .disabled(model.connectionControlsDisabled)
+                        .frame(minHeight: FieldGuideTokens.touchTarget)
+                }
+            }
+            if let document = model.connectionDocument {
+                if document.proposals.isEmpty {
+                    Text(
+                        model.isFindingConnections
+                            ? "Discovery is still running. Connections will appear when it finishes."
+                            : "No pending connections. Find connections to check current evidence."
+                    )
+                    .font(.callout).foregroundStyle(.secondary)
+                }
+                ForEach(document.proposals, id: \.review.assessmentId) { proposal in
+                    ConnectionProposalRow(proposal: proposal, model: model, onAccepted: onAccepted)
+                }
+            }
+            if let error = model.connectionError {
+                InlineLoadFailure(message: error) {
+                    if model.discoveryRunID != nil {
+                        requestConnectionDiscoveryObservation(model: model)
+                    } else {
+                        model.requestRefresh()
+                    }
+                }
             }
         }
     }
@@ -92,6 +159,86 @@ struct EntityRelationshipsSection: View {
     }
 }
 
+private struct ConnectionProposalRow: View {
+    let proposal: ConnectionProposal
+    let model: EntityRelationshipsModel
+    let onAccepted: (RelationshipAcceptance) -> Void
+    @Environment(AppModel.self) private var appModel
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
+            Text(proposal.label).font(.headline)
+            RelationshipRecordButton(
+                node: .init(
+                    reference: .init(proposal.source), label: proposal.sourceName ?? proposal.source.entityId)
+            )
+            Label("Connect to", systemImage: "arrow.down")
+                .font(.caption).foregroundStyle(.secondary)
+            RelationshipRecordButton(
+                node: .init(
+                    reference: .init(proposal.target), label: proposal.targetName ?? proposal.target.entityId)
+            )
+            proposalReasons(proposal.evidence.reasons)
+            ForEach(proposal.evidence.contradictions, id: \.self) { reason in
+                Label("Conflict: \(reason)", systemImage: "exclamationmark.triangle")
+                    .font(.callout).fixedSize(horizontal: false, vertical: true)
+            }
+            ForEach(proposal.evidence.unknowns, id: \.self) { reason in
+                Label("Unknown: \(reason)", systemImage: "questionmark.circle")
+                    .font(.callout).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if model.reviewingConnectionID == proposal.review.assessmentId {
+                ProgressView("Saving review…")
+            }
+            if proposal.requiresIdentityReview {
+                Text("Choose the survivor and inspect merge effects in Product identity review.")
+                    .font(.callout).foregroundStyle(.secondary)
+                Button(
+                    "Review Product identity on the web", systemImage: "safari", action: openIdentityReview
+                )
+                .disabled(model.connectionControlsDisabled)
+                .frame(minHeight: FieldGuideTokens.touchTarget)
+            } else {
+                Button("Confirm connection") { review(.correct) }
+                    .disabled(model.connectionControlsDisabled || !proposal.evidence.contradictions.isEmpty)
+                    .frame(minHeight: FieldGuideTokens.touchTarget)
+            }
+            Menu("Other review actions") {
+                Button("Wrong connection") { review(.wrong) }
+                Button("Uncertain") { review(.uncertain) }
+                Button("Dismiss") { review(.dismissed) }
+                if proposal.review.suppression != nil {
+                    Button("Never suggest this connection") { review(.dismissed, persistent: true) }
+                }
+            }
+            .disabled(model.connectionControlsDisabled)
+            .frame(minHeight: FieldGuideTokens.touchTarget)
+        }
+        .padding(.vertical, FieldGuideTokens.Space.xs)
+        .accessibilityElement(children: .contain)
+    }
+
+    private func review(_ verdict: ConnectionReviewVerdict, persistent: Bool = false) {
+        requestConnectionReview(
+            model: model, proposal: proposal, verdict: verdict, persistent: persistent, onAccepted: onAccepted
+        )
+    }
+
+    private func openIdentityReview() {
+        var components = URLComponents(
+            url: appModel.baseURL.appending(path: "recommendations/workbench"),
+            resolvingAgainstBaseURL: false)
+        components?.queryItems = [
+            .init(name: "kind", value: "product-match"),
+            .init(name: "source", value: proposal.source.entityId),
+            .init(name: "candidate", value: proposal.target.entityId),
+        ]
+        if let url = components?.url { openURL(url) }
+    }
+}
+
 private struct RelationshipRecommendationGroupView: View {
     let group: EntityRecommendationGroup
     let basisKey: String
@@ -106,7 +253,7 @@ private struct RelationshipRecommendationGroupView: View {
                 ExpenseProjectProposalView(
                     proposal: proposal,
                     isAccepting: model.acceptingRecommendationID == proposal.id,
-                    isDisabled: model.acceptingRecommendationID != nil || model.activity != .idle,
+                    isDisabled: model.connectionControlsDisabled,
                     accept: { accept(.expenseProject(proposal)) }
                 )
             }
@@ -116,7 +263,7 @@ private struct RelationshipRecommendationGroupView: View {
                 InventoryPlacementProposalView(
                     proposal: proposal,
                     isAccepting: model.acceptingRecommendationID == proposal.id,
-                    isDisabled: model.acceptingRecommendationID != nil || model.activity != .idle,
+                    isDisabled: model.connectionControlsDisabled,
                     accept: { accept(.inventoryPlacement(proposal)) }
                 )
             }
@@ -172,8 +319,7 @@ struct RelationshipRecommendationReviewSheet: View {
 
     private var canAccept: Bool {
         model.recommendationDocument?.basisKey == review.basisKey
-            && model.acceptingRecommendationID == nil
-            && model.activity == .idle
+            && !model.connectionControlsDisabled
     }
 
     var body: some View {
@@ -573,6 +719,25 @@ struct RelationshipGraphNode: View {
     .environment(PreviewFixtures.signedInModel())
 }
 
+#Preview("Connections — Review") {
+    let source = EntityRef(entity: .expense, id: "EXP-2345")
+    let proposal = ConnectionProposal(
+        relation: .expenseProject,
+        source: .init(source),
+        target: .init(EntityRef(entity: .project, id: "PRJ-2345")),
+        label: "Assign to workshop shelves",
+        evidence: .init(
+            reasons: ["Purchased during the project period"], contradictions: [],
+            unknowns: ["The receipt does not name the project"]),
+        review: .init(assessmentId: "00000000-0000-4000-8000-000000000001"),
+        fingerprint: "preview-evidence",
+        integration: .connectionReview(.init(kind: .connectionReview)))
+    return RelationshipPreviewHost(
+        model: EntityRelationshipsModel(
+            client: PreviewEntityRelationshipsClient(),
+            initialConnections: .init(source: .init(source), proposals: [proposal])))
+}
+
 private struct RelationshipPreviewHost: View {
     let model: EntityRelationshipsModel
     var sourceToLoad: EntityRef?
@@ -702,6 +867,19 @@ private actor PreviewEntityRelationshipsClient: EntityRelationshipsClient {
     let mode: Mode
 
     init(mode: Mode = .error) { self.mode = mode }
+
+    func storedConnections(_ input: EntityGraphRootInput) async throws -> ConnectionDiscoveryOut {
+        try await waitOrThrow()
+    }
+    func discoverConnections(_ input: EntityGraphRootInput) async throws -> ConnectionDiscoveryOut {
+        try await waitOrThrow()
+    }
+    func discoveryRunSnapshot(runID: RunShortcode) throws -> RunWorkSnapshotOutput {
+        throw URLError(.resourceUnavailable)
+    }
+    func reviewAssessment(_ input: AssessmentReviewInput) throws -> AssessmentReviewOut {
+        throw URLError(.resourceUnavailable)
+    }
 
     func exploreRelationships(root: EntityRef, depth: Int) async throws -> EntityGraph {
         try await waitOrThrow()

@@ -52,6 +52,8 @@ export const workQueueSourceSchema = z.enum([
   "account",
   "problem",
   "suggestion",
+  /** Pending statement Transaction suggestions, one row per account. */
+  "statement_suggestion",
 ]);
 
 const workRecordRef = z.object({

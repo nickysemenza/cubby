@@ -291,7 +291,6 @@ const addBackFilters = ({ current, views, gaps }: DeriveState) => {
         kind: "idMulti",
         placeholder: `Filter by ${owner.names.singular.toLowerCase()}...`,
         brandRef: { entity: owner.key },
-        urlOnly: true,
         deriveSchema: true,
         stored: true,
       };

@@ -1,27 +1,6 @@
 {
   "email": ["purchaseId", "vendorAccountId", "vendorId"],
-  "expense": [
-    "costTypeFilter",
-    "ledgerPartyId",
-    "projectFilter",
-    "spendingCategoryFilter",
-    "tradeFilter"
-  ],
-  "financialAccount": ["externalAccountId", "last4", "source"],
-  "financialTransaction": ["externalId", "sourceRefs"],
-  "gardenEntry": ["journalPlantingId"],
-  "image": ["runId", "targetState"],
-  "imageJob": ["submissionId"],
   "inventory": ["effectiveOwner"],
-  "product": [
-    "anyGtin",
-    "effectiveOwner",
-    "externalIdSource",
-    "taskDue",
-    "taskOpen",
-    "taskStatus"
-  ],
-  "project": ["attention", "dateRange", "search"],
-  "task": ["search"],
-  "wish": ["search"]
+  "product": ["effectiveOwner"],
+  "project": ["dateRange"]
 }

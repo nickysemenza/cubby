@@ -5,7 +5,7 @@ import type { SelectedFields } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { expenseAggregateFields } from "~/server/db/computed/expense-aggregate-sql";
-import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
+import { unwrapDb } from "~/server/db/helpers";
 import { expense } from "~/server/db/schema";
 import type { ExpenseSpendingCategoryResolutionDraft } from "~/server/domains/expense/repo/expense-category-resolution";
 
@@ -22,18 +22,22 @@ import {
 import type { ExpenseSpendingAllocationRow } from "./expense-spending-allocation";
 
 /** Each read declares its allocation dimensions before execution. Scope is
- * applied to rounded output shares, never to the complete sibling denominator. */
+ * applied to rounded output shares, never to the complete sibling denominator.
+ * Only `shares` exposes which principal line each share follows. */
 const derivedReads = {
-  shares: { categories: true, projects: true },
-  projects: { categories: false, projects: true },
-  categories: { categories: true, projects: true },
-  costs: { categories: false, projects: true },
-  membership: { categories: false, projects: false },
-  names: { categories: false, projects: true },
-  categoryNames: { categories: true, projects: true },
-  presence: { categories: false, projects: true },
-  categoryEvidence: { categories: true, projects: true },
-} satisfies Record<string, { categories: boolean; projects: boolean }>;
+  shares: { categories: true, projects: true, principals: true },
+  projects: { categories: false, projects: true, principals: false },
+  categories: { categories: true, projects: true, principals: false },
+  costs: { categories: false, projects: true, principals: false },
+  membership: { categories: false, projects: false, principals: false },
+  names: { categories: false, projects: true, principals: false },
+  categoryNames: { categories: true, projects: true, principals: false },
+  presence: { categories: false, projects: true, principals: false },
+  categoryEvidence: { categories: true, projects: true, principals: false },
+} satisfies Record<
+  string,
+  { categories: boolean; projects: boolean; principals: boolean }
+>;
 
 type DerivedRead = keyof typeof derivedReads;
 type DerivedReadOptions = {
@@ -62,12 +66,14 @@ export function expenseDerivedReadSql(
     derivedReads[read].categories ||
     scope?.spendingCategoryIds !== undefined ||
     scope?.categoryPresence !== undefined;
-  const trades = categories || scope?.trades !== undefined;
+  const trades =
+    categories ||
+    scope?.trades !== undefined ||
+    scope?.tradePresence !== undefined;
   const projects =
     derivedReads[read].projects ||
     scope?.projectIds !== undefined ||
-    scope?.presence !== undefined ||
-    scope?.membershipProjectIds !== undefined;
+    scope?.presence !== undefined;
   const condition = scope
     ? expenseAllocationScopeConditionSql("allocation", scope)
     : undefined;
@@ -77,17 +83,9 @@ export function expenseDerivedReadSql(
       categories,
       trades,
       projects,
+      principals: derivedReads[read].principals,
     });
-  const membership = scope?.membershipProjectIds;
-  const allocations =
-    membership === undefined
-      ? sql`SELECT allocation.* FROM (${source}) allocation WHERE ${condition ?? sql`true`}`
-      : sql`WITH derived_allocation AS MATERIALIZED (${source})
-      SELECT allocation.* FROM derived_allocation allocation
-      WHERE ${condition ?? sql`true`} AND allocation."expenseId" IN (
-        SELECT "expenseId" FROM derived_allocation
-        WHERE "projectId" = ANY(${uuidArrayParam(membership)})
-      )`;
+  const allocations = sql`SELECT allocation.* FROM (${source}) allocation WHERE ${condition ?? sql`true`}`;
   switch (read) {
     case "membership":
       return sql`SELECT "expenseId" FROM (${allocations}) member_share`;
@@ -325,9 +323,6 @@ export function expenseDerivedBatchesSql<
               ? [...scope.projectIds].sort()
               : undefined,
             presence: scope.presence,
-            membershipProjectIds: scope.membershipProjectIds
-              ? [...scope.membershipProjectIds].sort()
-              : undefined,
             spendingCategoryIds: scope.spendingCategoryIds
               ? [...scope.spendingCategoryIds].sort()
               : undefined,
@@ -370,7 +365,7 @@ export function expenseDerivedBatchesSql<
       source: sql`SELECT * FROM expense_derived_allocation`,
     });
     const costs = expenseDerivedReadSql("costs", {
-      scope: scope ? { ...scope, membershipProjectIds: undefined } : undefined,
+      scope,
       source: sql`SELECT * FROM ${shareName}`,
     });
     return [

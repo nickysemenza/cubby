@@ -94,8 +94,8 @@ struct EntityFilterTests {
             shape: "integer", entity: .product, wire: "expenseCountMin", value: ["2"],
             expected: ["expenseCountMin": 2]),
         Row(
-            shape: "boolean", entity: .product, wire: "taskOpenOnly", value: ["true"],
-            expected: ["taskOpenOnly": true]),
+            shape: "boolean", entity: .product, wire: "inventoryMultiplicity", value: ["true"],
+            expected: ["inventoryMultiplicity": true]),
         Row(
             shape: "string enum", entity: .product, wire: "imagePresenceFilter", value: ["none"],
             expected: ["imagePresenceFilter": "none"]),
@@ -119,8 +119,8 @@ struct EntityFilterTests {
             shape: "strings minLength", entity: .financialAccount, wire: "source",
             value: ["synthetic-bank"], expected: ["source": ["synthetic-bank"]]),
         Row(
-            shape: "nested", entity: .expense, wire: "projectScopeKinds",
-            value: ["garden"], expected: ["projectScope": ["kinds": ["garden"]]]),
+            shape: "nested", entity: .expense, wire: "projectScopeKind",
+            value: ["garden"], expected: ["projectScope": ["kind": ["garden"]]]),
     ]
 
     @Test(arguments: rows)

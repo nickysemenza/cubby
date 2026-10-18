@@ -31,6 +31,7 @@ import {
   type EntityMutationOptionsFactory,
 } from "~/entity/entity-contracts";
 import { featureRegistry } from "~/entity/feature-registry";
+import { ConnectionSuggestions } from "~/entity/relatedness/connection-suggestions";
 import {
   EntityRecommendations,
   type EntityRecommendationOperations,
@@ -505,19 +506,22 @@ function RelationshipRecommendations({
   });
 
   return (
-    <EntityRecommendations
-      source={source}
-      operations={operations}
-      exclude={exclude}
-      pending={expenseUpdate.isPending || inventoryPlacement.isPending}
-      onAcceptExpenseProject={async (proposal) => {
-        await expenseUpdate.mutateAsync({
-          id: proposal.expenseId,
-          data: { projectId: proposal.target.id },
-        });
-      }}
-      onAcceptInventoryPlacement={inventoryPlacement.accept}
-    />
+    <>
+      <ConnectionSuggestions source={source} />
+      <EntityRecommendations
+        source={source}
+        operations={operations}
+        exclude={exclude}
+        pending={expenseUpdate.isPending || inventoryPlacement.isPending}
+        onAcceptExpenseProject={async (proposal) => {
+          await expenseUpdate.mutateAsync({
+            id: proposal.expenseId,
+            data: { projectId: proposal.target.id },
+          });
+        }}
+        onAcceptInventoryPlacement={inventoryPlacement.accept}
+      />
+    </>
   );
 }
 

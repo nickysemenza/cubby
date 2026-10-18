@@ -1,3 +1,4 @@
+import type { GardenEntryFilters } from "@cubby/schemas/garden-entry";
 import { and, eq } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
@@ -317,6 +318,34 @@ describe("garden workflows", () => {
     expect(ids.has(preStart.id)).toBe(false);
     expect(ids.has(postFinish.id)).toBe(false);
     expect(ids.has(otherBedEntry.id)).toBe(false);
+
+    // Through the row set, the journal filter also excludes and reads
+    // presence: an entry in no planting's journal has no value.
+    const listedIds = async (filters: GardenEntryFilters) =>
+      new Set(
+        (
+          await gardenEntryList(
+            ctx.db,
+            filters,
+            { pageIndex: 0, pageSize: 50 },
+            [],
+          )
+        ).data.map((row) => row.id),
+      );
+    const excluded = await listedIds({ journalPlantingIdExclude: [target.id] });
+    expect(
+      [direct, inWindowWholeArea, preStart, postFinish, otherBedEntry].map(
+        (entry) => excluded.has(entry.id),
+      ),
+    ).toEqual([false, false, true, true, true]);
+    const unjournaled = await listedIds({
+      journalPlantingIdPresenceFilter: "none",
+    });
+    expect(
+      [direct, inWindowWholeArea, preStart, postFinish, otherBedEntry].map(
+        (entry) => unjournaled.has(entry.id),
+      ),
+    ).toEqual([false, false, true, true, true]);
   });
 
   it("replaces planting associations transactionally and audits unordered sets", async () => {

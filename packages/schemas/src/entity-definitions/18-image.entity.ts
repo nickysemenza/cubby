@@ -628,20 +628,20 @@ export default defineEntity({
     ],
     bulk: [],
     audit: [],
+    rows: {
+      importTargets: {
+        label: "Import targets",
+        path: [{ edge: "PhotoRunImage.imageId", direction: "incoming" }],
+      },
+    },
     derived: {
       // Referenced by a live owner (an attachment, an order document).
       referenced: { type: "boolean" },
       processingIssue: { type: "enum", options: ["failed", "review_needed"] },
       uploadedAgeHours: { type: "number" },
-      runId: {
-        predicate: "idMulti",
-        reason:
-          "Matches an import-run target row, together with targetState on the same row",
-      },
-      targetState: {
-        predicate: "multiselect",
-        reason: "Matches the state of any import-run target row",
-      },
+      // Both match on the same import-run target row.
+      runId: { via: "importTargets.run" },
+      targetState: { via: "importTargets.state" },
     },
     sort: {
       fields: ["createdAt", "updatedAt", "filename", "size", "status"],
@@ -722,7 +722,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Filter by filename...",
         deriveSchema: true,
-        stored: true,
+        anyOf: ["filename"],
         schemaDescription: "Filter by filename (substring)",
       },
       {
@@ -804,7 +804,6 @@ export default defineEntity({
         derived: true,
         placeholder: "Filter by import run...",
         brandRef: { entity: "run" },
-        urlOnly: true,
       },
       {
         columnId: "targetState",
@@ -885,7 +884,6 @@ export default defineEntity({
         placeholder: "Filter by captured by...",
         brandRef: { entity: "ledgerParty" },
         currentMember: true,
-        urlOnly: true,
         deriveSchema: true,
         stored: true,
       },
@@ -893,7 +891,6 @@ export default defineEntity({
         columnId: "uploadedAgeHours",
         kind: "range",
         placeholder: "Filter by upload age...",
-        urlOnly: true,
         deriveSchema: true,
         derived: true,
         range: {

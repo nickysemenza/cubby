@@ -1,4 +1,8 @@
-import { type ExpenseId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
+  type ExpenseId,
+  parseShortcodeFor,
+  type ProjectId,
+} from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { projectListItemOut } from "@cubby/schemas/project";
 import { MAX_PROJECT_TREE_DEPTH } from "@cubby/schemas/project";
@@ -7,7 +11,7 @@ import type {
   ProjectFilters,
   ProjectOptionsOut,
 } from "@cubby/schemas/project";
-import { and, asc, eq, inArray, or, type SQL, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
@@ -16,9 +20,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import {
   getDb,
-  formatSearchTerm,
   isTransaction,
-  textArrayMatches,
   type ListReadIntent,
   notDeleted,
 } from "~/server/db/helpers";
@@ -37,13 +39,21 @@ import {
 } from "~/server/generic/list/repo/list-projection";
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 
-import { projectContentDates, projectDependencyIds } from "./analytics";
+import {
+  projectContentDates,
+  projectContentDatesExcluding,
+  projectDependencyIds,
+} from "./analytics";
 import {
   computeAttentionItems,
   projectAttentionFilterTypes,
 } from "./attention";
 import { dashboardProjectDateCondition } from "./dashboard-shared";
-import { EMPTY_PROJECT_DATE_WINDOW, hydrateProjectRow } from "./helpers";
+import {
+  EMPTY_PROJECT_DATE_WINDOW,
+  hydrateProjectRow,
+  type ProjectContentDates,
+} from "./helpers";
 import {
   aggregateSubtreeDates,
   loadProjectDateWindows,
@@ -65,8 +75,6 @@ const projectIdsWithImages = qb
     and(eq(image.id, entityAttachment.imageId), notDeleted(image)),
   )
   .where(and(notDeleted(entityAttachment), displayableImageWhere));
-
-const effectiveLocationsSql = effectiveFieldSql("project", "locations");
 
 // The tree and attention reads take the request's Database handle; a project
 // list never reads inside a write transaction.
@@ -97,26 +105,20 @@ const projectCompletion = listPrepare(async (db) => {
   return { tree, dateWindows };
 });
 
-const projectScaffold = listScaffold("project", project, {
+/**
+ * Each project-grain attention type's list filter value. Read on render, not
+ * at load: task and expense lists import `projectScaffold` for their project
+ * scope, and `attention.ts` reaches the task list (through task
+ * actionability) before its own exports exist.
+ */
+const attentionFilterOf = (type: string) =>
+  Object.entries(projectAttentionFilterTypes).find(
+    ([, attention]) => attention === type,
+  )?.[0];
+
+export const projectScaffold = listScaffold("project", project, {
   derived: {
     image: inArray(project.id, projectIdsWithImages),
-    search: (term) =>
-      or(
-        formatSearchTerm(project.name, term),
-        formatSearchTerm(project.notes, term),
-        textArrayMatches(effectiveLocationsSql, term),
-      ),
-    attention: projectAttention.predicate((items, { values }) => {
-      const types = new Set<string>(
-        Object.entries(projectAttentionFilterTypes)
-          .filter(([filter]) => values.includes(filter))
-          .map(([, type]) => type),
-      );
-      const codes = items
-        .filter((item) => types.has(item.type))
-        .map((item) => item.entityId);
-      return codes.length ? inArray(project.shortcode, codes) : sql`false`;
-    }),
     dateRange: ({ from, to }) =>
       dashboardProjectDateCondition({
         dateFrom: typeof from === "string" ? from : undefined,
@@ -155,6 +157,19 @@ const projectScaffold = listScaffold("project", project, {
       ))) FROM date_tree node
     )`,
   },
+  rows: {
+    attentionItems: projectAttention.rows((items) => {
+      const rows = items.flatMap((item) => {
+        const filter = attentionFilterOf(item.type);
+        return filter === undefined ? [] : [sql`(${item.entityId}, ${filter})`];
+      });
+      return rows.length === 0
+        ? sql`SELECT NULL::uuid AS "owner", NULL::text AS "type" WHERE false`
+        : sql`SELECT p."id" AS "owner", item."type"
+          FROM (VALUES ${sql.join(rows, sql`, `)}) item("code", "type")
+          JOIN "Project" p ON p."shortcode" = item."code"`;
+    }),
+  },
 });
 
 /**
@@ -177,23 +192,58 @@ export const projectNameOptions = async (
   db: Database,
   excludeExpenseId?: ExpenseId,
 ): Promise<ProjectOptionsOut[]> => {
+  if (excludeExpenseId)
+    return (
+      (await projectNameOptionsExcluding(db, [excludeExpenseId])).get(
+        excludeExpenseId,
+      ) ?? []
+    );
   const [rows, contentDates] = await Promise.all([
-    getDb(db)
-      .select({
-        id: project.id,
-        shortcode: project.shortcode,
-        name: project.name,
-        emoji: project.emoji,
-        parentProjectId: project.parentProjectId,
-        startDate: project.startDate,
-        endDate: project.endDate,
-      })
-      .from(project)
-      .where(notDeleted(project))
-      .orderBy(asc(project.name)),
-    projectContentDates(db, undefined, excludeExpenseId),
+    projectOptionRows(db),
+    projectContentDates(db),
   ]);
+  return projectOptions(rows, contentDates);
+};
 
+/** `projectNameOptions` once per excluded Expense, sharing one roster read
+ * and one allocation pass across the set. */
+export const projectNameOptionsExcluding = async (
+  db: Database,
+  excludeExpenseIds: readonly ExpenseId[],
+): Promise<Map<ExpenseId, ProjectOptionsOut[]>> => {
+  if (excludeExpenseIds.length === 0) return new Map();
+  const [rows, contentDates] = await Promise.all([
+    projectOptionRows(db),
+    projectContentDatesExcluding(db, excludeExpenseIds),
+  ]);
+  return new Map(
+    excludeExpenseIds.map((id) => [
+      id,
+      projectOptions(rows, contentDates.get(id) ?? new Map()),
+    ]),
+  );
+};
+
+const projectOptionRows = (db: Database) =>
+  getDb(db)
+    .select({
+      id: project.id,
+      shortcode: project.shortcode,
+      name: project.name,
+      emoji: project.emoji,
+      parentProjectId: project.parentProjectId,
+      startDate: project.startDate,
+      endDate: project.endDate,
+    })
+    .from(project)
+    .where(notDeleted(project))
+    // Recommendation evidence fingerprints this order; the id breaks name ties.
+    .orderBy(asc(project.name), asc(project.id));
+
+const projectOptions = (
+  rows: Awaited<ReturnType<typeof projectOptionRows>>,
+  contentDates: Map<ProjectId, ProjectContentDates>,
+): ProjectOptionsOut[] => {
   const windows = aggregateSubtreeDates(rows, contentDates);
   return rows.map((row) => {
     const window = windows.get(row.id) ?? EMPTY_PROJECT_DATE_WINDOW;

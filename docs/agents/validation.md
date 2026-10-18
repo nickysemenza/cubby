@@ -56,6 +56,16 @@ option for one spec. `workerdProfile` owns intentional peer/queue differences.
 
 ## During implementation
 
+Rebase onto freshly fetched `origin/main` before running any typecheck,
+generator, or test, and again before pushing: results from a stale base miss
+migrations, generated artifacts, and ratchets (layout counts, schema budgets)
+that main has since changed, so they are not evidence for the merge.
+
+Construct synthetic domain fixtures through the supported `createRepoEntity`
+writer roster. For other entities, use the owning `create…Fixture` and
+`make…Input` helpers so required defaults survive. Create Runs with `ensureRun`
+and an actor; tests of system scheduling must seed `systemActor().userId`.
+
 Test subprocesses invoke Node/the installed tool directly and inherit the
 necessary parent environment. Never invoke a package manager from a test: its
 dependency verification can install or prune modules under concurrent suites.
@@ -72,9 +82,10 @@ local native `sim-e2e` artifacts; no custom bundle is required for every E2E
 journey or runtime acquisition.
 
 Run one affected E2E scenario when it exposes the behavior. While iterating on
-web code, run `pnpm test:related src/...` for the fast-tier tests that import
-the edited files, or `pnpm test:changed` for everything changed since
-`origin/main`; `pnpm test:file src/...` runs named test files. Run them from
+web code, run `pnpm test:changed` for the fast-tier tests affected by changes
+since `origin/main`; `pnpm test:file src/...` runs named test files. Do not use
+Vitest's own `related` or `run --changed`: selecting and running in one
+process fails `ui` tests falsely. Run them from
 the repository root; paths are relative to `apps/web`. For PostgreSQL
 contracts use `pnpm test:postgres src/...`. Read failed tests from
 `apps/web/.vitest-results.json` before deciding what to change; do not rerun an

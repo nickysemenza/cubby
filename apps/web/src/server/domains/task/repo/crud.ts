@@ -74,10 +74,7 @@ import {
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import {
-  effectiveTaskTradeSql,
-  hydrateTaskInheritanceRows,
-} from "./task-project-inheritance";
+import { hydrateTaskInheritanceRows } from "./task-project-inheritance";
 
 type TaskUpdateAuditEntry = Exclude<AuditEntryInput, { action: "delete" }>;
 type TaskUpdateChanges = NonNullable<TaskUpdateAuditEntry["changes"]>;
@@ -252,7 +249,7 @@ async function assertEffectiveTaskTrade(
   id: TaskId,
 ): Promise<void> {
   const result = await tx.execute<{ trade: string | null }>(sql`
-    SELECT ${effectiveTaskTradeSql()} AS "trade"
+    SELECT ${effectiveFieldSql("task", "trade")} AS "trade"
     FROM "Task"
     WHERE "id" = ${id} AND "deletedAt" IS NULL
   `);
@@ -275,7 +272,7 @@ const taskEffectiveValues = async (tx: DrizzleTransaction, id: TaskId) => {
       ${effectiveFieldSql("task", "assigneeId")} AS "assigneeId",
       ${effectiveFieldSql("task", "projectId")} AS "projectId",
       ${effectiveFieldSql("task", "subjectProductId")} AS "subjectProductId",
-      ${effectiveTaskTradeSql()} AS "trade"
+      ${effectiveFieldSql("task", "trade")} AS "trade"
     FROM "Task"
     WHERE "id" = ${id} AND "deletedAt" IS NULL
   `);

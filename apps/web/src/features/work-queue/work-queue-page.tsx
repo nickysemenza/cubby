@@ -262,7 +262,17 @@ function suggestionReviewHref(row: QueueTableRow) {
   return `/ai?${search.toString()}`;
 }
 
+/** An account's statement Transaction suggestions open the grouped review. */
+function statementSuggestionSearch(row: QueueTableRow) {
+  if (row.source !== "statement_suggestion" || row.recordId === null)
+    return null;
+  return { tab: "suggestions" as const, account: row.recordId };
+}
+
 function queueHref(row: QueueTableRow) {
+  const statement = statementSuggestionSearch(row);
+  if (statement)
+    return `/statement-rows?${new URLSearchParams(statement).toString()}`;
   const review = suggestionReviewHref(row);
   if (review) return review;
   if (row.entity === null || row.recordId === null) return "/problems";
@@ -272,6 +282,17 @@ function queueHref(row: QueueTableRow) {
 }
 
 function WorkRecordLink({ row }: { row: QueueTableRow }) {
+  const statement = statementSuggestionSearch(row);
+  if (statement)
+    return (
+      <Link
+        to="/statement-rows"
+        search={statement}
+        className="block truncate font-medium"
+      >
+        {row.name}
+      </Link>
+    );
   if (row.entity !== null && row.suggestionField !== undefined)
     return (
       <Link
@@ -674,7 +695,10 @@ function WorkQueueTable() {
   const onRowClick = useCallback(
     (row: CubbyRow<QueueTableRow>) => {
       const { entity, suggestionField } = row.original;
-      if (canPreview(row)) previewClick(previewRow(row));
+      const statement = statementSuggestionSearch(row.original);
+      if (statement)
+        void navigate({ to: "/statement-rows", search: statement });
+      else if (canPreview(row)) previewClick(previewRow(row));
       else if (entity === "run" && row.original.recordId)
         void navigate({
           to: entities.run.routes.detail,

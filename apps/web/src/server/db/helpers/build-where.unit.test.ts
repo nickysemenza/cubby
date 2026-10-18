@@ -53,13 +53,6 @@ describe("buildWishWhere", () => {
   const where = (filters: WishFilters) =>
     Promise.resolve(renderWhereSql(buildWishWhere(filters)));
 
-  it("searches name, notes and candidate products in one OR", async () => {
-    const rendered = await where({ search: "kettle" });
-    expect(rendered).toContain('"Wish"."name" ilike');
-    expect(rendered).toContain('"Wish"."notes" ilike');
-    expect(rendered).toContain('p."manufacturer" ILIKE');
-  });
-
   it("filters candidates through the related view's productId", async () => {
     expect(
       await where({ productId: [parseShortcodeFor("product", "PRD-2345")] }),
@@ -91,23 +84,12 @@ describe("buildFinancialAccountWhere", () => {
       renderWhereSql,
     );
 
-  it("matches source and external account id on the same alias", async () => {
-    const rendered = await where({
-      source: "bank-export",
-      externalAccountId: "acct-1",
-    });
-    expect(rendered).toMatch(
-      /alias->>\$\d+ = \$\d+\s+AND alias->>'externalAccountId' = \$\d+/,
-    );
-  });
-
   it.each([
     {
       name: "identityKind",
       filters: { identityKind: "cash" as const },
       contains: '"identity"->>',
     },
-    { name: "last4", filters: { last4: "4242" }, contains: "card->>'last4'" },
     {
       name: "sourceAliasPresenceFilter",
       filters: { sourceAliasPresenceFilter: "none" as const },
@@ -138,16 +120,6 @@ describe("buildFinancialTransactionWhere", () => {
     buildFinancialTransactionWhere(mockWhereDatabase(), filters).then(
       renderWhereSql,
     );
-
-  it("matches source and external id on the same settlement reference", async () => {
-    const rendered = await where({
-      source: "bank-export",
-      externalId: "ext-1",
-    });
-    expect(rendered).toMatch(
-      /fx\."source" = \$\d+\s+AND fx\."externalId" = \$\d+/,
-    );
-  });
 
   it("filters purchases through live allocations, not the mirror column", async () => {
     const rendered = await where({
@@ -679,22 +651,17 @@ describe("buildExpenseWhereClause", () => {
     );
   });
 
-  it("applies the allocation scope once across allocation filters", async () => {
+  // The allocation filters match one share together, so the share
+  // relation is read once for the group, not once per filter.
+  it("reads the allocation shares once across allocation filters", async () => {
     const rendered = await where({
       trade: "electrical",
       costType: "materials",
     });
-    expect(rendered?.match(/member_share/g)).toHaveLength(1);
+    expect(rendered?.match(/row_set\."owner"/g)).toHaveLength(1);
   });
 
   it.each([
-    {
-      name: "ledgerPartyId",
-      filters: {
-        ledgerPartyId: [parseShortcodeFor("ledgerParty", "LPY-2345")],
-      },
-      contains: '"ExpenseAttribution" ea',
-    },
     {
       name: "costSign",
       filters: { costSign: "negative" as const },
@@ -790,11 +757,6 @@ describe("buildTaskWhere", () => {
   });
 
   it.each([
-    {
-      name: "search (name or inherited subject product)",
-      filters: { search: "filter" },
-      contains: '"Product"."name" ilike',
-    },
     {
       name: "completion",
       filters: { completion: "open" as const },

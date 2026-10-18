@@ -298,13 +298,18 @@ export default defineEntity({
       "notes",
       "harvestAmount",
     ],
+    rows: {
+      // The plantings whose journal holds the entry: its own live planting
+      // links, or for a whole-area entry (no planting links), every planting
+      // at its location whose active window holds its observed day.
+      journalPlantings: {
+        label: "Journal plantings",
+        repository: { planting: { reference: "planting" } },
+      },
+    },
     derived: {
       plantingId: { via: "plantings" },
-      journalPlantingId: {
-        predicate: "idMulti",
-        reason:
-          "A planting's journal also holds whole-area entries observed at its location while it was active",
-      },
+      journalPlantingId: { via: "journalPlantings.planting" },
     },
     sort: {
       fields: ["observedOn", "createdAt", "updatedAt", "kind"],
@@ -421,7 +426,6 @@ export default defineEntity({
         derived: true,
         placeholder: "Journal for planting...",
         brandRef: { entity: "planting" },
-        urlOnly: true,
       },
     ],
   },

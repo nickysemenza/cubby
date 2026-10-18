@@ -274,14 +274,12 @@ export default defineEntity({
     update: ["name", "notes", "candidateProductIds", "acquired"],
     bulk: [],
     audit: ["name", "notes", "acquiredAt", "candidateProductIds"],
-    // The midpoint of the candidates' price range.
     derived: {
+      // The midpoint of the candidates' price range.
       priceRange: { type: "number" },
-      search: {
-        predicate: "text",
-        reason:
-          "Searches the wish's name and notes and its candidate products' name, manufacturer and model",
-      },
+      candidateName: { via: "candidates.name" },
+      candidateManufacturer: { via: "candidates.manufacturer" },
+      candidateModel: { via: "candidates.model" },
     },
     sort: {
       fields: ["name", "acquiredAt", "priceRange", "createdAt", "updatedAt"],
@@ -331,7 +329,13 @@ export default defineEntity({
         placeholder: "Search wishlist...",
         deriveSchema: true,
         schemaFromRead: true,
-        derived: "search",
+        anyOf: [
+          "name",
+          "notes",
+          "candidateName",
+          "candidateManufacturer",
+          "candidateModel",
+        ],
       },
       {
         columnId: "acquiredAt",

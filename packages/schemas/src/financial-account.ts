@@ -46,7 +46,7 @@ export {
 export const financialAccountFilterFields = {
   ...financialAccountBaseFilterFields,
   identityKind: oneOrMany(financialAccountIdentityKind).optional(),
-  last4: last4.optional(),
+  last4: oneOrMany(last4).optional(),
   source: oneOrMany(z.string().min(1)).optional(),
   externalAccountId: oneOrMany(z.string().min(1)).optional(),
   sourceAliasPresenceFilter: presenceFilter,

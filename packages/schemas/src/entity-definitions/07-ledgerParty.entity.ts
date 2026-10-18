@@ -218,7 +218,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Search ledger parties...",
         deriveSchema: true,
-        stored: true,
+        anyOf: ["name"],
       },
       {
         columnId: "kind",
@@ -248,13 +248,11 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by related meals id...",
         brandRef: { entity: "meal" },
-        urlOnly: true,
       },
       {
         columnId: "mealPresenceFilter",
         kind: "presence",
         placeholder: "Filter related meals presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:ledgerParty.recipesEaten",
@@ -268,13 +266,11 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by related recipes id...",
         brandRef: { entity: "recipe" },
-        urlOnly: true,
       },
       {
         columnId: "recipePresenceFilter",
         kind: "presence",
         placeholder: "Filter related recipes presence...",
-        urlOnly: true,
       },
     ],
   },

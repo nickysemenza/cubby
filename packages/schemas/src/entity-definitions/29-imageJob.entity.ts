@@ -296,12 +296,21 @@ export default defineEntity({
       "createdAt",
       "updatedAt",
     ],
-    derived: {
-      submissionId: {
-        predicate: "text",
-        reason:
-          "A job joins every submission that scheduled or retried it, and a submission is not an entity",
+    rows: {
+      submissions: {
+        label: "Submissions",
+        path: [
+          { edge: "ImageProcessingSubmissionJob.jobId", direction: "incoming" },
+          {
+            edge: "ImageProcessingSubmissionJob.submissionId",
+            direction: "outgoing",
+          },
+        ],
       },
+    },
+    derived: {
+      // Every submission that scheduled or retried the job, not only its first.
+      submissionId: { via: "submissions.publicId" },
     },
     sort: { fields: ["createdAt", "completedAt", "state", "kind"] },
   },
@@ -394,9 +403,8 @@ export default defineEntity({
         // A job joins every submission that scheduled or retried it
         // (`ImageProcessingSubmissionJob`), so this is membership, not a column.
         columnId: "submissionId",
-        kind: "text",
+        kind: "multiselect",
         placeholder: "Filter by submission...",
-        urlOnly: true,
         derived: true,
       },
       {

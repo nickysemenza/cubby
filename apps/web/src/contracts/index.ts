@@ -16,7 +16,10 @@ export { dashboardContract } from "./dashboard.contract";
 export { dataQualityContract } from "./data-quality.contract";
 export { entityDetailContract } from "./entity-detail.contract";
 export { entityFilterOptionsContract } from "./entity-filter-options.contract";
-export { entityGraphContract } from "./entity-graph.contract";
+export {
+  connectionContract,
+  entityGraphContract,
+} from "./entity-graph.contract";
 export { entityInspectorHealthContract } from "./entity-inspector-health.contract";
 export {
   entityIntegrityContract,

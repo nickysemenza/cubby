@@ -733,7 +733,7 @@ Rules:
         kind: "text",
         placeholder: "Search product categories...",
         deriveSchema: true,
-        stored: { columns: ["name"] },
+        anyOf: ["name"],
       },
     ],
   },

@@ -125,7 +125,6 @@ export const renderFilterArtifacts = (
       ...(dateRangeBounds(descriptor) === null
         ? []
         : [`range:${compactLiteral(dateRangeBounds(descriptor))}`]),
-      ...(descriptor.urlOnly ? ["urlOnly:true"] : []),
       ...(descriptor.nullable === null
         ? []
         : [`nullable:${compactLiteral(descriptor.nullable)}`]),
@@ -139,6 +138,13 @@ export const renderFilterArtifacts = (
         ? []
         : [`subtree:${JSON.stringify(descriptor.subtree)}`]),
       ...(descriptor.currentMember ? ["currentMember:true"] : []),
+      ...(descriptor.singleValue === null ? [] : ["singleValue:true"]),
+      ...(descriptor.exclusiveGroup === null
+        ? []
+        : [`exclusiveGroup:${JSON.stringify(descriptor.exclusiveGroup)}`]),
+      ...(descriptor.aliasOf === null
+        ? []
+        : [`aliasOf:${JSON.stringify(descriptor.aliasOf)}`]),
       ...(descriptor.sentinels === null
         ? []
         : [`sentinels:${compactLiteral(descriptor.sentinels)}`]),

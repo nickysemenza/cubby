@@ -1,3 +1,10 @@
+import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
+import type {
+  ProductCategoryId,
+  ProjectId,
+  PurchaseId,
+} from "@cubby/schemas/identifiers";
+import { productCategoryFeature } from "@cubby/schemas/product-category-fields";
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -15,8 +22,15 @@ import { loadRelatedSummary } from "~/server/generic/entity-links/repo/related-v
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { expenseDerivedCostsSql } from "./expense-derived-read";
-import { effectiveExpenseProjectSql } from "./expense-inheritance";
-import { loadExpenseProjectAllocations } from "./expense-project-allocation";
+import {
+  effectiveExpenseProjectSql,
+  effectiveExpenseTradeSql,
+  principalExpenseInheritanceSql,
+} from "./expense-inheritance";
+import {
+  expenseJointAllocationSql,
+  loadExpenseProjectAllocations,
+} from "./expense-project-allocation";
 import { buildExpenseWhereClause } from "./lookup";
 
 const allocationPlanNode = z.object({
@@ -354,6 +368,9 @@ describe("expense project allocation", () => {
     // The embedded project scope selects whole expenses, while a direct
     // project filter measures its shares. Different shares may satisfy each
     // predicate; intersecting projects would lose this shared charge.
+    // The scope is part of the where, through the bounded allocation-share
+    // row set, so the read allocates once per place the where appears, and
+    // each allocation still runs once, uncorrelated.
     const embeddedRead = await prepareExpenseDerivedRead(ctx.db, {
       projectId: smallProject.shortcode,
       projectScope: { search: largeProject.name },
@@ -371,7 +388,8 @@ describe("expense project allocation", () => {
     inspectPlan(
       allocationPlan.parse(embeddedPlan.rows[0]!["QUERY PLAN"])[0]!.Plan,
     );
-    expect(allocationLoops).toEqual([1]);
+    expect(allocationLoops).not.toEqual([]);
+    expect(allocationLoops.every((loops) => loops === 1)).toBe(true);
     expect(correlatedAllocations).toEqual([]);
 
     const summary = await loadRelatedSummary(ctx.db, {
@@ -640,6 +658,293 @@ describe("expense project allocation", () => {
     expect(
       rows.reduce((sum, row) => sum + (row.attributedCents ?? 0n), 0n),
     ).toBe(1n);
+  });
+
+  // The allocation resolves principal projects and trades through joins; they
+  // must match the scalar resolvers line for line, including deleted
+  // overrides, deleted Purchases and the household food fallback.
+  it("joins the same project and trade inheritance as the scalar resolvers", async () => {
+    const [explicit, fallback, gone, tradeProject] = await Promise.all([
+      insertWithShortcode(ctx.db, "project", { name: "Synthetic explicit" }),
+      insertWithShortcode(ctx.db, "project", { name: "Synthetic default" }),
+      insertWithShortcode(ctx.db, "project", { name: "Synthetic removed" }),
+      insertWithShortcode(ctx.db, "project", {
+        name: "Synthetic trade default",
+        defaultTrade: "electrical",
+      }),
+    ]);
+    await unwrapDb(ctx.db).execute(
+      sql`UPDATE "Project" SET "deletedAt" = now() WHERE id = ${gone.id}`,
+    );
+    // The food fallback resolves the household Project by its fixed code.
+    const [household] = (
+      await unwrapDb(ctx.db).execute<{ id: string }>(
+        sql`INSERT INTO "Project" (shortcode, name) VALUES ('PRJ-HSHD', 'Synthetic household') RETURNING id`,
+      )
+    ).rows;
+    const food = await unwrapDb(ctx.db).execute<{ id: ProductCategoryId }>(
+      sql`SELECT id FROM "ProductCategory" WHERE feature = ${productCategoryFeature.enum.food} AND "deletedAt" IS NULL LIMIT 1`,
+    );
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic inheritance supplier",
+    });
+    const [withDefault, removedDefault, deleted] = await Promise.all([
+      insertWithShortcode(ctx.db, "purchase", {
+        vendorId: vendor.id,
+        defaultProjectId: fallback.id,
+        defaultTrade: "plumbing",
+      }),
+      insertWithShortcode(ctx.db, "purchase", {
+        vendorId: vendor.id,
+        defaultProjectId: gone.id,
+      }),
+      insertWithShortcode(ctx.db, "purchase", {
+        vendorId: vendor.id,
+        defaultProjectId: fallback.id,
+        defaultTrade: "plumbing",
+      }),
+    ]);
+    await unwrapDb(ctx.db).execute(
+      sql`UPDATE "Purchase" SET "deletedAt" = now() WHERE id = ${deleted.id}`,
+    );
+    const [foodCategory] = food.rows;
+    expect(foodCategory).toBeDefined();
+    const groceries = await insertWithShortcode(ctx.db, "product", {
+      name: "Synthetic oats",
+      manufacturer: "Synthetic mill",
+      categoryId: foodCategory!.id,
+    });
+    const principal = (extra: Partial<typeof expense.$inferInsert>) =>
+      insertWithShortcode(ctx.db, "expense", {
+        name: "Synthetic inherited line",
+        cost: 1,
+        date: "2026-09-20",
+        lineKind: "principal",
+        costType: "materials",
+        future: false,
+        ...extra,
+      });
+    await principal({ projectId: explicit.id, purchaseId: withDefault.id });
+    await principal({ projectId: gone.id, purchaseId: withDefault.id });
+    await principal({ purchaseId: withDefault.id, trade: "drywall" });
+    await principal({ purchaseId: removedDefault.id });
+    await principal({ purchaseId: deleted.id });
+    await principal({ projectId: tradeProject.id });
+    await principal({
+      productId: groceries.id,
+      purchaseId: removedDefault.id,
+    });
+    await principal({ productId: groceries.id, projectId: explicit.id });
+
+    const inherited = principalExpenseInheritanceSql("e", "live_purchase");
+    const lines = await unwrapDb(ctx.db).execute<{
+      scalarProject: string | null;
+      joinedProject: string | null;
+      scalarTrade: string | null;
+      joinedTrade: string | null;
+    }>(sql`SELECT
+        ${effectiveExpenseProjectSql("e")} AS "scalarProject", ${inherited.projectId} AS "joinedProject",
+        ${effectiveExpenseTradeSql("e")} AS "scalarTrade", ${inherited.trade} AS "joinedTrade"
+      FROM "Expense" e
+      LEFT JOIN "Purchase" live_purchase
+        ON live_purchase.id = e."purchaseId" AND live_purchase."deletedAt" IS NULL
+      ${inherited.joins}
+      WHERE e."deletedAt" IS NULL AND e."lineKind" = ${expenseLineKindSchema.enum.principal}`);
+    expect(lines.rows).toHaveLength(8);
+    for (const line of lines.rows) {
+      expect(line.joinedProject).toBe(line.scalarProject);
+      expect(line.joinedTrade).toBe(line.scalarTrade);
+    }
+    const projects = new Set(lines.rows.map((line) => line.scalarProject));
+    expect(projects).toEqual(
+      new Set([explicit.id, fallback.id, null, tradeProject.id, household!.id]),
+    );
+    expect(new Set(lines.rows.map((line) => line.scalarTrade))).toEqual(
+      new Set(["plumbing", "drywall", null, "electrical"]),
+    );
+  });
+
+  // Grouped reads weigh a purchase whose principals share every dimension as
+  // one line. Largest remainder must still hand that group exactly what the
+  // per-principal split sums to, for every grouped read and purchase shape.
+  it("matches the per-principal split for every grouped read", async () => {
+    const [first, second] = await Promise.all([
+      insertWithShortcode(ctx.db, "project", { name: "Synthetic first" }),
+      insertWithShortcode(ctx.db, "project", { name: "Synthetic second" }),
+    ]);
+    const [pantry, hardware] = await Promise.all([
+      insertWithShortcode(ctx.db, "spendingCategory", {
+        name: `Synthetic pantry ${crypto.randomUUID()}`,
+      }),
+      insertWithShortcode(ctx.db, "spendingCategory", {
+        name: `Synthetic hardware ${crypto.randomUUID()}`,
+      }),
+    ]);
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic split supplier",
+    });
+    const order = (defaultProjectId?: ProjectId) =>
+      insertWithShortcode(ctx.db, "purchase", {
+        vendorId: vendor.id,
+        date: "2026-09-20",
+        defaultProjectId,
+      });
+    const line = (
+      purchaseId: PurchaseId,
+      lineKind: "principal" | "tax" | "fee" | "shipping" | "discount",
+      cost: number | null,
+      extra: Partial<typeof expense.$inferInsert> = {},
+    ) =>
+      insertWithShortcode(ctx.db, "expense", {
+        name: `Synthetic ${lineKind} ${cost}`,
+        cost,
+        date: "2026-09-20",
+        lineKind,
+        costType: lineKind === "principal" ? "materials" : "services",
+        future: false,
+        purchaseId,
+        ...extra,
+      });
+    const uniform = await order();
+    for (let index = 0; index < 3; index++)
+      await line(uniform.id, "principal", 1, { projectId: first.id });
+    await line(uniform.id, "tax", 1);
+    await line(uniform.id, "fee", 0.02, { trade: "plumbing" });
+    const mixed = await order();
+    await line(mixed.id, "principal", 1, { projectId: first.id });
+    await line(mixed.id, "principal", 2, { projectId: second.id });
+    await line(mixed.id, "principal", 0, { projectId: second.id });
+    await line(mixed.id, "shipping", 0.1);
+    await line(mixed.id, "discount", -0.07);
+    const zeros = await order();
+    for (let index = 0; index < 2; index++)
+      await line(zeros.id, "principal", 0, { projectId: second.id });
+    await line(zeros.id, "fee", 0.05);
+    const costTypes = await order();
+    await line(costTypes.id, "principal", 3, { projectId: first.id });
+    await line(costTypes.id, "principal", 3, {
+      projectId: first.id,
+      costType: "tools",
+    });
+    await line(costTypes.id, "tax", 0.01);
+    const categories = await order();
+    await line(categories.id, "principal", 1, {
+      projectId: first.id,
+      spendingCategoryId: pantry.id,
+    });
+    await line(categories.id, "principal", 1, {
+      projectId: first.id,
+      spendingCategoryId: hardware.id,
+    });
+    await line(categories.id, "tax", 0.03);
+    const unpriced = await order();
+    await line(unpriced.id, "principal", 5, { projectId: first.id });
+    await line(unpriced.id, "principal", null, { projectId: first.id });
+    await line(unpriced.id, "tax", 0.02);
+    const fallback = await order(second.id);
+    await line(fallback.id, "tax", 0.04);
+    const trades = await order();
+    await line(trades.id, "principal", 2, {
+      projectId: first.id,
+      trade: "plumbing",
+    });
+    await line(trades.id, "principal", 2, {
+      projectId: first.id,
+      trade: "electrical",
+    });
+    await line(trades.id, "tax", 0.03);
+    // A negative non-discount adjustment against positive principals keeps
+    // no category.
+    await line(trades.id, "fee", -0.05);
+    const refund = await order();
+    await line(refund.id, "principal", -1, { projectId: second.id });
+    await line(refund.id, "principal", -2, { projectId: second.id });
+    await line(refund.id, "tax", -0.03);
+
+    const rows = async (statement: ReturnType<typeof sql>) =>
+      (await unwrapDb(ctx.db).execute(statement)).rows
+        .map((row) => JSON.stringify(row))
+        .sort();
+    const allDimensions = { categories: true, trades: true, projects: true };
+    const projectsOnly = { categories: false, trades: false, projects: true };
+    const reads = [
+      ["projects", projectsOnly, undefined],
+      ["names", projectsOnly, undefined],
+      ["presence", projectsOnly, undefined],
+      ["costs", projectsOnly, { projectIds: [first.id] }],
+      ["categories", allDimensions, undefined],
+      ["categoryNames", allDimensions, undefined],
+      ["categoryEvidence", allDimensions, undefined],
+      [
+        "costs",
+        { categories: false, trades: true, projects: true },
+        { trades: ["plumbing"] as const },
+      ],
+      ["presence", projectsOnly, { presence: "none" as const }],
+      ["costs", projectsOnly, { presence: "has" as const }],
+      ["categories", allDimensions, { spendingCategoryIds: [pantry.id] }],
+      [
+        "names",
+        { categories: true, trades: true, projects: true },
+        { categoryPresence: "has" as const, costTypes: ["materials"] as const },
+      ],
+    ] as const;
+    // Selections allocate complete purchases, then keep the selected lines.
+    const selections = [
+      undefined,
+      {
+        select: sql`SELECT id FROM "Expense"
+          WHERE "purchaseId" IN (${uniform.id}, ${mixed.id}, ${trades.id}) AND "deletedAt" IS NULL`,
+      },
+    ];
+    for (const expenseIds of selections)
+      for (const [read, dimensions, scope] of reads) {
+        const perPrincipal = expenseJointAllocationSql(expenseIds, undefined, {
+          ...dimensions,
+          principals: true,
+        });
+        expect(
+          await rows(expenseDerivedReadSql(read, { scope, expenseIds })),
+        ).toEqual(
+          await rows(
+            expenseDerivedReadSql(read, {
+              scope,
+              expenseIds,
+              source: perPrincipal,
+            }),
+          ),
+        );
+      }
+    const members = (source?: ReturnType<typeof sql>) =>
+      rows(
+        sql`SELECT DISTINCT "expenseId" FROM (${expenseDerivedReadSql(
+          "membership",
+          { scope: { projectIds: [first.id] }, source },
+        )}) member`,
+      );
+    expect(await members()).toEqual(
+      await members(
+        expenseJointAllocationSql(undefined, undefined, {
+          categories: false,
+          trades: false,
+          projects: true,
+          principals: true,
+        }),
+      ),
+    );
+
+    // The uniform tax still splits by principal where a read exposes it.
+    const tax = await unwrapDb(ctx.db).execute<{ attributedCents: string }>(
+      sql`SELECT share."attributedCents" FROM (${expenseDerivedReadSql("shares")}) share
+        JOIN "Expense" e ON e.id = share."expenseId"
+        WHERE e."purchaseId" = ${uniform.id} AND e."lineKind" = ${expenseLineKindSchema.enum.tax}
+        ORDER BY share."attributedCents"::bigint`,
+    );
+    expect(tax.rows.map((row) => row.attributedCents)).toEqual([
+      "33",
+      "33",
+      "34",
+    ]);
   });
 
   it("ORs a selected project with the unassigned presence sentinel", async () => {

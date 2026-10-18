@@ -167,7 +167,11 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "product" },
-        control: { kind: "specialized", renderer: "entity-select" },
+        control: {
+          kind: "specialized",
+          renderer: "entity-select",
+          suggest: { basis: ["name", "platform"], reviewRequired: true },
+        },
         display: { detail: true },
         validation: {
           read: productShortcode.nullable(),
@@ -359,14 +363,14 @@ export default defineEntity({
         kind: "text",
         placeholder: "Search devices...",
         deriveSchema: true,
-        stored: { columns: ["name"] },
+        anyOf: ["name"],
       },
       {
         columnId: "installationId",
         kind: "text",
         placeholder: "Filter by installation ID...",
         deriveSchema: true,
-        stored: true,
+        anyOf: ["installationId"],
       },
       {
         columnId: "platform",
@@ -408,7 +412,6 @@ export default defineEntity({
         placeholder: "Filter by owner...",
         brandRef: { entity: "ledgerParty" },
         currentMember: true,
-        urlOnly: true,
         deriveSchema: true,
         stored: true,
       },

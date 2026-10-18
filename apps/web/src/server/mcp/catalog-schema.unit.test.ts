@@ -1,3 +1,4 @@
+import { entityGraphRootSchema } from "@cubby/schemas/entity-graph";
 import { PUBLIC_SHORTCODE_PREFIXES } from "@cubby/shared";
 import { Ajv } from "@modelcontextprotocol/client/validators/ajv";
 import { McpServer } from "@modelcontextprotocol/server";
@@ -171,6 +172,27 @@ function concreteOutputSchema(value: JSONType): boolean {
 }
 
 describe("MCP catalog schemas", () => {
+  // Physical QR labels must remain valid while the catalog advertises canonical IDs.
+  it("accepts legacy graph labels without accepting another entity's label", () => {
+    expect(
+      entityGraphRootSchema.safeParse({
+        entityKind: "product",
+        entityId: "P-4K7M",
+      }).success,
+    ).toBe(true);
+    expect(
+      entityGraphRootSchema.safeParse({
+        entityKind: "location",
+        entityId: "L-4K7M",
+      }).success,
+    ).toBe(true);
+    expect(
+      entityGraphRootSchema.safeParse({
+        entityKind: "location",
+        entityId: "P-4K7M",
+      }).success,
+    ).toBe(false);
+  });
   it("accepts returned audit cursors and record-backed Sources in the published catalog", async () => {
     const tools = (await listMcpToolCatalog()).tools;
     const validator = new Ajv({ strict: false, validateFormats: true });
@@ -734,9 +756,15 @@ const write = ({ destructive = false, openWorld = false } = {}) => ({
  * `prepare_purchase_import` at 8,616. The two entity-kernel tools carry every
  * kind's schema and get their own ceiling; every other tool stays under the
  * workflow ceiling, about twice that largest pre-consolidation workflow tool.
+ * Both rose one step when every scope filter (a relation back-filter, a
+ * deep-link id) gained the generated Exclude / Any value keys every other
+ * compiled value filter has. The kernel ceiling rose again when the filters
+ * over row sets (`model.rows`, #2607) gained the same keys plus Match all,
+ * and the workflow ceiling when a project page's embedded scope became the
+ * project list's own filter keys (`projectScope`, #2610).
  */
-const KERNEL_SCHEMA_BUDGET = 131_072;
-const WORKFLOW_SCHEMA_BUDGET = 16_384;
+const KERNEL_SCHEMA_BUDGET = 143_360;
+const WORKFLOW_SCHEMA_BUDGET = 19_456;
 const KERNEL_TOOLS = new Set(["entity", "entity_read"]);
 
 function isObject(value: JSONType | undefined): value is JsonObject {
