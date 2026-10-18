@@ -2,14 +2,15 @@ import { and, eq } from "drizzle-orm";
 import { TEST_AI_WORK_LAUNCHER } from "tooling/ai-work";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
-import { aiEvaluation, assessmentState, run } from "~/server/db/schema";
+import { aiEvaluation, assessmentState, run, user } from "~/server/db/schema";
 import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";
 import { scheduleConnectionRefresh } from "~/server/domains/run/repo/connection-refresh";
+import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import { executeAiRefreshTarget } from "~/server/domains/run/service/ai-refresh";
 import {
   kernelCtx,
@@ -30,6 +31,18 @@ import { prepareEntityConnections } from "./entity-connections";
 // key reopens the exact inference a member already graded Wrong inline.
 describe("connection preparation and publication authority", () => {
   const ctx = withTestDb();
+  beforeEach(async () => {
+    await getDb(ctx.db)
+      .insert(user)
+      .values({
+        id: systemActor().userId,
+        name: "Synthetic system",
+        email: "synthetic-system@example.test",
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+  });
   async function fixture() {
     const name = "Synthetic publication fence wrench";
     const item = await createProductFixture(
@@ -40,6 +53,7 @@ describe("connection preparation and publication authority", () => {
     await refreshSearchDocument(ctx.db, "product", item.entityId);
     const task = await createRepoEntity(ctx, "task", {
       name,
+      trade: "electrical",
       subjectProductId: null,
     });
     return {

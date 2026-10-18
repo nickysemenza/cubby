@@ -4,6 +4,7 @@ import {
   aiRefreshRunInput,
 } from "@cubby/schemas/ai-evaluation";
 import { entitySchema, type EntityRef } from "@cubby/schemas/entity";
+import { searchableEntities } from "@cubby/schemas/search";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, asc, gt, inArray, isNull, sql } from "drizzle-orm";
 
@@ -94,7 +95,10 @@ export async function connectionSourceFingerprint(
     .where(
       and(
         notDeleted(searchDocument),
-        inArray(searchDocument.entityKind, [...discoveryEntities]),
+        inArray(
+          searchDocument.entityKind,
+          searchableEntities.filter((entity) => discoveryEntitySet.has(entity)),
+        ),
       ),
     );
   const [identities] = await getDb(db)

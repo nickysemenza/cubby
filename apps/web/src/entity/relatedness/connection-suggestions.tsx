@@ -141,19 +141,19 @@ export function ConnectionReviewRows({
           <span className="text-sm font-medium">{proposal.label}</span>
           <Row gap="xs" align="center" className="flex-wrap text-sm">
             <EntityRefLink
-              entity={proposal.source.entityKind}
-              data={{
-                id: proposal.source.entityId,
-                name: proposal.sourceName ?? proposal.source.entityId,
-              }}
+              variant="audit"
+              entityKind={proposal.source.entityKind}
+              entityId={proposal.source.entityId}
+              name={proposal.sourceName}
+              displayImage={null}
             />
             <span aria-hidden="true">→</span>
             <EntityRefLink
-              entity={proposal.target.entityKind}
-              data={{
-                id: proposal.target.entityId,
-                name: proposal.targetName ?? proposal.target.entityId,
-              }}
+              variant="audit"
+              entityKind={proposal.target.entityKind}
+              entityId={proposal.target.entityId}
+              name={proposal.targetName}
+              displayImage={null}
             />
           </Row>
           {proposal.evidence.reasons.map((reason) => (

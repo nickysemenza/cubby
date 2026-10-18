@@ -218,9 +218,10 @@ async function prepareFieldConnections(
       ...captured.inputs.map((call) => call.feature),
     ]);
     const servedModel =
-      captured.inputs.findLast(
-        (call) => call.operation === `suggestFields.${entity}.${field}`,
-      )?.model ?? model;
+      [...captured.inputs]
+        .reverse()
+        .find((call) => call.operation === `suggestFields.${entity}.${field}`)
+        ?.model ?? model;
     const reviewKey = await fieldReviewIdentity({
       entity,
       recordId,
