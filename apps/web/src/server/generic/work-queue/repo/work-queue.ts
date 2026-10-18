@@ -11,12 +11,8 @@ import {
   type ScoredEntity,
 } from "@cubby/schemas/data-quality";
 import { entityRefKey, entitySchema, type Entity } from "@cubby/schemas/entity";
-import { entityFieldByKey } from "@cubby/schemas/entity-fields";
 import { entityGraphRootSchema } from "@cubby/schemas/entity-graph";
-import {
-  shortcodeEntities,
-  type ShortcodeEntity,
-} from "@cubby/schemas/entity-manifest";
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import {
   financialTransactionStatus,
@@ -176,14 +172,21 @@ async function workQueueProjection(
   const selections: SQL[] = [];
   if (!scope.check) {
     // Use the same currentness check as Relations before counting or paginating Work.
+    // A record's Work covers both ends of a connection, so the record may be
+    // either the Assessment's source or its candidate's target.
+    const target = (field: "entityId" | "entityKind") =>
+      sql`prediction.evidence->'candidate'->${"target"}->>${field}`;
+    const touches = scope.record
+      ? sql`AND ((root.kind=${scope.record.entity} AND root.shortcode=${scope.record.id})
+          OR (${target("entityKind")}=${scope.record.entity} AND ${target("entityId")}=${scope.record.id}))`
+      : sql``;
     const pending = await getDb(db)
       .execute(sql`SELECT DISTINCT root.kind AS "entityKind", root.shortcode AS "entityId"
       FROM "AssessmentState" current JOIN "Assessment" prediction ON prediction.id=current.id
       JOIN "Entity" root ON root.id=current."recordId" AND root.kind=current.entity
       WHERE current.active AND current.status=${suggestionStatus.enum.pending}
         AND prediction.subject->>'scope' LIKE 'connection.%'
-        AND root."deletedAt" IS NULL AND root."mergedIntoId" IS NULL
-        ${scope.record ? sql`AND root.kind=${scope.record.entity} AND root.shortcode=${scope.record.id}` : sql``}`);
+        AND root."deletedAt" IS NULL AND root."mergedIntoId" IS NULL ${touches}`);
     const sources = z.array(entityGraphRootSchema).parse(pending.rows);
     const freshIds: string[] = [];
     for (let offset = 0; offset < sources.length; offset += 250) {
@@ -200,32 +203,45 @@ async function workQueueProjection(
           .map((proposal) => proposal.review.assessmentId),
       );
     }
-    const record = scope.record
-      ? sql`AND root.kind = ${scope.record.entity} AND root.shortcode = ${scope.record.id}`
-      : sql``;
-    selections.push(sql`SELECT root.kind::text AS entity, root.shortcode::text AS id,
-      coalesce(document.title, root.shortcode)::text AS name,
-      'connection:' || root.id::text AS key, ${workQueueSourceSchema.enum.suggestion}::text AS source, ${workQueueKindSchema.enum.review}::text AS kind,
-      count(*)::text || ' pending connection candidates' AS reason,
-      'Review the proposed connection and its evidence in Relations.'::text AS "nextAction",
-      ARRAY[]::uuid[] AS owners, true AS shared, NULL::text AS "problemKey", ${NO_FACT_COLUMNS}
-      FROM "AssessmentState" current
-      JOIN "Assessment" prediction ON prediction.id = current.id
-      JOIN "Entity" root ON root.id = current."recordId" AND root.kind = current.entity
-      LEFT JOIN "SearchDocument" document ON document."entityId" = root.id AND document."entityKind" = root.kind AND document."deletedAt" IS NULL
-      WHERE current.family = ${assessmentFamily.enum.recommendation} AND current.active AND current.status = ${suggestionStatus.enum.pending}
+    const reviewable = sql`current.family = ${assessmentFamily.enum.recommendation} AND current.active AND current.status = ${suggestionStatus.enum.pending}
         AND ${freshIds.length ? inArray(sql`current.id`, freshIds) : sql`false`}
         AND prediction.subject->>'scope' LIKE 'connection.%'
-        AND root."deletedAt" IS NULL AND root."mergedIntoId" IS NULL ${record}
+        AND root."deletedAt" IS NULL AND root."mergedIntoId" IS NULL
         AND NOT EXISTS (SELECT 1 FROM "Feedback" reviewed WHERE reviewed."assessmentId" = prediction.id
           AND reviewed.authority = ${feedbackAuthority.enum.member} AND reviewed.verdict IN (${feedbackVerdict.enum.wrong}, ${feedbackVerdict.enum.dismissed}))
         AND NOT EXISTS (SELECT 1 FROM "AssessmentState" hidden WHERE hidden.active AND hidden.entity = current.entity
           AND hidden."recordId" = current."recordId" AND hidden.suppression->>'scope' = prediction.subject->>'scope'
           AND hidden.suppression->>'candidateKey' = prediction.subject->>'candidateKey'
           AND (hidden.suppression->>'fingerprint' IS NULL OR hidden.suppression->>'fingerprint' = prediction.fingerprint))
-        AND EXISTS (SELECT 1 FROM "Entity" target WHERE target.shortcode = prediction.evidence->'candidate'->${"target"}->>'entityId'
-          AND target.kind = prediction.evidence->'candidate'->${"target"}->>'entityKind' AND target."deletedAt" IS NULL AND target."mergedIntoId" IS NULL)
-      GROUP BY root.kind, root.shortcode, root.id, document.title`);
+        AND EXISTS (SELECT 1 FROM "Entity" other WHERE other.shortcode = ${target("entityId")}
+          AND other.kind = ${target("entityKind")} AND other."deletedAt" IS NULL AND other."mergedIntoId" IS NULL)`;
+    if (scope.record) {
+      const { entity, id } = scope.record;
+      selections.push(sql`SELECT ${entity}::text AS entity, ${id}::text AS id,
+      coalesce(max(document.title), ${id})::text AS name,
+      'connection:' || ${id}::text AS key, ${workQueueSourceSchema.enum.suggestion}::text AS source, ${workQueueKindSchema.enum.review}::text AS kind,
+      count(*)::text || CASE WHEN count(*) = 1 THEN ' pending connection suggestion' ELSE ' pending connection suggestions' END AS reason,
+      'Review the proposed connections and their evidence on the Suggestions page.'::text AS "nextAction",
+      ARRAY[]::uuid[] AS owners, true AS shared, NULL::text AS "problemKey", ${NO_FACT_COLUMNS}
+      FROM "AssessmentState" current
+      JOIN "Assessment" prediction ON prediction.id = current.id
+      JOIN "Entity" root ON root.id = current."recordId" AND root.kind = current.entity
+      LEFT JOIN "Entity" self ON self.kind = ${entity} AND self.shortcode = ${id}
+      LEFT JOIN "SearchDocument" document ON document."entityId" = self.id AND document."entityKind" = self.kind AND document."deletedAt" IS NULL
+      WHERE ${reviewable} ${touches}
+      HAVING count(*) > 0`);
+    } else
+      selections.push(sql`SELECT NULL::text AS entity, NULL::text AS id,
+      'Connection suggestions'::text AS name,
+      'suggestions:' || ${assessmentFamily.enum.recommendation}::text AS key, ${workQueueSourceSchema.enum.suggestion}::text AS source, ${workQueueKindSchema.enum.review}::text AS kind,
+      count(*)::text || CASE WHEN count(*) = 1 THEN ' pending connection suggestion' ELSE ' pending connection suggestions' END AS reason,
+      'Review them on the Suggestions page.'::text AS "nextAction",
+      ARRAY[]::uuid[] AS owners, true AS shared, NULL::text AS "problemKey", ${NO_FACT_COLUMNS}
+      FROM "AssessmentState" current
+      JOIN "Assessment" prediction ON prediction.id = current.id
+      JOIN "Entity" root ON root.id = current."recordId" AND root.kind = current.entity
+      WHERE ${reviewable}
+      HAVING count(*) > 0`);
   }
   // Skips building a branch the scope would drop anyway.
   const admits = (entity: Entity, carriesGaps = false) =>
@@ -330,10 +346,20 @@ async function workQueueProjection(
         carriesGaps: true,
       }),
     );
-  // One row per suggested field, never one per Suggestion: the Review list
-  // is where each is accepted or rejected. It names no record, so a record
-  // read never includes it.
-  if (scopeAdmitsUnrecorded(scope)) {
+  if (scopeAdmitsUnrecorded(scope))
+    selections.push(sql`SELECT NULL::text AS entity, NULL::text AS id,
+    'Transaction suggestions'::text AS name,
+    'suggestions:' || ${assessmentFamily.enum.statement_transaction}::text AS key,
+    ${workQueueSourceSchema.enum.suggestion}::text AS source, ${workQueueKindSchema.enum.review}::text AS kind,
+    count(*)::text || CASE WHEN count(*) = 1 THEN ' transaction suggestion' ELSE ' transaction suggestions' END
+      || ' (' || count(*) FILTER (WHERE (${suggestionField("clean")})::boolean) || ' ready to accept)' AS reason,
+    'Review them on the Suggestions page; accept the clean ones as a group.'::text AS "nextAction",
+    ARRAY[]::uuid[] AS owners, true AS shared, NULL::text AS "problemKey", ${NO_FACT_COLUMNS}
+    FROM "AssessmentState" s WHERE ${pendingSuggestion()}
+    HAVING count(*) > 0`);
+  // One row for the whole family, never one per Suggestion: the Suggestions
+  // page is where each is reviewed. A record's own Work counts its own.
+  if (scopeAdmitsUnrecorded(scope) || (scope.record && !scope.check)) {
     const guarded = await getDb(db)
       .execute(sql`SELECT DISTINCT data->'connectionEvidence'->'candidate'->${"source"} AS source FROM ${suggestionTable}
       WHERE ${suggestionTable.family}=${assessmentFamily.enum.field} AND ${suggestionTable.status}=${suggestionStatus.enum.pending}
@@ -355,17 +381,23 @@ async function workQueueProjection(
           .map((proposal) => proposal.review.assessmentId),
       );
     }
-    selections.push(sql`SELECT ${suggestionTable.entity}::text AS entity, NULL::text AS id,
-    ${suggestionTable.entity} || '.' || ${suggestionTable.field} AS name,
-    'suggestion:' || ${suggestionTable.entity} || '.' || ${suggestionTable.field} AS key,
+    const own = scope.record
+      ? sql`AND ${suggestionTable.entity} = ${scope.record.entity} AND ${suggestionTable.recordId} = (
+          SELECT self.id FROM "Entity" self WHERE self.kind = ${scope.record.entity} AND self.shortcode = ${scope.record.id})`
+      : sql``;
+    selections.push(sql`SELECT ${scope.record ? sql`${scope.record.entity}::text` : sql`NULL::text`} AS entity,
+    ${scope.record ? sql`${scope.record.id}::text` : sql`NULL::text`} AS id,
+    'Field suggestions'::text AS name,
+    ${scope.record ? sql`'field-suggestions:' || ${scope.record.id}::text` : sql`'suggestions:' || ${assessmentFamily.enum.field}::text`} AS key,
     ${workQueueSourceSchema.enum.suggestion}::text AS source, ${workQueueKindSchema.enum.review}::text AS kind,
-    count(*)::text || CASE WHEN count(*) = 1 THEN ' pending suggestion' ELSE ' pending suggestions' END AS reason,
-    'Accept or reject them in AI Review.'::text AS "nextAction",
+    count(*)::text || CASE WHEN count(*) = 1 THEN ' pending field suggestion' ELSE ' pending field suggestions' END AS reason,
+    'Review them on the Suggestions page.'::text AS "nextAction",
     ARRAY[]::uuid[] AS owners, true AS shared, NULL::text AS "problemKey", ${NO_FACT_COLUMNS}
     FROM ${suggestionTable} LEFT JOIN ${runTable} ON ${runTable.id} = ${suggestionTable.runId}
-    WHERE ${suggestionTable.status} = ${suggestionStatus.enum.pending} AND ${suggestionTable.family} = ${"field"} AND ${reviewableSuggestionSql}
+    WHERE ${suggestionTable.status} = ${suggestionStatus.enum.pending} AND ${suggestionTable.family} = ${assessmentFamily.enum.field} AND ${reviewableSuggestionSql}
       AND (NOT coalesce(${suggestionTable.data} ? 'connectionEvidence', false) OR ${freshFieldIds.length ? inArray(suggestionTable.id, freshFieldIds) : sql`false`})
-    GROUP BY ${suggestionTable.entity}, ${suggestionTable.field}`);
+      ${own}
+    HAVING count(*) > 0`);
   }
 
   // The declared unsettled view owns missing payment evidence. Receipt
@@ -511,30 +543,32 @@ async function workQueueProjection(
       },
       key: "account:provisional",
     }),
-    // One row per account, never one per charge: the statement Suggestions
-    // view groups and bulk-accepts them.
-    ...workQueueCandidate(scope, {
-      entity: "financialAccount",
-      table: sql`"FinancialAccount" JOIN (
+    // An account's own Work counts its Transaction suggestions; the global
+    // view has one row for the family, below.
+    ...(scope.record
+      ? workQueueCandidate(scope, {
+          entity: "financialAccount",
+          table: sql`"FinancialAccount" JOIN (
         SELECT (${suggestionField("accountId")})::uuid AS account,
           count(*)::int AS total,
           count(*) FILTER (WHERE (${suggestionField("clean")})::boolean)::int AS clean
         FROM "AssessmentState" s WHERE ${pendingSuggestion()}
         GROUP BY 1
       ) statement_suggestions ON statement_suggestions.account = "FinancialAccount".id`,
-      id: sql`"FinancialAccount".shortcode`,
-      name: sql`"FinancialAccount".name`,
-      owners: sql`ARRAY["FinancialAccount"."ledgerPartyId"]`,
-      where: sql`"FinancialAccount"."deletedAt" IS NULL`,
-      details: {
-        source: "statement_suggestion",
-        kind: "review",
-        reason: sql`statement_suggestions.total || CASE WHEN statement_suggestions.total = 1 THEN ' transaction suggestion' ELSE ' transaction suggestions' END || ' (' || statement_suggestions.clean || ' ready to accept)'`,
-        nextAction:
-          "Review the statement Suggestions for this account; accept the clean ones as a group.",
-      },
-      key: "statement_suggestion",
-    }),
+          id: sql`"FinancialAccount".shortcode`,
+          name: sql`"FinancialAccount".name`,
+          owners: sql`ARRAY["FinancialAccount"."ledgerPartyId"]`,
+          where: sql`"FinancialAccount"."deletedAt" IS NULL`,
+          details: {
+            source: "suggestion",
+            kind: "review",
+            reason: sql`statement_suggestions.total || CASE WHEN statement_suggestions.total = 1 THEN ' transaction suggestion' ELSE ' transaction suggestions' END || ' (' || statement_suggestions.clean || ' ready to accept)'`,
+            nextAction:
+              "Review this account's Transaction suggestions on the Suggestions page; accept the clean ones as a group.",
+          },
+          key: "statement_suggestion",
+        })
+      : []),
   );
 
   if (admits("financialTransaction")) {
@@ -632,15 +666,6 @@ async function workQueueProjection(
       NULL::text AS "problemKey", ${NO_FACT_COLUMNS} WHERE false`;
   return sql.join(selections, sql` UNION ALL `);
 }
-
-const fieldLabel = (entity: Entity, field: string) => {
-  const suggested = z.enum(shortcodeEntities).safeParse(entity);
-  return (
-    (suggested.success
-      ? entityFieldByKey(suggested.data, field)?.label
-      : undefined) ?? field
-  );
-};
 
 /** Each row carries its source record's quality score, and a gap row states
  * its own gaps (an Email's missing original, a Purchase's missing item lines)
@@ -927,7 +952,7 @@ async function queryWorkQueue(
           WHEN ${members} THEN jsonb_build_object('kind', ${members}::text, 'members', (SELECT jsonb_agg(jsonb_build_object('id', member.shortcode, 'name', member.name) ORDER BY member.name, member.shortcode) FROM members member WHERE member.id = ANY(page.owners)))
           ELSE jsonb_build_object('kind', ${unresolved}::text, 'reason', 'Current private source ownership is not established.') END
       ) || CASE WHEN "problemKey" IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('problemKey', "problemKey") END
-        || CASE WHEN source = ${workQueueSourceSchema.enum.suggestion} AND key LIKE 'suggestion:%' THEN jsonb_build_object('suggestionField', split_part(key, '.', 2)) ELSE '{}'::jsonb END ORDER BY position) FROM page), '[]'::jsonb) AS items
+        || CASE WHEN source = ${workQueueSourceSchema.enum.suggestion} AND key LIKE 'suggestions:%' THEN jsonb_build_object('suggestionFamily', split_part(key, ':', 2)) ELSE '{}'::jsonb END ORDER BY position) FROM page), '[]'::jsonb) AS items
   `);
   const row = z
     .object({
@@ -941,9 +966,6 @@ async function queryWorkQueue(
   for (const item of row.items) {
     item.explanations = projectWorkExplanations(item, contexts.get(item.key));
   }
-  for (const item of row.items)
-    if (item.entity && item.suggestionField)
-      item.name = `${entitySummary[item.entity].singular} · ${fieldLabel(item.entity, item.suggestionField)}`;
   // Member routing fences rows, not imagery borrowed through linked records
   // (a transaction's purchase receipts), so member reads carry none. The
   // record strip sits on the record's own page and carries none either.

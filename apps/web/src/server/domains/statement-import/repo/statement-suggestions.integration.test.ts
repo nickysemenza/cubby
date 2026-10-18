@@ -241,11 +241,16 @@ describe("statement Transaction suggestions", () => {
       workQueueHouseholdInput.parse({ pageSize: 100 }),
       false,
     );
+    // The household's Work has one row for the family, opening the
+    // Suggestions page; the account's own Work counts its own.
     expect(
-      queue.items.filter((row) => row.source === "statement_suggestion"),
+      queue.items.filter(
+        (row) => row.suggestionFamily === "statement_transaction",
+      ),
     ).toEqual([
       expect.objectContaining({
-        entity: "financialAccount",
+        entity: null,
+        id: null,
         // A category rule is one vote: nothing is clean before a label.
         reason: "2 transaction suggestions (0 ready to accept)",
       }),

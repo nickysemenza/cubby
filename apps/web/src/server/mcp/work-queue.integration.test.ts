@@ -1531,10 +1531,10 @@ describe("member actionable Work queue", () => {
     const suggested = queue.items.filter((row) => row.source === "suggestion");
     expect(suggested).toEqual([
       expect.objectContaining({
-        entity: "product",
+        entity: null,
         id: null,
-        suggestionField: "categoryId",
-        reason: "2 pending suggestions",
+        suggestionFamily: "field",
+        reason: "2 pending field suggestions",
       }),
     ]);
     const receipt = queue.items.find(
