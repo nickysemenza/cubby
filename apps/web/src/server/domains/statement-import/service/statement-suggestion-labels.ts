@@ -1,4 +1,5 @@
 import { assessmentSubjects } from "@cubby/schemas/assessment";
+import { financialTransactionSettlementViolation } from "@cubby/schemas/financial-transaction";
 import type { RunId } from "@cubby/schemas/identifiers";
 import {
   statementTransactionJudgment,
@@ -122,7 +123,16 @@ export async function labelStatementSuggestions(
           ];
         // Only a confident answer replaces the direction's default; either way
         // a model kind stays a correction-reviewed choice, never bulk-accepted.
-        if (kind && result.confidence === "high")
+        // A kind the settlement sign rule refuses could never be applied.
+        if (
+          kind &&
+          result.confidence === "high" &&
+          !financialTransactionSettlementViolation({
+            linked: false,
+            kind,
+            amount: judgment.create.amount,
+          })
+        )
           judgment.create = { ...judgment.create, kind, kindSource: "model" };
       }
     }

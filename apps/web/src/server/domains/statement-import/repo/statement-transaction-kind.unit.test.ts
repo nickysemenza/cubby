@@ -1,3 +1,4 @@
+import { financialTransactionSettlementViolation } from "@cubby/schemas/financial-transaction";
 import { describe, expect, it } from "vitest";
 
 import { statementTransactionKind } from "./statement-transaction-kind";
@@ -5,7 +6,11 @@ import { statementTransactionKind } from "./statement-transaction-kind";
 describe("statementTransactionKind", () => {
   it.each([
     ["Paychecks", -2500, "income", "rule"],
-    ["Interest", -1.25, "interest", "rule"],
+    ["Interest", 1.25, "interest", "rule"],
+    // Interest earned is money in; `interest` means interest charged and must
+    // be positive, so an inflow under Interest was once unappliable.
+    ["Interest", -8.66, "income", "rule"],
+    ["Financial Fees", -35, "adjustment", "rule"],
     ["Transfer", 500, "account_transfer", "rule"],
     ["Transfer", -500, "account_transfer", "rule"],
     ["Credit Card Payment", 900, "credit_card_payment", "rule"],
@@ -39,6 +44,40 @@ describe("statementTransactionKind", () => {
     expect(
       statementTransactionKind({ sourceCategory: "Other", amount: -74.38 }),
     ).toEqual({ kind: "refund", kindSource: "sign" });
+  });
+
+  it("never proposes a kind the settlement sign rule refuses", () => {
+    const categories = [
+      "Paychecks",
+      "Other Income",
+      "Business Income",
+      "Income",
+      "Dividends & Capital Gains",
+      "Interest",
+      "Transfer",
+      "Transfers",
+      "Internal Transfer",
+      "Credit Card Payment",
+      "Payment",
+      "Payments",
+      "Credit",
+      "Balance Adjustments",
+      "Financial Fees",
+      "Fees",
+      "Groceries",
+    ];
+    for (const sourceCategory of [...categories, null])
+      for (const amount of [12.5, -12.5]) {
+        const { kind } = statementTransactionKind({ sourceCategory, amount });
+        expect(
+          financialTransactionSettlementViolation({
+            linked: false,
+            kind,
+            amount,
+          }),
+          `${sourceCategory} at ${amount} → ${kind}`,
+        ).toBeNull();
+      }
   });
 
   it("does not call an outgoing paycheck income", () => {
