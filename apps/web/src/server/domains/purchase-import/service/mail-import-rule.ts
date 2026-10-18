@@ -107,6 +107,19 @@ const CLASSIFIER_STAGES: ReadonlySet<MailboxClassificationStage> = new Set([
 ]);
 
 export function decideMailByRule(evidence: MailRuleEvidence): MailRuleDecision {
+  if (evidence.retainedAttachments > 0)
+    return {
+      kind: "coordinator",
+      reason: "Attachment purposes need a decision.",
+    };
+  if (
+    EXCLUDED_SUBJECT.test(normalized(evidence.subject ?? "")) ||
+    BODY_REVERSAL.test(normalized(evidence.text))
+  )
+    return {
+      kind: "coordinator",
+      reason: "A reversal or lifecycle exception needs a decision.",
+    };
   const event = mailLifecycleEvent(evidence.subject, evidence.text);
   if (
     evidence.classification === "unrelated" &&
@@ -132,11 +145,6 @@ export function decideMailByRule(evidence: MailRuleEvidence): MailRuleDecision {
     return { kind: "coordinator", reason: "No rule-settled lifecycle notice." };
   if (!evidence.senderVendorId)
     return { kind: "coordinator", reason: "The sender proves no Vendor." };
-  if (evidence.retainedAttachments > 0)
-    return {
-      kind: "coordinator",
-      reason: "Attachment purposes need a decision.",
-    };
   const matches = evidence.candidates.filter(
     (candidate) => candidate.vendorId === evidence.senderVendorId,
   );

@@ -134,6 +134,33 @@ describe("mail import rule", () => {
 
   it.each<[string, Partial<MailRuleEvidence>]>([
     [
+      "an unrelated Email with retained attachment bytes",
+      {
+        ...newsletter,
+        classification: "unrelated",
+        classificationStage: "decision",
+        retainedAttachments: 1,
+      },
+    ],
+    [
+      "an unrelated cancellation with no recorded order",
+      {
+        ...newsletter,
+        subject: "Your order was cancelled",
+        classification: "unrelated",
+        classificationStage: "decision",
+      },
+    ],
+    [
+      "an unrelated body reporting a refund",
+      {
+        ...newsletter,
+        text: "We refunded the unavailable item.",
+        classification: "unrelated",
+        classificationStage: "decision",
+      },
+    ],
+    [
       "two same-Vendor matches",
       { candidates: [candidate, { ...candidate, purchaseId: siblingId }] },
     ],
