@@ -18,10 +18,7 @@ import {
   type ExpenseSpendingCategoryResolutionDraft,
 } from "~/server/domains/expense/repo/expense-category-resolution";
 
-import {
-  effectiveExpenseProjectSql,
-  effectiveExpenseTradeSql,
-} from "./expense-inheritance";
+import { principalExpenseInheritanceSql } from "./expense-inheritance";
 
 /** SQL arrays retain legacy correlated callers; relational selections expose
  * cardinality to the planner instead of hiding a whole ledger in an InitPlan. */
@@ -83,6 +80,11 @@ type RawAllocationRow<T> = Omit<T, "sourceCents" | "attributedCents"> & {
  * All live siblings supply the denominator; ledger filters only select final
  * rows. The stable principal ID breaks remainder ties independently of mutable
  * Project/category assignments. ID-scoped reads first select complete purchases.
+ *
+ * Reads that group shares by dimension pass `principals: false`. A purchase
+ * whose principals all share one set of dimensions then weighs them as one
+ * line with a null `principalExpenseId`: largest remainder gives that group
+ * the whole adjustment either way, so grouped totals are unchanged.
  */
 export const expenseJointAllocationSql = (
   expenseIds?: ExpenseIdSelection,
@@ -91,8 +93,16 @@ export const expenseJointAllocationSql = (
     categories = true,
     trades = categories,
     projects = true,
-  }: { categories?: boolean; trades?: boolean; projects?: boolean } = {},
-): SQL => sql`
+    principals = true,
+  }: {
+    categories?: boolean;
+    trades?: boolean;
+    projects?: boolean;
+    principals?: boolean;
+  } = {},
+): SQL => {
+  const inherited = principalExpenseInheritanceSql("e", "live_purchase");
+  return sql`
   WITH ${
     expenseIds
       ? sql`selected_expense AS (
@@ -125,7 +135,7 @@ export const expenseJointAllocationSql = (
       : sql``
   } principal_fact AS (
     SELECT e."id" AS "expenseId", e."purchaseId",
-      ${projects ? effectiveExpenseProjectSql("e") : sql`NULL::uuid`} AS "projectId",
+      ${projects ? inherited.projectId : sql`NULL::uuid`} AS "projectId",
       ${
         // Resolve policy with set-based joins across the selected principals.
         // Reads without a category projection or scope omit its resolution.
@@ -133,7 +143,7 @@ export const expenseJointAllocationSql = (
           ? sql`principal_categories."spendingCategoryId"`
           : sql`NULL::uuid`
       } AS "spendingCategoryId",
-      ${trades ? effectiveExpenseTradeSql("e") : sql`NULL::text`} AS trade,
+      ${trades ? inherited.trade : sql`NULL::text`} AS trade,
       e."costType"::text AS "costType",
       round(e."cost"::numeric * 100)::bigint AS cost_cents,
       live_purchase."id" IS NOT NULL AS live_purchase,
@@ -145,6 +155,7 @@ export const expenseJointAllocationSql = (
     ${categories ? sql`LEFT JOIN principal_categories ON principal_categories."expenseId"=e.id` : sql``}
     LEFT JOIN "Purchase" live_purchase
       ON live_purchase."id" = e."purchaseId" AND live_purchase."deletedAt" IS NULL
+    ${projects || trades ? inherited.joins : sql``}
   ), purchase_direction AS (
     SELECT "purchaseId", coalesce(bool_or(cost_cents > 0), false) AS has_positive,
       coalesce(bool_or(cost_cents < 0), false) AS has_negative,
@@ -164,7 +175,16 @@ export const expenseJointAllocationSql = (
       -- principal keeps the unknown default instead of inventing a denominator.
       OR (NOT d.has_positive AND NOT d.has_negative
         AND NOT coalesce(d.has_unpriced_principal, false) AND f.cost_cents = 0)
-  ), fallback_weight AS (
+  ), ${
+    principals
+      ? sql``
+      : sql`principal_group AS (
+    SELECT "purchaseId", "projectId", "spendingCategoryId", trade, "costType", basis,
+      sum(weight)::bigint AS weight, count(*) OVER (PARTITION BY "purchaseId") AS groups
+    FROM principal_weight
+    GROUP BY "purchaseId", "projectId", "spendingCategoryId", trade, "costType", basis
+  ),`
+  } fallback_weight AS (
     SELECT p."id" AS "purchaseId", NULL::uuid AS "principalExpenseId",
       ${projects ? sql`default_project."id"` : sql`NULL::uuid`} AS "projectId",
       -- With no item line to follow, adjustments read the order's own category
@@ -182,7 +202,17 @@ export const expenseJointAllocationSql = (
       ${expenseIds ? sql`AND p."id" IN (SELECT "purchaseId" FROM selected_expense)` : sql``}
       AND NOT EXISTS (SELECT 1 FROM principal_weight w WHERE w."purchaseId" = p."id")
   ), weights AS (
-    SELECT * FROM principal_weight UNION ALL SELECT * FROM fallback_weight
+    ${
+      principals
+        ? sql`SELECT * FROM principal_weight`
+        : sql`SELECT * FROM principal_weight
+      WHERE "purchaseId" IN (SELECT "purchaseId" FROM principal_group WHERE groups > 1)
+    UNION ALL
+    SELECT "purchaseId", NULL::uuid AS "principalExpenseId", "projectId",
+      "spendingCategoryId", trade, "costType", basis, weight
+    FROM principal_group WHERE groups = 1`
+    }
+    UNION ALL SELECT * FROM fallback_weight
   ), adjustment_seed AS (
     SELECT e."id" AS "expenseId", e."purchaseId", w."principalExpenseId",
       ${projects ? sql`CASE WHEN p."id" IS NULL THEN standalone_project."id" ELSE w."projectId" END` : sql`NULL::uuid`} AS "projectId",
@@ -269,6 +299,7 @@ export const expenseJointAllocationSql = (
   LEFT JOIN ${spendingCategoryCatalogSql(draft)} c ON c."id" = a."spendingCategoryId" AND c."deletedAt" IS NULL
   ${expenseIds ? sql`WHERE a."expenseId" IN (SELECT "id" FROM selected_expense)` : sql``}
 `;
+};
 
 export type ExpenseAllocationProjectScope = {
   /** Select entire expenses independently of the shares being measured. */

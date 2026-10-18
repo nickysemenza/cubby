@@ -22,18 +22,22 @@ import {
 import type { ExpenseSpendingAllocationRow } from "./expense-spending-allocation";
 
 /** Each read declares its allocation dimensions before execution. Scope is
- * applied to rounded output shares, never to the complete sibling denominator. */
+ * applied to rounded output shares, never to the complete sibling denominator.
+ * Only `shares` exposes which principal line each share follows. */
 const derivedReads = {
-  shares: { categories: true, projects: true },
-  projects: { categories: false, projects: true },
-  categories: { categories: true, projects: true },
-  costs: { categories: false, projects: true },
-  membership: { categories: false, projects: false },
-  names: { categories: false, projects: true },
-  categoryNames: { categories: true, projects: true },
-  presence: { categories: false, projects: true },
-  categoryEvidence: { categories: true, projects: true },
-} satisfies Record<string, { categories: boolean; projects: boolean }>;
+  shares: { categories: true, projects: true, principals: true },
+  projects: { categories: false, projects: true, principals: false },
+  categories: { categories: true, projects: true, principals: false },
+  costs: { categories: false, projects: true, principals: false },
+  membership: { categories: false, projects: false, principals: false },
+  names: { categories: false, projects: true, principals: false },
+  categoryNames: { categories: true, projects: true, principals: false },
+  presence: { categories: false, projects: true, principals: false },
+  categoryEvidence: { categories: true, projects: true, principals: false },
+} satisfies Record<
+  string,
+  { categories: boolean; projects: boolean; principals: boolean }
+>;
 
 type DerivedRead = keyof typeof derivedReads;
 type DerivedReadOptions = {
@@ -77,6 +81,7 @@ export function expenseDerivedReadSql(
       categories,
       trades,
       projects,
+      principals: derivedReads[read].principals,
     });
   const membership = scope?.membershipProjectIds;
   const allocations =

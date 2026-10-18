@@ -1,3 +1,5 @@
+import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
+import type { ProjectId, PurchaseId } from "@cubby/schemas/identifiers";
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -16,7 +18,10 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 
 import { expenseDerivedCostsSql } from "./expense-derived-read";
 import { effectiveExpenseProjectSql } from "./expense-inheritance";
-import { loadExpenseProjectAllocations } from "./expense-project-allocation";
+import {
+  expenseJointAllocationSql,
+  loadExpenseProjectAllocations,
+} from "./expense-project-allocation";
 import { buildExpenseWhereClause } from "./lookup";
 
 const allocationPlanNode = z.object({
@@ -640,6 +645,153 @@ describe("expense project allocation", () => {
     expect(
       rows.reduce((sum, row) => sum + (row.attributedCents ?? 0n), 0n),
     ).toBe(1n);
+  });
+
+  // Grouped reads weigh a purchase whose principals share every dimension as
+  // one line. Largest remainder must still hand that group exactly what the
+  // per-principal split sums to, for every grouped read and purchase shape.
+  it("matches the per-principal split for every grouped read", async () => {
+    const [first, second] = await Promise.all([
+      insertWithShortcode(ctx.db, "project", { name: "Synthetic first" }),
+      insertWithShortcode(ctx.db, "project", { name: "Synthetic second" }),
+    ]);
+    const [pantry, hardware] = await Promise.all([
+      insertWithShortcode(ctx.db, "spendingCategory", {
+        name: `Synthetic pantry ${crypto.randomUUID()}`,
+      }),
+      insertWithShortcode(ctx.db, "spendingCategory", {
+        name: `Synthetic hardware ${crypto.randomUUID()}`,
+      }),
+    ]);
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic split supplier",
+    });
+    const order = (defaultProjectId?: ProjectId) =>
+      insertWithShortcode(ctx.db, "purchase", {
+        vendorId: vendor.id,
+        date: "2026-09-20",
+        defaultProjectId,
+      });
+    const line = (
+      purchaseId: PurchaseId,
+      lineKind: "principal" | "tax" | "fee" | "shipping" | "discount",
+      cost: number | null,
+      extra: Partial<typeof expense.$inferInsert> = {},
+    ) =>
+      insertWithShortcode(ctx.db, "expense", {
+        name: `Synthetic ${lineKind} ${cost}`,
+        cost,
+        date: "2026-09-20",
+        lineKind,
+        costType: lineKind === "principal" ? "materials" : "services",
+        future: false,
+        purchaseId,
+        ...extra,
+      });
+    const uniform = await order();
+    for (let index = 0; index < 3; index++)
+      await line(uniform.id, "principal", 1, { projectId: first.id });
+    await line(uniform.id, "tax", 1);
+    await line(uniform.id, "fee", 0.02, { trade: "plumbing" });
+    const mixed = await order();
+    await line(mixed.id, "principal", 1, { projectId: first.id });
+    await line(mixed.id, "principal", 2, { projectId: second.id });
+    await line(mixed.id, "principal", 0, { projectId: second.id });
+    await line(mixed.id, "shipping", 0.1);
+    await line(mixed.id, "discount", -0.07);
+    const zeros = await order();
+    for (let index = 0; index < 2; index++)
+      await line(zeros.id, "principal", 0, { projectId: second.id });
+    await line(zeros.id, "fee", 0.05);
+    const costTypes = await order();
+    await line(costTypes.id, "principal", 3, { projectId: first.id });
+    await line(costTypes.id, "principal", 3, {
+      projectId: first.id,
+      costType: "tools",
+    });
+    await line(costTypes.id, "tax", 0.01);
+    const categories = await order();
+    await line(categories.id, "principal", 1, {
+      projectId: first.id,
+      spendingCategoryId: pantry.id,
+    });
+    await line(categories.id, "principal", 1, {
+      projectId: first.id,
+      spendingCategoryId: hardware.id,
+    });
+    await line(categories.id, "tax", 0.03);
+    const unpriced = await order();
+    await line(unpriced.id, "principal", 5, { projectId: first.id });
+    await line(unpriced.id, "principal", null, { projectId: first.id });
+    await line(unpriced.id, "tax", 0.02);
+    const fallback = await order(second.id);
+    await line(fallback.id, "tax", 0.04);
+    const refund = await order();
+    await line(refund.id, "principal", -1, { projectId: second.id });
+    await line(refund.id, "principal", -2, { projectId: second.id });
+    await line(refund.id, "tax", -0.03);
+
+    const rows = async (statement: ReturnType<typeof sql>) =>
+      (await unwrapDb(ctx.db).execute(statement)).rows
+        .map((row) => JSON.stringify(row))
+        .sort();
+    const allDimensions = { categories: true, trades: true, projects: true };
+    const projectsOnly = { categories: false, trades: false, projects: true };
+    const reads = [
+      ["projects", projectsOnly, undefined],
+      ["names", projectsOnly, undefined],
+      ["presence", projectsOnly, undefined],
+      ["costs", projectsOnly, { projectIds: [first.id] }],
+      ["categories", allDimensions, undefined],
+      ["categoryNames", allDimensions, undefined],
+      ["categoryEvidence", allDimensions, undefined],
+      [
+        "costs",
+        { categories: false, trades: true, projects: true },
+        { trades: ["plumbing"] as const },
+      ],
+    ] as const;
+    for (const [read, dimensions, scope] of reads) {
+      const perPrincipal = expenseJointAllocationSql(undefined, undefined, {
+        ...dimensions,
+        principals: true,
+      });
+      expect(await rows(expenseDerivedReadSql(read, { scope }))).toEqual(
+        await rows(
+          expenseDerivedReadSql(read, { scope, source: perPrincipal }),
+        ),
+      );
+    }
+    const members = (source?: ReturnType<typeof sql>) =>
+      rows(
+        sql`SELECT DISTINCT "expenseId" FROM (${expenseDerivedReadSql(
+          "membership",
+          { scope: { projectIds: [first.id] }, source },
+        )}) member`,
+      );
+    expect(await members()).toEqual(
+      await members(
+        expenseJointAllocationSql(undefined, undefined, {
+          categories: false,
+          trades: false,
+          projects: true,
+          principals: true,
+        }),
+      ),
+    );
+
+    // The uniform tax still splits by principal where a read exposes it.
+    const tax = await unwrapDb(ctx.db).execute<{ attributedCents: string }>(
+      sql`SELECT share."attributedCents" FROM (${expenseDerivedReadSql("shares")}) share
+        JOIN "Expense" e ON e.id = share."expenseId"
+        WHERE e."purchaseId" = ${uniform.id} AND e."lineKind" = ${expenseLineKindSchema.enum.tax}
+        ORDER BY share."attributedCents"::bigint`,
+    );
+    expect(tax.rows.map((row) => row.attributedCents)).toEqual([
+      "33",
+      "33",
+      "34",
+    ]);
   });
 
   it("ORs a selected project with the unassigned presence sentinel", async () => {
