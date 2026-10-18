@@ -128,7 +128,9 @@ pending: nothing here starts Product research.
    `Resent-*` or `X-Google-Original-From` header, no `Fwd:` subject and no
    forwarded-message marker in the text or HTML body) defaults to
    `recipient` unless the model answers `third_party` with high confidence;
-   Delivered-To or Cc alone is not own mail. Any other Email needs a
+   evidence too large for the model stays `uncertain`, own mail included,
+   since the default needs an actual answer. Delivered-To or Cc alone is not
+   own mail. Any other Email needs a
    high-confidence answer. A refusal reports the label, its basis
    (`owner_default`, `model` or `oversized`), the model's label and
    probability, and any owner-evidence warnings. Payment, refund and

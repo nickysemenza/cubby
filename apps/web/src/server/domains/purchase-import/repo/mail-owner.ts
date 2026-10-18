@@ -7,7 +7,7 @@ import type { LedgerPartyId } from "@cubby/schemas/identifiers";
 import * as Sentry from "@sentry/tanstackstart-react";
 import { and, eq, inArray, isNotNull } from "drizzle-orm";
 
-import { scrubErrorMessage } from "~/lib/error-diagnostics";
+import { scrubbedError } from "~/lib/error-diagnostics";
 import type { Database } from "~/server/db";
 import { account, user } from "~/server/db/auth.schema";
 import { getDb, notDeleted } from "~/server/db/helpers";
@@ -41,10 +41,10 @@ const readGmailProfileAddress = async (
     return { address };
   } catch (error) {
     // Attribution proceeds on the sign-in address; the failure stays visible.
-    Sentry.captureException(error);
-    return unread(
-      scrubErrorMessage(error instanceof Error ? error.message : String(error)),
-    );
+    // Upstream bodies can carry tokens, so only the scrubbed copy leaves.
+    const captured = scrubbedError(error);
+    Sentry.captureException(captured);
+    return unread(captured.message);
   }
 };
 

@@ -45,10 +45,7 @@ export function normalizeMailAddress(address: string): string | null {
  */
 function headerAddresses(value: string | undefined): Set<string> {
   const found = new Set<string>();
-  const unquoted = (value ?? "")
-    .replace(/"(?:[^"\\]|\\.)*"/gu, " ")
-    .replace(/\([^()]*\)/gu, " ");
-  for (const mailbox of unquoted.split(/[,;]/u)) {
+  for (const mailbox of withoutQuotesAndComments(value ?? "").split(/[,;]/u)) {
     const angle = /<([^<>]*)>/u.exec(mailbox);
     // A group label (`Team: a@b`) precedes its first member.
     const spec = (angle ? angle[1]! : mailbox.replace(/^[^:@]*:/u, "")).trim();
@@ -57,6 +54,36 @@ function headerAddresses(value: string | undefined): Set<string> {
     if (normalized) found.add(normalized);
   }
   return found;
+}
+
+/**
+ * The header with quoted strings and (nested) comments blanked, honouring
+ * backslash escapes, so neither can contribute a recipient.
+ */
+function withoutQuotesAndComments(value: string): string {
+  let out = "";
+  let depth = 0;
+  let quoted = false;
+  for (let index = 0; index < value.length; index++) {
+    const char = value[index]!;
+    if (char === "\\" && (quoted || depth > 0)) {
+      index++;
+      continue;
+    }
+    if (quoted) {
+      if (char === '"') quoted = false;
+      continue;
+    }
+    if (char === "(") depth++;
+    else if (char === ")" && depth > 0) depth--;
+    else if (depth === 0) {
+      if (char === '"') quoted = true;
+      else out += char;
+      continue;
+    }
+    out += " ";
+  }
+  return out;
 }
 
 // Any of these means the copy travelled through another mailbox first.

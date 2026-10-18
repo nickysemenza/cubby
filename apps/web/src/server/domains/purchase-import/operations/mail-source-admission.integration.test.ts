@@ -8,7 +8,8 @@
  * and forwarded copies of one order book spending twice in either arrival
  * order; a vendor's direct mail to the mailbox owner's own address is
  * refused because headers-only evidence leaves the model uncertain, or one
- * the model confidently attributes to a third party is imported anyway.
+ * the model confidently attributes to a third party, or one too large for the
+ * model to read, is imported anyway.
  * Deterministic original checks precede all admission judgments.
  */
 import type { ActorContext } from "@cubby/schemas/context";
@@ -318,13 +319,17 @@ describe("Mail import source admission", () => {
     ).toEqual([]);
   });
 
-  async function ownInvoice(partyId: LedgerPartyId, messageId: string) {
+  async function ownInvoice(
+    partyId: LedgerPartyId,
+    messageId: string,
+    body = "Invoice attached.",
+  ) {
     const [owner] = await getDb(ctx.db)
       .select({ email: user.email })
       .from(user)
       .where(eq(user.id, ctx.actor.userId));
     // An invoice whose body is only its PDF: headers are the whole evidence.
-    return retain(partyId, messageId, "Invoice attached.", {
+    return retain(partyId, messageId, body, {
       headers: {
         from: "Synthetic kettle shop <orders@kettle.example.test>",
         to: owner!.email.toUpperCase(),
@@ -348,6 +353,27 @@ describe("Mail import source admission", () => {
     expect(JSON.parse(port.mock.calls[0]![0].state)).toMatchObject({
       mailboxOwner: { owner: { name: party.name } },
     });
+  });
+
+  it("refuses own mail too large for the model to judge", async () => {
+    const { party, vendor } = await world();
+    // Past the decision context: no model answer, so no owner default.
+    const invoice = await ownInvoice(
+      party.id,
+      "own-oversized-invoice",
+      "Synthetic kettle line. ".repeat(2_000),
+    );
+    const { id, actor } = await mailRun(party, [invoice], "discovery");
+    const port = decisions({ attribution: "recipient" });
+    await expect(
+      preparePurchaseImport(
+        ctx.db,
+        prepareInput(id, "oversized", vendor.shortcode, invoice, "SYN-11"),
+        actor,
+        port,
+      ),
+    ).rejects.toThrow(/attribution is uncertain; oversized/);
+    expect(port).not.toHaveBeenCalled();
   });
 
   it("refuses own mail the model confidently attributes to a third party", async () => {

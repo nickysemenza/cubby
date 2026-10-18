@@ -1,8 +1,29 @@
 import { describe, expect, it } from "vitest";
 
-import { describeErrorCauses, scrubErrorMessage } from "./error-diagnostics";
+import {
+  describeErrorCauses,
+  scrubbedError,
+  scrubErrorMessage,
+} from "./error-diagnostics";
 
 describe("error diagnostics", () => {
+  it("captures only a scrubbed message, without causes or properties", () => {
+    const upstream = Object.assign(
+      new TypeError(
+        'Gmail 401: {"error":"invalid_grant","refresh_token":"synthetic-token"}',
+        { cause: new Error("Authorization: Bearer synthetic-bearer") },
+      ),
+      { body: "access_token=synthetic-token" },
+    );
+    const copy = scrubbedError(upstream);
+    expect(copy.name).toBe("TypeError");
+    expect(copy.message).toContain("invalid_grant");
+    expect(copy.cause).toBeUndefined();
+    expect(JSON.stringify({ ...copy, message: copy.message })).not.toMatch(
+      /synthetic-(token|bearer)/,
+    );
+  });
+
   it("retains driver causes including Drizzle SQL and parameters", () => {
     const driver = Object.assign(new Error("Connection limit exceeded"), {
       code: "53300",

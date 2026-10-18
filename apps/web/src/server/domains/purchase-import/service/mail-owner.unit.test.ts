@@ -160,6 +160,19 @@ describe("isOwnMail", () => {
     ).toBe(true);
   });
 
+  it("ignores addresses inside nested comments", () => {
+    expect(
+      isOwnMail(
+        mail({
+          from: "orders@kettle.example",
+          to: "friend@elsewhere.example.test (note (nested),sam@home.example.test,rest)",
+        }),
+        evidence,
+        null,
+      ),
+    ).toBe(false);
+  });
+
   it("decides nothing without owner evidence", () => {
     expect(isOwnMail(mail(vendorToOwner), null, null)).toBe(false);
   });

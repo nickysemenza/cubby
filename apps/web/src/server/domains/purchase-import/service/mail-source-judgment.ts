@@ -68,7 +68,8 @@ export function mailJudgmentEvidence(mail: JudgedMail) {
  * One attribution decision. `model`: the decision model's label, which
  * counts only at high confidence (otherwise uncertain). `owner_default`: own
  * mail (`isOwnMail`) is `recipient` unless the model confidently answers
- * third_party. `oversized`: the evidence exceeded the decision context.
+ * third_party. `oversized`: the evidence exceeded the decision context, so
+ * no model answered and the label is uncertain, own mail included.
  * `warnings` carry owner-evidence gaps, such as an unreadable Gmail profile.
  */
 export type MailAttributionJudgment = {
@@ -131,7 +132,9 @@ export async function judgeMailAttributions(
       probability: result?.probability ?? null,
       warnings,
     };
-    if (own[index])
+    // The default needs the model's actual answer; oversized evidence that
+    // no model read stays uncertain even for own mail.
+    if (own[index] && result)
       return {
         ...decided,
         label: confident === "third_party" ? "third_party" : "recipient",
