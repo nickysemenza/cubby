@@ -16,12 +16,17 @@ public struct DatePresentation: Sendable, Equatable {
     private static let transcoder = LenientISO8601DateTranscoder()
 
     public static func timestamp(_ date: Date, now: Date = .now, compact: Bool = false) -> Self {
-        let sameYear = calendar.component(.year, from: date) == calendar.component(.year, from: now)
-        let pattern = compact ? (sameYear ? "MMM d" : "MMM d, yyyy") : "MMM d, yyyy, h:mm a"
-        let absolute = format(date, pattern: pattern)
-        return Self(
-            absolute: absolute, relative: distance(date.timeIntervalSince(now), compact: compact),
+        Self(
+            absolute: absolute(date, now: now, compact: compact),
+            relative: distance(date.timeIntervalSince(now), compact: compact),
             exact: format(date, pattern: "MMM d, yyyy, h:mm:ss a zzz"))
+    }
+
+    /// `timestamp(_:now:compact:).absolute` alone, for labels that never show the age or zone.
+    public static func absolute(_ date: Date, now: Date = .now, compact: Bool = false) -> String {
+        guard compact else { return format(date, pattern: "MMM d, yyyy, h:mm a") }
+        let sameYear = calendar.component(.year, from: date) == calendar.component(.year, from: now)
+        return format(date, pattern: sameYear ? "MMM d" : "MMM d, yyyy")
     }
 
     /// Capture provenance preserves the camera's recorded offset, without a live age.

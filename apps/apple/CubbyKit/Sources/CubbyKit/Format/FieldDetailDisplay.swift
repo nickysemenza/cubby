@@ -36,11 +36,7 @@ extension FieldDescriptor {
     /// The display rows the detail record carries for this field (`display.itemsPath`).
     public func detailItems(in raw: JSONValue) -> [DetailDisplayRow] {
         guard let itemsPath, let items = raw.pathValue(itemsPath)?.arrayValue else { return [] }
-        return items.compactMap { item in
-            (try? JSONEncoder().encode(item)).flatMap {
-                try? JSONDecoder().decode(DetailDisplayRow.self, from: $0)
-            }
-        }
+        return items.compactMap { try? $0.decoded(DetailDisplayRow.self) }
     }
 
     /// The value a detail row reads: the one at its declared `readPath` (`identity.kind`,

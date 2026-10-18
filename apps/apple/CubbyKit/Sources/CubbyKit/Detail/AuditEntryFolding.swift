@@ -70,16 +70,23 @@ public struct AuditFieldChange: Sendable, Hashable {
 
 extension AuditLogEntryOut {
     /// The entry's changed fields, sorted by name for a stable order.
-    public var fieldChanges: [AuditFieldChange] {
-        (changes?.additionalProperties ?? [:]).sorted { $0.key < $1.key }.map { field, diff in
+    public var fieldChanges: [AuditFieldChange] { fieldChanges(prefix: .max) }
+
+    /// The first `count` changed fields in `fieldChanges` order; a feed row words only the ones it
+    /// shows, since each value is a JSON round trip.
+    public func fieldChanges(prefix count: Int) -> [AuditFieldChange] {
+        (changes?.additionalProperties ?? [:]).sorted { $0.key < $1.key }.prefix(count).map {
+            field, diff in
             AuditFieldChange(field: field, from: Self.text(diff.from), to: Self.text(diff.to))
         }
     }
 
+    public var changedFieldCount: Int { changes?.additionalProperties.count ?? 0 }
+
     private static func text(_ value: JsonValue?) -> String? {
         guard let value,
-            let data = try? JSONEncoder().encode(value),
-            let json = try? JSONDecoder().decode(JSONValue.self, from: data)
+            let data = try? encoder.encode(value),
+            let json = try? decoder.decode(JSONValue.self, from: data)
         else { return nil }
         switch json {
         case .null: return nil
@@ -94,4 +101,8 @@ extension AuditLogEntryOut {
             return String(decoding: data, as: UTF8.self)
         }
     }
+
+    // Plain coders, shared: an audit diff holds no dates, and a feed words every shown value.
+    private static let encoder = JSONEncoder()
+    private static let decoder = JSONDecoder()
 }

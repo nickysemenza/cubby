@@ -83,7 +83,7 @@ private struct LibraryRecentThumbnail: View {
         }
         .frame(width: 112, height: 112)
         .clipShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel))
-        .accessibilityLabel(asset.creationDate.map { DatePresentation.timestamp($0).absolute } ?? "Photo")
+        .accessibilityLabel(asset.creationDate.map { DatePresentation.absolute($0) } ?? "Photo")
         .task(id: asset.localIdentifier) {
             thumbnail = try? await PhotoLibraryIO.shared.thumbnail(for: asset)
         }

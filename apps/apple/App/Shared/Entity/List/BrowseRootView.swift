@@ -169,7 +169,7 @@ struct BrowseRootView: View {
 /// failure, so a Browse row shows nothing on the right rather than a stale or fabricated number.
 @Observable
 final class BrowseCountsModel {
-    private(set) var counts: DashboardCountsOut?
+    private(set) var counts: EntityCounts?
     private var requestedHost: String?
 
     func load(client: CubbyClient, host: String, force: Bool = false) async {
@@ -178,7 +178,7 @@ final class BrowseCountsModel {
         do {
             let loaded = try await client.dashboardCounts()
             guard requestedHost == host else { return }
-            counts = loaded
+            counts = loaded.entityCounts
         } catch {
             guard requestedHost == host else { return }
             requestedHost = nil

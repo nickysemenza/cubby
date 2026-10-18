@@ -123,7 +123,7 @@ struct AuditEntryRow: View {
                         VStack(alignment: .leading, spacing: 2) {
                             DateDisplay(date: update.createdAt)
                                 .font(.caption2).foregroundStyle(.secondary)
-                            AuditChangeLines(changes: update.fieldChanges)
+                            AuditChangeLines(entry: update)
                         }
                     }
                 }
@@ -152,7 +152,7 @@ struct AuditEntryRow: View {
             DateDisplay(date: entry.createdAt)
         } supplement: {
             if !group.isFolded, entry.action == .update {
-                AuditChangeLines(changes: entry.fieldChanges)
+                AuditChangeLines(entry: entry)
             }
         }
     }
@@ -160,16 +160,17 @@ struct AuditEntryRow: View {
 
 /// An update's diff at a glance: the first two changed fields inline, the rest counted.
 struct AuditChangeLines: View {
-    let changes: [AuditFieldChange]
+    let entry: AuditLogEntryOut
 
     var body: some View {
+        let count = entry.changedFieldCount
         VStack(alignment: .leading, spacing: 2) {
-            ForEach(changes.prefix(2), id: \.field) { change in
+            ForEach(entry.fieldChanges(prefix: 2), id: \.field) { change in
                 Text("\(change.label): \(change.from ?? "(empty)") → \(change.to ?? "(empty)")")
                     .lineLimit(1)
             }
-            if changes.count > 2 {
-                Text("\(changes.count - 2) more \(changes.count == 3 ? "field" : "fields")")
+            if count > 2 {
+                Text("\(count - 2) more \(count == 3 ? "field" : "fields")")
                     .foregroundStyle(.secondary)
             }
         }
