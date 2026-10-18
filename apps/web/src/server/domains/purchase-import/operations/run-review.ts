@@ -238,7 +238,7 @@ async function reconcileSettledRunOnce(
           updatedAt: new Date(),
         })
         .where(eq(runTable.id, scope.public.runId));
-      return { unresolved: [] };
+      return { unresolved: [], reasons: new Map<string, string>() };
     });
     if (settled && !settled.unresolved.length)
       return { reconciled: true as const, status: "completed" as const };
