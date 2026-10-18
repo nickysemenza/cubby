@@ -68,8 +68,10 @@ jobs:
         if: github.event_name == 'push' || github.event_name == 'pull_request'
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
         with:
-          # Broad on purpose: a started Apple lane first probes the Nx cache
-          # on Linux, so over-selection costs one short Linux job.
+          # The Apple filter names native sources and the files the Apple
+          # tasks read directly, not the generator's web inputs: a PR that
+          # changes only the generated Swift client (contracts, schemas) skips
+          # the Apple lanes, and the nightly run catches what that misses.
           filters: |
             rust: &rust
               - 'recipebridge/**'
@@ -89,15 +91,10 @@ jobs:
               - '.github/actions/setup-apple/**'
               - 'scripts/{ensure,rust-fingerprint}.ts'
               - 'scripts/lib/**'
-              # Generator inputs (project.json cubby-checks:generate): the
-              # probe compares the generated Apple sources themselves.
-              - 'apps/web/generator/**'
-              - 'apps/web/src/**'
-              - 'apps/web/tooling/**'
-              - 'apps/web/{cloudflare.config.ts,tsconfig.json}'
-              - 'packages/**'
-              - '.claude/skills/purchase-import/references/**'
-              - '{package.json,pnpm-lock.yaml,redocly.yaml,.oxlintrc.json}'
+              # File inputs of appleCommon in apps/apple/project.json.
+              - 'apps/web/tooling/{simulator-inventory-schema,mac-fixture-identity}.ts'
+              - 'apps/web/generator/artifacts.ts'
+              - 'packages/shared/src/apple-{client-version,app-identity}.ts'
             purchase:
               - 'apps/web/src/server/domains/purchase-import/**'
               - 'apps/web/src/features/purchase/**'
