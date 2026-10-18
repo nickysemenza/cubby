@@ -336,7 +336,12 @@ function buildProblemsCount(): z.infer<typeof problemsCountSchema> {
   const zeroByType = Object.fromEntries(byTypeKeys.map((key) => [key, 0]));
   return mock(problemsCountSchema, {
     seed: 300,
-    overrides: { total: 14, coverageTotal: 3, byType: zeroByType },
+    overrides: {
+      total: 14,
+      autoFixTotal: 40,
+      coverageTotal: 3,
+      byType: zeroByType,
+    },
   });
 }
 

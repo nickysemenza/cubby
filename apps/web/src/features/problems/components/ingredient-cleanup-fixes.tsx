@@ -75,7 +75,7 @@ export function UnusedIngredientDeleteFix({
 // ── Bulk header buttons ──────────────────────────────────────────────────────
 
 /** A destructive header button that confirms before running its action. */
-function ConfirmHeaderButton({
+export function ConfirmHeaderButton({
   label,
   title,
   body,

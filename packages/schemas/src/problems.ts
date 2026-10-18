@@ -1147,6 +1147,48 @@ export const sumProblemSections = (
     0,
   );
 
+export type DefectProblemKey = Exclude<ProblemKey, CoverageProblemKey>;
+
+/**
+ * Defect detectors whose every row the Problems page's Fix button clears without
+ * a decision. They still count as defects, but the page, badge and Fix button
+ * report them apart from what needs a person: thousands of unindexed records
+ * otherwise bury the dozens that need a decision. The web Fix-button registry is
+ * typed against this list, so a key here without a task fails to compile.
+ */
+export const AUTO_FIX_PROBLEM_KEYS = [
+  "locationsWithoutAiDescription",
+  "entitiesMissingEmbeddings",
+] as const satisfies readonly DefectProblemKey[];
+export type AutoFixProblemKey = (typeof AUTO_FIX_PROBLEM_KEYS)[number];
+
+export const isAutoFixProblemKey = (key: string): key is AutoFixProblemKey =>
+  AUTO_FIX_PROBLEM_KEYS.some((candidate) => candidate === key);
+
+/**
+ * True population behind a set of detector keys. A Problems section is sized by
+ * its declared keys through this, never by its rendered rows, so the section
+ * counts sum to the headline figures exactly.
+ */
+export const problemKeysSize = (
+  sections: Partial<Record<ProblemKey, readonly unknown[]>>,
+  keys: readonly ProblemKey[],
+  totals: SectionTotals | undefined,
+): number =>
+  keys.reduce((n, key) => n + sectionSize(key, sections[key] ?? [], totals), 0);
+
+/** Defects split by who resolves them; the two parts sum to every defect. */
+export const splitDefects = (
+  sections: Record<string, readonly unknown[]>,
+  totals: SectionTotals | undefined,
+) => {
+  const autoFix = problemKeysSize(sections, AUTO_FIX_PROBLEM_KEYS, totals);
+  return {
+    needsYou: sumProblemSections(sections, "defect", totals) - autoFix,
+    autoFix,
+  };
+};
+
 // SAFETY: one `z.number()` per detector key.
 const byTypeFields = mapDetectors(
   () => true,
@@ -1154,8 +1196,13 @@ const byTypeFields = mapDetectors(
 ) as { [K in ProblemKey]: z.ZodNumber };
 
 export const problemsCountSchema = z.object({
-  /** Defect rows only — what the navbar badge and homepage banner show. */
+  /**
+   * Defect rows that need a decision — what the homepage banner and Today show.
+   * Excludes `autoFixTotal`.
+   */
   total: z.number().int(),
+  /** Defect rows the Problems page's Fix button clears (`AUTO_FIX_PROBLEM_KEYS`). */
+  autoFixTotal: z.number().int(),
   /** Coverage-backlog rows, reported separately so they never inflate `total`. */
   coverageTotal: z.number().int(),
   byType: z.object(byTypeFields),
@@ -1170,8 +1217,7 @@ export const problemsCountSchema = z.object({
  *
  * Deliberately its OWN schema and procedure rather than a field on
  * `problemsFastShape`: `allProblemArrayFields` must stay arrays-only, or the
- * mechanically-derived `byTypeShape` and `countProblems` both break on a
- * non-array key. `unvaluedBucketProducts` is absent on purpose — a misc bucket
+ * mechanically-derived `byTypeShape` breaks on a non-array key. `unvaluedBucketProducts` is absent on purpose — a misc bucket
  * has no meaningful population to be a fraction of, so it renders as a plain
  * list.
  */
@@ -1192,42 +1238,6 @@ export type ProblemsFast = z.infer<typeof problemsFastSchema>;
 export type ProblemsCoverage = z.infer<typeof problemsCoverageSchema>;
 export type ProblemsUpc = z.infer<typeof problemsUpcSchema>;
 export type ProblemsCount = z.infer<typeof problemsCountSchema>;
-
-// Derive the count payload from the full problems result: every array key
-// becomes its length. The single source of truth for badge/count consumers, so
-// they assemble the five cost-grouped queries and count locally (no re-scan).
-export const countProblems = (all: AllProblems): ProblemsCount => {
-  // `sectionTotals` must come OUT of the rest — it is not a detector section,
-  // and leaving it in would put a non-array into `byType`.
-  const {
-    totalProblems,
-    sectionTotals,
-    upcFreshness: _upcFreshness,
-    conversionCoverageFreshness: _conversionCoverageFreshness,
-  } = all;
-  // Freshness metadata sits beside detector arrays in the aggregate contract.
-  // Keep the mechanically-derived count roster arrays-only as promised.
-  const arrays = problemArraysSchema.parse(
-    Object.fromEntries(
-      Object.entries(all).filter(([, value]) => Array.isArray(value)),
-    ),
-  );
-  const byType = problemsCountSchema.shape.byType.parse(
-    Object.fromEntries(
-      Object.entries(arrays).map(([key, items]) => [
-        key,
-        sectionSize(key, items, sectionTotals),
-      ]),
-    ),
-  );
-  // `byType` stays the FULL roster (coverage keys included) so per-detector
-  // consumers and the MCP `type` slices keep working; only the totals split.
-  return {
-    total: totalProblems,
-    coverageTotal: sumProblemSections(arrays, "coverage", sectionTotals),
-    byType,
-  };
-};
 
 // Assemble the cost-grouped detector results into the combined AllProblems
 // shape (with derived total). Shared so the merge + total live in one place —

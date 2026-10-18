@@ -16,24 +16,24 @@ const problems = (overrides: Partial<AllProblems> = {}): AllProblems => ({
 });
 
 describe("buildAutoFixPlan", () => {
-  it("keeps maintenance work out of the listed-problems count", () => {
+  it("counts the true backlog behind a sampled section and keeps upkeep out of it", () => {
     const plan = buildAutoFixPlan(
       problems({
         entitiesMissingEmbeddings: fromPartial<
           AllProblems["entitiesMissingEmbeddings"]
         >([{ entityId: "sample" }]),
+        sectionTotals: { entitiesMissingEmbeddings: 6238 },
       }),
       maintenanceCountsSchema.parse({
         cullablePendingImages: 4,
-        entitiesMissingEmbeddings: 12,
+        entitiesMissingEmbeddings: 6238,
         staleRecipeTotals: 3,
         productsWithNoImages: 0,
         locationsWithoutAiDescription: 0,
       }),
     );
 
-    expect(plan.items).toBe(19);
-    expect(plan.listedItems).toBe(1);
+    expect(plan.issues).toBe(6238);
     expect(plan.tasks.map((task) => task.key)).toEqual([
       "cullPendingImages",
       "missingEmbeddings",
@@ -53,6 +53,6 @@ describe("buildAutoFixPlan", () => {
       }),
     );
 
-    expect(plan).toMatchObject({ items: 0, listedItems: 0, tasks: [] });
+    expect(plan).toMatchObject({ issues: 0, tasks: [] });
   });
 });

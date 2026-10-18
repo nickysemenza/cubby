@@ -12,6 +12,7 @@ import {
 } from "~/integrations/tanstack-query/cache-tags";
 import { problems as problemOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
+import { formatCount } from "~/lib/number-format";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Progress } from "~/ui/primitives/progress";
@@ -24,18 +25,8 @@ import {
 
 import { type AutoFixTask, buildAutoFixPlan } from "./auto-fix-registry";
 
-/**
- * What a run would do right now.
- *
- * Two different figures, deliberately not merged:
- * - `items` — everything the run touches. This is the button's promise, so it
- *   must include work with no Problems section (abandoned uploads) and the
- *   true uncapped figure behind a sampled section (missing embeddings).
- * - `listedItems` — the subset of `problems.totalProblems` the run clears. Only
- *   this may be described as "N of them", since `items` can legitimately exceed
- *   the issue count above it.
- */
-export function useAutoFixPlan(problems: AllProblems) {
+/** What a run would do right now: the listed issues it clears and its tasks. */
+function useAutoFixPlan(problems: AllProblems) {
   const { data: counts } = useQuery({
     ...problemOperations.getMaintenanceCounts.queryOptions(),
   });
@@ -59,7 +50,7 @@ export function useAutoFixPlan(problems: AllProblems) {
  */
 export function AutoFixButton({ problems }: { problems: AllProblems }) {
   const queryClient = useQueryClient();
-  const { items, tasks } = useAutoFixPlan(problems);
+  const { issues, tasks } = useAutoFixPlan(problems);
   const [running, setRunning] = useState<{
     done: number;
     total: number;
@@ -116,8 +107,11 @@ export function AutoFixButton({ problems }: { problems: AllProblems }) {
       ) : (
         <>
           <MagicWandIcon className="mr-2 size-3.5" />
-          Fix{" "}
-          {tasks.length ? `${items} ${items === 1 ? "item" : "items"}` : "—"}
+          {issues > 0
+            ? `Fix ${formatCount(issues)}`
+            : tasks.length
+              ? "Run upkeep"
+              : "Fix —"}
         </>
       )}
     </Button>

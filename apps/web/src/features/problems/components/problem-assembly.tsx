@@ -1,5 +1,4 @@
 import type { Entity } from "@cubby/schemas/entity";
-import type { ProblemsCoverage } from "@cubby/schemas/problems";
 import { describeRangeBounds, humanize } from "@cubby/shared";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
@@ -62,7 +61,6 @@ type ProblemAssemblyProps = {
     count: number;
     location: ProblemListLocation;
   }[];
-  projectionFreshness?: ProblemsCoverage["freshness"];
 };
 
 /**
@@ -140,74 +138,55 @@ const freshnessDetail = (query: ProblemQuery): string => {
 };
 
 /**
- * Read-only explanation of how a Problem is assembled. It deliberately looks
- * like ledger metadata, not a second filter bar: editing belongs on the list
- * that the exact continuation opens.
+ * Read-only explanation of how a Problem is assembled, folded behind "How it
+ * works". It deliberately looks like ledger metadata, not a second filter bar:
+ * editing belongs on the list that the exact continuation opens, which the
+ * section offers as its "+N more" row.
  */
 export function ProblemAssembly({
   queries,
   listLocations,
-  projectionFreshness,
 }: ProblemAssemblyProps) {
   if (queries.length === 0) return null;
 
   const isBranching = queries.length > 1;
   const derived = queries.some((query) => query.source.kind === "derived");
-  const onlyLocation =
-    listLocations.length === 1 ? listLocations[0] : undefined;
 
   return (
-    <Collapsible className="mt-2 border-t border-border pt-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="font-mono text-2xs tracking-wider text-slate uppercase">
-          {isBranching ? "Any branch" : "Assembly"}
-        </span>
-        {queries.map((query, queryIndex) => (
-          <Fragment key={query.key}>
-            {queryIndex > 0 && (
-              <span className="font-mono text-2xs text-muted-foreground">
-                OR
-              </span>
-            )}
-            {assemblyChips(query).map((chip, chipIndex) => (
-              <Fragment key={`${query.key}-${chip}`}>
-                {chipIndex > 0 && (
-                  <span className="text-xs text-muted-foreground">AND</span>
+    <Collapsible>
+      <CollapsibleTrigger
+        render={
+          <Button
+            size="xs"
+            variant="ghost"
+            className="-ml-1.5 text-muted-foreground"
+          />
+        }
+      >
+        How it works <CaretDownIcon className="ml-1 size-3" />
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="mt-1 space-y-2 border-l border-border pl-2 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="font-mono text-2xs tracking-wider text-slate uppercase">
+              {isBranching ? "Any branch" : "Assembly"}
+            </span>
+            {queries.map((query, queryIndex) => (
+              <Fragment key={query.key}>
+                {queryIndex > 0 && (
+                  <span className="font-mono text-2xs">OR</span>
                 )}
-                <span className="border border-border bg-muted/40 px-2 py-1 text-xs text-foreground">
-                  {chip}
-                </span>
+                {assemblyChips(query).map((chip, chipIndex) => (
+                  <Fragment key={`${query.key}-${chip}`}>
+                    {chipIndex > 0 && <span>AND</span>}
+                    <span className="border border-border bg-muted/40 px-1.5 py-0.5 text-foreground">
+                      {chip}
+                    </span>
+                  </Fragment>
+                ))}
               </Fragment>
             ))}
-          </Fragment>
-        ))}
-        {onlyLocation && !isBranching && !derived && (
-          <a
-            href={onlyLocation.location.href}
-            className={cn(
-              buttonVariants({ size: "xs", variant: "ghost" }),
-              "ml-auto",
-            )}
-          >
-            <FunnelIcon className="mr-1 size-3" />
-            Open {onlyLocation.count}{" "}
-            {entityPluralLabel(onlyLocation.location.entity).toLowerCase()}
-          </a>
-        )}
-        {queries.some((query) => query.freshness.kind === "projection") &&
-          projectionFreshness?.state !== "fresh" && (
-            <span className="border border-warning/40 bg-warning/10 px-2 py-1 text-xs text-warning-ink">
-              {projectionFreshness?.state === "unavailable"
-                ? "Projection unavailable"
-                : "Projection stale"}
-            </span>
-          )}
-        <CollapsibleTrigger render={<Button size="xs" variant="ghost" />}>
-          How it works <CaretDownIcon className="ml-1 size-3" />
-        </CollapsibleTrigger>
-      </div>
-      <CollapsibleContent>
-        <div className="mt-2 space-y-2 border-l border-border pl-2 text-xs text-muted-foreground">
+          </div>
           {queries.map((query) => (
             <div key={query.key}>
               {isBranching && (

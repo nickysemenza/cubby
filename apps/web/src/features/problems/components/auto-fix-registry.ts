@@ -1,5 +1,10 @@
 import { CULL_PENDING_IMAGES_DEFAULT_HOURS } from "@cubby/schemas/image";
-import type { AllProblems, MaintenanceCounts } from "@cubby/schemas/problems";
+import {
+  type AllProblems,
+  type AutoFixProblemKey,
+  type MaintenanceCounts,
+  problemKeysSize,
+} from "@cubby/schemas/problems";
 import { countLabel } from "@cubby/shared/pluralize";
 import { sumBy } from "es-toolkit";
 
@@ -24,48 +29,36 @@ type AutoFixOutcome = {
 export type AutoFixTask = {
   key: string;
   label: string;
-  /** Problems-page section this task fully clears, when it has one. */
-  sectionId?: string;
-  /**
-   * How many items this task would act on right now. `null` means "not
-   * countable" — such a task never contributes to the headline figure and only
-   * runs alongside a task that does (see `alwaysRun`).
-   */
-  count: (
-    problems: AllProblems,
-    counts: MaintenanceCounts | undefined,
-  ) => number | null;
-  /**
-   * How many of `count` are actually represented in `problems.totalProblems` —
-   * the only figure the summary card may phrase as "N of them".
-   *
-   * REQUIRED, deliberately: a task's count and its listed count diverge more
-   * often than not, and every task that draws its count from `MaintenanceCounts`
-   * rather than an `AllProblems` array contributes ZERO here — that describes
-   * three of the six. Defaulting this to `count` silently overcounted twice
-   * during review, so each task must now state where its number comes from and
-   * the compiler enforces it.
-   *
-   * Second way to reach zero: a section classed `coverage` in `PROBLEM_CLASS`
-   * is excluded from `totalProblems`, so a task fixing one must return 0 here
-   * even though it reads a real `AllProblems` array. All three non-zero tasks
-   * below happen to be defect-classed today.
-   */
-  listedCount: (
-    problems: AllProblems,
-    counts: MaintenanceCounts | undefined,
-  ) => number;
   /** Run alongside the others even at a zero/unknown count (idempotent tail steps). */
   alwaysRun?: boolean;
   run: () => Promise<AutoFixOutcome>;
   /**
    * Cache tags to invalidate once the WHOLE run finishes. Declared per task
    * rather than read off each descriptor because the button batches one
-   * invalidation across every task it ran, and two of the six are held-open
+   * invalidation across every task it ran, and two of them are held-open
    * streams with no `useMutation` to hang `meta` on.
    */
   invalidateTags?: InvalidationTagSet;
-};
+} & (
+  | {
+      /**
+       * The Problems detector this task clears in full. Its size is the
+       * section's own count, so the Fix button and the "fix automatically"
+       * headline are the same figure.
+       */
+      problemKey: AutoFixProblemKey;
+      count?: never;
+    }
+  | {
+      problemKey?: never;
+      /**
+       * Upkeep with no Problems section. `null` means "not countable" — such a
+       * task only runs alongside one that counts (see `alwaysRun`). Never part
+       * of the button's number, which promises only issues listed on the page.
+       */
+      count: (counts: MaintenanceCounts | undefined) => number | null;
+    }
+);
 
 /**
  * The fixes the top-of-page "Fix" button runs — every Problems remedy that
@@ -92,14 +85,11 @@ export type AutoFixTask = {
  * one server procedure would rebuild exactly the monolith that blew the 30s
  * Worker CPU limit and forced the Problems page into cost-grouped queries.
  */
-const AUTO_FIX_TASKS: AutoFixTask[] = [
+const AUTO_FIX_TASKS = [
   {
     key: "cullPendingImages",
     label: "Cull abandoned uploads",
-    count: (_problems, counts) => counts?.cullablePendingImages ?? null,
-    // Abandoned uploads are maintenance, not a detected problem — there's no
-    // Problems section for them, so none of this work is in `totalProblems`.
-    listedCount: () => 0,
+    count: (counts) => counts?.cullablePendingImages ?? null,
     invalidateTags: ripple.image,
     run: async () => {
       const r = await imageUpload.cullPendingImages.call({
@@ -115,10 +105,7 @@ const AUTO_FIX_TASKS: AutoFixTask[] = [
   {
     key: "locationDescriptions",
     label: "Analyze location photos",
-    sectionId: "ai-descriptions",
-    count: (problems) => problems.locationsWithoutAiDescription.length,
-    // Its own section, uncapped.
-    listedCount: (problems) => problems.locationsWithoutAiDescription.length,
+    problemKey: "locationsWithoutAiDescription",
     invalidateTags: ripple.location,
     run: async () => {
       const r = await collectBulkStream(
@@ -134,13 +121,7 @@ const AUTO_FIX_TASKS: AutoFixTask[] = [
   {
     key: "missingEmbeddings",
     label: "Backfill search embeddings",
-    sectionId: "missing-embeddings",
-    // The Problems section only carries a sampled list, so the true figure comes
-    // from the maintenance counts.
-    count: (_problems, counts) => counts?.entitiesMissingEmbeddings ?? null,
-    // The section is a capped sample, so only what's listed counts toward the
-    // total — a model swap can make the true figure dwarf it.
-    listedCount: (problems) => problems.entitiesMissingEmbeddings.length,
+    problemKey: "entitiesMissingEmbeddings",
     invalidateTags: ripple.search,
     // Republishes every derived-data kind whose freshness marker is stale, not
     // just embeddings — there is no per-kind "just the embeddings" enqueue any
@@ -158,11 +139,9 @@ const AUTO_FIX_TASKS: AutoFixTask[] = [
   {
     key: "staleRecipeTotals",
     label: "Recompute stale recipe totals",
-    count: (_problems, counts) => counts?.staleRecipeTotals ?? null,
-    // Maintenance-only, like the image cull: `staleRecipeTotals` lives in
-    // MaintenanceCounts and has no Problems section, so none of it is in the
-    // total. (`staleParentRecipes` is a different, unrelated detector.)
-    listedCount: () => 0,
+    // `staleRecipeTotals` is maintenance with no Problems section
+    // (`staleParentRecipes` is a different, unrelated detector).
+    count: (counts) => counts?.staleRecipeTotals ?? null,
     invalidateTags: ripple.recipeList,
     run: async () => {
       const r = await collectBulkStream(await openRecipeRecomputeStaleStream());
@@ -173,29 +152,40 @@ const AUTO_FIX_TASKS: AutoFixTask[] = [
       };
     },
   },
-];
+] satisfies AutoFixTask[];
 
-export const AUTO_FIX_SECTION_IDS = new Set(
-  AUTO_FIX_TASKS.flatMap((task) => (task.sectionId ? [task.sectionId] : [])),
-);
+type MissingAutoFixTask = Exclude<
+  AutoFixProblemKey,
+  NonNullable<(typeof AUTO_FIX_TASKS)[number]["problemKey"]>
+>;
+// Every auto-fix detector needs a task, or the page would promise a Fix the
+// button can't run.
+const everyAutoFixKeyHasATask: [MissingAutoFixTask] extends [never]
+  ? true
+  : MissingAutoFixTask = true;
+void everyAutoFixKeyHasATask;
 
 /**
- * Pure plan calculation shared by the button and summary. Keeping counting
- * separate from React/query state makes sampled-vs-maintenance totals testable.
+ * Pure plan calculation for the button. `issues` is the listed Problems the run
+ * clears — the "fix automatically" headline; upkeep tasks ride along without
+ * adding to it.
  */
 export function buildAutoFixPlan(
   problems: AllProblems,
   counts: MaintenanceCounts | undefined,
 ) {
-  const counted = AUTO_FIX_TASKS.map((task) => ({
+  const tasks: readonly AutoFixTask[] = AUTO_FIX_TASKS;
+  const counted = tasks.map((task) => ({
     task,
-    count: task.count(problems, counts),
+    count: task.problemKey
+      ? problemKeysSize(problems, [task.problemKey], problems.sectionTotals)
+      : task.count(counts),
   }));
   const actionable = counted.filter((entry) => (entry.count ?? 0) > 0);
   return {
-    items: sumBy(actionable, (entry) => entry.count ?? 0),
-    listedItems: sumBy(actionable, (entry) =>
-      entry.task.listedCount(problems, counts),
+    issues: sumBy(
+      actionable.filter((entry) => entry.task.problemKey),
+      (entry) => entry.count ?? 0,
     ),
     // Tail steps ride along, but only when something else justified the run.
     tasks: actionable.length

@@ -6,10 +6,10 @@ import { maintenance } from "~/integrations/tanstack-query/generated/catalog.gen
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {
-  AwaitingWorkCard,
+  AwaitingWorkList,
   type AwaitingWorkOperations,
   awaitingWorkRefetchInterval,
-} from "./awaiting-work-card";
+} from "./awaiting-work";
 
 const counts = (overrides: Partial<AwaitingWork> = {}): AwaitingWork => ({
   staleRecipeTotals: 0,
@@ -34,7 +34,7 @@ function createOperations(awaiting: AwaitingWork | Error) {
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 
-describe("AwaitingWorkCard", () => {
+describe("AwaitingWorkList", () => {
   beforeEach(() => {
     harness = createBrowserTestHarness();
   });
@@ -46,7 +46,7 @@ describe("AwaitingWorkCard", () => {
     const { operations } = createOperations(
       counts({ staleRecipeTotals: 3, unembeddedEntities: 12 }),
     );
-    render(<AwaitingWorkCard operations={operations} />, {
+    render(<AwaitingWorkList operations={operations} />, {
       wrapper: harness.wrapper,
     });
 
@@ -61,7 +61,7 @@ describe("AwaitingWorkCard", () => {
 
   it("says nothing is waiting instead of showing zeros", async () => {
     const { operations } = createOperations(counts());
-    render(<AwaitingWorkCard operations={operations} />, {
+    render(<AwaitingWorkList operations={operations} />, {
       wrapper: harness.wrapper,
     });
     expect(await screen.findByText("Nothing waiting.")).toBeInTheDocument();
@@ -70,7 +70,7 @@ describe("AwaitingWorkCard", () => {
 
   it("reports a failed read truthfully rather than as a clean card", async () => {
     const { operations } = createOperations(new Error("db down"));
-    render(<AwaitingWorkCard operations={operations} />, {
+    render(<AwaitingWorkList operations={operations} />, {
       wrapper: harness.wrapper,
     });
     expect(await screen.findByText("db down")).toBeInTheDocument();
