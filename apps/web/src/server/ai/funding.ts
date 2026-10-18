@@ -8,6 +8,7 @@ import { and, desc, eq, gte, isNotNull, isNull } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { aiUsage, run } from "~/server/db/schema";
+import { readPaidGrant } from "~/server/domains/run/repo/paid-grant";
 
 import {
   AI_BUDGET_WINDOW_MS,
@@ -212,4 +213,14 @@ export async function isBackgroundRun(
     current = row.predecessorRunId;
   }
   return false;
+}
+
+/** A grant allows paid fallback; its confirmed excess lapses with its window. */
+export async function readPaidAllowance(db: Database, runId: RunId) {
+  const grant = await readPaidGrant(db, runId);
+  if (!grant) return null;
+  return aiBudgetWindow(grant.createdAt).start.getTime() ===
+    aiBudgetWindow().start.getTime()
+    ? (grant.paidOverBudgetUsd ?? 0)
+    : 0;
 }

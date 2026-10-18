@@ -150,6 +150,9 @@ Run (and the imports its discovery starts) within the paid budget; spending past
 spent paid budget requires a second confirmation naming the amount, valid for
 the window it was granted in. The paid budget counts charged cost only, so
 credit usage never consumes it.
+The header exposes this funding action for discovery and suggestion Runs too,
+without giving them import-agent commands. Every frontier admission path reads
+the same Run grant and window-scoped allowance.
 
 Considered: pausing interactive work too (rejected: rare interactive work stays
 interactive); a scheduled six-hour cron for resume (rejected: frequent crons

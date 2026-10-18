@@ -169,7 +169,7 @@ function RunActionButtons({
 }
 
 /** Paused by a funding stop (`pauseExecutionRun`): waiting for free capacity or the paid budget. */
-const waitsForFunding = (run: RunDetail) =>
+const waitsForFunding = (run: Pick<RunDetail, "status" | "failureCode">) =>
   run.status === "paused_auth" && run.failureCode === "execution_limit";
 
 /** The member's one-Run override: resume now with paid models allowed. */
@@ -1097,24 +1097,29 @@ function RunLink({ label, publicId }: { label: string; publicId: string }) {
   );
 }
 
-/** The same cached work read supplies agent controls on every detail tab. */
+/** Funding controls apply to every Run; agent commands stay with imports. */
 export function RunAgentActions({ record }: { record: RunOut }) {
-  return agentImportRunPurpose.safeParse(record.purpose).success ? (
+  return agentImportRunPurpose.safeParse(record.purpose).success ||
+    waitsForFunding(record) ? (
     <RunAgentActionRead record={record} />
   ) : null;
 }
 function RunAgentActionRead({ record }: { record: RunOut }) {
   const query = useSyncedRun(record, true);
+  const agentRun =
+    query.data && agentImportRunPurpose.safeParse(query.data.purpose).success;
   return query.data ? (
     <>
       {waitsForFunding(query.data) ? <PaidRunControl run={query.data} /> : null}
       {query.data.purpose === "photo_inventory" ? (
         <PhotoRunGroupingAction run={query.data} />
       ) : null}
-      <RunActionButtons
-        runId={query.data.publicId}
-        actions={runActions(query.data)}
-      />
+      {agentRun ? (
+        <RunActionButtons
+          runId={query.data.publicId}
+          actions={runActions(query.data)}
+        />
+      ) : null}
     </>
   ) : null;
 }

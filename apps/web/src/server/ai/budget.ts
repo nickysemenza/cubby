@@ -146,12 +146,15 @@ export function withAiBudget<R>(
 ): ((request: R) => Promise<void>) | undefined {
   if (preflight || !db || !aiBudgetCovers(call.model)) return preflight;
   return async () => {
+    let allowanceUsd = 0;
     if (call.runId) {
       const funding = await import("./funding");
-      if (await funding.isBackgroundRun(db, call.runId))
+      const allowance = await funding.readPaidAllowance(db, call.runId);
+      if (allowance === null && (await funding.isBackgroundRun(db, call.runId)))
         throw await funding.fundingWaitError(db);
+      allowanceUsd = allowance ?? 0;
     }
-    await assertAiBudget(db);
+    await assertAiBudget(db, allowanceUsd);
   };
 }
 

@@ -13,6 +13,7 @@ import {
   DEFAULT_CREDIT_BUDGET_USD,
   aiBudgetWindow,
   readAiBudget,
+  withAiBudget,
 } from "~/server/ai/budget";
 import { readChatGptPlanAvailability } from "~/server/ai/funding";
 import { setCfEnv } from "~/server/cf-env";
@@ -198,6 +199,29 @@ describe("household AI funding at the paid transport boundary", () => {
       .update(run)
       .set({ updatedAt: previousWindow() })
       .where(eq(run.id, runId));
+
+  // Non-agent background features use the generic funding wrapper rather
+  // than the agent preflight; a member grant must work at both boundaries.
+  it("honors a paid grant in generic background feature admission while retaining the paid limit", async () => {
+    const runId = await setup("mail_discovery");
+    const preflight = withAiBudget(
+      ctx.db,
+      { model: "gpt-6-sol", runId },
+      undefined,
+    );
+    if (!preflight) throw new Error("Synthetic frontier call has no preflight");
+    await expect(preflight(chatRequest())).rejects.toBeInstanceOf(
+      AiFundingWaitError,
+    );
+    await grant(runId);
+    await expect(preflight(chatRequest())).resolves.toBeUndefined();
+    await spend(runId, AI_BUDGET_LIMIT_USD);
+    await expect(preflight(chatRequest())).rejects.toBeInstanceOf(
+      AiBudgetExhaustedError,
+    );
+    await grant(runId, { paidOverBudgetUsd: 1 });
+    await expect(preflight(chatRequest())).resolves.toBeUndefined();
+  });
 
   it("counts Claude credit at standard cost and never as paid", async () => {
     const runId = await setup("mail_import");

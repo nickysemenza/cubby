@@ -10,13 +10,13 @@ import { z } from "zod";
 import {
   AiBudgetExhaustedError,
   aiBudgetCovers,
-  aiBudgetWindow,
   assertAiBudget,
 } from "~/server/ai/budget";
 import {
   creditBudgetRefusal,
   fundingWaitError,
   isBackgroundRun,
+  readPaidAllowance,
   type FundingStatusPorts,
 } from "~/server/ai/funding";
 import { getAiGatewayEgress } from "~/server/cf-env";
@@ -31,7 +31,6 @@ import {
   assertRunExecutable,
   pauseExecutionRun,
 } from "../repo/execution-context";
-import { readPaidGrant } from "../repo/paid-grant";
 
 function runningOwnerMatches(
   live: RunExecutionIdentity | undefined,
@@ -110,19 +109,6 @@ async function selectedCoordinatorExecution(
 
 const RESUME_MARGIN_MS = 60_000;
 
-/**
- * A grant's confirmed spend past the paid budget lapses with the window it
- * was granted in, so one confirmation never stretches a later window.
- */
-const paidAllowance = (grant: {
-  createdAt: Date;
-  paidOverBudgetUsd: number | null;
-}) =>
-  aiBudgetWindow(grant.createdAt).start.getTime() ===
-  aiBudgetWindow().start.getTime()
-    ? (grant.paidOverBudgetUsd ?? 0)
-    : 0;
-
 /** The frontier chat model a request names; other endpoints are never budgeted. */
 async function budgetedModel(request: GatewayFetchRequest) {
   if (request.endpoint !== "responses" && request.endpoint !== "v1/messages")
@@ -150,10 +136,10 @@ export function paidRunPreflight(
     await assertRunExecutable(db, runId);
     if (!(await budgetedModel(request))) return;
     try {
-      const grant = await readPaidGrant(db, runId);
-      if (!grant && (await isBackgroundRun(db, runId)))
+      const allowance = await readPaidAllowance(db, runId);
+      if (allowance === null && (await isBackgroundRun(db, runId)))
         throw await fundingWaitError(db, ports);
-      await assertAiBudget(db, grant ? paidAllowance(grant) : 0);
+      await assertAiBudget(db, allowance ?? 0);
     } catch (error) {
       if (error instanceof AiBudgetExhaustedError) {
         await pauseExecutionRun(db, runId, error.message);

@@ -37,6 +37,7 @@ export async function controlWorkflowRun(
       id: runTable.id,
       shortcode: runTable.shortcode,
       status: runTable.status,
+      failureCode: runTable.failureCode,
       actorUserId: runTable.actorUserId,
       memberUserId: ledgerParty.userId,
       attempt: sql<number>`coalesce((${runTable.progress}->>'attempt')::int, 0)`,
@@ -68,15 +69,12 @@ export async function controlWorkflowRun(
     return;
   }
   if (input.action === "run_now_paid") {
-    // Only background Mail discovery waits for free capacity; the recorded
-    // event is its paid grant (`readPaidGrant`), inherited by its imports.
-    if (
-      purpose !== "mail_discovery" ||
-      !["paused", "paused_auth"].includes(row.status)
-    )
+    // Every background frontier Workflow shares funding admission. Discovery
+    // grants also cover its child imports; unrelated auth pauses stay blocked.
+    if (row.status !== "paused_auth" || row.failureCode !== "execution_limit")
       throw createAppError(
         "RUN_CONTROL_REFUSED",
-        `Only paused Mail discovery can run now with paid models (${purpose}, ${row.status})`,
+        `Only a funding-paused Run can run now with paid models (${purpose}, ${row.status}, ${row.failureCode})`,
       );
     await recordPaidGrant(db, actor, {
       runId: row.id,
