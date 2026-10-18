@@ -352,10 +352,12 @@ result may wait for the active run; deployment remains independent.
 
 `Plan` runs on the `ubuntu-slim` container runner and only path-filters the
 Rust and Apple lanes with `dorny/paths-filter`: a pull request against its
-base, a push against its `before` commit. Its filters are inline in `ci.yaml`
-and deliberately broad: the Apple filter includes the generator's inputs, since
-the Linux probe compares the generated Apple sources themselves. Nightly and
-manual runs start both. Outward-text validation runs in the final gate so a
+base, a push against its `before` commit. Its filters are inline in `ci.yaml`.
+The Apple filter names native sources and the files the Apple tasks read
+directly, not the generator's web inputs: a change that only alters the
+generated Swift client (a contract or schema edit) skips the Apple lanes, and
+the nightly run catches a native break it causes. Nightly and manual runs start
+both. Outward-text validation runs in the final gate so a
 metadata error cannot suppress otherwise-runnable checks.
 
 `CI passed` is the single required check (`re-actors/alls-green` on

@@ -25,8 +25,9 @@ Mac (63 hits and 50 rebuilds that day) and never matched the Linux probe's key
   replays unchanged tasks.
 - `Plan` path-filters only the Rust runner and the Apple lanes, with inline
   `dorny/paths-filter` groups against the PR base or the push's `before`
-  commit. Nightly and manual runs start both. The Apple filter is broad: the
-  Linux probe, not the filter, keeps a cached pass off macOS.
+  commit. Nightly and manual runs start both. The Apple filter names native
+  sources and direct Apple task inputs, not the generator's web inputs; the
+  Linux probe keeps a cached pass of a started lane off macOS.
 - Apple passes key a declared toolchain (`.xcode-version`, the Xcode major
   `setup-apple` selects) and plain `env` inputs, never a command observed on a
   Mac, so Linux and macOS compute the same key. Minor Xcode updates reuse
@@ -52,5 +53,7 @@ Mac (63 hits and 50 rebuilds that day) and never matched the Linux probe's key
 - Diffing against the PR base can skip the Rust or Apple lane on a PR whose
   base never passed them; the nightly run and the next lane-touching change
   catch that.
+- A contract or schema change that only alters the generated Swift client
+  skips the Apple lanes; the nightly run catches a native break it causes.
 - An Xcode minor update or Rust stable release does not invalidate Apple passes;
   only a `fresh` dispatch or a changed input builds against it.
