@@ -6,6 +6,8 @@ import {
   location,
   productCategory,
 } from "../../src/server/db/schema";
+import { AUTOMATIC_RULES } from "~/server/generic/assessment/automatic-rules";
+
 import { taxonomyRootFixtures } from "../product-category-fixtures";
 
 /**
@@ -54,7 +56,7 @@ export async function seedBaseWorld(db: InsertClient): Promise<void> {
       {
         family: "field",
         ruleKey: "field.addition",
-        revision: "2026-10-18.1",
+        revision: AUTOMATIC_RULES["field.addition"].revision(),
         enabled: true,
         enabledAt: new Date(),
         enabledReason: "Synthetic base world: as migrated",
@@ -62,7 +64,7 @@ export async function seedBaseWorld(db: InsertClient): Promise<void> {
       {
         family: "statement_transaction",
         ruleKey: "statement_transaction.attach",
-        revision: "2026-10-18.1/2026-10-17.1",
+        revision: AUTOMATIC_RULES["statement_transaction.attach"].revision(),
         enabled: false,
         disabledAt: new Date(),
         disabledReason: "Synthetic base world: as migrated",
