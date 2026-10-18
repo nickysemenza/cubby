@@ -384,12 +384,12 @@ function imageBackfillStep(ports: MaintenancePorts): StepDriver {
       const { db, step, run } = context;
       // Paid describe/identify calls stop at the frontier-model budget; the
       // Run pauses until the window ends and resumes from this cursor.
-      const budget = await readAiBudget(db);
-      if (budget.spentUsd >= budget.limitUsd)
+      const { paid, windowEnd } = await readAiBudget(db);
+      if (paid.spentUsd >= paid.limitUsd)
         return {
           kind: "paused",
-          reason: `AI budget used for this window ($${roundTo(budget.spentUsd, 2)} of $${budget.limitUsd})`,
-          until: new Date(budget.windowEnd),
+          reason: `Paid AI budget used for this window ($${roundTo(paid.spentUsd, 2)} of $${paid.limitUsd})`,
+          until: new Date(windowEnd),
         };
       const retried = retryRefs(context, "image:").map((id) =>
         imageId.parse(id),

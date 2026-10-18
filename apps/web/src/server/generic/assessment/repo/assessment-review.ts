@@ -378,6 +378,17 @@ export async function reviewAssessment(
   );
 }
 
+function assertReviewAction(
+  name: AssessmentFamily,
+  verdict: Review["verdict"],
+  automatic: AutomaticReview | null,
+) {
+  if (automatic && !AUTOMATIC_RULE_FAMILIES.some((rule) => rule === name))
+    throw new Error(`${name} Assessments have no Automatic rule; review them`);
+  if (!assessmentFamilies[name].actions.some((action) => action === verdict))
+    throw new Error(`Unsupported ${name} review action ${verdict}`);
+}
+
 async function settleReview(
   db: Database,
   context: EntityKernelContext,
@@ -426,17 +437,7 @@ async function settleReview(
   if (!prediction) throw new Error("Assessment not found");
   const family = assessmentFamilies[prediction.family];
   family.subject.parse(prediction.subject);
-  if (
-    automatic &&
-    !AUTOMATIC_RULE_FAMILIES.some((name) => name === prediction.family)
-  )
-    throw new Error(
-      `${prediction.family} Assessments have no Automatic rule; review them`,
-    );
-  if (!family.actions.some((action) => action === input.verdict))
-    throw new Error(
-      `Unsupported ${prediction.family} review action ${input.verdict}`,
-    );
+  assertReviewAction(prediction.family, input.verdict, automatic);
   if (input.suppression) {
     if (
       !["dismissed", "wrong"].includes(input.verdict) ||

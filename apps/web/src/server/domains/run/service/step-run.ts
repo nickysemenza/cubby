@@ -386,14 +386,16 @@ export async function recoverStepRuns(
   launcher: WorkflowLauncher = productionWorkflowLauncher,
   runIds?: readonly string[],
   now = new Date(),
+  budgetRaised = false,
 ) {
-  const budget = await readAiBudget(db, now);
-  const budgetOpen = budget.spentUsd < budget.limitUsd;
+  const { paid } = await readAiBudget(db, now);
+  const budgetOpen = paid.spentUsd < paid.limitUsd;
   const candidates = await stepRunsToRecover(
     db,
     STEP_RUN_PURPOSES,
     now,
     runIds,
+    budgetRaised,
   );
   let launched = 0;
   for (const candidate of candidates) {

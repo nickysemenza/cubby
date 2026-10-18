@@ -286,7 +286,12 @@ export async function stepRunsToRecover(
   purposes: readonly string[],
   now: Date,
   runIds?: readonly string[],
+  budgetRaised = false,
 ) {
+  const budgetPaused = and(
+    eq(run.status, "paused_auth"),
+    eq(run.failureCode, "execution_limit"),
+  );
   return getDb(db)
     .select({ id: run.id, purpose: run.purpose, status: run.status })
     .from(run)
@@ -299,37 +304,40 @@ export async function stepRunsToRecover(
               runIds.map((id) => runEntityId.parse(id)),
             )
           : undefined,
-        or(
-          and(
-            eq(run.status, "running"),
-            attemptIs(0),
-            lte(run.createdAt, new Date(now.getTime() - 60_000)),
-          ),
-          // A crashed or never-dispatched attempt (reconcile fails a lost
-          // first dispatch) retries under the automatic-failure cap; a member's
-          // cancellation and recorded step failures are outcomes, not crashes.
-          and(
-            inArray(run.status, ["failed", "dispatch_failed"]),
-            sql`${run.failureCode} IS DISTINCT FROM 'user_cancelled'`,
-            sql`coalesce((${run.progress}->>'automaticRecoveryFailures')::int, 0) < ${MAX_AUTOMATIC_WORKFLOW_FAILURES}`,
-          ),
-          and(
-            eq(run.status, "paused_auth"),
-            eq(run.failureCode, "execution_limit"),
-            notExists(
-              getDb(db)
-                .select({ id: runStep.id })
-                .from(runStep)
-                .where(
-                  and(
-                    eq(runStep.runId, run.id),
-                    eq(runStep.state, "paused"),
-                    gt(runStep.pausedUntil, now),
-                  ),
+        // A raised credit limit resumes budget-paused Runs before their window
+        // ends; nothing else is recovered on that path.
+        budgetRaised
+          ? budgetPaused
+          : or(
+              and(
+                eq(run.status, "running"),
+                attemptIs(0),
+                lte(run.createdAt, new Date(now.getTime() - 60_000)),
+              ),
+              // A crashed or never-dispatched attempt (reconcile fails a lost
+              // first dispatch) retries under the automatic-failure cap; a member's
+              // cancellation and recorded step failures are outcomes, not crashes.
+              and(
+                inArray(run.status, ["failed", "dispatch_failed"]),
+                sql`${run.failureCode} IS DISTINCT FROM 'user_cancelled'`,
+                sql`coalesce((${run.progress}->>'automaticRecoveryFailures')::int, 0) < ${MAX_AUTOMATIC_WORKFLOW_FAILURES}`,
+              ),
+              and(
+                budgetPaused,
+                notExists(
+                  getDb(db)
+                    .select({ id: runStep.id })
+                    .from(runStep)
+                    .where(
+                      and(
+                        eq(runStep.runId, run.id),
+                        eq(runStep.state, "paused"),
+                        gt(runStep.pausedUntil, now),
+                      ),
+                    ),
                 ),
+              ),
             ),
-          ),
-        ),
       ),
     );
 }

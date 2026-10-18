@@ -138,6 +138,7 @@ describe("Workflow paid funding controls", () => {
       expect(launches).toEqual([purpose]);
     },
   );
+});
 
 // CUBBY-1E8: recovery paths race to relaunch the same Run. The loser must see
 // "already running or ended" as a no-op, not throw on an unrelated request.

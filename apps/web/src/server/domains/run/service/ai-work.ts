@@ -400,7 +400,14 @@ export async function resumeFundingPausedRuns(
       log.warn("funding-paused discovery did not resume", { runId, error });
     }
   }
-  return imports + discoveries;
+  // Budget-paused Sweeps and maintenance passes wait for their window to end;
+  // a raised limit (anyWindow) resumes them now.
+  const steps = anyWindow
+    ? await (
+        await import("./step-run")
+      ).recoverStepRuns(db, launcher, undefined, now, true)
+    : 0;
+  return imports + discoveries + steps;
 }
 
 export async function recoverManualAiWork(

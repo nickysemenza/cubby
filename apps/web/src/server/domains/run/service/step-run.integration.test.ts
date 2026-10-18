@@ -193,13 +193,9 @@ describe("step-ledger Runs", () => {
       failureCode: "execution_limit",
     });
     expect(await recoverStepRuns(ctx.db, launcher, [id])).toBe(0);
+    // A raised credit limit resumes the pass before its window ends.
     expect(
-      await recoverStepRuns(
-        ctx.db,
-        launcher,
-        [id],
-        new Date(until.getTime() + 1_000),
-      ),
+      await recoverStepRuns(ctx.db, launcher, [id], new Date(), true),
     ).toBe(1);
     const resumed = await readRun(id);
     expect(resumed?.status).toBe("running");
