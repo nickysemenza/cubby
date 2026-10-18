@@ -36,15 +36,14 @@ import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 
 /** Rule revision stamped on every published suggestion; bump with any policy change. */
-export const STATEMENT_SUGGESTION_REVISION = "2026-10-17.1";
-export const STATEMENT_SUGGESTION_PAGE = FINANCIAL_STATEMENT_IMPORT_MAX_ROWS;
+const STATEMENT_SUGGESTION_REVISION = "2026-10-17.1";
+const STATEMENT_SUGGESTION_PAGE = FINANCIAL_STATEMENT_IMPORT_MAX_ROWS;
 /** A hold's posted twin lands within this window, and a vanished hold is judged after it. */
-export const PENDING_POST_WINDOW_DAYS = 7;
+const PENDING_POST_WINDOW_DAYS = 7;
 const SIBLING_WINDOW_DAYS = 3;
 
 export type ChargeRef = { source: string; chargeKey: string };
-export const chargeId = (charge: ChargeRef) =>
-  `${charge.source}:${charge.chargeKey}`;
+const chargeId = (charge: ChargeRef) => `${charge.source}:${charge.chargeKey}`;
 
 type Observation = {
   id: string;
@@ -91,7 +90,7 @@ const tuples = (charges: readonly ChargeRef[]) =>
   );
 
 /** Unmatched charges in `(source, chargeKey)` order after the cursor. */
-export async function nextUnmatchedCharges(
+async function nextUnmatchedCharges(
   db: Database,
   input: { after: ChargeRef | null; limit: number },
 ): Promise<ChargeRef[]> {
@@ -198,7 +197,7 @@ type PendingTransaction = {
  * Pending transactions whose every live settlement ref names a statement row
  * the provider reported as pending: holds this ledger itself recorded.
  */
-export async function statementPendingTransactions(
+async function statementPendingTransactions(
   db: Database,
   accountIds: readonly string[],
 ): Promise<PendingTransaction[]> {
@@ -695,7 +694,7 @@ async function loadObservationsById(db: Database, rowIds: readonly string[]) {
 }
 
 /** The import proving the hold vanished: newer, same account, past the window, without it. */
-export async function laterCoveringImport(
+async function laterCoveringImport(
   db: Database,
   input: {
     source: string;
@@ -867,7 +866,7 @@ export async function publishChargeProposal(
   });
 }
 
-export const ruleProducer = (runId: string | null): AssessmentProducer => ({
+const ruleProducer = (runId: string | null): AssessmentProducer => ({
   kind: "rule",
   model: null,
   revision: STATEMENT_SUGGESTION_REVISION,

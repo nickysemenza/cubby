@@ -27,12 +27,13 @@ export type StatementTransactionAction = z.infer<
 /** How the proposed kind was chosen; only `rule` is bulk-acceptable. */
 export const statementTransactionKindSource = z.enum(["rule", "model", "sign"]);
 
+// Transaction column names rather than a vocabulary of their own, so they are
+// declared outside an inline enum: SQL that names these columns is not using
+// a schema enum value.
+const transactionFields = ["amount", "postedDate", "status"] as const;
+
 /** Fields an attach or supersede may copy from the statement onto the transaction. */
-export const statementTransactionField = z.enum([
-  "amount",
-  "postedDate",
-  "status",
-]);
+export const statementTransactionField = z.enum(transactionFields);
 
 /** Advisory model reading of one candidate; it never authorizes an action. */
 export const statementCandidateLabel = z.object({

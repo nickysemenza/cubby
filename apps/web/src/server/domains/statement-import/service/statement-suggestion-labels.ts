@@ -27,7 +27,7 @@ import {
 } from "~/server/domains/statement-import/repo/statement-suggestions";
 
 /** One queue message labels at most this many suggestions. */
-export const STATEMENT_LABEL_BATCH = 20;
+const STATEMENT_LABEL_BATCH = 20;
 
 const identityLabel = {
   same_charge: "same",
