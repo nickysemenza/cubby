@@ -585,7 +585,7 @@ export const rowSetSql = (
   const where = and(
     first.condition,
     first.softDelete ? sql`${firstAlias}."deletedAt" IS NULL` : undefined,
-    ...Object.entries(storage.where).map(
+    ...Object.entries(storage.kind === "path" ? storage.where : {}).map(
       ([column, value]) => sql`${leaf(column)} = ${value}`,
     ),
   );

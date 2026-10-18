@@ -914,6 +914,23 @@ const rowSetPredicates = (
         const flag = optionalBoolean.parse(value);
         return flag === undefined ? [] : condition(sql`${column} = ${flag}`);
       }
+      // Bounds on the shared row. A related view's range (product tasks by
+      // due date) leaves its presence key to the view, which reads "has any
+      // related record", not "has a value".
+      case "range": {
+        if (descriptor.wire.kind !== "range") return [];
+        const [low, high] = [
+          rangeBound.parse(values[descriptor.wire.from]),
+          rangeBound.parse(values[descriptor.wire.to]),
+        ];
+        const bounds = and(
+          low === undefined ? undefined : sql`${column} >= ${low}`,
+          high === undefined ? undefined : sql`${column} <= ${high}`,
+        );
+        return bounds === undefined
+          ? []
+          : [{ any: bounds, all: null, presence: undefined, absent: false }];
+      }
       default: {
         const picked = nonEmpty(optionalTextList.parse(value));
         const matches = (items: readonly string[]) =>

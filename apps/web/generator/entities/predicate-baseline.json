@@ -1,6 +1,6 @@
 {
   "email": ["purchaseId", "vendorAccountId", "vendorId"],
   "inventory": ["effectiveOwner"],
-  "product": ["effectiveOwner", "taskDue", "taskOpen", "taskStatus"],
+  "product": ["effectiveOwner"],
   "project": ["dateRange"]
 }

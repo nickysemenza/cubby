@@ -258,13 +258,23 @@ describe("product list declared filters", () => {
         [w.flour, w.misc, w.kit, w.bit, w.tote],
       ],
       [{ taskStatusFilter: ["in_progress"] }, [w.flour]],
-      [{ taskOpenOnly: true }, [w.flour]],
+      // The Open preset: every status but done.
+      [
+        {
+          taskStatusFilter: ["not_started", "later", "in_progress", "blocked"],
+        },
+        [w.flour],
+      ],
       // Status and due constrain the same task: the in-progress task has no
       // due date and the dated one is done.
       [{ taskStatusFilter: ["in_progress"], taskDueTo: "2026-12-31" }, []],
-      [{ taskOpenOnly: false }, all],
-      [{ taskStatusFilter: [], taskOpenOnly: true }, [w.flour]],
+      [{ taskStatusFilter: ["done"], taskDueTo: "2026-12-31" }, [w.flour]],
       [{ taskStatusFilter: [], taskDueTo: "2026-08-01" }, []],
+      // Exclude reads any task: flour has a done task.
+      [
+        { taskStatusExclude: ["done"] },
+        [w.driver, w.misc, w.kit, w.bit, w.tote],
+      ],
       [{ stockTrackedPresenceFilter: "has" }, [w.driver]],
       // The generated sub-category toggle: on by default, off is exact.
       [

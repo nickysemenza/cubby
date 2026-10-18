@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { wasm } from "~/lib/wasm";
+import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { getDb } from "~/server/db/helpers";
 import {
   image as imageTable,
@@ -781,5 +782,81 @@ describe("row-set filters", () => {
     expect(
       inFixture(await listed("project", { attentionPresenceFilter: "none" })),
     ).toEqual([budgeted]);
+  });
+
+  it("matches a product's tasks by their effective subject, on one task", async () => {
+    const kernel = context();
+    const product = async (name: string) =>
+      (
+        await executeEntityAs(kernel, "create", {
+          entity: "product",
+          data: buildEntity("product", { name }),
+        })
+      ).item.id;
+    const direct = await product("Row-set directly tasked");
+    const inherited = await product("Row-set inherited subject");
+    const untasked = await product("Row-set untasked");
+    const parent = await createRepoEntity(ctx, "task", {
+      name: "Row-set parent task",
+      subjectProductId: parseShortcodeFor("product", inherited),
+      status: "done",
+      dueDate: "2026-09-01",
+      trade: "other",
+    });
+    // The child sets no subject, so it reads its parent's.
+    await createRepoEntity(ctx, "task", {
+      name: "Row-set child task",
+      parentTaskId: parent.output.id,
+      status: "blocked",
+      trade: "other",
+    });
+    await createRepoEntity(ctx, "task", {
+      name: "Row-set direct task",
+      subjectProductId: parseShortcodeFor("product", direct),
+      status: "in_progress",
+      dueDate: "2026-10-01",
+      trade: "other",
+    });
+    const fixture = new Set<string>([direct, inherited, untasked]);
+    const inFixture = (ids: string[]) => ids.filter((id) => fixture.has(id));
+    /** The retired predicate: a live task with the effective subject matching every key. */
+    const retired = (statuses: string[], from?: string, to?: string) =>
+      sql`"Product"."deletedAt" IS NULL AND "Product"."id" IN (
+        SELECT ${effectiveFieldSql("task", "subjectProductId")} FROM "Task"
+        WHERE "Task"."deletedAt" IS NULL
+          AND ${effectiveFieldSql("task", "subjectProductId")} IS NOT NULL
+          AND ${statuses.length > 0 ? matchesValues(sql`"Task"."status"`, statuses) : sql`true`}
+          AND ${from === undefined ? sql`true` : sql`"Task"."dueDate" >= ${from}`}
+          AND ${to === undefined ? sql`true` : sql`"Task"."dueDate" <= ${to}`})`;
+    const open = ["not_started", "later", "in_progress", "blocked"];
+    const cases: [ListFilterValues, SQL][] = [
+      [{ taskStatusFilter: ["blocked"] }, retired(["blocked"])],
+      [{ taskStatusFilter: open }, retired(open)],
+      [{ taskDueFrom: "2026-09-15" }, retired([], "2026-09-15")],
+      // One task: the inherited subject's dated task is done, its open one undated.
+      [
+        { taskStatusFilter: open, taskDueTo: "2026-09-30" },
+        retired(open, undefined, "2026-09-30"),
+      ],
+    ];
+    for (const [filters, condition] of cases)
+      expect(
+        labelled(filters, inFixture(await listed("product", filters))),
+      ).toEqual(
+        labelled(filters, inFixture(await oracle("Product", condition))),
+      );
+    // Only the child task is blocked; it reaches the product through its parent.
+    expect(
+      inFixture(await listed("product", { taskStatusFilter: ["blocked"] })),
+    ).toEqual([inherited]);
+    // Combining the Open preset with Done now unions the statuses.
+    expect(
+      inFixture(
+        await listed("product", { taskStatusFilter: [...open, "done"] }),
+      ),
+    ).toEqual(sorted([direct, inherited]));
+    expect(
+      inFixture(await listed("product", { taskStatusPresenceFilter: "none" })),
+    ).toEqual([untasked]);
   });
 });
