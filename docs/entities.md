@@ -2042,8 +2042,16 @@ for example, `Purchase.products` combines detachable `explicit` evidence from
 product-linked Expense, including exits, adjustments, unknown quantities, and
 planned lines. Counts, filters, inverse navigation, and graph traversal use the
 same deduplicated union. Movement roles and planned status are backend evidence;
-an explicit-only link is Linked and does not establish acquisition or ownership.
-Acquisition dates and pricing retain their narrower acquisition rules.
+an unconfirmed explicit-only link is Linked and does not establish acquisition or
+ownership. Existing links remain unconfirmed. Explicit acquisition confirmation
+(`EntityLink.acquisitionConfirmed`, allowed only on `purchaseProduct`) establishes
+Acquired with unknown item cost and quantity; it creates no Expense or inventory.
+The purchase date locates its timeline marker as order context, never delivery;
+confirmation supplies no ledger date or ownership interval. Exact Expense binding
+remains separate, and itemized acquiring Expenses remain authoritative. The
+unpurchased quality check accepts confirmed live purchase links or real acquiring
+Expenses, excluding plans. Acquisition dates and pricing retain their narrower
+acquisition rules.
 Mutable sources additionally name a typed item schema, adapter, and
 transport exposure. The compiler rejects duplicate relation/source keys,
 unresolvable mutation sources, invalid inverses, and stale generated bindings.

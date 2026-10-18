@@ -183,6 +183,16 @@ export const ripple = {
   maintenance: exactRippleTags([["maintenance"], ["problems"], ["search"]]),
   problemsSearch: exactRippleTags([["problems"], ["search"]]),
   recommendations: exactRippleTags([["recommendations"]]),
+  connections: exactRippleTags(
+    allEntities.map((entity): OperationCacheTag => [entity]),
+    [
+      ["connections"],
+      ["recommendations"],
+      ["workQueue"],
+      ["maintenance"],
+      FIELD_SUGGESTIONS,
+    ],
+  ),
   /** A member review can reopen a remembered decline. */
   settledSuggestions: exactRippleTags([["ai", "settledSuggestionQuestion"]]),
   collection: exactRippleTags([["collection"]]),

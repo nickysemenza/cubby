@@ -149,6 +149,8 @@ const discoveryCursor = z.object({
   fieldDone: z.boolean().default(false),
   emailDone: z.boolean().default(false),
   productDone: z.boolean().default(false),
+  connectionDone: z.boolean().default(false),
+  connection: z.uuid().nullable().default(null),
   product: z.uuid().nullable().default(null),
   field: z
     .object({ entity: z.string(), recordId: z.uuid(), field: z.string() })

@@ -100,6 +100,11 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "product" },
+        control: {
+          kind: "specialized",
+          renderer: "entity-select",
+          suggest: { basis: ["name", "author"], reviewRequired: true },
+        },
       },
       { key: "importedAt", kind: "timestamp" },
       {

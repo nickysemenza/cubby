@@ -5,6 +5,7 @@ import {
   connectedRecordsPreviewOutputSchema,
 } from "@cubby/schemas/connected-records";
 import {
+  connectionDiscoveryOut,
   entityConnectionsInput,
   entityConnectionsOut,
 } from "@cubby/schemas/entity-connections";
@@ -13,12 +14,15 @@ import {
   entityGraphExploreOutputSchema,
   entityGraphInputSchema,
   entityGraphOutputSchema,
+  entityGraphRootSchema,
   entityGraphPathsInputSchema,
   entityGraphPathsOutputSchema,
 } from "@cubby/schemas/entity-graph";
+import { allEntities } from "@cubby/schemas/entity-manifest";
+import { z } from "zod";
 
 import { ENTITY_ROOT_TAGS } from "~/contracts/cache-policy";
-import { defineContract, query } from "~/contracts/define";
+import { defineContract, mutation, query } from "~/contracts/define";
 import {
   generatedEntityRelationListInputSchema,
   generatedEntityRelationListOutputSchema,
@@ -84,5 +88,36 @@ export const entityGraphContract = defineContract("entity", {
     input: entityConnectionsInput,
     output: entityConnectionsOut,
     cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
+  }),
+});
+
+export const connectionContract = defineContract("connection", {
+  read: query({
+    input: entityGraphRootSchema,
+    output: connectionDiscoveryOut,
+    cache: {
+      tags: [
+        ["connections"],
+        ...allEntities.map((entity) => [entity] as const),
+      ],
+    },
+    native: "Read stored connection candidates from either endpoint",
+  }),
+  readBatch: query({
+    input: z.object({ sources: z.array(entityGraphRootSchema).max(250) }),
+    output: z.array(connectionDiscoveryOut),
+    cache: {
+      tags: [
+        ["connections"],
+        ...allEntities.map((entity) => [entity] as const),
+      ],
+    },
+    mcp: { omit: "client_view" },
+  }),
+  discover: mutation({
+    input: entityGraphRootSchema,
+    output: connectionDiscoveryOut,
+    invalidates: ["connections"],
+    native: "Explicitly discover connections using existing typed matchers",
   }),
 });

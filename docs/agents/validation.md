@@ -61,6 +61,11 @@ generator, or test, and again before pushing: results from a stale base miss
 migrations, generated artifacts, and ratchets (layout counts, schema budgets)
 that main has since changed, so they are not evidence for the merge.
 
+Construct synthetic domain fixtures through the supported `createRepoEntity`
+writer roster. For other entities, use the owning `create…Fixture` and
+`make…Input` helpers so required defaults survive. Create Runs with `ensureRun`
+and an actor; tests of system scheduling must seed `systemActor().userId`.
+
 Test subprocesses invoke Node/the installed tool directly and inherit the
 necessary parent environment. Never invoke a package manager from a test: its
 dependency verification can install or prune modules under concurrent suites.

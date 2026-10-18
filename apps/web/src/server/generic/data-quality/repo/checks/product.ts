@@ -68,16 +68,17 @@ const hasAmazonId = (t: Product) => sql`EXISTS (
 const hasAcquiringExpense = (t: Product) => sql`EXISTS (
   SELECT 1 FROM "Expense" dq_acq
   WHERE dq_acq."productId" = ${t.id} AND dq_acq."deletedAt" IS NULL
+    AND dq_acq."future" = false
     AND ${sql.raw(expenseAcquisitionSql("dq_acq"))}
 )`;
 
-// A photo-inventory-created Product is stocked (has inventory) but was never
-// claimed by a purchase: no acquiring Expense, and no explicit `purchaseProduct`
-// link (the enrichment path a purchase import takes when it later matches
-// this same Product — see `product-identity.md`).
+// Identity links alone do not prove that the household acquired a Product.
+// Confirmation requires a live order; it carries no item cost or quantity.
 const hasPurchaseProductLink = (t: Product) => sql`EXISTS (
   SELECT 1 FROM "EntityLink" dq_pp
+  JOIN "Purchase" dq_purchase ON dq_purchase."id" = dq_pp."fromEntityId" AND dq_purchase."deletedAt" IS NULL
   WHERE dq_pp."toEntityId" = ${t.id} AND dq_pp."deletedAt" IS NULL AND dq_pp."kind" = 'purchaseProduct'
+    AND dq_pp."acquisitionConfirmed" = true
 )`;
 
 const hasExternalId = (t: Product) => sql`EXISTS (

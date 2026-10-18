@@ -113,6 +113,8 @@ const CLIENT_PASSTHROUGH_METHODS = {
   "ai.describeLocation": { method: "describeLocation", doc: null },
   "assessment.review": { method: "reviewAssessment", doc: null },
   "assessment.reviewBatch": { method: "reviewAssessments", doc: null },
+  "connection.read": { method: "readConnections", doc: null },
+  "connection.discover": { method: "discoverConnections", doc: null },
   "image.attachExisting": { method: "attachExistingImage", doc: null },
   "spendingClassification.preview": {
     method: "previewSpendingClassification",

@@ -469,6 +469,22 @@ const FIELD_SUGGEST_OVERRIDES = {
     detailOf: projectOptionDetail,
     renderLine: renderProjectOption,
   } satisfies ReferenceSuggestSpec<ProjectOptionsOut>,
+  "cookbook.productId": {
+    ...FIELD_SUGGEST_DECISIONS["cookbook.productId"],
+    roster: (db, basis) => lexicalProductCandidates(db, basis.name ?? null),
+    idOf: (c) => c.id,
+    labelOf: (c) => c.title,
+    detailOf: (c) => c.subtitle,
+    renderLine: renderProductCandidate,
+  } satisfies ReferenceSuggestSpec<InternalSearchCandidate>,
+  "device.productId": {
+    ...FIELD_SUGGEST_DECISIONS["device.productId"],
+    roster: (db, basis) => lexicalProductCandidates(db, basis.name ?? null),
+    idOf: (c) => c.id,
+    labelOf: (c) => c.title,
+    detailOf: (c) => c.subtitle,
+    renderLine: renderProductCandidate,
+  } satisfies ReferenceSuggestSpec<InternalSearchCandidate>,
   "task.subjectProductId": {
     ...FIELD_SUGGEST_DECISIONS["task.subjectProductId"],
     roster: (db, basis) => lexicalProductCandidates(db, basis.name ?? null),

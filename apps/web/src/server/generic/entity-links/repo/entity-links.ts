@@ -208,6 +208,7 @@ type LinkRow = {
   fromEntityId: string;
   toEntityId: string;
   quantity: number | null;
+  acquisitionConfirmed: boolean;
 };
 
 type LinkRepointResult = {
@@ -251,6 +252,7 @@ export async function repointLinkEnd(
       fromEntityId: entityLink.fromEntityId,
       toEntityId: entityLink.toEntityId,
       quantity: entityLink.quantity,
+      acquisitionConfirmed: entityLink.acquisitionConfirmed,
     })
     .from(entityLink)
     .where(and(liveLinks(args.kind), inArray(own, [...mergeSet])))
@@ -293,6 +295,16 @@ export async function repointLinkEnd(
     if (absorbed.length === 0) continue;
     switch (collision) {
       case "dropLoser":
+        // Confirmation survives either end's merge, including duplicate links.
+        if (
+          !target.acquisitionConfirmed &&
+          absorbed.some((row) => row.acquisitionConfirmed)
+        ) {
+          await tx
+            .update(entityLink)
+            .set({ acquisitionConfirmed: true })
+            .where(eq(entityLink.id, target.id));
+        }
         break;
       case "dedupeEqualQuantityElseRefuse":
         if (absorbed.some((row) => row.quantity !== target.quantity))

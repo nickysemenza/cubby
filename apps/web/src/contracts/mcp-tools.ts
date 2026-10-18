@@ -23,6 +23,7 @@ import { aiContract } from "~/contracts/ai.contract";
 import { auditLogContract } from "~/contracts/audit-log.contract";
 import { cookbookContract } from "~/contracts/cookbook.contract";
 import { dataQualityContract } from "~/contracts/data-quality.contract";
+import { connectionContract } from "~/contracts/entity-graph.contract";
 import { entityGraphContract } from "~/contracts/entity-graph.contract";
 import { expenseContract } from "~/contracts/expense.contract";
 import {
@@ -116,6 +117,11 @@ export const MCP_TOOLS = defineMcpTools({
         }),
         description:
           "Stored field suggestions; every filter composes: entity, field or fields, kind, minConfidence, runId, and recordIds (with entity). status defaults to pending (the review queue; each Assessment id feeds entity.review_assessment); applied, rejected and superseded read reviewed history with correctValue — the decision-eval label set. Paired trial rows never appear.",
+      }),
+      connection_candidates: mcpAction({
+        op: connectionContract.ops.read,
+        description:
+          "Stored typed connection candidates from either endpoint. Reading performs no discovery or model calls. Review each original Assessment through entity.review_assessment; similarity alone establishes no relationship.",
       }),
       inventory_ownership_context: mcpAction({
         op: expenseContract.ops.inventoryOwnershipContext,
@@ -253,6 +259,12 @@ export const MCP_TOOLS = defineMcpTools({
         op: assessmentContract.ops.review,
         description:
           "Review immutable evidence as correct, wrong, uncertain or a presentation dismissal. Draft review does not apply; saved application is revalidated.",
+      }),
+      discover_connections: mcpAction({
+        op: connectionContract.ops.discover,
+        modelBacked: true,
+        description:
+          "Discover proposed relationships for an existing record using bounded typed matchers. Publishes Assessments, without accepting new links. Repeated purchases remain eligible. Review the exact proposed effect before acceptance.",
       }),
       review_assessments: mcpAction({
         op: assessmentContract.ops.reviewBatch,

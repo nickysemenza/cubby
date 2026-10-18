@@ -1,9 +1,15 @@
 import { z } from "zod";
+import {
+  assessmentReviewReference,
+  assessmentSuppression,
+} from "./assessment-reference";
+import { entityGraphRootSchema } from "./entity-graph";
 
 import { entitySchema } from "./entity-core";
 import { edgeRoleSchema, operationDispositionSchema } from "./entity-integrity";
 import { shortcodeEntities } from "./entity-manifest";
 import { anyShortcodeSchema, nonEmptyTuple } from "./identifier-fields";
+import { runShortcode } from "./identifiers";
 
 /**
  * One-hop physical connections of an entity, read from the generated
@@ -61,3 +67,96 @@ export const orphanEntitiesOut = z.object({
   count: z.number().int().nonnegative(),
 });
 export type OrphanEntitiesOut = z.infer<typeof orphanEntitiesOut>;
+
+export const connectionRelation = z.enum([
+  "product-purchase",
+  "product-expense",
+  "product-identity",
+  "email-purchase",
+  "transaction-purchase",
+  "transaction-transfer",
+  "transaction-refund",
+  "expense-project",
+  "project-tool",
+  "task-subject-product",
+  "product-ingredient",
+  "product-grows-plant",
+  "cookbook-product",
+  "device-product",
+  "inventory-location",
+]);
+export type ConnectionRelation = z.infer<typeof connectionRelation>;
+
+const connectionEndpoints = {
+  "product-purchase": ["product", "purchase"],
+  "product-expense": ["product", "expense"],
+  "product-identity": ["product", "product"],
+  "email-purchase": ["email", "purchase"],
+  "transaction-purchase": ["financialTransaction", "purchase"],
+  "transaction-transfer": ["financialTransaction", "financialTransaction"],
+  "transaction-refund": ["financialTransaction", "purchase"],
+  "expense-project": ["expense", "project"],
+  "project-tool": ["project", "product"],
+  "task-subject-product": ["task", "product"],
+  "product-ingredient": ["product", "ingredient"],
+  "product-grows-plant": ["product", "plant"],
+  "cookbook-product": ["cookbook", "product"],
+  "device-product": ["device", "product"],
+  "inventory-location": ["inventory", "location"],
+} satisfies Record<ConnectionRelation, readonly [string, string]>;
+
+export const connectionEvidence = z.object({
+  reasons: z.array(z.string()).max(30),
+  contradictions: z.array(z.string()).max(30),
+  unknowns: z.array(z.string()).max(30),
+});
+
+/** Direction is canonical regardless of which endpoint requests discovery. */
+export const connectionCandidate = z
+  .object({
+    relation: connectionRelation,
+    source: entityGraphRootSchema,
+    target: entityGraphRootSchema,
+    label: z.string().min(1),
+    evidence: connectionEvidence,
+  })
+  .refine(({ relation, source, target }) => {
+    const [from, to] = connectionEndpoints[relation];
+    return (
+      source.entityKind === from &&
+      target.entityKind === to &&
+      !(
+        source.entityKind === target.entityKind &&
+        source.entityId === target.entityId
+      )
+    );
+  }, "Connection relation requires its canonical distinct endpoints");
+export type ConnectionCandidate = z.infer<typeof connectionCandidate>;
+
+export const connectionProposal = connectionCandidate.safeExtend({
+  sourceName: z.string().optional(),
+  targetName: z.string().optional(),
+  review: assessmentReviewReference.extend({
+    suppression: assessmentSuppression.nullable(),
+  }),
+  fingerprint: z.string().min(1),
+  integration: z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("connection-review") }),
+    z.object({ kind: z.literal("field-review"), field: z.string().min(1) }),
+    z.object({ kind: z.literal("product-pair-review") }),
+    z.object({ kind: z.literal("email-link-review") }),
+  ]),
+});
+export type ConnectionProposal = z.infer<typeof connectionProposal>;
+
+/** Immutable payload in recommendation Assessment evidence; no separate ledger. */
+export const connectionAssessmentEvidence = z.object({
+  version: z.literal(1),
+  candidate: connectionCandidate,
+  basis: z.json(),
+});
+export const connectionDiscoveryOut = z.object({
+  source: entityGraphRootSchema,
+  proposals: z.array(connectionProposal),
+  discoveryRunId: runShortcode.nullable().optional(),
+});

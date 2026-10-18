@@ -6,7 +6,12 @@
 
 import type { RelationMutationOut } from "@cubby/schemas/common";
 import type { ActorContext } from "@cubby/schemas/context";
-import type { ProductId, PurchaseId } from "@cubby/schemas/identifiers";
+import type {
+  ProductId,
+  ProductShortcode,
+  PurchaseId,
+  PurchaseShortcode,
+} from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   productMovementKind,
@@ -46,6 +51,7 @@ import {
   linkValues,
   liveLinks,
 } from "~/server/generic/entity-links/repo/entity-links";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { classifyProductMovement } from "~/server/lib/product-movement";
 
 /** Acquisition-only consumers must not broaden when identity relations do. */
@@ -67,11 +73,17 @@ const movementEvidenceByPair = (
     quantity: number | null;
     future: boolean;
   }[],
+  confirmedKeys: readonly string[] = [],
 ) => {
   const evidence = new Map<
     string,
     { movementKinds: Set<ProductMovementKind>; hasPlanned: boolean }
   >();
+  for (const key of confirmedKeys)
+    evidence.set(key, {
+      movementKinds: new Set(["acquired"]),
+      hasPlanned: false,
+    });
   for (const row of rows) {
     const pair = evidence.get(row.key) ?? {
       movementKinds: new Set<ProductMovementKind>(),
@@ -196,7 +208,11 @@ export async function listPurchaseProducts(
 
   const [linkRows, expenseRows] = await Promise.all([
     dbc
-      .select({ ...productColumns, linkAttachedAt: entityLink.createdAt })
+      .select({
+        ...productColumns,
+        linkAttachedAt: entityLink.createdAt,
+        acquisitionConfirmed: entityLink.acquisitionConfirmed,
+      })
       .from(entityLink)
       .innerJoin(
         purchase,
@@ -233,8 +249,13 @@ export async function listPurchaseProducts(
 
   const movementEvidence = movementEvidenceByPair(
     expenseRows.map((row) => ({ ...row, key: row.productId })),
+    linkRows
+      .filter((row) => row.acquisitionConfirmed)
+      .map((row) => row.productId),
   );
-  const rows = mergeSources<Omit<(typeof linkRows)[number], "linkAttachedAt">>(
+  const rows = mergeSources<
+    Omit<(typeof linkRows)[number], "linkAttachedAt" | "acquisitionConfirmed">
+  >(
     linkRows.map((row) => ({ ...row, key: row.productId })),
     expenseRows.map((row) => ({ ...row, key: row.productId })),
   ).sort((a, b) => a.productName.localeCompare(b.productName));
@@ -279,7 +300,11 @@ export async function listProductPurchases(
 
   const [linkRows, expenseRows] = await Promise.all([
     dbc
-      .select({ ...purchaseColumns, linkAttachedAt: entityLink.createdAt })
+      .select({
+        ...purchaseColumns,
+        linkAttachedAt: entityLink.createdAt,
+        acquisitionConfirmed: entityLink.acquisitionConfirmed,
+      })
       .from(entityLink)
       .innerJoin(
         product,
@@ -315,8 +340,13 @@ export async function listProductPurchases(
 
   const movementEvidence = movementEvidenceByPair(
     expenseRows.map((row) => ({ ...row, key: row.purchaseKey })),
+    linkRows
+      .filter((row) => row.acquisitionConfirmed)
+      .map((row) => row.purchaseKey),
   );
-  const rows = mergeSources<Omit<(typeof linkRows)[number], "linkAttachedAt">>(
+  const rows = mergeSources<
+    Omit<(typeof linkRows)[number], "linkAttachedAt" | "acquisitionConfirmed">
+  >(
     linkRows.map((row) => ({ ...row, key: row.purchaseKey })),
     expenseRows.map((row) => ({ ...row, key: row.purchaseKey })),
   ).sort((a, b) => comparePlainDatesDescending(a.date, b.date));
@@ -421,6 +451,35 @@ async function preflightDetachPurchaseProducts(
     alreadySatisfied: requested.filter((id) => !alreadyLive.has(id)),
     codeById,
   };
+}
+
+/** Confirms acquisition with unknown item cost/quantity; never writes a ledger or stock row. */
+export async function confirmPurchaseAcquisition(
+  db: Database,
+  input: { purchaseId: PurchaseShortcode; productId: ProductShortcode },
+): Promise<{ changed: boolean }> {
+  return withTransaction(db, async (tx) => {
+    const purchaseId = await resolveOrThrow(tx, "purchase", input.purchaseId);
+    const productId = await resolveOrThrow(tx, "product", input.productId);
+    const rows = await tx
+      .insert(entityLink)
+      .values({
+        ...linkValues("purchaseProduct", purchaseId, productId),
+        acquisitionConfirmed: true,
+      })
+      .onConflictDoUpdate({
+        target: [
+          entityLink.kind,
+          entityLink.fromEntityId,
+          entityLink.toEntityId,
+        ],
+        targetWhere: sql`${entityLink.deletedAt} IS NULL`,
+        set: { acquisitionConfirmed: true, updatedAt: new Date() },
+        setWhere: eq(entityLink.acquisitionConfirmed, false),
+      })
+      .returning({ id: entityLink.id });
+    return { changed: rows.length > 0 };
+  });
 }
 
 export async function attachPurchaseProducts(

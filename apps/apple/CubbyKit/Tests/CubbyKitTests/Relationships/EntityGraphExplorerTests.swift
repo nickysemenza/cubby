@@ -116,6 +116,20 @@ struct EntityGraphExplorerTests {
 }
 
 private actor GraphExplorerClient: EntityRelationshipsClient {
+    func discoveryRunSnapshot(runID: RunShortcode) throws -> RunWorkSnapshotOutput {
+        throw URLError(.unsupportedURL)
+    }
+
+    func storedConnections(_ input: EntityGraphRootInput) async throws -> ConnectionDiscoveryOut {
+        return .init(source: .init(entityKind: input.entityKind, entityId: input.entityId), proposals: [])
+    }
+    func discoverConnections(_ input: EntityGraphRootInput) throws -> ConnectionDiscoveryOut {
+        throw URLError(.unsupportedURL)
+    }
+    func reviewAssessment(_ input: AssessmentReviewInput) throws -> AssessmentReviewOut {
+        throw URLError(.unsupportedURL)
+    }
+
     let graphs: [EntityRef: EntityGraph]
     let delayed: EntityRef?
     var reads: [EntityRef] = []

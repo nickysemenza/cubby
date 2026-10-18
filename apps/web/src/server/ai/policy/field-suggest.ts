@@ -214,6 +214,22 @@ const FIELD_SUGGEST_DECISION_OVERRIDES = {
     maxCandidates: REFERENCE_ROSTER_CAP,
     subject: (basis) => renderSubject("task", basis),
   } satisfies ReferenceSuggestDecision,
+  "cookbook.productId": {
+    kind: "reference",
+    entity: "product",
+    maxCandidates: REFERENCE_ROSTER_CAP,
+    rules:
+      "Identify an existing physical cookbook Product using title, author and ISBN evidence. A title match alone is retrieval evidence, not proof of the same edition or format. Conflicting ISBN, edition, author or digital versus physical format requires none. Unknown identity remains unknown. Choose none when evidence is insufficient. Never create a Product or acquisition.",
+    subject: (b) => renderSubject("cookbook", b),
+  } satisfies ReferenceSuggestDecision,
+  "device.productId": {
+    kind: "reference",
+    entity: "product",
+    maxCandidates: REFERENCE_ROSTER_CAP,
+    rules:
+      "Identify the Product model represented by this Device using any explicit manufacturer and model in its name and its declared platform. A platform alone does not identify a model. A device label, host name, network address or similar title alone does not prove identity. Conflicting model or manufacturer requires none. Missing identity stays unknown. Do not infer household ownership or acquisition from network presence. Choose none when evidence is insufficient.",
+    subject: (b) => renderSubject("device", b),
+  } satisfies ReferenceSuggestDecision,
   "task.subjectProductId": {
     kind: "reference",
     entity: "product",

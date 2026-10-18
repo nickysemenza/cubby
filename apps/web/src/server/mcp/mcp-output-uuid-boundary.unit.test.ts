@@ -77,6 +77,8 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   // Assessments and Feedback are child-row review/receipt handles without
   // shortcodes; review and batch review return those exact handles.
   "entity_read.items[].assessmentId",
+  "entity_read.proposals[].review.assessmentId",
+  "entity.proposals[].review.assessmentId",
   "entity.assessmentId",
   "entity.feedbackId",
   "entity.items[].assessmentId",

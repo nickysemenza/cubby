@@ -47,10 +47,11 @@ struct EntityDetailView: View {
     private func lifecycle<V: View>(on view: V, model: GenericEntityDetailModel?) -> some View {
         view
             .task(id: id) { await setup() }
+            .onDisappear { relationshipsModel?.cancel() }
             .task(id: appModel.entityMutationRevision) {
                 guard appModel.entityMutationRevision > 0,
                     appModel.entityMutationKeys.contains(key),
-                    appModel.relationshipMutationReplacement?.recommendation.subject
+                    appModel.relationshipMutationReplacement?.subject
                         != EntityRef(entity: key, id: model?.row?.id ?? id),
                     model?.phase == .loaded
                 else { return }

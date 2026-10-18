@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
 import { usePageIdentity, usePageWorkbenchTarget } from "~/entity/page/page";
+import { ConnectionSuggestionsProvider } from "~/entity/relatedness/connection-suggestions";
 import {
   RecordSuggestionsBulkAction,
   RecordSuggestionsProvider,
@@ -1258,81 +1259,88 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
   };
 
   return (
-    <RecordSuggestionsProvider
-      statusTarget={statusTarget}
+    <ConnectionSuggestionsProvider
       entity={entity}
       records={
         isLoading || isTransitioning ? [] : rows.map((row) => row.original)
       }
-      fieldKeys={table.getVisibleLeafColumns().map((column) => column.id)}
     >
-      <EntityDisplayImagesProvider refs={entityMediaRefs}>
-        <Stack>
-          <DesktopTableView
-            table={table}
-            controller={controller}
-            entity={entity}
-            embedded={embedded}
-            desktopInspector={desktopInspector}
-            externalToolbar={externalToolbar}
-            desktopToolbar={desktopToolbar}
-            showToolbar={showToolbar}
-            infiniteScroll={infiniteScroll}
-            showPagination={showPagination}
-            showCellSelectionStats={showCellSelectionStats}
-            timing={timing}
-            ariaLabel={ariaLabel}
-            cellSelectionEnabled={cellSelectionEnabled}
-            statusContent={statusContent}
-            hasStatusContent={hasStatusContent}
-            tableBody={renderTableBody()}
-          />
+      <RecordSuggestionsProvider
+        statusTarget={statusTarget}
+        entity={entity}
+        records={
+          isLoading || isTransitioning ? [] : rows.map((row) => row.original)
+        }
+        fieldKeys={table.getVisibleLeafColumns().map((column) => column.id)}
+      >
+        <EntityDisplayImagesProvider refs={entityMediaRefs}>
+          <Stack>
+            <DesktopTableView
+              table={table}
+              controller={controller}
+              entity={entity}
+              embedded={embedded}
+              desktopInspector={desktopInspector}
+              externalToolbar={externalToolbar}
+              desktopToolbar={desktopToolbar}
+              showToolbar={showToolbar}
+              infiniteScroll={infiniteScroll}
+              showPagination={showPagination}
+              showCellSelectionStats={showCellSelectionStats}
+              timing={timing}
+              ariaLabel={ariaLabel}
+              cellSelectionEnabled={cellSelectionEnabled}
+              statusContent={statusContent}
+              hasStatusContent={hasStatusContent}
+              tableBody={renderTableBody()}
+            />
 
-          {/* Mobile List View. Also rendered pre-hydration (see the desktop
+            {/* Mobile List View. Also rendered pre-hydration (see the desktop
           wrapper's breakpoint comment) so a phone's first paint is the
           shape-matched skeleton rather than a clipped desktop table. */}
-          {(isMobile || !hydrated) && (
-            <MobileListScreen
-              table={table}
-              entity={entity}
-              getDetailsHref={getMobileDetailsHref}
-              disableDetailsHref={disableMobileDetailsHref}
-              renderRowFooter={renderMobileRowFooter}
-              onRowClick={onRowClick}
-              additionalToolbarContent={additionalToolbarContent}
-              actions={actions}
-              bulkActionBar={bulkActionsWithSuggestions}
-              isLoading={isLoading}
-              error={error}
-              infiniteScroll={infiniteScroll}
-              refreshControls={refreshControls}
-              groupConfig={groupConfig}
-              presentationSwitches={presentationSwitches(nestToggle)}
-              isTransitioning={isTransitioning}
-              rowContentVersion={rowContentVersion}
-              portalWorkbenchUtilities={externalToolbar}
-              showToolbar={showToolbar}
-              showViewOptions={showMobileViewOptions({
-                embedded,
-                showColumnMenu,
-                externalToolbar,
-              })}
-              toolbarVariant={tableChromeVariant(embedded)}
-              emptyState={emptyState}
-            />
-          )}
+            {(isMobile || !hydrated) && (
+              <MobileListScreen
+                table={table}
+                entity={entity}
+                getDetailsHref={getMobileDetailsHref}
+                disableDetailsHref={disableMobileDetailsHref}
+                renderRowFooter={renderMobileRowFooter}
+                onRowClick={onRowClick}
+                additionalToolbarContent={additionalToolbarContent}
+                actions={actions}
+                bulkActionBar={bulkActionsWithSuggestions}
+                isLoading={isLoading}
+                error={error}
+                infiniteScroll={infiniteScroll}
+                refreshControls={refreshControls}
+                groupConfig={groupConfig}
+                presentationSwitches={presentationSwitches(nestToggle)}
+                isTransitioning={isTransitioning}
+                rowContentVersion={rowContentVersion}
+                portalWorkbenchUtilities={externalToolbar}
+                showToolbar={showToolbar}
+                showViewOptions={showMobileViewOptions({
+                  embedded,
+                  showColumnMenu,
+                  externalToolbar,
+                })}
+                toolbarVariant={tableChromeVariant(embedded)}
+                emptyState={emptyState}
+              />
+            )}
 
-          {/* Mobile keeps the inline pager, hidden when infinite scroll is active */}
-          {isMobile && table.getPageCount() > 1 && !infiniteScroll && (
-            <DataTablePagination
-              table={table}
-              timing={timing}
-              variant={tableChromeVariant(embedded)}
-            />
-          )}
-        </Stack>
-      </EntityDisplayImagesProvider>
-    </RecordSuggestionsProvider>
+            {/* Mobile keeps the inline pager, hidden when infinite scroll is active */}
+            {isMobile && table.getPageCount() > 1 && !infiniteScroll && (
+              <DataTablePagination
+                table={table}
+                timing={timing}
+                variant={tableChromeVariant(embedded)}
+              />
+            )}
+          </Stack>
+        </EntityDisplayImagesProvider>
+      </RecordSuggestionsProvider>
+    </ConnectionSuggestionsProvider>
   );
 }
 
