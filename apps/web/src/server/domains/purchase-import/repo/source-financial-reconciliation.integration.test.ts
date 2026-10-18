@@ -437,6 +437,78 @@ describe("accepted source financial reconciliation", () => {
     expect(await state()).toEqual(initial);
   });
 
+  // The state loader must refuse a moved reviewed Expense as stale, not a 500.
+  it("refuses to apply a review whose Expense moved to another Purchase as a CONFLICT", async () => {
+    const { submit, state, initial, accepted, database } = await world();
+    await submit("moved-expense", "e".repeat(64), {
+      ...candidate,
+      printedGrandTotal: 45,
+      lines: [{ ...candidate.lines[0]!, amount: 45 }],
+      payments: candidate.payments,
+    });
+    const [finding] = await database
+      .select()
+      .from(runFinding)
+      .where(eq(runFinding.entityId, accepted.id));
+    const expenseId = parseShortcodeFor(
+      "expense",
+      initial.expenses[0]!.shortcode,
+    );
+    const preview = await prepareSourceOrderReconciliation(
+      ctx.db,
+      {
+        id: finding!.id,
+        resolution: {
+          kind: "replace_lines",
+          expenseIds: [expenseId],
+          lines: [{ lineIndex: 0, expenseId, productId: null }],
+          attributionTargets: [
+            { role: "beneficiary", partyId: null, amount: 45 },
+            { role: "funder", partyId: null, amount: 45 },
+          ],
+        },
+      },
+      ctx.actor,
+    );
+    const other = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: accepted.vendorId,
+      date: "2026-09-03",
+      orderId: null,
+    });
+    await database
+      .update(expense)
+      .set({ purchaseId: other.id })
+      .where(eq(expense.id, initial.expenses[0]!.id));
+    const snapshot = async () => ({
+      state: await state(),
+      expenses: await database
+        .select()
+        .from(expense)
+        .where(eq(expense.id, initial.expenses[0]!.id)),
+      findings: await database
+        .select()
+        .from(runFinding)
+        .where(eq(runFinding.id, finding!.id)),
+    });
+    const before = await snapshot();
+    await expect(
+      resolveRunFinding(
+        ctx.db,
+        {
+          id: finding!.id,
+          action: "apply",
+          reviewedFingerprint: preview.reviewedFingerprint,
+        },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      reason: "PURCHASE_IMPORT_REVIEW_STALE",
+      message: "A selected Expense belongs to a different Purchase.",
+    });
+    expect(await snapshot()).toEqual(before);
+  });
+
   it("commits an explicitly reviewed cost correction once and retains the first extraction", async () => {
     const { submit, state, initial, accepted, database } = await world();
     await submit("corrected-cost", "d".repeat(64), {
