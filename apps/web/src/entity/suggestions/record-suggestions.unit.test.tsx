@@ -2,6 +2,10 @@ import type {
   FieldSuggestionsInput,
   FieldSuggestionsOut,
 } from "@cubby/schemas/ai";
+import type {
+  SettledSuggestionAnswer,
+  SettledSuggestionQuestion,
+} from "@cubby/schemas/ai";
 import { suggestionReviewRowSchema } from "@cubby/schemas/ai";
 import { inventoryEntryOut } from "@cubby/schemas/inventory";
 import { productTopLevelOut } from "@cubby/schemas/product";
@@ -64,7 +68,12 @@ const emptyStoredSuggestionOperations: StoredSuggestionOperations = {
     applied: intent === "apply",
   }),
   reviewBatch: async () => [],
-  settled: async () => null,
+  settled: async ({ questions }) => ({
+    results: questions.map(() => ({
+      ok: true as const,
+      value: { outcome: null, revision: null },
+    })),
+  }),
 };
 const decline = {
   kind: "evaluated" as const,
@@ -73,6 +82,16 @@ const decline = {
   probability: 0.9,
   alternatives: [],
 };
+/** A settled port answering each question from `answer`, positionally. */
+const settledBy = (
+  answer: (question: SettledSuggestionQuestion) => SettledSuggestionAnswer,
+) =>
+  vi.fn<StoredSuggestionOperations["settled"]>(async ({ questions }) => ({
+    results: questions.map((question) => ({
+      ok: true as const,
+      value: answer(question),
+    })),
+  }));
 const food = {
   assessmentId: "00000000-0000-4000-8000-000000000001",
   value: "CAT-2222",
@@ -257,7 +276,12 @@ describe("record suggestions", () => {
             ok: true as const,
           })),
       ),
-      settled: async () => null,
+      settled: async ({ questions }) => ({
+        results: questions.map(() => ({
+          ok: true as const,
+          value: { outcome: null, revision: null },
+        })),
+      }),
     };
     const suggestFields = vi.fn((_input: FieldSuggestionsInput) => undefined);
     const operations: EntitySuggestionsOperations = {
@@ -366,10 +390,10 @@ describe("record suggestions", () => {
         return { suggestions: { categoryId: null }, outcomes: {} };
       }),
     };
-    const settled = vi.fn<StoredSuggestionOperations["settled"]>(
-      async (question) =>
-        question.basis.name === "Synthetic gadget" ? decline : null,
-    );
+    const settled = settledBy((question) => ({
+      outcome: question.basis.name === "Synthetic gadget" ? decline : null,
+      revision: null,
+    }));
     const stored = { ...emptyStoredSuggestionOperations, settled };
     const List = ({ name }: { name: string }) => (
       <RecordSuggestionsProvider
@@ -410,9 +434,10 @@ describe("record suggestions", () => {
       }),
     };
     let remembered = true;
-    const settled = vi.fn<StoredSuggestionOperations["settled"]>(async () =>
-      remembered ? decline : null,
-    );
+    const settled = settledBy(() => ({
+      outcome: remembered ? decline : null,
+      revision: null,
+    }));
     render(
       <RecordSuggestionsProvider
         entity="product"
@@ -450,6 +475,116 @@ describe("record suggestions", () => {
     await waitFor(() =>
       expect(asked).toHaveBeenCalledExactlyOnceWith("Synthetic gadget"),
     );
+  });
+
+  // Regression: a reopened question restored the cached live `none` for its
+  // old inputs, because the live query key was the basis alone. A member's
+  // miss reopens under that review's revision rather than the original key.
+  it.each([
+    {
+      trigger: "product write",
+      ripple: "product",
+      revision: "synthetic-inputs",
+    },
+    {
+      trigger: "member miss",
+      ripple: "settledSuggestions",
+      revision: "miss:synthetic-feedback",
+    },
+  ] as const)(
+    "asks a question reopened by a $trigger live",
+    async ({ ripple, revision }) => {
+      const asked = vi.fn();
+      const operations: EntitySuggestionsOperations = {
+        suggestFields: ai.suggestFields.withTransport(async ({ input }) => {
+          asked(input.inputRevision ?? null);
+          return {
+            suggestions: { categoryId: null },
+            outcomes: { categoryId: decline },
+          };
+        }),
+      };
+      // Production never refetches a passive cache entry on remount.
+      harness.queryClient.setDefaultOptions({
+        queries: { retry: false, refetchOnMount: false },
+      });
+      let answer: SettledSuggestionAnswer = { outcome: null, revision: null };
+      const settled = settledBy(() => answer);
+      render(
+        <RecordSuggestionsProvider
+          entity="product"
+          records={[
+            {
+              id,
+              name: "Synthetic gadget",
+              manufacturer: null,
+              categoryId: null,
+            },
+          ]}
+          fieldKeys={["categoryId"]}
+          operations={operations}
+          storedSuggestionOperations={{
+            ...emptyStoredSuggestionOperations,
+            settled,
+          }}
+        >
+          <span>rows</span>
+        </RecordSuggestionsProvider>,
+        { wrapper: harness.wrapper },
+      );
+      await waitFor(() => expect(asked).toHaveBeenCalledExactlyOnceWith(null));
+
+      // The decline is remembered, then the trigger reopens it.
+      const invalidate = () =>
+        act(() =>
+          invalidateOperationTags(harness.queryClient, rippleFor([ripple])),
+        );
+      answer = { outcome: decline, revision: null };
+      await invalidate();
+      await waitFor(() => expect(settled).toHaveBeenCalledTimes(2));
+      answer = { outcome: null, revision };
+      await invalidate();
+      await waitFor(() => expect(asked).toHaveBeenLastCalledWith(revision));
+      expect(
+        asked.mock.calls.filter(([asked]) => asked === revision),
+      ).toHaveLength(1);
+    },
+  );
+
+  // Regression: each settled question was its own unscheduled read, so a page
+  // of rows fanned out past the database limiter.
+  it("reads a page's settled questions in one batched dispatch", async () => {
+    const settled = settledBy(() => ({ outcome: decline, revision: null }));
+    const records = Array.from({ length: 12 }, (_, index) => ({
+      id: testShortcode("product", `batch${index}`),
+      name: `Synthetic batch row ${index}`,
+      manufacturer: null,
+      categoryId: null,
+    }));
+    render(
+      <RecordSuggestionsProvider
+        entity="product"
+        records={records}
+        fieldKeys={["categoryId"]}
+        operations={{
+          suggestFields: ai.suggestFields.withTransport(async () => {
+            throw new Error("Settled rows must not be asked live");
+          }),
+        }}
+        storedSuggestionOperations={{
+          ...emptyStoredSuggestionOperations,
+          settled,
+        }}
+      >
+        <span>rows</span>
+      </RecordSuggestionsProvider>,
+      { wrapper: harness.wrapper },
+    );
+    await waitFor(() => expect(settled).toHaveBeenCalledTimes(1));
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    await waitFor(() => expect(harness.queryClient.isFetching()).toBe(0));
+    expect(settled).toHaveBeenCalledTimes(1);
+    expect(settled.mock.calls[0]?.[0].questions).toHaveLength(12);
   });
 
   // Regression: deriving a basis and a query observer per row during SSR cost

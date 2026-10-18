@@ -100,7 +100,12 @@ function validatedStoredOperations(stored: SuggestionReviewRow[]) {
           ok: true as const,
         })),
     ),
-    settled: async () => null,
+    settled: async ({ questions }) => ({
+      results: questions.map(() => ({
+        ok: true as const,
+        value: { outcome: null, revision: null },
+      })),
+    }),
   } satisfies StoredSuggestionOperations;
 }
 
@@ -123,7 +128,12 @@ function setup(
   const harness = createBrowserTestHarness();
   const operations: StoredSuggestionOperations = {
     list: vi.fn(async () => stored),
-    settled: async () => null,
+    settled: async ({ questions }) => ({
+      results: questions.map(() => ({
+        ok: true as const,
+        value: { outcome: null, revision: null },
+      })),
+    }),
     ...mutations,
   };
   const liveOperations: EntitySuggestionsOperations = {

@@ -39,7 +39,7 @@ import { suggestExternalIdKind } from "~/server/ai/external-id-kind";
 import {
   fieldQuestionKey,
   isSettledOutcome,
-  readSettledQuestion,
+  readSettledQuestions,
   rememberSettledQuestions,
   settledSignature,
 } from "~/server/ai/field-suggest/settled-questions";
@@ -554,8 +554,8 @@ export const aiHandlers = implementOperationDomain(aiContract, {
   },
   applyFinanceCategorySuggestion: (context, input) =>
     applyFinanceCategorySuggestion(context, input),
-  settledSuggestionQuestion: (context, input) =>
-    readSettledQuestion(context.db, input),
+  settledSuggestionQuestions: (context, input) =>
+    readSettledQuestions(context.db, input),
   listSuggestionReviewQueue: (context, input) =>
     listSuggestions(context.db, input),
   suggestionCounts: (context, input) => suggestionCounts(context.db, input),

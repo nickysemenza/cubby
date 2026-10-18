@@ -1,3 +1,4 @@
+import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AI_CACHE_TTL_SECONDS } from "~/server/ai/adapters";
@@ -124,5 +125,31 @@ describe("embedTexts over the AI Gateway", () => {
 
     expect(vectors[0]?.[0]).toBe(0.25);
     expect(vectors[1]?.[0]).toBe(0.5);
+  });
+
+  // Regression: a settled-suggestion recheck prepared a semantic roster and,
+  // on a cold query cache, paid the embeddings provider for it.
+  it("makes no provider call for a cold query inside provider-free preparation", async () => {
+    const { sent } = await embedTextsOverFakeGateway(
+      openAiEmbeddingsResponse(1),
+    );
+    const cfEnv = await import("~/server/cf-env");
+    vi.spyOn(cfEnv, "getVectorIndex").mockReturnValue(
+      fromPartial<NonNullable<ReturnType<typeof cfEnv.getVectorIndex>>>({}),
+    );
+    const { embedQuery, semanticEmbeddingsConfigured } =
+      await import("./embeddings");
+    const { withAiInputs } = await import("~/server/ai/evaluation-inputs");
+    expect(semanticEmbeddingsConfigured()).toBe(true);
+
+    const prepared = await withAiInputs(
+      true,
+      () => embedQuery("synthetic cold pantry staple"),
+      { providerFree: true },
+    );
+
+    expect(prepared.result).toBeNull();
+    expect(prepared.incomplete).toBe(true);
+    expect(sent).toHaveLength(0);
   });
 });

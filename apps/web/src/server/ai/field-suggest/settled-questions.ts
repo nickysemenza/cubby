@@ -2,12 +2,14 @@ import {
   fieldSuggestionOutcomeSchema,
   type FieldSuggestionOutcome,
   type FieldSuggestionsInput,
-  type SettledSuggestionQuestionInput,
+  type SettledSuggestionAnswer,
+  type SettledSuggestionQuestion,
+  type SettledSuggestionQuestionsInput,
 } from "@cubby/schemas/ai";
 import type { AiRefreshManifest } from "@cubby/schemas/ai-evaluation";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, eq, isNull, notExists, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -24,9 +26,10 @@ import {
 } from "~/server/ai/policy/refresh-manifest";
 import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
+import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { aiAnalysis, feedback } from "~/server/db/schema";
 import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
+import { settleBatch } from "~/server/workflows/settle-batch";
 
 /**
  * A declined or signal-less field question is remembered in the shared
@@ -109,7 +112,14 @@ export const settledSignature = (
     }),
   );
 
-/** One statement per question; a repeated settle of a key adds no row. */
+/**
+ * A re-settle of a key replaces its outcome and signature: after its inputs
+ * change, a fresh decline must become the comparison point, or every later
+ * read would reopen it again. `AiAnalysis_active_key` cannot enforce one row
+ * per key (its `entityId` is always NULL here), so each replacement holds a
+ * transaction lock on the key: its upsert statement then sees any concurrent
+ * first insert, and the key keeps one effective row.
+ */
 export async function rememberSettledQuestions(
   db: Database,
   entries: readonly {
@@ -122,13 +132,13 @@ export async function rememberSettledQuestions(
     const result = JSON.stringify(
       rememberedSchema.parse({ outcome, signature }),
     );
-    await getDb(db).execute(sql`
-      INSERT INTO "AiAnalysis"
-        ("entityKind", "entityId", "feature", "model", "promptVersion", "inputFingerprint", "result")
-      SELECT ${SETTLED_QUESTION.entityKind}, NULL, ${SETTLED_QUESTION.feature},
-        ${SETTLED_QUESTION.model}, ${SETTLED_QUESTION.promptVersion}, ${key}, ${result}::jsonb
-      WHERE NOT EXISTS (
-        SELECT 1 FROM "AiAnalysis"
+    await withTransactionDatabase(db, async (transactionDb) => {
+      await getDb(transactionDb).execute(
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${`${SETTLED_QUESTION.feature}:${key}`}, 0))`,
+      );
+      await getDb(transactionDb).execute(sql`
+      WITH replaced AS (
+        UPDATE "AiAnalysis" SET "result" = ${result}::jsonb, "updatedAt" = now()
         WHERE "entityKind" = ${SETTLED_QUESTION.entityKind}
           AND "entityId" IS NULL
           AND "feature" = ${SETTLED_QUESTION.feature}
@@ -136,23 +146,103 @@ export async function rememberSettledQuestions(
           AND "promptVersion" = ${SETTLED_QUESTION.promptVersion}
           AND "inputFingerprint" = ${key}
           AND "AiAnalysis"."deletedAt" IS NULL
-      )`);
+        RETURNING 1
+      )
+      INSERT INTO "AiAnalysis"
+        ("entityKind", "entityId", "feature", "model", "promptVersion", "inputFingerprint", "result")
+      SELECT ${SETTLED_QUESTION.entityKind}, NULL, ${SETTLED_QUESTION.feature},
+        ${SETTLED_QUESTION.model}, ${SETTLED_QUESTION.promptVersion}, ${key}, ${result}::jsonb
+      WHERE NOT EXISTS (SELECT 1 FROM replaced)`);
+    });
   }
 }
 
+type SettledPorts = Pick<SuggestFieldsPorts, "decisionPort" | "registry">;
+
 /**
- * The remembered outcome while its basis, policy and prepared decision inputs
- * are unchanged; a member's recorded miss on the decline also reopens it.
+ * Re-prepares one remembered question's decision inputs from saved data,
+ * without the model or any paid provider call, and compares their signature.
+ * A member's recorded miss (`missId`) keeps the question open; its revision
+ * still names the current inputs, so a changed roster after the miss asks
+ * live again instead of reusing the answer cached for the older inputs.
  */
-export async function readSettledQuestion(
+async function recheck(
   db: Database,
-  input: SettledSuggestionQuestionInput,
-  ports: Pick<SuggestFieldsPorts, "decisionPort" | "registry"> = {},
-): Promise<{ outcome: FieldSuggestionOutcome | null }> {
+  entity: SettledSuggestionQuestionsInput["entity"],
+  question: SettledSuggestionQuestion,
+  remembered: z.infer<typeof rememberedSchema>,
+  missId: string | null,
+  ports: SettledPorts,
+): Promise<SettledSuggestionAnswer> {
+  const missed = missId ? `miss:${missId}:` : "";
+  const prepared = await withAiInputs(
+    true,
+    () =>
+      suggestFields(
+        db,
+        PREPARATION_RUN,
+        {
+          entity,
+          basisMode: question.basisMode,
+          basis: question.basis,
+          targets: [question.field],
+        },
+        { ...ports, recordUsage: false },
+      ),
+    { providerFree: true },
+    // SILENT: a question preparation refuses is asked live, which reports
+    // the raw diagnostic on its own surface.
+  ).catch(() => null);
+  const preparedOutcome = prepared?.result.outcomes?.[question.field];
+  // Inputs that cannot be prepared for free cannot be verified, so no earlier
+  // live answer can be known to match them either: each such read asks live
+  // under a revision of its own.
+  if (!prepared || !preparedOutcome || prepared.incomplete)
+    return {
+      outcome: null,
+      revision: `${missed}unverified:${crypto.randomUUID()}`,
+    };
+  const signature = await settledSignature(
+    { entity, field: question.field },
+    preparedOutcome,
+    prepared.inputs,
+  );
+  if (missId) return { outcome: null, revision: `${missed}${signature}` };
+  return signature === remembered.signature
+    ? { outcome: remembered.outcome, revision: null }
+    : { outcome: null, revision: signature };
+}
+
+/**
+ * One list page batch: a single policy read and a single memory lookup for
+ * every question, then a sequential free recheck of only the remembered ones,
+ * so a batch holds one database connection at a time. A member's recorded
+ * miss on the decline also reopens it.
+ */
+export async function readSettledQuestions(
+  db: Database,
+  input: SettledSuggestionQuestionsInput,
+  ports: SettledPorts = {},
+) {
   const manifest = await producingAiManifest(db);
-  const key = await fieldQuestionKey(input, manifest);
-  const [row] = await getDb(db)
-    .select({ result: aiAnalysis.result })
+  const keys = await Promise.all(
+    input.questions.map((question) =>
+      fieldQuestionKey({ ...question, entity: input.entity }, manifest),
+    ),
+  );
+  const rows = await getDb(db)
+    .select({
+      key: aiAnalysis.inputFingerprint,
+      result: aiAnalysis.result,
+      missId: sql<string | null>`(
+        SELECT ${feedback.id}::text FROM ${feedback}
+        WHERE ${feedback.assessmentId}::text = ${aiAnalysis.result}->'outcome'->>'assessmentId'
+          AND ${feedback.authority} = ${"member"}
+          AND ${feedback.verdict} = ${"wrong"}
+        ORDER BY ${feedback.createdAt} DESC, ${feedback.id} DESC
+        LIMIT 1
+      )`,
+    })
     .from(aiAnalysis)
     .where(
       and(
@@ -161,51 +251,38 @@ export async function readSettledQuestion(
         eq(aiAnalysis.feature, SETTLED_QUESTION.feature),
         eq(aiAnalysis.model, SETTLED_QUESTION.model),
         eq(aiAnalysis.promptVersion, SETTLED_QUESTION.promptVersion),
-        eq(aiAnalysis.inputFingerprint, key),
+        inArray(aiAnalysis.inputFingerprint, [...new Set(keys)]),
         isNull(aiAnalysis.deletedAt),
-        notExists(
-          getDb(db)
-            .select({ id: feedback.id })
-            .from(feedback)
-            .where(
-              and(
-                sql`${feedback.assessmentId}::text = ${aiAnalysis.result}->'outcome'->>'assessmentId'`,
-                eq(feedback.authority, "member"),
-                eq(feedback.verdict, "wrong"),
-              ),
-            ),
-        ),
       ),
     )
-    .limit(1);
-  const remembered = row ? rememberedSchema.safeParse(row.result) : null;
-  if (!remembered?.success) return { outcome: null };
-  const prepared = await withAiInputs(
-    true,
-    () =>
-      suggestFields(
+    // Rows written before replacements were serialized may share a key; the
+    // newest is the effective one.
+    .orderBy(desc(aiAnalysis.updatedAt), desc(aiAnalysis.id));
+  const byKey = new Map<
+    string,
+    { remembered: z.infer<typeof rememberedSchema>; missId: string | null }
+  >();
+  for (const row of rows) {
+    const parsed = rememberedSchema.safeParse(row.result);
+    if (parsed.success && !byKey.has(row.key))
+      byKey.set(row.key, { remembered: parsed.data, missId: row.missId });
+  }
+  return settleBatch(
+    input.questions,
+    async (question, index): Promise<SettledSuggestionAnswer> => {
+      const entry = byKey.get(keys[index]!);
+      if (!entry) return { outcome: null, revision: null };
+      // A member's recorded miss reopens the question under that review's
+      // identity, so the live answer cached before it is never restored.
+      return recheck(
         db,
-        PREPARATION_RUN,
-        {
-          entity: input.entity,
-          basisMode: input.basisMode,
-          basis: input.basis,
-          targets: [input.field],
-        },
-        { ...ports, recordUsage: false },
-      ),
-    // SILENT: a question preparation refuses is asked live, which reports
-    // the raw diagnostic on its own surface.
-  ).catch(() => null);
-  const preparedOutcome = prepared?.result.outcomes?.[input.field];
-  if (!prepared || !preparedOutcome) return { outcome: null };
-  const signature = await settledSignature(
-    input,
-    preparedOutcome,
-    prepared.inputs,
+        input.entity,
+        question,
+        entry.remembered,
+        entry.missId,
+        ports,
+      );
+    },
+    { concurrency: 1 },
   );
-  return {
-    outcome:
-      signature === remembered.data.signature ? remembered.data.outcome : null,
-  };
 }
