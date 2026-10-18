@@ -21,7 +21,12 @@ import { z } from "zod";
 
 import { plainDateDaysBetween } from "~/lib/household-date";
 import type { Database } from "~/server/db";
-import { getDb, unwrapDb, withTransactionDatabase } from "~/server/db/helpers";
+import {
+  getDb,
+  runAfterCommit,
+  unwrapDb,
+  withTransactionDatabase,
+} from "~/server/db/helpers";
 import { previewFinancialStatementImport } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
 import {
   CHARGE_STATE,
@@ -862,7 +867,7 @@ export async function publishChargeProposal(
         )})
       `);
     const { judgment } = proposal;
-    await publishAssessment(
+    const published = await publishAssessment(
       tx,
       {
         publicationKey: `statement_transaction:${chargeId(charge)}:${proposal.fingerprint}:${prior.length}`,
@@ -903,6 +908,24 @@ export async function publishChargeProposal(
         },
       },
     );
+    // A ref writer holds evidence keys, not this charge's lock: one that
+    // committed between the settled check and this commit has a trigger that
+    // could not see the new row. Recheck once both are committed.
+    if (judgment.recommended !== "void")
+      await runAfterCommit(tx, (committed) =>
+        getDb(committed)
+          .execute(
+            sql`UPDATE "AssessmentState" SET active = false, status = ${suggestionStatus.enum.superseded}, "updatedAt" = now()
+            WHERE id = ${published.id}::uuid AND status = ${suggestionStatus.enum.pending}
+              AND EXISTS (
+                SELECT 1 FROM ${chargeStateOf(
+                  sql`r.source = ${charge.source} AND ${chargeKeyOf("r")} = ${charge.chargeKey}`,
+                )} cs
+                WHERE cs.ignored OR cs.superseded OR cs.shortcode IS NOT NULL
+              )`,
+          )
+          .then(() => undefined),
+      );
     return "published";
   });
 }

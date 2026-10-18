@@ -12,9 +12,11 @@ import {
   type StatementTransactionApplication,
   type StatementTransactionJudgment,
 } from "@cubby/schemas/statement-suggestion";
+import { createLogger } from "@cubby/worker-tracing";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import type { Database } from "~/server/db";
 import {
   getDb,
@@ -38,6 +40,8 @@ import {
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
+
+const log = createLogger("statement-suggestions");
 
 const refused = (message: string) =>
   createAppError("CONSTRAINT_VIOLATION", message);
@@ -184,15 +188,23 @@ export async function applyStatementTransactionSuggestion(
   // A sibling's evidence included this charge being unmatched; refresh it
   // now rather than leaving it stale until a whole-ledger pass.
   if (judgment.siblings.length)
-    await runAfterCommit(db, (committed) =>
-      regenerateCharges(
-        committed,
-        judgment.siblings.map((chargeKey) => ({
-          source: charge.source,
-          chargeKey,
-        })),
-      ),
-    );
+    await runAfterCommit(db, async (committed) => {
+      try {
+        await regenerateCharges(
+          committed,
+          judgment.siblings.map((chargeKey) => ({
+            source: charge.source,
+            chargeKey,
+          })),
+        );
+      } catch (error) {
+        // SILENT: advisory refresh only; the apply committed and the sibling's
+        // own accept rechecks evidence, so the next Refresh repairs it.
+        log.error("Sibling suggestion refresh failed", {
+          error: scrubErrorMessage(String(error)),
+        });
+      }
+    });
 }
 
 type Effects = {
