@@ -4,7 +4,7 @@ import {
 } from "@cubby/schemas/assessment";
 import type { RunId } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq, ne, inArray } from "drizzle-orm";
 import type { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -14,6 +14,8 @@ import {
   assessment,
   assessmentState,
   expense,
+  purchase,
+  vendor,
 } from "~/server/db/schema";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 
@@ -36,6 +38,31 @@ export async function importedMailJudgment(
           0,
         ) / 100
       : null,
+  });
+}
+
+/** Database UUIDs change on replay; order/vendor evidence names the linked target. */
+export async function linkedMailJudgment(
+  db: Database,
+  input: {
+    purchaseIds: NonNullable<typeof expense.$inferSelect.purchaseId>[];
+    event: string;
+  },
+) {
+  const purchases = input.purchaseIds.length
+    ? await getDb(db)
+        .select({ orderId: purchase.orderId, vendor: vendor.name })
+        .from(purchase)
+        .leftJoin(vendor, eq(vendor.id, purchase.vendorId))
+        .where(
+          and(inArray(purchase.id, input.purchaseIds), notDeleted(purchase)),
+        )
+        .orderBy(purchase.id)
+    : [];
+  return mailImportOutcome.parse({
+    kind: "linked",
+    event: input.event,
+    purchases,
   });
 }
 

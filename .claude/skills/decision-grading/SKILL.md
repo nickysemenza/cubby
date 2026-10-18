@@ -94,7 +94,7 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
 
 1. Read the sampled Email's retained original through `imports_read.mail` before
    revealing its `mail_import_outcome` Assessment. Lock a session-only judgment:
-   imported lines and signed total, linked lifecycle event, unrelated with reason,
+   imported lines and signed total, linked lifecycle event and order/vendor targets, unrelated with reason,
    or unresolved with the missing evidence. Missing original/attachments or
    unavailable Purchase context stays unavailable; a body-only replay cannot
    establish full-context parity.
@@ -116,7 +116,7 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
    contains parity counts and disagreement case positions/field names only.
    Join those positions to the session worklist, then review only disagreements
    from the originals via authenticated MCP. Inspect `actualModels`: funding
-   recovery can substitute a model. Reason-text differences are mechanical
+   recovery can substitute a model. Missing stable linked-target identity is unavailable, never parity. Reason-text differences are mechanical
    disagreements, not automatically wrong decisions. Keep unserved candidate
    judgments in the session; production MCP cannot grade disposable database
    handles.

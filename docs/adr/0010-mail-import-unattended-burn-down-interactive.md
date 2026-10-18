@@ -47,7 +47,9 @@ choices keep their domain review flows.
 Each delegated Email settlement publishes an immutable `mail_import_outcome`
 Assessment with its checksum, Run, producer and terminal disposition. Imported
 lines and totals freeze the actual Expense ledger, including credits; the total
-remains `SUM(Expense.cost)`. Rules retain their revision; agent settlements retain
+remains `SUM(Expense.cost)`. Linked outcomes freeze the actual targets' order and
+Vendor names; replay compares those identities across databases and reports missing
+identity as unavailable. Rules retain their revision; agent settlements retain
 the most recent successful coordinator model usage when available, otherwise the
 model remains unknown. Retries reuse the first producer and evidence. Feedback
 records history-only grades and never rewrites the ledger or Email disposition.

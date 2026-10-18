@@ -104,6 +104,7 @@ import {
 } from "../repo/mail-financial-review";
 import {
   importedMailJudgment,
+  linkedMailJudgment,
   publishMailImportOutcome,
 } from "../repo/mail-import-assessment";
 import { ingestGmailMessages } from "../service/gmail/ingest";
@@ -801,8 +802,9 @@ export async function settleMail(
                 ? {
                     kind: "linked",
                     event: input.detail.slice("linked:".length),
+                    purchases: [],
                   }
-                : { kind: "linked", event: input.detail },
+                : { kind: "linked", event: "financial", purchases: [] },
         );
       await publishMailImportOutcome(databaseForTransaction(tx), {
         emailId,
@@ -1112,6 +1114,10 @@ export async function resolveMail(
           status: "completed",
           detail: `linked:${disposition.event}`,
           ruleRevision: rule?.revision,
+          judgment: await linkedMailJudgment(tdb, {
+            purchaseIds: ids,
+            event: disposition.event,
+          }),
         },
         actor,
       );

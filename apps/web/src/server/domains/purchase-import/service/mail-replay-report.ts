@@ -28,8 +28,19 @@ export function mailReplayDisagreement(
       ...(isEqual(lines(baseline), lines(replay)) ? [] : ["lines"]),
     ];
   }
-  if (baseline.kind === "linked" && replay.kind === "linked")
-    return baseline.event === replay.event ? [] : ["event"];
+  if (baseline.kind === "linked" && replay.kind === "linked") {
+    const fields = baseline.event === replay.event ? [] : ["event"];
+    const hasIdentity = (outcome: typeof baseline) =>
+      outcome.purchases.length > 0 &&
+      outcome.purchases.every((target) => target.orderId && target.vendor);
+    if (!hasIdentity(baseline) || !hasIdentity(replay))
+      return [...fields, "target_identity_unavailable"];
+    const targets = (outcome: typeof baseline) =>
+      outcome.purchases.map((target) => JSON.stringify(target)).sort();
+    return isEqual(targets(baseline), targets(replay))
+      ? fields
+      : [...fields, "purchases"];
+  }
   if ("reason" in baseline && "reason" in replay)
     return baseline.reason === replay.reason ? [] : ["reason"];
   return [];

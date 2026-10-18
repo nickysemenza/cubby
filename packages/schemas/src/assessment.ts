@@ -167,7 +167,16 @@ export const mailImportOutcome = z.discriminatedUnion("kind", [
     ),
     total: z.number().nullable(),
   }),
-  z.object({ kind: z.literal("linked"), event: z.string() }),
+  z.object({
+    kind: z.literal("linked"),
+    event: z.string(),
+    purchases: z.array(
+      z.object({
+        orderId: z.string().nullable(),
+        vendor: z.string().nullable(),
+      }),
+    ),
+  }),
   z.object({ kind: z.literal("unrelated"), reason: z.string().min(1) }),
   z.object({ kind: z.literal("unresolved"), reason: z.string().min(1) }),
 ]);

@@ -30,6 +30,40 @@ describe("Mail replay disagreement", () => {
       }),
     ).toEqual(["lines"]);
   });
+  it("compares linked order/vendor identity and never calls missing identity parity", () => {
+    const baseline = {
+      kind: "linked" as const,
+      event: "shipped",
+      purchases: [
+        { orderId: "SYNTHETIC-ORDER-A", vendor: "Synthetic merchant" },
+      ],
+    };
+    expect(
+      mailReplayDisagreement(baseline, {
+        ...baseline,
+        purchases: [
+          { orderId: "SYNTHETIC-ORDER-B", vendor: "Synthetic merchant" },
+        ],
+      }),
+    ).toEqual(["purchases"]);
+    expect(
+      mailReplayDisagreement(baseline, {
+        ...baseline,
+        purchases: [
+          {
+            orderId: "SYNTHETIC-ORDER-A",
+            vendor: "Another synthetic merchant",
+          },
+        ],
+      }),
+    ).toEqual(["purchases"]);
+    expect(
+      mailReplayDisagreement(baseline, {
+        ...baseline,
+        purchases: [{ orderId: null, vendor: "Synthetic merchant" }],
+      }),
+    ).toEqual(["target_identity_unavailable"]);
+  });
   it("reports absent outcomes and disposition/reason disagreements", () => {
     const baseline = {
       kind: "unresolved" as const,
