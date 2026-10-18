@@ -41,6 +41,17 @@ describe("server photo group steps", () => {
         inventoryMissing: true,
       }).blockedReason,
     ).toContain("Inventory");
+    // The folded step names where stock lands, not just that it will.
+    expect(
+      photoGroupSteps({
+        ...base,
+        stockIntent: "receive",
+        destination: { locationName: "Bedroom › Closet", quantity: 2 },
+      }).steps[2]?.summary,
+    ).toBe("Add 2 to Bedroom › Closet");
+    expect(photoGroupSteps(base).steps[2]?.summary).toBe(
+      "Reference photo only · no stock change",
+    );
     expect(
       photoGroupSteps({
         ...base,

@@ -85,6 +85,7 @@ import {
   loadImageRepresentations,
 } from "~/server/domains/image-processing/repo/image-processing";
 import { loadImageAnalysisEvidence } from "~/server/domains/image/repo/image-analysis-summary";
+import { loadLocationAncestors } from "~/server/domains/location/repo/tree";
 import { photoFieldCrossCheck } from "~/server/domains/photo-import/repo/photo-correctness";
 import { photoRunImageOrder } from "~/server/domains/photo-import/repo/photo-import";
 import {
@@ -427,7 +428,24 @@ async function toViews(
   );
   const summaryById = new Map(chosen.map((entry) => [entry.uuid, entry]));
   const summaryByCode = new Map(conflicts.map((entry) => [entry.id, entry]));
-  const locationById = new Map(locations.map((entry) => [entry.id, entry]));
+  const ancestorsById = await loadLocationAncestors(
+    db,
+    locations.map((entry) => entry.id),
+  );
+  // A leaf name alone ("Closet") is ambiguous between rooms; the reviewer
+  // sees the same breadcrumb the Location picker lists.
+  const locationById = new Map(
+    locations.map((entry) => [
+      entry.id,
+      {
+        ...entry,
+        name: [
+          ...(ancestorsById.get(entry.id) ?? []).map((rung) => rung.name),
+          entry.name,
+        ].join(" › "),
+      },
+    ]),
+  );
   const strip = (
     entry: (typeof chosen)[number] | undefined,
   ): PhotoGroupProposalProductSummary | null =>
@@ -481,6 +499,10 @@ async function toViews(
         stockIntent:
           row.review?.stockIntent ?? (inventory ? "receive" : "evidence"),
         inventoryMissing: !inventory || !place,
+        destination:
+          inventory && place
+            ? { locationName: place.name, quantity: inventory.quantity }
+            : null,
         descriptionBlocked: processing.some(
           (photo) =>
             roster.imageCodes.includes(photo.id) &&

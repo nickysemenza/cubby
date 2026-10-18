@@ -21,6 +21,8 @@ export function photoGroupSteps(input: {
   concern: string | null;
   stockIntent: string;
   inventoryMissing: boolean;
+  /** Receive destination, so the folded step says where stock lands. */
+  destination?: { locationName: string; quantity: number } | null;
   descriptionBlocked: boolean;
 }) {
   const settled = input.state !== "proposed";
@@ -69,10 +71,7 @@ export function photoGroupSteps(input: {
           : inventoryBlock
             ? "needs_input"
             : "done",
-      summary:
-        input.stockIntent === "receive"
-          ? "Receive into inventory"
-          : "Reference only",
+      summary: stockSummary(input.stockIntent, input.destination ?? null),
       action: input.stockIntent === "receive" ? "create" : null,
       blockedReason: productBlock ?? identityBlock,
     },
@@ -88,4 +87,18 @@ export function photoGroupSteps(input: {
       step.blockedReason = null;
     }
   return { steps, blockedReason };
+}
+
+function stockSummary(
+  stockIntent: string,
+  destination: { locationName: string; quantity: number } | null,
+): string {
+  if (stockIntent === "receive")
+    return destination
+      ? `Add ${destination.quantity} to ${destination.locationName}`
+      : "Add to inventory · choose a location";
+  if (stockIntent === "counted") return "Already counted · no stock change";
+  if (stockIntent === "historical")
+    return "Historical or sold · no stock change";
+  return "Reference photo only · no stock change";
 }

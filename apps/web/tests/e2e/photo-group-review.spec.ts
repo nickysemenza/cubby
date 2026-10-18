@@ -121,12 +121,10 @@ test("resolves identity, validates counts, and applies selected fields without r
   await page
     .getByRole("option", { name: "Yes, add to inventory", exact: true })
     .click();
+  // Receiving a reference-only group lands where its siblings receive.
   await expect(
-    other.getByText("Choose a location before receiving stock."),
+    other.getByText(`Create a count of 1 at Home › ${name} location.`),
   ).toBeVisible();
-  await expect(
-    other.getByRole("button", { name: "Create product", exact: true }),
-  ).toBeDisabled();
   await other.getByRole("combobox", { name: "stock decision" }).click();
   await page
     .getByRole("option", { name: "Just a reference photo", exact: true })
@@ -215,7 +213,7 @@ test("resolves identity, validates counts, and applies selected fields without r
     .getByRole("heading", { name: `Approved · ${name} shirt`, exact: true })
     .click();
   await expect(
-    group.getByText("No Inventory write", { exact: true }),
+    group.getByText("Historical or sold · no stock change", { exact: true }),
   ).toBeVisible();
   const context = await createEvidenceHarnessContext(page);
   const db = getDb(context.db);
@@ -843,6 +841,9 @@ test("reviews an occupied location and links a chosen unlinked Expense after pho
   ).toBeTruthy();
   await page
     .getByRole("heading", { name: `Approved · ${existingName}` })
+    .click();
+  await page
+    .getByRole("heading", { name: "Link a purchase line", exact: true })
     .click();
   const linkSection = page.getByRole("region", {
     name: "Unlinked purchase lines",
