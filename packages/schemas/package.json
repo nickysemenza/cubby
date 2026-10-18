@@ -171,6 +171,7 @@
     "./statement-row": "./src/statement-row.ts",
     "./statement-suggestion": "./src/statement-suggestion.ts",
     "./suggestion-list": "./src/suggestion-list.ts",
+    "./automatic-rule": "./src/automatic-rule.ts",
     "./wish": "./src/wish.ts",
     "./wish-fields": "./src/wish-fields.ts",
     "./entity-fields": "./src/entity-fields.ts",

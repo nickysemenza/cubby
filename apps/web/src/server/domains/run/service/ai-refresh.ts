@@ -64,6 +64,7 @@ import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
+import type { AuditSampler } from "~/server/generic/assessment/automatic-rules";
 import { fieldReviewIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/audit-log";
 import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -104,6 +105,8 @@ export type AiRefreshPorts = {
     >[2],
     "triage" | "relevance" | "storage"
   >;
+  /** Test seam: the Automatic rule audit sample, so outcomes never ride on random ids. */
+  auditSample?: AuditSampler;
 };
 const log = createLogger("ai-refresh");
 const jsonSnapshot = (value: unknown) =>
@@ -795,15 +798,12 @@ export async function executeAiRefreshTarget(
       const model = snapshot.decisionModel;
       const entry = decision
         ? makeSweepSuggestion({
-            entity: snapshot.entity,
-            field: snapshot.field,
             currentValue: snapshot.currentValue,
             decision: {
               value: decision.value,
               confidence: decision.probability ?? 0,
             },
             model,
-            pinnedModel: model,
           })
         : null;
       const applicationFailures: string[] = [];
@@ -819,6 +819,7 @@ export async function executeAiRefreshTarget(
           predecessorIds: target.assessmentIds,
           evaluationId: id,
           provenance: saved.provenance,
+          rules: { pinnedModel: model, auditSample: ports.auditSample },
         },
         entry
           ? [
@@ -826,11 +827,6 @@ export async function executeAiRefreshTarget(
                 ...entry,
                 reviewKey: saved.reviewKey,
                 model: saved.provenance.model ?? entry.model,
-                status:
-                  saved.provenance.model &&
-                  saved.provenance.model !== snapshot.decisionModel
-                    ? "pending"
-                    : entry.status,
               },
             ]
           : [],

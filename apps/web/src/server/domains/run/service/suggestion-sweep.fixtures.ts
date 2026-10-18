@@ -35,7 +35,10 @@ import {
   resolveLiveShortcode,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { makeProductInput } from "~/server/testing/repo.fixtures";
+import {
+  createSystemUserFixture,
+  makeProductInput,
+} from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { ensureRun } from "../repo/ensure-run";
@@ -62,10 +65,11 @@ export const kernelCtx = (ctx: Ctx) =>
     createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
   );
 
-/** Defaults: pinned primary model, no paired sampling, no pacing waits. */
+/** Defaults: pinned primary model, no paired sampling or audit sample, no pacing waits. */
 const sweepDefaults = {
   decisionModel: () => PRIMARY_MODEL,
   samplePair: () => false,
+  auditSample: () => false,
   wait: async () => {},
 };
 export const startSuggestionSweep = async (
@@ -78,6 +82,8 @@ export const startSuggestionSweep = async (
     ...ports,
     launcher: TEST_AI_WORK_LAUNCHER,
   };
+  // Automatic rule applications write as the system actor.
+  await createSystemUserFixture(db);
   const started = await startSweep(db, input, options);
   await driveAiWork(db, started.id, { sweep: options });
   return started;
@@ -92,6 +98,7 @@ export const resumeSuggestionSweep = async (
     ...ports,
     launcher: TEST_AI_WORK_LAUNCHER,
   };
+  await createSystemUserFixture(db);
   await resumeSweep(db, runId, options);
   await driveAiWork(db, runId, { sweep: options });
 };

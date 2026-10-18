@@ -14,16 +14,27 @@ import {
   pendingSuggestion,
   suggestionField,
 } from "~/server/domains/statement-import/repo/statement-charge";
+import {
+  automaticApplicationRule,
+  matchedRulesOf,
+} from "~/server/generic/assessment/repo/assessment";
 
 /** Record-level scope the cross-family list pushes into SQL. */
 export type StatementSuggestionScope = {
   /** FinancialAccount or candidate/hold FinancialTransaction ids. */
   recordUuids?: readonly string[];
   runCode?: string;
+  /** Pending by default; `applied` lists reviewed history. */
+  status?: "pending" | "applied";
 };
 
+const inStatus = (status: StatementSuggestionScope["status"]) =>
+  status === "applied"
+    ? sql`s.family = ${assessmentFamily.enum.statement_transaction} AND s.status = ${status}`
+    : pendingSuggestion();
+
 const conditions = (filters: StatementSuggestionScope): SQL => {
-  const where: SQL[] = [pendingSuggestion()];
+  const where: SQL[] = [inStatus(filters.status)];
   if (filters.runCode)
     where.push(
       sql`s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${filters.runCode})`,
@@ -71,6 +82,8 @@ export async function statementSuggestionKeys(
     sourceCategory: string | null;
     providerStatus: string;
     candidateCode: string | null;
+    matchedRules: string[];
+    automaticRule: string | null;
   }>(sql`
     SELECT s.id, s.fingerprint, (${suggestionField("clean")})::boolean AS clean,
       ${suggestionField("recommended")} AS recommended,
@@ -82,7 +95,9 @@ export async function statementSuggestionKeys(
       a.judgment->${"create"}->>${"kind"} AS kind,
       a.judgment->${"create"}->>${"kindSource"} AS "kindSource",
       r."sourceCategory", a.judgment->>'providerStatus' AS "providerStatus",
-      first_candidate.shortcode AS "candidateCode"
+      first_candidate.shortcode AS "candidateCode",
+      ${matchedRulesOf(sql`s.data`)} AS "matchedRules",
+      ${automaticApplicationRule(sql`s.id`)} AS "automaticRule"
     ${FROM}
     -- The first candidate that still exists, as hydration shows it.
     LEFT JOIN LATERAL (
@@ -101,10 +116,11 @@ export async function statementSuggestionKeys(
   }));
 }
 
-/** Public rows for the given pending suggestions, in no particular order. */
+/** Public rows for the given suggestions still in `status`, in no particular order. */
 export async function readStatementSuggestions(
   db: Database,
   ids: readonly string[],
+  status: StatementSuggestionScope["status"] = "pending",
 ): Promise<StatementSuggestionOut[]> {
   if (!ids.length) return [];
   const page = await unwrapDb(db).execute<{
@@ -124,7 +140,7 @@ export async function readStatementSuggestions(
       fa.shortcode AS "accountCode", account_owner.shortcode AS "ownerCode",
       r.merchant, r."rawDescription", r."sourceCategory"
     ${FROM}
-    WHERE ${pendingSuggestion()} AND s.id IN (${sql.join(
+    WHERE ${inStatus(status)} AND s.id IN (${sql.join(
       ids.map((id) => sql`${id}::uuid`),
       sql`, `,
     )})

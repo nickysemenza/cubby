@@ -213,12 +213,17 @@ async function scopedKeys(db: Database, filters: SuggestionListFilters) {
     throw new Error(
       `Unknown Suggestion column ${unknown.join(", ")}; columns here: ${[...known].join(", ")}`,
     );
-  const query = await familyQuery(db, filters);
+  const scoped = filters.appliedAutomatically
+    ? { ...filters, status: "applied" as const }
+    : filters;
+  const query = await familyQuery(db, scoped);
   const keys = (
     await Promise.all(
       families.map((family) => suggestionFamilies[family].keys(db, query)),
     )
-  ).flat();
+  )
+    .flat()
+    .filter((key) => !scoped.appliedAutomatically || key.automaticRule);
   return { families, keys: filterKeys(keys, filters.where), all: keys };
 }
 

@@ -94,6 +94,7 @@ const actionCapability = {
   "entity.approve_detected_item": "member_decision",
   "entity.review_assessment": "member_decision",
   "entity.review_assessments": "member_decision",
+  "entity.set_suggestion_rule": "member_decision",
   "statement_rows.record": "generic_mutation",
   "statement_rows.update": "generic_mutation",
   "statement_rows.delete": "generic_mutation",

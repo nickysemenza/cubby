@@ -27,7 +27,11 @@ import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
-import { recordFeedback } from "~/server/generic/assessment/repo/assessment";
+import {
+  automaticApplicationRule,
+  matchedRulesOf,
+  recordFeedback,
+} from "~/server/generic/assessment/repo/assessment";
 import { withAuditReceipts } from "~/server/generic/audit-log/repo/audit-receipts";
 import {
   lookupShortcodes,
@@ -249,6 +253,8 @@ export async function fieldSuggestionKeys(
       kind: suggestionTable.kind,
       confidence: suggestionTable.confidence,
       createdAt: suggestionTable.createdAt,
+      matchedRules: matchedRulesOf(sql`${suggestionTable.data}`),
+      automaticRule: automaticApplicationRule(sql`${suggestionTable.id}`),
     })
     .from(suggestionTable)
     .leftJoin(runTable, eq(runTable.id, suggestionTable.runId))

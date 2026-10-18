@@ -1,11 +1,17 @@
 import { assessmentReviewBatchOut } from "@cubby/schemas/assessment";
 import {
+  automaticRuleOut,
+  automaticRulesOut,
+  setAutomaticRuleInput,
+} from "@cubby/schemas/automatic-rule";
+import {
   acceptCleanSuggestionsInput,
   suggestionCountsInput,
   suggestionCountsOut,
   suggestionListInput,
   suggestionListOut,
 } from "@cubby/schemas/suggestion-list";
+import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
 
@@ -57,5 +63,18 @@ export const suggestionsContract = defineContract("suggestions", {
       "financialTransaction",
       "settledSuggestions",
     ],
+  }),
+  /** Each Automatic rule with its switch and precision, computed on read. */
+  rules: query({
+    input: z.object({}).strict(),
+    output: automaticRulesOut,
+    readPolicy: "strong",
+    cache: { profile: "stable", tags: [["suggestions"]] },
+  }),
+  /** A member's switch: on requires eligibility, off is always allowed. */
+  setRule: mutation({
+    input: setAutomaticRuleInput,
+    output: automaticRuleOut,
+    invalidates: ["suggestions"],
   }),
 });

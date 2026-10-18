@@ -675,14 +675,20 @@ export const insertEntityAttachments = async (
     .returning();
 };
 
-/** The reserved system user exists in production; crons write as it. */
+/**
+ * The reserved system user exists in production; crons and Automatic rule
+ * applications write as it. Idempotent.
+ */
 export const createSystemUserFixture = async (db: Database): Promise<void> => {
-  await getDb(db).insert(user).values({
-    id: systemActor().userId,
-    name: "System",
-    email: "system@example.test",
-    emailVerified: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  });
+  await getDb(db)
+    .insert(user)
+    .values({
+      id: systemActor().userId,
+      name: "System",
+      email: "system@example.test",
+      emailVerified: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .onConflictDoNothing();
 };

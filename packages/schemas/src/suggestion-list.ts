@@ -184,7 +184,10 @@ const rowBase = {
   /** Bulk-acceptable as is through `suggestions.acceptClean`. */
   clean: z.boolean(),
   impact: z.array(suggestionImpact),
+  /** Automatic rule stamps (`<ruleKey>@<revision>[@<model>]`) matched at publication. */
   matchedRules: z.array(z.string()),
+  /** `<ruleKey>@<revision>` of the Automatic rule that applied it, else null. */
+  automaticRule: z.string().nullable(),
   createdAt: z.iso.datetime(),
   actions: z.array(suggestionAction),
   /** The row's `suggestionColumns` values, as filtered and sorted. */
@@ -236,8 +239,10 @@ export const suggestionListFilters = z.object({
     .array(z.string().min(1))
     .max(SUGGESTION_RECORD_IDS_MAX)
     .optional(),
-  /** Reviewed history is field-only (the decision-eval label set). */
+  /** Reviewed history: field rows in every status (the decision-eval label set), statement rows applied. */
   status: suggestionStatus.default("pending"),
+  /** Only Suggestions an Automatic rule applied; implies status applied. */
+  appliedAutomatically: z.boolean().optional(),
   runId: runShortcode.optional(),
   /** Conditions on `suggestionColumns`, by column key. */
   where: z.record(z.string(), suggestionColumnFilter).default({}),
@@ -319,6 +324,7 @@ export type SuggestionFieldCount = z.infer<typeof suggestionFieldCount>;
 
 export const suggestionCountsInput = suggestionListFilters.omit({
   status: true,
+  appliedAutomatically: true,
 });
 const count = z.number().int().nonnegative();
 /**
@@ -347,7 +353,9 @@ export type SuggestionCountsOut = z.infer<typeof suggestionCountsOut>;
 
 export const SUGGESTION_ACCEPT_CLEAN_MAX = 100;
 export const acceptCleanSuggestionsInput = z.object({
-  filters: suggestionListFilters.omit({ status: true }).default({ where: {} }),
+  filters: suggestionListFilters
+    .omit({ status: true, appliedAutomatically: true })
+    .default({ where: {} }),
   limit: z.number().int().min(1).max(SUGGESTION_ACCEPT_CLEAN_MAX).default(100),
   /** Already attempted ids; a failed accept stays pending and clean. */
   skip: z.array(assessmentChildHandle).max(5000).default([]),

@@ -2,12 +2,8 @@ import {
   fieldSuggestionsInput,
   type FieldSuggestionsInput,
 } from "@cubby/schemas/ai";
-import { SUGGESTION_AUTO_APPLY_THRESHOLD } from "@cubby/schemas/ai-evaluation";
 import { aiProvenance } from "@cubby/schemas/ai-evaluation";
-import {
-  basisValueOf,
-  requiresSuggestionReview,
-} from "@cubby/schemas/field-suggestion";
+import { basisValueOf } from "@cubby/schemas/field-suggestion";
 import { parseEntityId, type RunId } from "@cubby/schemas/identifiers";
 import type { RunTrigger } from "@cubby/schemas/purchase-import";
 import {
@@ -41,6 +37,7 @@ import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
+import type { AuditSampler } from "~/server/generic/assessment/automatic-rules";
 import { fieldReviewIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/audit-log";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -86,6 +83,8 @@ export type SuggestionSweepPorts = {
   pauseAfter?: number;
   /** Persisted pairing regressions must not depend on randomly generated record IDs. */
   samplePair?: (entityId: string) => boolean;
+  /** Likewise the Automatic rule audit sample. */
+  auditSample?: AuditSampler;
 };
 type SweepTarget = {
   id: string;
@@ -165,8 +164,6 @@ async function suggestTarget(
     return { primary: null, entries, financeReviewFingerprint: null };
   }
   const primary = makeSweepSuggestion({
-    entity: input.entity,
-    field: input.field,
     currentValue: target.currentValue,
     decision: {
       value: jsonValue(decision.value),
@@ -178,12 +175,10 @@ async function suggestTarget(
       runnerUpConfidence: decision.alternatives[0]?.probability,
     },
     model: input.decisionModel,
-    pinnedModel: input.decisionModel,
     pairKey,
   });
   if (primary) {
     primary.model = primaryCall.inputs[0]?.model ?? input.decisionModel;
-    if (primary.model !== input.decisionModel) primary.status = "pending";
     primary.reviewKey = await fieldReviewIdentity({
       entity: input.entity,
       recordId: target.entityId,
@@ -215,15 +210,12 @@ async function suggestTarget(
       const pairedRow =
         alt &&
         makeSweepSuggestion({
-          entity: input.entity,
-          field: input.field,
           currentValue: target.currentValue,
           decision: {
             value: jsonValue(alt.value),
             confidence: alt.probability ?? 0,
           },
           model: pairedModel,
-          pinnedModel: input.decisionModel,
           pairKey,
         });
       if (pairedRow) entries.push(pairedRow);
@@ -499,6 +491,10 @@ export async function executeSuggestionSweepTarget(
         fieldDecisionId,
         evaluationId: item.id,
         provenance: result.provenance,
+        rules: {
+          pinnedModel: input.decisionModel,
+          auditSample: ports.auditSample,
+        },
       },
       result.entries,
       result.financeReviewFingerprint,
@@ -632,27 +628,19 @@ const isBlank = (value: SuggestionValue) => value == null || value === "";
 const equalValue = (left: SuggestionValue, right: SuggestionValue) =>
   canonicalJson(left) === canonicalJson(right);
 
-/** Converts a decision into its durable sweep row; only the pinned model may apply an Addition. */
+/**
+ * Converts a decision into its durable sweep row, always pending. Only the
+ * `field.addition` Automatic rule may then apply it.
+ */
 export function makeSweepSuggestion(args: {
-  entity: SweepEntity;
-  field: string;
   currentValue: SuggestionValue;
   decision: SweepDecision;
   model: SupportedDecisionModel;
-  pinnedModel: SupportedDecisionModel;
   pairKey?: string | null;
 }): SweepSuggestion | null {
   if (equalValue(args.currentValue, args.decision.value)) return null;
-  const kind = isBlank(args.currentValue) ? "addition" : "correction";
   return {
-    kind,
-    status:
-      kind === "addition" &&
-      !requiresSuggestionReview(args.entity, args.field) &&
-      args.decision.confidence >= SUGGESTION_AUTO_APPLY_THRESHOLD &&
-      args.model === args.pinnedModel
-        ? "applied"
-        : "pending",
+    kind: isBlank(args.currentValue) ? "addition" : "correction",
     currentValue: args.currentValue,
     suggestedValue: args.decision.value,
     confidence: args.decision.confidence,

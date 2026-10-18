@@ -211,19 +211,14 @@ async function prepareFieldConnections(
     const decision = captured.result.suggestions[field];
     if (!decision || decision.value === null) continue;
     const entry = makeSweepSuggestion({
-      entity,
-      field,
       currentValue,
       decision: {
         value: jsonValue(decision.value),
         confidence: decision.probability ?? 0,
       },
       model,
-      pinnedModel: model,
     });
     if (!entry) continue;
-    // Existing automatic callers retain their policy. This new flow always queues.
-    entry.status = "pending";
     const dependencies = dependencyStamps(await producingAiManifest(db), [
       ...fieldDependencyKeys(entity, field),
       ...captured.inputs.map((call) => call.feature),

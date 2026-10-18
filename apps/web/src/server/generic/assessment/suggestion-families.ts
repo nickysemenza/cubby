@@ -65,13 +65,20 @@ type Columns = Record<string, SuggestionColumnValue | SuggestionColumnValue[]>;
 export type SuggestionKey = {
   family: SuggestionListFamily;
   assessmentId: string;
+  status: SuggestionListFilters["status"];
   fingerprint: string | null;
   clean: boolean;
   strength: SuggestionStrength;
   impact: SuggestionImpact[];
   createdAt: Date;
   columns: Columns;
+  /** Rule stamps matched at publication. */
+  matchedRules: string[];
+  /** `<ruleKey>@<revision>` when an Automatic rule applied it. */
+  automaticRule: string | null;
 };
+
+const stamps = z.array(z.string()).catch([]);
 
 /** `records` is set when the caller filters by recordIds (resolved, maybe empty). */
 export type SuggestionFamilyQuery = {
@@ -137,7 +144,8 @@ const keyBase = (key: SuggestionKey) => ({
   strength: key.strength,
   clean: key.clean,
   impact: key.impact,
-  matchedRules: [],
+  matchedRules: key.matchedRules,
+  automaticRule: key.automaticRule,
   createdAt: key.createdAt.toISOString(),
   columns: key.columns,
 });
@@ -193,6 +201,9 @@ const field: SuggestionFamilyPresentation<"field"> = {
       return {
         family: "field" as const,
         assessmentId: row.id,
+        status: filters.status,
+        matchedRules: stamps.parse(row.matchedRules),
+        automaticRule: row.automaticRule,
         fingerprint: row.fingerprint,
         strength,
         clean: false,
@@ -340,7 +351,8 @@ const statementTransaction: SuggestionFamilyPresentation<"statement_transaction"
   {
     keys: async (db, query) => {
       const { filters } = query;
-      if (filters.status !== "pending") return [];
+      const status = filters.status;
+      if (status !== "pending" && status !== "applied") return [];
       if (filters.entity && !STATEMENT_ENTITIES.includes(filters.entity))
         return [];
       const recordUuids = recordIdsOf(query, STATEMENT_ENTITIES);
@@ -348,10 +360,14 @@ const statementTransaction: SuggestionFamilyPresentation<"statement_transaction"
       const rows = await statementSuggestionKeys(db, {
         recordUuids,
         runCode: runCode(query),
+        status,
       });
       return rows.map((row) => ({
         family: "statement_transaction" as const,
         assessmentId: row.id,
+        status,
+        matchedRules: stamps.parse(row.matchedRules),
+        automaticRule: row.automaticRule,
         fingerprint: row.fingerprint,
         clean: row.clean,
         strength: statementStrength(row),
@@ -383,6 +399,7 @@ const statementTransaction: SuggestionFamilyPresentation<"statement_transaction"
       const rows = await readStatementSuggestions(
         db,
         keys.map((key) => key.assessmentId),
+        keys[0]?.status === "applied" ? "applied" : "pending",
       );
       const byId = new Map(keys.map((key) => [key.assessmentId, key]));
       return new Map(
@@ -553,6 +570,10 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
         {
           family: "recommendation" as const,
           assessmentId: row.id,
+          status: filters.status,
+          // Connections have no Automatic rule.
+          matchedRules: [],
+          automaticRule: null,
           fingerprint: row.fingerprint,
           // Connections stay individually reviewed (ADR 0016).
           clean: false,

@@ -1,12 +1,17 @@
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import type { drizzle } from "drizzle-orm/node-postgres";
 
-import { location, productCategory } from "../../src/server/db/schema";
+import {
+  automaticRule,
+  location,
+  productCategory,
+} from "../../src/server/db/schema";
 import { taxonomyRootFixtures } from "../product-category-fixtures";
 
 /**
  * The rows every Cubby database starts with: the one real location-hierarchy
- * root ("Home") and the product-category taxonomy roots. Seeded here for Vitest
+ * root ("Home"), the product-category taxonomy roots and the Automatic rule
+ * switches as migration 0091 seeds them. Seeded here for Vitest
  * integration databases, browser E2E workers, the dev corpus, simulator
  * scenarios, and the Mac import lane, so none of them re-inserts its own copy.
  *
@@ -26,7 +31,7 @@ export const BASE_HOME_SHORTCODE = testShortcode("location", "LOC-HM3E");
 /** The slice of a Drizzle client `seedBaseWorld` needs; any node-postgres client fits. */
 type InsertClient = Pick<ReturnType<typeof drizzle>, "insert">;
 
-/** Insert Home and the taxonomy roots. Idempotent: a re-seed is a no-op. */
+/** Insert the starting rows. Idempotent: a re-seed is a no-op. */
 export async function seedBaseWorld(db: InsertClient): Promise<void> {
   await db
     .insert(location)
@@ -42,5 +47,26 @@ export async function seedBaseWorld(db: InsertClient): Promise<void> {
   await db
     .insert(productCategory)
     .values(taxonomyRootFixtures)
+    .onConflictDoNothing();
+  await db
+    .insert(automaticRule)
+    .values([
+      {
+        family: "field",
+        ruleKey: "field.addition",
+        revision: "2026-10-18.1",
+        enabled: true,
+        enabledAt: new Date(),
+        enabledReason: "Synthetic base world: as migrated",
+      },
+      {
+        family: "statement_transaction",
+        ruleKey: "statement_transaction.attach",
+        revision: "2026-10-18.1/2026-10-17.1",
+        enabled: false,
+        disabledAt: new Date(),
+        disabledReason: "Synthetic base world: as migrated",
+      },
+    ])
     .onConflictDoNothing();
 }

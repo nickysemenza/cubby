@@ -3,9 +3,10 @@ import {
   assessmentPublication,
   assessmentJudgments,
   assessmentProjectionTargets,
+  feedbackAuthority,
   feedbackEvent,
 } from "@cubby/schemas/assessment";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, sql, type SQL } from "drizzle-orm";
 import { isEqual } from "es-toolkit";
 import { z } from "zod";
 
@@ -34,7 +35,8 @@ export function assertApplicationReceipt(
     metadata.data.kind !== kind ||
     metadata.data.commandFeedbackId !== command.id ||
     receipt.assessmentId !== command.assessmentId ||
-    receipt.authority !== "member" ||
+    receipt.authority !== command.authority ||
+    !["member", "automatic"].includes(receipt.authority) ||
     receipt.intent !== "apply" ||
     receipt.actorUserId !== command.actorUserId ||
     receipt.suppression !== null ||
@@ -42,6 +44,22 @@ export function assertApplicationReceipt(
   )
     throw new Error("Invalid immutable application receipt for this command");
 }
+
+/**
+ * `<ruleKey>@<revision>` of the Automatic rule whose application receipt an
+ * Assessment carries, else null: the "applied automatically" mark.
+ */
+export const automaticApplicationRule = (assessmentId: SQL) => sql<
+  string | null
+>`(SELECT (f.metadata->${"rule"}->>${"key"}) || '@' || (f.metadata->${"rule"}->>${"revision"})
+  FROM "Feedback" f WHERE f."assessmentId" = ${assessmentId}
+    AND f.authority = ${feedbackAuthority.enum.automatic}
+    AND f.metadata->>${"kind"} = ${"assessment_application"}
+  LIMIT 1)`;
+
+/** The rule stamps an AssessmentState's publication matched. */
+export const matchedRulesOf = (data: SQL) =>
+  sql<unknown>`CASE WHEN jsonb_typeof(${data}->'matchedRules') = 'array' THEN ${data}->'matchedRules' ELSE '[]'::jsonb END`;
 
 /** A publication key names exact immutable evidence, never a mutable slot. */
 export async function publishAssessment(

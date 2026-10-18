@@ -55,10 +55,15 @@ import {
   statementTransactionKind,
 } from "~/server/domains/statement-import/repo/statement-transaction-kind";
 import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
+import {
+  automaticRuleStamp,
+  matchStatementRules,
+  statementSubjectKey,
+} from "~/server/generic/assessment/automatic-rules";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 
 /** Rule revision stamped on every published suggestion; bump with any policy change. */
-const STATEMENT_SUGGESTION_REVISION = "2026-10-18.3";
+export const STATEMENT_SUGGESTION_REVISION = "2026-10-18.3";
 const STATEMENT_SUGGESTION_PAGE = FINANCIAL_STATEMENT_IMPORT_MAX_ROWS;
 /** A hold's posted twin lands within this window, and a vanished hold is judged after it. */
 const PENDING_POST_WINDOW_DAYS = 7;
@@ -1152,6 +1157,11 @@ export async function publishChargeProposal(
           // Rule output awaits the decision model's labels: candidate
           // identity, and the kind and counterparty of every create.
           needsLabel: producer.kind === "rule" && judgment.create !== null,
+          ...(await automaticRuleStamp(
+            "statement_transaction",
+            matchStatementRules(judgment),
+            statementSubjectKey(charge),
+          )),
         },
       },
     );

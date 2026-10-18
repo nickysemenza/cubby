@@ -27,6 +27,7 @@ import {
   type LabelCursor,
 } from "~/server/domains/statement-import/repo/statement-suggestions";
 import { labelStatementKind } from "~/server/domains/statement-import/service/statement-kind-labels";
+import { applyAutomaticRulesForCharge } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 
 /** One label page labels at most this many suggestions. */
 const STATEMENT_LABEL_BATCH = 20;
@@ -151,7 +152,10 @@ export async function labelStatementSuggestions(
           evaluationId: null,
         },
       );
-      if (outcome === "published") labelled++;
+      if (outcome === "published") {
+        labelled++;
+        await applyAutomaticRulesForCharge(db, charge);
+      }
     } catch (error) {
       // The budget pauses the whole pass; any other failure is this charge's.
       if (error instanceof AiBudgetExhaustedError) throw error;
