@@ -67,6 +67,7 @@ import { assertRunCapability } from "~/server/domains/purchase-import/repo/capab
 import {
   type ImportScope,
   loadImportScope,
+  canonicalMailSourceKey,
   parseMailSourceKey,
   type RetainedMailSource,
   retainedMailSource,
@@ -524,9 +525,27 @@ export async function preparePurchaseImport(
   actor: ActorContext,
   decisionPort?: DecisionPort,
 ) {
-  const input = preparePurchaseImportInput.parse(rawInput);
-  const scope = await importRunScope(db, actor, input._runExecution, true);
+  const parsed = preparePurchaseImportInput.parse(rawInput);
+  const scope = await importRunScope(db, actor, parsed._runExecution, true);
   assertRunCapability(scope.purpose, "prepare");
+  // Before the operation ledger: a nested attachment key and its stored form
+  // are one source, so retries and the writer see a single identity.
+  const input = {
+    ...parsed,
+    orders: await Promise.all(
+      parsed.orders.map(async (order) => ({
+        ...order,
+        source: {
+          ...order.source,
+          externalKey: await canonicalMailSourceKey(
+            db,
+            scope.ledgerPartyId,
+            order.source,
+          ),
+        },
+      })),
+    ),
+  };
   return executeAtomicOperation(
     db,
     {

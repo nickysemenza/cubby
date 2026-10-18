@@ -2,7 +2,8 @@
  * Declared semantic judgments about one retained original: whose transaction
  * it evidences and whether a supporting original is the same purchase. Both
  * are closed Decision features over checksum-bound evidence; only a confident
- * answer counts, and neither creates records.
+ * answer counts, and neither creates records. A vendor's direct mail to the
+ * mailbox owner is attributed by the host rule in `mail-owner.ts` instead.
  */
 import { wasm } from "~/lib/wasm";
 import {
@@ -16,6 +17,8 @@ import {
 } from "~/server/ai/policy/features";
 import type { AiRunContext } from "~/server/ai/run-feature";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
+
+import { type MailOwnerEvidence, ownMailAttribution } from "./mail-owner";
 
 export type MailAttribution = (typeof MAIL_ATTRIBUTION_FEATURE.choices)[number];
 
@@ -34,6 +37,9 @@ const ATTRIBUTION_HEADERS = [
   "sender",
   "x-forwarded-for",
   "x-forwarded-to",
+  "x-google-original-from",
+  "resent-from",
+  "resent-to",
 ] as const;
 
 export function mailJudgmentEvidence(mail: JudgedMail) {
@@ -58,33 +64,78 @@ export function mailJudgmentEvidence(mail: JudgedMail) {
   };
 }
 
+/**
+ * One attribution decision. `owner_rule`: the host decided `recipient` from
+ * the owner's addresses without a model; `model`: the decision model's label
+ * and selected probability (below high confidence reads as uncertain);
+ * `oversized`: the evidence exceeded the decision context.
+ */
+export type MailAttributionJudgment = {
+  label: MailAttribution;
+  basis: "owner_rule" | "model" | "oversized";
+  modelLabel: MailAttribution | null;
+  probability: number | null;
+};
+
+/** Raw decision diagnostics for refusal messages. */
+export const describeMailAttribution = (judgment: MailAttributionJudgment) =>
+  judgment.basis === "model"
+    ? `${judgment.label}; model ${judgment.modelLabel ?? "none"} at p=${judgment.probability ?? "?"}`
+    : `${judgment.label}; ${judgment.basis}`;
+
 /** Each Email's attribution; anything short of a confident answer is uncertain. */
 export async function judgeMailAttributions(
   mails: readonly JudgedMail[],
+  owner: MailOwnerEvidence | null,
   usage: AiRunContext,
   port?: DecisionPort,
-): Promise<MailAttribution[]> {
-  const prompts = mails.map((mail) =>
-    MAIL_ATTRIBUTION_FEATURE.prompt(JSON.stringify(mailJudgmentEvidence(mail))),
+): Promise<MailAttributionJudgment[]> {
+  const ruled = mails.map((mail) => ownMailAttribution(mail, owner));
+  const prompts = mails.map((mail, index) =>
+    ruled[index]
+      ? null
+      : MAIL_ATTRIBUTION_FEATURE.prompt(
+          JSON.stringify({
+            mailboxOwner: owner,
+            email: mailJudgmentEvidence(mail),
+          }),
+        ),
   );
-  const fits = prompts.map((prompt) => decisionChoiceFitsContext(prompt));
+  const fits = prompts.map(
+    (prompt) => prompt !== null && decisionChoiceFitsContext(prompt),
+  );
   const results = await runDecisionChoices(
-    prompts
-      .filter((_, index) => fits[index])
-      .map((prompt) => ({
-        ...prompt,
-        feature: MAIL_ATTRIBUTION_FEATURE,
-        usage,
-        port,
-      })),
+    prompts.flatMap((prompt, index) =>
+      prompt && fits[index]
+        ? [{ ...prompt, feature: MAIL_ATTRIBUTION_FEATURE, usage, port }]
+        : [],
+    ),
   );
   let next = 0;
-  return fits.map((fit) => {
-    if (!fit) return "uncertain";
+  return ruled.map((rule, index): MailAttributionJudgment => {
+    if (rule)
+      return {
+        label: rule,
+        basis: "owner_rule",
+        modelLabel: null,
+        probability: null,
+      };
+    if (!fits[index])
+      return {
+        label: "uncertain",
+        basis: "oversized",
+        modelLabel: null,
+        probability: null,
+      };
     const result = results[next++];
     const choice =
-      MAIL_ATTRIBUTION_FEATURE.choices[result?.selectedIndex ?? -1];
-    return result?.confidence === "high" && choice ? choice : "uncertain";
+      MAIL_ATTRIBUTION_FEATURE.choices[result?.selectedIndex ?? -1] ?? null;
+    return {
+      label: result?.confidence === "high" && choice ? choice : "uncertain",
+      basis: "model",
+      modelLabel: choice,
+      probability: result?.probability ?? null,
+    };
   });
 }
 

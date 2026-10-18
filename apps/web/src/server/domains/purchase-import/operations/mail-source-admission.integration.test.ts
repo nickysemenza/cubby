@@ -6,7 +6,9 @@
  * second-guessed; a supporting original of the same purchase cannot be
  * imported, or one of another purchase joins the roster; equivalent original
  * and forwarded copies of one order book spending twice in either arrival
- * order. Deterministic original checks precede all admission judgments.
+ * order; a vendor's direct mail to the mailbox owner's own address is
+ * refused because headers-only evidence leaves the model uncertain.
+ * Deterministic original checks precede all admission judgments.
  */
 import type { ActorContext } from "@cubby/schemas/context";
 import type { LedgerPartyId, RunId } from "@cubby/schemas/identifiers";
@@ -28,6 +30,7 @@ import {
   importPreparedOrder,
   purchase,
   run,
+  user,
   vendorAccount,
 } from "~/server/db/schema";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
@@ -106,7 +109,11 @@ describe("Mail import source admission", () => {
     partyId: LedgerPartyId,
     messageId: string,
     body: string,
-    overrides: { mailboxId?: string; threadId?: string } = {},
+    overrides: {
+      mailboxId?: string;
+      threadId?: string;
+      headers?: Record<string, string>;
+    } = {},
   ) {
     return retainedMailFixture(ctx.db, {
       ledgerPartyId: partyId,
@@ -115,7 +122,12 @@ describe("Mail import source admission", () => {
       threadId: overrides.threadId,
       checksum: await sha256Hex(`${messageId}:${body}`),
       sender: "orders@kettle.example.test",
-      content: { snippet: null, bodyText: body, bodyHtml: null },
+      content: {
+        snippet: null,
+        bodyText: body,
+        bodyHtml: null,
+        headers: overrides.headers,
+      },
     });
   }
 
@@ -303,6 +315,33 @@ describe("Mail import source admission", () => {
           ),
         ),
     ).toEqual([]);
+  });
+
+  it("imports a vendor's direct mail to the owner's address under an automatic Run without the model", async () => {
+    const { party, vendor } = await world();
+    const [owner] = await getDb(ctx.db)
+      .select({ email: user.email })
+      .from(user)
+      .where(eq(user.id, ctx.actor.userId));
+    // An invoice whose body is only its PDF: headers are the whole evidence.
+    const invoice = await retain(party.id, "own-invoice", "Invoice attached.", {
+      headers: {
+        from: "Synthetic kettle shop <orders@kettle.example.test>",
+        to: owner!.email.toUpperCase(),
+      },
+    });
+    const { id, actor } = await mailRun(party, [invoice], "discovery");
+    const port = vi.fn<DecisionPort>(async () => {
+      throw new Error("Own mail needs no attribution decision");
+    });
+    const prepared = await preparePurchaseImport(
+      ctx.db,
+      prepareInput(id, "own-invoice", vendor.shortcode, invoice, "SYN-9"),
+      actor,
+      port,
+    );
+    expect(prepared.orders).toHaveLength(1);
+    expect(port).not.toHaveBeenCalled();
   });
 
   it("imports a member-selected forwarded confirmation without second-guessing the selection", async () => {

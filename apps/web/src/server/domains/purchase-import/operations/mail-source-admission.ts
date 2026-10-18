@@ -27,10 +27,13 @@ import {
   ensureRun,
 } from "~/server/domains/run/repo/ensure-run";
 
+import { readMailOwnerEvidence } from "../repo/mail-owner";
 import {
+  describeMailAttribution,
   judgeMailAttributions,
   judgeSameMailPurchase,
   type MailAttribution,
+  type MailAttributionJudgment,
 } from "../service/mail-source-judgment";
 
 export type MailSourceRef = { mailboxId: string; messageId: string };
@@ -41,6 +44,8 @@ export type MailSourceAdmission = {
   supporting: boolean;
   /** `explicit`: the member selected this Email for import themselves. */
   attribution: MailAttribution | "explicit";
+  /** The decision behind a judged attribution, reported by a refusal. */
+  judgment?: MailAttributionJudgment;
 };
 
 /** Same-mailbox roster originals to compare against, the shared thread first. */
@@ -108,19 +113,27 @@ export async function prepareMailSourceAdmissions(
       }
     : undefined;
   const attributions = usage
-    ? await judgeMailAttributions(judged, usage, port)
+    ? await judgeMailAttributions(
+        judged,
+        await readMailOwnerEvidence(db, {
+          ledgerPartyId: party.id,
+          mailboxIds: judged.map((mail) => mail.mailboxId),
+        }),
+        usage,
+        port,
+      )
     : [];
   const admissions: MailSourceAdmission[] = [];
   for (const mail of mails) {
-    const index = judged.indexOf(mail);
-    const attribution = index < 0 ? "explicit" : attributions[index]!;
+    const judgment = attributions[judged.indexOf(mail)];
+    const attribution = judgment?.label ?? "explicit";
     if (member(mail) || !usage) {
-      admissions.push({ mail, supporting: false, attribution });
+      admissions.push({ mail, supporting: false, attribution, judgment });
       continue;
     }
     if (attribution !== "recipient")
       throw new Error(
-        `Cubby cannot attribute that supporting Email's transaction to the recipient (${attribution}); forwarding alone never proves ownership.`,
+        `Cubby cannot attribute that supporting Email's transaction to the recipient (${judgment ? describeMailAttribution(judgment) : attribution}); forwarding alone never proves ownership.`,
       );
     const anchors = roster
       .filter(
@@ -154,7 +167,7 @@ export async function prepareMailSourceAdmissions(
       throw new Error(
         "Cubby could not establish that the supporting Email is the same purchase as an Email this Run admitted.",
       );
-    admissions.push({ mail, supporting: true, attribution });
+    admissions.push({ mail, supporting: true, attribution, judgment });
   }
   return admissions;
 }
@@ -179,7 +192,7 @@ export async function applyMailSourceAdmissions(
       admission.attribution !== "recipient"
     )
       throw new Error(
-        `Automatic import needs the recipient's own transaction; this Email's attribution is ${admission.attribution}. Resolve it unresolved so the member can select it explicitly.`,
+        `Automatic import needs the recipient's own transaction; this Email's attribution is ${admission.judgment ? describeMailAttribution(admission.judgment) : admission.attribution}. Resolve it unresolved so the member can select it explicitly.`,
       );
   }
 }

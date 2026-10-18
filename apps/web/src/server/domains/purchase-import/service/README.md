@@ -116,7 +116,18 @@ pending: nothing here starts Product research.
    explicitly select (`trigger` other than `foreground`) prepares a Purchase
    only from an Email attributed to its recipient: forwarding alone never
    proves ownership, and an unattributed Email may still link to an existing
-   Purchase without creating the recipient's VendorAccount. Payment, refund and
+   Purchase without creating the recipient's VendorAccount. Attribution
+   (`service/mail-source-judgment.ts`) first applies the host rule in
+   `service/mail-owner.ts`: the owner LedgerParty's addresses (its linked
+   sign-in email and the connected Gmail profile address, cached per isolate
+   by `repo/mail-owner.ts`) compared lowercased, `+tag`-free and, for Gmail,
+   dot-free. An owner address in To, a sender who is neither the owner nor
+   another live member, no forwarding header (`X-Forwarded-*`, `Resent-*`,
+   `X-Google-Original-From`), no `Fwd:` subject and no forwarded-message body
+   make it `recipient` without a model; Delivered-To or Cc alone does not.
+   Everything else asks `mail-attribution` with the owner and household
+   members as trusted evidence, and a refusal reports the label, its basis
+   and the model's probability. Payment, refund and
    transfer Emails reach `finance.converge`, whose mail branch uses the
    checksum- and literal-verified `mail-financial-event` preparation
    (`service/mail-financial-event.ts`, revalidated by

@@ -234,7 +234,7 @@ export const MAIL_ATTRIBUTION_FEATURE = defineFeature({
   prompt: mailAttributionPrompt,
   choices: mailAttributionChoices,
   feature: "mail-attribution",
-  promptVersion: "2026-10-16.1",
+  promptVersion: "2026-10-18.1",
   tier: "decision",
   cache: true,
   collectPayload: false,
