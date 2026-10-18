@@ -25,9 +25,7 @@ import {
 } from "~/server/generic/search/repo/search-document";
 import { publishBackgroundTasks } from "~/server/workflows/background-tasks/publish";
 
-/** One page is plenty for a repair republish — "Settle now" only needs to
- * repair a LOST wakeup, not drive the whole backlog; `backfillImageMetadata`
- * maintenance is the bounded loop for a larger one. */
+/** Each recovery invocation republishes a bounded page; later invocations advance it. */
 const SETTLE_IMAGE_METADATA_BATCH_SIZE = 100;
 
 /** Uploads abandoned after presign; the same threshold the presign cull uses. */

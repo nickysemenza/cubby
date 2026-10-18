@@ -10,12 +10,13 @@ import {
 import { applyImageMetadataExtraction } from "~/server/domains/image/repo/image-metadata";
 import { recordImageSightings } from "~/server/domains/image/repo/image-sighting";
 import { extractImageMetadata } from "~/server/domains/image/service/image-metadata";
-import { backfillImageMetadata } from "~/server/domains/image/service/image-metadata-backfill.service";
 import {
   extractAndStoreImageMetadata,
   type ExtractImageMetadataPorts,
 } from "~/server/domains/image/service/image-metadata-extraction.service";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
+import { settleAwaitingWork } from "~/server/generic/work-queue/service/awaiting-work.service";
+import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import { createImageFixture } from "~/server/testing/repo.fixtures";
 
 // ---------------------------------------------------------------------------
@@ -265,7 +266,7 @@ describe("image metadata extraction + backfill (real Postgres)", () => {
     expect(row.provenanceEvidence).toEqual({ basis: "sighting" });
   });
 
-  it("backfillImageMetadata bounds a loop over every stale row and reports completion", async () => {
+  it("automatic recovery queues stale metadata and extraction clears the backlog", async () => {
     const jpeg = buildJpegWithExif("2025:03:03 03:03:00", 0, 0);
     const images = await Promise.all(
       Array.from({ length: 3 }, (_, i) =>
@@ -275,28 +276,28 @@ describe("image metadata extraction + backfill (real Postgres)", () => {
       ),
     );
 
-    const result = await backfillImageMetadata(
-      ctx.db,
-      { batchSize: 2, maxBatches: 10 },
-      {
-        select: async (db, limit) => {
-          const { selectImagesForMetadataExtraction } =
-            await import("~/server/domains/image/repo/image");
-          return selectImagesForMetadataExtraction(db, limit);
-        },
-        count: async (db) => {
-          const { countImagesStaleMetadata } =
-            await import("~/server/domains/image/repo/image");
-          return countImagesStaleMetadata(db);
-        },
-        extract: (db, imageId) =>
-          extractAndStoreImageMetadata(db, imageId, stubbedPorts(jpeg)),
-      },
-    );
-
-    expect(result.stopped).toBe("complete");
-    expect(result.extracted).toBeGreaterThanOrEqual(images.length);
-    expect(result.remaining).toBe(0);
+    const queue = captureBackgroundQueue();
+    try {
+      await settleAwaitingWork(ctx.db);
+      const tasks = queue.tasks.filter(
+        (task) => task.kind === "image-metadata.extract",
+      );
+      for (const image of images)
+        expect(tasks.some((task) => task.imageId === image.id)).toBe(true);
+      for (const task of tasks)
+        await extractAndStoreImageMetadata(
+          ctx.db,
+          task.imageId,
+          stubbedPorts(jpeg),
+        );
+      queue.tasks.length = 0;
+      await settleAwaitingWork(ctx.db);
+      expect(
+        queue.tasks.filter((task) => task.kind === "image-metadata.extract"),
+      ).toEqual([]);
+    } finally {
+      queue.restore();
+    }
 
     for (const image of images) {
       const row = await getImageById(ctx.db, image.id);

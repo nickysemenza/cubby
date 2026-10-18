@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import pluralize from "pluralize";
 import type { ReactNode } from "react";
 
-import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { maintenance } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
@@ -15,8 +14,6 @@ import {
   CardTitle,
 } from "~/ui/primitives/card";
 import { Description } from "~/ui/primitives/description";
-
-import { ProblemActionButton } from "./problem-action-button";
 
 /** Poll only while something is waiting; a clean card has nothing to watch. */
 export const awaitingWorkRefetchInterval = (
@@ -61,12 +58,10 @@ const LINES: ReadonlyArray<{
 /** Live diagnostics for work that app-open recovery and daily maintenance repair. */
 export interface AwaitingWorkOperations {
   awaitingWork: typeof maintenance.awaitingWork.queryOptions;
-  settleAwaitingWork: typeof maintenance.settleAwaitingWork.mutationOptions;
 }
 
 const defaultOperations: AwaitingWorkOperations = {
   awaitingWork: maintenance.awaitingWork.queryOptions,
-  settleAwaitingWork: maintenance.settleAwaitingWork.mutationOptions,
 };
 
 export function AwaitingWorkCard({
@@ -78,28 +73,6 @@ export function AwaitingWorkCard({
     ...operations.awaitingWork(),
     refetchInterval: (query) => awaitingWorkRefetchInterval(query.state.data),
   });
-  const settle = useActionMutation({
-    mutationFn: operations.settleAwaitingWork,
-    success: (result) => {
-      const parts = [
-        result.publishedRecipeTasks > 0
-          ? `${result.publishedRecipeTasks} recipe ${pluralize("recompute", result.publishedRecipeTasks)}`
-          : null,
-        result.publishedEmbeddingTasks > 0
-          ? `${result.publishedEmbeddingTasks} embedding ${pluralize("refresh", result.publishedEmbeddingTasks)}`
-          : null,
-        result.culledUploads > 0
-          ? `${result.culledUploads} abandoned ${pluralize("upload", result.culledUploads)} removed`
-          : null,
-        result.publishedImageMetadataTasks > 0
-          ? `${result.publishedImageMetadataTasks} image metadata ${pluralize("extraction", result.publishedImageMetadataTasks)}`
-          : null,
-      ].filter((part): part is string => part !== null);
-      if (parts.length === 0) return "Nothing was waiting.";
-      return `Published ${parts.join(", ")}; they run in the background.`;
-    },
-  });
-
   const data = awaiting.data;
   const total = data
     ? data.staleRecipeTotals +
@@ -142,15 +115,10 @@ export function AwaitingWorkCard({
             <CardTitle>Awaiting work</CardTitle>
             <CardDescription>
               Derived data whose background update hasn't landed. Read from the
-              records themselves, so this is the truth right now.
+              records themselves. Recovery runs automatically on app open and
+              during daily maintenance.
             </CardDescription>
           </Stack>
-          <ProblemActionButton
-            onClick={() => settle.mutate(undefined)}
-            isPending={settle.isPending}
-            idleLabel="Settle now"
-            pendingLabel="Publishing…"
-          />
         </Row>
       </CardHeader>
       <CardContent>{body}</CardContent>

@@ -28,8 +28,8 @@ export async function backfillImageProcessing(
   },
 ) {
   const kinds = input.kinds ?? ALL_IMAGE_PROCESSING_KINDS;
-  const submission = await createImageProcessingSubmission(db);
   if (input.retryFailures) {
+    const submission = await createImageProcessingSubmission(db);
     const jobs = await retryFailedImageProcessingJobs(db, input.batchSize, {
       submissionId: submission.id,
       kinds,
@@ -46,6 +46,8 @@ export async function backfillImageProcessing(
     kinds,
     input.batchSize,
   );
+  if (shortcodes.length === 0) return { scheduled: 0, paused: false };
+  const submission = await createImageProcessingSubmission(db);
   const jobs: string[] = [];
   for (const shortcode of shortcodes) {
     const scheduled = await scheduleImageProcessingJobs(db, {
@@ -72,4 +74,5 @@ export async function repairImageProcessingWork(db: Database) {
     db,
     await findImageProcessingDispatchRepairs(db, 100),
   );
+  await backfillImageProcessing(db, { batchSize: 25, retryFailures: false });
 }

@@ -55,6 +55,7 @@ import {
 import { commitPhotoGroup } from "~/server/domains/photo-import/repo/run/writer";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   createImageFixture,
   createLocationFixture,
@@ -106,6 +107,14 @@ const readScenarioEvidence = async (active: ScenarioHarness | undefined) => ({
 
 describe("current purchase-agent system boundaries", () => {
   const ctx = withTestDb();
+  let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
+  beforeEach(() => {
+    backgroundQueue = captureBackgroundQueue();
+  });
+  afterEach(() => {
+    backgroundQueue.restore();
+  });
+
   beforeEach(() => {
     identity = captureE2ERunIdentity(repoRoot);
     began = Date.now();

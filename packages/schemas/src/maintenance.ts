@@ -50,36 +50,10 @@ export type RepairImageDimensionsOut = z.infer<
 >;
 
 /**
- * Bounded backfill for images whose `metadataRevision` is stale (never
- * extracted, or extracted under an older `IMAGE_METADATA_REVISION`) — the
- * "Settle now" republish already wakes most of these; this repairs any row a
- * lost queue message left behind, mirroring `repairImageDimensions`'s
- * bounded-loop shape.
- */
-export const backfillImageMetadataInputSchema = z.object({
-  batchSize: z.number().int().positive().max(100).default(25),
-  maxBatches: z.number().int().positive().max(100).default(20),
-});
-export const backfillImageMetadataOutSchema = z.object({
-  batches: z.number().int().nonnegative(),
-  scanned: z.number().int().nonnegative(),
-  extracted: z.number().int().nonnegative(),
-  skipped: z.number().int().nonnegative(),
-  remaining: z.number().int().nonnegative(),
-  stopped: z.enum(["complete", "limit", "no_progress"]),
-});
-export type BackfillImageMetadataInput = z.infer<
-  typeof backfillImageMetadataInputSchema
->;
-export type BackfillImageMetadataOut = z.infer<
-  typeof backfillImageMetadataOutSchema
->;
-
-/**
  * One-off repair for live images that never received a SearchDocument (the
  * upload paths did not project on create), which `settleAwaitingWork` cannot
  * see because it starts from existing documents. Each page is projected and
- * its embeddings queued; bounded like `backfillImageMetadata`.
+ * its embeddings queued in bounded batches.
  */
 export const backfillImageSearchInputSchema = z.object({
   batchSize: z.number().int().positive().max(200).default(100),

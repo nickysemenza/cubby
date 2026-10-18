@@ -1,5 +1,4 @@
 import type {
-  BackfillImageMetadataOut,
   ClassifyImageProvenanceOut,
   SearchIndexRepairCounters,
 } from "@cubby/schemas/maintenance";
@@ -263,36 +262,6 @@ function RepairIndexAction() {
   );
 }
 
-// Bounded loop for a `metadataRevision` backlog a lost queue wakeup left behind
-// (e.g. after an `IMAGE_METADATA_REVISION` bump); see
-// `image-metadata-backfill.service.ts`.
-function ImageMetadataAction() {
-  const backfill = useMutation(
-    maintenance.backfillImageMetadata.mutationOptions(),
-  );
-  const result = backfill.data;
-  return (
-    <Row align="center" gap="sm">
-      {result && (
-        <span
-          className="font-mono text-2xs text-muted-foreground tabular-nums"
-          title={`${countLabel(result.skipped, "image")} skipped (missing bytes or already fresh); ${BATCH_STOPPED_LABEL[result.stopped]}`}
-        >
-          {result.extracted} of {result.scanned} extracted · {result.remaining}{" "}
-          stale
-        </span>
-      )}
-      <Button
-        size="sm"
-        disabled={backfill.isPending}
-        onClick={() => backfill.mutate({ batchSize: 25, maxBatches: 20 })}
-      >
-        {backfill.isPending ? "Extracting…" : "Run"}
-      </Button>
-    </Row>
-  );
-}
-
 // Decision classification for weak image-source evidence; Preview runs the
 // same frozen candidate roster without publishing results.
 export function ImageProvenanceAction({
@@ -368,10 +337,7 @@ const BATCH_STOPPED_LABEL = {
   complete: "no more candidates",
   limit: "batch limit reached — more may remain",
   no_progress: "the last batch made no progress",
-} satisfies Record<
-  (BackfillImageMetadataOut | ClassifyImageProvenanceOut)["stopped"],
-  string
->;
+} satisfies Record<ClassifyImageProvenanceOut["stopped"], string>;
 
 function ProvenanceSummary({ result }: { result: ClassifyImageProvenanceOut }) {
   const detail = [
@@ -448,12 +414,6 @@ const MAINTENANCE_GROUPS: { group: string; tools: MaintenanceTool[] }[] = [
           "Review still-unknown image sources using bounded evidence and seed a missing capture date from on-device photo analysis. Preview first — Apply writes only high-confidence classifications.",
         action: <ImageProvenanceAction />,
       },
-      {
-        label: "Extract EXIF metadata",
-        description:
-          "Read each stale image's stored bytes for capture date, GPS, and camera, and feed them into capture attribution. Every upload already schedules this — run it only to repair a backlog.",
-        action: <ImageMetadataAction />,
-      },
     ],
   },
   {
@@ -472,15 +432,7 @@ const MAINTENANCE_GROUPS: { group: string; tools: MaintenanceTool[] }[] = [
   },
 ];
 
-/**
- * The shared "Maintenance" card: one-off tools that rebuild derived data on
- * demand. Routine upkeep no longer lives here — search projections are written
- * with the entity, valuations are computed on read, and anything waiting on a
- * queue wakeup shows in the Awaiting-work card. Rendered on BOTH the Problems
- * page (so a "fix this" affordance lives next to the issues) and Settings →
- * Developer / Maintenance (so the tools are reachable even when the page is
- * clean).
- */
+/** Exceptional repair tools live on Problems; routine upkeep runs automatically. */
 export function MaintenanceCard() {
   // Always-on "N to do" figures — one cheap DB query (no USDA/UPC network).
   const { data: counts } = useQuery({

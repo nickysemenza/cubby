@@ -351,10 +351,12 @@ native PostgreSQL installation remain owned by their existing runners.
   - App-open recovery and daily maintenance republish stale recipe totals,
     configured search embeddings, and image metadata work, and cull uploads
     abandoned for more than a day. Embeddings and metadata use bounded pages.
-    Problems retains live counts and manual recovery for diagnosis.
+    Problems retains live counts for diagnosis. Missing image-processing jobs
+    are backfilled automatically in batches of 25 without retrying failed jobs.
   - Image processing always accepts uploads and queued work; historical
     enabled/paused settings are ignored. Device availability and capability
-    still determine which companion work can execute.
+    still determine which companion work can execute. Exceptional repair tools
+    live on Problems; Settings contains connection diagnostics.
   - The daily cron reports remaining backlog after requesting recovery;
     queued work completes asynchronously.
 - Inventory and location valuation are computed on every read. Search

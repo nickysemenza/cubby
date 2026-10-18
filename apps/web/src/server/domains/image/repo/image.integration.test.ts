@@ -14,7 +14,7 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import { asc, eq, inArray, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { Database } from "~/server/db";
 import {
@@ -39,6 +39,7 @@ import {
   upsertCookbook,
 } from "~/server/domains/cookbook/repo/cookbook";
 import { markImageUploadedWorkflow } from "~/server/domains/image/operations/image.server";
+import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   makeCookbookExtraction,
   insertEntityAttachments,
@@ -151,6 +152,13 @@ const mkRunTargetRow = (
 
 describe("image repository", () => {
   const ctx = withTestDb();
+  let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
+  beforeEach(() => {
+    backgroundQueue = captureBackgroundQueue();
+  });
+  afterEach(() => {
+    backgroundQueue.restore();
+  });
 
   it("publishes source decisions only against the selected snapshot and preserves stronger evidence", async () => {
     const eligible = await createUploadedImageRecord(ctx.db, {

@@ -7,7 +7,7 @@ import {
 import { generateShortcode } from "@cubby/shared";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import {
@@ -28,6 +28,7 @@ import {
   startPhotoInventoryRun,
 } from "~/server/domains/purchase-import/repo/run-service";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import { createImageFixture } from "~/server/testing/repo.fixtures";
 
 import { startPhotoGroupingForActor } from "./grouping";
@@ -93,6 +94,13 @@ import {
 
 describe("photo run lifecycle", () => {
   const ctx = withTestDb();
+  let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
+  beforeEach(() => {
+    backgroundQueue = captureBackgroundQueue();
+  });
+  afterEach(() => {
+    backgroundQueue.restore();
+  });
 
   const seedRun = async (input: {
     processor: "cubby" | "external";

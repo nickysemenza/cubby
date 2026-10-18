@@ -37,6 +37,11 @@ Direct component tests of feature-backed pickers call `installFeatures()` from
 `~/features/registry` themselves; the browser harness supplies context, not the
 route's registry installation.
 
+Upload and photo-finalization tests configure `captureBackgroundQueue` when
+running in Node. Image processing always schedules work; do not suppress its
+queue seam with persisted enable/pause settings. Assert durable jobs and their
+captured wakeups, draining only when the scenario needs consumer behavior.
+
 Do not overlap PostgreSQL and E2E locally: they contend for
 containers, workerd, browsers, and database connections. For changed workspace packages, run their affected test rather than every
 package. A cross-package contract change may need its consumers too.

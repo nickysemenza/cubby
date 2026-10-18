@@ -8,8 +8,6 @@ import {
   repairImageDimensionsOutSchema,
   classifyImageProvenanceInputSchema,
   classifyImageProvenanceOutSchema,
-  backfillImageMetadataInputSchema,
-  backfillImageMetadataOutSchema,
   backfillImageSearchInputSchema,
   backfillImageSearchOutSchema,
 } from "@cubby/schemas/maintenance";
@@ -64,12 +62,6 @@ export const maintenanceContract = defineContract("maintenance", {
     mcp: { omit: "operator_maintenance" },
     input: classifyImageProvenanceInputSchema,
     output: classifyImageProvenanceOutSchema,
-    invalidates: ["image"],
-  }),
-  backfillImageMetadata: mutation({
-    mcp: { omit: "operator_maintenance" },
-    input: backfillImageMetadataInputSchema,
-    output: backfillImageMetadataOutSchema,
     invalidates: ["image"],
   }),
   backfillImageSearch: mutation({

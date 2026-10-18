@@ -70,15 +70,6 @@ export function ImageProcessingMaintenance() {
           <div className="flex flex-wrap gap-2">
             <Button
               size="sm"
-              disabled={batch.isPending}
-              onClick={() =>
-                batch.mutate({ batchSize: 25, retryFailures: false })
-              }
-            >
-              Process next 25 images
-            </Button>
-            <Button
-              size="sm"
               variant="outline"
               disabled={batch.isPending}
               onClick={() =>
