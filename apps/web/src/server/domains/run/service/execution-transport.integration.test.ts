@@ -14,6 +14,7 @@ import {
   aiBudgetWindow,
   readAiBudget,
   withAiBudget,
+  withCreditBudget,
 } from "~/server/ai/budget";
 import { readChatGptPlanAvailability } from "~/server/ai/funding";
 import { setCfEnv } from "~/server/cf-env";
@@ -199,6 +200,53 @@ describe("household AI funding at the paid transport boundary", () => {
       .update(run)
       .set({ updatedAt: previousWindow() })
       .where(eq(run.id, runId));
+
+  // Automatic feature refreshes have purpose background but the default
+  // ephemeral trigger; interactive ephemeral Runs must retain their ladder.
+  it("caps credit and refuses automatic paid fallback for ephemeral background work only", async () => {
+    const automatic = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "background",
+    });
+    const interactive = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+    });
+    await spend(automatic, DEFAULT_CREDIT_BUDGET_USD, { credit: true });
+    const automaticCredit = withCreditBudget(
+      ctx.db,
+      { model: "claude-opus-5-5", runId: automatic },
+      undefined,
+    );
+    const interactiveCredit = withCreditBudget(
+      ctx.db,
+      { model: "claude-opus-5-5", runId: interactive },
+      undefined,
+    );
+    const automaticPaid = withAiBudget(
+      ctx.db,
+      { model: "gpt-6-sol", runId: automatic },
+      undefined,
+    );
+    const interactivePaid = withAiBudget(
+      ctx.db,
+      { model: "gpt-6-sol", runId: interactive },
+      undefined,
+    );
+    if (
+      !automaticCredit ||
+      !interactiveCredit ||
+      !automaticPaid ||
+      !interactivePaid
+    )
+      throw new Error("Synthetic frontier admissions missing");
+    expect(await automaticCredit(chatRequest())).toContain(
+      "Claude credit budget reached",
+    );
+    expect(await interactiveCredit(chatRequest())).toBeNull();
+    await expect(automaticPaid(chatRequest())).rejects.toBeInstanceOf(
+      AiFundingWaitError,
+    );
+    await expect(interactivePaid(chatRequest())).resolves.toBeUndefined();
+  });
 
   // Non-agent background features use the generic funding wrapper rather
   // than the agent preflight; a member grant must work at both boundaries.

@@ -502,8 +502,11 @@ the window's Claude credit budget is spent (`beforeCreditRequest` returns a
 `cubby_credit_budget_reached` funding refusal), and at the paid rung
 `paidRunPreflight` pauses the Run (`paused_auth`, `execution_limit`) with the
 raw credit and plan reasons. The `AI_GATEWAY_EGRESS` Durable Object holds one
-`fundingResumeAt` alarm at the window end; `resumeFundingPausedRuns` then
-redispatches paused agent imports and relaunches paused Mail discovery, and the
+`fundingResumeAt` alarm at the window end. Before recovery it consumes that
+wake into a persisted, generation-tagged in-flight record; recovery retries
+retain that record and any newly requested window remains pending separately.
+`resumeFundingPausedRuns` then redispatches paused agent imports and relaunches
+paused Mail discovery, and the
 nightly/app-open recovery calls it too. A member's `run_now_paid` control
 event ("Run now, paid allowed" on the Run page, "Run discovery now, paid
 allowed" on the Mail import card, or MCP `run.lifecycle`/`run.discover_mail`)

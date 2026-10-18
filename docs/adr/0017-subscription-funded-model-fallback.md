@@ -129,9 +129,10 @@ Amended after Claude credit drained at standard cost uncounted and background
 relevance and Mail import calls paid Unified Billing while free capacity was
 hours away. Interactive work (member-started Runs, member-selected Email
 imports and calls outside a background Run) keeps the ladder above. Background
-work — a Run whose lineage root was scheduled, discovered or backfilled, which
-includes Mail discovery, its relevance fallback and the Mail import Runs it
-starts — follows a narrower ladder:
+work — a Run whose lineage root has purpose `background` or was scheduled,
+discovered or backfilled — follows a narrower ladder. This includes automatic
+feature refreshes with the default `ephemeral` trigger, Mail discovery, its
+relevance fallback and the Mail import Runs it starts:
 
 1. Claude subscriber credit, while the window's credit budget (standard cost of
    `subscriber_credit` usage, default $5 per six-hour window, member-editable)

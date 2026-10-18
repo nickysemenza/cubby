@@ -190,8 +190,9 @@ const BACKGROUND_TRIGGERS: readonly string[] = [
 const MAX_LINEAGE = 50;
 
 /**
- * Background work: a Run whose lineage root nobody started (scheduled,
- * discovered or backfilled). Retries inherit their root's origin, as
+ * Automatic feature Runs retain purpose background even with the default
+ * ephemeral trigger. Other background roots are scheduled, discovered or
+ * backfilled. Retries inherit their root's origin, as
  * `selectedCoordinatorExecution` does for member-selected Email Runs.
  */
 export async function isBackgroundRun(
@@ -203,13 +204,20 @@ export async function isBackgroundRun(
   for (let depth = 0; depth < MAX_LINEAGE; depth++) {
     visited.add(current);
     const [row] = await getDb(db)
-      .select({ trigger: run.trigger, predecessorRunId: run.predecessorRunId })
+      .select({
+        purpose: run.purpose,
+        trigger: run.trigger,
+        predecessorRunId: run.predecessorRunId,
+      })
       .from(run)
       .where(eq(run.id, current))
       .limit(1);
     if (!row) return false;
     if (!row.predecessorRunId || visited.has(row.predecessorRunId))
-      return BACKGROUND_TRIGGERS.includes(row.trigger);
+      return (
+        row.purpose === "background" ||
+        BACKGROUND_TRIGGERS.includes(row.trigger)
+      );
     current = row.predecessorRunId;
   }
   return false;

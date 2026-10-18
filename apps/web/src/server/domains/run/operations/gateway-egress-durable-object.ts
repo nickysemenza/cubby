@@ -18,6 +18,8 @@ const REQUESTS_PER_WINDOW = 180;
 const MAX_IN_FLIGHT = 4;
 const REQUEST_DEADLINE_MS = 10 * 60_000;
 const FUNDING_RESUME = "fundingResumeAt";
+const FUNDING_IN_FLIGHT = "fundingResumeInFlight";
+type FundingResume = { at: number; generation: string };
 
 /** One identity per gateway; subscription requests never enter this object. */
 export class AiGatewayEgressDurableObject extends DurableObject<Env> {
@@ -165,22 +167,56 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
   }
 
   private async resumeFundingWaits() {
-    const at = await this.ctx.storage.get<number>(FUNDING_RESUME);
-    if (at === undefined) return;
-    if (at > Date.now()) {
-      // Another wake fired first; keep this one armed.
-      const alarm = await this.ctx.storage.getAlarm();
-      if (alarm === null || alarm > at) await this.ctx.storage.setAlarm(at);
-      return;
+    const wake = await this.ctx.blockConcurrencyWhile(async () => {
+      const inFlight =
+        await this.ctx.storage.get<FundingResume>(FUNDING_IN_FLIGHT);
+      // A failed or interrupted alarm retries the consumed wake. New requests
+      // remain in FUNDING_RESUME and cannot be erased by this acknowledgement.
+      if (inFlight) return inFlight;
+      const at = await this.ctx.storage.get<number>(FUNDING_RESUME);
+      if (at === undefined) return null;
+      if (at > Date.now()) {
+        await this.armFundingAlarm(at);
+        return null;
+      }
+      const consumed = { at, generation: crypto.randomUUID() };
+      await this.ctx.storage.transaction(async (storage) => {
+        await storage.put(FUNDING_IN_FLIGHT, consumed);
+        await storage.delete(FUNDING_RESUME);
+      });
+      return consumed;
+    });
+    if (!wake) return;
+    try {
+      await this.recoverFundingRuns();
+    } catch (error) {
+      await this.ctx.blockConcurrencyWhile(async () => {
+        await this.armFundingAlarm(Date.now() + 60_000);
+      });
+      throw error;
     }
+    await this.ctx.blockConcurrencyWhile(async () => {
+      const current =
+        await this.ctx.storage.get<FundingResume>(FUNDING_IN_FLIGHT);
+      if (current?.generation === wake.generation)
+        await this.ctx.storage.delete(FUNDING_IN_FLIGHT);
+      const next = await this.ctx.storage.get<number>(FUNDING_RESUME);
+      if (next !== undefined) await this.armFundingAlarm(next);
+    });
+  }
+
+  private async armFundingAlarm(at: number) {
+    const alarm = await this.ctx.storage.getAlarm();
+    await this.ctx.storage.setAlarm(
+      alarm !== null && alarm > Date.now() ? Math.min(alarm, at) : at,
+    );
+  }
+
+  private async recoverFundingRuns() {
     const { withInvocationDb, db } = await import("~/server/db");
     await withInvocationDb(this.env.HYPERDRIVE.connectionString, async () => {
       const { resumeFundingPausedRuns } = await import("../service/ai-work");
       await resumeFundingPausedRuns(db);
-    });
-    await this.ctx.blockConcurrencyWhile(async () => {
-      if ((await this.ctx.storage.get<number>(FUNDING_RESUME)) === at)
-        await this.ctx.storage.delete(FUNDING_RESUME);
     });
   }
 

@@ -87,7 +87,7 @@ describe("Workflow paid funding controls", () => {
       const id = await ensureRun(ctx.db, ctx.actor, {
         purpose,
         trigger: "scheduled",
-        status: "paused_auth",
+        status: "running",
       });
       await getDb(ctx.db)
         .update(run)
