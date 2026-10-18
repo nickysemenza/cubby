@@ -1,16 +1,25 @@
 import { entityRecommendationsOut } from "@cubby/schemas/entity-recommendations";
+import { parseShortcodeFor, type ProjectId } from "@cubby/schemas/identifiers";
+import { sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { unwrapDb } from "~/server/db/helpers";
+import { expense } from "~/server/db/schema";
 import {
   deleteExpenses,
   getExpenseByShortcode,
   updateExpense,
 } from "~/server/domains/expense/repo/crud";
+import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { createProduct } from "~/server/domains/product/repo/crud";
+import { projectContentDatesExcluding } from "~/server/domains/project/repo/analytics";
 import { getEntityRecommendations } from "~/server/domains/recommendation/service/entity-recommendations.service";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { makeProductInput } from "~/server/testing/repo.fixtures";
+
+import { expenseProjectRecommendationContexts } from "./project-recommendations";
 
 describe("expense project recommendation evidence", () => {
   const ctx = withTestDb();
@@ -168,5 +177,103 @@ describe("expense project recommendation evidence", () => {
       currentTarget: null,
       proposals: [{ target: { id: project.output.id } }],
     });
+  });
+
+  // Freshness checks read many candidates at once. Excluding each candidate
+  // from one shared allocation must match excluding it in its own read.
+  it("batches project windows per excluded expense like one exclusion at a time", async () => {
+    const parent = await insertWithShortcode(ctx.db, "project", {
+      name: "Synthetic parent",
+    });
+    const [child, sibling] = await Promise.all([
+      insertWithShortcode(ctx.db, "project", {
+        name: "Synthetic child",
+        parentProjectId: parent.id,
+      }),
+      insertWithShortcode(ctx.db, "project", { name: "Synthetic sibling" }),
+    ]);
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic window supplier",
+    });
+    const order = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      date: "2024-08-01",
+    });
+    const line = (values: Partial<typeof expense.$inferInsert>) =>
+      insertWithShortcode(ctx.db, "expense", {
+        name: "Synthetic dated line",
+        cost: 5,
+        lineKind: "principal",
+        costType: "materials",
+        trade: "electrical",
+        future: false,
+        ...values,
+      });
+    const lines = [
+      await line({ projectId: child.id, date: "2024-06-15" }),
+      await line({ projectId: child.id, date: "2024-07-01" }),
+      await line({ projectId: sibling.id, date: "2024-05-01" }),
+      await line({
+        projectId: sibling.id,
+        date: "2024-08-01",
+        purchaseId: order.id,
+      }),
+      await line({
+        lineKind: "tax",
+        trade: null,
+        costType: "services",
+        date: "2024-08-02",
+        purchaseId: order.id,
+      }),
+    ];
+    const undated = await line({ trade: "plumbing", cost: null });
+    const ids = [...lines.map((row) => row.id), undated.id];
+    // Duplicates and another spelling of a uuid resolve to the same exclusion.
+    const batched = await projectContentDatesExcluding(ctx.db, [
+      ...ids,
+      ids[0]!,
+      ids[1]!.toUpperCase() as (typeof ids)[number],
+    ]);
+    expect(batched.get(ids[1]!.toUpperCase() as (typeof ids)[number])).toEqual(
+      batched.get(ids[1]!),
+    );
+    for (const id of ids) {
+      const alone = await unwrapDb(ctx.db).execute<{
+        projectId: ProjectId;
+        contentStart: string | null;
+        contentEnd: string | null;
+      }>(sql`SELECT allocation."projectId",
+          min(e."date") AS "contentStart", max(e."date") AS "contentEnd"
+        FROM (${expenseDerivedReadSql("projects")}) allocation
+        JOIN "Expense" e ON e."id" = allocation."expenseId"
+        WHERE allocation."projectId" IS NOT NULL AND e."id" <> ${id}
+        GROUP BY allocation."projectId"`);
+      expect(batched.get(id)).toEqual(
+        new Map(
+          alone.rows.map((row) => [
+            row.projectId,
+            { contentStart: row.contentStart, contentEnd: row.contentEnd },
+          ]),
+        ),
+      );
+    }
+    expect(batched.get(ids[0]!)?.get(child.id)).toEqual({
+      contentStart: "2024-07-01",
+      contentEnd: "2024-07-01",
+    });
+
+    // Item lines get a context; adjustments and unknown codes do not.
+    const contexts = await expenseProjectRecommendationContexts(ctx.db, [
+      ...lines.map((row) => row.shortcode),
+      parseShortcodeFor("expense", "EXP-ZZZZZ"),
+    ]);
+    expect([...contexts.values()].map((context) => context !== null)).toEqual([
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+    ]);
   });
 });

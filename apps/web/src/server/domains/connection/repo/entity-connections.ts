@@ -46,7 +46,10 @@ import {
   acquisitionPairEligible,
   expenseConnectionEligible,
 } from "./connection-candidates";
-import { captureConnectionBasis } from "./connection-evidence";
+import {
+  captureConnectionBasis,
+  prepareConnectionBases,
+} from "./connection-evidence";
 import { applyEmailConnection } from "./email-connections";
 import { readExistingConnectionAssessments } from "./existing-assessments";
 
@@ -242,13 +245,14 @@ export async function readEntityConnectionsBatch(
     : [];
   const liveKeys = new Set(live.map((row) => `${row.kind}:${row.code}`));
   const fresh: ConnectionProposal[] = [];
-  for (const proposal of parsed) {
-    if (
-      !liveKeys.has(sourceKey(proposal.source)) ||
-      !liveKeys.has(sourceKey(proposal.target))
-    )
-      continue;
-    const basis = await captureConnectionBasis(db, proposal);
+  const liveProposals = parsed.filter(
+    (proposal) =>
+      liveKeys.has(sourceKey(proposal.source)) &&
+      liveKeys.has(sourceKey(proposal.target)),
+  );
+  const prepared = await prepareConnectionBases(db, liveProposals);
+  for (const proposal of liveProposals) {
+    const basis = await captureConnectionBasis(db, proposal, false, prepared);
     if (
       (await sha256Hex(
         canonicalJson({

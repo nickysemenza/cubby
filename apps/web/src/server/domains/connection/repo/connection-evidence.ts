@@ -16,7 +16,10 @@ import {
   financialTransactionAllocation,
   inventoryEntry,
 } from "~/server/db/schema";
-import { expenseProjectRecommendationContext } from "~/server/domains/expense/repo/project-recommendations";
+import {
+  expenseProjectRecommendationContext,
+  expenseProjectRecommendationContexts,
+} from "~/server/domains/expense/repo/project-recommendations";
 import { suggestFinancialTransferPairs } from "~/server/domains/financial-transaction/repo/financial-transfer-pairing";
 import { getProductStockRows } from "~/server/domains/inventory/repo/scan";
 import { suggestProjectTools } from "~/server/domains/project/repo/tools";
@@ -153,11 +156,37 @@ export async function connectionRecord(
   return { id, row: snapshotJson(connectionRelevantRow(kind, value.row)) };
 }
 
+/** Dependency payloads several unlocked captures can share. */
+export type PreparedConnectionBases = {
+  expenseProject: Map<string, unknown>;
+};
+
+/**
+ * Batch the dependency reads of `captureConnectionBasis` for unlocked
+ * freshness checks: every Expense-Project candidate shares one project roster
+ * and ledger allocation instead of recomputing them per candidate.
+ */
+export async function prepareConnectionBases(
+  db: Database,
+  raws: readonly ConnectionCandidate[],
+): Promise<PreparedConnectionBases> {
+  const expenses = raws
+    .map((raw) => connectionCandidate.parse(raw))
+    .filter((candidate) => candidate.relation === "expense-project")
+    .map((candidate) =>
+      parseShortcodeFor("expense", candidate.source.entityId),
+    );
+  return {
+    expenseProject: await expenseProjectRecommendationContexts(db, expenses),
+  };
+}
+
 /** Authoritative family evidence is reread inside the application transaction. */
 export async function captureConnectionBasis(
   db: Database,
   raw: ConnectionCandidate,
   lock = false,
+  prepared?: PreparedConnectionBases,
 ) {
   const candidate = connectionCandidate.parse(raw);
   if (candidate.relation === "email-purchase")
@@ -182,14 +211,15 @@ export async function captureConnectionBasis(
   const target = targetFirst ? first : second;
   let dependencies: ConnectionJson = null;
   switch (candidate.relation) {
-    case "expense-project":
+    case "expense-project": {
+      const expenseId = parseShortcodeFor("expense", candidate.source.entityId);
       dependencies = snapshotJson(
-        await expenseProjectRecommendationContext(
-          db,
-          parseShortcodeFor("expense", candidate.source.entityId),
-        ),
+        !lock && prepared?.expenseProject.has(expenseId)
+          ? prepared.expenseProject.get(expenseId)
+          : await expenseProjectRecommendationContext(db, expenseId),
       );
       break;
+    }
     case "inventory-location": {
       const [stock] = await getDb(db)
         .select({ productId: inventoryEntry.productId })

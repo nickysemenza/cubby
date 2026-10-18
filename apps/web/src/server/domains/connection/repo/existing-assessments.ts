@@ -20,7 +20,10 @@ import {
 import { currentProductPairPolicy } from "~/server/domains/product/repo/match/product-match-candidate";
 import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
 
-import { captureConnectionBasis } from "./connection-evidence";
+import {
+  captureConnectionBasis,
+  prepareConnectionBases,
+} from "./connection-evidence";
 
 const fieldRelations = new Map<string, ConnectionRelation>(
   Object.entries({
@@ -156,18 +159,32 @@ export async function readExistingConnectionAssessments(
     });
     return result.success ? [result.data] : [];
   });
+  const guards = new Map(
+    proposals.map((proposal) => [
+      proposal,
+      z
+        .object({ connectionEvidence: connectionAssessmentEvidence })
+        .safeParse(
+          rows.find((row) => row.prediction.id === proposal.review.assessmentId)
+            ?.state.data,
+        ),
+    ]),
+  );
+  const prepared = await prepareConnectionBases(
+    db,
+    [...guards.values()].flatMap((guard) =>
+      guard.success ? [guard.data.connectionEvidence.candidate] : [],
+    ),
+  );
   const fresh: ConnectionProposal[] = [];
   for (const proposal of proposals) {
-    const row = rows.find(
-      (row) => row.prediction.id === proposal.review.assessmentId,
-    );
-    const guard = z
-      .object({ connectionEvidence: connectionAssessmentEvidence })
-      .safeParse(row?.state.data);
+    const guard = guards.get(proposal)!;
     if (guard.success) {
       const basis = await captureConnectionBasis(
         db,
         guard.data.connectionEvidence.candidate,
+        false,
+        prepared,
       );
       if (
         canonicalJson(basis) !==
