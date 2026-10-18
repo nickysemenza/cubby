@@ -575,7 +575,11 @@ export async function resumeSuggestionSweep(
 }
 export async function startSuggestionSweep(
   db: Database,
-  { trigger = "manual", ...input }: SweepInput & { trigger?: SweepTrigger },
+  {
+    trigger = "manual",
+    parentRunId,
+    ...input
+  }: SweepInput & { trigger?: SweepTrigger; parentRunId?: RunId },
   ports: SuggestionSweepPorts,
 ) {
   const decisionModel = ports.decisionModel?.() ?? selectDecisionModel();
@@ -602,6 +606,7 @@ export async function startSuggestionSweep(
       status: "running",
       input: storedInput,
       progress: initialProgress,
+      ...(parentRunId && { parentRunId }),
     });
     await prepareSuggestionSweep(tx, runId, {
       ...ports,

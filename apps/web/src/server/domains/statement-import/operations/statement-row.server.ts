@@ -12,10 +12,7 @@ import {
   listStatementSuggestionGroups,
   listStatementSuggestions,
 } from "~/server/domains/statement-import/repo/statement-suggestion-read";
-import {
-  refreshStatementSuggestions,
-  scheduleStatementSuggestions,
-} from "~/server/domains/statement-import/service/statement-suggestion-generation";
+import { scheduleStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-generation";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import {
   commitStatementCsv,
@@ -58,7 +55,5 @@ export const statementRowHandlers = implementOperationDomain(
     suggestions: (context, input) =>
       listStatementSuggestions(context.db, input),
     suggestionGroups: (context) => listStatementSuggestionGroups(context.db),
-    refreshSuggestions: (context, input) =>
-      refreshStatementSuggestions(context.db, input),
   },
 );

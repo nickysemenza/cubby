@@ -178,15 +178,11 @@ export async function handleBackgroundTask(
       await discoverPurchases(db);
       return "succeeded";
     }
-    case "statement-suggestions.generate": {
-      const { continueStatementSuggestions } =
-        await import("~/server/domains/statement-import/service/statement-suggestion-generation");
-      return continueStatementSuggestions(db, task);
-    }
+    case "statement-suggestions.generate":
     case "statement-suggestions.label": {
-      const { continueStatementSuggestionLabels } =
+      const { retiredStatementSuggestionTask } =
         await import("~/server/domains/statement-import/service/statement-suggestion-generation");
-      return continueStatementSuggestionLabels(db, task);
+      return retiredStatementSuggestionTask();
     }
     case "calendar-feed.mark-dirty": {
       // Propagates a failure on purpose: the queue retries only a throwing

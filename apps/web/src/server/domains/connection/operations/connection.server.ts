@@ -9,6 +9,7 @@ import {
 import { scheduleConnectionRefresh } from "~/server/domains/run/repo/connection-refresh";
 import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
+import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
 export const connectionHandlers = implementOperationDomain(connectionContract, {
   read: async (context, source) => ({
@@ -33,6 +34,14 @@ export const connectionHandlers = implementOperationDomain(connectionContract, {
       source,
       context.actorContext,
     );
+    // Nothing else starts a member's discovery Run promptly; a shared Run
+    // already in flight makes this a no-op.
+    if (runId)
+      await launchWorkflowRun(context.db, {
+        runId,
+        purpose: "ai_refresh",
+        automatic: true,
+      });
     const codes = runId
       ? await lookupShortcodes(context.db, [parseEntityRef("run", runId)])
       : new Map<string, string>();

@@ -1,108 +1,26 @@
-import type { BackgroundTask } from "@cubby/schemas/background-tasks";
-import { runEntityId } from "@cubby/schemas/identifiers";
-
-import { getBackgroundQueue } from "~/server/cf-env";
 import type { Database } from "~/server/db";
-import {
-  generateStatementSuggestionPage,
-  type ChargeRef,
-} from "~/server/domains/statement-import/repo/statement-suggestions";
-import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
-import {
-  publishBackgroundTasks,
-  publishInBackground,
-} from "~/server/workflows/background-tasks/publish";
-
-const pageTask = (after: ChargeRef | null, importId: string | null) => ({
-  kind: "statement-suggestions.generate" as const,
-  requestedAt: new Date().toISOString(),
-  after,
-  importId,
-});
+import { systemActor } from "~/server/domains/run/repo/ensure-run";
 
 /**
- * Generate suggestions for one import's charges once the caller's write
- * commits. A whole-ledger pass is the member's Refresh. Without a queue
- * binding (Node dev, tests) nothing is published.
+ * Generate suggestions for one import's charges as a routine Sweep, once the
+ * caller's write commits. A whole-ledger pass is a member's Find suggestions.
  */
-export function scheduleStatementSuggestions(
+export async function scheduleStatementSuggestions(
   db: Database,
   importId: string,
 ): Promise<void> {
-  if (!getBackgroundQueue()) return Promise.resolve();
-  return publishInBackground(db, [pageTask(null, importId)], {
-    source: "statement-suggestions",
+  const { startSweep } = await import("~/server/domains/run/service/sweep");
+  await startSweep(db, systemActor(), {
+    trigger: "scheduled",
+    families: [{ family: "statement_transaction", scope: { importId } }],
   });
-}
-
-const labelTask = () => ({
-  kind: "statement-suggestions.label" as const,
-  requestedAt: new Date().toISOString(),
-});
-
-/** Queue consumer: one page, then hand the cursor to the next message. */
-export async function continueStatementSuggestions(
-  db: Database,
-  task: Extract<BackgroundTask, { kind: "statement-suggestions.generate" }>,
-) {
-  const page = await generateStatementSuggestionPage(db, {
-    after: task.after,
-    runId: task.runId ?? null,
-    importId: task.importId,
-  });
-  await publishBackgroundTasks(
-    db,
-    [
-      ...(page.next ? [pageTask(page.next, task.importId)] : []),
-      ...(page.published ? [labelTask()] : []),
-    ],
-    { source: "statement-suggestions" },
-  );
-  return page.published ? ("succeeded" as const) : ("skipped" as const);
-}
-
-/** Queue consumer: one label batch, continuing while batches make progress. */
-export async function continueStatementSuggestionLabels(
-  db: Database,
-  task: Extract<BackgroundTask, { kind: "statement-suggestions.label" }>,
-) {
-  const outcome = await labelStatementSuggestions(db, {
-    runId: task.runId ? runEntityId.parse(task.runId) : null,
-  });
-  if (outcome.remaining)
-    await publishBackgroundTasks(db, [labelTask()], {
-      source: "statement-suggestions.label",
-    });
-  return outcome.labelled ? ("succeeded" as const) : ("skipped" as const);
 }
 
 /**
- * A member-requested refresh: the first page runs now so its results are
- * visible on return, and the remainder continues on the queue. With no queue
- * the caller receives the cursor and pages again.
+ * Generation and labelling run as a Sweep's statement step. A message queued
+ * by the retired queue chain before deploy is acknowledged without work.
+ * TODO(#2722 follow-up): drop the two task kinds after one deploy.
  */
-export async function refreshStatementSuggestions(
-  db: Database,
-  input: { after: ChargeRef | null },
-) {
-  const page = await generateStatementSuggestionPage(db, {
-    after: input.after,
-    runId: null,
-  });
-  const queued = Boolean(page.next && getBackgroundQueue());
-  if (getBackgroundQueue())
-    await publishBackgroundTasks(
-      db,
-      [
-        ...(page.next ? [pageTask(page.next, null)] : []),
-        ...(page.published ? [labelTask()] : []),
-      ],
-      { source: "statement-suggestions.refresh" },
-    );
-  return {
-    published: page.published,
-    unchanged: page.unchanged,
-    next: queued ? null : page.next,
-    queued,
-  };
+export async function retiredStatementSuggestionTask() {
+  return "skipped" as const;
 }

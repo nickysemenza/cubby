@@ -10,11 +10,13 @@ import { getRouteApi } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import type { z } from "zod";
 
+import { runHref } from "~/entity/routing/purchase-import-links";
 import { createCurrencyColumn } from "~/entity/table/column-helpers";
 import RTable from "~/entity/table/table";
 import { rippleFor } from "~/integrations/tanstack-query/cache-tags";
 import {
   assessment,
+  run,
   statementRow,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
@@ -116,37 +118,17 @@ export function StatementSuggestions() {
   const [refresh, setRefresh] = useState<RefreshState>({ state: "idle" });
   const [groupAccept, setGroupAccept] = useState<GroupAcceptState | null>(null);
 
+  // TODO(#2722 U6): this tab moves onto the Suggestions page.
   const runRefresh = async () => {
-    let published = 0;
-    let unchanged = 0;
-    let after: { source: string; chargeKey: string } | null = null;
-    setRefresh({ state: "running", published, unchanged });
+    setRefresh({ state: "running", published: 0, unchanged: 0 });
     try {
-      // Without a background queue (local dev, E2E) the server returns a
-      // cursor per page and the client drives the pass to completion.
-      for (;;) {
-        const page = await statementRow.refreshSuggestions.call({ after });
-        published += page.published;
-        unchanged += page.unchanged;
-        if (!page.next || page.queued) {
-          setRefresh({
-            state: "done",
-            published,
-            unchanged,
-            queued: page.queued,
-          });
-          break;
-        }
-        after = page.next;
-        setRefresh({ state: "running", published, unchanged });
-      }
+      const { runId } = await run.sweep.call({
+        families: [{ family: "statement_transaction" }],
+      });
+      window.location.assign(runHref(runId));
     } catch (error) {
       setRefresh({ state: "failed", error: errorText(error) });
     }
-    await invalidateOperationTags(
-      queryClient,
-      statementRow.refreshSuggestions.invalidates({ after: null }),
-    );
   };
 
   const review = async (items: ReviewItem[]) => {

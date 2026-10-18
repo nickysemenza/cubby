@@ -4,8 +4,9 @@ import {
   aiRefreshRunInput,
 } from "@cubby/schemas/ai-evaluation";
 import { entitySchema, type EntityRef } from "@cubby/schemas/entity";
+import type { RunId } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, asc, eq, gt, inArray, isNull, ne } from "drizzle-orm";
+import { and, asc, count, eq, gt, inArray, isNull, ne } from "drizzle-orm";
 
 import { dependencyStamps } from "~/server/ai/policy/refresh-manifest";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
@@ -19,8 +20,11 @@ import {
 } from "~/server/domains/connection/repo/discovery-fingerprint";
 import { refreshSearchDocuments } from "~/server/generic/search/repo/search-document";
 
-import { scheduleEvaluationRun } from "./ai-refresh-state";
-import { systemActor } from "./ensure-run";
+import {
+  insertEvaluationTargets,
+  scheduleEvaluationRun,
+} from "./ai-refresh-state";
+import { ensureRun, systemActor } from "./ensure-run";
 
 const discoveryEntities = [
   "product",
@@ -98,6 +102,110 @@ export async function scheduleConnectionRefresh(
   return existing?.id ?? null;
 }
 
+/** The kinds a connection Sweep can cover. */
+export const connectionSweepEntities: readonly string[] = discoveryEntities;
+
+/**
+ * The child `ai_refresh` Run that evaluates one Sweep's connection sources.
+ * It is created `running` at attempt 0 and launched once its roster is ready.
+ */
+export async function ensureConnectionSweepRun(
+  db: Database,
+  actor: Parameters<typeof ensureRun>[1],
+  parentRunId: RunId,
+) {
+  const activation = await readAiRefreshActivation(db);
+  if (!activation?.enabled || !activation.manifest["entity-connections"])
+    return null;
+  return ensureRun(db, actor, {
+    purpose: "ai_refresh",
+    trigger: "manual",
+    status: "running",
+    clientKey: `sweep:${parentRunId}:recommendation`,
+    parentRunId,
+    input: aiRefreshRunInput.parse({ kind: "ai_refresh", activation }),
+  });
+}
+
+/**
+ * One roster page of a connection Sweep: eligible sources after the cursor,
+ * each queued on the child Run unless its current fingerprint was already
+ * evaluated (or is being evaluated) under any Run.
+ */
+export async function prepareConnectionSweepPage(
+  db: Database,
+  input: {
+    childRunId: RunId;
+    after: string | null;
+    limit: number;
+    entityKinds?: readonly string[];
+  },
+) {
+  const activation = await readAiRefreshActivation(db);
+  if (!activation?.enabled || !activation.manifest["entity-connections"])
+    throw new Error(
+      "Connection discovery requires an active AI refresh generation",
+    );
+  const page = await connectionDiscoveryRecords(
+    db,
+    input.after,
+    input.limit,
+    input.entityKinds,
+  );
+  const sources = page.map((record) => record.source);
+  const fingerprints = await connectionSourceFingerprints(db, sources);
+  const inserted = await insertEvaluationTargets(
+    db,
+    input.childRunId,
+    page.map((record, index) => ({
+      target: aiEvaluationTarget.parse({
+        kind: "connection",
+        entity: record.source.entityKind,
+        recordId: record.id,
+        field: null,
+        assessmentIds: [],
+      }),
+      provenance: aiProvenance.parse({
+        dependencies: dependencyStamps(activation.manifest, [
+          "entity-connections",
+        ]),
+        inputFingerprint: fingerprints[index],
+        optionFingerprint: "typed-connection-discovery-v1",
+        model: null,
+      }),
+      snapshot: record.source,
+    })),
+  );
+  return {
+    scanned: page.length,
+    inserted,
+    next: page.length === input.limit ? (page.at(-1)?.id ?? null) : null,
+  };
+}
+
+/** How many sources a connection Sweep's scope covers. */
+export async function countConnectionSweepSources(
+  db: Database,
+  entityKinds?: readonly string[],
+) {
+  const [row] = await getDb(db)
+    .select({ count: count() })
+    .from(entityIdentity)
+    .where(
+      and(
+        isNull(entityIdentity.deletedAt),
+        isNull(entityIdentity.mergedIntoId),
+        inArray(entityIdentity.kind, sweepKinds(entityKinds)),
+      ),
+    );
+  return row?.count ?? 0;
+}
+
+const sweepKinds = (entityKinds?: readonly string[]) =>
+  entityKinds?.length
+    ? discoveryEntities.filter((kind) => entityKinds.includes(kind))
+    : [...discoveryEntities];
+
 export const connectionSourceFingerprint = connectionDiscoveryFingerprint;
 export const connectionSourceFingerprints = connectionDiscoveryFingerprints;
 
@@ -106,6 +214,7 @@ export async function connectionDiscoveryRecords(
   db: Database,
   after: string | null,
   limit: number,
+  entityKinds?: readonly string[],
 ) {
   const rows = await getDb(db)
     .select({
@@ -118,7 +227,7 @@ export async function connectionDiscoveryRecords(
       and(
         isNull(entityIdentity.deletedAt),
         isNull(entityIdentity.mergedIntoId),
-        inArray(entityIdentity.kind, [...discoveryEntities]),
+        inArray(entityIdentity.kind, sweepKinds(entityKinds)),
         after ? gt(entityIdentity.id, after) : undefined,
       ),
     )

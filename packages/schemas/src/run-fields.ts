@@ -359,7 +359,63 @@ export const isAiRefreshMailRun = (run: {
     Boolean(input.data.mailboxId && input.data.emails?.length)
   );
 };
+/** Entity and decision fields a field Sweep covers. */
+export const sweepFieldTargets = z
+  .array(
+    z.strictObject({
+      entity: z.string().min(1),
+      fields: z.array(z.string().min(1)).min(1),
+      filters: z.record(z.string(), z.json()).default({}),
+    }),
+  )
+  .max(50);
+
+/** The Suggestion families a Sweep can cover, each with its own scope. */
+export const sweepFamilyScope = z.discriminatedUnion("family", [
+  z.strictObject({
+    family: z.literal("statement_transaction"),
+    scope: z
+      .strictObject({
+        importId: z.uuid().optional(),
+        accountIds: z.array(z.uuid()).max(100).optional(),
+        since: z.iso.date().optional(),
+      })
+      .default({}),
+  }),
+  z.strictObject({
+    family: z.literal("recommendation"),
+    scope: z
+      .strictObject({
+        /** Connection sources of these entity kinds; omitted covers every eligible kind. */
+        entityKinds: z.array(z.string().min(1)).max(20).optional(),
+      })
+      .default({}),
+  }),
+  z.strictObject({
+    family: z.literal("field"),
+    scope: z
+      .strictObject({
+        /** Omitted covers every declared decision field. */
+        targets: sweepFieldTargets.optional(),
+      })
+      .default({}),
+  }),
+]);
+export type SweepFamilyScope = z.infer<typeof sweepFamilyScope>;
+export type SweepFamily = SweepFamilyScope["family"];
+export const sweepRunInput = z.strictObject({
+  kind: z.literal("sweep"),
+  families: z.array(sweepFamilyScope).min(1).max(3),
+});
+export type SweepRunInput = z.infer<typeof sweepRunInput>;
+export const maintenanceRunInput = z.strictObject({
+  kind: z.literal("maintenance"),
+});
+export type MaintenanceRunInput = z.infer<typeof maintenanceRunInput>;
+
 export type RunInput =
+  | SweepRunInput
+  | MaintenanceRunInput
   | MailReclassifyRunInput
   | ResearchObjectivesRunInput
   | MailResearchRunInput

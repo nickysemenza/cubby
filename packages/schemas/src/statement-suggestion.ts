@@ -227,22 +227,3 @@ export const statementSuggestionGroupOut = z.object({
 export const statementSuggestionGroupsOut = z.object({
   data: z.array(statementSuggestionGroupOut),
 });
-
-const chargeCursor = z.object({
-  source: z.string().min(1),
-  chargeKey: z.string().min(1),
-});
-
-export const refreshStatementSuggestionsInput = z.object({
-  /** Resume after this charge; omit to start a full pass. */
-  after: chargeCursor.nullable().default(null),
-});
-
-export const refreshStatementSuggestionsOut = z.object({
-  published: z.number().int(),
-  unchanged: z.number().int(),
-  /** Set when no queue continues the pass: call again with it to page on. */
-  next: chargeCursor.nullable(),
-  /** The remaining pages continue in the background. */
-  queued: z.boolean(),
-});

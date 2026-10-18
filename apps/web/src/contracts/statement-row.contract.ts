@@ -20,8 +20,6 @@ import {
 import {
   listStatementSuggestionGroupsInput,
   listStatementSuggestionsInput,
-  refreshStatementSuggestionsInput,
-  refreshStatementSuggestionsOut,
   statementSuggestionGroupsOut,
   statementSuggestionListOut,
 } from "@cubby/schemas/statement-suggestion";
@@ -97,10 +95,5 @@ export const statementRowContract = defineContract("statementRow", {
     readPolicy: "strong",
     input: listStatementSuggestionGroupsInput,
     output: statementSuggestionGroupsOut,
-  }),
-  refreshSuggestions: mutation({
-    input: refreshStatementSuggestionsInput,
-    output: refreshStatementSuggestionsOut,
-    invalidates: ["statementRow"],
   }),
 });

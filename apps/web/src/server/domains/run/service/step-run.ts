@@ -64,6 +64,11 @@ export type StepPage =
       errors?: readonly RunStepError[];
       pausedUntil?: Date | null;
       reason?: string;
+      /** The driver's own resume point (which child of several is current). */
+      cursor?: unknown;
+      meta?: RunStepMeta;
+      /** Page again now instead of waiting (the driver just moved to its next child). */
+      again?: boolean;
     }
   | { kind: "paused"; reason: string; until: Date | null };
 
@@ -195,6 +200,8 @@ export async function advanceStepRun(
       counts: page.counts,
       childRunId: page.childRunId,
       ...(page.errors?.length && { errors: page.errors }),
+      ...(page.cursor !== undefined && { cursor: page.cursor }),
+      ...(page.meta && { meta: page.meta }),
       state: ended
         ? page.state === "failed" || page.counts.failed > 0
           ? "failed"
@@ -216,7 +223,9 @@ export async function advanceStepRun(
       await stepEnded(db, owner, current, page.counts, stamp);
       return { kind: "continue" };
     }
-    return { kind: "wait", seconds: CHILD_WAIT_SECONDS };
+    return page.again
+      ? { kind: "continue" }
+      : { kind: "wait", seconds: CHILD_WAIT_SECONDS };
   }
   const failed = current.failed + (page.delta?.failed ?? 0);
   await recordRunStepPage(db, owner.id, current.key, {

@@ -778,11 +778,6 @@ export const MCP_TOOLS = defineMcpTools({
         description:
           "Write judgments onto statement rows; the provider's own columns are immutable after ingest. Address rows by {source, externalIds} for a handful, or by {filter} for a bulk pass (an empty filter is refused). Set disposition 'ignored' with both a reason and a note to take rows off the worklist permanently — the intended move for the large tail of consumer spend Cubby does not model. `accountId` records which account a row belongs to, and `supersededByExternalId` links a pending row to the posted row that replaced it (superseding requires the explicit id selector).",
       }),
-      refresh_suggestions: mcpAction({
-        op: statementRowContract.ops.refreshSuggestions,
-        description:
-          "Recompute Transaction suggestions from the statement ledger. Runs the first page of charges now and continues the rest in the background (`queued`); when no background queue is available it returns `next`, which you pass back as `after` to page on. Safe to repeat: unchanged evidence publishes nothing, and a dismissed charge stays dismissed. Recording rows already starts a pass, so call this only after changing transactions or accounts by hand.",
-      }),
       delete: mcpAction({
         op: statementRowContract.ops.delete,
         destructive: true,
@@ -1032,6 +1027,12 @@ export const MCP_TOOLS = defineMcpTools({
         op: runContract.ops.setCreditBudget,
         description:
           "Set the household Claude subscriber-credit budget per six-hour window (creditLimitUsd, standard API cost; default $5). Background work past it moves to the ChatGPT plan, then waits; work paused under the old limit retries now. Returns imports_read.mail_import.",
+      }),
+      sweep: mcpAction({
+        op: runContract.ops.sweep,
+        openWorld: true,
+        description:
+          "Find suggestions: start one Sweep over the chosen Suggestion families (statement_transaction scoped by accountIds/since, recommendation by entityKinds, field by entity and fields; omitted scope covers everything). Returns the Sweep Run; follow it with imports_read.run_status and review results with entity_read.suggestion_queue. Model calls spend within the household AI budget and pause at it.",
       }),
       discover_mail: mcpAction({
         op: runContract.ops.discoverMail,

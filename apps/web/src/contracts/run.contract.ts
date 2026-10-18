@@ -37,6 +37,7 @@ import {
   runRetirementReason,
   runStatus,
 } from "@cubby/schemas/run-fields";
+import { sweepEstimateOut, sweepStartInput } from "@cubby/schemas/sweep";
 import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
@@ -273,6 +274,18 @@ export const runContract = defineContract("run", {
     input: setCreditBudgetInput,
     output: mailImportStatus,
     invalidates: ["runOnly"],
+  }),
+  sweep: mutation({
+    native: "Find suggestions across Cubby or a chosen scope",
+    input: sweepStartInput,
+    output: z.object({ runId: runShortcode }),
+    invalidates: ["runOnly"],
+  }),
+  sweepEstimate: query({
+    mcp: { omit: "client_view" },
+    native: "Show what a Sweep would look at before it starts",
+    input: sweepStartInput,
+    output: sweepEstimateOut,
   }),
   discoverMail: mutation({
     native: "Start Mail discovery now for one mailbox with Mail import on",

@@ -595,7 +595,7 @@ describe("statement Transaction suggestions", () => {
     const page = await generateStatementSuggestionPage(ctx.db, {
       after: null,
       runId: null,
-      importId: later.batchId,
+      scope: { importId: later.batchId },
     });
     expect(page).toMatchObject({ published: 1, next: null });
     expect((await suggestions(ctx)).map((row) => row.rawDescription)).toEqual([

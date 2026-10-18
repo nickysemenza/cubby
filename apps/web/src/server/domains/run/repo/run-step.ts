@@ -320,3 +320,28 @@ export async function stepRunsToRecover(
       ),
     );
 }
+
+/** A step's child Run as its parent step reads it. */
+export async function readChildRun(db: Database, childRunId: RunId) {
+  const [row] = await getDb(db)
+    .select({
+      id: run.id,
+      status: run.status,
+      progress: run.progress,
+      failureCode: run.failureCode,
+      dispatchError: run.dispatchError,
+    })
+    .from(run)
+    .where(eq(run.id, childRunId));
+  return row ?? null;
+}
+
+/** Ends a child Run that turned out to have no work, before it is launched. */
+export async function settleEmptyChildRun(db: Database, childRunId: RunId) {
+  await getDb(db)
+    .update(run)
+    .set({ status: "completed", endedAt: new Date() })
+    .where(
+      and(eq(run.id, childRunId), eq(run.status, "running"), attemptIs(0)),
+    );
+}
