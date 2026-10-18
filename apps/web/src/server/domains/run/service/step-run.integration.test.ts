@@ -277,4 +277,17 @@ describe("step-ledger Runs", () => {
       "broken has no scripted page left",
     );
   });
+
+  // Failure mode: retrying an old pass's step while another maintenance pass
+  // is active hits the one-active index with a bare constraint error.
+  it("refuses to retry a maintenance step while another pass is active", async () => {
+    const { id, params } = await startRun();
+    const broken = scripted("broken", []);
+    await drive(params, async () => [broken.driver]);
+    await startRun();
+    await expect(retryRunStep(ctx.db, id, "broken", launcher)).rejects.toThrow(
+      /is still running or paused; retry this step once it ends/,
+    );
+    expect((await readRunSteps(ctx.db, id))[0]?.state).toBe("failed");
+  });
 });

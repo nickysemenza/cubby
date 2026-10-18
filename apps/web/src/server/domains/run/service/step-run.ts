@@ -30,6 +30,7 @@ import {
   finishStepRunRow,
   isTerminalStep,
   listRunSteps,
+  otherActiveRun,
   pauseStepRun,
   readStepRunOwner,
   recordRunStepPage,
@@ -346,6 +347,15 @@ export async function retryRunStep(
   if (owner.status === "running")
     throw new Error(
       "This Run is still running; retry its failures once it stops.",
+    );
+  // One maintenance pass at a time (Run_one_active_maintenance).
+  const active =
+    owner.purpose === "maintenance"
+      ? await otherActiveRun(db, owner.purpose, runId)
+      : null;
+  if (active)
+    throw new Error(
+      `Maintenance ${active} is still running or paused; retry this step once it ends.`,
     );
   const reopened = await reopenRunStep(db, runId, key);
   if (!reopened) throw new Error("This step has no failures to retry");

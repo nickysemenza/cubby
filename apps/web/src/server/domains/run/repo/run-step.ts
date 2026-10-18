@@ -361,3 +361,23 @@ export async function activeSweepFor(db: Database, family: string) {
     .limit(1);
   return row?.id ?? null;
 }
+
+/** Another unfinished Run of a purpose that allows only one at a time. */
+export async function otherActiveRun(
+  db: Database,
+  purpose: string,
+  runId: RunId,
+) {
+  const [row] = await getDb(db)
+    .select({ shortcode: run.shortcode })
+    .from(run)
+    .where(
+      and(
+        eq(run.purpose, purpose),
+        inArray(run.status, ["running", "paused_auth"]),
+        sql`${run.id} <> ${runId}`,
+      ),
+    )
+    .limit(1);
+  return row?.shortcode ?? null;
+}
