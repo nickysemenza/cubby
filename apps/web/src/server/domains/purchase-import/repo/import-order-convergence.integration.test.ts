@@ -34,7 +34,6 @@ import {
   commitFinancialBooking,
   previewFinancialBooking,
 } from "~/server/domains/financial-transaction/repo/financial-booking";
-import { updateImageProcessingSettings } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import { productionPhotoImportCommitPorts } from "~/server/domains/photo-import/repo/photo-import-commit";
 import {
   approvePhotoGroupProposals,
@@ -133,7 +132,7 @@ async function ensureMember(db: Database, actor: ActorContext) {
 const CONVERGENCE_TOKEN = "order";
 async function seedConvergenceWorld(db: Database, actor: ActorContext) {
   // Writers under test drive describe jobs by hand, never automatic processing.
-  await updateImageProcessingSettings(db, { enabled: false, paused: false });
+
   const kernel = buildKernelContext(db, actor.userId);
   const member = await ensureMember(db, actor);
   const { vendor, account, card, location, category, productCategory } =

@@ -27,7 +27,6 @@ import type {
   PhotoImportStageInput,
 } from "~/contracts/photo-import.contract";
 import { getDb } from "~/server/db/helpers";
-import { updateImageProcessingSettings } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { inspectImageFile } from "~/server/domains/image/repo/image-integrity";
 
@@ -90,7 +89,7 @@ export async function seedCoupledJourneys(
 
   // A fresh database starts with image processing paused; finalize would
   // schedule descriptions that no wakeup ever claims.
-  await updateImageProcessingSettings(db, { enabled: true, paused: false });
+
   seed["import-photo-inventory"] = { run: await uploadPhotoRun(services) };
   return seed;
 }

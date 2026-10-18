@@ -82,6 +82,8 @@ export async function recoverMissedWork(
     disposalResult,
     searchExpiryResult,
     photoRunResult,
+    derivedResult,
+    approvalsResult,
   ] = await Promise.allSettled([
     repairImageProcessingWork(db),
     expireStaleRuns(db),
@@ -105,6 +107,12 @@ export async function recoverMissedWork(
     disposeExpiredSearchOriginals(db, productionOrderMailAttachmentStorage),
     // Backstop for a cubby photo Run whose readiness hook was missed.
     advanceWaitingPhotoRuns(db),
+    (
+      await import("~/server/generic/work-queue/service/awaiting-work.service")
+    ).settleAwaitingWork(db),
+    (
+      await import("~/server/domains/purchase-import/repo/run-service")
+    ).resumeApprovalPausedRuns(db),
   ]);
   const errors = [
     image,
@@ -115,6 +123,8 @@ export async function recoverMissedWork(
     disposalResult,
     searchExpiryResult,
     photoRunResult,
+    derivedResult,
+    approvalsResult,
   ]
     .filter((result) => result.status === "rejected")
     .map((result) => String(result.reason));
@@ -167,6 +177,9 @@ export async function discoverPurchases(db: Database) {
   // `running` Run would otherwise hold its mailbox's slot until the next
   // trigger.
   await reconcileWorkflowRuns(db);
+  await (
+    await import("~/server/domains/purchase-import/repo/mail-import-run")
+  ).importPendingEmails(db);
   const mail = await startMailDiscovery(db);
   log.info("purchase discovery", {
     mailPassesStarted: mail.started,

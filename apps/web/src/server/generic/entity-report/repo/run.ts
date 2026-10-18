@@ -32,7 +32,7 @@ import {
 } from "~/server/generic/collection/repo/collection-items";
 
 /**
- * The Run detail's report blocks: progress, approvals, findings, transcript, log, AI usage and
+ * The Run detail's report blocks: progress, findings, transcript, log, AI usage and
  * changes, composed once for web and native. Every sentence, empty-state line, visibility rule
  * and action below is written here; a client lays the blocks out. A report that does not apply
  * to the run (the other progress variant, targets a run never had) is no blocks, so the client
@@ -156,28 +156,6 @@ const minutesSeconds = (seconds: number) =>
 
 const memberName = (member: RunDetail["actor"]) =>
   member.name ?? member.ledgerParty?.name ?? "Household member";
-
-const decision = (
-  runId: RunDetail["publicId"],
-  approval: RunDetail["approvals"][number],
-  action: "approve" | "reject",
-): ReportCommand => ({
-  id: `${approval.id}:${action}`,
-  label:
-    action === "approve" ? "Approve import proposal" : "Reject import proposal",
-  prominent: action === "approve",
-  confirm:
-    action === "approve"
-      ? `Approve ${approval.operationKind}? The agent will run it with the arguments shown.`
-      : `Reject ${approval.operationKind}? The agent will not run it.`,
-  request: {
-    kind: "run-control",
-    runId,
-    action,
-    operationId: approval.operationId,
-    approvalId: approval.id,
-  },
-});
 
 const targetCounts = (run: RunDetail) =>
   countRunTargets(
@@ -320,37 +298,6 @@ const importPurchases = (run: RunDetail): ReportBlock[] => [
       }),
     ),
     { empty: "No purchases were changed by this run." },
-  ),
-];
-
-const importApprovals = (run: RunDetail): ReportBlock[] => [
-  records(
-    run.approvals.map((approval) => {
-      const decided = approval.rejectedAt ?? approval.grantedAt;
-      const statusLine = approval.rejectedAt
-        ? line("Rejected")
-        : approval.grantedAt
-          ? line("Granted")
-          : line("Awaiting explicit approval", "warning");
-      return row(approval.id, {
-        title: approval.operationKind,
-        badges: [badge(approval.state, toneForState(approval.state))],
-        at: decided ?? undefined,
-        lines: [statusLine, line(approval.operationId, "muted")],
-        detail: {
-          label: "Proposed arguments",
-          text: JSON.stringify(approval.args, null, 2),
-        },
-        actions:
-          approval.state === "pending"
-            ? [
-                decision(run.publicId, approval, "approve"),
-                decision(run.publicId, approval, "reject"),
-              ]
-            : [],
-      });
-    }),
-    { empty: "No approvals were required for this run." },
   ),
 ];
 
@@ -777,7 +724,6 @@ const IMPORT_BUILDERS = {
   "run.import-progress-stopped": (run: RunDetail) =>
     isLiveRunStatus(run.status) ? [] : importProgress(run),
   "run.import-purchases": importPurchases,
-  "run.import-approvals": importApprovals,
   "run.import-findings": importFindings,
   "run.import-targets": importTargets,
   "run.import-prepared-orders": importPreparedOrders,
@@ -845,8 +791,6 @@ function workflowBlocks(
               kind: "run-control",
               runId,
               action: "cancel",
-              operationId: null,
-              approvalId: null,
             },
           },
         ]
@@ -861,8 +805,6 @@ function workflowBlocks(
                 kind: "run-control",
                 runId,
                 action: "retry",
-                operationId: null,
-                approvalId: null,
               },
             },
           ]

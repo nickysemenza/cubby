@@ -30,7 +30,7 @@ export async function observeAiRefreshFeatures(
   return withInvocationDb(env.HYPERDRIVE.connectionString, async () => {
     const { db } = await import("../db");
     const activation = await activateAiRefresh(db, __GIT_COMMIT__, {
-      enabled: env.AI_REFRESH_ENABLED === "true",
+      enabled: true,
       startDiscovery: true,
       observationEpoch,
     });

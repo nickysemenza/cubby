@@ -1,5 +1,10 @@
 # Quality and local diagnostics
 
+Repository-owned modules are imported through their `~/server/...` aliases.
+Relative imports from server composition bypass the generated declaration
+mapping and pull implementations into the server check. Fix the import rather
+than weakening the boundary guard.
+
 `pnpm typecheck:web` checks web app code for web-only work; it leaves out
 tests and test tooling. When tests or test tooling change,
 include `pnpm typecheck` as an affected check: passing Vitest does not

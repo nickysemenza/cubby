@@ -720,11 +720,8 @@ const handler = {
               // through both the errored child span and Sentry.
               Sentry.captureException(error);
             }
-            // The clock is a legitimate input for the calendar above. This job is
-            // not a repair: it only reads the markers that "Settle now" acts on
-            // and reports when they are non-zero, which is the evidence that a
-            // wakeup was lost — the cue to look, not a sweep that would hide it.
-            // (The vector-reconcile job below IS a repair — see its comment.)
+            // Recovery above republishes missed work; queue completion is asynchronous.
+            // Keep the remaining source-row backlog visible in diagnostics.
             try {
               await withInvocationDb(
                 env.HYPERDRIVE.connectionString,
@@ -745,15 +742,18 @@ const handler = {
                             awaiting.unembeddedEntities,
                           "cubby.awaiting.pending_uploads":
                             awaiting.pendingUploads,
+                          "cubby.awaiting.stale_image_metadata":
+                            awaiting.staleImageMetadata,
                         });
                         scheduledLog.info("awaiting work", awaiting);
                         if (
                           awaiting.staleRecipeTotals > 0 ||
                           awaiting.unembeddedEntities > 0 ||
-                          awaiting.pendingUploads > 0
+                          awaiting.pendingUploads > 0 ||
+                          awaiting.staleImageMetadata > 0
                         ) {
                           Sentry.captureMessage(
-                            `Derived work is waiting: ${awaiting.staleRecipeTotals} stale recipe totals, ${awaiting.unembeddedEntities} unembedded entities, ${awaiting.pendingUploads} pending uploads`,
+                            `Derived work is waiting: ${awaiting.staleRecipeTotals} stale recipe totals, ${awaiting.unembeddedEntities} unembedded entities, ${awaiting.pendingUploads} pending uploads, ${awaiting.staleImageMetadata} stale image metadata records`,
                             "warning",
                           );
                         }

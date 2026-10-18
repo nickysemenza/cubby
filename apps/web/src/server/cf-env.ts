@@ -200,4 +200,3 @@ export const getAiGatewayEgress = (gatewayId: string) =>
   cfEnv?.AI_GATEWAY_EGRESS?.getByName(gatewayId);
 
 export const getAiRefreshWorkflow = () => cfEnv?.AI_REFRESH;
-export const getAiRefreshEnabled = () => cfEnv?.AI_REFRESH_ENABLED === "true";

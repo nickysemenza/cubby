@@ -23,7 +23,6 @@ import {
   reclaimExpiredImageProcessingLeases,
 } from "~/server/domains/image-processing/repo/image-processing";
 import { assignImageProcessingExecutor } from "~/server/domains/image-processing/repo/image-processing-history";
-import { readImageProcessingSettings } from "~/server/domains/image-processing/repo/image-processing-maintenance";
 import { getVerifiedImageRenditionKey } from "~/server/domains/image/repo/image-identification";
 import { reserveImageAnalysisInput } from "~/server/generic/activity/repo/activity-input";
 
@@ -56,8 +55,6 @@ export async function dispatchImageProcessingWakeup(
   jobId: string,
   options: CloudImageDispatchOptions = {},
 ): Promise<"dispatched" | "completed" | "waiting" | "skipped"> {
-  const settings = await readImageProcessingSettings(db);
-  if (settings.paused) return "skipped";
   await reclaimExpiredImageProcessingLeases(db);
   const claimed = await claimImageProcessingJob(db, {
     jobId,

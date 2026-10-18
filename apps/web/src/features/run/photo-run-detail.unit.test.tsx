@@ -123,7 +123,6 @@ const run: RunDetail = {
   ],
   progress: [],
   latestProgress: null,
-  approvals: [],
 };
 
 const photo = (

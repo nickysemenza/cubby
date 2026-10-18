@@ -38,7 +38,6 @@ import {
   deleteCookbook,
   upsertCookbook,
 } from "~/server/domains/cookbook/repo/cookbook";
-import { updateImageProcessingSettings } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import { markImageUploadedWorkflow } from "~/server/domains/image/operations/image.server";
 import {
   makeCookbookExtraction,
@@ -354,10 +353,6 @@ describe("image repository", () => {
   // with automatic processing on, scheduling refused it and every screenshot
   // upload failed. The stored bytes' hash is recorded as the upload is marked.
   it("hashes a standalone upload before scheduling its automatic processing", async () => {
-    await updateImageProcessingSettings(ctx.db, {
-      enabled: true,
-      paused: true,
-    });
     const pending = await createPendingImageRecord(ctx.db, {
       key: `images/${crypto.randomUUID()}.png`,
       filename: "browser-view.png",

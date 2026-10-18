@@ -527,8 +527,7 @@ public final class ReportSlotModel {
         case .runControl(let control):
             let successor = try await service.controlRun(
                 .init(
-                    runId: control.runId, action: control.action,
-                    operationId: control.operationId, approvalId: control.approvalId))
+                    runId: control.runId, action: control.action))
             if let successor { return .openedRun(successor) }
             return .done(nil)
         case .resolveFinding(let finding):

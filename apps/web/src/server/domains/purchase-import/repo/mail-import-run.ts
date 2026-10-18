@@ -21,13 +21,18 @@ import {
 } from "@cubby/schemas/mailbox-research";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, eq, or } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, notInArray, or } from "drizzle-orm";
 
 import { getPurchaseAgentQueue } from "~/server/cf-env";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import { runAfterCommit } from "~/server/db/helpers/core";
-import { ledgerParty, email as emailTable, run } from "~/server/db/schema";
+import {
+  ledgerParty,
+  email as emailTable,
+  orderMail,
+  run,
+} from "~/server/db/schema";
 import {
   readRetainedMail,
   type RetainedMail,
@@ -41,6 +46,12 @@ import {
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { dispatchRunEvent, recordRunDispatchAttempt } from "./dispatch";
+
+const CLASSIFICATION_RUN_PURPOSES: (typeof run.$inferSelect.purpose)[] = [
+  "mail_discovery",
+  "mail_reclassify",
+  "ai_refresh",
+];
 
 type MailImportAdmission = {
   ledgerPartyId: string;
@@ -138,7 +149,12 @@ async function partitionOwnership(
           )
           .limit(1)
       : [];
-    if (owner && !owner.retiredAt) owners.set(owner.id, owner);
+    if (
+      owner &&
+      !owner.retiredAt &&
+      !CLASSIFICATION_RUN_PURPOSES.includes(owner.purpose)
+    )
+      owners.set(owner.id, owner);
     else fresh.push(source);
   }
   return { owners, fresh };
@@ -337,4 +353,74 @@ export async function startMailImport(
     });
   }
   return results;
+}
+
+/** Revisit retained related Emails that predate automatic import admission. */
+export async function importPendingEmails(
+  db: Database,
+  queue: PurchaseAgentQueueProducer | undefined = getPurchaseAgentQueue(),
+) {
+  const { listMemberMailboxes } =
+    await import("~/server/domains/purchase-import/repo/gmail/targets");
+  const { mailImportEnabled } = await import("./mail-import-settings");
+  const { hasRetainedEmailImportContent } =
+    await import("~/server/domains/purchase-import/repo/email-content");
+  for (const target of await listMemberMailboxes(db)) {
+    if (!target.userId) continue;
+    if (!(await mailImportEnabled(db, target.mailboxId))) continue;
+    const pending = await getDb(db)
+      .select({ email: emailTable, content: orderMail.content })
+      .from(emailTable)
+      .innerJoin(
+        orderMail,
+        and(
+          eq(orderMail.id, emailTable.orderMailId),
+          eq(orderMail.rawChecksum, emailTable.checksum),
+        ),
+      )
+      .leftJoin(run, eq(run.id, emailTable.runId))
+      .where(
+        and(
+          eq(
+            emailTable.ledgerPartyId,
+            parseEntityId("ledgerParty", target.ledgerPartyId),
+          ),
+          eq(emailTable.mailboxId, target.mailboxId),
+          eq(emailTable.classification, "related"),
+          or(
+            isNull(emailTable.runId),
+            and(
+              inArray(run.purpose, CLASSIFICATION_RUN_PURPOSES),
+              eq(run.ledgerPartyId, emailTable.ledgerPartyId),
+            ),
+          ),
+          notInArray(emailTable.status, ["excluded", "deleted"]),
+          notDeleted(emailTable),
+        ),
+      )
+      .orderBy(asc(emailTable.createdAt), asc(emailTable.id))
+      .limit(50);
+    const messageIds = [];
+    for (const { email, content } of pending) {
+      if (
+        email.orderMailId &&
+        (await hasRetainedEmailImportContent(
+          getDb(db),
+          email.orderMailId,
+          content,
+        ))
+      )
+        messageIds.push(email.orderMailId);
+    }
+    await startMailImport(
+      db,
+      {
+        ledgerPartyId: target.ledgerPartyId,
+        userId: target.userId,
+        mailboxId: target.mailboxId,
+        messageIds,
+      },
+      queue,
+    );
+  }
 }

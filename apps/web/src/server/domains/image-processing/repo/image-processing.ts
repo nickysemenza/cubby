@@ -406,9 +406,6 @@ export async function claimImageProcessingJob(
   const leaseExpiresAt = sql`now() + ${input.leaseMs} * interval '1 millisecond'`;
   return await withTransaction(db, async (tx) => {
     // The policy is internal so a new caller cannot accidentally bypass pause.
-    const { mayClaimImageProcessingJob } =
-      await import("./image-processing-maintenance");
-    if (!(await mayClaimImageProcessingJob(tx))) return null;
     const [candidate] = await tx
       .select({
         id: imageProcessingJob.id,

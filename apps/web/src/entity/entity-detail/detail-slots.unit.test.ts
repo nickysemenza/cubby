@@ -16,7 +16,6 @@ const IMPORT_SLOTS = [
   "import-stats",
   "import-agent-live",
   "import-purchases",
-  "import-approvals",
   "import-findings",
   "import-targets",
   "import-prepared-orders",

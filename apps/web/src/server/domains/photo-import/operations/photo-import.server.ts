@@ -3,7 +3,6 @@ import type { z } from "zod";
 
 import { photoImportContract } from "~/contracts/photo-import.contract";
 import { decideProductVariantComparisons } from "~/server/ai/semantic-decisions";
-import { readImageProcessingSettings } from "~/server/domains/image-processing/repo/image-processing-maintenance";
 import {
   photoRunCandidates,
   rejectPhotoProductCandidate,
@@ -68,14 +67,11 @@ export const photoImportHandlers = implementOperationDomain(
         context.actorContext,
         input.runId,
       );
-      const [snapshot, settings] = await Promise.all([
-        readPhotoRunSnapshot(context.db, input.runId),
-        readImageProcessingSettings(context.db),
-      ]);
+      const snapshot = await readPhotoRunSnapshot(context.db, input.runId);
       return {
         review: snapshot.review,
         images: snapshot.images,
-        imageProcessingPaused: settings.paused,
+        imageProcessingPaused: false,
         lifecycle: snapshot.lifecycle,
       };
     },

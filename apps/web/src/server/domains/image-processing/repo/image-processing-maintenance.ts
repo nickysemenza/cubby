@@ -8,16 +8,12 @@ import {
 } from "@cubby/schemas/image-processing";
 
 const JOB = imageProcessingJobState.enum;
-import {
-  imageProcessingSettings,
-  imageProcessingMaintenanceCounts,
-} from "@cubby/schemas/maintenance";
-import { eq, sql } from "drizzle-orm";
+import { imageProcessingMaintenanceCounts } from "@cubby/schemas/maintenance";
+import { sql } from "drizzle-orm";
 import { z } from "zod";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
-import { getDb, unwrapDb, withTransaction } from "~/server/db/helpers";
-import { appSettings } from "~/server/db/schema";
+import type { Database } from "~/server/db";
+import { getDb } from "~/server/db/helpers";
 import { publishBackgroundTasks } from "~/server/workflows/background-tasks/publish";
 
 import {
@@ -26,10 +22,6 @@ import {
   IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
   IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
 } from "./image-processing";
-
-// A namespaced settings row, not an import session or a processing run.
-const SETTINGS_ID = "00000000-0000-4000-8000-000000000071";
-const DEFAULTS = { enabled: false, paused: true };
 
 export const ALL_IMAGE_PROCESSING_KINDS: readonly ImageProcessingJobKind[] = [
   "describe_image",
@@ -42,56 +34,7 @@ const REVISION_BY_KIND = {
   subject_lift: IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
 } satisfies Record<ImageProcessingJobKind, number>;
 
-export async function readImageProcessingSettings(
-  db: Database | DrizzleTransaction,
-  options?: { lock?: boolean },
-) {
-  const query = unwrapDb(db)
-    .select({ metadata: appSettings.metadata })
-    .from(appSettings)
-    .where(eq(appSettings.id, SETTINGS_ID));
-  const rows = options?.lock ? await query.for("update") : await query;
-  const row = rows[0];
-  return row?.metadata ? imageProcessingSettings.parse(row.metadata) : DEFAULTS;
-}
-
-/**
- * Serialize a lease against pause/resume updates. Creating the default row in
- * the same transaction gives even a fresh installation a concrete row lock.
- */
-export async function mayClaimImageProcessingJob(
-  tx: DrizzleTransaction,
-): Promise<boolean> {
-  await tx
-    .insert(appSettings)
-    .values({ id: SETTINGS_ID, metadata: DEFAULTS })
-    .onConflictDoNothing();
-  return !(await readImageProcessingSettings(tx, { lock: true })).paused;
-}
-
-export async function writeImageProcessingSettings(
-  db: Database,
-  settings: z.infer<typeof imageProcessingSettings>,
-) {
-  await withTransaction(db, async (tx) => {
-    await tx
-      .insert(appSettings)
-      .values({ id: SETTINGS_ID, metadata: DEFAULTS })
-      .onConflictDoNothing();
-    await tx
-      .select({ id: appSettings.id })
-      .from(appSettings)
-      .where(eq(appSettings.id, SETTINGS_ID))
-      .for("update");
-    await tx
-      .update(appSettings)
-      .set({ metadata: settings })
-      .where(eq(appSettings.id, SETTINGS_ID));
-  });
-}
-
 export async function imageProcessingMaintenanceSummary(db: Database) {
-  const settings = await readImageProcessingSettings(db);
   const counts = async (
     kind: "describe_image" | "subject_lift",
     revision: number,
@@ -120,7 +63,7 @@ export async function imageProcessingMaintenanceSummary(db: Database) {
     counts("describe_image", IMAGE_DESCRIPTION_PROCESSOR_REVISION),
     counts("subject_lift", IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION),
   ]);
-  return { settings, description, cutout };
+  return { description, cutout };
 }
 
 /** Shortcodes of uploaded images missing a current job of one of `kinds`. */
@@ -197,14 +140,12 @@ export async function pruneExecutorlessWaitingAttempts(
 
 const IMAGE_PROCESSING_WAKEUP_SOURCE = "image-processing";
 
-/** Background wakeups for image-processing jobs; paused processing publishes
- * none. Queue payloads only wake durable rows, so repeats and repairs are harmless. */
+/** Queue payloads only wake durable rows, so repeats and repairs are harmless. */
 export async function publishImageProcessingWakeups(
   db: Database,
   jobIds: readonly string[],
 ): Promise<void> {
-  const settings = await readImageProcessingSettings(db);
-  if (settings.paused || jobIds.length === 0) return;
+  if (jobIds.length === 0) return;
   await publishBackgroundTasks(
     db,
     [...new Set(jobIds)].map((jobId) => ({

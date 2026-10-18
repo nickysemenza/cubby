@@ -1,7 +1,7 @@
 # AI prompt refresh
 
 The [entity contract](../entities.md) owns refresh eligibility, history and
-acceptance semantics. `AI_REFRESH_ENABLED` controls admission; the existing
+acceptance semantics. Refresh is always enabled; the existing
 Gateway Durable Object detects its own compiled feature policy. Gateway coordination
 applies to production paid inference independently.
 
@@ -25,7 +25,7 @@ applies to production paid inference independently.
    legacy work, repeated activation, no-proposal completion and member decisions
    during inference. No live source belongs in repository fixtures, reports or
    PR text.
-4. Enable the Cloudflare configuration flag in a reviewed deployment. Requests and nightly
+4. Requests and nightly
    maintenance nudge the production Gateway singleton. It checks its own
    deployment version in Durable Object storage before opening Neon once to
    compare the exact compiled feature manifest.
@@ -66,9 +66,8 @@ on creates fresh eligible work. Admission waits defer without consuming inferenc
 Cancelled Runs remain stopped. Exhausted failures require Run retry; replacement
 evaluations retain the earlier failed rows and link their receipts.
 
-Disable `AI_REFRESH_ENABLED` in a deployment to pause admission and
-fence publication. Already applied values and immutable history survive disabling
-or rollback. Do not delete the additive ledger/receipt columns during rollback.
+Already applied values and immutable history survive rollback. Do not delete
+the additive ledger/receipt columns during rollback.
 A failed startup handoff retains its alarm and retries the same discovery Run;
 nightly reconciliation is the additional backstop. Preserve the Gateway
 namespace and its storage during changes. If stored ownership falls behind

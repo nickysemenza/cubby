@@ -12,7 +12,6 @@ import {
   createImageProcessingJob,
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
 } from "~/server/domains/image-processing/repo/image-processing";
-import { updateImageProcessingSettings } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import type { BackgroundQueueProducer } from "~/server/workflows/background-queue-types";
@@ -27,10 +26,6 @@ import { handleCloudImageTask } from "./cloud-queue";
 const ctx = withTestDb();
 let batchRunId: RunId;
 beforeEach(async () => {
-  await updateImageProcessingSettings(ctx.db, {
-    enabled: false,
-    paused: false,
-  });
   // withTestDb has a test actor, not the production system user. Every photo
   // inherits this one batch Run rather than opening an unattributed system Run.
   batchRunId = await ensureRun(ctx.db, ctx.actor, { purpose: "background" });

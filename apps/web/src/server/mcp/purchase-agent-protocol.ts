@@ -5,13 +5,12 @@ import type { CubbyMcpMutationAction } from "@cubby/schemas/mcp-tools";
 import { purchaseImportRunExecution } from "@cubby/schemas/purchase-import";
 import { parseShortcode } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, desc, eq, inArray } from "drizzle-orm";
-import { isEqual } from "es-toolkit";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import { auditLog, run as runTable, runApproval } from "~/server/db/schema";
+import { run as runTable } from "~/server/db/schema";
 import { recordRunWrites } from "~/server/domains/purchase-import/repo/run-audit";
 import {
   completeOperation,
@@ -25,8 +24,8 @@ import type { ToolExtra } from "./tools/tool-registration";
 
 /**
  * Writers that enforce the purchase agent's run protocol themselves (stable
- * operation ids, replay, target checks) and so run without the generic
- * per-call human approval. Batch actions govern each item the same way.
+ * operation ids, replay, target checks) and so run without the
+ * generic replay wrapper. Batch actions govern each item the same way.
  */
 const SELF_GOVERNED_ACTIONS = new Set<string>([
   "mail.search",
@@ -71,37 +70,13 @@ async function targetSnapshot(db: Database, args: PurchaseAgentArguments) {
     const parsed = parseShortcode(code);
     if (!parsed) continue;
     const id = await resolveLiveShortcode(db, parsed.shortcode, parsed.type);
-    const auditable = auditEntitySchema.safeParse(parsed.type);
-    const [latest] =
-      id && auditable.success
-        ? await getDb(db)
-            .select({ id: auditLog.id, createdAt: auditLog.createdAt })
-            .from(auditLog)
-            .where(
-              and(
-                eq(auditLog.entityKind, auditable.data),
-                eq(auditLog.entityId, id),
-              ),
-            )
-            .orderBy(desc(auditLog.createdAt), desc(auditLog.id))
-            .limit(1)
-        : [];
     refs.push({
       type: parsed.type,
       shortcode: parsed.shortcode,
       id,
-      latestAuditId: latest?.id ?? null,
-      latestAuditAt: latest?.createdAt.toISOString() ?? null,
     });
   }
   return refs;
-}
-
-export async function purchaseAgentTargetFingerprint(
-  db: Database,
-  args: PurchaseAgentArguments,
-) {
-  return sha256Hex(JSON.stringify(await targetSnapshot(db, args)));
 }
 
 type TrustedPurchaseAgent = {
@@ -139,7 +114,6 @@ export async function executePurchaseAgentMutation<T>(input: {
     params: purchaseAgentArguments.parse(input.args),
   };
   const argsFingerprint = await sha256Hex(JSON.stringify(args));
-  const evidenceFingerprint = argsFingerprint;
   const [run] = await getDb(input.db)
     .select({
       id: runTable.id,
@@ -159,124 +133,49 @@ export async function executePurchaseAgentMutation<T>(input: {
     throw new Error(
       "Purchase-agent run execution does not match its delegation",
     );
-  const targetFingerprint = await purchaseAgentTargetFingerprint(
-    input.db,
-    args,
-  );
   const operationKey = {
     runId: run.id,
     operationId: input.execution.operationId,
   };
-  const operation = await readOperation(getDb(input.db), operationKey);
-  if (!operation) {
-    if (run.status !== "running" && run.status !== "paused_approval")
-      throw new Error(`Purchase-agent run is fenced in ${run.status}`);
-    await getDb(input.db).transaction(async (tx) => {
-      await insertOperation(tx, {
-        ...operationKey,
-        kind: `mcp:${input.toolName}`,
-        inputFingerprint: argsFingerprint,
-        state: "paused_approval",
-        result: {
-          approvalProposal: {
-            operationKind: `mcp:${input.toolName}`,
-            args,
-            targetFingerprint,
-            evidenceFingerprint,
-          },
-        },
-      });
-      await tx.insert(runApproval).values({
-        runId: run.id,
-        operationId: input.execution.operationId,
-        operationKind: `mcp:${input.toolName}`,
-        args,
-        argsFingerprint,
-        targetFingerprint,
-        evidenceFingerprint,
-        state: "pending",
-      });
-      await tx
-        .update(runTable)
-        .set({ status: "paused_approval", updatedAt: new Date() })
-        .where(eq(runTable.id, run.id));
-    });
-    throw new Error(
-      "Purchase-agent mutation is awaiting exact human approval; inspect operation status",
-    );
-  }
-  if (operation.inputFingerprint !== argsFingerprint)
-    throw new Error("Operation id was replayed with different input");
-  if (operation.state === "completed") {
-    // SAFETY: this operation row is scoped to the same tool, stable id, and
-    // exact args fingerprint; the registration layer parses T again.
-    return operation.result as T;
-  }
-  if (operation.state !== "paused_approval")
-    throw new Error("Mutation outcome is uncertain; inspect operation status");
-  if (run.status !== "paused_approval")
-    throw new Error(`Purchase-agent run is fenced in ${run.status}`);
-
-  const [approval] = await getDb(input.db)
-    .select()
-    .from(runApproval)
-    .where(
-      and(
-        eq(runApproval.runId, run.id),
-        eq(runApproval.operationId, input.execution.operationId),
-        eq(runApproval.state, "granted"),
-      ),
-    )
-    .limit(1);
-  if (
-    !approval ||
-    approval.argsFingerprint !== argsFingerprint ||
-    approval.targetFingerprint !== targetFingerprint ||
-    approval.evidenceFingerprint !== evidenceFingerprint ||
-    // jsonb preserves values and array order, but reorders object keys.
-    !isEqual(approval.args, args)
-  )
-    throw new Error("Exact mutation approval is missing or target changed");
-
   return input.operationContext.inTransaction(async (prepared) => {
     const transactionDb = prepared.entityKernel.db;
     const database = getDb(transactionDb);
-    // Lock order is Run → RunOperation → RunApproval, the order `controlRun`
-    // takes; issuing them concurrently or reordered can deadlock against an
-    // overlapping cancel or approval decision.
+    // Serialize replay with cancellation and other attempts before any write.
     const [lockedRun] = await database
-      .select({ status: runTable.status })
+      .select({ status: runTable.status, retiredAt: runTable.retiredAt })
       .from(runTable)
       .where(eq(runTable.id, run.id))
       .limit(1)
       .for("update");
-    const lockedOperation = await readOperation(database, operationKey, {
+    if (
+      lockedRun?.retiredAt ||
+      !lockedRun ||
+      !["running", "paused_approval"].includes(lockedRun.status)
+    )
+      throw new Error(`Purchase-agent run is fenced in ${lockedRun?.status}`);
+    const operation = await readOperation(database, operationKey, {
       forUpdate: true,
     });
-    const [lockedApproval] = await database
-      .select({
-        state: runApproval.state,
-        argsFingerprint: runApproval.argsFingerprint,
-        targetFingerprint: runApproval.targetFingerprint,
-        evidenceFingerprint: runApproval.evidenceFingerprint,
-      })
-      .from(runApproval)
-      .where(eq(runApproval.id, approval.id))
-      .limit(1)
-      .for("update");
-    const currentTargetFingerprint = await purchaseAgentTargetFingerprint(
-      transactionDb,
-      args,
-    );
-    if (
-      lockedRun?.status !== "paused_approval" ||
-      lockedOperation?.state !== "paused_approval" ||
-      lockedApproval?.state !== "granted" ||
-      lockedApproval.argsFingerprint !== argsFingerprint ||
-      lockedApproval.targetFingerprint !== currentTargetFingerprint ||
-      lockedApproval.evidenceFingerprint !== evidenceFingerprint
-    ) {
-      throw new Error("Mutation approval changed or target is stale");
+    if (operation) {
+      if (
+        operation.inputFingerprint !== argsFingerprint ||
+        operation.kind !== `mcp:${input.toolName}`
+      )
+        throw new Error("Operation id was replayed with different input");
+      if (operation.state === "completed") {
+        // SAFETY: the same tool, stable operation ID and exact arguments own this result.
+        return operation.result as T;
+      }
+      if (operation.state !== "paused_approval")
+        throw new Error(
+          "Mutation outcome is uncertain; inspect operation status",
+        );
+    } else {
+      await insertOperation(database, {
+        ...operationKey,
+        kind: `mcp:${input.toolName}`,
+        inputFingerprint: argsFingerprint,
+      });
     }
     const transactionalExtra: ToolExtra = {
       ...input.baseExtra,
@@ -293,7 +192,7 @@ export async function executePurchaseAgentMutation<T>(input: {
     const result = await input.run(transactionalExtra);
     const resultArguments = purchaseAgentArguments.parse(result);
     // The tool may write rows without auditing them itself; the Run's audit
-    // trail names every entity the approved call touched.
+    // trail names every entity the call touched.
     const refs = await targetSnapshot(transactionDb, [args, resultArguments]);
     await recordRunWrites(
       transactionDb,
@@ -312,29 +211,7 @@ export async function executePurchaseAgentMutation<T>(input: {
           : [];
       }),
     );
-    await database
-      .update(runApproval)
-      .set({ state: "consumed", consumedAt: new Date() })
-      .where(eq(runApproval.id, approval.id));
     await completeOperation(database, operationKey, result);
-    const remainingApprovals = await database
-      .select({ id: runApproval.id })
-      .from(runApproval)
-      .where(
-        and(
-          eq(runApproval.runId, run.id),
-          inArray(runApproval.state, ["pending", "granted"]),
-        ),
-      )
-      .limit(1);
-    await database
-      .update(runTable)
-      .set({
-        status: remainingApprovals.length > 0 ? "paused_approval" : "running",
-        failureCode: null,
-        updatedAt: new Date(),
-      })
-      .where(eq(runTable.id, run.id));
     return result;
   });
 }

@@ -86,7 +86,6 @@ export default defineEntity({
           workspace: "work",
           title: "Purchases changed",
         },
-        { kind: "slot", id: "import-approvals", title: "Approvals" },
         {
           kind: "slot",
           id: "import-findings",

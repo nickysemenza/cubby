@@ -396,7 +396,7 @@ describe("purchase import run admission", () => {
     ]);
   });
 
-  it("keeps a settled run running until the agent has received every wake the server issued", async () => {
+  it("waits for the dispatch generation but ignores retired approval wakes", async () => {
     const party = await createMember();
     const run = await startAgentRun(party);
     const { runApproval } = await import("~/server/db/schema");
@@ -434,13 +434,12 @@ describe("purchase import run admission", () => {
 
     // The current dispatch generation is still queued for the agent.
     await expect(settle([wake])).resolves.toEqual(kept);
-    // A member's decision woke the agent, but the wake has not arrived.
-    await expect(settle([dispatch])).resolves.toEqual(kept);
     // An unanswered submission passes the same fence before failing the run.
     await expect(
       settle([wake], { failureCode: "agent_failed" }),
     ).resolves.toEqual(kept);
-    await expect(settle([dispatch, wake])).resolves.toEqual({
+    // An old approval record no longer requires an event that may never arrive.
+    await expect(settle([dispatch])).resolves.toEqual({
       reconciled: true,
       status: "needs_review",
     });

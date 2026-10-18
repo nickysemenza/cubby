@@ -809,14 +809,16 @@ function importRow(
       ],
     });
   return pipelineRow("Import Run", "Not reached", {
-    lines: ["Import runs only when you authorize this Email.", ...estimate],
+    lines: [
+      "Related Email imports automatically when Mail import is enabled for its mailbox.",
+      ...estimate,
+    ],
     commands: [
       {
         id: `import:${shortcode}:${email.checksum}`,
         label: "Import this Email",
         prominent: true,
-        confirm:
-          "Authorize paid Pi import for this Email? Automatic discovery remains classification-only.",
+        confirm: null,
         request: {
           kind: "import-email",
           items: [{ id: shortcode, expectedChecksum: email.checksum }],

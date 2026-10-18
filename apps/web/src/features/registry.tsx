@@ -297,7 +297,6 @@ const detailSlots = {
       isImportRun,
     ),
     "import-purchases": runReportSlot("import-purchases", isImportRun),
-    "import-approvals": runReportSlot("import-approvals", isImportRun),
     "import-findings": runReportSlot("import-findings", isImportRun),
     "import-targets": runReportSlot("import-targets", isImportRun),
     "import-prepared-orders": runReportSlot(

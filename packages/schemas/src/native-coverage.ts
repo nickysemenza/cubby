@@ -267,7 +267,7 @@ export const nativeCoverage = {
       "purchase.project-allocation",
       "purchase.financial-settlement",
       "expense.settlement",
-      // A run's progress, approvals, findings, transcript, log, usage and changes: the same report
+      // A run's progress, findings, transcript, log, usage and changes: the same report
       // view draws the server's `records` rows, polls (one batched read) while the run is live,
       // and runs the commands the server offers (approve, reject, apply, dismiss, retry) only
       // after the confirmation each declares. Web keeps its corrections review (targets) and
@@ -275,7 +275,6 @@ export const nativeCoverage = {
       "run.ai-usage",
       "run.suggestions",
       "run.changes",
-      "run.import-approvals",
       "run.import-debug-log",
       "run.import-findings",
       // Approve-and-import: the server's prepared lines are `records` rows with a `choice`

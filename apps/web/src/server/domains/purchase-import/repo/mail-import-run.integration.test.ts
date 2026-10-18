@@ -8,6 +8,7 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
+import { account } from "~/server/db/auth.schema";
 import {
   databaseForTransaction,
   getDb,
@@ -35,7 +36,8 @@ import { settleMail } from "../operations/mail-tool";
 import { retainedMailFixture } from "../operations/order-import.fixtures";
 import { startAgentRunFixture } from "../service/import-run.fixtures";
 import { writeOutcomeReceipts } from "../service/run-outcome.fixtures";
-import { startMailImport } from "./mail-import-run";
+import { importPendingEmails, startMailImport } from "./mail-import-run";
+import { setMailImport } from "./mail-import-settings";
 import { transferMailRunSources } from "./mail-run-membership";
 import * as sourceIdentity from "./mail-source-identity";
 import { controlRun, loadRunDetail } from "./run-service";
@@ -75,6 +77,70 @@ describe("mail research admission", () => {
     if (!mail) throw new Error("Synthetic mail fixture did not persist");
     return { party, mail };
   }
+  // Previously classified Email must progress without a member import click;
+  // disabled mailboxes, excluded sources, and existing ownership stay respected.
+  it("automatically admits retained related Email once its mailbox is enabled and replays without duplicate Runs", async () => {
+    const { party, mail } = await source();
+    await getDb(ctx.db).insert(account).values({
+      id: crypto.randomUUID(),
+      accountId: "synthetic-mailbox",
+      providerId: "google",
+      userId: ctx.actor.userId,
+      updatedAt: new Date(),
+    });
+    const excluded = await retainedMailFixture(ctx.db, {
+      ledgerPartyId: party.id,
+      messageId: "excluded-message",
+      checksum: "b".repeat(64),
+    });
+    await getDb(ctx.db)
+      .update(emailTable)
+      .set({ status: "excluded" })
+      .where(eq(emailTable.orderMailId, excluded.id));
+    const classificationRunId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "mail_discovery",
+      trigger: "scheduled",
+      status: "completed",
+    });
+    await getDb(ctx.db)
+      .update(emailTable)
+      .set({ runId: classificationRunId })
+      .where(eq(emailTable.orderMailId, mail.id));
+    const queue = { send: async () => {} };
+    await importPendingEmails(ctx.db, queue);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.purpose, "mail_import")),
+    ).toEqual([]);
+    await setMailImport(ctx.db, {
+      mailboxId: "synthetic-mailbox",
+      enabled: true,
+    });
+    await importPendingEmails(ctx.db, queue);
+    const [owner] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.purpose, "mail_import"));
+    expect(owner?.purpose).toBe("mail_import");
+    expect(await frozenSources(owner!.id)).toEqual([
+      { orderMailId: mail.id, checksum: mail.rawChecksum },
+    ]);
+    await importPendingEmails(ctx.db, queue);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.purpose, "mail_import")),
+    ).toHaveLength(1);
+    const [excludedEmail] = await getDb(ctx.db)
+      .select()
+      .from(emailTable)
+      .where(eq(emailTable.orderMailId, excluded.id));
+    expect(excludedEmail?.runId).toBeNull();
+  });
+
   it("preserves the parent Email outcome after a retry transfers its live assignment", async () => {
     const { party, mail } = await source();
     const [admitted] = await startMailImport(

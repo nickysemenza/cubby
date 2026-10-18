@@ -21,7 +21,6 @@ import { preferredImageDescriptionPolicy } from "~/server/domains/image-processi
 import { getDb } from "~/server/db/helpers";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { saveImageDescriptionAnalysis } from "~/server/domains/image-processing/repo/image-processing";
-import { updateImageProcessingSettings } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import { imageDescriptionInputFingerprint } from "~/server/domains/image/service/image-description.service";
 import { scheduleImageProcessingJobs } from "~/server/domains/image-processing/service/image-processing.service";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
@@ -60,7 +59,7 @@ test("companion normalization preserves originals and rejects stale or corrupt r
   const { db, actor } = await createEvidenceHarnessContext(page);
   const runId = await ensureRun(db, actor, { purpose: "background" });
   const database = getDb(db);
-  await updateImageProcessingSettings(db, { enabled: false, paused: false });
+
   const hello = imageProcessingHello.parse({
     protocolVersion: 1,
     type: "hello",

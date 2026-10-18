@@ -8,11 +8,12 @@ import {
 import { providerFor } from "@cubby/shared/ai/models";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/policy/features";
 import { getDb } from "~/server/db/helpers";
 import {
+  appSettings,
   aiAnalysis,
   image,
   imageDerivative,
@@ -20,7 +21,6 @@ import {
   imageProcessingOrphan,
   searchDocument,
 } from "~/server/db/schema";
-import { updateImageProcessingSettings } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import {
   createUploadedImageRecord,
   deleteImages,
@@ -57,12 +57,6 @@ import { persistImageProcessingSubmission } from "./image-processing-submission"
 
 describe("durable image representations", () => {
   const ctx = withTestDb();
-  beforeEach(async () => {
-    await updateImageProcessingSettings(ctx.db, {
-      enabled: false,
-      paused: false,
-    });
-  });
   const hash = "a".repeat(64);
   async function source() {
     const row = await createUploadedImageRecord(ctx.db, {
@@ -277,25 +271,27 @@ describe("durable image representations", () => {
     expect(orphanRows).toHaveLength(0);
   });
 
-  it("does not claim new device work while processing is paused", async () => {
+  it("claims device work even with legacy disabled and paused settings", async () => {
     const row = await source();
-    await updateImageProcessingSettings(ctx.db, {
-      enabled: false,
-      paused: true,
-    });
+    await getDb(ctx.db)
+      .insert(appSettings)
+      .values({
+        id: "00000000-0000-4000-8000-000000000071",
+        metadata: { enabled: false, paused: true },
+      });
     expect(
       await claimImageProcessingJob(ctx.db, {
         jobId: row.jobId,
         kinds: ["subject_lift"],
         leaseMs: 60000,
       }),
-    ).toBeNull();
+    ).not.toBeNull();
     const [job] = await getDb(ctx.db)
       .select()
       .from(imageProcessingJob)
       .where(eq(imageProcessingJob.id, row.jobId));
-    expect(job?.state).toBe("pending");
-    expect(job?.attempts).toBe(0);
+    expect(job?.state).toBe("leased");
+    expect(job?.attemptId).toEqual(expect.any(String));
   });
 
   it("retains a successful earlier cutout when the new policy job fails", async () => {

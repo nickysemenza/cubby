@@ -8,7 +8,7 @@ import { importRunAgentIdentity } from "@cubby/schemas/import-run-agent";
 import { PHOTO_RUN_IMAGE_LIMIT } from "@cubby/shared/client-constants";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { getDb } from "~/server/db/helpers";
@@ -20,7 +20,6 @@ import {
   runFinding,
   photoRunImage,
 } from "~/server/db/schema";
-import { updateImageProcessingSettings } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import { productionPhotoImportCommitPorts } from "~/server/domains/photo-import/repo/photo-import-commit";
 import { getRunByShortcode } from "~/server/domains/run/repo/run";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
@@ -45,16 +44,6 @@ import {
 
 describe("photo import finalize", () => {
   const ctx = withTestDb();
-
-  beforeEach(async () => {
-    // A finalized image is immediately UPLOADED and processing-eligible; keep
-    // the shared wakeup queue from actually leasing and running a job inline
-    // during the test.
-    await updateImageProcessingSettings(ctx.db, {
-      enabled: false,
-      paused: true,
-    });
-  });
 
   const createMember = () =>
     insertWithShortcode(ctx.db, "ledgerParty", {

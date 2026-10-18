@@ -61,13 +61,12 @@ export const reportSlots = [
   "purchase.project-allocation",
   "purchase.financial-settlement",
   "expense.settlement",
-  // A Run's detail: progress, approvals, findings, transcript, log, AI usage and changes.
+  // A Run's detail: progress, findings, transcript, log, AI usage and changes.
   "run.live-progress",
   "run.import-stats",
   "run.import-progress-live",
   "run.import-progress-stopped",
   "run.import-purchases",
-  "run.import-approvals",
   "run.import-findings",
   "run.import-targets",
   "run.import-prepared-orders",
@@ -258,8 +257,6 @@ export const reportCommandRequest = z.discriminatedUnion("kind", [
     kind: z.literal("run-control"),
     runId: runShortcode,
     action: runControlAction,
-    operationId: z.string().min(1).nullable(),
-    approvalId: z.string().min(1).nullable(),
   }),
   z.object({
     kind: z.literal("resolve-finding"),

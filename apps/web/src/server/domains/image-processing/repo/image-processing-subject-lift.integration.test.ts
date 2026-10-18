@@ -1,13 +1,12 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { imageProcessingJob } from "~/server/db/image-processing-schema";
 import { image } from "~/server/db/schema";
 import { prepareCompanionImageCommand } from "~/server/domains/image-processing/service/dispatch";
-import { updateImageProcessingSettings } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 
 import {
@@ -21,12 +20,6 @@ import {
 // uncertain/negative. Apple, rather than a cloud classifier, decides whether a subject exists.
 describe("independent Apple subject lift", () => {
   const ctx = withTestDb();
-  beforeEach(async () => {
-    await updateImageProcessingSettings(ctx.db, {
-      enabled: false,
-      paused: false,
-    });
-  });
   it.each([null, "review", "ineligible"] as const)(
     "prepares a subject-lift command when cloud eligibility is %s",
     async (eligibility) => {

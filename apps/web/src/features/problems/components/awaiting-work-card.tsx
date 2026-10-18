@@ -58,16 +58,7 @@ const LINES: ReadonlyArray<{
   },
 ];
 
-/**
- * Derived work that is waiting on a queue message that may never arrive.
- *
- * These counts are read from the source rows themselves — a null totals stamp,
- * a text hash that no vector matches, a PENDING upload — so they are live
- * truth, not a job ledger's opinion. Publication after a commit is best-effort
- * by design; this card is the visible backstop, and "Settle now" republishes
- * exactly what the counts describe. It never waits for completion: the counts
- * shrink as the queue lands, and the nightly assertion reports if they don't.
- */
+/** Live diagnostics for work that app-open recovery and daily maintenance repair. */
 export interface AwaitingWorkOperations {
   awaitingWork: typeof maintenance.awaitingWork.queryOptions;
   settleAwaitingWork: typeof maintenance.settleAwaitingWork.mutationOptions;

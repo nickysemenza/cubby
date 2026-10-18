@@ -91,8 +91,6 @@ enum DetailSlotRegistry {
             return runReportSlot(.run_importProgressStopped, row, liveness: false)
         case .runImportPurchases:
             return runReportSlot(.run_importPurchases, row)
-        case .runImportApprovals:
-            return runReportSlot(.run_importApprovals, row)
         case .runImportFindings:
             return runReportSlot(.run_importFindings, row)
         case .runImportTargets:
@@ -213,7 +211,7 @@ private struct ProductJourneySummaryView: View {
 }
 
 /// `run.import-controls` for a paused import: the Run is paused, and web holds the controls that
-/// resume or stop it. Approval pauses are answered in `run.import-approvals` instead.
+/// resume or stop it.
 private struct RunPausedHandoff: View {
     static let pausedStatuses: Set<String> = ["paused_auth", "paused_offline"]
 

@@ -47,7 +47,6 @@ import {
   run as runTable,
   session,
 } from "~/server/db/schema";
-import { updateImageProcessingSettings } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import { productionPhotoImportCommitPorts } from "~/server/domains/photo-import/repo/photo-import-commit";
 import {
   approvePhotoGroupProposals,
@@ -241,10 +240,6 @@ describe("current purchase-agent system boundaries", () => {
         storageStatus: "unverified",
       },
     );
-    await updateImageProcessingSettings(ctx.db, {
-      enabled: false,
-      paused: true,
-    });
     await finalizePhotoRun(
       ctx.db,
       {

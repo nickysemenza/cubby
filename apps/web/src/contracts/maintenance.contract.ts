@@ -2,7 +2,6 @@ import {
   imageProcessingMaintenanceOutput,
   imageProcessingBatchInput,
   imageProcessingBatchOutput,
-  imageProcessingSettings,
   awaitingWorkSchema,
   settleAwaitingWorkOutSchema,
   repairImageDimensionsInputSchema,
@@ -41,12 +40,6 @@ export const maintenanceContract = defineContract("maintenance", {
     input: z.undefined(),
     output: imageProcessingMaintenanceOutput,
     cache: { tags: [["maintenance"], ["image"]] },
-  }),
-  configureImageProcessing: mutation({
-    mcp: { omit: "operator_maintenance" },
-    input: imageProcessingSettings,
-    output: imageProcessingSettings,
-    invalidates: ["maintenance"],
   }),
   // Live operational state.
   awaitingWork: query({

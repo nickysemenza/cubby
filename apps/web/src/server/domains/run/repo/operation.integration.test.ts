@@ -11,16 +11,12 @@ import {
   commitPurchaseImport,
   preparePurchaseImport,
 } from "~/server/domains/purchase-import/operations/import-orders";
-import { controlRun } from "~/server/domains/purchase-import/repo/run-service";
 import { startAgentRunFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
 import { insertDebugEventOperations } from "~/server/domains/run/repo/run-operation";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import { McpOperationContext } from "~/server/mcp/operation-context";
-import {
-  executePurchaseAgentMutation,
-  purchaseAgentTargetFingerprint,
-} from "~/server/mcp/purchase-agent-protocol";
+import { executePurchaseAgentMutation } from "~/server/mcp/purchase-agent-protocol";
 import type { ToolExtra } from "~/server/mcp/tools/tool-registration";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
@@ -220,10 +216,7 @@ describe("RunOperation rows written by earlier code", () => {
     };
     const args = { toolName, params };
     const argsFingerprint = await sha256Hex(JSON.stringify(args));
-    const targetFingerprint = await purchaseAgentTargetFingerprint(
-      ctx.db,
-      args,
-    );
+    const targetFingerprint = "synthetic-predecessor-target";
     const operationId = "mcp-call:restore";
     const approvalProposal = {
       operationKind: `mcp:${toolName}`,
@@ -252,21 +245,11 @@ describe("RunOperation rows written by earlier code", () => {
         state: "pending",
       });
 
-    const approved = await controlRun(ctx.db, ctx.actor, {
-      runPublicId: run.shortcode,
-      action: decision,
-      operationId,
-    });
-    expect(approved).toMatchObject({
-      decision: decision === "approve" ? "approved" : "rejected",
-    });
-    if (decision === "approve") {
-      if (!("approvalId" in approved))
-        throw new Error("Synthetic approval returned another control outcome");
-      expect(await stored(run.id, operationId)).toMatchObject({
-        state: "paused_approval",
-        result: { approvalProposal, approvalId: approved.approvalId },
-      });
+    if (decision === "reject") {
+      await getDb(ctx.db)
+        .update(runOperation)
+        .set({ state: "failed", error: "Rejected by member" })
+        .where(eq(runOperation.runId, run.id));
     }
 
     let executions = 0;
@@ -299,7 +282,7 @@ describe("RunOperation rows written by earlier code", () => {
     };
   };
 
-  it("approves and executes a paused MCP mutation proposed by earlier code", async () => {
+  it("executes a paused MCP mutation proposed by earlier code without a new approval", async () => {
     const { run, operationId, execute, executions } = await seedMcpMutation();
     await expect(execute()).resolves.toEqual({ accepted: true });
     await expect(execute()).resolves.toEqual({ accepted: true });
@@ -324,7 +307,7 @@ describe("RunOperation rows written by earlier code", () => {
     expect(await stored(run.id, operationId)).toEqual(before);
   });
 
-  it("locks the Run before the operation when executing an approved mutation", async () => {
+  it("locks the Run before the operation when executing a historical paused mutation", async () => {
     const { run, operationId, execute, executions } = await seedMcpMutation();
     let pending: Promise<unknown> | undefined;
     // A transaction holding the Run lock stands in for `controlRun`, which

@@ -184,19 +184,6 @@ const runDetail = z
     }),
     progress: z.array(runProgress),
     latestProgress: runProgress.nullable(),
-    approvals: z.array(
-      z.object({
-        id: z.string().min(1),
-        operationId: z.string().min(1),
-        operationKind: z.string().min(1),
-        args: z.json(),
-        state: z.string().min(1),
-        grantedAt: z.iso.datetime().nullable(),
-        consumedAt: z.iso.datetime().nullable(),
-        invalidatedAt: z.iso.datetime().nullable(),
-        rejectedAt: z.iso.datetime().nullable(),
-      }),
-    ),
   })
   .extend(runOut.pick({ parentRunId: true, cause: true, attempt: true }).shape);
 export type RunDetail = z.infer<typeof runDetail>;
@@ -242,8 +229,6 @@ const merchantRules = z.object({
 const runControlInput = z.object({
   runId: runShortcode,
   action: runControlAction,
-  operationId: z.string().min(1).optional(),
-  approvalId: z.string().min(1).optional(),
 });
 const runControlOutput = z.object({
   run: runDetail,
@@ -409,7 +394,7 @@ export const runContract = defineContract("run", {
       twin: "run.lifecycle",
       note: "MCP reserves `action`, so agents name it controlAction",
     },
-    native: "Approve, reject, stop or retry a Run from its detail sections",
+    native: "Stop, resume or retry a Run from its detail sections",
     input: runControlInput,
     output: runControlOutput,
     invalidates: ["runOnly"],

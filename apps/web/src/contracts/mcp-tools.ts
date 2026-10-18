@@ -989,7 +989,7 @@ export const MCP_TOOLS = defineMcpTools({
         openWorld: true,
         strict: true,
         description:
-          "Control an owned Run with controlAction: cancel stops active work; retry/restart preserve the previous attempt and return its admitted successor; approve/reject (with approvalId) settle a pending approval; pause, resume, escalate_sol, retry_dispatch, abort, upload_evidence and no_evidence_available follow the Run page. Unsupported states refuse without changing the Run.",
+          "Control an owned Run with controlAction: cancel stops active work; retry/restart preserve the previous attempt and return its admitted successor; pause, resume, escalate_sol, retry_dispatch, abort, upload_evidence and no_evidence_available follow the Run page. Unsupported states refuse without changing the Run.",
       }),
       set_mail_import: mcpAction({
         op: runContract.ops.setMailImport,

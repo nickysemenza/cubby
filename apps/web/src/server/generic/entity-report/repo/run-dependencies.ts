@@ -160,7 +160,6 @@ export const RUN_REPORTS = {
   "run.import-progress-live": importSlot("run.import-progress-live"),
   "run.import-progress-stopped": importSlot("run.import-progress-stopped"),
   "run.import-purchases": importSlot("run.import-purchases"),
-  "run.import-approvals": importSlot("run.import-approvals"),
   "run.import-findings": importSlot("run.import-findings"),
   "run.import-targets": importSlot("run.import-targets"),
   "run.import-prepared-orders": importSlot("run.import-prepared-orders"),

@@ -168,10 +168,6 @@ export type SearchIndexRepairEvent = z.infer<
   typeof searchIndexRepairEventSchema
 >;
 
-export const imageProcessingSettings = z.object({
-  enabled: z.boolean(),
-  paused: z.boolean(),
-});
 export const imageProcessingMaintenanceCounts = z.object({
   current: z.number().int().nonnegative(),
   pending: z.number().int().nonnegative(),
@@ -182,7 +178,6 @@ export const imageProcessingMaintenanceCounts = z.object({
   remaining: z.number().int().nonnegative(),
 });
 export const imageProcessingMaintenanceOutput = z.object({
-  settings: imageProcessingSettings,
   description: imageProcessingMaintenanceCounts,
   cutout: imageProcessingMaintenanceCounts,
 });
@@ -195,6 +190,6 @@ export const imageProcessingBatchInput = z.object({
 export const imageProcessingBatchOutput = z.object({
   submissionId: z.string().nullable().optional(),
   scheduled: z.number().int().nonnegative(),
-  /** True when processing is paused, which blocks every backfill. */
+  /** Processing is always active; retained for native result decoding. */
   paused: z.boolean(),
 });

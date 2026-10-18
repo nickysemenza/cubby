@@ -17,7 +17,6 @@ import {
   proposePhotoGroups,
 } from "~/server/domains/photo-import/repo/run/proposals";
 import { listImageSightings } from "~/server/domains/image/repo/image";
-import { updateImageProcessingSettings } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import {
   completeDescribeImageJobs,
   listDescribeImageJobs,
@@ -135,7 +134,7 @@ export async function createSimulatorInputJourney(input: {
       ],
     }),
   );
-  await updateImageProcessingSettings(db, { enabled: true, paused: false });
+
   const inputs = path.join(input.artifacts, "inputs");
   mkdirSync(inputs, { recursive: true });
   const csv = path.join(inputs, "synthetic-input-statement.csv");

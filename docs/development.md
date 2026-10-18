@@ -348,9 +348,15 @@ native PostgreSQL installation remain owned by their existing runners.
   `cubby-background`. There is no execution table and no dead-letter queue.
   - Every handler re-checks its row's own freshness marker, so redelivery is a
     no-op.
-  - A lost wakeup is repaired on read, or with the "Settle now" button on the
-    Problems page.
-  - The daily cron only _asserts_ that the awaiting counts are zero.
+  - App-open recovery and daily maintenance republish stale recipe totals,
+    configured search embeddings, and image metadata work, and cull uploads
+    abandoned for more than a day. Embeddings and metadata use bounded pages.
+    Problems retains live counts and manual recovery for diagnosis.
+  - Image processing always accepts uploads and queued work; historical
+    enabled/paused settings are ignored. Device availability and capability
+    still determine which companion work can execute.
+  - The daily cron reports remaining backlog after requesting recovery;
+    queued work completes asynchronously.
 - Inventory and location valuation are computed on every read. Search
   projections are written inside the entity write transaction.
 - Secrets are set with `wrangler secret put NAME --name cubby`. Production is the only deployed

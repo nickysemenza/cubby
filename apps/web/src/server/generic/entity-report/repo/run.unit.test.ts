@@ -60,7 +60,6 @@ const baseRun: RunDetail = {
   },
   progress: [],
   latestProgress: null,
-  approvals: [],
 };
 
 const run = (overrides: Partial<RunDetail> = {}): RunDetail => ({
@@ -355,86 +354,6 @@ describe("import report blocks", () => {
       );
       expect(notes(blocks)).toEqual([
         "No progress updates have been recorded.",
-      ]);
-    });
-  });
-
-  describe("approvals", () => {
-    const approval = {
-      id: "approval-1",
-      operationId: "op-1",
-      operationKind: "product_overwrite",
-      args: { productId: "PRD-4K7M" },
-      state: "pending",
-      grantedAt: null,
-      consumedAt: null,
-      invalidatedAt: null,
-      rejectedAt: null,
-    };
-
-    it("offers approve and reject for a pending approval with the exact ids and a confirmation", () => {
-      const blocks = importReportBlocks(
-        "run.import-approvals",
-        run({ status: "paused_approval", approvals: [approval] }),
-      );
-      const [pending] = recordsOf(blocks).rows;
-      expect(pending?.detail?.label).toBe("Proposed arguments");
-      expect(JSON.parse(pending?.detail?.text ?? "null")).toEqual({
-        productId: "PRD-4K7M",
-      });
-      expect(pending?.commands?.map((action) => action.label)).toEqual([
-        "Approve import proposal",
-        "Reject import proposal",
-      ]);
-      expect(pending?.commands?.map((action) => action.request)).toEqual([
-        {
-          kind: "run-control",
-          runId: RUN_ID,
-          action: "approve",
-          operationId: "op-1",
-          approvalId: "approval-1",
-        },
-        {
-          kind: "run-control",
-          runId: RUN_ID,
-          action: "reject",
-          operationId: "op-1",
-          approvalId: "approval-1",
-        },
-      ]);
-      // Neither decision may run on a stray tap.
-      for (const action of pending?.commands ?? [])
-        expect(action.confirm).toBeTruthy();
-      expect(pending?.lines).toContainEqual({
-        text: "Awaiting explicit approval",
-        tone: "warning",
-      });
-    });
-
-    it("offers nothing for a decided approval", () => {
-      const blocks = importReportBlocks(
-        "run.import-approvals",
-        run({
-          approvals: [
-            {
-              ...approval,
-              state: "granted",
-              grantedAt: "2026-09-20T16:02:00.000Z",
-            },
-            {
-              ...approval,
-              id: "approval-2",
-              state: "rejected",
-              rejectedAt: "2026-09-20T16:02:10.000Z",
-            },
-          ],
-        }),
-      );
-      const rows = recordsOf(blocks).rows;
-      expect(rows.flatMap((r) => r.commands)).toEqual([]);
-      expect(rows.map((r) => [r.lines?.[0]?.text, r.at])).toEqual([
-        ["Granted", "2026-09-20T16:02:00.000Z"],
-        ["Rejected", "2026-09-20T16:02:10.000Z"],
       ]);
     });
   });
@@ -942,8 +861,6 @@ describe("liveProgressBlocks", () => {
         kind: "run-control",
         runId: RUN_ID,
         action: "cancel",
-        operationId: null,
-        approvalId: null,
       },
     ]);
     expect(

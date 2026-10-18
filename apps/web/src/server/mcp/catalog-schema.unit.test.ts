@@ -618,11 +618,9 @@ describe("MCP catalog schemas", () => {
       "entity_read.entityId",
       "entity_read.recordIds",
       "spending_classification_write.entityId",
-      // run.lifecycle settles a Run's pending operation or approval by its
-      // handle; commit_prepared carries the same opaque import keys as
+      // commit_prepared carries the same opaque operation and import keys as
       // purchase_import.commit; resolve_finding takes the finding row id.
       "run.operationId",
-      "run.approvalId",
       "run.prepareOperationId",
       "run.resolutions[].stableOrderId",
       "run.resolutions[].stableLineId",
