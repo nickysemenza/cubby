@@ -4,6 +4,7 @@ import {
   type LedgerPartyId,
   parseEntityId,
   type ProductId,
+  type RunId,
   type VendorId,
   runEntityId,
 } from "@cubby/schemas/identifiers";
@@ -83,6 +84,7 @@ import { sourceOrderKey } from "~/server/domains/purchase-import/repo/source-ord
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { executeAtomicOperation } from "~/server/domains/run/repo/operation";
 import { readOperation } from "~/server/domains/run/repo/run-operation";
+import { createAppError } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { ensureMailVendorAccount } from "../repo/gmail/mail-account";
@@ -559,6 +561,8 @@ export async function preparePurchaseImport(
     async (ledger) => {
       const recorded = await ledger.replay(getDb(db), preparePurchaseImportOut);
       if (recorded) return recorded;
+      const prior = await priorPreparation(db, scope.runId, input.orders);
+      if (prior) return prior;
       // Invalid keys or altered originals never reach paid source judgments.
       // The writer repeats these checks under its transaction after admission.
       if (scope.purpose === "mail_import")
@@ -574,7 +578,7 @@ export async function preparePurchaseImport(
           ? await prepareMailSourceAdmissions(
               db,
               scope.runId,
-              input.orders.flatMap(({ source }) => {
+              input.orders.flatMap(({ source, via }) => {
                 const { mailboxId, messageId } = parseMailSourceKey(
                   source.externalKey,
                 );
@@ -582,7 +586,7 @@ export async function preparePurchaseImport(
                   source.kind === "mail_attachment") &&
                   mailboxId &&
                   messageId
-                  ? [{ mailboxId, messageId }]
+                  ? [{ mailboxId, messageId, via }]
                   : [];
               }),
               actor,
@@ -807,6 +811,61 @@ export async function preparePurchaseImport(
         return result;
       });
     },
+  );
+}
+
+/**
+ * A preparation an earlier prepare operation of this Run already recorded for
+ * these items, such as a retried coordinator's repeat under a new operation id.
+ * Identical orders read back that preparation (commit names its operation id);
+ * any other overlap with prepared items is a conflict naming it.
+ */
+async function priorPreparation(
+  db: Database,
+  runId: RunId,
+  orders: PreparePurchaseImportInput["orders"],
+) {
+  const database = getDb(db);
+  const prepared = await database
+    .select({
+      prepareOperationId: importPreparedOrder.prepareOperationId,
+      itemOperationId: importPreparedOrder.itemOperationId,
+    })
+    .from(importPreparedOrder)
+    .where(
+      and(
+        eq(importPreparedOrder.runId, runId),
+        inArray(
+          importPreparedOrder.itemOperationId,
+          orders.map((order) => order.itemOperationId),
+        ),
+      ),
+    );
+  const [first] = prepared;
+  if (!first) return undefined;
+  const operation = await readOperation(database, {
+    runId,
+    operationId: first.prepareOperationId,
+  });
+  if (
+    prepared.length === orders.length &&
+    prepared.every(
+      (row) => row.prepareOperationId === first.prepareOperationId,
+    ) &&
+    operation?.state === "completed" &&
+    operation.inputFingerprint === (await sha256Hex(JSON.stringify(orders)))
+  )
+    return preparePurchaseImportOut.parse(operation.result);
+  throw createAppError(
+    "PURCHASE_IMPORT_ITEM_PREPARED",
+    `This Run already prepared ${prepared
+      .map(
+        (row) =>
+          `itemOperationId ${row.itemOperationId} under prepare operation ${row.prepareOperationId}`,
+      )
+      .join(
+        ", ",
+      )} (${operation?.state ?? "unrecorded"}) with different orders. Commit that preparation by its prepareOperationId, or prepare changed evidence under new itemOperationIds.`,
   );
 }
 

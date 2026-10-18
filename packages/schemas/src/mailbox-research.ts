@@ -229,6 +229,18 @@ export const mailMessageRef = z.object({
 export type MailMessageRef = z.infer<typeof mailMessageRef>;
 
 /**
+ * Retained Emails linking a supporting original to one a Mail import Run
+ * admitted, judged pairwise along the path.
+ */
+export const mailAdmissionPath = z
+  .array(mailMessageRef)
+  .min(1)
+  .max(3)
+  .describe(
+    "For an Email this Run has not admitted: the retained Emails in its mailbox that connect it to one the Run admitted, nearest the admitted Email first. Each must share an order, tracking or invoice identifier with the next (a shipping Email tying an admitted carrier notice's tracking number to this order number). Every Email on the path joins the Run as a supporting original.",
+  );
+
+/**
  * Evidence omissions in Mail triage's bounded view, supplied to the decision
  * model and exposed in previews without overriding its definite choice.
  */
@@ -512,6 +524,7 @@ export const mailResolveDisposition = z.discriminatedUnion("kind", [
         ),
       event: mailEvent,
       settlement: mailSettlementReview.optional(),
+      via: mailAdmissionPath.optional(),
     })
     .describe(
       "The Email records this lifecycle event of existing Purchases. Writes no Expenses.",

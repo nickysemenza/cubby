@@ -9,7 +9,10 @@
  * order; a vendor's direct mail to the mailbox owner's own address is
  * refused because headers-only evidence leaves the model uncertain, or one
  * the model confidently attributes to a third party, or one too large for the
- * model to read, is imported anyway.
+ * model to read, is imported anyway; a refused admission surfaces as a server
+ * error instead of a client conflict; an order traced from an admitted carrier
+ * notice through a shipping Email that ties tracking to the order number has
+ * no admission path.
  * Deterministic original checks precede all admission judgments.
  */
 import type { ActorContext } from "@cubby/schemas/context";
@@ -71,6 +74,39 @@ function decisions(answers: Answers) {
         selection: {
           type: "choice",
           choice,
+          confidence: 0.97,
+          probabilities: Object.fromEntries(
+            [0, 1, 2].map((option) => [
+              `c${option}`,
+              option === index ? 0.97 : 0.015,
+            ]),
+          ),
+        },
+      },
+    };
+  });
+}
+
+const identifiers = (value: unknown) =>
+  new Set(JSON.stringify(value).match(/\b(?:TRK|SYN)-\d+\b/gu) ?? []);
+
+/** Same purchase exactly when the pair shares an order or tracking identifier. */
+function sharedIdentifierDecisions() {
+  return vi.fn<DecisionPort>(async (input) => {
+    const state = JSON.parse(input.state);
+    const index =
+      "admitted" in state
+        ? [...identifiers(state.admitted)].some((id) =>
+            identifiers(state.candidate).has(id),
+          )
+          ? 0
+          : 2
+        : 0;
+    return {
+      answers: {
+        selection: {
+          type: "choice",
+          choice: `c${index}`,
           confidence: 0.97,
           probabilities: Object.fromEntries(
             [0, 1, 2].map((option) => [
@@ -172,6 +208,7 @@ describe("Mail import source admission", () => {
     vendorId: string,
     mail: RetainedMail,
     orderId: string,
+    via?: readonly RetainedMail[],
   ) {
     return preparePurchaseImportInput.parse({
       _runExecution: {
@@ -185,6 +222,10 @@ describe("Mail import source admission", () => {
           itemOperationId: `item:${key}`,
           vendorId,
           source: mailSource(mail),
+          via: via?.map(({ mailboxId, messageId }) => ({
+            mailboxId,
+            messageId,
+          })),
           evidenceChecksum: mail.rawChecksum,
           extractionRevision: "synthetic@1",
           extraction: {
@@ -498,11 +539,95 @@ describe("Mail import source admission", () => {
           actor,
           decisions(answers),
         ),
-      ).rejects.toThrow(/same purchase|attribute/);
+      ).rejects.toMatchObject({
+        code: "CONFLICT",
+        reason: "MAIL_SOURCE_ADMISSION_REFUSED",
+        message: expect.stringMatching(/same purchase|attribute/),
+      });
       expect(await rosterOf(id)).toEqual([shipment.id]);
       expect(await emailRow(other)).toEqual({ runId: null, status: "pending" });
     },
   );
+
+  it("admits an order traced from a carrier notice through the shipping Email naming both identifiers", async () => {
+    const { party, vendor } = await world();
+    const notice = await retain(
+      party.id,
+      "carrier-notice",
+      "Expected delivery today for tracking TRK-12",
+    );
+    const bridge = await retain(
+      party.id,
+      "fulfilment-notice",
+      "Order SYN-12 shipped with tracking TRK-12",
+    );
+    const original = await retain(
+      party.id,
+      "traced-original",
+      "Order SYN-12 confirmed: Synthetic kettle USD 24.00",
+    );
+    const { id, actor } = await mailRun(party, [notice], "discovery");
+    const port = sharedIdentifierDecisions();
+    await expect(
+      preparePurchaseImport(
+        ctx.db,
+        prepareInput(id, "traced", vendor.shortcode, original, "SYN-12"),
+        actor,
+        port,
+      ),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      reason: "MAIL_SOURCE_ADMISSION_REFUSED",
+      message: expect.stringMatching(/same purchase.*via/),
+    });
+    expect(await rosterOf(id)).toEqual([notice.id]);
+
+    const prepared = await preparePurchaseImport(
+      ctx.db,
+      prepareInput(id, "traced", vendor.shortcode, original, "SYN-12", [
+        bridge,
+      ]),
+      actor,
+      port,
+    );
+    expect(prepared.orders).toHaveLength(1);
+    expect(await rosterOf(id)).toEqual([notice.id, bridge.id, original.id]);
+    expect(await emailRow(bridge)).toEqual({
+      runId: id,
+      status: "researching",
+    });
+  });
+
+  it("refuses a via path whose link shares no identifier, admitting none of it", async () => {
+    const { party, vendor } = await world();
+    const notice = await retain(party.id, "notice-13", "Tracking TRK-13");
+    const unrelated = await retain(
+      party.id,
+      "bridge-13",
+      "Order SYN-14 shipped with tracking TRK-13",
+    );
+    const original = await retain(party.id, "original-13", "Order SYN-13");
+    const { id, actor } = await mailRun(party, [notice], "discovery");
+    await expect(
+      preparePurchaseImport(
+        ctx.db,
+        prepareInput(id, "broken", vendor.shortcode, original, "SYN-13", [
+          unrelated,
+        ]),
+        actor,
+        sharedIdentifierDecisions(),
+      ),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      reason: "MAIL_SOURCE_ADMISSION_REFUSED",
+      message: expect.stringContaining("bridge-13"),
+    });
+    expect(await rosterOf(id)).toEqual([notice.id]);
+    expect(await emailRow(unrelated)).toEqual({
+      runId: null,
+      status: "pending",
+    });
+  });
 
   it.each([
     ["original first", ["original", "forwarded"]],

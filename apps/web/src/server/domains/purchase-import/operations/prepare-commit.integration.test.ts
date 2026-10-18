@@ -346,6 +346,44 @@ describe("caller-driven purchase import", () => {
     ).resolves.toEqual(prepared);
   });
 
+  // A retried coordinator re-prepares under a new operation id: identical
+  // items read back their preparation instead of a unique-index 500.
+  it("reads back a preparation a new prepare operation repeats and refuses changed items as a conflict", async () => {
+    const { prepareInput, prepared } = await importConfirmation();
+    const repeat = {
+      ...prepareInput,
+      _runExecution: {
+        ...prepareInput._runExecution,
+        run: prepared.runId,
+        operationId: "prepare:syn-100-retry",
+      },
+    };
+    await expect(
+      preparePurchaseImport(ctx.db, repeat, ctx.actor),
+    ).resolves.toEqual(prepared);
+
+    await expect(
+      preparePurchaseImport(
+        ctx.db,
+        {
+          ...repeat,
+          _runExecution: {
+            ...repeat._runExecution,
+            operationId: "prepare:syn-100-changed",
+          },
+          orders: [
+            { ...prepareInput.orders[0]!, extractionRevision: "synthetic@2" },
+          ],
+        },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      reason: "PURCHASE_IMPORT_ITEM_PREPARED",
+      message: expect.stringContaining("prepare:syn-100"),
+    });
+  });
+
   it("links a shipment Email to an existing Purchase without new Expenses, idempotently", async () => {
     const { party, committed } = await importConfirmation();
     const purchaseId = committed.items[0]!.purchaseId!;

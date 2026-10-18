@@ -831,7 +831,7 @@ export async function resolveMail(
       admissions = await prepareMailSourceAdmissions(
         db,
         importRunId,
-        [input],
+        [{ ...input, via: disposition.via }],
         actor,
         decisionPort,
       );
