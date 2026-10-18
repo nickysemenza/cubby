@@ -23,7 +23,10 @@ import {
 import { suggestFinancialTransferPairs } from "~/server/domains/financial-transaction/repo/financial-transfer-pairing";
 import { getProductStockRows } from "~/server/domains/inventory/repo/scan";
 import { suggestProjectTools } from "~/server/domains/project/repo/tools";
-import { listPurchaseSettlementCandidates } from "~/server/domains/purchase/repo/purchase-settlement-candidates";
+import {
+  listPurchaseSettlementCandidates,
+  listPurchasesSettlementCandidates,
+} from "~/server/domains/purchase/repo/purchase-settlement-candidates";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
@@ -159,6 +162,7 @@ export async function connectionRecord(
 /** Dependency payloads several unlocked captures can share. */
 export type PreparedConnectionBases = {
   expenseProject: Map<string, unknown>;
+  settlementCandidates: Map<string, unknown>;
 };
 
 /**
@@ -170,14 +174,27 @@ export async function prepareConnectionBases(
   db: Database,
   raws: readonly ConnectionCandidate[],
 ): Promise<PreparedConnectionBases> {
-  const expenses = raws
-    .map((raw) => connectionCandidate.parse(raw))
+  const candidates = raws.map((raw) => connectionCandidate.parse(raw));
+  const expenses = candidates
     .filter((candidate) => candidate.relation === "expense-project")
     .map((candidate) =>
       parseShortcodeFor("expense", candidate.source.entityId),
     );
+  const purchases = candidates
+    .filter(
+      (candidate) =>
+        candidate.relation === "transaction-purchase" ||
+        candidate.relation === "transaction-refund",
+    )
+    .map((candidate) =>
+      parseShortcodeFor("purchase", candidate.target.entityId),
+    );
   return {
     expenseProject: await expenseProjectRecommendationContexts(db, expenses),
+    settlementCandidates: await listPurchasesSettlementCandidates(
+      db,
+      purchases,
+    ),
   };
 }
 
@@ -239,12 +256,16 @@ export async function captureConnectionBasis(
       );
       break;
     case "transaction-purchase":
-    case "transaction-refund":
+    case "transaction-refund": {
+      const purchaseId = parseShortcodeFor(
+        "purchase",
+        candidate.target.entityId,
+      );
       dependencies = snapshotJson({
-        candidates: await listPurchaseSettlementCandidates(
-          db,
-          parseShortcodeFor("purchase", candidate.target.entityId),
-        ),
+        candidates:
+          !lock && prepared?.settlementCandidates.has(purchaseId)
+            ? prepared.settlementCandidates.get(purchaseId)
+            : await listPurchaseSettlementCandidates(db, purchaseId),
         allocations: await getDb(db)
           .select()
           .from(financialTransactionAllocation)
@@ -260,6 +281,7 @@ export async function captureConnectionBasis(
           .orderBy(financialTransactionAllocation.id),
       });
       break;
+    }
     case "transaction-transfer":
       dependencies = snapshotJson(
         await suggestFinancialTransferPairs(db, {
