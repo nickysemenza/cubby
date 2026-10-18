@@ -22,21 +22,20 @@ const fundingPartyCoveringSql = (account: SQL, from: SQL, to: SQL) => sql`(
  */
 const POSTING_LAG_DAYS = 14;
 
+/**
+ * The days a settlement row's charge may fall on: its charge date, else the
+ * posting date and the lag before it. A dated membership must cover them all.
+ */
+export const paymentDateWindowSql = (payment: SQL) => ({
+  from: sql`coalesce(${payment}."transactionDate", ${payment}."postedDate" - ${sql.raw(String(POSTING_LAG_DAYS))})`,
+  to: sql`coalesce(${payment}."transactionDate", ${payment}."postedDate")`,
+});
+
 /** Funding party for a settlement row, by charge date, else a boundary-safe posting date. */
-export const paymentFundingPartySql = (account: SQL, payment: SQL) => sql`(
-  CASE WHEN ${payment}."transactionDate" IS NOT NULL
-    THEN ${fundingPartyCoveringSql(
-      account,
-      sql`${payment}."transactionDate"`,
-      sql`${payment}."transactionDate"`,
-    )}
-    ELSE ${fundingPartyCoveringSql(
-      account,
-      sql`${payment}."postedDate" - ${sql.raw(String(POSTING_LAG_DAYS))}`,
-      sql`${payment}."postedDate"`,
-    )}
-  END
-)`;
+export const paymentFundingPartySql = (account: SQL, payment: SQL) => {
+  const { from, to } = paymentDateWindowSql(payment);
+  return fundingPartyCoveringSql(account, from, to);
+};
 
 /** Linked detail rows preserve dated membership order on every client. */
 // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- jsonb_build_object keys describe the DisplayItem wire shape, not enum values.

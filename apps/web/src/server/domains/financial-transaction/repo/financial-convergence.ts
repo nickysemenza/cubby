@@ -33,7 +33,10 @@ import {
   vendor,
 } from "~/server/db/schema";
 import { emailPurchaseEvidenceSql } from "~/server/domains/email/repo/email-purchase-links";
-import { paymentFundingPartySql } from "~/server/domains/financial-account/repo/funding-sql";
+import {
+  paymentDateWindowSql,
+  paymentFundingPartySql,
+} from "~/server/domains/financial-account/repo/funding-sql";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
   assertMailFinancialEvidenceCurrent,
@@ -388,6 +391,7 @@ async function runFinancialConvergence(
       // is known) is the household or the member, and the member owns the
       // account or holds the card: a household-funded card owned by another
       // member's party is still its cardholder's to settle.
+      const window = paymentDateWindowSql(sql`payment`);
       const accountAuthority = await tx.execute<{ authorized: boolean }>(sql`
       SELECT EXISTS (
         SELECT 1 FROM "FinancialAccount" a
@@ -404,8 +408,8 @@ async function runFinancialConvergence(
             OR EXISTS (
               SELECT 1 FROM jsonb_array_elements(a."authorizedUsers") period
               WHERE period->>'ledgerPartyId' = member.shortcode
-                AND (period->>'validFrom' IS NULL OR (period->>'validFrom')::date <= coalesce(payment."transactionDate", payment."postedDate"))
-                AND (period->>'validTo' IS NULL OR coalesce(payment."transactionDate", payment."postedDate") <= (period->>'validTo')::date)
+                AND (period->>'validFrom' IS NULL OR (period->>'validFrom')::date <= ${window.from})
+                AND (period->>'validTo' IS NULL OR ${window.to} <= (period->>'validTo')::date)
             )
           )
       ) AS authorized`);

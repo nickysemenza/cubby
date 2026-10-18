@@ -629,6 +629,29 @@ describe("Mail import source admission", () => {
     });
   });
 
+  // Repeating an Email made it its own predecessor, skipping the roster link.
+  it("refuses a via path that repeats an Email or names the source itself", async () => {
+    const { party, vendor } = await world();
+    const notice = await retain(party.id, "notice-15", "Tracking TRK-15");
+    const bridge = await retain(party.id, "bridge-15", "Order SYN-15 shipped");
+    const original = await retain(party.id, "original-15", "Order SYN-15");
+    const { id, actor } = await mailRun(party, [notice], "discovery");
+    for (const via of [[bridge, bridge], [original]])
+      await expect(
+        preparePurchaseImport(
+          ctx.db,
+          prepareInput(id, "repeat", vendor.shortcode, original, "SYN-15", via),
+          actor,
+          sharedIdentifierDecisions(),
+        ),
+      ).rejects.toMatchObject({
+        code: "CONFLICT",
+        reason: "MAIL_SOURCE_ADMISSION_REFUSED",
+        message: expect.stringContaining("more than once"),
+      });
+    expect(await rosterOf(id)).toEqual([notice.id]);
+  });
+
   it.each([
     ["original first", ["original", "forwarded"]],
     ["forwarded copy first", ["forwarded", "original"]],

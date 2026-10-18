@@ -177,6 +177,70 @@ describe("server verified financial convergence", () => {
     },
   );
 
+  // A posting date can trail the charge past the start of an authorization.
+  it("refuses an authorized user whose period does not cover a posting-date row's lag window", async () => {
+    const household = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Synthetic household",
+      kind: "household",
+    });
+    const holder = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Synthetic late user",
+      kind: "member",
+    });
+    await getDb(ctx.db)
+      .update(ledgerParty)
+      .set({ userId: ctx.actor.userId })
+      .where(eq(ledgerParty.shortcode, holder.output.id));
+    const owner = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Synthetic account owner",
+      kind: "member",
+    });
+    const account = await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic late card",
+      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      ledgerPartyId: owner.output.id,
+      primaryCardholderId: owner.output.id,
+      authorizedUsers: [
+        {
+          ledgerPartyId: holder.output.id,
+          validFrom: "2026-09-08",
+          validTo: null,
+        },
+      ],
+      fundingPeriods: [
+        {
+          ledgerPartyId: household.output.id,
+          validFrom: "2026-08-01",
+          validTo: null,
+        },
+      ],
+      provisional: false,
+    });
+    const transaction = await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      kind: "purchase",
+      amount: 25,
+      status: "posted",
+      transactionDate: null,
+      postedDate: "2026-09-10",
+      merchant: "Synthetic store",
+      sourceRefs: [
+        { source: "synthetic-bank", externalId: "synthetic-late-charge" },
+      ],
+      allocations: [],
+    });
+    expect(
+      await convergeFinancialTransaction(
+        ctx.db,
+        { transactionId: transaction.output.id },
+        ctx.actor,
+      ),
+    ).toMatchObject({
+      status: "review_required",
+      reason: expect.stringContaining("funding account"),
+    });
+  });
+
   it("still refuses a household-funded card the member neither owns nor holds", async () => {
     const household = await createRepoEntity(ctx, "ledgerParty", {
       name: "Synthetic household",

@@ -32,7 +32,7 @@ import {
 } from "drizzle-orm";
 import { z } from "zod";
 
-import type { Database } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import { getDb, withTransaction } from "~/server/db/helpers";
 import {
   auditLog,
@@ -484,7 +484,7 @@ const SETTLED_MAIL_STATUSES = new Set(["completed", "excluded", "blocked"]);
 
 /** Pi's latest recorded reason for each unresolved Email, by Email id. */
 async function unresolvedMailReasons(
-  tx: Parameters<Parameters<typeof withTransaction>[1]>[0],
+  tx: DrizzleTransaction,
   runId: string,
   emailIds: readonly string[],
 ) {

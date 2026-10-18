@@ -118,6 +118,12 @@ export async function prepareMailSourceAdmissions(
       path.push(bridge);
     }
     path.push(mail);
+    // A repeated Email would be judged against itself, skipping the roster link.
+    if (new Set(path.map(({ id }) => id)).size !== path.length)
+      throw createAppError(
+        "MAIL_SOURCE_ADMISSION_REFUSED",
+        `The via path for Email ${mail.messageId} names an Email more than once or names the Email itself; list each connecting Email once, nearest the admitted Email first.`,
+      );
     path.forEach((step, index) => {
       const before = path[index - 1];
       if (before && !previous.has(step.id)) previous.set(step.id, before);

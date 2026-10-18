@@ -25,7 +25,7 @@ import {
 } from "drizzle-orm";
 
 import { describeErrorCauses } from "~/lib/error-diagnostics";
-import type { Database } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import { account } from "~/server/db/auth.schema";
 import {
   databaseForTransaction,
@@ -180,7 +180,7 @@ const LEGACY_MAILBOX_PREFIX = "legacy:";
  * for historical ownership review stay as they are.
  */
 async function supersedeLegacyEmail(
-  tx: Parameters<Parameters<typeof withTransaction>[1]>[0],
+  tx: DrizzleTransaction,
   input: { ledgerPartyId: string; mailboxId: string; messageId: string },
 ) {
   if (input.mailboxId.startsWith(LEGACY_MAILBOX_PREFIX)) return;
@@ -194,7 +194,12 @@ async function supersedeLegacyEmail(
           parseEntityId("ledgerParty", input.ledgerPartyId),
         ),
         eq(emailTable.provider, "gmail"),
-        sql`starts_with(${emailTable.mailboxId}, ${LEGACY_MAILBOX_PREFIX})`,
+        // Migration 0025 wrote exactly `legacy:<ledgerPartyId>`; an exact key
+        // uses the mailbox/message index instead of scanning the party.
+        eq(
+          emailTable.mailboxId,
+          `${LEGACY_MAILBOX_PREFIX}${input.ledgerPartyId}`,
+        ),
         eq(emailTable.messageId, input.messageId),
         eq(emailTable.status, "pending"),
         isNull(emailTable.deletedAt),
