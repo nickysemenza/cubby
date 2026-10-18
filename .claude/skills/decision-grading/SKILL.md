@@ -101,7 +101,9 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
 2. Read the Email's Assessment history through `imports_read.mail_outcomes`
    and retain its Assessment handle and producer in session memory. Rule and
    coordinator outcomes are separate evidence; do not attribute a rule result
-   to the coordinator model. Historical outcomes stay immutable after retries.
+   to the coordinator model. Agent producer model is null until a causal settling
+   call receipt exists; latest Run-level usage cannot establish that attribution.
+   Historical outcomes stay immutable after retries.
 3. Before paid inference, show the sample size, chosen primary/escalation model,
    and the per-case eight-minute replay timeout. With the member's authorization,
    pass originals and frozen outcomes through `eval:mail-replay:stdin`, using

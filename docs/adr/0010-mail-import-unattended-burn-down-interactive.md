@@ -49,9 +49,13 @@ Assessment with its checksum, Run, producer and terminal disposition. Imported
 lines and totals freeze the actual Expense ledger, including credits; the total
 remains `SUM(Expense.cost)`. Linked outcomes freeze the actual targets' order and
 Vendor names; replay compares those identities across databases and reports missing
-identity as unavailable. Rules retain their revision; agent settlements retain
-the most recent successful coordinator model usage when available, otherwise the
-model remains unknown. Retries reuse the first producer and evidence. Feedback
+identity as unavailable. Rules retain their revision. The public writer has no
+causal model receipt, so agent outcome model attribution remains null. Never
+infer it from the latest Run usage: asynchronous telemetry or an earlier turn
+can name the wrong model after escalation or funding recovery. Evaluator reports
+show observed Run-level model usage separately, including parity cases; that is
+routing evidence rather than per-outcome producer attribution. Retries reuse
+the first producer and evidence. Feedback
 records history-only grades and never rewrites the ledger or Email disposition.
 
 The local Mail replay evaluator copies supplied retained originals into a fresh

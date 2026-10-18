@@ -4,13 +4,12 @@ import {
 } from "@cubby/schemas/assessment";
 import type { RunId } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, desc, eq, ne, inArray } from "drizzle-orm";
+import { and, eq, ne, inArray } from "drizzle-orm";
 import type { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
-  aiUsage,
   assessment,
   assessmentState,
   expense,
@@ -89,24 +88,11 @@ export async function publishMailImportOutcome(
     .where(eq(assessment.publicationKey, publicationKey))
     .limit(1);
   if (existing) return existing;
-  const [usage] = input.ruleRevision
-    ? []
-    : await getDb(db)
-        .select({ model: aiUsage.model })
-        .from(aiUsage)
-        .where(
-          and(
-            eq(aiUsage.runId, input.runId),
-            eq(aiUsage.feature, "purchase_import_agent"),
-            eq(aiUsage.status, "succeeded"),
-            notDeleted(aiUsage),
-          ),
-        )
-        .orderBy(desc(aiUsage.createdAt), desc(aiUsage.id))
-        .limit(1);
+  // Run-level usage can arrive asynchronously or name an earlier turn. Only
+  // a model receipt causally bound to this settlement may fill producer.model.
   const producer: AssessmentProducer = {
     kind: input.ruleRevision ? "rule" : "agent",
-    model: usage?.model ?? null,
+    model: null,
     revision: input.ruleRevision ?? null,
     runId: input.runId,
     evaluationId: null,
