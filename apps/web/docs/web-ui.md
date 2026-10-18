@@ -111,7 +111,7 @@ leaving readable space for secondary evidence and next actions; narrow container
 stack that evidence beneath the identity. A list whose rows carry several
 labelled values declares `columns`: its own `columns` ledger variant places each
 fact explicitly from inline custom properties, gives the identity a
-`minmax(12rem, 1fr)` track instead of the 16rem cap, and keeps its labels in
+`minmax(8rem, 1fr)` track instead of the 16rem cap, and keeps its labels in
 each row's `dt` (visually hidden beside the header) so phones and assistive
 tech read them.
 

@@ -198,3 +198,44 @@ it("drops the header and shows labels inline in a narrow list", async () => {
   expect(container.querySelector("[data-ledger-header]")).not.toBeVisible();
   expect(screen.getByText("Amount", { selector: "dt" })).toBeVisible();
 });
+
+// A dense section (duplicate spend names nine facts) must never scroll
+// sideways where the columns layout begins, nor anywhere above it.
+it.each([640, 720, 800])(
+  "keeps nine fact columns inside a %ipx container",
+  async (width) => {
+    await page.viewport(1440, 900);
+    const labels = [
+      "Cost",
+      "Matches stated total",
+      "Vendor",
+      "Purchase",
+      "Expense date",
+      "Purchase date",
+      "Apart",
+      "Weaker matches",
+      "Location",
+    ];
+    render(
+      <div style={{ width }} data-testid="dense">
+        <RecordList columns={labels.map((label) => ({ id: label, label }))}>
+          {[1, 2].map((row) => (
+            <RecordRow
+              key={row}
+              leading={<span className="size-6" />}
+              primary="Synthetic washer stacking bracket kit"
+              secondary="EXP-0000"
+              facts={labels.map((label) => ({
+                label,
+                value: `Synthetic value for ${label.toLowerCase()}`,
+              }))}
+              actions={<button type="button">Delete</button>}
+            />
+          ))}
+        </RecordList>
+      </div>,
+    );
+    const dense = screen.getByTestId("dense");
+    expect(dense.scrollWidth).toBeLessThanOrEqual(dense.clientWidth);
+  },
+);

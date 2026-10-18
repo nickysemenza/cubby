@@ -102,7 +102,7 @@ export function RecordList({
     // SAFETY: React CSSProperties has no index signature for custom
     // properties; these three are consumed only by ledger.css's columns rules.
     const style = {
-      "--ledger-columns": `auto minmax(12rem, 1fr) fit-content(16rem) repeat(${columns.length}, fit-content(14rem)) auto auto`,
+      "--ledger-columns": `auto minmax(8rem, 1fr) fit-content(16rem) repeat(${columns.length}, fit-content(14rem)) auto auto`,
       "--ledger-trailing-column": trailing,
       "--ledger-actions-column": trailing + 1,
     } as CSSProperties;

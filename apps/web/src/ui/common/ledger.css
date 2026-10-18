@@ -318,6 +318,7 @@
     grid-column: var(--fact-column);
     grid-row: 1;
     align-self: end;
+    overflow-wrap: anywhere;
   }
   .ledger[data-ledger="columns"]
     > .ledger-row
@@ -361,14 +362,15 @@
     clip-path: inset(50%);
     white-space: nowrap;
   }
-  /* Values wrap rather than clip: a finding's tail is often the point, and a
-     wrapping column can shrink to its longest word when the section is dense. */
+  /* Values wrap rather than clip: a finding's tail is often the point. A
+     dense section (nine columns at 40rem) may break inside a word rather than
+     scroll sideways. */
   .ledger[data-ledger="columns"]
     > .ledger-row
     > [data-ledger-slot="facts"]
     [data-fact]
     > dd {
-    overflow-wrap: break-word;
+    overflow-wrap: anywhere;
   }
 }
 
