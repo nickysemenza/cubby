@@ -2319,25 +2319,35 @@ const applyProductExternalIdPatch = async (
   );
 };
 
+interface QuickCreateProductInput {
+  name: string;
+  manufacturer?: string;
+  upc?: string | null;
+  isbn?: string | null;
+  expectedQuantity?: number | null;
+  model?: string | null;
+  fdc_id?: number | null;
+  ingredientId?: IngredientId | null;
+  price?: number | null;
+  categoryId?: ProductCategoryId | null;
+  shortcode?: string; // Optional shortcode from import (preserves sheet shortcodes)
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
 export const quickCreateProduct = async (
   db: Database,
-  data: {
-    name: string;
-    manufacturer?: string;
-    upc?: string | null;
-    isbn?: string | null;
-    expectedQuantity?: number | null;
-    model?: string | null;
-    fdc_id?: number | null;
-    ingredientId?: IngredientId | null;
-    price?: number | null;
-    categoryId?: ProductCategoryId | null;
-    shortcode?: string; // Optional shortcode from import (preserves sheet shortcodes)
-    createdAt?: Date;
-    updatedAt?: Date;
-  },
+  data: QuickCreateProductInput,
   actor: ActorContext,
-): Promise<ProductTopLevelOut> => {
+): Promise<ProductTopLevelOut> =>
+  (await quickCreateProductRecord(db, data, actor)).output;
+
+/** `quickCreateProduct` with the inserted row's id, so a caller never re-resolves the code it just minted. */
+export const quickCreateProductRecord = async (
+  db: Database,
+  data: QuickCreateProductInput,
+  actor: ActorContext,
+): Promise<{ output: ProductTopLevelOut; entityId: ProductId }> => {
   const incomingGtin = resolvePrimaryProductCodeInput({
     upc: data.upc,
     isbn: data.isbn,
@@ -2406,24 +2416,25 @@ export const quickCreateProduct = async (
     return { newProduct: inserted, externalIds: rows };
   });
 
-  const qualities = await loadProductDataQualities(db, [newProduct.id]);
-  return dbProductToTopLevelAPI({
-    classificationEvidence: await getProductClassificationEvidence(
-      db,
-      newProduct.id,
-    ),
-    category:
-      (await loadCategorySummaries(db)).get(newProduct.categoryId!) ?? null,
-    categoryStockTracking: await loadCategoryStockTracking(
-      db,
-      newProduct.categoryId,
-    ),
+  // Independent reads of the committed row, so they run concurrently.
+  const [qualities, classificationEvidence, categories, categoryStockTracking] =
+    await Promise.all([
+      loadProductDataQualities(db, [newProduct.id]),
+      getProductClassificationEvidence(db, newProduct.id),
+      loadCategorySummaries(db),
+      loadCategoryStockTracking(db, newProduct.categoryId),
+    ]);
+  const output = dbProductToTopLevelAPI({
+    classificationEvidence,
+    category: categories.get(newProduct.categoryId!) ?? null,
+    categoryStockTracking,
     ...newProduct,
     pricing: resolveProductPricing(newProduct.price),
     dataQuality: qualities.get(newProduct.id)!,
     images: [],
     externalIds,
   });
+  return { output, entityId: newProduct.id };
 };
 
 /**
