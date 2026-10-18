@@ -445,7 +445,14 @@ export default {
     const violation = finishNudgeViolation(input, browserCalls);
     if (violation) violations.push(violation);
 
-    for (const step of steps) {
+    // Mail import requests carry only the current work item
+    // (`workItemContext: "current"`), so an earlier item's calls leave the
+    // request: every step before the latest issued call is already done.
+    let latest = -1;
+    steps.forEach((step, index) => {
+      if ("call" in step && issued(requestBody, step.call)) latest = index;
+    });
+    for (const step of steps.slice(Math.max(latest, 0))) {
       if ("call" in step) {
         if (issued(requestBody, step.call)) continue;
         emitted.push(step.call);
