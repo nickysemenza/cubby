@@ -9,6 +9,7 @@ import { SHORTCODE_TABLE } from "../generated/shortcode-tables.gen";
 import {
   assessmentHistoryDdl,
   productIdentityInvalidationDdl,
+  statementSuggestionDdl,
 } from "./assessment-ddl";
 
 const quoteIdentifier = (value: string) => `"${value.replaceAll('"', '""')}"`;
@@ -217,5 +218,5 @@ const classificationConstraintSql = (): string =>
  * this whole script.
  */
 export function renderDerivedDdl(): string {
-  return `${entityIdentityTriggerSql()}\n\n${entityLinkLivenessTriggerSql()}\n\n${suggestionSupersedingTriggerSql()}\n\n${classificationConstraintSql()}\n\n${assessmentHistoryDdl()}\n\n${productIdentityInvalidationDdl(entityFieldModels.product.fields.filter((field) => field.control?.suggest?.basis.some((basis) => String(basis) === "classificationEvidence")).map((field) => field.key))}\n`;
+  return `${entityIdentityTriggerSql()}\n\n${entityLinkLivenessTriggerSql()}\n\n${suggestionSupersedingTriggerSql()}\n\n${classificationConstraintSql()}\n\n${assessmentHistoryDdl()}\n\n${statementSuggestionDdl()}\n\n${productIdentityInvalidationDdl(entityFieldModels.product.fields.filter((field) => field.control?.suggest?.basis.some((basis) => String(basis) === "classificationEvidence")).map((field) => field.key))}\n`;
 }

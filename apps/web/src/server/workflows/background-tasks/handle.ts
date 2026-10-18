@@ -178,6 +178,11 @@ export async function handleBackgroundTask(
       await discoverPurchases(db);
       return "succeeded";
     }
+    case "statement-suggestions.generate": {
+      const { continueStatementSuggestions } =
+        await import("~/server/domains/statement-import/service/statement-suggestion-generation");
+      return continueStatementSuggestions(db, task);
+    }
     case "calendar-feed.mark-dirty": {
       // Propagates a failure on purpose: the queue retries only a throwing
       // handler, and `markDirty` is a flag set, so replay is harmless.

@@ -24,6 +24,7 @@ export const backgroundTaskKinds = [
   "maintenance.recover",
   "maintenance.purchase-discovery",
   "calendar-feed.mark-dirty",
+  "statement-suggestions.generate",
 ] as const;
 
 export const backgroundTaskKindSchema = z.enum(backgroundTaskKinds);
@@ -135,6 +136,19 @@ export const calendarFeedMarkDirtyTaskSchema = z.object({
   reason: z.string().min(1),
 });
 
+/**
+ * One page of statement Transaction suggestion generation, resuming after a
+ * `(source, chargeKey)` cursor. Publication is fingerprint-idempotent, so a
+ * replayed page publishes nothing new; the handler enqueues the next page.
+ */
+export const statementSuggestionsGenerateTaskSchema = z.object({
+  kind: z.literal("statement-suggestions.generate"),
+  ...taskEnvelopeFields,
+  after: z
+    .object({ source: z.string().min(1), chargeKey: z.string().min(1) })
+    .nullable(),
+});
+
 export const backgroundTaskSchema = z.discriminatedUnion("kind", [
   recipeTotalsRecomputeTaskSchema,
   entityEmbeddingRefreshTaskSchema,
@@ -146,6 +160,7 @@ export const backgroundTaskSchema = z.discriminatedUnion("kind", [
   maintenanceRecoverTaskSchema,
   maintenancePurchaseDiscoveryTaskSchema,
   calendarFeedMarkDirtyTaskSchema,
+  statementSuggestionsGenerateTaskSchema,
 ]);
 
 /** The parsed (branded) task a handler receives. */

@@ -561,12 +561,12 @@ export const MCP_TOOLS = defineMcpTools({
       statement_rows: mcpAction({
         op: statementRowContract.ops.list,
         description:
-          "Recorded statement rows with their derived match state. `unmatched` is the drift worklist: a provider row with no live Financial Transaction carrying its source reference. `matched` returns the FTX- shortcode that claims it. `ignored` and `superseded` are off the worklist by an agent's explicit judgment. Eligible unmatched rows may include advisory vendorInference derived from prior settled transactions with the same Merchant label; it neither matches nor links anything. Filter by source, account (FAC- shortcode), match state, disposition, date range, amount range, or a search over the raw statement description. To close an unmatched row, entity.update(financialTransaction) to append its source reference; the row flips to matched on the next read, with no write to the row itself.",
+          "Recorded statement rows with their derived match state. Match state is per charge: every observation sharing a row's v1 identity (repeated exports of one charge) inherits an ignore, supersession or match recorded on any of them. `unmatched` is the drift worklist: a charge with no live Financial Transaction carrying any of its source references. `matched` returns the FTX- shortcode that claims it. `ignored` and `superseded` are off the worklist by an agent's explicit judgment. Eligible unmatched rows may include advisory vendorInference derived from prior settled transactions with the same Merchant label; it neither matches nor links anything. Filter by source, account (FAC- shortcode), match state, disposition, date range, amount range, or a search over the raw statement description. To close an unmatched row, entity.update(financialTransaction) to append its source reference; the row flips to matched on the next read, with no write to the row itself.",
       }),
       summary: mcpAction({
         op: statementRowContract.ops.summary,
         description:
-          "Count and total statement rows by match state for a filter — total, matched, unmatched, ignored, superseded, and the unmatched dollar amount. Size the remaining drift before working it, or confirm a bulk disposition landed.",
+          "Count and total statement rows by match state for a filter — total, matched, unmatched, ignored, superseded, the unmatched dollar amount, and unmatchedCharges (distinct charges behind the unmatched observations). Size the remaining drift before working it, or confirm a bulk disposition landed.",
       }),
       imports: mcpAction({
         op: statementRowContract.ops.imports,
@@ -583,6 +583,16 @@ export const MCP_TOOLS = defineMcpTools({
         readPolicy: "strong",
         description:
           "Preview client-parsed Monarch statement rows before recording settlement evidence. Normalized rows only — never a CSV path, upload, or file contents; at most 200 rows. Monarch charges are negative in the export and are normalized to positive Cubby outflows; credits become negative. The preview derives a stable source reference from account/date/amount/original statement, resolves an existing Financial Account only when unambiguous, and returns already_recorded, ready_to_create, possible_existing, unresolved_account, or indistinguishable_duplicate per row. Eligible rows may include advisory vendorInference from prior settled transactions with the same Merchant label; it neither matches nor links anything. Unresolved rows include a non-persisted provisional Account suggestion. It never creates Accounts, Financial Transactions, Purchases, or links: create only user-approved ready_to_create rows afterwards with entity.create(financialTransaction), then review every result.",
+      }),
+      statement_suggestions: mcpAction({
+        op: statementRowContract.ops.suggestions,
+        description:
+          "Pending Transaction suggestions computed from unmatched statement charges: one per charge, recommending create, attach (to an existing transaction that may already record it), supersede (a recorded hold now posted) or void (a recorded hold a later export no longer contains). Filter by account (FAC-), month (YYYY-MM), recommended action, or clean. `clean` suggestions are the bulk-acceptable ones: a rule-chosen kind with no candidate or sibling, or a single exact-amount supersede, or a single attach a decision model labelled the same charge with high confidence; everything else needs reading. Candidates carry the fields that differ (`diff`) and an advisory model `label` that never authorizes anything. Accept, correct or dismiss through entity.review_assessments with each assessmentId and fingerprint: accept as is = verdict correct, intent apply, application {kind: statement_transaction, action: the recommended action}; a different choice (another candidate, create anyway with rejectedCandidateIds, a kindOverride, ticked fields) = verdict wrong with correction {present: true, value: <the same application>}; dismiss = verdict dismissed with suppression {scope: statement_transaction, candidateKey: `<source>:<chargeKey>`, fingerprint}. Nothing is created or attached until reviewed.",
+      }),
+      statement_suggestion_groups: mcpAction({
+        op: statementRowContract.ops.suggestionGroups,
+        description:
+          "Pending Transaction suggestions counted per account and month, with how many are clean and how many recommend each action — the worklist for burning down the unmatched backlog group by group.",
       }),
       transfer_pairs: mcpAction({
         op: householdContributionContract.ops.transferPairs,
@@ -762,6 +772,11 @@ export const MCP_TOOLS = defineMcpTools({
         op: statementRowContract.ops.update,
         description:
           "Write judgments onto statement rows; the provider's own columns are immutable after ingest. Address rows by {source, externalIds} for a handful, or by {filter} for a bulk pass (an empty filter is refused). Set disposition 'ignored' with both a reason and a note to take rows off the worklist permanently — the intended move for the large tail of consumer spend Cubby does not model. `accountId` records which account a row belongs to, and `supersededByExternalId` links a pending row to the posted row that replaced it (superseding requires the explicit id selector).",
+      }),
+      refresh_suggestions: mcpAction({
+        op: statementRowContract.ops.refreshSuggestions,
+        description:
+          "Recompute Transaction suggestions from the statement ledger. Runs the first page of charges now and continues the rest in the background (`queued`); when no background queue is available it returns `next`, which you pass back as `after` to page on. Safe to repeat: unchanged evidence publishes nothing, and a dismissed charge stays dismissed. Recording rows already starts a pass, so call this only after changing transactions or accounts by hand.",
       }),
       delete: mcpAction({
         op: statementRowContract.ops.delete,

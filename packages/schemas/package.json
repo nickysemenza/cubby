@@ -165,6 +165,7 @@
     "./filter-options": "./src/filter-options.ts",
     "./filter-sentinel-fields": "./src/filter-sentinel-fields.ts",
     "./statement-row": "./src/statement-row.ts",
+    "./statement-suggestion": "./src/statement-suggestion.ts",
     "./wish": "./src/wish.ts",
     "./wish-fields": "./src/wish-fields.ts",
     "./entity-fields": "./src/entity-fields.ts",

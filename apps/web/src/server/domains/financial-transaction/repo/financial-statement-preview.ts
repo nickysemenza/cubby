@@ -89,6 +89,18 @@ const provisionalAccountFor = (
   };
 };
 
+export type FinancialStatementPreviewOptions = {
+  /**
+   * `suggestion` widens nearby candidacy to any same-account, same-cents
+   * transaction within three days whatever its descriptor, and never offers a
+   * void transaction. Statement suggestions use it at generation and again at
+   * apply, so both sides agree on what a candidate is.
+   */
+  candidatePolicy?: "import" | "suggestion";
+  /** Server-only: a stored StatementRow account outranks alias/last4 resolution, keyed by row key. */
+  accountHints?: ReadonlyMap<string, string>;
+};
+
 /**
  * Preview only: client-parsed rows become a decision worklist. It intentionally
  * does not create accounts/transactions or infer any Purchase link.
@@ -97,7 +109,9 @@ export async function previewFinancialStatementImport(
   db: Database,
   input: FinancialStatementImportPreviewInput,
   duplicateProviderIds?: ReadonlySet<string>,
+  options: FinancialStatementPreviewOptions = {},
 ): Promise<FinancialStatementImportPreviewOut> {
+  const suggestionPolicy = options.candidatePolicy === "suggestion";
   const legacyIds = await Promise.all(
     input.rows.map((row) => statementRowExternalId(row)),
   );
@@ -257,6 +271,11 @@ export async function previewFinancialStatementImport(
   }));
 
   const accountFor = (row: FinancialStatementImportRow) => {
+    const hinted = options.accountHints?.get(row.key);
+    if (hinted) {
+      const stored = parsedAccounts.find((account) => account.id === hinted);
+      if (stored) return stored;
+    }
     const descriptor = canonical(row.account);
     const aliasMatches = parsedAccounts.filter((account) =>
       account.sourceAliases.some(
@@ -410,10 +429,11 @@ export async function previewFinancialStatementImport(
               Math.abs(Date.parse(date) - Date.parse(row.date)) <= 3 * 86400000,
           );
           if (!nearbyDate) return false;
+          if (suggestionPolicy && transaction.status === "void") return false;
           return (
             // A settled tip or other amount correction without a provider ID
             // is a review candidate only with matching source description.
-            (!row.importFingerprint && sameAmount) ||
+            ((!row.importFingerprint || suggestionPolicy) && sameAmount) ||
             canonical(transaction.rawDescription ?? "") ===
               canonical(row.originalStatement) ||
             Boolean(
@@ -432,7 +452,11 @@ export async function previewFinancialStatementImport(
             [...legacyMatches, ...nearbyMatches],
             (transaction) => transaction.id,
           )
-    ).filter((transaction) => !belongsToAnotherOccurrence(transaction));
+    ).filter(
+      (transaction) =>
+        !belongsToAnotherOccurrence(transaction) &&
+        !(suggestionPolicy && transaction.status === "void"),
+    );
 
     const existingTransactionIds = (
       alreadyRecorded.length ? alreadyRecorded : possibleExisting

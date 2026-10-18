@@ -93,6 +93,7 @@ const actionCapability = {
   "entity.review_assessments": "member_decision",
   "statement_rows.record": "generic_mutation",
   "statement_rows.update": "generic_mutation",
+  "statement_rows.refresh_suggestions": "generic_mutation",
   "statement_rows.delete": "generic_mutation",
   "mail.search": "prepare",
   "mail.correct_relevance": "generic_mutation",

@@ -29,6 +29,7 @@ import {
   statementSignWarning,
   updateStatementRows,
 } from "~/server/domains/statement-import/repo/statement-row";
+import { scheduleStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-generation";
 import { createAppError } from "~/server/errors/app-error";
 
 const firstHeader = (headers: string[], pattern: RegExp) =>
@@ -299,6 +300,8 @@ export async function commitStatementCsv(
     previewRows,
     selected,
   );
+  // Rows left unmatched by this commit become Transaction suggestions.
+  if (evidence) await scheduleStatementSuggestions(db);
   return {
     transactions,
     attached,
