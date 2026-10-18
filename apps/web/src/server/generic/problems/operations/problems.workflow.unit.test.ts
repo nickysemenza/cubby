@@ -8,6 +8,7 @@ import { resolveProblemCounts } from "./problem-counts.server";
 const counts = (total: number) =>
   problemsCountSchema.parse({
     total,
+    autoFixTotal: 0,
     coverageTotal: total,
     byType: Object.fromEntries(expectedProblemKeys.map((key) => [key, 0])),
   });
