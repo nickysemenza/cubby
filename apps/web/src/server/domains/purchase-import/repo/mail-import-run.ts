@@ -21,7 +21,7 @@ import {
 } from "@cubby/schemas/mailbox-research";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, asc, eq, inArray, isNull, notInArray, or } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne, notInArray, or } from "drizzle-orm";
 
 import { getPurchaseAgentQueue } from "~/server/cf-env";
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -38,7 +38,10 @@ import {
   type RetainedMail,
 } from "~/server/domains/mail/repo/retained-mail";
 import type { PurchaseAgentQueueProducer } from "~/server/domains/purchase-agent/service/purchase-agent-queue-types";
-import { assertMailSourceIdentityReady } from "~/server/domains/purchase-import/repo/mail-source-identity";
+import {
+  assertMailSourceIdentityReady,
+  HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
+} from "~/server/domains/purchase-import/repo/mail-source-identity";
 import {
   actorSnapshot,
   assertRunParent,
@@ -363,13 +366,15 @@ export async function importPendingEmails(
   const { listMemberMailboxes } =
     await import("~/server/domains/purchase-import/repo/gmail/targets");
   const { mailImportEnabled } = await import("./mail-import-settings");
-  const { hasRetainedEmailImportContent } =
+  const { retainedEmailImportContentCondition } =
     await import("~/server/domains/purchase-import/repo/email-content");
+  const errors: unknown[] = [];
   for (const target of await listMemberMailboxes(db)) {
-    if (!target.userId) continue;
+    const actorId = target.userId;
+    if (!actorId) continue;
     if (!(await mailImportEnabled(db, target.mailboxId))) continue;
     const pending = await getDb(db)
-      .select({ email: emailTable, content: orderMail.content })
+      .select({ id: orderMail.id })
       .from(emailTable)
       .innerJoin(
         orderMail,
@@ -388,6 +393,14 @@ export async function importPendingEmails(
           eq(emailTable.mailboxId, target.mailboxId),
           eq(emailTable.classification, "related"),
           or(
+            isNull(emailTable.classificationVersion),
+            ne(
+              emailTable.classificationVersion,
+              HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
+            ),
+          ),
+          retainedEmailImportContentCondition(),
+          or(
             isNull(emailTable.runId),
             and(
               inArray(run.purpose, CLASSIFICATION_RUN_PURPOSES),
@@ -400,27 +413,31 @@ export async function importPendingEmails(
       )
       .orderBy(asc(emailTable.createdAt), asc(emailTable.id))
       .limit(50);
-    const messageIds = [];
-    for (const { email, content } of pending) {
-      if (
-        email.orderMailId &&
-        (await hasRetainedEmailImportContent(
-          getDb(db),
-          email.orderMailId,
-          content,
-        ))
-      )
-        messageIds.push(email.orderMailId);
+    const admit = (messageIds: readonly string[]) =>
+      startMailImport(
+        db,
+        {
+          ledgerPartyId: target.ledgerPartyId,
+          userId: actorId,
+          mailboxId: target.mailboxId,
+          messageIds,
+        },
+        queue,
+      );
+    try {
+      await admit(pending.map(({ id }) => id));
+    } catch {
+      // SILENT: retry each source below; persistent errors are returned and reported after discovery.
+      // A source may change after selection. Isolate it without abandoning
+      // other sources; admission replay preserves ownership on a retry.
+      for (const { id } of pending) {
+        try {
+          await admit([id]);
+        } catch (error) {
+          errors.push(error);
+        }
+      }
     }
-    await startMailImport(
-      db,
-      {
-        ledgerPartyId: target.ledgerPartyId,
-        userId: target.userId,
-        mailboxId: target.mailboxId,
-        messageIds,
-      },
-      queue,
-    );
   }
+  return { errors };
 }

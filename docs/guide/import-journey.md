@@ -58,6 +58,10 @@ Discovery admits retained candidates to Pi, which imports what is unambiguous
 under the writer contracts and leaves the rest in the Work queue. Keep a
 minimal identity and classification footprint for scanned negatives; retain
 useful related evidence and uncertain candidates for resolution.
+Catch-up also admits older retained related Emails in enabled mailboxes. Only
+usable text or retained attachments count toward its bounded page; empty shells
+and historical sources with unresolved ownership stay out. An admission failure
+does not stop other sources or new-mail discovery, and retains its diagnostics.
 
 The household AI budget is a stopgap safety net on frontier chat-model spend:
 $1 per fixed six-hour UTC window (`server/ai/budget.ts`), summed from

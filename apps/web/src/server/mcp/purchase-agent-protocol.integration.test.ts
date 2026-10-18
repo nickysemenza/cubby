@@ -4,7 +4,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { runApproval, runOperation } from "~/server/db/schema";
+import { run as runTable, runApproval, runOperation } from "~/server/db/schema";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -15,6 +15,7 @@ import type { ToolExtra } from "./tools/tool-registration";
 
 // Routine permitted writes execute immediately; stable operation IDs still
 // reject changed arguments and replay saved results without another write.
+// A stopped Run still returns completed results, but fences new mutations.
 describe("purchase-agent automatic mutations", () => {
   const ctx = withTestDb();
 
@@ -90,5 +91,27 @@ describe("purchase-agent automatic mutations", () => {
       .where(eq(runOperation.runId, run.id));
     expect(consumed).toBeUndefined();
     expect(operation?.state).toBe("completed");
+    for (const status of ["paused", "completed", "failed"] as const) {
+      await getDb(ctx.db)
+        .update(runTable)
+        .set({ status })
+        .where(eq(runTable.id, run.id));
+      await expect(executePurchaseAgentMutation(input)).resolves.toEqual({
+        accepted: true,
+      });
+      await expect(
+        executePurchaseAgentMutation({ ...input, args: { changed: true } }),
+      ).rejects.toThrow("different input");
+      await expect(
+        executePurchaseAgentMutation({
+          ...input,
+          execution: {
+            ...input.execution,
+            operationId: `synthetic:new:${status}`,
+          },
+        }),
+      ).rejects.toThrow("fenced");
+    }
+    expect(executions).toBe(1);
   });
 });

@@ -147,12 +147,6 @@ export async function executePurchaseAgentMutation<T>(input: {
       .where(eq(runTable.id, run.id))
       .limit(1)
       .for("update");
-    if (
-      lockedRun?.retiredAt ||
-      !lockedRun ||
-      !["running", "paused_approval"].includes(lockedRun.status)
-    )
-      throw new Error(`Purchase-agent run is fenced in ${lockedRun?.status}`);
     const operation = await readOperation(database, operationKey, {
       forUpdate: true,
     });
@@ -170,7 +164,15 @@ export async function executePurchaseAgentMutation<T>(input: {
         throw new Error(
           "Mutation outcome is uncertain; inspect operation status",
         );
-    } else {
+    }
+    // Completed operations are read-only replays even after the Run stops.
+    if (
+      lockedRun?.retiredAt ||
+      !lockedRun ||
+      !["running", "paused_approval"].includes(lockedRun.status)
+    )
+      throw new Error(`Purchase-agent run is fenced in ${lockedRun?.status}`);
+    if (!operation) {
       await insertOperation(database, {
         ...operationKey,
         kind: `mcp:${input.toolName}`,

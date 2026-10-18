@@ -141,6 +141,114 @@ describe("mail research admission", () => {
     expect(excludedEmail?.runId).toBeNull();
   });
 
+  // Historical ownership blocks and contentless shells must not consume the
+  // automatic admission page or prevent healthy retained evidence progressing.
+  it("skips unresolved ownership and more than a page of empty shells before admitting retained content", async () => {
+    const { party, mail } = await source();
+    await getDb(ctx.db)
+      .insert(account)
+      .values({
+        id: crypto.randomUUID(),
+        accountId: "synthetic-mailbox",
+        providerId: "google",
+        userId: ctx.actor.userId,
+        updatedAt: new Date(),
+      });
+    await setMailImport(ctx.db, {
+      mailboxId: "synthetic-mailbox",
+      enabled: true,
+    });
+    await getDb(ctx.db)
+      .update(emailTable)
+      .set({
+        status: "blocked",
+        classificationVersion:
+          sourceIdentity.HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
+      })
+      .where(eq(emailTable.orderMailId, mail.id));
+    for (let index = 0; index < 50; index += 1) {
+      await retainedMailFixture(ctx.db, {
+        ledgerPartyId: party.id,
+        messageId: `synthetic-shell-${index}`,
+        checksum: "b".repeat(64),
+        content: { snippet: " \n ", bodyText: null, bodyHtml: null },
+      });
+    }
+    const healthy = await retainedMailFixture(ctx.db, {
+      ledgerPartyId: party.id,
+      messageId: "synthetic-retained-later",
+      checksum: "c".repeat(64),
+    });
+    await expect(
+      importPendingEmails(ctx.db, { send: async () => {} }),
+    ).resolves.toBeDefined();
+    const [owner] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.purpose, "mail_import"));
+    expect(owner).toBeDefined();
+    expect(await frozenSources(owner!.id)).toEqual([
+      { orderMailId: healthy.id, checksum: healthy.rawChecksum },
+    ]);
+    const [blocked] = await getDb(ctx.db)
+      .select()
+      .from(emailTable)
+      .where(eq(emailTable.orderMailId, mail.id));
+    expect(blocked?.runId).toBeNull();
+    expect(blocked?.status).toBe("blocked");
+  });
+
+  // A source can become inadmissible between selection and its transaction;
+  // retain that error while allowing the rest of the page to progress.
+  it("isolates an admission failure without abandoning healthy retained sources", async () => {
+    const { party, mail } = await source();
+    await getDb(ctx.db)
+      .insert(account)
+      .values({
+        id: crypto.randomUUID(),
+        accountId: "synthetic-mailbox",
+        providerId: "google",
+        userId: ctx.actor.userId,
+        updatedAt: new Date(),
+      });
+    await setMailImport(ctx.db, {
+      mailboxId: "synthetic-mailbox",
+      enabled: true,
+    });
+    const healthy = await retainedMailFixture(ctx.db, {
+      ledgerPartyId: party.id,
+      messageId: "synthetic-healthy-after-failure",
+      checksum: "d".repeat(64),
+    });
+    const original = sourceIdentity.assertMailSourceIdentityReady;
+    const interleaving = vi
+      .spyOn(sourceIdentity, "assertMailSourceIdentityReady")
+      .mockImplementation(async (...args) => {
+        await original(...args);
+        if (args[1].id === mail.id)
+          throw new Error("Synthetic source changed after selection");
+      });
+    try {
+      const result = await importPendingEmails(ctx.db, {
+        send: async () => {},
+      });
+      expect(result.errors).toHaveLength(1);
+      expect(String(result.errors[0])).toContain(
+        "Synthetic source changed after selection",
+      );
+      const [owner] = await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.purpose, "mail_import"));
+      expect(owner).toBeDefined();
+      expect(await frozenSources(owner!.id)).toEqual([
+        { orderMailId: healthy.id, checksum: healthy.rawChecksum },
+      ]);
+    } finally {
+      interleaving.mockRestore();
+    }
+  });
+
   it("preserves the parent Email outcome after a retry transfers its live assignment", async () => {
     const { party, mail } = await source();
     const [admitted] = await startMailImport(

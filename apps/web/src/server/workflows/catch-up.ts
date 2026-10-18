@@ -177,7 +177,7 @@ export async function discoverPurchases(db: Database) {
   // `running` Run would otherwise hold its mailbox's slot until the next
   // trigger.
   await reconcileWorkflowRuns(db);
-  await (
+  const pending = await (
     await import("~/server/domains/purchase-import/repo/mail-import-run")
   ).importPendingEmails(db);
   const mail = await startMailDiscovery(db);
@@ -185,5 +185,10 @@ export async function discoverPurchases(db: Database) {
     mailPassesStarted: mail.started,
     mailPassesRunning: mail.running,
   });
+  if (pending.errors.length)
+    throw new AggregateError(
+      pending.errors,
+      "Retained Email admission failed; discovery continued.",
+    );
   return { mail };
 }
