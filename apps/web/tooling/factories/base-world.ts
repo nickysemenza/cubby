@@ -33,7 +33,7 @@ type InsertClient = Pick<ReturnType<typeof drizzle>, "insert">;
 
 /** Insert the starting rows. Idempotent: a re-seed is a no-op. */
 /**
- * The rule revisions migration 0090 seeds. Literal because the global test
+ * The rule revisions migration 0091 seeds. Literal because the global test
  * setup loads this file before the test environment exists, so it cannot
  * import the rule declarations; `automatic-rules.unit.test.ts` keeps them equal.
  */

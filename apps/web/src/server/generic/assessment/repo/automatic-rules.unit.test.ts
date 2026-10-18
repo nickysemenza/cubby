@@ -9,7 +9,7 @@ import { AUTOMATIC_RULES } from "./automatic-rules";
 const migration = readFileSync(
   fileURLToPath(
     new URL(
-      "../../../../../drizzle/0090_sweeps_maintenance_automatic_rules.sql",
+      "../../../../../drizzle/0091_sweeps_maintenance_automatic_rules.sql",
       import.meta.url,
     ),
   ),
