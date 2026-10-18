@@ -95,6 +95,16 @@ const reports: {
 describe("isolated Mail coordinator replay", () => {
   const ctx = withTestDb(); // A fresh throwaway database for each case.
   afterAll(() => {
+    for (const [index] of cases.entries()) {
+      if (!reports.some((report) => report.case === index + 1))
+        reports.push({
+          case: index + 1,
+          fields: ["unavailable"],
+          status: "infrastructure_error",
+          actualModels: [],
+        });
+    }
+    reports.sort((a, b) => a.case - b.case);
     const disagreements = reports.filter((report) => report.fields.length);
     console.log(
       JSON.stringify({

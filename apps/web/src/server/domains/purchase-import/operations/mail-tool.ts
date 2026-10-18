@@ -1,4 +1,7 @@
-import { mailImportOutcome } from "@cubby/schemas/assessment";
+import {
+  assessmentSubjects,
+  mailImportOutcome,
+} from "@cubby/schemas/assessment";
 import type { ActorContext } from "@cubby/schemas/context";
 /**
  * The public `mail` tool: read a member's retained Email and record what it
@@ -306,16 +309,12 @@ export async function readMailImportOutcomes(
     .offset(input.offset)
     .limit(input.limit + 1);
   return mailImportOutcomesOut.parse({
-    items: rows
-      .slice(0, input.limit)
-      .map((row) => ({
-        ...row,
-        checksum:
-          row.subject.kind === "mail_import_outcome"
-            ? row.subject.checksum
-            : "",
-        createdAt: row.createdAt.toISOString(),
-      })),
+    items: rows.slice(0, input.limit).map((row) => ({
+      ...row,
+      checksum: assessmentSubjects.mail_import_outcome.parse(row.subject)
+        .checksum,
+      createdAt: row.createdAt.toISOString(),
+    })),
     nextOffset: rows.length > input.limit ? input.offset + input.limit : null,
   });
 }
