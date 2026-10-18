@@ -54,11 +54,7 @@ const FIELD_LABELS = {
 
 const KIND_OPTIONS = fieldEnumOptions("financialTransaction", "kind");
 
-export function ActionBadge({
-  action,
-}: {
-  action: StatementTransactionAction;
-}) {
+function ActionBadge({ action }: { action: StatementTransactionAction }) {
   const presentation = ACTION_PRESENTATION[action];
   return (
     <Badge variant="secondary" className={presentation.className}>

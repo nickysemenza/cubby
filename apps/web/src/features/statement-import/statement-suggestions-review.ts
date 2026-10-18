@@ -28,7 +28,7 @@ export type StatementChoice = {
  * candidate as rejected: the server refuses a create while any possible
  * existing transaction is still live.
  */
-export function statementApplication(
+function statementApplication(
   suggestion: StatementSuggestionOut,
   choice: StatementChoice,
 ): StatementTransactionApplication {
@@ -52,7 +52,7 @@ export function statementApplication(
 }
 
 /** Whether the application is exactly the recommendation (Correct), not a correction (Wrong). */
-export function isRecommendedAsIs(
+function isRecommendedAsIs(
   suggestion: StatementSuggestionOut,
   application: StatementTransactionApplication,
 ): boolean {
