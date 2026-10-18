@@ -7,7 +7,7 @@ import {
   type CoverageProblemKey,
   type CoverageTotals,
   type ProblemKey,
-  sectionSize,
+  problemKeysSize,
   TRACKER_PROBLEM_KEY_BY_TYPE,
   type ProblemItem,
   type ProblemRow,
@@ -28,10 +28,9 @@ import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 import { StorefrontIcon } from "@phosphor-icons/react/dist/csr/Storefront";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
-import type { Icon } from "@phosphor-icons/react/lib";
 import { Link } from "@tanstack/react-router";
 import { groupBy } from "es-toolkit";
-import type { ReactNode } from "react";
+import type { ElementType, ReactNode } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import {
@@ -76,7 +75,9 @@ import { BackfillButton } from "./problem-backfill-action";
 import {
   type IconProp,
   ProblemSection,
+  type ProblemSectionContext,
   type ProblemSectionCoverage,
+  type ProblemSectionKind,
   type RenderedProblemItem,
 } from "./problem-section";
 import { byManufacturer, CodeChip, createdAgoDetail } from "./render-helpers";
@@ -84,6 +85,7 @@ import {
   DuplicateProductMergeFix,
   DuplicateAccountAliasFix,
   DuplicateTransactionRefFix,
+  DeleteAllOrphanedButton,
   DuplicateVendorMergeFix,
   OrphanedDeleteFix,
 } from "./tier2-fixes";
@@ -149,16 +151,31 @@ const resolveCoverage = (
   };
 };
 
-type ProblemSectionEntry<K extends CoverageProblemKey = CoverageProblemKey> = {
+export type ProblemSectionEntry<
+  K extends CoverageProblemKey = CoverageProblemKey,
+> = {
   id: string;
   label: string;
+  title: string;
+  description: string;
+  /** What a passing check says about itself. */
+  emptyMessage: string;
+  icon: ElementType<{ className?: string }>;
+  coverage?: ProblemSectionDeclaredCoverage<K>;
+  /** Every detector key the section renders; its count is their true size. */
+  problemKeys: readonly ProblemKey[];
+  /** The rows the section renders — a sample when its lane caps them. */
+  rows: (problems: AllProblems) => readonly unknown[];
   count: (problems: AllProblems) => number;
+  /** For a regression guard: an empty section isn't listed at all. */
+  hideWhenEmpty?: boolean;
+  /** The section's own bulk fix, shown beside its heading while it has rows. */
+  headerAction?: (problems: AllProblems) => ReactNode;
   node: (
     problems: AllProblems,
     totals: CoverageTotals | undefined,
+    kind?: ProblemSectionKind,
   ) => ReactNode;
-  coverage?: ProblemSectionDeclaredCoverage<K>;
-  problemKeys?: readonly ProblemKey[];
 };
 
 const isHeaderActionFactory = <T,>(
@@ -166,140 +183,171 @@ const isHeaderActionFactory = <T,>(
 ): value is (items: T[], count: number) => ReactNode =>
   typeof value === "function";
 
-function section<T, K extends CoverageProblemKey = never>(config: {
-  id: string;
-  label: string;
-  select: (problems: AllProblems) => readonly T[];
-  /**
-   * Set when `select` returns a PAGE rather than the whole set — i.e. for a
-   * view-backed section, whose rows come from page one of an entity list.
-   * Names the `sectionTotals` entry carrying the real population, so the chip
-   * count and the card's meter describe the backlog instead of the page.
-   */
-  totalKey?: ProblemKey;
-  title?: string;
-  description?: string;
-  emptyMessage?: string;
-  icon?: Icon;
-  entity?: Entity;
-  renderItem: (item: T) => RenderedProblemItem;
-  groupBy?: (items: T[]) => Record<string, T[]>;
-  problemKeys?: readonly ProblemKey[];
-  /**
-   * A static "fix all" node, or one built from the section's contents.
-   *
-   * The builder gets the true `count` alongside the rendered `items`, because a
-   * view-backed section renders only a page — a bulk action wired to `items`
-   * would act on twelve and label itself "all".
-   */
-  headerAction?: ReactNode | ((items: T[], count: number) => ReactNode);
-  coverage?: ProblemSectionDeclaredCoverage<K>;
-  /** See `ProblemSection`'s `hideWhenEmpty` — for a regression guard, not a backlog. */
-  hideWhenEmpty?: boolean;
-}): ProblemSectionEntry<K> {
-  const iconProp: IconProp = config.entity
-    ? { entity: config.entity }
-    : config.icon
-      ? { icon: config.icon }
-      : (() => {
-          throw new Error(`Problem section "${config.id}" needs an icon`);
-        })();
-  const canonicalKey =
-    config.problemKeys?.length === 1 ? config.problemKeys[0] : undefined;
-  const canonicalPresentation = canonicalKey
-    ? problemQuery(canonicalKey)
-    : undefined;
-  const title = config.title ?? canonicalPresentation?.title;
-  const description = config.description ?? canonicalPresentation?.description;
-  const emptyMessage =
-    config.emptyMessage ?? canonicalPresentation?.emptyMessage;
+const entityGlyphs = new Map<Entity, ElementType<{ className?: string }>>();
+
+/** A section-heading icon component for an entity, made once per entity. */
+function entityGlyph(entity: Entity): ElementType<{ className?: string }> {
+  const existing = entityGlyphs.get(entity);
+  if (existing) return existing;
+  const Glyph = ({ className }: { className?: string }) => (
+    <EntityIcon entity={entity} className={className} />
+  );
+  entityGlyphs.set(entity, Glyph);
+  return Glyph;
+}
+
+const sectionIcon = (config: IconProp, id: string) => {
+  if (config.entity) return entityGlyph(config.entity);
+  if (config.icon) return config.icon;
+  throw new Error(`Problem section "${id}" needs an icon`);
+};
+
+/** Heading copy from the explicit config, else the lone Problem query. */
+function sectionCopy(
+  id: string,
+  problemKeys: readonly ProblemKey[],
+  copy: { title?: string; description?: string; emptyMessage?: string },
+) {
+  const canonical =
+    problemKeys.length === 1 ? problemQuery(problemKeys[0]!) : undefined;
+  const title = copy.title ?? canonical?.title;
+  const description = copy.description ?? canonical?.description;
+  const emptyMessage = copy.emptyMessage ?? canonical?.emptyMessage;
   if (!title || !description || !emptyMessage) {
     throw new Error(
-      `Problem section "${config.id}" needs one canonical Problem key or explicit presentation copy`,
+      `Problem section "${id}" needs one canonical Problem key or explicit presentation copy`,
     );
   }
+  return { title, description, emptyMessage };
+}
+
+function section<T, K extends CoverageProblemKey = never>(
+  config: {
+    id: string;
+    label: string;
+    select: (problems: AllProblems) => readonly T[];
+    /**
+     * Every detector key `select` reads. The section's count is their true
+     * size (`problemKeysSize`), never `select`'s length — a sampled lane
+     * returns a page of rows, and counting the page is what made the summary
+     * disagree with the headline.
+     */
+    problemKeys: readonly ProblemKey[];
+    title?: string;
+    description?: string;
+    emptyMessage?: string;
+    renderItem: (item: T) => RenderedProblemItem;
+    groupBy?: (items: T[]) => Record<string, T[]>;
+    /**
+     * A static "fix all" node, or one built from the section's contents.
+     *
+     * The builder gets the true `count` alongside the rendered `items`, because
+     * a sampled section renders only a page — a bulk action wired to `items`
+     * would act on twelve and label itself "all".
+     */
+    headerAction?: ReactNode | ((items: T[], count: number) => ReactNode);
+    coverage?: ProblemSectionDeclaredCoverage<K>;
+    hideWhenEmpty?: boolean;
+  } & IconProp,
+): ProblemSectionEntry<K> {
+  const { title, description, emptyMessage } = sectionCopy(
+    config.id,
+    config.problemKeys,
+    config,
+  );
+  const count = (problems: AllProblems) =>
+    problemKeysSize(problems, config.problemKeys, problems.sectionTotals);
   return {
     id: config.id,
     label: config.label,
+    title,
+    description,
+    emptyMessage,
+    icon: sectionIcon(config, config.id),
     // Must be forwarded, not just closed over by `node` below: the page groups
-    // sections by reading THIS field. Omitting it still rendered a correct
-    // meter (node reads `config` directly) while the section itself sat in the
-    // defect list — a mismatch the meter hides rather than reveals.
+    // sections by reading THIS field.
     coverage: config.coverage,
     problemKeys: config.problemKeys,
-    count: (problems) =>
-      sectionSize(
-        config.totalKey,
-        config.select(problems),
-        problems.sectionTotals,
-      ),
-    node: (problems, totals) => {
-      const items = [...config.select(problems)];
-      const count = sectionSize(config.totalKey, items, problems.sectionTotals);
+    rows: config.select,
+    count,
+    hideWhenEmpty: config.hideWhenEmpty,
+    headerAction: config.headerAction
+      ? (problems) => {
+          const action = config.headerAction;
+          return isHeaderActionFactory<T>(action)
+            ? action([...config.select(problems)], count(problems))
+            : action;
+        }
+      : undefined,
+    node: (problems, totals, kind) => {
+      const context = problemContext(config.problemKeys, problems);
       return (
         <ProblemSection
-          {...iconProp}
-          title={title}
-          description={description}
+          items={[...config.select(problems)]}
+          count={count(problems)}
           emptyMessage={emptyMessage}
-          items={items}
-          count={count}
-          hideWhenEmpty={config.hideWhenEmpty}
           renderItem={config.renderItem}
           groupBy={config.groupBy}
-          assembly={problemAssembly(
-            config.problemKeys,
-            problems,
-            problems.conversionCoverageFreshness,
-          )}
+          assembly={context.assembly}
+          listHref={context.listHref}
+          warning={context.warning}
           coverage={resolveCoverage(config.coverage, totals)}
-          headerAction={
-            config.headerAction &&
-            (isHeaderActionFactory(config.headerAction)
-              ? config.headerAction(items, count)
-              : config.headerAction)
-          }
+          kind={kind}
+          visible={kind === "auto-fix" ? AUTO_FIX_PREVIEW_ROWS : undefined}
         />
       );
     },
   };
 }
 
-function customSection<T, K extends CoverageProblemKey = never>(def: {
-  id: string;
-  label: string;
-  select: (problems: AllProblems) => readonly T[];
-  totalKey?: ProblemKey;
-  render: (
-    items: T[],
-    coverage: ProblemSectionCoverage | undefined,
-    count: number,
-    assembly: ReactNode | undefined,
-  ) => ReactNode;
-  problemKeys?: readonly ProblemKey[];
-  coverage?: ProblemSectionDeclaredCoverage<K>;
-}): ProblemSectionEntry<K> {
-  const sizeOf = (problems: AllProblems, items: readonly unknown[]) =>
-    sectionSize(def.totalKey, items, problems.sectionTotals);
+/** Auto-fix sections preview what the Fix button will touch, not the backlog. */
+const AUTO_FIX_PREVIEW_ROWS = 3;
+
+function customSection<T, K extends CoverageProblemKey = never>(
+  def: {
+    id: string;
+    label: string;
+    select: (problems: AllProblems) => readonly T[];
+    problemKeys: readonly ProblemKey[];
+    title?: string;
+    description?: string;
+    emptyMessage?: string;
+    render: (props: {
+      items: T[];
+      coverage: ProblemSectionCoverage | undefined;
+      count: number;
+      emptyMessage: string;
+      context: ProblemSectionContext;
+    }) => ReactNode;
+    coverage?: ProblemSectionDeclaredCoverage<K>;
+  } & IconProp,
+): ProblemSectionEntry<K> {
+  const { title, description, emptyMessage } = sectionCopy(
+    def.id,
+    def.problemKeys,
+    def,
+  );
+  const count = (problems: AllProblems) =>
+    problemKeysSize(problems, def.problemKeys, problems.sectionTotals);
   return {
     id: def.id,
     label: def.label,
+    title,
+    description,
+    emptyMessage,
+    icon: sectionIcon(def, def.id),
     coverage: def.coverage,
     problemKeys: def.problemKeys,
-    count: (problems) => sizeOf(problems, def.select(problems)),
-    node: (problems, totals) => {
-      const items = [...def.select(problems)];
-      return def.render(
-        items,
-        resolveCoverage(def.coverage, totals),
-        sizeOf(problems, items),
-        problemAssembly(
-          def.problemKeys,
-          problems,
-          problems.conversionCoverageFreshness,
-        ),
-      );
-    },
+    rows: def.select,
+    count,
+    node: (problems, totals) =>
+      def.render({
+        items: [...def.select(problems)],
+        coverage: resolveCoverage(def.coverage, totals),
+        count: count(problems),
+        emptyMessage,
+        context: problemContext(def.problemKeys, problems),
+      }),
   };
 }
 
@@ -339,15 +387,13 @@ type RowProblemKey = {
 
 /**
  * A section over uniform `ProblemRow`s: the server computed the evidence line
- * and badges, so the card is generic. `actions` adds the section's own fix.
+ * and badges, so the row is generic. `actions` adds the section's own fix.
  */
 function rowSection<K extends CoverageProblemKey = never>(
   key: RowProblemKey,
   config: {
     id: string;
     label: string;
-    icon?: Icon;
-    entity?: Entity;
     headerAction?:
       | ReactNode
       | ((items: ProblemRow[], count: number) => ReactNode);
@@ -355,28 +401,28 @@ function rowSection<K extends CoverageProblemKey = never>(
     actions?: (
       row: ProblemRow,
     ) => Pick<RenderedProblemItem, "customActions" | "inlineFix">;
-  },
+  } & IconProp,
 ): ProblemSectionEntry<K> {
   const { actions, ...rest } = config;
   return section<ProblemRow, K>({
     ...rest,
     select: (p) => p[key],
     problemKeys: [key],
-    // Every row lane reports its true population in `sectionTotals`.
-    totalKey: key,
     renderItem: (row) => ({ ...renderProblemRow(row), ...actions?.(row) }),
   });
 }
 
-function problemAssembly(
-  keys: readonly ProblemKey[] | undefined,
+/**
+ * What a section derives from its canonical Problem queries: the "How it works"
+ * disclosure, the one exact list behind "+N more", and any stale input.
+ */
+function problemContext(
+  keys: readonly ProblemKey[],
   problems: AllProblems,
-  projectionFreshness?: AllProblems["conversionCoverageFreshness"],
-): ReactNode | undefined {
-  const queries = (keys ?? [])
+): ProblemSectionContext {
+  const queries = keys
     .map(problemQuery)
     .filter((query): query is ProblemQuery => query != null);
-  if (!queries.length) return undefined;
   const listLocations = queries.flatMap((query) => {
     const location = problemListLocation(query);
     return location
@@ -389,13 +435,40 @@ function problemAssembly(
         ]
       : [];
   });
-  return (
-    <ProblemAssembly
-      queries={queries}
-      listLocations={listLocations}
-      projectionFreshness={projectionFreshness}
-    />
-  );
+  return {
+    assembly: queries.length ? (
+      <ProblemAssembly queries={queries} listLocations={listLocations} />
+    ) : undefined,
+    listHref:
+      queries.length === 1 && listLocations.length === 1
+        ? listLocations[0]!.location.href
+        : undefined,
+    warning: queries
+      .map((query) => freshnessWarning(query, problems))
+      .find((warning) => warning != null),
+  };
+}
+
+/** A stale or unavailable input, said once in the section it affects. */
+function freshnessWarning(
+  query: ProblemQuery,
+  problems: AllProblems,
+): string | undefined {
+  if (query.freshness.kind === "projection") {
+    const state = problems.conversionCoverageFreshness?.state;
+    if (state === "unavailable")
+      return "Conversion coverage is partially unavailable; exact product worklists omit unavailable rows until enrichment recovers.";
+    if (state === "stale")
+      return "Conversion coverage is stale; exact product worklists omit stale rows until the projection is rebuilt.";
+  }
+  if (query.freshness.kind === "external") {
+    const status = problems.upcFreshness?.status;
+    if (status === "stale")
+      return "UPC refresh was deferred; showing cached proposals where available. Remaining codes will be retried on a later pass.";
+    if (status != null && status !== "fresh")
+      return "UPC lookup is disabled; proposals cannot be refreshed right now.";
+  }
+  return undefined;
 }
 
 /**
@@ -421,6 +494,7 @@ function UpcApplyAction({
   return (
     <Button
       size="sm"
+      variant="ghost"
       onClick={() => apply.mutate({ id: product.id, upc: product.upc })}
       disabled={apply.isPending}
     >
@@ -566,6 +640,7 @@ function OpenLocationLink({ shortcode }: { shortcode: string | undefined }) {
   return (
     <Button
       size="sm"
+      variant="ghost"
       render={<Link to="/locations/$shortcode" params={{ shortcode }} />}
       nativeButton={false}
     >
@@ -578,7 +653,7 @@ function ManufacturerVariantLink({ manufacturer }: { manufacturer: string }) {
   return (
     <Button
       size="sm"
-      variant="outline"
+      variant="ghost"
       render={<Link to="/products" search={{ manufacturer }} />}
       nativeButton={false}
     >
@@ -600,6 +675,7 @@ function WorkbenchFixLink({ ingredientId }: { ingredientId: string | null }) {
   return (
     <Button
       size="sm"
+      variant="ghost"
       render={
         <Link
           to="/ingredients/workbench"
@@ -909,6 +985,11 @@ const DECLARED_SECTIONS = [
     select: (p) => p.orphanedProducts,
     problemKeys: ["orphanedProducts"],
     entity: "product",
+    // "All" only when every orphan is loaded, so it never means a sample.
+    headerAction: (items, count) =>
+      items.length > 1 && items.length === count ? (
+        <DeleteAllOrphanedButton ids={items.map((product) => product.id)} />
+      ) : null,
     renderItem: (product) => ({
       title: product.name,
       subtitle: byManufacturer(product.manufacturer),
@@ -916,6 +997,7 @@ const DECLARED_SECTIONS = [
       route: entityDetailLink("product", product.id),
       inlineFix: {
         label: "Delete",
+        destructive: true,
         render: (close) => (
           <OrphanedDeleteFix
             id={product.id}
@@ -1043,7 +1125,6 @@ const DECLARED_SECTIONS = [
     select: (p) =>
       buildUnitCoverageItems([], [], [], p.productsWithTitleDerivableSize),
     problemKeys: ["productsWithTitleDerivableSize"],
-    totalKey: "productsWithTitleDerivableSize",
     // No meter: the denominator would be "every product that could ever state a
     // size in its name", which is not a knowable population.
     coverage: { keys: ["productsWithTitleDerivableSize"] },
@@ -1126,17 +1207,22 @@ const DECLARED_SECTIONS = [
     label: "Locations",
     select: (p) => p.emptyLocations,
     problemKeys: ["emptyLocations"],
-    totalKey: "emptyLocations",
+    entity: "location",
+    title: "Empty locations",
+    description:
+      "Leaf locations holding no inventory entries. Many are deliberate — a crate of zip ties is photographed and described rather than itemized — so treat this as how much of the house is itemized, not as a list of mistakes.",
+    emptyMessage: "All leaf locations have inventory entries.",
     coverage: {
       keys: ["emptyLocations"],
       meter: { total: (t) => t.emptyLocations, doneLabel: "itemized" },
     },
-    render: (items, coverage, count, assembly) => (
+    render: ({ items, coverage, count, emptyMessage, context }) => (
       <EmptyLocationsList
         locations={items}
         coverage={coverage}
         count={count}
-        assembly={assembly}
+        emptyMessage={emptyMessage}
+        context={context}
       />
     ),
   }),

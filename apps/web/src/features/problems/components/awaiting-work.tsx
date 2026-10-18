@@ -5,14 +5,7 @@ import type { ReactNode } from "react";
 
 import { maintenance } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { Row, Stack } from "~/ui/layout";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/ui/primitives/card";
+import { Stack } from "~/ui/layout";
 import { Description } from "~/ui/primitives/description";
 
 /** Poll only while something is waiting; a clean card has nothing to watch. */
@@ -64,7 +57,11 @@ const defaultOperations: AwaitingWorkOperations = {
   awaitingWork: maintenance.awaitingWork.queryOptions,
 };
 
-export function AwaitingWorkCard({
+/**
+ * Derived data whose background update hasn't landed, read from the records
+ * themselves. The Problems page supplies its heading.
+ */
+export function AwaitingWorkList({
   operations = defaultOperations,
 }: {
   operations?: AwaitingWorkOperations;
@@ -107,21 +104,5 @@ export function AwaitingWorkCard({
     );
   }
 
-  return (
-    <Card data-testid="awaiting-work-card">
-      <CardHeader>
-        <Row align="start" justify="between" gap="md" wrap>
-          <Stack gap="xs">
-            <CardTitle>Awaiting work</CardTitle>
-            <CardDescription>
-              Derived data whose background update hasn't landed. Read from the
-              records themselves. Recovery runs automatically on app open and
-              during daily maintenance.
-            </CardDescription>
-          </Stack>
-        </Row>
-      </CardHeader>
-      <CardContent>{body}</CardContent>
-    </Card>
-  );
+  return <div data-testid="awaiting-work">{body}</div>;
 }

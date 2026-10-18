@@ -1,9 +1,11 @@
 import {
   type AllProblems,
   EMPTY_PROBLEM_ARRAYS,
+  isAutoFixProblemKey,
   PROBLEM_CLASS,
   problemRowSchema,
   type ProblemKey,
+  splitDefects,
   understatedCostMealSchema,
 } from "@cubby/schemas/problems";
 import { testShortcode } from "@cubby/schemas/testing";
@@ -24,7 +26,7 @@ const isStringProperty = (property: PropertyKey): property is string =>
 
 /**
  * The detector keys a section actually renders, taken from the section itself
- * rather than from a second hand-written list: `count` runs the section's own
+ * rather than from a second hand-written list: `rows` runs the section's own
  * `select` over a probe that records every key it touches. That is what makes
  * this file a check on `coverage.keys` and not just a restatement of it — a
  * section whose declared keys drift from its `select` fails here.
@@ -44,7 +46,7 @@ function keysReadBy(section: Section): ProblemKey[] {
       return [];
     },
   });
-  section.count(proxied);
+  section.rows(proxied);
   return [...read].filter((key): key is ProblemKey => key in PROBLEM_CLASS);
 }
 
@@ -84,6 +86,35 @@ describe("PROBLEM_SECTIONS", () => {
       }
     },
   );
+
+  it("sums section counts to the split headline when lanes return samples", () => {
+    // Every lane returns a one-row sample of a much larger true population —
+    // the shape that made the summary chips count samples while the headline
+    // counted the backlog.
+    const sections = Object.fromEntries(
+      ALL_PROBLEM_KEYS.map((key) => [key, [{}]]),
+    );
+    const sectionTotals = Object.fromEntries(
+      ALL_PROBLEM_KEYS.map((key, index) => [key, 100 + index]),
+    );
+    const problems: AllProblems = {
+      ...EMPTY_PROBLEM_ARRAYS,
+      ...sections,
+      sectionTotals,
+      totalProblems: 0,
+    };
+    const sum = (sections: readonly Section[]) =>
+      sections.reduce((n, section) => n + section.count(problems), 0);
+    const defects = PROBLEM_SECTIONS.filter((s) => s.coverage == null);
+    const autoFix = defects.filter((s) =>
+      s.problemKeys.every(isAutoFixProblemKey),
+    );
+    const needsYou = defects.filter((s) => !autoFix.includes(s));
+
+    expect({ needsYou: sum(needsYou), autoFix: sum(autoFix) }).toEqual(
+      splitDefects(sections, sectionTotals),
+    );
+  });
 
   it("renders every detector key in exactly one section", () => {
     const rendered = PROBLEM_SECTIONS.flatMap(keysReadBy);

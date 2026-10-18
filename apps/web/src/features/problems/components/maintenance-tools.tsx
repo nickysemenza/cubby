@@ -22,13 +22,6 @@ import {
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/ui/primitives/card";
 import { Description } from "~/ui/primitives/description";
 import { Eyebrow } from "~/ui/primitives/eyebrow";
 
@@ -432,45 +425,37 @@ const MAINTENANCE_GROUPS: { group: string; tools: MaintenanceTool[] }[] = [
   },
 ];
 
-/** Exceptional repair tools live on Problems; routine upkeep runs automatically. */
-export function MaintenanceCard() {
+/**
+ * Exceptional repair tools live on Problems; routine upkeep runs automatically.
+ * The Problems page supplies the heading.
+ */
+export function MaintenanceTools() {
   // Always-on "N to do" figures — one cheap DB query (no USDA/UPC network).
   const { data: counts } = useQuery({
     ...problems.getMaintenanceCounts.queryOptions(),
   });
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Maintenance</CardTitle>
-        <CardDescription>
-          Rebuilds derived data on demand. Routine upkeep happens at write time;
-          these are one-off tools.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Stack gap="lg">
-          <ImageProcessingMaintenance />
-          {MAINTENANCE_GROUPS.map(({ group, tools }) => (
-            <Stack key={group} gap="tight">
-              <Eyebrow>{group}</Eyebrow>
-              <div className="divide-y divide-border/60">
-                {tools.map((t) => (
-                  <MaintenanceRow
-                    key={t.label}
-                    label={t.label}
-                    description={t.description}
-                    showCount={!!t.count}
-                    count={t.count && counts ? t.count(counts) : undefined}
-                    approximate={t.approximate}
-                    action={t.action}
-                  />
-                ))}
-              </div>
-            </Stack>
-          ))}
+    <Stack gap="lg">
+      <ImageProcessingMaintenance />
+      {MAINTENANCE_GROUPS.map(({ group, tools }) => (
+        <Stack key={group} gap="tight">
+          <Eyebrow>{group}</Eyebrow>
+          <div className="divide-y divide-border/60">
+            {tools.map((t) => (
+              <MaintenanceRow
+                key={t.label}
+                label={t.label}
+                description={t.description}
+                showCount={!!t.count}
+                count={t.count && counts ? t.count(counts) : undefined}
+                approximate={t.approximate}
+                action={t.action}
+              />
+            ))}
+          </div>
         </Stack>
-      </CardContent>
-    </Card>
+      ))}
+    </Stack>
   );
 }

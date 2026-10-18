@@ -189,6 +189,17 @@ link to the passive Problems overview until Run detail reads stop recovering
 execution. Problems and Research saved views link into this projection without
 creating assignments.
 
+The Problems overview is one `IndexedSections` page grouped Needs you,
+Fixes automatically, Coverage & cues and Upkeep. Its headline reads inline
+"N need you · M fix automatically · K coverage gaps", each figure the sum of
+its group's contents counts, and the Fix button shows M. A section's count is
+the true size of its detector keys, never its sampled rows. Rows render through
+`RecordList` with a defect, quiet auto-fix or coverage mark, wrapping messages
+and ghost actions; a sampled section closes with "+N more" into its exact list,
+and auto-fix sections preview three rows. "How it works" folds each query's
+assembly; a stale input is one warning line in the section it affects. Checks
+with nothing to report fold into one "N checks passing" line after the groups.
+
 Specialist workflows such as photo review, import, calendar, Gantt, camera, reconciliation, and matrices keep their task-specific controls inside the shared frame. Preserve status wording and raw diagnostics where the product contract requires them.
 
 Photo review keeps a Label media slot even without a label photo: show Missing,

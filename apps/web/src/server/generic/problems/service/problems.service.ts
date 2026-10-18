@@ -16,6 +16,7 @@ import {
 import { measureEstimate, estimateCoverage } from "@cubby/schemas/nutrition";
 import {
   allProblemsSchema,
+  AUTO_FIX_PROBLEM_KEYS,
   type CoverageTotals,
   ingredientWithPartialCoverageSchema,
   type MaintenanceCounts,
@@ -47,7 +48,7 @@ import {
 } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
 import { createLogger } from "@cubby/worker-tracing";
-import { sum, uniq, uniqBy } from "es-toolkit";
+import { sum, sumBy, uniq, uniqBy } from "es-toolkit";
 import { z } from "zod";
 
 import { listEntities } from "~/entity/generated/entity-lists.gen";
@@ -1722,8 +1723,10 @@ export const findProblemCounts = async (
           : total,
       0,
     );
+  const autoFixTotal = sumBy(AUTO_FIX_PROBLEM_KEYS, (key) => byType[key]);
   return {
-    total: totalFor("defect"),
+    total: totalFor("defect") - autoFixTotal,
+    autoFixTotal,
     coverageTotal: totalFor("coverage"),
     byType,
   };

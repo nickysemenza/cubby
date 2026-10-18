@@ -1,24 +1,24 @@
-import type { AllProblems } from "@cubby/schemas/problems";
+import { isAutoFixProblemKey } from "@cubby/schemas/problems";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
-import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
+import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
+import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
 import { useQuery } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
-import { useMemo, useRef, useState } from "react";
+import { type ReactNode, useMemo } from "react";
 
 import { problems as problemOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatCount } from "~/lib/number-format";
+import { cn } from "~/lib/utils";
+import { RecordDot, RecordList, RecordRow } from "~/ui/common/record-list";
+import {
+  IndexedSections,
+  type IndexedSection,
+  type IndexedSectionGroup,
+} from "~/ui/data-table/indexed-sections";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
-import { Row, Section, Stack } from "~/ui/layout";
-import { Badge } from "~/ui/primitives/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/ui/primitives/card";
 import {
   Collapsible,
   CollapsibleContent,
@@ -26,56 +26,34 @@ import {
 } from "~/ui/primitives/collapsible";
 import { Spinner } from "~/ui/primitives/spinner";
 
-import { AutoFixButton, useAutoFixPlan } from "./components/auto-fix-button";
-import { AUTO_FIX_SECTION_IDS } from "./components/auto-fix-registry";
-import { AwaitingWorkCard } from "./components/awaiting-work-card";
-import { MaintenanceCard } from "./components/maintenance-card";
-import { PROBLEM_SECTIONS } from "./components/problem-sections";
+import { AutoFixButton } from "./components/auto-fix-button";
+import { AwaitingWorkList } from "./components/awaiting-work";
+import { MaintenanceTools } from "./components/maintenance-tools";
+import type { ProblemSectionKind } from "./components/problem-section";
+import {
+  PROBLEM_SECTIONS,
+  type ProblemSectionEntry,
+} from "./components/problem-sections";
 import { RecipeUsageContext } from "./components/recipe-usage-context";
 import { problemSectionLaneState } from "./problem-lane-state";
 import { useProblemsData } from "./use-problems-data";
 
-/**
- * Scroll to a node that may not be laid out yet.
- *
- * A section revealed by opening the collapsed group mounts *before* it has any
- * height — Base UI animates the panel open, and `scrollIntoView` on a zero-height
- * node is a silent no-op, which is exactly how the chip ended up doing nothing.
- * Wait for real layout, bounded so a permanently-hidden node can't spin frames.
- */
-function scrollWhenLaidOut(el: HTMLElement, framesLeft = 20) {
-  if (el.offsetHeight > 0) {
-    el.scrollIntoView({ behavior: "smooth" });
-    return;
-  }
-  if (framesLeft <= 0) return;
-  requestAnimationFrame(() => scrollWhenLaidOut(el, framesLeft - 1));
-}
+type Entry = (typeof PROBLEM_SECTIONS)[number];
 
-// Three disjoint lists. Coverage is checked FIRST so a coverage section can't
-// also fall into the main list (`images` is coverage and has a fix-all button,
-// but isn't one of the Fix button's auto-fix tasks).
-const COVERAGE_SECTIONS = PROBLEM_SECTIONS.filter((s) => s.coverage != null);
-const MAIN_SECTIONS = PROBLEM_SECTIONS.filter(
-  (section) =>
-    section.coverage == null && !AUTO_FIX_SECTION_IDS.has(section.id),
+// A defect section is auto-fixable when the Fix button clears every key it
+// renders. Three disjoint lists; coverage is checked first so a coverage
+// section can't also land in a defect group.
+const isAutoFixSection = (section: Entry) =>
+  section.coverage == null && section.problemKeys.every(isAutoFixProblemKey);
+const NEEDS_YOU_SECTIONS = PROBLEM_SECTIONS.filter(
+  (section) => section.coverage == null && !isAutoFixSection(section),
 );
-const AUTO_FIXABLE_SECTIONS = PROBLEM_SECTIONS.filter(
-  (section) => section.coverage == null && AUTO_FIX_SECTION_IDS.has(section.id),
+const AUTO_FIX_SECTIONS = PROBLEM_SECTIONS.filter(isAutoFixSection);
+const COVERAGE_SECTIONS = PROBLEM_SECTIONS.filter(
+  (section) => section.coverage != null,
 );
 
 export function ProblemsOverview() {
-  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  // Sections the Fix button clears live in a collapsed group, so a chip pointing
-  // at one has to open the group before it can scroll. Opening isn't enough to
-  // scroll in the same pass: Base UI mounts the panel's children a beat after
-  // `open` flips, so an effect keyed on the click sees a null ref, silently
-  // no-ops, and the chip does nothing. Park the id in a REF instead and let the
-  // section's own ref callback scroll the moment its node lands — exact, with no
-  // polling and no stale closure over the pending id.
-  const [autoFixOpen, setAutoFixOpen] = useState(false);
-  const pendingScrollId = useRef<string | null>(null);
-
   // The page loads detectors as five cost-grouped, unbatched queries (each its
   // own Worker invocation/CPU budget — see useProblemsData) and merges them back
   // into the AllProblems shape the sections expect. The hook keeps results warm
@@ -92,8 +70,8 @@ export function ProblemsOverview() {
   const isLoading = useHydratedLoading(detectorsLoading && !hasResolvedLane);
 
   // Every product shortcode across the product-bearing sections, so we fetch
-  // recipe usage once for the whole page rather than per card. Keyed by
-  // shortcode because that is the only id the cards themselves carry.
+  // recipe usage once for the whole page rather than per row. Keyed by
+  // shortcode because that is the only id the rows themselves carry.
   const productShortcodes = useMemo(
     () =>
       problems
@@ -137,258 +115,212 @@ export function ProblemsOverview() {
     return <ErrorDisplay error={error} className="bg-destructive/10 p-4" />;
   }
 
-  const scrollToSection = (id: string, grouped: boolean) => {
-    const mounted = sectionRefs.current[id];
-    if (mounted) {
-      scrollWhenLaidOut(mounted);
-      return;
+  const passing: Entry[] = [];
+
+  /** One check as an indexed section, or nothing when it passed. */
+  const toSection = (
+    entry: ProblemSectionEntry,
+    kind: ProblemSectionKind,
+  ): IndexedSection | null => {
+    const base = {
+      id: entry.id,
+      title: entry.title,
+      description: entry.description,
+      icon: entry.icon,
+    };
+    const state = problemSectionLaneState(entry.problemKeys, laneStates);
+    if (state.state === "error") {
+      // Keep the check's identity: a failed lane still names WHICH check is
+      // missing, and says its rows aren't in the totals.
+      return {
+        ...base,
+        description: "This check couldn't run, so its rows aren't counted.",
+        content: <ErrorDisplay error={state.error} />,
+      };
     }
-    // Not in the DOM yet ⇒ it's inside the collapsed group. Open it and let the
-    // ref callback below finish the job once the panel mounts.
-    pendingScrollId.current = id;
-    if (grouped) setAutoFixOpen(true);
+    if (state.state === "loading") {
+      return {
+        ...base,
+        content: <RecordList state={{ status: "pending" }} />,
+      };
+    }
+    const count = entry.count(problems);
+    if (count === 0) {
+      if (!entry.hideWhenEmpty) passing.push(entry);
+      return null;
+    }
+    return {
+      ...base,
+      count,
+      headerAction: entry.headerAction?.(problems),
+      // Inline fixes open comboboxes that must escape the section plane.
+      overflowVisible: true,
+      content: entry.node(problems, coverageTotals, kind),
+    };
   };
 
-  const renderSection = (section: (typeof PROBLEM_SECTIONS)[number]) => (
-    <div
-      key={section.id}
-      ref={(el) => {
-        sectionRefs.current[section.id] = el;
-        if (el && pendingScrollId.current === section.id) {
-          pendingScrollId.current = null;
-          scrollWhenLaidOut(el);
-        }
-      }}
-    >
-      {(() => {
-        const state = problemSectionLaneState(
-          section.problemKeys ?? [],
-          laneStates,
-        );
-        if (state.state === "error") {
-          // Keep the section's identity. A bare ErrorDisplay replaced the whole
-          // card, so a failed lane left an anonymous red box where a named
-          // check used to be — you couldn't tell WHICH check was missing, only
-          // that something was.
-          return (
-            <Card>
-              <CardHeader>
-                <CardTitle>
-                  <WarningIcon className="size-5 text-destructive" />
-                  {section.label}
-                </CardTitle>
-                <CardDescription>
-                  This check couldn't run, so its rows aren't included in the
-                  totals above.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ErrorDisplay error={state.error} />
-              </CardContent>
-            </Card>
-          );
-        }
-        if (state.state === "loading") {
-          return <SimpleLoading text={`Checking ${section.label}…`} />;
-        }
-        return section.node(problems, coverageTotals);
-      })()}
-    </div>
-  );
+  const sectionsOf = (entries: readonly Entry[], kind: ProblemSectionKind) =>
+    entries
+      .map((entry) => toSection(entry, kind))
+      .filter((section) => section != null);
+
+  const needsYou = sectionsOf(NEEDS_YOU_SECTIONS, "needs-you");
+  const autoFix = sectionsOf(AUTO_FIX_SECTIONS, "auto-fix");
+  const coverage = sectionsOf(COVERAGE_SECTIONS, "coverage");
+  // The headline is the sidebar's own counts summed, so the two can't disagree.
+  const total = (sections: IndexedSection[]) =>
+    sections.reduce((n, section) => n + (section.count ?? 0), 0);
+
+  const groups: IndexedSectionGroup[] = [
+    { id: "needs-you", title: "Needs you", sections: needsYou },
+    {
+      id: "fixes-automatically",
+      title: "Fixes automatically",
+      sections: autoFix,
+    },
+    { id: "coverage-and-cues", title: "Coverage & cues", sections: coverage },
+    {
+      id: "upkeep",
+      title: "Upkeep",
+      sections: [
+        {
+          id: "awaiting-work",
+          title: "Awaiting work",
+          description:
+            "Derived data whose background update hasn't landed. Recovery runs automatically on app open and during daily maintenance.",
+          icon: ClockIcon,
+          content: <AwaitingWorkList />,
+        },
+        {
+          id: "maintenance",
+          title: "Maintenance",
+          description:
+            "Rebuilds derived data on demand. Routine upkeep happens at write time; these are one-off tools.",
+          icon: WrenchIcon,
+          content: <MaintenanceTools />,
+        },
+      ],
+    },
+  ].filter((group) => group.sections.length > 0);
 
   return (
     <RecipeUsageContext.Provider value={recipeUsage ?? {}}>
-      <Stack gap="lg">
-        <ProblemsSummary
-          problems={problems}
-          analyzing={detectorsLoading}
-          onJump={scrollToSection}
-        />
-
-        {problems.upcFreshness?.status !== "fresh" &&
-          problems.upcFreshness != null && (
-            <output className="block border border-warning/40 bg-warning/10 px-4 py-2 text-sm text-warning-ink">
-              {problems.upcFreshness.status === "stale"
-                ? "UPC refresh was deferred; showing cached proposals where available. Remaining codes will be retried on a later pass."
-                : "UPC lookup is disabled; proposals cannot be refreshed right now."}
-            </output>
-          )}
-
-        {problems.conversionCoverageFreshness?.state !== "fresh" &&
-          problems.conversionCoverageFreshness != null && (
-            <output className="block border border-warning/40 bg-warning/10 px-4 py-2 text-sm text-warning-ink">
-              {problems.conversionCoverageFreshness.state === "unavailable"
-                ? "Conversion coverage is partially unavailable; exact product worklists omit unavailable rows until enrichment recovers."
-                : "Conversion coverage is stale; exact product worklists omit stale rows until the projection is rebuilt."}
-            </output>
-          )}
-
-        {MAIN_SECTIONS.map(renderSection)}
-
-        {/* Everything the Fix button clears, folded away: one click empties
-            these, so they'd otherwise be a wall of rows nobody has to read. */}
-        <AutoFixableGroup
-          problems={problems}
-          open={autoFixOpen}
-          onOpenChange={setAutoFixOpen}
-        >
-          {AUTO_FIXABLE_SECTIONS.map(renderSection)}
-        </AutoFixableGroup>
-
-        {/* Backlog and advisory cues, not defects. Kept on this page (it's the
-            same housekeeping headspace) but below the issues and visually
-            distinct: these never reach zero, so counting them as problems is
-            what made the badge permanently red and taught everyone to ignore
-            it. */}
-        <Section
-          title="Coverage & cues"
-          description="How much of the house has been itemized, photographed and counted, plus soft cues that are often correct as they stand. These don't reach zero — new things arrive faster than they get filed — so they're progress and prompts, not problems."
-        >
-          {COVERAGE_SECTIONS.map(renderSection)}
-        </Section>
-
-        {/* Derived work still waiting on a queue wakeup, then the one-off tools —
-            surfaced here (not just buried in Settings) so the "fix it" affordances
-            live right next to the issues. Same shared cards as Settings →
-            Developer / Maintenance, same mutations. */}
-        <AwaitingWorkCard />
-        <MaintenanceCard />
-      </Stack>
+      <ProblemsHeadline
+        needsYou={total(needsYou)}
+        autoFix={total(autoFix)}
+        coverage={total(coverage)}
+        analyzing={detectorsLoading}
+        fix={<AutoFixButton problems={problems} />}
+      />
+      <IndexedSections
+        groups={groups}
+        footer={<PassingChecks entries={passing} />}
+      />
     </RecipeUsageContext.Provider>
   );
 }
 
 /**
- * The headline card. The total is decomposed rather than shown alone: a bare
- * four-digit number reads as an indictment, while "N issues · M auto-fixable"
- * tells you how much of it is actually yours to do.
+ * The page's figures as inline stats. Split by who resolves them: a bare
+ * four-digit total that is mostly search-index backlog reads as an indictment,
+ * while "N need you · M fix automatically" says how much is actually yours.
  */
-function ProblemsSummary({
-  problems,
+function ProblemsHeadline({
+  needsYou,
+  autoFix,
+  coverage,
   analyzing,
-  onJump,
+  fix,
 }: {
-  problems: AllProblems;
+  needsYou: number;
+  autoFix: number;
+  coverage: number;
   analyzing: boolean;
-  onJump: (id: string, grouped: boolean) => void;
+  fix: ReactNode;
 }) {
-  // `listedItems`, not `items` — only the part of the run that's actually among
-  // the issues counted above can be described as "N of them".
-  const { listedItems } = useAutoFixPlan(problems);
-
-  if (problems.totalProblems === 0) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            {analyzing ? (
-              <Spinner />
-            ) : (
-              <CheckCircleIcon className="size-5 text-secondary-foreground" />
-            )}
-            {analyzing ? "Analyzing data consistency…" : "All Good!"}
-          </CardTitle>
-          <CardDescription>
-            {analyzing
-              ? "Completed checks will appear below while the remaining lanes run."
-              : "All data consistency checks passed. No issues found."}
-          </CardDescription>
-        </CardHeader>
-      </Card>
-    );
-  }
-
-  // Both the summary chips and the section list derive from PROBLEM_SECTIONS,
-  // so each check is declared exactly once (see ./components/problem-sections).
-  // Coverage sections are excluded: this card counts issues, and their rows
-  // aren't issues — they'd also swamp the chip row, being the bulk of the page.
-  const chips = PROBLEM_SECTIONS.filter((s) => s.coverage == null)
-    .map((section) => ({
-      id: section.id,
-      label: section.label,
-      count: section.count(problems),
-      grouped: AUTO_FIX_SECTION_IDS.has(section.id),
-    }))
-    .filter((cat) => cat.count > 0);
-
+  const clean = needsYou + autoFix === 0;
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <Row align="start" justify="between" gap="md">
-          <Stack gap="tight">
-            <CardTitle>
-              <Badge variant="destructive" className="text-base">
-                {problems.totalProblems}
-              </Badge>
-              {problems.totalProblems === 1 ? "Issue" : "Issues"} Found
-            </CardTitle>
-            {listedItems > 0 && (
-              <CardDescription>
-                {listedItems} of them need no decisions from you.
-              </CardDescription>
-            )}
-            {analyzing && (
-              <CardDescription>More checks are still running.</CardDescription>
-            )}
-          </Stack>
-          <AutoFixButton problems={problems} />
-        </Row>
-        <Row gap="sm" wrap className="pt-2">
-          {chips.map((cat) => (
-            <button
-              key={cat.id}
-              type="button"
-              onClick={() => onJump(cat.id, cat.grouped)}
-              className="inline-flex items-center gap-2 bg-muted px-2 py-1 text-sm transition-colors hover:bg-muted/80"
-            >
-              {cat.label}
-              <Badge
-                variant={cat.grouped ? "secondary" : "destructive"}
-                className="ml-1"
-              >
-                {cat.count}
-              </Badge>
-            </button>
-          ))}
-        </Row>
-      </CardHeader>
-    </Card>
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+        {analyzing ? (
+          <Spinner aria-hidden className="size-3.5" />
+        ) : clean ? (
+          <CheckCircleIcon
+            aria-hidden
+            className="size-4 text-secondary-foreground"
+          />
+        ) : null}
+        {clean && !analyzing ? (
+          <span className="text-foreground">Every check passes.</span>
+        ) : (
+          <>
+            <Stat value={needsYou} tone={needsYou > 0 ? "alert" : "plain"} />
+            need you
+            <span aria-hidden>·</span>
+            <Stat value={autoFix} />
+            fix automatically
+          </>
+        )}
+        {coverage > 0 && (
+          <>
+            <span aria-hidden>·</span>
+            <Stat value={coverage} />
+            coverage gaps
+          </>
+        )}
+        {analyzing && <span>· more checks are still running</span>}
+      </p>
+      {autoFix > 0 && fix}
+    </div>
   );
 }
 
-function AutoFixableGroup({
-  problems,
-  open,
-  onOpenChange,
-  children,
+function Stat({
+  value,
+  tone = "plain",
 }: {
-  problems: AllProblems;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  children: React.ReactNode;
+  value: number;
+  tone?: "plain" | "alert";
 }) {
-  const total = AUTO_FIXABLE_SECTIONS.reduce(
-    (n, s) => n + s.count(problems),
-    0,
-  );
-  if (total === 0) return null;
-
   return (
-    <Collapsible open={open} onOpenChange={onOpenChange}>
-      <CollapsibleTrigger className="flex w-full items-center gap-2 border border-border px-4 py-2 text-left text-sm transition-colors hover:bg-muted/50">
+    <span
+      className={cn(
+        "font-mono font-semibold tabular-nums",
+        tone === "alert" ? "text-destructive" : "text-foreground",
+      )}
+    >
+      {formatCount(value)}
+    </span>
+  );
+}
+
+/**
+ * Checks with nothing to report, folded into one line after the sections: worth
+ * confirming, but an empty card between real problems is clutter.
+ */
+function PassingChecks({ entries }: { entries: readonly Entry[] }) {
+  if (entries.length === 0) return null;
+  return (
+    <Collapsible className="border-t border-border pt-2">
+      <CollapsibleTrigger className="group flex min-h-7 items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground max-md:min-h-11">
         <CaretRightIcon
-          className={`size-3.5 shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
+          aria-hidden
+          className="size-3 transition-transform group-data-[panel-open]:rotate-90 motion-reduce:transition-none"
         />
-        <span className="font-medium">Auto-fixable</span>
-        <Badge variant="secondary">{total}</Badge>
-        <span className="text-muted-foreground">
-          cleared by the Fix button — no decisions needed
-        </span>
+        <CheckCircleIcon aria-hidden className="size-3.5" />
+        {entries.length} {entries.length === 1 ? "check" : "checks"} passing
       </CollapsibleTrigger>
       <CollapsibleContent>
-        <Stack gap="lg" className="pt-4">
-          {children}
-        </Stack>
+        <RecordList aria-label="Passing checks" className="mt-1">
+          {entries.map((entry) => (
+            <RecordRow
+              key={entry.id}
+              leading={<RecordDot tone="positive" label="Passing" />}
+              primary={entry.title}
+              secondary={entry.emptyMessage}
+            />
+          ))}
+        </RecordList>
       </CollapsibleContent>
     </Collapsible>
   );

@@ -18,6 +18,7 @@ import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
 import { withoutSourceAlias, withoutSourceRef } from "./duplicate-claims";
+import { ConfirmHeaderButton } from "./ingredient-cleanup-fixes";
 
 const deleteProduct = entityMutationOptionsFactory("product", "delete");
 
@@ -62,6 +63,26 @@ export function OrphanedDeleteFix({
         Delete product
       </Button>
     </Stack>
+  );
+}
+
+/**
+ * Delete every orphaned product the section lists. Offered only when the
+ * section holds its whole population, so "all" never means a sample.
+ */
+export function DeleteAllOrphanedButton({ ids }: { ids: readonly string[] }) {
+  const remove = useActionMutation({
+    mutationFn: deleteProduct,
+    success: `Deleted ${countLabel(ids.length, "product")}`,
+  });
+  return (
+    <ConfirmHeaderButton
+      label={`Delete all (${ids.length})`}
+      title="Delete all orphaned products?"
+      body={`This deletes ${countLabel(ids.length, "product")} with no inventory, no expenses, and no ingredient.`}
+      isPending={remove.isPending}
+      onConfirm={() => remove.mutate({ ids: [...ids] })}
+    />
   );
 }
 

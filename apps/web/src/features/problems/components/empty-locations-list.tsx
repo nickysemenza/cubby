@@ -10,20 +10,26 @@ import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 
 import { AddInventoryDialog } from "./add-inventory-dialog";
-import { ProblemSection, type ProblemSectionCoverage } from "./problem-section";
+import {
+  ProblemSection,
+  type ProblemSectionContext,
+  type ProblemSectionCoverage,
+} from "./problem-section";
 import { createdAgoDetail } from "./render-helpers";
 
 export function EmptyLocationsList({
   locations,
   coverage,
   count,
-  assembly,
+  emptyMessage,
+  context,
 }: {
   locations: ProblemItem<"emptyLocations">[];
   coverage?: ProblemSectionCoverage;
   /** True population — `locations` is a page of it. */
-  count?: number;
-  assembly?: ReactNode;
+  count: number;
+  emptyMessage: string;
+  context: ProblemSectionContext;
 }) {
   const [addDialogLocation, setAddDialogLocation] =
     useState<ProblemItem<"emptyLocations"> | null>(null);
@@ -31,23 +37,19 @@ export function EmptyLocationsList({
   return (
     <>
       <ProblemSection
-        title="Empty Locations"
-        description="Leaf locations holding no inventory entries. Many are deliberate — a crate of zip ties is photographed and described rather than itemized — so treat this as how much of the house is itemized, not as a list of mistakes."
-        entity="location"
         items={locations}
         count={count}
-        assembly={assembly}
+        assembly={context.assembly}
+        listHref={context.listHref}
+        warning={context.warning}
         coverage={coverage}
-        emptyMessage="All leaf locations have inventory entries."
+        emptyMessage={emptyMessage}
         renderItem={(location) => {
           const details: ReactNode[] = [];
 
           if (location.aiDescription) {
             details.push(
-              <p
-                key="ai-desc"
-                className="line-clamp-2 text-sm text-muted-foreground"
-              >
+              <p key="ai-desc" className="line-clamp-2 text-muted-foreground">
                 {location.aiDescription}
               </p>,
             );
@@ -81,7 +83,7 @@ export function EmptyLocationsList({
               <EntityCover
                 images={images}
                 alt={location.name}
-                size={40}
+                size={32}
                 to="/locations/$shortcode"
                 params={{ shortcode: location.id }}
                 preview
@@ -97,7 +99,11 @@ export function EmptyLocationsList({
             details,
             route: entityDetailLink("location", location.id),
             customActions: (
-              <Button size="sm" onClick={() => setAddDialogLocation(location)}>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setAddDialogLocation(location)}
+              >
                 Add Inventory
               </Button>
             ),

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { maintenance } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-import { ImageProvenanceAction } from "./maintenance-card";
+import { ImageProvenanceAction } from "./maintenance-tools";
 
 const cursorOne = "00000000-0000-4000-8000-000000000001";
 const cursorTwo = "00000000-0000-4000-8000-000000000002";

@@ -14,6 +14,7 @@ const operations: ProblemsBannerOperations = {
   getCounts: problems.getCounts.withTransport(async () =>
     problemsCountSchema.parse({
       total: 2,
+      autoFixTotal: 0,
       coverageTotal: 3,
       byType: Object.fromEntries(
         Object.keys(problemsCountSchema.shape.byType.shape).map((key) => [

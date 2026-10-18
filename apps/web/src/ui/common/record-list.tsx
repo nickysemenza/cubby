@@ -205,10 +205,13 @@ export function RecordHeading({
 export function RecordMore({
   label,
   link,
+  href,
   onClick,
 }: {
   label: string;
   link?: Pick<LinkProps, "to" | "search" | "params">;
+  /** A prebuilt list URL (filters and sort encoded) when no typed route fits. */
+  href?: string;
   onClick?: () => void;
 }) {
   const className =
@@ -221,6 +224,11 @@ export function RecordMore({
             {label}
             <CaretRightIcon aria-hidden className="size-3" />
           </Link>
+        ) : href ? (
+          <a href={href} className={className}>
+            {label}
+            <CaretRightIcon aria-hidden className="size-3" />
+          </a>
         ) : (
           <button type="button" className={className} onClick={onClick}>
             {label}
