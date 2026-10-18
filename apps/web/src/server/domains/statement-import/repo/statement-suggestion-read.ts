@@ -171,9 +171,11 @@ export async function listStatementSuggestionGroups(db: Database) {
     GROUP BY fa.shortcode, fa.name, 3
     ORDER BY 3 DESC, fa.name
   `);
-  return rows.map((row) => ({
-    ...row,
-    accountId: parseShortcodeFor("financialAccount", row.accountId),
-    amount: Number(row.amount),
-  }));
+  return {
+    data: rows.map((row) => ({
+      ...row,
+      accountId: parseShortcodeFor("financialAccount", row.accountId),
+      amount: Number(row.amount),
+    })),
+  };
 }

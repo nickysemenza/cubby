@@ -183,9 +183,9 @@ export const statementSuggestionGroupOut = z.object({
   void: z.number().int(),
   amount: z.number(),
 });
-export const statementSuggestionGroupsOut = z.array(
-  statementSuggestionGroupOut,
-);
+export const statementSuggestionGroupsOut = z.object({
+  data: z.array(statementSuggestionGroupOut),
+});
 
 const chargeCursor = z.object({
   source: z.string().min(1),
