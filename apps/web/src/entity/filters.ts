@@ -4,9 +4,11 @@ import {
   FILTER_ALL,
   FILTER_ANY,
   FILTER_EXACT,
+  FILTER_LIST_SEPARATOR,
   FILTER_NONE,
   FILTER_NOT_PREFIX,
   splitExcluded,
+  splitFilterList,
 } from "@cubby/schemas/filter-sentinel-fields";
 import {
   CURRENT_MEMBER_FILTER,
@@ -73,6 +75,11 @@ export interface FilterSpecCore {
   range?: { from: string; to: string };
   /** An id scope the server accepts one value for: the control picks one. */
   singleValue?: boolean;
+  /**
+   * Scopes sharing a group hold one value between them (Email's Purchase,
+   * Vendor and Vendor account): picking one replaces the others.
+   */
+  exclusiveGroup?: string;
   /**
    * Marks a picklist as covering a NULLABLE column: the control gains the
    * Any value / No value options below, and the builder routes them to
@@ -160,7 +167,10 @@ const single = (value: FilterValue): string | undefined =>
  * Everything funnels through here so one shape reaches the wire.
  */
 const many = (value: FilterValue): string[] | undefined => {
-  const values = Array.isArray(value) ? value : value ? [value] : [];
+  // A typed entry can hold `a, b` before the URL codec splits it.
+  const values = (Array.isArray(value) ? value : value ? [value] : []).flatMap(
+    splitFilterList,
+  );
   return values.length ? values : undefined;
 };
 
@@ -409,7 +419,7 @@ export const soleValue = <T>(value: T | T[] | undefined): T | undefined => {
 // split on read here — uniformly, from the manifest, so no two keys can end up
 // encoding differently.
 
-const LIST_SEPARATOR = ",";
+const LIST_SEPARATOR = FILTER_LIST_SEPARATOR;
 
 /** The one search-param key a spec reads and writes. */
 export const filterUrlKey = (
@@ -539,19 +549,17 @@ export function decodeFilters<TSearch extends {}>(
 ): ColumnFilterValue[] {
   const parsedSearch = parseFilterSearch(search);
   const filters: ColumnFilterValue[] = [];
-  const listParts = (raw: string | undefined) =>
-    (raw ?? "")
-      .split(LIST_SEPARATOR)
-      .map((part) => part.trim())
-      .filter(Boolean);
   for (const spec of specs) {
     const exclude = excludeKey(spec);
     const excluded = exclude
-      ? listParts(parsedSearch[exclude]).map(
+      ? splitFilterList(parsedSearch[exclude]).map(
           (value) => `${FILTER_NOT_PREFIX}${value}`,
         )
       : [];
-    const parts = [...listParts(parsedSearch[filterUrlKey(spec)]), ...excluded];
+    const parts = [
+      ...splitFilterList(parsedSearch[filterUrlKey(spec)]),
+      ...excluded,
+    ];
     const first = parts[0];
     if (first === undefined) continue;
     const exact =

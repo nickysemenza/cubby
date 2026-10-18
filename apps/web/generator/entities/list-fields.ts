@@ -485,6 +485,7 @@ const toggleDescriptor = (target: CompiledEntity): FilterDescriptor => {
     subtree: null,
     currentMember: false,
     singleValue: null,
+    exclusiveGroup: null,
     wire: { kind: "param", name: key },
   };
 };
@@ -548,6 +549,93 @@ const withExcludeKey = (
       reason: bound?.shape === "predicate" ? bound.exclude : null,
     },
   };
+};
+
+/**
+ * The noun a descriptor's menu entry reads by: a related view's relation
+ * label (its column header), else its placeholder's noun. `singular` names
+ * one of the relation's records ("Expense search").
+ */
+const menuNoun = (
+  descriptor: FilterDescriptor,
+  entity: CompiledEntity,
+  byKey: ReadonlyMap<string, CompiledEntity>,
+  singular = false,
+): string => {
+  const relation = relationOf(descriptor, entity);
+  if (relation !== undefined) {
+    const target = byKey.get(relation.target);
+    return singular && target && relation.label === pluralOf(target)
+      ? target.inspector.singular
+      : relation.label;
+  }
+  return placeholderNoun(descriptor);
+};
+
+const relationOf = (descriptor: FilterDescriptor, entity: CompiledEntity) => {
+  const key = /^related:[^.]+\.(.+)$/u.exec(descriptor.columnId)?.[1];
+  return entity.relations.find((candidate) => candidate.key === key);
+};
+
+/** The noun a placeholder names ("Filter by related expenses id..."). */
+const placeholderNoun = (descriptor: FilterDescriptor): string => {
+  // Mirrors `filterSpecLabel`: only "related … id" drops its "id".
+  const related = /^(Filter|Search)( by)? related\b/iu.test(
+    descriptor.placeholder,
+  );
+  const noun = descriptor.placeholder
+    .replace(/^(Filter|Search)( by)?( related)?\s*/iu, "")
+    .replace(
+      related ? /\s*(id|presence)?\.\.\.$/iu : /\s*(presence)?\.\.\.$/iu,
+      "",
+    )
+    .trim();
+  return noun.slice(0, 1).toUpperCase() + noun.slice(1);
+};
+
+/**
+ * A text search or a count range that names the same noun as another of the
+ * entity's filters (a relation's record picker reads "Expenses") is labelled
+ * for what it is — "Expense search", "Expenses count" — so no two Filters-menu
+ * entries read alike. A declared label is kept.
+ */
+const withDistinctMenuLabels = (
+  descriptors: readonly FilterDescriptor[],
+  entity: CompiledEntity,
+  byKey: ReadonlyMap<string, CompiledEntity>,
+): FilterDescriptor[] => {
+  const wire = (descriptor: FilterDescriptor) =>
+    descriptor.field ?? descriptor.columnId;
+  // A related column reads its relation label as a header, and its
+  // placeholder's noun where no column hosts it; either can collide.
+  const nouns = descriptors.map(
+    (descriptor) =>
+      new Set(
+        (descriptor.label === null
+          ? [menuNoun(descriptor, entity, byKey), placeholderNoun(descriptor)]
+          : [descriptor.label]
+        ).map((noun) => noun.toLowerCase()),
+      ),
+  );
+  return descriptors.map((descriptor, index) => {
+    if (
+      descriptor.label !== null ||
+      (descriptor.kind !== "text" && descriptor.kind !== "range")
+    )
+      return descriptor;
+    const collides = descriptors.some(
+      (other, otherIndex) =>
+        otherIndex !== index &&
+        [...nouns[otherIndex]!].some((noun) => nouns[index]!.has(noun)) &&
+        wire(other) !== wire(descriptor),
+    );
+    if (!collides) return descriptor;
+    const noun = menuNoun(descriptor, entity, byKey, true);
+    return {
+      ...descriptor,
+      label: `${noun} ${descriptor.kind === "text" ? "search" : "count"}`,
+    };
+  });
 };
 
 /**
@@ -921,7 +1009,10 @@ export const compileListFields = (
       if (!toggles.some(({ columnId }) => columnId === toggle.columnId))
         toggles.push(toggle);
     }
-    const filterDescriptors = [...compiled, ...toggles];
+    const filterDescriptors = [
+      ...withDistinctMenuLabels(compiled, entity, byKey),
+      ...toggles,
+    ];
     const urlKeys = filterDescriptors.flatMap(({ urlKey, exclude }) =>
       exclude === null ? [urlKey] : [urlKey, exclude.field],
     );

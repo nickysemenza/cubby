@@ -1282,6 +1282,7 @@ const filterDescriptor = (
     subtree: null,
     currentMember: value.currentMember === true,
     singleValue: value.singleValue?.reason ?? null,
+    exclusiveGroup: value.singleValue?.group ?? null,
     sentinels: value.sentinels ?? null,
     wire: filterWire(value, parsedKind, range, modelField),
   };
@@ -1956,6 +1957,7 @@ const suggestionFilterDescriptors = (
       subtree: null,
       currentMember: false,
       singleValue: null,
+      exclusiveGroup: null,
       wire: { kind: "param", name: "suggestionKind" },
     },
   ];
@@ -2018,6 +2020,17 @@ export const compileEntity = (
       `${context}.filters.descriptors[${index}]`,
     ),
   );
+  for (const descriptor of declaredDescriptors) {
+    const group = descriptor.exclusiveGroup;
+    if (
+      group !== null &&
+      declaredDescriptors.filter((peer) => peer.exclusiveGroup === group)
+        .length < 2
+    )
+      throw new EntityDeclarationError(
+        `${context}.filters ${descriptor.columnId} is alone in singleValue group ${group}; a group shares one value between several scopes.`,
+      );
+  }
   const policyGapKinds = classificationPolicyGapKinds(
     declaration.capabilities.classificationPolicies,
     context,
@@ -2101,6 +2114,7 @@ export const compileEntity = (
           subtree: null,
           currentMember: false,
           singleValue: null,
+          exclusiveGroup: null,
           wire: { kind: "range", from: "createdFrom", to: "createdTo" },
         },
         {
@@ -2137,6 +2151,7 @@ export const compileEntity = (
           subtree: null,
           currentMember: false,
           singleValue: null,
+          exclusiveGroup: null,
           wire: { kind: "range", from: "updatedFrom", to: "updatedTo" },
         },
       ]

@@ -25,6 +25,20 @@ export const excludedFilterValue = (value: string): string | undefined =>
     ? value.slice(FILTER_NOT_PREFIX.length)
     : undefined;
 
+/** The separator a value list's URL param and typed entry share. */
+export const FILTER_LIST_SEPARATOR = ",";
+
+/**
+ * A comma-separated value list as its values: trimmed, empties dropped. The
+ * URL codec, typed entry, and server-filter builder all read lists through
+ * this, so `ext-a, ext-b` is the same two values however it arrived.
+ */
+export const splitFilterList = (raw: string | undefined): string[] =>
+  (raw ?? "")
+    .split(FILTER_LIST_SEPARATOR)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
 /** A value list split into its included and excluded ("is not") values. */
 export const splitExcluded = (values: readonly string[]) => {
   const included: string[] = [];

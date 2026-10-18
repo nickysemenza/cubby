@@ -621,6 +621,25 @@ describe("paramToSort / sortToParam", () => {
   });
 });
 
+describe("typed value lists", () => {
+  it("builds the same server values from typed entry and from the URL", () => {
+    // Typed `ext-a, ext-b` once reached the server as one value, while a
+    // reload of the same URL decoded two.
+    const specs = [
+      { columnId: "externalId", kind: "multiselect" },
+    ] as const satisfies readonly FilterSpecCore[];
+    const typed = buildFiltersFromManifest(specs, () => "ext-a, ext-b");
+    const reloaded = buildFiltersFromManifest(
+      specs,
+      filterGetterFromColumnFilters(
+        compileFilterCodec(specs).decode({ externalId: "ext-a,ext-b" }),
+      ),
+    );
+    expect(typed).toEqual({ externalId: ["ext-a", "ext-b"] });
+    expect(reloaded).toEqual(typed);
+  });
+});
+
 describe("compileFilterCodec", () => {
   it("folds an Include sub-… toggle's URL key into its filter's state", () => {
     const codec = compileFilterCodec([

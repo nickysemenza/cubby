@@ -238,6 +238,7 @@ export const compileDataQuality = (
     subtree: null,
     currentMember: false,
     singleValue: null,
+    exclusiveGroup: null,
   } as const;
   const statusDescriptor: FilterDescriptor = {
     ...descriptorBase,

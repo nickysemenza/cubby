@@ -1512,7 +1512,15 @@ descriptor — `label`, else the noun its placeholder names, and Yes/No for a
 presence or boolean filter without options — and its value rides in the
 table's filter state beside the column-hosted ones, through the same URL
 codec and server builder. Only a client-filtered table keeps column-less ids
-out of TanStack's state.
+out of TanStack's state. A declared `label` also wins over a hosting column's
+header; a related view's text search is generated as "<Target> search" so it
+never shares a name with the relation's record picker. Every list loads a
+deferred roster for each reference filter (`useEntityList`); a caller's
+`optionsKey` list wins when supplied. A multiselect with nothing to pick
+from takes typed, comma-separated values, split by the same
+`splitFilterList` the URL codec and server builder use.
+`singleValue.group` names scopes that share one value (Email's Purchase,
+Vendor and Vendor account): picking one in the menu replaces the others.
 
 Every compiled value filter (a `multiselect`/`idMulti` over a
 stored column or a `model.derived` entry, plus the generic data-quality and

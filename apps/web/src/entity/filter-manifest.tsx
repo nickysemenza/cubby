@@ -47,16 +47,40 @@ const hasNoRoster = (spec: FilterSpec): boolean =>
   !spec.options?.length && !spec.optionsKey && !spec.nullable;
 
 /**
- * A multiselect with no roster (an external id) takes a typed value; its
- * comma-separated list round-trips through the URL codec. So does a range
- * with neither presets nor date bounds that passes its value through
- * (planting `activeOn`).
+ * The runtime roster a spec reads: the caller's `optionsKey` list when it
+ * supplied one, else the reference's deferred roster, which every list loads
+ * (`useEntityList`) — so an embedded list's Account picker is never empty.
+ */
+const runtimeOptionsKey = (
+  spec: FilterSpec,
+  runtimeOptions: RuntimeFilterOptions | undefined,
+): string | undefined =>
+  spec.optionsKey && runtimeOptions?.[spec.optionsKey] !== undefined
+    ? spec.optionsKey
+    : (referenceFilterOptionsKey(spec) ?? spec.optionsKey);
+
+/**
+ * A multiselect with nothing to pick from takes typed values: an external
+ * id, or an `optionsKey` list this list's caller does not supply.
+ */
+const isFreeText = (
+  spec: FilterSpec,
+  runtimeOptions: RuntimeFilterOptions | undefined,
+): boolean => {
+  if (spec.kind !== "multiselect" || spec.options?.length || spec.nullable)
+    return false;
+  const key = runtimeOptionsKey(spec, runtimeOptions);
+  return key === undefined || runtimeOptions?.[key] === undefined;
+};
+
+/**
+ * A range with neither presets nor date bounds that passes its value
+ * through (planting `activeOn`) takes one typed value.
  */
 const filterTypeForSpec = (
   spec: FilterSpec,
 ): "text" | "select" | "multiselect" =>
   spec.kind === "text" ||
-  (spec.kind === "multiselect" && hasNoRoster(spec)) ||
   (spec.kind === "range" && hasNoRoster(spec) && !spec.range)
     ? "text"
     : isMultiFilterKind(spec.kind) && !spec.singleValue
@@ -73,9 +97,15 @@ export const filterSpecLabel = (
   spec: Pick<FilterSpec, "label" | "placeholder" | "columnId" | "kind">,
 ): string => {
   if (spec.label) return spec.label;
+  // "related … id" names the relation's records; a bare "external id" keeps
+  // its "id".
+  const related = /^(Filter|Search)( by)? related\b/iu.test(spec.placeholder);
   const noun = spec.placeholder
     .replace(/^(Filter|Search)( by)?( related)?\s*/iu, "")
-    .replace(/\s*(id|presence)?\.\.\.$/iu, "")
+    .replace(
+      related ? /\s*(id|presence)?\.\.\.$/iu : /\s*(presence)?\.\.\.$/iu,
+      "",
+    )
     .trim();
   if (!noun) return humanize(spec.columnId);
   return spec.kind === "presence"
@@ -116,7 +146,7 @@ const resolveSpecOptions = (
   spec: FilterSpec,
   runtimeOptions?: RuntimeFilterOptions,
 ): PickerOption[] => {
-  const optionsKey = spec.optionsKey ?? referenceFilterOptionsKey(spec);
+  const optionsKey = runtimeOptionsKey(spec, runtimeOptions);
   const resolved = optionsKey
     ? filterOptionItems(runtimeOptions?.[optionsKey])
     : (spec.options ?? fallbackOptions(spec));
@@ -140,13 +170,16 @@ const specFilterConfig = (
   specs: readonly FilterSpec[],
   runtimeOptions?: RuntimeFilterOptions,
 ): FilterConfig => {
-  const optionsKey = spec.optionsKey ?? referenceFilterOptionsKey(spec);
+  const optionsKey = runtimeOptionsKey(spec, runtimeOptions);
   const deferred = optionsKey
     ? deferredFilterOptionSource(runtimeOptions?.[optionsKey])
     : undefined;
   return {
     placeholder: spec.placeholder,
+    ...(spec.label ? { label: spec.label } : {}),
     filterType: filterTypeForSpec(spec),
+    ...(isFreeText(spec, runtimeOptions) ? { freeText: true } : {}),
+    ...(spec.exclusiveGroup ? { exclusiveGroup: spec.exclusiveGroup } : {}),
     options: resolveSpecOptions(spec, runtimeOptions),
     matchAll: spec.match === undefined ? undefined : true,
     exclude: spec.exclude && { reason: spec.exclude.reason },
@@ -181,6 +214,44 @@ const isExpressible = (spec: FilterSpec): boolean =>
   !hasNoRoster(spec);
 
 /**
+ * The specs a list's Filters menu offers beside its columns' own: every
+ * declared filter no column hosts, except one whose key the list fixes or
+ * hides, and an alias of a filter already offered — the same request field
+ * under a deep-link key (`relatedParentTaskId` beside `parentTaskId`) —
+ * unless the alias is the one holding a value, so a deep link keeps its chip.
+ */
+export const menuOnlyFilterSpecs = (
+  specs: readonly FilterSpec[],
+  {
+    hostedIds,
+    excludedKeys,
+    activeIds,
+  }: {
+    hostedIds: ReadonlySet<string>;
+    excludedKeys: ReadonlySet<string | undefined>;
+    activeIds: ReadonlySet<string>;
+  },
+): FilterSpec[] => {
+  const wire = (spec: FilterSpec) => spec.field ?? spec.columnId;
+  const offered = new Set(
+    specs.filter((spec) => hostedIds.has(spec.columnId)).map(wire),
+  );
+  const menu: FilterSpec[] = [];
+  for (const spec of editableFilterSpecs(specs)) {
+    if (
+      hostedIds.has(spec.columnId) ||
+      excludedKeys.has(spec.columnId) ||
+      excludedKeys.has(wire(spec)) ||
+      (offered.has(wire(spec)) && !activeIds.has(spec.columnId))
+    )
+      continue;
+    offered.add(wire(spec));
+    menu.push(spec);
+  }
+  return menu;
+};
+
+/**
  * Filters-menu fields for an entity's specs. `include` narrows them — a
  * table passes the specs no column of its own hosts.
  */
@@ -191,11 +262,23 @@ export function manifestFilterFields(
 ): FilterBarField[] {
   return editableFilterSpecs(specs)
     .filter((spec) => isExpressible(spec) && include(spec))
-    .map((spec) =>
-      barFieldFromConfig(
+    .map((spec) => {
+      const field = barFieldFromConfig(
         spec.columnId,
         filterSpecLabel(spec),
         specFilterConfig(spec, specs, runtimeOptions),
-      ),
-    );
+      );
+      const peers = specs.filter(
+        (peer) =>
+          spec.exclusiveGroup !== undefined &&
+          peer.exclusiveGroup === spec.exclusiveGroup &&
+          peer.columnId !== spec.columnId,
+      );
+      return peers.length
+        ? {
+            ...field,
+            description: `Replaces ${peers.map(filterSpecLabel).join(" or ")}.`,
+          }
+        : field;
+    });
 }

@@ -38,7 +38,6 @@ import {
   type TimelineEntity,
   timelineEntities,
 } from "~/entity/generated/entity-timelines.gen";
-import { useDeferredReferenceFilterOptions } from "~/entity/hooks/use-deferred-reference-filter-options";
 import {
   type BaseListRow,
   type EntityListTreeConfig,
@@ -320,11 +319,7 @@ function ServerListBody({
           },
     [entity, navigate, nested, parts.tree],
   );
-  const referenceFilterOptions = useDeferredReferenceFilterOptions(entity);
-  const filterOptions = useFilterOptions({
-    ...referenceFilterOptions,
-    ...parts.list?.filterOptions,
-  });
+  const filterOptions = useFilterOptions({ ...parts.list?.filterOptions });
   // Cards and Compact keep the same query, filtering, ordering, and page as
   // List. A search changes the roster, never the chosen presentation.
   const renderedView = view;

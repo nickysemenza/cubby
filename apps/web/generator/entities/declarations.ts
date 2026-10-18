@@ -123,6 +123,8 @@ export type FilterDescriptor = Readonly<{
   currentMember: boolean;
   /** The declared reason this filter accepts one value, not an any-of. */
   singleValue: string | null;
+  /** Single-value scopes that share one value between them. */
+  exclusiveGroup: string | null;
   sentinels: readonly Readonly<{ value: string; label: string }>[] | null;
   wire: FilterWire;
 }>;

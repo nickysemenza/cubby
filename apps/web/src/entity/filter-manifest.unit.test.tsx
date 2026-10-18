@@ -8,6 +8,7 @@ import {
   getEntityFilters,
   manifestFilterConfig,
   manifestFilterFields,
+  menuOnlyFilterSpecs,
 } from "./filter-manifest";
 import {
   buildFiltersFromManifest,
@@ -184,7 +185,8 @@ describe("manifestFilterConfig", () => {
     for (const entity of browserRoutedEntities) {
       const specs = getEntityFilters(entity);
       for (const field of manifestFilterFields(specs)) {
-        if (field.type === "text" || field.dateRange) continue;
+        if (field.type === "text" || field.freeText || field.dateRange)
+          continue;
         const spec = specs.find(({ columnId }) => columnId === field.key);
         if (spec?.optionsKey || spec?.referenceEntity) continue;
         if (!field.options?.length) violations.push(`${entity}.${field.key}`);
@@ -212,6 +214,79 @@ describe("manifestFilterConfig", () => {
     ).toEqual([
       ["has", "Yes"],
       ["none", "No"],
+    ]);
+  });
+
+  it("gives every entity's Filters menu distinct labels", () => {
+    // A relation's text search and its record picker once both read
+    // "Expenses"; two same-named entries are indistinguishable in the menu.
+    const duplicates: string[] = [];
+    const none = new Set<string>();
+    for (const entity of browserRoutedEntities) {
+      const specs = getEntityFilters(entity);
+      const menu = new Set(
+        menuOnlyFilterSpecs(specs, {
+          hostedIds: none,
+          excludedKeys: none,
+          activeIds: none,
+        }),
+      );
+      const labels = manifestFilterFields(specs, undefined, (spec) =>
+        menu.has(spec),
+      ).map((field) => field.label);
+      for (const label of new Set(labels))
+        if (labels.filter((other) => other === label).length > 1)
+          duplicates.push(`${entity}: ${label}`);
+    }
+    expect(duplicates).toEqual([]);
+  });
+
+  it("offers one menu field per request field, keeping an active alias", () => {
+    const task = getEntityFilters("task");
+    const menu = (activeIds: ReadonlySet<string>) =>
+      menuOnlyFilterSpecs(task, {
+        hostedIds: new Set(["parentTaskId"]),
+        excludedKeys: new Set(),
+        activeIds,
+      }).map((spec) => spec.columnId);
+    expect(menu(new Set())).not.toContain("relatedParentTaskId");
+    expect(menu(new Set(["relatedParentTaskId"]))).toContain(
+      "relatedParentTaskId",
+    );
+  });
+
+  it("names a related view's text search for the search", () => {
+    const product = getEntityFilters("product");
+    const search = product.find(
+      (spec) => spec.columnId === "related:product.expenses",
+    );
+    expect(search?.label).toBe("Expense search");
+    expect(
+      manifestFilterConfig("product", "related:product.expenses")?.label,
+    ).toBe("Expense search");
+  });
+
+  it("types a rosterless multiselect's values instead of offering an empty picker", () => {
+    const externalId = manifestFilterFields(
+      getEntityFilters("financialTransaction"),
+    ).find((field) => field.key === "externalId");
+    expect(externalId).toMatchObject({ type: "multiselect", freeText: true });
+  });
+
+  it("marks Email's scopes as one shared value that replaces the others", () => {
+    const scopes = manifestFilterFields(getEntityFilters("email")).filter(
+      (field) => field.exclusiveGroup !== undefined,
+    );
+    expect(
+      scopes.map(({ key, exclusiveGroup, description }) => [
+        key,
+        exclusiveGroup,
+        description,
+      ]),
+    ).toEqual([
+      ["purchaseId", "emailScope", "Replaces Vendor or Vendor account."],
+      ["vendorId", "emailScope", "Replaces Purchase or Vendor account."],
+      ["vendorAccountId", "emailScope", "Replaces Purchase or Vendor."],
     ]);
   });
 

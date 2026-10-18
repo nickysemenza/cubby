@@ -15,7 +15,13 @@ import type { CubbyColumn } from "./table-features";
 /** Configuration for an inline column-header filter. */
 export interface FilterConfig {
   placeholder: string;
+  /** The filter's declared name; it wins over the hosting column's header. */
+  label?: string;
   filterType?: "text" | "select" | "multiselect";
+  /** A multiselect with no roster: its values are typed, comma-separated. */
+  freeText?: boolean;
+  /** Filters sharing a group hold one value between them: picking replaces. */
+  exclusiveGroup?: string;
   options?: PickerOption[];
   /** A multi-valued field: the editor offers Match any | Match all. */
   matchAll?: boolean;

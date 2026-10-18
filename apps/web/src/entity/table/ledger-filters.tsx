@@ -38,7 +38,8 @@ function getLedgerFields<TData extends RowData>(
     const config = column.columnDef.meta?.filterConfig;
     if (!config) return [];
     const header = column.columnDef.header;
-    const label = isColumnLabel(header) ? header : humanize(column.id);
+    const label =
+      config.label ?? (isColumnLabel(header) ? header : humanize(column.id));
     return [
       barFieldFromConfig(column.id, label, config, optionHints?.[column.id]),
     ];

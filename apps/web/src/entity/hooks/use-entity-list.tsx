@@ -15,6 +15,7 @@ import { browserEntityDefinition, entities } from "~/entity/entities";
 import {
   getEntityFilters,
   manifestFilterFields,
+  menuOnlyFilterSpecs,
 } from "~/entity/filter-manifest";
 import {
   buildFiltersFromManifest,
@@ -24,6 +25,7 @@ import {
   summarizeListState,
 } from "~/entity/filters";
 import type { ListGroupState } from "~/entity/hooks/progressive-list";
+import { useDeferredReferenceFilterOptions } from "~/entity/hooks/use-deferred-reference-filter-options";
 import { useInfiniteTableList } from "~/entity/hooks/use-infinite-table-list";
 import type { RowLinkResolver } from "~/entity/table/column-helpers";
 import type { ServerListWorkbenchModel } from "~/entity/table/list-workbench";
@@ -416,6 +418,17 @@ export function useEntityList<
     onInspectRow ?? (previewOptions ? inspection.inspectRow : undefined);
 
   const effectiveDeletable = useContractDeletable(entity, deletable);
+  // Every reference filter loads its live roster here, so an embedded list
+  // (Linked transactions) offers pickers without wiring rosters itself.
+  // A caller's own `filterOptions` win.
+  const referenceFilterOptions = useDeferredReferenceFilterOptions(entity);
+  const resolvedFilterOptions = useMemo(
+    () =>
+      filterOptions
+        ? { ...referenceFilterOptions, ...filterOptions }
+        : referenceFilterOptions,
+    [filterOptions, referenceFilterOptions],
+  );
 
   const hasUnitMappings =
     browserEntityDefinition(entity).list?.hasUnitMappings ?? false;
@@ -635,7 +648,7 @@ export function useEntityList<
     data,
     columns: customColumns,
     filters,
-    filterOptions,
+    filterOptions: resolvedFilterOptions,
     initialColumnVisibility,
     ...worklistColumns,
     state: presentationState,
@@ -664,22 +677,33 @@ export function useEntityList<
   // or hides stays out, as does the primary search, which has its own input.
   const scopeKeys = Object.keys(scopeFilters ?? {}).join("|");
   const hiddenFilterKey = (hiddenFilterColumns ?? []).join("|");
+  const activeKey = tableState.columnFilters
+    .map((filter) => filter.id)
+    .join("|");
   const filterFields = useMemo(() => {
-    const hosted = new Set(allColumns.visit(listReadColumnId));
-    const excluded = new Set([
-      ...scopeKeys.split("|"),
-      ...hiddenFilterKey.split("|"),
-      entitySummary[entity].primarySearch?.key,
-    ]);
-    return manifestFilterFields(
-      getEntityFilters(entity),
-      filterOptions,
-      (spec) =>
-        !hosted.has(spec.columnId) &&
-        !excluded.has(spec.columnId) &&
-        !excluded.has(spec.field ?? spec.columnId),
+    const specs = getEntityFilters(entity);
+    const menu = new Set(
+      menuOnlyFilterSpecs(specs, {
+        hostedIds: new Set(allColumns.visit(listReadColumnId)),
+        excludedKeys: new Set([
+          ...scopeKeys.split("|"),
+          ...hiddenFilterKey.split("|"),
+          entitySummary[entity].primarySearch?.key,
+        ]),
+        activeIds: new Set(activeKey.split("|")),
+      }),
     );
-  }, [allColumns, entity, filterOptions, hiddenFilterKey, scopeKeys]);
+    return manifestFilterFields(specs, resolvedFilterOptions, (spec) =>
+      menu.has(spec),
+    );
+  }, [
+    activeKey,
+    allColumns,
+    entity,
+    hiddenFilterKey,
+    resolvedFilterOptions,
+    scopeKeys,
+  ]);
 
   useEffect(() => {
     const fields = allColumns

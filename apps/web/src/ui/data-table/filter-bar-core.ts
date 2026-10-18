@@ -25,6 +25,10 @@ export type FilterFieldConfig = {
   description?: string;
   /** Offers Match any | Match all (multi-valued fields only). */
   matchAll?: boolean;
+  /** A multiselect with no roster: its values are typed, comma-separated. */
+  freeText?: boolean;
+  /** Fields sharing a group hold one value between them: picking replaces. */
+  exclusiveGroup?: string;
   /** The "Include sub-…" toggle inside a hierarchical reference's editor. */
   subtree?: { label: string };
   /** Offers is | is not; a `reason` disables "is not" with that line. */
@@ -231,8 +235,8 @@ export function normalizeBarFilters(
 
 /**
  * One filter-bar field from a resolved {@link FilterConfig}. The label is passed in
- * rather than read off the source: a table takes it from the column header, a
- * manifest-only bar from the spec's `label`, and neither can see the other's.
+ * rather than read off the source: a table takes the spec's declared `label`,
+ * else the column header; a manifest-only bar takes the spec's label.
  */
 export function barFieldFromConfig(
   key: string,
@@ -253,6 +257,8 @@ export function barFieldFromConfig(
         }))
       : undefined,
     matchAll: config.matchAll,
+    freeText: config.freeText,
+    exclusiveGroup: config.exclusiveGroup,
     subtree: config.subtree,
     exclude: config.exclude,
     dateRange: config.dateRange,

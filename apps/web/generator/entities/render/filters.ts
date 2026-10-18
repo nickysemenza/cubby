@@ -139,6 +139,9 @@ export const renderFilterArtifacts = (
         : [`subtree:${JSON.stringify(descriptor.subtree)}`]),
       ...(descriptor.currentMember ? ["currentMember:true"] : []),
       ...(descriptor.singleValue === null ? [] : ["singleValue:true"]),
+      ...(descriptor.exclusiveGroup === null
+        ? []
+        : [`exclusiveGroup:${JSON.stringify(descriptor.exclusiveGroup)}`]),
       ...(descriptor.sentinels === null
         ? []
         : [`sentinels:${compactLiteral(descriptor.sentinels)}`]),

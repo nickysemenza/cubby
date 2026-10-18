@@ -1,6 +1,8 @@
 import {
+  closePopovers,
   gotoAuthenticatedPage,
   reloadAuthenticatedPage,
+  selectComboboxItem,
   uniqueName,
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
@@ -50,7 +52,7 @@ test("vendor accounts filter by member from the Filters menu", async ({
   await page.getByRole("option", { name: alder.name }).click();
   await picker.click();
   await page.getByRole("button", { name: "Apply", exact: true }).click();
-  await page.keyboard.press("Escape");
+  await closePopovers(page);
 
   const chip = page.getByRole("button", {
     name: `Ledger party: ${alder.name}`,
@@ -68,4 +70,32 @@ test("vendor accounts filter by member from the Filters menu", async ({
   await page.getByRole("button", { name: "Clear 1", exact: true }).click();
   await expect(account(birch)).toBeVisible();
   expect(new URL(page.url()).searchParams.has("ledgerPartyId")).toBe(false);
+
+  // A filter no column hosts at all: the relation's presence predicate.
+  const pickHasPurchases = async (answer: "Yes" | "No") => {
+    await page.getByRole("button", { name: "Filters", exact: true }).click();
+    await page
+      .getByRole("button", { name: /^Has purchases: / })
+      .last()
+      .click();
+    await selectComboboxItem(
+      page,
+      page.getByRole("combobox", { name: "Filter Has purchases" }),
+      answer,
+    );
+    await closePopovers(page);
+  };
+
+  await pickHasPurchases("Yes");
+  await expect(
+    page.getByRole("button", { name: "Has purchases: Yes", exact: true }),
+  ).toBeVisible();
+  await expect(account(alder)).toHaveCount(0);
+  await expect(account(birch)).toHaveCount(0);
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("purchasePresenceFilter"))
+    .toBe("has");
+  await pickHasPurchases("No");
+  await expect(account(alder)).toBeVisible();
+  await expect(account(birch)).toBeVisible();
 });

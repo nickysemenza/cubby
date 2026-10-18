@@ -114,10 +114,6 @@ function FilteredEmptyState({
   );
 }
 
-export function hasActiveFilters(columnFilters: unknown[]): boolean {
-  return columnFilters.length > 0;
-}
-
 /** One recovery contract for table, phone, and shelf presentations. */
 export function TableEmptyState<TData extends RowData>({
   entity,
@@ -131,7 +127,7 @@ export function TableEmptyState<TData extends RowData>({
   onClearAdditionalFilters?: () => void;
 }) {
   const isFiltered =
-    hasActiveFilters(table.state.columnFilters) || additionalFilterActive;
+    table.state.columnFilters.length > 0 || additionalFilterActive;
   const onClearFilters = isFiltered
     ? () => {
         table.resetColumnFilters();
