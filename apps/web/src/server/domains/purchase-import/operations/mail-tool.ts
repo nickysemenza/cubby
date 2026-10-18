@@ -106,7 +106,7 @@ import {
   importedMailJudgment,
   linkedMailJudgment,
   publishMailImportOutcome,
-} from "../repo/mail-import-assessment";
+} from "../repo/mail-outcome/assessment";
 import { ingestGmailMessages } from "../service/gmail/ingest";
 import { prepareMailFinancialEvent } from "../service/mail-financial-event";
 import {
@@ -296,11 +296,13 @@ export async function readMailImportOutcomes(
       assessmentId: assessment.id,
       judgment: assessment.judgment,
       producer: assessment.producer,
+      producerRun: runTable.shortcode,
       subject: assessment.subject,
       createdAt: assessment.createdAt,
     })
     .from(assessment)
     .innerJoin(assessmentState, eq(assessmentState.id, assessment.id))
+    .leftJoin(runTable, eq(runTable.id, assessmentState.runId))
     .where(
       and(
         eq(assessmentState.family, "mail_import_outcome"),
@@ -314,6 +316,12 @@ export async function readMailImportOutcomes(
   return mailImportOutcomesOut.parse({
     items: rows.slice(0, input.limit).map((row) => ({
       ...row,
+      producer: row.producer
+        ? {
+            ...row.producer,
+            runId: row.producer.runId ? row.producerRun : null,
+          }
+        : null,
       checksum: assessmentSubjects.mail_import_outcome.parse(row.subject)
         .checksum,
       createdAt: row.createdAt.toISOString(),

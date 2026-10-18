@@ -299,6 +299,7 @@ describe("mail research admission", () => {
       prediction.id,
     ]);
     expect(history.nextOffset).toBeNull();
+    expect(history.items[0]?.producer?.runId).toMatch(/^RUN-/);
     await expect(
       readMailImportOutcomes(
         ctx.db,

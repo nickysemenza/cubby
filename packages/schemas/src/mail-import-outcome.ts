@@ -5,6 +5,7 @@ import {
   assessmentProducer,
 } from "./assessment";
 import { mailMessageRef } from "./mailbox-research";
+import { runShortcode } from "./identifier-fields";
 
 export const mailImportOutcomesInput = mailMessageRef.extend({
   offset: z.number().int().nonnegative().default(0),
@@ -15,7 +16,9 @@ export const mailImportOutcomesOut = z.object({
     z.object({
       assessmentId: assessmentChildHandle,
       judgment: mailImportOutcome,
-      producer: assessmentProducer.nullable(),
+      producer: assessmentProducer
+        .extend({ runId: runShortcode.nullable() })
+        .nullable(),
       checksum: z.string(),
       createdAt: z.iso.datetime(),
     }),

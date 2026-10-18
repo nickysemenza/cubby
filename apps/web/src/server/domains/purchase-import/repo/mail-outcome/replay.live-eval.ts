@@ -22,18 +22,18 @@ import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   memberImportWorld,
   retainedMailFixture,
-} from "../operations/order-import.fixtures";
+} from "../../operations/order-import.fixtures";
 import {
   observeMailReplayAttempt,
   type MailReplayCaseReport,
-} from "../service/mail-replay-report";
-import { startMailImport } from "./mail-import-run";
+} from "../../service/mail-replay-report";
+import { startMailImport } from "../mail-import-run";
 import {
   authorizePurchaseAgent,
   enableSyntheticMailImport,
   startScenarioHarness,
   waitFor,
-} from "./purchase-agent-workerd.fixtures";
+} from "../purchase-agent-workerd.fixtures";
 
 /** Source originals arrive over an ephemeral loopback socket, never files or argv. */
 const replayCases = z

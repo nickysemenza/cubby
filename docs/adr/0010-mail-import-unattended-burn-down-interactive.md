@@ -59,6 +59,8 @@ show observed Run-level model usage separately, including parity cases; that is
 routing evidence rather than per-outcome producer attribution. Retries reuse
 the first producer and evidence. Feedback
 records history-only grades and never rewrites the ledger or Email disposition.
+The outcome read exposes its producing Run as a shortcode; Assessment and
+evaluation IDs remain opaque grading and receipt handles.
 
 The local Mail replay evaluator copies supplied retained originals into a fresh
 throwaway database per case and runs the real coordinator and public writers.
