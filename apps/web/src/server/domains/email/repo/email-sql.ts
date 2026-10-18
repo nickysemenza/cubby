@@ -250,8 +250,12 @@ export const purchaseMailPartiesSql = (purchases: SQL): SQL => {
   UNION
   SELECT decision."purchaseId", "Email"."ledgerPartyId"
   FROM (${purchases}) purchase
+  -- The purchase's decisions by "AssessmentState_email_purchase_uuid_idx",
+  -- then the linked state by id: a "decision" predicate beside the purchase
+  -- lets the planner full-scan the linked-event partial index instead.
   JOIN "AssessmentEmailLink" decision ON decision."purchaseId" = purchase."id"
-    AND decision."decision" = ${emailPurchaseLinkState.enum.linked}
+  JOIN "AssessmentEmailLink" linked ON linked."id" = decision."id"
+    AND linked."decision" = ${emailPurchaseLinkState.enum.linked}
   JOIN "OrderMailEvent" event ON event."id" = decision."eventId" AND event."supersededAt" IS NULL
   JOIN "OrderMail" original ON original."id" = event."orderMailId"
   JOIN "Email" ON "Email"."orderMailId" = original."id"

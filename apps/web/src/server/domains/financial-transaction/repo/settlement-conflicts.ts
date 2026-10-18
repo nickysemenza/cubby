@@ -105,33 +105,50 @@ export const purchaseMailMembersSql = (purchases: SQL) => sql`
     AND mail_party.kind = ${ledgerPartyKind.enum.member}
 `;
 
+/** `("purchaseId", id)`: the one mailbox member per purchase, NULL when several. */
+const soleMailMembersSql = (mailMembers: SQL) => sql`
+  SELECT member_mail."purchaseId",
+    CASE WHEN count(DISTINCT member_mail.id) = 1 THEN (array_agg(member_mail.id))[1] END AS id
+  FROM (${mailMembers}) member_mail
+  GROUP BY member_mail."purchaseId"
+`;
+
 /**
  * `(id, member)`: each purchase's member id, or NULL when unknown (see module
  * doc). A purchaser override that names no live member (a household
  * purchaser) leaves it unknown rather than falling through to Email. Never
  * the card-derived purchaser: that derives from the settling account this
- * check judges. `purchases` is a `purchaseRowSql`-shaped relation; a caller
- * that already reads `purchaseMailMembersSql` passes it to read it once.
+ * check judges. `purchases` is a `purchaseRowSql`-shaped relation.
+ *
+ * Without `mailMembers`, Email evidence is a correlated fallback read only
+ * when no Vendor Account member or override decides, so per-row conflict
+ * checks skip it for most orders. A set reader that already reads
+ * `purchaseMailMembersSql` passes it to hash-join it once instead.
  */
-export const purchaseMembersSql = (
-  purchases: SQL,
-  mailMembers: SQL = purchaseMailMembersSql(purchases),
-) => sql`
-  SELECT purchase.id, coalesce(
+export const purchaseMembersSql = (purchases: SQL, mailMembers?: SQL) => sql`
+  SELECT member_purchase.id, coalesce(
     va."ledgerPartyId",
-    CASE WHEN purchase."purchaserOverrideId" IS NOT NULL THEN override_party.id ELSE mail.id END
+    CASE WHEN member_purchase."purchaserOverrideId" IS NOT NULL THEN override_party.id
+    ELSE ${
+      mailMembers === undefined
+        ? sql`(SELECT sole_mail.id FROM (${soleMailMembersSql(
+            purchaseMailMembersSql(
+              sql`SELECT member_purchase.id, member_purchase."deletedAt"`,
+            ),
+          )}) sole_mail)`
+        : sql`mail.id`
+    } END
   ) AS member
-  FROM (${purchases}) purchase
-  LEFT JOIN "VendorAccount" va ON va.id = purchase."vendorAccountId" AND va."deletedAt" IS NULL
-  LEFT JOIN "LedgerParty" override_party ON override_party.id = purchase."purchaserOverrideId"
+  FROM (${purchases}) member_purchase
+  LEFT JOIN "VendorAccount" va ON va.id = member_purchase."vendorAccountId" AND va."deletedAt" IS NULL
+  LEFT JOIN "LedgerParty" override_party ON override_party.id = member_purchase."purchaserOverrideId"
     AND override_party."deletedAt" IS NULL
     AND override_party.kind = ${ledgerPartyKind.enum.member}
-  LEFT JOIN (
-    SELECT member_mail."purchaseId",
-      CASE WHEN count(DISTINCT member_mail.id) = 1 THEN (array_agg(member_mail.id))[1] END AS id
-    FROM (${mailMembers}) member_mail
-    GROUP BY member_mail."purchaseId"
-  ) mail ON mail."purchaseId" = purchase.id
+  ${
+    mailMembers === undefined
+      ? sql``
+      : sql`LEFT JOIN (${soleMailMembersSql(mailMembers)}) mail ON mail."purchaseId" = member_purchase.id`
+  }
 `;
 
 const purchaseMemberSql = (purchase: SQL) =>
