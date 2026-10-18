@@ -2,7 +2,7 @@ import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import type { FoodSummary } from "@cubby/usda";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { createRepoEntity } from "tooling/factories/repo";
-import { withTestDb } from "tooling/test-setup";
+import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { UPCLookupResponse } from "~/contracts/upc.schemas";
@@ -106,6 +106,29 @@ const usdaFood = (overrides: Partial<FoodSummary> = {}): FoodSummary => ({
 
 describe("findOrCreateByUPC", () => {
   const ctx = withTestDb();
+
+  // The create holds the uuid it inserted; resolving its fresh code back is a
+  // wasted round trip on every scan of an unknown barcode.
+  it("does not look up a created product's own code", async () => {
+    const { result, statements } = await countTestDbQueries(() =>
+      findOrCreateByUPC(
+        ctx.db,
+        usdaClient(),
+        upcLookupClient(),
+        "033333333330",
+        undefined,
+        ctx.actor,
+      ),
+    );
+    expect(result.created).toBe(true);
+    expect(
+      statements.filter((statement) =>
+        statement.startsWith(
+          'select "id" from "Product" where ("Product"."shortcode" = $1',
+        ),
+      ),
+    ).toEqual([]);
+  });
 
   it("branch 1: returns the existing product without calling USDA or the UPC worker", async () => {
     const upc = "011111111110";

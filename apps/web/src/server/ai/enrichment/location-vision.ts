@@ -57,7 +57,7 @@ import {
 } from "~/server/domains/location/repo/crud";
 import {
   getProductByID,
-  quickCreateProduct,
+  quickCreateProductRecord,
 } from "~/server/domains/product/repo/crud";
 import { findProductByNameFuzzyManufacturer } from "~/server/domains/product/repo/lookup";
 import { runMutationSideEffects } from "~/server/entity-kernel/repo/mutation-side-effects";
@@ -604,7 +604,7 @@ export async function approveDetectedInventoryItem(
       productShortcode = matched.id;
       productNameForToast = matched.name;
     } else {
-      const created = await quickCreateProduct(
+      const { output: created, entityId } = await quickCreateProductRecord(
         db,
         {
           name: productName,
@@ -612,7 +612,7 @@ export async function approveDetectedInventoryItem(
         },
         actor,
       );
-      productId = await resolveCreatedOrInvariant(db, "product", created.id);
+      productId = entityId;
       productShortcode = created.id;
       productNameForToast = created.name;
       createdProduct = true;

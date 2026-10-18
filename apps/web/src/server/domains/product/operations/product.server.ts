@@ -43,7 +43,7 @@ import {
   getProductPickerItemsByIds,
   getProductsByShortcodes,
   productSearch,
-  quickCreateProduct,
+  quickCreateProductRecord,
 } from "~/server/domains/product/repo/crud";
 import {
   discardProductUnits,
@@ -212,7 +212,7 @@ export async function quickCreateProductWorkflow(
   context: ProductWorkflowContext,
   input: z.output<typeof productQuickCreatePayload>,
 ) {
-  const product = await quickCreateProduct(
+  const { output: product, entityId } = await quickCreateProductRecord(
     context.db,
     {
       name: input.name,
@@ -233,7 +233,6 @@ export async function quickCreateProductWorkflow(
     },
     context.actorContext,
   );
-  const entityId = await productShortcodes.one(context.db, product.id);
   await runMutationSideEffects(context.db, {
     action: "created",
     entity: { entity: "product", id: entityId },

@@ -44,7 +44,7 @@ import { findProductsWithNoImages } from "~/server/domains/product/repo/analytic
 import { findUnbarcodedBookByTitle } from "~/server/domains/product/repo/book-title-match";
 import {
   getProductByShortcode,
-  quickCreateProduct,
+  quickCreateProductRecord,
   updateProduct,
 } from "~/server/domains/product/repo/crud";
 import { findProductByGtin } from "~/server/domains/product/repo/lookup";
@@ -57,10 +57,7 @@ import type { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-c
 import { runMutationSideEffects } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { createAppError } from "~/server/errors/app-error";
 import { runWithConflictRecovery } from "~/server/errors/db-errors";
-import {
-  resolveCreatedOrInvariant,
-  resolveLiveShortcode,
-} from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import type {
   ProductWriteActions,
@@ -410,10 +407,12 @@ export async function findOrCreateByUPC(
   if (existing) return matched(existing);
 
   const emitCreated = async (
-    product: ProductTopLevelOut,
+    {
+      output: product,
+      entityId,
+    }: { output: ProductTopLevelOut; entityId: ProductId },
     warnings: readonly string[] = [],
   ): Promise<FindOrCreateByUPCResult> => {
-    const entityId = await resolveCreatedOrInvariant(db, "product", product.id);
     await runMutationSideEffects(db, {
       action: "created",
       entity: { entity: "product", id: entityId },
@@ -441,7 +440,7 @@ export async function findOrCreateByUPC(
 
       if (food) {
         return await emitCreated(
-          await quickCreateProduct(
+          await quickCreateProductRecord(
             db,
             {
               ...usdaIdentity(food),
@@ -457,7 +456,7 @@ export async function findOrCreateByUPC(
       const upcLookup = await upcLookupClient.lookup(upc);
 
       if (upcLookup) {
-        const newProduct = await quickCreateProduct(
+        const newProduct = await quickCreateProductRecord(
           db,
           {
             ...externalIdentity(upcLookup),
@@ -473,7 +472,7 @@ export async function findOrCreateByUPC(
               db,
               upcLookupClient,
               upc,
-              await resolveCreatedOrInvariant(db, "product", newProduct.id),
+              newProduct.entityId,
               "findOrCreateByUPC",
             )
           : [];
@@ -483,7 +482,7 @@ export async function findOrCreateByUPC(
 
       // 4. Nothing found anywhere - create with defaults
       return await emitCreated(
-        await quickCreateProduct(
+        await quickCreateProductRecord(
           db,
           {
             name: defaultName ?? `Product ${upc}`,
@@ -529,10 +528,12 @@ async function findOrCreateByISBN(
   if (existing) return matched(existing);
 
   const emitCreated = async (
-    product: ProductTopLevelOut,
+    {
+      output: product,
+      entityId,
+    }: { output: ProductTopLevelOut; entityId: ProductId },
     warnings: readonly string[],
   ): Promise<FindOrCreateByUPCResult> => {
-    const entityId = await resolveCreatedOrInvariant(db, "product", product.id);
     await runMutationSideEffects(db, {
       action: "created",
       entity: { entity: "product", id: entityId },
@@ -568,7 +569,7 @@ async function findOrCreateByISBN(
         });
         return matched(attached);
       }
-      const product = await quickCreateProduct(
+      const product = await quickCreateProductRecord(
         db,
         {
           ...(external
@@ -589,7 +590,7 @@ async function findOrCreateByISBN(
             db,
             upcLookupClient,
             normalized.isbn13,
-            await resolveCreatedOrInvariant(db, "product", product.id),
+            product.entityId,
             "findOrCreateByISBN",
           )
         : [];
