@@ -104,6 +104,27 @@ describe("coordinator escalation", () => {
     },
   );
 
+  // Pi can turn a failed beforeTool hook into a tool error. The primary's
+  // next unresolved call then has a new ID and still needs a stronger turn.
+  it("holds a new primary-authored resolution after recovering failed configuration", async () => {
+    let fail = true;
+    const { configured, claim, resolve } = harness(undefined, async (model) => {
+      if (model === "claude-opus-5-5" && fail) {
+        fail = false;
+        throw new Error("Synthetic failure before model configuration");
+      }
+    });
+    await claim("claim-1");
+    await expect(resolve("resolve-primary-1", "unresolved")).rejects.toThrow(
+      "Synthetic failure before model configuration",
+    );
+    const recovered = await resolve("resolve-primary-2", "unresolved");
+    expect(recovered?.block).toContain("claude-opus-5-5");
+    expect(configured).toEqual(["claude-opus-5-5", "claude-opus-5-5"]);
+    expect(await resolve("resolve-primary-2", "unresolved")).toEqual(recovered);
+    expect(await resolve("resolve-escalated", "unresolved")).toBeUndefined();
+  });
+
   it("reconciles an interrupted next-claim reset before accepting the replay", async () => {
     let refuse = false;
     const { escalation, configured, claim } = harness(

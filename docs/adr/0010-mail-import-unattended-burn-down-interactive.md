@@ -79,4 +79,7 @@ explicit request, two refused prepares, or before the primary records unresolved
 the next claim returns to the primary. Coordinator model transitions retain a pending/applied configuration receipt.
 Recovery reconciles the desired model before accepting a replayed escalation,
 held resolution, refused prepare or next-Email reset. A failed configuration may
-already have taken effect, so pending transitions always reapply idempotently.
+already have taken effect, so pending transitions always reapply idempotently. A
+new unresolved call arriving while configuration is pending is held before
+reconciliation: changing the configuration does not establish that the escalation
+model authored the call. The subsequent escalation-model turn may settle it.

@@ -89,7 +89,7 @@ export function coordinatorEscalation(input: {
 
   const desiredModel = (): SupportedChatModel =>
     active && escalated() ? target : primary;
-  async function reconcileConfiguration() {
+  function configurationIsCurrent() {
     const desired = desiredModel();
     const raw = store.read(KEYS.configuration);
     const previous = raw
@@ -97,11 +97,14 @@ export function coordinatorEscalation(input: {
       : undefined;
     // Before the first transition the host installs the primary itself. A
     // pending attempt may have applied before throwing, so it always retries.
-    if (
+    return (
       (!previous && desired === primary) ||
       (previous?.status === "applied" && previous.model === desired)
-    )
-      return;
+    );
+  }
+  async function reconcileConfiguration() {
+    if (configurationIsCurrent()) return;
+    const desired = desiredModel();
     store.write(
       KEYS.configuration,
       JSON.stringify({ model: desired, status: "pending" }),
@@ -157,10 +160,10 @@ export function coordinatorEscalation(input: {
         });
         return { block: blocked };
       }
-      if (escalated()) {
-        await reconcileConfiguration();
-        return undefined;
-      }
+      if (escalated() && configurationIsCurrent()) return undefined;
+      // Pi can complete a failed beforeTool call as an error and let the
+      // primary retry with a new ID. Persist its hold before reconciliation,
+      // so recovery cannot mistake that primary-authored call for a stronger turn.
       const block = `${note("before resolving it unresolved")} Review its evidence before resolving it.`;
       store.write(KEYS.blocked(call.id), block);
       await escalate({
