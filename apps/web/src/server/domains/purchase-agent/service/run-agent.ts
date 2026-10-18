@@ -254,12 +254,7 @@ export class PurchaseImportRunAgent
       fundingFallback: true,
       fixedModel: this.agentEnv.fixedModel,
       onFundingRefusal: async (message) => {
-        log.warn("coordinator funding rung refused", {
-          provider: message.provider,
-          model: message.model,
-          transport: this.requestTransport,
-          errorMessage: message.errorMessage,
-        });
+        // The usage row records the refusal text in `failure`.
         await this.afterResponse(message);
         // The next rung is a new attempt: its usage row must not inherit this
         // rung's transport, start time or gateway log.
