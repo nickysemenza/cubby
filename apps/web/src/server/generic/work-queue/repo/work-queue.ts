@@ -79,6 +79,10 @@ import {
   purchasePostingStartSql,
   transactionPostingStartSql,
 } from "~/server/domains/purchase/repo/settlement-grace";
+import {
+  pendingSuggestion,
+  suggestionField,
+} from "~/server/domains/statement-import/repo/statement-charge";
 import { buildVendorWhereClause } from "~/server/domains/vendor/repo/vendor";
 import { resolvePublicEntityDisplayImageLists } from "~/server/entity-kernel/repo/entity-display-image";
 import { reviewableSuggestionSql } from "~/server/generic/assessment/repo/suggestion-review";
@@ -496,6 +500,30 @@ async function workQueueProjection(
         nextAction: "Claim the account using provider evidence.",
       },
       key: "account:provisional",
+    }),
+    // One row per account, never one per charge: the statement Suggestions
+    // view groups and bulk-accepts them.
+    ...workQueueCandidate(scope, {
+      entity: "financialAccount",
+      table: sql`"FinancialAccount" JOIN (
+        SELECT (${suggestionField("accountId")})::uuid AS account,
+          count(*)::int AS total,
+          count(*) FILTER (WHERE (${suggestionField("clean")})::boolean)::int AS clean
+        FROM "AssessmentState" s WHERE ${pendingSuggestion()}
+        GROUP BY 1
+      ) statement_suggestions ON statement_suggestions.account = "FinancialAccount".id`,
+      id: sql`"FinancialAccount".shortcode`,
+      name: sql`"FinancialAccount".name`,
+      owners: sql`ARRAY["FinancialAccount"."ledgerPartyId"]`,
+      where: sql`"FinancialAccount"."deletedAt" IS NULL`,
+      details: {
+        source: "statement_suggestion",
+        kind: "review",
+        reason: sql`statement_suggestions.total || CASE WHEN statement_suggestions.total = 1 THEN ' transaction suggestion' ELSE ' transaction suggestions' END || ' (' || statement_suggestions.clean || ' ready to accept)'`,
+        nextAction:
+          "Review the statement Suggestions for this account; accept the clean ones as a group.",
+      },
+      key: "statement_suggestion",
     }),
   );
 

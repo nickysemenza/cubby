@@ -9,6 +9,7 @@ import {
 } from "@cubby/schemas/assessment";
 import { correctEmailRelevanceInput } from "@cubby/schemas/email-actions";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { statementTransactionApplication } from "@cubby/schemas/statement-suggestion";
 import { getErrorMessage } from "@cubby/shared";
 import { and, eq, or, sql } from "drizzle-orm";
 import { isEqual } from "es-toolkit";
@@ -262,6 +263,26 @@ const assessmentFamilies = {
       );
     },
   },
+  statement_transaction: {
+    subject: assessmentSubjects.statement_transaction,
+    target: assessmentProjectionTargets.statement_transaction,
+    // The domain write appends settlement refs, which supersede pending
+    // suggestions by trigger; the handler marks its own state applied first.
+    transactionBound: true,
+    actions: ["correct", "wrong", "uncertain", "dismissed"],
+    apply: async (db, context, state, input) => {
+      if (input.application?.kind !== "statement_transaction")
+        throw new Error(
+          "Applying a Transaction suggestion requires the chosen statement action",
+        );
+      const { applyStatementTransactionSuggestion } =
+        await import("~/server/domains/statement-import/repo/statement-suggestion-apply");
+      await applyStatementTransactionSuggestion(db, context, state, {
+        application: input.application,
+        corrected: input.correction.present,
+      });
+    },
+  },
   recommendation: {
     subject: assessmentSubjects.recommendation,
     target: assessmentProjectionTargets.recommendation,
@@ -343,6 +364,13 @@ export async function reviewAssessment(
         throw new Error(
           "Suppression differs from the declared recommendation scope",
         );
+    } else if (prediction.subject.kind === "statement_transaction") {
+      if (
+        input.suppression.scope !== "statement_transaction" ||
+        input.suppression.candidateKey !==
+          `${prediction.subject.source}:${prediction.subject.chargeKey}`
+      )
+        throw new Error("Suppression differs from the statement charge");
     } else if (prediction.subject.kind === "product_pair") {
       if (
         input.suppression.scope !== "product_pair" ||
@@ -377,6 +405,13 @@ export async function reviewAssessment(
     throw new Error(
       "Product merge application requires a Product pair Assessment",
     );
+  if (
+    input.application?.kind === "statement_transaction" &&
+    prediction.family !== "statement_transaction"
+  )
+    throw new Error(
+      "Statement application requires a Transaction suggestion Assessment",
+    );
   if (input.intent === "apply" && prediction.family === "email_relevance") {
     const subject = assessmentSubjects.email_relevance.parse(
       prediction.subject,
@@ -392,6 +427,17 @@ export async function reviewAssessment(
       );
     if (prediction.family === "image_description")
       z.string().parse(input.correction.value);
+    // A different choice is a Wrong verdict whose correction is that choice.
+    if (
+      prediction.family === "statement_transaction" &&
+      !isEqual(
+        statementTransactionApplication.parse(input.correction.value),
+        input.application,
+      )
+    )
+      throw new Error(
+        "A corrected Transaction suggestion must apply the corrected action",
+      );
   }
   const event = await recordFeedback(db, {
     ...input,

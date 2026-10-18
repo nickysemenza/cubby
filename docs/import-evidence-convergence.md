@@ -116,6 +116,25 @@ coexistence evidence; live coverage still excludes deleted statement rows.
 Legacy identities cannot establish distinct
 physical occurrences by themselves.
 
+A provider charge is every observation sharing one v1 identity: repeated
+exports record new occurrence rows for the same money. An ignore, supersession
+or live settlement ref on any observation settles the whole charge, so match
+state and unmatched counts are per charge. Statement Transaction suggestions
+propose, one per unmatched charge, creating a transaction, attaching to an
+existing one (same account, same cents, within three days, whatever the
+descriptor), superseding a recorded hold with its posted row (posted at or up
+to the larger of 25% or $20 above the hold, within seven days), or voiding a
+vanished hold. Nothing applies until reviewed; a create is refused while any
+candidate the member has not rejected remains. A same-amount charge from
+another export is a possible firmed-up twin and is never bulk-acceptable.
+Decision-model labels rank candidates and choose a fallback kind; they never
+authorize an attach or suppress a create. The vanished-hold void is the one
+bounded absence judgment: it applies only to a transaction recorded from rows
+the provider itself marked pending, with no posted twin, after a later export
+of that account covers dates seven days past the hold without containing it,
+and it voids rather than deletes, keeping the refs. Absence never proves a
+posted charge did not happen.
+
 Provider account masks retain all supplied digits, including non-card masks
 longer than four digits. An account name already containing that mask does not
 receive a second suffix. These descriptors participate in statement identity;

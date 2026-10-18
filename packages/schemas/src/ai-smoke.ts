@@ -49,6 +49,12 @@ export const aiSmokeInputs = {
   mailFinancialEvent: z.object({
     fixture: z.enum(["reimbursement", "promotion"]),
   }),
+  statementChargeIdentity: z.object({
+    fixture: z.enum(["processor_prefix", "different_merchant"]),
+  }),
+  statementTransactionKind: z.object({
+    fixture: z.enum(["paycheck", "card_payment"]),
+  }),
   purchaseProductIdentity: z.object({
     fixture,
     productId: sourceId.optional(),

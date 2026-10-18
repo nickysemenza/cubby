@@ -30,6 +30,8 @@ import {
   MAILBOX_TRIAGE_FEATURE,
   MAILBOX_RELEVANCE_FEATURE,
   MAIL_FINANCIAL_EVENT_FEATURE,
+  STATEMENT_CHARGE_IDENTITY_FEATURE,
+  STATEMENT_TRANSACTION_KIND_FEATURE,
   PURCHASE_IMPORT_EXTRACTION_FEATURE,
   PURCHASE_IMPORT_MAIL_FEATURE,
   PURCHASE_IMPORT_PRODUCT_IDENTITY_FEATURE,
@@ -573,6 +575,57 @@ async function runCase(
           ),
           { db, runId, operation: "smoke.mailFinancialEvent" },
         ),
+      };
+    }
+    case "statementChargeIdentity": {
+      const { fixture } = aiSmokeInputs.statementChargeIdentity.parse(raw);
+      return {
+        result: await runDecisionChoice({
+          ...STATEMENT_CHARGE_IDENTITY_FEATURE.prompt(
+            JSON.stringify({
+              statement: {
+                descriptor: "SQ *EXAMPLE BAKERY SPRINGFIELD",
+                merchant: "Example Bakery",
+                date: "2026-05-04",
+                amount: 12.5,
+              },
+              transaction: {
+                descriptor:
+                  fixture === "processor_prefix"
+                    ? "EXAMPLE BAKERY #12"
+                    : "SAMPLE HARDWARE CO",
+                date: "2026-05-05",
+                amount: 12.5,
+              },
+            }),
+          ),
+          feature: STATEMENT_CHARGE_IDENTITY_FEATURE,
+          usage: { db, runId, operation: "smoke.statementChargeIdentity" },
+        }),
+      };
+    }
+    case "statementTransactionKind": {
+      const { fixture } = aiSmokeInputs.statementTransactionKind.parse(raw);
+      return {
+        result: await runDecisionChoice({
+          ...STATEMENT_TRANSACTION_KIND_FEATURE.prompt(
+            JSON.stringify(
+              fixture === "paycheck"
+                ? {
+                    descriptor: "EXAMPLE CORP PAYROLL DIRECT DEP",
+                    amount: -2500,
+                    category: null,
+                  }
+                : {
+                    descriptor: "PAYMENT THANK YOU EXAMPLE CARD",
+                    amount: -900,
+                    category: null,
+                  },
+            ),
+          ),
+          feature: STATEMENT_TRANSACTION_KIND_FEATURE,
+          usage: { db, runId, operation: "smoke.statementTransactionKind" },
+        }),
       };
     }
     case "mailboxTriage":

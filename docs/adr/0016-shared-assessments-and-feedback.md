@@ -205,3 +205,18 @@ first published producer and resolved review state. Relevant evidence or policy
 changes can publish a fresh Assessment while historical Feedback remains bound
 to the original. Review retry identity separately preserves the application
 receipt and refuses conflicting reuse rather than repeating a domain mutation.
+
+## Amendment: statement Transaction suggestions (2026-10)
+
+The `statement_transaction` family targets a non-shortcode record, the
+canonical StatementRow observation of one provider charge, as `email_link`
+targets a retained mail event. Its judgment is proposal-shaped: one
+Assessment per charge carries the recommended action, every attach candidate
+and the create payload, because rejecting the candidates is what makes a
+create available. Accepting the recommendation is Correct Feedback; choosing
+another action is Wrong Feedback whose correction is the chosen application.
+Dismissal suppresses the charge's declared `source:chargeKey` key. Decision
+labels republish the same evidence fingerprint under a model producer; apply
+recomputes that evidence fingerprint inside the review transaction and marks
+the state applied before writing refs, because a new live ref supersedes
+every pending suggestion naming it.
