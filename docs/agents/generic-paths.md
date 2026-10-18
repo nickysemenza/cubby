@@ -29,7 +29,7 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   extend maintenance (`server/domains/maintenance/service/maintenance-run.ts`). Never a
   queue chain or an ad hoc counter.
 - Suggestion review: `suggestions.list`/`acceptClean` over the family registry
-  (`server/generic/assessment/suggestion-families.ts`) and the Suggestions page; apply
+  (`server/generic/assessment/repo/suggestion-families.ts`) and the Suggestions page; apply
   stays the family's `reviewAssessment` handler. Never a family-specific review list.
 - Run detail: web renders `GenericEntityDetail` with the declared `run` slots; on Apple
   every Run route (`Route.entityDetail(.run, …)`) opens `RunConsoleView`, the

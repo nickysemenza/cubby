@@ -2601,7 +2601,7 @@ for the same record and field. Suggestions remain available to evaluation after
 review. The `/suggestions` page lists every family's pending Suggestions
 (fields, statement transactions, connections) on one server-filtered table
 (`suggestions.list` over the family registry in
-`server/generic/assessment/suggestion-families.ts`): family chips with counts, each family's own columns,
+`server/generic/assessment/repo/suggestion-families.ts`): family chips with counts, each family's own columns,
 inline evidence, keyboard review (↑/↓, →, A, D), a confirmed "Accept N clean"
 that re-lists before each chunk, bulk Dismiss and Never suggest (no bulk
 Wrong), and Find suggestions, which estimates and starts a Sweep. Its

@@ -59,7 +59,7 @@ import {
   automaticRuleStamp,
   matchStatementRules,
   statementSubjectKey,
-} from "~/server/generic/assessment/automatic-rules";
+} from "~/server/generic/assessment/repo/automatic-rules";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 
 /** Rule revision stamped on every published suggestion; bump with any policy change. */

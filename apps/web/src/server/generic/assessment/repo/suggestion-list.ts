@@ -23,7 +23,7 @@ import {
   type SuggestionFamilyQuery,
   type SuggestionKey,
   suggestionFamilies,
-} from "~/server/generic/assessment/suggestion-families";
+} from "~/server/generic/assessment/repo/suggestion-families";
 import { resolveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 type Value = SuggestionColumnValue | SuggestionColumnValue[];

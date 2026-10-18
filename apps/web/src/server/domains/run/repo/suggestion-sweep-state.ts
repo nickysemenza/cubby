@@ -20,7 +20,7 @@ import {
   automaticRuleStamp,
   fieldSubjectKey,
   matchFieldRules,
-} from "~/server/generic/assessment/automatic-rules";
+} from "~/server/generic/assessment/repo/automatic-rules";
 import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/audit-log";
 

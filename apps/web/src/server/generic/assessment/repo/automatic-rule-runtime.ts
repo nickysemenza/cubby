@@ -40,7 +40,7 @@ import {
   matchFieldRules,
   matchStatementRules,
   ruleBase,
-} from "~/server/generic/assessment/automatic-rules";
+} from "~/server/generic/assessment/repo/automatic-rules";
 import {
   automaticApplicationRule,
   matchedRulesOf,
