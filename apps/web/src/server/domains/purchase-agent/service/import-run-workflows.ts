@@ -47,8 +47,27 @@ const fromBundle = (id: string, skills: SkillManifestEntry[]) =>
     skills,
   });
 
+/**
+ * Said only to a primary that can escalate (`escalation.ts`), so a Run
+ * without an escalation model keeps its instructions and prompt cache.
+ */
+const ESCALATION_INSTRUCTIONS = `## Escalation
+
+This Run can hand one Email at a time to a stronger escalation model. When an
+Email's evidence is beyond what you can settle confidently, call
+\`escalate_import_work\` with the reason instead of guessing: the escalation
+model continues that Email and the next claim returns to you. Cubby also
+escalates an Email whose \`purchase_import\` \`prepare\` refuses twice, and
+holds an \`unresolved\` resolution until the escalation model has reviewed the
+Email. An escalated Email is settled by the escalation model, including as
+\`unresolved\` when the gap is real.`;
+
 /** The run carries identity and tools; the workflow is shared Markdown. */
-export function workflowForRun(purpose: AgentImportRunPurpose, runId: string) {
+export function workflowForRun(
+  purpose: AgentImportRunPurpose,
+  runId: string,
+  options: { escalation?: boolean } = {},
+) {
   const enrichment = skillEntry(
     productEnrichmentSkill,
     references["product-enrichment"],
@@ -73,6 +92,7 @@ export function workflowForRun(purpose: AgentImportRunPurpose, runId: string) {
       settlementRules
         .split("## Authority and signs\n")[1]
         ?.split("**Verify the normalization")[0] ?? "",
+      ...(options.escalation ? [ESCALATION_INSTRUCTIONS] : []),
     ].join("\n\n"),
   };
 }

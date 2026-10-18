@@ -1,3 +1,8 @@
+import {
+  assessmentChildHandle,
+  mailImportOutcome,
+  assessmentProducer,
+} from "./assessment";
 import { workflowRecoveryProgress } from "./workflow-runs";
 import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import { z } from "zod";
@@ -330,6 +335,23 @@ export const MAIL_READ_RESPONSE_MAX_BYTES = 200_000;
 
 /** Raw HTML page bound for `includeHtml` reads, measured JSON-escaped. */
 export const MAIL_READ_HTML_PAGE_MAX_BYTES = 100_000;
+
+export const mailImportOutcomesInput = mailMessageRef.extend({
+  offset: z.number().int().nonnegative().default(0),
+  limit: z.number().int().min(1).max(50).default(20),
+});
+export const mailImportOutcomesOut = z.object({
+  items: z.array(
+    z.object({
+      assessmentId: assessmentChildHandle,
+      judgment: mailImportOutcome,
+      producer: assessmentProducer.nullable(),
+      checksum: z.string(),
+      createdAt: z.iso.datetime(),
+    }),
+  ),
+  nextOffset: z.number().int().nullable(),
+});
 
 export const mailReadInput = mailMessageRef.extend({
   attachmentId: z

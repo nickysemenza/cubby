@@ -23,6 +23,7 @@ import {
 import {
   cubbyPiProviders,
   fundedCubbyPiProviders,
+  type GatewayFetchFor,
 } from "@cubby/shared/ai/pi-providers";
 import type { AssistantMessage, Provider } from "@earendil-works/pi-ai";
 import { z } from "zod";
@@ -31,6 +32,7 @@ import { type ContextRecorder, withContextCapture } from "./context-breakdown";
 import type { AgentGateway, PurchaseAgentEnvironment } from "./environment";
 
 type TestModel = NonNullable<PurchaseAgentEnvironment["testModel"]>;
+type FundingRefusal = (message: AssistantMessage) => Promise<void>;
 type AgentTransport = Extract<AiUsageTransport, "gateway" | "chatgpt">;
 
 /**
@@ -167,7 +169,7 @@ interface AgentFetchOptions extends Pick<
   funding?: InferenceFunding;
   fundingFallback?: boolean;
   fixedModel?: PurchaseAgentEnvironment["fixedModel"];
-  onFundingRefusal?: (message: AssistantMessage) => Promise<void>;
+  onFundingRefusal?: FundingRefusal;
   /** Pi may open before dispatch binds a Run; resolve its policy per request. */
   transportPolicy?: () => Pick<
     GatewayFetchRoutes,
@@ -337,9 +339,15 @@ function transportFailure(error: unknown): Response {
 export function cubbyAgentProviders(
   input: AgentFetchOptions & { recorder: ContextRecorder },
 ): Provider[] {
+  // The coordinator's configured model (its manifest primary, or the
+  // escalation model for an escalated Email) answers first.
   const providers =
     input.fundingFallback && !input.fixedModel
-      ? fundedCubbyPiProviders
+      ? (fetchFor: GatewayFetchFor, onRefused?: FundingRefusal) =>
+          fundedCubbyPiProviders(fetchFor, onRefused, {
+            paid: true,
+            leadWithRequested: true,
+          })
       : cubbyPiProviders;
   return providers((route, onUnbilledResponse, funding) => {
     let finalTransport: AgentTransport | undefined;

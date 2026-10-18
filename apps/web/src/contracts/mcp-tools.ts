@@ -648,6 +648,11 @@ export const MCP_TOOLS = defineMcpTools({
         description:
           "Read one retained Email: addressing, subject and date headers, body as compact text (HTML converted when richer than the text part; `compacted`, `truncated`, `htmlBytes` report it), preheader, cue-first links and content images within size bounds (`linksOmitted`/`imagesOmitted` count the rest), structured data, attachments and checksum. A long compact body continues from each page's nextOffset as offset (null at the end); `truncated` means evidence is missing from the compact text. Raw HTML is never returned by default; includeHtml returns one raw HTML page instead, for interactive sessions only (a Run's coordinator is refused). acceptedSourceOrders supplies owned accepted-order handles and source identities for prepare_reconciliation, separately from lifecycle Purchase links. Pass attachmentId for original PDF/image bytes (at most 3 MiB). Start research from this original and its links.",
       }),
+      mail_outcomes: mcpAction({
+        op: purchaseImportContract.ops.mailImportOutcomes,
+        description:
+          "Read bounded immutable import outcomes for one owned Email, newest first. Read imports_read.mail and lock a blind grade before revealing these predictions. Includes Assessment handles, imported lines/total or linked/unrelated/unresolved disposition and rule/model producer. Grade member-confirmed outcomes through entity.review_assessments with intent history; grades never change the ledger.",
+      }),
       mail_triage_preview: mcpAction({
         op: purchaseImportContract.ops.mailTriagePreview,
         description:

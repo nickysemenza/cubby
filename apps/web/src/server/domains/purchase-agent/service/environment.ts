@@ -135,6 +135,11 @@ export interface PurchaseAgentEnvironment {
   /** Harness only: select Responses before serialization; never switch funding models. */
   fixedModel?: "openai-responses";
   /**
+   * Harness only: replace the manifest's primary and escalation models, so
+   * an offline eval runs a candidate coordinator as production would.
+   */
+  coordinatorModels?: import("./escalation").CoordinatorModels;
+  /**
    * Workerd harness only: a shorter settlement poll, so a scripted Run settles
    * without waiting out production's interval.
    */

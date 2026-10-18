@@ -41,3 +41,28 @@ member/source ownership, transaction fences and audit receipts remain enforced.
 Historical approval-paused Runs resume through the normal dispatch path; existing
 approval history remains stored. Photo group review and ambiguous business
 choices keep their domain review flows.
+
+## Mail import outcome measurement
+
+Each delegated Email settlement publishes an immutable `mail_import_outcome`
+Assessment with its checksum, Run, producer and terminal disposition. Imported
+lines and totals freeze the actual Expense ledger, including credits; the total
+remains `SUM(Expense.cost)`. Rules retain their revision; agent settlements retain
+the most recent successful coordinator model usage when available, otherwise the
+model remains unknown. Retries reuse the first producer and evidence. Feedback
+records history-only grades and never rewrites the ledger or Email disposition.
+
+The local Mail replay evaluator copies supplied retained originals into a fresh
+throwaway database per case and runs the real coordinator and public writers.
+It publishes no production records. Its session-only stdin transport and reports
+keep originals and entity handles out of files; reports show parity counts and
+only disagreement case positions/fields. Existing Purchases, catalog, attachments
+and supporting Emails are not copied, so a replay with those dependencies is
+context-limited rather than evidence of a model regression. The decision-grading
+skill owns blind review and member-confirmed MCP grading.
+
+Production continues to use Opus. Candidate model and escalation settings are
+harness-only overrides until held-out real replay and member grading justify a
+change. With distinct primary and escalation models, one Email escalates on an
+explicit request, two refused prepares, or before the primary records unresolved;
+the next claim returns to the primary. Escalation is durable across recovery.

@@ -30,6 +30,7 @@ export const assessmentFamily = z.enum([
   "field",
   "email_relevance",
   "email_link",
+  "mail_import_outcome",
   "image_description",
   "product_pair",
   "recommendation",
@@ -57,6 +58,13 @@ export const assessmentSubjects = {
     recordId: z.uuid(),
     checksum: z.string().nullable(),
     observationId: z.uuid().nullable(),
+  }),
+  mail_import_outcome: z.object({
+    kind: z.literal("mail_import_outcome"),
+    entity: z.literal("email"),
+    recordId: z.uuid(),
+    checksum: z.string(),
+    runId: z.uuid(),
   }),
   email_link: z.object({
     kind: z.literal("email_link"),
@@ -103,6 +111,7 @@ export const assessmentSubject = z.discriminatedUnion("kind", [
   assessmentSubjects.field,
   assessmentSubjects.email_relevance,
   assessmentSubjects.email_link,
+  assessmentSubjects.mail_import_outcome,
   assessmentSubjects.image_description,
   assessmentSubjects.product_pair,
   assessmentSubjects.recommendation,
@@ -117,6 +126,10 @@ const publicAssessmentTarget = z.object({
 export const assessmentProjectionTargets = {
   field: publicAssessmentTarget,
   email_relevance: z.object({ entity: z.literal("email"), recordId: z.uuid() }),
+  mail_import_outcome: z.object({
+    entity: z.literal("email"),
+    recordId: z.uuid(),
+  }),
   email_link: z
     .discriminatedUnion("entity", [
       z.object({ entity: z.literal("email"), recordId: z.uuid() }),
@@ -145,6 +158,19 @@ export const assessmentProjectionTargets = {
   }),
 };
 
+/** Frozen result of the real writer; totals remain SUM(Expense.cost). */
+export const mailImportOutcome = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("imported"),
+    lines: z.array(
+      z.object({ name: z.string().nullable(), cost: z.number().nullable() }),
+    ),
+    total: z.number().nullable(),
+  }),
+  z.object({ kind: z.literal("linked"), event: z.string() }),
+  z.object({ kind: z.literal("unrelated"), reason: z.string().min(1) }),
+  z.object({ kind: z.literal("unresolved"), reason: z.string().min(1) }),
+]);
 export const assessmentJudgments = {
   field: z.object({
     outcome: z.json().optional(),
@@ -160,6 +186,7 @@ export const assessmentJudgments = {
     classification: z.enum(["related", "unrelated", "uncertain"]),
     stage: z.string().nullable(),
   }),
+  mail_import_outcome: mailImportOutcome,
   email_link: z.object({ decision: z.enum(["linked", "dismissed"]) }),
   image_description: z.string().nullable(),
   product_pair: z.object({ actionable: z.boolean(), conflict: z.boolean() }),

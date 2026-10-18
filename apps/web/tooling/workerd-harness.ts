@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { R2Bucket } from "@cloudflare/workers-types";
+import type { SupportedChatModel } from "@cubby/shared/ai/models";
 import { usdaReleaseObjectName } from "@cubby/usda/release";
 
 import { SYNTHETIC_USDA_RELEASE } from "./dev-services/dev-profile.ts";
@@ -181,6 +182,14 @@ export interface WorkerdHarnessOptions {
   googleProviderUrl?: string;
   /** Live peers for a profile with `purchaseAgentPeers`; deterministic by default. */
   models?: { agent?: WorkerdModelWorker; gateway?: WorkerdModelWorker };
+  /**
+   * The Mail import coordinator's primary and escalation models in place of
+   * the manifest's; honored only beside a model peer.
+   */
+  coordinatorModels?: {
+    primary: SupportedChatModel;
+    escalation?: SupportedChatModel;
+  };
   /** Omitted: request pools keep pg-pool's production idle timeout. */
   poolIdleTimeoutMs?: number;
 }
@@ -365,6 +374,11 @@ export async function workerdHarnessOptions(
           CUBBY_TEST_SETTLEMENT_POLL_MS: "25",
           ...(options.models?.agent?.fixedModel && {
             CUBBY_PURCHASE_AGENT_FIXED_MODEL: "openai-responses",
+          }),
+          ...(options.coordinatorModels && {
+            CUBBY_PURCHASE_AGENT_COORDINATOR_MODELS: JSON.stringify(
+              options.coordinatorModels,
+            ),
           }),
           ...(options.poolIdleTimeoutMs !== undefined && {
             CUBBY_TEST_POOL_IDLE_TIMEOUT_MS: String(options.poolIdleTimeoutMs),

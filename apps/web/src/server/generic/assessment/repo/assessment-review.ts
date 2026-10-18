@@ -126,6 +126,17 @@ const assessmentFamilies = {
       );
     },
   },
+  mail_import_outcome: {
+    subject: assessmentSubjects.mail_import_outcome,
+    target: assessmentProjectionTargets.mail_import_outcome,
+    transactionBound: true,
+    actions: ["correct", "wrong", "uncertain", "ungraded"],
+    apply: async () => {
+      throw new Error(
+        "Mail import outcome grades are history only; use the domain tools to correct a Purchase or Email",
+      );
+    },
+  },
   email_link: {
     subject: assessmentSubjects.email_link,
     target: assessmentProjectionTargets.email_link,
@@ -391,6 +402,8 @@ export async function reviewAssessment(
     throw new Error(
       "Applying Feedback requires acceptance or an explicit correction",
     );
+  if (input.intent !== "history" && prediction.family === "mail_import_outcome")
+    throw new Error("Mail import outcome grades are history only");
   if (input.intent === "draft" && prediction.family !== "field")
     throw new Error("Only field Assessments support draft acceptance");
   if (
@@ -419,6 +432,8 @@ export async function reviewAssessment(
     emailRelevanceApplication(subject, input);
   }
   if (input.correction.present) {
+    if (prediction.family === "mail_import_outcome")
+      assessmentJudgments.mail_import_outcome.parse(input.correction.value);
     if (prediction.family === "email_link")
       assessmentJudgments.email_link.parse(input.correction.value);
     if (prediction.family === "email_relevance")

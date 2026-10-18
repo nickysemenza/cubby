@@ -1,3 +1,4 @@
+import { mailImportOutcome } from "@cubby/schemas/assessment";
 import type { ActorContext } from "@cubby/schemas/context";
 /**
  * The public `mail` tool: read a member's retained Email and record what it
@@ -12,6 +13,8 @@ import {
   type UserId,
 } from "@cubby/schemas/identifiers";
 import {
+  mailImportOutcomesInput,
+  mailImportOutcomesOut,
   mailReadInput,
   mailReadOut,
   mailSearchInput,
@@ -26,7 +29,8 @@ import {
 } from "@cubby/schemas/mailbox-research";
 import { runTargetOutcomeReceipt } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, asc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
+import type { z } from "zod";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
 import type { Database } from "~/server/db";
@@ -39,6 +43,8 @@ import {
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import {
+  assessment,
+  assessmentState,
   entityAttachment,
   ledgerParty,
   email as emailTable,
@@ -91,6 +97,10 @@ import {
   recordMailFinancialEvidence,
   recordMailFinancialReview,
 } from "../repo/mail-financial-review";
+import {
+  importedMailJudgment,
+  publishMailImportOutcome,
+} from "../repo/mail-import-assessment";
 import { ingestGmailMessages } from "../service/gmail/ingest";
 import { prepareMailFinancialEvent } from "../service/mail-financial-event";
 import {
@@ -245,6 +255,69 @@ async function associationsForMail(
     acceptedSourceOrders: await readEmailAcceptedSourceOrders(db, id),
     financialAssociations: await readEmailFinancialAssociations(db, id),
   };
+}
+
+/** Read predictions separately so the original can be graded blind first. */
+export async function readMailImportOutcomes(
+  db: Database,
+  raw: z.input<typeof mailImportOutcomesInput>,
+  actor: ActorContext,
+) {
+  const input = mailImportOutcomesInput.parse(raw);
+  const parties = await memberPartyIds(db, actor.userId);
+  const [source] = parties.length
+    ? await getDb(db)
+        .select({ id: emailTable.id })
+        .from(emailTable)
+        .where(
+          and(
+            inArray(emailTable.ledgerPartyId, parties),
+            eq(emailTable.provider, "gmail"),
+            eq(emailTable.mailboxId, input.mailboxId),
+            eq(emailTable.messageId, input.messageId),
+            notDeleted(emailTable),
+          ),
+        )
+        .limit(1)
+    : [];
+  if (!source)
+    throw createAppError(
+      "EMAIL_NOT_FOUND",
+      "No Email in this mailbox belongs to this member.",
+    );
+  const rows = await getDb(db)
+    .select({
+      assessmentId: assessment.id,
+      judgment: assessment.judgment,
+      producer: assessment.producer,
+      subject: assessment.subject,
+      createdAt: assessment.createdAt,
+    })
+    .from(assessment)
+    .innerJoin(assessmentState, eq(assessmentState.id, assessment.id))
+    .where(
+      and(
+        eq(assessmentState.family, "mail_import_outcome"),
+        eq(assessmentState.entity, "email"),
+        eq(assessmentState.recordId, source.id),
+      ),
+    )
+    .orderBy(desc(assessment.createdAt), desc(assessment.id))
+    .offset(input.offset)
+    .limit(input.limit + 1);
+  return mailImportOutcomesOut.parse({
+    items: rows
+      .slice(0, input.limit)
+      .map((row) => ({
+        ...row,
+        checksum:
+          row.subject.kind === "mail_import_outcome"
+            ? row.subject.checksum
+            : "",
+        createdAt: row.createdAt.toISOString(),
+      })),
+    nextOffset: rows.length > input.limit ? input.offset + input.limit : null,
+  });
 }
 
 export async function readMail(
@@ -614,6 +687,7 @@ export async function settleMail(
     detail: string;
     /** The Mail import rule revision that applied a classification. */
     ruleRevision?: string;
+    judgment?: z.infer<typeof mailImportOutcome>;
   },
   actor?: ActorContext,
 ) {
@@ -712,6 +786,30 @@ export async function settleMail(
           "Email assignment changed before settlement.",
         );
       const emailId = settledEmails[0]!.id;
+      const judgment =
+        input.judgment ??
+        mailImportOutcome.parse(
+          input.status === "blocked"
+            ? { kind: "unresolved", reason: input.detail }
+            : input.classification === "unrelated"
+              ? {
+                  kind: "unrelated",
+                  reason: input.detail.replace(/^unrelated: /u, ""),
+                }
+              : input.detail.startsWith("linked:")
+                ? {
+                    kind: "linked",
+                    event: input.detail.slice("linked:".length),
+                  }
+                : { kind: "linked", event: input.detail },
+        );
+      await publishMailImportOutcome(databaseForTransaction(tx), {
+        emailId,
+        runId: input.importRunId,
+        checksum: input.mail.rawChecksum,
+        judgment,
+        ruleRevision: input.ruleRevision,
+      });
       const fingerprint = await sha256Hex(
         JSON.stringify({
           emailId,
@@ -1012,6 +1110,7 @@ export async function resolveMail(
           importRunId,
           status: "completed",
           detail: `linked:${disposition.event}`,
+          ruleRevision: rule?.revision,
         },
         actor,
       );
@@ -1154,6 +1253,10 @@ export async function linkImportedMail(
     importRunId: await mailImportRun(db, input.runId),
     status: "completed",
     detail: "imported",
+    judgment: await importedMailJudgment(
+      db,
+      parseEntityId("purchase", input.purchaseId),
+    ),
   });
 }
 

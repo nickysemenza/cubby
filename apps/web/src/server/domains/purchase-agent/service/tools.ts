@@ -172,8 +172,20 @@ export function runAgentTools(
     api: ToolExecutionApi,
     context: Context,
   ) => Promise<RunProgressStamp>,
+  /** Move the current work item to the escalation model (`escalation.ts`). */
+  escalate?: (reason: string) => Promise<object>,
 ): ToolRegistration[] {
   return [
+    tool("escalate_import_work", {
+      description:
+        "Hand the current Email to the stronger escalation model when its evidence is beyond what you can settle confidently. That model continues this Email; the next claim returns to you. Returns escalated: false when this Email is already escalated: settle it yourself.",
+      execute: async (args, api, context) => {
+        if (!escalate) throw new Error("This Run has no escalation model");
+        return result(
+          await step(api, context, "escalate", () => escalate(args.reason)),
+        );
+      },
+    }),
     tool("claim_next_import_work", {
       description:
         "Claim and describe the run's next admitted work item (an Email for Mail import, with its compact read; a photo group for photo inventory). Call it again after resolving each item; continue until it returns done.",

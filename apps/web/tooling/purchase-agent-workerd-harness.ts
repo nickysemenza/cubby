@@ -95,6 +95,14 @@ export function scenarioControls(harness: TestHarness) {
       readJson(z.array(z.string()), () =>
         model.fetch("https://model.test/emitted"),
       ),
+    /** Each model request's model, after the latest scripted call it carried. */
+    requests: async () =>
+      readJson(
+        z.array(
+          z.object({ model: z.string(), afterCall: z.string().nullable() }),
+        ),
+        () => model.fetch("https://model.test/requests"),
+      ),
     gatewayCalls: async () =>
       readJson(
         z.array(

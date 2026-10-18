@@ -1,0 +1,120 @@
+import {
+  mailImportOutcome,
+  type AssessmentProducer,
+} from "@cubby/schemas/assessment";
+import type { RunId } from "@cubby/schemas/identifiers";
+import { sha256Hex } from "@cubby/shared/sha256";
+import { and, desc, eq, ne } from "drizzle-orm";
+import type { z } from "zod";
+
+import type { Database } from "~/server/db";
+import { getDb, notDeleted } from "~/server/db/helpers";
+import {
+  aiUsage,
+  assessment,
+  assessmentState,
+  expense,
+} from "~/server/db/schema";
+import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
+
+/** Freeze the ledger the writer actually reached, including credits and unknown costs. */
+export async function importedMailJudgment(
+  db: Database,
+  purchaseId: NonNullable<typeof expense.$inferSelect.purchaseId>,
+) {
+  const lines = await getDb(db)
+    .select({ name: expense.name, cost: expense.cost })
+    .from(expense)
+    .where(and(eq(expense.purchaseId, purchaseId), notDeleted(expense)))
+    .orderBy(expense.id);
+  return mailImportOutcome.parse({
+    kind: "imported",
+    lines,
+    total: lines.some((line) => line.cost !== null)
+      ? lines.reduce(
+          (cents, line) => cents + Math.round((line.cost ?? 0) * 100),
+          0,
+        ) / 100
+      : null,
+  });
+}
+
+/** Settlement history and its current review projection commit with the Email. */
+export async function publishMailImportOutcome(
+  db: Database,
+  input: {
+    emailId: string;
+    runId: RunId;
+    checksum: string;
+    judgment: z.infer<typeof mailImportOutcome>;
+    ruleRevision?: string;
+  },
+) {
+  const fingerprint = await sha256Hex(
+    JSON.stringify({ checksum: input.checksum, judgment: input.judgment }),
+  );
+  const publicationKey = `mail-import-outcome:${input.runId}:${input.emailId}:${fingerprint}`;
+  // A recovered tool can run after another model turn; its original producer
+  // belongs to its first committed outcome, never the latest usage on retry.
+  const [existing] = await getDb(db)
+    .select()
+    .from(assessment)
+    .where(eq(assessment.publicationKey, publicationKey))
+    .limit(1);
+  if (existing) return existing;
+  const [usage] = input.ruleRevision
+    ? []
+    : await getDb(db)
+        .select({ model: aiUsage.model })
+        .from(aiUsage)
+        .where(
+          and(
+            eq(aiUsage.runId, input.runId),
+            eq(aiUsage.feature, "purchase_import_agent"),
+            eq(aiUsage.status, "succeeded"),
+            notDeleted(aiUsage),
+          ),
+        )
+        .orderBy(desc(aiUsage.createdAt), desc(aiUsage.id))
+        .limit(1);
+  const producer: AssessmentProducer = {
+    kind: input.ruleRevision ? "rule" : "agent",
+    model: usage?.model ?? null,
+    revision: input.ruleRevision ?? null,
+    runId: input.runId,
+    evaluationId: null,
+  };
+  const published = await publishAssessment(
+    db,
+    {
+      publicationKey,
+      family: "mail_import_outcome",
+      subject: {
+        kind: "mail_import_outcome",
+        entity: "email",
+        recordId: input.emailId,
+        checksum: input.checksum,
+        runId: input.runId,
+      },
+      judgment: input.judgment,
+      fingerprint,
+      producer,
+      evidence: { checksum: input.checksum },
+    },
+    { runId: input.runId, model: producer.model ?? "unknown" },
+  );
+  // Preserve every historical outcome; only the newest result is a current
+  // review candidate for the same Run and Email.
+  await getDb(db)
+    .update(assessmentState)
+    .set({ active: false, status: "superseded", updatedAt: new Date() })
+    .where(
+      and(
+        eq(assessmentState.family, "mail_import_outcome"),
+        ne(assessmentState.id, published.id),
+        eq(assessmentState.runId, input.runId),
+        eq(assessmentState.recordId, input.emailId),
+      ),
+    );
+  return published;
+}

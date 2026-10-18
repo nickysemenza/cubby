@@ -1,6 +1,7 @@
 import { agentConversationSchema } from "@cubby/schemas/agent-conversation";
 import { importRunIdFromAgentIdentity } from "@cubby/schemas/import-run-agent";
 import { aiGatewayId } from "@cubby/shared/ai/gateway-metadata";
+import { supportedChatModelSchema } from "@cubby/shared/ai/models";
 import { createLogger } from "@cubby/worker-tracing";
 /**
  * The purchase agent's host: the exported Durable Object and the narrowed
@@ -18,6 +19,7 @@ import { createLogger } from "@cubby/worker-tracing";
  */
 import * as Sentry from "@sentry/cloudflare";
 import { DurableObject } from "cloudflare:workers";
+import { z } from "zod";
 
 import { connectedChatGptInference } from "~/server/ai/chatgpt/client";
 import { gatewayEnvironment } from "~/server/ai/gateway";
@@ -44,6 +46,10 @@ import {
 } from "./agent-services";
 
 type HostContext = { waitUntil(promise: Promise<unknown>): void };
+const harnessCoordinatorModels = z.object({
+  primary: supportedChatModelSchema,
+  escalation: supportedChatModelSchema.optional(),
+});
 const retirementLog = createLogger("purchase-agent.retirement");
 
 /**
@@ -60,9 +66,11 @@ function purchaseAgentEnvironment(
   const {
     CUBBY_PURCHASE_AGENT_TEST_MODEL: testModel,
     CUBBY_PURCHASE_AGENT_FIXED_MODEL: fixedModel,
+    CUBBY_PURCHASE_AGENT_COORDINATOR_MODELS: coordinatorModels,
   } = env as Env & {
     CUBBY_PURCHASE_AGENT_TEST_MODEL?: PurchaseAgentEnvironment["testModel"];
     CUBBY_PURCHASE_AGENT_FIXED_MODEL?: string;
+    CUBBY_PURCHASE_AGENT_COORDINATOR_MODELS?: string;
   };
   return {
     chatGptInference: (body, options) =>
@@ -92,6 +100,14 @@ function purchaseAgentEnvironment(
     ...(testModel &&
       fixedModel === "openai-responses" && {
         fixedModel,
+      }),
+    // Like the fixed model, only a harness with a model peer can override
+    // the manifest's coordinator models.
+    ...(testModel &&
+      coordinatorModels && {
+        coordinatorModels: harnessCoordinatorModels.parse(
+          JSON.parse(coordinatorModels),
+        ),
       }),
     settlementPollMs: testDurationOverrideMs(env.CUBBY_TEST_SETTLEMENT_POLL_MS),
   };

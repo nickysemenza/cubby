@@ -124,6 +124,24 @@ export const AI_MODELS = {
     vision: true,
     adaptiveThinking: true,
   },
+  "claude-sonnet-5-5": {
+    role: "chat",
+    provider: "anthropic",
+    catalogProvider: "anthropic",
+    gatewayProvider: "anthropic",
+    vision: true,
+    adaptiveThinking: true,
+  },
+  // Unlike Haiku 4.5, Haiku 5.5 takes adaptive thinking and effort and
+  // rejects a thinking budget or a forced tool (400).
+  "claude-haiku-5-5": {
+    role: "chat",
+    provider: "anthropic",
+    catalogProvider: "anthropic",
+    gatewayProvider: "anthropic",
+    vision: true,
+    adaptiveThinking: true,
+  },
   "claude-haiku-4-5": {
     role: "chat",
     provider: "anthropic",

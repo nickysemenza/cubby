@@ -12,6 +12,7 @@ import {
 } from "~/server/domains/purchase-import/operations/import-orders";
 import {
   readMail,
+  readMailImportOutcomes,
   resolveMail,
   searchMail,
 } from "~/server/domains/purchase-import/operations/mail-tool";
@@ -74,6 +75,8 @@ export const purchaseImportHandlers = implementOperationDomain(
       purchaseImportOperationStatus(context.db, input, context.actorContext),
     confirmMerchantVendor: (context, input) =>
       confirmMerchantVendorRule(context.db, input, context.actorContext),
+    mailImportOutcomes: (context, input) =>
+      readMailImportOutcomes(context.db, input, context.actorContext),
     mailRead: (context, input) =>
       readMail(context.db, input, context.actorContext),
     mailTriagePreview: (context, input) =>

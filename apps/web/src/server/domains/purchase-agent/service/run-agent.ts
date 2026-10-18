@@ -9,6 +9,7 @@ import {
 } from "@cubby/schemas/context-breakdown";
 import {
   agentImportRunPurpose,
+  ESCALATE_TOOL,
   importRunAgentIdentity,
   importRunAgentManifest,
 } from "@cubby/schemas/import-run-agent";
@@ -18,6 +19,7 @@ import {
 } from "@cubby/schemas/run-fields";
 import type { AiUsageTransport } from "@cubby/schemas/telemetry";
 import type { GatewayResponseInfo } from "@cubby/shared/ai/gateway-request";
+import type { SupportedChatModel } from "@cubby/shared/ai/models";
 import { piTokenUsage } from "@cubby/shared/ai/pi-providers";
 import { createLogger } from "@cubby/worker-tracing";
 import type { Context } from "@earendil-works/chord";
@@ -32,6 +34,7 @@ import {
   hook,
   LiveDoc,
   ROOT_CONVERSATION_ID,
+  ToolTask,
   type EntryRecord,
 } from "@earendil-works/pi-durable";
 import type { ToolExecutionApi } from "@earendil-works/pi-durable";
@@ -58,6 +61,11 @@ import type {
   PurchaseImportRunAgentRpc,
   RunServices,
 } from "./environment";
+import {
+  coordinatorEscalation,
+  coordinatorModelsFor,
+  type CoordinatorEscalation,
+} from "./escalation";
 import { workflowForRun } from "./import-run-workflows";
 import { RunSettlement, SETTLEMENT_POLL_MS } from "./run-settlement";
 import { renderSignal } from "./signals";
@@ -119,6 +127,8 @@ export class PurchaseImportRunAgent
   private readonly registry = createRegistry();
   private readonly recorder = createContextRecorder();
   private installed: string | undefined;
+  /** The installed Run's per-Email escalation; set with its extensions. */
+  private escalation: CoordinatorEscalation | undefined;
   private requestStartedAt = 0;
   /** What carried the current model request; the coordinator runs one at a time. */
   private requestTransport: AiUsageTransport = "unknown";
@@ -309,7 +319,18 @@ export class PurchaseImportRunAgent
     if (this.installed === identity.runId) return;
     const { runId, purpose } = identity;
     const manifest = importRunAgentManifest[purpose];
-    const workflow = workflowForRun(purpose, runId);
+    const escalation = coordinatorEscalation({
+      models: coordinatorModelsFor(manifest, this.agentEnv.coordinatorModels),
+      store: {
+        read: (key) => this.readState(key),
+        write: (key, value) => this.writeState(key, value),
+      },
+      useModel: (model) => this.useModel(model),
+    });
+    this.escalation = escalation;
+    const workflow = workflowForRun(purpose, runId, {
+      escalation: escalation.active,
+    });
     const agentTools = new Set<string>(manifest.agentTools);
     this.registry.install(
       defineExtension({
@@ -317,8 +338,24 @@ export class PurchaseImportRunAgent
         tools: runAgentTools(
           () => this.services(),
           (api, context) => this.toolProgressStamp(api, context),
-        ).filter((tool) => agentTools.has(tool.name)),
+          (reason) =>
+            escalation.escalate({ reason: "requested", detail: reason }),
+        ).filter(
+          (tool) =>
+            agentTools.has(tool.name) &&
+            (tool.name !== ESCALATE_TOOL || escalation.active),
+        ),
         hooks: [
+          // Inert unless the escalation model differs from the primary.
+          ...(escalation.active
+            ? [
+                hook(ToolTask, {
+                  beforeTool: (call) => escalation.beforeTool(call),
+                  afterTool: (call, result) =>
+                    escalation.afterTool(call, result),
+                }),
+              ]
+            : []),
           hook(GenerationTask, {
             beforeRequest: async (request, api, requestContext) => {
               const live = await api.snapshot(
@@ -484,14 +521,27 @@ export class PurchaseImportRunAgent
   private async ensureRunReady(identity: RunIdentity): Promise<void> {
     await this.installRunExtensions(identity);
     const manifest = importRunAgentManifest[identity.purpose];
+    const escalation = this.escalation;
+    if (!escalation) throw new Error("Run extensions were not installed");
     const root = await (await this.harness.pi()).root(context);
     await root.configure(
       {
-        model: cubbyAgentModel(manifest.model, this.agentEnv.fixedModel),
+        // A resumed Run keeps an escalated Email on its escalation model.
+        model: cubbyAgentModel(escalation.model(), this.agentEnv.fixedModel),
         thinkingLevel: manifest.effort,
-        instructions: workflowForRun(identity.purpose, identity.runId)
-          .instructions,
+        instructions: workflowForRun(identity.purpose, identity.runId, {
+          escalation: escalation.active,
+        }).instructions,
       },
+      context,
+    );
+  }
+
+  /** The model of the conversation's next request (`escalation.ts`). */
+  private async useModel(model: SupportedChatModel): Promise<void> {
+    const root = await (await this.harness.pi()).root(context);
+    await root.configure(
+      { model: cubbyAgentModel(model, this.agentEnv.fixedModel) },
       context,
     );
   }

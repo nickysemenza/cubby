@@ -20,6 +20,8 @@ let violations: string[] = [];
 let expectedInference: ScriptConfiguration["expectedInference"];
 /** Each emitted step, in order: what the real import-run agent was told to do. */
 let emitted: string[] = [];
+/** Each request's model and the latest scripted call it carried. */
+let requests: Array<{ model: string; afterCall: string | null }> = [];
 /** A waiting model is asked again on every nudge; record the wait once. */
 const record = (entry: string) => {
   if (emitted.at(-1) !== entry) emitted.push(entry);
@@ -215,6 +217,7 @@ function configureScript(configured: ScriptConfiguration) {
   sourceScripts = configured.sourceSteps ?? [];
   violations = [];
   emitted = [];
+  requests = [];
   released = new Set();
 }
 
@@ -395,6 +398,7 @@ export default {
     }
     if (url.pathname === "/violations") return Response.json(violations);
     if (url.pathname === "/emitted") return Response.json(emitted);
+    if (url.pathname === "/requests") return Response.json(requests);
     if (!script)
       return new Response("Script is not configured", { status: 409 });
 
@@ -451,6 +455,11 @@ export default {
     let latest = -1;
     steps.forEach((step, index) => {
       if ("call" in step && issued(requestBody, step.call)) latest = index;
+    });
+    const latestStep = steps[latest];
+    requests.push({
+      model: body.model ?? "unknown",
+      afterCall: latestStep && "call" in latestStep ? latestStep.call : null,
     });
     for (const step of steps.slice(Math.max(latest, 0))) {
       if ("call" in step) {
