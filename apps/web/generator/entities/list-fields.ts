@@ -160,7 +160,13 @@ type InheritHop = Readonly<{ field: string; column: string; target: string }>;
 
 /** A compiled `resolution.inherit` source, in declared order. */
 type InheritSource =
-  | Readonly<{ kind: "hierarchy"; parentColumn: string; maxDepth: number }>
+  | Readonly<{
+      kind: "hierarchy";
+      parentColumn: string;
+      maxDepth: number;
+      /** The walk stops at an ancestor whose effective field differs. */
+      whileSame: Readonly<{ field: string; column: string }> | null;
+    }>
   | Readonly<{
       kind: "effective";
       hops: readonly InheritHop[];
@@ -493,7 +499,7 @@ const compileInherit = (
       };
     }
     const from = inherit.from.map((source): InheritSource => {
-      if (source === "hierarchy") {
+      if (source === "hierarchy" || "hierarchy" in source) {
         const hierarchy = entity.fieldModel.hierarchy;
         const parent =
           hierarchy === null
@@ -505,10 +511,24 @@ const compileInherit = (
           throw new EntityDeclarationError(
             `${context}.from hierarchy: ${entity.key} declares no model.hierarchy.`,
           );
+        let whileSame: Readonly<{ field: string; column: string }> | null =
+          null;
+        if (source !== "hierarchy") {
+          const same = source.hierarchy.whileSame;
+          const column = entity.fieldModel.storage.find(
+            ({ key }) => key === same,
+          )?.column;
+          if (same === field.key || column === undefined)
+            throw new EntityDeclarationError(
+              `${context}.from hierarchy.whileSame ${same} must be another stored field of ${entity.key}.`,
+            );
+          whileSame = { field: same, column };
+        }
         return {
           kind: "hierarchy",
           parentColumn: parent.column,
           maxDepth: hierarchy.maxDepth,
+          whileSame,
         };
       }
       const segments = source.path.split(".");
@@ -551,7 +571,10 @@ const assertAcyclicInherit = (
     const chain = inherit.get(entity)?.[field];
     if (chain === undefined) return [];
     return chain.from.flatMap((source) => {
-      if (source.kind === "hierarchy") return [];
+      if (source.kind === "hierarchy")
+        return source.whileSame === null
+          ? []
+          : [`${entity}.${source.whileSame.field}`];
       const reads: string[] = [];
       let current = entity;
       for (const hop of source.hops) {

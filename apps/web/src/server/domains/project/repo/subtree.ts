@@ -35,6 +35,7 @@ import {
 } from "~/server/db/computed/effective-field";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { ledgerParty, project } from "~/server/db/schema";
+import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 
 import {
   projectContentDates,
@@ -151,8 +152,27 @@ function buildChildrenMap(
 }
 
 /**
+ * The selected live projects and all their live descendants, expanded in
+ * SQL (`hierarchyDescendantsSql`, the list filter's expansion), for a caller
+ * that needs only the ids and not the loaded tree.
+ */
+export async function loadProjectSubtreeIds(
+  db: Database,
+  ids: readonly ProjectId[],
+): Promise<ProjectId[]> {
+  if (ids.length === 0) return [];
+  const rows = await getDb(db)
+    .select({ id: project.id })
+    .from(project)
+    .where(sql`${project.id} IN ${hierarchyDescendantsSql("project", ids)}`);
+  return rows.map((row) => row.id);
+}
+
+/**
  * Every descendant id under `rootId` (excludes `rootId` itself) — BFS over
- * the children map, depth-capped and cycle-guarded via a visited set.
+ * an already-loaded children map, depth-capped and cycle-guarded via a
+ * visited set. Callers that read the loaded tree for more than the ids use
+ * it; one that needs only the ids reads {@link loadProjectSubtreeIds}.
  */
 export function collectDescendantIds(
   childrenByParent: Map<ProjectId, ProjectId[]>,

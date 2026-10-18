@@ -1,18 +1,15 @@
 import { sql } from "drizzle-orm";
 
+import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { task } from "~/server/db/schema";
-import { effectiveTaskTradeSql } from "~/server/domains/task/repo/task-project-inheritance";
 import { defineEntityChecks } from "~/server/generic/data-quality/repo/registry";
 
 type Task = typeof task;
 
-// A task inherits its trade from a parent task or project, so the stored
-// column alone undercounts. Relational lists rename Task, so evaluate the
-// inheritance under an alias local to this subquery.
-const effectiveTrade = (t: Task) => sql`(
-  SELECT ${effectiveTaskTradeSql("dq_task_trade")} FROM "Task" dq_task_trade
-  WHERE dq_task_trade."id" = ${t.id}
-)`;
+// A task inherits its trade from an ancestor task or project, so the stored
+// column alone undercounts. Relational lists rename Task, so read it by id.
+const effectiveTrade = (t: Task) =>
+  effectiveFieldSql("task", "trade", { id: sql`${t.id}` });
 
 export const taskChecks = defineEntityChecks({
   entity: "task",
