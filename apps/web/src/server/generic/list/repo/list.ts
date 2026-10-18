@@ -922,7 +922,7 @@ const rowSetPredicates = (
           return condition(picked === undefined ? undefined : matches(picked));
         return [
           {
-            any: undefined,
+            any: or(matches(picked), presenceSql(presence)),
             all: picked.map((item) => matches([item])),
             presence: presenceSql(presence),
             absent: presence === "none",
@@ -932,29 +932,35 @@ const rowSetPredicates = (
     }
   });
   if (conditions.length === 0) return undefined;
-  const plain = conditions.filter(({ all }) => all === null);
-  const base = and(...plain.map(({ any }) => any));
-  // No row at all, matched only when every condition asked for No value.
-  const empty = (group: readonly RowCondition[]) =>
-    group.every(({ absent }) => absent)
-      ? sql`NOT ${set.exists(undefined)}`
-      : undefined;
-  const everyValue = conditions.flatMap(({ all, presence, absent }) =>
-    all === null ? [] : [{ all, presence, absent }],
-  );
-  if (everyValue.length === 0) return or(set.exists(base), empty(plain));
+  // No row at all, matched only when every condition asks for No value.
+  const empty = (absent: boolean) =>
+    absent ? sql`NOT ${set.exists(undefined)}` : undefined;
+  const everyValue = conditions.filter(({ all }) => all !== null);
+  if (everyValue.length === 0)
+    return or(
+      set.exists(and(...conditions.map(({ any }) => any))),
+      empty(conditions.every(({ absent }) => absent)),
+    );
+  // Each value of a Match all filter needs its own row, which also holds
+  // every sibling's any-of condition (another Match all filter's included).
   return and(
-    ...everyValue.map(({ all, presence, absent }) =>
-      or(
-        and(...all.map((each) => set.exists(and(each, base)))),
-        presence === undefined
+    ...everyValue.map((condition) => {
+      const others = conditions.filter((other) => other !== condition);
+      const siblings = and(...others.map(({ any }) => any));
+      return or(
+        and(
+          ...(condition.all ?? []).map((each) =>
+            set.exists(and(each, siblings)),
+          ),
+        ),
+        condition.presence === undefined
           ? undefined
           : or(
-              set.exists(and(presence, base)),
-              empty([...plain, { any: presence, all: null, presence, absent }]),
+              set.exists(and(condition.presence, siblings)),
+              empty(condition.absent && others.every(({ absent }) => absent)),
             ),
-      ),
-    ),
+      );
+    }),
   );
 };
 

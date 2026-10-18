@@ -210,6 +210,26 @@ describe("row-set filters", () => {
         [],
       ],
       [{ last4Exclude: ["1111", "3333"] }, [unnumbered, bare]],
+      // Two Match all filters: each value's alias also holds one of the
+      // other filter's values, so no alias pairs Statement with ACME-0042.
+      [
+        {
+          source: ["plaid", "statement"],
+          sourceMatch: "all",
+          externalAccountId: ["ACME-0042", "ACME-0099"],
+          externalAccountIdMatch: "all",
+        },
+        [both],
+      ],
+      [
+        {
+          source: ["plaid", "statement"],
+          sourceMatch: "all",
+          externalAccountId: ["ACME-0042"],
+          externalAccountIdMatch: "all",
+        },
+        [],
+      ],
     ];
     for (const [filters, ids] of expected)
       expect(
