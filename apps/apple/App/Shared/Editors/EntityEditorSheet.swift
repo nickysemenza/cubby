@@ -401,3 +401,21 @@ struct EntityEditorSheet: View {
     ) { _ in }
     .environment(PreviewFixtures.signedInModel())
 }
+
+#Preview("Edit project") {
+    let raw: JSONValue = [
+        "id": "PRJ-4K7M", "name": "Backyard deck refresh", "status": "planning", "emoji": "🪵",
+        "locations": ["Back deck"], "costEstimate": 450,
+        "assignee": ["id": "LPY-2B9C", "name": "Alex"],
+        "fieldResolutions": [
+            "assigneeId": [
+                "mode": "inherit", "storedValue": .null, "value": "LPY-2B9C", "fallbackValue": "LPY-2B9C",
+                "source": "parent project",
+                "sourceEntity": ["entityKind": "project", "entityId": "PRJ-9Q3R", "name": "Yard upkeep"],
+                "matchesFallback": false, "canReset": false,
+            ]
+        ],
+    ]
+    EntityEditorSheet(key: .project, mode: .update(id: "PRJ-4K7M"), original: raw) { _ in }
+        .environment(PreviewFixtures.signedInModel())
+}
