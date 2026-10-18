@@ -10,13 +10,20 @@ import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { z } from "zod";
 
 import { usePageCount } from "~/entity/page/page";
 import { PossibleVendor } from "~/features/finance/possible-vendor";
 import { statementRow } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { formatCurrency } from "~/lib/number-format";
+import { formatCount, formatCurrency } from "~/lib/number-format";
 import { statusTone } from "~/lib/status-tone";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
@@ -180,7 +187,7 @@ function StatementRowSummary({
 
   const selectable = (
     label: string,
-    value: number,
+    value: ReactNode,
     target: MatchStateSearchValue,
   ) => ({
     label,
@@ -194,7 +201,12 @@ function StatementRowSummary({
       metrics={[
         selectable("Total", data.total, "all"),
         selectable("Matched", data.matched, "matched"),
-        selectable("Unmatched", data.unmatched, "unmatched"),
+        selectable(
+          "Unmatched",
+          // Rows are observations; charges are the distinct money behind them.
+          `${formatCount(data.unmatched)} rows · ${formatCount(data.unmatchedCharges)} charges`,
+          "unmatched",
+        ),
         selectable("Ignored", data.ignored, "ignored"),
         {
           label: "Unmatched $",
