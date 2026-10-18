@@ -47,6 +47,11 @@ export async function recoverMissedWork(
   db: Database,
   coordinatorRetireBefore?: Date,
 ) {
+  // Ended instances are marked failed before recovery, never only by the
+  // maintenance Run, which may itself be the Run whose instance died.
+  await (
+    await import("~/server/workflows/runs/lifecycle")
+  ).reconcileWorkflowRuns(db);
   await (
     await import("~/server/domains/run/service/ai-refresh")
   ).recoverAiRefresh(db);

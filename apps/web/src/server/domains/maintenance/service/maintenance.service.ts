@@ -16,6 +16,7 @@ import {
 } from "~/server/domains/image/repo/image";
 import {
   ACTIVE_MAINTENANCE_STATUSES,
+  endBudgetPausedPass,
   latestMaintenanceRun,
   readRunShortcode,
 } from "~/server/domains/maintenance/repo/maintenance-run";
@@ -51,7 +52,13 @@ export async function launchMaintenanceRun(
   trigger: "manual" | "scheduled",
   launcher: WorkflowLauncher = productionWorkflowLauncher,
 ): Promise<MaintenanceRunOut> {
-  const active = await latestMaintenanceRun(db, true);
+  let active = await latestMaintenanceRun(db, true);
+  if (
+    active &&
+    trigger === "scheduled" &&
+    (await endBudgetPausedPass(db, active.id))
+  )
+    active = await latestMaintenanceRun(db, true);
   if (active)
     return {
       runId: parseShortcodeFor("run", active.shortcode),

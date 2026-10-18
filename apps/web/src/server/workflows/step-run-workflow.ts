@@ -56,13 +56,9 @@ export class StepRunWorkflow extends WorkflowEntrypoint<
               type: "step-run",
               timeout: `${advance.seconds} seconds`,
             });
-          } catch (error) {
-            if (
-              !(error instanceof Error) ||
-              !/timeout|timed out/i.test(error.message)
-            )
-              throw error;
-            // SILENT: the timeout rechecks the child; the event is only a hint.
+          } catch {
+            // SILENT: the wait is only a hint; its timeout (or any other end)
+            // falls through to the next page, which re-reads the child.
           }
       }
       await step.do("continue", () =>

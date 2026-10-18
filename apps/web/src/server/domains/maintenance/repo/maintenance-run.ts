@@ -34,3 +34,29 @@ export async function readRunShortcode(db: Database, runId: RunId) {
     .where(eq(run.id, runId));
   return row?.shortcode ?? null;
 }
+
+/**
+ * Ends a pass that is still waiting out an AI budget window so the next
+ * nightly pass can start; its free backlogs would otherwise wait behind paid
+ * image work for as long as that backlog lasts.
+ */
+export async function endBudgetPausedPass(db: Database, runId: RunId) {
+  const [ended] = await getDb(db)
+    .update(run)
+    .set({
+      status: "needs_review",
+      endedAt: new Date(),
+      failureCode: "superseded_by_next_pass",
+      dispatchError:
+        "Ended while paused for the AI budget; the next nightly pass continues every backlog.",
+    })
+    .where(
+      and(
+        eq(run.id, runId),
+        eq(run.status, "paused_auth"),
+        eq(run.failureCode, "execution_limit"),
+      ),
+    )
+    .returning({ id: run.id });
+  return Boolean(ended);
+}

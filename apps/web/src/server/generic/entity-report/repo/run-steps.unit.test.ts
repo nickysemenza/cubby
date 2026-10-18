@@ -69,7 +69,7 @@ describe("Steps ledger", () => {
     expect(exif?.state).toEqual({ kind: "failed", label: "Failures" });
     expect(exif?.lines?.map((line) => line.text)).toEqual([
       "5,557 done · 3 failed · 0 skipped · 0 left · 18m 0s",
-      "image:synthetic-1: R2 object not found: synthetic/IMG-0001.heic (404)",
+      "R2 object not found: synthetic/IMG-0001.heic (404)",
     ]);
     expect(exif?.commands?.[0]?.request).toEqual({
       kind: "retry-run-step",

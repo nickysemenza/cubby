@@ -936,9 +936,9 @@ export function runStepsBlocks(report: RunStepsReport): ReportBlock[] {
           ]
         : []),
     ].join(" · ");
-    const errors = step.errors.map(
-      (error) => `${error.ref ? `${error.ref}: ` : ""}${error.message}`,
-    );
+    // Refs are internal retry keys (`image:<uuid>`); the raw message is the
+    // diagnostic a member reads.
+    const errors = step.errors.map((error) => error.message);
     return row(step.key, {
       title: step.label,
       trailing: `${formatCount(step.done)} of ${formatCount(step.found)}`,

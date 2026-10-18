@@ -80,6 +80,8 @@ export type StepContext = {
   attempt: number;
   /** Launches a step's child Run (tests inject a recording fake). */
   launcher: WorkflowLauncher;
+  /** The first page after "Retry failed" reopened this step. */
+  retrying: boolean;
 };
 
 export interface StepDriver extends RunStepDefinition {
@@ -145,6 +147,8 @@ export async function advanceStepRun(
     return { kind: "continue" };
   }
   const stamp = stampOf(params.attempt);
+  // Only a reopened step is queued after it has already run pages.
+  const retrying = current.state === "queued" && current.pages > 0;
   if (current.state === "queued" || current.state === "paused") {
     await recordRunStepPage(db, owner.id, current.key, {
       state: "running",
@@ -168,6 +172,7 @@ export async function advanceStepRun(
       step: current,
       attempt: params.attempt,
       launcher,
+      retrying,
     });
   } catch (error) {
     // A thrown page ends this step only; the Run moves on to the next one.

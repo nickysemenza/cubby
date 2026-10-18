@@ -33,7 +33,13 @@ export const runStepErrors = z.array(runStepError).max(RUN_STEP_ERROR_SAMPLE);
  * details (a phase split, a budget note) shown beside the step.
  */
 export const runStepMeta = z.object({
-  retryErrors: runStepErrors.optional(),
+  /**
+   * Every failed item ref (`image:<id>`), uncapped: `errors` keeps only a
+   * sample for display, so a retry re-admits from this set.
+   */
+  failedRefs: z.array(z.string()).optional(),
+  /** The failed refs a "Retry failed" handed back to the step's driver. */
+  retryRefs: z.array(z.string()).optional(),
   retriedFailures: z.number().int().nonnegative().optional(),
   /** Wall time of the step's pages, so a slow backlog shows where it waits. */
   timing: z

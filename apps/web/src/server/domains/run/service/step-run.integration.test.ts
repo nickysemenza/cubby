@@ -33,7 +33,7 @@ function scripted(key: string, pages: StepPage[]) {
     key,
     label: `Synthetic ${key}`,
     page: async ({ step }) => {
-      seen.push({ cursor: step.cursor, retried: step.meta?.retryErrors });
+      seen.push({ cursor: step.cursor, retried: step.meta?.retryRefs });
       const next = pages.shift();
       if (!next) throw new Error(`${key} has no scripted page left`);
       return next;
@@ -170,9 +170,7 @@ describe("step-ledger Runs", () => {
       "continue",
       "finished",
     ]);
-    expect(exif.seen.at(-1)?.retried).toEqual([
-      expect.objectContaining({ ref: "image:synthetic-1" }),
-    ]);
+    expect(exif.seen.at(-1)?.retried).toEqual(["image:synthetic-1"]);
     expect(embed.seen).toHaveLength(1);
     expect(await readRun(id)).toMatchObject({ status: "completed" });
     // The superseded attempt can no longer write.
@@ -289,5 +287,58 @@ describe("step-ledger Runs", () => {
       /is still running or paused; retry this step once it ends/,
     );
     expect((await readRunSteps(ctx.db, id))[0]?.state).toBe("failed");
+  });
+
+  // Failure mode (review): the error sample holds 20, so a retry that read it
+  // re-admitted 20 failures and silently dropped the rest.
+  it("re-admits every failed item on retry, not only the displayed sample", async () => {
+    const { id, params } = await startRun();
+    const refs = Array.from({ length: 25 }, (_, n) => `image:synthetic-${n}`);
+    const exif = scripted("exif", [
+      {
+        kind: "progress",
+        found: 25,
+        delta: { failed: 25 },
+        errors: refs.map((ref) => ({
+          at: new Date().toISOString(),
+          message: "R2 object not found (404)",
+          ref,
+        })),
+        done: true,
+      },
+    ]);
+    await drive(params, async () => [exif.driver]);
+    expect((await readRunSteps(ctx.db, id))[0]?.errors).toHaveLength(20);
+    exif.pages.push({ kind: "progress", delta: { done: 25 }, done: true });
+    await retryRunStep(ctx.db, id, "exif", launcher);
+    const attempt = attemptOf(await readRun(id));
+    await drive({ runId: id, attempt }, async () => [exif.driver]);
+    expect(exif.seen.at(-1)?.retried).toEqual(refs);
+  });
+
+  // Failure mode (review): reconcile fails a Run whose first dispatch was lost,
+  // and recovery only looked at running attempt-0 Runs, so it never relaunched.
+  it("relaunches a step-ledger Run that reconcile failed for a lost dispatch", async () => {
+    const id = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "maintenance",
+      trigger: "scheduled",
+      status: "running",
+    });
+    await getDb(ctx.db)
+      .update(run)
+      .set({
+        status: "failed",
+        failureCode: "workflow_dispatch_failed",
+        dispatchError: "The Run was saved but its Workflow was never started",
+      })
+      .where(eq(run.id, id));
+    expect(await recoverStepRuns(ctx.db, launcher, [id])).toBe(1);
+    expect(await readRun(id)).toMatchObject({ status: "running" });
+    // A member's cancellation is an outcome, never retried.
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "failed", failureCode: "user_cancelled" })
+      .where(eq(run.id, id));
+    expect(await recoverStepRuns(ctx.db, launcher, [id])).toBe(0);
   });
 });

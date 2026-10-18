@@ -94,12 +94,12 @@ const failuresOf = (error: unknown): RunStepError[] =>
 
 /** The refs a "Retry failed" re-admitted on this step, by prefix. */
 const retryRefs = (context: StepContext, prefix: string) =>
-  (context.step.meta?.retryErrors ?? []).flatMap((error) =>
-    error.ref?.startsWith(prefix) ? [error.ref.slice(prefix.length)] : [],
+  (context.step.meta?.retryRefs ?? []).flatMap((ref) =>
+    ref.startsWith(prefix) ? [ref.slice(prefix.length)] : [],
   );
 
 /** Consumed retry refs, so a later page drains normally. */
-const RETRY_CONSUMED: RunStepMeta = { retryErrors: [] };
+const RETRY_CONSUMED: RunStepMeta = { retryRefs: [] };
 
 const detail = (values: Record<string, number | string | boolean>) => ({
   detail: values,

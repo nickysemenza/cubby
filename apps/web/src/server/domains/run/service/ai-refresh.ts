@@ -300,17 +300,19 @@ async function scheduleConnectionDiscovery(
   db: Database,
   cursor: Awaited<ReturnType<typeof readAiDiscoveryCursor>>,
 ) {
-  if (!cursor.connectionDone)
-    try {
-      const { startRoutineSweep } = await import("./sweep");
-      await startRoutineSweep(db, "recommendation");
-    } catch (error) {
-      // An unlaunched Sweep is relaunched by step-run recovery.
-      log.error("Connection discovery Sweep failed to start", {
-        error: scrubErrorMessage(String(error)),
-      });
-    }
-  return { done: true, cursor: null };
+  if (cursor.connectionDone) return { done: true, cursor: null };
+  try {
+    const { startRoutineSweep } = await import("./sweep");
+    await startRoutineSweep(db, "recommendation");
+    // Started now, or an unscoped connection Sweep already covers this pass.
+    return { done: true, cursor: null };
+  } catch (error) {
+    // Left undone, so the next discovery pass tries again.
+    log.error("Connection discovery Sweep failed to start", {
+      error: scrubErrorMessage(String(error)),
+    });
+    return { done: false, cursor: null };
+  }
 }
 
 /** Preparation enumerates evidence using live renderers; no model calls happen here. */

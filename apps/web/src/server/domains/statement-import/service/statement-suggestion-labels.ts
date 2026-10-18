@@ -52,6 +52,8 @@ export async function labelStatementSuggestions(
     /** The Run the model calls are accounted to (a Sweep's step). */
     runId?: RunId | null;
     after?: LabelCursor | null;
+    /** Label only this import's charges (an import-scoped Sweep). */
+    importId?: string | null;
   } = {},
 ): Promise<{
   labelled: number;
@@ -66,7 +68,12 @@ export async function labelStatementSuggestions(
   const activation = await readAiRefreshActivation(db);
   if (!activation?.enabled && !input.port) return { ...empty, active: false };
   const limit = input.limit ?? STATEMENT_LABEL_BATCH;
-  const rows = await suggestionsNeedingLabels(db, limit + 1, input.after);
+  const rows = await suggestionsNeedingLabels(
+    db,
+    limit + 1,
+    input.after,
+    input.importId ?? null,
+  );
   if (!rows.length) return { ...empty, active: true };
   const runId =
     input.runId ??

@@ -8,6 +8,7 @@ import {
   type RunStepMeta,
   type RunStepState,
 } from "@cubby/schemas/run-step";
+import { MAX_AUTOMATIC_WORKFLOW_FAILURES } from "@cubby/schemas/workflow-runs";
 import {
   and,
   asc,
@@ -87,6 +88,9 @@ export async function recordRunStepPage(
   },
 ) {
   const delta = page.delta ?? {};
+  const failedRefs = (page.errors ?? []).flatMap((error) =>
+    error.ref ? [error.ref] : [],
+  );
   const errors = page.errors?.length
     ? runStepErrors.parse(page.errors.slice(-RUN_STEP_ERROR_SAMPLE))
     : null;
@@ -116,8 +120,9 @@ export async function recordRunStepPage(
         pausedReason: page.pausedReason,
       }),
       ...(page.pausedUntil !== undefined && { pausedUntil: page.pausedUntil }),
-      ...(page.meta && {
-        meta: sql`coalesce(${runStep.meta}, '{}'::jsonb) || ${JSON.stringify(page.meta)}::jsonb`,
+      ...((page.meta || failedRefs.length) && {
+        meta: sql`coalesce(${runStep.meta}, '{}'::jsonb) || ${JSON.stringify(page.meta ?? {})}::jsonb
+          || jsonb_build_object('failedRefs', coalesce(${runStep.meta}->'failedRefs', '[]'::jsonb) || ${JSON.stringify(failedRefs)}::jsonb)`,
       }),
       ...(page.state && {
         state: page.state,
@@ -144,7 +149,7 @@ export async function reopenRunStep(
       endedAt: null,
       pausedReason: null,
       pausedUntil: null,
-      meta: sql`coalesce(${runStep.meta}, '{}'::jsonb) || jsonb_build_object('retriedFailures', coalesce((${runStep.meta}->>'retriedFailures')::int, 0) + ${runStep.failed}, 'retryErrors', ${runStep.errors})`,
+      meta: sql`coalesce(${runStep.meta}, '{}'::jsonb) || jsonb_build_object('retriedFailures', coalesce((${runStep.meta}->>'retriedFailures')::int, 0) + ${runStep.failed}, 'retryRefs', coalesce(${runStep.meta}->'failedRefs', '[]'::jsonb), 'failedRefs', '[]'::jsonb)`,
       errors: sql`'[]'::jsonb`,
     })
     .where(
@@ -300,6 +305,14 @@ export async function stepRunsToRecover(
             attemptIs(0),
             lte(run.createdAt, new Date(now.getTime() - 60_000)),
           ),
+          // A crashed or never-dispatched attempt (reconcile fails a lost
+          // first dispatch) retries under the automatic-failure cap; a member's
+          // cancellation and recorded step failures are outcomes, not crashes.
+          and(
+            inArray(run.status, ["failed", "dispatch_failed"]),
+            sql`${run.failureCode} IS DISTINCT FROM 'user_cancelled'`,
+            sql`coalesce((${run.progress}->>'automaticRecoveryFailures')::int, 0) < ${MAX_AUTOMATIC_WORKFLOW_FAILURES}`,
+          ),
           and(
             eq(run.status, "paused_auth"),
             eq(run.failureCode, "execution_limit"),
@@ -326,6 +339,8 @@ export async function readChildRun(db: Database, childRunId: RunId) {
   const [row] = await getDb(db)
     .select({
       id: run.id,
+      shortcode: run.shortcode,
+      purpose: run.purpose,
       status: run.status,
       progress: run.progress,
       failureCode: run.failureCode,
@@ -342,11 +357,31 @@ export async function settleEmptyChildRun(db: Database, childRunId: RunId) {
     .update(run)
     .set({ status: "completed", endedAt: new Date() })
     .where(
+      and(
+        eq(run.id, childRunId),
+        inArray(run.status, ["running", "paused"]),
+        attemptIs(0),
+      ),
+    );
+}
+
+/**
+ * Holds a freshly created child out of recovery (which launches running
+ * attempt-0 Runs) until its parent finishes its roster and launches it.
+ */
+export async function holdChildRun(db: Database, childRunId: RunId) {
+  await getDb(db)
+    .update(run)
+    .set({ status: "paused" })
+    .where(
       and(eq(run.id, childRunId), eq(run.status, "running"), attemptIs(0)),
     );
 }
 
-/** An unfinished Sweep that already covers this family, if one exists. */
+/**
+ * An unfinished Sweep that covers this whole family (no scope), if one
+ * exists; a member's scoped Sweep never stands in for routine coverage.
+ */
 export async function activeSweepFor(db: Database, family: string) {
   const [row] = await getDb(db)
     .select({ id: run.id })
@@ -355,7 +390,8 @@ export async function activeSweepFor(db: Database, family: string) {
       and(
         eq(run.purpose, "sweep"),
         inArray(run.status, ["running", "paused_auth"]),
-        sql`${run.input}->'families' @> ${JSON.stringify([{ family }])}::jsonb`,
+        sql`EXISTS (SELECT 1 FROM jsonb_array_elements(${run.input}->'families') covered
+          WHERE covered->>'family' = ${family} AND coalesce(covered->'scope', '{}'::jsonb) = '{}'::jsonb)`,
       ),
     )
     .limit(1);
@@ -380,4 +416,18 @@ export async function otherActiveRun(
     )
     .limit(1);
   return row?.shortcode ?? null;
+}
+
+/** The unfinished child Runs a step-ledger Run's steps delegated to. */
+export async function unfinishedStepChildren(db: Database, runId: RunId) {
+  return getDb(db)
+    .select({ id: run.id, shortcode: run.shortcode, purpose: run.purpose })
+    .from(runStep)
+    .innerJoin(run, eq(run.id, runStep.childRunId))
+    .where(
+      and(
+        eq(runStep.runId, runId),
+        inArray(run.status, ["running", "paused", "paused_auth"]),
+      ),
+    );
 }

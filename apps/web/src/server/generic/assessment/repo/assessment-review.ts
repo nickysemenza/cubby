@@ -344,16 +344,20 @@ export async function reviewAssessment(
   automatic?: AutomaticReview,
 ) {
   if (!automatic) {
-    const outcome = await settleReview(
-      db,
-      context,
-      assessmentReviewInput.parse(raw),
-      null,
-    );
+    const input = assessmentReviewInput.parse(raw);
     const { recheckAutomaticRules } =
       await import("~/server/generic/assessment/repo/automatic-rule-runtime");
-    await recheckAutomaticRules(db, outcome.assessmentId);
-    return outcome;
+    try {
+      const outcome = await settleReview(db, context, input, null);
+      await recheckAutomaticRules(db, outcome.assessmentId);
+      return outcome;
+    } catch (error) {
+      // The member's Feedback committed before a refused application; its Miss
+      // still counts toward the rule, so drift is checked before the raw error.
+      if (input.assessmentId)
+        await recheckAutomaticRules(db, input.assessmentId);
+      throw error;
+    }
   }
   const input = automaticReviewInput.parse(raw);
   if (

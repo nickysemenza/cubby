@@ -1268,6 +1268,7 @@ export async function suggestionsNeedingLabels(
   db: Database,
   limit: number,
   after: LabelCursor | null = null,
+  importId: string | null = null,
 ) {
   const { rows } = await unwrapDb(db).execute<{
     id: string;
@@ -1279,6 +1280,7 @@ export async function suggestionsNeedingLabels(
       a.subject, ${suggestionField("evidenceFingerprint")} AS "evidenceFingerprint"
     FROM "AssessmentState" s JOIN "Assessment" a ON a.id = s.id
     WHERE ${pendingSuggestion()} AND (${suggestionField("needsLabel")})::boolean
+      ${importScope(importId)}
       ${after ? sql`AND (s."createdAt", s.id) > (${after.createdAt}::timestamp, ${after.id}::uuid)` : sql``}
     ORDER BY s."createdAt", s.id
     LIMIT ${limit}
@@ -1286,11 +1288,27 @@ export async function suggestionsNeedingLabels(
   return rows;
 }
 
+/**
+ * An import-scoped pass labels only the charges that import observed, so
+ * concurrent import Sweeps never ask the model about the same suggestions.
+ */
+const importScope = (importId: string | null) =>
+  importId
+    ? sql`AND (${suggestionField("source")}, ${suggestionField("chargeKey")}) IN (
+        SELECT seen.source, ${chargeKeyOf("seen")} FROM "StatementRow" seen
+        WHERE seen."deletedAt" IS NULL AND seen.id IN (
+          SELECT m."statementRowId" FROM ${statementImportMembers} m WHERE m."importId" = ${importId}::uuid))`
+    : sql``;
+
 /** How many pending suggestions still need labels, for a Sweep's count. */
-export async function countSuggestionsNeedingLabels(db: Database) {
+export async function countSuggestionsNeedingLabels(
+  db: Database,
+  importId: string | null = null,
+) {
   const { rows } = await unwrapDb(db).execute<{ count: number }>(sql`
     SELECT count(*)::int AS count FROM "AssessmentState" s
     WHERE ${pendingSuggestion()} AND (${suggestionField("needsLabel")})::boolean
+      ${importScope(importId)}
   `);
   return rows[0]?.count ?? 0;
 }

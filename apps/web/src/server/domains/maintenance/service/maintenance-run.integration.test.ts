@@ -22,6 +22,7 @@ import {
   retryRunStep,
   type StepRunDrivers,
 } from "~/server/domains/run/service/step-run";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import type { WorkflowLauncher } from "~/server/workflows/runs/launcher";
 
@@ -296,7 +297,43 @@ describe("maintenance Run", () => {
     expect((await imageRow(later.id))?.metadataRevision).toBeNull();
     const [step] = await readRunSteps(ctx.db, id);
     expect(step).toMatchObject({ state: "done", done: 3, failed: 0 });
-    expect(step?.meta?.retryErrors).toEqual([]);
+    expect(step?.meta?.retryRefs).toEqual([]);
     expect(await readRun(id)).toMatchObject({ status: "completed" });
+  });
+
+  // Failure mode (review): a pass parked on the AI budget held the one-active
+  // slot, so no nightly pass drained the free backlogs while it waited.
+  it("ends a budget-paused pass when the nightly launch starts a fresh one", async () => {
+    const first = await launchMaintenanceRun(
+      ctx.db,
+      ctx.actor,
+      "manual",
+      launcher,
+    );
+    const firstId = await resolveOrThrow(ctx.db, "run", first.runId);
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "paused_auth", failureCode: "execution_limit" })
+      .where(eq(run.id, firstId));
+    // A member's Run now still sees the paused pass.
+    expect(
+      await launchMaintenanceRun(ctx.db, ctx.actor, "manual", launcher),
+    ).toEqual({ runId: first.runId, existing: true });
+    const nightly = await launchMaintenanceRun(
+      ctx.db,
+      ctx.actor,
+      "scheduled",
+      launcher,
+    );
+    expect(nightly.existing).toBe(false);
+    expect(nightly.runId).not.toBe(first.runId);
+    const [ended] = await getDb(ctx.db)
+      .select({ status: run.status, failureCode: run.failureCode })
+      .from(run)
+      .where(eq(run.id, firstId));
+    expect(ended).toEqual({
+      status: "needs_review",
+      failureCode: "superseded_by_next_pass",
+    });
   });
 });

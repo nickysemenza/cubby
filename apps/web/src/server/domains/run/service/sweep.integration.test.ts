@@ -250,10 +250,8 @@ describe("Sweeps", () => {
     });
   });
 
-  // Failure mode: a field Sweep step finishes before its per-entity child
-  // Runs do, or loses their counts.
-  it("runs one field-sweep child per entity and reports its totals", async () => {
-    const runId = await startSweep(
+  const fieldSweep = () =>
+    startSweep(
       ctx.db,
       ctx.actor,
       {
@@ -269,30 +267,53 @@ describe("Sweeps", () => {
       },
       launcher,
     );
+
+  const childOf = async (runId: string) => {
+    const [step] = await readRunSteps(ctx.db, runId as never);
+    if (!step?.childRunId) throw new Error("expected a child Run");
+    return step.childRunId;
+  };
+
+  const settleChild = (
+    childRunId: string,
+    status: "completed" | "failed",
+    progress: { total: number; done: number; failed: number },
+  ) =>
+    getDb(ctx.db)
+      .update(run)
+      .set({
+        status,
+        ...(status === "failed" && {
+          failureCode: "ai_work_workflow_failed",
+          dispatchError:
+            "Synthetic Workflow crash before any evaluation failed",
+        }),
+        progress: {
+          ...progress,
+          applied: 0,
+          queued: 0,
+          diagnostics: [],
+          attempt: 1,
+        },
+      })
+      .where(eq(run.id, childRunId as never));
+
+  // Failure mode: a field Sweep step finishes before its per-entity child
+  // Runs do, or loses their counts.
+  it("runs one field-sweep child per entity and reports its totals", async () => {
+    const runId = await fieldSweep();
     expect(await drive(runId)).toBe("wait");
-    const [waiting] = await readRunSteps(ctx.db, runId);
-    expect(waiting).toMatchObject({ key: "field", state: "waiting" });
-    const childRunId = waiting?.childRunId;
-    if (!childRunId) throw new Error("expected a field-sweep child Run");
+    const childRunId = await childOf(runId);
     const [child] = await getDb(ctx.db)
       .select({ purpose: run.purpose, parentRunId: run.parentRunId })
       .from(run)
       .where(eq(run.id, childRunId));
     expect(child).toEqual({ purpose: "suggestion_sweep", parentRunId: runId });
-    await getDb(ctx.db)
-      .update(run)
-      .set({
-        status: "completed",
-        progress: {
-          total: 3,
-          done: 3,
-          applied: 0,
-          queued: 0,
-          failed: 0,
-          diagnostics: [],
-        },
-      })
-      .where(eq(run.id, childRunId));
+    await settleChild(childRunId, "completed", {
+      total: 3,
+      done: 3,
+      failed: 0,
+    });
     expect(await drive(runId)).toBe("finished");
     expect((await readRunSteps(ctx.db, runId))[0]).toMatchObject({
       state: "done",
@@ -300,5 +321,51 @@ describe("Sweeps", () => {
       done: 3,
       left: 0,
     });
+  });
+
+  // Failure modes (review): a child whose Workflow crashed before recording a
+  // failed evaluation counted as success; cancelling the Sweep left it running.
+  it("fails the step for a crashed child and cancels children with the Sweep", async () => {
+    const crashed = await fieldSweep();
+    await drive(crashed);
+    const crashedChild = await childOf(crashed);
+    await settleChild(crashedChild, "failed", { total: 3, done: 1, failed: 0 });
+    expect(await drive(crashed)).toBe("finished");
+    const [step] = await readRunSteps(ctx.db, crashed);
+    expect(step).toMatchObject({ state: "failed", failed: 1 });
+    expect(step?.errors[0]?.message).toContain("Synthetic Workflow crash");
+    // Retry failed relaunches the crashed child instead of rereading it.
+    const { retryRunStep } = await import("./step-run");
+    await retryRunStep(ctx.db, crashed as never, "field", launcher);
+    expect(await drive(crashed)).toBe("wait");
+    const [relaunched] = await getDb(ctx.db)
+      .select({ status: run.status })
+      .from(run)
+      .where(eq(run.id, crashedChild));
+    expect(relaunched?.status).toBe("running");
+
+    const cancelled = await fieldSweep();
+    await drive(cancelled);
+    const runningChild = await childOf(cancelled);
+    const shortcode = (
+      await getDb(ctx.db)
+        .select({ shortcode: run.shortcode })
+        .from(run)
+        .where(eq(run.id, cancelled))
+    )[0]!.shortcode;
+    const { controlWorkflowRun } =
+      await import("~/server/workflows/runs/control");
+    await controlWorkflowRun(
+      ctx.db,
+      ctx.actor,
+      { runPublicId: shortcode, action: "cancel" },
+      "sweep",
+      launcher,
+    );
+    const [child] = await getDb(ctx.db)
+      .select({ status: run.status, failureCode: run.failureCode })
+      .from(run)
+      .where(eq(run.id, runningChild));
+    expect(child).toEqual({ status: "failed", failureCode: "user_cancelled" });
   });
 });
