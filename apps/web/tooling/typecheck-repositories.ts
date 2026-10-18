@@ -191,6 +191,7 @@ export const repositoryOwners = [
   "src/server/generic/list/repo/list-all.ts",
   "src/server/generic/list/repo/list-display-labels.ts",
   "src/server/generic/list/repo/list-read-adapters.ts",
+  "src/server/generic/list/repo/terms.ts",
   "src/server/generic/merge/repo/collisions.ts",
   "src/server/generic/problems/repo/detectors-label-variants.ts",
   "src/server/generic/problems/repo/unused-aliases.ts",

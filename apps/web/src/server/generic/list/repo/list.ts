@@ -93,6 +93,7 @@ import {
   hierarchyDescendantsSql,
 } from "~/server/generic/list/repo/hierarchy";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
+import { listTermExpanders } from "~/server/generic/list/repo/terms";
 import {
   lexicalEligibility,
   lexicalRelevance,
@@ -123,7 +124,6 @@ import {
   shortcodeIdsSql,
 } from "./field-compiler";
 import { wantsListGroup } from "./list-projection";
-import { listTermExpanders } from "./terms";
 
 const suggestionKinds = z
   .union([

@@ -1,4 +1,3 @@
-import type { Entity } from "@cubby/schemas/entity";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { eq, inArray, type SQL, sql } from "drizzle-orm";
 import { buildEntity, type EntityOverrides } from "tooling/factories/build";
@@ -23,6 +22,7 @@ import {
   executeEntity,
   executeEntityAs,
 } from "~/server/entity-kernel";
+import type { EntityKernelEntity } from "~/server/entity-kernel/contracts";
 import type { ListFilterValues } from "~/server/generic/list/repo/field-compiler";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
@@ -52,7 +52,10 @@ describe("row-set filters", () => {
     entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
-  const listed = async (entity: Entity, filters: ListFilterValues) =>
+  const listed = async (
+    entity: EntityKernelEntity,
+    filters: ListFilterValues,
+  ) =>
     sorted(
       z
         .object({ items: z.array(z.object({ id: z.string() })) })
@@ -136,7 +139,7 @@ describe("row-set filters", () => {
       [],
     );
     const bare = await account("Row-set bare account", [], []);
-    const accounts = new Set([both, statementOnly, unnumbered, bare]);
+    const accounts = new Set<string>([both, statementOnly, unnumbered, bare]);
     const inFixture = (ids: string[]) => ids.filter((id) => accounts.has(id));
     const aliases = sql`jsonb_array_elements(CASE
       WHEN jsonb_typeof("FinancialAccount"."sourceAliases") = 'array'
@@ -238,7 +241,7 @@ describe("row-set filters", () => {
       { source: "rowset-bank", externalId: "RS-2" },
     ]);
     const unrefd = await transaction([]);
-    const fixture = new Set([split, paired, unrefd]);
+    const fixture = new Set<string>([split, paired, unrefd]);
     const inFixture = (ids: string[]) => ids.filter((id) => fixture.has(id));
     const retired = (sources?: string[], externalIds?: string[]) => sql`EXISTS (
       SELECT 1 FROM "EntityExternalId" fx
@@ -318,7 +321,7 @@ describe("row-set filters", () => {
     await target(child.id, mixed.id, "pending");
     await target(parent.id, mixed.id, "prepared");
     await target(child.id, childPrepared.id, "prepared");
-    const fixture = new Set(
+    const fixture = new Set<string>(
       [parentPending, mixed, childPrepared, untargeted].map(
         (row) => row.shortcode,
       ),
@@ -424,7 +427,7 @@ describe("row-set filters", () => {
     const addId = (
       code: string,
       source: string,
-      kind: string,
+      kind: "gtin_14" | "asin",
       externalId: string,
     ) =>
       executeEntity(kernel, {
@@ -446,7 +449,7 @@ describe("row-set filters", () => {
     const listedOnly = await create("Row-set listed", {});
     await addId(listedOnly, "amazon", "asin", "B0ROWSET01");
     const bare = await create("Row-set bare", {});
-    const fixture = new Set([scanned, listedOnly, bare]);
+    const fixture = new Set<string>([scanned, listedOnly, bare]);
     const inFixture = (ids: string[]) => ids.filter((id) => fixture.has(id));
 
     // The digits read off a package, a secondary barcode, an absent one.

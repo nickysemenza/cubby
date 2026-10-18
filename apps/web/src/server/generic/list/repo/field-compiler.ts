@@ -477,7 +477,9 @@ export const rowSetSql = (
   /** The list's outer table, which the set correlates to. */
   outerTable: string,
 ): RowSetSql => {
-  const rowSet = generatedEntityListFields[entity].rows[key];
+  const rowSet = Object.entries(generatedEntityListFields[entity].rows).find(
+    ([name]) => name === key,
+  )?.[1];
   if (rowSet === undefined)
     throw new Error(`${entity} declares no model.rows ${key}`);
   const outer = sql.identifier(outerTable);
