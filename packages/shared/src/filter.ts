@@ -35,6 +35,9 @@ export const RELATIVE_DATE_TODAY = "@today" as const;
 
 export const RELATIVE_DATE_PATTERN = /^@today(?:([+-])(\d{1,5})d)?$/;
 
+/** The largest day offset a token carries: the pattern's five digits. */
+export const RELATIVE_DATE_MAX_DAYS = 99_999;
+
 /** A relative date token's whole-day offset from today, or undefined for any other value. */
 export const relativeDateOffset = (value: string): number | undefined => {
   const match = RELATIVE_DATE_PATTERN.exec(value);

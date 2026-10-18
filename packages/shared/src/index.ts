@@ -22,6 +22,7 @@ export {
   parseNumberRangeBounds,
   parseRangeBounds,
   RANGE_BOUNDS_SEPARATOR,
+  RELATIVE_DATE_MAX_DAYS,
   RELATIVE_DATE_PATTERN,
   RELATIVE_DATE_TODAY,
   relativeDateOffset,

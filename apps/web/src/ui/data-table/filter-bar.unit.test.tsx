@@ -434,7 +434,10 @@ describe("range bounds editors", () => {
       label: "Age",
       type: "select",
       numberRange: { nonnegative: true },
-      options: [{ value: "5", label: "5+" }],
+      options: [
+        { value: "2", label: "2+" },
+        { value: "5", label: "5+" },
+      ],
     },
     {
       key: "made",
@@ -459,7 +462,7 @@ describe("range bounds editors", () => {
     return { onChange, rerender };
   };
   const input = (name: string) =>
-    screen.getByRole<HTMLInputElement>("spinbutton", { name });
+    screen.getByRole<HTMLInputElement>("textbox", { name });
 
   // Failure mode: the bounds editor read its value once, so a value changed
   // while it was open (Back/Forward, a deep link) left stale inputs, and the
@@ -507,5 +510,66 @@ describe("range bounds editors", () => {
     expect(onChange).toHaveBeenLastCalledWith(
       filterOf("made", "2026-03-01..2026-04-15"),
     );
+  });
+
+  // Failure mode: a number input reports incomplete text (`-`, `1e`) as an
+  // empty value, so typing it silently cleared an active bound.
+  it("rejects incomplete number text instead of clearing the bound", () => {
+    const { onChange } = renderRanges(filterOf("age", "1..8"));
+    fireEvent.click(screen.getByRole("button", { name: "Age: 1 to 8" }));
+    for (const text of ["-", "1e"]) {
+      fireEvent.change(input("Age minimum"), { target: { value: text } });
+      expect(input("Age minimum").value).toBe(text);
+      expect(input("Age minimum")).toHaveAttribute("aria-invalid", "true");
+    }
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  // Failure mode: a preset passed no bounds to the editor, so switching
+  // between presets never reset it and a stale invalid draft blocked edits.
+  it("starts over when one preset replaces another", () => {
+    const { onChange, rerender } = renderRanges(filterOf("age", "5"));
+    fireEvent.click(screen.getByRole("button", { name: "Age: 5+" }));
+    fireEvent.change(input("Age minimum"), { target: { value: "-3" } });
+    rerender(filterOf("age", "2"));
+    expect(input("Age minimum").value).toBe("");
+    fireEvent.change(input("Age maximum"), { target: { value: "12" } });
+    expect(onChange).toHaveBeenLastCalledWith(filterOf("age", "..12"));
+  });
+
+  // Failure mode: only the last emission was remembered, so a parent's
+  // delayed echo of an earlier one rolled the typed minimum back.
+  it("keeps typed text through a lagging parent's echoes", () => {
+    const { onChange, rerender } = renderRanges(filterOf("age", "1..80"));
+    fireEvent.click(screen.getByRole("button", { name: "Age: 1 to 80" }));
+    fireEvent.change(input("Age minimum"), { target: { value: "2" } });
+    fireEvent.change(input("Age minimum"), { target: { value: "23" } });
+    expect(onChange).toHaveBeenLastCalledWith(filterOf("age", "23..80"));
+    rerender(filterOf("age", "2..80"));
+    expect(input("Age minimum").value).toBe("23");
+    rerender(filterOf("age", "23..80"));
+    expect(input("Age minimum").value).toBe("23");
+    rerender(filterOf("age", "4..80"));
+    expect(input("Age minimum").value).toBe("4");
+  });
+
+  // Failure mode: a relative amount past the token's five digits emitted a
+  // token that is not relative, so the bound flipped to Date mid-typing.
+  it("rejects a relative amount past the token limit without leaving Relative", () => {
+    const { onChange } = renderRanges(filterOf("made", "@today-30d.."));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /^Made: on or after today − 30 days$/,
+      }),
+    );
+    const days = input("From days");
+    expect(days.value).toBe("30");
+    fireEvent.change(days, { target: { value: "100000" } });
+    expect(input("From days").value).toBe("100000");
+    expect(input("From days")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.queryByLabelText("From date")).toBeNull();
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.change(input("From days"), { target: { value: "45" } });
+    expect(onChange).toHaveBeenLastCalledWith(filterOf("made", "@today-45d.."));
   });
 });

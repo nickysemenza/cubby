@@ -282,8 +282,8 @@ test("a number range filter keeps its bounds through entry, reload and clear", a
   await page
     .getByRole("button", { name: "Upload age: any", exact: true })
     .click();
-  const min = page.getByRole("spinbutton", { name: "Upload age minimum" });
-  const max = page.getByRole("spinbutton", { name: "Upload age maximum" });
+  const min = page.getByRole("textbox", { name: "Upload age minimum" });
+  const max = page.getByRole("textbox", { name: "Upload age maximum" });
   await expect(
     page.getByText("Only images uploaded at least this many hours ago."),
   ).toBeVisible();
@@ -371,7 +371,7 @@ test("typing a bound after picking a preset keeps every digit", async ({
     }),
   ).toBeVisible();
 
-  const min = page.getByRole("spinbutton", { name: "Purchase count minimum" });
+  const min = page.getByRole("textbox", { name: "Purchase count minimum" });
   await min.click();
   await min.pressSequentially("12");
   await expect(min).toHaveValue("12");

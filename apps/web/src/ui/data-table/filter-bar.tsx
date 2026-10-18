@@ -15,6 +15,7 @@ import {
   type NumberRange,
   parseNumberBound,
   parseRangeBounds,
+  RELATIVE_DATE_MAX_DAYS,
   relativeDateOffset,
   RELATIVE_DATE_TODAY,
   relativeDateToken,
@@ -332,6 +333,18 @@ function DateBound({
   const days = bound === undefined ? undefined : relativeDateOffset(bound);
   const relative = days ?? 0;
   const ahead = bound?.startsWith(`${RELATIVE_DATE_TODAY}+`) ?? false;
+  // The typed amount, kept while it is not a token's whole day count: past
+  // the token's digits it would emit a bound that is not relative, flipping
+  // the mode to Date mid-typing. A new bound (its own echo included) resets it.
+  const [daysText, setDaysText] = useState(() => String(Math.abs(relative)));
+  const [seenBound, setSeenBound] = useState(bound);
+  if (bound !== seenBound) {
+    setSeenBound(bound);
+    setDaysText(String(Math.abs(relative)));
+  }
+  const daysInvalid =
+    daysText !== "" &&
+    !(/^\d+$/.test(daysText) && Number(daysText) <= RELATIVE_DATE_MAX_DAYS);
   return (
     <fieldset className="flex flex-col gap-1.5">
       <legend className="mb-1 text-xs font-medium text-muted-foreground">
@@ -370,18 +383,17 @@ function DateBound({
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-1.5">
             <Input
-              type="number"
-              min={0}
               inputMode="numeric"
               aria-label={`${label} days`}
+              aria-invalid={daysInvalid || undefined}
               className="w-20 tabular-nums"
-              value={Math.abs(relative)}
+              value={daysText}
               onChange={(event) => {
-                const count = Math.max(
-                  0,
-                  Math.trunc(Number(event.target.value)),
-                );
-                if (!Number.isFinite(count)) return;
+                const text = event.target.value.trim();
+                setDaysText(text);
+                if (!/^\d+$/.test(text)) return;
+                const count = Number(text);
+                if (count > RELATIVE_DATE_MAX_DAYS) return;
                 onChange(relativeBound(count, ahead));
               }}
             />
@@ -395,9 +407,17 @@ function DateBound({
               className="flex-1"
             />
           </div>
-          <p className="px-1 text-xs text-muted-foreground">
-            {describeRelativeDate(relative)}, counted from the household's today
-          </p>
+          {daysInvalid ? (
+            <p className="px-1 text-xs text-destructive">
+              Enter whole days, up to{" "}
+              {RELATIVE_DATE_MAX_DAYS.toLocaleString("en-US")}.
+            </p>
+          ) : (
+            <p className="px-1 text-xs text-muted-foreground">
+              {describeRelativeDate(relative)}, counted from the household's
+              today
+            </p>
+          )}
         </div>
       )}
     </fieldset>
@@ -459,11 +479,10 @@ function NumberBound({
     text.trim() !== "" && parseNumberBound(text, range) === undefined;
   return (
     <div className="flex flex-col gap-1">
+      {/* Text, not `type="number"`: a number input reports incomplete text
+          (`-`, `1e`) as empty, which would read as clearing the bound. */}
       <Input
-        type="number"
         inputMode={range.int ? "numeric" : "decimal"}
-        step="any"
-        min={range.nonnegative ? 0 : undefined}
         aria-label={label}
         aria-invalid={invalid || undefined}
         className="tabular-nums"
@@ -483,9 +502,10 @@ function NumberBound({
 }
 
 /**
- * Custom bounds for a number range filter, beside any presets. The value is
- * `min..max`; an invalid side (negative under `nonnegative`) shows its error
- * and leaves the filter as it was until it is fixed or emptied.
+ * Custom bounds for a number range filter, beside any presets. `value` is
+ * the filter's whole value, a preset key or `min..max`; an invalid side
+ * (negative under `nonnegative`) shows its error and leaves the filter as it
+ * was until it is fixed or emptied.
  */
 function NumberRangeBounds({
   label,
@@ -507,20 +527,23 @@ function NumberRangeBounds({
   };
   const [min, setMin] = useState(() => draftsOf(value).min);
   const [max, setMax] = useState(() => draftsOf(value).max);
-  // A new incoming value the editor did not emit itself (Back/Forward, a
-  // preset, Clear) replaces the drafts. The echo of its own emission, a
-  // parent that has not caught up yet, or an invalid draft that was never
-  // emitted leaves the typed text alone.
+  // Emissions the parent has not echoed yet, oldest first. An incoming
+  // value among them is an echo, possibly late: it acknowledges that one and
+  // every earlier one and leaves the typed text alone. Any other new value
+  // (Back/Forward, a preset, Clear) replaces the drafts and the queue. An
+  // unchanged value, or an invalid draft that was never emitted, changes
+  // nothing.
   const [seen, setSeen] = useState(value);
-  const [emitted, setEmitted] = useState(value);
+  const [pending, setPending] = useState<ReadonlyArray<string | undefined>>([]);
   if (value !== seen) {
     setSeen(value);
-    if (value !== emitted) {
+    const echoed = pending.indexOf(value);
+    if (echoed === -1) {
       const drafts = draftsOf(value);
-      setEmitted(value);
+      setPending([]);
       setMin(drafts.min);
       setMax(drafts.max);
-    }
+    } else setPending(pending.slice(echoed + 1));
   }
   const update = (nextMin: string, nextMax: string) => {
     setMin(nextMin);
@@ -535,7 +558,8 @@ function NumberRangeBounds({
       low === null ? undefined : formatNumberBound(low),
       high === null ? undefined : formatNumberBound(high),
     );
-    setEmitted(next);
+    // The current value is never echoed back, so it is not queued.
+    if (next !== seen) setPending((queue) => [...queue, next]);
     onChange(next);
   };
   const low = parseNumberBound(min, range);
@@ -694,7 +718,7 @@ function FilterValueEditor({
         <NumberRangeBounds
           label={field.label ?? field.key}
           range={field.numberRange}
-          value={isBounds ? value : undefined}
+          value={value}
           separated={options.length > 0}
           onChange={(next) => setValues(next === undefined ? [] : [next])}
         />
@@ -706,7 +730,7 @@ function FilterValueEditor({
     <>
       {options.length > 0 && picker}
       <DateRangeBounds
-        value={isBounds ? value : undefined}
+        value={value}
         onChange={(next) => setValues(next === undefined ? [] : [next])}
       />
     </>
