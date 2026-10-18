@@ -183,17 +183,40 @@ export const purchaseListsItemsSql = (alias: string): SQL => sql`(
  * productless goods line is a lump, not an itemization. Totals stay with
  * `paperwork_mismatch` and `settlement_mismatch`; this axis is the line shape
  * only. */
-export const purchaseHasItemizationSql = (alias: string): SQL => sql`(
+export const purchaseHasItemizationSql = (
+  alias: string,
+  // Bulk reads bind `purchaseItemizationLineFactsSql` columns instead.
+  lines?: { unclassified: SQL; unlinkedRequired: SQL },
+): SQL => sql`(
   ${purchaseListsItemsSql(alias)}
-  AND NOT EXISTS (SELECT 1 FROM "Expense" ep_unclassified
+  AND NOT ${
+    lines?.unclassified ??
+    sql`EXISTS (SELECT 1 FROM "Expense" ep_unclassified
     WHERE ep_unclassified."purchaseId" = ${column(alias, "id")}
       AND ep_unclassified."deletedAt" IS NULL
-      AND ep_unclassified."lineKind" = ${expenseLineKindSchema.enum.unclassified})
-  AND NOT EXISTS (SELECT 1 FROM "Expense" ep_unlinked
+      AND ep_unclassified."lineKind" = ${expenseLineKindSchema.enum.unclassified})`
+  }
+  AND NOT ${
+    lines?.unlinkedRequired ??
+    sql`EXISTS (SELECT 1 FROM "Expense" ep_unlinked
     WHERE ep_unlinked."purchaseId" = ${column(alias, "id")} AND ep_unlinked."deletedAt" IS NULL
-      AND ep_unlinked.future = false AND ep_unlinked."productId" IS NULL
-      AND ${expenseProductExpectedSql("ep_unlinked")})
+      AND ${unlinkedRequiredLineSql("ep_unlinked")})`
+  }
 )`;
+
+/**
+ * `purchaseHasItemizationSql`'s line facts for every Purchase in one grouped
+ * scan. Per Purchase, the correlated form probed Expense with a BitmapAnd of
+ * its `purchaseId` and `productId IS NULL` indexes, re-reading every
+ * productless line of the ledger for each order.
+ */
+export const purchaseItemizationLineFactsSql = (): SQL => sql`SELECT
+    ep_line."purchaseId",
+    bool_or(ep_line."lineKind" = ${expenseLineKindSchema.enum.unclassified}) AS "hasUnclassified",
+    coalesce(bool_or(${unlinkedRequiredLineSql("ep_line")}), false) AS "hasUnlinkedRequired"
+  FROM "Expense" ep_line
+  WHERE ep_line."deletedAt" IS NULL AND ep_line."purchaseId" IS NOT NULL
+  GROUP BY ep_line."purchaseId"`;
 
 /** An accepted missing-evidence gap reopens when new documents or ledger lines
  * arrive, even when the new material still needs extraction or review. The
@@ -235,6 +258,11 @@ const expenseProductExpectationSql = (alias: string): SQL => sql`(CASE
 
 export const expenseProductExpectedSql = (alias: string): SQL =>
   sql`(${expenseProductExpectationSql(alias)} = 'required')`;
+
+/** An incurred line still missing the Product its policy requires. */
+const unlinkedRequiredLineSql = (alias: string): SQL =>
+  sql`(${column(alias, "future")} = false AND ${column(alias, "productId")} IS NULL
+    AND ${expenseProductExpectedSql(alias)})`;
 
 const purchaseBookingSql = (alias: string): SQL => sql`(SELECT CASE
   WHEN count(*) = 0 THEN 'missing'

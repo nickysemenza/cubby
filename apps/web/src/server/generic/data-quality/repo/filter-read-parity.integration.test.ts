@@ -223,6 +223,52 @@ describe("bulk quality relations", () => {
       }
     }
 
+    // Itemization variants on orders that require it: listed and linked, a
+    // productless line whose category requires a Product, an unresolved line
+    // role, and a lump with no item lines.
+    const productRequired = await insertWithShortcode(
+      ctx.db,
+      "spendingCategory",
+      {
+        name: `Synthetic parity hardware ${crypto.randomUUID()}`,
+        productExpectation: "required",
+      },
+    );
+    const itemized = await insertWithShortcode(ctx.db, "product", {
+      name: "Synthetic parity widget",
+      manufacturer: "Synthetic maker",
+    });
+    for (const itemization of [
+      "listed",
+      "unlinked",
+      "unclassified",
+      "lump",
+    ] as const) {
+      const order = await insertWithShortcode(ctx.db, "purchase", {
+        vendorId: vendor.id,
+        date: "2026-02-01",
+        displayLabel: `Synthetic parity ${itemization} itemization`,
+        itemizationExpectation: "required",
+      });
+      const line = (values: Partial<typeof expense.$inferInsert>) =>
+        insertWithShortcode(ctx.db, "expense", {
+          name: `Synthetic parity ${itemization} line`,
+          cost: 4,
+          date: "2026-02-01",
+          lineKind: "principal",
+          costType: "materials",
+          future: false,
+          purchaseId: order.id,
+          ...values,
+        });
+      if (itemization === "lump") await line({ lineBasis: "allocation" });
+      else await line({ productId: itemized.id });
+      if (itemization === "unlinked")
+        await line({ spendingCategoryId: productRequired.id });
+      if (itemization === "unclassified")
+        await line({ lineKind: "unclassified" });
+    }
+
     // Both Email link kinds: accepted source evidence and a reviewed link.
     const linkRun = await insertWithShortcode(ctx.db, "run", {
       purpose: "mail_import",
@@ -364,6 +410,7 @@ describe("bulk quality relations", () => {
           "paperwork_mismatch",
           "settlement_reference",
           "settlement_mismatch",
+          "purchase_itemization",
         ] as const
       ).map((check) => {
         const index = checksOf("purchase").indexOf(check);

@@ -26,6 +26,7 @@ import {
   purchaseItemizationExpectationSql,
   purchaseEvidenceFingerprintSql,
   purchaseHasItemizationSql,
+  purchaseItemizationLineFactsSql,
   purchaseHasPrimaryDocumentSql,
   effectivePurchaseItemizationExpectationSql,
 } from "~/server/domains/purchase/repo/purchase-evidence-policy";
@@ -36,7 +37,7 @@ import {
 
 type Purchase = typeof purchase;
 
-/** A bulk read's precomputed `purchaseQualityFilterReadSql` column, if bound. */
+/** A bulk read's precomputed `filterRead` column, if bound. */
 const filtered = (context: QualityReadContext | undefined, column: string) =>
   context?.derivedAlias
     ? sql`${sql.identifier(context.derivedAlias)}.${sql.identifier(column)}`
@@ -51,8 +52,16 @@ const expectsItemization = (t: Purchase) =>
   sql`(${effectivePurchaseItemizationExpectationSql(getTableName(t))} = 'required')`;
 const hasPrimaryDocument = (t: Purchase) =>
   purchaseHasPrimaryDocumentSql(getTableName(t));
-const hasItemization = (t: Purchase) =>
-  purchaseHasItemizationSql(getTableName(t));
+const hasItemization = (t: Purchase, context?: QualityReadContext) => {
+  const unclassified = filtered(context, "hasUnclassified");
+  const unlinkedRequired = filtered(context, "hasUnlinkedRequired");
+  return purchaseHasItemizationSql(
+    getTableName(t),
+    unclassified && unlinkedRequired
+      ? { unclassified, unlinkedRequired }
+      : undefined,
+  );
+};
 // An imported order that carried an order id (`sourceOrderKey`'s `/order/`
 // form) expects its Purchase to keep one, whatever the source kind; an
 // orderless receipt or statement booking does not.
@@ -141,7 +150,12 @@ const paperworkMismatch = (t: Purchase, context?: QualityReadContext) => {
 export const purchaseChecks = defineEntityChecks({
   entity: "purchase",
   table: purchase,
-  filterRead: purchaseQualityFilterReadSql,
+  filterRead: () => sql`SELECT settlement.*,
+    COALESCE(lines."hasUnclassified", false) AS "hasUnclassified",
+    COALESCE(lines."hasUnlinkedRequired", false) AS "hasUnlinkedRequired"
+  FROM (${purchaseQualityFilterReadSql()}) settlement
+  LEFT JOIN (${purchaseItemizationLineFactsSql()}) lines
+    ON lines."purchaseId" = settlement."entityId"`,
   related: {
     product: (t, productId) => sql`EXISTS (
       SELECT 1 FROM "Expense" dq_pe
@@ -197,7 +211,7 @@ export const purchaseChecks = defineEntityChecks({
       // the Research queue only through this gap (`empty_expenses` is not in
       // that view).
       expected: expectsItemization,
-      missing: (t) => sql`NOT ${hasItemization(t)}`,
+      missing: (t, context) => sql`NOT ${hasItemization(t, context)}`,
       // Document presence is already part of the evidence fingerprint; the
       // inputs stay unchanged so accepted exceptions do not reopen.
       fingerprint: (t) => [
