@@ -4,6 +4,7 @@ import { suggestFieldKeys } from "@cubby/schemas/entity-fields";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
 import {
+  SWEEP_FAMILY_LABEL,
   suggestionSweepRunProgress,
   sweepFamilyScope,
   sweepRunInput,
@@ -41,12 +42,6 @@ import {
   type StepRunOwner,
 } from "../repo/run-step";
 import type { StepDriver, StepPage, StepRunDrivers } from "./step-run";
-
-const FAMILY_LABEL = {
-  statement_transaction: "Statements",
-  recommendation: "Connections",
-  field: "Fields",
-} as const satisfies Record<SweepFamilyScope["family"], string>;
 
 /**
  * Starts a Sweep: one step per Suggestion family in scope, run by the
@@ -135,7 +130,7 @@ export const sweepDrivers: StepRunDrivers = async (_db, owner) =>
   sweepRunInput.parse(owner.input).families.map((entry): StepDriver => {
     const definition = {
       key: entry.family,
-      label: FAMILY_LABEL[entry.family],
+      label: SWEEP_FAMILY_LABEL[entry.family],
     };
     switch (entry.family) {
       case "statement_transaction":
