@@ -372,6 +372,8 @@ export const runFindingKind = z.enum([
   "expected_order_not_found",
   "receipt_required",
   "unclassified_vendor",
+  /** A settled Mail import's admitted Email that Pi resolved unresolved. */
+  "unresolved_targets",
   "other",
 ]);
 export const replacementLineIdentity = z.object({
