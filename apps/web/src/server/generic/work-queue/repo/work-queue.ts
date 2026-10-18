@@ -70,7 +70,10 @@ import { buildExpenseWhereClause } from "~/server/domains/expense/repo/lookup";
 import { buildFinancialTransactionWhere } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { buildProductWhere } from "~/server/domains/product/repo/crud";
 import { productPriceEvidenceSql } from "~/server/domains/product/repo/pricing";
-import { onHandUnitsReadSql } from "~/server/domains/product/repo/quantity-ledger";
+import {
+  expectedQuantityReadSql,
+  onHandUnitsReadSql,
+} from "~/server/domains/product/repo/quantity-ledger";
 import { activeFindingSql } from "~/server/domains/purchase-import/repo/finding-expiry";
 import { obsoleteExecutionFindingSql } from "~/server/domains/purchase-import/repo/run-retirement";
 import { buildPurchaseWhereClause } from "~/server/domains/purchase/repo/purchase";
@@ -726,10 +729,17 @@ async function queryWorkQueue(
     candidateConditions.push(sql`kind IN (${textList(kinds)})`);
   let needsPriceEvidence = false;
   let needsOnHandEvidence = false;
+  let needsExpectedEvidence = false;
   const productReadContext: QualityReadContext = {
     derivedValue: record
       ? undefined
       : (field, entityId) => {
+          if (field === "expectedQuantity") {
+            needsExpectedEvidence = true;
+            // Text keeps the double exact through the map; the catalog walk
+            // replaces one kit recursion per stocked Product.
+            return sql`((SELECT jsonb_object_agg("id", "value"::text) FROM work_product_expected) ->> ${entityId}::text)::double precision`;
+          }
           if (field !== "onHandUnits") return undefined;
           needsOnHandEvidence = true;
           return sql`((SELECT jsonb_object_agg("productId", "onHandUnits") FROM work_product_on_hand) ->> ${entityId}::text)::double precision`;
@@ -869,6 +879,7 @@ async function queryWorkQueue(
   const result = await getDb(db).execute(sql`
     WITH ${needsPriceEvidence ? sql`work_product_price AS MATERIALIZED (${productPriceEvidenceSql()}),` : sql``}
     ${needsOnHandEvidence ? sql`work_product_on_hand AS MATERIALIZED (${onHandUnitsReadSql()}),` : sql``}
+    ${needsExpectedEvidence ? sql`work_product_expected AS MATERIALIZED (${expectedQuantityReadSql()}),` : sql``}
     ${sql.join(
       quality.ctes().map((cte) => sql`${cte},`),
       sql` `,

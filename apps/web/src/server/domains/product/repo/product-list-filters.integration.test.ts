@@ -1,5 +1,6 @@
 import type { ProductCategoryShortcode } from "@cubby/schemas/identifiers";
 import type { ProductFilters } from "@cubby/schemas/product";
+import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
@@ -10,6 +11,7 @@ import { getDb } from "~/server/db/helpers";
 import { location, product } from "~/server/db/schema";
 import { createProductCategory } from "~/server/domains/product-category/repo/product-category";
 import { attachProductComponents } from "~/server/domains/product/repo/product-components";
+import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
 import {
   createInventoryFixture,
   createLocationFixture,
@@ -174,6 +176,19 @@ describe("product list declared filters", () => {
     expect((await list({ kitAccounting: true })).map((row) => row.id)).toEqual([
       w.kit.id,
     ]);
+    // Work binds the catalog's expected quantities as one statement-local
+    // walk; it must find the same kit the per-row list filter does.
+    const work = await readWorkQueue(
+      ctx.db,
+      null,
+      workQueueHouseholdInput.parse({ pageSize: 100 }),
+      false,
+    );
+    expect(
+      work.items
+        .filter((row) => row.key.startsWith("kitsCountedTwice:"))
+        .map((row) => row.id),
+    ).toEqual([w.kit.id]);
     expect(
       (await list({ kitAccounting: false })).map((row) => row.id).sort(),
     ).toEqual(
