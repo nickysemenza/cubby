@@ -42,6 +42,7 @@ import {
 
 import {
   DECISION_CONTEXT_BYTE_LIMIT,
+  type BatchedChoiceResponse,
   DecisionRequestBatch,
   decisionInputFitsContext as inputFitsContext,
   type DecisionQuestionsInput,
@@ -461,27 +462,38 @@ async function runDecisionChoiceInternal(
     },
     validate,
     onWait: () => pending?.batch.ready(pending.index),
-    onHit: (durationMs) => {
+    onHit: (durationMs, avoidedUsage) => {
       pending?.batch.ready(pending.index);
-      return recordApplicationCacheHit(feature, args.usage, durationMs);
+      return recordApplicationCacheHit(
+        feature,
+        args.usage,
+        durationMs,
+        avoidedUsage,
+      );
     },
-    compute: async (applicationCacheStatus) => {
+    compute: async (applicationCacheStatus, recordUsage) => {
       if (args.port) pending?.batch.ready(pending.index);
+      let questionUsage: BatchedChoiceResponse["questionUsage"];
       const response = await (args.port
         ? args.port(input)
         : pending
-          ? pending.batch.request(
-              pending.index,
-              JSON.stringify([feature, pending.usageGroup]),
-              input,
-              (questions) =>
-                requestDecision(
-                  questions,
-                  args.usage,
-                  feature,
-                  applicationCacheStatus,
-                ),
-            )
+          ? pending.batch
+              .request(
+                pending.index,
+                JSON.stringify([feature, pending.usageGroup]),
+                input,
+                (questions) =>
+                  requestDecision(
+                    questions,
+                    args.usage,
+                    feature,
+                    applicationCacheStatus,
+                  ),
+              )
+              .then((batched) => {
+                questionUsage = batched.questionUsage;
+                return batched;
+              })
           : requestDecision(
               input,
               args.usage,
@@ -492,6 +504,12 @@ async function runDecisionChoiceInternal(
         inputTokens: response.usage?.input_tokens ?? null,
         outputTokens: response.usage?.output_tokens ?? null,
       });
+      questionUsage ??= response.usage;
+      if (questionUsage)
+        recordUsage({
+          inputTokens: questionUsage.input_tokens ?? null,
+          outputTokens: questionUsage.output_tokens ?? null,
+        });
       const answer = response.answers.selection;
       if (!answer)
         throw new Error("The decision model omitted the selection question.");

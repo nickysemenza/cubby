@@ -110,6 +110,7 @@ export async function loadMailDiscoveryRead(
       savings: totals.savings,
       comparedCalls: totals.comparedCalls,
       count: totals.count,
+      failedWithoutUsageCount: totals.failedWithoutUsageCount,
       billingReasons: totals.billingReasons,
     },
   };

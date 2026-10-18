@@ -7,6 +7,15 @@ export const DECISION_CONTEXT_BYTE_LIMIT = 32_000;
 
 type ChoiceInput = Parameters<DecisionPort>[0];
 type ChoiceResponse = Awaited<ReturnType<DecisionPort>>;
+type ChoiceUsage = NonNullable<ChoiceResponse["usage"]>;
+/**
+ * `usage` stays on the first entry so the shared call is counted once;
+ * `questionUsage` is every entry's even share of it, which is what a later
+ * cache hit for that one question avoids.
+ */
+export type BatchedChoiceResponse = ChoiceResponse & {
+  questionUsage?: ChoiceUsage;
+};
 export type DecisionQuestionsInput = Omit<ChoiceInput, "questions"> & {
   questions: Record<string, ChoiceInput["questions"]["selection"]>;
 };
@@ -28,7 +37,7 @@ type Entry = {
   group: string;
   input: ChoiceInput;
   execute(input: DecisionQuestionsInput): Promise<DecisionQuestionsResponse>;
-  resolve(value: ChoiceResponse): void;
+  resolve(value: BatchedChoiceResponse): void;
   reject(error: unknown): void;
 };
 
@@ -69,7 +78,7 @@ export class DecisionRequestBatch {
     group: string,
     input: ChoiceInput,
     execute: Entry["execute"],
-  ): Promise<ChoiceResponse> {
+  ): Promise<BatchedChoiceResponse> {
     const media = input.images?.length
       ? await sha256Hex(JSON.stringify(input.images))
       : null;
@@ -120,10 +129,17 @@ export class DecisionRequestBatch {
         throw new Error(
           "The decision model returned an unexpected question set.",
         );
+      const share = (tokens: number | undefined) =>
+        tokens === undefined ? undefined : Math.round(tokens / entries.length);
+      const questionUsage = response.usage && {
+        input_tokens: share(response.usage.input_tokens),
+        output_tokens: share(response.usage.output_tokens),
+      };
       entries.forEach((entry, index) =>
         entry.resolve({
           answers: { selection: answers[index]! },
           ...(index === 0 && response.usage ? { usage: response.usage } : {}),
+          ...(questionUsage ? { questionUsage } : {}),
         }),
       );
     } catch (error) {

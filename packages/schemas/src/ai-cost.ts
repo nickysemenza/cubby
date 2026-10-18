@@ -15,6 +15,11 @@ export const aiCostSummaryFields = {
   savings: z.number(),
   comparedCalls: z.number().int().nonnegative(),
   count: z.number().int().nonnegative(),
+  /**
+   * Failed calls that reported no usage; excluded from the unpriced counts.
+   * Optional because stored cookbook extraction reports predate it.
+   */
+  failedWithoutUsageCount: z.number().int().nonnegative().optional(),
   billingReasons: z.array(aiCostEvidenceSchema.shape.billingReason).optional(),
   standardComplete: z.boolean().optional(),
   chargedComplete: z.boolean().optional(),

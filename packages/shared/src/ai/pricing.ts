@@ -299,6 +299,14 @@ export const aiPricingRatesSchema = z.object({
   cache_read: z.number().nonnegative().optional(),
   cache_write: z.number().nonnegative().optional(),
 });
+const tokenCountSchema = z.number().int().nonnegative();
+export const aiAvoidedUsageSchema = z.object({
+  inputTokens: tokenCountSchema.nullable(),
+  outputTokens: tokenCountSchema.nullable(),
+  cacheReadTokens: tokenCountSchema.nullable().optional(),
+  cacheWriteTokens: tokenCountSchema.nullable().optional(),
+});
+export type AiAvoidedUsage = z.infer<typeof aiAvoidedUsageSchema>;
 const costProvenance = z.object({
   source: z.enum([
     "estimate",
@@ -347,6 +355,12 @@ export const aiCostEvidenceSchema = z.object({
       outcome: z.enum(["priced", "unavailable"]),
     })
     .optional(),
+  /**
+   * An application-cache replay's standard comparison: the token classes the
+   * cached answer originally consumed, priced when the hit was recorded. The
+   * row's own token columns stay zero because nothing was sent.
+   */
+  avoidedUsage: aiAvoidedUsageSchema.optional(),
 });
 export type AiCostEvidence = z.infer<typeof aiCostEvidenceSchema>;
 
@@ -481,6 +495,7 @@ export function accountAiUsage(
     ...(billing.reconstruction
       ? { reconstruction: billing.reconstruction }
       : {}),
+    ...(billing.avoidedUsage ? { avoidedUsage: billing.avoidedUsage } : {}),
   };
   return { standardCost: standard.amount, chargedCost, costEvidence };
 }
