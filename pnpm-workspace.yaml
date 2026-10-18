@@ -79,9 +79,8 @@ overrides:
   webpack: ^5.111.1
   wrangler: 4.151.0
 
-# The global store cannot rely on project-local hoisting. The maintained type
-# fixer handles published devDependencies; these packages omit that metadata
-# and need their React type peer declared explicitly.
+# The global store cannot rely on project-local hoisting, so packages that use
+# an undeclared dependency at runtime or in their types need it declared here.
 packageExtensions:
   # The build plugin requires Babel 7 while Vite uses Babel 8.
   "@sentry/bundler-plugins":
@@ -99,6 +98,16 @@ packageExtensions:
   vite-plugin-top-level-await:
     dependencies:
       rollup: ^4.59.0
+  # Their published declarations import an untyped runtime module whose
+  # @types package they list only as a devDependency. addMissingPeerTypes
+  # covers peers, not regular dependencies, so declare the types here; without
+  # them tsc silently types JSONSchema7 and miniflare's WebSocket as any.
+  "@ai-sdk/provider":
+    dependencies:
+      "@types/json-schema": ^7.0.15
+  miniflare:
+    dependencies:
+      "@types/ws": ^8.5.7
   vite-ssr-components:
     peerDependencies:
       vite: ^8.0.10
@@ -109,350 +118,9 @@ packageExtensions:
         optional: true
       react:
         optional: true
-  "@phosphor-icons/react":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@tanstack/react-router":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@tanstack/react-table":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "cmdk":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@nivo/annotations":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@nivo/arcs":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@nivo/axes":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@nivo/bar":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@nivo/calendar":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@nivo/colors":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@nivo/core":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@nivo/legends":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
   "@nivo/line":
     dependencies:
       lodash: ^4.18.0
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@nivo/pie":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@nivo/text":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@nivo/theming":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@nivo/tooltip":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@dnd-kit/core":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@dnd-kit/utilities":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@dnd-kit/accessibility":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@dnd-kit/sortable":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@dnd-kit/modifiers":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@emotion/use-insertion-effect-with-fallbacks":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@marsidev/react-turnstile":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@nivo/voronoi":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@react-email/body":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@react-email/button":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@react-email/code-block":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@react-email/code-inline":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@react-email/column":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@react-email/components":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@react-email/container":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@react-email/font":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@react-email/head":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@react-email/heading":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@react-email/hr":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@react-email/html":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@react-email/img":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@react-email/link":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@react-email/markdown":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@react-email/preview":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@react-email/render":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@react-email/row":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@react-email/section":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@react-email/tailwind":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@react-email/text":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@react-spring/animated":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@react-spring/core":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@react-spring/shared":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@react-spring/web":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@tanstack/react-router-devtools":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "@tanstack/react-router-ssr-query":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "react-async-script":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "react-dom":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "react-google-recaptcha":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "react-qr-code":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
-  "use-sync-external-store":
-    peerDependencies:
-      "@types/react": "*"
-    peerDependenciesMeta:
-      "@types/react":
-        optional: true
   "@testing-library/jest-dom":
     peerDependencies:
       vitest: "*"
@@ -480,9 +148,11 @@ virtualStoreType: global
 # node_modules, so the link stayed missing. Verifying costs ~1s per no-op
 # install and relinks anything absent.
 optimisticRepeatInstall: false
-
-configDependencies:
-  "@pnpm/plugin-types-fixer": 0.1.0
+# The global virtual store keeps TypeScript from finding @types packages next
+# to a package that peers on their runtime (react -> @types/react). This links
+# the matching @types as an optional peer. It is a setting, not a pnpmfile
+# hook, because hosted Renovate resolves with --ignore-pnpmfile.
+addMissingPeerTypes: true
 # Observation events preserve pg-cloudflare startup ordering; port when upgrading.
 patchedDependencies:
   agent-device@0.21.27: patches/agent-device@0.21.27.patch
