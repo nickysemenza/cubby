@@ -497,7 +497,7 @@ async function attachRetainedSource(
  * (Email, Purchase, event, checksum), so a replay adds nothing; a member's
  * dismissal of this Email for the Purchase refuses the link.
  */
-export async function linkOrderMail(
+async function linkOrderMail(
   db: Database,
   input: {
     mail: RetainedMail;
