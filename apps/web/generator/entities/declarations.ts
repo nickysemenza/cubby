@@ -107,7 +107,6 @@ export type FilterDescriptor = Readonly<{
     finite: boolean;
     describe: Readonly<{ lower: string; upper: string }> | null;
   }> | null;
-  urlOnly: boolean;
   /** The Any value / No value request key (`presenceFilter`). */
   nullable: Readonly<{ field: string; label: string }> | null;
   /** The Match all request key of a multi-valued compiled filter. */
@@ -124,6 +123,13 @@ export type FilterDescriptor = Readonly<{
   currentMember: boolean;
   /** The declared reason this filter accepts one value, not an any-of. */
   singleValue: string | null;
+  /** Single-value scopes that share one value between them. */
+  exclusiveGroup: string | null;
+  /**
+   * The list-column filter this one duplicates (the same request field
+   * under an older deep-link key); the URL codec reads it into that state.
+   */
+  aliasOf: string | null;
   sentinels: readonly Readonly<{ value: string; label: string }>[] | null;
   wire: FilterWire;
 }>;

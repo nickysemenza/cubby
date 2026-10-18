@@ -756,9 +756,12 @@ const write = ({ destructive = false, openWorld = false } = {}) => ({
  * `prepare_purchase_import` at 8,616. The two entity-kernel tools carry every
  * kind's schema and get their own ceiling; every other tool stays under the
  * workflow ceiling, about twice that largest pre-consolidation workflow tool.
+ * Both rose one step when every scope filter (a relation back-filter, a
+ * deep-link id) gained the generated Exclude / Any value keys every other
+ * compiled value filter has.
  */
-const KERNEL_SCHEMA_BUDGET = 131_072;
-const WORKFLOW_SCHEMA_BUDGET = 16_384;
+const KERNEL_SCHEMA_BUDGET = 139_264;
+const WORKFLOW_SCHEMA_BUDGET = 18_432;
 const KERNEL_TOOLS = new Set(["entity", "entity_read"]);
 
 function isObject(value: JSONType | undefined): value is JsonObject {

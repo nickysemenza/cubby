@@ -9,6 +9,7 @@ import { useMemo, useState } from "react";
 
 import type { TableStateReturn } from "../../entity/table/use-table-state";
 import { useTableColumnLayout } from "./column-layout";
+import type { FilterBarField } from "./filter-bar-core";
 import {
   type CubbyColumnCollection,
   type CubbyRow,
@@ -57,6 +58,8 @@ interface UseTableConfigOptions<TData extends RowData> {
    * renderers via table meta — client rows only cover loaded pages.
    */
   serverTotals?: ServerTotals;
+  /** Filters-menu fields for declared filters no column hosts. */
+  filterFields?: readonly FilterBarField[];
   /**
    * Changes when cells read render-time state that does not live on
    * `row.original` (for example asynchronously fetched relation previews).
@@ -103,6 +106,7 @@ export function useTableConfig<TData extends RowData>({
   onColumnVisibilityChange: controlledOnVisibilityChange,
   scrollRestorationId,
   serverTotals,
+  filterFields,
   rowContentVersion,
   getSubRows,
   filterFromLeafRows,
@@ -115,22 +119,27 @@ export function useTableConfig<TData extends RowData>({
   const {
     sorting,
     setSorting,
-    columnFilters,
-    allFilters,
+    columnFilters: allFilters,
     setColumnFilters,
     pagination,
     setPagination,
   } = tableState;
 
-  // `allFilters` is `columnFilters` plus the URL-only scopes; only the latter
-  // go into the table (every entry there must resolve to a column), so the
-  // difference is what the empty state would otherwise be blind to.
-  const urlScopeCount = allFilters.length - columnFilters.length;
-
   const { columns: tableColumns, defaultLayout } = useTableColumnLayout({
     columns,
     initialColumnVisibility,
   });
+  // A filter with no column (a relation scope, the primary search) reaches
+  // the server through `tableState`. Only the client filtered row model
+  // resolves filter ids to columns — warning `Column with id '<x>' does not
+  // exist` for each miss on every render — so a client-filtered table gets
+  // the column-hosted filters alone. Its setter still receives every filter.
+  const columnFilters = useMemo(() => {
+    if (manualFiltering) return allFilters;
+    const leafIds = new Set(defaultLayout.columnOrder);
+    const hosted = allFilters.filter((filter) => leafIds.has(filter.id));
+    return hosted.length === allFilters.length ? allFilters : hosted;
+  }, [allFilters, defaultLayout.columnOrder, manualFiltering]);
   const [internalVisibility, setInternalVisibility] = useState<
     Record<string, boolean>
   >(defaultLayout.columnVisibility);
@@ -147,8 +156,8 @@ export function useTableConfig<TData extends RowData>({
     if (serverTotals) {
       Object.assign(meta, { serverTotals });
     }
-    if (urlScopeCount > 0) {
-      Object.assign(meta, { urlScopeCount });
+    if (filterFields?.length) {
+      Object.assign(meta, { filterFields });
     }
     if (rowContentVersion !== undefined) {
       Object.assign(meta, { rowContentVersion });
@@ -252,7 +261,7 @@ export function useTableConfig<TData extends RowData>({
     enableSorting,
     totalCount,
     serverTotals,
-    urlScopeCount,
+    filterFields,
     rowContentVersion,
     getRowId,
     enableRowSelection,

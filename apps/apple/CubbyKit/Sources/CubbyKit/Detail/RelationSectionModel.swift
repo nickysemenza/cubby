@@ -45,7 +45,7 @@ public final class RelationSectionModel: Identifiable {
         self.client = client
         self.target = target
         // The generic seed rule: when the filter's own column is a real create field on the
-        // target (a direct filter like `locationId`), seed that; otherwise (a derived/urlOnly
+        // target (a direct filter like `locationId`), seed that; otherwise (a derived
         // filter like `journalPlantingId`) fall back to the target's single reference field whose
         // `reference.entity` matches the filter's brandRef entity. Sections with an ambiguous or
         // multiple reference use the generated explicit prefill field instead.

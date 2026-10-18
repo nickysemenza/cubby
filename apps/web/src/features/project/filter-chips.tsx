@@ -8,9 +8,8 @@ import { Button } from "~/ui/primitives/button";
  * filter rows — `FilterChipGroup` (multi-select) and `SingleSelectChipGroup`
  * (single-select). These are *toggle* chips (click to add/remove a filter
  * condition), not *removable* chips (an already-applied filter with a
- * dismiss affordance) — don't unify this with `ScopeChip` in
- * `data-table/ScopeChip.tsx`, which is the removable-chip abstraction for a
- * different surface. They use the shared Button primitive so their pressed,
+ * dismiss affordance) — the list Filters bar's chips are a different
+ * surface. They use the shared Button primitive so their pressed,
  * focus, and phone touch-target behavior cannot drift from the rest of Cubby.
  */
 

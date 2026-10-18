@@ -2296,7 +2296,6 @@ Rules:
         field: "manufacturerFilter",
         kind: "text",
         placeholder: "Search manufacturer...",
-        urlOnly: true,
         deriveSchema: true,
         schemaDescription: "Filter by manufacturer",
         stored: { columns: ["manufacturer"] },
@@ -2626,7 +2625,6 @@ Rules:
         field: "pricePresenceFilter",
         kind: "presence",
         placeholder: "Filter price presence...",
-        urlOnly: true,
         derived: true,
       },
       {
@@ -2634,7 +2632,6 @@ Rules:
         field: "miscBucketFilter",
         kind: "presence",
         placeholder: "Filter misc buckets...",
-        urlOnly: true,
         derived: true,
       },
       {
@@ -2642,7 +2639,6 @@ Rules:
         field: "unknownQuantityLinesFilter",
         kind: "presence",
         placeholder: "Filter lines with no quantity...",
-        urlOnly: true,
         derived: true,
       },
       {
@@ -2650,7 +2646,6 @@ Rules:
         field: "taskStatusFilter",
         kind: "multiselect",
         placeholder: "Filter task status...",
-        urlOnly: true,
         derived: true,
       },
       {
@@ -2658,7 +2653,6 @@ Rules:
         field: "taskOpenOnly",
         kind: "boolean",
         placeholder: "Filter open tasks...",
-        urlOnly: true,
         derived: true,
       },
       {
@@ -2831,7 +2825,6 @@ Rules:
         kind: "idMulti",
         placeholder: "Filter by kit...",
         brandRef: { entity: "product" },
-        urlOnly: true,
       },
       {
         // Kits containing a component: parents on its `productComponent` links.
@@ -2840,20 +2833,17 @@ Rules:
         kind: "idMulti",
         placeholder: "Filter by component...",
         brandRef: { entity: "product" },
-        urlOnly: true,
       },
       {
         columnId: "usedOnProjectId",
         kind: "idMulti",
         placeholder: "Filter by related used on projects id...",
         brandRef: { entity: "project" },
-        urlOnly: true,
       },
       {
         columnId: "usedOnProjectPresenceFilter",
         kind: "presence",
         placeholder: "Filter related used on projects presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:product.purchases",
@@ -2877,13 +2867,11 @@ Rules:
         kind: "idMulti",
         placeholder: "Filter by related expenses id...",
         brandRef: { entity: "expense" },
-        urlOnly: true,
       },
       {
         columnId: "expensePresenceFilter",
         kind: "presence",
         placeholder: "Filter related expenses presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:product.inventory",
@@ -2897,13 +2885,11 @@ Rules:
         kind: "idMulti",
         placeholder: "Filter by related inventory id...",
         brandRef: { entity: "inventory" },
-        urlOnly: true,
       },
       {
         columnId: "relatedInventoryPresenceFilter",
         kind: "presence",
         placeholder: "Filter related inventory presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:product.wishes",
@@ -2917,13 +2903,11 @@ Rules:
         kind: "idMulti",
         placeholder: "Filter by related wishlist candidates id...",
         brandRef: { entity: "wish" },
-        urlOnly: true,
       },
       {
         columnId: "wishPresenceFilter",
         kind: "presence",
         placeholder: "Filter related wishlist candidates presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:product.tasks",
@@ -2971,7 +2955,6 @@ Rules:
         kind: "idMulti",
         placeholder: "Filter by related tasks id...",
         brandRef: { entity: "task" },
-        urlOnly: true,
       },
       {
         columnId: "related:product.meals",
@@ -2985,13 +2968,11 @@ Rules:
         kind: "idMulti",
         placeholder: "Filter by related meals id...",
         brandRef: { entity: "meal" },
-        urlOnly: true,
       },
       {
         columnId: "mealPresenceFilter",
         kind: "presence",
         placeholder: "Filter related meals presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:product.eaters",
@@ -3006,13 +2987,11 @@ Rules:
         placeholder: "Filter by related eaters id...",
         brandRef: { entity: "ledgerParty" },
         currentMember: true,
-        urlOnly: true,
       },
       {
         columnId: "eaterPresenceFilter",
         kind: "presence",
         placeholder: "Filter related eaters presence...",
-        urlOnly: true,
       },
     ],
   },

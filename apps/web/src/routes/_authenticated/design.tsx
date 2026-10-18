@@ -247,14 +247,12 @@ const GROUPS: IndexedSectionGroup[] = [
               "EnumPill",
               "GapChipCluster",
               "FilterBar",
-              "ScopeChip",
             ]}
             source={[
               "ui/common/date-display.tsx",
               "ui/primitives/enum-pill.tsx",
               "entity/work-queue/work-queue-display.tsx",
               "ui/data-table/filter-bar.tsx",
-              "ui/data-table/scope-chip.tsx",
             ]}
           />
         ),

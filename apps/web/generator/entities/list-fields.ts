@@ -456,10 +456,7 @@ const compatibleKinds = (
   }
 };
 
-const toggleDescriptor = (
-  target: CompiledEntity,
-  parent: FilterDescriptor,
-): FilterDescriptor => {
+const toggleDescriptor = (target: CompiledEntity): FilterDescriptor => {
   const key = `includeSub${pascal(pluralOf(target))}`;
   const label = `Include sub-${pluralOf(target).toLowerCase()}`;
   return {
@@ -481,7 +478,6 @@ const toggleDescriptor = (
     stored: null,
     derived: null,
     range: null,
-    urlOnly: parent.urlOnly,
     nullable: null,
     sentinels: null,
     match: null,
@@ -489,6 +485,8 @@ const toggleDescriptor = (
     subtree: null,
     currentMember: false,
     singleValue: null,
+    exclusiveGroup: null,
+    aliasOf: null,
     wire: { kind: "param", name: key },
   };
 };
@@ -508,8 +506,7 @@ const withViaKeys = (
     descriptor.derived === null ? undefined : derived[descriptor.derived];
   if (
     bound?.shape !== "via" ||
-    (descriptor.kind !== "multiselect" && descriptor.kind !== "idMulti") ||
-    descriptor.urlOnly
+    (descriptor.kind !== "multiselect" && descriptor.kind !== "idMulti")
   )
     return descriptor;
   if (descriptor.nullable !== null)
@@ -534,7 +531,7 @@ const withViaKeys = (
  * Every compiled value filter gets a generated Exclude key: the negation of
  * the predicate its include builds, so rows with no value stay. A declared
  * predicate that is not `negatable` keeps the key with the reason it cannot
- * exclude. A URL-only scope is not a filter a person edits, so it has none.
+ * exclude. A single-value scope has none.
  */
 const withExcludeKey = (
   descriptor: FilterDescriptor,
@@ -542,7 +539,6 @@ const withExcludeKey = (
 ): FilterDescriptor => {
   if (
     (descriptor.kind !== "multiselect" && descriptor.kind !== "idMulti") ||
-    descriptor.urlOnly ||
     descriptor.singleValue !== null ||
     (descriptor.stored === null && bound === undefined)
   )
@@ -554,6 +550,151 @@ const withExcludeKey = (
       reason: bound?.shape === "predicate" ? bound.exclude : null,
     },
   };
+};
+
+/**
+ * The noun a descriptor's menu entry reads by: a related view's relation
+ * label (its column header), else its placeholder's noun. `singular` names
+ * one of the relation's records ("Expense search").
+ */
+const menuNoun = (
+  descriptor: FilterDescriptor,
+  entity: CompiledEntity,
+  byKey: ReadonlyMap<string, CompiledEntity>,
+  singular = false,
+): string => {
+  const relation = relationOf(descriptor, entity);
+  if (relation !== undefined) {
+    const target = byKey.get(relation.target);
+    return singular && target && relation.label === pluralOf(target)
+      ? target.inspector.singular
+      : relation.label;
+  }
+  return placeholderNoun(descriptor);
+};
+
+const relationOf = (descriptor: FilterDescriptor, entity: CompiledEntity) => {
+  const key = /^related:[^.]+\.(.+)$/u.exec(descriptor.columnId)?.[1];
+  return entity.relations.find((candidate) => candidate.key === key);
+};
+
+/** The noun a placeholder names ("Filter by related expenses id..."). */
+const placeholderNoun = (descriptor: FilterDescriptor): string => {
+  // Mirrors `filterSpecLabel`: only "related … id" drops its "id".
+  const related = /^(Filter|Search)( by)? related\b/iu.test(
+    descriptor.placeholder,
+  );
+  const noun = descriptor.placeholder
+    .replace(/^(Filter|Search)( by)?( related)?\s*/iu, "")
+    .replace(
+      related ? /\s*(id|presence)?\.\.\.$/iu : /\s*(presence)?\.\.\.$/iu,
+      "",
+    )
+    .trim();
+  return noun.slice(0, 1).toUpperCase() + noun.slice(1);
+};
+
+/**
+ * A text search or a count range that names the same noun as another of the
+ * entity's filters (a relation's record picker reads "Expenses") is labelled
+ * for what it is — "Expense search", "Expenses count" — so no two Filters-menu
+ * entries read alike. A declared label is kept.
+ */
+const withDistinctMenuLabels = (
+  descriptors: readonly FilterDescriptor[],
+  entity: CompiledEntity,
+  byKey: ReadonlyMap<string, CompiledEntity>,
+): FilterDescriptor[] => {
+  const wire = (descriptor: FilterDescriptor) =>
+    descriptor.field ?? descriptor.columnId;
+  // A related column reads its relation label as a header, and its
+  // placeholder's noun where no column hosts it; either can collide.
+  const nouns = descriptors.map(
+    (descriptor) =>
+      new Set(
+        (descriptor.label === null
+          ? [menuNoun(descriptor, entity, byKey), placeholderNoun(descriptor)]
+          : [descriptor.label]
+        ).map((noun) => noun.toLowerCase()),
+      ),
+  );
+  return descriptors.map((descriptor, index) => {
+    if (
+      descriptor.label !== null ||
+      (descriptor.kind !== "text" && descriptor.kind !== "range")
+    )
+      return descriptor;
+    const collides = descriptors.some(
+      (other, otherIndex) =>
+        otherIndex !== index &&
+        [...nouns[otherIndex]!].some((noun) => nouns[index]!.has(noun)) &&
+        wire(other) !== wire(descriptor),
+    );
+    if (!collides) return descriptor;
+    const noun = menuNoun(descriptor, entity, byKey, true);
+    return {
+      ...descriptor,
+      label: `${noun} ${descriptor.kind === "text" ? "search" : "count"}`,
+    };
+  });
+};
+
+/**
+ * A multiselect over a derived enum value offers that value's options when it
+ * declares none, labelled as its group sections are.
+ */
+const withDerivedOptions = (
+  descriptor: FilterDescriptor,
+  bound: CompiledListField | undefined,
+): FilterDescriptor =>
+  descriptor.kind !== "multiselect" ||
+  descriptor.options !== null ||
+  descriptor.optionsRef !== null ||
+  descriptor.optionsKey !== null ||
+  bound?.shape !== "value" ||
+  bound.options === null
+    ? descriptor
+    : {
+        ...descriptor,
+        options: bound.options.map((value) => ({
+          value,
+          label: value[0]!.toUpperCase() + value.slice(1),
+        })),
+      };
+
+/**
+ * Two declarations of one request field — a list column's filter and an
+ * older deep-link key for it (task `relatedParentTaskId` beside
+ * `parentTaskId`) — hold one state: the non-column one becomes the column
+ * filter's alias, which the URL codec reads into that state and never writes.
+ */
+const withAliases = (
+  descriptors: readonly FilterDescriptor[],
+  entity: CompiledEntity,
+): FilterDescriptor[] => {
+  const listColumns = new Set(
+    entity.fieldModel.fields
+      .filter((field) => field.display.list)
+      .map((field) => field.display.columnId ?? field.key),
+  );
+  const hosted = (descriptor: FilterDescriptor) =>
+    listColumns.has(descriptor.columnId) ||
+    descriptor.columnId.startsWith("related:");
+  const wire = (descriptor: FilterDescriptor) =>
+    descriptor.field ?? descriptor.columnId;
+  return descriptors.map((descriptor) => {
+    if (hosted(descriptor)) return descriptor;
+    const canonical = descriptors.filter(
+      (peer) =>
+        peer !== descriptor &&
+        hosted(peer) &&
+        peer.kind === descriptor.kind &&
+        wire(peer) === wire(descriptor),
+    );
+    return canonical.length === 1
+      ? { ...descriptor, aliasOf: canonical[0]!.columnId }
+      : descriptor;
+  });
 };
 
 const enumOptions = (
@@ -607,7 +748,6 @@ const compileGroupChoice = (
     ];
     return descriptors.find(
       (candidate) =>
-        !candidate.urlOnly &&
         (candidate.kind === "multiselect" || candidate.kind === "idMulti") &&
         (keys.includes(candidate.columnId) ||
           (candidate.field !== null && keys.includes(candidate.field)) ||
@@ -869,8 +1009,8 @@ export const compileListFields = (
         throw new EntityDeclarationError(
           `${context}.filters ${declared.columnId} is derived but names no model.derived entry ${declared.derived}.`,
         );
-      const descriptor = withExcludeKey(
-        withViaKeys(declared, derived, byKey, context),
+      const descriptor = withDerivedOptions(
+        withExcludeKey(withViaKeys(declared, derived, byKey, context), bound),
         bound,
       );
       compiled.push(descriptor);
@@ -896,7 +1036,7 @@ export const compileListFields = (
                 )?.reference ?? null);
       const target = referenced === null ? undefined : byKey.get(referenced);
       if (target?.fieldModel.hierarchy == null) continue;
-      const toggle = toggleDescriptor(target, descriptor);
+      const toggle = toggleDescriptor(target);
       subtree[descriptor.field ?? descriptor.columnId] = toggle.columnId;
       compiled[compiled.length - 1] = {
         ...descriptor,
@@ -905,7 +1045,10 @@ export const compileListFields = (
       if (!toggles.some(({ columnId }) => columnId === toggle.columnId))
         toggles.push(toggle);
     }
-    const filterDescriptors = [...compiled, ...toggles];
+    const filterDescriptors = [
+      ...withAliases(withDistinctMenuLabels(compiled, entity, byKey), entity),
+      ...toggles,
+    ];
     const urlKeys = filterDescriptors.flatMap(({ urlKey, exclude }) =>
       exclude === null ? [urlKey] : [urlKey, exclude.field],
     );

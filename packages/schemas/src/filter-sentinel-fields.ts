@@ -25,6 +25,64 @@ export const excludedFilterValue = (value: string): string | undefined =>
     ? value.slice(FILTER_NOT_PREFIX.length)
     : undefined;
 
+/** The separator between a value list's items, in its URL param and typed entry. */
+export const FILTER_LIST_SEPARATOR = ",";
+const FILTER_LIST_ESCAPE = "\\";
+
+/**
+ * A value list as one URL param. A comma or backslash inside a value is
+ * backslash-escaped, so a picked tag `quick, easy` stays one value.
+ */
+export const joinFilterList = (values: readonly string[]): string =>
+  values
+    .map((value) =>
+      value
+        .replaceAll(
+          FILTER_LIST_ESCAPE,
+          `${FILTER_LIST_ESCAPE}${FILTER_LIST_ESCAPE}`,
+        )
+        .replaceAll(
+          FILTER_LIST_SEPARATOR,
+          `${FILTER_LIST_ESCAPE}${FILTER_LIST_SEPARATOR}`,
+        ),
+    )
+    .join(FILTER_LIST_SEPARATOR);
+
+/**
+ * A URL param back into the values {@link joinFilterList} wrote: split on
+ * unescaped commas, unescaped, trimmed, empties dropped. Only `\,` and `\\`
+ * are escapes; any other backslash stays literal, so a link written before
+ * escaping (`?tags=a,b`, `?tags=path\alpha`) reads as it always did.
+ */
+export const splitFilterList = (raw: string | undefined): string[] => {
+  const values: string[] = [];
+  let current = "";
+  const text = raw ?? "";
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index]!;
+    const next = text[index + 1];
+    if (
+      char === FILTER_LIST_ESCAPE &&
+      (next === FILTER_LIST_SEPARATOR || next === FILTER_LIST_ESCAPE)
+    ) {
+      index += 1;
+      current += next;
+    } else if (char === FILTER_LIST_SEPARATOR) {
+      values.push(current);
+      current = "";
+    } else current += char;
+  }
+  values.push(current);
+  return values.map((value) => value.trim()).filter(Boolean);
+};
+
+/** Typed entry (an external id list): every comma separates two values. */
+export const splitTypedList = (raw: string): string[] =>
+  raw
+    .split(FILTER_LIST_SEPARATOR)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
 /** A value list split into its included and excluded ("is not") values. */
 export const splitExcluded = (values: readonly string[]) => {
   const included: string[] = [];

@@ -176,7 +176,7 @@ export function useClientEntityList<TData extends BaseListRow>({
     includeCatalogActions,
     selectable,
     deleteEmptyLabel,
-    selectionScope: (state) => state.allFilters,
+    selectionScope: (state) => state.columnFilters,
   });
   const { tableState } = presentationState;
   const primarySearchKey = entitySummary[entity].primarySearch?.key;
@@ -186,31 +186,13 @@ export function useClientEntityList<TData extends BaseListRow>({
   const locallySearchedData = useMemo(() => {
     return filterClientRows(data, primarySearchQuery, matchesSearch);
   }, [data, matchesSearch, primarySearchQuery]);
-  // The generated primary-search field is a query input, not a physical
-  // client-side column. Remove it before TanStack resolves column filters so
-  // the typed callback above owns matching without an unknown-column warning.
-  const tableStateWithoutPrimarySearch = useMemo(() => {
-    if (!matchesSearch || !primarySearchKey) return tableState;
-    const columnFilters = tableState.columnFilters.filter(
-      (filter) => filter.id !== primarySearchKey,
-    );
-    const allFilters = tableState.allFilters.filter(
-      (filter) => filter.id !== primarySearchKey,
-    );
-    if (
-      columnFilters.length === tableState.columnFilters.length &&
-      allFilters.length === tableState.allFilters.length
-    )
-      return tableState;
-    return { ...tableState, columnFilters, allFilters };
-  }, [matchesSearch, primarySearchKey, tableState]);
   const presentation = useEntityListPresentation<TData>({
     entity,
     data: locallySearchedData,
     columns: customColumns,
     filters,
     initialColumnVisibility,
-    state: { ...presentationState, tableState: tableStateWithoutPrimarySearch },
+    state: presentationState,
     supportsServerSorting: false,
     hiddenFilterColumns,
     nameEditable,
@@ -266,7 +248,7 @@ export function useClientEntityList<TData extends BaseListRow>({
   const table = useTableConfig({
     data: locallySearchedData,
     columns: allColumns,
-    tableState: tableStateWithoutPrimarySearch,
+    tableState,
     totalCount: locallySearchedData.length,
     manualPagination: false,
     manualSorting: false,

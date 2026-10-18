@@ -1119,16 +1119,11 @@ const validateFilterReference = (
   context: string,
 ): void => {
   const isIdentifier = kind === "idMulti";
-  if (isIdentifier && !value.urlOnly && value.brandRef == null) {
+  // Every id filter is a Filters-menu picker, so its URL values stay
+  // shortcode-native and a detail page can find it as a back-filter.
+  if (isIdentifier && value.brandRef == null) {
     throw new EntityDeclarationError(
-      `${context} rendered ${kind} filters require brandRef so browser URL values stay shortcode-native.`,
-    );
-  }
-  // A URL-only id filter still names the entity it scopes by, so a detail
-  // page can find it as a back-filter; `brandRef: null` marks a non-entity id.
-  if (isIdentifier && value.brandRef === undefined) {
-    throw new EntityDeclarationError(
-      `${context} ${kind} filters must declare brandRef (null for an id that names no entity).`,
+      `${context} ${kind} filters require brandRef so browser URL values stay shortcode-native.`,
     );
   }
   if (value.brandRef != null && !isIdentifier) {
@@ -1143,9 +1138,9 @@ const validateFilterReference = (
     throw new EntityDeclarationError(
       `${context} currentMember (@me) applies only to an idMulti filter over ledgerParty.`,
     );
-  if (value.singleValue !== undefined && (!isIdentifier || !value.urlOnly))
+  if (value.singleValue !== undefined && !isIdentifier)
     throw new EntityDeclarationError(
-      `${context} singleValue applies only to a urlOnly idMulti scope filter.`,
+      `${context} singleValue applies only to an idMulti scope filter.`,
     );
 };
 
@@ -1212,8 +1207,7 @@ const storedPresence = (
     throw new EntityDeclarationError(
       `${context} is compiled, so its Any value / No value key is generated; remove nullable.`,
     );
-  if ((kind !== "multiselect" && kind !== "idMulti") || value.urlOnly)
-    return null;
+  if (kind !== "multiselect" && kind !== "idMulti") return null;
   const field = storage.find(({ key }) => key === stored.columns[0]);
   return field?.nullable || field?.kind === "text-array"
     ? { field: `${value.columnId}PresenceFilter`, label: label.toLowerCase() }
@@ -1273,7 +1267,6 @@ const filterDescriptor = (
           ? value.columnId
           : value.derived,
     range,
-    urlOnly: value.urlOnly ?? false,
     nullable: storedPresence(
       value,
       parsedKind,
@@ -1284,14 +1277,13 @@ const filterDescriptor = (
     ),
     // A multiselect over a `text[]` column holds several values per row, so
     // it can match all of the picked ones.
-    match:
-      stored?.array && !value.urlOnly
-        ? { field: `${value.columnId}Match` }
-        : null,
+    match: stored?.array ? { field: `${value.columnId}Match` } : null,
     exclude: null,
     subtree: null,
     currentMember: value.currentMember === true,
     singleValue: value.singleValue?.reason ?? null,
+    exclusiveGroup: value.singleValue?.group ?? null,
+    aliasOf: null,
     sentinels: value.sentinels ?? null,
     wire: filterWire(value, parsedKind, range, modelField),
   };
@@ -1745,10 +1737,10 @@ const validateRouteCreate = (
 type SavedView = CompiledEntity["inspector"]["list"]["savedViews"][number];
 
 /**
- * A saved view is applied by writing real column-filter state, so each pinned
- * filter must be a column-hosted descriptor of this entity with a value the
- * control can hold. A typo'd id, a urlOnly descriptor or a range preset that
- * expands to nothing would leave the view lit while selecting every row; the
+ * A saved view is applied by writing real filter state, so each pinned filter
+ * must be a descriptor of this entity with a value the control can hold. A
+ * typo'd id or a range preset that expands to nothing would leave the view
+ * lit while selecting every row; the
  * layout and sort may only name columns the list actually has.
  */
 const validateSavedViews = (
@@ -1795,10 +1787,6 @@ const validateSavedViews = (
           `${where} pins filter ${filter.id} twice.`,
         );
       filterIds.add(filter.id);
-      if (descriptor.urlOnly)
-        throw new EntityDeclarationError(
-          `${where} pins urlOnly filter ${filter.id}, which no column hosts.`,
-        );
       const values = Array.isArray(filter.value)
         ? filter.value
         : [filter.value];
@@ -1963,7 +1951,6 @@ const suggestionFilterDescriptors = (
       stored: null,
       derived: null,
       range: null,
-      urlOnly: false,
       nullable: { field: "suggestionPresenceFilter", label: "suggestion" },
       sentinels: null,
       match: null,
@@ -1971,6 +1958,8 @@ const suggestionFilterDescriptors = (
       subtree: null,
       currentMember: false,
       singleValue: null,
+      exclusiveGroup: null,
+      aliasOf: null,
       wire: { kind: "param", name: "suggestionKind" },
     },
   ];
@@ -2033,6 +2022,17 @@ export const compileEntity = (
       `${context}.filters.descriptors[${index}]`,
     ),
   );
+  for (const descriptor of declaredDescriptors) {
+    const group = descriptor.exclusiveGroup;
+    if (
+      group !== null &&
+      declaredDescriptors.filter((peer) => peer.exclusiveGroup === group)
+        .length < 2
+    )
+      throw new EntityDeclarationError(
+        `${context}.filters ${descriptor.columnId} is alone in singleValue group ${group}; a group shares one value between several scopes.`,
+      );
+  }
   const policyGapKinds = classificationPolicyGapKinds(
     declaration.capabilities.classificationPolicies,
     context,
@@ -2109,7 +2109,6 @@ export const compileEntity = (
             module: "~/entity/filter-behavior",
             export: "resolveCreatedDate",
           },
-          urlOnly: false,
           nullable: null,
           sentinels: null,
           match: null,
@@ -2117,6 +2116,8 @@ export const compileEntity = (
           subtree: null,
           currentMember: false,
           singleValue: null,
+          exclusiveGroup: null,
+          aliasOf: null,
           wire: { kind: "range", from: "createdFrom", to: "createdTo" },
         },
         {
@@ -2146,7 +2147,6 @@ export const compileEntity = (
             module: "~/entity/filter-behavior",
             export: "resolveUpdatedDate",
           },
-          urlOnly: false,
           nullable: null,
           sentinels: null,
           match: null,
@@ -2154,6 +2154,8 @@ export const compileEntity = (
           subtree: null,
           currentMember: false,
           singleValue: null,
+          exclusiveGroup: null,
+          aliasOf: null,
           wire: { kind: "range", from: "updatedFrom", to: "updatedTo" },
         },
       ]

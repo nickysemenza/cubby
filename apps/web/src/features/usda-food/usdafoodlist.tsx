@@ -1,6 +1,6 @@
 import type { UsdaFoodListRow, USDAFoodSortField } from "@cubby/schemas/usda";
 import { usdaListInput } from "@cubby/schemas/usda";
-import { type DataType, dataTypeEnum, dataTypeLabel } from "@cubby/usda";
+import { type DataType, dataTypeLabel } from "@cubby/usda";
 import { useCallback, useEffect, useMemo } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
@@ -21,7 +21,7 @@ import { TableEmptyState } from "~/entity/table/entity-empty-states";
 import { ListWorkbench } from "~/entity/table/list-workbench";
 import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { USDA_KINDS } from "~/lib/conversion-coverage";
-import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
+import { UsdaDataTypeDot } from "~/lib/usda-data-type";
 import { nutrientCount } from "~/lib/usda-food-stats";
 import {
   createCubbyColumnCollection,
@@ -51,9 +51,6 @@ type USDAListFilters = {
 };
 
 const USDA_TABLE_STATE = { initialSort: "fdc_id" } as const;
-const USDA_FILTERS = [
-  { id: "description", placeholder: "Filter by description..." },
-];
 
 export interface USDAFoodListOperations {
   list: typeof usdaFood.list;
@@ -65,23 +62,15 @@ const buildUSDAFilters = (tableState: TableStateReturn): USDAListFilters => {
   const declared = usdaListInput.shape.filters.parse(
     buildFiltersFromManifest(
       getEntityFilters("usda-food"),
-      filterGetterFromColumnFilters(tableState.allFilters),
+      filterGetterFromColumnFilters(tableState.columnFilters),
     ),
   );
   return {
     ...declared,
-    nameFilter:
-      declared.nameFilter ?? tableState.getColumnFilter("description"),
     dataTypeFilter:
       declared.dataTypeFilter === undefined
-        ? dataTypeEnum
-            .array()
-            .optional()
-            .parse(tableState.getColumnFilterValues("foodInfo-data_type"))
+        ? undefined
         : [declared.dataTypeFilter].flat(),
-    linkedProductsOnly:
-      declared.linkedProductsOnly ??
-      (tableState.getColumnFilter("linkedProducts") === "linked" || undefined),
     foodsOnly: declared.foodsOnly ?? true,
   };
 };
@@ -178,15 +167,6 @@ export function USDAFoodList({
             meta: {
               className: "w-32 max-w-32",
               mobile: { slot: "subtitle", priority: 10 },
-              filterConfig: {
-                placeholder: "Filter by type...",
-                filterType: "multiselect" as const,
-                options: Object.values(dataTypeEnum.enum).map((type) => ({
-                  value: type,
-                  label: dataTypeLabel(type),
-                  color: dataTypeColor(type),
-                })),
-              },
             },
             id: "foodInfo-data_type",
             enableSorting: true,
@@ -321,11 +301,6 @@ export function USDAFoodList({
               className: "w-48 max-w-48",
               enableSorting: true,
               mobile: { slot: "meta", priority: 40, interactive: true },
-              filterConfig: {
-                placeholder: "Filter linked...",
-                filterType: "select",
-                options: [{ value: "linked", label: "Linked products only" }],
-              },
             },
           ),
         );
@@ -336,7 +311,6 @@ export function USDAFoodList({
   const { workbench, inspection } = useEntityList<USDAListRow, USDAListFilters>(
     {
       entity: "usda-food",
-      filters: USDA_FILTERS,
       preview: { idField: "fdc_id", responsiveInspector: true },
       queryOptions,
       buildFilters: buildUSDAFilters,

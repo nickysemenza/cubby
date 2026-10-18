@@ -172,8 +172,8 @@ export function planRelationSection(
   const seedField = filterKey.replace(/Filter$/u, "");
   const explicitField = section.prefill?.field;
   let seed = createSeedThrough(target, explicitField ?? seedField);
-  // The descriptor's own key names no create field — a derived/urlOnly
-  // descriptor like `journalPlantingId` reads a computed column, not a
+  // The descriptor's own key names no create field — a derived descriptor
+  // like `journalPlantingId` reads a computed column, not a
   // storage field. Fall back to the target's own reference field pointing at
   // the same entity the descriptor scopes by, so its create button still
   // seeds a real, writable field. Explicit `prefill` is required when that

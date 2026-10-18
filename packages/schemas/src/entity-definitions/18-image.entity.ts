@@ -804,7 +804,6 @@ export default defineEntity({
         derived: true,
         placeholder: "Filter by import run...",
         brandRef: { entity: "run" },
-        urlOnly: true,
       },
       {
         columnId: "targetState",
@@ -885,7 +884,6 @@ export default defineEntity({
         placeholder: "Filter by captured by...",
         brandRef: { entity: "ledgerParty" },
         currentMember: true,
-        urlOnly: true,
         deriveSchema: true,
         stored: true,
       },
@@ -893,7 +891,6 @@ export default defineEntity({
         columnId: "uploadedAgeHours",
         kind: "range",
         placeholder: "Filter by upload age...",
-        urlOnly: true,
         deriveSchema: true,
         derived: true,
         range: {

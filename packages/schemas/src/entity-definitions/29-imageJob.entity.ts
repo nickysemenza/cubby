@@ -396,7 +396,6 @@ export default defineEntity({
         columnId: "submissionId",
         kind: "text",
         placeholder: "Filter by submission...",
-        urlOnly: true,
         derived: true,
       },
       {

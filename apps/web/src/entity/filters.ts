@@ -4,9 +4,12 @@ import {
   FILTER_ALL,
   FILTER_ANY,
   FILTER_EXACT,
+  FILTER_LIST_SEPARATOR,
+  joinFilterList,
   FILTER_NONE,
   FILTER_NOT_PREFIX,
   splitExcluded,
+  splitFilterList,
 } from "@cubby/schemas/filter-sentinel-fields";
 import {
   CURRENT_MEMBER_FILTER,
@@ -71,21 +74,19 @@ export interface FilterSpecCore {
    * or a relative date token the server resolves (`..@today-1d`).
    */
   range?: { from: string; to: string };
+  /** An id scope the server accepts one value for: the control picks one. */
+  singleValue?: boolean;
   /**
-   * No table column renders this spec — it's URL state only: a deep link's
-   * scope (expenses' `?productId=` and `?order=`), surfaced as a `ScopeChip`
-   * and cleared by the page that owns the param.
-   *
-   * Such a spec is kept OUT of `columnFilters`. TanStack resolves every entry
-   * there to a column and `console.error`s
-   * `[Table] Column with id '<x>' does not exist.` for the ones it can't — on
-   * every render, loud enough to bury real errors. It still reaches the server
-   * filters: `useTableState` exposes it via `allFilters` (table pages) and
-   * `filterGetterFromSearch` reads it straight from the URL (the table-less
-   * analytics view). It's likewise excluded from `encodeFilters` and from the
-   * keys `useTableState` writes through, since no column state can produce it.
+   * Scopes sharing a group hold one value between them (Email's Purchase,
+   * Vendor and Vendor account): picking one replaces the others.
    */
-  urlOnly?: boolean;
+  exclusiveGroup?: string;
+  /**
+   * The filter this one duplicates under an older deep-link key (task
+   * `relatedParentTaskId` → `parentTaskId`). The codec decodes it into that
+   * filter's state and never writes it, so there is one editable state.
+   */
+  aliasOf?: string;
   /**
    * Marks a picklist as covering a NULLABLE column: the control gains the
    * Any value / No value options below, and the builder routes them to
@@ -173,6 +174,7 @@ const single = (value: FilterValue): string | undefined =>
  * Everything funnels through here so one shape reaches the wire.
  */
 const many = (value: FilterValue): string[] | undefined => {
+  // Picked values pass through whole: a tag may contain a comma.
   const values = Array.isArray(value) ? value : value ? [value] : [];
   return values.length ? values : undefined;
 };
@@ -216,6 +218,8 @@ export function buildFiltersFromManifest(
   };
 
   for (const spec of specs) {
+    // An alias's value lives in its canonical filter's state.
+    if (spec.aliasOf) continue;
     const raw = get(spec.columnId);
     const field = spec.field ?? spec.columnId;
 
@@ -419,10 +423,11 @@ export const soleValue = <T>(value: T | T[] | undefined): T | undefined => {
 // TanStack Router's default `stringifySearch` JSON-encodes a non-string value,
 // which would give `?trade=%5B%22drywall%22%2C...%5D`. There's no custom
 // parseSearch/stringifySearch on this router, so arrays are joined on write and
-// split on read here — uniformly, from the manifest, so no two keys can end up
-// encoding differently.
+// split on read here (`joinFilterList` / `splitFilterList`, which escape a
+// comma inside a value) — uniformly, from the manifest, so no two keys can end
+// up encoding differently.
 
-const LIST_SEPARATOR = ",";
+const LIST_SEPARATOR = FILTER_LIST_SEPARATOR;
 
 /** The one search-param key a spec reads and writes. */
 export const filterUrlKey = (
@@ -430,26 +435,16 @@ export const filterUrlKey = (
 ): string => spec.urlKey ?? spec.columnId;
 
 /**
- * `[column-backed, url-only]`.
- *
- * The first list is everything a table's `columnFilters` may hold — the only
- * specs `useTableState` decodes into state, encodes back out, or claims a URL
- * key for. See `urlOnly` on the spec for why the second list is held apart.
+ * The specs that hold filter state of their own: everything but the
+ * "Include sub-…" toggles, which ride in their parent filter's state.
  */
-export const partitionFilterSpecs = <TSpec extends FilterSpecCore>(
+export const editableFilterSpecs = <TSpec extends FilterSpecCore>(
   specs: readonly TSpec[],
-): [TSpec[], TSpec[]] => {
-  // A column filter's "Include sub-…" toggle rides in that filter's state,
-  // so it is neither a column of its own nor a URL-only scope.
+): TSpec[] => {
   const companions = new Set(
-    specs.flatMap((spec) =>
-      spec.subtree && !spec.urlOnly ? [spec.subtree] : [],
-    ),
+    specs.flatMap((spec) => (spec.subtree ? [spec.subtree] : [])),
   );
-  return partition(
-    specs.filter((spec) => !companions.has(spec.columnId)),
-    (spec) => !spec.urlOnly,
-  );
+  return specs.filter((spec) => !companions.has(spec.columnId));
 };
 
 /**
@@ -460,30 +455,25 @@ const ownedUrlKeys = (spec: FilterSpecCore): string[] => {
   const exclude = excludeKey(spec);
   return [
     filterUrlKey(spec),
-    ...(spec.subtree && !spec.urlOnly ? [spec.subtree] : []),
+    ...(spec.subtree ? [spec.subtree] : []),
     ...(exclude ? [exclude] : []),
   ];
 };
 
 /**
  * Everything a table needs to move filters between state and the URL,
- * compiled once from an entity's specs: which specs back columns and which
- * are URL-only scopes, the exact search-param keys each side owns, and the
- * encode/decode over them. Ownership and encoding come from the same walk,
- * so a table can never claim (or delete) a key it does not encode.
+ * compiled once from an entity's specs: the exact search-param keys the
+ * filters own and the encode/decode over them. Ownership and encoding come
+ * from the same walk, so a table can never claim (or delete) a key it does
+ * not encode.
  */
 export interface FilterCodec {
-  readonly columnSpecs: readonly FilterSpecCore[];
-  readonly urlOnlySpecs: readonly FilterSpecCore[];
   /** Search-param keys the table owns — it may write and clear these. */
-  readonly columnKeys: readonly string[];
-  /** Search-param keys only navigation may change; a table never deletes them. */
-  readonly urlOnlyKeys: readonly string[];
+  readonly keys: readonly string[];
   encode(
     get: (columnId: string) => FilterValue,
   ): Record<string, string | undefined>;
-  decodeColumns<TSearch extends {}>(search: TSearch): ColumnFilterValue[];
-  decodeUrlOnly<TSearch extends {}>(search: TSearch): ColumnFilterValue[];
+  decode<TSearch extends {}>(search: TSearch): ColumnFilterValue[];
 }
 
 export type ColumnFilterValue = { id: string; value: string | string[] };
@@ -491,15 +481,11 @@ export type ColumnFilterValue = { id: string; value: string | string[] };
 export const compileFilterCodec = (
   specs: readonly FilterSpecCore[],
 ): FilterCodec => {
-  const [columnSpecs, urlOnlySpecs] = partitionFilterSpecs(specs);
+  const editable = editableFilterSpecs(specs);
   return {
-    columnSpecs,
-    urlOnlySpecs,
-    columnKeys: columnSpecs.flatMap(ownedUrlKeys),
-    urlOnlyKeys: urlOnlySpecs.map(filterUrlKey),
-    encode: (get) => encodeFilters(columnSpecs, get),
-    decodeColumns: (search) => decodeFilters(columnSpecs, search),
-    decodeUrlOnly: (search) => decodeFilters(urlOnlySpecs, search),
+    keys: editable.flatMap(ownedUrlKeys),
+    encode: (get) => encodeFilters(editable, get),
+    decode: (search) => decodeFilters(editable, search),
   };
 };
 
@@ -536,11 +522,16 @@ export function encodeFilters(
   // A parent's column state owns its folded subtree toggle, so the toggle's
   // standalone descriptor must not overwrite it.
   const folded = new Set(
-    specs.flatMap((spec) =>
-      spec.subtree && !spec.urlOnly ? [spec.subtree] : [],
-    ),
+    specs.flatMap((spec) => (spec.subtree ? [spec.subtree] : [])),
   );
-  for (const spec of specs) {
+  const [aliases, canonical] = partition(specs, (spec) => !!spec.aliasOf);
+  // An alias is read, never written: its own keys clear (the URL moves to
+  // the canonical key), except one it shares with a canonical filter.
+  const canonicalKeys = new Set(canonical.flatMap(ownedUrlKeys));
+  for (const alias of aliases)
+    for (const key of ownedUrlKeys(alias))
+      if (!canonicalKeys.has(key)) params[key] = undefined;
+  for (const spec of canonical) {
     if (folded.has(filterUrlKey(spec))) continue;
     const raw = get(spec.columnId);
     const all = Array.isArray(raw) ? raw : raw ? [raw] : [];
@@ -553,13 +544,11 @@ export function encodeFilters(
     // undefined, never "" — `stripSearchParams` only strips on undefined, so
     // an empty string would stick in the URL forever.
     params[filterUrlKey(spec)] = values.length
-      ? values.join(LIST_SEPARATOR)
+      ? joinFilterList(values)
       : undefined;
     if (exclude)
-      params[exclude] = excluded.length
-        ? excluded.join(LIST_SEPARATOR)
-        : undefined;
-    if (spec.subtree && !spec.urlOnly)
+      params[exclude] = excluded.length ? joinFilterList(excluded) : undefined;
+    if (spec.subtree)
       params[spec.subtree] =
         exact && (values.length || excluded.length) ? "false" : undefined;
   }
@@ -573,36 +562,38 @@ export function decodeFilters<TSearch extends {}>(
 ): ColumnFilterValue[] {
   const parsedSearch = parseFilterSearch(search);
   const filters: ColumnFilterValue[] = [];
-  const listParts = (raw: string | undefined) =>
-    (raw ?? "")
-      .split(LIST_SEPARATOR)
-      .map((part) => part.trim())
-      .filter(Boolean);
+  const present = new Set(specs.map((spec) => spec.columnId));
   for (const spec of specs) {
+    // An alias decodes into its canonical filter's state when that filter is
+    // in play, merging with any value the canonical key carries.
+    const id =
+      spec.aliasOf && present.has(spec.aliasOf) ? spec.aliasOf : spec.columnId;
     const exclude = excludeKey(spec);
     const excluded = exclude
-      ? listParts(parsedSearch[exclude]).map(
+      ? splitFilterList(parsedSearch[exclude]).map(
           (value) => `${FILTER_NOT_PREFIX}${value}`,
         )
       : [];
-    const parts = [...listParts(parsedSearch[filterUrlKey(spec)]), ...excluded];
+    const parts = [
+      ...splitFilterList(parsedSearch[filterUrlKey(spec)]),
+      ...excluded,
+    ];
     const first = parts[0];
     if (first === undefined) continue;
     const exact =
-      spec.subtree !== undefined &&
-      !spec.urlOnly &&
-      parsedSearch[spec.subtree] === "false";
-    filters.push({
-      id: spec.columnId,
-      // A multi column always holds an array, even for one value — mixing the
-      // two shapes is what splits the React Query cache. A single value in a
-      // URL or saved view therefore reads as a one-element list.
-      value: isMultiFilterKind(spec.kind)
-        ? exact
-          ? [...parts, FILTER_EXACT]
-          : parts
-        : first,
-    });
+      spec.subtree !== undefined && parsedSearch[spec.subtree] === "false";
+    // A multi column always holds an array, even for one value — mixing the
+    // two shapes is what splits the React Query cache. A single value in a
+    // URL or saved view therefore reads as a one-element list.
+    const value = isMultiFilterKind(spec.kind)
+      ? exact
+        ? [...parts, FILTER_EXACT]
+        : parts
+      : first;
+    const existing = filters.find((filter) => filter.id === id);
+    if (!existing) filters.push({ id, value });
+    else if (Array.isArray(existing.value) && Array.isArray(value))
+      existing.value = [...new Set([...existing.value, ...value])];
   }
   return filters;
 }

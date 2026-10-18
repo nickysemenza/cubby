@@ -444,13 +444,11 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by related meals id...",
         brandRef: { entity: "meal" },
-        urlOnly: true,
       },
       {
         columnId: "mealPresenceFilter",
         kind: "presence",
         placeholder: "Filter related meals presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:ingredient.eaters",
@@ -465,13 +463,11 @@ export default defineEntity({
         placeholder: "Filter by related eaters id...",
         brandRef: { entity: "ledgerParty" },
         currentMember: true,
-        urlOnly: true,
       },
       {
         columnId: "eaterPresenceFilter",
         kind: "presence",
         placeholder: "Filter related eaters presence...",
-        urlOnly: true,
       },
     ],
   },

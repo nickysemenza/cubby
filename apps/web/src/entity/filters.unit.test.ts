@@ -1,3 +1,4 @@
+import { splitTypedList } from "@cubby/schemas/filter-sentinel-fields";
 import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -10,6 +11,7 @@ import {
   FILTER_ANY,
   FILTER_EXACT,
   FILTER_NONE,
+  filterGetterFromColumnFilters,
   type FilterSpecCore,
   type FilterSearch,
   type FilterValue,
@@ -620,15 +622,89 @@ describe("paramToSort / sortToParam", () => {
   });
 });
 
+describe("value lists in the URL", () => {
+  const specs = [
+    { columnId: "tags", field: "tagFilters", kind: "multiselect" },
+  ] as const satisfies readonly FilterSpecCore[];
+
+  it("keeps a picked value containing a comma whole through URL and reload", () => {
+    // The tag `quick, easy` once reached the server as two tags.
+    const codec = compileFilterCodec(specs);
+    const picked = ["quick, easy", "dinner"];
+    const url = codec.encode((columnId) =>
+      columnId === "tags" ? picked : undefined,
+    );
+    const reloaded = codec.decode(url);
+    expect(reloaded).toEqual([{ id: "tags", value: picked }]);
+    expect(
+      buildFiltersFromManifest(specs, filterGetterFromColumnFilters(reloaded)),
+    ).toEqual({ tagFilters: picked });
+    expect(buildFiltersFromManifest(specs, () => picked)).toEqual({
+      tagFilters: picked,
+    });
+  });
+
+  it("still splits an unescaped link and typed entry on every comma", () => {
+    expect(compileFilterCodec(specs).decode({ tags: "a, b" })).toEqual([
+      { id: "tags", value: ["a", "b"] },
+    ]);
+    expect(splitTypedList("ext-a, ext-b,")).toEqual(["ext-a", "ext-b"]);
+  });
+
+  it("keeps a backslash literal unless it escapes a comma or backslash", () => {
+    // A bookmark from before escaping (`?tags=path%5Calpha`) once decoded to
+    // `pathalpha`, and URL sync rewrote it.
+    const codec = compileFilterCodec(specs);
+    expect(codec.decode({ tags: "path\\alpha,trailing\\" })).toEqual([
+      { id: "tags", value: ["path\\alpha", "trailing\\"] },
+    ]);
+    const picked = ["path\\alpha", "a\\,b"];
+    const url = codec.encode((columnId) =>
+      columnId === "tags" ? picked : undefined,
+    );
+    expect(codec.decode(url)).toEqual([{ id: "tags", value: picked }]);
+  });
+});
+
+describe("filter aliases", () => {
+  const specs = [
+    { columnId: "parentTaskId", kind: "idMulti" },
+    {
+      columnId: "relatedParentTaskId",
+      urlKey: "parentTask",
+      field: "parentTaskId",
+      kind: "idMulti",
+      aliasOf: "parentTaskId",
+    },
+  ] as const satisfies readonly FilterSpecCore[];
+
+  it("decodes an alias into its canonical state and writes the canonical key", () => {
+    const codec = compileFilterCodec(specs);
+    expect(codec.decode({ parentTask: "TSK-AAAA" })).toEqual([
+      { id: "parentTaskId", value: ["TSK-AAAA"] },
+    ]);
+    expect(
+      codec.encode((columnId) =>
+        columnId === "parentTaskId" ? ["TSK-BBBB"] : undefined,
+      ),
+    ).toEqual({ parentTaskId: "TSK-BBBB", parentTask: undefined });
+    expect(
+      buildFiltersFromManifest(specs, (columnId) =>
+        columnId === "parentTaskId" ? ["TSK-BBBB"] : ["TSK-AAAA"],
+      ),
+    ).toEqual({ parentTaskId: ["TSK-BBBB"] });
+  });
+});
+
 describe("compileFilterCodec", () => {
   it("folds an Include sub-… toggle's URL key into its filter's state", () => {
     const codec = compileFilterCodec([
       { columnId: "parent", kind: "idMulti", subtree: "includeSubCategories" },
       { columnId: "includeSubCategories", kind: "boolean" },
     ]);
-    expect(codec.columnKeys).toEqual(["parent", "includeSubCategories"]);
+    expect(codec.keys).toEqual(["parent", "includeSubCategories"]);
     const search = { parent: "SCAT-4K7M", includeSubCategories: "false" };
-    expect(codec.decodeColumns(search)).toEqual([
+    expect(codec.decode(search)).toEqual([
       { id: "parent", value: ["SCAT-4K7M", FILTER_EXACT] },
     ]);
     expect(
@@ -659,29 +735,21 @@ describe("compileFilterCodec", () => {
   const specs = [
     { columnId: "name", kind: "text" },
     { columnId: "trade", kind: "multiselect" },
-    { columnId: "scope", kind: "text", urlKey: "in", urlOnly: true },
+    { columnId: "scope", kind: "text", urlKey: "in" },
   ] as const satisfies readonly FilterSpecCore[];
 
-  it("owns exactly the column-backed keys and encodes only those", () => {
+  it("round-trips every spec through one key set, urlKey included", () => {
     const codec = compileFilterCodec(specs);
-    expect(codec.columnKeys).toEqual(["name", "trade"]);
-    expect(codec.urlOnlyKeys).toEqual(["in"]);
-    expect(
-      codec.encode((columnId) =>
-        columnId === "trade" ? ["drywall", "electrical"] : undefined,
-      ),
-    ).toEqual({ name: undefined, trade: "drywall,electrical" });
-  });
-
-  it("decodes each side from the same search", () => {
-    const codec = compileFilterCodec(specs);
+    expect(codec.keys).toEqual(["name", "trade", "in"]);
     const search = { name: "saw", trade: "drywall,electrical", in: "LOC-4K7M" };
-    expect(codec.decodeColumns(search)).toEqual([
+    const decoded = codec.decode(search);
+    expect(decoded).toEqual([
       { id: "name", value: "saw" },
       { id: "trade", value: ["drywall", "electrical"] },
-    ]);
-    expect(codec.decodeUrlOnly(search)).toEqual([
       { id: "scope", value: "LOC-4K7M" },
     ]);
+    expect(codec.encode(filterGetterFromColumnFilters(decoded))).toEqual(
+      search,
+    );
   });
 });

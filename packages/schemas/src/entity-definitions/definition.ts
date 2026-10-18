@@ -2231,7 +2231,6 @@ const buildMetadataSchemas = () => {
         .strict()
         .nullable()
         .optional(),
-      urlOnly: z.boolean({ error: "must be a boolean" }).optional(),
       /**
        * The Any value / No value request key of a hand-written value filter.
        * A compiled (`stored`/`derived`) filter over a nullable field gets it
@@ -2250,9 +2249,16 @@ const buildMetadataSchemas = () => {
       /**
        * A declared exception to any-of: the filter accepts one value, and
        * `reason` says why (Email's scope record anchors `linkState`).
-       * Clients pick one record.
+       * Clients pick one record. Filters naming the same `group` share that
+       * one value: picking one clears the rest.
        */
-      singleValue: z.object({ reason: nonEmptyString() }).strict().optional(),
+      singleValue: z
+        .object({
+          reason: nonEmptyString(),
+          group: nonEmptyString().optional(),
+        })
+        .strict()
+        .optional(),
       /**
        * Named states an `idMulti` filter accepts beside entity codes (an
        * Owner filter's `@household`). Clients offer each as a meta option;

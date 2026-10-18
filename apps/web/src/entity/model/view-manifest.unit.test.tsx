@@ -28,7 +28,7 @@ const entityFromKey = (value: string): Entity | undefined =>
 // stays alias-free regardless — that's a property of the module, not the test.
 
 describe("view manifest", () => {
-  // Filter ids, urlOnly descriptors, static range presets, value kinds, ids and
+  // Filter ids, static range presets, value kinds, ids and
   // layout/sort columns are checked at generation time
   // (`validateSavedViews` in apps/web/generator/entities/compile.ts).
   it("never pins a range preset that expands to nothing", () => {

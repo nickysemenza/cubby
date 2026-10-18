@@ -10,14 +10,17 @@ import {
 import { entityFilterOptions } from "~/integrations/tanstack-query/generated/catalog.gen";
 import type { RuntimeFilterOptions } from "~/ui/hooks/filter-option-types";
 
-/** Generic live rosters for unscoped manifest entity-reference filters. */
+/**
+ * Generic live rosters for every manifest entity-reference filter, including
+ * one with an `optionsKey` its list's caller may not supply.
+ */
 export function useDeferredReferenceFilterOptions(
   entity: BrowserRoutedEntity,
 ): RuntimeFilterOptions {
   const references = useMemo(
     () =>
       getEntityFilters(entity).flatMap((spec) => {
-        if (spec.optionsKey || !spec.referenceEntity) return [];
+        if (!spec.referenceEntity) return [];
         const key = referenceFilterOptionsKey(spec);
         return key ? [{ key, target: spec.referenceEntity }] : [];
       }),

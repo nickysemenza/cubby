@@ -2,7 +2,9 @@ import {
   FILTER_ALL,
   FILTER_ANY,
   FILTER_EXACT,
+  FILTER_LIST_SEPARATOR,
   FILTER_NONE,
+  splitTypedList,
 } from "@cubby/schemas/filter-sentinel-fields";
 import {
   describeRangeBounds,
@@ -432,6 +434,53 @@ function DateRangeBounds({
 }
 
 /** The editor body for one field's popover — shape depends on its declared type. */
+/**
+ * A rosterless multiselect (an external id): values typed comma-separated.
+ * The input keeps what was typed (spacing, a trailing comma); the filter
+ * holds the values it separates, which the URL codec writes and a reload
+ * decodes back unchanged. Excluded values ride along untouched.
+ */
+function TypedValuesEditor({
+  field,
+  filter,
+  setValues,
+}: {
+  field: FilterBarField;
+  filter: Filter | undefined;
+  setValues: (values: string[]) => void;
+}) {
+  const values = sideValues(filter?.values ?? [], "is");
+  const key = values.join(FILTER_LIST_SEPARATOR);
+  const [draft, setDraft] = useState(() => values.join(", "));
+  // A change from outside (reload, Clear, a saved view) replaces the text.
+  if (splitTypedList(draft).join(FILTER_LIST_SEPARATOR) !== key)
+    setDraft(values.join(", "));
+  const label = field.label ?? field.key;
+  return (
+    <>
+      <Input
+        ref={focusOnMount}
+        value={draft}
+        onChange={(event) => {
+          setDraft(event.target.value);
+          setValues(
+            withSideValues(
+              filter?.values ?? [],
+              "is",
+              splitTypedList(event.target.value),
+            ),
+          );
+        }}
+        placeholder={field.placeholder}
+        aria-label={`Filter ${label}`}
+      />
+      <p className="text-xs text-muted-foreground">
+        Separate values with commas.
+      </p>
+    </>
+  );
+}
+
 function FilterValueEditor({
   field,
   filter,
@@ -459,6 +508,11 @@ function FilterValueEditor({
         max={field.max}
         aria-label={`Filter ${field.label ?? field.key}`}
       />
+    );
+  }
+  if (field.type === "multiselect" && field.freeText) {
+    return (
+      <TypedValuesEditor field={field} filter={filter} setValues={setValues} />
     );
   }
   if (field.type === "multiselect") {
@@ -656,16 +710,27 @@ function useFilterEdits({
 
   const setValues = (field: FilterBarField, values: string[]) => {
     const existing = filtersByField.get(field.key);
+    // A value in one exclusive scope replaces its group's other scopes.
+    const group = field.exclusiveGroup;
+    const rest =
+      group && values.some((value) => value !== "")
+        ? filters.filter(
+            (filter) =>
+              filter.field === field.key ||
+              fields.find((candidate) => candidate.key === filter.field)
+                ?.exclusiveGroup !== group,
+          )
+        : filters;
     if (existing) {
       onChange(
-        filters.map((filter) =>
+        rest.map((filter) =>
           filter.field === field.key ? { ...filter, values } : filter,
         ),
       );
     } else {
       field.onActivate?.();
       onChange([
-        ...filters,
+        ...rest,
         {
           id: `filter-${field.key}`,
           field: field.key,
@@ -785,7 +850,8 @@ export function FilterBar({
                 setValues(field, values);
                 // Apply commits and closes; a text/combobox editor commits per
                 // keystroke and stays open until dismissed.
-                if (field.type === "multiselect") setEditingKey(null);
+                if (field.type === "multiselect" && !field.freeText)
+                  setEditingKey(null);
               }}
               clear={() => {
                 clear(field);
