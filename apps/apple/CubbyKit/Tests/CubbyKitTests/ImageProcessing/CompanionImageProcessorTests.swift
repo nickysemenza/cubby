@@ -66,6 +66,39 @@ struct CompanionImageProcessorTests {
         #expect(await upload.count == 1)
     }
 
+    // Regression: an unclassified model error was reported as a retryable `processing_failed`
+    // with no message, so a deterministic failure was re-leased forever.
+    @Test("Reports a deterministic model failure verbatim and does not retry it")
+    func reportsDeterministicModelFailure() async throws {
+        let bytes = try Self.syntheticAVIF()
+        let processor = CompanionImageProcessor(
+            download: { _ in bytes },
+            put: { _, _, _ in Issue.record("A native description must not upload") })
+        let commandBytes = try JSONSerialization.data(withJSONObject: [
+            "kind": "describe_image", "jobId": UUID().uuidString,
+            "attemptId": UUID().uuidString,
+            "deadline": ISO8601DateFormatter().string(from: .now.addingTimeInterval(60)),
+            "source": [
+                "url": "https://images.example.invalid/catalog.avif",
+                "sha256": Self.sha256(bytes), "contentType": "image/avif",
+            ],
+            "promptRevision": 1, "resultSchemaRevision": 1,
+        ])
+        let command = try JSONDecoder.companionImageProcessing.decode(
+            ImageProcessingCommand.self, from: commandBytes)
+        let result = await CompanionImageCommandExecutor(
+            processor: processor,
+            describer: FailingDescriber(
+                failure: .model(
+                    reason: "context_size_exceeded: Content contains 8193 tokens", retryable: false))
+        ).execute(command)
+        let encoded = String(
+            decoding: try JSONEncoder.companionImageProcessing.encode(result), as: UTF8.self)
+        #expect(encoded.contains("\"status\":\"failed\""))
+        #expect(encoded.contains("\"retryable\":false"))
+        #expect(encoded.contains("context_size_exceeded: Content contains 8193 tokens"))
+    }
+
     @Test("Uploads a transparent PNG derived from an unchanged source", .requiresVisionHardware)
     func uploadsTransparentPNGFromUnchangedSource() async throws {
         let sourceBytes = try ImageEncoding.encode(
@@ -391,4 +424,10 @@ private struct UnavailableDescriber: CompanionImageDescribing {
         Issue.record("JPEG normalization must not invoke Foundation Models")
         throw CompanionImageDescriptionFailure.unavailable
     }
+}
+
+private struct FailingDescriber: CompanionImageDescribing {
+    let failure: CompanionImageDescriptionFailure
+    func availability() -> CompanionImageDescriptionAvailability { .available }
+    func describe(_ image: CGImage) async throws -> CompanionImageDescription { throw failure }
 }
