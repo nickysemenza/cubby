@@ -1,7 +1,10 @@
 import type { DisplayItem } from "@cubby/schemas/entity-definitions/label-field";
 import { sql, type SQL } from "drizzle-orm";
 
-/** The party whose funding period covers every day from `from` through `to`. */
+/**
+ * The party whose funding period covers every day from `from` through `to`.
+ * Nonempty history replaces the undated fallback; a gap remains unknown.
+ */
 const fundingPartyCoveringSql = (account: SQL, from: SQL, to: SQL) => sql`(
   CASE WHEN jsonb_array_length(${account}."fundingPeriods") = 0 THEN ${account}."ledgerPartyId"
   ELSE (SELECT party.id FROM jsonb_array_elements(${account}."fundingPeriods") period
@@ -11,10 +14,6 @@ const fundingPartyCoveringSql = (account: SQL, from: SQL, to: SQL) => sql`(
       AND (period->>'validTo' IS NULL OR ${to} <= (period->>'validTo')::date)
   ) END
 )`;
-
-/** Nonempty history replaces the undated fallback; a gap remains unknown. */
-export const accountFundingPartySql = (account: SQL, date: SQL) =>
-  fundingPartyCoveringSql(account, date, date);
 
 /**
  * Statement imports store only `postedDate`, which can trail the charge by days
@@ -26,7 +25,11 @@ const POSTING_LAG_DAYS = 14;
 /** Funding party for a settlement row, by charge date, else a boundary-safe posting date. */
 export const paymentFundingPartySql = (account: SQL, payment: SQL) => sql`(
   CASE WHEN ${payment}."transactionDate" IS NOT NULL
-    THEN ${accountFundingPartySql(account, sql`${payment}."transactionDate"`)}
+    THEN ${fundingPartyCoveringSql(
+      account,
+      sql`${payment}."transactionDate"`,
+      sql`${payment}."transactionDate"`,
+    )}
     ELSE ${fundingPartyCoveringSql(
       account,
       sql`${payment}."postedDate" - ${sql.raw(String(POSTING_LAG_DAYS))}`,
