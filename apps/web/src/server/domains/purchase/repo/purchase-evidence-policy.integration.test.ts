@@ -11,6 +11,7 @@ import {
   financialTransactionAllocation,
 } from "~/server/db/schema";
 import { financialTransactionItemizationSql } from "~/server/domains/financial-transaction/repo/financial-reconciliation";
+import { getVendorByID } from "~/server/domains/vendor/repo/vendor";
 import { setDataException } from "~/server/generic/data-quality/repo/exceptions";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { linkValues } from "~/server/generic/entity-links/repo/entity-links";
@@ -617,4 +618,126 @@ describe("purchase evidence policy", () => {
       );
     },
   );
+});
+
+// A Vendor's order evidence supplies its itemization default: an online
+// account means item lines are expected, no evidence means not expected, and
+// a receipt-only or unrecorded vendor stays unclassified. An explicit Vendor
+// value always wins, and an unclassified default must not mask the spending
+// category's policy downstream.
+describe("vendor itemization default from order evidence", () => {
+  const ctx = withTestDb();
+
+  const vendorWith = (
+    orderEvidence: "online_account" | "receipt_only" | "not_expected" | null,
+    stored: (typeof itemizationExpectation.options)[number] | null = null,
+  ) =>
+    insertWithShortcode(ctx.db, "vendor", {
+      name: `Fixture vendor ${orderEvidence ?? "none"} ${stored ?? "derived"}`,
+      orderEvidence,
+      itemizationExpectation: stored,
+    });
+
+  it.each([
+    ["online_account", "required"],
+    ["not_expected", "not_expected"],
+    ["receipt_only", "unknown"],
+    [null, "unknown"],
+  ] as const)(
+    "derives %s order evidence as %s",
+    async (orderEvidence, expected) => {
+      const vendor = await vendorWith(orderEvidence);
+      const read = await getVendorByID(ctx.db, vendor.id);
+      expect(read.itemizationExpectation).toBeNull();
+      expect(read.fieldResolutions?.itemizationExpectation).toMatchObject({
+        mode: "inherit",
+        storedValue: null,
+        value: expected,
+        fallbackValue: expected,
+        canReset: false,
+      });
+    },
+  );
+
+  it("keeps an explicit Vendor value over its order evidence", async () => {
+    const vendor = await vendorWith("online_account", "not_expected");
+    const read = await getVendorByID(ctx.db, vendor.id);
+    expect(read.fieldResolutions?.itemizationExpectation).toMatchObject({
+      mode: "explicit",
+      storedValue: "not_expected",
+      value: "not_expected",
+      fallbackValue: "required",
+      canReset: true,
+    });
+  });
+
+  it("feeds the derived Vendor value to Purchase and transaction policy", async () => {
+    const category = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: "Fixture dining",
+      itemizationExpectation: "not_expected",
+    });
+    const online = await vendorWith("online_account");
+    const receiptOnly = await vendorWith("receipt_only");
+    const purchaseFor = (vendorId: typeof online.id) =>
+      insertWithShortcode(ctx.db, "purchase", {
+        vendorId,
+        spendingCategoryId: category.id,
+        date: "2026-09-01",
+      });
+    const onlinePurchase = await purchaseFor(online.id);
+    const receiptPurchase = await purchaseFor(receiptOnly.id);
+
+    const onlineRead = await getPurchaseByID(ctx.db, onlinePurchase.id);
+    expect(onlineRead.fieldResolutions?.itemizationExpectation).toMatchObject({
+      mode: "inherit",
+      value: "required",
+      source: "vendor policy",
+      sourceEntity: expect.objectContaining({
+        entityKind: "vendor",
+        entityId: online.shortcode,
+      }),
+    });
+    // Receipt-only implies nothing, so the category's policy still decides.
+    const receiptRead = await getPurchaseByID(ctx.db, receiptPurchase.id);
+    expect(receiptRead.fieldResolutions?.itemizationExpectation).toMatchObject({
+      value: "not_expected",
+      source: "spending category policy",
+    });
+
+    const account = await insertWithShortcode(ctx.db, "financialAccount", {
+      name: "Fixture online card",
+      identity: { kind: "cash" },
+    });
+    const charge = await insertWithShortcode(ctx.db, "financialTransaction", {
+      accountId: account.id,
+      amount: 25,
+      kind: "purchase",
+      status: "posted",
+      postedDate: "2026-09-01",
+      merchant: "Fixture online merchant",
+    });
+    await unwrapDb(ctx.db).insert(financialTransactionAllocation).values({
+      transactionId: charge.id,
+      purchaseId: onlinePurchase.id,
+      amount: 25,
+    });
+    const coverage = await unwrapDb(ctx.db).execute(sql`
+      SELECT ${financialTransactionCoverageSql("t")}->>'expectation' AS expectation
+      FROM "FinancialTransaction" t WHERE t.id = ${charge.id}
+    `);
+    expect(coverage.rows[0]?.expectation).toBe("required");
+  });
+
+  it("never reports a derived value as an order evidence conflict", async () => {
+    const derived = await vendorWith("not_expected");
+    const conflicting = await vendorWith("not_expected", "required");
+    const qualities = await loadDataQualities(ctx.db, "vendor", [
+      derived.id,
+      conflicting.id,
+    ]);
+    const checks = (id: typeof derived.id) =>
+      qualities.get(id)?.gaps.map((gap) => gap.check);
+    expect(checks(derived.id)).not.toContain("vendor_order_evidence_conflict");
+    expect(checks(conflicting.id)).toContain("vendor_order_evidence_conflict");
+  });
 });

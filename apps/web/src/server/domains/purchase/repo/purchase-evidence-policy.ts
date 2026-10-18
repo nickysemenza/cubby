@@ -7,11 +7,12 @@ import type {
   FinancialTransactionCoverage,
   PurchaseEvidenceCoverage,
 } from "@cubby/schemas/purchase-evidence-policy";
+import { vendorOrderEvidence } from "@cubby/schemas/vendor-import-fields";
 import { sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { unwrapDb } from "~/server/db/helpers";
+import { sqlEnumConstant, unwrapDb } from "~/server/db/helpers";
 import { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
 export { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -29,8 +30,24 @@ const categoryPolicy = (
   WHERE ep_category.id = ${categoryId} AND ep_category."deletedAt" IS NULL
 )`;
 
+/** The itemization policy a Vendor's order evidence implies: an online
+ * account keeps retrievable order history, so item lines are expected; no
+ * order evidence means none are. Receipt-only and unrecorded evidence imply
+ * nothing (NULL), so a Purchase still falls through to its spending category
+ * rather than stopping at an unclassified Vendor. */
+const vendorOrderEvidenceItemizationSql = (
+  alias: string,
+): SQL => sql`(CASE ${column(alias, "orderEvidence")}
+  WHEN ${sqlEnumConstant(vendorOrderEvidence, vendorOrderEvidence.enum.online_account)} THEN ${sqlEnumConstant(itemizationExpectation, itemizationExpectation.enum.required)}
+  WHEN ${sqlEnumConstant(vendorOrderEvidence, vendorOrderEvidence.enum.not_expected)} THEN ${sqlEnumConstant(itemizationExpectation, itemizationExpectation.enum.not_expected)} END)`;
+
+/** A Vendor's own itemization policy: its explicit value always wins over the
+ * one its order evidence implies. */
+export const vendorItemizationPolicySql = (alias: string): SQL =>
+  sql`COALESCE(${column(alias, "itemizationExpectation")},${vendorOrderEvidenceItemizationSql(alias)})`;
+
 const purchaseEvidenceFallbackSql = (alias: string): SQL => sql`COALESCE(
-  (SELECT ep_vendor."itemizationExpectation" FROM "Vendor" ep_vendor
+  (SELECT ${vendorItemizationPolicySql("ep_vendor")} FROM "Vendor" ep_vendor
    WHERE ep_vendor.id = ${column(alias, "vendorId")} AND ep_vendor."deletedAt" IS NULL),
   ${categoryPolicy(column(alias, "spendingCategoryId"), "itemizationExpectation")},
   'unknown'
@@ -69,12 +86,34 @@ const evidenceFieldResolutionsSql = (values: {
     ${values.source} AS source,${values.sourceEntity} AS "sourceEntity",${values.allocated ?? sql`false`} AS allocated) policy
 )`;
 
+/** The Vendor read's `fieldResolutions.itemizationExpectation`: the stored
+ * value is the override, and the order-evidence default reads `unknown` when
+ * the evidence implies nothing. */
+export const vendorEvidenceFieldResolutionsSql = (
+  alias: string,
+): SQL<FieldResolutions> => {
+  const stored = column(alias, "itemizationExpectation");
+  const implied = vendorOrderEvidenceItemizationSql(alias);
+  const unclassified = sqlEnumConstant(
+    itemizationExpectation,
+    itemizationExpectation.enum.unknown,
+  );
+  return evidenceFieldResolutionsSql({
+    stored,
+    value: sql`COALESCE(${vendorItemizationPolicySql(alias)},${unclassified})`,
+    fallback: sql`COALESCE(${implied},${unclassified})`,
+    source: sql`CASE WHEN ${stored} IS NOT NULL THEN 'vendor override'
+      WHEN ${implied} IS NOT NULL THEN 'order evidence' ELSE 'unclassified policy' END`,
+    sourceEntity: sql`NULL::jsonb`,
+  });
+};
+
 export const purchaseEvidenceFieldResolutionsSql = (
   alias: string,
 ): SQL<FieldResolutions> => {
   const vendorSource = sql`(SELECT jsonb_build_object('entityKind','vendor','entityId',ep_source_vendor.shortcode,'name',ep_source_vendor.name)
     FROM "Vendor" ep_source_vendor WHERE ep_source_vendor.id = ${column(alias, "vendorId")}
-      AND ep_source_vendor."deletedAt" IS NULL AND ep_source_vendor."itemizationExpectation" IS NOT NULL)`;
+      AND ep_source_vendor."deletedAt" IS NULL AND ${vendorItemizationPolicySql("ep_source_vendor")} IS NOT NULL)`;
   const inheritedSource = sql`COALESCE(${vendorSource},${categoryEvidenceSourceSql(alias)})`;
   return evidenceFieldResolutionsSql({
     stored: column(alias, "itemizationExpectation"),

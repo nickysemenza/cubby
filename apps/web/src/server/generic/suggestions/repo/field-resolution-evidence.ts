@@ -45,7 +45,10 @@ import {
 } from "~/server/domains/inventory/repo/ownership";
 import { categoryFeatureSql } from "~/server/domains/product-category/repo/category-feature";
 import { kitAncestorCteSql } from "~/server/domains/product/repo/kit-projection";
-import { purchaseEvidenceFieldResolutionsSql } from "~/server/domains/purchase/repo/purchase-evidence-policy";
+import {
+  purchaseEvidenceFieldResolutionsSql,
+  vendorItemizationPolicySql,
+} from "~/server/domains/purchase/repo/purchase-evidence-policy";
 import { eligibleParentTaskTradeSql } from "~/server/domains/task/repo/task-project-inheritance";
 import { shortcodeLabels } from "~/server/generic/shortcode/repo/shortcode-labels";
 
@@ -575,7 +578,7 @@ async function fieldSteps(
   }
   if (entity === "purchase" && field === "itemizationExpectation") {
     const result = await unwrapDb(db).execute(sql`
-      SELECT v.shortcode AS "vendorCode",v."itemizationExpectation" AS "vendorPolicy",
+      SELECT v.shortcode AS "vendorCode",${vendorItemizationPolicySql("v")} AS "vendorPolicy",
         c.shortcode AS "categoryCode",c."itemizationExpectation" AS "categoryPolicy"
       FROM "Purchase" p LEFT JOIN "Vendor" v ON v.id=p."vendorId" AND v."deletedAt" IS NULL
       LEFT JOIN "SpendingCategory" c ON c.id=p."spendingCategoryId" AND c."deletedAt" IS NULL

@@ -1139,7 +1139,7 @@ null values alone do not establish that a contract is unnecessary.
   recall, collision review, and [purchase correction work](https://github.com/nickysemenza/cubby/issues?q=is%3Aissue%20is%3Aopen%20label%3Aarea%3Afinance);
   an empty queue alone does not establish that its workflow is unnecessary.
 - **Always-null columns.** `Plant.daysFrom*` and `Plant.breeding`,
-  `Planting.outcome`, `Vendor.returnWindowDays` and `Vendor.orderEvidence`,
+  `Planting.outcome`, `Vendor.returnWindowDays`,
   `Run.historyCursorUrl`, `Task.sortOrder`,
   `Meal.sortOrder`, `Wish.acquiredAt`, `Device.productId`, `Cookbook.report`.
   Image `captureDeviceLabel`, `capturePlaceName`, and
