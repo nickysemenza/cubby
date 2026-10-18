@@ -7,6 +7,7 @@ import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { withDatabaseOperationMetrics } from "~/server/db/db-observability";
 import { unwrapDb } from "~/server/db/helpers";
 import {
   dataExceptionRecord,
@@ -729,6 +730,80 @@ describe("data quality: list filters, sort and hydration agree", () => {
     expect(
       changed.get(row.entityId)?.gaps.map((gap) => gap.check),
     ).not.toContain("product_external_id");
+  });
+
+  // Fingerprints are compared only where a stored exception meets a live gap.
+  // A batch mixing those rows with exception-free and stale ones must keep
+  // each state, and exception-free rows must not evaluate fingerprints.
+  it("product: compares fingerprints only for rows with an exception on a live gap", async () => {
+    const make = (name: string) =>
+      createProductFixture(
+        ctx.db,
+        makeProductInput({
+          name,
+          manufacturer: "Acme",
+          categoryId: taxonomyShortcode("tools"),
+          model: null,
+        }),
+        TEST_ACTOR,
+      );
+    const [accepted, open, mismatched] = [
+      await make("DQ batch accepted"),
+      await make("DQ batch open"),
+      await make("DQ batch mismatched"),
+    ];
+    await unwrapDb(ctx.db)
+      .insert(dataExceptionRecord)
+      .values([
+        {
+          entityId: accepted.entityId,
+          entityKind: "product",
+          check: "product_external_id",
+          reason: "not_issued",
+          note: "Synthetic component has no issued identifier.",
+          fingerprint: "product_external_id:false",
+        },
+        {
+          entityId: mismatched.entityId,
+          entityKind: "product",
+          check: "product_external_id",
+          reason: "not_issued",
+          note: "Synthetic evidence has since changed.",
+          fingerprint: "product_external_id:synthetic-earlier-evidence",
+        },
+      ]);
+    const qualities = await loadDataQualities(ctx.db, "product", [
+      accepted.entityId,
+      open.entityId,
+      mismatched.entityId,
+    ]);
+    const state = (id: typeof accepted.entityId) => ({
+      gap: qualities
+        .get(id)
+        ?.gaps.some((gap) => gap.check === "product_external_id"),
+      exception: qualities
+        .get(id)
+        ?.exceptions.find(
+          (exception) => exception.check === "product_external_id",
+        )?.state,
+    });
+    expect([
+      state(accepted.entityId),
+      state(open.entityId),
+      state(mismatched.entityId),
+    ]).toEqual([
+      { gap: false, exception: "active" },
+      { gap: true, exception: undefined },
+      { gap: true, exception: "stale" },
+    ]);
+    const statements = (ids: (typeof accepted.entityId)[]) =>
+      withDatabaseOperationMetrics(async (metrics) => {
+        await loadDataQualities(ctx.db, "product", ids);
+        return metrics.queryCount;
+      });
+    expect(await statements([accepted.entityId])).toBe(
+      (await statements([open.entityId])) + 1,
+    );
   });
 
   // Failure mode: a planned (future) line, which may be unpriced by policy,

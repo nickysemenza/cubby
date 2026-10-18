@@ -252,11 +252,16 @@ const gapKey = (index: number) => `g${index}`;
 const fingerprintKey = (index: number) => `f${index}`;
 
 /**
- * One statement per entity: every check's `expected`, raw gap and (where the
- * entity has exceptions) fingerprint as boolean/text columns. Rendered through
- * `execute`, not the select builder, because a single-table select builder
- * renders selected columns unqualified and a correlated subquery over the
- * same table then self-joins (docs/agents/domain-rules.md).
+ * One statement per entity: every check's `expected` and raw gap as boolean
+ * columns. Rendered through `execute`, not the select builder, because a
+ * single-table select builder renders selected columns unqualified and a
+ * correlated subquery over the same table then self-joins
+ * (docs/agents/domain-rules.md).
+ *
+ * A fingerprint only decides whether a stored exception still matches its
+ * live gap, so it is evaluated afterwards for just those rows and checks.
+ * Planning every check's fingerprint for every row roughly doubled the
+ * statement for records that carry no exception.
  */
 const loadEvaluations = async (
   db: Database | DrizzleTransaction,
@@ -266,21 +271,24 @@ const loadEvaluations = async (
   const entry = entryFor(entity);
   const t = entry.table;
   const checks = checksOf(entity);
-  const derived = entry.derivedRead?.(uuidArrayParam(ids));
-  const context = derived ? { derivedAlias: "dq_derived" } : undefined;
-  const withFingerprints = dataQualityExceptionEntities[entity];
+  const evaluationContext = (selected: readonly string[]) => {
+    const derived = entry.derivedRead?.(uuidArrayParam(selected));
+    return {
+      context: derived ? { derivedAlias: "dq_derived" } : undefined,
+      join: derived
+        ? sql`LEFT JOIN (${derived}) dq_derived ON dq_derived."entityId" = ${t.id}`
+        : sql``,
+    };
+  };
+  const { context, join } = evaluationContext(ids);
+  const withExceptions = dataQualityExceptionEntities[entity];
   const columns = checks.flatMap((check, index) => [
     sql`${expectedCondition(entity, check, t, context)} AS ${sql.identifier(expectedKey(index))}`,
     // `missing` alone; `evaluateRow` requires `expected` too. `rawGapCondition`
     // would plan every `expected` twice (see `scoreSql`).
     sql`${checkMissingCondition(entity, check, t, context)} AS ${sql.identifier(gapKey(index))}`,
-    ...(withFingerprints
-      ? [
-          sql`${fingerprintSql(entity, check, t, context)} AS ${sql.identifier(fingerprintKey(index))}`,
-        ]
-      : []),
   ]);
-  const exceptions = withFingerprints
+  const exceptions = withExceptions
     ? sql`COALESCE((
   SELECT jsonb_agg(jsonb_build_object(
     'check', dq_exception."check",
@@ -302,9 +310,55 @@ const loadEvaluations = async (
   ${exceptions} AS "exceptions",
   ${sql.join(columns, sql`, `)}
 FROM ${t}
-${derived ? sql`LEFT JOIN (${derived}) dq_derived ON dq_derived."entityId" = ${t.id}` : sql``}
+${join}
 WHERE ${t.id} = ANY(${uuidArrayParam(ids)}) AND ${liveQualityRow(t)}`);
-  return z.array(hydrationRow).parse(result.rows);
+  const rows = z.array(hydrationRow).parse(result.rows);
+  const compared = checks.flatMap((check, index) => {
+    if (!dataCheckExemptible[check]) return [];
+    const rowIds = rows
+      .filter(
+        (row) =>
+          row[expectedKey(index)] === true &&
+          row[gapKey(index)] === true &&
+          row.exceptions.some((exception) => exception.check === check),
+      )
+      .map((row) => row.id);
+    return rowIds.length === 0 ? [] : [{ check, index, rowIds }];
+  });
+  if (compared.length === 0) return rows;
+  const fingerprintIds = uniq(compared.flatMap(({ rowIds }) => rowIds));
+  const fingerprinted = evaluationContext(fingerprintIds);
+  const fingerprints = await unwrapDb(db).execute(sql`SELECT
+  ${t.id} AS "id",
+  ${sql.join(
+    compared.map(
+      ({ check, index }) =>
+        sql`${fingerprintSql(entity, check, t, fingerprinted.context)} AS ${sql.identifier(fingerprintKey(index))}`,
+    ),
+    sql`, `,
+  )}
+FROM ${t}
+${fingerprinted.join}
+WHERE ${t.id} = ANY(${uuidArrayParam(fingerprintIds)}) AND ${liveQualityRow(t)}`);
+  const byId = new Map(
+    z
+      .array(hydrationRow.pick({ id: true }).catchall(fingerprintColumn))
+      .parse(fingerprints.rows)
+      .map((row) => [row.id, row]),
+  );
+  return rows.map((row) => {
+    const fingerprint = byId.get(row.id);
+    if (!fingerprint) return row;
+    const values = Object.fromEntries(
+      compared
+        .filter(({ rowIds }) => rowIds.includes(row.id))
+        .map(({ index }) => [
+          fingerprintKey(index),
+          fingerprint[fingerprintKey(index)] ?? null,
+        ]),
+    );
+    return { ...row, ...values };
+  });
 };
 
 type Evaluated = Omit<DataQuality, "relatedGaps" | "relatedExceptions">;
