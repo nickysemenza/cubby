@@ -14,13 +14,6 @@ import { cn } from "~/lib/utils";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/ui/primitives/card";
 import { Description } from "~/ui/primitives/description";
 import { Progress } from "~/ui/primitives/progress";
 import { StaticTable } from "~/ui/primitives/static-table";
@@ -148,30 +141,26 @@ export function MaintenanceRunCard({
     );
   }
 
+  // The Problems page section supplies the title; this owns the pass line.
   return (
-    <Card data-testid="maintenance-run-card">
-      <CardHeader>
-        <Row align="start" justify="between" gap="md" wrap>
-          <Stack gap="xs">
-            <CardTitle>Maintenance</CardTitle>
-            <CardDescription>
-              {active
-                ? `Started ${formatInstant(active.startedAt, "dateShortTime")}${active.trigger === "scheduled" ? " by the nightly schedule" : ""}. One pass at a time.`
-                : "Runs nightly. Each pass drains every backlog below and keeps a step-by-step record."}
-            </CardDescription>
-          </Stack>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={Boolean(active) || launch.isPending || !data}
-            onClick={() => launch.mutate(undefined)}
-          >
-            {active ? "Running…" : launch.isPending ? "Starting…" : "Run now"}
-          </Button>
-        </Row>
-      </CardHeader>
-      <CardContent>{body}</CardContent>
-    </Card>
+    <Stack gap="md" data-testid="maintenance-run-card">
+      <Row align="start" justify="between" gap="md" wrap>
+        <Description size="xs">
+          {active
+            ? `Started ${formatInstant(active.startedAt, "dateShortTime")}${active.trigger === "scheduled" ? " by the nightly schedule" : ""}. One pass at a time.`
+            : "Runs nightly. Each pass drains every backlog below and keeps a step-by-step record."}
+        </Description>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={Boolean(active) || launch.isPending || !data}
+          onClick={() => launch.mutate(undefined)}
+        >
+          {active ? "Running…" : launch.isPending ? "Starting…" : "Run now"}
+        </Button>
+      </Row>
+      {body}
+    </Stack>
   );
 }
 
