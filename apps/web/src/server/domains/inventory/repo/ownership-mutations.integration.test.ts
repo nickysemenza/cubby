@@ -9,7 +9,12 @@ import {
 import { OWNER_FILTER_HOUSEHOLD } from "@cubby/shared";
 import { and, eq } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
-import { raceUniqueInsert, TEST_ACTOR, withTestDb } from "tooling/test-setup";
+import {
+  countTestDbQueries,
+  raceUniqueInsert,
+  TEST_ACTOR,
+  withTestDb,
+} from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import { selectListReadRows } from "~/entity/model/list-read-schema";
@@ -315,7 +320,17 @@ describe("inventory ownership mutations", () => {
           : "inherited_payment_account",
       );
       const productIds = [subject.product.entityId, unstocked.entityId];
-      const owners = await loadProductOwners(ctx.db, productIds);
+      const { result: owners, statements } = await countTestDbQueries(() =>
+        loadProductOwners(ctx.db, productIds),
+      );
+      // Stocked and unstocked products share one acquisition-candidate pass.
+      expect(
+        statements.filter((statement) =>
+          statement.startsWith(
+            'select "id", "shortcode", "vendorAccountId", "date" from "Purchase"',
+          ),
+        ),
+      ).toHaveLength(1);
       for (const id of productIds) {
         expect(owners.get(id)).toEqual([
           {
