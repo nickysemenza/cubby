@@ -117,17 +117,21 @@ pending: nothing here starts Product research.
    only from an Email attributed to its recipient: forwarding alone never
    proves ownership, and an unattributed Email may still link to an existing
    Purchase without creating the recipient's VendorAccount. Attribution
-   (`service/mail-source-judgment.ts`) first applies the host rule in
-   `service/mail-owner.ts`: the owner LedgerParty's addresses (its linked
-   sign-in email and the connected Gmail profile address, cached per isolate
-   by `repo/mail-owner.ts`) compared lowercased, `+tag`-free and, for Gmail,
-   dot-free. An owner address in To, a sender who is neither the owner nor
-   another live member, no forwarding header (`X-Forwarded-*`, `Resent-*`,
-   `X-Google-Original-From`), no `Fwd:` subject and no forwarded-message body
-   make it `recipient` without a model; Delivered-To or Cc alone does not.
-   Everything else asks `mail-attribution` with the owner and household
-   members as trusted evidence, and a refusal reports the label, its basis
-   and the model's probability. Payment, refund and
+   (`service/mail-source-judgment.ts`) always asks `mail-attribution`, with
+   the owner and household members as trusted evidence: the owner
+   LedgerParty's linked sign-in email and connected Gmail profile address
+   (cached per isolate by `repo/mail-owner.ts`; an unreadable profile is
+   reported to Sentry and named in the judgment's warnings), compared
+   lowercased, `+tag`-free and, for Gmail, dot-free on addr-specs only.
+   Own mail (`service/mail-owner.ts`: an owner address in To, a sender who
+   is neither the owner nor another live member, no `X-Forwarded-*`,
+   `Resent-*` or `X-Google-Original-From` header, no `Fwd:` subject and no
+   forwarded-message marker in the text or HTML body) defaults to
+   `recipient` unless the model answers `third_party` with high confidence;
+   Delivered-To or Cc alone is not own mail. Any other Email needs a
+   high-confidence answer. A refusal reports the label, its basis
+   (`owner_default`, `model` or `oversized`), the model's label and
+   probability, and any owner-evidence warnings. Payment, refund and
    transfer Emails reach `finance.converge`, whose mail branch uses the
    checksum- and literal-verified `mail-financial-event` preparation
    (`service/mail-financial-event.ts`, revalidated by

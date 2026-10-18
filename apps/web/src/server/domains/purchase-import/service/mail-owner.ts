@@ -1,6 +1,6 @@
 /**
- * Who owns the mailbox a retained Email sits in, and the one attribution the
- * host decides without a model: a vendor writing directly to the owner.
+ * Who owns the mailbox a retained Email sits in, and which Emails are a
+ * vendor writing directly to that owner.
  */
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
 
@@ -10,6 +10,12 @@ type MailParty = { name: string; addresses: readonly string[] };
 export type MailOwnerEvidence = {
   owner: MailParty;
   householdMembers: readonly MailParty[];
+};
+
+/** Owner evidence and the gaps in it, e.g. an unreadable Gmail profile. */
+export type MailOwnerContext = {
+  evidence: MailOwnerEvidence | null;
+  warnings: readonly string[];
 };
 
 const GMAIL_DOMAINS = new Set(["gmail.com", "googlemail.com"]);
@@ -32,28 +38,36 @@ export function normalizeMailAddress(address: string): string | null {
   return local ? `${local}@${domain}` : null;
 }
 
-const ADDRESS = /[^\s<>,;:"()[\]]+@[^\s<>,;:"()[\]]+\.[^\s<>,;:"()[\]]+/gu;
-
-/** Normalized addresses named in an addressing header value. */
+/**
+ * Normalized addr-specs in an addressing header value. Only the address
+ * inside `<…>` counts when present; quoted display names, comments and group
+ * labels never do, so `"owner@x" <friend@y>` names only friend@y.
+ */
 function headerAddresses(value: string | undefined): Set<string> {
   const found = new Set<string>();
-  for (const match of value?.match(ADDRESS) ?? []) {
-    const normalized = normalizeMailAddress(match);
+  const unquoted = (value ?? "")
+    .replace(/"(?:[^"\\]|\\.)*"/gu, " ")
+    .replace(/\([^()]*\)/gu, " ");
+  for (const mailbox of unquoted.split(/[,;]/u)) {
+    const angle = /<([^<>]*)>/u.exec(mailbox);
+    // A group label (`Team: a@b`) precedes its first member.
+    const spec = (angle ? angle[1]! : mailbox.replace(/^[^:@]*:/u, "")).trim();
+    if (/\s/u.test(spec)) continue;
+    const normalized = normalizeMailAddress(spec);
     if (normalized) found.add(normalized);
   }
   return found;
 }
 
 // Any of these means the copy travelled through another mailbox first.
-const FORWARDING_HEADERS = [
-  "x-forwarded-for",
-  "x-forwarded-to",
-  "x-google-original-from",
-  "resent-from",
-  "resent-to",
-  "resent-sender",
-  "resent-date",
-] as const;
+const isForwardingHeader = (name: string) => {
+  const key = name.toLowerCase();
+  return (
+    key.startsWith("x-forwarded-") ||
+    key.startsWith("resent-") ||
+    key === "x-google-original-from"
+  );
+};
 const FORWARDED_SUBJECT = /^\s*(?:re:\s*)*(?:fwd?|fw)\s*:/iu;
 const FORWARDED_BODY =
   /-{2,}\s*forwarded message\s*-{2,}|^\s*begin forwarded message:/imu;
@@ -61,34 +75,45 @@ const FORWARDED_BODY =
 type OwnMailInput = Pick<RetainedMail, "sender" | "subject" | "content">;
 
 /**
- * Deterministic `recipient`: the owner is a To recipient, the sender is
- * neither the owner nor a household member, and nothing marks the copy as
- * forwarded. Delivered-To alone does not qualify — Gmail stamps it on Cc and
- * Bcc copies too — and household senders still need the model, since a
- * member may be sharing their own purchase.
+ * Own mail: the owner is a To recipient, the sender is neither the owner nor
+ * a household member, and nothing marks the copy as forwarded. Its
+ * attribution defaults to `recipient` unless the model confidently names a
+ * third party. Delivered-To alone does not qualify — Gmail stamps it on Cc
+ * and Bcc copies too — and household senders keep the ordinary judgment,
+ * since a member may be sharing their own purchase. `htmlText` is the
+ * compact text of the HTML body, so HTML-only forwards are seen too.
  */
-export function ownMailAttribution(
+export function isOwnMail(
   mail: OwnMailInput,
   evidence: MailOwnerEvidence | null,
-): "recipient" | null {
-  if (!evidence) return null;
+  htmlText: string | null,
+): boolean {
+  if (!evidence) return false;
   const owner = addressSet([evidence.owner]);
-  if (!owner.size) return null;
+  if (!owner.size) return false;
   const headers = mail.content.headers ?? {};
-  if (FORWARDING_HEADERS.some((name) => headers[name]?.trim())) return null;
-  if (FORWARDED_SUBJECT.test(mail.subject ?? "")) return null;
-  if (FORWARDED_BODY.test(mail.content.bodyText ?? "")) return null;
+  if (
+    Object.entries(headers).some(
+      ([name, value]) => isForwardingHeader(name) && value.trim(),
+    )
+  )
+    return false;
+  if (FORWARDED_SUBJECT.test(mail.subject ?? "")) return false;
+  if (
+    FORWARDED_BODY.test(mail.content.bodyText ?? "") ||
+    FORWARDED_BODY.test(htmlText ?? "")
+  )
+    return false;
   const to = headerAddresses(headers.to);
-  if (![...to].some((address) => owner.has(address))) return null;
+  if (![...to].some((address) => owner.has(address))) return false;
   const senders = new Set([
     ...headerAddresses(headers.from),
     ...headerAddresses(headers.sender),
     ...headerAddresses(mail.sender ?? undefined),
   ]);
-  if (!senders.size) return null;
+  if (!senders.size) return false;
   const household = addressSet([evidence.owner, ...evidence.householdMembers]);
-  if ([...senders].some((address) => household.has(address))) return null;
-  return "recipient";
+  return ![...senders].some((address) => household.has(address));
 }
 
 function addressSet(parties: readonly MailParty[]): Set<string> {

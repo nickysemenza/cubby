@@ -7,7 +7,8 @@
  * imported, or one of another purchase joins the roster; equivalent original
  * and forwarded copies of one order book spending twice in either arrival
  * order; a vendor's direct mail to the mailbox owner's own address is
- * refused because headers-only evidence leaves the model uncertain.
+ * refused because headers-only evidence leaves the model uncertain, or one
+ * the model confidently attributes to a third party is imported anyway.
  * Deterministic original checks precede all admission judgments.
  */
 import type { ActorContext } from "@cubby/schemas/context";
@@ -317,23 +318,25 @@ describe("Mail import source admission", () => {
     ).toEqual([]);
   });
 
-  it("imports a vendor's direct mail to the owner's address under an automatic Run without the model", async () => {
-    const { party, vendor } = await world();
+  async function ownInvoice(partyId: LedgerPartyId, messageId: string) {
     const [owner] = await getDb(ctx.db)
       .select({ email: user.email })
       .from(user)
       .where(eq(user.id, ctx.actor.userId));
     // An invoice whose body is only its PDF: headers are the whole evidence.
-    const invoice = await retain(party.id, "own-invoice", "Invoice attached.", {
+    return retain(partyId, messageId, "Invoice attached.", {
       headers: {
         from: "Synthetic kettle shop <orders@kettle.example.test>",
         to: owner!.email.toUpperCase(),
       },
     });
+  }
+
+  it("imports a vendor's direct mail to the owner's address under an automatic Run when the model is uncertain", async () => {
+    const { party, vendor } = await world();
+    const invoice = await ownInvoice(party.id, "own-invoice");
     const { id, actor } = await mailRun(party, [invoice], "discovery");
-    const port = vi.fn<DecisionPort>(async () => {
-      throw new Error("Own mail needs no attribution decision");
-    });
+    const port = decisions({ attribution: "uncertain" });
     const prepared = await preparePurchaseImport(
       ctx.db,
       prepareInput(id, "own-invoice", vendor.shortcode, invoice, "SYN-9"),
@@ -341,7 +344,24 @@ describe("Mail import source admission", () => {
       port,
     );
     expect(prepared.orders).toHaveLength(1);
-    expect(port).not.toHaveBeenCalled();
+    expect(port).toHaveBeenCalledOnce();
+    expect(JSON.parse(port.mock.calls[0]![0].state)).toMatchObject({
+      mailboxOwner: { owner: { name: party.name } },
+    });
+  });
+
+  it("refuses own mail the model confidently attributes to a third party", async () => {
+    const { party, vendor } = await world();
+    const invoice = await ownInvoice(party.id, "own-invoice-for-other");
+    const { id, actor } = await mailRun(party, [invoice], "discovery");
+    await expect(
+      preparePurchaseImport(
+        ctx.db,
+        prepareInput(id, "other", vendor.shortcode, invoice, "SYN-10"),
+        actor,
+        decisions({ attribution: "third_party" }),
+      ),
+    ).rejects.toThrow(/attribution is third_party; owner_default/);
   });
 
   it("imports a member-selected forwarded confirmation without second-guessing the selection", async () => {

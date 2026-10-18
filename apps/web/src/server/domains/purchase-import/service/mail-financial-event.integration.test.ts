@@ -4,8 +4,9 @@
  * is accepted; an ambiguous amount literal is read one way; a forged or
  * mutated preparation, or one whose Email changed after inference, still
  * passes the booking assertion; another member's Email is prepared; a
- * vendor's direct mail to the owner's own address still waits on an
- * uncertain model, or a forwarded copy to that address skips it.
+ * vendor's direct mail to the owner's own address stays unverified when the
+ * model is uncertain, or verifies when it confidently names a third party; a
+ * forwarded copy to that address takes the owner default.
  */
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { MailFinancialEventModelOutput } from "@cubby/schemas/mailbox-research";
@@ -197,7 +198,7 @@ describe("mail financial event port", () => {
     return owner!.email;
   }
 
-  it("attributes a vendor's direct mail to the owner without the model", async () => {
+  it("attributes a vendor's direct mail to the owner when the model is uncertain", async () => {
     const { emailId } = await retained({
       from: "Synthetic Gardens <billing@gardens.example.test>",
       to: await ownerAddress(),
@@ -210,7 +211,23 @@ describe("mail financial event port", () => {
       { decide, extract: async () => reported() },
     );
     expect(result.status).toBe("verified");
-    expect(decide).not.toHaveBeenCalled();
+    expect(decide).toHaveBeenCalledOnce();
+  });
+
+  it("keeps a confident third party on own mail unverified", async () => {
+    const { emailId } = await retained({
+      from: "Synthetic Gardens <billing@gardens.example.test>",
+      to: await ownerAddress(),
+    });
+    await expect(
+      prepareMailFinancialEvent(ctx.db, { emailId }, ctx.actor, {
+        decide: attribution("c1"),
+        extract: async () => reported(),
+      }),
+    ).resolves.toEqual({
+      status: "unverified",
+      reason: expect.stringMatching(/third_party; owner_default/),
+    });
   });
 
   it("asks the model about a forwarded copy to the owner", async () => {
@@ -227,7 +244,9 @@ describe("mail financial event port", () => {
       }),
     ).resolves.toEqual({
       status: "unverified",
-      reason: expect.stringMatching(/uncertain; model uncertain at p=0\.97/),
+      reason: expect.stringMatching(
+        /uncertain; model; model uncertain at p=0\.97/,
+      ),
     });
     expect(decide).toHaveBeenCalledOnce();
   });

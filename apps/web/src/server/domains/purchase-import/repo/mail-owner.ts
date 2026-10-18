@@ -4,13 +4,15 @@
  * the household's other live members and their sign-in addresses.
  */
 import type { LedgerPartyId } from "@cubby/schemas/identifiers";
+import * as Sentry from "@sentry/tanstackstart-react";
 import { and, eq, inArray, isNotNull } from "drizzle-orm";
 
+import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import type { Database } from "~/server/db";
 import { account, user } from "~/server/db/auth.schema";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { ledgerParty } from "~/server/db/schema";
-import type { MailOwnerEvidence } from "~/server/domains/purchase-import/service/mail-owner";
+import type { MailOwnerContext } from "~/server/domains/purchase-import/service/mail-owner";
 
 import { gmailOAuthConfigured, gmailProviderForUser } from "./gmail/provider";
 
@@ -18,35 +20,38 @@ import { gmailOAuthConfigured, gmailProviderForUser } from "./gmail/provider";
 // not cached so the next judgment retries it.
 const profileAddresses = new Map<string, string>();
 
-/** A connected mailbox's own address, or null when it cannot be read. */
-const gmailProfileAddressFor =
-  (db: Database) =>
-  async ({
-    userId,
-    mailboxId,
-  }: {
-    userId: string;
-    mailboxId: string;
-  }): Promise<string | null> => {
-    const cached = profileAddresses.get(mailboxId);
-    if (cached) return cached;
-    if (!gmailOAuthConfigured()) return null;
-    try {
-      const provider = await gmailProviderForUser(db, userId, mailboxId);
-      const address = (await provider.getProfile()).emailAddress?.trim();
-      if (!address) return null;
-      profileAddresses.set(mailboxId, address);
-      return address;
-    } catch {
-      // A revoked or offline connection still leaves the sign-in address.
-      return null;
-    }
-  };
+type ProfileRead = { address: string } | { warning: string };
+
+/** A connected mailbox's own address, or why it could not be read. */
+const readGmailProfileAddress = async (
+  db: Database,
+  { userId, mailboxId }: { userId: string; mailboxId: string },
+): Promise<ProfileRead> => {
+  const cached = profileAddresses.get(mailboxId);
+  if (cached) return { address: cached };
+  const unread = (reason: string): ProfileRead => ({
+    warning: `Gmail profile address for mailbox ${mailboxId} unavailable (${reason}); owner addresses fall back to the sign-in email`,
+  });
+  if (!gmailOAuthConfigured()) return unread("Google OAuth is not configured");
+  try {
+    const provider = await gmailProviderForUser(db, userId, mailboxId);
+    const address = (await provider.getProfile()).emailAddress?.trim();
+    if (!address) return unread("the profile has no emailAddress");
+    profileAddresses.set(mailboxId, address);
+    return { address };
+  } catch (error) {
+    // Attribution proceeds on the sign-in address; the failure stays visible.
+    Sentry.captureException(error);
+    return unread(
+      scrubErrorMessage(error instanceof Error ? error.message : String(error)),
+    );
+  }
+};
 
 export async function readMailOwnerEvidence(
   db: Database,
   input: { ledgerPartyId: LedgerPartyId; mailboxIds: readonly string[] },
-): Promise<MailOwnerEvidence | null> {
+): Promise<MailOwnerContext> {
   const database = getDb(db);
   const parties = await database
     .select({
@@ -60,7 +65,7 @@ export async function readMailOwnerEvidence(
     .leftJoin(user, eq(user.id, ledgerParty.userId))
     .where(notDeleted(ledgerParty));
   const owner = parties.find((party) => party.id === input.ledgerPartyId);
-  if (!owner) return null;
+  if (!owner) return { evidence: null, warnings: [] };
   const mailboxes =
     owner.userId && input.mailboxIds.length
       ? await database
@@ -75,20 +80,29 @@ export async function readMailOwnerEvidence(
             ),
           )
       : [];
-  const read = gmailProfileAddressFor(db);
-  const profile = await Promise.all(mailboxes.map((mailbox) => read(mailbox)));
+  const profiles = await Promise.all(
+    mailboxes.map((mailbox) => readGmailProfileAddress(db, mailbox)),
+  );
   return {
-    owner: {
-      name: owner.name,
-      addresses: [owner.email, ...profile].filter(
-        (address): address is string => Boolean(address),
-      ),
+    evidence: {
+      owner: {
+        name: owner.name,
+        addresses: [
+          ...(owner.email ? [owner.email] : []),
+          ...profiles.flatMap((read) =>
+            "address" in read ? [read.address] : [],
+          ),
+        ],
+      },
+      householdMembers: parties
+        .filter((party) => party.id !== owner.id && party.kind === "member")
+        .map((party) => ({
+          name: party.name,
+          addresses: party.email ? [party.email] : [],
+        })),
     },
-    householdMembers: parties
-      .filter((party) => party.id !== owner.id && party.kind === "member")
-      .map((party) => ({
-        name: party.name,
-        addresses: party.email ? [party.email] : [],
-      })),
+    warnings: profiles.flatMap((read) =>
+      "warning" in read ? [read.warning] : [],
+    ),
   };
 }

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   type MailOwnerEvidence,
   normalizeMailAddress,
-  ownMailAttribution,
+  isOwnMail,
 } from "./mail-owner";
 
 const evidence: MailOwnerEvidence = {
@@ -54,40 +54,43 @@ describe("normalizeMailAddress", () => {
   });
 });
 
-describe("ownMailAttribution", () => {
+describe("isOwnMail", () => {
   it("attributes a vendor's mail to the owner's own address", () => {
-    expect(ownMailAttribution(mail(vendorToOwner), evidence)).toBe("recipient");
+    expect(isOwnMail(mail(vendorToOwner), evidence, null)).toBe(true);
   });
 
   it("leaves a forwarding header to the model", () => {
     expect(
-      ownMailAttribution(
+      isOwnMail(
         mail({ ...vendorToOwner, "x-forwarded-to": "samexample@gmail.com" }),
         evidence,
+        null,
       ),
-    ).toBeNull();
+    ).toBe(false);
   });
 
   it("leaves a Fwd: subject or forwarded body to the model", () => {
     expect(
-      ownMailAttribution(
+      isOwnMail(
         mail(vendorToOwner, { subject: "Fwd: Your order SYN-100" }),
         evidence,
+        null,
       ),
-    ).toBeNull();
+    ).toBe(false);
     expect(
-      ownMailAttribution(
+      isOwnMail(
         mail(vendorToOwner, {
           bodyText: "---------- Forwarded message ---------\nOrder SYN-100",
         }),
         evidence,
+        null,
       ),
-    ).toBeNull();
+    ).toBe(false);
   });
 
   it("leaves Cc-only delivery to the model", () => {
     expect(
-      ownMailAttribution(
+      isOwnMail(
         mail({
           from: "orders@kettle.example",
           to: "friend@elsewhere.example.test",
@@ -95,23 +98,69 @@ describe("ownMailAttribution", () => {
           "delivered-to": "samexample@gmail.com",
         }),
         evidence,
+        null,
       ),
-    ).toBeNull();
+    ).toBe(false);
   });
 
   it("leaves a household member's mail to the model", () => {
     expect(
-      ownMailAttribution(
+      isOwnMail(
         mail({
           from: "Alex Example <alex@home.example.test>",
           to: "sam@home.example.test",
         }),
         evidence,
+        null,
       ),
-    ).toBeNull();
+    ).toBe(false);
+  });
+
+  it("treats any X-Forwarded-* or Resent-* header as forwarding", () => {
+    for (const name of ["X-Forwarded-Message-Id", "Resent-Message-ID"])
+      expect(
+        isOwnMail(
+          mail({ ...vendorToOwner, [name.toLowerCase()]: "<syn-1@example>" }),
+          evidence,
+          null,
+        ),
+      ).toBe(false);
+  });
+
+  it("sees a forwarded marker that only the HTML body carries", () => {
+    expect(
+      isOwnMail(
+        mail(vendorToOwner, { bodyText: "" }),
+        evidence,
+        "---------- Forwarded message ---------\nFrom: orders@kettle.example",
+      ),
+    ).toBe(false);
+  });
+
+  it("matches only the addr-spec, never a quoted display name", () => {
+    expect(
+      isOwnMail(
+        mail({
+          from: "orders@kettle.example",
+          to: '"sam@home.example.test" <friend@elsewhere.example.test>',
+        }),
+        evidence,
+        null,
+      ),
+    ).toBe(false);
+    expect(
+      isOwnMail(
+        mail({
+          from: '"Kettle (orders)" <orders@kettle.example>',
+          to: 'Friend <friend@elsewhere.example.test>, "Sam" <sam@home.example.test>',
+        }),
+        evidence,
+        null,
+      ),
+    ).toBe(true);
   });
 
   it("decides nothing without owner evidence", () => {
-    expect(ownMailAttribution(mail(vendorToOwner), null)).toBeNull();
+    expect(isOwnMail(mail(vendorToOwner), null, null)).toBe(false);
   });
 });
