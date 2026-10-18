@@ -337,8 +337,7 @@ struct FieldsSectionView<Inline: View>: View {
             DetailDisplayRows(label: field.label, rows: field.detailItems(in: row.raw))
         } else if field.detailRenderer == .spendingCategorySummary {
             if let value = row.raw[field.key],
-                let summary = try? JSONDecoder.cubby().decode(
-                    SpendingCategorySummary.self, from: JSONEncoder.cubby().encode(value))
+                let summary = try? value.decoded(SpendingCategorySummary.self)
             {
                 SpendingCategorySummaryView(
                     summary: summary, contextOnly: descriptor.key == .financialTransaction)

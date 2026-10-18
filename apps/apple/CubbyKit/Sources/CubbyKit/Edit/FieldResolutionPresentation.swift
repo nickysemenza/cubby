@@ -9,8 +9,7 @@ public struct FieldResolutionPresentation: Sendable {
 
     public init?(raw: JSONValue, field: FieldDescriptor) {
         guard let projected = raw["fieldResolutions"]?[field.key],
-            let data = try? JSONEncoder.cubby().encode(projected),
-            let resolution = try? JSONDecoder.cubby().decode(FieldResolution.self, from: data)
+            let resolution = try? projected.decoded(FieldResolution.self)
         else { return nil }
         self.resolution = resolution
         effectiveValue = projected["value"] ?? .null

@@ -147,8 +147,7 @@ struct EntityRowPresentation: Sendable, Hashable {
             }
             if field.listRenderer == .spendingCategorySummary,
                 let value = row.raw[key],
-                let summary = try? JSONDecoder.cubby().decode(
-                    SpendingCategorySummary.self, from: JSONEncoder.cubby().encode(value))
+                let summary = try? value.decoded(SpendingCategorySummary.self)
             {
                 let names = summary.categories.map(\.name).joined(separator: ", ")
                 let text =

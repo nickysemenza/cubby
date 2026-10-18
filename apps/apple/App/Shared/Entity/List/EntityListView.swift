@@ -1206,13 +1206,19 @@ struct EntityRowView: View {
     /// while allowing previews to exercise the real image geometry and clipping.
     var previewImage: Image? = nil
 
-    private var presentation: EntityRowPresentation {
-        EntityRowPresentation.resolve(
-            descriptor: EntityCatalog[key], row: row, columns: columns, photoMode: photoMode)
+    /// The row's resolved presentation and its rail, subtitle and supporting facts, derived
+    /// together once per body: each projection resolves every field's value and explanation.
+    private struct Layout {
+        let presentation: EntityRowPresentation
+        let rail: [EntityRowPresentation.Fact]
+        let context: EntityRowPresentation.Fact?
+        let supporting: [EntityRowPresentation.Fact]
     }
 
-    private var railFacts: [EntityRowPresentation.Fact] {
+    private var layout: Layout {
         let descriptor = EntityCatalog[key]
+        let presentation = EntityRowPresentation.resolve(
+            descriptor: descriptor, row: row, columns: columns, photoMode: photoMode)
         let dated = presentation.facts.first { $0.isDate }
         let leading = presentation.facts.filter { !$0.isDate }.sorted { left, right in
             func priority(_ fact: EntityRowPresentation.Fact) -> Int {
@@ -1227,22 +1233,18 @@ struct EntityRowView: View {
             return field?.key == descriptor.presentation.heroChip
                 || field?.mobileSlot == "trailing" || fact.id == "dataQuality"
         }
-        return [leading, dated].compactMap { $0 }
-    }
-
-    private var contextFact: EntityRowPresentation.Fact? {
-        let railIDs = Set(railFacts.map(\.id))
-        return presentation.facts.filter {
-            !railIDs.contains($0.id) && EntityCatalog[key].field($0.id)?.mobileSlot == "subtitle"
+        let rail = [leading, dated].compactMap { $0 }
+        let railIDs = Set(rail.map(\.id))
+        let context = presentation.facts.filter {
+            !railIDs.contains($0.id) && descriptor.field($0.id)?.mobileSlot == "subtitle"
         }.min {
-            (EntityCatalog[key].field($0.id)?.mobilePriority ?? .max)
-                < (EntityCatalog[key].field($1.id)?.mobilePriority ?? .max)
+            (descriptor.field($0.id)?.mobilePriority ?? .max)
+                < (descriptor.field($1.id)?.mobilePriority ?? .max)
         }
-    }
-
-    private var supportingFacts: [EntityRowPresentation.Fact] {
-        let headerIDs = Set(railFacts.map(\.id) + [contextFact?.id].compactMap { $0 })
-        return presentation.facts.filter { !headerIDs.contains($0.id) }
+        let headerIDs = railIDs.union([context?.id].compactMap { $0 })
+        return Layout(
+            presentation: presentation, rail: rail, context: context,
+            supporting: presentation.facts.filter { !headerIDs.contains($0.id) })
     }
 
     @ViewBuilder
@@ -1285,19 +1287,19 @@ struct EntityRowView: View {
     }
 
     @ViewBuilder
-    private var supportingBand: some View {
-        if supportingFacts.isEmpty && row.pendingFields.isEmpty && row.failedFields.isEmpty && !photoMode {
+    private func supportingBand(_ layout: Layout) -> some View {
+        if layout.supporting.isEmpty && row.pendingFields.isEmpty && row.failedFields.isEmpty && !photoMode {
             EmptyView()
         } else {
             WrappingFactsLayout(spacing: FieldGuideTokens.Space.sm) {
-                ForEach(supportingFacts) { fact in factView(fact) }
+                ForEach(layout.supporting) { fact in factView(fact) }
                 if !row.pendingFields.isEmpty {
                     Text("Loading details…").font(.caption).foregroundStyle(.secondary)
                 } else if !row.failedFields.isEmpty {
                     Text("Some details unavailable").font(.caption).foregroundStyle(.secondary)
                 }
                 if photoMode {
-                    Text(presentation.shortcode).font(.caption2.monospaced())
+                    Text(layout.presentation.shortcode).font(.caption2.monospaced())
                 }
             }
             .font(.caption)
@@ -1306,16 +1308,18 @@ struct EntityRowView: View {
     }
 
     var body: some View {
+        let layout = layout
+        let presentation = layout.presentation
         RecordListRow(
             title: presentation.title, imageURL: presentation.imageURL,
             symbol: EntityCatalog[key].recordSymbol(in: row), emoji: EntityCatalog[key].recordEmoji(in: row),
             previewImage: previewImage, titleIdentifier: "entity.row.title.\(key.rawValue).\(row.id)"
         ) {
-            if let contextFact { factView(contextFact) }
+            if let context = layout.context { factView(context) }
         } rail: {
-            ForEach(railFacts) { fact in factView(fact, isRail: true) }
+            ForEach(layout.rail) { fact in factView(fact, isRail: true) }
         } supplement: {
-            supportingBand
+            supportingBand(layout)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(
