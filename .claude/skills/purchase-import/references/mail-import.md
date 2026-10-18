@@ -94,7 +94,8 @@ Claude or Codex session researches it later through the Research queue.
    admitted carrier notice), name the connecting Emails in `via`, nearest the
    admitted Email first: a shipping Email naming both the tracking number and
    the order number bridges them. Each Email on the path is judged against the
-   one before it and joins the Run, so resolve it too.
+   one before it and joins the Run, so resolve it too. Every path must reach an
+   Email already admitted to this Run; cyclic `via` paths are refused.
 5. Claim the next Email. Stop with `stop_import_run_for_review` only for
    ambiguity that blocks every remaining Email. Once every admitted Email is
    imported, linked, excluded or resolved, the Run completes; any `unresolved`
