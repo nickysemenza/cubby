@@ -10,6 +10,7 @@ import type {
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
 import { renderOptionCell } from "~/entity/table/column-helpers";
 import { formatCurrency } from "~/lib/number-format";
@@ -163,7 +164,12 @@ export function StatementSuggestionRow({
         ) : (
           <Badge variant="outline">Needs review</Badge>
         )}
-        <span>{suggestion.accountName}</span>
+        <EntityRefLink
+          variant="byId"
+          entityKind="financialAccount"
+          entityId={suggestion.accountId}
+          compact
+        />
         <span>{suggestion.providerStatus}</span>
         {suggestion.sourceCategory ? (
           <span>{suggestion.sourceCategory}</span>

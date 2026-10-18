@@ -215,17 +215,13 @@ export async function readFieldSuggestions(
   return presentFieldRows(db, rows);
 }
 
-/** The sort and Strength inputs of every reviewable field suggestion in scope. */
+/** The list facts of every reviewable field suggestion for a roster, entity or Run. */
 export async function fieldSuggestionKeys(
   db: Database,
   scope: {
     status: z.infer<typeof suggestionStatus>;
     entities?: readonly string[];
     recordUuids?: readonly string[];
-    field?: string;
-    fields?: readonly string[];
-    kind?: "correction" | "addition";
-    minConfidence?: number;
     runId?: string;
   },
 ) {
@@ -233,28 +229,16 @@ export async function fieldSuggestionKeys(
     eq(suggestionTable.family, "field"),
     eq(suggestionTable.active, true),
     eq(suggestionTable.status, scope.status),
-    scope.minConfidence === undefined
-      ? undefined
-      : gte(suggestionTable.confidence, scope.minConfidence),
     scope.entities
       ? inArray(suggestionTable.entity, [...scope.entities])
       : undefined,
     scope.recordUuids
       ? inArray(suggestionTable.recordId, [...scope.recordUuids])
       : undefined,
-    scope.field ? eq(suggestionTable.field, scope.field) : undefined,
-    scope.fields
-      ? inArray(suggestionTable.field, [...scope.fields])
-      : undefined,
-    scope.kind ? eq(suggestionTable.kind, scope.kind) : undefined,
     scope.runId ? requestedSuggestionRun(scope.runId) : undefined,
     reviewableSuggestionSql,
   ];
-  if (
-    scope.entities?.length === 0 ||
-    scope.recordUuids?.length === 0 ||
-    scope.fields?.length === 0
-  )
+  if (scope.entities?.length === 0 || scope.recordUuids?.length === 0)
     return [];
   return getDb(db)
     .select({

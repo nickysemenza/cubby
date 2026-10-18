@@ -290,7 +290,7 @@ const productionStoredSuggestionOperations: StoredSuggestionOperations = {
         family: "field",
         entity,
         recordIds,
-        scope: { field: { fields } },
+        where: { field: { in: fields } },
         limit,
         ...(cursor ? { cursor } : {}),
       });

@@ -31,7 +31,7 @@ const suggestion = (
     source: "monarch",
     chargeKey: "charge-1",
     accountId: "FAC-4C4C",
-    accountName: "Synthetic Card",
+    ownerId: null,
     statementDate: "2026-05-04",
     amount: 42.5,
     merchant: "Example Grocer",

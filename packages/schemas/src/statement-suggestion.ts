@@ -7,6 +7,7 @@ import {
 import { financialTransactionSourceRef } from "./financial-transaction-fields";
 import {
   financialAccountShortcode,
+  ledgerPartyShortcode,
   financialTransactionShortcode,
 } from "./identifiers";
 import { plainDate } from "./project";
@@ -173,7 +174,8 @@ export const statementSuggestionOut = z.object({
   source: z.string(),
   chargeKey: z.string(),
   accountId: financialAccountShortcode,
-  accountName: z.string(),
+  /** The account's owner. */
+  ownerId: ledgerPartyShortcode.nullable(),
   statementDate: plainDate,
   amount: z.number(),
   merchant: z.string().nullable(),
@@ -197,15 +199,3 @@ export const statementSuggestionOut = z.object({
 });
 export type StatementSuggestionOut = z.infer<typeof statementSuggestionOut>;
 
-export const statementSuggestionGroupOut = z.object({
-  accountId: financialAccountShortcode,
-  accountName: z.string(),
-  month: z.string(),
-  total: z.number().int(),
-  clean: z.number().int(),
-  create: z.number().int(),
-  attach: z.number().int(),
-  supersede: z.number().int(),
-  void: z.number().int(),
-  amount: z.number(),
-});

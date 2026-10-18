@@ -1,11 +1,16 @@
-import type { assessmentReviewInput } from "@cubby/schemas/assessment";
+import { suggestionStatus } from "@cubby/schemas/ai";
+import {
+  assessmentFamily,
+  type assessmentReviewInput,
+  feedbackAuthority,
+  feedbackVerdict,
+} from "@cubby/schemas/assessment";
 import {
   type DataCheck,
   dataCheckKind,
   dataCheckPresentation,
   dataChecksByEntity,
 } from "@cubby/schemas/data-quality";
-import { entityRefKey } from "@cubby/schemas/entity";
 import {
   connectionCandidate,
   type connectionEvidence,
@@ -24,6 +29,7 @@ import {
   fieldSuggestionRow,
   recommendationSuggestionRow,
   statementSuggestionRow,
+  type SuggestionColumnValue,
   type SuggestionImpact,
   type SuggestionListFamily,
   type SuggestionListFilters,
@@ -49,14 +55,14 @@ import {
   readFieldSuggestions,
   suggestionCounts,
 } from "~/server/generic/assessment/repo/suggestion-review";
-import {
-  lookupEntityLabels,
-  resolveShortcodes,
-} from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 type ShortcodeEntity = SuggestionRecordRef["entity"];
+type Columns = Record<string, SuggestionColumnValue | SuggestionColumnValue[]>;
 
-/** The sort, Strength and Impact facts of one Suggestion, read before hydration. */
+/**
+ * One Suggestion's list facts, read for every row in scope before any row is
+ * hydrated: Strength, clean, Impact and its family's `suggestionColumns`.
+ */
 export type SuggestionKey = {
   family: SuggestionListFamily;
   assessmentId: string;
@@ -65,6 +71,7 @@ export type SuggestionKey = {
   strength: SuggestionStrength;
   impact: SuggestionImpact[];
   createdAt: Date;
+  columns: Columns;
 };
 
 /** `records` is set when the caller filters by recordIds (resolved, maybe empty). */
@@ -125,6 +132,7 @@ const outcome = (label: string): SuggestionImpact => ({
 });
 
 const keyBase = (key: SuggestionKey) => ({
+  id: key.assessmentId,
   assessmentId: key.assessmentId,
   fingerprint: key.fingerprint,
   strength: key.strength,
@@ -132,6 +140,7 @@ const keyBase = (key: SuggestionKey) => ({
   impact: key.impact,
   matchedRules: [],
   createdAt: key.createdAt.toISOString(),
+  columns: key.columns,
 });
 
 const recordIdsOf = (
@@ -141,6 +150,8 @@ const recordIdsOf = (
   query.records
     ?.filter((record) => entities.includes(record.entity))
     .map((record) => record.id);
+
+const runCode = (query: SuggestionFamilyQuery) => query.filters.runId;
 
 // ---------------------------------------------------------------- field
 
@@ -169,23 +180,22 @@ const fieldStrength = (
       : "weak";
 
 const shortcodeEntity = z.enum(shortcodeEntities);
+const fieldKind = z.enum(["correction", "addition"]);
 
 const field: SuggestionFamilyPresentation<"field"> = {
-  keys: async (db, { filters, records }) => {
-    const scope = filters.scope.field ?? {};
+  keys: async (db, query) => {
+    const { filters, records } = query;
+    // Pushed into SQL: the record roster, entity and Run. Column filters
+    // apply to every family's keys in the generic list.
     const rows = await fieldSuggestionKeys(db, {
       status: filters.status,
       entities: filters.entity ? [filters.entity] : undefined,
       recordUuids: records?.map((record) => record.id),
-      field: scope.field,
-      fields: scope.fields,
-      kind: scope.kind,
-      minConfidence: scope.minConfidence,
-      runId: filters.runId,
+      runId: runCode(query),
     });
     return rows.map((row) => {
       const entity = shortcodeEntity.parse(row.entity);
-      const kind = z.enum(["correction", "addition"]).parse(row.kind);
+      const kind = fieldKind.parse(row.kind);
       const strength = fieldStrength(entity, row.field, kind, row.confidence);
       return {
         family: "field" as const,
@@ -200,6 +210,12 @@ const field: SuggestionFamilyPresentation<"field"> = {
               )
             : [],
         createdAt: row.createdAt,
+        columns: {
+          entity,
+          field: row.field,
+          kind,
+          confidence: row.confidence,
+        },
       };
     });
   },
@@ -208,41 +224,25 @@ const field: SuggestionFamilyPresentation<"field"> = {
       db,
       keys.map((key) => key.assessmentId),
     );
-    const refs = await resolveShortcodes(
-      db,
-      rows.map((row) => row.recordId),
-    );
-    const names = await lookupEntityLabels(db, [...refs.values()]);
     const byId = new Map(keys.map((key) => [key.assessmentId, key]));
     return new Map(
       rows.flatMap((row) => {
         const key = byId.get(row.assessmentId);
         if (!key) return [];
-        const ref = refs.get(row.recordId);
-        const summary: SuggestionSummaryPart[] =
-          row.kind === "correction"
-            ? [
-                { kind: "field", entity: row.entity, field: row.field },
-                { kind: "value", value: row.currentValue },
-                { kind: "value", value: row.suggestedValue },
-              ]
-            : [
-                { kind: "field", entity: row.entity, field: row.field },
-                { kind: "value", value: row.suggestedValue },
-              ];
+        const summary: SuggestionSummaryPart[] = [
+          { kind: "field", entity: row.entity, field: row.field },
+          ...(row.kind === "correction"
+            ? [{ kind: "value" as const, value: row.currentValue }]
+            : []),
+          { kind: "value", value: row.suggestedValue },
+        ];
         return [
           [
             row.assessmentId,
             fieldSuggestionRow.parse({
               ...keyBase(key),
               family: "field",
-              record: {
-                entity: row.entity,
-                id: row.recordId,
-                name: ref
-                  ? (names.get(entityRefKey(ref.entity, ref.id)) ?? null)
-                  : null,
-              },
+              record: { entity: row.entity, id: row.recordId },
               summary,
               actions: verbs("accept", "correct", "reject", "dismiss"),
               evidence: row,
@@ -281,23 +281,22 @@ const field: SuggestionFamilyPresentation<"field"> = {
 
 // ---------------------------------------------------- statement_transaction
 
-const statementImpact: Record<StatementTransactionAction, SuggestionImpact[]> =
-  {
-    // No data-quality check closes: the outcome is the unmatched charge.
-    create: [
-      outcome("Statement charge matched"),
-      {
-        kind: "caution",
-        label: "The new transaction may open its own data-quality checks",
-      },
-    ],
-    attach: [outcome("Statement charge matched")],
-    supersede: [
-      outcome("Statement charge matched"),
-      outcome("Pending hold retired"),
-    ],
-    void: [outcome("Statement charge matched"), outcome("Hold voided")],
-  };
+const statementImpact = {
+  // No data-quality check closes: the outcome is the unmatched charge.
+  create: [
+    outcome("Statement charge matched"),
+    {
+      kind: "caution",
+      label: "The new transaction may open its own data-quality checks",
+    },
+  ],
+  attach: [outcome("Statement charge matched")],
+  supersede: [
+    outcome("Statement charge matched"),
+    outcome("Pending hold retired"),
+  ],
+  void: [outcome("Statement charge matched"), outcome("Hold voided")],
+} satisfies Record<StatementTransactionAction, SuggestionImpact[]>;
 
 const statementStrength = (key: {
   clean: boolean;
@@ -310,23 +309,13 @@ const statementStrength = (key: {
       ? "medium"
       : "weak";
 
-const statementActionLabel: Record<StatementTransactionAction, string> = {
-  create: "Create transaction",
-  attach: "Attach to transaction",
-  supersede: "Supersede pending hold",
-  void: "Void hold",
-};
-
 const otherTransaction = (row: StatementSuggestionOut) => {
   if (row.recommended === "attach" && row.candidates[0])
-    return {
-      id: row.candidates[0].transactionId,
-      name: row.candidates[0].merchant,
-    };
+    return row.candidates[0].transactionId;
   if (row.recommended === "supersede" && row.supersedeTransactionId)
-    return { id: row.supersedeTransactionId, name: null };
+    return row.supersedeTransactionId;
   if (row.recommended === "void" && row.voidTransactionId)
-    return { id: row.voidTransactionId, name: null };
+    return row.voidTransactionId;
   return null;
 };
 
@@ -364,9 +353,8 @@ const statementTransaction: SuggestionFamilyPresentation<"statement_transaction"
       const recordUuids = recordIdsOf(query, STATEMENT_ENTITIES);
       if (recordUuids?.length === 0) return [];
       const rows = await statementSuggestionKeys(db, {
-        ...filters.scope.statement_transaction,
         recordUuids,
-        runCode: filters.runId,
+        runCode: runCode(query),
       });
       return rows.map((row) => ({
         family: "statement_transaction" as const,
@@ -376,6 +364,26 @@ const statementTransaction: SuggestionFamilyPresentation<"statement_transaction"
         strength: statementStrength(row),
         impact: statementImpact[row.recommended],
         createdAt: row.createdAt,
+        columns: {
+          date: row.statementDate,
+          month: row.statementDate.slice(0, 7),
+          account: row.accountCode,
+          owner: row.ownerCode,
+          merchant: [row.merchant, row.rawDescription]
+            .filter(Boolean)
+            .join(" "),
+          amount: row.amount,
+          action: row.recommended,
+          kind: row.kind,
+          kindSource: row.kindSource,
+          providerCategory: row.sourceCategory,
+          providerStatus: row.providerStatus,
+          candidate: row.candidateCode,
+          modelLabel:
+            row.labelSame && row.labelConfidence
+              ? `${row.labelSame}:${row.labelConfidence}`
+              : null,
+        },
       }));
     },
     rows: async (db, keys) => {
@@ -396,21 +404,11 @@ const statementTransaction: SuggestionFamilyPresentation<"statement_transaction"
                 ...keyBase(key),
                 fingerprint: row.fingerprint,
                 family: "statement_transaction",
-                record: {
-                  entity: "financialAccount" as const,
-                  id: row.accountId,
-                  name: row.accountName,
-                },
+                record: { entity: "financialAccount", id: row.accountId },
                 ...(other
-                  ? {
-                      other: {
-                        entity: "financialTransaction" as const,
-                        ...other,
-                      },
-                    }
+                  ? { other: { entity: "financialTransaction", id: other } }
                   : {}),
                 summary: [
-                  { kind: "text", text: statementActionLabel[row.recommended] },
                   { kind: "amount", amount: row.amount },
                   { kind: "date", date: row.statementDate },
                   { kind: "text", text: row.merchant ?? row.rawDescription },
@@ -456,7 +454,7 @@ const statementTransaction: SuggestionFamilyPresentation<"statement_transaction"
 
 // ------------------------------------------------------------ recommendation
 
-const connectionImpact: Record<ConnectionRelation, SuggestionImpact[]> = {
+const connectionImpact = {
   "product-purchase": [qualityImpact("product_unpurchased")],
   "product-expense": [
     qualityImpact("product_unpurchased"),
@@ -478,7 +476,7 @@ const connectionImpact: Record<ConnectionRelation, SuggestionImpact[]> = {
   "cookbook-product": [outcome("Cookbook Product recorded")],
   "device-product": [outcome("Device Product recorded")],
   "inventory-location": [qualityImpact("inventory_unknown_location")],
-};
+} satisfies Record<ConnectionRelation, SuggestionImpact[]>;
 
 // Acquisition discovery's indexed lexical/semantic retrieval; every other
 // candidate comes from deterministic record evidence.
@@ -515,18 +513,22 @@ const connectionActions = (proposal: ConnectionProposal): Action[] => {
 const READ_BATCH = 250;
 
 const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
-  keys: async (db, { filters, records }) => {
+  keys: async (db, query) => {
+    const { filters, records } = query;
     if (filters.status !== "pending") return [];
-    const scope = filters.scope.recommendation ?? {};
-    const endpoints = sql`ARRAY[a.evidence->'candidate'->'source'->>'entityKind' || ':' || (a.evidence->'candidate'->'source'->>'entityId'),
-      a.evidence->'candidate'->'target'->>'entityKind' || ':' || (a.evidence->'candidate'->'target'->>'entityId')]`;
-    const kinds = sql`ARRAY[a.evidence->'candidate'->'source'->>'entityKind', a.evidence->'candidate'->'target'->>'entityKind']`;
-    const text = (values: readonly string[]) =>
-      sql`ARRAY[${sql.join(
-        values.map((value) => sql`${value}`),
-        sql`, `,
-      )}]::text[]`;
     if (records?.length === 0) return [];
+    const side = (end: "source" | "target", key: "entityKind" | "entityId") =>
+      sql`(a.evidence->'candidate'->${end}->>${key})`;
+    const endpoint = (end: "source" | "target") =>
+      sql`${side(end, "entityKind")} || ':' || ${side(end, "entityId")}`;
+    const roster = records
+      ? sql.join(
+          records.map((record) => sql`${`${record.entity}:${record.code}`}`),
+          sql`, `,
+        )
+      : null;
+    const run = runCode(query);
+    // Mirrors readEntityConnectionsBatch's selection; hydration rechecks evidence.
     const { rows } = await unwrapDb(db).execute<{
       id: string;
       fingerprint: string | null;
@@ -535,23 +537,25 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
     }>(sql`
       SELECT a.id, a.fingerprint, a."createdAt", a.evidence->'candidate' AS candidate
       FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id
-      WHERE a.family = 'recommendation' AND a.served AND s.active AND s.status = 'pending'
+      WHERE a.family = ${assessmentFamily.enum.recommendation} AND a.served AND s.active
+        AND s.status = ${suggestionStatus.enum.pending}
         AND a.subject->>'scope' LIKE 'connection.%'
         AND NOT EXISTS (SELECT 1 FROM "Feedback" f WHERE f."assessmentId" = a.id
-          AND f.authority = 'member' AND f.verdict IN ('wrong', 'dismissed'))
+          AND f.authority = ${feedbackAuthority.enum.member}
+          AND f.verdict IN (${feedbackVerdict.enum.wrong}, ${feedbackVerdict.enum.dismissed}))
         AND NOT EXISTS (SELECT 1 FROM "AssessmentState" suppressed WHERE suppressed.active
           AND suppressed.entity = s.entity AND suppressed."recordId" = s."recordId"
           AND suppressed.suppression->>'scope' = a.subject->>'scope'
           AND suppressed.suppression->>'candidateKey' = a.subject->>'candidateKey'
           AND (suppressed.suppression->>'fingerprint' IS NULL OR suppressed.suppression->>'fingerprint' = a.fingerprint))
-        ${records ? sql`AND ${endpoints} && ${text(records.map((record) => `${record.entity}:${record.code}`))}` : sql``}
-        ${filters.entity ? sql`AND ${filters.entity} = ANY(${kinds})` : sql``}
-        ${scope.relation ? sql`AND a.evidence->'candidate'->>'relation' = ${scope.relation}` : sql``}
-        ${filters.runId ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${filters.runId})` : sql``}
+        ${roster ? sql`AND (${endpoint("source")} IN (${roster}) OR ${endpoint("target")} IN (${roster}))` : sql``}
+        ${filters.entity ? sql`AND (${side("source", "entityKind")} = ${filters.entity} OR ${side("target", "entityKind")} = ${filters.entity})` : sql``}
+        ${run ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${run})` : sql``}
     `);
     return rows.flatMap((row) => {
-      const candidate = connectionCandidate.safeParse(row.candidate);
-      if (!candidate.success) return [];
+      const parsed = connectionCandidate.safeParse(row.candidate);
+      if (!parsed.success) return [];
+      const candidate = parsed.data;
       return [
         {
           family: "recommendation" as const,
@@ -559,9 +563,20 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
           fingerprint: row.fingerprint,
           // Connections stay individually reviewed (ADR 0016).
           clean: false,
-          strength: connectionStrength(candidate.data.evidence),
-          impact: connectionImpact[candidate.data.relation],
+          strength: connectionStrength(candidate.evidence),
+          impact: connectionImpact[candidate.relation],
           createdAt: new Date(row.createdAt),
+          columns: {
+            relation: candidate.relation,
+            entityKind: [
+              ...new Set([
+                candidate.source.entityKind,
+                candidate.target.entityKind,
+              ]),
+            ],
+            source: candidate.source.entityId,
+            target: candidate.target.entityId,
+          },
         },
       ];
     });
@@ -573,8 +588,8 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
       entityKind: string;
       entityId: string;
     }>(sql`
-      SELECT DISTINCT a.evidence->'candidate'->'source'->>'entityKind' AS "entityKind",
-        a.evidence->'candidate'->'source'->>'entityId' AS "entityId"
+      SELECT DISTINCT a.evidence->'candidate'->${"source"}->>'entityKind' AS "entityKind",
+        a.evidence->'candidate'->${"source"}->>'entityId' AS "entityId"
       FROM "Assessment" a
       WHERE a.id IN (${sql.join(
         keys.map((key) => sql`${key.assessmentId}::uuid`),
@@ -584,10 +599,11 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
     const found = new Map<string, RowOf<"recommendation">>();
     // Stored only: readEntityConnectionsBatch rechecks evidence, never discovers.
     for (let start = 0; start < sources.length; start += READ_BATCH) {
-      const chunk = sources.slice(start, start + READ_BATCH);
       const groups = await readEntityConnectionsBatch(
         db,
-        entityGraphRootSchema.array().parse(chunk),
+        entityGraphRootSchema
+          .array()
+          .parse(sources.slice(start, start + READ_BATCH)),
       );
       for (const proposal of groups.flat()) {
         const key = byId.get(proposal.review.assessmentId);
@@ -595,12 +611,10 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
         const source = {
           entity: shortcodeEntity.parse(proposal.source.entityKind),
           id: proposal.source.entityId,
-          name: proposal.sourceName ?? null,
         };
         const target = {
           entity: shortcodeEntity.parse(proposal.target.entityKind),
           id: proposal.target.entityId,
-          name: proposal.targetName ?? null,
         };
         found.set(
           key.assessmentId,
@@ -630,7 +644,7 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
     }>(sql`
       SELECT s.status, count(*)::int AS count
       FROM "AssessmentState" s JOIN "Assessment" a ON a.id = s.id
-      WHERE a.family = 'recommendation' AND a.subject->>'scope' LIKE 'connection.%'
+      WHERE a.family = ${assessmentFamily.enum.recommendation} AND a.subject->>'scope' LIKE 'connection.%'
         ${filters.runId ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${filters.runId})` : sql``}
       GROUP BY s.status
     `);
@@ -648,10 +662,10 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
 };
 
 /** The Suggestion family registry, keyed by Assessment family. */
-export const suggestionFamilies: {
-  [F in SuggestionListFamily]: SuggestionFamilyPresentation<F>;
-} = {
+export const suggestionFamilies = {
   field,
   statement_transaction: statementTransaction,
   recommendation,
+} satisfies {
+  [F in SuggestionListFamily]: SuggestionFamilyPresentation<F>;
 };

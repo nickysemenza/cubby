@@ -79,7 +79,7 @@ const fieldListInput = (
     family: "field",
     entity: input.entity,
     recordIds: input.recordIds,
-    scope: { field: { fields: input.fields } },
+    where: { field: { in: input.fields } },
     ...(input.limit ? { limit: input.limit } : {}),
     ...(input.cursor ? { cursor: input.cursor } : {}),
   });

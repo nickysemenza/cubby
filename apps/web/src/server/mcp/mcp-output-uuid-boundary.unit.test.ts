@@ -72,7 +72,9 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "imports_read.items[].predictionId",
   "mail.evaluationId",
   "mail.predictionId",
-  // The producing read: entity_read.suggestion_queue's field evidence row ids.
+  // The producing read: entity_read.suggestion_queue's row ids (Assessment
+  // handles) and its field evidence row ids.
+  "entity_read.items[].id",
   "entity_read.items[].evidence.id",
   "entity_read.items[].evidence.assessmentId",
   "entity_read.items[].evidence.review.assessmentId",

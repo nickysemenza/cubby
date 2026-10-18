@@ -522,13 +522,12 @@ export function SuggestionReviewList({
       entity: input.entity,
       status: input.status,
       runId: input.runId,
-      scope: {
-        field: {
-          field: input.field,
-          kind: input.kind,
-          minConfidence: input.minConfidence,
-        },
+      where: {
+        ...(input.field ? { field: { in: [input.field] } } : {}),
+        ...(input.kind ? { kind: { in: [input.kind] } } : {}),
+        confidence: { min: input.minConfidence },
       },
+      order: [{ by: "confidence", direction: "desc" }],
       limit: SUGGESTION_LIST_PAGE_MAX,
     }),
     select: (page) =>

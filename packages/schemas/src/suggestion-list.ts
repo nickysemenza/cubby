@@ -5,12 +5,17 @@ import { assessmentChildHandle } from "./assessment-reference";
 import { dataCheck } from "./data-quality";
 import { connectionProposal, connectionRelation } from "./entity-connections";
 import { shortcodeEntities } from "./entity-manifest";
+import { generatedFinancialTransactionKindValues } from "./generated/entity-field-schemas.financialTransaction.gen";
 import { anyShortcodeSchema, nonEmptyTuple } from "./identifier-fields";
-import { runShortcode } from "./identifiers";
 import {
-  statementSuggestionFilters,
-  statementSuggestionGroupOut,
+  financialAccountShortcode,
+  ledgerPartyShortcode,
+  runShortcode,
+} from "./identifiers";
+import {
   statementSuggestionOut,
+  statementTransactionAction,
+  statementTransactionKindSource,
 } from "./statement-suggestion";
 
 /** Assessment families the Suggestions page lists. */
@@ -25,18 +30,11 @@ export type SuggestionListFamily = z.infer<typeof suggestionListFamily>;
 export const suggestionStrength = z.enum(["strong", "medium", "weak"]);
 export type SuggestionStrength = z.infer<typeof suggestionStrength>;
 
-/**
- * `ready`: clean first, then strength, then newest. `impact`: most
- * data-quality checks restored first, then `ready`. `newest`: creation time.
- */
-export const suggestionSort = z.enum(["ready", "impact", "newest"]);
-export type SuggestionSort = z.infer<typeof suggestionSort>;
-
 const shortcodeEntity = z.enum(shortcodeEntities);
+/** A record by shortcode and kind; clients resolve its label and marks. */
 export const suggestionRecordRef = z.object({
   entity: shortcodeEntity,
   id: anyShortcodeSchema(nonEmptyTuple(shortcodeEntities)),
-  name: z.string().nullable(),
 });
 export type SuggestionRecordRef = z.infer<typeof suggestionRecordRef>;
 
@@ -81,7 +79,101 @@ export const suggestionAction = z.object({
   ownerOnly: z.boolean(),
 });
 
+/**
+ * A column's filter and sort value. Refs hold shortcodes; a multi-valued
+ * column (a connection's endpoint kinds) matches when any value does.
+ */
+export const suggestionColumnValue = z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.null(),
+]);
+export type SuggestionColumnValue = z.infer<typeof suggestionColumnValue>;
+
+type ColumnType =
+  | { type: "text" }
+  | { type: "number" }
+  | { type: "date" }
+  | { type: "boolean" }
+  | { type: "enum"; values: readonly string[] }
+  | { type: "ref"; entity: (typeof shortcodeEntities)[number] };
+
+/**
+ * Every server-filterable, sortable column, by family; `common` columns are
+ * on every row. `facet` columns return value counts beside the page.
+ */
+export const suggestionColumns = {
+  common: {
+    family: {
+      type: "enum",
+      values: suggestionListFamily.options,
+      facet: true,
+    },
+    strength: {
+      type: "enum",
+      values: suggestionStrength.options,
+      facet: true,
+    },
+    clean: { type: "boolean", facet: true },
+    createdAt: { type: "date" },
+    /** Data-quality checks acceptance restores. */
+    impact: { type: "number" },
+  },
+  field: {
+    entity: { type: "enum", values: shortcodeEntities, facet: true },
+    field: { type: "text", facet: true },
+    kind: { type: "enum", values: ["correction", "addition"], facet: true },
+    confidence: { type: "number" },
+  },
+  statement_transaction: {
+    date: { type: "date" },
+    /** `YYYY-MM` of the statement date; the grouping month. */
+    month: { type: "text" },
+    account: { type: "ref", entity: "financialAccount", facet: true },
+    owner: { type: "ref", entity: "ledgerParty", facet: true },
+    /** Merchant and raw description, searched together. */
+    merchant: { type: "text" },
+    amount: { type: "number" },
+    action: {
+      type: "enum",
+      values: statementTransactionAction.options,
+      facet: true,
+    },
+    kind: {
+      type: "enum",
+      values: generatedFinancialTransactionKindValues,
+      facet: true,
+    },
+    kindSource: {
+      type: "enum",
+      values: statementTransactionKindSource.options,
+    },
+    providerCategory: { type: "text" },
+    providerStatus: { type: "enum", values: ["posted", "pending"] },
+    candidate: { type: "ref", entity: "financialTransaction" },
+    /** The first candidate's advisory label, `<same>:<confidence>`. */
+    modelLabel: { type: "text" },
+  },
+  recommendation: {
+    relation: {
+      type: "enum",
+      values: connectionRelation.options,
+      facet: true,
+    },
+    /** Either endpoint's kind. */
+    entityKind: { type: "enum", values: shortcodeEntities, facet: true },
+    source: { type: "text" },
+    target: { type: "text" },
+  },
+} as const satisfies Record<
+  "common" | SuggestionListFamily,
+  Record<string, ColumnType & { facet?: true }>
+>;
+
 const rowBase = {
+  /** The Assessment id: stable for a row until its evidence republishes. */
+  id: assessmentChildHandle,
   assessmentId: assessmentChildHandle,
   /** Pass as `expectedFingerprint` when reviewing. */
   fingerprint: z.string().nullable(),
@@ -95,6 +187,11 @@ const rowBase = {
   matchedRules: z.array(z.string()),
   createdAt: z.iso.datetime(),
   actions: z.array(suggestionAction),
+  /** The row's `suggestionColumns` values, as filtered and sorted. */
+  columns: z.record(
+    z.string(),
+    z.union([suggestionColumnValue, z.array(suggestionColumnValue)]),
+  ),
 };
 
 export const fieldSuggestionRow = z.object({
@@ -120,23 +217,13 @@ export const suggestionListRow = z.discriminatedUnion("family", [
 ]);
 export type SuggestionListRow = z.infer<typeof suggestionListRow>;
 
-/** Filters scoped to one family; ignored by the others. */
-export const suggestionFamilyScope = z.object({
-  field: z
-    .object({
-      field: z.string().optional(),
-      fields: z.array(z.string()).max(100).optional(),
-      kind: z.enum(["correction", "addition"]).optional(),
-      minConfidence: z.number().min(0).max(1).optional(),
-    })
-    .optional(),
-  statement_transaction: statementSuggestionFilters
-    .omit({ clean: true })
-    .optional(),
-  /** The top-level `entity` already matches either endpoint's kind. */
-  recommendation: z
-    .object({ relation: connectionRelation.optional() })
-    .optional(),
+/** One column's condition; every given part must hold. */
+export const suggestionColumnFilter = z.object({
+  in: z.array(suggestionColumnValue).max(200).optional(),
+  min: z.union([z.number(), z.string()]).optional(),
+  max: z.union([z.number(), z.string()]).optional(),
+  /** Case-insensitive substring of a text column. */
+  search: z.string().min(1).optional(),
 });
 
 export const SUGGESTION_RECORD_IDS_MAX = 250;
@@ -149,30 +236,73 @@ export const suggestionListFilters = z.object({
     .array(z.string().min(1))
     .max(SUGGESTION_RECORD_IDS_MAX)
     .optional(),
-  strength: suggestionStrength.optional(),
   /** Reviewed history is field-only (the decision-eval label set). */
   status: suggestionStatus.default("pending"),
-  clean: z.boolean().optional(),
   runId: runShortcode.optional(),
-  scope: suggestionFamilyScope.default({}),
+  /** Conditions on `suggestionColumns`, by column key. */
+  where: z.record(z.string(), suggestionColumnFilter).default({}),
 });
 export type SuggestionListFilters = z.output<typeof suggestionListFilters>;
 
+/** `ready`: clean, then Strength, then newest. `impact`: checks restored, then `ready`. */
+export const suggestionOrder = z.object({
+  by: z.string().min(1),
+  direction: z.enum(["asc", "desc"]).default("desc"),
+});
+export type SuggestionOrder = z.output<typeof suggestionOrder>;
+
 export const SUGGESTION_LIST_PAGE_MAX = 200;
 export const suggestionListInput = suggestionListFilters.extend({
-  order: suggestionSort.default("ready"),
-  /** The previous page's `next`. */
+  /** Sort stack, primary first; ties end on the Assessment id. */
+  order: z
+    .array(suggestionOrder)
+    .max(4)
+    .default([{ by: "ready", direction: "desc" }]),
+  /** The previous page's `next` (keyset); takes precedence over `offset`. */
   cursor: z.string().min(1).optional(),
+  offset: z.number().int().min(0).default(0),
   limit: z.number().int().min(1).max(SUGGESTION_LIST_PAGE_MAX).default(50),
-  /** Adds pending statement suggestions counted per account and month. */
+  /** Groups statement suggestions by account and month, groups first in order. */
   groups: z.enum(["account_month"]).optional(),
 });
 export type SuggestionListInput = z.input<typeof suggestionListInput>;
 
+/** One account × month section of the grouped statement list. */
+export const suggestionGroup = z.object({
+  key: z.string().min(1),
+  /** The month, `YYYY-MM`; the account is `accountId`. */
+  label: z.string().min(1),
+  count: z.number().int().positive(),
+  clean: z.number().int().nonnegative(),
+  /** Counts by recommended action, and the summed charge amount. */
+  create: z.number().int().nonnegative(),
+  attach: z.number().int().nonnegative(),
+  supersede: z.number().int().nonnegative(),
+  void: z.number().int().nonnegative(),
+  amount: z.number(),
+  accountId: financialAccountShortcode,
+  ownerId: ledgerPartyShortcode.nullable(),
+  month: z.string(),
+});
+
+export type SuggestionGroup = z.infer<typeof suggestionGroup>;
+
+export const suggestionFacet = z.array(
+  z.object({ value: suggestionColumnValue, count: z.number().int() }),
+);
+
 export const suggestionListOut = z.object({
   items: z.array(suggestionListRow),
+  meta: z.object({
+    pageIndex: z.number().int(),
+    pageSize: z.number().int(),
+    totalCount: z.number().int(),
+    groups: z.array(suggestionGroup).optional(),
+  }),
+  /** Value counts per facet column over the filtered set, ignoring that column's own filter. */
+  facets: z.record(z.string(), suggestionFacet),
+  /** Keyset cursor for the next page; null on the last. */
   next: z.string().nullable(),
-  groups: z.array(statementSuggestionGroupOut).optional(),
 });
 export type SuggestionListOut = z.infer<typeof suggestionListOut>;
 
@@ -217,9 +347,7 @@ export type SuggestionCountsOut = z.infer<typeof suggestionCountsOut>;
 
 export const SUGGESTION_ACCEPT_CLEAN_MAX = 100;
 export const acceptCleanSuggestionsInput = z.object({
-  filters: suggestionListFilters.omit({ status: true, clean: true }).default({
-    scope: {},
-  }),
+  filters: suggestionListFilters.omit({ status: true }).default({ where: {} }),
   limit: z.number().int().min(1).max(SUGGESTION_ACCEPT_CLEAN_MAX).default(100),
   /** Already attempted ids; a failed accept stays pending and clean. */
   skip: z.array(assessmentChildHandle).max(5000).default([]),

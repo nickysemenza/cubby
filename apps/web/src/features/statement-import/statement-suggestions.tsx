@@ -2,14 +2,14 @@ import { financialAccountShortcode } from "@cubby/schemas/identifiers";
 import type {
   StatementSuggestionFilters,
   StatementSuggestionOut,
-  statementSuggestionGroupOut,
 } from "@cubby/schemas/statement-suggestion";
+import type { SuggestionGroup } from "@cubby/schemas/suggestion-list";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import type { z } from "zod";
 
 import { runHref } from "~/entity/routing/purchase-import-links";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { createCurrencyColumn } from "~/entity/table/column-helpers";
 import RTable from "~/entity/table/table";
 import { rippleFor } from "~/integrations/tanstack-query/cache-tags";
@@ -62,7 +62,7 @@ import {
 
 const route = getRouteApi("/_authenticated/statement-rows/");
 
-type Group = z.infer<typeof statementSuggestionGroupOut>;
+type Group = SuggestionGroup;
 
 const PAGE_SIZE = 50;
 /** What a statement suggestion review touches; mirrors `assessment.reviewBatch`'s ripple. */
@@ -119,7 +119,7 @@ export function StatementSuggestions() {
       limit: 1,
       groups: "account_month",
     }),
-    select: (page) => page.groups ?? NO_GROUPS,
+    select: (page) => page.meta.groups ?? NO_GROUPS,
   });
   const groups = groupsQuery.data ?? NO_GROUPS;
 
@@ -149,7 +149,7 @@ export function StatementSuggestions() {
   };
 
   const acceptGroup = async (group: Group) => {
-    const label = `${group.accountName} · ${monthLabel(group.month)}`;
+    const label = `${group.accountId} · ${monthLabel(group.month)}`;
     setGroupAccept({
       label,
       total: group.clean,
@@ -170,11 +170,9 @@ export function StatementSuggestions() {
         const results = await suggestions.acceptClean.call({
           filters: {
             family: "statement_transaction",
-            scope: {
-              statement_transaction: {
-                accountId: group.accountId,
-                month: group.month,
-              },
+            where: {
+              account: { in: [group.accountId] },
+              month: { in: [group.month] },
             },
           },
           limit: REVIEW_BATCH_MAX,
@@ -226,13 +224,18 @@ export function StatementSuggestions() {
     () =>
       createCubbyColumnCollection<Group>((add) => {
         add(
-          columnHelper.accessor("accountName", {
-            id: "accountName",
+          columnHelper.accessor("accountId", {
+            id: "accountId",
             header: "Account",
             enableSorting: false,
             meta: { className: "w-48" },
             cell: (info) => (
-              <span className="block truncate">{info.getValue()}</span>
+              <EntityRefLink
+                variant="byId"
+                entityKind="financialAccount"
+                entityId={info.getValue()}
+                compact
+              />
             ),
           }),
         );
@@ -246,7 +249,7 @@ export function StatementSuggestions() {
           }),
         );
         for (const [key, header] of [
-          ["total", "Pending"],
+          ["count", "Pending"],
           ["clean", "Clean"],
           ["create", "Create"],
           ["attach", "Attach"],
@@ -342,7 +345,7 @@ export function StatementSuggestions() {
       Refresh suggestions
     </Button>
   );
-  const totalPending = groups.reduce((sum, group) => sum + group.total, 0);
+  const totalPending = groups.reduce((sum, group) => sum + group.count, 0);
   const totalClean = groups.reduce((sum, group) => sum + group.clean, 0);
   const currentGroup =
     search.account && search.month
@@ -390,7 +393,7 @@ export function StatementSuggestions() {
             </AlertDialogTitle>
             <AlertDialogDescription>
               {confirming
-                ? `${confirming.accountName} · ${monthLabel(confirming.month)}. Each creates or settles a transaction from its statement row; there is no undo.`
+                ? `${confirming.accountId} · ${monthLabel(confirming.month)}. Each creates or settles a transaction from its statement row; there is no undo.`
                 : null}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -506,13 +509,18 @@ function SuggestionList({
   });
   const cursors = page.key === filterKey ? page.cursors : [];
   const cursor = cursors.at(-1);
-  const { clean, ...scope } = filters;
   const query = useQuery(
     suggestions.list.queryOptions({
       family: "statement_transaction",
-      order: "newest",
-      scope: { statement_transaction: scope },
-      ...(clean === undefined ? {} : { clean }),
+      order: [{ by: "date", direction: "desc" }],
+      where: {
+        ...(filters.accountId ? { account: { in: [filters.accountId] } } : {}),
+        ...(filters.month ? { month: { in: [filters.month] } } : {}),
+        ...(filters.action ? { action: { in: [filters.action] } } : {}),
+        ...(filters.clean === undefined
+          ? {}
+          : { clean: { in: [filters.clean] } }),
+      },
       limit: PAGE_SIZE,
       ...(cursor ? { cursor } : {}),
     }),
@@ -546,14 +554,8 @@ function SuggestionList({
     (group) =>
       group.accountId === filters.accountId && group.month === filters.month,
   );
-  const scopeAccount = groups.find(
-    (group) => group.accountId === filters.accountId,
-  )?.accountName;
   const title = filters.accountId
-    ? [
-        scopeAccount ?? filters.accountId,
-        filters.month && monthLabel(filters.month),
-      ]
+    ? [filters.accountId, filters.month && monthLabel(filters.month)]
         .filter(Boolean)
         .join(" · ")
     : "All suggestions";
@@ -563,7 +565,7 @@ function SuggestionList({
         (!filters.accountId || group.accountId === filters.accountId) &&
         (!filters.month || group.month === filters.month),
     )
-    .reduce((sum, group) => sum + group.total, 0);
+    .reduce((sum, group) => sum + group.count, 0);
   const rows = useMemo(
     () =>
       query.data?.items.flatMap((row) =>

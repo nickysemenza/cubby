@@ -34,7 +34,8 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
 ## Field decisions (Jev vs Clef, prompts, options)
 
 1. Sample `entity_read.suggestion_queue` across pending, applied, rejected
-   and superseded statuses, `minConfidence: 0`, filtered by `entity`/`field`.
+   and superseded statuses with `family: "field"`, filtered by `entity` and
+   `where {field: {in: [...]}}`.
    Luna/Sol may grade any sample independently from its captured evidence.
    Lock the model grade before revealing acceptance or rejection. Keep model
    grades and member labels as separate evidence: automatic application is an
