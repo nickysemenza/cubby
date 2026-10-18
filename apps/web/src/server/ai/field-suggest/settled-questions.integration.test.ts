@@ -258,6 +258,47 @@ describe("settled suggestion questions", () => {
     expect(await read(question)).toBeNull();
   });
 
+  // Regression: a missed question's revision named only the review, so a
+  // roster change after the miss kept the empty live retry cached.
+  it("moves a missed question's revision when its inputs change", async () => {
+    await insertWithShortcode(ctx.db, "location", {
+      type: "room",
+      name: "Synthetic hall closet",
+    });
+    const target = await productFixture(ctx, "Synthetic missed lantern");
+    const question: Question = {
+      entity: "inventory",
+      field: "locationId",
+      basis: { productId: target.id },
+    };
+    const answer = await ask(question);
+    const outcome = answer.outcomes?.locationId;
+    if (outcome?.kind !== "evaluated" || !outcome.assessmentId)
+      throw new Error("Synthetic decline has no assessment");
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      assessmentId: outcome.assessmentId,
+      operationId: "synthetic:location-miss",
+      verdict: "wrong",
+      intent: "history",
+    });
+    const missed = await readAnswer(question);
+    expect(missed.outcome).toBeNull();
+    expect(missed.revision).toMatch(/^miss:/u);
+    // The live retry repeats the rejected assessment and is withheld.
+    const retry = await ask(question);
+    expect(retry.outcomes?.locationId).toBeUndefined();
+    expect((await readAnswer(question)).revision).toBe(missed.revision);
+
+    await insertWithShortcode(ctx.db, "location", {
+      type: "room",
+      name: "Synthetic lantern hook",
+    });
+    const changed = await readAnswer(question);
+    expect(changed.outcome).toBeNull();
+    expect(changed.revision).toMatch(/^miss:/u);
+    expect(changed.revision).not.toBe(missed.revision);
+  });
+
   it("reopens when its candidate vocabulary gains a record", async () => {
     await insertWithShortcode(ctx.db, "project", {
       name: "Synthetic garden refresh",

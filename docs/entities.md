@@ -2368,7 +2368,8 @@ Category or Project), linked record or stock tally reopens it just as a basis
 edit does; inputs that need a provider (a cold query embedding) cannot be
 verified and are asked live under a fresh revision on every read. A reopened
 question's live ask carries the read's input revision (the new input
-signature, or the member review that marked the decline a miss), so an answer
+signature, prefixed by the member review that marked the decline a miss
+when there is one), so an answer
 cached for its old inputs is not reused. Replacements are serialized per
 question, and the newest memory row wins. Member reviews and writes to the
 entity kinds a question declares (its entity, the field's vocabulary,

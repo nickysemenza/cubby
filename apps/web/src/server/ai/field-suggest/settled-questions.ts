@@ -162,14 +162,19 @@ type SettledPorts = Pick<SuggestFieldsPorts, "decisionPort" | "registry">;
 /**
  * Re-prepares one remembered question's decision inputs from saved data,
  * without the model or any paid provider call, and compares their signature.
+ * A member's recorded miss (`missId`) keeps the question open; its revision
+ * still names the current inputs, so a changed roster after the miss asks
+ * live again instead of reusing the answer cached for the older inputs.
  */
 async function recheck(
   db: Database,
   entity: SettledSuggestionQuestionsInput["entity"],
   question: SettledSuggestionQuestion,
   remembered: z.infer<typeof rememberedSchema>,
+  missId: string | null,
   ports: SettledPorts,
 ): Promise<SettledSuggestionAnswer> {
+  const missed = missId ? `miss:${missId}:` : "";
   const prepared = await withAiInputs(
     true,
     () =>
@@ -193,12 +198,16 @@ async function recheck(
   // live answer can be known to match them either: each such read asks live
   // under a revision of its own.
   if (!prepared || !preparedOutcome || prepared.incomplete)
-    return { outcome: null, revision: `unverified:${crypto.randomUUID()}` };
+    return {
+      outcome: null,
+      revision: `${missed}unverified:${crypto.randomUUID()}`,
+    };
   const signature = await settledSignature(
     { entity, field: question.field },
     preparedOutcome,
     prepared.inputs,
   );
+  if (missId) return { outcome: null, revision: `${missed}${signature}` };
   return signature === remembered.signature
     ? { outcome: remembered.outcome, revision: null }
     : { outcome: null, revision: signature };
@@ -265,9 +274,14 @@ export async function readSettledQuestions(
       if (!entry) return { outcome: null, revision: null };
       // A member's recorded miss reopens the question under that review's
       // identity, so the live answer cached before it is never restored.
-      if (entry.missId)
-        return { outcome: null, revision: `miss:${entry.missId}` };
-      return recheck(db, input.entity, question, entry.remembered, ports);
+      return recheck(
+        db,
+        input.entity,
+        question,
+        entry.remembered,
+        entry.missId,
+        ports,
+      );
     },
     { concurrency: 1 },
   );
