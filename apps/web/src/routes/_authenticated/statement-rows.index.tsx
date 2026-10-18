@@ -27,6 +27,11 @@ const searchSchema = z.object({
   dateFrom: urlStringParam,
   dateTo: urlStringParam,
   q: urlStringParam,
+  /** `suggestions` opens the grouped Transaction suggestion review. */
+  tab: z.enum(["rows", "suggestions"]).optional().catch(undefined),
+  /** Suggestions view: one account's (FAC-) and one month's (YYYY-MM) group. */
+  account: urlStringParam,
+  month: urlStringParam,
 });
 
 // Stripped back out of the URL when it equals the app's default worklist
@@ -39,6 +44,9 @@ const searchDefaults = {
   dateFrom: undefined,
   dateTo: undefined,
   q: undefined,
+  tab: undefined,
+  account: undefined,
+  month: undefined,
 } as const;
 
 // Bound to a const, not inlined into the options object below: see
