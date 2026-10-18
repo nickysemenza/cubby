@@ -26,6 +26,7 @@ import { previewFinancialStatementImport } from "~/server/domains/financial-tran
 import {
   CHARGE_STATE,
   chargeKeyOf,
+  chargeStateOf,
   pendingSuggestion,
   suggestionField,
   suggestionRefKey,
@@ -279,28 +280,43 @@ async function siblingsFor(
     }),
     sql`, `,
   );
+  // Each stage is materialized and scoped to this page's candidates, so the
+  // charge-state aggregate and membership union never scan the whole ledger.
   const { rows } = await unwrapDb(db).execute<{
     key: string;
     siblings: string[];
   }>(sql`
-    SELECT p.key, array_agg(DISTINCT ${chargeKeyOf("o")} ORDER BY ${chargeKeyOf("o")}) AS siblings
-    FROM (VALUES ${values}) AS p(key, source, "chargeKey", descriptor, amount, day, "rowIds")
-    JOIN "StatementRow" o ON o.source = p.source
-      AND o."accountDescriptor" = p.descriptor
-      AND o."providerAmount" = p.amount
-      AND o."statementDate" BETWEEN p.day - ${SIBLING_WINDOW_DAYS}::int AND p.day + ${SIBLING_WINDOW_DAYS}::int
-      AND o."deletedAt" IS NULL
-      AND ${chargeKeyOf("o")} <> p."chargeKey"
-    JOIN ${CHARGE_STATE} cs ON cs.source = o.source AND cs."chargeKey" = ${chargeKeyOf("o")}
+    WITH p AS MATERIALIZED (
+      SELECT * FROM (VALUES ${values}) AS v(key, source, "chargeKey", descriptor, amount, day, "rowIds")
+    ),
+    o AS MATERIALIZED (
+      SELECT p.key, p."rowIds", o.id, o.source, ${chargeKeyOf("o")} AS "chargeKey"
+      FROM p JOIN "StatementRow" o ON o.source = p.source
+        AND o."accountDescriptor" = p.descriptor
+        AND o."providerAmount" = p.amount
+        AND o."statementDate" BETWEEN p.day - ${SIBLING_WINDOW_DAYS}::int AND p.day + ${SIBLING_WINDOW_DAYS}::int
+        AND o."deletedAt" IS NULL
+        AND ${chargeKeyOf("o")} <> p."chargeKey"
+    ),
+    cs AS MATERIALIZED ${chargeStateOf(
+      sql`(r.source, ${chargeKeyOf("r")}) IN (SELECT source, "chargeKey" FROM o)`,
+    )},
+    members AS MATERIALIZED (
+      SELECT m."importId", m."statementRowId" FROM ${statementImportMembers} m
+      WHERE m."statementRowId" IN (SELECT id FROM o UNION SELECT unnest("rowIds") FROM p)
+    )
+    SELECT o.key, array_agg(DISTINCT o."chargeKey" ORDER BY o."chargeKey") AS siblings
+    FROM o
+    JOIN cs ON cs.source = o.source AND cs."chargeKey" = o."chargeKey"
       AND NOT cs.ignored AND NOT cs.superseded AND cs.shortcode IS NULL
     -- One export speaks one descriptor vocabulary: two of its own rows are two
     -- real charges, so only another export's row can be this money again.
     WHERE NOT EXISTS (
-      SELECT 1 FROM ${statementImportMembers} mo
-      JOIN ${statementImportMembers} mp ON mp."importId" = mo."importId"
-      WHERE mo."statementRowId" = o.id AND mp."statementRowId" = ANY(p."rowIds")
+      SELECT 1 FROM members mo
+      JOIN members mp ON mp."importId" = mo."importId"
+      WHERE mo."statementRowId" = o.id AND mp."statementRowId" = ANY(o."rowIds")
     )
-    GROUP BY p.key
+    GROUP BY o.key
   `);
   for (const row of rows) result.set(row.key, row.siblings.map(String));
   return result;

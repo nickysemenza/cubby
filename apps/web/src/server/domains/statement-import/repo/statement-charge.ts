@@ -1,7 +1,7 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
 import { assessmentFamily } from "@cubby/schemas/assessment";
 import { statementRowDisposition } from "@cubby/schemas/statement-row";
-import { sql } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 
 /**
  * Every live settlement reference with its transaction's shortcode — the
@@ -37,7 +37,7 @@ export const chargeKeyOf = (alias: string) =>
  * a matched ref — including a ref equal to the charge's v1 hash) settles every
  * other observation of the same charge.
  */
-export const CHARGE_STATE = sql`(
+export const chargeStateOf = (scope: SQL) => sql`(
   SELECT r.source, ${chargeKeyOf("r")} AS "chargeKey",
     bool_or(r.disposition = ${statementRowDisposition.enum.ignored}) AS ignored,
     bool_or(r."supersededByRowId" IS NOT NULL) AS superseded,
@@ -47,9 +47,11 @@ export const CHARGE_STATE = sql`(
     ON own.source = r.source AND own."externalId" = r."externalId"
   LEFT JOIN ${LIVE_REFS} legacy
     ON legacy.source = r.source AND legacy."externalId" = r."legacyExternalId"
-  WHERE r."deletedAt" IS NULL
+  WHERE r."deletedAt" IS NULL AND (${scope})
   GROUP BY r.source, ${chargeKeyOf("r")}
 )`;
+
+export const CHARGE_STATE = chargeStateOf(sql`true`);
 
 /** Settlement-ref keys stored on a suggestion's projection, `source:externalId`. */
 export const suggestionRefKey = (source: string, externalId: string) =>
