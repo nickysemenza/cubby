@@ -378,7 +378,7 @@ export const sweepFamilyScope = z.discriminatedUnion("family", [
       .strictObject({
         importId: z.uuid().optional(),
         accountIds: z.array(z.uuid()).max(100).optional(),
-        since: z.iso.date().optional(),
+        since: plainDate.optional(),
       })
       .default({}),
   }),

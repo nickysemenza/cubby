@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { plainDate } from "./base-entity";
 import { financialAccountShortcode } from "./identifiers";
 import { sweepFieldTargets } from "./run-fields";
 
@@ -11,7 +12,7 @@ export const sweepStartInput = z.object({
         z.object({
           family: z.literal("statement_transaction"),
           accountIds: z.array(financialAccountShortcode).max(100).optional(),
-          since: z.iso.date().optional(),
+          since: plainDate.optional(),
         }),
         z.object({
           family: z.literal("recommendation"),

@@ -37,6 +37,7 @@ import {
   mealRecipePortion,
   photoGroupProposal,
   photoRunImage,
+  runStep,
   productConversionCoverage,
   entityExternalId,
   productUnitMappings,
@@ -110,6 +111,7 @@ export const ENTITY_EDGE_OWNERS = {
   StatementRow: { owner: statementRow.accountId },
   // A run's target list is how a run relates to what it imported.
   PhotoRunImage: { owner: photoRunImage.runId },
+  RunStep: { owner: runStep.runId },
   PhotoGroupProposal: { owner: photoGroupProposal.runId },
   ImageDerivative: { owner: imageDerivative.imageId },
   // An Image job's attempts, events and submission memberships belong to the job.
