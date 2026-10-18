@@ -877,7 +877,17 @@ async function queryWorkQueue(
   // rather than window-sorting every eligible row and sorting again by position.
   // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- JSON property names below are the response contract, not vocabulary values.
   const result = await getDb(db).execute(sql`
-    WITH ${needsPriceEvidence ? sql`work_product_price AS MATERIALIZED (${productPriceEvidenceSql()}),` : sql``}
+    WITH ${
+      needsPriceEvidence
+        ? sql`work_product_price AS MATERIALIZED (${productPriceEvidenceSql(
+            // A record read prices only its Product; the kit walk climbs
+            // from it, so pricing the whole catalog adds nothing.
+            record?.entity === "product"
+              ? sql`ARRAY(SELECT price_record."id" FROM "Product" price_record WHERE price_record."shortcode" = ${record.id})`
+              : undefined,
+          )}),`
+        : sql``
+    }
     ${needsOnHandEvidence ? sql`work_product_on_hand AS MATERIALIZED (${onHandUnitsReadSql()}),` : sql``}
     ${needsExpectedEvidence ? sql`work_product_expected AS MATERIALIZED (${expectedQuantityReadSql()}),` : sql``}
     ${sql.join(
