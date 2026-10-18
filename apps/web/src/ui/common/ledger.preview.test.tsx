@@ -14,6 +14,38 @@ const MATCH_OPTIONS = [
 const REASON_OPTIONS = [{ value: "not-applicable", label: "Not applicable" }];
 const ACTION_OPTIONS = [{ value: "review", label: "Review" }];
 
+// Long record prose must not grow the unused leading track and squeeze the
+// next action to one character per line. Narrow containers stack the action.
+it.each([1200, 540, 360])(
+  "keeps long work queue prose readable in a %ipx container",
+  async (width) => {
+    await page.viewport(1440, 900);
+    render(
+      <div style={{ width }} data-testid="queue-ledger">
+        <Ledger>
+          <LedgerRow>
+            <LedgerCell slot="primary">
+              Synthetic order confirmation lists one item without a unit price,
+              subtotal or tax breakdown. Retain the source evidence for review
+              before adding verified expenses to this purchase.
+            </LedgerCell>
+            <LedgerCell slot="secondary" data-testid="next-action">
+              Open the retained source and review the proposed changes.
+              <button type="button">Details</button>
+            </LedgerCell>
+            <LedgerCell slot="trailing">Either</LedgerCell>
+          </LedgerRow>
+        </Ledger>
+      </div>,
+    );
+    const ledger = screen.getByTestId("queue-ledger");
+    const action = screen.getByTestId("next-action").getBoundingClientRect();
+    expect(action.width).toBeGreaterThanOrEqual(160);
+    expect(action.height).toBeLessThan(100);
+    expect(ledger.scrollWidth).toBeLessThanOrEqual(ledger.clientWidth);
+  },
+);
+
 it("retains readable photo evidence when an image fails", async () => {
   await page.viewport(1440, 900);
   render(

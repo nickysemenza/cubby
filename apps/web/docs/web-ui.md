@@ -106,6 +106,9 @@ shell; detail bodies use `DetailSections`. Repeated read-only fact and record ro
 
 Record lists fill their available width, including inside a flex fact value;
 their size-contained ledger must not rely on intrinsic width from its children.
+Record ledgers without leading media keep prose in the capped identity track,
+leaving readable space for secondary evidence and next actions; narrow containers
+stack that evidence beneath the identity.
 
 Column factories reuse module-level render components for selection controls:
 `flexRender` treats callbacks as React component types, so refreshing column
