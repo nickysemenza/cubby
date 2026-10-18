@@ -1,6 +1,9 @@
 import type { CoordinatorModels } from "@cubby/schemas/coordinator-models";
 import type { ImportRunAgentConfig } from "@cubby/schemas/import-run-agent";
-import type { SupportedChatModel } from "@cubby/shared/ai/models";
+import {
+  supportedChatModelSchema,
+  type SupportedChatModel,
+} from "@cubby/shared/ai/models";
 import type { ToolExecutionResult } from "@earendil-works/pi-durable";
 import { z } from "zod";
 
@@ -38,6 +41,10 @@ const escalationRecord = z.object({
   /** The tool call that escalated, so its recovery repeats the same note. */
   callId: z.string().nullable(),
 });
+const modelConfiguration = z.object({
+  model: supportedChatModelSchema,
+  status: z.enum(["pending", "applied"]),
+});
 const refusedCalls = z.array(z.string());
 const toolArguments = z.looseObject({
   action: z.string().optional(),
@@ -47,6 +54,7 @@ const toolArguments = z.looseObject({
 });
 
 const KEYS = {
+  configuration: "escalation:model-configuration",
   item: "escalation:work-item",
   escalated: (item: string) => `escalation:escalated:${item}`,
   refused: (item: string) => `escalation:refused:${item}`,
@@ -79,13 +87,42 @@ export function coordinatorEscalation(input: {
   const note = (detail: string) =>
     `Cubby escalated this Email to ${target} (${detail}); ${target} settles it from here.`;
 
+  const desiredModel = (): SupportedChatModel =>
+    active && escalated() ? target : primary;
+  async function reconcileConfiguration() {
+    const desired = desiredModel();
+    const raw = store.read(KEYS.configuration);
+    const previous = raw
+      ? modelConfiguration.parse(JSON.parse(raw))
+      : undefined;
+    // Before the first transition the host installs the primary itself. A
+    // pending attempt may have applied before throwing, so it always retries.
+    if (
+      (!previous && desired === primary) ||
+      (previous?.status === "applied" && previous.model === desired)
+    )
+      return;
+    store.write(
+      KEYS.configuration,
+      JSON.stringify({ model: desired, status: "pending" }),
+    );
+    await input.useModel(desired);
+    store.write(
+      KEYS.configuration,
+      JSON.stringify({ model: desired, status: "applied" }),
+    );
+  }
+
   async function escalate(request: {
     reason: Trigger;
     detail: string;
     callId?: string;
   }): Promise<{ escalated: boolean; model: SupportedChatModel }> {
-    if (!active || escalated())
-      return { escalated: false, model: active ? target : primary };
+    if (!active) return { escalated: false, model: primary };
+    if (escalated()) {
+      await reconcileConfiguration();
+      return { escalated: false, model: target };
+    }
     store.write(
       KEYS.escalated(item()),
       JSON.stringify(
@@ -96,14 +133,14 @@ export function coordinatorEscalation(input: {
         }),
       ),
     );
-    await input.useModel(target);
+    await reconcileConfiguration();
     return { escalated: true, model: target };
   }
 
   return {
     active,
     /** The model this Run's next request uses. */
-    model: (): SupportedChatModel => (active && escalated() ? target : primary),
+    model: desiredModel,
     escalate,
     /** Hold a primary model's `unresolved` resolution for one escalated try. */
     async beforeTool(call: ToolCall): Promise<{ block: string } | undefined> {
@@ -112,8 +149,18 @@ export function coordinatorEscalation(input: {
       if (args?.action !== "resolve" || args.disposition?.kind !== "unresolved")
         return undefined;
       const blocked = store.read(KEYS.blocked(call.id));
-      if (blocked) return { block: blocked };
-      if (escalated()) return undefined;
+      if (blocked) {
+        await escalate({
+          reason: "unresolved",
+          detail: args.disposition.reason ?? "unresolved",
+          callId: call.id,
+        });
+        return { block: blocked };
+      }
+      if (escalated()) {
+        await reconcileConfiguration();
+        return undefined;
+      }
       const block = `${note("before resolving it unresolved")} Review its evidence before resolving it.`;
       store.write(KEYS.blocked(call.id), block);
       await escalate({
@@ -130,10 +177,8 @@ export function coordinatorEscalation(input: {
     ): Promise<ToolExecutionResult | undefined> {
       if (!active) return undefined;
       if (call.name === CLAIM_TOOL) {
-        const previous = item();
-        if (previous === call.id) return undefined;
-        store.write(KEYS.item, call.id);
-        if (escalated(previous)) await input.useModel(primary);
+        if (item() !== call.id) store.write(KEYS.item, call.id);
+        await reconcileConfiguration();
         return undefined;
       }
       if (
@@ -150,7 +195,10 @@ export function coordinatorEscalation(input: {
           { type: "text" as const, text: note("prepare refused twice") },
         ],
       });
-      if (current) return current.callId === call.id ? withNote() : undefined;
+      if (current) {
+        await reconcileConfiguration();
+        return current.callId === call.id ? withNote() : undefined;
+      }
       const raw = store.read(KEYS.refused(item()));
       const refused = new Set(raw ? refusedCalls.parse(JSON.parse(raw)) : []);
       refused.add(call.id);

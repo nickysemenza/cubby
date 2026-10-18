@@ -17,6 +17,7 @@ function harness(
     primary: "claude-haiku-5-5",
     escalation: "claude-opus-5-5",
   },
+  configure?: (model: SupportedChatModel) => Promise<void>,
 ) {
   const state = new Map<string, string>();
   const configured: SupportedChatModel[] = [];
@@ -30,6 +31,7 @@ function harness(
     },
     useModel: async (model) => {
       configured.push(model);
+      await configure?.(model);
     },
   });
   const ok: ToolExecutionResult = {
@@ -67,6 +69,66 @@ function harness(
 }
 
 describe("coordinator escalation", () => {
+  // Configuration can fail after the durable decision or after its own effect.
+  // Replaying that same transition must reconcile before it returns success.
+  it.each(["requested", "prepare", "unresolved"] as const)(
+    "reconciles failed %s escalation on the same call",
+    async (trigger) => {
+      let refuse = true;
+      const { escalation, configured, claim, prepare, resolve } = harness(
+        undefined,
+        async (model) => {
+          if (model === "claude-opus-5-5" && refuse) {
+            refuse = false;
+            throw new Error("Synthetic configure interruption");
+          }
+        },
+      );
+      await claim("claim-1");
+      if (trigger === "prepare") await prepare("prepare-1");
+      const transition = () =>
+        trigger === "requested"
+          ? escalation.escalate({
+              reason: "requested",
+              detail: "Synthetic ambiguity",
+            })
+          : trigger === "prepare"
+            ? prepare("prepare-2")
+            : resolve("resolve-1", "unresolved");
+      await expect(transition()).rejects.toThrow(
+        "Synthetic configure interruption",
+      );
+      const attempts = configured.length;
+      await transition();
+      expect(configured.slice(attempts)).toEqual(["claude-opus-5-5"]);
+    },
+  );
+
+  it("reconciles an interrupted next-claim reset before accepting the replay", async () => {
+    let refuse = false;
+    const { escalation, configured, claim } = harness(
+      undefined,
+      async (model) => {
+        if (model === "claude-haiku-5-5" && refuse) {
+          refuse = false;
+          throw new Error("Synthetic reset interruption");
+        }
+      },
+    );
+    await claim("claim-1");
+    await escalation.escalate({
+      reason: "requested",
+      detail: "Synthetic ambiguity",
+    });
+    refuse = true;
+    await expect(claim("claim-2")).rejects.toThrow(
+      "Synthetic reset interruption",
+    );
+    const attempts = configured.length;
+    await claim("claim-2");
+    expect(configured.slice(attempts)).toEqual(["claude-haiku-5-5"]);
+  });
+
   it("escalates the current Email on request and returns to the primary at the next claim", async () => {
     const { escalation, configured, claim } = harness();
     expect(escalation.active).toBe(true);

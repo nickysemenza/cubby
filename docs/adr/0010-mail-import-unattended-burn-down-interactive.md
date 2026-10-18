@@ -65,10 +65,16 @@ keep originals and entity handles out of files; reports show parity counts and
 only disagreement case positions/fields. Existing Purchases, catalog, attachments
 and supporting Emails are not copied, so a replay with those dependencies is
 context-limited rather than evidence of a model regression. The decision-grading
-skill owns blind review and member-confirmed MCP grading.
+skill owns blind review and member-confirmed MCP grading. Replay observation runs
+before Worker teardown on both completion and failure; timeouts retain observed
+successful-call models while their outcome remains unavailable rather than
+counting as parity.
 
 Production continues to use Opus. Candidate model and escalation settings are
 harness-only overrides until held-out real replay and member grading justify a
 change. With distinct primary and escalation models, one Email escalates on an
 explicit request, two refused prepares, or before the primary records unresolved;
-the next claim returns to the primary. Escalation is durable across recovery.
+the next claim returns to the primary. Coordinator model transitions retain a pending/applied configuration receipt.
+Recovery reconciles the desired model before accepting a replayed escalation,
+held resolution, refused prepare or next-Email reset. A failed configuration may
+already have taken effect, so pending transitions always reapply idempotently.

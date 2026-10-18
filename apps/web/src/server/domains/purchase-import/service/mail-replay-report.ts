@@ -45,3 +45,54 @@ export function mailReplayDisagreement(
     return baseline.reason === replay.reason ? [] : ["reason"];
   return [];
 }
+
+export type MailReplayCaseReport = {
+  case: number;
+  fields: string[];
+  status: string;
+  actualModels: string[];
+};
+
+/** Observe a failed attempt while its Worker and database still exist. */
+export async function observeMailReplayAttempt(input: {
+  caseIndex: number;
+  baseline: Outcome;
+  run: () => Promise<void>;
+  read: () => Promise<{
+    outcome: Outcome | null;
+    status: string;
+    actualModels: string[];
+  }>;
+  record: (report: MailReplayCaseReport) => void;
+}) {
+  let completion: { kind: "completed" } | { kind: "failed"; error: unknown };
+  try {
+    await input.run();
+    completion = { kind: "completed" };
+  } catch (error) {
+    completion = { kind: "failed", error };
+  }
+  let observation: Awaited<ReturnType<typeof input.read>>;
+  try {
+    observation = await input.read();
+    input.record({
+      case: input.caseIndex,
+      status: observation.status,
+      fields: mailReplayDisagreement(
+        input.baseline,
+        completion.kind === "completed" ? observation.outcome : null,
+      ),
+      actualModels: [...new Set(observation.actualModels)],
+    });
+  } catch (error) {
+    if (completion.kind === "failed")
+      throw new AggregateError(
+        [completion.error, error],
+        "Replay failed and its observation failed",
+        { cause: error },
+      );
+    throw error;
+  }
+  if (completion.kind === "failed") throw completion.error;
+  return observation.outcome;
+}

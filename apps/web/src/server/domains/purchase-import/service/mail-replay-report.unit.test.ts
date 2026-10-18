@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { mailReplayDisagreement } from "./mail-replay-report";
+import {
+  mailReplayDisagreement,
+  observeMailReplayAttempt,
+} from "./mail-replay-report";
 
 // Replay must distinguish a ledger change from row ordering, retain signed
 // credits, and treat a missing terminal outcome as unavailable, never parity.
@@ -83,4 +86,43 @@ describe("Mail replay disagreement", () => {
       }),
     ).toEqual(["reason"]);
   });
+});
+
+// Teardown must follow observation even when the coordinator times out, and
+// unavailable outcomes must retain every successful model call already seen.
+it("retains successful model usage before failed replay teardown", async () => {
+  const reports: { actualModels: string[]; fields: string[] }[] = [];
+  const order: string[] = [];
+  try {
+    await expect(
+      observeMailReplayAttempt({
+        caseIndex: 1,
+        baseline: { kind: "unresolved", reason: "Synthetic missing total" },
+        run: async () => {
+          order.push("run");
+          throw new Error("Synthetic coordinator timeout");
+        },
+        read: async () => {
+          order.push("read");
+          return {
+            status: "running",
+            outcome: { kind: "unresolved", reason: "Synthetic missing total" },
+            actualModels: ["claude-haiku-5-5", "claude-opus-5-5"],
+          };
+        },
+        record: (report) => {
+          reports.push(report);
+        },
+      }),
+    ).rejects.toThrow("Synthetic coordinator timeout");
+  } finally {
+    order.push("teardown");
+  }
+  expect(order).toEqual(["run", "read", "teardown"]);
+  expect(reports).toMatchObject([
+    {
+      actualModels: ["claude-haiku-5-5", "claude-opus-5-5"],
+      fields: ["unavailable"],
+    },
+  ]);
 });

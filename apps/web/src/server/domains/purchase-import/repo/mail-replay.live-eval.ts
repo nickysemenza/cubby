@@ -23,7 +23,10 @@ import {
   memberImportWorld,
   retainedMailFixture,
 } from "../operations/order-import.fixtures";
-import { mailReplayDisagreement } from "../service/mail-replay-report";
+import {
+  observeMailReplayAttempt,
+  type MailReplayCaseReport,
+} from "../service/mail-replay-report";
 import { startMailImport } from "./mail-import-run";
 import {
   authorizePurchaseAgent,
@@ -83,12 +86,7 @@ const primary = supportedChatModelSchema.parse(
 const escalation = process.env.MAIL_REPLAY_ESCALATION_MODEL
   ? supportedChatModelSchema.parse(process.env.MAIL_REPLAY_ESCALATION_MODEL)
   : undefined;
-const reports: {
-  case: number;
-  fields: string[];
-  status: string;
-  actualModels: string[];
-}[] = [];
+const reports: MailReplayCaseReport[] = [];
 
 // Failure modes: replay reaches production data or Gmail; two cases share
 // ledger writes; comparison publishes grades; a missing outcome counts as parity.
@@ -180,8 +178,8 @@ describe("isolated Mail coordinator replay", () => {
               "Replay admission did not produce a coordinator event",
             );
           const runId = parseEntityId("run", started.runId);
-          const collect = async () => {
-            let status = "running";
+          let status = "running";
+          const waitForSettlement = async () => {
             await waitFor(
               async () => {
                 const [row] = await getDb(ctx.db)
@@ -194,33 +192,42 @@ describe("isolated Mail coordinator replay", () => {
               "Replay coordinator did not settle within its time budget",
               scripted ? 30_000 : 8 * 60_000,
             );
-            const [outcome] = await getDb(ctx.db)
-              .select({ judgment: assessment.judgment })
-              .from(assessment)
-              .where(and(eq(assessment.family, "mail_import_outcome")))
-              .orderBy(desc(assessment.createdAt), desc(assessment.id))
-              .limit(1);
-            const usage = await getDb(ctx.db)
-              .select({ model: aiUsage.model })
-              .from(aiUsage)
-              .where(
-                and(
-                  eq(aiUsage.runId, runId),
-                  eq(aiUsage.feature, "purchase_import_agent"),
-                  eq(aiUsage.status, "succeeded"),
-                ),
-              );
-            reports.push({
-              case: index + 1,
-              status,
-              fields: mailReplayDisagreement(
-                sample.baseline,
-                outcome ? mailImportOutcome.parse(outcome.judgment) : null,
-              ),
-              actualModels: [...new Set(usage.map((row) => row.model))],
-            });
-            expect(Boolean(outcome)).toBe(true);
           };
+          const observe = (run: () => Promise<void>) =>
+            observeMailReplayAttempt({
+              caseIndex: index + 1,
+              baseline: sample.baseline,
+              run,
+              read: async () => {
+                const [outcome] = await getDb(ctx.db)
+                  .select({ judgment: assessment.judgment })
+                  .from(assessment)
+                  .where(eq(assessment.family, "mail_import_outcome"))
+                  .orderBy(desc(assessment.createdAt), desc(assessment.id))
+                  .limit(1);
+                const usage = await getDb(ctx.db)
+                  .select({ model: aiUsage.model })
+                  .from(aiUsage)
+                  .where(
+                    and(
+                      eq(aiUsage.runId, runId),
+                      eq(aiUsage.feature, "purchase_import_agent"),
+                      eq(aiUsage.status, "succeeded"),
+                    ),
+                  );
+                return {
+                  status,
+                  outcome: outcome
+                    ? mailImportOutcome.parse(outcome.judgment)
+                    : null,
+                  actualModels: usage.map((row) => row.model),
+                };
+              },
+              record: (report) => {
+                reports.push(report);
+              },
+            });
+          let observedOutcome: z.infer<typeof mailImportOutcome> | null = null;
           if (scripted) {
             const scenario = await startScenarioHarness(
               ctx.databaseUrl,
@@ -244,8 +251,10 @@ describe("isolated Mail coordinator replay", () => {
               { coordinatorModels: { primary } },
             );
             try {
-              await scenario.dispatch(events[0]);
-              await collect();
+              observedOutcome = await observe(async () => {
+                await scenario.dispatch(events[0]);
+                await waitForSettlement();
+              });
             } finally {
               await scenario.close();
             }
@@ -271,21 +280,24 @@ describe("isolated Mail coordinator replay", () => {
                 coordinatorModels: { primary, escalation },
               },
               async ({ harness }) => {
-                const response = await harness
-                  .getWorker("cubby-queue-producer")
-                  .fetch("https://queue.test/dispatch", {
-                    method: "POST",
-                    headers: { "content-type": "application/json" },
-                    body: JSON.stringify(events[0]),
-                  });
-                if (!response.ok)
-                  throw new Error(
-                    `Replay dispatch refused (${response.status})`,
-                  );
-                await collect();
+                observedOutcome = await observe(async () => {
+                  const response = await harness
+                    .getWorker("cubby-queue-producer")
+                    .fetch("https://queue.test/dispatch", {
+                      method: "POST",
+                      headers: { "content-type": "application/json" },
+                      body: JSON.stringify(events[0]),
+                    });
+                  if (!response.ok)
+                    throw new Error(
+                      `Replay dispatch refused (${response.status})`,
+                    );
+                  await waitForSettlement();
+                });
               },
             );
           }
+          expect(observedOutcome).not.toBeNull();
         } finally {
           queueCapture.restore();
         }
