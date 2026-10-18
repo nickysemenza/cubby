@@ -33,6 +33,13 @@ Existing automatic domain behavior is unchanged.
   cannot consume another endpoint's result allowance.
 - Background discovery publishes Assessments only inside the evaluation's
   attempt and generation fence. Candidate-roster changes invalidate negative scans.
+- Discovery fingerprints include only the source's family inputs: deterministic
+  candidate evidence, exact-Product stock for placement, scoped retained mail,
+  and eligible target corpora for field inference and indexed/semantic retrieval.
+  Unrelated families, orphaned account changes, projection rebuild timestamps,
+  and inventory verification stamps do not invalidate completed scans or running
+  evaluations. A target corpus can remain broad when any eligible target may be
+  selected; its relevant content changes still invalidate negative scans.
 - Retained Email checksums, order events, reviewed links and accepted sources
   participate in discovery currentness, including scans with no candidates.
   Purchase account assignments and account ownership/deletion participate too.

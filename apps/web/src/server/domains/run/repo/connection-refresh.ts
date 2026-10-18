@@ -4,28 +4,16 @@ import {
   aiRefreshRunInput,
 } from "@cubby/schemas/ai-evaluation";
 import { entitySchema, type EntityRef } from "@cubby/schemas/entity";
-import { searchableEntities } from "@cubby/schemas/search";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, asc, eq, gt, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, ne } from "drizzle-orm";
 
 import { dependencyStamps } from "~/server/ai/policy/refresh-manifest";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
-import {
-  entityIdentity,
-  searchDocument,
-  orderMail,
-  orderMailEvent,
-  assessmentEmailLink,
-  importSourceOrder,
-  run,
-  aiEvaluation,
-  purchase,
-  vendorAccount,
-} from "~/server/db/schema";
+import { entityIdentity, run, aiEvaluation } from "~/server/db/schema";
 import { connectionRecord } from "~/server/domains/connection/repo/connection-evidence";
-import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
+import { connectionDiscoveryFingerprint } from "~/server/domains/connection/repo/discovery-fingerprint";
 import { refreshSearchDocuments } from "~/server/generic/search/repo/search-document";
 
 import { scheduleEvaluationRun } from "./ai-refresh-state";
@@ -107,54 +95,7 @@ export async function scheduleConnectionRefresh(
   return existing?.id ?? null;
 }
 
-export async function connectionSourceFingerprint(
-  db: Database,
-  source: EntityRef,
-) {
-  const record = await connectionRecord(db, source);
-  // A new or changed potential endpoint must invalidate a completed negative scan.
-  // Content hashes avoid rescheduling merely because projections were rebuilt.
-  const [roster] = await getDb(db)
-    .select({
-      fingerprint: sql<string>`md5(coalesce(string_agg(${searchDocument.entityId}::text || ':' || ${searchDocument.sourceHash}, ',' ORDER BY ${searchDocument.entityId}), ''))`,
-    })
-    .from(searchDocument)
-    .where(
-      and(
-        notDeleted(searchDocument),
-        inArray(
-          searchDocument.entityKind,
-          searchableEntities.filter((entity) => discoveryEntitySet.has(entity)),
-        ),
-      ),
-    );
-  const [identities] = await getDb(db)
-    .select({
-      fingerprint: sql<string>`md5(coalesce(string_agg(id::text || ':' || coalesce("deletedAt"::text, '') || ':' || coalesce("mergedIntoId"::text, ''), ',' ORDER BY id), ''))`,
-    })
-    .from(entityIdentity)
-    .where(inArray(entityIdentity.kind, [...discoveryEntities]));
-  const [mail] = await getDb(db)
-    .select({
-      fingerprint: sql<string>`md5(jsonb_build_array(
-    (SELECT coalesce(jsonb_agg(jsonb_build_array(o.id, o."ledgerPartyId", o."vendorId", o."rawChecksum") ORDER BY o.id), '[]'::jsonb) FROM ${orderMail} o),
-    (SELECT coalesce(jsonb_agg(jsonb_build_array(e.id, e."orderMailId", e.event, e."orderId", e.amount, e."sourceKey", e."supersededAt") ORDER BY e.id), '[]'::jsonb) FROM ${orderMailEvent} e),
-    (SELECT coalesce(jsonb_agg(jsonb_build_array(l.id, l."eventId", l."purchaseId", l.decision, l."evidenceChecksum") ORDER BY l.id), '[]'::jsonb) FROM ${assessmentEmailLink} l),
-    (SELECT coalesce(jsonb_agg(jsonb_build_array(a.id, a."sourceClaimId", a."purchaseId", a.checksum) ORDER BY a.id), '[]'::jsonb) FROM ${importSourceOrder} a),
-    (SELECT coalesce(jsonb_agg(jsonb_build_array(p.id, p."vendorAccountId", p."orderId", p."vendorId", p.date, p."statedTotal", p."deletedAt") ORDER BY p.id), '[]'::jsonb) FROM ${purchase} p),
-    (SELECT coalesce(jsonb_agg(jsonb_build_array(a.id, a."vendorId", a."ledgerPartyId", a."deletedAt") ORDER BY a.id), '[]'::jsonb) FROM ${vendorAccount} a)
-  )::text)`,
-    })
-    .from(sql`(SELECT 1) AS connection_mail_roster`);
-  return sha256Hex(
-    canonicalJson({
-      source: record.row,
-      roster: roster?.fingerprint ?? null,
-      identities: identities?.fingerprint ?? null,
-      mail: mail?.fingerprint ?? null,
-    }),
-  );
-}
+export const connectionSourceFingerprint = connectionDiscoveryFingerprint;
 
 /** Cursor coverage includes records without stock or prior acquisition. */
 export async function connectionDiscoveryRecords(

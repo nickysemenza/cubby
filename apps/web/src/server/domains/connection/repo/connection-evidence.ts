@@ -125,10 +125,14 @@ const relevantFields = new Map<string, readonly string[]>(
   }),
 );
 
+export function connectionRelevantFields(kind: string): readonly string[] {
+  return relevantFields.get(kind) ?? ["name"];
+}
+
 export function connectionRelevantRow(kind: string, value: unknown) {
   const row = z.record(z.string(), z.json()).parse(value);
   return Object.fromEntries(
-    (relevantFields.get(kind) ?? ["name"])
+    connectionRelevantFields(kind)
       .filter((key) => Object.hasOwn(row, key))
       .map((key) => [key, row[key]]),
   );
