@@ -70,13 +70,22 @@ it("isolates concurrent background transactions and their after-commit effects",
   );
   expect(rows.rows.map((row) => row.name)).toEqual(["kept-row"]);
   expect(published).toEqual(["committed"]);
-  const remaining = await getDb(ctx.db).execute<{ pid: number }>(
-    sql`SELECT pid FROM pg_stat_activity WHERE pid IN (${sql.join(
-      backendIds.map((pid) => sql`${pid}`),
-      sql`, `,
-    )})`,
-  );
-  expect(remaining.rows).toEqual([]);
+  // Client shutdown precedes PostgreSQL removing its backend from the activity view.
+  // One second is below the pool's ten-second idle timeout, so a missing close still fails.
+  await expect
+    .poll(
+      async () => {
+        const remaining = await getDb(ctx.db).execute<{ pid: number }>(
+          sql`SELECT pid FROM pg_stat_activity WHERE pid IN (${sql.join(
+            backendIds.map((pid) => sql`${pid}`),
+            sql`, `,
+          )})`,
+        );
+        return remaining.rows;
+      },
+      { timeout: 1000 },
+    )
+    .toEqual([]);
 });
 
 // A rejected task must release its database resources before its caller retries.
@@ -91,10 +100,17 @@ it("closes background database connections when the invocation throws", async ()
       throw new Error("Synthetic invocation failure");
     }),
   ).rejects.toThrow("Synthetic invocation failure");
-  const remaining = await getDb(ctx.db).execute<{ pid: number }>(
-    sql`SELECT pid FROM pg_stat_activity WHERE pid = ${backendId}`,
-  );
-  expect(remaining.rows).toEqual([]);
+  await expect
+    .poll(
+      async () => {
+        const remaining = await getDb(ctx.db).execute<{ pid: number }>(
+          sql`SELECT pid FROM pg_stat_activity WHERE pid = ${backendId}`,
+        );
+        return remaining.rows;
+      },
+      { timeout: 1000 },
+    )
+    .toEqual([]);
 });
 
 // A continuation inherits its AsyncLocalStorage scope, but not a new lifetime.
