@@ -407,9 +407,12 @@ const productScaffold = listScaffold("product", product, {
     )})`,
     kitAccounting: listReadValue((read) => {
       const onHand = onHandUnitsFilterSql(product.id, read);
+      const expected =
+        read?.derivedValue?.("expectedQuantity", product.id) ??
+        expectedQuantityFilterSql(product.id);
       // Unknown stock is not applicable; make that false before expensive kit work.
       return sql`((${onHand} > 0) IS TRUE AND ${partsAccountedKitsSql} > 0
-        AND ${onHand} + ${partsAccountedKitsSql} > ${expectedQuantityFilterSql(product.id)})`;
+        AND ${onHand} + ${partsAccountedKitsSql} > ${expected})`;
     }),
     ownershipReconciliation: listReadValue(
       (read) => sql`(${inArray(product.id, productIdsWithRecordedDisposal)}
