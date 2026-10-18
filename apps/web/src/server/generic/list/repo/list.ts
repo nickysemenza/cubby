@@ -1435,13 +1435,19 @@ export function listScaffold<
       seeded: ReadonlyArray<readonly [ListPrepare<unknown>, unknown]> = [],
     ): Promise<ListContext> {
       const values = listFilterValues.parse(request.filters);
+      // An active filter reads its derived entry, or every derived member of
+      // its `anyOf`.
       const filtered = new Set(
-        descriptorsFor(entity).flatMap(({ derived, ...descriptor }) =>
-          derived !== null &&
-          descriptorValueKeys({ derived, ...descriptor }).some(
+        descriptorsFor(entity).flatMap((descriptor) =>
+          descriptorValueKeys(descriptor).some(
             (key) => values[key] !== undefined,
           )
-            ? [derived]
+            ? [
+                ...(descriptor.derived === null ? [] : [descriptor.derived]),
+                ...(descriptor.anyOf ?? []).flatMap(({ key, source }) =>
+                  source === "derived" ? [key] : [],
+                ),
+              ]
             : [],
         ),
       );
