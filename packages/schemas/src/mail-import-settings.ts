@@ -10,14 +10,55 @@ export const mailImportSettings = z.strictObject({
 });
 export type MailImportSettings = z.infer<typeof mailImportSettings>;
 
-/** Frontier chat-model spend in the current fixed UTC window, classification excluded. */
-export const aiBudgetStatus = z.strictObject({
-  windowStart: z.iso.datetime(),
-  windowEnd: z.iso.datetime(),
+/** The Claude subscriber-credit budget a member may set per six-hour window. */
+export const creditBudgetLimitUsd = z.number().nonnegative().max(100);
+
+/** Stored household AI budget settings; an absent row keeps the defaults. */
+export const aiBudgetSettings = z.strictObject({
+  creditLimitUsd: creditBudgetLimitUsd,
+});
+export type AiBudgetSettings = z.infer<typeof aiBudgetSettings>;
+
+const budgetUse = z.strictObject({
   limitUsd: z.number().nonnegative(),
   spentUsd: z.number().nonnegative(),
 });
+
+/**
+ * Frontier chat-model spend in the current fixed UTC window. `credit` sums
+ * the standard API cost of Claude subscriber-credit calls; `paid` sums the
+ * charged cost of everything else, so credit calls never count as paid.
+ */
+export const aiBudgetStatus = z.strictObject({
+  windowStart: z.iso.datetime(),
+  windowEnd: z.iso.datetime(),
+  credit: budgetUse,
+  paid: budgetUse,
+});
 export type AiBudgetStatus = z.infer<typeof aiBudgetStatus>;
+
+/**
+ * Whether the household ChatGPT plan can carry background work now:
+ * `paused` after a recorded quota refusal until its reset (`until`);
+ * `reason` keeps the raw refusal or connection diagnostic.
+ */
+export const chatGptPlanAvailability = z.strictObject({
+  state: z.enum([
+    "available",
+    "paused",
+    "disconnected",
+    "needs_reauthorization",
+  ]),
+  until: z.iso.datetime().nullable(),
+  reason: z.string().nullable(),
+});
+export type ChatGptPlanAvailability = z.infer<typeof chatGptPlanAvailability>;
+
+/** Both budgets and the plan: what decides whether background work waits. */
+export const aiFundingStatus = aiBudgetStatus.extend({
+  plan: chatGptPlanAvailability,
+});
+export type AiFundingStatus = z.infer<typeof aiFundingStatus>;
 
 export const mailImportStatus = z.strictObject({
   mailboxes: z.array(
@@ -27,7 +68,7 @@ export const mailImportStatus = z.strictObject({
       searches: mailSearchProgress,
     }),
   ),
-  budget: aiBudgetStatus,
+  budget: aiFundingStatus,
 });
 export type MailImportStatus = z.infer<typeof mailImportStatus>;
 
@@ -36,3 +77,14 @@ export const setMailImportInput = z.strictObject({
   enabled: z.boolean(),
 });
 export type SetMailImportInput = z.infer<typeof setMailImportInput>;
+
+export const setCreditBudgetInput = z.strictObject({
+  creditLimitUsd: creditBudgetLimitUsd,
+});
+
+/**
+ * A member's one-Run override of "background work never pays": paid funding
+ * within the paid budget, or past it by the confirmed `paidOverBudgetUsd`
+ * for the window the override was granted in.
+ */
+export const paidOverBudgetUsd = z.number().positive().max(10);

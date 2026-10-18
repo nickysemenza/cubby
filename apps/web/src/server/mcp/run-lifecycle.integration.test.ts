@@ -10,7 +10,13 @@ import { type JSONType, z } from "zod";
 import { setCfEnv } from "~/server/cf-env";
 import { account, user } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
-import { appSettings, runApproval, run as runTable } from "~/server/db/schema";
+import {
+  aiUsage,
+  appSettings,
+  runApproval,
+  runControlEvent,
+  run as runTable,
+} from "~/server/db/schema";
 import { retainedMailFixture } from "~/server/domains/purchase-import/operations/order-import.fixtures";
 import { admitMailImport } from "~/server/domains/purchase-import/repo/mail-import-run";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
@@ -42,7 +48,11 @@ describe("Run lifecycle through MCP", () => {
   });
   afterEach(() => setCfEnv(undefined));
 
-  const call = async (runId: string, controlAction: string) => {
+  const call = async (
+    runId: string,
+    controlAction: string,
+    extra: Record<string, JSONType> = {},
+  ) => {
     const request = requireActor(
       createTestRequestContext(ctx.db, {
         auth: { userId: ctx.actor.userId },
@@ -55,6 +65,7 @@ describe("Run lifecycle through MCP", () => {
         action: "lifecycle",
         runId,
         controlAction,
+        ...extra,
       },
       request,
       { entityKernel: entityKernelContextSchema.parse(request) },
@@ -134,6 +145,72 @@ describe("Run lifecycle through MCP", () => {
       where: eq(runTable.shortcode, successor.publicId),
     });
     expect(nextRow?.predecessorRunId).toBe(previous?.id);
+  });
+
+  // Failure modes: a waiting background Run cannot be released with paid
+  // models; the release pays past a spent paid budget without a named amount;
+  // the grant is not recorded against the member.
+  it("runs a waiting Mail import now with paid models, past a spent budget only by a named amount", async () => {
+    const original = await prepare();
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({
+        trigger: "discovery",
+        status: "paused_auth",
+        failureCode: "execution_limit",
+      })
+      .where(eq(runTable.id, original.id));
+    const released = await call(original.shortcode, "run_now_paid");
+    expect(released.isError).not.toBe(true);
+    expect(released.structuredContent).toMatchObject({
+      run: { status: "running" },
+    });
+
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "paused_auth", failureCode: "execution_limit" })
+      .where(eq(runTable.id, original.id));
+    await getDb(ctx.db).insert(aiUsage).values({
+      runId: original.id,
+      feature: "purchase_import_agent",
+      provider: "openai",
+      model: "gpt-6-sol",
+      operation: "agent.generation",
+      durationMs: 1,
+      chargedCost: 1.05,
+      standardCost: 1.05,
+    });
+    const refused = await call(original.shortcode, "run_now_paid");
+    expect(refused.isError).toBe(true);
+    expect(JSON.stringify(refused.content)).toContain(
+      "The paid AI budget is spent: $1.05 of $1.00",
+    );
+    const confirmed = await call(original.shortcode, "run_now_paid", {
+      paidOverBudgetUsd: 1,
+    });
+    expect(confirmed.isError).not.toBe(true);
+    expect(
+      await getDb(ctx.db)
+        .select({
+          action: runControlEvent.action,
+          paidOverBudgetUsd: runControlEvent.paidOverBudgetUsd,
+          controllerUserId: runControlEvent.controllerUserId,
+        })
+        .from(runControlEvent)
+        .where(eq(runControlEvent.runId, original.id))
+        .orderBy(runControlEvent.createdAt),
+    ).toEqual([
+      {
+        action: "run_now_paid",
+        paidOverBudgetUsd: null,
+        controllerUserId: ctx.actor.userId,
+      },
+      {
+        action: "run_now_paid",
+        paidOverBudgetUsd: 1,
+        controllerUserId: ctx.actor.userId,
+      },
+    ]);
   });
 
   it("refuses foreign ownership before changing a Run", async () => {
@@ -265,6 +342,56 @@ describe("Mail import switch and discovery through MCP", () => {
       mailboxId,
       executionPolicy: "import",
     });
+  });
+
+  // Failure modes: the card's budgets or plan state are missing from MCP;
+  // the credit budget cannot be changed; "Run discovery now, paid allowed"
+  // starts discovery without recording the member's paid grant.
+  it("reports both budgets and the plan, sets the credit budget, and grants paid discovery", async () => {
+    await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic MCP approval member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    await connect(mailboxId);
+    await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic MCP discovery vendor",
+    });
+    expect(
+      (await call("imports_read", { action: "mail_import" })).structuredContent,
+    ).toMatchObject({
+      budget: {
+        credit: { limitUsd: 5, spentUsd: 0 },
+        paid: { limitUsd: 1, spentUsd: 0 },
+        plan: { state: "disconnected", until: null },
+      },
+    });
+    const set = await call("run", {
+      action: "set_credit_budget",
+      creditLimitUsd: 7.5,
+    });
+    expect(set.isError).not.toBe(true);
+    expect(set.structuredContent).toMatchObject({
+      budget: { credit: { limitUsd: 7.5 } },
+    });
+    expect((await call("run", enable())).isError).not.toBe(true);
+    const discovered = await call("run", {
+      action: "discover_mail",
+      mailboxId,
+      paidAllowed: true,
+    });
+    expect(discovered.isError).not.toBe(true);
+    expect(discovered.structuredContent).toEqual({ started: 1, running: 0 });
+    const [discovery] = await getDb(ctx.db)
+      .select({ id: runTable.id })
+      .from(runTable)
+      .where(eq(runTable.purpose, "mail_discovery"));
+    expect(
+      await getDb(ctx.db)
+        .select({ action: runControlEvent.action })
+        .from(runControlEvent)
+        .where(eq(runControlEvent.runId, discovery!.id)),
+    ).toEqual([{ action: "run_now_paid" }]);
   });
 
   it("refuses a caller without a member link and a mailbox the member does not own", async () => {

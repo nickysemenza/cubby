@@ -255,10 +255,7 @@ async function recoverPurchaseAudit(
       }),
       beforePaidRequest: withAiBudget(
         args.db,
-        {
-          model: AUDIT_RECOVERY_MODEL,
-          feature: PURCHASE_IMPORT_AUDIT_FEATURE.feature,
-        },
+        { model: AUDIT_RECOVERY_MODEL, runId: runEntityId.parse(args.runId) },
         undefined,
       ),
       onTransport: (selected) => {

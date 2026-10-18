@@ -154,7 +154,10 @@ describe("automatic Mail import switch", () => {
       ok: true,
       data: {
         mailboxes: [{ mailboxId, enabled: true }],
-        budget: { limitUsd: 1, spentUsd: 0 },
+        budget: {
+          credit: { limitUsd: 5, spentUsd: 0 },
+          paid: { limitUsd: 1, spentUsd: 0 },
+        },
       },
     });
     expect(await invoke("mailImport", {})).toMatchObject({

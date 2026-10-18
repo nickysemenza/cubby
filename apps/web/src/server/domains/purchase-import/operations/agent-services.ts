@@ -102,11 +102,15 @@ export function runServicesFor(
           import("~/server/domains/run/service/execution-transport"),
           import("@cubby/schemas/identifiers"),
         ]);
-        await paidRunPreflight(
-          db,
-          runEntityId.parse(runId),
-          "purchase_import_agent",
-        )(request);
+        await paidRunPreflight(db, runEntityId.parse(runId))(request);
+      }),
+    admitCreditInference: (request) =>
+      withDatabase(async (db) => {
+        const [{ creditRunPreflight }, { runEntityId }] = await Promise.all([
+          import("~/server/domains/run/service/execution-transport"),
+          import("@cubby/schemas/identifiers"),
+        ]);
+        return creditRunPreflight(db, runEntityId.parse(runId))(request);
       }),
     coordinatorRetired: () =>
       withDatabase(async (db) => {

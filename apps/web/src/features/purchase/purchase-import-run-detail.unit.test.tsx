@@ -155,6 +155,20 @@ beforeEach(() => {
       };
     if (operation === "run.control")
       return { ok: true, data: { run: detailRun, successor: null } };
+    if (operation === "run.mailImport")
+      return {
+        ok: true,
+        data: {
+          mailboxes: [],
+          budget: {
+            windowStart: "2026-09-20T12:00:00.000Z",
+            windowEnd: "2026-09-20T18:00:00.000Z",
+            credit: { limitUsd: 5, spentUsd: 5 },
+            paid: { limitUsd: 1, spentUsd: 0.25 },
+            plan: { state: "available", until: null, reason: null },
+          },
+        },
+      };
     if (operation === "run.aiUsage")
       return {
         ok: true,
@@ -299,6 +313,41 @@ describe("import run slots", () => {
       screen.queryByRole("button", { name: "Abort agent" }),
     ).not.toBeInTheDocument();
   });
+});
+
+// A background Run waiting for free AI capacity must offer the member's paid
+// override, confirm it, and send it as run_now_paid; other Runs must not.
+it("runs a waiting import now with paid models after confirmation", async () => {
+  detailRun = {
+    ...run,
+    status: "paused_auth",
+    failureCode: "execution_limit",
+    endedAt: null,
+  };
+  render(<RunImportControls record={record} />, { wrapper: harness.wrapper });
+  const button = await screen.findByRole("button", {
+    name: "Run now, paid allowed",
+  });
+  await waitFor(() => expect(button).toBeEnabled());
+  fireEvent.click(button);
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Allow paid models" }),
+  );
+  await waitFor(() =>
+    expect(operationCalls).toContainEqual({
+      operation: "run.control",
+      input: { runId: "RUN-4K7M", action: "run_now_paid" },
+    }),
+  );
+});
+
+it("offers no paid override to a Run that is not waiting for funding", async () => {
+  detailRun = { ...run, status: "paused_auth", failureCode: null };
+  render(<RunImportControls record={record} />, { wrapper: harness.wrapper });
+  await screen.findAllByRole("button");
+  expect(
+    screen.queryByRole("button", { name: "Run now, paid allowed" }),
+  ).not.toBeInTheDocument();
 });
 
 // Unrelated-source retirement erased the Run's inputs and targets; it must

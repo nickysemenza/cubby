@@ -9,6 +9,8 @@ import {
 } from "@cubby/schemas/identifiers";
 import {
   mailImportStatus,
+  paidOverBudgetUsd,
+  setCreditBudgetInput,
   setMailImportInput,
 } from "@cubby/schemas/mail-import-settings";
 import {
@@ -229,6 +231,11 @@ const merchantRules = z.object({
 const runControlInput = z.object({
   runId: runShortcode,
   action: runControlAction,
+  /**
+   * `run_now_paid` only: the spend past a spent paid budget the member
+   * confirmed, valid for the current six-hour window.
+   */
+  paidOverBudgetUsd: paidOverBudgetUsd.optional(),
 });
 const runControlOutput = z.object({
   run: runDetail,
@@ -243,7 +250,8 @@ const runControlOutput = z.object({
 
 export const runContract = defineContract("run", {
   mailImport: query({
-    native: "Show automatic Mail import switches and the AI budget window",
+    native:
+      "Show automatic Mail import switches, both AI budgets and the ChatGPT plan",
     input: z.strictObject({}),
     output: mailImportStatus,
     // Search progress moves while discovery runs; Run writes refresh it.
@@ -255,9 +263,18 @@ export const runContract = defineContract("run", {
     output: mailImportStatus,
     invalidates: ["runOnly"],
   }),
+  setCreditBudget: mutation({
+    input: setCreditBudgetInput,
+    output: mailImportStatus,
+    invalidates: ["runOnly"],
+  }),
   discoverMail: mutation({
     native: "Start Mail discovery now for one mailbox with Mail import on",
-    input: setMailImportInput.pick({ mailboxId: true }),
+    input: setMailImportInput.pick({ mailboxId: true }).extend({
+      /** Skip the wait for free AI capacity; spend from the paid budget. */
+      paidAllowed: z.boolean().optional(),
+      paidOverBudgetUsd: paidOverBudgetUsd.optional(),
+    }),
     output: mailboxDiscoveryStartOutput,
     invalidates: ["runOnly"],
   }),

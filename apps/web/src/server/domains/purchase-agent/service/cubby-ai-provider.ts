@@ -159,7 +159,10 @@ const COORDINATOR_CALL = {
 
 interface AgentFetchOptions extends Pick<
   GatewayFetchRoutes,
-  "subscriptionRequired" | "subscriptionFallback" | "beforePaidRequest"
+  | "subscriptionRequired"
+  | "subscriptionFallback"
+  | "beforePaidRequest"
+  | "beforeCreditRequest"
 > {
   funding?: InferenceFunding;
   fundingFallback?: boolean;
@@ -168,7 +171,10 @@ interface AgentFetchOptions extends Pick<
   /** Pi may open before dispatch binds a Run; resolve its policy per request. */
   transportPolicy?: () => Pick<
     GatewayFetchRoutes,
-    "subscriptionRequired" | "subscriptionFallback" | "beforePaidRequest"
+    | "subscriptionRequired"
+    | "subscriptionFallback"
+    | "beforePaidRequest"
+    | "beforeCreditRequest"
   >;
   gateway: () => AgentGateway;
   testModel?: TestModel;
@@ -198,7 +204,10 @@ export function createCubbyGatewayFetch(
   const routedFetch = (
     policy: Pick<
       GatewayFetchRoutes,
-      "subscriptionRequired" | "subscriptionFallback" | "beforePaidRequest"
+      | "subscriptionRequired"
+      | "subscriptionFallback"
+      | "beforePaidRequest"
+      | "beforeCreditRequest"
     >,
   ) =>
     gatewayFetchThrough({
@@ -251,9 +260,11 @@ export function createCubbyGatewayFetch(
       subscriptionRequired: options.subscriptionRequired,
       subscriptionFallback: options.subscriptionFallback,
       beforePaidRequest: options.beforePaidRequest,
+      beforeCreditRequest: options.beforeCreditRequest,
       ...options.transportPolicy?.(),
     };
     const admit = policy.beforePaidRequest;
+    const admitCredit = policy.beforeCreditRequest;
     let refusal: { error: unknown } | undefined;
     try {
       return await routedFetch({
@@ -263,6 +274,16 @@ export function createCubbyGatewayFetch(
           (async (request) => {
             try {
               await admit(request);
+            } catch (error: unknown) {
+              refusal = { error };
+              throw error;
+            }
+          }),
+        beforeCreditRequest:
+          admitCredit &&
+          (async (request) => {
+            try {
+              return await admitCredit(request);
             } catch (error: unknown) {
               refusal = { error };
               throw error;

@@ -20,6 +20,21 @@ describe("shared Gateway admission", () => {
       await stub.finish(unified.token, 200, null, now + 1);
   });
 
+  // Work paused for free AI capacity must wake at the earliest window end, and
+  // no other wake may clear that pending resume.
+  it("keeps one funding resume armed at the earliest requested time", async () => {
+    const stub = env.AI_GATEWAY_EGRESS.getByName(crypto.randomUUID());
+    const later = Date.now() + 6 * 60 * 60_000;
+    const sooner = later - 60 * 60_000;
+    await stub.scheduleFundingResume(later);
+    await stub.scheduleFundingResume(sooner);
+    await stub.scheduleFundingResume(later);
+    await runInDurableObject(stub, async (_instance, state) => {
+      expect(await state.storage.get("fundingResumeAt")).toBe(sooner);
+      expect(await state.storage.getAlarm()).toBe(sooner);
+    });
+  });
+
   it("shares the aggregate budget and cooldown across callers without spending capacity on a refusal", async () => {
     const name = crypto.randomUUID();
     const first = env.AI_GATEWAY_EGRESS.getByName(name);

@@ -640,7 +640,7 @@ export const MCP_TOOLS = defineMcpTools({
       mail_import: mcpAction({
         op: runContract.ops.mailImport,
         description:
-          "The member's connected Gmail mailboxes with their automatic Mail import switch, and frontier chat-model spend in the current six-hour budget window (classification excluded).",
+          "The member's connected Gmail mailboxes with their automatic Mail import switch, and the current six-hour window's frontier chat-model budgets: budget.credit (Claude subscriber credit at standard API cost, default $5) and budget.paid (charged cost, $1), plus budget.plan (ChatGPT plan available, paused until a quota reset, disconnected or needing reauthorization, with the raw reason). Background work uses credit, then the plan, and otherwise waits; it never pays automatically.",
       }),
 
       mail: mcpAction({
@@ -1016,18 +1016,23 @@ export const MCP_TOOLS = defineMcpTools({
         openWorld: true,
         strict: true,
         description:
-          "Control an owned Run with controlAction: cancel stops active work; retry/restart preserve the previous attempt and return its admitted successor; pause, resume, escalate_sol, retry_dispatch, abort, upload_evidence and no_evidence_available follow the Run page. Unsupported states refuse without changing the Run.",
+          "Control an owned Run with controlAction: cancel stops active work; retry/restart preserve the previous attempt and return its admitted successor; pause, resume, escalate_sol, retry_dispatch, abort, upload_evidence and no_evidence_available follow the Run page. run_now_paid resumes a paused Mail import or Mail discovery Run now with paid models allowed for that Run, within the paid budget; once the window's paid budget is spent it refuses unless paidOverBudgetUsd names the confirmed amount past it. It spends money: use it only on the member's explicit instruction. Unsupported states refuse without changing the Run.",
       }),
       set_mail_import: mcpAction({
         op: runContract.ops.setMailImport,
         description:
-          "Turn automatic Mail import on or off for one connected mailbox (imports_read.mail_import). On, scheduled discovery searches known Vendors' senders and unmatched transaction merchants, imports unambiguous purchases, and spends within the household AI budget.",
+          "Turn automatic Mail import on or off for one connected mailbox (imports_read.mail_import). On, scheduled discovery searches known Vendors' senders and unmatched transaction merchants and imports unambiguous purchases on Claude credit or the ChatGPT plan, waiting for free capacity rather than paying.",
+      }),
+      set_credit_budget: mcpAction({
+        op: runContract.ops.setCreditBudget,
+        description:
+          "Set the household Claude subscriber-credit budget per six-hour window (creditLimitUsd, standard API cost; default $5). Background work past it moves to the ChatGPT plan, then waits; work paused under the old limit retries now. Returns imports_read.mail_import.",
       }),
       discover_mail: mcpAction({
         op: runContract.ops.discoverMail,
         openWorld: true,
         description:
-          "Start Mail discovery now for one mailbox with Mail import on; replays an active launch.",
+          'Start Mail discovery now for one mailbox with Mail import on; replays an active launch. paidAllowed ("Run discovery now, paid allowed") lets this discovery and the imports it starts pay within the paid budget instead of waiting for free capacity, resuming a waiting discovery; once the paid budget is spent it refuses unless paidOverBudgetUsd names the confirmed amount past it. Use paidAllowed only on the member\'s explicit instruction.',
       }),
       commit_prepared: mcpAction({
         op: runContract.ops.commitPrepared,

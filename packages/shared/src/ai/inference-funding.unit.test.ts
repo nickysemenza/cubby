@@ -108,6 +108,37 @@ describe("inference funding", () => {
     ).toBe(429);
     expect(calls).toEqual([]);
   });
+  // A spent Claude credit budget must advance the ladder like a Console
+  // refusal, before anything is transmitted on the credit key.
+  it("refuses a credit attempt Cubby's credit budget stops as a funding refusal", async () => {
+    const sent: string[] = [];
+    const send = (refusal: string | null) =>
+      gatewayFetchThrough({
+        provider: "anthropic",
+        funding: "subscriber_credit",
+        beforeCreditRequest: async () => refusal,
+        gateway: async () => {
+          sent.push("credit");
+          return Response.json({});
+        },
+      })("https://ai-gateway.invalid/anthropic/v1/messages", {
+        method: "POST",
+        body: '{"model":"claude-opus-5-5"}',
+      });
+    const refused = await send(
+      "Claude credit budget reached: $5 of $5 standard cost",
+    );
+    const body = await refused.text();
+    expect(refused.status).toBe(429);
+    expect(body).toContain("Claude credit budget reached");
+    expect(isInferenceFundingRefusal(429, body, "subscriber_credit")).toBe(
+      true,
+    );
+    expect(sent).toEqual([]);
+    expect((await send(null)).status).toBe(200);
+    expect(sent).toEqual(["credit"]);
+  });
+
   it("requires the named credit key and leaves paid requests unaliased", () => {
     expect(inferenceFundingHeaders("subscriber_credit")).toEqual({
       "cf-aig-byok-alias": "subscriber-credit",

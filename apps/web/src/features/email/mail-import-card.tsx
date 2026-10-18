@@ -9,8 +9,11 @@ import { Stack } from "~/ui/layout";
 import { StatusText } from "~/ui/primitives/status-text";
 import { Switch } from "~/ui/primitives/switch";
 
-const usd = (value: number) =>
-  value.toLocaleString(undefined, { style: "currency", currency: "USD" });
+import {
+  AiFundingSummary,
+  CreditBudgetEditor,
+  PaidRunButton,
+} from "./ai-funding";
 
 const MAIL_IMPORT_REFRESH_MS = 30_000;
 /** Poll only while a switched-on mailbox still has searches to run. */
@@ -77,6 +80,19 @@ export function MailImportSettings() {
       queryClient.setQueryData(run.mailImport.queryOptions({}).queryKey, data);
     },
   });
+  const setCredit = useActionMutation({
+    mutationFn: () => run.setCreditBudget.mutationOptions(),
+    success: "Claude credit budget updated",
+    error: "Couldn't update the Claude credit budget",
+    onSuccess: (data) => {
+      queryClient.setQueryData(run.mailImport.queryOptions({}).queryKey, data);
+    },
+  });
+  const discover = useActionMutation({
+    mutationFn: () => run.discoverMail.mutationOptions(),
+    success: "Discovery started with paid models allowed",
+    error: "Couldn't start discovery",
+  });
   const mailboxes = status.data?.mailboxes ?? [];
   const budget = status.data?.budget;
   return (
@@ -120,6 +136,20 @@ export function MailImportSettings() {
                 />
               </label>
               <MailSearchSummary searches={mailbox.searches} />
+              {mailbox.enabled ? (
+                <div className="mt-2">
+                  <PaidRunButton
+                    label="Run discovery now, paid allowed"
+                    budget={budget}
+                    pending={discover.isPending}
+                    onConfirm={(paidOverBudgetUsd) => discover.mutate({
+                      mailboxId: mailbox.mailboxId,
+                      paidAllowed: true,
+                      paidOverBudgetUsd,
+                    })}
+                  />
+                </div>
+              ) : null}
             </div>
           );
         })}
@@ -133,16 +163,15 @@ export function MailImportSettings() {
           </Link>
         ) : null}
         {budget ? (
-          <p className="text-sm text-muted-foreground">
-            AI budget: {usd(budget.spentUsd)} of {usd(budget.limitUsd)} used
-            this six-hour window; resets{" "}
-            {new Date(budget.windowEnd).toLocaleTimeString(undefined, {
-              hour: "numeric",
-              minute: "2-digit",
-            })}
-            . Only frontier chat models count; classification and embeddings
-            don't.
-          </p>
+          <Stack gap="sm">
+            <AiFundingSummary budget={budget} />
+            <CreditBudgetEditor
+              key={budget.credit.limitUsd}
+              limitUsd={budget.credit.limitUsd}
+              pending={setCredit.isPending}
+              onSave={(creditLimitUsd) => setCredit.mutate({ creditLimitUsd })}
+            />
+          </Stack>
         ) : null}
       </Stack>
     </div>

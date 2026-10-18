@@ -49,11 +49,7 @@ export async function productionCandidateChoice(
         db,
         runId: runEntityId.parse(runId),
         operation: "mailbox-order-candidate",
-        beforePaidRequest: paidRunPreflight(
-          db,
-          runEntityId.parse(runId),
-          MAILBOX_ORDER_CANDIDATE_FEATURE.feature,
-        ),
+        beforePaidRequest: paidRunPreflight(db, runEntityId.parse(runId)),
       },
     });
   };

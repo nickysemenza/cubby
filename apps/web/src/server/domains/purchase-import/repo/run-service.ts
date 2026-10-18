@@ -23,6 +23,7 @@ import {
   coordinatorModelFor,
   importRunAgentIdentity,
 } from "@cubby/schemas/import-run-agent";
+import { paidOverBudgetUsd } from "@cubby/schemas/mail-import-settings";
 import {
   storedPhotoRunInput,
   type PhotoInventoryRunInput,
@@ -993,8 +994,8 @@ export async function resumeAuthorizedRuns(
 const BUDGET_RESUME_RECLAIM_MS = 5 * 60_000;
 
 /**
- * Redispatch agent imports a spent AI budget window paused; the caller checks
- * the current window has room. A resumed Run stays `budget_resume_pending`
+ * Redispatch agent imports a funding stop paused before `pausedBefore`; the
+ * caller chooses the window (`resumeFundingPausedRuns`). A resumed Run stays `budget_resume_pending`
  * until its queue send is recorded. Each send is claimed atomically (the
  * resuming update, or reclaiming a stale pending generation), so concurrent
  * recoveries never send one generation twice and a late failed duplicate
@@ -1003,6 +1004,7 @@ const BUDGET_RESUME_RECLAIM_MS = 5 * 60_000;
 export async function redispatchBudgetPausedImports(
   db: Database,
   now = new Date(),
+  pausedBefore = now,
 ) {
   const sent = {
     id: runTable.id,
@@ -1025,6 +1027,7 @@ export async function redispatchBudgetPausedImports(
         eq(runTable.status, "paused_auth"),
         eq(runTable.failureCode, "execution_limit"),
         inArray(runTable.purpose, [...agentImportRunPurpose.options]),
+        lt(runTable.updatedAt, pausedBefore),
         notDeleted(runTable),
       ),
     )
@@ -1775,7 +1778,9 @@ const runControlInput = z.object({
     "upload_evidence",
     "no_evidence_available",
     "escalate_sol",
+    "run_now_paid",
   ]),
+  paidOverBudgetUsd: paidOverBudgetUsd.optional(),
 });
 
 const runControlAction = z.enum([
@@ -2027,6 +2032,7 @@ export async function controlRun(
       controllerLedgerPartyShortcode: controller.ledgerPartyShortcode,
       controllerLedgerPartyName: controller.ledgerPartyName,
       controllerLedgerPartyKind: controller.ledgerPartyKind,
+      paidOverBudgetUsd: input.paidOverBudgetUsd ?? null,
     });
     if (input.action === "retry_dispatch") {
       if (
@@ -2245,14 +2251,15 @@ export async function controlRun(
         status: "paused" as const,
       };
     }
-    if (input.action === "resume") {
+    if (input.action === "resume" || input.action === "run_now_paid") {
+      // The recorded `run_now_paid` event is the paid grant
+      // (`readPaidGrant`); resuming is the same redispatch.
       if (
-        !new Set([
-          "paused",
-          "paused_auth",
-          "paused_offline",
-          "paused_approval",
-        ]).has(locked.status)
+        !new Set(
+          input.action === "run_now_paid"
+            ? ["paused", "paused_auth"]
+            : ["paused", "paused_auth", "paused_offline", "paused_approval"],
+        ).has(locked.status)
       )
         throw new Error(`Purchase import run is fenced in ${locked.status}`);
       const dispatchEventId = crypto.randomUUID();

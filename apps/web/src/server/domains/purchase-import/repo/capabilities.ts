@@ -134,6 +134,7 @@ const actionCapability = {
   "run.lifecycle": "start_run",
   "run.set_mail_import": "member_decision",
   "run.discover_mail": "member_decision",
+  "run.set_credit_budget": "member_decision",
   "run.commit_prepared": "member_decision",
   "run.resolve_finding": "member_decision",
   "meal_recipe.add": "generic_mutation",

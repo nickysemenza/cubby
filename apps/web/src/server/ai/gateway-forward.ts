@@ -328,7 +328,7 @@ async function forwardGatewayAttempt(
       funding,
       // Only a paid frontier transmission is budgeted; subscription is not.
       beforePaidRequest: model
-        ? withAiBudget(opts.db, { model, feature: opts.feature }, undefined)
+        ? withAiBudget(opts.db, { model, runId: opts.runId }, undefined)
         : undefined,
       onTransport: (selected) => {
         transport = selected;

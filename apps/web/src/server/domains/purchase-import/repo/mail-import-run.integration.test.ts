@@ -475,7 +475,6 @@ describe("mail research admission", () => {
       beforePaidRequest: paidRunPreflight(
         ctx.db,
         parseEntityId("run", admitted.runId),
-        "purchase_import_agent",
       ),
       gateway: async () => {
         transmissions += 1;
@@ -534,7 +533,6 @@ describe("mail research admission", () => {
         beforePaidRequest: paidRunPreflight(
           ctx.db,
           parseEntityId("run", admitted.runId),
-          "purchase_import_agent",
         ),
         gateway: async () => {
           transmissions += 1;
@@ -599,7 +597,6 @@ describe("mail research admission", () => {
         beforePaidRequest: paidRunPreflight(
           ctx.db,
           parseEntityId("run", successor.successorRunId),
-          "purchase_import_agent",
         ),
         gateway: async () => {
           transmissions += 1;
@@ -676,7 +673,6 @@ describe("mail research admission", () => {
         beforePaidRequest: paidRunPreflight(
           ctx.db,
           parseEntityId("run", successor.successorRunId),
-          "purchase_import_agent",
         ),
         gateway: async () => {
           transmissions += 1;
