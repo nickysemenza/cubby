@@ -192,7 +192,9 @@ async function emitAiUsage(
       cacheWriteTokens: input.cacheWriteTokens ?? null,
       status: input.status ?? "succeeded",
       gatewayLogId: input.gatewayLogId ?? null,
-      failure: input.failure ? scrubErrorMessage(input.failure) : null,
+      // Omitted unless set: the preceding consumer's strict schema rejects
+      // the key, so a rollback drops only queued failures, not every row.
+      ...(input.failure ? { failure: scrubErrorMessage(input.failure) } : {}),
       durationMs: input.durationMs,
       cacheStatus: input.cacheStatus ?? null,
       applicationCacheStatus: input.applicationCacheStatus ?? null,
