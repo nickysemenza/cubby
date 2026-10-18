@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
 import { entityDetailLink } from "~/entity/entities";
-import { suggestions } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { recipeAvailability } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { Grid, Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
@@ -32,7 +32,7 @@ export function MealSuggestionsPage({
   const minCoverage = activeFilter.minCoverage;
 
   const { data, isLoading, error } = useQuery(
-    suggestions.getMakeable.queryOptions({ minCoverage }),
+    recipeAvailability.getMakeable.queryOptions({ minCoverage }),
   );
 
   return (

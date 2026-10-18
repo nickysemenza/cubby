@@ -4,7 +4,6 @@ import type {
   StatementSuggestionOut,
   statementSuggestionGroupOut,
 } from "@cubby/schemas/statement-suggestion";
-import { STATEMENT_SUGGESTION_PAGE_MAX } from "@cubby/schemas/statement-suggestion";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
@@ -18,9 +17,10 @@ import {
   assessment,
   run,
   statementRow,
+  suggestions,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import { formatCount, formatCurrency } from "~/lib/number-format";
+import { formatCount } from "~/lib/number-format";
 import { Ledger } from "~/ui/common/ledger";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";
 import {
@@ -70,6 +70,7 @@ const REVIEW_RIPPLE = rippleFor([
   "statementRow",
   "financialTransaction",
   "settledSuggestions",
+  "suggestions",
 ]);
 const REVIEW_BATCH_MAX = 100;
 const NO_GROUPS: Group[] = [];
@@ -112,8 +113,15 @@ export function StatementSuggestions() {
   const search = route.useSearch();
   const navigate = route.useNavigate();
   const queryClient = useQueryClient();
-  const groupsQuery = useQuery(statementRow.suggestionGroups.queryOptions({}));
-  const groups = groupsQuery.data?.data ?? NO_GROUPS;
+  const groupsQuery = useQuery({
+    ...suggestions.list.queryOptions({
+      family: "statement_transaction",
+      limit: 1,
+      groups: "account_month",
+    }),
+    select: (page) => page.groups ?? NO_GROUPS,
+  });
+  const groups = groupsQuery.data ?? NO_GROUPS;
 
   const [refresh, setRefresh] = useState<RefreshState>({ state: "idle" });
   const [groupAccept, setGroupAccept] = useState<GroupAcceptState | null>(null);
@@ -151,7 +159,7 @@ export function StatementSuggestions() {
     });
     const failures: GroupAcceptState["failures"] = [];
     try {
-      // Re-list before every chunk rather than reading the group once: labels
+      // The server re-lists the clean set before every chunk: labels
       // republish a charge's suggestion under a new id while this runs, and
       // accepting shrinks the set, so a single up-front read goes stale.
       // Attempted ids are never retried; failures stay pending for review.
@@ -159,40 +167,30 @@ export function StatementSuggestions() {
       let done = 0;
       let total = group.clean;
       for (;;) {
-        const page = await statementRow.suggestions.call({
+        const results = await suggestions.acceptClean.call({
           filters: {
-            accountId: group.accountId,
-            month: group.month,
-            clean: true,
+            family: "statement_transaction",
+            scope: {
+              statement_transaction: {
+                accountId: group.accountId,
+                month: group.month,
+              },
+            },
           },
-          limit: STATEMENT_SUGGESTION_PAGE_MAX,
-          offset: 0,
+          limit: REVIEW_BATCH_MAX,
+          skip: [...attempted],
         });
-        const batch = page.data
-          .filter((suggestion) => !attempted.has(suggestion.assessmentId))
-          .slice(0, REVIEW_BATCH_MAX);
-        if (!batch.length) break;
-        total = Math.max(total, done + page.count - failures.length);
-        const byAssessment = new Map(
-          batch.map((suggestion) => [suggestion.assessmentId, suggestion]),
-        );
-        for (const suggestion of batch) attempted.add(suggestion.assessmentId);
-        const results = await assessment.reviewBatch.call({
-          items: batch.map((suggestion) => applyItem(suggestion)),
-        });
+        if (!results.length) break;
         for (const result of results) {
+          if (result.assessmentId) attempted.add(result.assessmentId);
           if (result.ok) continue;
-          const suggestion = result.assessmentId
-            ? byAssessment.get(result.assessmentId)
-            : undefined;
           failures.push({
-            label: suggestion
-              ? `${suggestion.statementDate} · ${suggestion.merchant ?? suggestion.rawDescription} · ${formatCurrency(suggestion.amount)}`
-              : (result.assessmentId ?? "Unknown suggestion"),
+            label: result.assessmentId ?? "Unknown suggestion",
             error: result.error,
           });
         }
-        done += batch.length;
+        done += results.length;
+        total = Math.max(total, done);
         setGroupAccept({
           label,
           total,
@@ -502,13 +500,21 @@ function SuggestionList({
   ) => Promise<Awaited<ReturnType<typeof assessment.reviewBatch.call>>>;
 }) {
   const filterKey = JSON.stringify(filters);
-  const [page, setPage] = useState({ key: filterKey, offset: 0 });
-  const offset = page.key === filterKey ? page.offset : 0;
+  const [page, setPage] = useState<{ key: string; cursors: string[] }>({
+    key: filterKey,
+    cursors: [],
+  });
+  const cursors = page.key === filterKey ? page.cursors : [];
+  const cursor = cursors.at(-1);
+  const { clean, ...scope } = filters;
   const query = useQuery(
-    statementRow.suggestions.queryOptions({
-      filters,
+    suggestions.list.queryOptions({
+      family: "statement_transaction",
+      order: "newest",
+      scope: { statement_transaction: scope },
+      ...(clean === undefined ? {} : { clean }),
       limit: PAGE_SIZE,
-      offset,
+      ...(cursor ? { cursor } : {}),
     }),
   );
   const [outcomes, setOutcomes] = useState<Map<string, RowOutcome>>(
@@ -551,8 +557,21 @@ function SuggestionList({
         .filter(Boolean)
         .join(" · ")
     : "All suggestions";
-  const count = query.data?.count ?? 0;
-  const rows = query.data?.data ?? NO_SUGGESTIONS;
+  const count = groups
+    .filter(
+      (group) =>
+        (!filters.accountId || group.accountId === filters.accountId) &&
+        (!filters.month || group.month === filters.month),
+    )
+    .reduce((sum, group) => sum + group.total, 0);
+  const rows = useMemo(
+    () =>
+      query.data?.items.flatMap((row) =>
+        row.family === "statement_transaction" ? [row.evidence] : [],
+      ) ?? NO_SUGGESTIONS,
+    [query.data],
+  );
+  const next = query.data?.next ?? null;
 
   return (
     <Section
@@ -595,27 +614,22 @@ function SuggestionList({
               />
             ))}
           </Ledger>
-          {count > PAGE_SIZE ? (
+          {cursors.length || next ? (
             <Row
               align="center"
               gap="sm"
               className="text-xs text-muted-foreground"
             >
               <span className="tabular-nums">
-                {formatCount(offset + 1)}–
-                {formatCount(Math.min(offset + PAGE_SIZE, count))} of{" "}
-                {formatCount(count)}
+                Page {formatCount(cursors.length + 1)}
               </span>
               <Button
                 type="button"
                 variant="outline"
                 size="xs"
-                disabled={offset === 0}
+                disabled={!cursors.length}
                 onClick={() =>
-                  setPage({
-                    key: filterKey,
-                    offset: Math.max(0, offset - PAGE_SIZE),
-                  })
+                  setPage({ key: filterKey, cursors: cursors.slice(0, -1) })
                 }
               >
                 Previous
@@ -624,9 +638,10 @@ function SuggestionList({
                 type="button"
                 variant="outline"
                 size="xs"
-                disabled={offset + PAGE_SIZE >= count}
+                disabled={!next}
                 onClick={() =>
-                  setPage({ key: filterKey, offset: offset + PAGE_SIZE })
+                  next &&
+                  setPage({ key: filterKey, cursors: [...cursors, next] })
                 }
               >
                 Next

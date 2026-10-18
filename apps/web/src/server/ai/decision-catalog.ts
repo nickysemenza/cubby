@@ -4,9 +4,10 @@
  * subject. Field rows come from `ai/policy/field-decisions.ts`; Try runs a
  * real record.
  */
-import type { DecisionCatalogRow, SuggestionCountRow } from "@cubby/schemas/ai";
+import type { DecisionCatalogRow } from "@cubby/schemas/ai";
 import { externalIdKind } from "@cubby/schemas/external-id";
 import { extractedPurchaseLine } from "@cubby/schemas/purchase-import";
+import type { SuggestionFieldCount } from "@cubby/schemas/suggestion-list";
 
 import { externalIdKindSubject } from "~/server/ai/external-id-kind";
 import {
@@ -43,7 +44,7 @@ import {
   EXTERNAL_ID_KIND_RULES,
 } from "~/server/ai/vocabularies";
 import type { Database } from "~/server/db";
-import { suggestionCounts } from "~/server/generic/assessment/repo/suggestion-review";
+import { suggestionCountsByFamily } from "~/server/generic/assessment/repo/suggestion-list";
 
 import { productIdentityPrompt } from "./product-identity";
 
@@ -276,8 +277,9 @@ export function decisionCatalogRows(): CatalogRow[] {
 export async function decisionCatalog(
   db: Database,
 ): Promise<DecisionCatalogRow[]> {
-  const counts = new Map<string, SuggestionCountRow>(
-    (await suggestionCounts(db)).map((row) => [
+  const { families } = await suggestionCountsByFamily(db, { family: "field" });
+  const counts = new Map<string, SuggestionFieldCount>(
+    (families[0]?.fields ?? []).map((row) => [
       `${row.entity}.${row.field}`,
       row,
     ]),

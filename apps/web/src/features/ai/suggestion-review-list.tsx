@@ -9,6 +9,7 @@ import { auditEntitySchema } from "@cubby/schemas/audit";
 import { entityFieldByKey } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import { SUGGESTION_LIST_PAGE_MAX } from "@cubby/schemas/suggestion-list";
 import { humanize, parseShortcode } from "@cubby/shared";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
@@ -20,8 +21,8 @@ import { enumFieldLabel } from "~/entity/display/enum-field-display";
 import RTable from "~/entity/table/table";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import {
-  ai,
   assessment,
+  suggestions,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatCount } from "~/lib/number-format";
@@ -515,8 +516,30 @@ export function SuggestionReviewList({
     ...filters,
     minConfidence: filters.minConfidence ?? MIN_CONFIDENCE_DEFAULT,
   });
-  const list = useQuery(ai.listSuggestionReviewQueue.queryOptions(input));
-  const counts = useQuery(ai.suggestionCounts.queryOptions({}));
+  const list = useQuery({
+    ...suggestions.list.queryOptions({
+      family: "field",
+      entity: input.entity,
+      status: input.status,
+      runId: input.runId,
+      scope: {
+        field: {
+          field: input.field,
+          kind: input.kind,
+          minConfidence: input.minConfidence,
+        },
+      },
+      limit: SUGGESTION_LIST_PAGE_MAX,
+    }),
+    select: (page) =>
+      page.items.flatMap((row) =>
+        row.family === "field" ? [row.evidence] : [],
+      ),
+  });
+  const counts = useQuery({
+    ...suggestions.counts.queryOptions({ family: "field" }),
+    select: (out) => out.families[0]?.fields ?? [],
+  });
   // Outcomes and failed rows belong to one visit of a filtered query. Every
   // filter change (back/forward included, and a return to earlier filters)
   // starts a new generation with nothing shown, and a settlement commits only

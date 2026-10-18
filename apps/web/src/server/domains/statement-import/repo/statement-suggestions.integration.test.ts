@@ -20,6 +20,7 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
 
 import {
@@ -28,7 +29,6 @@ import {
   recordStatementRows,
   updateStatementRows,
 } from "./statement-row";
-import { listStatementSuggestions } from "./statement-suggestion-read";
 import {
   generateStatementSuggestionPage,
   pendingPostedMatch,
@@ -107,14 +107,22 @@ const generate = async (ctx: Ctx) => {
   }
 };
 
+/** Pending statement rows of the cross-family list, newest charge first. */
 const suggestions = async (ctx: Ctx) =>
   (
-    await listStatementSuggestions(ctx.db, {
-      filters: {},
-      limit: 50,
-      offset: 0,
+    await listSuggestionPage(ctx.db, {
+      family: "statement_transaction",
+      limit: 200,
     })
-  ).data;
+  ).items
+    .flatMap((row) =>
+      row.family === "statement_transaction" ? [row.evidence] : [],
+    )
+    .sort(
+      (a, b) =>
+        b.statementDate.localeCompare(a.statementDate) ||
+        a.assessmentId.localeCompare(b.assessmentId),
+    );
 
 const accept = (
   ctx: Ctx,

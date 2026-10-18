@@ -150,8 +150,6 @@ export type StatementTransactionApplication = z.infer<
   typeof statementTransactionApplication
 >;
 
-export const STATEMENT_SUGGESTION_PAGE_MAX = 500;
-
 export const statementSuggestionFilters = z.object({
   accountId: financialAccountShortcode.optional(),
   month: z
@@ -164,14 +162,6 @@ export const statementSuggestionFilters = z.object({
 export type StatementSuggestionFilters = z.infer<
   typeof statementSuggestionFilters
 >;
-
-export const listStatementSuggestionGroupsInput = z.object({});
-
-export const listStatementSuggestionsInput = z.object({
-  filters: statementSuggestionFilters.default({}),
-  limit: z.number().int().min(1).max(STATEMENT_SUGGESTION_PAGE_MAX).default(50),
-  offset: z.number().int().min(0).default(0),
-});
 
 const publicCandidate = statementTransactionCandidate
   .omit({ transactionId: true })
@@ -207,11 +197,6 @@ export const statementSuggestionOut = z.object({
 });
 export type StatementSuggestionOut = z.infer<typeof statementSuggestionOut>;
 
-export const statementSuggestionListOut = z.object({
-  data: z.array(statementSuggestionOut),
-  count: z.number().int(),
-});
-
 export const statementSuggestionGroupOut = z.object({
   accountId: financialAccountShortcode,
   accountName: z.string(),
@@ -223,7 +208,4 @@ export const statementSuggestionGroupOut = z.object({
   supersede: z.number().int(),
   void: z.number().int(),
   amount: z.number(),
-});
-export const statementSuggestionGroupsOut = z.object({
-  data: z.array(statementSuggestionGroupOut),
 });

@@ -524,7 +524,7 @@ export const suggestionStatus = z.enum([
   "rejected",
   "superseded",
 ]);
-/** The most rows one suggestion_queue read returns. */
+/** The most rows one field-suggestion read returns. */
 export const SUGGESTION_LIST_LIMIT_MAX = 1000;
 export const suggestionReviewListInput = z.object({
   entity: z.enum(shortcodeEntities).optional(),
@@ -576,23 +576,7 @@ export const suggestionReviewRowSchema = z.object({
   correctValue: z.json().nullable(),
   createdAt: z.string(),
 });
-export const suggestionReviewListOut = z.array(suggestionReviewRowSchema);
 export type SuggestionReviewRow = z.infer<typeof suggestionReviewRowSchema>;
-/** Pending, applied, rejected and superseded counts per (entity, field),
- * optionally for one Run; paired trial rows never count. */
-export const suggestionCountsInput = z.object({
-  runId: runShortcode.optional(),
-});
-export const suggestionCountRowSchema = z.object({
-  entity: z.enum(shortcodeEntities),
-  field: z.string(),
-  pending: z.number().int().nonnegative(),
-  applied: z.number().int().nonnegative(),
-  rejected: z.number().int().nonnegative(),
-  superseded: z.number().int().nonnegative(),
-});
-export const suggestionCountsOut = z.array(suggestionCountRowSchema);
-export type SuggestionCountRow = z.infer<typeof suggestionCountRowSchema>;
 
 /**
  * `ai.decisionCatalog`: one row per manifest suggest field plus every
@@ -632,8 +616,13 @@ export const decisionCatalogRowSchema = z.object({
   reviewRequired: z.boolean(),
   prompt: z.object({ subject: z.string(), input: z.json() }),
   /** Stored Suggestion outcomes; null for decisions that store none. */
-  counts: suggestionCountRowSchema
-    .pick({ pending: true, applied: true, rejected: true, superseded: true })
+  counts: z
+    .object({
+      pending: z.number().int().nonnegative(),
+      applied: z.number().int().nonnegative(),
+      rejected: z.number().int().nonnegative(),
+      superseded: z.number().int().nonnegative(),
+    })
     .nullable(),
 });
 export const decisionCatalogOut = z.array(decisionCatalogRowSchema);

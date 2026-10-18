@@ -8,10 +8,6 @@ import {
   recordStatementRows,
   updateStatementRows,
 } from "~/server/domains/statement-import/repo/statement-row";
-import {
-  listStatementSuggestionGroups,
-  listStatementSuggestions,
-} from "~/server/domains/statement-import/repo/statement-suggestion-read";
 import { scheduleStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-generation";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import {
@@ -52,8 +48,5 @@ export const statementRowHandlers = implementOperationDomain(
       updateStatementRows(context.db, input, context.actorContext),
     delete: (context, input) =>
       deleteStatementRows(context.db, input.selector, context.actorContext),
-    suggestions: (context, input) =>
-      listStatementSuggestions(context.db, input),
-    suggestionGroups: (context) => listStatementSuggestionGroups(context.db),
   },
 );

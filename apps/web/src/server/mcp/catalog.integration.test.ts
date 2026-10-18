@@ -707,7 +707,13 @@ describe("MCP catalog", () => {
     const queue = await call({ action: "suggestion_queue", entity: "product" });
     expect(queue.isError).not.toBe(true);
     expect(queue.structuredContent).toMatchObject({
-      items: [{ entity: "product", recordId: product.shortcode }],
+      items: [
+        {
+          family: "field",
+          record: { entity: "product", id: product.shortcode },
+          evidence: { entity: "product", recordId: product.shortcode },
+        },
+      ],
     });
   });
 });

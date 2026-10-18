@@ -8,7 +8,7 @@ describe("shared read policy", () => {
       "ai.usageRecent",
       "meal.getShoppingList",
       "problems.getByType",
-      "suggestions.getRecipeAvailability",
+      "recipeAvailability.getRecipeAvailability",
       "calendar.range",
       "collection.detail",
       "expense.analytics",

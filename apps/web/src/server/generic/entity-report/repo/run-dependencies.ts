@@ -19,7 +19,7 @@ import {
 import { getRunLiveProgress } from "~/server/domains/run/repo/run-progress";
 import { readRunStepsReport } from "~/server/domains/run/repo/run-step";
 import { createEntityReader } from "~/server/entity-kernel/repo/repository";
-import { suggestionCounts } from "~/server/generic/assessment/repo/suggestion-review";
+import { suggestionCountsByFamily } from "~/server/generic/assessment/repo/suggestion-list";
 import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log";
 import { isStepRunPurpose } from "~/server/workflows/runs/contract";
 
@@ -121,7 +121,7 @@ const runSuggestions = reportDependency(async (execution) => {
   const { code, purpose } = await execution.read(runBase);
   return purpose === "suggestion_sweep"
     ? suggestionBlocks(
-        await suggestionCounts(execution.request.db, { runId: code }),
+        await suggestionCountsByFamily(execution.request.db, { runId: code }),
       )
     : [];
 });

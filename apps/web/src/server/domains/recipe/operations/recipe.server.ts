@@ -21,7 +21,7 @@ import {
   recipeContract,
   recipeNutritionOut,
   recipeStreamsContract,
-  suggestionsContract,
+  recipeAvailabilityContract,
 } from "~/contracts/recipe.contract";
 import { scaleTotals } from "~/lib/nutrition-estimates";
 import { getIngredientMappings } from "~/lib/unit-mapping-utils";
@@ -294,7 +294,7 @@ const makeableWorkflow = bindWorkflow(
   workflow<
     { db: Database; availability: MakeableAvailability },
     typeof makeableRecipesInput._output
-  >("suggestions.getMakeable")
+  >("recipeAvailability.getMakeable")
     .call("candidates", async ({ context }) =>
       recipeList(
         context.db,
@@ -567,8 +567,8 @@ export function costingExplanation(
   };
 }
 
-export const suggestionsHandlers = implementOperationDomain(
-  suggestionsContract,
+export const recipeAvailabilityHandlers = implementOperationDomain(
+  recipeAvailabilityContract,
   {
     getRecipeAvailability: (context, input) =>
       context.services.availability.getRecipeAvailability(input.recipeId),

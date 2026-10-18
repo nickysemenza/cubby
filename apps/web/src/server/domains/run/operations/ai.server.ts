@@ -71,11 +71,7 @@ import {
 } from "~/server/domains/run/service/suggestion-sweep";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { fieldReviewIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
-import {
-  latestSuggestionSweepStatus,
-  listSuggestions,
-  suggestionCounts,
-} from "~/server/generic/assessment/repo/suggestion-review";
+import { latestSuggestionSweepStatus } from "~/server/generic/assessment/repo/suggestion-review";
 import {
   resolveAllOrThrow,
   resolveLiveShortcodes,
@@ -556,9 +552,6 @@ export const aiHandlers = implementOperationDomain(aiContract, {
     applyFinanceCategorySuggestion(context, input),
   settledSuggestionQuestions: (context, input) =>
     readSettledQuestions(context.db, input),
-  listSuggestionReviewQueue: (context, input) =>
-    listSuggestions(context.db, input),
-  suggestionCounts: (context, input) => suggestionCounts(context.db, input),
   decisionCatalog: async (context) => {
     const { decisionCatalog } = await import("~/server/ai/decision-catalog");
     return decisionCatalog(context.db);

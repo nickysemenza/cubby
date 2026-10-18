@@ -21,10 +21,6 @@ import {
   fieldSuggestionsReviewOut,
   settledSuggestionQuestionsInput,
   settledSuggestionQuestionsOut,
-  suggestionReviewListInput,
-  suggestionReviewListOut,
-  suggestionCountsInput,
-  suggestionCountsOut,
   decisionCatalogOut,
   suggestionSweepControlInput,
   suggestionSweepStartInput,
@@ -168,23 +164,6 @@ export const aiContract = defineContract("ai", {
     // List pages batch this read and cache each question separately, tagged
     // with the entity kinds its decision reads (`record-suggestions.tsx`).
     cache: { profile: "stable", tags: [["ai", "settledSuggestionQuestion"]] },
-  }),
-  listSuggestionReviewQueue: query({
-    input: suggestionReviewListInput,
-    output: suggestionReviewListOut,
-    readPolicy: "strong",
-    transport: "post",
-    cache: { profile: "stable" },
-  }),
-  suggestionCounts: query({
-    mcp: {
-      omit: "client_view",
-      note: "Review and Run counts; agents read rows through suggestion_queue",
-    },
-    input: suggestionCountsInput,
-    output: suggestionCountsOut,
-    readPolicy: "strong",
-    cache: { profile: "stable" },
   }),
   decisionCatalog: query({
     mcp: {

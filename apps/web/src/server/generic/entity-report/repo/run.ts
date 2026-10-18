@@ -11,6 +11,7 @@ import {
   runTargetState,
 } from "@cubby/schemas/purchase-import";
 import { hasImportRunReports } from "@cubby/schemas/run-fields";
+import type { SuggestionCountsOut } from "@cubby/schemas/suggestion-list";
 import { TRADE_LABELS, tradeValues } from "@cubby/schemas/task-fields";
 import { AI_USAGE_TRANSPORT_LABELS } from "@cubby/schemas/telemetry";
 import { CF_ACCOUNT_ID } from "@cubby/shared/ai/gateway-metadata";
@@ -30,7 +31,6 @@ import { runHasCapability } from "~/server/domains/purchase-import/repo/capabili
 import { findingHasExpired } from "~/server/domains/purchase-import/repo/finding-expiry";
 import type { getRunLiveProgress } from "~/server/domains/run/repo/run-progress";
 import type { RunStepRead } from "~/server/domains/run/repo/run-step";
-import type { suggestionCounts } from "~/server/generic/assessment/repo/suggestion-review";
 import {
   phaseLabel,
   runRowState,
@@ -1051,12 +1051,10 @@ export function runLogBlocks(log: {
   ];
 }
 
-/** A sweep Run's stored Suggestion outcomes; review happens on web `/ai` or over MCP. */
-export function suggestionBlocks(
-  counts: Awaited<ReturnType<typeof suggestionCounts>>,
-): ReportBlock[] {
+/** A sweep Run's stored Suggestion outcomes across families; review happens on web or over MCP. */
+export function suggestionBlocks(counts: SuggestionCountsOut): ReportBlock[] {
   const total = (key: "pending" | "applied" | "rejected" | "superseded") =>
-    counts.reduce((sum, row) => sum + row[key], 0);
+    counts.families.reduce((sum, row) => sum + row[key], 0);
   const figure = (label: string, value: number) => ({
     label,
     value,

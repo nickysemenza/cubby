@@ -17,12 +17,6 @@ import {
   statementCsvFileInput,
   statementCsvPreviewOut,
 } from "@cubby/schemas/statement-row";
-import {
-  listStatementSuggestionGroupsInput,
-  listStatementSuggestionsInput,
-  statementSuggestionGroupsOut,
-  statementSuggestionListOut,
-} from "@cubby/schemas/statement-suggestion";
 
 import { defineContract, mutation, query } from "~/contracts/define";
 
@@ -84,16 +78,5 @@ export const statementRowContract = defineContract("statementRow", {
     input: deleteStatementRowsInput,
     output: statementRowWriteOut,
     invalidates: ["statementRow"],
-  }),
-  /** Pending Transaction suggestions; review them through `assessment.review(Batch)`. */
-  suggestions: query({
-    readPolicy: "strong",
-    input: listStatementSuggestionsInput,
-    output: statementSuggestionListOut,
-  }),
-  suggestionGroups: query({
-    readPolicy: "strong",
-    input: listStatementSuggestionGroupsInput,
-    output: statementSuggestionGroupsOut,
   }),
 });

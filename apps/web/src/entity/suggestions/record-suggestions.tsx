@@ -7,10 +7,7 @@ import type {
   SettledSuggestionQuestionsInput,
   SuggestionReviewRow,
 } from "@cubby/schemas/ai";
-import {
-  SETTLED_SUGGESTION_QUESTION_MAX,
-  SUGGESTION_LIST_LIMIT_MAX,
-} from "@cubby/schemas/ai";
+import { SETTLED_SUGGESTION_QUESTION_MAX } from "@cubby/schemas/ai";
 import type {
   AssessmentReviewBatchOut,
   AssessmentReviewOut,
@@ -21,6 +18,10 @@ import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import { productCategorySummary } from "@cubby/schemas/product-category-fields";
+import {
+  SUGGESTION_LIST_PAGE_MAX,
+  SUGGESTION_RECORD_IDS_MAX,
+} from "@cubby/schemas/suggestion-list";
 import { parseShortcode } from "@cubby/shared";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
@@ -63,6 +64,7 @@ import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import {
   ai,
   assessment,
+  suggestions,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { operationCachePolicy } from "~/integrations/tanstack-query/query-policy";
@@ -236,44 +238,69 @@ export interface StoredSuggestionOperations {
 
 type PendingPageInput = Parameters<StoredSuggestionOperations["list"]>[0];
 
+/** One cursor page of pending field rows; `next` is null on the last page. */
+type PendingPage = { items: SuggestionReviewRow[]; next: string | null };
+
 /**
  * Every pending row for a list page's records, with no confidence floor.
- * Split oversized rosters before reading, then split full result pages by
- * record so pages with many suggestible fields are never silently truncated.
+ * Rosters larger than one read accepts are split, and each read pages to
+ * its last cursor, so pages with many suggestible fields are never silently
+ * truncated.
  */
 export const everyPendingSuggestion =
   (
     read: (
-      input: PendingPageInput & { minConfidence: number; limit: number },
-    ) => Promise<SuggestionReviewRow[]>,
+      input: PendingPageInput & { cursor?: string; limit: number },
+    ) => Promise<PendingPage>,
   ) =>
   async (input: PendingPageInput): Promise<SuggestionReviewRow[]> => {
-    // Grouped lists can contain more records than a single queue read accepts.
-    const rows =
-      input.recordIds.length > 250
-        ? null
-        : await read({
-            ...input,
-            minConfidence: 0,
-            limit: SUGGESTION_LIST_LIMIT_MAX,
-          });
-    if (
-      rows &&
-      (rows.length < SUGGESTION_LIST_LIMIT_MAX || input.recordIds.length < 2)
+    const rosters: string[][] = [];
+    for (
+      let start = 0;
+      start < input.recordIds.length;
+      start += SUGGESTION_RECORD_IDS_MAX
     )
-      return rows;
-    const middle = Math.ceil(input.recordIds.length / 2);
-    const halves = await Promise.all(
-      [input.recordIds.slice(0, middle), input.recordIds.slice(middle)].map(
-        (recordIds) => everyPendingSuggestion(read)({ ...input, recordIds }),
-      ),
+      rosters.push(
+        input.recordIds.slice(start, start + SUGGESTION_RECORD_IDS_MAX),
+      );
+    const pages = await Promise.all(
+      rosters.map(async (recordIds) => {
+        const rows: SuggestionReviewRow[] = [];
+        let cursor: string | undefined;
+        do {
+          const page = await read({
+            ...input,
+            recordIds,
+            limit: SUGGESTION_LIST_PAGE_MAX,
+            ...(cursor ? { cursor } : {}),
+          });
+          rows.push(...page.items);
+          cursor = page.next ?? undefined;
+        } while (cursor);
+        return rows;
+      }),
     );
-    return halves.flat();
+    return pages.flat();
   };
 
 const productionStoredSuggestionOperations: StoredSuggestionOperations = {
-  list: everyPendingSuggestion((input) =>
-    ai.listSuggestionReviewQueue.call(input),
+  list: everyPendingSuggestion(
+    async ({ entity, recordIds, fields, cursor, limit }) => {
+      const page = await suggestions.list.call({
+        family: "field",
+        entity,
+        recordIds,
+        scope: { field: { fields } },
+        limit,
+        ...(cursor ? { cursor } : {}),
+      });
+      return {
+        items: page.items.flatMap((row) =>
+          row.family === "field" ? [row.evidence] : [],
+        ),
+        next: page.next,
+      };
+    },
   ),
   review: (input) => assessment.review.call(input),
   reviewBatch: (input) => assessment.reviewBatch.call(input),
