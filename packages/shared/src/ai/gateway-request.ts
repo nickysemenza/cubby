@@ -15,6 +15,17 @@ import type { AiGatewayMetadata } from "./gateway-metadata";
  * `.invalid` is reserved by RFC 2606, so a shim bypass fails loudly instead of
  * leaking a real request.
  */
+
+/** A request that must ride the ChatGPT plan found no connected plan; retrying cannot help. */
+export class SubscriptionRequiredError extends Error {
+  constructor() {
+    super(
+      "Required ChatGPT subscription is unavailable; reconnect before retrying.",
+    );
+    this.name = "SubscriptionRequiredError";
+  }
+}
+
 export function gatewayBaseURL(provider: string): string {
   return `https://ai-gateway.invalid/${provider}`;
 }
@@ -1072,10 +1083,7 @@ export function gatewayFetchThrough(routes: GatewayFetchRoutes): typeof fetch {
         ),
       );
     }
-    if (requireSubscription)
-      throw new Error(
-        "Required ChatGPT subscription is unavailable; reconnect before retrying.",
-      );
+    if (requireSubscription) throw new SubscriptionRequiredError();
     request.signal?.throwIfAborted();
     if (routes.funding !== "subscriber_credit")
       await routes.beforePaidRequest?.(request);

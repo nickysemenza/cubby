@@ -2,6 +2,8 @@
  * Who owns the mailbox a retained Email sits in, and which Emails are a
  * vendor writing directly to that owner.
  */
+import { isMailForwardingHeader } from "@cubby/schemas/mailbox-research";
+
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
 
 type MailParty = { name: string; addresses: readonly string[] };
@@ -86,15 +88,6 @@ function withoutQuotesAndComments(value: string): string {
   return out;
 }
 
-// Any of these means the copy travelled through another mailbox first.
-const isForwardingHeader = (name: string) => {
-  const key = name.toLowerCase();
-  return (
-    key.startsWith("x-forwarded-") ||
-    key.startsWith("resent-") ||
-    key === "x-google-original-from"
-  );
-};
 const FORWARDED_SUBJECT = /^\s*(?:re:\s*)*(?:fwd?|fw)\s*:/iu;
 const FORWARDED_BODY =
   /-{2,}\s*forwarded message\s*-{2,}|^\s*begin forwarded message:/imu;
@@ -121,7 +114,7 @@ export function isOwnMail(
   const headers = mail.content.headers ?? {};
   if (
     Object.entries(headers).some(
-      ([name, value]) => isForwardingHeader(name) && value.trim(),
+      ([name, value]) => isMailForwardingHeader(name) && value.trim(),
     )
   )
     return false;

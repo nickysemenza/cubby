@@ -1,11 +1,15 @@
 import {
   MAIL_READ_HTML_PAGE_MAX_BYTES,
+  MAIL_READ_IMAGES_MAX_BYTES,
+  MAIL_READ_LINKS_MAX_BYTES,
   MAIL_READ_RESPONSE_MAX_BYTES,
+  MAIL_READ_STRUCTURED_MAX_BYTES,
   MAIL_READ_TEXT_MAX_BYTES,
   type MailReadContent,
   type MailReadInput,
   type MailAttachmentOriginal,
   type MailReadOut,
+  mailAttributionHeaders,
   mailReadAgentText,
   type RetainedMailContent,
 } from "@cubby/schemas/mailbox-research";
@@ -14,6 +18,7 @@ import { wasm } from "~/lib/wasm";
 import { createAppError } from "~/server/errors/app-error";
 
 const MAIL_READ_MAX_LINKS = 40;
+const MAIL_READ_IDENTITY_HEADERS = ["subject", "date", "message-id"];
 
 const encoder = new TextEncoder();
 
@@ -71,6 +76,62 @@ function jsonPage(text: string, offset: number, maxBytes: number) {
   };
 }
 
+/**
+ * The compactor's cue-first links that fit MAIL_READ_LINKS_MAX_BYTES. Trackers
+ * labelled "Track delivery" rank first, so an oversized one is skipped rather
+ * than ending the list, leaving room for a later short product link.
+ */
+function boundedLinks(links: readonly { href: string; text: string }[]) {
+  const kept: { href: string; text: string }[] = [];
+  let bytes = 0;
+  for (const { href, text } of links) {
+    if (kept.length === MAIL_READ_MAX_LINKS) break;
+    const size = encoder.encode(JSON.stringify({ href, text })).length;
+    if (bytes + size > MAIL_READ_LINKS_MAX_BYTES) continue;
+    kept.push({ href, text });
+    bytes += size;
+  }
+  return { links: kept, linksOmitted: links.length - kept.length };
+}
+
+/** Whole items, in order, while their serialized size fits `maxBytes`. */
+function withinBytes<T>(items: readonly T[], maxBytes: number) {
+  const kept: T[] = [];
+  let bytes = 0;
+  for (const item of items) {
+    const size = encoder.encode(JSON.stringify(item)).length;
+    if (bytes + size > maxBytes) continue;
+    kept.push(item);
+    bytes += size;
+  }
+  return { kept, omitted: items.length - kept.length };
+}
+
+// Branding and social badges are never an order line's picture.
+const DECORATIVE_IMAGE =
+  /\b(?:logo|icon|facebook|instagram|twitter|pinterest|youtube|tiktok|linkedin|social)\b/iu;
+
+/**
+ * Content images for line `imageUrl`s, purchase-cue images first, each `src`
+ * once. Extraction only needs the exact `src` (Cubby checks it against the
+ * stored HTML), so the coordinator never pages markup for it.
+ */
+function boundedImages(
+  images: readonly { src: string; alt: string; cue: boolean }[],
+) {
+  const seen = new Set<string>();
+  const candidates = [...images]
+    .sort((a, b) => Number(b.cue) - Number(a.cue))
+    .filter(({ src, alt }) => {
+      if (DECORATIVE_IMAGE.test(alt) || seen.has(src)) return false;
+      seen.add(src);
+      return true;
+    })
+    .map(({ src, alt }) => ({ src, alt }));
+  const { kept, omitted } = withinBytes(candidates, MAIL_READ_IMAGES_MAX_BYTES);
+  return { images: kept, imagesOmitted: omitted };
+}
+
 const readableChars = (text: string) =>
   (text.match(/[\p{L}\p{N}]/gu) ?? []).length;
 
@@ -107,29 +168,48 @@ export function mailReadContent(
   // An HTML page replaces the text so the response stays under the agent cap.
   const textPage =
     page === null && body !== null
-      ? jsonPage(body, 0, MAIL_READ_TEXT_MAX_BYTES)
+      ? jsonPage(body, input.offset ?? 0, MAIL_READ_TEXT_MAX_BYTES)
       : null;
+  if (textPage !== null && textPage.text === "" && (input.offset ?? 0) > 0)
+    throw createAppError(
+      "MAIL_REQUEST_REFUSED",
+      `Offset ${input.offset} is past the end of this Email's ${encoder.encode(body ?? "").length}-byte compact body.`,
+    );
+  // A compact page is truncated while more pages follow or evidence is
+  // missing; a fully paged body's last page is complete. An HTML page is
+  // always a fragment of the original.
   const truncated =
     page === null
       ? (compacted && compact.truncated) ||
         (textPage !== null && textPage.nextOffset !== null)
       : page.start > 0 || page.nextOffset !== null;
+  const structured = withinBytes(
+    compact?.structured_data ?? [],
+    MAIL_READ_STRUCTURED_MAX_BYTES,
+  );
   return {
     snippet: content.snippet,
+    preheader: compact?.preheader ?? null,
     bodyText: textPage?.text ?? null,
+    textBytes: body === null ? null : encoder.encode(body).length,
     bodyHtml: page?.text ?? null,
-    nextOffset: page?.nextOffset ?? null,
-    ...(content.headers ? { headers: content.headers } : {}),
+    nextOffset: page?.nextOffset ?? textPage?.nextOffset ?? null,
+    ...(content.headers
+      ? {
+          headers: mailAttributionHeaders(
+            content.headers,
+            MAIL_READ_IDENTITY_HEADERS,
+          ),
+        }
+      : {}),
     htmlBytes,
     compacted,
     truncated,
-    links: (compact?.links ?? [])
-      .slice(0, MAIL_READ_MAX_LINKS)
-      .map(({ href, text }) => ({ href, text })),
-    linksOmitted: Math.max(
-      0,
-      (compact?.links.length ?? 0) - MAIL_READ_MAX_LINKS,
-    ),
+    ...boundedLinks(compact?.links ?? []),
+    ...boundedImages(compact?.images ?? []),
+    structuredData: structured.kept,
+    structuredDataOmitted:
+      structured.omitted + (compact?.structured_data_omitted ?? 0),
     headersOmitted: false,
     bodyShortened: false,
   };
@@ -161,11 +241,14 @@ function shortenBody(
     };
   }
   if (content.bodyText === null) return null;
+  const pageBytes = encoder.encode(content.bodyText).length;
+  const start = (content.nextOffset ?? content.textBytes ?? 0) - pageBytes;
   const page = jsonPage(content.bodyText, 0, budget);
   if (page.nextOffset === null) return content;
   return {
     ...content,
     bodyText: page.text,
+    nextOffset: start + page.nextOffset,
     truncated: true,
     bodyShortened: true,
   };
@@ -173,8 +256,8 @@ function shortenBody(
 
 /**
  * Bound a whole Email read under the agent's response cap, measured on the
- * exact text the agent adapter emits (`mailReadAgentText`): trailing links go
- * first, then headers, then the body is cut (an HTML page continues from an
+ * exact text the agent adapter emits (`mailReadAgentText`): images and
+ * structured data go first, then trailing links, then headers, then the body is cut (an HTML page continues from an
  * earlier `nextOffset`), each reported. Purchase associations are never
  * trimmed; a read whose remaining metadata alone overflows is refused.
  */
@@ -182,9 +265,23 @@ export function fitMailRead<
   T extends Pick<MailReadOut, "content"> & {
     originalAttachment?: MailAttachmentOriginal;
   },
->(read: T): T {
+>(full: T): T {
   const fits = (candidate: T) =>
     agentBytes(candidate) <= MAIL_READ_RESPONSE_MAX_BYTES;
+  if (fits(full)) return full;
+  // Images and structured data go first; line evidence lives in the body.
+  const { images, structuredData } = full.content;
+  const read: T = {
+    ...full,
+    content: {
+      ...full.content,
+      images: [],
+      imagesOmitted: full.content.imagesOmitted + images.length,
+      structuredData: [],
+      structuredDataOmitted:
+        full.content.structuredDataOmitted + structuredData.length,
+    },
+  };
   if (fits(read)) return read;
   const { links } = read.content;
   const withLinks = (kept: number, base: T): T => ({

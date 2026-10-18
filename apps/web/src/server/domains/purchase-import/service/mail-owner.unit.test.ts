@@ -1,3 +1,4 @@
+import { mailAttributionHeaders } from "@cubby/schemas/mailbox-research";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -125,6 +126,28 @@ describe("isOwnMail", () => {
           null,
         ),
       ).toBe(false);
+  });
+
+  // Regression: trimming transport headers from reads and judgment evidence
+  // must keep every forwarding header, or a forwarded copy looks like own
+  // mail and auto-imports as the recipient's purchase.
+  it("keeps a forwarded copy forwarded after the attribution header trim", () => {
+    for (const name of [
+      "x-forwarded-message-id",
+      "x-forwarded-by",
+      "resent-sender",
+      "x-google-original-from",
+    ]) {
+      const headers = mailAttributionHeaders({
+        ...vendorToOwner,
+        [name]: "<syn-1@example>",
+        "dkim-signature": "v=1; synthetic",
+        received: "from mx.example",
+      });
+      expect(headers).toHaveProperty(name);
+      expect(headers).not.toHaveProperty("dkim-signature");
+      expect(isOwnMail(mail(headers), evidence, null)).toBe(false);
+    }
   });
 
   it("sees a forwarded marker that only the HTML body carries", () => {

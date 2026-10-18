@@ -62,6 +62,7 @@ import { workflowForRun } from "./import-run-workflows";
 import { RunSettlement, SETTLEMENT_POLL_MS } from "./run-settlement";
 import { renderSignal } from "./signals";
 import { runAgentTools } from "./tools";
+import { currentWorkItemMessages } from "./work-item-context";
 
 const log = createLogger("purchase-agent");
 const context = BACKGROUND_CONTEXT;
@@ -252,7 +253,15 @@ export class PurchaseImportRunAgent
     for (const provider of cubbyAgentProviders({
       fundingFallback: true,
       fixedModel: this.agentEnv.fixedModel,
-      onFundingRefusal: (message) => this.afterResponse(message),
+      onFundingRefusal: async (message) => {
+        // The usage row records the refusal text in `failure`.
+        await this.afterResponse(message);
+        // The next rung is a new attempt: its usage row must not inherit this
+        // rung's transport, start time or gateway log.
+        this.requestStartedAt = Date.now();
+        this.requestTransport = "unknown";
+        this.requestGateway = undefined;
+      },
       gateway: () => this.agentEnv.gateway(),
       recorder: this.recorder,
       testModel: this.agentEnv.testModel,
@@ -308,7 +317,7 @@ export class PurchaseImportRunAgent
         ).filter((tool) => agentTools.has(tool.name)),
         hooks: [
           hook(GenerationTask, {
-            beforeRequest: async (_request, api, requestContext) => {
+            beforeRequest: async (request, api, requestContext) => {
               const live = await api.snapshot(
                 LiveDoc,
                 api.conversationId,
@@ -342,7 +351,9 @@ export class PurchaseImportRunAgent
               this.requestStartedAt = Date.now();
               this.requestTransport = "unknown";
               this.requestGateway = undefined;
-              return undefined;
+              return manifest.workItemContext === "current"
+                ? { messages: currentWorkItemMessages(request.messages) }
+                : undefined;
             },
             afterResponse: (message) => this.afterResponse(message),
           }),

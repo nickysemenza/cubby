@@ -255,6 +255,13 @@ export async function readMail(
   actor: ActorContext,
 ) {
   const input = mailReadInput.parse(rawInput);
+  // A Run's coordinator reads compact text only: raw HTML pages cost ~30k
+  // tokens each and stay in its context. Members keep includeHtml.
+  if (actor.runId && input.includeHtml)
+    throw createAppError(
+      "MAIL_READ_HTML_RUN",
+      "Run reads return compact text only; continue a long body with offset set to the previous nextOffset.",
+    );
   if (!actor.runId) {
     const parties = await memberPartyIds(db, actor.userId);
     const [source] = await getDb(db)

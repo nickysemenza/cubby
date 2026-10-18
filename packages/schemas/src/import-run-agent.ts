@@ -99,6 +99,12 @@ export type ImportRunAgentConfig = {
    */
   mcpActions: readonly CubbyMcpToolAction[];
   mcpTools: readonly CubbyMcpToolName[];
+  /**
+   * What each request carries of earlier claimed work items: `current` sends
+   * only the latest claim onward, since each Email is independent and durable
+   * records carry what earlier ones settled; `all` keeps every item.
+   */
+  workItemContext: "current" | "all";
 };
 
 /** Each purpose's model and authority: host tools plus narrowed MCP actions. */
@@ -109,6 +115,7 @@ export const importRunAgentManifest = {
     agentTools: RUN_AGENT_TOOLS,
     mcpActions: PHOTO_MCP_ACTIONS,
     mcpTools: toolsOf(PHOTO_MCP_ACTIONS),
+    workItemContext: "all",
   },
   mail_import: {
     model: "claude-opus-5-5",
@@ -116,6 +123,7 @@ export const importRunAgentManifest = {
     agentTools: RUN_AGENT_TOOLS,
     mcpActions: MAIL_IMPORT_MCP_ACTIONS,
     mcpTools: toolsOf(MAIL_IMPORT_MCP_ACTIONS),
+    workItemContext: "current",
   },
 } as const satisfies Record<AgentImportRunPurpose, ImportRunAgentConfig>;
 

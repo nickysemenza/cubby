@@ -48,8 +48,10 @@ pending: nothing here starts Product research.
    text or pictures; actual CSS visibility and `hidden` attributes still do.
    Hidden HTTP(S) links and their labels are retained in the bounded link set;
    omitted cue-bearing links and cues lost during URL normalization still mark
-   evidence incomplete. Hidden receipt text
-   and image evidence keep their completeness checks.
+   evidence incomplete. Hidden receipt text marks evidence incomplete only
+   when the visible text and preheader do not repeat its purchase cues
+   (responsive mobile/desktop duplicates are complete); hidden image evidence
+   keeps its completeness checks.
    Referenced `cid:` pictures count as available only when their exact MIME
    Content-ID image bytes fit and reach the relevance interpreter. Missing,
    unsupported or oversized parts remain incomplete.

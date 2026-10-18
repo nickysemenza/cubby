@@ -196,6 +196,37 @@ describe("createCubbyGatewayFetch", () => {
     expect(events).toEqual(["admitted", "gateway", "transmit"]);
   });
 
+  // Regression: a household AI budget stop threw inside fetch, so the provider
+  // SDK reported "Connection error." and pi retried it as a network fault.
+  it("reports an admission refusal's own reason to the coordinator", async () => {
+    const run = vi.fn(async () => completedResponse());
+    const models = createModels();
+    for (const provider of cubbyAgentProviders({
+      gateway: () => gateway(run),
+      recorder: createContextRecorder(),
+      subscription: async () => null,
+      subscriptionRequired: true,
+      subscriptionFallback: "budgeted",
+      beforePaidRequest: async () => {
+        throw new Error("AI budget reached: synthetic window");
+      },
+    }))
+      models.setProvider(provider);
+    const selected = cubbyAgentModel("gpt-6-sol");
+    const model = models.getModel(selected.provider, selected.modelId);
+    if (!model) throw new Error("Missing test model");
+    const result = await models.complete(
+      model,
+      { messages: [] },
+      { maxRetries: 0 },
+    );
+    expect(result.stopReason).toBe("error");
+    expect(result.errorMessage).toContain(
+      "AI budget reached: synthetic window",
+    );
+    expect(run).not.toHaveBeenCalled();
+  });
+
   it("stops subscription-required research when the plan is disconnected", async () => {
     const run = vi.fn(async () => completedResponse());
     const options = {
@@ -203,15 +234,17 @@ describe("createCubbyGatewayFetch", () => {
       subscription: async () => null,
       subscriptionRequired: true,
     };
-    await expect(
-      createCubbyGatewayFetch("openai", options)(
-        "https://api.openai.com/v1/responses",
-        {
-          method: "POST",
-          body: JSON.stringify({ model: "gpt-6-sol", input: [] }),
-        },
-      ),
-    ).rejects.toThrow(/Required ChatGPT subscription/);
+    const response = await createCubbyGatewayFetch("openai", options)(
+      "https://api.openai.com/v1/responses",
+      {
+        method: "POST",
+        body: JSON.stringify({ model: "gpt-6-sol", input: [] }),
+      },
+    );
+    // The cause reaches the transcript instead of the SDK's "Connection error.",
+    // as a final refusal: retrying cannot reconnect the plan.
+    expect(response.status).toBe(403);
+    expect(await response.text()).toMatch(/Required ChatGPT subscription/);
     expect(run).not.toHaveBeenCalled();
   });
 
@@ -372,12 +405,12 @@ describe("createCubbyGatewayFetch", () => {
       },
       onTransport: (transport) => transports.push(transport),
     });
-    await expect(
-      gatewayFetch("https://ai-gateway.invalid/openai/responses", {
-        method: "POST",
-        body: JSON.stringify({ model: "gpt-6-sol" }),
-      }),
-    ).rejects.toThrow(/connection reset/);
+    const response = await gatewayFetch(
+      "https://ai-gateway.invalid/openai/responses",
+      { method: "POST", body: JSON.stringify({ model: "gpt-6-sol" }) },
+    );
+    expect(response.status).toBe(502);
+    expect(await response.text()).toMatch(/connection reset/);
     expect(transports).toEqual(["chatgpt"]);
     expect(run).not.toHaveBeenCalled();
   });

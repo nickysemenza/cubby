@@ -19,7 +19,7 @@ import {
  */
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { fromPartial } from "@total-typescript/shoehorn";
+import { fromAny, fromPartial } from "@total-typescript/shoehorn";
 import { and, eq, inArray } from "drizzle-orm";
 import { seedEmailLinkDecision } from "tooling/shared-assessment-fixtures";
 import { withTestDb } from "tooling/test-setup";
@@ -1248,6 +1248,20 @@ describe("public mail tool", () => {
     expect(read.content.links.length).toBeGreaterThan(0);
     expect(read.content.linksOmitted).toBeGreaterThan(0);
     expect(read.purchaseAssociations).toEqual([]);
+  });
+
+  // Failure: a Run's coordinator pages raw HTML into its context.
+  it("refuses raw HTML pages to a Run's coordinator", async () => {
+    await expect(
+      readMail(
+        ctx.db,
+        { mailboxId, messageId: "synthetic-any", includeHtml: true },
+        {
+          ...ctx.actor,
+          runId: fromAny("00000000-0000-4000-8000-000000000001"),
+        },
+      ),
+    ).rejects.toThrow(/compact text only/u);
   });
 
   describe("read attachment originals", () => {
