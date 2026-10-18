@@ -170,11 +170,18 @@ export function mailReadContent(
     page === null && body !== null
       ? jsonPage(body, input.offset ?? 0, MAIL_READ_TEXT_MAX_BYTES)
       : null;
+  if (textPage !== null && textPage.text === "" && (input.offset ?? 0) > 0)
+    throw createAppError(
+      "MAIL_REQUEST_REFUSED",
+      `Offset ${input.offset} is past the end of this Email's ${encoder.encode(body ?? "").length}-byte compact body.`,
+    );
+  // A compact page is truncated while more pages follow or evidence is
+  // missing; a fully paged body's last page is complete. An HTML page is
+  // always a fragment of the original.
   const truncated =
     page === null
       ? (compacted && compact.truncated) ||
-        (textPage !== null &&
-          (textPage.start > 0 || textPage.nextOffset !== null))
+        (textPage !== null && textPage.nextOffset !== null)
       : page.start > 0 || page.nextOffset !== null;
   const structured = withinBytes(
     compact?.structured_data ?? [],

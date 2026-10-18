@@ -8,6 +8,7 @@ import {
   type GatewayQuery,
   type GatewayFetchRoutes,
   gatewayFetchThrough,
+  SubscriptionRequiredError,
   type GatewayResponseInfo,
   requestUrl,
   runUniversalGateway,
@@ -175,6 +176,8 @@ export function createCubbyGatewayFetch(
     } catch (error: unknown) {
       if (refusal) return admissionRefusal(refusal.error);
       if (init?.signal?.aborted) throw error;
+      if (error instanceof SubscriptionRequiredError)
+        return admissionRefusal(error);
       return transportFailure(error);
     }
   };
@@ -186,7 +189,8 @@ const errorMessage = (error: unknown) =>
 /**
  * A fetch that throws reaches the coordinator as the provider SDK's bare
  * "Connection error.", hiding the cause from the transcript. Paid admission
- * (household AI budget, Run no longer executable) refuses with a final 403;
+ * (household AI budget, Run no longer executable) and a disconnected required
+ * plan refuse with a final 403;
  * any other failure is a 502, which pi still retries and the funding ladder
  * never mistakes for a funding refusal.
  */

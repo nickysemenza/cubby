@@ -241,8 +241,9 @@ describe("createCubbyGatewayFetch", () => {
         body: JSON.stringify({ model: "gpt-6-sol", input: [] }),
       },
     );
-    // The cause reaches the transcript instead of the SDK's "Connection error.".
-    expect(response.status).toBe(502);
+    // The cause reaches the transcript instead of the SDK's "Connection error.",
+    // as a final refusal: retrying cannot reconnect the plan.
+    expect(response.status).toBe(403);
     expect(await response.text()).toMatch(/Required ChatGPT subscription/);
     expect(run).not.toHaveBeenCalled();
   });

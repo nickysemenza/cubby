@@ -47,19 +47,28 @@ describe("currentWorkItemMessages", () => {
     expect(currentWorkItemMessages(unclaimed)).toBe(unclaimed);
   });
 
-  it("keeps user messages between earlier work items", () => {
+  // pi records tool-list and instruction deltas as system entries at their
+  // point in the transcript and never resends them; dropping one would leave
+  // later requests on a stale tool list.
+  it("keeps user and system messages between earlier work items", () => {
     const kickoff = user("Import.");
     const resume = user("Resume after the pause.");
+    const delta: Message = fromPartial({
+      role: "system",
+      content: "Tool list changed.",
+    });
     const messages = [
       kickoff,
       ...claim("c1"),
       ...read("r1"),
       resume,
+      delta,
       ...claim("c2"),
     ];
     expect(currentWorkItemMessages(messages)).toEqual([
       kickoff,
       resume,
+      delta,
       ...claim("c2"),
     ]);
   });

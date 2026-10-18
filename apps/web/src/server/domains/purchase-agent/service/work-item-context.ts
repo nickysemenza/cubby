@@ -12,7 +12,8 @@ const claims = (message: Message) =>
 /**
  * A request's messages without earlier work items: everything from the first
  * claim up to the latest claim is dropped except user messages (kickoff,
- * resume, member input). Durable records are the only memory between work
+ * resume, member input) and system messages (pi records tool-list and
+ * instruction deltas there once and never resends them). Durable records are the only memory between work
  * items; the stored transcript keeps every item for the Run page.
  */
 export function currentWorkItemMessages(
@@ -27,7 +28,9 @@ export function currentWorkItemMessages(
     ...messages.slice(0, first),
     ...messages
       .slice(first, latest)
-      .filter((message) => message.role === "user"),
+      .filter(
+        (message) => message.role === "user" || message.role === "system",
+      ),
     ...messages.slice(latest),
   ];
 }

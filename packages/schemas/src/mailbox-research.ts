@@ -362,8 +362,8 @@ export const MAIL_READ_STRUCTURED_MAX_BYTES = 4_000;
 
 /**
  * Serialized link bound for a compact read. Click-tracking redirects run over
- * 1 KB each; a background coordinator keeps every read in context, so links
- * past it are counted in `linksOmitted` and stay reachable through includeHtml.
+ * 1 KB each, so links past the bound are counted in `linksOmitted`. Members
+ * reach them through includeHtml; a Run's coordinator, refused HTML, does not.
  */
 export const MAIL_READ_LINKS_MAX_BYTES = 8_000;
 
@@ -429,7 +429,8 @@ export const mailReadContent = z.object({
   htmlBytes: z.number().int().nullable(),
   /** `bodyText` was converted from the HTML body. */
   compacted: z.boolean(),
-  /** Some body text or the HTML page stops before the end of the original. */
+  /** More compact pages follow (`nextOffset`), the compact text lost
+   * purchase evidence, or the HTML page is a fragment of the original. */
   truncated: z.boolean(),
   /** Cue-bearing links first, from the HTML body. */
   links: z.array(z.object({ href: z.string(), text: z.string() })).default([]),

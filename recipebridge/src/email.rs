@@ -674,6 +674,19 @@ fn identifiers(text: &str) -> Vec<&str> {
     found
 }
 
+/// `needle` occurs in `haystack` as a whole token: `#1234` is not inside
+/// `#12345`, nor `refund` inside `non-refundable`.
+fn contains_token(haystack: &str, needle: &str) -> bool {
+    if needle.is_empty() {
+        return true;
+    }
+    haystack.match_indices(needle).any(|(start, _)| {
+        let before = haystack[..start].chars().next_back();
+        let after = haystack[start + needle.len()..].chars().next();
+        !before.is_some_and(char::is_alphanumeric) && !after.is_some_and(char::is_alphanumeric)
+    })
+}
+
 /// Purchase cues in `text`: currency amounts and order/invoice identifiers as
 /// they appear, then receipt phrases in lowercase. A caller checks each one
 /// against its final view (case-insensitively) to tell whether a bound clipped
@@ -887,15 +900,12 @@ pub fn compact_email_html(html: &str) -> WCompactEmail {
         )
         .collect::<Vec<_>>()
         .join("\n");
-    let visible = format!(
-        "{}\n{text}",
-        state.preheader.as_deref().unwrap_or_default()
-    );
+    let visible = format!("{}\n{text}", state.preheader.as_deref().unwrap_or_default());
     let visible_lower = visible.to_lowercase();
     state.truncated |= state
         .hidden_cues
         .iter()
-        .any(|cue| !visible_lower.contains(&cue.to_lowercase()));
+        .any(|cue| !contains_token(&visible_lower, &cue.to_lowercase()));
     let WPurchaseCues {
         cues,
         omitted: cues_omitted,
@@ -1111,6 +1121,12 @@ mod tests {
             r#"<p>Thanks for shopping.</p><p>Order #SYN-12345</p><div style="display:none">Total $26.10</div>"#,
         );
         assert!(hidden_only.truncated);
+
+        // A cue inside a longer visible token is not a repeat of it.
+        let longer = compact_email_html(
+            r#"<p>Order #SYN-12345 total $126.10, non-refundable.</p><div style="display:none">Refund for order #SYN-1234</div>"#,
+        );
+        assert!(longer.truncated);
     }
 
     #[test]

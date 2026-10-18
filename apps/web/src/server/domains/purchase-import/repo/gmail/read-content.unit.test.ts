@@ -250,6 +250,31 @@ describe("mailReadContent compact evidence", () => {
     expect(parts.join("")).toBe(text);
   });
 
+  // Failure: every page of a long body reports truncated, so the coordinator
+  // resolves a fully read Email unresolved; an offset past the end reads as
+  // an empty, complete body.
+  it("reports only an unfinished page or missing evidence as truncated", () => {
+    const text = "Synthetic line item $1.00\n".repeat(8_000);
+    const first = mailReadContent(
+      { snippet: null, bodyText: text, bodyHtml: null },
+      {},
+    );
+    expect(first.truncated).toBe(true);
+    let last = first;
+    while (last.nextOffset !== null)
+      last = mailReadContent(
+        { snippet: null, bodyText: text, bodyHtml: null },
+        { offset: last.nextOffset },
+      );
+    expect(last.truncated).toBe(false);
+    expect(() =>
+      mailReadContent(
+        { snippet: null, bodyText: text, bodyHtml: null },
+        { offset: (first.textBytes ?? 0) + 10 },
+      ),
+    ).toThrow(/past the end/u);
+  });
+
   it("continues a body that fitMailRead shortened from its nextOffset", () => {
     const text = "Synthetic line item $1.00\n".repeat(6_000);
     const descriptors = Array.from({ length: 100 }, (_, index) => ({
