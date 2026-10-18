@@ -74,7 +74,17 @@ export const effectiveExpenseProjectSql = (
        FROM "Purchase" inherited_purchase
        WHERE inherited_purchase."id" = ${purchaseId}
          AND inherited_purchase."deletedAt" IS NULL),
-      CASE WHEN ${householdTarget} AND EXISTS (
+      ${householdFoodProjectSql(productId, householdTarget)}
+    )
+  END`;
+};
+
+/** The household Project a food line falls back to after explicit and
+ * Purchase defaults. */
+const householdFoodProjectSql = (
+  productId: SQL,
+  householdTarget: SQL = sql`TRUE`,
+): SQL<ProjectId | null> => sql<ProjectId | null>`CASE WHEN ${householdTarget} AND EXISTS (
         SELECT 1 FROM "Product" food_product
         WHERE food_product."id" = ${productId}
           AND food_product."deletedAt" IS NULL
@@ -85,9 +95,43 @@ export const effectiveExpenseProjectSql = (
         WHERE household_project."shortcode" = 'PRJ-HSHD'
           AND household_project."deletedAt" IS NULL
         LIMIT 1
-      ) END
-    )
-  END`;
+      ) END`;
+
+/** A principal line's trade: its own, then its Purchase default, then its
+ * effective Project's inherited default. */
+const principalTradeSql = (
+  storedTrade: SQL,
+  purchaseTrade: SQL,
+  projectId: SQL,
+): SQL<Trade | null> =>
+  sql<Trade | null>`COALESCE(${storedTrade}, ${purchaseTrade}, ${effectiveProjectTradeSql(projectId)})`;
+
+/**
+ * {@link effectiveExpenseProjectSql} and {@link effectiveExpenseTradeSql} for
+ * a relation of principal lines already LEFT JOINed to their live Purchase:
+ * the same precedence, read through hash joins instead of per-line lookups.
+ * `joins` must follow the Purchase join.
+ */
+export const principalExpenseInheritanceSql = (
+  alias: string,
+  purchaseAlias: string,
+) => {
+  const projectId = sql<ProjectId | null>`COALESCE(inherited_explicit_project."id", inherited_purchase_project."id",
+      ${householdFoodProjectSql(column(alias, "productId"))})`;
+  return {
+    joins: sql`LEFT JOIN "Project" inherited_explicit_project
+      ON inherited_explicit_project."id" = ${column(alias, "projectId")}
+        AND inherited_explicit_project."deletedAt" IS NULL
+    LEFT JOIN "Project" inherited_purchase_project
+      ON inherited_purchase_project."id" = ${column(purchaseAlias, "defaultProjectId")}
+        AND inherited_purchase_project."deletedAt" IS NULL`,
+    projectId,
+    trade: principalTradeSql(
+      column(alias, "trade"),
+      column(purchaseAlias, "defaultTrade"),
+      projectId,
+    ),
+  };
 };
 
 /** Effective trade for a principal Expense, including its effective Project ancestry. */
@@ -97,21 +141,18 @@ export const effectiveExpenseTradeSql = (
   const lineKind = column(alias, "lineKind");
   const storedTrade = column(alias, "trade");
   const purchaseId = column(alias, "purchaseId");
-  const projectTrade = effectiveProjectTradeSql(
-    effectiveExpenseProjectSql(alias),
-  );
 
   return sql<Trade | null>`CASE
     WHEN ${lineKind} = ${sqlEnumConstant(expenseLineKindSchema, expenseLineKindSchema.enum.unclassified)} THEN NULL
     WHEN ${lineKind} <> 'principal' THEN ${storedTrade}
-    ELSE COALESCE(
-      ${storedTrade},
-      (SELECT inherited_purchase."defaultTrade"
+    ELSE ${principalTradeSql(
+      storedTrade,
+      sql`(SELECT inherited_purchase."defaultTrade"
        FROM "Purchase" inherited_purchase
        WHERE inherited_purchase."id" = ${purchaseId}
-         AND inherited_purchase."deletedAt" IS NULL),
-      ${projectTrade}
-    )
+         AND inherited_purchase."deletedAt" IS NULL)`,
+      effectiveExpenseProjectSql(alias),
+    )}
   END`;
 };
 
@@ -132,14 +173,7 @@ export const expenseInheritanceReadExtras = (alias = "expense") => {
         AND purchase_project."deletedAt" IS NULL
        WHERE inherited_purchase."id" = ${purchaseId}
          AND inherited_purchase."deletedAt" IS NULL),
-      CASE WHEN EXISTS (
-        SELECT 1 FROM "Product" food_product
-        WHERE food_product."id" = ${productId}
-          AND food_product."deletedAt" IS NULL
-          AND ${categoryFeatureSql(column("food_product", "categoryId"), "food")}
-      ) THEN (SELECT household_project."id" FROM "Project" household_project
-        WHERE household_project."shortcode" = 'PRJ-HSHD'
-          AND household_project."deletedAt" IS NULL LIMIT 1) END
+      ${householdFoodProjectSql(productId)}
     ) END`;
   const fallbackTrade = sql<Trade | null>`CASE
     WHEN ${lineKind} <> 'principal' THEN NULL
