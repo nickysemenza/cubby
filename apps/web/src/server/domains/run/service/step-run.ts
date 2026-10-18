@@ -160,6 +160,7 @@ export async function advanceStepRun(
     );
   }
   let page: StepPage;
+  const started = Date.now();
   try {
     page = await driver.page({
       db,
@@ -188,6 +189,13 @@ export async function advanceStepRun(
     return { kind: "continue" };
   }
   if (!(await claimWorkflowRun(db, params, "id"))) return { kind: "lost" };
+  const elapsed = Date.now() - started;
+  const timing = {
+    timing: {
+      lastPageMs: elapsed,
+      totalMs: (current.meta?.timing?.totalMs ?? 0) + elapsed,
+    },
+  };
   if (page.kind === "paused") {
     await pauseStep(
       db,
@@ -206,7 +214,7 @@ export async function advanceStepRun(
       childRunId: page.childRunId,
       ...(page.errors?.length && { errors: page.errors }),
       ...(page.cursor !== undefined && { cursor: page.cursor }),
-      ...(page.meta && { meta: page.meta }),
+      meta: { ...page.meta, ...timing },
       state: ended
         ? page.state === "failed" || page.counts.failed > 0
           ? "failed"
@@ -238,7 +246,7 @@ export async function advanceStepRun(
     ...(page.found !== undefined && { found: page.found }),
     ...(page.errors && { errors: page.errors }),
     ...(page.cursor !== undefined && { cursor: page.cursor }),
-    ...(page.meta && { meta: page.meta }),
+    meta: { ...page.meta, ...timing },
     ...(page.done && { state: failed > 0 ? "failed" : "done" }),
   });
   if (page.done) {

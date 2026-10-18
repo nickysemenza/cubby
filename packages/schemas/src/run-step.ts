@@ -35,6 +35,13 @@ export const runStepErrors = z.array(runStepError).max(RUN_STEP_ERROR_SAMPLE);
 export const runStepMeta = z.object({
   retryErrors: runStepErrors.optional(),
   retriedFailures: z.number().int().nonnegative().optional(),
+  /** Wall time of the step's pages, so a slow backlog shows where it waits. */
+  timing: z
+    .object({
+      lastPageMs: z.number().nonnegative(),
+      totalMs: z.number().nonnegative(),
+    })
+    .optional(),
   detail: z
     .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
     .optional(),

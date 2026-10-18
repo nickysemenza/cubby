@@ -930,6 +930,11 @@ export function runStepsBlocks(report: RunStepsReport): ReportBlock[] {
       `${formatCount(step.skipped)} skipped`,
       `${formatCount(step.left)} left`,
       ...(elapsed ? [elapsed] : []),
+      ...(step.meta?.timing && step.pages > 0
+        ? [
+            `${formatDuration(step.meta.timing.totalMs / step.pages)} per page over ${formatCount(step.pages)} pages`,
+          ]
+        : []),
     ].join(" · ");
     const errors = step.errors.map(
       (error) => `${error.ref ? `${error.ref}: ` : ""}${error.message}`,
