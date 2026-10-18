@@ -19,6 +19,8 @@ export function parseRecordParam(value: string | undefined) {
 /** The route's search params; table filters ride beside them as their column ids. */
 export const suggestionsSearchSchema = z.object({
   family: suggestionListFamily.optional().catch(undefined),
+  /** Absent lists pending Suggestions; `applied_automatically` what rules applied. */
+  status: z.literal("applied_automatically").optional().catch(undefined),
   /** `<entityKind>:<SHORTCODE>`; a connection matches either endpoint. */
   record: z
     .string()

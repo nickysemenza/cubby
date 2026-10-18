@@ -26,13 +26,16 @@ function SuggestionsRoute() {
         void navigate({
           to: ".",
           replace,
-          // A new family view starts from its own filters and order.
+          // A new family or status view starts from its own filters and order.
           search: (previous) =>
-            "family" in patch && patch.family !== previous.family
+            ("family" in patch && patch.family !== previous.family) ||
+            ("status" in patch && patch.status !== previous.status)
               ? {
                   record: previous.record,
                   runId: previous.runId,
                   sweep: previous.sweep,
+                  family: previous.family,
+                  status: previous.status,
                   ...patch,
                 }
               : { ...previous, ...patch },

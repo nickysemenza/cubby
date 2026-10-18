@@ -388,6 +388,29 @@ test("Find suggestions estimates a Sweep before it starts, then follows its Step
   ).toBeVisible();
 });
 
+// The migration-seeded rules read through `suggestions.rules`: Field Addition
+// carried forward On, Statement attach Off until reviews make it eligible.
+test("Automatic rules lists each seeded rule with its state and switch", async ({
+  page,
+}) => {
+  await gotoAuthenticatedPage(page, "/suggestions");
+  await page.getByRole("button", { name: "Automatic rules" }).click();
+  const rules = page.getByRole("list", { name: "Automatic rules" });
+  const field = rules.getByRole("listitem", { name: "Field Addition" });
+  await expect(field.getByText("On", { exact: true })).toBeVisible();
+  await expect(
+    field.getByRole("switch", { name: "Field Addition automatic rule" }),
+  ).toHaveAttribute("aria-checked", "true");
+  const attach = rules.getByRole("listitem", { name: "Statement attach" });
+  await expect(attach.getByText("Off", { exact: true })).toBeVisible();
+  await expect(attach.getByText("Not yet eligible")).toBeVisible();
+  await expect(
+    attach.getByRole("switch", { name: "Statement attach automatic rule" }),
+  ).toHaveAttribute("aria-disabled", "true");
+  await page.getByRole("button", { name: /^Applied automatically/ }).click();
+  await expect(page).toHaveURL(/status=applied_automatically/);
+});
+
 // Acceptance must acknowledge the chosen value before the response arrives,
 // retain other pills throughout the write/refetch, and persist the real value.
 test("list pills accept immediately without unloading another row's suggestion", async ({

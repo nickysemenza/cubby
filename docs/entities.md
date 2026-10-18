@@ -2604,8 +2604,12 @@ review. The `/suggestions` page lists every family's pending Suggestions
 `server/generic/assessment/repo/suggestion-families.ts`): family chips with counts, each family's own columns,
 inline evidence, keyboard review (↑/↓, →, A, D), a confirmed "Accept N clean"
 that re-lists before each chunk, bulk Dismiss and Never suggest (no bulk
-Wrong), and Find suggestions, which estimates and starts a Sweep. Its
-`family`, `record` (`<kind>:<CODE>`) and `runId` params scope it. The `/ai`
+Wrong), and Find suggestions, which estimates and starts a Sweep. A
+collapsible Automatic rules section lists each rule's state, measured
+precision and member switch (`suggestions.rules`/`setRule`; On only when
+eligible, Off after a confirm), and `status=applied_automatically` lists what
+rules applied with the authorizing rule and a Wrong… that records a Miss (not
+an undo). Its `family`, `record` (`<kind>:<CODE>`) and `runId` params scope it. The `/ai`
 page's Decisions tab catalogs every decision's basis, options, rules and
 rendered request (`ai.decisionCatalog`) with a Jev/Clef Try panel. The
 household's Work has one row per Suggestion family linking into the page,

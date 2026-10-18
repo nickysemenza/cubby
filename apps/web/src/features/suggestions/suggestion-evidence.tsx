@@ -1,3 +1,4 @@
+import { formatConfidence } from "@cubby/schemas/ai";
 import type { SuggestionListRow } from "@cubby/schemas/suggestion-list";
 import { humanize } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
@@ -15,6 +16,11 @@ import { DateDisplay } from "~/ui/common/date-display";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
 
+import {
+  CounterpartyLine,
+  KindVotes,
+  TransferLine,
+} from "./statement-kind-votes";
 import {
   acceptItem,
   statementApplyItem,
@@ -72,6 +78,8 @@ type StatementRow = Extract<
 /** The charge beside each candidate it could be, with what attaching would copy. */
 function StatementEvidence({ row }: { row: StatementRow }) {
   const charge = row.evidence;
+  // An Automatic rule already applied it: evidence only, nothing to choose.
+  const settled = row.automaticRule !== null;
   const { draft, setDraft, review, outcome } = useSuggestionReview();
   const rowDraft = draft(row.id);
   const busy = outcome(row.id)?.state === "pending";
@@ -174,7 +182,7 @@ function StatementEvidence({ row }: { row: StatementRow }) {
                       </span>
                     ) : null}
                   </div>
-                  {candidate.diff.length ? (
+                  {candidate.diff.length && !settled ? (
                     <div className="flex flex-wrap items-center gap-3 text-xs">
                       {candidate.diff.map((field) => (
                         <label
@@ -193,7 +201,7 @@ function StatementEvidence({ row }: { row: StatementRow }) {
                       ))}
                     </div>
                   ) : null}
-                  {!recommended ? (
+                  {!recommended && !settled ? (
                     <div>
                       <Button
                         size="xs"
@@ -260,20 +268,24 @@ function StatementEvidence({ row }: { row: StatementRow }) {
       <EvidenceBox title="Why">
         <div className="flex flex-col gap-1 text-xs">
           <p>
-            {charge.clean
-              ? "Clean: deterministic evidence and no competing candidate."
-              : "Needs review before it is accepted."}
+            {settled
+              ? "Applied automatically by its Automatic rule."
+              : charge.clean
+                ? "Clean: deterministic evidence and no competing candidate."
+                : "Needs review before it is accepted."}
           </p>
           {charge.create ? (
-            // TODO(#2739): show the kind votes, counterparty and transfer
-            // evidence once the judgment carries them.
-            <p className="text-muted-foreground">
-              Kind {kind ? humanize(kind) : "unknown"}
-              {rowDraft.kind && rowDraft.kind !== charge.create.kind
-                ? " (changed by you)"
-                : ` from ${charge.create.kindSource === "sign" ? "the amount sign" : charge.create.kindSource}`}
-            </p>
+            <>
+              <KindVotes create={charge.create} />
+              {rowDraft.kind && rowDraft.kind !== charge.create.kind ? (
+                <p className="text-muted-foreground">
+                  You changed the kind to {humanize(rowDraft.kind)}.
+                </p>
+              ) : null}
+              <CounterpartyLine counterparty={charge.create.counterparty} />
+            </>
           ) : null}
+          {charge.transfer ? <TransferLine transfer={charge.transfer} /> : null}
           {charge.siblings > 0 ? (
             <p className="text-warning-ink">
               {countLabel(charge.siblings, "similar unmatched charge")}
@@ -336,6 +348,47 @@ function FieldEvidence({ row }: { row: FieldRow }) {
   );
 }
 
+/** A field change an Automatic rule applied: what it wrote and what decided it. */
+function AppliedFieldEvidence({ row }: { row: FieldRow }) {
+  const suggestion = row.evidence;
+  return (
+    <div className="max-w-xl">
+      <EvidenceBox title="Applied automatically">
+        <Facts
+          rows={[
+            [
+              "Value",
+              <FieldValue
+                key="value"
+                entity={suggestion.entity}
+                recordId={suggestion.recordId}
+                field={suggestion.field}
+                value={suggestion.suggestedValue}
+              />,
+            ],
+            [
+              "Confidence",
+              <span key="confidence" className="tabular-nums">
+                {formatConfidence(suggestion.confidence)}
+              </span>,
+            ],
+            ["Decision model", suggestion.model],
+            [
+              "Run",
+              suggestion.runId ? (
+                <RecordLink
+                  key="run"
+                  record={{ entity: "run", id: suggestion.runId }}
+                />
+              ) : null,
+            ],
+          ]}
+        />
+      </EvidenceBox>
+    </div>
+  );
+}
+
 type ConnectionRow = Extract<SuggestionListRow, { family: "recommendation" }>;
 
 function ConnectionEvidence({ row }: { row: ConnectionRow }) {
@@ -387,7 +440,13 @@ export function SuggestionEvidence({ row }: { row: SuggestionListRow }) {
         .with({ family: "statement_transaction" }, (statement) => (
           <StatementEvidence row={statement} />
         ))
-        .with({ family: "field" }, (field) => <FieldEvidence row={field} />)
+        .with({ family: "field" }, (field) =>
+          field.automaticRule === null ? (
+            <FieldEvidence row={field} />
+          ) : (
+            <AppliedFieldEvidence row={field} />
+          ),
+        )
         .with({ family: "recommendation" }, (connection) => (
           <ConnectionEvidence row={connection} />
         ))

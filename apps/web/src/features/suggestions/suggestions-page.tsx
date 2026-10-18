@@ -46,6 +46,7 @@ import type { ListQueryOptionsFn } from "~/ui/hooks/use-paginated-table-core";
 import { Button } from "~/ui/primitives/button";
 
 import { useAcceptClean, type CleanTarget } from "./accept-clean";
+import { AutomaticRulesSection } from "./automatic-rules";
 import { SuggestionEvidence } from "./suggestion-evidence";
 import { acceptItem, dismissItem, neverSuggestItem } from "./suggestion-review";
 import {
@@ -91,12 +92,104 @@ export function scopeFilters(search: SuggestionsSearch): ScopeFilters {
     ...recordScope,
     ...(search.family ? { family: search.family } : {}),
     ...(search.runId ? { runId: search.runId } : {}),
+    ...(search.status === "applied_automatically"
+      ? { appliedAutomatically: true }
+      : {}),
   };
 }
 
-/** The table's view: the chosen family, or the one a record scope implies. */
-const viewOf = (search: SuggestionsSearch): SuggestionView =>
+/** The chosen family, or the one a record scope implies. */
+const familyOf = (search: SuggestionsSearch) =>
   search.family ?? scopeFilters(search).family ?? "all";
+
+/** The table's view: what rules applied, else the family's own. */
+const viewOf = (search: SuggestionsSearch): SuggestionView =>
+  search.status === "applied_automatically" ? "applied" : familyOf(search);
+
+function Chip({
+  active,
+  label,
+  count,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  count: number | undefined;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={
+        active
+          ? "rounded-full border border-primary bg-primary px-2.5 py-0.5 text-xs font-medium text-primary-foreground max-md:min-h-11"
+          : "rounded-full border bg-card px-2.5 py-0.5 text-xs font-medium hover:bg-muted max-md:min-h-11"
+      }
+    >
+      {label}{" "}
+      <span
+        className={
+          active
+            ? "tabular-nums opacity-75"
+            : "text-muted-foreground tabular-nums"
+        }
+      >
+        {count === undefined ? "…" : formatCount(count)}
+      </span>
+    </button>
+  );
+}
+
+/** Pending Suggestions, or the changes Automatic rules applied without review. */
+function StatusChips({
+  search,
+  onSearch,
+}: {
+  search: SuggestionsSearch;
+  onSearch: (patch: Partial<SuggestionsSearch>) => void;
+}) {
+  const { appliedAutomatically: _applied, ...scope } = scopeFilters({
+    ...search,
+    status: undefined,
+  });
+  const counts = useQuery(
+    suggestions.counts.queryOptions({ ...scope, where: scope.where ?? {} }),
+  );
+  // Counts read pending outcomes; the applied view's total comes from its list.
+  const applied = useQuery(
+    suggestions.list.queryOptions({
+      ...scope,
+      appliedAutomatically: true,
+      limit: 1,
+    }),
+  );
+  const pending = counts.data?.families.reduce(
+    (sum, row) => sum + row.pending,
+    0,
+  );
+  const status = search.status;
+  return (
+    <fieldset className="flex flex-wrap gap-1.5">
+      <legend className="sr-only">Suggestion status</legend>
+      <Chip
+        active={!status}
+        label="Pending"
+        count={pending}
+        onClick={() => onSearch({ status: undefined })}
+      />
+      <Chip
+        active={status === "applied_automatically"}
+        label="Applied automatically"
+        count={applied.data?.meta.totalCount}
+        onClick={() =>
+          onSearch({ status: "applied_automatically", group: undefined })
+        }
+      />
+    </fieldset>
+  );
+}
 
 type QueryFilters = {
   scope: ScopeFilters;
@@ -193,7 +286,12 @@ export function SuggestionsPage({
       />
       <div className="flex flex-col gap-2 px-2 pt-2 md:px-4">
         {sweep ? <SweepStatusLine key={sweep} runId={sweep} /> : null}
-        <FamilyChips search={search} onSearch={onSearch} />
+        <AutomaticRulesSection />
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <StatusChips search={search} onSearch={onSearch} />
+          <span aria-hidden className="h-4 w-px bg-border max-md:hidden" />
+          <FamilyChips search={search} onSearch={onSearch} />
+        </div>
         <ScopeChips search={search} onSearch={onSearch} />
       </div>
       <SuggestionsTable
@@ -213,48 +311,53 @@ function FamilyChips({
   search: SuggestionsSearch;
   onSearch: (patch: Partial<SuggestionsSearch>) => void;
 }) {
-  const { family: _family, ...scope } = scopeFilters({
+  const {
+    family: _family,
+    appliedAutomatically,
+    ...scope
+  } = scopeFilters({
     ...search,
     family: undefined,
   });
-  const counts = useQuery(
-    suggestions.counts.queryOptions({ ...scope, where: scope.where ?? {} }),
-  );
-  const pending = (family?: SuggestionListFamily) =>
-    (counts.data?.families ?? [])
+  const counts = useQuery({
+    ...suggestions.counts.queryOptions({ ...scope, where: scope.where ?? {} }),
+    enabled: !appliedAutomatically,
+  });
+  // The applied view counts each family from its own list total.
+  const applied = useQuery({
+    ...suggestions.list.queryOptions({
+      ...scope,
+      appliedAutomatically: true,
+      limit: 1,
+    }),
+    enabled: Boolean(appliedAutomatically),
+  });
+  const appliedFacet = applied.data?.facets.family;
+  const count = (family?: SuggestionListFamily) => {
+    if (appliedAutomatically) {
+      if (!applied.data) return undefined;
+      return family
+        ? (appliedFacet?.find((facet) => facet.value === family)?.count ?? 0)
+        : applied.data.meta.totalCount;
+    }
+    if (!counts.data) return undefined;
+    return counts.data.families
       .filter((row) => !family || row.family === family)
       .reduce((sum, row) => sum + row.pending, 0);
+  };
   const chips = [{ family: undefined, label: "All" }, ...FAMILY_CHIPS] as const;
   return (
     <fieldset className="flex flex-wrap gap-1.5">
       <legend className="sr-only">Suggestion families</legend>
-      {chips.map((chip) => {
-        const active = viewOf(search) === (chip.family ?? "all");
-        return (
-          <button
-            key={chip.label}
-            type="button"
-            aria-pressed={active}
-            onClick={() => onSearch({ family: chip.family, group: undefined })}
-            className={
-              active
-                ? "rounded-full border border-primary bg-primary px-2.5 py-0.5 text-xs font-medium text-primary-foreground max-md:min-h-11"
-                : "rounded-full border bg-card px-2.5 py-0.5 text-xs font-medium hover:bg-muted max-md:min-h-11"
-            }
-          >
-            {chip.label}{" "}
-            <span
-              className={
-                active
-                  ? "tabular-nums opacity-75"
-                  : "text-muted-foreground tabular-nums"
-              }
-            >
-              {counts.data ? formatCount(pending(chip.family)) : "…"}
-            </span>
-          </button>
-        );
-      })}
+      {chips.map((chip) => (
+        <Chip
+          key={chip.label}
+          active={familyOf(search) === (chip.family ?? "all")}
+          label={chip.label}
+          count={count(chip.family)}
+          onClick={() => onSearch({ family: chip.family, group: undefined })}
+        />
+      ))}
     </fieldset>
   );
 }
@@ -309,6 +412,7 @@ const QUICK_FILTERS = {
   field: ["entity", "field", "kind"],
   statement_transaction: ["clean", "action", "kind", "account", "owner"],
   recommendation: ["relation", "entityKind"],
+  applied: [],
 } satisfies Record<SuggestionView, readonly string[]>;
 
 function QuickFilters({
@@ -596,6 +700,8 @@ function SuggestionsTableBody({
     const rows = list.data;
     const index = rows.findIndex((row) => row.id === current);
     const row = rows[index];
+    // Applied rows are already settled: A and D have nothing to review.
+    const reviewable = view === "applied" ? undefined : row;
     const handled = (() => {
       switch (event.key) {
         case "ArrowDown":
@@ -618,15 +724,15 @@ function SuggestionsTableBody({
           return Boolean(row);
         case "a":
         case "A":
-          if (row)
-            void review.review([row], (target) =>
+          if (reviewable)
+            void review.review([reviewable], (target) =>
               acceptItem(target, review.statementChoice(target)),
             );
-          return Boolean(row);
+          return Boolean(reviewable);
         case "d":
         case "D":
-          if (row) void review.review([row], dismissItem);
-          return Boolean(row);
+          if (reviewable) void review.review([reviewable], dismissItem);
+          return Boolean(reviewable);
         default:
           return false;
       }
@@ -696,7 +802,7 @@ function SuggestionsTableBody({
             />
           ) : null}
         </div>
-        {cleanCount > 0 && !grouped ? (
+        {cleanCount > 0 && !grouped && view !== "applied" ? (
           <div className="flex flex-wrap items-center gap-2 rounded-md border border-positive/30 bg-positive/5 px-2.5 py-1.5 text-xs">
             <span className="font-medium text-positive">Clean</span>
             <span>
@@ -800,7 +906,9 @@ function SuggestionsTableBody({
         showColumnMenu
         emptyState={
           <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-            No pending suggestions here. Find suggestions to look again.
+            {view === "applied"
+              ? "No Automatic rule has applied a change here."
+              : "No pending suggestions here. Find suggestions to look again."}
           </p>
         }
       />

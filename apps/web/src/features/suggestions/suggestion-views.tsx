@@ -34,6 +34,8 @@ import type { RuntimeFilterOptions } from "~/ui/hooks/filter-option-types";
 import { deferredFilterOptionSource } from "~/ui/hooks/filter-option-types";
 import { NoneValue } from "~/ui/primitives/none-value";
 
+import { AuthorizedBy, AutomaticWrongCell } from "./automatic-rules";
+import { kindAgreement } from "./statement-kind-votes";
 import { SuggestionActionsCell, ExpandCell } from "./suggestion-actions";
 import {
   ActionBadge,
@@ -48,8 +50,11 @@ import {
   fieldLabel,
 } from "./suggestion-values";
 
-/** The table's view: every family's shared columns, or one family's own. */
-export type SuggestionView = "all" | SuggestionListFamily;
+/**
+ * The table's view: every family's shared columns, one family's own, or the
+ * changes Automatic rules applied.
+ */
+export type SuggestionView = "all" | SuggestionListFamily | "applied";
 
 type Row = SuggestionListRow;
 const helper = createCubbyColumnHelper<Row>();
@@ -109,6 +114,7 @@ const VIEW_FILTERS = {
     multiselect("entityKind"),
     multiselect("strength"),
   ],
+  applied: [],
 } satisfies Record<SuggestionView, readonly ColumnFilterSpec[]>;
 
 /** The filter codec's specs for a view (URL keys are the column ids). */
@@ -662,21 +668,21 @@ function statementColumns(
       }),
     );
     add(
-      // TODO(#2739): render create.votes / counterparty / transfer evidence
-      // here once the judgment carries them; until then the source of the kind.
+      // Filters by the source that chose the kind; the cell reads the votes.
       helper.accessor((row) => columnText(row, "kindSource"), {
         id: "kindSource",
         header: "Kind source",
-        size: 112,
+        size: 220,
         meta: attachCubbyColumnMeta<Row>({
           mobile: { slot: "meta", priority: 7, label: "Kind source" },
           filterConfig: multiFilter("Filter kind source", KIND_SOURCE_OPTIONS),
         }),
         cell: ({ row }) => {
-          const source = columnText(row.original, "kindSource");
-          return source ? (
-            (KIND_SOURCE_OPTIONS.find((option) => option.value === source)
-              ?.label ?? source)
+          const create = evidence(row.original)?.create;
+          return create ? (
+            <span className="truncate text-muted-foreground">
+              {kindAgreement(create).reason}
+            </span>
           ) : (
             <NoneValue />
           );
@@ -829,6 +835,71 @@ function recommendationColumns() {
   });
 }
 
+/** Changes an Automatic rule applied: what changed, the rule, and Wrong…. */
+function appliedColumns() {
+  return createCubbyColumnCollection<Row>((add) => {
+    add(
+      helper.display({
+        id: "expand",
+        header: "",
+        size: 32,
+        enableSorting: false,
+        enableHiding: false,
+        enableResizing: false,
+        meta: attachCubbyColumnMeta<Row>({ entityColumnRole: "selection" }),
+        cell: ExpandCell,
+      }),
+    );
+    add(recordColumn);
+    add(
+      helper.display({
+        id: "whatChanges",
+        header: "What changed",
+        size: 320,
+        meta: attachCubbyColumnMeta<Row>({
+          mobile: { slot: "subtitle", priority: 0, label: "What changed" },
+        }),
+        cell: ({ row }) => <WhatChanges row={row.original} />,
+      }),
+    );
+    add(
+      helper.accessor((row) => row.automaticRule, {
+        id: "automaticRule",
+        header: "Authorized by",
+        size: 260,
+        enableSorting: false,
+        meta: attachCubbyColumnMeta<Row>({
+          mobile: { slot: "meta", priority: 0, label: "Authorized by" },
+        }),
+        cell: ({ row }) => <AuthorizedBy row={row.original} />,
+      }),
+    );
+    add(
+      helper.accessor((row) => row.family, {
+        id: "family",
+        header: "Family",
+        size: 104,
+        meta: attachCubbyColumnMeta<Row>({
+          mobile: { slot: "meta", priority: 1, label: "Family" },
+        }),
+        cell: ({ row }) => FAMILY_LABEL[row.original.family],
+      }),
+    );
+    add(ageColumn);
+    add(
+      helper.display({
+        id: "actions",
+        header: "",
+        size: 160,
+        enableSorting: false,
+        enableHiding: false,
+        meta: attachCubbyColumnMeta<Row>({ mobile: { slot: "trailing" } }),
+        cell: ({ row }) => <AutomaticWrongCell row={row.original} />,
+      }),
+    );
+  });
+}
+
 /** Rosters for the statement reference filters, read only when opened. */
 export const STATEMENT_ROSTERS = [
   { key: "account", target: "financialAccount" },
@@ -850,6 +921,8 @@ export function viewColumns(
       return statementColumns(rosters, providerCategoryLabel);
     case "recommendation":
       return recommendationColumns();
+    case "applied":
+      return appliedColumns();
   }
 }
 
@@ -865,4 +938,5 @@ export const VIEW_HIDDEN_COLUMNS = {
     impact: false,
   },
   recommendation: { entityKind: false },
+  applied: {},
 } satisfies Record<SuggestionView, Record<string, false>>;
