@@ -1,11 +1,13 @@
-import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import { ensureMemberParty } from "./fixtures/core";
+import { gotoAuthenticatedPage, uniqueName } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
 // Section jumps must preserve query feedback and unfinished inputs; visiting
 // maintenance must not start diagnostics until the user opens them.
 test("settings section navigation preserves drafts, feedback, and diagnostic disclosure", async ({
   page,
-}) => {
+}, testInfo) => {
+  await ensureMemberParty(page, uniqueName(testInfo, "Synthetic settings"));
   await page.setViewportSize({ width: 1440, height: 900 });
   await gotoAuthenticatedPage(page, "/settings?purchaseAgent=dispatch_failed");
   const index = page.getByRole("navigation", { name: "Section index" });
