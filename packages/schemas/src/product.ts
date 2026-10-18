@@ -308,7 +308,6 @@ export const productFilterFields = {
     "Filter to products that are / aren't in service as a Location.",
   ),
   taskStatusFilter: oneOrMany(taskStatusSchema).optional(),
-  taskOpenOnly: z.boolean().optional(),
   ...dateRangeFields("taskDue"),
   categoryFeatureFilter: oneOrMany(productCategoryFeature).optional(),
   expensePresenceFilter: presenceFilter.describe(

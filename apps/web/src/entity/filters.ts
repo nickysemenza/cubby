@@ -294,7 +294,16 @@ export function buildFiltersFromManifest(
       })
       .exhaustive();
 
-    if (patch) Object.assign(filters, patch);
+    // Two filters writing one any-of list (a preset beside its column's
+    // picks: Tasks "Has open task" with status Done) union their values.
+    if (patch)
+      for (const [key, value] of Object.entries(patch)) {
+        const existing = filters[key];
+        filters[key] =
+          Array.isArray(existing) && Array.isArray(value)
+            ? [...new Set([...existing, ...value])]
+            : value;
+      }
   }
 
   return filters;

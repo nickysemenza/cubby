@@ -58,6 +58,12 @@ type CompiledListField =
             kind: "record";
             target: string;
             titleColumn: string | null;
+            /**
+             * The row's foreign key to the record, when the declaration
+             * names it (a relation row set's field); else the row table's
+             * one foreign key to the target.
+             */
+            column: string | null;
           }>;
       sort: string;
       group: string;
@@ -427,6 +433,7 @@ const compileRowsVia = (
             kind: "record",
             target: target.key,
             titleColumn: titleColumn(target),
+            column: stored?.column ?? null,
           },
     sort: reason("sort"),
     group: reason("group"),

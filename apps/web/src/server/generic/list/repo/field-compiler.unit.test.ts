@@ -249,4 +249,29 @@ describe("list field compiler", () => {
         ).not.toThrow();
       }
   });
+
+  // A relation row set's entity field that inherits (task project) filters
+  // by its effective value, as a `via` terminal does; a plain field reads
+  // its column.
+  it("reads a relation row set's inherited field effectively", () => {
+    const set = rowSetSql("product", "subjectTasks", "Product");
+    const column = (name: string) =>
+      renderWhereSql(
+        set.column({
+          shape: "rows",
+          path: `subjectTasks.${name}`,
+          rows: "subjectTasks",
+          terminal: {
+            kind: "column",
+            column: name,
+            fieldKind: null,
+            options: null,
+          },
+          sort: "",
+          group: "",
+        }),
+      );
+    expect(column("status")).toBe('rs1."status"');
+    expect(column("projectId")).not.toBe('rs1."projectId"');
+  });
 });
