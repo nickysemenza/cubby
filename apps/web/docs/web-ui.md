@@ -108,7 +108,12 @@ Record lists fill their available width, including inside a flex fact value;
 their size-contained ledger must not rely on intrinsic width from its children.
 Record ledgers without leading media keep prose in the capped identity track,
 leaving readable space for secondary evidence and next actions; narrow containers
-stack that evidence beneath the identity.
+stack that evidence beneath the identity. A list whose rows carry several
+labelled values declares `columns`: its own `columns` ledger variant places each
+fact explicitly from inline custom properties, gives the identity a
+`minmax(8rem, 1fr)` track instead of the 16rem cap, and keeps its labels in
+each row's `dt` (visually hidden beside the header) so phones and assistive
+tech read them.
 
 Column factories reuse module-level render components for selection controls:
 `flexRender` treats callbacks as React component types, so refreshing column

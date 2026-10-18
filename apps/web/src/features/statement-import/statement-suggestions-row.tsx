@@ -136,7 +136,7 @@ export function StatementSuggestionRow({
 
   return (
     <LedgerRow aria-label={`Suggestion for ${descriptor}`}>
-      <LedgerCell slot="leading" className="w-20">
+      <LedgerCell slot="leading">
         <ActionBadge action={suggestion.recommended} />
       </LedgerCell>
       <LedgerCell as="div" slot="primary" className="flex min-w-0 flex-col">

@@ -149,7 +149,7 @@ export const workQueueVendorSchema = z.object({
 
 export const workQueueRowSchema = problemRowSchema
   .omit({
-    subtitle: true,
+    fields: true,
     badges: true,
   })
   .extend({

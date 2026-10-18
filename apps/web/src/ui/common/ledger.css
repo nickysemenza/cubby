@@ -244,6 +244,136 @@
   }
 }
 
+/* Columnar records: each row's facts align under one quiet header. Below
+   40rem the header hides and the same `FactList` wraps inline beneath the
+   identity with its labels visible, so no fact is lost on a phone. Columns
+   are placed explicitly from inline custom properties set by `RecordList`
+   (`--ledger-columns`, `--ledger-trailing-column`, `--ledger-actions-column`)
+   and per fact (`--fact-column`); an inline `grid-template-columns` would beat
+   this container query. */
+.ledger-row > [data-ledger-slot="facts"] {
+  grid-column: 2 / -1;
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+}
+.ledger > .ledger-row[data-ledger-header] {
+  display: none;
+}
+/* Narrow rows read identity, code, facts, then commands. Columnar lists stay
+   in this shape until 40rem: below that a dense section's columns cannot fit
+   beside a readable identity. */
+@container ledger (max-width: 39.99rem) {
+  /* The hidden header leaves the first real row with no rule above it. */
+  .ledger > .ledger-row[data-ledger-header] + .ledger-row {
+    border-top: 0;
+  }
+  .ledger[data-ledger="columns"] > .ledger-row > [data-ledger-slot="facts"] {
+    grid-row: 3;
+  }
+  .ledger[data-ledger="columns"]
+    > .ledger-row:has(> [data-ledger-slot="facts"])
+    > [data-ledger-slot="actions"] {
+    grid-row: 4;
+  }
+  /* Without leading marks, identity, facts and evidence share one left edge. */
+  .ledger[data-ledger="columns"]:not(
+      :has(> .ledger-row > [data-ledger-slot="leading"])
+    )
+    > .ledger-row
+    > [data-ledger-slot="primary"] {
+    grid-column: 1 / 3;
+  }
+  .ledger[data-ledger="columns"]:not(
+      :has(> .ledger-row > [data-ledger-slot="leading"])
+    )
+    > .ledger-row
+    > :is([data-ledger-slot="facts"], [data-ledger-slot="secondary"]) {
+    grid-column: 1 / -1;
+  }
+}
+
+@container ledger (max-width: 31.99rem) {
+  .ledger-row > [data-ledger-slot="facts"] {
+    grid-row: 3;
+  }
+  .ledger-row:has(> [data-ledger-slot="facts"]) > [data-ledger-slot="actions"] {
+    grid-row: 4;
+  }
+}
+
+@container ledger (min-width: 40rem) {
+  .ledger[data-ledger="columns"] {
+    grid-template-columns: var(--ledger-columns);
+  }
+  .ledger[data-ledger="columns"] > .ledger-row[data-ledger-header] {
+    display: grid;
+    min-height: 1.5rem;
+    font-size: 0.6875rem;
+    line-height: 1rem;
+    color: var(--muted-foreground);
+  }
+  .ledger[data-ledger="columns"]
+    > .ledger-row[data-ledger-header]
+    > [data-ledger-column] {
+    grid-column: var(--fact-column);
+    grid-row: 1;
+    align-self: end;
+    overflow-wrap: anywhere;
+  }
+  .ledger[data-ledger="columns"]
+    > .ledger-row
+    > [data-ledger-slot="secondary"] {
+    grid-column: 3;
+    grid-row: 1;
+  }
+  .ledger[data-ledger="columns"] > .ledger-row > [data-ledger-slot="trailing"] {
+    grid-column: var(--ledger-trailing-column);
+    grid-row: 1;
+  }
+  .ledger[data-ledger="columns"] > .ledger-row > [data-ledger-slot="actions"] {
+    grid-column: var(--ledger-actions-column);
+    grid-row: 1;
+    justify-self: end;
+  }
+  .ledger[data-ledger="columns"] > .ledger-row > [data-ledger-slot="facts"],
+  .ledger[data-ledger="columns"]
+    > .ledger-row
+    > [data-ledger-slot="facts"]
+    > [data-fact-list] {
+    display: contents;
+  }
+  .ledger[data-ledger="columns"]
+    > .ledger-row
+    > [data-ledger-slot="facts"]
+    [data-fact] {
+    grid-column: var(--fact-column);
+    grid-row: 1;
+  }
+  /* The header names the column; the term stays for assistive tech. */
+  .ledger[data-ledger="columns"]
+    > .ledger-row
+    > [data-ledger-slot="facts"]
+    [data-fact]
+    > dt {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  /* Values wrap rather than clip: a finding's tail is often the point. A
+     dense section (nine columns at 40rem) may break inside a word rather than
+     scroll sideways. */
+  .ledger[data-ledger="columns"]
+    > .ledger-row
+    > [data-ledger-slot="facts"]
+    [data-fact]
+    > dd {
+    overflow-wrap: anywhere;
+  }
+}
+
 /* Ledger form: an editor laid out like the facts it edits — quiet label
    column, control column. Below 26rem (the phone sheet) fields stay stacked.
    Only top-level fields take the grid; a field nested in a fieldset, another

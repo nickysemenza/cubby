@@ -142,3 +142,100 @@ it("starts evidence and detail under identity when no row has a leading cell", a
   expect(Math.abs(rect("evidence").left - identity)).toBeLessThanOrEqual(1);
   expect(Math.abs(rect("detail").left - identity)).toBeLessThanOrEqual(1);
 });
+
+it("places each fact under its column and keeps the label for assistive tech", async () => {
+  await page.viewport(1440, 900);
+  const { container } = render(
+    <div style={{ width: 960 }}>
+      <RecordList
+        columns={[
+          { id: "Amount", label: "Amount" },
+          { id: "Location", label: "Location" },
+        ]}
+      >
+        <RecordRow
+          primary="Synthetic oats"
+          facts={[
+            { label: "Location", value: "Synthetic pantry" },
+            { label: "Amount", value: "500 g" },
+          ]}
+        />
+        <RecordRow
+          primary="Synthetic lentils"
+          facts={[{ label: "Location", value: "Synthetic shelf" }]}
+        />
+      </RecordList>
+    </div>,
+  );
+  const header = container.querySelector("[data-ledger-header]");
+  expect(header).toHaveAttribute("aria-hidden", "true");
+  expect(header).toBeVisible();
+  const column = (text: string) =>
+    getComputedStyle(screen.getByText(text).closest("[data-fact]") as Element)
+      .gridColumnStart;
+  // Order in the row does not matter; the column id does.
+  expect(column("500 g")).toBe("4");
+  expect(column("Synthetic pantry")).toBe("5");
+  expect(column("Synthetic shelf")).toBe("5");
+  // The term stays in the accessibility tree even though the header shows it.
+  expect(
+    screen.getAllByText("Amount", { selector: "dt" }).length,
+  ).toBeGreaterThan(0);
+});
+
+it("drops the header and shows labels inline in a narrow list", async () => {
+  await page.viewport(1440, 900);
+  const { container } = render(
+    <div style={{ width: 320 }}>
+      <RecordList columns={[{ id: "Amount", label: "Amount" }]}>
+        <RecordRow
+          primary="Synthetic oats"
+          facts={[{ label: "Amount", value: "500 g" }]}
+        />
+      </RecordList>
+    </div>,
+  );
+  expect(container.querySelector("[data-ledger-header]")).not.toBeVisible();
+  expect(screen.getByText("Amount", { selector: "dt" })).toBeVisible();
+});
+
+// A dense section (duplicate spend names nine facts) must never scroll
+// sideways where the columns layout begins, nor anywhere above it.
+it.each([640, 720, 800])(
+  "keeps nine fact columns inside a %ipx container",
+  async (width) => {
+    await page.viewport(1440, 900);
+    const labels = [
+      "Cost",
+      "Matches stated total",
+      "Vendor",
+      "Purchase",
+      "Expense date",
+      "Purchase date",
+      "Apart",
+      "Weaker matches",
+      "Location",
+    ];
+    render(
+      <div style={{ width }} data-testid="dense">
+        <RecordList columns={labels.map((label) => ({ id: label, label }))}>
+          {[1, 2].map((row) => (
+            <RecordRow
+              key={row}
+              leading={<span className="size-6" />}
+              primary="Synthetic washer stacking bracket kit"
+              secondary="EXP-0000"
+              facts={labels.map((label) => ({
+                label,
+                value: `Synthetic value for ${label.toLowerCase()}`,
+              }))}
+              actions={<button type="button">Delete</button>}
+            />
+          ))}
+        </RecordList>
+      </div>,
+    );
+    const dense = screen.getByTestId("dense");
+    expect(dense.scrollWidth).toBeLessThanOrEqual(dense.clientWidth);
+  },
+);

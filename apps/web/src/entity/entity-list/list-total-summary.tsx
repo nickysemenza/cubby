@@ -1,5 +1,6 @@
 import type { EntitySummary } from "@cubby/schemas/entity-summary";
 
+import { FactList } from "~/ui/common/fact-list";
 import { ErrorDetails } from "~/ui/feedback/error-details";
 import { Button } from "~/ui/primitives/button";
 
@@ -50,14 +51,15 @@ export function ListTotalSummary({
           )}
         </>
       )}
-      <dl className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        {values.map(({ id, label, value }) => (
-          <div key={id} className="flex min-w-0 items-baseline gap-1.5">
-            <dt className="text-muted-foreground">{label}</dt>
-            <dd className="font-medium tabular-nums">{value}</dd>
-          </div>
-        ))}
-      </dl>
+      <FactList
+        emphasis="value"
+        facts={values.map(({ id, label, value }) => ({
+          id,
+          label,
+          value,
+          className: "font-medium tabular-nums",
+        }))}
+      />
     </div>
   );
 }

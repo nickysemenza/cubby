@@ -24,6 +24,7 @@ const candidate = (
   expenseDate: "2024-05-06",
   purchaseId: testShortcode("purchase", "PUR-YUKU"),
   vendorName: "Best Buy",
+  vendorId: null,
   purchaseDate: "2024-05-06",
   purchaseExpenseTotal: 43.44,
   purchaseStatedTotal: null,
@@ -83,14 +84,18 @@ describe("duplicate spend section", () => {
       undefined,
     );
     const { container } = render(node, { wrapper: harness.wrapper });
+    // Labels name a column once in the header and again, for assistive tech,
+    // in each row's term — so they are matched with the All queries.
 
     expect(screen.getByText("washer stacking bracket")).toBeTruthy();
     // The stated-total arm must show the stated total, not the line sum — the
     // gap between them is the whole reason that arm exists.
-    expect(screen.getByText(/\$50\.71/)).toBeTruthy();
-    expect(screen.getByText(/Best Buy stated total/)).toBeTruthy();
-    expect(screen.getByText("2 days apart")).toBeTruthy();
-    expect(screen.getByText("+1 weaker match")).toBeTruthy();
+    expect(screen.getAllByText("Matches stated total")).not.toHaveLength(0);
+    expect(screen.getByText("$50.71 (2 lines)")).toBeTruthy();
+    expect(screen.getByText("Best Buy")).toBeTruthy();
+    expect(screen.getAllByText("Apart")).not.toHaveLength(0);
+    expect(screen.getByText("2 days")).toBeTruthy();
+    expect(screen.getAllByText("Weaker matches")).not.toHaveLength(0);
 
     // The actionable row is the expense; the purchase it collides with is only
     // context, so every route out of this card points at the expense.
@@ -106,9 +111,9 @@ describe("duplicate spend section", () => {
       wrapper: harness.wrapper,
     });
 
-    expect(screen.getByText(/Best Buy expense total of \$43\.44/)).toBeTruthy();
-    expect(screen.getByText(/across 2 lines/)).toBeTruthy();
-    expect(screen.queryByText(/apart/)).toBeNull();
-    expect(screen.queryByText(/weaker match/)).toBeNull();
+    expect(screen.getAllByText("Matches expense total")).not.toHaveLength(0);
+    expect(screen.getByText("$43.44 (2 lines)")).toBeTruthy();
+    expect(screen.queryAllByText("Apart")).toHaveLength(0);
+    expect(screen.queryAllByText("Weaker matches")).toHaveLength(0);
   });
 });

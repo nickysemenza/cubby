@@ -9,7 +9,13 @@ import { formatCount } from "~/lib/number-format";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn } from "~/lib/utils";
 import { DateDisplay } from "~/ui/common/date-display";
-import { RecordDetail, RecordDot, RecordRow } from "~/ui/common/record-list";
+import type { Fact } from "~/ui/common/fact-list";
+import {
+  type RecordColumn,
+  RecordDetail,
+  RecordDot,
+  RecordRow,
+} from "~/ui/common/record-list";
 import { Row, Stack } from "~/ui/layout";
 import { MutedBox } from "~/ui/layout/muted-box";
 import { Avatar, AvatarFallback, AvatarImage } from "~/ui/primitives/avatar";
@@ -275,13 +281,51 @@ function ChangesList({ changes }: { changes: AuditChanges }) {
 }
 
 /** "Claude · Kitchen iPad": the client and device behind a write; the run links separately. */
-const auditVia = (entry: AuditLogEntry): string | null => {
-  const parts = [
-    entry.oauthClient ? (entry.oauthClient.name ?? "OAuth client") : null,
-    entry.device ? (entry.device.name ?? entry.device.id) : null,
-  ].filter((part): part is string => part !== null);
-  return parts.length > 0 ? parts.join(" · ") : null;
-};
+export const AUDIT_COLUMNS = [
+  { id: "client", label: "Client" },
+  { id: "device", label: "Device" },
+  { id: "run", label: "Run" },
+] as const satisfies readonly RecordColumn[];
+
+/** Which client, device and Run carried the change, keyed by `AUDIT_COLUMNS`. */
+export const auditFacts = (entry: AuditLogEntry): Fact[] => [
+  ...(entry.oauthClient
+    ? [
+        {
+          id: "client",
+          label: "Client",
+          value: entry.oauthClient.name ?? "OAuth client",
+        },
+      ]
+    : []),
+  ...(entry.device
+    ? [
+        {
+          id: "device",
+          label: "Device",
+          value: entry.device.name ?? entry.device.id,
+        },
+      ]
+    : []),
+  ...(entry.runId
+    ? [
+        {
+          id: "run",
+          label: "Run",
+          value: (
+            <EntityRefLink
+              variant="chip"
+              entity="run"
+              id={entry.runId}
+              name={entry.runId}
+              displayImage={null}
+              emoji={null}
+            />
+          ),
+        },
+      ]
+    : []),
+];
 
 const actorName = (entry: AuditLogEntry) =>
   entry.user ? (entry.user.name ?? entry.user.email) : "System";
@@ -349,7 +393,6 @@ export function AuditRecordRow({
   const references: AuditReferences = folded
     ? Object.assign({}, ...group.map((item) => item.references))
     : entry.references;
-  const via = auditVia(entry);
   const changedCount = Object.keys(changes ?? {}).length;
   const shownCount = summary?.shown.length ?? 0;
   return (
@@ -384,34 +427,15 @@ export function AuditRecordRow({
         </>
       }
       secondary={
-        summary || via || entry.runId ? (
-          <span className="flex min-w-0 items-baseline gap-2">
-            {summary ? (
-              <LedgerChangeSummary
-                shown={summary.shown}
-                omitted={0}
-                references={references}
-              />
-            ) : null}
-            {via || entry.runId ? (
-              <span className="flex shrink-0 items-baseline gap-1">
-                via {via}
-                {via && entry.runId ? " · " : null}
-                {entry.runId ? (
-                  <EntityRefLink
-                    variant="chip"
-                    entity="run"
-                    id={entry.runId}
-                    name={entry.runId}
-                    displayImage={null}
-                    emoji={null}
-                  />
-                ) : null}
-              </span>
-            ) : null}
-          </span>
+        summary ? (
+          <LedgerChangeSummary
+            shown={summary.shown}
+            omitted={0}
+            references={references}
+          />
         ) : null
       }
+      facts={auditFacts(entry)}
       trailing={
         <span className="inline-flex items-center gap-1.5">
           <AuditActor entry={entry} />

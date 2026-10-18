@@ -4,7 +4,9 @@ import { cn } from "~/lib/utils";
 
 import "./ledger.css";
 
-const LedgerContext = createContext<"facts" | "records" | null>(null);
+const LedgerContext = createContext<"facts" | "records" | "columns" | null>(
+  null,
+);
 
 /** Shared row geometry; record links, editing, commands and evidence stay with callers. */
 export function Ledger({
@@ -14,7 +16,8 @@ export function Ledger({
   ...props
 }: HTMLAttributes<HTMLElement> & {
   as?: "ul" | "dl" | "div";
-  variant?: "facts" | "records";
+  /** `columns`: records whose facts align under a header (see `RecordList` `columns`). */
+  variant?: "facts" | "records" | "columns";
 }) {
   return (
     <div className="ledger-container min-w-0">
@@ -57,6 +60,7 @@ export function LedgerCell({
     | "trailing"
     | "actions"
     | "detail"
+    | "facts"
     | "group";
 }) {
   return (

@@ -101,13 +101,13 @@ import {
   type ProblemRunStatus,
 } from "~/server/generic/problems/service/problem-execution.service";
 import {
-  byManufacturer,
+  field,
   locationBadges,
+  manufacturerField,
   problemRow,
   type ProblemRowInput,
   recordBadge,
   selectedProblemCard,
-  textBadge,
 } from "~/server/generic/problems/service/problem-rows";
 import { traceAllBounded } from "~/server/observability/tracing";
 
@@ -676,8 +676,8 @@ const toInventoryRow = (r: z.output<typeof inventoryCardSchema>) => {
   return problemRow(
     "inventory",
     { id: r.id, name: r.product.name },
-    [`${r.amount.value} ${r.amount.unit}`],
-    locationBadges([r.location]),
+    [field("Amount", `${r.amount.value} ${r.amount.unit}`)],
+    [recordBadge("product", r.product), ...locationBadges([r.location])],
   );
 };
 
@@ -689,7 +689,10 @@ const toUnusedIngredient = (
     "ingredient",
     r,
     // The finding is "no recipe references this", not the ingredient's age.
-    ["Used in no recipes", withProduct ? null : "no product attached"],
+    [
+      field("Recipes", "None", "warning"),
+      withProduct ? null : field("Product", "None"),
+    ],
     r.product.map((p) => recordBadge("product", p)),
   );
 };
@@ -699,12 +702,10 @@ const toLocationWithoutAiDescription = (
 ) => {
   // The list's `images` relation is soft-delete guarded and carries no
   // content-type filter, so a PDF attachment still counts.
-  return problemRow(
-    "location",
-    r,
-    [`${countLabel(r.images.length, "photo")} to describe from`],
-    r.type ? [textBadge(r.type)] : [],
-  );
+  return problemRow("location", r, [
+    r.type ? field("Type", r.type) : null,
+    field("Photos", countLabel(r.images.length, "photo")),
+  ]);
 };
 
 const toEmptyLocation = (
@@ -731,9 +732,13 @@ const toNegativeExpectedQuantity = (
   const ledger = r.quantityLedger;
   const unknown = ledger.unknownAcquisitionLines + ledger.unknownExitLines;
   return problemRow("product", r, [
-    byManufacturer(r.manufacturer),
-    `${ledger.acquiredUnits} acquired, ${ledger.exitedUnits} gone → ${ledger.expectedQuantity}`,
-    unknown > 0 ? `${countLabel(unknown, "line")} carry no quantity` : null,
+    manufacturerField(r.manufacturer),
+    field("Acquired", String(ledger.acquiredUnits)),
+    field("Gone", String(ledger.exitedUnits)),
+    field("Expected", String(ledger.expectedQuantity), "destructive"),
+    unknown > 0
+      ? field("No quantity", countLabel(unknown, "line"), "warning")
+      : null,
   ]);
 };
 
@@ -746,8 +751,8 @@ const toProductMissingPrice = (
     "product",
     { id: r.id, name: miscBucket ? getMiscDisplayName(r.name) : r.name },
     [
-      byManufacturer(r.manufacturer),
-      `${countLabel(quantity, "unit")} unvalued`,
+      manufacturerField(r.manufacturer),
+      field("Unvalued", countLabel(quantity, "unit"), "warning"),
     ],
     locationBadges(r.inventoryEntry.map((e) => e.location)),
   );
@@ -771,19 +776,15 @@ const toProductWithoutMappings = (
 const toStaleLocation = (r: z.output<typeof staleLocationCardSchema>) => {
   // The recount age is the finding, so it leads. `inventoryEntries` is the
   // live population the `directItemCountMin` filter selected on.
-  return problemRow(
-    "location",
-    r,
-    [
-      r.lastBulkInventory
-        ? `last recounted ${householdLocalDate(r.lastBulkInventory)}`
-        : "never recounted",
-    ],
-    [
-      ...(r.type ? [textBadge(r.type)] : []),
-      textBadge(countLabel(r.inventoryEntries.length, "item")),
-    ],
-  );
+  return problemRow("location", r, [
+    field(
+      "Last recount",
+      r.lastBulkInventory ? householdLocalDate(r.lastBulkInventory) : "Never",
+      "warning",
+    ),
+    r.type ? field("Type", r.type) : null,
+    field("Items", String(r.inventoryEntries.length)),
+  ]);
 };
 
 const toIngredientWithoutProduct = (
@@ -792,8 +793,8 @@ const toIngredientWithoutProduct = (
   // `ownRecipeCount`, not `appearsInRecipes.length` — the same non-cookbook
   // population the filter selected on.
   return problemRow("ingredient", r, [
-    `Used in ${countLabel(r.ownRecipeCount, "recipe")}`,
-    "no product to price it",
+    field("Recipes", String(r.ownRecipeCount)),
+    field("Product", "None", "warning"),
   ]);
 };
 

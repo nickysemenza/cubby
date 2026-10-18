@@ -23,6 +23,7 @@ import { savedSentryEventId, sentryEventUrl } from "~/lib/error-diagnostics";
 import { formatCurrency } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import { CurrencyValue } from "~/ui/common/currency-value";
+import { FactList } from "~/ui/common/fact-list";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
@@ -62,29 +63,25 @@ const formatValue = (value: number, format: "money" | "count" | "text") =>
 
 function Stats({ block }: { block: Extract<ReportBlock, { kind: "stats" }> }) {
   return (
-    <dl className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
-      {block.figures.map((figure) => (
-        <div key={figure.label} className="flex items-baseline gap-2">
-          <dt className="text-xs text-muted-foreground">{figure.label}</dt>
-          <dd
-            className={cn(
-              "font-mono text-sm tabular-nums",
-              figure.tone && TONE_TEXT[figure.tone],
-            )}
-          >
-            {figure.format === "text" ? (
-              (figure.text ?? "—")
-            ) : figure.value == null ? (
-              "—"
-            ) : figure.format === "money" ? (
-              <CurrencyValue value={figure.value} />
-            ) : (
-              formatValue(figure.value, figure.format)
-            )}
-          </dd>
-        </div>
-      ))}
-    </dl>
+    <FactList
+      emphasis="value"
+      className="gap-x-5 text-xs"
+      facts={block.figures.map((figure) => ({
+        label: figure.label,
+        tone: figure.tone,
+        className: "font-mono text-sm tabular-nums",
+        value:
+          figure.format === "text" ? (
+            (figure.text ?? "—")
+          ) : figure.value == null ? (
+            "—"
+          ) : figure.format === "money" ? (
+            <CurrencyValue value={figure.value} />
+          ) : (
+            formatValue(figure.value, figure.format)
+          ),
+      }))}
+    />
   );
 }
 
