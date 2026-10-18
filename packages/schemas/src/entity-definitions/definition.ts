@@ -851,8 +851,9 @@ const buildMetadataSchemas = () => {
   /**
    * A list field that is not a table column, or the value a stored field
    * orders and groups by. `via` is a related path of relation keys,
-   * optionally ending in a field of the last entity; the list compiler builds
-   * it. `type` is a value whose SQL the repository passes to `listScaffold`;
+   * optionally ending in a field of the last entity, or a `model.rows` row
+   * set and one terminal (its column, or an entity its row references); the
+   * list compiler builds it. `type` is a value whose SQL the repository passes to `listScaffold`;
    * a `dateInterval` is the two-part `[start, end]` (NULL `end` is open)
    * that range filters test for overlap and a one-date filter for
    * containment.
@@ -905,6 +906,35 @@ const buildMetadataSchemas = () => {
     })
     .strict();
 
+  /**
+   * A to-many set of rows a `via` may start at (`<row>.<column>`, or
+   * `<row>.<entity>` for a reference the row holds). It is not an entity: it
+   * has no shortcode, manifest entry, or relation section. `path` walks
+   * foreign-key edges to a child or shared table, narrowed by `where` column
+   * equalities on the row table; `json` reads a JSONB array of records on the
+   * row. Every include filter through one row set matches the same row;
+   * independent matching needs a second row set over the same storage.
+   */
+  const entityRowSetMetadataSchema = z.union([
+    z
+      .object({
+        label: nonEmptyString(),
+        path: z
+          .array(
+            z
+              .object({
+                edge: nonEmptyString(),
+                direction: z.enum(["incoming", "outgoing"]),
+              })
+              .strict(),
+          )
+          .min(1),
+        where: z.record(nonEmptyString(), nonEmptyString()).optional(),
+      })
+      .strict(),
+    z.object({ label: nonEmptyString(), json: nonEmptyString() }).strict(),
+  ]);
+
   const entityFieldModelMetadataSchema = z
     .object({
       fields: z.array(entityFieldMetadataSchema),
@@ -922,6 +952,10 @@ const buildMetadataSchemas = () => {
       sort: entityFieldModelSortMetadataSchema.optional(),
       derived: z
         .record(derivedKey, entityDerivedFieldMetadataSchema)
+        .optional()
+        .default({}),
+      rows: z
+        .record(derivedKey, entityRowSetMetadataSchema)
         .optional()
         .default({}),
       hierarchy: entityHierarchyMetadataSchema.optional(),
@@ -2230,6 +2264,12 @@ const buildMetadataSchemas = () => {
           ),
         ])
         .optional(),
+      /**
+       * A text filter's term expander, an entry of the server's
+       * `listTermExpanders`: the trimmed input becomes the terms the filter
+       * ORs as contains-matches (a barcode in its other encodings).
+       */
+      terms: nonEmptyString().optional(),
       /** Range bounds; `kind` is inferred from the model field when omitted. */
       range: z
         .object({

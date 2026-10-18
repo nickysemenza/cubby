@@ -1,0 +1,59 @@
+import { beforeAll, describe, expect, it } from "vitest";
+
+import {
+  compileLoadedEntityDeclarations,
+  type DeclarationObject,
+  loadEntityDeclarationBundle,
+  objectValue,
+} from "../generator/entities/declarations";
+
+/**
+ * `model.rows` declaration errors (#2607): a `via` that walks past a row
+ * set's terminal, a JSON item key the field's schema does not hold, a row
+ * set that shadows a relation, and a JSON row set over a non-JSON field
+ * would each compile SQL that reads nothing, so the generator rejects them.
+ */
+describe("row-set declarations", () => {
+  let declarations: DeclarationObject[];
+  beforeAll(async () => {
+    ({ declarations } = await loadEntityDeclarationBundle());
+  }, 60_000);
+
+  /** Compiles every entity with financialAccount's model sections patched. */
+  const compileWith = (patch: DeclarationObject) =>
+    compileLoadedEntityDeclarations(
+      declarations.map((declaration) => {
+        if (declaration.key !== "financialAccount") return declaration;
+        const model = objectValue(declaration.model, "financialAccount.model");
+        const patched = Object.entries(patch).map(([section, value]) => [
+          section,
+          {
+            ...objectValue(model[section] ?? {}, section),
+            ...objectValue(value, section),
+          },
+        ]);
+        return {
+          ...declaration,
+          model: { ...model, ...Object.fromEntries(patched) },
+        };
+      }),
+    );
+
+  it.each([
+    [
+      { derived: { last4: { via: "cards.last4.digits" } } },
+      /exactly one terminal/,
+    ],
+    [{ derived: { last4: { via: "cards.pin" } } }, /pin is not a key of cards/],
+    [
+      { rows: { transactions: { label: "Rows", json: "cardNumbers" } } },
+      /shares its key with a relation/,
+    ],
+    [
+      { rows: { cards: { label: "Card numbers", json: "name" } } },
+      /not a stored JSON field/,
+    ],
+  ])("rejects %j", (model, error) => {
+    expect(() => compileWith(model)).toThrow(error);
+  });
+});

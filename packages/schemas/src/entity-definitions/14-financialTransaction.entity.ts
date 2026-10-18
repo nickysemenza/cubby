@@ -953,6 +953,13 @@ export default defineEntity({
       "sourceRefs",
       "notes",
     ],
+    rows: {
+      settlementRefs: {
+        label: "Settlement references",
+        path: [{ edge: "EntityExternalId.entityId", direction: "incoming" }],
+        where: { kind: "settlement_ref" },
+      },
+    },
     derived: {
       merchant: { type: "text" },
       // Allocated to a live Purchase (not the mirror column, which is NULL
@@ -976,15 +983,9 @@ export default defineEntity({
         type: "enum",
         options: descriptorProcessors.map((processor) => processor.value),
       },
-      sourceRefs: {
-        predicate: "multiselect",
-        reason:
-          "Matches a live settlement reference's source, together with externalId on the same reference",
-      },
-      externalId: {
-        predicate: "multiselect",
-        reason: "Matches the external id of any live settlement reference",
-      },
+      // Both match on the same live settlement reference.
+      sourceRefs: { via: "settlementRefs.source" },
+      externalId: { via: "settlementRefs.externalId" },
     },
     sort: {
       fields: [

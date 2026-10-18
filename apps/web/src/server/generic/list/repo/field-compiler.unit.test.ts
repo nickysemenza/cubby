@@ -1,3 +1,5 @@
+import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
+import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { and, sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
@@ -5,7 +7,7 @@ import type { Database } from "~/server/db";
 import { inventoryEntry, location, purchase, run } from "~/server/db/schema";
 import { renderWhereSql } from "~/server/testing/mock-db";
 
-import { listPrepare } from "./field-compiler";
+import { listPrepare, rowSetSql } from "./field-compiler";
 import { listScaffold } from "./list";
 
 /**
@@ -225,5 +227,21 @@ describe("list field compiler", () => {
       ),
     ).toBe("prepared_valuation asc nulls last");
     expect(loads).toBe(1);
+  });
+
+  // A row set's table, `where` columns and terminals are checked when its
+  // SQL renders, not by the generator, which cannot see the schema.
+  it("resolves every declared row set's columns and references", () => {
+    for (const entity of allEntities)
+      for (const field of Object.values(
+        generatedEntityListFields[entity].derived,
+      )) {
+        const table = entityManifest[entity].dbTable;
+        if (field.shape !== "rows" || table === null) continue;
+        const set = rowSetSql(entity, field.rows, table);
+        expect(() =>
+          renderWhereSql(set.exists(sql`${set.column(field)} IS NULL`)),
+        ).not.toThrow();
+      }
   });
 });

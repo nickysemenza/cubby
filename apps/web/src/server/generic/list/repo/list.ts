@@ -119,9 +119,11 @@ import {
   ListContext,
   type ListPrepare,
   relatedExistsSql,
+  rowSetSql,
   shortcodeIdsSql,
 } from "./field-compiler";
 import { wantsListGroup } from "./list-projection";
+import { listTermExpanders } from "./terms";
 
 const suggestionKinds = z
   .union([
@@ -699,6 +701,10 @@ const derivedFilterPredicates = (
       }
     }
   }
+  if (field.shape === "rows")
+    throw new Error(
+      `${entity}.${descriptor.columnId} goes through row set ${field.rows}, which compiles as one group`,
+    );
   /** Whether a related row (with a value, for a field terminal) exists. */
   const relatedPresence = (presence: PresenceFilter): SQL | undefined => {
     if (presence === undefined) return undefined;
@@ -799,6 +805,157 @@ const derivedFilterPredicates = (
       ];
     }
   }
+};
+
+/**
+ * One filter's conditions on a row of its row set: `any` for its picked
+ * values and Any value / No value together, or under Match all one
+ * condition per picked value beside its presence. `absent` is true when the
+ * filter also admits a record with no row (it asked for No value).
+ */
+interface RowCondition {
+  readonly any: SQL | undefined;
+  readonly all: readonly SQL[] | null;
+  readonly presence: SQL | undefined;
+  readonly absent: boolean;
+}
+
+/**
+ * The filters through one declared row set (`model.rows`), compiled as one
+ * group: every include condition holds on the same row, in one `EXISTS`.
+ * No value also matches a record with no row at all when every condition
+ * in the group admits absence, so "source is Plaid and no external id"
+ * needs a Plaid alias. Match all gives each picked value its own `EXISTS`,
+ * each carrying the sibling conditions. Exclude reaches here as a request
+ * holding only the excluded values, so its negation is independent of the
+ * group.
+ */
+const rowSetPredicates = (
+  entity: Entity,
+  table: PgTable,
+  rows: string,
+  descriptors: readonly (StoredDescriptorView & { derived: string })[],
+  values: ListFilterValues,
+): SQL | undefined => {
+  const set = rowSetSql(entity, rows, getTableName(table));
+  const conditions = descriptors.flatMap((descriptor): RowCondition[] => {
+    const field = derivedFieldsOf(entity)[descriptor.derived];
+    if (field?.shape !== "rows") return [];
+    const key = descriptor.field ?? descriptor.columnId;
+    const value =
+      values[descriptor.wire.kind === "param" ? descriptor.wire.name : key];
+    const column = set.column(field);
+    const terminal = field.terminal;
+    const target =
+      terminal.kind === "record"
+        ? Object.keys(SHORTCODE_TABLE).find(
+            (entry): entry is ShortcodeEntity => entry === terminal.target,
+          )
+        : undefined;
+    if (terminal.kind === "record" && target === undefined)
+      throw new Error(
+        `${entity}.${field.path} targets an entity without shortcodes`,
+      );
+    // A reference to a soft-deleted record counts as no value.
+    const live =
+      target === undefined
+        ? sql`${column} IS NOT NULL`
+        : sql`${column} IN ${shortcodeIdsSql(target, () => sql`true`)}`;
+    const presenceSql = (presence: PresenceFilter) =>
+      presence === undefined
+        ? undefined
+        : presence === "has"
+          ? live
+          : sql`NOT COALESCE((${live}), false)`;
+    const presence =
+      descriptor.kind === "presence"
+        ? presenceFilter.parse(value)
+        : descriptor.nullable
+          ? presenceFilter.parse(values[descriptor.nullable.field])
+          : undefined;
+    const condition = (any: SQL | undefined): RowCondition[] =>
+      any === undefined && presence === undefined
+        ? []
+        : [
+            {
+              any: or(any, presenceSql(presence)),
+              all: null,
+              presence: presenceSql(presence),
+              absent: presence === "none",
+            },
+          ];
+    switch (descriptor.kind) {
+      case "presence":
+        return condition(undefined);
+      case "text": {
+        const term = optionalText.parse(value)?.trim();
+        if (!term) return [];
+        const expander = Object.entries(
+          generatedEntityListFields[entity].terms,
+        ).find(([filter]) => filter === key)?.[1];
+        const terms = expander ? listTermExpanders[expander](term) : [term];
+        return condition(
+          or(...terms.map((candidate) => formatSearchTerm(column, candidate))),
+        );
+      }
+      case "boolean": {
+        const flag = optionalBoolean.parse(value);
+        return flag === undefined ? [] : condition(sql`${column} = ${flag}`);
+      }
+      default: {
+        const picked = nonEmpty(optionalTextList.parse(value));
+        const matches = (items: readonly string[]) =>
+          target === undefined
+            ? sql`${column} IN (${sql.join(
+                items.map((item) => sql`${item}`),
+                sql`, `,
+              )})`
+            : sql`${column} IN ${requestedIdsSql(
+                target,
+                items,
+                subtreeToggle(entity, key, values),
+              )}`;
+        const all =
+          descriptor.match !== null &&
+          matchAll.parse(values[descriptor.match.field]);
+        if (picked === undefined || !all)
+          return condition(picked === undefined ? undefined : matches(picked));
+        return [
+          {
+            any: undefined,
+            all: picked.map((item) => matches([item])),
+            presence: presenceSql(presence),
+            absent: presence === "none",
+          },
+        ];
+      }
+    }
+  });
+  if (conditions.length === 0) return undefined;
+  const plain = conditions.filter(({ all }) => all === null);
+  const base = and(...plain.map(({ any }) => any));
+  // No row at all, matched only when every condition asked for No value.
+  const empty = (group: readonly RowCondition[]) =>
+    group.every(({ absent }) => absent)
+      ? sql`NOT ${set.exists(undefined)}`
+      : undefined;
+  const everyValue = conditions.flatMap(({ all, presence, absent }) =>
+    all === null ? [] : [{ all, presence, absent }],
+  );
+  if (everyValue.length === 0) return or(set.exists(base), empty(plain));
+  return and(
+    ...everyValue.map(({ all, presence, absent }) =>
+      or(
+        and(...all.map((each) => set.exists(and(each, base)))),
+        presence === undefined
+          ? undefined
+          : or(
+              set.exists(and(presence, base)),
+              empty([...plain, { any: presence, all: null, presence, absent }]),
+            ),
+      ),
+    ),
+  );
 };
 
 const nonEmpty = <T>(list: readonly T[] | undefined) =>
@@ -924,6 +1081,15 @@ export function declaredFilterPredicates<Filters extends object>(
     (field) => field.control?.suggest != null,
   );
   const values = listFilterValues.parse(filters);
+  const derivedDescriptors = descriptorsFor(entity).filter(
+    (descriptor): descriptor is StoredDescriptorView & { derived: string } =>
+      descriptor.derived !== null,
+  );
+  /** The row set a derived descriptor's `via` starts at, if any. */
+  const rowSetOf = ({ derived }: { derived: string }) => {
+    const field = derivedFieldsOf(entity)[derived];
+    return field?.shape === "rows" ? field.rows : null;
+  };
   const include = (values: ListFilterValues): Array<SQL | undefined> => [
     hasSuggestTargets
       ? suggestionPredicate(
@@ -933,13 +1099,8 @@ export function declaredFilterPredicates<Filters extends object>(
           presenceFilter.parse(values.suggestionPresenceFilter),
         )
       : undefined,
-    ...descriptorsFor(entity)
-      .filter(
-        (
-          descriptor,
-        ): descriptor is StoredDescriptorView & { derived: string } =>
-          descriptor.derived !== null,
-      )
+    ...derivedDescriptors
+      .filter((descriptor) => rowSetOf(descriptor) === null)
       .flatMap((descriptor) =>
         derivedFilterPredicates(
           entity,
@@ -960,6 +1121,21 @@ export function declaredFilterPredicates<Filters extends object>(
             values,
             derivedInput,
           ),
+    ),
+    ...[...new Set(derivedDescriptors.map(rowSetOf))].flatMap((rows) =>
+      rows === null
+        ? []
+        : [
+            rowSetPredicates(
+              entity,
+              table,
+              rows,
+              derivedDescriptors.filter(
+                (descriptor) => rowSetOf(descriptor) === rows,
+              ),
+              values,
+            ),
+          ],
     ),
     ...descriptorsFor(entity)
       .filter((descriptor) => descriptor.stored !== null)

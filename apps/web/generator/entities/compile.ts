@@ -515,6 +515,7 @@ const compileFieldModel = (
       output: [],
       sort: null,
       derived: {},
+      rows: {},
       hierarchy: null,
       grouping: [],
       intents: null,
@@ -833,6 +834,7 @@ const compileFieldModel = (
     output: policy("output"),
     sort,
     derived,
+    rows: model.rows,
     hierarchy,
     grouping: model.grouping ?? [],
     intents: compileEditIntents(model.intents, fieldKeys, `${context}.intents`),
@@ -1333,6 +1335,8 @@ const filterDescriptor = (
     aliasOf: null,
     sentinels: value.sentinels ?? null,
     wire: filterWire(value, parsedKind, range, modelField),
+    // Server-only: `compileListFields` moves it into `listFields.terms`.
+    ...(value.terms === undefined ? {} : { terms: value.terms }),
   };
 };
 
@@ -2329,6 +2333,8 @@ export const compileEntity = (
     // Resolved across entities by `compileListFields`.
     listFields: {
       derived: {},
+      rows: {},
+      terms: {},
       inherit: {},
       hierarchy: null,
       subtree: {},

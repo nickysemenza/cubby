@@ -535,6 +535,10 @@ export default defineEntity({
       "ledgerPartyId",
       "inventoryOwnerDefaultEnabled",
     ],
+    rows: {
+      cards: { label: "Card numbers", json: "cardNumbers" },
+      aliases: { label: "Source aliases", json: "sourceAliases" },
+    },
     derived: {
       transactionCount: { type: "number" },
       identityKind: {
@@ -549,20 +553,11 @@ export default defineEntity({
       },
       // At least one source alias.
       hasSourceAlias: { type: "boolean" },
-      last4: {
-        predicate: "text",
-        reason:
-          "Matches any card the account has ever presented, not only today's primary",
-      },
-      source: {
-        predicate: "multiselect",
-        reason:
-          "Matches a source alias, together with externalAccountId on the same alias",
-      },
-      externalAccountId: {
-        predicate: "multiselect",
-        reason: "Matches the external account id of any source alias",
-      },
+      // Any card the account has ever presented, not only today's primary.
+      last4: { via: "cards.last4" },
+      // Both match on the same alias.
+      source: { via: "aliases.source" },
+      externalAccountId: { via: "aliases.externalAccountId" },
     },
     sort: {
       fields: [
@@ -761,7 +756,7 @@ export default defineEntity({
       {
         columnId: "last4",
         derived: true,
-        kind: "text",
+        kind: "multiselect",
         placeholder: "Filter by last four digits...",
       },
       {

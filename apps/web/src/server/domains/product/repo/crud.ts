@@ -83,7 +83,6 @@ import {
   countWhere,
   formatSearchTerm,
   getDb,
-  idSetPresence,
   imageJoinBindings,
   insertAndReturn,
   type ListReadIntent,
@@ -498,35 +497,9 @@ const productScaffold = listScaffold("product", product, {
       (read) =>
         sql`(${product.price} IS NOT NULL OR ${hasDerivedProductPriceSql(product.id, read)})`,
     ),
-    anyGtin: (term) => productMatchesGtinTerm(term),
     effectiveOwner: ownedProducts.predicate((ids) =>
       ids.length === 0 ? sql`false` : inArray(product.id, ids),
     ),
-    externalIdSource: ({ values, presence }) =>
-      or(
-        values.length === 0
-          ? undefined
-          : inArray(
-              product.id,
-              qb
-                .select({ productId: entityExternalId.entityId })
-                .from(entityExternalId)
-                .where(
-                  and(
-                    notDeleted(entityExternalId),
-                    inArray(entityExternalId.source, [...values]),
-                  ),
-                ),
-            ),
-        idSetPresence(
-          product.id,
-          presence,
-          qb
-            .select({ productId: entityExternalId.entityId })
-            .from(entityExternalId)
-            .where(notDeleted(entityExternalId)),
-        ),
-      ),
     taskStatus: productTasks.predicate((keys) => productHasTask(keys)),
     taskOpen: productTasks.predicate((keys) =>
       keys.taskStatusFilter.length === 0 ? productHasTask(keys) : undefined,

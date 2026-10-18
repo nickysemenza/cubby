@@ -1494,7 +1494,8 @@ on the nullable presence field; its label is presentation copy, not part of
 the filter's query semantics. A filter over several values per row (a
 `text[]` column or a `via` path through a list) also generates
 `<columnId>Match` (`any`/`all`), the Match all control, which appears nowhere
-else. `currentMember: true` marks a Ledger Party filter that accepts `@me` and offers Me
+else. A rosterless multiselect takes typed values, with or without Any value
+/ No value. `currentMember: true` marks a Ledger Party filter that accepts `@me` and offers Me
 ([ADR 0018](adr/0018-current-member-filter-token.md)). Any value and No value
 lead a filter's value list above a divider; No value combines with picked
 values, and picking Any value clears them, since it already includes them.
@@ -1541,9 +1542,8 @@ filter's own "Include sub-…" toggle. Include and exclude combine ("Clothing
 except Outerwear"). A declared `predicate` offers Exclude only with
 `negatable: true`, which asserts its SQL reads only the values it receives.
 One that reads request data prepared from the include values (an effective
-owner, an expense allocation share) or pairs with a sibling on one related
-row (an image's import-run target state, a transaction's settlement source) would ignore or mis-pair excluded
-values, so it keeps the key with the reason `Include only: <its reason>.`;
+owner, an expense allocation share) would ignore excluded values, so it keeps
+the key with the reason `Include only: <its reason>.`;
 clients disable "is not" with that line and the list rejects the key as
 `LIST_FILTER_EXCLUDE_UNSUPPORTED` with the same text. Web column state carries
 excluded values with `FILTER_NOT_PREFIX` (`__not__:`) beside the included
@@ -1560,8 +1560,8 @@ same request with the same text, unmasked
 
 Every list filter predicate compiles from its declaration: `scaffold.where`
 takes the filters and a read context, and no hand-written condition. A
-filter that cannot be a stored column or a `via` path is a `model.derived`
-`predicate` whose `reason` lives in the declaration. A list's static row
+filter that cannot be a stored column, a `via` path, or a row set is a
+`model.derived` `predicate` whose `reason` lives in the declaration. A list's static row
 scope (ingredient lists never show recipe-scoped rows) and a project page's
 embedded `projectScope` (an object, not a filter descriptor) are ANDed with
 `where` by the repository. Email's
@@ -1629,6 +1629,13 @@ one shape:
   single record can sort.`); in `model.grouping` it stays a disabled Group by
   choice showing its reason. A list request sorting or grouping by it (or by
   a `predicate`) fails with that reason over HTTP and MCP.
+- `{ via: "<rows>.<terminal>" }` starts at a `model.rows` row set (below) and
+  takes one terminal: a column of the row (a JSON item key), or an entity the
+  row references (`importTargets.run`), which filters by shortcode and gets
+  the "Include sub-…" toggle when it declares `model.hierarchy`. A row set is
+  to-many, so it filters but never sorts or groups (`Goes through a list of
+  Import targets. …`), and its value filters generate Any value / No value,
+  Match all, and Exclude.
 - `{ type }` is a repository value: the repository passes its SQL as
   `listScaffold(entity, table, { derived })`, whose argument type is
   generated, so a declared key without SQL fails typecheck. A compound value
@@ -1695,11 +1702,7 @@ only when the request filters, sorts, groups, or projects on a field that
 reads it; a caller that already holds a prepare's data passes it as
 `context(db, request, [[handle, data]])` (project attention). `where`/`orderBy`/`filterPredicates` stay synchronous and take that
 context, `list` builds it unless `spec.context` passes one, and `hydrate`
-receives it. A predicate that must match on the same related row as a sibling
-filter (an account alias's `source` with its `externalAccountId`, an image's
-import `runId` with its `targetState`) reads the sibling's value through a
-prepare; the sibling keeps its own independent predicate, which the combined
-one implies. A list's static row scope (ingredient lists never show
+receives it. A list's static row scope (ingredient lists never show
 recipe-scoped rows) is ANDed with `where` by the repository; it is not a
 filter. The generated `generatedEntityListFields` map
 (`@cubby/schemas/entity-list-fields`) carries each entity's derived shapes,
@@ -1719,8 +1722,9 @@ selected records. It replaced the hand-written pairs: inventory's
 `locationSubtreeFilter` is `locationIdFilter` with `includeSubLocations`, and
 project's parent filter is the stored `parentProjectId` with
 `includeSubProjects`. A predicate receives the toggle as `includeDescendants`
-on its `idMulti` value: expense's allocated project and spending category, and
-an image's import run. An inherited reference (task project, a product
+on its `idMulti` value: expense's allocated project and spending category. A
+row-set terminal reference (an image's import run) gets the toggle like a
+`via` path. An inherited reference (task project, a product
 category's effective spending category) is a `via` path through its effective
 edge and gets the toggle like any other.
 
@@ -1736,6 +1740,40 @@ write transaction, then publishes one embedding wave after commit; a change
 to projection SQL itself does not rewrite persisted rows — run the streaming
 "Repair index" maintenance action after such a change.
 
+### Row sets and same-row matching
+
+`model.rows` names a to-many set of rows a `via` can start at. A row set is
+not an entity: it has no shortcode, manifest entry, or relation section, and
+its key may not repeat a relation or `model.derived` key. `path` walks
+foreign-key edges (`compileTraversal`) to a child or shared table, and
+`where` narrows it by column equalities on the row table (product
+`barcodes` is `EntityExternalId` rows with `source = 'gtin'`; soft-deleted
+rows never match). `json` reads a JSONB array of records on the row
+(financial account `aliases`), whose item keys the generator checks against
+the field's read schema. A path row set's table, `where` columns and
+terminals are checked when its SQL renders (`rowSetSql` in
+`field-compiler.ts`), since the generator cannot see the database schema.
+
+Every include filter through one row set matches the same row: the
+compiler builds one `EXISTS` for the group, so account `source` Plaid with
+`externalAccountId` `ACME-0042` means one Plaid alias holding that id. To
+match independently, declare a second row set over the same storage.
+Exclude negates its own values, independent of the group: no row holds an
+excluded value, and a record with no rows stays. Any value joins the shared
+row like a picked value (the column is not NULL; a reference is live). No
+value matches a row in the shared `EXISTS` whose column is NULL, or a record
+with no rows at all when every condition in the group asks for No value, so
+an account with no aliases matches `externalAccountId` No value but not
+`source` Plaid with it. Match all gives each picked value its own `EXISTS`,
+each carrying the group's other conditions.
+
+A text filter over a row set may declare `terms: "<key>"`, an entry of
+`listTermExpanders` (`server/generic/list/repo/terms.ts`) that turns the
+input into the terms it ORs as contains-matches; product `upcFilter` names
+`productCode`, every barcode encoding of the typed digits. Its key union is
+generated from the declarations, so an undeclared or unused expander fails
+typecheck. The compiler moves `terms` off the client descriptor.
+
 ## Child storage
 
 An entity's `children` declares its physical child tables using
@@ -1750,6 +1788,10 @@ PostgreSQL generated column; it cannot also declare a default or update callback
 Retained mail stores text presence this way, preserving the nullable and
 space-trimming rules as content changes. Email quality reads this scalar rather
 than decompressing original bodies during list and Work queue filtering.
+
+A filter over child or shared rows (import targets, settlement references,
+barcodes) reads them through a `model.rows` row set
+([row sets](#row-sets-and-same-row-matching)), not a declared predicate.
 
 Mail, statement-import, and image-processing storage belongs to the explicit
 module registry (`child-tables/modules.ts`) because those rows are not owned

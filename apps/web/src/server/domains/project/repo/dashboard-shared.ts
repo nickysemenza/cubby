@@ -89,9 +89,7 @@ const qb = new QueryBuilder();
  *    aliases the root table to `"project"` but does NOT rewrite column
  *    references buried inside a sub-select — the correlation would emit
  *    `"Project"."id"` against a FROM entry that no longer exists — while
- *    `buildUndatedProjectWhere` is fed to an unaliased `countWhere`. Same trap,
- *    same fix, as the product list's presence filters (see `idSetPresence` in
- *    db/helpers/query.ts).
+ *    `buildUndatedProjectWhere` is fed to an unaliased `countWhere`.
  *  - **Soft deletes.** `notDeleted(task)` is load-bearing: a project whose
  *    tasks were all soft-deleted must NOT read as dated. `pnpm check`'s
  *    `cubby/require-soft-delete-filter` oxlint rule only scans

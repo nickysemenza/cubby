@@ -11,7 +11,6 @@ import type {
 } from "@cubby/schemas/financial-transaction";
 import {
   financialTransactionAllocationIntegrity,
-  financialTransactionFiltersSchema,
   financialTransactionKind,
   financialTransactionOut,
   financialTransactionSettlementViolation,
@@ -23,7 +22,6 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import {
-  oneOrManyValues,
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
@@ -39,7 +37,6 @@ import {
   buildPartialUpdateValues,
   getDb,
   type ListReadIntent,
-  matchesStringValues,
   notDeleted,
   touchUpdatedAt,
   unwrapDb,
@@ -99,7 +96,6 @@ import {
   type SettlementRef,
   settlementRefsFor,
 } from "~/server/generic/entity-links/repo/entity-external-ids";
-import { listPrepare } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
@@ -366,32 +362,6 @@ const hydrateTransactionsRead = async (
   return projectListRows("financialTransaction", values, projection);
 };
 
-/**
- * "Carries a live settlement reference matching the filters". `sourceRefs`
- * and `externalId` constrain the SAME reference row, so a transaction that
- * took its source from one reference and its externalId from another does
- * not match.
- */
-const refsCondition = (
-  sources: readonly string[] | undefined,
-  externalIds: readonly string[] | undefined,
-): SQL => sql`EXISTS (
-  SELECT 1 FROM "EntityExternalId" fx
-  WHERE fx."entityId" = "FinancialTransaction"."id"
-    AND fx."kind" = 'settlement_ref' AND fx."deletedAt" IS NULL
-    AND ${matchesStringValues(sql`fx."source"`, sources && [...sources])}
-    AND ${matchesStringValues(sql`fx."externalId"`, externalIds && [...externalIds])}
-)`;
-
-// A `source` filter matches `externalId` on the same reference, so it reads
-// that sibling filter.
-const refExternalIds = listPrepare(async (_db, filters) =>
-  oneOrManyValues(
-    financialTransactionFiltersSchema.pick({ externalId: true }).parse(filters)
-      .externalId,
-  ),
-);
-
 // Mirrors `parseBankDescriptor`: the same POSIX patterns, first match wins.
 const descriptorProcessorSql = sql`CASE ${sql.join(
   descriptorProcessors.map(
@@ -415,10 +385,6 @@ const financialTransactionScaffold = listScaffold(
         financialTransaction,
       )} THEN ${financialTransactionAllocationIntegrity.enum.defect}::text END`,
       descriptorProcessor: descriptorProcessorSql,
-      sourceRefs: refExternalIds.predicate((externalIds, { values }) =>
-        refsCondition(values, externalIds),
-      ),
-      externalId: ({ values }) => refsCondition(undefined, values),
     },
   },
 );
