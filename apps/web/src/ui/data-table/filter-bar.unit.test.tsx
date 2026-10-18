@@ -553,6 +553,46 @@ describe("range bounds editors", () => {
     expect(input("Age minimum").value).toBe("4");
   });
 
+  // Failure mode: typing back to the current value while earlier emissions
+  // were outstanding skipped queuing it, so its late echo read as external
+  // and rolled the typed minimum back.
+  it("queues a return to the current value while echoes are outstanding", () => {
+    const { rerender } = renderRanges(filterOf("age", "1..80"));
+    fireEvent.click(screen.getByRole("button", { name: "Age: 1 to 80" }));
+    for (const text of ["2", "1", "13"])
+      fireEvent.change(input("Age minimum"), { target: { value: text } });
+    rerender(filterOf("age", "2..80"));
+    expect(input("Age minimum").value).toBe("13");
+    rerender(filterOf("age", "1..80"));
+    expect(input("Age minimum").value).toBe("13");
+    rerender(filterOf("age", "13..80"));
+    expect(input("Age minimum").value).toBe("13");
+  });
+
+  // Failure modes: an inline error was not tied to its input, so a screen
+  // reader announced the invalid state without saying what was wrong.
+  it("describes each invalid bound by its error", () => {
+    renderRanges(filterOf("age", "1..8"));
+    fireEvent.click(screen.getByRole("button", { name: "Age: 1 to 8" }));
+    fireEvent.change(input("Age minimum"), { target: { value: "-3" } });
+    expect(input("Age minimum")).toHaveAccessibleDescription(
+      "Enter a number 0 or more.",
+    );
+  });
+
+  it("describes an invalid relative amount by its error", () => {
+    renderRanges(filterOf("made", "@today-30d.."));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /^Made: on or after today − 30 days$/,
+      }),
+    );
+    fireEvent.change(input("From days"), { target: { value: "100000" } });
+    expect(input("From days")).toHaveAccessibleDescription(
+      "Enter whole days, up to 99,999.",
+    );
+  });
+
   // Failure mode: a relative amount past the token's five digits emitted a
   // token that is not relative, so the bound flipped to Date mid-typing.
   it("rejects a relative amount past the token limit without leaving Relative", () => {
