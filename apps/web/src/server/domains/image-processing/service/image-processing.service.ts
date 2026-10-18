@@ -46,10 +46,7 @@ import {
   recordImageProcessingEvent,
   createImageProcessingSubmission,
 } from "~/server/domains/image-processing/repo/image-processing-history";
-import {
-  readImageProcessingSettings,
-  publishImageProcessingWakeups,
-} from "~/server/domains/image-processing/repo/image-processing-maintenance";
+import { publishImageProcessingWakeups } from "~/server/domains/image-processing/repo/image-processing-maintenance";
 import {
   persistImageProcessingSubmission,
   persistAppleImageDescriptionSubmission,
@@ -84,10 +81,8 @@ export async function scheduleImageProcessingJobs(
     runId?: RunId | null;
   },
 ): Promise<{ jobIds: string[]; submissionId?: string }> {
-  const settings = await readImageProcessingSettings(db);
-  if (input.automatic && !settings.enabled) return { jobIds: [] };
   const scheduled = await persistImageProcessingSubmission(db, input);
-  if (input.publish !== false && !settings.paused)
+  if (input.publish !== false)
     await publishImageProcessingWakeups(db, scheduled.jobIds);
   return scheduled;
 }
@@ -490,7 +485,6 @@ export async function claimCompanionImageCommand(
   },
 ): Promise<ImageProcessingCommand | null> {
   const { device } = input;
-  if ((await readImageProcessingSettings(db)).paused) return null;
   const { revisions, kinds, allowAvifNormalization } =
     companionClaimCapabilities(device);
   if (!kinds.length) return null;

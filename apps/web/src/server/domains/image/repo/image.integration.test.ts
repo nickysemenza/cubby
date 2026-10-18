@@ -14,7 +14,7 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import { asc, eq, inArray, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { Database } from "~/server/db";
 import {
@@ -38,8 +38,8 @@ import {
   deleteCookbook,
   upsertCookbook,
 } from "~/server/domains/cookbook/repo/cookbook";
-import { updateImageProcessingSettings } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import { markImageUploadedWorkflow } from "~/server/domains/image/operations/image.server";
+import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   makeCookbookExtraction,
   insertEntityAttachments,
@@ -152,6 +152,13 @@ const mkRunTargetRow = (
 
 describe("image repository", () => {
   const ctx = withTestDb();
+  let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
+  beforeEach(() => {
+    backgroundQueue = captureBackgroundQueue();
+  });
+  afterEach(() => {
+    backgroundQueue.restore();
+  });
 
   it("publishes source decisions only against the selected snapshot and preserves stronger evidence", async () => {
     const eligible = await createUploadedImageRecord(ctx.db, {
@@ -354,10 +361,6 @@ describe("image repository", () => {
   // with automatic processing on, scheduling refused it and every screenshot
   // upload failed. The stored bytes' hash is recorded as the upload is marked.
   it("hashes a standalone upload before scheduling its automatic processing", async () => {
-    await updateImageProcessingSettings(ctx.db, {
-      enabled: true,
-      paused: true,
-    });
     const pending = await createPendingImageRecord(ctx.db, {
       key: `images/${crypto.randomUUID()}.png`,
       filename: "browser-view.png",

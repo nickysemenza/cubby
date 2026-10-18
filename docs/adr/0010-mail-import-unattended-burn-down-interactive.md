@@ -29,3 +29,15 @@ current source/account authority rather than inventory ownership or historical
 actor snapshots; private originals keep their existing access checks. Queue
 reads create no records, launch no inference and authorize no execution.
 Automatic maintenance remains in its existing controls.
+
+## Amendment: automatic routine work (2026-10-17)
+
+Automatic maintenance recovers missed queue publications on app open and daily.
+Related retained Emails from enabled connected mailboxes enter import automatically,
+including unclaimed Email classified before automatic admission was introduced.
+MCP mutations allowed by a Run's capabilities execute without per-operation
+approval or approval bindings. Stable operation IDs, exact-input replay checks,
+member/source ownership, transaction fences and audit receipts remain enforced.
+Historical approval-paused Runs resume through the normal dispatch path; existing
+approval history remains stored. Photo group review and ambiguous business
+choices keep their domain review flows.

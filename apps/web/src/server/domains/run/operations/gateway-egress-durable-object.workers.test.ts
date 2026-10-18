@@ -132,7 +132,6 @@ it("keeps unchanged policy nudges entirely in durable storage without opening Ne
   await runInDurableObject(stub, async (instance, state) => {
     Object.defineProperty(instance, "env", {
       value: {
-        AI_REFRESH_ENABLED: "true",
         CF_VERSION_METADATA: { id: "synthetic-current-version" },
       },
     });

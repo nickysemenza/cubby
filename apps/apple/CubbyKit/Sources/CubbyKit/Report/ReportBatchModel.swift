@@ -6,7 +6,7 @@ import Observation
 public enum RunReportBatch {
     public static let slots: [ReportSlot] = [
         .run_liveProgress, .run_importStats, .run_importProgressLive, .run_importProgressStopped,
-        .run_importPurchases, .run_importApprovals, .run_importFindings, .run_importTargets,
+        .run_importPurchases, .run_importFindings, .run_importTargets,
         .run_importPreparedOrders, .run_importTimeline,
     ]
 

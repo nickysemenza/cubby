@@ -2,7 +2,7 @@ import { runEntityId } from "@cubby/schemas/identifiers";
 import { coordinatorModelFor } from "@cubby/schemas/import-run-agent";
 import { runFindingProblemSchema } from "@cubby/schemas/problems";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { runFinding } from "~/server/db/schema";
@@ -13,14 +13,17 @@ import {
 import { executeLeasedOperation } from "~/server/domains/run/repo/operation";
 import { importReportBlocks } from "~/server/generic/entity-report/repo/run";
 import { findOpenRunFindings } from "~/server/generic/problems/repo/detectors-import";
+import { recoverMissedWork } from "~/server/workflows/catch-up";
 
 import { dispatchRunEvent, recordRunDispatchAttempt } from "./dispatch";
+import * as dispatch from "./dispatch";
 import { resolveRunFinding } from "./findings";
 import { admitMailImport } from "./mail-import-run";
 import {
   controlRun,
   loadRunDetail,
   resumeAuthorizedRuns,
+  resumeApprovalPausedRuns,
   updateAgentProgress,
 } from "./run-service";
 
@@ -82,6 +85,131 @@ describe("purchase import run admission", () => {
       ),
     );
   };
+
+  // A manual pause must remain cancellable and resumable; legacy recovery must
+  // continue after one dispatch fails and must not resume a manual pause.
+  it("keeps manually paused imports cancellable and resumable", async () => {
+    const party = await createMember();
+    const run = await startAgentRun(party);
+    await controlRun(ctx.db, ctx.actor, {
+      runPublicId: run.publicId,
+      action: "pause",
+    });
+    expect(
+      await controlRun(ctx.db, ctx.actor, {
+        runPublicId: run.publicId,
+        action: "resume",
+      }),
+    ).toMatchObject({ status: "running" });
+    await controlRun(ctx.db, ctx.actor, {
+      runPublicId: run.publicId,
+      action: "pause",
+    });
+    expect(
+      await controlRun(ctx.db, ctx.actor, {
+        runPublicId: run.publicId,
+        action: "cancel",
+      }),
+    ).toMatchObject({ status: "failed" });
+  });
+
+  it("recovers legacy approval pauses independently and leaves manual pauses alone", async () => {
+    const { eq } = await import("drizzle-orm");
+    const { run: runTable } = await import("~/server/db/schema");
+    const party = await createMember();
+    const first = await startAgentRun(party);
+    const second = await startAgentRun(party);
+    const manual = await startAgentRun(party);
+    for (const run of [first, second])
+      await getDb(ctx.db)
+        .update(runTable)
+        .set({ status: "paused_approval" })
+        .where(eq(runTable.id, run.id));
+    await controlRun(ctx.db, ctx.actor, {
+      runPublicId: manual.publicId,
+      action: "pause",
+    });
+    const sent: string[] = [];
+    const send = vi
+      .spyOn(dispatch, "dispatchStartedRun")
+      .mockImplementation(async (_db, input) => {
+        sent.push(input.id);
+        if (input.id === first.id)
+          throw new Error("Synthetic dispatch unavailable");
+        return "running";
+      });
+    try {
+      await expect(resumeApprovalPausedRuns(ctx.db)).rejects.toThrow(
+        "Legacy Run recovery failed",
+      );
+      expect(sent).toEqual(expect.arrayContaining([first.id, second.id]));
+      const [saved] = await getDb(ctx.db)
+        .select()
+        .from(runTable)
+        .where(eq(runTable.id, manual.id));
+      expect(saved?.status).toBe("paused");
+      await getDb(ctx.db)
+        .update(runTable)
+        .set({ status: "paused_approval" })
+        .where(eq(runTable.id, first.id));
+      await expect(recoverMissedWork(ctx.db)).rejects.toMatchObject({
+        errors: expect.arrayContaining([
+          expect.objectContaining({
+            errors: expect.arrayContaining([
+              expect.objectContaining({
+                message: "Synthetic dispatch unavailable",
+              }),
+            ]),
+          }),
+        ]),
+      });
+    } finally {
+      send.mockRestore();
+    }
+  });
+
+  // Selection is stale by the time later Runs are locked: recovery must not
+  // undo a member's resume-then-pause while an earlier dispatch is in flight.
+  it("preserves a manual pause placed after legacy recovery selected its batch", async () => {
+    const { eq } = await import("drizzle-orm");
+    const { run: runTable } = await import("~/server/db/schema");
+    const party = await createMember();
+    const first = await startAgentRun(party);
+    const later = await startAgentRun(party);
+    for (const run of [first, later])
+      await getDb(ctx.db)
+        .update(runTable)
+        .set({ status: "paused_approval" })
+        .where(eq(runTable.id, run.id));
+    const sent: string[] = [];
+    const send = vi
+      .spyOn(dispatch, "dispatchStartedRun")
+      .mockImplementation(async (_db, input) => {
+        sent.push(input.id);
+        if (input.id === first.id) {
+          await controlRun(ctx.db, ctx.actor, {
+            runPublicId: later.publicId,
+            action: "resume",
+          });
+          await controlRun(ctx.db, ctx.actor, {
+            runPublicId: later.publicId,
+            action: "pause",
+          });
+        }
+        return "running";
+      });
+    try {
+      await resumeApprovalPausedRuns(ctx.db);
+      expect(sent).toEqual([first.id]);
+      const [saved] = await getDb(ctx.db)
+        .select()
+        .from(runTable)
+        .where(eq(runTable.id, later.id));
+      expect(saved?.status).toBe("paused");
+    } finally {
+      send.mockRestore();
+    }
+  });
 
   it("discloses retained mail restart scope without exposing private source identities", async () => {
     const party = await createMember();
@@ -396,7 +524,7 @@ describe("purchase import run admission", () => {
     ]);
   });
 
-  it("keeps a settled run running until the agent has received every wake the server issued", async () => {
+  it("waits for the dispatch generation but ignores retired approval wakes", async () => {
     const party = await createMember();
     const run = await startAgentRun(party);
     const { runApproval } = await import("~/server/db/schema");
@@ -434,13 +562,12 @@ describe("purchase import run admission", () => {
 
     // The current dispatch generation is still queued for the agent.
     await expect(settle([wake])).resolves.toEqual(kept);
-    // A member's decision woke the agent, but the wake has not arrived.
-    await expect(settle([dispatch])).resolves.toEqual(kept);
     // An unanswered submission passes the same fence before failing the run.
     await expect(
       settle([wake], { failureCode: "agent_failed" }),
     ).resolves.toEqual(kept);
-    await expect(settle([dispatch, wake])).resolves.toEqual({
+    // An old approval record no longer requires an event that may never arrive.
+    await expect(settle([dispatch])).resolves.toEqual({
       reconciled: true,
       status: "needs_review",
     });

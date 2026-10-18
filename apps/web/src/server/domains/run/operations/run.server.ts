@@ -7,7 +7,6 @@ import type { z } from "zod";
 import { runContract } from "~/contracts/run.contract";
 import { readAiBudget } from "~/server/ai/budget";
 import { listAiUsageForRun } from "~/server/ai/repo/ai-usage";
-import { getPurchaseAgentQueue } from "~/server/cf-env";
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import { oauthRefreshToken, run as runTable } from "~/server/db/schema";
@@ -17,10 +16,7 @@ import {
   findActivePurchaseAgentGrant,
   PURCHASE_AGENT_OAUTH_CLIENT_ID,
 } from "~/server/domains/purchase-import/repo/agent-auth";
-import {
-  dispatchRunEvent,
-  dispatchStartedRun,
-} from "~/server/domains/purchase-import/repo/dispatch";
+import { dispatchStartedRun } from "~/server/domains/purchase-import/repo/dispatch";
 import { withMailSearchProgress } from "~/server/domains/purchase-import/repo/gmail/search-progress";
 import {
   readMailImportSettings,
@@ -31,7 +27,6 @@ import {
   listMerchantVendorRules,
 } from "~/server/domains/purchase-import/repo/merchant-vendor-rules";
 import {
-  approvalWakeEvent,
   controlRun,
   loadRunDetail,
   loadRunLog,
@@ -93,9 +88,6 @@ async function controlRunOperation(
     runPublicId: runId,
     ...input,
   });
-  const wake = approvalWakeEvent(control);
-  const queue = wake ? getPurchaseAgentQueue() : null;
-  if (wake && queue) await dispatchRunEvent(context.db, queue, wake);
   if (
     "dispatchRunId" in control &&
     control.dispatchRunId &&

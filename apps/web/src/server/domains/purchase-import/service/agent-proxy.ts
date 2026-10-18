@@ -1,5 +1,6 @@
 import { agentConversationSchema } from "@cubby/schemas/agent-conversation";
 import { runShortcode } from "@cubby/schemas/purchase-import";
+import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { z } from "zod";
 
 import { getPurchaseImportRunAgentNamespace } from "~/server/cf-env";
@@ -12,12 +13,7 @@ import type {
   CurrentParty,
 } from "~/server/http/request-context";
 
-const ACTIVE_STATUSES = new Set([
-  "running",
-  "paused_auth",
-  "paused_offline",
-  "paused_approval",
-]);
+const ACTIVE_STATUSES = new Set<string>(ACTIVE_RUN_STATUSES);
 
 const allowedSuffix = /^(?:|abort|stream)$/u;
 

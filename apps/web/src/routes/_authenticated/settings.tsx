@@ -23,8 +23,6 @@ import { ChatGptPlanCard } from "~/features/account/chatgpt-plan-card";
 import { PurchaseImportAgentConnection } from "~/features/activity/purchase-import-agent-connection";
 import { CalendarConnectDialog } from "~/features/calendar/calendar-connect-dialog";
 import { MailImportCard } from "~/features/email/mail-import-card";
-import { AwaitingWorkCard } from "~/features/problems/components/awaiting-work-card";
-import { MaintenanceCard } from "~/features/problems/components/maintenance-card";
 import {
   calendar,
   ledgerParty,
@@ -99,10 +97,8 @@ function SettingsPage() {
             <Row align="center" gap="sm">
               <WrenchIcon className="size-4 text-muted-foreground" />
               <Stack gap="tight">
-                <Eyebrow as="span">Developer / Maintenance</Eyebrow>
-                <Description size="xs">
-                  Diagnostics and force-run batch fixes.
-                </Description>
+                <Eyebrow as="span">Developer / Diagnostics</Eyebrow>
+                <Description size="xs">Connection diagnostics.</Description>
               </Stack>
             </Row>
             <CaretDownIcon
@@ -116,10 +112,6 @@ function SettingsPage() {
               <DiagnosticsCard />
 
               <CalendarFeedInspectorCard enabled={devOpen} />
-
-              <AwaitingWorkCard />
-
-              <MaintenanceCard />
             </Stack>
           </CollapsibleContent>
         </Collapsible>

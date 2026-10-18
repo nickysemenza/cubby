@@ -211,21 +211,6 @@ export async function completeOperation(
   });
 }
 
-/** Replace the stored result without changing state (an approval decision). */
-export async function setOperationResult(
-  client: Client,
-  key: OperationKey,
-  result: OperationResult,
-) {
-  await client.transaction(async (tx) => {
-    if (await lockOperationRun(tx, key)) return;
-    await tx
-      .update(runOperation)
-      .set({ result, updatedAt: new Date() })
-      .where(matchesKey(key));
-  });
-}
-
 /** Mark the operation `failed` with a bounded diagnostic. */
 export async function failOperation(
   client: Client,

@@ -86,7 +86,6 @@ export default defineEntity({
           workspace: "work",
           title: "Purchases changed",
         },
-        { kind: "slot", id: "import-approvals", title: "Approvals" },
         {
           kind: "slot",
           id: "import-findings",
@@ -195,12 +194,12 @@ export default defineEntity({
         {
           id: "attention",
           label: "Needs attention",
-          description:
-            "Runs waiting on authorization or approval, needing review, or failed",
+          description: "Paused Runs, Runs needing review, and failed Runs",
           filters: [
             {
               id: "status",
               value: [
+                "paused",
                 "paused_auth",
                 "paused_approval",
                 "needs_review",
@@ -254,7 +253,7 @@ export default defineEntity({
             { value: "paused", label: "Paused" },
             { value: "paused_auth", label: "Agent authorization needed" },
             { value: "paused_offline", label: "Paused offline (historical)" },
-            { value: "paused_approval", label: "Awaiting approval" },
+            { value: "paused_approval", label: "Recovering legacy pause" },
             { value: "needs_review", label: "Needs review" },
             { value: "completed", label: "Completed" },
             { value: "failed", label: "Failed" },
@@ -812,7 +811,7 @@ export default defineEntity({
         on: ["vendorAccountId"],
         unique: true,
         where:
-          "{vendorAccountId} IS NOT NULL AND {status} IN ('running', 'paused_auth', 'paused_offline', 'paused_approval')",
+          "{vendorAccountId} IS NOT NULL AND {status} IN ('running', 'paused', 'paused_auth', 'paused_offline', 'paused_approval')",
       },
       {
         // One scheduled pass per mailbox at a time: an overlapping cron and
@@ -879,7 +878,7 @@ export default defineEntity({
           },
           {
             value: "paused_approval",
-            label: "Awaiting approval",
+            label: "Recovering legacy pause",
             color: "var(--warning)",
           },
           {

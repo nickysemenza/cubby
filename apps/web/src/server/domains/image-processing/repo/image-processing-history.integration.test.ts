@@ -2,7 +2,7 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
 import { generateShortcode } from "@cubby/shared";
 import { eq, sql } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import * as storage from "~/server/clients/s3";
 import { getDb } from "~/server/db/helpers";
@@ -21,7 +21,6 @@ import {
   updateDevice,
 } from "~/server/domains/device/repo/device";
 import { upsertDeviceFromHello } from "~/server/domains/device/repo/device-participation";
-import { updateImageProcessingSettings } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import {
   scheduleImageProcessingJobs,
   completeCompanionImageProcessingResult,
@@ -54,12 +53,6 @@ import {
 
 describe("image execution history conservation", () => {
   const ctx = withTestDb();
-  beforeEach(async () => {
-    await updateImageProcessingSettings(ctx.db, {
-      enabled: false,
-      paused: false,
-    });
-  });
   async function setup() {
     const source = await createUploadedImageRecord(ctx.db, {
       key: `tests/${crypto.randomUUID()}.jpg`,

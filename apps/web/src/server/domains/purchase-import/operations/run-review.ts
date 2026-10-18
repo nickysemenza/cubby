@@ -33,7 +33,6 @@ import {
   auditLog,
   photoGroupProposal,
   run as runTable,
-  runApproval,
   runFinding,
   runOperation,
   photoRunImage,
@@ -46,42 +45,25 @@ import { resolveRunFinding } from "../repo/findings";
 import {
   loadRunScope,
   STALE_RUN_MS,
-  APPROVAL_WAKE_DECISION,
   assertRunActive,
   markRunFailed,
 } from "../repo/run-service";
 
 /**
  * Whether the server issued a wake the reporting agent has not received: the
- * current dispatch generation or a member's approval decision. Each is a
- * queue event that resumes the conversation,
+ * current dispatch generation. It is a queue event that resumes the conversation,
  * so the stop the settled submission reported is not where the run ends.
  * Event ids, not clocks: the two Workers' clocks are not comparable.
  */
-async function unreceivedWake(
-  db: Database,
+function unreceivedWake(
   scope: Awaited<ReturnType<typeof loadRunScope>>,
   received: ReadonlySet<string>,
-): Promise<boolean> {
-  const runId = scope.public.runId;
+): boolean {
   if (
     scope.public.dispatchEventId &&
     !received.has(scope.public.dispatchEventId)
   )
     return true;
-  const decided = await getDb(db)
-    .select({ id: runApproval.id, state: runApproval.state })
-    .from(runApproval)
-    .where(
-      and(
-        eq(runApproval.runId, runId),
-        inArray(runApproval.state, [...APPROVAL_WAKE_DECISION.keys()]),
-      ),
-    );
-  for (const { id, state } of decided) {
-    const decision = APPROVAL_WAKE_DECISION.get(state);
-    if (!received.has(`approval:${id}:${decision}`)) return true;
-  }
   return false;
 }
 
@@ -92,8 +74,6 @@ async function unreceivedWake(
  * legitimate ways to settle while running are a wake the agent has not
  * received yet (`unreceivedWake`) and photo groups awaiting a household
  * review, so those cases are left alone.
- * A pending approval never reaches here: it moves the run to
- * `paused_approval` first.
  */
 async function reconcileSettledRunOnce(
   db: Database,
@@ -126,10 +106,7 @@ async function reconcileSettledRunOnce(
     return { reconciled: false as const, status: scope.public.status };
   if (scope.public.status !== "running")
     return { reconciled: false as const, status: scope.public.status };
-  if (
-    input.receivedEventIds &&
-    (await unreceivedWake(db, scope, input.receivedEventIds))
-  )
+  if (input.receivedEventIds && unreceivedWake(scope, input.receivedEventIds))
     return { reconciled: false as const, status: "running" as const };
   if (input.failure) {
     const { failed } = await markRunFailed(db, {

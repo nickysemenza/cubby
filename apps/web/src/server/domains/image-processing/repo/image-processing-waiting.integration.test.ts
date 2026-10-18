@@ -1,7 +1,7 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import {
@@ -11,7 +11,6 @@ import {
 } from "~/server/db/image-processing-schema";
 import { image } from "~/server/db/schema";
 import { dispatchImageProcessingWakeup } from "~/server/domains/image-processing/service/dispatch";
-import { updateImageProcessingSettings } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 
 import {
@@ -23,12 +22,6 @@ import { pruneExecutorlessWaitingAttempts } from "./image-processing-maintenance
 
 describe("waiting for a device records no attempt", () => {
   const ctx = withTestDb();
-  beforeEach(async () => {
-    await updateImageProcessingSettings(ctx.db, {
-      enabled: false,
-      paused: false,
-    });
-  });
 
   async function subjectLiftJob() {
     const row = await createUploadedImageRecord(ctx.db, {

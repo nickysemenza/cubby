@@ -1,8 +1,5 @@
-import type {
-  AwaitingWork,
-  SettleAwaitingWorkOut,
-} from "@cubby/schemas/maintenance";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { AwaitingWork } from "@cubby/schemas/maintenance";
+import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { maintenance } from "~/integrations/tanstack-query/generated/catalog.gen";
@@ -23,33 +20,15 @@ const counts = (overrides: Partial<AwaitingWork> = {}): AwaitingWork => ({
   ...overrides,
 });
 
-function createOperations(
-  awaiting: AwaitingWork | Error,
-  settled: SettleAwaitingWorkOut = {
-    publishedRecipeTasks: 0,
-    publishedEmbeddingTasks: 0,
-    culledUploads: 0,
-    publishedImageMetadataTasks: 0,
-    transport: "queue",
-  },
-) {
-  const settles: number[] = [];
+function createOperations(awaiting: AwaitingWork | Error) {
   const awaitingWork = maintenance.awaitingWork.withTransport(async () => {
     if (awaiting instanceof Error) throw awaiting;
     return awaiting;
   });
-  const settleAwaitingWork = maintenance.settleAwaitingWork.withTransport(
-    async () => {
-      settles.push(1);
-      return settled;
-    },
-  );
   return {
     operations: {
       awaitingWork: awaitingWork.queryOptions,
-      settleAwaitingWork: settleAwaitingWork.mutationOptions,
     } satisfies AwaitingWorkOperations,
-    settles,
   };
 }
 
@@ -63,16 +42,9 @@ describe("AwaitingWorkCard", () => {
     harness.dispose();
   });
 
-  it("lists only the non-zero counts and publishes on Settle now", async () => {
-    const { operations, settles } = createOperations(
+  it("shows pending work as passive diagnostics", async () => {
+    const { operations } = createOperations(
       counts({ staleRecipeTotals: 3, unembeddedEntities: 12 }),
-      {
-        publishedRecipeTasks: 1,
-        publishedEmbeddingTasks: 12,
-        culledUploads: 0,
-        publishedImageMetadataTasks: 0,
-        transport: "queue",
-      },
     );
     render(<AwaitingWorkCard operations={operations} />, {
       wrapper: harness.wrapper,
@@ -84,8 +56,7 @@ describe("AwaitingWorkCard", () => {
     expect(screen.getByText(/awaiting a search embedding/)).toBeInTheDocument();
     expect(screen.queryByText(/abandoned more than a day/)).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Settle now" }));
-    await waitFor(() => expect(settles).toHaveLength(1));
+    expect(screen.queryByRole("button", { name: "Settle now" })).toBeNull();
   });
 
   it("says nothing is waiting instead of showing zeros", async () => {

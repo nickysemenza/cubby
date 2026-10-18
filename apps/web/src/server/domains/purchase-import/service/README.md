@@ -161,7 +161,7 @@ until a session itemizes it.
 | Public mail tool (read, search, resolve)   | `mail-tool.ts`, `packages/schemas/src/mailbox-research.ts`             |
 | Import writers                             | `import-orders.ts`, `writer.ts`, `writer-policy.ts`                    |
 | Mail import admission                      | `mail-import-run.ts`                                                   |
-| Run lifecycle, approvals, controls         | `run-service.ts`, `run-review.ts`                                      |
+| Run lifecycle, controls                    | `run-service.ts`, `run-review.ts`                                      |
 | Agent capabilities per Run purpose         | `capabilities.ts`                                                      |
 | Gmail discovery, classification, retention | `gmail/`                                                               |
 | Pi host and services                       | `agent-host.ts`, `agent-services.ts`, `server/domains/purchase-agent/` |

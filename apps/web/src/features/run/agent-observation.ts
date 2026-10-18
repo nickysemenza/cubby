@@ -2,6 +2,7 @@ import {
   agentConversationSchema,
   type AgentConversation,
 } from "@cubby/schemas/agent-conversation";
+import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { EventSourceParserStream } from "eventsource-parser/stream";
 import { useEffect, useSyncExternalStore } from "react";
@@ -359,12 +360,7 @@ export function useAgentReviewSync(publicId: string, observing: boolean) {
 const WORKER_PENDING_STATES = ["pending", "waiting_for_device", "leased"];
 
 /** Statuses during which the agent or the device may still change the run. */
-export const LIVE_RUN_STATUSES = new Set([
-  "running",
-  "paused_auth",
-  "paused_offline",
-  "paused_approval",
-]);
+export const LIVE_RUN_STATUSES = new Set<string>(ACTIVE_RUN_STATUSES);
 
 /**
  * How often a photo run's review refetches. A live agent stream reports the

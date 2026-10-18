@@ -82,6 +82,8 @@ export async function recoverMissedWork(
     disposalResult,
     searchExpiryResult,
     photoRunResult,
+    derivedResult,
+    approvalsResult,
   ] = await Promise.allSettled([
     repairImageProcessingWork(db),
     expireStaleRuns(db),
@@ -105,6 +107,12 @@ export async function recoverMissedWork(
     disposeExpiredSearchOriginals(db, productionOrderMailAttachmentStorage),
     // Backstop for a cubby photo Run whose readiness hook was missed.
     advanceWaitingPhotoRuns(db),
+    (
+      await import("~/server/generic/work-queue/service/awaiting-work.service")
+    ).settleAwaitingWork(db),
+    (
+      await import("~/server/domains/purchase-import/repo/run-service")
+    ).resumeApprovalPausedRuns(db),
   ]);
   const errors = [
     image,
@@ -115,9 +123,11 @@ export async function recoverMissedWork(
     disposalResult,
     searchExpiryResult,
     photoRunResult,
+    derivedResult,
+    approvalsResult,
   ]
     .filter((result) => result.status === "rejected")
-    .map((result) => String(result.reason));
+    .map((result) => result.reason);
   const stale = staleResult.status === "fulfilled" ? staleResult.value : null;
   log.info("purchase runs expired", {
     staleExpired: stale?.expired,
@@ -140,7 +150,8 @@ export async function recoverMissedWork(
       `Stale purchase run could not be moved to review: ${failure.error}`,
       "warning",
     );
-  if (errors.length) throw new Error(errors.join("; "));
+  if (errors.length)
+    throw new AggregateError(errors, "Background recovery failed");
   return { stale };
 }
 
@@ -167,10 +178,18 @@ export async function discoverPurchases(db: Database) {
   // `running` Run would otherwise hold its mailbox's slot until the next
   // trigger.
   await reconcileWorkflowRuns(db);
+  const pending = await (
+    await import("~/server/domains/purchase-import/repo/mail-import-run")
+  ).importPendingEmails(db);
   const mail = await startMailDiscovery(db);
   log.info("purchase discovery", {
     mailPassesStarted: mail.started,
     mailPassesRunning: mail.running,
   });
+  if (pending.errors.length)
+    throw new AggregateError(
+      pending.errors,
+      "Retained Email admission failed; discovery continued.",
+    );
   return { mail };
 }

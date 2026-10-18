@@ -4,10 +4,14 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { image, imageProcessingJob } from "~/server/db/schema";
+import {
+  image,
+  imageProcessingJob,
+  imageProcessingSubmission,
+} from "~/server/db/schema";
 import {
   backfillImageProcessing,
-  updateImageProcessingSettings,
+  repairImageProcessingWork,
 } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
@@ -46,28 +50,56 @@ describe("backfillImageProcessing", () => {
     return rows.map((job) => job.kind).sort();
   };
 
-  it("reports paused explicitly and schedules nothing under the default settings", async () => {
+  // Missing jobs must be recovered without a manual batch button. Repeated
+  // recovery must neither duplicate jobs nor manufacture empty submissions.
+  it("automatically backfills missing jobs and leaves settled work alone", async () => {
+    const row = await seedImage();
+    await repairImageProcessingWork(ctx.db);
+    expect(await jobKinds(row.id)).toEqual([
+      "describe_image",
+      "describe_image",
+      "identify_image",
+      "subject_lift",
+    ]);
+    const before = await getDb(ctx.db).select().from(imageProcessingSubmission);
+    await repairImageProcessingWork(ctx.db);
+    expect(
+      await getDb(ctx.db).select().from(imageProcessingSubmission),
+    ).toEqual(before);
+    expect(await jobKinds(row.id)).toEqual([
+      "describe_image",
+      "describe_image",
+      "identify_image",
+      "subject_lift",
+    ]);
+    expect(
+      queue.tasks.some((task) => task.kind === "image-processing.wakeup"),
+    ).toBe(true);
+  });
+
+  it("schedules jobs without an enable or resume step", async () => {
     const row = await seedImage();
     const result = await backfillImageProcessing(ctx.db, {
       batchSize: 10,
       retryFailures: false,
     });
-    expect(result).toMatchObject({ scheduled: 0, paused: true });
-    expect(await jobKinds(row.id)).toEqual([]);
+    expect(result).toMatchObject({ scheduled: 1 });
+    expect(await jobKinds(row.id)).toEqual([
+      "describe_image",
+      "describe_image",
+      "identify_image",
+      "subject_lift",
+    ]);
   });
 
   it("schedules only the requested kinds", async () => {
-    await updateImageProcessingSettings(ctx.db, {
-      enabled: false,
-      paused: false,
-    });
     const row = await seedImage();
     const result = await backfillImageProcessing(ctx.db, {
       batchSize: 10,
       retryFailures: false,
       kinds: ["describe_image"],
     });
-    expect(result).toMatchObject({ scheduled: 1, paused: false });
+    expect(result).toMatchObject({ scheduled: 1 });
     expect(await jobKinds(row.id)).toEqual([
       "describe_image",
       "describe_image",
@@ -75,10 +107,6 @@ describe("backfillImageProcessing", () => {
   });
 
   it("schedules independent cloud, Apple, and identification baseline jobs when none are given", async () => {
-    await updateImageProcessingSettings(ctx.db, {
-      enabled: false,
-      paused: false,
-    });
     const row = await seedImage();
     await backfillImageProcessing(ctx.db, {
       batchSize: 10,

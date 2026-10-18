@@ -88,7 +88,7 @@ export const productionWorker = defineWorker({
     R2_ACCESS_KEY_ID: bindings.secret(),
     R2_SECRET_ACCESS_KEY: bindings.secret(),
     AI_GATEWAY_API_KEY: bindings.secret(),
-    AI_REFRESH_ENABLED: bindings.text("true"),
+
     NODE_ENV: bindings.text("production"),
     ALLOW_SIGNUP: bindings.text("false"),
     E2E_AUTH_TEST_MODE: bindings.text("false"),

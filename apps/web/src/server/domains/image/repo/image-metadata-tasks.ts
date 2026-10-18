@@ -18,8 +18,7 @@ const imageMetadataExtractTask = (imageId: ImageId): BackgroundTaskInput => ({
  * `createOrReuseAttachedImage` (MCP/native attach), URL import, and the
  * photo-import commit's per-item activation. Fire-and-forget like every other
  * post-mutation publish — `Image.metadataRevision` is the durable stale
- * marker a lost message doesn't threaten (repaired by "Settle now" or the
- * `backfillImageMetadata` maintenance sweep).
+ * marker a lost message doesn't threaten: automatic recovery republishes it.
  */
 export async function publishImageMetadataExtraction(
   db: Database,

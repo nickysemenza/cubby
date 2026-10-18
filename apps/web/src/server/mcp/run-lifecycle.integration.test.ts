@@ -323,9 +323,7 @@ describe("Mail import switch and discovery through MCP", () => {
     expect(await getDb(ctx.db).select().from(appSettings)).toEqual([]);
   });
 
-  // Replaces the old "lifecycle refuses approve" assertion: approval is now an
-  // intended member control on run.lifecycle.
-  it("grants an agent Run's pending approval through run.lifecycle", async () => {
+  it("executes permitted agent work without an approval lifecycle call", async () => {
     const run = await agentRun();
     const pending = {
       db: ctx.db,
@@ -347,20 +345,13 @@ describe("Mail import switch and discovery through MCP", () => {
       run: async () => ({ accepted: true }),
       baseExtra: fromPartial<ToolExtra>({}),
     };
-    await expect(executePurchaseAgentMutation(pending)).rejects.toThrow(
-      "awaiting exact human approval",
-    );
-    const approved = await call("run", {
-      action: "lifecycle",
-      runId: run.shortcode,
-      controlAction: "approve",
-      operationId: pending.execution.operationId,
+    await expect(executePurchaseAgentMutation(pending)).resolves.toEqual({
+      accepted: true,
     });
-    expect(approved.isError).not.toBe(true);
     const [grant] = await getDb(ctx.db)
       .select()
       .from(runApproval)
       .where(eq(runApproval.runId, run.id));
-    expect(grant?.state).toBe("granted");
+    expect(grant).toBeUndefined();
   });
 });

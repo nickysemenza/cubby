@@ -73,8 +73,6 @@ export const runControlAction = z.enum([
   "pause",
   "resume",
   "cancel",
-  "approve",
-  "reject",
   "retry",
   "restart",
   "escalate_sol",

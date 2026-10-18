@@ -200,15 +200,8 @@ function descriptionsInFlight(review: PhotoRunReview | undefined) {
   );
 }
 
-function groupingHint(
-  pending: number,
-  analyzing: boolean,
-  paused: boolean,
-  external: boolean,
-) {
+function groupingHint(pending: number, analyzing: boolean, external: boolean) {
   if (!pending) return "Upload and finalize photos in the Cubby app first.";
-  if (analyzing && paused)
-    return "Image processing is paused, so photo descriptions are queued. Resume queued work under Problems → Image processing to start grouping.";
   if (analyzing)
     return external
       ? "Photos are processing. Your Claude/Codex handoff will be ready once descriptions finish."
@@ -345,7 +338,6 @@ export function PhotoImportRunView({ run }: { run: RunDetail }) {
               {groupingHint(
                 pending,
                 analyzing,
-                review.data?.imageProcessingPaused ?? false,
                 review.data?.lifecycle.processor === "external",
               )}
             </p>

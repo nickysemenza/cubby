@@ -1,7 +1,7 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import {
@@ -9,7 +9,6 @@ import {
   imageProcessingAttempt,
   imageProcessingJob,
 } from "~/server/db/schema";
-import { updateImageProcessingSettings } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 
 import {
@@ -31,12 +30,6 @@ describe("background companion leases", () => {
   const ctx = withTestDb();
   const userId = "synthetic-background-user";
   const deviceId = crypto.randomUUID();
-  beforeEach(async () => {
-    await updateImageProcessingSettings(ctx.db, {
-      enabled: false,
-      paused: false,
-    });
-  });
   async function job(processorRevision: number, contentType = "image/jpeg") {
     const row = await createUploadedImageRecord(ctx.db, {
       key: `tests/${crypto.randomUUID()}.jpg`,

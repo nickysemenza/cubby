@@ -233,7 +233,6 @@ const REPORTS = {
   "run.import-progress-live": runBuilder("run.import-progress-live"),
   "run.import-progress-stopped": runBuilder("run.import-progress-stopped"),
   "run.import-purchases": runBuilder("run.import-purchases"),
-  "run.import-approvals": runBuilder("run.import-approvals"),
   "run.import-findings": runBuilder("run.import-findings"),
   "run.import-targets": runBuilder("run.import-targets"),
   "run.import-prepared-orders": runBuilder("run.import-prepared-orders"),

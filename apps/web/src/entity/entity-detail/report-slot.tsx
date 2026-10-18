@@ -318,7 +318,6 @@ const RUN_BATCH_SLOTS = [
   "run.import-progress-live",
   "run.import-progress-stopped",
   "run.import-purchases",
-  "run.import-approvals",
   "run.import-findings",
   "run.import-targets",
   "run.import-prepared-orders",

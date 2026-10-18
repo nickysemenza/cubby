@@ -47,7 +47,6 @@ import {
   run as runTable,
   session,
 } from "~/server/db/schema";
-import { updateImageProcessingSettings } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import { productionPhotoImportCommitPorts } from "~/server/domains/photo-import/repo/photo-import-commit";
 import {
   approvePhotoGroupProposals,
@@ -56,6 +55,7 @@ import {
 import { commitPhotoGroup } from "~/server/domains/photo-import/repo/run/writer";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   createImageFixture,
   createLocationFixture,
@@ -107,6 +107,14 @@ const readScenarioEvidence = async (active: ScenarioHarness | undefined) => ({
 
 describe("current purchase-agent system boundaries", () => {
   const ctx = withTestDb();
+  let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
+  beforeEach(() => {
+    backgroundQueue = captureBackgroundQueue();
+  });
+  afterEach(() => {
+    backgroundQueue.restore();
+  });
+
   beforeEach(() => {
     identity = captureE2ERunIdentity(repoRoot);
     began = Date.now();
@@ -241,10 +249,6 @@ describe("current purchase-agent system boundaries", () => {
         storageStatus: "unverified",
       },
     );
-    await updateImageProcessingSettings(ctx.db, {
-      enabled: false,
-      paused: true,
-    });
     await finalizePhotoRun(
       ctx.db,
       {

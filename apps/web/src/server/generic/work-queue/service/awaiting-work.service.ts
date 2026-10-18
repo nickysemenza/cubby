@@ -1,14 +1,4 @@
-/**
- * Derived work that is waiting on a queue wakeup which may never arrive.
- *
- * Publication after a commit is best-effort: the mutation is already saved,
- * and the stale marker on the source row is the durable record of what still
- * needs doing. This service reads those markers directly — never a job ledger
- * — so the counts are live truth, and "Settle now" republishes exactly what
- * the counts describe. The nightly cron asserts these are zero and repairs
- * the embedding backlog it finds (see the cron's repair block); other backlogs
- * still surface here rather than being silently absorbed.
- */
+/** Source-row freshness markers recover lost queue publications automatically. */
 
 import type {
   AwaitingWork,
@@ -35,9 +25,7 @@ import {
 } from "~/server/generic/search/repo/search-document";
 import { publishBackgroundTasks } from "~/server/workflows/background-tasks/publish";
 
-/** One page is plenty for a repair republish — "Settle now" only needs to
- * repair a LOST wakeup, not drive the whole backlog; `backfillImageMetadata`
- * maintenance is the bounded loop for a larger one. */
+/** Each recovery invocation republishes a bounded page; later invocations advance it. */
 const SETTLE_IMAGE_METADATA_BATCH_SIZE = 100;
 
 /** Uploads abandoned after presign; the same threshold the presign cull uses. */
@@ -74,7 +62,7 @@ export async function countAwaitingWork(db: Database): Promise<AwaitingWork> {
 }
 
 /**
- * Republish every waiting item. Nothing here waits for completion — the queue
+ * Republish waiting items; embedding and image metadata work use bounded pages. Nothing here waits for completion — the queue
  * consumer does the work, and the counts above shrink as it
  * lands. Idempotent: republishing already-published work only costs each
  * handler its freshness check.
@@ -91,8 +79,8 @@ export async function settleAwaitingWork(
   const config = getSemanticEmbeddingConfig();
   const requestedAt = new Date().toISOString();
   let publishedEmbeddingTasks = 0;
-  let page = await selectUnembeddedSearchDocumentRefs(db, config);
-  for (;;) {
+  if (semanticEmbeddingsConfigured()) {
+    const page = await selectUnembeddedSearchDocumentRefs(db, config);
     if (page.refs.length > 0) {
       const receipt = await publishBackgroundTasks(
         db,
@@ -104,12 +92,8 @@ export async function settleAwaitingWork(
         })),
         { source: "maintenance.settle-awaiting-work" },
       );
-      publishedEmbeddingTasks += receipt.count;
+      publishedEmbeddingTasks = receipt.count;
     }
-    if (!page.nextCursor) break;
-    page = await selectUnembeddedSearchDocumentRefs(db, config, {
-      cursor: page.nextCursor,
-    });
   }
 
   const culled = await cullPendingImageStorage(db, PENDING_UPLOAD_HOURS);

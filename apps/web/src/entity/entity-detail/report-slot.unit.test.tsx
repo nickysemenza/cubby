@@ -200,53 +200,6 @@ describe("EntityReportSlot records", () => {
     ).toHaveAttribute("href", "/images/IMG-4S9Q");
   });
 
-  it("sends the server's exact request when a command is tapped", async () => {
-    answer = () => ({
-      live: true,
-      status: "running",
-      blocks: [
-        {
-          kind: "records",
-          empty: "",
-          rows: [
-            row("approval-1", "product_overwrite", [
-              {
-                id: "approval-1:approve",
-                label: "Approve import proposal",
-                prominent: true,
-                confirm: "Approve product_overwrite?",
-                request: {
-                  kind: "run-control",
-                  runId: RUN_ID,
-                  action: "approve",
-                  operationId: "op-1",
-                  approvalId: "approval-1",
-                },
-              },
-            ]),
-          ],
-        },
-      ],
-    });
-    render(<EntityReportSlot slot="run.import-approvals" id={RUN_ID} />, {
-      wrapper: harness.wrapper,
-    });
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Approve import proposal" }),
-    );
-    await waitFor(() =>
-      expect(calls).toContainEqual({
-        operation: "run.control",
-        input: {
-          runId: RUN_ID,
-          action: "approve",
-          operationId: "op-1",
-          approvalId: "approval-1",
-        },
-      }),
-    );
-  });
-
   // A ledger row's state stays readable without color, a failure keeps its raw diagnostic in
   // full, and a command that needs input opens only for the row it belongs to.
   it("lays a ledger block out with readable states and on-demand command input", async () => {

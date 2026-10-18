@@ -803,9 +803,6 @@ export async function executeAiRefreshTarget(
 }
 
 export async function recoverAiRefresh(db: Database) {
-  const { getAiRefreshEnabled } = await import("~/server/cf-env");
-  const enabled = getAiRefreshEnabled();
-  if (!enabled) return false;
   const current = await readAiRefreshActivation(db);
   // The singleton owns activation. An old Worker can still receive recovery work.
   if (!current?.enabled) return false;

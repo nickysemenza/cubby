@@ -9,7 +9,7 @@ import { Stack } from "~/ui/layout";
 
 /**
  * A Run detail slot that is nothing but its server-composed report (`run.<id>` in
- * `reportSlots`): progress, targets, approvals, findings, transcript, log, AI usage. Changes keep the audit list's field diffs. The record's status
+ * `reportSlots`): progress, targets, findings, transcript, log, AI usage. Changes keep the audit list's field diffs. The record's status
  * rides along so the page refreshes the Run when the report read a newer one.
  */
 const runReport =
@@ -24,7 +24,6 @@ export const runReportSlots = {
   "import-progress-live": runReport("run.import-progress-live"),
   "import-progress-stopped": runReport("run.import-progress-stopped"),
   "import-purchases": runReport("run.import-purchases"),
-  "import-approvals": runReport("run.import-approvals"),
   "import-findings": runReport("run.import-findings"),
   "import-targets": runReport("run.import-targets"),
   "import-prepared-orders": runReport("run.import-prepared-orders"),

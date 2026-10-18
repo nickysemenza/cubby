@@ -226,8 +226,6 @@ export function useReportCommands() {
             runId: r.runId,
             action: r.action,
           };
-          if (r.operationId) input.operationId = r.operationId;
-          if (r.approvalId) input.approvalId = r.approvalId;
           control.mutate(input);
         })
         .with({ kind: "resolve-finding" }, (r) => {

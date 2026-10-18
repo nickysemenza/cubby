@@ -908,17 +908,8 @@ async function runHeadlessPhotoScenario(
   const scenarioStarted = performance.now();
   const pool = createPostgresPool({ connectionString: databaseURL });
   try {
-    const [{ seedSimulatorPhotoActor }, scenario, maintenance] =
-      await Promise.all([
-        import("./scenarios/simulator"),
-        import("./scenarios/context"),
-        import("~/server/domains/image-processing/service/image-processing-maintenance"),
-      ]);
+    const { seedSimulatorPhotoActor } = await import("./scenarios/simulator");
     await seedSimulatorPhotoActor(pool, userId);
-    await maintenance.updateImageProcessingSettings(
-      scenario.buildScenarioDatabase(pool),
-      { enabled: true, paused: false },
-    );
   } finally {
     await pool.end();
   }

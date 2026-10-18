@@ -7,7 +7,7 @@ import {
 } from "@cubby/schemas/image-identification";
 import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import {
@@ -17,7 +17,6 @@ import {
   imageProcessingJob,
 } from "~/server/db/schema";
 import { dispatchImageProcessingWakeup } from "~/server/domains/image-processing/service/dispatch";
-import { updateImageProcessingSettings } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { getVerifiedImageRenditionKey } from "~/server/domains/image/repo/image-identification";
 
@@ -37,12 +36,6 @@ import { persistImageProcessingSubmission } from "./image-processing-submission"
 describe("independent durable image identification", () => {
   const ctx = withTestDb();
   const hash = "a".repeat(64);
-  beforeEach(async () => {
-    await updateImageProcessingSettings(ctx.db, {
-      enabled: false,
-      paused: false,
-    });
-  });
 
   async function setup() {
     const row = await createUploadedImageRecord(ctx.db, {

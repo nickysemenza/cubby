@@ -22,7 +22,6 @@ import {
 
 import type { Page } from "@playwright/test";
 import { and, eq, sql } from "drizzle-orm";
-import { updateImageProcessingSettings } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import { photoImportContract } from "~/contracts/photo-import.contract";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import * as schema from "~/server/db/schema";
@@ -355,7 +354,7 @@ export async function createConvergenceHarness(
     // harness, consuming the lease at the keyless external-AI boundary.
     // Resume before finalize creates these jobs; Workerd wakeups go to the
     // harness's offline queue peer and the supplied result takes a real lease.
-    await updateImageProcessingSettings(db, { enabled: false, paused: false });
+
     const result = await post(
       "photoImport/finalize",
       { runId: run.runId, clientBatchId, images: finalized },

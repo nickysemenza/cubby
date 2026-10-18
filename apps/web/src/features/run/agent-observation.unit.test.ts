@@ -172,6 +172,23 @@ describe("photoReviewPollInterval", () => {
     ).toBe(30_000);
   });
 
+  it("continues observing manually paused Runs", () => {
+    expect(
+      photoReviewPollInterval({
+        runStatus: "paused",
+        agentLive: false,
+        data: idle,
+      }),
+    ).toBe(3_000);
+    expect(
+      photoReviewPollInterval({
+        runStatus: "paused",
+        agentLive: true,
+        data: idle,
+      }),
+    ).toBe(30_000);
+  });
+
   it("keeps the 15s worker poll, which the agent stream does not signal", () => {
     expect(
       photoReviewPollInterval({

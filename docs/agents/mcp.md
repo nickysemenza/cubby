@@ -30,6 +30,11 @@ before validation; for example, `run.resolve_finding` requires
 
 ## Runs and Burn-down
 
+Run-delegated mutations execute permitted writes without a separate approval.
+Reuse an operation ID only with the identical tool and arguments: a completed
+operation returns its saved result even after its Run stops. New writes remain
+fenced by the Run's current state.
+
 Runs are started by Mail discovery (scheduled, or `run.discover_mail` on the
 member's instruction), photo uploads and a member's own
 `purchase_import.prepare`; nothing else on MCP starts research

@@ -132,11 +132,10 @@ private func report(
     )
 }
 
-private let approve = #"""
-    {"id": "approval-1:approve", "label": "Approve import proposal", "prominent": true,
-     "confirm": "Approve product_overwrite?",
-     "request": {"kind": "run-control", "runId": "RUN-4K7M", "action": "approve",
-                 "operationId": "op-1", "approvalId": "approval-1"}}
+private let cancel = #"""
+    {"id": "cancel-run", "label": "Cancel Run", "prominent": true,
+     "confirm": "Cancel this Run?",
+     "request": {"kind": "run-control", "runId": "RUN-4K7M", "action": "cancel"}}
     """#
 
 private let dismiss = #"""
@@ -230,7 +229,7 @@ struct ReportSlotModelTests {
         _ service: FakeReports, shown: String? = nil, polls: Gate = Gate()
     ) -> ReportSlotModel {
         ReportSlotModel(
-            slot: .run_importApprovals, id: "RUN-4K7M", shownStatus: shown, service: service,
+            slot: .run_importFindings, id: "RUN-4K7M", shownStatus: shown, service: service,
             waitForNextPoll: { try await polls.pass() })
     }
 
@@ -240,9 +239,9 @@ struct ReportSlotModelTests {
         } ?? []
     }
 
-    @Test("An approval sends nothing until the person confirms, then the exact request")
-    func approvalNeedsConfirmation() async throws {
-        let action: ReportCommand = try decode(approve)
+    @Test("A destructive command sends nothing until the person confirms, then the exact request")
+    func cancellationNeedsConfirmation() async throws {
+        let action: ReportCommand = try decode(cancel)
         let service = FakeReports([try report(live: true, rows: [row("a")])])
         let model = model(service)
 
@@ -253,9 +252,7 @@ struct ReportSlotModelTests {
         #expect(await model.run(action, confirmed: true) == .done(nil))
         let sent = try #require(service.calls.withLock { $0.controls.first })
         #expect(sent.runId == "RUN-4K7M")
-        #expect(sent.action == .approve)
-        #expect(sent.operationId == "op-1")
-        #expect(sent.approvalId == "approval-1")
+        #expect(sent.action == .cancel)
         #expect(service.calls.withLock { $0.controls.count } == 1)
     }
 
@@ -502,8 +499,7 @@ struct ReportSlotModelTests {
         let retry: ReportCommand = try decode(
             #"""
             {"id": "r", "label": "Retry", "prominent": false, "confirm": null,
-             "request": {"kind": "run-control", "runId": "RUN-4K7M", "action": "retry",
-                         "operationId": null, "approvalId": null}}
+             "request": {"kind": "run-control", "runId": "RUN-4K7M", "action": "retry"}}
             """#)
         let service = FakeReports([try report(live: false, status: "completed")])
         service.controlFails.withLock { $0 = true }
@@ -560,7 +556,7 @@ struct ReportSlotModelTests {
         await model.loadMore()
         #expect(rowIDs(model.presentation) == ["call-1", "call-2"])
         #expect(!model.canLoadMore)
-        #expect(service.calls.withLock { $0.reads } == ["run.import-approvals|-", "run.import-approvals|c2"])
+        #expect(service.calls.withLock { $0.reads } == ["run.import-findings|-", "run.import-findings|c2"])
     }
 
     @Test("A status the screen does not show asks the screen to reload once")
@@ -576,13 +572,13 @@ struct ReportSlotModelTests {
 
     @Test("Records blocks keep rows, actions and the next cursor in the presentation")
     func recordsPresentation() throws {
-        let page = try report(live: true, rows: [row("a", actions: "[\(approve)]")], nextCursor: "c")
+        let page = try report(live: true, rows: [row("a", actions: "[\(cancel)]")], nextCursor: "c")
         let presentation = ReportPresentation(page)
         guard case .records(let records) = presentation.blocks[0] else {
             Issue.record("expected records")
             return
         }
-        #expect(records.rows[0].commands.map(\.id) == ["approval-1:approve"])
+        #expect(records.rows[0].commands.map(\.id) == ["cancel-run"])
         #expect(presentation.live)
         #expect(presentation.nextCursor == "c")
     }

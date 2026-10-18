@@ -28,6 +28,7 @@ export const HOUSEHOLD_TIMEZONE = "America/Los_Angeles";
 /** Statuses in which a Run is still moving: clients poll and show the live variants only then. */
 export const ACTIVE_RUN_STATUSES = [
   "running",
+  "paused",
   "paused_auth",
   "paused_offline",
   "paused_approval",

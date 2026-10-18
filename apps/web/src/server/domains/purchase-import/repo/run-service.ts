@@ -1,4 +1,4 @@
-import { type ActorContext } from "@cubby/schemas/context";
+import { buildActorContext, type ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
 import {
   imageId,
@@ -45,7 +45,6 @@ import {
   runScope,
   runTargetState,
 } from "@cubby/schemas/purchase-import";
-import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { purchaseImportDebugEvent } from "@cubby/schemas/purchase-import-debug";
 import {
   chargeHuntRunInput,
@@ -88,12 +87,7 @@ import type {
 import type { RunDetail, RunLogEntry } from "~/contracts/run.contract";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { vendorAccountLabelSql } from "~/server/db/computed/vendor-account-label";
-import {
-  databaseForTransaction,
-  getDb,
-  notDeleted,
-  withTransaction,
-} from "~/server/db/helpers";
+import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import {
   aiUsage,
   auditLog,
@@ -138,10 +132,7 @@ import {
 import { getRunHeaderByShortcode } from "~/server/domains/run/repo/run";
 import {
   DEBUG_EVENT_KIND,
-  failOperation,
   failOperationsForRun,
-  readOperation,
-  setOperationResult,
 } from "~/server/domains/run/repo/run-operation";
 import { recordRunProgress } from "~/server/domains/run/repo/run-progress";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -1102,14 +1093,6 @@ const publicRunOperations = (runId: RunId) =>
 
 export const STALE_RUN_MS = 2 * 60 * 60_000;
 
-/** The approval decision a `controlRun` wake event names (`approvalWakeEvent`). */
-export const APPROVAL_WAKE_DECISION = new Map([
-  ["granted", "approved"],
-  ["consumed", "approved"],
-  ["rejected", "rejected"],
-  ["invalidated", "invalidated"],
-]);
-
 export const assertRunActive = (status: string) => {
   if (status !== "running")
     throw new Error(`Import run is fenced in status ${status}`);
@@ -1328,7 +1311,7 @@ function restartInputSummary(
 }
 
 /** A durable timeline needs public operation metadata, never result payloads
- * or the import-specific targets, approvals and restart context. */
+ * or the import-specific targets and restart context. */
 export async function loadRunTimeline(
   db: Database,
   runId: RunId,
@@ -1374,7 +1357,6 @@ export async function loadRunDetail(
   const [
     successor,
     operations,
-    approvals,
     preparedOrders,
     progress,
     affectedPurchases,
@@ -1398,21 +1380,6 @@ export async function loadRunDetail(
       .from(runOperation)
       .where(publicRunOperations(run.id))
       .orderBy(asc(runOperation.startedAt)),
-    database
-      .select({
-        id: runApproval.id,
-        operationId: runApproval.operationId,
-        operationKind: runApproval.operationKind,
-        args: runApproval.args,
-        state: runApproval.state,
-        decidedAt: runApproval.decidedAt,
-        rejectedAt: runApproval.rejectedAt,
-        consumedAt: runApproval.consumedAt,
-        invalidatedAt: runApproval.invalidatedAt,
-      })
-      .from(runApproval)
-      .where(eq(runApproval.runId, run.id))
-      .orderBy(asc(runApproval.createdAt)),
     loadPreparedReviewRows(db, run.id),
     Promise.resolve(run.progressHistory ?? []),
     database
@@ -1635,17 +1602,6 @@ export async function loadRunDetail(
         .parse(target.diff ?? null),
       completedAt: iso(target.completedAt),
     })),
-    approvals: approvals.map((approval) => ({
-      id: approval.id,
-      operationId: approval.operationId,
-      operationKind: approval.operationKind,
-      args: z.json().parse(approval.args),
-      state: approval.state,
-      grantedAt: approval.state === "granted" ? iso(approval.decidedAt) : null,
-      consumedAt: iso(approval.consumedAt),
-      invalidatedAt: iso(approval.invalidatedAt),
-      rejectedAt: iso(approval.rejectedAt),
-    })),
     affectedPurchases,
     findings: findings.map((finding) => ({
       ...finding,
@@ -1737,35 +1693,6 @@ function operationLogEntry(
   };
 }
 
-/**
- * The queue event an approval decision delivers to its parked conversation.
- * Without it the coordinator only resumes when a member prompts it. A retry
- * signal is not fenced by the dispatch generation, and its id names the
- * decision so the agent reads the persisted approval before continuing.
- */
-export function approvalWakeEvent(
-  control: Awaited<ReturnType<typeof controlRun>>,
-): Extract<PurchaseAgentEvent, { type: "retry" }> | null {
-  if (!("wakeRunId" in control) || !control.wakeRunId) return null;
-  if (!control.wakeGeneration)
-    throw new Error("Approval wake has no admitted dispatch generation");
-  if ("evidenceWakeId" in control)
-    return {
-      version: 1,
-      runId: control.wakeRunId,
-      generation: control.wakeGeneration,
-      eventId: `validation-original:${control.evidenceWakeId}`,
-      type: "retry",
-    };
-  return {
-    version: 1,
-    runId: control.wakeRunId,
-    generation: control.wakeGeneration,
-    eventId: `approval:${control.approvalId}:${control.decision}`,
-    type: "retry",
-  };
-}
-
 /** Server tool calls and Mac bridge debug events, in occurrence order. */
 export async function loadRunLog(db: Database, shortcode: string) {
   const database = getDb(db);
@@ -1842,8 +1769,6 @@ const runControlInput = z.object({
     "resume",
     "cancel",
     "abort",
-    "approve",
-    "reject",
     "retry",
     "restart",
     "retry_dispatch",
@@ -1851,8 +1776,6 @@ const runControlInput = z.object({
     "no_evidence_available",
     "escalate_sol",
   ]),
-  operationId: z.string().trim().min(1).max(200).optional(),
-  approvalId: z.uuid().optional(),
 });
 
 const runControlAction = z.enum([
@@ -1861,8 +1784,6 @@ const runControlAction = z.enum([
   "pause",
   "resume",
   "cancel",
-  "approve",
-  "reject",
   "retry",
   "restart",
   "retry_dispatch",
@@ -1930,6 +1851,7 @@ export async function controlRun(
   db: Database,
   actor: ActorContext,
   rawInput: z.input<typeof runControlInput>,
+  precondition?: { status: "paused_approval" },
 ) {
   const input = runControlInput.parse(rawInput);
   const scope = await loadRunScopeByShortcode(db, input.runPublicId);
@@ -1960,294 +1882,117 @@ export async function controlRun(
     scope.ledgerPartyId !== controller.ledgerPartyId
   )
     throw new Error("Only the member this Run belongs to can control it");
-  return withTransaction(
-    db,
-    // eslint-disable-next-line complexity
-    async (tx) => {
-      if (scope.public.vendorAccountId)
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${scope.public.vendorAccountId}))`,
+  return withTransaction(db, async (tx) => {
+    if (scope.public.vendorAccountId)
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(${scope.public.vendorAccountId}))`,
+      );
+    const [locked] = await tx
+      .select({
+        status: runTable.status,
+        ledgerPartyId: runTable.ledgerPartyId,
+        actorUserId: runTable.actorUserId,
+        actorName: runTable.actorName,
+        actorEmail: runTable.actorEmail,
+        actorLedgerPartyShortcode: runTable.actorLedgerPartyShortcode,
+        actorLedgerPartyName: runTable.actorLedgerPartyName,
+        actorLedgerPartyKind: runTable.actorLedgerPartyKind,
+        vendorAccountId: runTable.vendorAccountId,
+        vendorId: runTable.vendorId,
+        purpose: runTable.purpose,
+        trigger: runTable.trigger,
+        parentRunId: runTable.parentRunId,
+        notes: runTable.notes,
+        input: runTable.input,
+        skillRevision: runTable.skillRevision,
+        runtimeRevision: runTable.runtimeRevision,
+        dispatchEventId: runTable.dispatchEventId,
+        coordinatorStartedAt: runTable.coordinatorStartedAt,
+        decisionRevision: runTable.decisionRevision,
+        historyCursorUrl: runTable.historyCursorUrl,
+      })
+      .from(runTable)
+      .where(eq(runTable.id, scope.public.runId))
+      .limit(1)
+      // A key-preserving lock: this transaction also touches child rows
+      // whose foreign keys share-lock the Run, so a full lock could deadlock.
+      .for("no key update");
+    if (!locked) throw new Error("Purchase import run was not found");
+    if (locked.vendorAccountId !== scope.public.vendorAccountId)
+      throw new Error("Purchase import control account changed.");
+    if (locked.ledgerPartyId !== scope.ledgerPartyId)
+      throw new Error("Purchase import control owner changed.");
+    // Automated recovery must not undo a member's newer pause or completion.
+    if (precondition && locked.status !== precondition.status)
+      return { publicId: input.runPublicId, status: locked.status };
+    if (input.action === "restart") {
+      if (
+        !new Set([
+          "completed",
+          "failed",
+          "needs_review",
+          "dispatch_failed",
+        ]).has(locked.status)
+      )
+        throw new Error(
+          `Only a finished run can be started again (${locked.status})`,
         );
-      const [locked] = await tx
-        .select({
-          status: runTable.status,
-          ledgerPartyId: runTable.ledgerPartyId,
-          actorUserId: runTable.actorUserId,
-          actorName: runTable.actorName,
-          actorEmail: runTable.actorEmail,
-          actorLedgerPartyShortcode: runTable.actorLedgerPartyShortcode,
-          actorLedgerPartyName: runTable.actorLedgerPartyName,
-          actorLedgerPartyKind: runTable.actorLedgerPartyKind,
-          vendorAccountId: runTable.vendorAccountId,
-          vendorId: runTable.vendorId,
-          purpose: runTable.purpose,
-          trigger: runTable.trigger,
-          parentRunId: runTable.parentRunId,
-          notes: runTable.notes,
-          input: runTable.input,
-          skillRevision: runTable.skillRevision,
-          runtimeRevision: runTable.runtimeRevision,
-          dispatchEventId: runTable.dispatchEventId,
-          coordinatorStartedAt: runTable.coordinatorStartedAt,
-          decisionRevision: runTable.decisionRevision,
-          historyCursorUrl: runTable.historyCursorUrl,
-        })
-        .from(runTable)
-        .where(eq(runTable.id, scope.public.runId))
-        .limit(1)
-        // A key-preserving lock: this transaction also touches child rows
-        // whose foreign keys share-lock the Run, so a full lock could deadlock.
-        .for("no key update");
-      if (!locked) throw new Error("Purchase import run was not found");
-      if (locked.vendorAccountId !== scope.public.vendorAccountId)
-        throw new Error("Purchase import control account changed.");
-      if (locked.ledgerPartyId !== scope.ledgerPartyId)
-        throw new Error("Purchase import control owner changed.");
-      if (input.action === "restart") {
-        if (
-          !new Set([
-            "completed",
-            "failed",
-            "needs_review",
-            "dispatch_failed",
-          ]).has(locked.status)
-        )
-          throw new Error(
-            `Only a finished run can be started again (${locked.status})`,
-          );
-        if (!agentImportRunPurpose.safeParse(locked.purpose).success)
-          throw new Error("Only agent import runs can be started again");
-        const sourceTargets = (
-          await (locked.purpose === "photo_inventory"
-            ? selectPhotoRestartTargets(tx, scope.public.runId)
-            : selectRestartTargets(tx, scope.public.runId))
-        ).map((target) => ({
-          entityId: target.entityId,
-          entityKind: target.entityKind,
-          workKey: target.workKey,
-          position: target.position,
-          vendorAccountId: target.vendorAccountId,
-          sourceKind: target.sourceKind,
-          sourceExternalKey: target.sourceExternalKey,
-          targetFingerprint: target.targetFingerprint,
-        }));
-        if (sourceTargets.length === 0)
-          throw new Error("This run has no inputs to start again");
-        if (
-          locked.purpose === "photo_inventory" &&
-          sourceTargets.some((target) => target.entityKind !== "image")
-        )
-          throw new Error("Photo run inputs are incomplete");
-        const successorId = runEntityId.parse(crypto.randomUUID());
-        const dispatchEventId = crypto.randomUUID();
-        const successor = await insertWithShortcode(tx, "run", {
-          id: successorId,
-          ledgerPartyId: locked.ledgerPartyId,
-          actorUserId: userId.parse(controller.userId),
-          actorName: controller.name,
-          actorEmail: controller.email,
-          actorLedgerPartyShortcode: controller.ledgerPartyShortcode,
-          actorLedgerPartyName: controller.ledgerPartyName,
-          actorLedgerPartyKind: controller.ledgerPartyKind,
-          vendorAccountId: locked.vendorAccountId,
-          vendorId: locked.vendorId,
-          predecessorRunId: scope.public.runId,
-          parentRunId:
-            locked.purpose === "mail_import" ? locked.parentRunId : null,
-          purpose: locked.purpose,
-          trigger: "manual",
-          notes: locked.notes,
-          input: locked.input,
-          coordinatorModel: coordinatorModelFor(locked.purpose),
-          skillRevision: locked.skillRevision,
-          runtimeRevision: locked.runtimeRevision,
-          dispatchEventId,
-          agentSessionId: importRunAgentIdentity(
-            successorId,
-            agentImportRunPurpose.parse(locked.purpose),
-          ),
-        });
-        if (locked.purpose === "photo_inventory") {
-          if (sourceTargets.length)
-            await tx.insert(photoRunImage).values(
-              sourceTargets.map((target) => ({
-                runId: successorId,
-                imageId: imageId.parse(target.entityId),
-                workKey: target.workKey,
-                position: target.position,
-                targetFingerprint: target.targetFingerprint,
-                state: "pending" as const,
-              })),
-            );
-        } else if (locked.purpose === "mail_import") {
-          await transferMailRunSources(tx, scope.public.runId, successorId);
-        }
-        return {
-          publicId: input.runPublicId,
-          status: locked.status,
-          successorRunId: successorId,
-          successorRunPublicId: successor.shortcode,
-          successorStatus: successor.status,
-          created: true,
-          dispatchRunId: successorId,
-          dispatchPublicId: successor.shortcode,
-          dispatchPurpose: locked.purpose,
-          dispatchEventId,
-        };
-      }
-      await tx.insert(runControlEvent).values({
-        runId: scope.public.runId,
-        action: input.action,
-        controllerUserId: userId.parse(controller.userId),
-        controllerName: controller.name,
-        controllerEmail: controller.email,
-        controllerLedgerPartyId: ledgerPartyId.parse(controller.ledgerPartyId),
-        controllerLedgerPartyShortcode: controller.ledgerPartyShortcode,
-        controllerLedgerPartyName: controller.ledgerPartyName,
-        controllerLedgerPartyKind: controller.ledgerPartyKind,
+      if (!agentImportRunPurpose.safeParse(locked.purpose).success)
+        throw new Error("Only agent import runs can be started again");
+      const sourceTargets = (
+        await (locked.purpose === "photo_inventory"
+          ? selectPhotoRestartTargets(tx, scope.public.runId)
+          : selectRestartTargets(tx, scope.public.runId))
+      ).map((target) => ({
+        entityId: target.entityId,
+        entityKind: target.entityKind,
+        workKey: target.workKey,
+        position: target.position,
+        vendorAccountId: target.vendorAccountId,
+        sourceKind: target.sourceKind,
+        sourceExternalKey: target.sourceExternalKey,
+        targetFingerprint: target.targetFingerprint,
+      }));
+      if (sourceTargets.length === 0)
+        throw new Error("This run has no inputs to start again");
+      if (
+        locked.purpose === "photo_inventory" &&
+        sourceTargets.some((target) => target.entityKind !== "image")
+      )
+        throw new Error("Photo run inputs are incomplete");
+      const successorId = runEntityId.parse(crypto.randomUUID());
+      const dispatchEventId = crypto.randomUUID();
+      const successor = await insertWithShortcode(tx, "run", {
+        id: successorId,
+        ledgerPartyId: locked.ledgerPartyId,
+        actorUserId: userId.parse(controller.userId),
+        actorName: controller.name,
+        actorEmail: controller.email,
+        actorLedgerPartyShortcode: controller.ledgerPartyShortcode,
+        actorLedgerPartyName: controller.ledgerPartyName,
+        actorLedgerPartyKind: controller.ledgerPartyKind,
+        vendorAccountId: locked.vendorAccountId,
+        vendorId: locked.vendorId,
+        predecessorRunId: scope.public.runId,
+        parentRunId:
+          locked.purpose === "mail_import" ? locked.parentRunId : null,
+        purpose: locked.purpose,
+        trigger: "manual",
+        notes: locked.notes,
+        input: locked.input,
+        coordinatorModel: coordinatorModelFor(locked.purpose),
+        skillRevision: locked.skillRevision,
+        runtimeRevision: locked.runtimeRevision,
+        dispatchEventId,
+        agentSessionId: importRunAgentIdentity(
+          successorId,
+          agentImportRunPurpose.parse(locked.purpose),
+        ),
       });
-      if (input.action === "retry_dispatch") {
-        if (
-          !new Set(["running", "dispatch_failed"]).has(locked.status) ||
-          locked.coordinatorStartedAt
-        ) {
-          throw new Error("Only an unacknowledged dispatch can be retried");
-        }
-        const dispatchEventId = crypto.randomUUID();
-        await tx
-          .update(runTable)
-          .set({
-            status: "running",
-            failureCode: null,
-            endedAt: null,
-            dispatchEventId,
-            dispatchError: null,
-            coordinatorModel: coordinatorModelFor(locked.purpose),
-            updatedAt: new Date(),
-          })
-          .where(eq(runTable.id, scope.public.runId));
-        return {
-          publicId: input.runPublicId,
-          status: "running" as const,
-          dispatchRunId: scope.public.runId,
-          dispatchPublicId: input.runPublicId,
-          dispatchPurpose: locked.purpose,
-          dispatchEventId,
-        };
-      }
-      if (input.action === "retry" || input.action === "escalate_sol") {
-        if (
-          !new Set(["needs_review", "completed", "failed"]).has(locked.status)
-        )
-          throw new Error(
-            `Purchase import run is not terminal in ${locked.status}`,
-          );
-        const successorVendorAccountId = locked.vendorAccountId
-          ? vendorAccountId.parse(locked.vendorAccountId)
-          : null;
-        const [existingSuccessor] = await tx
-          .select({
-            id: runTable.id,
-            publicId: runTable.shortcode,
-            status: runTable.status,
-          })
-          .from(runTable)
-          .where(eq(runTable.predecessorRunId, scope.public.runId))
-          .orderBy(desc(runTable.startedAt))
-          .limit(1);
-        if (existingSuccessor) {
-          return {
-            publicId: input.runPublicId,
-            status: locked.status,
-            successorRunId: existingSuccessor.id,
-            successorRunPublicId: existingSuccessor.publicId,
-            successorStatus: existingSuccessor.status,
-            created: false,
-          };
-        }
-        const successorId = runEntityId.parse(crypto.randomUUID());
-        const dispatchEventId = crypto.randomUUID();
-        const unresolvedTargets =
-          locked.purpose === "photo_inventory"
-            ? await tx
-                .select({
-                  entityId: photoRunImage.imageId,
-                  entityKind: sql<"image">`${runTargetEntityKind.enum.image}`,
-                  workKey: photoRunImage.workKey,
-                  position: photoRunImage.position,
-                  vendorAccountId: sql<null>`NULL`,
-                  sourceKind: sql<null>`NULL`,
-                  sourceExternalKey: sql<null>`NULL`,
-                  targetFingerprint: photoRunImage.targetFingerprint,
-                })
-                .from(photoRunImage)
-                .where(
-                  and(
-                    eq(photoRunImage.runId, scope.public.runId),
-                    inArray(photoRunImage.state, [
-                      "pending",
-                      "prepared",
-                      "unresolved",
-                      "needs_evidence",
-                      "unavailable",
-                    ]),
-                  ),
-                )
-            : (await selectRestartTargets(tx, scope.public.runId)).filter(
-                (target) =>
-                  [
-                    "pending",
-                    "prepared",
-                    "unresolved",
-                    "needs_evidence",
-                    "unavailable",
-                  ].includes(target.state),
-              );
-        if (!unresolvedTargets.length)
-          throw new Error("This Run has no unresolved targets to retry");
-        const successorInput =
-          locked.purpose === "mail_import"
-            ? {
-                ...mailResearchRunInput.parse(locked.input),
-                sources: mailResearchRunInput
-                  .parse(locked.input)
-                  .sources.filter((source) =>
-                    unresolvedTargets.some(
-                      (target) => target.workKey === source.orderMailId,
-                    ),
-                  ),
-              }
-            : locked.input;
-        const successor = await insertWithShortcode(tx, "run", {
-          id: successorId,
-          ledgerPartyId: locked.ledgerPartyId,
-          actorUserId: locked.actorUserId,
-          actorName: locked.actorName,
-          actorEmail: locked.actorEmail,
-          actorLedgerPartyShortcode: locked.actorLedgerPartyShortcode,
-          actorLedgerPartyName: locked.actorLedgerPartyName,
-          actorLedgerPartyKind: locked.actorLedgerPartyKind,
-          vendorAccountId: successorVendorAccountId,
-          vendorId: locked.vendorId,
-          predecessorRunId: scope.public.runId,
-          parentRunId:
-            locked.purpose === "mail_import" ? locked.parentRunId : null,
-          purpose: locked.purpose,
-          trigger: locked.trigger,
-          input: successorInput,
-          dispatchEventId,
-          coordinatorModel: coordinatorModelFor(locked.purpose),
-          skillRevision: locked.skillRevision,
-          runtimeRevision: locked.runtimeRevision,
-          decisionRevision: locked.decisionRevision + 1,
-          agentSessionId: importRunAgentIdentity(
-            successorId,
-            agentImportRunPurpose.parse(locked.purpose),
-          ),
-        });
-        if (locked.purpose === "photo_inventory") {
+      if (locked.purpose === "photo_inventory") {
+        if (sourceTargets.length)
           await tx.insert(photoRunImage).values(
-            unresolvedTargets.map((target) => ({
+            sourceTargets.map((target) => ({
               runId: successorId,
               imageId: imageId.parse(target.entityId),
               workKey: target.workKey,
@@ -2256,273 +2001,332 @@ export async function controlRun(
               state: "pending" as const,
             })),
           );
-        } else if (locked.purpose === "mail_import") {
-          await transferMailRunSources(
-            tx,
-            scope.public.runId,
-            successorId,
-            unresolvedTargets.map((target) => target.workKey),
-          );
-        }
+      } else if (locked.purpose === "mail_import") {
+        await transferMailRunSources(tx, scope.public.runId, successorId);
+      }
+      return {
+        publicId: input.runPublicId,
+        status: locked.status,
+        successorRunId: successorId,
+        successorRunPublicId: successor.shortcode,
+        successorStatus: successor.status,
+        created: true,
+        dispatchRunId: successorId,
+        dispatchPublicId: successor.shortcode,
+        dispatchPurpose: locked.purpose,
+        dispatchEventId,
+      };
+    }
+    await tx.insert(runControlEvent).values({
+      runId: scope.public.runId,
+      action: input.action,
+      controllerUserId: userId.parse(controller.userId),
+      controllerName: controller.name,
+      controllerEmail: controller.email,
+      controllerLedgerPartyId: ledgerPartyId.parse(controller.ledgerPartyId),
+      controllerLedgerPartyShortcode: controller.ledgerPartyShortcode,
+      controllerLedgerPartyName: controller.ledgerPartyName,
+      controllerLedgerPartyKind: controller.ledgerPartyKind,
+    });
+    if (input.action === "retry_dispatch") {
+      if (
+        !new Set(["running", "dispatch_failed"]).has(locked.status) ||
+        locked.coordinatorStartedAt
+      ) {
+        throw new Error("Only an unacknowledged dispatch can be retried");
+      }
+      const dispatchEventId = crypto.randomUUID();
+      await tx
+        .update(runTable)
+        .set({
+          status: "running",
+          failureCode: null,
+          endedAt: null,
+          dispatchEventId,
+          dispatchError: null,
+          coordinatorModel: coordinatorModelFor(locked.purpose),
+          updatedAt: new Date(),
+        })
+        .where(eq(runTable.id, scope.public.runId));
+      return {
+        publicId: input.runPublicId,
+        status: "running" as const,
+        dispatchRunId: scope.public.runId,
+        dispatchPublicId: input.runPublicId,
+        dispatchPurpose: locked.purpose,
+        dispatchEventId,
+      };
+    }
+    if (input.action === "retry" || input.action === "escalate_sol") {
+      if (!new Set(["needs_review", "completed", "failed"]).has(locked.status))
+        throw new Error(
+          `Purchase import run is not terminal in ${locked.status}`,
+        );
+      const successorVendorAccountId = locked.vendorAccountId
+        ? vendorAccountId.parse(locked.vendorAccountId)
+        : null;
+      const [existingSuccessor] = await tx
+        .select({
+          id: runTable.id,
+          publicId: runTable.shortcode,
+          status: runTable.status,
+        })
+        .from(runTable)
+        .where(eq(runTable.predecessorRunId, scope.public.runId))
+        .orderBy(desc(runTable.startedAt))
+        .limit(1);
+      if (existingSuccessor) {
         return {
           publicId: input.runPublicId,
           status: locked.status,
-          successorRunId: successorId,
-          successorRunPublicId: successor.shortcode,
-          successorStatus: successor.status,
-          created: true,
-          dispatchRunId: successorId,
-          dispatchPublicId: successor.shortcode,
-          dispatchPurpose: locked.purpose,
-          dispatchEventId,
+          successorRunId: existingSuccessor.id,
+          successorRunPublicId: existingSuccessor.publicId,
+          successorStatus: existingSuccessor.status,
+          created: false,
         };
       }
-      if (input.action === "cancel" || input.action === "abort") {
-        const dispatchAbort = input.action === "abort";
-        if (
-          dispatchAbort
-            ? !new Set(["running", "dispatch_failed"]).has(locked.status) ||
-              locked.coordinatorStartedAt !== null
-            : !ACTIVE_RUN_STATUSES.some((status) => status === locked.status)
-        )
-          throw new Error(
-            `Purchase import run is immutable in ${locked.status}`,
-          );
-        await tx
-          .update(runTable)
-          .set({
-            status: "failed",
-            failureCode: dispatchAbort ? "dispatch_aborted" : "user_cancelled",
-            endedAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where(eq(runTable.id, scope.public.runId));
-        await tx
-          .update(runApproval)
-          .set({ state: "invalidated", invalidatedAt: new Date() })
-          .where(
-            and(
-              eq(runApproval.runId, scope.public.runId),
-              inArray(runApproval.state, ["pending", "granted"]),
-            ),
-          );
-        await failOperationsForRun(
+      const successorId = runEntityId.parse(crypto.randomUUID());
+      const dispatchEventId = crypto.randomUUID();
+      const unresolvedTargets =
+        locked.purpose === "photo_inventory"
+          ? await tx
+              .select({
+                entityId: photoRunImage.imageId,
+                entityKind: sql<"image">`${runTargetEntityKind.enum.image}`,
+                workKey: photoRunImage.workKey,
+                position: photoRunImage.position,
+                vendorAccountId: sql<null>`NULL`,
+                sourceKind: sql<null>`NULL`,
+                sourceExternalKey: sql<null>`NULL`,
+                targetFingerprint: photoRunImage.targetFingerprint,
+              })
+              .from(photoRunImage)
+              .where(
+                and(
+                  eq(photoRunImage.runId, scope.public.runId),
+                  inArray(photoRunImage.state, [
+                    "pending",
+                    "prepared",
+                    "unresolved",
+                    "needs_evidence",
+                    "unavailable",
+                  ]),
+                ),
+              )
+          : (await selectRestartTargets(tx, scope.public.runId)).filter(
+              (target) =>
+                [
+                  "pending",
+                  "prepared",
+                  "unresolved",
+                  "needs_evidence",
+                  "unavailable",
+                ].includes(target.state),
+            );
+      if (!unresolvedTargets.length)
+        throw new Error("This Run has no unresolved targets to retry");
+      const successorInput =
+        locked.purpose === "mail_import"
+          ? {
+              ...mailResearchRunInput.parse(locked.input),
+              sources: mailResearchRunInput
+                .parse(locked.input)
+                .sources.filter((source) =>
+                  unresolvedTargets.some(
+                    (target) => target.workKey === source.orderMailId,
+                  ),
+                ),
+            }
+          : locked.input;
+      const successor = await insertWithShortcode(tx, "run", {
+        id: successorId,
+        ledgerPartyId: locked.ledgerPartyId,
+        actorUserId: locked.actorUserId,
+        actorName: locked.actorName,
+        actorEmail: locked.actorEmail,
+        actorLedgerPartyShortcode: locked.actorLedgerPartyShortcode,
+        actorLedgerPartyName: locked.actorLedgerPartyName,
+        actorLedgerPartyKind: locked.actorLedgerPartyKind,
+        vendorAccountId: successorVendorAccountId,
+        vendorId: locked.vendorId,
+        predecessorRunId: scope.public.runId,
+        parentRunId:
+          locked.purpose === "mail_import" ? locked.parentRunId : null,
+        purpose: locked.purpose,
+        trigger: locked.trigger,
+        input: successorInput,
+        dispatchEventId,
+        coordinatorModel: coordinatorModelFor(locked.purpose),
+        skillRevision: locked.skillRevision,
+        runtimeRevision: locked.runtimeRevision,
+        decisionRevision: locked.decisionRevision + 1,
+        agentSessionId: importRunAgentIdentity(
+          successorId,
+          agentImportRunPurpose.parse(locked.purpose),
+        ),
+      });
+      if (locked.purpose === "photo_inventory") {
+        await tx.insert(photoRunImage).values(
+          unresolvedTargets.map((target) => ({
+            runId: successorId,
+            imageId: imageId.parse(target.entityId),
+            workKey: target.workKey,
+            position: target.position,
+            targetFingerprint: target.targetFingerprint,
+            state: "pending" as const,
+          })),
+        );
+      } else if (locked.purpose === "mail_import") {
+        await transferMailRunSources(
           tx,
           scope.public.runId,
-          dispatchAbort
-            ? "Dispatch aborted by its owner"
-            : "Run cancelled by its owner",
+          successorId,
+          unresolvedTargets.map((target) => target.workKey),
         );
-        return { publicId: input.runPublicId, status: "failed" as const };
       }
-      if (input.action === "pause") {
-        if (locked.status !== "running")
-          throw new Error(`Purchase import run is fenced in ${locked.status}`);
-        await tx
-          .update(runTable)
-          .set({ status: "paused_approval", updatedAt: new Date() })
-          .where(eq(runTable.id, scope.public.runId));
-        return {
-          publicId: input.runPublicId,
-          status: "paused_approval" as const,
-        };
-      }
-      if (input.action === "resume") {
-        if (!new Set(["paused_auth", "paused_offline"]).has(locked.status))
-          throw new Error(`Purchase import run is fenced in ${locked.status}`);
-        const dispatchEventId = crypto.randomUUID();
-        await tx
-          .update(runTable)
-          .set({
-            status: "running",
-            failureCode: null,
-            dispatchEventId,
-            dispatchError: null,
-            coordinatorStartedAt: null,
-            endedAt: null,
-            updatedAt: new Date(),
-          })
-          .where(eq(runTable.id, scope.public.runId));
-        return {
-          publicId: input.runPublicId,
-          status: "running" as const,
-          dispatchRunId: scope.public.runId,
-          dispatchPublicId: input.runPublicId,
-          dispatchPurpose: locked.purpose,
-          dispatchEventId,
-        };
-      }
-
-      if (!input.operationId)
-        throw new Error("Approval decision requires an operation id");
-      const operationKey = {
-        runId: scope.public.runId,
-        operationId: input.operationId,
-      };
-      const operation = await readOperation(tx, operationKey, {
-        forUpdate: true,
-      });
-      if (!operation || operation.state !== "paused_approval")
-        throw new Error("Approval proposal is missing or no longer pending");
-      const proposal = z
-        .object({
-          approvalProposal: z.object({
-            operationKind: z.string().min(1),
-            args: z.unknown(),
-            targetFingerprint: z.string().regex(/^[a-f0-9]{64}$/u),
-            evidenceFingerprint: z.string().regex(/^[a-f0-9]{64}$/u),
-          }),
-        })
-        .parse(operation.result).approvalProposal;
-      const [existing] = input.approvalId
-        ? await tx
-            .select({
-              id: runApproval.id,
-              state: runApproval.state,
-            })
-            .from(runApproval)
-            .where(
-              and(
-                eq(runApproval.id, input.approvalId),
-                eq(runApproval.runId, scope.public.runId),
-                eq(runApproval.operationId, input.operationId),
-              ),
-            )
-            .limit(1)
-        : await tx
-            .select({
-              id: runApproval.id,
-              state: runApproval.state,
-            })
-            .from(runApproval)
-            .where(
-              and(
-                eq(runApproval.runId, scope.public.runId),
-                eq(runApproval.operationId, input.operationId),
-              ),
-            )
-            .limit(1);
-      let approvalId = existing?.id;
-      if (!approvalId) {
-        const [created] = await tx
-          .insert(runApproval)
-          .values({
-            runId: scope.public.runId,
-            operationId: input.operationId,
-            operationKind: proposal.operationKind,
-            args: proposal.args,
-            argsFingerprint: operation.inputFingerprint,
-            targetFingerprint: proposal.targetFingerprint,
-            evidenceFingerprint: proposal.evidenceFingerprint,
-            state: "pending",
-          })
-          .returning({ id: runApproval.id });
-        approvalId = created?.id;
-      }
-      if (!approvalId) throw new Error("Approval was not recorded");
-      if (input.action === "reject") {
-        if (
-          existing &&
-          existing.state !== "pending" &&
-          existing.state !== "granted"
-        )
-          throw new Error(`Approval is already ${existing.state}`);
-        const decidedAt = new Date();
-        await tx
-          .update(runApproval)
-          .set({
-            state: "rejected",
-            decidedByUserId: actor.userId,
-            decidedAt,
-            rejectedAt: decidedAt,
-          })
-          .where(eq(runApproval.id, approvalId));
-        await failOperation(
-          tx,
-          operationKey,
-          "Mutation proposal rejected by a household member",
-        );
-        const pending = await tx
-          .select({ id: runApproval.id })
-          .from(runApproval)
-          .where(
-            and(
-              eq(runApproval.runId, scope.public.runId),
-              inArray(runApproval.state, ["pending", "granted"]),
-            ),
-          )
-          .limit(1);
-        const status = pending.length > 0 ? "paused_approval" : "running";
-        await tx
-          .update(runTable)
-          .set({ status, updatedAt: decidedAt })
-          .where(eq(runTable.id, scope.public.runId));
-        return {
-          publicId: input.runPublicId,
-          status,
-          approvalId,
-          decision: "rejected" as const,
-          wakeRunId: scope.public.runId,
-          wakeGeneration: locked.dispatchEventId,
-        };
-      }
-      if (
-        existing &&
-        existing.state !== "pending" &&
-        existing.state !== "granted"
-      )
-        throw new Error(`Approval is already ${existing.state}`);
-      if (operation.kind.startsWith("mcp:")) {
-        const { purchaseAgentTargetFingerprint } =
-          await import("~/server/mcp/purchase-agent-protocol");
-        const currentTarget = await purchaseAgentTargetFingerprint(
-          databaseForTransaction(tx),
-          z.json().parse(proposal.args),
-        );
-        if (currentTarget !== proposal.targetFingerprint) {
-          await tx
-            .update(runApproval)
-            .set({ state: "invalidated", invalidatedAt: new Date() })
-            .where(eq(runApproval.id, approvalId));
-          await failOperation(
-            tx,
-            operationKey,
-            "Mutation target changed after proposal",
-          );
-          await tx
-            .update(runTable)
-            .set({ status: "running", updatedAt: new Date() })
-            .where(eq(runTable.id, scope.public.runId));
-          return {
-            publicId: input.runPublicId,
-            status: "running" as const,
-            approvalId,
-            decision: "invalidated" as const,
-            wakeRunId: scope.public.runId,
-            wakeGeneration: locked.dispatchEventId,
-          };
-        }
-      }
-      await tx
-        .update(runApproval)
-        .set({
-          state: "granted",
-          decidedByUserId: actor.userId,
-          decidedAt: new Date(),
-        })
-        .where(eq(runApproval.id, approvalId));
-      await setOperationResult(tx, operationKey, {
-        ...z.record(z.string(), z.unknown()).parse(operation.result),
-        approvalId,
-      });
       return {
         publicId: input.runPublicId,
-        status: "paused_approval" as const,
-        approvalId,
-        decision: "approved" as const,
-        wakeRunId: scope.public.runId,
-        wakeGeneration: locked.dispatchEventId,
+        status: locked.status,
+        successorRunId: successorId,
+        successorRunPublicId: successor.shortcode,
+        successorStatus: successor.status,
+        created: true,
+        dispatchRunId: successorId,
+        dispatchPublicId: successor.shortcode,
+        dispatchPurpose: locked.purpose,
+        dispatchEventId,
       };
-    },
-  );
+    }
+    if (input.action === "cancel" || input.action === "abort") {
+      const dispatchAbort = input.action === "abort";
+      if (
+        dispatchAbort
+          ? !new Set(["running", "dispatch_failed"]).has(locked.status) ||
+            locked.coordinatorStartedAt !== null
+          : !ACTIVE_RUN_STATUSES.some((status) => status === locked.status)
+      )
+        throw new Error(`Purchase import run is immutable in ${locked.status}`);
+      await tx
+        .update(runTable)
+        .set({
+          status: "failed",
+          failureCode: dispatchAbort ? "dispatch_aborted" : "user_cancelled",
+          endedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(runTable.id, scope.public.runId));
+      await tx
+        .update(runApproval)
+        .set({ state: "invalidated", invalidatedAt: new Date() })
+        .where(
+          and(
+            eq(runApproval.runId, scope.public.runId),
+            inArray(runApproval.state, ["pending", "granted"]),
+          ),
+        );
+      await failOperationsForRun(
+        tx,
+        scope.public.runId,
+        dispatchAbort
+          ? "Dispatch aborted by its owner"
+          : "Run cancelled by its owner",
+      );
+      return { publicId: input.runPublicId, status: "failed" as const };
+    }
+    if (input.action === "pause") {
+      if (locked.status !== "running")
+        throw new Error(`Purchase import run is fenced in ${locked.status}`);
+      await tx
+        .update(runTable)
+        .set({ status: "paused", updatedAt: new Date() })
+        .where(eq(runTable.id, scope.public.runId));
+      return {
+        publicId: input.runPublicId,
+        status: "paused" as const,
+      };
+    }
+    if (input.action === "resume") {
+      if (
+        !new Set([
+          "paused",
+          "paused_auth",
+          "paused_offline",
+          "paused_approval",
+        ]).has(locked.status)
+      )
+        throw new Error(`Purchase import run is fenced in ${locked.status}`);
+      const dispatchEventId = crypto.randomUUID();
+      await tx
+        .update(runTable)
+        .set({
+          status: "running",
+          failureCode: null,
+          dispatchEventId,
+          dispatchError: null,
+          coordinatorStartedAt: null,
+          endedAt: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(runTable.id, scope.public.runId));
+      return {
+        publicId: input.runPublicId,
+        status: "running" as const,
+        dispatchRunId: scope.public.runId,
+        dispatchPublicId: input.runPublicId,
+        dispatchPurpose: locked.purpose,
+        dispatchEventId,
+      };
+    }
+
+    throw new Error(`Unsupported Run control: ${input.action}`);
+  });
+}
+
+/** Routine agent work no longer requires a second per-operation decision. */
+export async function resumeApprovalPausedRuns(db: Database) {
+  const { dispatchStartedRun } = await import("./dispatch");
+  const pending = await getDb(db)
+    .select({
+      shortcode: runTable.shortcode,
+      actorUserId: runTable.actorUserId,
+    })
+    .from(runTable)
+    .where(
+      and(
+        eq(runTable.status, "paused_approval"),
+        inArray(runTable.purpose, agentImportRunPurpose.options),
+        isNull(runTable.retiredAt),
+        notDeleted(runTable),
+      ),
+    )
+    .orderBy(asc(runTable.startedAt), asc(runTable.id))
+    .limit(50);
+  const errors: unknown[] = [];
+  for (const row of pending) {
+    try {
+      const result = await controlRun(
+        db,
+        buildActorContext(row.actorUserId, "system"),
+        {
+          runPublicId: row.shortcode,
+          action: "resume",
+        },
+        { status: "paused_approval" },
+      );
+      if (
+        "dispatchRunId" in result &&
+        result.dispatchRunId &&
+        result.dispatchEventId
+      )
+        await dispatchStartedRun(db, {
+          id: result.dispatchRunId,
+          eventId: result.dispatchEventId,
+          purpose: result.dispatchPurpose,
+        });
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+  if (errors.length)
+    throw new AggregateError(errors, "Legacy Run recovery failed");
 }

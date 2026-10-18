@@ -1,11 +1,7 @@
 import { maintenanceContract } from "~/contracts/maintenance.contract";
 import { imageProcessingMaintenanceSummary } from "~/server/domains/image-processing/repo/image-processing-maintenance";
-import {
-  backfillImageProcessing,
-  updateImageProcessingSettings,
-} from "~/server/domains/image-processing/service/image-processing-maintenance";
+import { backfillImageProcessing } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import { repairImageDimensions } from "~/server/domains/image/service/image-dimension-repair.service";
-import { backfillImageMetadata } from "~/server/domains/image/service/image-metadata-backfill.service";
 import { classifyImageProvenance } from "~/server/domains/image/service/image-provenance-classify.service";
 import { backfillImageSearchDocuments } from "~/server/domains/image/service/image-search-backfill.service";
 import {
@@ -23,16 +19,12 @@ export const maintenanceHandlers = implementOperationDomain(
     backfillImageProcessing: (context, input) =>
       backfillImageProcessing(context.db, input),
     imageProcessing: (context) => imageProcessingMaintenanceSummary(context.db),
-    configureImageProcessing: (context, input) =>
-      updateImageProcessingSettings(context.db, input),
     awaitingWork: (context) => countAwaitingWork(context.db),
     settleAwaitingWork: (context) => settleAwaitingWork(context.db),
     repairImageDimensions: (context, input) =>
       repairImageDimensions(context.db, input),
     classifyImageProvenance: (context, input) =>
       classifyImageProvenance(context.db, input, context.actorContext),
-    backfillImageMetadata: (context, input) =>
-      backfillImageMetadata(context.db, input),
     backfillImageSearch: (context, input) =>
       backfillImageSearchDocuments(context.db, input),
   },

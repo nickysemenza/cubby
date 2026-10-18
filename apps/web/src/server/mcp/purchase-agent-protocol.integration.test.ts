@@ -4,8 +4,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { runApproval, runOperation } from "~/server/db/schema";
-import { controlRun } from "~/server/domains/purchase-import/repo/run-service";
+import { run as runTable, runApproval, runOperation } from "~/server/db/schema";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -14,12 +13,13 @@ import { McpOperationContext } from "./operation-context";
 import { executePurchaseAgentMutation } from "./purchase-agent-protocol";
 import type { ToolExtra } from "./tools/tool-registration";
 
-// PostgreSQL jsonb reorders object keys. An exact approved replay must survive
-// that round trip, reject changed values, and consume the grant only once.
-describe("purchase-agent persisted mutation approval", () => {
+// Routine permitted writes execute immediately; stable operation IDs still
+// reject changed arguments and replay saved results without another write.
+// A stopped Run still returns completed results, but fences new mutations.
+describe("purchase-agent automatic mutations", () => {
   const ctx = withTestDb();
 
-  it("executes an unchanged grant after jsonb storage and replays without another mutation", async () => {
+  it("executes without approval and replays without another mutation", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic approval member",
       kind: "member",
@@ -60,24 +60,10 @@ describe("purchase-agent persisted mutation approval", () => {
       },
       baseExtra: fromPartial<ToolExtra>({}),
     };
-    await expect(executePurchaseAgentMutation(input)).rejects.toThrow(
-      "awaiting exact human approval",
-    );
-    expect(executions).toBe(0);
-    await controlRun(ctx.db, ctx.actor, {
-      runPublicId: run.shortcode,
-      action: "approve",
-      operationId: input.execution.operationId,
+    await expect(executePurchaseAgentMutation(input)).resolves.toEqual({
+      accepted: true,
     });
-    const [approval] = await getDb(ctx.db)
-      .select()
-      .from(runApproval)
-      .where(eq(runApproval.runId, run.id));
-    expect(approval?.state).toBe("granted");
-    // Prove the test crosses the real jsonb key-order boundary.
-    expect(JSON.stringify(approval?.args)).not.toBe(
-      JSON.stringify({ toolName: input.toolName, params: input.args }),
-    );
+    expect(executions).toBe(1);
     await expect(
       executePurchaseAgentMutation({
         ...input,
@@ -87,7 +73,7 @@ describe("purchase-agent persisted mutation approval", () => {
         },
       }),
     ).rejects.toThrow("different input");
-    expect(executions).toBe(0);
+    expect(executions).toBe(1);
     await expect(executePurchaseAgentMutation(input)).resolves.toEqual({
       accepted: true,
     });
@@ -103,7 +89,29 @@ describe("purchase-agent persisted mutation approval", () => {
       .select()
       .from(runOperation)
       .where(eq(runOperation.runId, run.id));
-    expect(consumed?.state).toBe("consumed");
+    expect(consumed).toBeUndefined();
     expect(operation?.state).toBe("completed");
+    for (const status of ["paused", "completed", "failed"] as const) {
+      await getDb(ctx.db)
+        .update(runTable)
+        .set({ status })
+        .where(eq(runTable.id, run.id));
+      await expect(executePurchaseAgentMutation(input)).resolves.toEqual({
+        accepted: true,
+      });
+      await expect(
+        executePurchaseAgentMutation({ ...input, args: { changed: true } }),
+      ).rejects.toThrow("different input");
+      await expect(
+        executePurchaseAgentMutation({
+          ...input,
+          execution: {
+            ...input.execution,
+            operationId: `synthetic:new:${status}`,
+          },
+        }),
+      ).rejects.toThrow("fenced");
+    }
+    expect(executions).toBe(1);
   });
 });
