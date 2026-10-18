@@ -56,6 +56,11 @@ export const problemFilterSemantics = {
       urlKey: "expectedQuantity",
       field: "expectedQuantity",
       kind: "range",
+      range: {
+        from: "expectedQuantityMin",
+        to: "expectedQuantityMax",
+        number: {},
+      },
       expand: (value) =>
         value === "negative" ? { expectedQuantityMax: -1 } : {},
     },
@@ -110,6 +115,11 @@ export const problemFilterSemantics = {
     {
       columnId: "inventoryEntries",
       kind: "range",
+      range: {
+        from: "directItemCountMin",
+        to: "directItemCountMax",
+        number: { nonnegative: true, int: true },
+      },
       expand: (value) =>
         value === "none"
           ? { directItemCountMax: 0 }
@@ -191,6 +201,7 @@ export const problemFilterSemantics = {
     {
       columnId: "cost",
       kind: "range",
+      range: { from: "costMin", to: "costMax", number: {} },
       expand: (value) =>
         value === "has" || value === "none"
           ? { costPresenceFilter: value }
@@ -221,6 +232,11 @@ export const problemFilterSemantics = {
     {
       columnId: "purchaseCount",
       kind: "range",
+      range: {
+        from: "purchaseCountMin",
+        to: "purchaseCountMax",
+        number: { nonnegative: true, int: true },
+      },
       expand: (value) => ({ purchaseCountMin: Number(value) }),
     },
     { columnId: "logo", field: "logoPresenceFilter", kind: "presence" },

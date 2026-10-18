@@ -1,7 +1,7 @@
 import type { Entity, EntityRef } from "@cubby/schemas/entity";
 import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import { humanize, parseShortcode } from "@cubby/shared";
+import { humanize, type NumberRange, parseShortcode } from "@cubby/shared";
 import type { CellData, RowData } from "@tanstack/react-table";
 import { z } from "zod";
 
@@ -31,6 +31,8 @@ export interface FilterConfig {
   exclude?: { reason: string | null };
   /** A date range: beside its presets the editor sets `from..to` bounds. */
   dateRange?: boolean;
+  /** A number range: beside its presets the editor sets `min..max` bounds. */
+  numberRange?: NumberRange;
   /** Client-side facet hints are opt-in because most Cubby tables are server-backed. */
   facetCount?: boolean;
   /** Deferred/server-backed option roster activation and search controls. */

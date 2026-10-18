@@ -13,8 +13,11 @@ import {
 } from "@cubby/schemas/filter-sentinel-fields";
 import {
   CURRENT_MEMBER_FILTER,
+  describeNumberRangeBounds,
   describeRangeBounds,
   humanize,
+  type NumberRange,
+  parseNumberRangeBounds,
   parseRangeBounds,
   UNRESOLVABLE_ENTITY_FILTER,
 } from "@cubby/shared";
@@ -26,8 +29,8 @@ import { z } from "zod";
 /**
  * text: substring match. multiselect: any-of a set of enum values. presence:
  * "has" | "none". boolean: "true" | "false". idMulti: any-of a set of branded
- * entity ids. range: preset key expanding to a {from,to} pair, or a date
- * range's `from..to` bounds.
+ * entity ids. range: preset key expanding to a {from,to} pair, or a date or
+ * number range's `from..to` bounds.
  */
 export type FilterKind = (typeof FILTER_KINDS)[number];
 
@@ -69,11 +72,12 @@ export interface FilterSpecCore {
   referenceEntity?: ShortcodeEntity;
   expand?: (value: string) => FilterPatch;
   /**
-   * A date range's bound keys. Beside its presets, the filter's value can be
-   * the bounds themselves, `from..to` (`parseRangeBounds`), each side a date
-   * or a relative date token the server resolves (`..@today-1d`).
+   * A range's bound keys. Beside its presets, the filter's value can be the
+   * bounds themselves, `from..to` (`parseRangeBounds`): each side a date or a
+   * relative date token the server resolves (`..@today-1d`), or under
+   * `number` a number the declaration accepts (`1.5..48`).
    */
-  range?: { from: string; to: string };
+  range?: { from: string; to: string; number?: NumberRange };
   /** An id scope the server accepts one value for: the control picks one. */
   singleValue?: boolean;
   /**
@@ -284,6 +288,16 @@ export function buildFiltersFromManifest(
         // server fields at once (dateFrom+dateTo), so its expander returns
         // the whole patch rather than one value.
         const bounds = spec.range && parseRangeBounds(value);
+        if (spec.range?.number && bounds) {
+          // A bound the declaration rejects (a hand-edited `..-3`) drops,
+          // rather than failing the whole list query.
+          const numbers = parseNumberRangeBounds(value, spec.range.number);
+          if (numbers === undefined) return undefined;
+          const patch: FilterPatch = {};
+          if (numbers.min !== undefined) patch[spec.range.from] = numbers.min;
+          if (numbers.max !== undefined) patch[spec.range.to] = numbers.max;
+          return patch;
+        }
         if (spec.range && bounds) {
           const patch: FilterPatch = {};
           if (bounds.from) patch[spec.range.from] = bounds.from;
@@ -776,7 +790,9 @@ function describeFilter(
         "range",
         () =>
           optionLabel(spec, first) ??
-          describeRangeBounds(first) ??
+          (spec.range?.number
+            ? describeNumberRangeBounds(first, spec.range.number)
+            : describeRangeBounds(first)) ??
           humanize(first),
       )
       .with("presence", () => describePresence(spec, first))

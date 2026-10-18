@@ -5,6 +5,7 @@ import {
   FILTER_NOT_PREFIX,
   splitExcluded,
 } from "@cubby/schemas/filter-sentinel-fields";
+import type { NumberRange } from "@cubby/shared";
 import type { ColumnFiltersState } from "@tanstack/react-table";
 
 import { colorizeSelectOptions } from "~/lib/select-options";
@@ -35,6 +36,8 @@ export type FilterFieldConfig = {
   exclude?: { reason: string | null };
   /** A date range: beside its presets the editor sets `from..to` bounds. */
   dateRange?: boolean;
+  /** A number range: beside its presets the editor sets `min..max` bounds. */
+  numberRange?: NumberRange;
   onActivate?: (selectedIds?: readonly string[]) => void;
   onSearchChange?: (query: string) => void;
   isLoading?: boolean;
@@ -262,6 +265,7 @@ export function barFieldFromConfig(
     subtree: config.subtree,
     exclude: config.exclude,
     dateRange: config.dateRange,
+    numberRange: config.numberRange,
     onActivate: config.onActivate,
     onSearchChange: config.onSearchChange,
     isLoading: config.isLoading,

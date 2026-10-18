@@ -35,6 +35,9 @@ export const RELATIVE_DATE_TODAY = "@today" as const;
 
 export const RELATIVE_DATE_PATTERN = /^@today(?:([+-])(\d{1,5})d)?$/;
 
+/** The largest day offset a token carries: the pattern's five digits. */
+export const RELATIVE_DATE_MAX_DAYS = 99_999;
+
 /** A relative date token's whole-day offset from today, or undefined for any other value. */
 export const relativeDateOffset = (value: string): number | undefined => {
   const match = RELATIVE_DATE_PATTERN.exec(value);
@@ -116,4 +119,82 @@ export const describeRangeBounds = (value: string): string | undefined => {
     return `${describeDateBound(from)} to ${describeDateBound(to)}`;
   if (from) return `on or after ${describeDateBound(from)}`;
   return to ? `on or before ${describeDateBound(to)}` : undefined;
+};
+
+/**
+ * A number range filter as its declaration constrains it; its value is the
+ * same `min..max` bounds a date range uses, each side a plain number.
+ */
+export type NumberRange = Readonly<{
+  nonnegative?: boolean;
+  int?: boolean;
+  describe?: Readonly<{ lower: string; upper: string }>;
+}>;
+
+// A decimal never ends in `.`: `1.` before the `..` separator would read
+// as `1` and `.`. An exponent is accepted because a number input yields one.
+const NUMBER_BOUND_PATTERN = /^-?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i;
+
+/**
+ * One typed number bound, or undefined when it is not a finite decimal the
+ * declaration accepts (negative under `nonnegative`, fractional or beyond
+ * exact integers under `int`).
+ */
+export const parseNumberBound = (
+  text: string,
+  range: NumberRange,
+): number | undefined => {
+  const trimmed = text.trim();
+  if (!NUMBER_BOUND_PATTERN.test(trimmed)) return undefined;
+  const value = Number(trimmed);
+  if (!Number.isFinite(value)) return undefined;
+  if (range.nonnegative && value < 0) return undefined;
+  if (range.int && !Number.isSafeInteger(value)) return undefined;
+  return value;
+};
+
+/**
+ * A number bound as its URL text: the shortest digits that read back as the
+ * same number, never in exponent form (`1e-7` is written `0.0000001`).
+ */
+export const formatNumberBound = (value: number): string => {
+  const text = String(value);
+  const match = /^(-?)(\d)(?:\.(\d+))?e([+-]\d+)$/.exec(text);
+  if (match === null) return text;
+  const [, sign = "", lead = "", rest = "", exponent = "0"] = match;
+  const digits = lead + rest;
+  const point = 1 + Number(exponent);
+  // `String` switches to exponent form only below 1e-6 or from 1e21, where
+  // the point sits before the digits or past them.
+  return point <= 0
+    ? `${sign}0.${"0".repeat(-point)}${digits}`
+    : `${sign}${digits.padEnd(point, "0")}`;
+};
+
+/** A number range's `min..max` value with each invalid side dropped. */
+export const parseNumberRangeBounds = (
+  value: string,
+  range: NumberRange,
+): { min: number | undefined; max: number | undefined } | undefined => {
+  const bounds = parseRangeBounds(value);
+  if (bounds === undefined) return undefined;
+  const min =
+    bounds.from === undefined
+      ? undefined
+      : parseNumberBound(bounds.from, range);
+  const max =
+    bounds.to === undefined ? undefined : parseNumberBound(bounds.to, range);
+  return min === undefined && max === undefined ? undefined : { min, max };
+};
+
+/** A number range's bounds as a chip reads them ("at least 2", "1 to 48"). */
+export const describeNumberRangeBounds = (
+  value: string,
+  range: NumberRange,
+): string | undefined => {
+  const bounds = parseNumberRangeBounds(value, range);
+  if (bounds === undefined) return undefined;
+  const { min, max } = bounds;
+  if (min !== undefined && max !== undefined) return `${min} to ${max}`;
+  return min === undefined ? `at most ${max}` : `at least ${min}`;
 };

@@ -1,6 +1,7 @@
 import { entitySchema } from "@cubby/schemas/entity";
 import { browserRoutedEntities } from "@cubby/schemas/entity-manifest";
 import { testShortcode } from "@cubby/schemas/testing";
+import { parseNumberBound } from "@cubby/shared";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -19,6 +20,10 @@ import {
   filterGetterFromSearch,
   filterUrlKey,
 } from "./filters";
+import {
+  type ListEntity,
+  parseEntityListInput,
+} from "./generated/entity-lists.gen";
 import { entitySearch } from "./generated/entity-search.gen";
 
 const VENDOR_ONE = testShortcode("vendor", "VEN-4K7M");
@@ -181,6 +186,48 @@ describe("manifestFilterConfig", () => {
     expect(manifestFilterConfig("expense", "updatedBy")).toBeUndefined();
   });
 
+  // Failure mode: a number range without declared limits let the editor send
+  // a negative or fractional bound its hand-written request schema rejects,
+  // so the whole list query failed.
+  it("never lets a number range editor accept a bound its request schema rejects", () => {
+    const accepts = (entity: string, filters: Record<string, number>) => {
+      try {
+        parseEntityListInput(entity as ListEntity, {
+          entity: entity as ListEntity,
+          filters,
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const violations: string[] = [];
+    let checked = 0;
+    for (const entity of browserRoutedEntities) {
+      for (const spec of getEntityFilters(entity)) {
+        const number = spec.range?.number;
+        if (!spec.range || !number) continue;
+        for (const key of [spec.range.from, spec.range.to]) {
+          if (!accepts(entity, { [key]: 0 })) {
+            violations.push(`${entity}.${key} rejects 0`);
+            continue;
+          }
+          checked += 1;
+          // Declarations carry no maximum, so the large probes stand in for
+          // any upper limit a hand-written request schema keeps.
+          for (const probe of ["-1", "1.5", "123456789", "1000000000000000"])
+            if (
+              parseNumberBound(probe, number) !== undefined &&
+              !accepts(entity, { [key]: Number(probe) })
+            )
+              violations.push(`${entity}.${key} accepts ${probe} client-side`);
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(20);
+    expect(violations).toEqual([]);
+  });
+
   it("gives every Filters-menu picklist something to pick", () => {
     // Every declared filter is a menu entry, column-hosted or not. A picker
     // with no options and no runtime roster would be an empty dropdown.
@@ -188,7 +235,12 @@ describe("manifestFilterConfig", () => {
     for (const entity of browserRoutedEntities) {
       const specs = getEntityFilters(entity);
       for (const field of manifestFilterFields(specs)) {
-        if (field.type === "text" || field.freeText || field.dateRange)
+        if (
+          field.type === "text" ||
+          field.freeText ||
+          field.dateRange ||
+          field.numberRange
+        )
           continue;
         const spec = specs.find(({ columnId }) => columnId === field.key);
         if (spec?.optionsKey || spec?.referenceEntity) continue;

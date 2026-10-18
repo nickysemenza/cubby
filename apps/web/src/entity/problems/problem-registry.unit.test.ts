@@ -125,13 +125,19 @@ describe("Problem Query registry", () => {
       const urlKeys = new Set(entityFilterUrlKeys(parsedEntity.data));
 
       for (const core of coreSpecs) {
+        // Bound help text is the editor's, not a Problem semantic.
+        const bounds = (range: FilterSpecCore["range"]) => {
+          if (!range?.number) return range;
+          const { describe: _describe, ...number } = range.number;
+          return { ...range, number };
+        };
         const semantic = (spec: FilterSpecCore) => ({
           columnId: spec.columnId,
           field: spec.field,
           kind: spec.kind,
           urlKey: spec.urlKey,
           nullableField: spec.nullable?.field,
-          range: spec.range,
+          range: bounds(spec.range),
         });
         const normalized = semantic(core);
         const ui = uiSpecs.get(core.columnId);
@@ -148,7 +154,7 @@ describe("Problem Query registry", () => {
         expect(ui?.kind).toBe(normalized.kind);
         expect(ui?.urlKey).toBe(normalized.urlKey);
         expect(ui?.nullable?.field).toBe(normalized.nullableField);
-        expect(ui?.range).toEqual(normalized.range);
+        expect(bounds(ui?.range)).toEqual(normalized.range);
       }
     }
   });

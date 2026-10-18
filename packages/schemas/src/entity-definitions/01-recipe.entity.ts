@@ -973,6 +973,8 @@ export default defineEntity({
       {
         columnId: "costTotal",
         kind: "range",
+        // The hand-written request schema rejects negative bounds.
+        range: { kind: "number", nonnegative: true },
         derived: true,
         placeholder: "Filter recipe cost...",
         options: [
@@ -996,6 +998,8 @@ export default defineEntity({
       {
         columnId: "caloriesTotal",
         kind: "range",
+        // The hand-written request schema rejects negative bounds.
+        range: { kind: "number", nonnegative: true },
         derived: true,
         placeholder: "Filter calories...",
         options: [

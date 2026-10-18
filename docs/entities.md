@@ -1636,7 +1636,14 @@ only dates. A date range's URL value is a preset key or its bounds,
 `from..to` (`..@today-1d` is "before today"); saved views, Problems and the
 native saved-view wire expand bounds onto the range's `from`/`to` keys, and
 the web and Apple range editors offer each bound as a date or as days
-relative to today, keeping the token on edit.
+relative to today, keeping the token on edit. A number range's URL value is
+likewise a preset key or `min..max` bounds onto its `Min`/`Max` keys; the web
+editor checks each typed bound against the declared `range` (`nonnegative`,
+`int`), shows `describe.lower`/`upper` beside it, rejects a minimum above the
+maximum, and the URL codec drops a bound the declaration rejects instead of
+failing the list. A range over a hand-written request schema declares the
+same `range` limits for clients; `filter-manifest.unit.test.tsx` fails when an
+editor would accept a bound its request schema rejects.
 
 `model.derived` declares a list field that is not a stored column, or the
 value a stored field orders and groups by when its column is not that value
