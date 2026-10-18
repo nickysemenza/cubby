@@ -55,6 +55,9 @@ export type AiGatewayEgressDurableObject =
 
 export type AiRefreshWorkflow = MailDiscoveryWorkflow;
 
+/** The `STEP_RUN` binding: one attempt of a step-ledger (maintenance, sweep) Run. */
+export type StepRunWorkflow = MailDiscoveryWorkflow;
+
 export interface WorkerRpc {
   AiGatewayEgressDurableObject: AiGatewayEgressDurableObject;
   AiResponseCacheDurableObject: AiResponseCacheDurableObject;
@@ -67,6 +70,7 @@ export interface WorkerRpc {
   SearchIndexRepairWorkflow: SearchIndexRepairWorkflow;
   MailDiscoveryWorkflow: MailDiscoveryWorkflow;
   AiRefreshWorkflow: AiRefreshWorkflow;
+  StepRunWorkflow: StepRunWorkflow;
 }
 
 type Worker = typeof import("../../cloudflare.config").productionWorker;

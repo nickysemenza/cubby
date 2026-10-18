@@ -60,6 +60,7 @@ import {
   failWorkflowRun,
   runFailureText,
 } from "~/server/workflows/runs/lifecycle";
+import { wakeStepRunParent } from "~/server/workflows/runs/wake";
 
 import { executeAiRefreshTarget } from "./ai-refresh";
 import {
@@ -135,6 +136,7 @@ export async function advanceAiWorkRun(
               .join("\n") || null,
         }),
   });
+  if (!pending.length) await wakeStepRunParent(db, owner.id);
   return pending
     .sort(
       (a, b) =>

@@ -65,6 +65,8 @@ const capabilityMatrix = {
   mail_search: new Set(),
   mail_discovery: new Set(),
   mail_reclassify: new Set(),
+  maintenance: new Set(),
+  sweep: new Set(),
 } satisfies Record<RunPurpose, ReadonlySet<Capability>>;
 
 /**

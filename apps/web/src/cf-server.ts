@@ -868,3 +868,4 @@ export default Sentry.withSentry(workerSentryOptions, handler);
 export { AiGatewayEgressDurableObject } from "./server/domains/run/operations/gateway-egress-durable-object";
 
 export { AiRefreshWorkflow } from "./server/workflows/ai-refresh-workflow";
+export { StepRunWorkflow } from "./server/workflows/step-run-workflow";

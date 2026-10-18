@@ -17,6 +17,9 @@ export const runPurpose = z.enum([
   "mail_search",
   "mail_discovery",
   "mail_reclassify",
+  // Step-ledger purposes: one ordered RunStep per backlog or Suggestion family.
+  "maintenance",
+  "sweep",
 ]);
 export type RunPurpose = z.infer<typeof runPurpose>;
 
@@ -72,6 +75,8 @@ export const RUN_PURPOSE_LABEL = {
   mail_search: "Mail search",
   mail_discovery: "Mail discovery",
   mail_reclassify: "Email reclassification",
+  maintenance: "Maintenance",
+  sweep: "Sweep",
 } as const satisfies Record<RunPurpose, string>;
 
 /** The Runs list's name for each kind of work, for rows and the kind filter. */

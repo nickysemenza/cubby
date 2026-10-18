@@ -1,6 +1,8 @@
+import type { RunId } from "@cubby/schemas/identifiers";
 import { and, eq, isNull } from "drizzle-orm";
+import { z } from "zod";
 
-import { getAiRefreshWorkflow } from "~/server/cf-env";
+import { getAiRefreshWorkflow, getStepRunWorkflow } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { runAfterCommit } from "~/server/db/helpers/core";
@@ -43,4 +45,31 @@ export async function wakeAiEvaluationRequesters(
       }),
     ).then(() => undefined),
   );
+}
+
+/**
+ * Wakes the step-ledger Run whose step waits on this child. Best effort: the
+ * parent's bounded wait rechecks the child either way.
+ */
+export async function wakeStepRunParent(db: Database, childRunId: RunId) {
+  const binding = getStepRunWorkflow();
+  if (!binding) return;
+  const { stepParentOf } = await import("~/server/domains/run/repo/run-step");
+  const parent = await stepParentOf(db, childRunId);
+  if (!parent || parent.status !== "running") return;
+  const attempt = z
+    .object({ attempt: z.number().default(0) })
+    .catch({ attempt: 0 })
+    .parse(parent.progress ?? {}).attempt;
+  if (!attempt) return;
+  const instanceId = workflowInstanceId(parent.shortcode, attempt);
+  await runAfterCommit(db, async () => {
+    try {
+      await (
+        await binding.get(instanceId)
+      ).sendEvent({ type: "step-run", payload: {} });
+    } catch {
+      // SILENT: a lost wake is recovered by the parent's bounded wait.
+    }
+  });
 }

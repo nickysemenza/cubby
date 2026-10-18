@@ -256,6 +256,7 @@ export async function failWorkflowRun(
     input.message.split("\n", 1)[0] ?? "",
     { attempt: params.attempt, sequence: Number.MAX_SAFE_INTEGER },
   );
+  await (await import("./wake")).wakeStepRunParent(db, runId);
   return true;
 }
 

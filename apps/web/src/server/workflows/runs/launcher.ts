@@ -2,9 +2,14 @@ import type { UnparsedError } from "~/lib/error-utils";
 import {
   getMailDiscoveryWorkflow,
   getAiRefreshWorkflow,
+  getStepRunWorkflow,
 } from "~/server/cf-env";
 
-import type { WorkflowRunParams, WorkflowRunPurpose } from "./contract";
+import {
+  isStepRunPurpose,
+  type WorkflowRunParams,
+  type WorkflowRunPurpose,
+} from "./contract";
 
 /** The instance states Cloudflare reports, plus `missing` once retention ends. */
 export type WorkflowInstanceState =
@@ -60,7 +65,9 @@ const bindingFor = (purpose: WorkflowRunPurpose) => {
   const binding =
     purpose === "mail_discovery"
       ? getMailDiscoveryWorkflow()
-      : getAiRefreshWorkflow();
+      : isStepRunPurpose(purpose)
+        ? getStepRunWorkflow()
+        : getAiRefreshWorkflow();
   if (!binding)
     throw new Error(`The ${purpose} Workflow binding is not configured`);
   return binding;

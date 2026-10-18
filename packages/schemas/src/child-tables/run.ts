@@ -1104,4 +1104,97 @@ export const runChildren = [
       },
     ],
   }),
+  /** One ordered step of a step-ledger Run; see `@cubby/schemas/run-step`. */
+  defineChildTable({
+    name: "RunStep",
+    exportName: "runStep",
+    columns: [
+      {
+        key: "id",
+        kind: "uuid",
+        primaryKey: true,
+        default: { sql: "gen_random_uuid()" },
+      },
+      {
+        key: "runId",
+        kind: "uuid",
+        notNull: true,
+        type: "RunId",
+        reference: { table: "run", column: "id", onDelete: "cascade" },
+      },
+      { key: "key", kind: "text", notNull: true },
+      { key: "label", kind: "text", notNull: true },
+      { key: "position", kind: "integer", notNull: true },
+      {
+        key: "state",
+        kind: "text",
+        type: "RunStepState",
+        notNull: true,
+        default: "queued",
+      },
+      { key: "found", kind: "integer", notNull: true, default: 0 },
+      { key: "done", kind: "integer", notNull: true, default: 0 },
+      { key: "failed", kind: "integer", notNull: true, default: 0 },
+      { key: "skipped", kind: "integer", notNull: true, default: 0 },
+      { key: "pages", kind: "integer", notNull: true, default: 0 },
+      {
+        key: "childRunId",
+        kind: "uuid",
+        type: "RunId",
+        reference: { table: "run", column: "id", onDelete: "set null" },
+      },
+      /** Driver-owned resume point; opaque to the ledger. */
+      { key: "cursor", kind: "jsonb" },
+      { key: "pausedReason", kind: "text" },
+      { key: "pausedUntil", kind: "timestamp" },
+      {
+        key: "errors",
+        kind: "jsonb",
+        type: "RunStepError[]",
+        notNull: true,
+        default: { sql: "'[]'::jsonb" },
+      },
+      { key: "meta", kind: "jsonb", type: "RunStepMeta" },
+      { key: "startedAt", kind: "timestamp" },
+      { key: "endedAt", kind: "timestamp" },
+      {
+        key: "createdAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+      },
+      {
+        key: "updatedAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+        onUpdateNow: true,
+      },
+    ],
+    types: [
+      { module: "@cubby/schemas/identifiers", exports: ["RunId"] },
+      {
+        module: "@cubby/schemas/run-step",
+        exports: ["RunStepState", "RunStepError", "RunStepMeta"],
+      },
+    ],
+    indexes: [
+      { name: "RunStep_run_key", unique: true, on: ["runId", "key"] },
+      {
+        name: "RunStep_child_idx",
+        on: ["childRunId"],
+        where: "{childRunId} IS NOT NULL",
+      },
+    ],
+    checks: [
+      {
+        name: "RunStep_state_check",
+        sql: "{state} IN ('queued', 'running', 'waiting', 'paused', 'done', 'failed')",
+      },
+      {
+        name: "RunStep_counts_check",
+        sql: "{found} >= 0 AND {done} >= 0 AND {failed} >= 0 AND {skipped} >= 0 AND {pages} >= 0",
+      },
+    ],
+  }),
 ];

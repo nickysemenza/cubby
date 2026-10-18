@@ -152,6 +152,9 @@ export async function pauseRunForAiWork(
         ),
       ),
     );
+  await (
+    await import("~/server/workflows/runs/wake")
+  ).wakeStepRunParent(db, runId);
 }
 
 export async function readAiEvaluationReceipt(db: Database, id: string) {

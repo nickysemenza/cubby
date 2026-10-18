@@ -200,3 +200,4 @@ export const getAiGatewayEgress = (gatewayId: string) =>
   cfEnv?.AI_GATEWAY_EGRESS?.getByName(gatewayId);
 
 export const getAiRefreshWorkflow = () => cfEnv?.AI_REFRESH;
+export const getStepRunWorkflow = () => cfEnv?.STEP_RUN;
