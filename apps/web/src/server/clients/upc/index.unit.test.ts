@@ -48,6 +48,32 @@ describe("UpcLookupService.lookupBatch", () => {
     expect(deferred?.failedUpcs).toEqual(["upc-25"]);
   });
 
+  it("defers the remainder and keeps completed results on a provider rate limit", async () => {
+    const rateLimit = Object.assign(
+      new Error('UPCitemdb request failed (HTTP 429): {"code":"TOO_FAST"}'),
+      { status: 429 },
+    );
+    const upstream = vi
+      .fn()
+      .mockResolvedValueOnce(found)
+      .mockResolvedValueOnce({ status: "not_found" as const })
+      .mockResolvedValueOnce({ status: "error" as const, error: rateLimit });
+    const service = new UpcLookupService(
+      {} as Database,
+      upstream,
+      async () => [],
+    );
+
+    const failure = service.lookupBatch(["upc-1", "upc-2", "upc-3", "upc-4"]);
+    await expect(failure).rejects.toBeInstanceOf(UpcBatchDeferredError);
+    await expect(failure).rejects.toMatchObject({
+      cause: rateLimit,
+      completedUpcs: ["upc-1", "upc-2"],
+      failedUpcs: ["upc-3", "upc-4"],
+    });
+    expect(upstream).toHaveBeenCalledTimes(3);
+  });
+
   it("keeps provider failures distinct from deterministic deferral", async () => {
     const upstream = vi
       .fn()

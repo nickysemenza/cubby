@@ -7,7 +7,8 @@ import type { RunId } from "@cubby/schemas/identifiers";
  * - `lookup`: cached hit, else (unless a fresh checked miss) one upstream call.
  * - `lookupBatch`: the provider function under `readCachedUpcLookups`; reuses
  *   cached hits, then asks upstream for the rest, stopping at the first
- *   transient failure so a rate limit is not hammered.
+ *   transient failure so a rate limit is not hammered. A 429 defers the
+ *   remainder (completed UPCs are kept); other failures reject the pass.
  * - `search`: substring search over cached identities (hand-entered and
  *   previously looked-up products).
  */
@@ -56,6 +57,9 @@ export type UpcUpstream = (
   upc: string,
   decideComparability: DecideOfferComparability,
 ) => Promise<ExternalLookupResult>;
+
+const isRateLimited = (error: Error) =>
+  "status" in error && error.status === 429;
 
 const toResponse = (
   upc: string,
@@ -137,8 +141,9 @@ export class UpcLookupService {
 
   /**
    * Hits for the requested UPCs; UPCs with no data are absent. A provider
-   * failure rejects the whole refresh. Reaching the per-pass budget publishes
-   * only completed UPCs and leaves the rest for the next pass.
+   * failure rejects the whole refresh. Reaching the per-pass budget or a
+   * provider rate limit publishes only completed UPCs and leaves the rest for
+   * the next pass.
    */
   async lookupBatch(upcs: string[]): Promise<Map<string, UPCLookupResponse>> {
     const result = new Map<string, UPCLookupResponse>();
@@ -168,6 +173,20 @@ export class UpcLookupService {
         if (outcome.status === "found") {
           result.set(upc, toResponse(upc, outcome));
         } else if (outcome.status === "error") {
+          // A rate limit (upcitemdb's burst `TOO_FAST` or daily quota) is a
+          // budget stop, not an outage: persist what this pass already spent
+          // quota on, or every rescan re-buys the same UPCs and trips it again.
+          if (isRateLimited(outcome.error)) {
+            log.warn(
+              `Rate limited; deferring ${pending.length - index} UPCs: ${outcome.error.message}`,
+            );
+            throw new UpcBatchDeferredError(
+              outcome.error,
+              attempted.slice(0, index),
+              result,
+              pending.slice(index),
+            );
+          }
           throw new PartialUpcBatchLookupError(outcome.error, [
             upc,
             ...pending.slice(index + 1),
