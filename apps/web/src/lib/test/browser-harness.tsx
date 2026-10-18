@@ -266,18 +266,20 @@ export function createBrowserTestHarness(options?: BrowserTestHarnessOptions) {
       // afterEach, which runs before the setup file's `cleanup()`; clearing the
       // cache or removing the stubs under a still-mounted tree re-rendered it
       // against missing globals (uncaught `matchMedia`/`IntersectionObserver`
-      // errors) and, under the shared jsdom document, left its links visible
-      // to the next test's queries.
-      cleanup();
-      queryClient.clear();
-      router.history.destroy();
-      restoreLayoutMetrics();
-      restoreScrollIntoView();
-      restoreMatchMedia();
-      restoreStartDispatch();
-      if (needsResizeObserver)
-        Reflect.deleteProperty(globalThis, "ResizeObserver");
-      if (options?.clock) vi.useRealTimers();
+      // errors). An unmount that throws still restores every global below.
+      try {
+        cleanup();
+      } finally {
+        queryClient.clear();
+        router.history.destroy();
+        restoreLayoutMetrics();
+        restoreScrollIntoView();
+        restoreMatchMedia();
+        restoreStartDispatch();
+        if (needsResizeObserver)
+          Reflect.deleteProperty(globalThis, "ResizeObserver");
+        if (options?.clock) vi.useRealTimers();
+      }
     },
   };
 }

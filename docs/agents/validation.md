@@ -74,8 +74,8 @@ journey or runtime acquisition.
 Run one affected E2E scenario when it exposes the behavior. While iterating on
 web code, run `pnpm test:changed` for the fast-tier tests affected by changes
 since `origin/main`; `pnpm test:file src/...` runs named test files. Do not use
-Vitest's own `related` or `run --changed`: they reuse the file-selection
-graph's transforms, under which `ui` tests fail falsely. Run them from
+Vitest's own `related` or `run --changed`: selecting and running in one
+process fails `ui` tests falsely. Run them from
 the repository root; paths are relative to `apps/web`. For PostgreSQL
 contracts use `pnpm test:postgres src/...`. Read failed tests from
 `apps/web/.vitest-results.json` before deciding what to change; do not rerun an

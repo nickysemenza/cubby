@@ -5,12 +5,13 @@ import { fileURLToPath } from "node:url";
  * Run the fast-tier test files affected by changes since a ref (default
  * `origin/main`): `pnpm test:changed [ref] [-- vitest args]`.
  *
- * Vitest's own `run --changed` (and `related`) reuses the transforms from the
- * affected-file graph walk it performs to choose the files, and the jsdom `ui`
- * project fails under those: measured, 44 of 246 files failed with leaked
- * trees ("Found multiple elements") while the same files listed by
- * `vitest list --changed` and then run in a fresh process all passed. So the
- * choice and the run stay in separate processes.
+ * Vitest's own `run --changed` (and `related`) chooses and runs the files in
+ * one process, and the jsdom `ui` project fails falsely there: measured, 44 of
+ * 246 files failed ("Found multiple elements") while the same files listed by
+ * `vitest list --changed` and then run in a fresh process all passed. The
+ * likely link is Vitest reusing the transforms of its file-selection graph
+ * walk for the run; the exact mechanism was not isolated. So the choice and
+ * the run stay in separate processes.
  */
 const PROJECTS = ["unit", "mcp-contract", "worker-safety", "ui"];
 // The CLI entry is the package's `bin`, which its exports map does not expose.
