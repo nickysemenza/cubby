@@ -94,7 +94,12 @@ type CompiledRowSet = Readonly<{
         steps: readonly RelationshipPathStep[];
         where: Readonly<Record<string, string>>;
       }>
-    | Readonly<{ kind: "json"; column: string; keys: readonly string[] }>;
+    | Readonly<{ kind: "json"; column: string; keys: readonly string[] }>
+    | Readonly<{
+        kind: "repository";
+        /** Column → the entity it references, or null for a value. */
+        columns: Readonly<Record<string, string | null>>;
+      }>;
 }>;
 
 /**
@@ -246,7 +251,10 @@ const jsonItemKeys = (schema: unknown): readonly string[] | null => {
 };
 
 /** Compiles `model.rows`, rejecting a row set no `via` could read. */
-const compileRowSets = (entity: CompiledEntity) => {
+const compileRowSets = (
+  entity: CompiledEntity,
+  byKey: ReadonlyMap<string, CompiledEntity>,
+) => {
   const compiled: Record<string, CompiledRowSet> = {};
   for (const [key, declared] of Object.entries(entity.fieldModel.rows)) {
     const context = `${entity.key}.model.rows.${key}`;
@@ -257,6 +265,22 @@ const compileRowSets = (entity: CompiledEntity) => {
       throw new EntityDeclarationError(
         `${context} shares its key with a relation or model.derived entry; a via's first segment must name one.`,
       );
+    if ("repository" in declared) {
+      const columns: Record<string, string | null> = {};
+      for (const [column, type] of Object.entries(declared.repository)) {
+        const reference = typeof type === "string" ? null : type.reference;
+        if (reference !== null && !byKey.has(reference))
+          throw new EntityDeclarationError(
+            `${context}.repository.${column} references unknown entity ${reference}.`,
+          );
+        columns[column] = reference;
+      }
+      compiled[key] = {
+        label: declared.label,
+        storage: { kind: "repository", columns },
+      };
+      continue;
+    }
     if ("json" in declared) {
       const stored = entity.fieldModel.storage.find(
         (candidate) => candidate.key === declared.json,
@@ -306,12 +330,25 @@ const compileRowsVia = (
     throw new EntityDeclarationError(
       `${context} via ${path}: row set ${key} takes exactly one terminal (a column or a referenced entity).`,
     );
-  const target =
-    rowSet.storage.kind === "path" ? byKey.get(terminal) : undefined;
-  if (rowSet.storage.kind === "json" && !rowSet.storage.keys.includes(terminal))
+  const { storage } = rowSet;
+  const declared =
+    storage.kind === "json"
+      ? storage.keys
+      : storage.kind === "repository"
+        ? Object.keys(storage.columns)
+        : null;
+  if (declared !== null && !declared.includes(terminal))
     throw new EntityDeclarationError(
-      `${context} via ${path}: ${terminal} is not a key of ${key}'s items (${rowSet.storage.keys.join(", ")}).`,
+      `${context} via ${path}: ${terminal} is not a column of ${key} (${declared.join(", ")}).`,
     );
+  const reference =
+    storage.kind === "repository" ? storage.columns[terminal] : undefined;
+  const target =
+    storage.kind === "path"
+      ? byKey.get(terminal)
+      : reference == null
+        ? undefined
+        : byKey.get(reference);
   const reason = (verb: "sort" | "group") =>
     `Goes through a list of ${rowSet.label}. Only paths that lead to a single record can ${verb}.`;
   return {
@@ -693,13 +730,14 @@ const withViaKeys = (
       : bound.terminal.kind === "record"
         ? bound.terminal.target
         : null;
-  if (descriptor.nullable !== null)
+  // A row-set filter may keep the presence key it was published under.
+  if (descriptor.nullable !== null && bound.shape !== "rows")
     throw new EntityDeclarationError(
       `${context}.filters ${descriptor.columnId} is compiled, so its Any value / No value key is generated; remove nullable.`,
     );
   return {
     ...descriptor,
-    nullable: {
+    nullable: descriptor.nullable ?? {
       field: `${descriptor.columnId}PresenceFilter`,
       label: (
         descriptor.label ??
@@ -1179,7 +1217,7 @@ export const compileListFields = (
   assertAcyclicInherit(entities, inherit);
   return entities.map((entity) => {
     const context = entity.key;
-    const rows = compileRowSets(entity);
+    const rows = compileRowSets(entity, byKey);
     const derived: Record<string, CompiledListField> = {};
     for (const [key, entry] of Object.entries(entity.fieldModel.derived)) {
       const derivedContext = `${context}.model.derived.${key}`;

@@ -310,7 +310,9 @@ export type ExpenseAllocationProjectScope = {
   spendingCategoryIds?: readonly SpendingCategoryId[];
   categoryPresence?: "has" | "none";
   trades?: readonly Trade[];
+  tradePresence?: "has" | "none";
   costTypes?: readonly CostType[];
+  costTypePresence?: "has" | "none";
 };
 
 export const expenseAllocationScopeConditionSql = (
@@ -357,11 +359,26 @@ export const expenseAllocationScopeConditionSql = (
             values.map((value) => sql`${value}`),
             sql`, `,
           )})`;
+  // Picked values OR with the column's presence, as the list's filters do.
+  const valuesOrPresence = (
+    column: string,
+    values: readonly string[] | undefined,
+    presence: "has" | "none" | undefined,
+  ) => {
+    const match = shareMatch(column, values);
+    const present =
+      presence === undefined
+        ? undefined
+        : sql`${allocation}.${sql.raw(`"${column}"`)} IS ${sql.raw(presence === "has" ? "NOT NULL" : "NULL")}`;
+    return match && present
+      ? sql`(${match} OR ${present})`
+      : (match ?? present);
+  };
   const conditions = [
     projectCondition,
     categoryCondition,
-    shareMatch("trade", scope.trades),
-    shareMatch("costType", scope.costTypes),
+    valuesOrPresence("trade", scope.trades, scope.tradePresence),
+    valuesOrPresence("costType", scope.costTypes, scope.costTypePresence),
   ].filter((condition) => condition !== undefined);
   return conditions.length === 0
     ? undefined

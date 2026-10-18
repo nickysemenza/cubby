@@ -105,20 +105,17 @@ const projectCompletion = listPrepare(async (db) => {
   return { tree, dateWindows };
 });
 
+/** Each project-grain attention type's list filter value. */
+const attentionFilterOf = new Map<string, string>(
+  Object.entries(projectAttentionFilterTypes).map(([filter, type]) => [
+    type,
+    filter,
+  ]),
+);
+
 const projectScaffold = listScaffold("project", project, {
   derived: {
     image: inArray(project.id, projectIdsWithImages),
-    attention: projectAttention.predicate((items, { values }) => {
-      const types = new Set<string>(
-        Object.entries(projectAttentionFilterTypes)
-          .filter(([filter]) => values.includes(filter))
-          .map(([, type]) => type),
-      );
-      const codes = items
-        .filter((item) => types.has(item.type))
-        .map((item) => item.entityId);
-      return codes.length ? inArray(project.shortcode, codes) : sql`false`;
-    }),
     dateRange: ({ from, to }) =>
       dashboardProjectDateCondition({
         dateFrom: typeof from === "string" ? from : undefined,
@@ -156,6 +153,19 @@ const projectScaffold = listScaffold("project", project, {
          WHERE a."projectId" = node."id" AND e."deletedAt" IS NULL)
       ))) FROM date_tree node
     )`,
+  },
+  rows: {
+    attentionItems: projectAttention.rows((items) => {
+      const rows = items.flatMap((item) => {
+        const filter = attentionFilterOf.get(item.type);
+        return filter === undefined ? [] : [sql`(${item.entityId}, ${filter})`];
+      });
+      return rows.length === 0
+        ? sql`SELECT NULL::uuid AS "owner", NULL::text AS "type" WHERE false`
+        : sql`SELECT p."id" AS "owner", item."type"
+          FROM (VALUES ${sql.join(rows, sql`, `)}) item("code", "type")
+          JOIN "Project" p ON p."shortcode" = item."code"`;
+    }),
   },
 });
 

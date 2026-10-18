@@ -1134,6 +1134,23 @@ Rules:
       "productQuantity",
       "purchaseId",
     ],
+    rows: {
+      attributions: {
+        label: "Attributions",
+        path: [{ edge: "ExpenseAttribution.expenseId", direction: "incoming" }],
+      },
+      // The expense's computed allocation shares, one per project, spending
+      // category, trade and cost type it splits into.
+      allocationShares: {
+        label: "Allocation shares",
+        repository: {
+          project: { reference: "project" },
+          spendingCategory: { reference: "spendingCategory" },
+          trade: "text",
+          costType: "text",
+        },
+      },
+    },
     derived: {
       // The allocated spending categories' names.
       spendingCategoryId: { type: "text" },
@@ -1145,31 +1162,12 @@ Rules:
       costSign: { type: "enum", options: ["negative", "positive"] },
       // Belongs to a disposal Purchase (a relationship, not a negative line).
       disposalPurchase: { type: "boolean" },
-      ledgerPartyId: {
-        predicate: "idMulti",
-        reason:
-          "Matches any live attribution's party; attributions are a ledger field, not a declared relation",
-      },
-      projectFilter: {
-        predicate: "idMulti",
-        reason:
-          "Matches the expense's allocation shares, which split one expense across projects, categories, trades and cost types, so it is not one row value",
-      },
-      spendingCategoryFilter: {
-        predicate: "idMulti",
-        reason:
-          "Matches the expense's allocation shares, which split one expense across projects, categories, trades and cost types, so it is not one row value",
-      },
-      tradeFilter: {
-        predicate: "multiselect",
-        reason:
-          "Matches the expense's allocation shares, which split one expense across projects, categories, trades and cost types, so it is not one row value",
-      },
-      costTypeFilter: {
-        predicate: "multiselect",
-        reason:
-          "Matches the expense's allocation shares, which split one expense across projects, categories, trades and cost types, so it is not one row value",
-      },
+      ledgerPartyId: { via: "attributions.ledgerParty" },
+      // All four match on the same allocation share.
+      projectFilter: { via: "allocationShares.project" },
+      spendingCategoryFilter: { via: "allocationShares.spendingCategory" },
+      tradeFilter: { via: "allocationShares.trade" },
+      costTypeFilter: { via: "allocationShares.costType" },
     },
     sort: {
       fields: [

@@ -1,6 +1,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { DataQuality } from "@cubby/schemas/data-quality";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import type { EntityLinkKind } from "@cubby/schemas/entity-links";
 import {
   type GardenEntryFilters,
   gardenEntryOut,
@@ -23,19 +24,7 @@ import {
   type plantingUpdateData,
 } from "@cubby/schemas/planting";
 import { isPlantingSourceFeature } from "@cubby/schemas/product-category-relations";
-import {
-  and,
-  desc,
-  eq,
-  exists,
-  inArray,
-  isNull,
-  lte,
-  notExists,
-  or,
-  sql,
-} from "drizzle-orm";
-import { alias, QueryBuilder } from "drizzle-orm/pg-core";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -47,7 +36,6 @@ import {
   mapImages,
   type MappableImageRecord,
   notDeleted,
-  shortcodeSetCondition,
   unwrapDb,
   updateLiveAndReturn,
   withTransaction,
@@ -79,7 +67,6 @@ import {
   liveLinks,
   ofLinkKind,
 } from "~/server/generic/entity-links/repo/entity-links";
-import { shortcodeIdsSql } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
@@ -95,8 +82,6 @@ import {
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 type GardenDb = Database | DrizzleTransaction;
-
-const qb = new QueryBuilder();
 
 // `z.input`, not `z.infer`/`z.output`: every defaultable create field
 // (`status`, `outcome`, …) is optional pre-parse and non-optional
@@ -863,66 +848,31 @@ export const plantingList = async (
   return parseCompleteListRead(plantingListItemOut, Promise.resolve(result));
 };
 
-const journalLink = alias(entityLink, "journalLink");
-const wholeAreaLink = alias(entityLink, "wholeAreaLink");
-const journalPlanting = alias(planting, "journalPlanting");
+const JOURNAL_LINK: EntityLinkKind = "gardenEntryPlanting";
 
 const gardenEntryScaffold = listScaffold("gardenEntry", gardenEntry, {
-  derived: {
+  rows: {
     /**
      * A planting's journal always includes its direct live associations. A
      * whole-area entry joins only when it has no live planting associations
      * and was observed at the planting's current location within the
      * planting's own active window.
      */
-    journalPlantingId: ({ values }) => {
-      const plantingIds = shortcodeIdsSql("planting", (shortcode) =>
-        shortcodeSetCondition(shortcode, values),
-      );
-      return or(
-        exists(
-          qb
-            .select({ id: journalLink.id })
-            .from(journalLink)
-            .where(
-              and(
-                eq(journalLink.fromEntityId, gardenEntry.id),
-                sql`${journalLink.toEntityId} IN ${plantingIds}`,
-                liveLinks("gardenEntryPlanting", journalLink),
-              ),
-            ),
-        ),
-        and(
-          notExists(
-            qb
-              .select({ id: wholeAreaLink.id })
-              .from(wholeAreaLink)
-              .where(
-                and(
-                  eq(wholeAreaLink.fromEntityId, gardenEntry.id),
-                  liveLinks("gardenEntryPlanting", wholeAreaLink),
-                ),
-              ),
-          ),
-          exists(
-            qb
-              .select({ id: journalPlanting.id })
-              .from(journalPlanting)
-              .where(
-                and(
-                  sql`${journalPlanting.id} IN ${plantingIds}`,
-                  eq(journalPlanting.locationId, gardenEntry.locationId),
-                  sql`${gardenEntry.observedOn} >= COALESCE(${journalPlanting.sowedOn}, ${journalPlanting.transplantedOn}, ${householdDaySql(journalPlanting.createdAt)})`,
-                  or(
-                    isNull(journalPlanting.finishedOn),
-                    lte(gardenEntry.observedOn, journalPlanting.finishedOn),
-                  ),
-                ),
-              ),
-          ),
-        ),
-      );
-    },
+    journalPlantings: sql`SELECT journal_link."fromEntityId" AS "owner", journal_link."toEntityId" AS "planting"
+      FROM "EntityLink" journal_link
+      WHERE journal_link."kind" = ${JOURNAL_LINK} AND journal_link."deletedAt" IS NULL
+      UNION ALL
+      SELECT entry."id", journal_planting."id"
+      FROM "GardenEntry" entry
+      JOIN "Planting" journal_planting ON journal_planting."locationId" = entry."locationId"
+        AND entry."observedOn" >= COALESCE(journal_planting."sowedOn", journal_planting."transplantedOn", ${householdDaySql(sql`journal_planting."createdAt"`)})
+        AND (journal_planting."finishedOn" IS NULL OR entry."observedOn" <= journal_planting."finishedOn")
+      WHERE NOT EXISTS (
+        SELECT 1 FROM "EntityLink" whole_area_link
+        WHERE whole_area_link."fromEntityId" = entry."id"
+          AND whole_area_link."kind" = ${JOURNAL_LINK}
+          AND whole_area_link."deletedAt" IS NULL
+      )`,
   },
 });
 

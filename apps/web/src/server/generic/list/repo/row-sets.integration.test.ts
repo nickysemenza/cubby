@@ -1,5 +1,6 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { eq, inArray, type SQL, sql } from "drizzle-orm";
+import type { ExpenseFilters } from "@cubby/schemas/project";
+import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { buildEntity, type EntityOverrides } from "tooling/factories/build";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -10,12 +11,24 @@ import { wasm } from "~/lib/wasm";
 import { getDb } from "~/server/db/helpers";
 import {
   image as imageTable,
+  expense as expenseTable,
+  expenseAttribution,
+  ledgerParty as ledgerPartyTable,
   imageProcessingSubmission,
   photoRunImage,
   run,
 } from "~/server/db/schema";
+import {
+  expenseDerivedMembershipSql,
+  prepareExpenseDerivedRead,
+} from "~/server/domains/expense/repo/expense-derived-read";
+import { resolveExpenseProjectAllocationScope } from "~/server/domains/expense/repo/lookup";
 import { scheduleImageProcessingJobs } from "~/server/domains/image-processing/service/image-processing.service";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
+import {
+  computeAttentionItems,
+  projectAttentionFilterTypes,
+} from "~/server/domains/project/repo/attention";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
   entityKernelContextSchema,
@@ -24,6 +37,7 @@ import {
 } from "~/server/entity-kernel";
 import type { EntityKernelEntity } from "~/server/entity-kernel/contracts";
 import type { ListFilterValues } from "~/server/generic/list/repo/field-compiler";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 /**
@@ -529,5 +543,243 @@ describe("row-set filters", () => {
       ).toEqual(
         labelled(filters, inFixture(await oracle("Product", condition))),
       );
+  });
+
+  it("matches an expense's allocation filters on one share and its parties through attributions", async () => {
+    const project = async (name: string, parentProjectId?: string) =>
+      (
+        await createRepoEntity(ctx, "project", {
+          name,
+          ...(parentProjectId === undefined
+            ? {}
+            : {
+                parentProjectId: parseShortcodeFor("project", parentProjectId),
+              }),
+        })
+      ).output.id;
+    const parent = await project("Row-set parent project");
+    const child = await project("Row-set child project", parent);
+    const other = await project("Row-set other project");
+    // Spending categories have no repository writer in the factory roster.
+    const category = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: "Row-set materials category",
+    });
+    const vendor = await createRepoEntity(ctx, "vendor", {
+      name: "Row-set allocation vendor",
+    });
+    const mixed = await createRepoEntity(ctx, "purchase", {
+      vendorId: vendor.output.id,
+      date: "2026-09-20",
+    });
+    const line = async (name: string, values: EntityOverrides<"expense">) =>
+      (
+        await createRepoEntity(ctx, "expense", {
+          name,
+          cost: 50,
+          date: "2026-09-20",
+          lineKind: "principal",
+          costType: "materials",
+          trade: null,
+          future: false,
+          ...values,
+        })
+      ).output;
+    // Two principals, one on the parent project and one unassigned; the fee
+    // splits into a share for each.
+    const assigned = await line("Row-set assigned principal", {
+      projectId: parseShortcodeFor("project", parent),
+      purchaseId: mixed.output.id,
+      trade: "plumbing",
+      spendingCategoryId: parseShortcodeFor(
+        "spendingCategory",
+        category.shortcode,
+      ),
+    });
+    const unassigned = await line("Row-set unassigned principal", {
+      purchaseId: mixed.output.id,
+      trade: "electrical",
+    });
+    const fee = await line("Row-set mixed fee", {
+      cost: 0.04,
+      lineKind: "fee",
+      costType: "services",
+      purchaseId: mixed.output.id,
+    });
+    const childLine = await line("Row-set child project line", {
+      projectId: parseShortcodeFor("project", child),
+      costType: "tools",
+      trade: "other",
+    });
+    const otherLine = await line("Row-set other project line", {
+      projectId: parseShortcodeFor("project", other),
+      trade: "plumbing",
+    });
+    const party = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Row-set beneficiary",
+      kind: "member",
+    });
+    const [lineRow] = await getDb(ctx.db)
+      .select({ id: expenseTable.id })
+      .from(expenseTable)
+      .where(eq(expenseTable.shortcode, childLine.id));
+    const [partyRow] = await getDb(ctx.db)
+      .select({ id: ledgerPartyTable.id })
+      .from(ledgerPartyTable)
+      .where(eq(ledgerPartyTable.shortcode, party.output.id));
+    await getDb(ctx.db).insert(expenseAttribution).values({
+      expenseId: lineRow!.id,
+      ledgerPartyId: partyRow!.id,
+      role: "beneficiary",
+      weight: 1,
+    });
+    const fixture = new Set<string>(
+      [assigned, unassigned, fee, childLine, otherLine].map((row) => row.id),
+    );
+    const inFixture = (ids: string[]) => ids.filter((id) => fixture.has(id));
+    /**
+     * The retired composition: one membership over the allocation scope. Its
+     * trade presence read the line's own column, which changed (below).
+     */
+    const retired = async (filters: ExpenseFilters) => {
+      const scope = await resolveExpenseProjectAllocationScope(ctx.db, filters);
+      return and(
+        sql`"Expense"."deletedAt" IS NULL`,
+        scope === undefined
+          ? undefined
+          : expenseDerivedMembershipSql(sql`"Expense"."id"`, scope),
+      )!;
+    };
+    const parentCode = parseShortcodeFor("project", parent);
+    const childCode = parseShortcodeFor("project", child);
+    const categoryCode = parseShortcodeFor(
+      "spendingCategory",
+      category.shortcode,
+    );
+    const cases: ExpenseFilters[] = [
+      { projectId: [parentCode] },
+      { projectId: [parentCode], includeSubProjects: false },
+      { projectPresenceFilter: "none" },
+      { projectId: [parentCode], projectPresenceFilter: "none" },
+      { spendingCategoryId: [categoryCode] },
+      { spendingCategoryPresenceFilter: "has" },
+      { trade: ["plumbing"] },
+      { costType: ["services"] },
+      // One share: the fee's parent-project share carries no electrical trade.
+      { projectId: [parentCode], trade: ["electrical"] },
+      { projectId: [parentCode], costType: ["services"] },
+    ];
+    for (const filters of cases)
+      expect(
+        labelled(filters, inFixture(await listed("expense", filters))),
+      ).toEqual(
+        labelled(
+          filters,
+          inFixture(await oracle("Expense", await retired(filters))),
+        ),
+      );
+    const partyCode = parseShortcodeFor("ledgerParty", party.output.id);
+    expect(
+      inFixture(await listed("expense", { ledgerPartyId: [partyCode] })),
+    ).toEqual([childLine.id]);
+    // Generic row-set keys the predicates never offered.
+    const expected: [ListFilterValues, { id: string }[]][] = [
+      // A share with no project keeps the unassigned principal.
+      [{ projectIdExclude: [parentCode] }, [unassigned, otherLine]],
+      [
+        { projectIdExclude: [parentCode], includeSubProjects: false },
+        [unassigned, childLine, otherLine],
+      ],
+      [
+        { ledgerPartyIdExclude: [partyCode] },
+        [assigned, unassigned, fee, otherLine],
+      ],
+      // The fee's share follows the plumbing principal.
+      [{ tradeExclude: ["plumbing"] }, [unassigned, childLine]],
+      // Behavior change (plan §8): trade presence reads the shares, not the
+      // line's own column, so the untraded fee has the trades its
+      // principals give it (it read as no trade before).
+      [{ tradePresenceFilter: "none" }, []],
+      [
+        { tradePresenceFilter: "has" },
+        [assigned, unassigned, fee, childLine, otherLine],
+      ],
+    ];
+    for (const [filters, rows] of expected)
+      expect(
+        labelled(filters, inFixture(await listed("expense", filters))),
+      ).toEqual(labelled(filters, sorted(rows.map((row) => row.id))));
+    // Analytics count the same expenses as the list, though they apportion
+    // share amounts by their own scope: Match all, Exclude, values mixed
+    // with presence, and an unresolved project beside No project.
+    for (const filters of [
+      { projectId: [parentCode, childCode], projectIdMatch: "all" },
+      {
+        projectId: [parentCode],
+        includeSubProjects: false,
+        tradePresenceFilter: "has",
+      },
+      { trade: ["plumbing"], tradePresenceFilter: "has" },
+      { costType: ["tools"], costTypePresenceFilter: "none" },
+      { projectIdExclude: [parentCode] },
+      {
+        projectId: [parseShortcodeFor("project", "PRJ-4K7M")],
+        projectPresenceFilter: "none",
+      },
+    ] satisfies ExpenseFilters[]) {
+      const read = await prepareExpenseDerivedRead(ctx.db, filters);
+      const counted = await read
+        .select({ id: expenseTable.shortcode })
+        .where(read.where);
+      expect(
+        labelled(filters, inFixture(sorted(counted.map((row) => row.id)))),
+      ).toEqual(labelled(filters, inFixture(await listed("expense", filters))));
+    }
+  });
+
+  it("matches a project's attention through its prepared attention items", async () => {
+    const project = async (name: string, costEstimate: number | null) => {
+      const { output } = await createRepoEntity(ctx, "project", {
+        name,
+        costEstimate,
+      });
+      await createRepoEntity(ctx, "expense", {
+        name: `${name} spend`,
+        projectId: parseShortcodeFor("project", output.id),
+        cost: 20,
+        date: "2026-09-20",
+        future: false,
+        lineKind: "principal",
+        costType: "materials",
+        trade: "other",
+      });
+      return output.id;
+    };
+    const unbudgeted = await project("Row-set unbudgeted project", null);
+    const budgeted = await project("Row-set budgeted project", 500);
+    const fixture = new Set<string>([unbudgeted, budgeted]);
+    const inFixture = (ids: string[]) => ids.filter((id) => fixture.has(id));
+    // The retired predicate: the attention items of the picked rules.
+    const items = await computeAttentionItems(ctx.db);
+    const retired = (filter: keyof typeof projectAttentionFilterTypes) =>
+      sorted(
+        items
+          .filter((item) => item.type === projectAttentionFilterTypes[filter])
+          .map((item) => item.entityId),
+      );
+    for (const filter of ["missing_budget", "stalled"] as const)
+      expect(
+        labelled(
+          { attention: [filter] },
+          inFixture(await listed("project", { attention: [filter] })),
+        ),
+      ).toEqual(labelled({ attention: [filter] }, inFixture(retired(filter))));
+    expect(
+      inFixture(
+        await listed("project", { attentionExclude: ["missing_budget"] }),
+      ),
+    ).toEqual([budgeted]);
+    expect(
+      inFixture(await listed("project", { attentionPresenceFilter: "none" })),
+    ).toEqual([budgeted]);
   });
 });

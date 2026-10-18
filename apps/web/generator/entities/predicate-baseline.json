@@ -1,14 +1,6 @@
 {
   "email": ["purchaseId", "vendorAccountId", "vendorId"],
-  "expense": [
-    "costTypeFilter",
-    "ledgerPartyId",
-    "projectFilter",
-    "spendingCategoryFilter",
-    "tradeFilter"
-  ],
-  "gardenEntry": ["journalPlantingId"],
   "inventory": ["effectiveOwner"],
   "product": ["effectiveOwner", "taskDue", "taskOpen", "taskStatus"],
-  "project": ["attention", "dateRange"]
+  "project": ["dateRange"]
 }

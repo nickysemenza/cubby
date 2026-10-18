@@ -238,9 +238,14 @@ describe("list field compiler", () => {
       )) {
         const table = entityManifest[entity].dbTable;
         if (field.shape !== "rows" || table === null) continue;
+        // A repository relation's columns are its own SQL's.
+        const storage = Object.entries(
+          generatedEntityListFields[entity].rows,
+        ).find(([key]) => key === field.rows)?.[1].storage.kind;
+        if (storage === "repository") continue;
         const set = rowSetSql(entity, field.rows, table);
         expect(() =>
-          renderWhereSql(set.exists(sql`${set.column(field)} IS NULL`)),
+          renderWhereSql(set.matches(sql`${set.column(field)} IS NULL`)),
         ).not.toThrow();
       }
   });

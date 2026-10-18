@@ -1573,7 +1573,7 @@ filter's own "Include sub-…" toggle. Include and exclude combine ("Clothing
 except Outerwear"). A declared `predicate` offers Exclude only with
 `negatable: true`, which asserts its SQL reads only the values it receives.
 One that reads request data prepared from the include values (an effective
-owner, an expense allocation share) would ignore excluded values, so it keeps
+owner) would ignore excluded values, so it keeps
 the key with the reason `Include only: <its reason>.`;
 clients disable "is not" with that line and the list rejects the key as
 `LIST_FILTER_EXCLUDE_UNSUPPORTED` with the same text. Web column state carries
@@ -1594,8 +1594,9 @@ takes the filters and a read context, and no hand-written condition. A
 filter that cannot be a stored column, a `via` path, or a row set is a
 `model.derived` `predicate` whose `reason` lives in the declaration. A list's static row
 scope (ingredient lists never show recipe-scoped rows) and a project page's
-embedded `projectScope` (an object, not a filter descriptor) are ANDed with
-`where` by the repository. Email's
+embedded `projectScope` (an object, not a filter descriptor; expenses match
+it as a membership beside their allocation filters) are ANDed with `where`
+by the repository. Email's
 `purchaseId`/`vendorId`/`vendorAccountId` declare `singleValue: { reason }`
 (`linkState` is relative to one scope record): their schemas accept one value,
 the web and native pickers choose one record, and the repository rejects more than one
@@ -1731,7 +1732,7 @@ SQL that needs request data (inventory valuations, an Email list's scope) wraps 
 `scaffold.context(db, request)` loads each needed prepare at most once, and
 only when the request filters, sorts, groups, or projects on a field that
 reads it; a caller that already holds a prepare's data passes it as
-`context(db, request, [[handle, data]])` (project attention). `where`/`orderBy`/`filterPredicates` stay synchronous and take that
+`context(db, request, [[handle, data]])` (project attention items). `where`/`orderBy`/`filterPredicates` stay synchronous and take that
 context, `list` builds it unless `spec.context` passes one, and `hydrate`
 receives it. A list's static row scope (ingredient lists never show
 recipe-scoped rows) is ANDed with `where` by the repository; it is not a
@@ -1784,6 +1785,25 @@ rows never match). `json` reads a JSONB array of records on the row
 the field's read schema. A path row set's table, `where` columns and
 terminals are checked when its SQL renders (`rowSetSql` in
 `field-compiler.ts`), since the generator cannot see the database schema.
+`repository` declares the columns of a relation the repository passes as
+`listScaffold(entity, table, { derived, rows })`, SQL selecting `"owner"`
+(the list row's id) and each column, a `{ reference }` column holding the
+referenced record's id; the argument type is generated, so a declared row
+set without SQL fails typecheck. It compiles to an uncorrelated
+`id IN (SELECT "owner" FROM relation WHERE …)` and renders only when a
+filter reads it. A relation may come from a `listPrepare` (`prepare.rows`):
+expense `allocationShares` bounds its computed shares by the request's
+other row filters (`rowSetFilterKeys` names the keys to leave out) and
+allocates only the dimensions a filter reads (expense analytics, which
+allocate the shares themselves, drop the allocation filters their scope
+expresses — any-of values ORed with their presence — and keep the group for
+Match all and Exclude); project `attentionItems`
+renders `VALUES` from the attention rules' items; gardenEntry
+`journalPlantings` is SQL (live journal links, plus whole-area entries at a
+planting's location inside its window). A row-set filter keeps a
+presence key it was already published under (expense
+`projectPresenceFilter`); others get the generated
+`<columnId>PresenceFilter`.
 
 Every include filter through one row set matches the same row: the
 compiler builds one `EXISTS` for the group, so account `source` Plaid with

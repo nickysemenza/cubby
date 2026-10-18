@@ -919,7 +919,10 @@ const buildMetadataSchemas = () => {
    * has no shortcode, manifest entry, or relation section. `path` walks
    * foreign-key edges to a child or shared table, narrowed by `where` column
    * equalities on the row table; `json` reads a JSONB array of records on the
-   * row. Every include filter through one row set matches the same row;
+   * row; `repository` is a relation the repository passes to `listScaffold`
+   * as SQL selecting `"owner"` (the list row's id) and each declared column
+   * (a reference column holds the referenced record's id), optionally from a
+   * `listPrepare`. Every include filter through one row set matches the same row;
    * independent matching needs a second row set over the same storage.
    */
   const entityRowSetMetadataSchema = z.union([
@@ -940,6 +943,18 @@ const buildMetadataSchemas = () => {
       })
       .strict(),
     z.object({ label: nonEmptyString(), json: nonEmptyString() }).strict(),
+    z
+      .object({
+        label: nonEmptyString(),
+        repository: z.record(
+          derivedKey,
+          z.union([
+            z.enum(["text", "number", "date", "boolean"]),
+            z.object({ reference: nonEmptyString() }).strict(),
+          ]),
+        ),
+      })
+      .strict(),
   ]);
 
   const entityFieldModelMetadataSchema = z

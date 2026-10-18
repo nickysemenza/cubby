@@ -1383,8 +1383,8 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         " * (0 exactly when `levelReason` says why).\n" +
         " */\n" +
         'export type GeneratedListField = { readonly shape: "via"; readonly path: string; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity; readonly terminal: { readonly kind: "record"; readonly titleColumn: string | null } | { readonly kind: "field"; readonly column: string; readonly fieldKind: string }; readonly many: boolean; readonly sort: string | null; readonly group: string | null } | { readonly shape: "rows"; readonly path: string; readonly rows: string; readonly terminal: { readonly kind: "column"; readonly column: string } | { readonly kind: "record"; readonly target: Entity; readonly titleColumn: string | null }; readonly sort: string; readonly group: string } | { readonly shape: "value"; readonly type: "text" | "number" | "date" | "dateInterval" | "boolean" | "enum"; readonly options: readonly string[] | null; readonly sort: null; readonly group: string | null } | { readonly shape: "predicate"; readonly predicate: "text" | "multiselect" | "idMulti" | "boolean" | "presence" | "range"; readonly options: readonly string[] | null; readonly reason: string; readonly sort: string; readonly group: string; readonly exclude: string | null };\n\n' +
-        "/** A compiled `model.rows` row set: an FK path (narrowed by `where`) or a JSON array of records. */\n" +
-        'export type GeneratedRowSet = { readonly label: string; readonly storage: { readonly kind: "path"; readonly steps: readonly RelationshipPathStep[]; readonly where: Readonly<Record<string, string>> } | { readonly kind: "json"; readonly column: string; readonly keys: readonly string[] } };\n\n' +
+        "/** A compiled `model.rows` row set: an FK path (narrowed by `where`), a JSON array of records, or a repository relation. */\n" +
+        'export type GeneratedRowSet = { readonly label: string; readonly storage: { readonly kind: "path"; readonly steps: readonly RelationshipPathStep[]; readonly where: Readonly<Record<string, string>> } | { readonly kind: "json"; readonly column: string; readonly keys: readonly string[] } | { readonly kind: "repository"; readonly columns: Readonly<Record<string, Entity | null>> } };\n\n' +
         "/** Every `listTermExpanders` key a text filter declares. */\n" +
         `export type GeneratedListTermKey = ${
           [
@@ -1419,6 +1419,10 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         "export type GeneratedDerivedValueKey<E extends Entity> = {\n" +
         '  [K in keyof DerivedOf<E>]: DerivedOf<E>[K] extends { shape: "value" } ? K : never;\n' +
         "}[keyof DerivedOf<E>] & string;\n" +
+        "/** Row sets whose relation the repository passes to `listScaffold`. */\n" +
+        "export type GeneratedRepositoryRowSetKey<E extends Entity> = {\n" +
+        '  [K in keyof (typeof generatedEntityListFields)[E]["rows"]]: (typeof generatedEntityListFields)[E]["rows"][K] extends { storage: { kind: "repository" } } ? K : never;\n' +
+        '}[keyof (typeof generatedEntityListFields)[E]["rows"]] & string;\n' +
         "/** Derived keys whose filter predicate the repository passes to `listScaffold`. */\n" +
         "export type GeneratedDerivedPredicateKey<E extends Entity> = {\n" +
         '  [K in keyof DerivedOf<E>]: DerivedOf<E>[K] extends { shape: "predicate" } ? K : never;\n' +
