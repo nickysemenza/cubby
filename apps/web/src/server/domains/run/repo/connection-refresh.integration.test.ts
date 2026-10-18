@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
 import { createRepoEntity } from "tooling/factories/repo";
-import { withTestDb } from "tooling/test-setup";
+import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -34,6 +34,7 @@ import {
 
 import {
   connectionSourceFingerprint,
+  connectionSourceFingerprints,
   scheduleConnectionRefresh,
 } from "./connection-refresh";
 import { ensureRun, systemActor } from "./ensure-run";
@@ -53,6 +54,62 @@ describe("connection discovery roster freshness", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+  });
+  // A page must not scan the same broad target corpus for every source.
+  it("shares broad rosters within a batch and refreshes them on the next call", async () => {
+    const first = await createRepoEntity(ctx, "task", {
+      name: "Synthetic first batch source",
+      trade: "other",
+    });
+    const second = await createRepoEntity(ctx, "task", {
+      name: "Synthetic second batch source",
+      trade: "other",
+    });
+    const item = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic batch target" }),
+      ctx.actor,
+    );
+    const sources = [
+      { entityKind: "task", entityId: second.output.id },
+      { entityKind: "product", entityId: item.id },
+      { entityKind: "task", entityId: first.output.id },
+      { entityKind: "task", entityId: second.output.id },
+    ] as const;
+    const singles = [];
+    for (const source of sources)
+      singles.push(await connectionSourceFingerprint(ctx.db, source));
+    const batch = await countTestDbQueries(() =>
+      connectionSourceFingerprints(ctx.db, sources),
+    );
+    expect(batch.result).toEqual(singles);
+    const corpusQueries = batch.statements.filter((statement) =>
+      statement.startsWith("select md5(coalesce(jsonb_agg("),
+    );
+    // Product needs five corpora; both Task sources share its Product corpus.
+    expect(corpusQueries.length).toBeGreaterThan(0);
+    expect(corpusQueries.length).toBeLessThanOrEqual(5);
+    const empty = await countTestDbQueries(() =>
+      connectionSourceFingerprints(ctx.db, []),
+    );
+    expect(empty.result).toEqual([]);
+    expect(empty.queryCount).toBe(0);
+    await getDb(ctx.db)
+      .update(product)
+      .set({ name: "Synthetic renamed batch target" })
+      .where(eq(product.id, item.entityId));
+    const after = await connectionSourceFingerprints(ctx.db, sources);
+    expect(after).not.toEqual(batch.result);
+    const current = [];
+    for (const source of sources)
+      current.push(await connectionSourceFingerprint(ctx.db, source));
+    expect(after).toEqual(current);
+    await refreshSearchDocument(ctx.db, "product", item.entityId);
+    const rebuilt = await connectionSourceFingerprints(ctx.db, sources);
+    await refreshSearchDocument(ctx.db, "product", item.entityId);
+    expect(await connectionSourceFingerprints(ctx.db, sources)).toEqual(
+      rebuilt,
+    );
   });
   // A Location has no outgoing discovery family. Unrelated records must not
   // invalidate its completed scan or fence an evaluation already in flight.

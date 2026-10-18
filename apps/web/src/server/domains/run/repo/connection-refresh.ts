@@ -13,7 +13,10 @@ import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { entityIdentity, run, aiEvaluation } from "~/server/db/schema";
 import { connectionRecord } from "~/server/domains/connection/repo/connection-evidence";
-import { connectionDiscoveryFingerprint } from "~/server/domains/connection/repo/discovery-fingerprint";
+import {
+  connectionDiscoveryFingerprint,
+  connectionDiscoveryFingerprints,
+} from "~/server/domains/connection/repo/discovery-fingerprint";
 import { refreshSearchDocuments } from "~/server/generic/search/repo/search-document";
 
 import { scheduleEvaluationRun } from "./ai-refresh-state";
@@ -96,6 +99,7 @@ export async function scheduleConnectionRefresh(
 }
 
 export const connectionSourceFingerprint = connectionDiscoveryFingerprint;
+export const connectionSourceFingerprints = connectionDiscoveryFingerprints;
 
 /** Cursor coverage includes records without stock or prior acquisition. */
 export async function connectionDiscoveryRecords(

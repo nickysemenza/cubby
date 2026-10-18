@@ -64,6 +64,13 @@ validate shortcode ownership through `entityGraphRootSchema`, including legacy
 Product and Location QR labels; the published pattern advertises canonical codes. Existing physical
 connection exports in the schema module keep their original meaning.
 
+`connectionSourceFingerprints(db, sources)` returns fingerprints in input order,
+including duplicate sources. It shares each broad target-corpus hash once per
+kind within that call and retains no cache across pages. Per-source candidate
+and recommendation evidence is still read separately. Evaluation and publication
+fences continue to use a fresh `connectionSourceFingerprint(db, source)`; a page
+estimate does not authorize publishing against old evidence.
+
 The public Find connections mutation schedules a durable evaluation in the
 active AI refresh generation and returns its Run handle alongside stored
 results. It requires that generation to be enabled. Member-initiated discovery

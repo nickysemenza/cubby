@@ -40,37 +40,79 @@ const targetCorpora = new Map<
   }),
 );
 
+type CorpusKind = keyof typeof SHORTCODE_TABLE;
+type CorpusFingerprint = Awaited<ReturnType<typeof readCorpusFingerprint>>;
+type CorpusReader = (kind: CorpusKind) => Promise<CorpusFingerprint>;
+
+/** Page-local reuse only. Evaluators still recompute the single-source fence. */
+export async function connectionDiscoveryFingerprints(
+  db: Database,
+  sources: readonly EntityRef[],
+): Promise<string[]> {
+  const corpora = new Map<CorpusKind, Promise<CorpusFingerprint>>();
+  const readCorpus: CorpusReader = (kind) => {
+    const existing = corpora.get(kind);
+    if (existing) return existing;
+    const pending = readCorpusFingerprint(db, kind);
+    corpora.set(kind, pending);
+    return pending;
+  };
+  const records = new Map<string, Promise<string>>();
+  const fingerprints = [];
+  for (const source of sources) {
+    const key = `${source.entityKind}:${source.entityId}`;
+    let pending = records.get(key);
+    if (!pending) {
+      pending = sourceFingerprint(db, source, readCorpus);
+      records.set(key, pending);
+    }
+    fingerprints.push(await pending);
+  }
+  return fingerprints;
+}
+
 /** No inference or projection writes: safe for scheduling and publication fences. */
 export async function connectionDiscoveryFingerprint(
   db: Database,
   source: EntityRef,
 ) {
-  const record = await connectionRecord(db, source);
-  const corpora = [];
-  const kinds = targetCorpora.get(source.entityKind) ?? [];
-  for (const kind of kinds) {
-    const table = SHORTCODE_TABLE[kind];
-    const relevant = sql`jsonb_build_object(${sql.join(
-      connectionRelevantFields(kind).flatMap((key) => [
-        sql`${key}::text`,
-        sql`to_jsonb(${table})->${key}::text`,
-      ]),
-      sql`, `,
-    )})`;
-    const projection = sql`(SELECT d."sourceHash" FROM "SearchDocument" d
+  return sourceFingerprint(db, source, (kind) =>
+    readCorpusFingerprint(db, kind),
+  );
+}
+
+async function readCorpusFingerprint(db: Database, kind: CorpusKind) {
+  const table = SHORTCODE_TABLE[kind];
+  const relevant = sql`jsonb_build_object(${sql.join(
+    connectionRelevantFields(kind).flatMap((key) => [
+      sql`${key}::text`,
+      sql`to_jsonb(${table})->${key}::text`,
+    ]),
+    sql`, `,
+  )})`;
+  const projection = sql`(SELECT d."sourceHash" FROM "SearchDocument" d
       WHERE d."entityId"=${table.id} AND d."entityKind"=${kind} AND d."deletedAt" IS NULL)`;
-    // Reduce in Postgres; a sweep must not transfer each entire target corpus
-    // to the Worker once for every source and publication fence.
-    const [corpus] = await getDb(db)
-      .select({
-        fingerprint: sql<string>`md5(coalesce(jsonb_agg(
+  // Reduce in Postgres; never transfer entire target corpora to the Worker.
+  const [corpus] = await getDb(db)
+    .select({
+      fingerprint: sql<string>`md5(coalesce(jsonb_agg(
         jsonb_build_array(${table.id}, ${relevant}, ${projection}) ORDER BY ${table.id}
       ), '[]'::jsonb)::text)`,
-      })
-      .from(table)
-      .where(notDeleted(table));
-    corpora.push({ kind, fingerprint: corpus?.fingerprint ?? null });
-  }
+    })
+    .from(table)
+    .where(notDeleted(table));
+  return { kind, fingerprint: corpus?.fingerprint ?? null };
+}
+
+async function sourceFingerprint(
+  db: Database,
+  source: EntityRef,
+  readCorpus: CorpusReader,
+) {
+  const record = await connectionRecord(db, source);
+  const corpora = [];
+  for (const kind of targetCorpora.get(source.entityKind) ?? [])
+    corpora.push(await readCorpus(kind));
   const candidates = await retrieveConnectionCandidates(db, source);
   const prepared = await prepareConnectionBases(db, candidates);
   const bases = [];
