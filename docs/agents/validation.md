@@ -56,6 +56,11 @@ option for one spec. `workerdProfile` owns intentional peer/queue differences.
 
 ## During implementation
 
+Rebase onto freshly fetched `origin/main` before running any typecheck,
+generator, or test, and again before pushing: results from a stale base miss
+migrations, generated artifacts, and ratchets (layout counts, schema budgets)
+that main has since changed, so they are not evidence for the merge.
+
 Test subprocesses invoke Node/the installed tool directly and inherit the
 necessary parent environment. Never invoke a package manager from a test: its
 dependency verification can install or prune modules under concurrent suites.
