@@ -15,7 +15,8 @@ iOS/macOS, HTTP, MCP connections), so change contracts in place:
 - MCP clients cache `tools/list` across deploys and validate results against
   it, so published output schemas are open objects: an added output field is
   safe for an open session, while removing, renaming or retyping one breaks
-  it until the client reconnects. Input schemas stay closed.
+  it until the client reconnects. A client that cached an older closed schema
+  must reconnect once to load the open schema. Input schemas stay closed.
 - Household data is real: carry it through a migration that transforms it.
 
 ## Production changes
