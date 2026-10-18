@@ -10,6 +10,7 @@
  */
 import type { ExpenseId, ProjectId } from "@cubby/schemas/identifiers";
 import { and, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
+import { uniq } from "es-toolkit";
 
 import type { Database } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
@@ -193,7 +194,6 @@ export async function projectRollupsAndContentDates(
 export async function projectContentDates(
   db: Database,
   projectIds?: ProjectId[],
-  excludeExpenseId?: ExpenseId,
 ): Promise<Map<ProjectId, ProjectContentDates>> {
   const out = new Map<ProjectId, ProjectContentDates>();
   if (projectIds?.length === 0) return out;
@@ -214,13 +214,55 @@ export async function projectContentDates(
       FROM (${expenseDerivedReadSql("projects")}) allocation
       JOIN "Expense" e ON e."id" = allocation."expenseId"
       WHERE ${scope(sql`allocation."projectId"`)}
-        ${excludeExpenseId ? sql`AND e."id" <> ${excludeExpenseId}` : sql``}
       GROUP BY allocation."projectId"
     `)
       .then((result) => result.rows),
   ]);
 
   return mergeProjectContentDates(taskRows, expenseRows);
+}
+
+/**
+ * Every live project's content dates with one Expense left out, for each
+ * excluded Expense. One allocation pass serves the whole set; removing a line
+ * never re-weights its siblings, so each exclusion only drops that line's own
+ * dated shares.
+ */
+export async function projectContentDatesExcluding(
+  db: Database,
+  excludeExpenseIds: readonly ExpenseId[],
+): Promise<Map<ExpenseId, Map<ProjectId, ProjectContentDates>>> {
+  const excluded = uniq(excludeExpenseIds);
+  if (excluded.length === 0) return new Map();
+  const [taskRows, expenseRows] = await Promise.all([
+    projectTaskDateRows(db),
+    getDb(db)
+      .execute<{
+        excludedId: ExpenseId;
+        projectId: ProjectId;
+        contentStart: string | null;
+        contentEnd: string | null;
+      }>(sql`
+      WITH allocation AS MATERIALIZED (${expenseDerivedReadSql("projects")})
+      SELECT excluded.id AS "excludedId", allocation."projectId",
+        min(e."date") AS "contentStart", max(e."date") AS "contentEnd"
+      FROM allocation
+      JOIN "Expense" e ON e."id" = allocation."expenseId"
+      CROSS JOIN unnest(${uuidArrayParam(excluded)}) AS excluded(id)
+      WHERE allocation."projectId" IS NOT NULL AND e."id" <> excluded.id
+      GROUP BY excluded.id, allocation."projectId"
+    `)
+      .then((result) => result.rows),
+  ]);
+  return new Map(
+    excluded.map((id) => [
+      id,
+      mergeProjectContentDates(
+        taskRows,
+        expenseRows.filter((row) => row.excludedId === id),
+      ),
+    ]),
+  );
 }
 
 /**

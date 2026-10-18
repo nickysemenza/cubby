@@ -1,4 +1,8 @@
-import { type ExpenseId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
+  type ExpenseId,
+  parseShortcodeFor,
+  type ProjectId,
+} from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { projectListItemOut } from "@cubby/schemas/project";
 import { MAX_PROJECT_TREE_DEPTH } from "@cubby/schemas/project";
@@ -37,13 +41,21 @@ import {
 } from "~/server/generic/list/repo/list-projection";
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 
-import { projectContentDates, projectDependencyIds } from "./analytics";
+import {
+  projectContentDates,
+  projectContentDatesExcluding,
+  projectDependencyIds,
+} from "./analytics";
 import {
   computeAttentionItems,
   projectAttentionFilterTypes,
 } from "./attention";
 import { dashboardProjectDateCondition } from "./dashboard-shared";
-import { EMPTY_PROJECT_DATE_WINDOW, hydrateProjectRow } from "./helpers";
+import {
+  EMPTY_PROJECT_DATE_WINDOW,
+  hydrateProjectRow,
+  type ProjectContentDates,
+} from "./helpers";
 import {
   aggregateSubtreeDates,
   loadProjectDateWindows,
@@ -177,23 +189,57 @@ export const projectNameOptions = async (
   db: Database,
   excludeExpenseId?: ExpenseId,
 ): Promise<ProjectOptionsOut[]> => {
+  if (excludeExpenseId)
+    return (
+      (await projectNameOptionsExcluding(db, [excludeExpenseId])).get(
+        excludeExpenseId,
+      ) ?? []
+    );
   const [rows, contentDates] = await Promise.all([
-    getDb(db)
-      .select({
-        id: project.id,
-        shortcode: project.shortcode,
-        name: project.name,
-        emoji: project.emoji,
-        parentProjectId: project.parentProjectId,
-        startDate: project.startDate,
-        endDate: project.endDate,
-      })
-      .from(project)
-      .where(notDeleted(project))
-      .orderBy(asc(project.name)),
-    projectContentDates(db, undefined, excludeExpenseId),
+    projectOptionRows(db),
+    projectContentDates(db),
   ]);
+  return projectOptions(rows, contentDates);
+};
 
+/** `projectNameOptions` once per excluded Expense, sharing one roster read
+ * and one allocation pass across the set. */
+export const projectNameOptionsExcluding = async (
+  db: Database,
+  excludeExpenseIds: readonly ExpenseId[],
+): Promise<Map<ExpenseId, ProjectOptionsOut[]>> => {
+  if (excludeExpenseIds.length === 0) return new Map();
+  const [rows, contentDates] = await Promise.all([
+    projectOptionRows(db),
+    projectContentDatesExcluding(db, excludeExpenseIds),
+  ]);
+  return new Map(
+    excludeExpenseIds.map((id) => [
+      id,
+      projectOptions(rows, contentDates.get(id) ?? new Map()),
+    ]),
+  );
+};
+
+const projectOptionRows = (db: Database) =>
+  getDb(db)
+    .select({
+      id: project.id,
+      shortcode: project.shortcode,
+      name: project.name,
+      emoji: project.emoji,
+      parentProjectId: project.parentProjectId,
+      startDate: project.startDate,
+      endDate: project.endDate,
+    })
+    .from(project)
+    .where(notDeleted(project))
+    .orderBy(asc(project.name));
+
+const projectOptions = (
+  rows: Awaited<ReturnType<typeof projectOptionRows>>,
+  contentDates: Map<ProjectId, ProjectContentDates>,
+): ProjectOptionsOut[] => {
   const windows = aggregateSubtreeDates(rows, contentDates);
   return rows.map((row) => {
     const window = windows.get(row.id) ?? EMPTY_PROJECT_DATE_WINDOW;
