@@ -11,6 +11,7 @@ import {
   type RouteComponent,
   RouterContextProvider,
 } from "@tanstack/react-router";
+import { cleanup } from "@testing-library/react";
 import {
   createContext as createReactContext,
   useContext,
@@ -261,6 +262,13 @@ export function createBrowserTestHarness(options?: BrowserTestHarnessOptions) {
     wrapper: BrowserTestProviders,
     routerWrapper: BrowserRouterTestProviders,
     dispose: () => {
+      // Unmount before tearing anything down. Test files dispose in their own
+      // afterEach, which runs before the setup file's `cleanup()`; clearing the
+      // cache or removing the stubs under a still-mounted tree re-rendered it
+      // against missing globals (uncaught `matchMedia`/`IntersectionObserver`
+      // errors) and, under the shared jsdom document, left its links visible
+      // to the next test's queries.
+      cleanup();
       queryClient.clear();
       router.history.destroy();
       restoreLayoutMetrics();

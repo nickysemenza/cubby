@@ -27,7 +27,6 @@
     "test:postgres": "pnpm --filter @cubby/web test:postgres",
     "test:file": "pnpm --filter @cubby/web test:file",
     "test:changed": "pnpm --filter @cubby/web test:changed",
-    "test:related": "pnpm --filter @cubby/web test:related",
     "knip:production": "knip --production --no-gitignore --include files,dependencies",
     "test:scripts": "node --test 'scripts/**/*.test.ts' 'tools/oxlint/**/*.test.ts' 'apps/web/generator/**/*.test.ts' 'apps/apple/tooling/**/*.test.ts' 'apps/apple/scripts/*.test.ts' 'apps/web/tooling/**/!(*.unit|*.integration).test.ts'",
     "test:e2e": "pnpm --filter @cubby/web test:e2e",
