@@ -339,7 +339,7 @@ export const mailReadInput = mailMessageRef.extend({
     .min(0)
     .optional()
     .describe(
-      "UTF-8 byte offset of the raw HTML page (includeHtml): 0, or the previous page's nextOffset.",
+      "UTF-8 byte offset of the page to read: 0, or the previous page's nextOffset. Pages the compact body text, or the raw HTML with includeHtml.",
     ),
   maxBytes: z
     .number()
@@ -356,6 +356,57 @@ export type MailReadInput = z.infer<typeof mailReadInput>;
 /** Compact text body bound, measured JSON-escaped; below MAIL_READ_RESPONSE_MAX_BYTES. */
 export const MAIL_READ_TEXT_MAX_BYTES = 120_000;
 
+/** Serialized bound for a compact read's images, and for its structured data. */
+export const MAIL_READ_IMAGES_MAX_BYTES = 4_000;
+export const MAIL_READ_STRUCTURED_MAX_BYTES = 4_000;
+
+/**
+ * Serialized link bound for a compact read. Click-tracking redirects run over
+ * 1 KB each; a background coordinator keeps every read in context, so links
+ * past it are counted in `linksOmitted` and stay reachable through includeHtml.
+ */
+export const MAIL_READ_LINKS_MAX_BYTES = 8_000;
+
+const MAIL_ADDRESSING_HEADERS = new Set([
+  "from",
+  "to",
+  "cc",
+  "delivered-to",
+  "reply-to",
+  "sender",
+]);
+
+/** Any of these means the copy travelled through another mailbox first. */
+export function isMailForwardingHeader(name: string): boolean {
+  const key = name.toLowerCase();
+  return (
+    key.startsWith("x-forwarded-") ||
+    key.startsWith("resent-") ||
+    key === "x-google-original-from"
+  );
+}
+
+/**
+ * Addressing headers plus every forwarding header (prefix-matched, so a new
+ * `x-forwarded-*` or `resent-*` form is never dropped) and any `also` names.
+ * Transport headers (DKIM, ARC, Received) are kilobytes of noise to a reader,
+ * while a dropped forwarding header would make a forwarded copy look direct.
+ */
+export function mailAttributionHeaders(
+  headers: Record<string, string> | undefined,
+  also: readonly string[] = [],
+): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(headers ?? {}).filter(
+      ([name, value]) =>
+        value.trim() !== "" &&
+        (MAIL_ADDRESSING_HEADERS.has(name) ||
+          isMailForwardingHeader(name) ||
+          also.includes(name)),
+    ),
+  );
+}
+
 /**
  * What a read returns: the body as compact text (HTML converted when the text
  * part is empty or poorer), or, when `includeHtml` pages it, one raw HTML page
@@ -363,10 +414,15 @@ export const MAIL_READ_TEXT_MAX_BYTES = 120_000;
  */
 export const mailReadContent = z.object({
   snippet: z.string().nullable(),
+  /** The hidden inbox summary before the visible body, from the HTML. */
+  preheader: z.string().nullable().default(null),
   bodyText: z.string().nullable(),
+  /** UTF-8 size of the whole compact body that `bodyText` pages. */
+  textBytes: z.number().int().nullable().default(null),
   /** One raw HTML page, only when `includeHtml` asked for it. */
   bodyHtml: z.string().nullable(),
-  /** Exact `offset` of the next HTML page; null at the end or without a page. */
+  /** Exact `offset` of the next page of `bodyText` (or of the HTML page when
+   * `includeHtml`); null at the end. */
   nextOffset: z.number().int().nullable(),
   headers: z.record(z.string(), z.string()).optional(),
   /** UTF-8 size of the stored HTML body. */
@@ -379,6 +435,12 @@ export const mailReadContent = z.object({
   links: z.array(z.object({ href: z.string(), text: z.string() })).default([]),
   /** Links left out to keep the read under MAIL_READ_RESPONSE_MAX_BYTES. */
   linksOmitted: z.number().int().min(0).default(0),
+  /** Content images (purchase-cue images first) with their exact `src`. */
+  images: z.array(z.object({ src: z.string(), alt: z.string() })).default([]),
+  imagesOmitted: z.number().int().min(0).default(0),
+  /** Whole JSON-LD or microdata blocks the HTML declares. */
+  structuredData: z.array(z.string()).default([]),
+  structuredDataOmitted: z.number().int().min(0).default(0),
   /** `headers` left out because they alone overflow the response cap. */
   headersOmitted: z.boolean().default(false),
   /** The body text or HTML page was cut further to fit the response cap;

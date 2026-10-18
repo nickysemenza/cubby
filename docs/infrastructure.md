@@ -99,7 +99,14 @@ checked-in configuration is part of `apps/web/cloudflare.config.ts`:
 - every model call through AI Gateway `cubby` on the Worker's `AI` binding,
   by the shared pi-ai providers (`@cubby/shared/ai/pi-providers`). The gateway
   shim disables parallel tool calls: pi ends a run on a terminating tool only
-  when it is the round's sole call.
+  when it is the round's sole call. A paid-admission refusal (household AI
+  budget, Run no longer executable) reaches the coordinator as an HTTP 403
+  carrying its reason, not a network error;
+- each request's context per the purpose's `workItemContext`
+  (`@cubby/schemas/import-run-agent`): Mail import sends only the kickoff, user
+  messages, and the latest `claim_next_import_work` onward, because each Email
+  is independent and durable records carry what earlier ones settled. The
+  stored transcript keeps every Email for the Run page.
 
 pi-durable owns migrations of its stored tool tasks. Validate preservation of
 live call identities, arguments, and replay checkpoints when upgrading it.

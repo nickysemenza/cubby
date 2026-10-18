@@ -11,12 +11,13 @@ Claude or Codex session researches it later through the Research queue.
    call observes current work, while retrying that same call preserves its result.
 2. `mcp__cubby__imports_read` `mail` reads the Email. Read an attachment's original with
    `attachmentId` when the order details live in a PDF or image. Note the
-   returned `checksum`. When `content.truncated` or `content.bodyShortened`
-   is true, the compact text stops before the end of the Email (long orders
-   lose their later item lines and totals): read the raw HTML with
-   `includeHtml: true` from `offset: 0`, then again with each page's
-   `content.nextOffset` until it is null, before extracting lines or a total.
-   Never import or resolve from a truncated read alone.
+   returned `checksum`. The read is compact text, never HTML: `preheader`,
+   `bodyText`, cue-first `links`, item `images` (exact `src` for a line's
+   `imageUrl`) and `structuredData`. When `content.nextOffset` is not null,
+   read again with `offset` set to it until it is null before extracting
+   lines or a total. If `content.truncated` is still true after the last page,
+   evidence is missing: import only when every item line and the total are
+   present; otherwise `mail` `resolve` it `unresolved` naming what is missing.
 3. Decide what the Email is:
    - **An order with priced lines** (confirmation, receipt, invoice): import it.
      Find the Vendor first with `search` / `entity_read`; name it by

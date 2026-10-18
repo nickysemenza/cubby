@@ -156,3 +156,124 @@ describe("fitMailRead minimum response", () => {
     expect(parts.join("")).toBe(html);
   });
 });
+
+// Regression: a background Mail import coordinator kept every Email read in
+// context; tracker-wrapped links and transport headers made each read ~63 KB
+// around a ~1.5 KB body, so one 50-Email Run spent its budget on noise.
+describe("mailReadContent default read size", () => {
+  const tracker = (index: number) =>
+    `https://click.mailer.example/r?d=${index}${"Z".repeat(1_400)}`;
+  const anchors = Array.from(
+    { length: 60 },
+    (_, index) => `<a href="${tracker(index)}">Track delivery ${index}</a>`,
+  ).join(" ");
+  const bodyHtml = `<p>Order #SYN-1001 total $12.34</p><a href="https://vendor.example/p/widget">Synthetic Widget</a> ${anchors}`;
+  const headers = {
+    from: "Orders <orders@vendor.example>",
+    to: "member@example.com",
+    subject: "Your order #SYN-1001",
+    date: "Sat, 17 Oct 2026 09:00:00 -0700",
+    "dkim-signature": "v=1; b=".padEnd(2_000, "x"),
+    "arc-seal": "i=1; b=".padEnd(2_000, "y"),
+    received: "from mx.example by mx.example".padEnd(1_500, "z"),
+  };
+  const read = mailReadContent(
+    { snippet: null, bodyText: null, bodyHtml, headers },
+    {},
+  );
+
+  it("keeps the vendor link and stays small", () => {
+    expect(read.links.map(({ href }) => href)).toContain(
+      "https://vendor.example/p/widget",
+    );
+    expect(read.linksOmitted).toBeGreaterThan(0);
+    expect(serialized(read)).toBeLessThan(12_000);
+  });
+
+  it("keeps addressing, identity and forwarding headers only", () => {
+    const forwarded = mailReadContent(
+      {
+        snippet: null,
+        bodyText: "Synthetic body",
+        bodyHtml: null,
+        headers: { ...headers, "x-forwarded-for": "member@example.com" },
+      },
+      {},
+    );
+    expect(Object.keys(read.headers ?? {}).sort()).toEqual([
+      "date",
+      "from",
+      "subject",
+      "to",
+    ]);
+    expect(forwarded.headers).toHaveProperty("x-forwarded-for");
+  });
+});
+
+// Failures: the coordinator opens raw HTML because the compact read lacks
+// item images, the preheader or structured data, or because a long compact
+// body cannot be continued; image lists grow without bound.
+describe("mailReadContent compact evidence", () => {
+  const items = Array.from(
+    { length: 30 },
+    (_, index) =>
+      `<tr><td><img src="https://img.vendor.example/item-${index}.jpg" alt="Product Image" width="80" height="80"></td><td>Synthetic item ${index}</td><td>$${index}.99</td></tr>`,
+  ).join("");
+  const bodyHtml = `<div style="display:none">Your synthetic order is confirmed</div><img src="https://img.vendor.example/logo.png" alt="Vendor logo" width="120" height="40"><table>${items}</table><p>Total $435.70</p><script type="application/ld+json">{"@type":"Order","orderNumber":"SYN-1001"}</script>`;
+  const read = mailReadContent({ snippet: null, bodyText: null, bodyHtml }, {});
+
+  it("carries the preheader, bounded item images and structured data", () => {
+    expect(read.preheader).toBe("Your synthetic order is confirmed");
+    expect(read.images.length).toBeGreaterThan(0);
+    expect(read.images.map(({ src }) => src)).not.toContain(
+      "https://img.vendor.example/logo.png",
+    );
+    expect(serialized(read.images)).toBeLessThanOrEqual(4_000);
+    expect(read.images.length + read.imagesOmitted).toBe(30);
+    expect(read.structuredData.join("")).toContain("SYN-1001");
+  });
+
+  it("pages a long compact body by offset without losing characters", () => {
+    const text = "Synthetic line item €1.00 🧾\n".repeat(8_000);
+    const parts: string[] = [];
+    let offset: number | null = 0;
+    while (offset !== null) {
+      const page = mailReadContent(
+        { snippet: null, bodyText: text, bodyHtml: null },
+        { offset },
+      );
+      expect(page.bodyHtml).toBeNull();
+      parts.push(page.bodyText ?? "");
+      offset = page.nextOffset;
+    }
+    expect(parts.length).toBeGreaterThan(1);
+    expect(parts.join("")).toBe(text);
+  });
+
+  it("continues a body that fitMailRead shortened from its nextOffset", () => {
+    const text = "Synthetic line item $1.00\n".repeat(6_000);
+    const descriptors = Array.from({ length: 100 }, (_, index) => ({
+      attachmentId: `synthetic-attachment-${index}-${"x".repeat(150)}`,
+      filename: `synthetic-receipt-${index}-${"y".repeat(800)}.pdf`,
+      mimeType: "application/pdf",
+      checksum: "c".repeat(64),
+    }));
+    const first = fitMailRead({
+      content: mailReadContent(
+        { snippet: null, bodyText: text, bodyHtml: null },
+        {},
+      ),
+      attachments: descriptors,
+    });
+    expect(first.content.bodyShortened).toBe(true);
+    const rest = mailReadContent(
+      { snippet: null, bodyText: text, bodyHtml: null },
+      { offset: first.content.nextOffset ?? -1 },
+    );
+    expect(
+      `${first.content.bodyText}${rest.bodyText}`.startsWith(
+        text.slice(0, 200_000),
+      ),
+    ).toBe(true);
+  });
+});

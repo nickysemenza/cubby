@@ -293,6 +293,9 @@ struct Walk {
     footer: String,
     preheader: Option<String>,
     tracking_image_labels: Vec<String>,
+    /// Purchase cues found only in hidden text; they count as omitted only
+    /// when the visible text does not repeat them (responsive duplicates).
+    hidden_cues: Vec<String>,
     visible_seen: bool,
     truncated: bool,
 }
@@ -401,7 +404,8 @@ fn walk(element: ElementRef, footer: bool, state: &mut Walk) {
         ) {
             let hidden_text = clean(&element.text().collect::<String>());
             let omitted = purchase_cues(&hidden_text);
-            state.truncated |= !omitted.cues.is_empty() || omitted.omitted > 0;
+            state.truncated |= omitted.omitted > 0;
+            state.hidden_cues.extend(omitted.cues);
         }
         return;
     }
@@ -883,13 +887,19 @@ pub fn compact_email_html(html: &str) -> WCompactEmail {
         )
         .collect::<Vec<_>>()
         .join("\n");
+    let visible = format!(
+        "{}\n{text}",
+        state.preheader.as_deref().unwrap_or_default()
+    );
+    let visible_lower = visible.to_lowercase();
+    state.truncated |= state
+        .hidden_cues
+        .iter()
+        .any(|cue| !visible_lower.contains(&cue.to_lowercase()));
     let WPurchaseCues {
         cues,
         omitted: cues_omitted,
-    } = purchase_cues(&format!(
-        "{}\n{text}",
-        state.preheader.as_deref().unwrap_or_default()
-    ));
+    } = purchase_cues(&visible);
     truncate_utf8(&mut text, MAX_TEXT_BYTES);
 
     let mut links: Vec<(usize, WEmailLink)> = Vec::new();
@@ -1085,6 +1095,22 @@ mod tests {
             assert!(!unavailable.text.contains("SYN-12345"));
             assert!(unavailable.truncated);
         }
+    }
+
+    // Regression: retailer mail repeats its totals in a hidden mobile copy.
+    // Flagging that as truncated sent the import coordinator to page ~100 KB
+    // of raw HTML for evidence its compact text already held.
+    #[test]
+    fn hidden_duplicates_of_visible_purchase_text_are_not_truncation() {
+        let duplicate = compact_email_html(
+            r#"<table><tr><td>Synthetic kettle</td><td>$24.00</td></tr><tr><td>Subtotal</td><td>$24.00</td></tr><tr><td>Total</td><td>$26.10</td></tr></table><p>Order #SYN-12345</p><div style="display:none">Subtotal $24.00 Total $26.10 Order #SYN-12345</div>"#,
+        );
+        assert!(!duplicate.truncated);
+
+        let hidden_only = compact_email_html(
+            r#"<p>Thanks for shopping.</p><p>Order #SYN-12345</p><div style="display:none">Total $26.10</div>"#,
+        );
+        assert!(hidden_only.truncated);
     }
 
     #[test]

@@ -198,6 +198,8 @@ export const AppErrors = {
   MAIL_REQUEST_REFUSED: "BAD_REQUEST",
   // An Email read whose fixed metadata alone overflows the agent response cap.
   MAIL_READ_TOO_LARGE: "BAD_REQUEST",
+  // A Run coordinator asked for raw HTML; Run reads are compact text only.
+  MAIL_READ_HTML_RUN: "BAD_REQUEST",
   // A Run control action its current status refuses (cancel an ended Run,
   // resume one that is not paused); the message names the status.
   RUN_CONTROL_REFUSED: "CONFLICT",

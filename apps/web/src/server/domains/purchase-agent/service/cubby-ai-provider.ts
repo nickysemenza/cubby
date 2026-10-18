@@ -103,16 +103,18 @@ export function createCubbyGatewayFetch(
   options: AgentFetchOptions,
 ): typeof fetch {
   const { testModel } = options;
-  const routedFetch = () =>
+  const routedFetch = (
+    policy: Pick<
+      GatewayFetchRoutes,
+      "subscriptionRequired" | "subscriptionFallback" | "beforePaidRequest"
+    >,
+  ) =>
     gatewayFetchThrough({
       provider: route,
       funding: options.funding,
       rewriteQuery: (body) => withSequentialToolCalls(route, body),
       chatGpt: options.subscription,
-      subscriptionRequired: options.subscriptionRequired,
-      subscriptionFallback: options.subscriptionFallback,
-      beforePaidRequest: options.beforePaidRequest,
-      ...options.transportPolicy?.(),
+      ...policy,
       onTransport: options.onTransport,
       onResponse: options.onResponse,
       testPeer: () =>
@@ -145,10 +147,65 @@ export function createCubbyGatewayFetch(
           : runUniversalGateway(gateway, route, request, controls);
       },
     });
-  return (input, init) => {
+  return async (input, init) => {
     const rejection = options.beforeTransmission?.();
-    return rejection ? Promise.resolve(rejection) : routedFetch()(input, init);
+    if (rejection) return rejection;
+    const policy = {
+      subscriptionRequired: options.subscriptionRequired,
+      subscriptionFallback: options.subscriptionFallback,
+      beforePaidRequest: options.beforePaidRequest,
+      ...options.transportPolicy?.(),
+    };
+    const admit = policy.beforePaidRequest;
+    let refusal: { error: unknown } | undefined;
+    try {
+      return await routedFetch({
+        ...policy,
+        beforePaidRequest:
+          admit &&
+          (async (request) => {
+            try {
+              await admit(request);
+            } catch (error: unknown) {
+              refusal = { error };
+              throw error;
+            }
+          }),
+      })(input, init);
+    } catch (error: unknown) {
+      if (refusal) return admissionRefusal(refusal.error);
+      if (init?.signal?.aborted) throw error;
+      return transportFailure(error);
+    }
   };
+}
+
+const errorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : String(error);
+
+/**
+ * A fetch that throws reaches the coordinator as the provider SDK's bare
+ * "Connection error.", hiding the cause from the transcript. Paid admission
+ * (household AI budget, Run no longer executable) refuses with a final 403;
+ * any other failure is a 502, which pi still retries and the funding ladder
+ * never mistakes for a funding refusal.
+ */
+function admissionRefusal(error: unknown): Response {
+  return Response.json(
+    {
+      error: { type: "cubby_admission_refused", message: errorMessage(error) },
+    },
+    { status: 403 },
+  );
+}
+
+function transportFailure(error: unknown): Response {
+  return Response.json(
+    {
+      error: { type: "cubby_transport_failed", message: errorMessage(error) },
+    },
+    { status: 502 },
+  );
 }
 
 /**

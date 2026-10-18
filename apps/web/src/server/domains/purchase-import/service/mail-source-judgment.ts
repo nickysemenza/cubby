@@ -5,6 +5,8 @@
  * answer counts, and neither creates records. A vendor's direct mail to the
  * mailbox owner (`mail-owner.ts`) defaults to the recipient instead.
  */
+import { mailAttributionHeaders } from "@cubby/schemas/mailbox-research";
+
 import { wasm } from "~/lib/wasm";
 import {
   decisionChoiceFitsContext,
@@ -27,31 +29,11 @@ type JudgedMail = Pick<
   "sender" | "subject" | "content" | "rawChecksum" | "receivedAt"
 >;
 
-// Forwarding evidence lives in addressing headers; the rest are transport noise.
-const ATTRIBUTION_HEADERS = [
-  "from",
-  "to",
-  "cc",
-  "delivered-to",
-  "reply-to",
-  "sender",
-  "x-forwarded-for",
-  "x-forwarded-to",
-  "x-google-original-from",
-  "resent-from",
-  "resent-to",
-] as const;
-
 export function mailJudgmentEvidence(mail: JudgedMail) {
   const html = mail.content.bodyHtml
     ? wasm.compact_email_html(mail.content.bodyHtml)
     : null;
-  const headers = Object.fromEntries(
-    ATTRIBUTION_HEADERS.flatMap((name) => {
-      const value = mail.content.headers?.[name];
-      return value ? [[name, value]] : [];
-    }),
-  );
+  const headers = mailAttributionHeaders(mail.content.headers);
   return {
     checksum: mail.rawChecksum,
     sender: mail.sender,
