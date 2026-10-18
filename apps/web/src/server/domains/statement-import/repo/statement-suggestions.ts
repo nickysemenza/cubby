@@ -42,7 +42,7 @@ import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 
 /** Rule revision stamped on every published suggestion; bump with any policy change. */
-const STATEMENT_SUGGESTION_REVISION = "2026-10-18.1";
+const STATEMENT_SUGGESTION_REVISION = "2026-10-18.2";
 const STATEMENT_SUGGESTION_PAGE = FINANCIAL_STATEMENT_IMPORT_MAX_ROWS;
 /** A hold's posted twin lands within this window, and a vanished hold is judged after it. */
 const PENDING_POST_WINDOW_DAYS = 7;

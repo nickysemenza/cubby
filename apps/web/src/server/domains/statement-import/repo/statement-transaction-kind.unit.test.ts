@@ -5,7 +5,11 @@ import { statementTransactionKind } from "./statement-transaction-kind";
 describe("statementTransactionKind", () => {
   it.each([
     ["Paychecks", -2500, "income", "rule"],
-    ["Interest", -1.25, "interest", "rule"],
+    ["Interest", 1.25, "interest", "rule"],
+    // Interest earned is money in; `interest` means interest charged and must
+    // be positive, so an inflow under Interest was once unappliable.
+    ["Interest", -8.66, "income", "rule"],
+    ["Financial Fees", -35, "refund", "rule"],
     ["Transfer", 500, "account_transfer", "rule"],
     ["Transfer", -500, "account_transfer", "rule"],
     ["Credit Card Payment", 900, "credit_card_payment", "rule"],
