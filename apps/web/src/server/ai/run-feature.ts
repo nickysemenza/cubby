@@ -1,5 +1,6 @@
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { AiUsageTransport } from "@cubby/schemas/telemetry";
+import { getErrorMessage } from "@cubby/shared";
 import type {
   GatewayResponseFailure,
   GatewayResponseInfo,
@@ -192,6 +193,8 @@ export interface FeatureUsageOutcome {
   status?: "succeeded" | "failed";
   gatewayLogId?: string | null;
   gatewayCacheStatus?: GatewayResponseInfo["gatewayCacheStatus"];
+  /** A failed call's provider refusal or error. */
+  failure?: string;
   /** Overrides the context's caller-cache status for this row. */
   cacheStatus?: "hit" | "miss" | "none";
   applicationCacheStatus?: ApplicationCacheStatus;
@@ -206,6 +209,10 @@ export interface FeatureUsageOutcome {
  * cookbook forwarder, audit recovery, the import agent) call `recordAiUsage`
  * directly; each call is still recorded by exactly one of them.
  */
+function describeResponseFailure(failure: GatewayResponseFailure): string {
+  return `HTTP ${failure.status} ${failure.statusText}: ${failure.body}`;
+}
+
 export async function recordFeatureUsage(
   spec: Pick<AiFeature, "feature" | "model">,
   ctx: UsageCallContext,
@@ -232,6 +239,7 @@ export async function recordFeatureUsage(
     status: outcome.status,
     gatewayLogId: outcome.gatewayLogId ?? null,
     gatewayCacheStatus: outcome.gatewayCacheStatus ?? null,
+    failure: outcome.failure ?? null,
     durationMs: outcome.durationMs,
     cacheStatus: outcome.cacheStatus ?? ctx.cacheStatus ?? "none",
     applicationCacheStatus: outcome.applicationCacheStatus,
@@ -810,6 +818,9 @@ export async function runStructuredFeature<T>(
     const funded: FundedCall | undefined = plan.funded && {
       ...plan.funded,
       onRefusedAttempt: async (refused) => {
+        const failure = responseFailure
+          ? describeResponseFailure(responseFailure)
+          : refused.errorMessage;
         if (responseFailure) recoveredFailures.push(responseFailure);
         responseFailure = undefined;
         responseWire = undefined;
@@ -822,6 +833,7 @@ export async function runStructuredFeature<T>(
               transport,
               durationMs: Math.round(performance.now() - startedAt),
               status: "failed",
+              failure,
               applicationCacheStatus: callCtx.applicationCacheStatus,
             },
           );
@@ -874,6 +886,9 @@ export async function runStructuredFeature<T>(
             transport,
             durationMs: Math.round(performance.now() - startedAt),
             status: "failed",
+            failure: responseFailure
+              ? describeResponseFailure(responseFailure)
+              : getErrorMessage(error),
             ...(response
               ? messageUsage(response, gateway)
               : {

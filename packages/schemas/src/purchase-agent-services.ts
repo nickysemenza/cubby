@@ -66,6 +66,8 @@ export const agentUsageEvent = purchaseAgentEventRef.extend({
   transport: aiUsageTransport,
   gatewayLogId: z.string().optional(),
   gatewayCacheStatus: z.enum(["hit", "miss"]).optional(),
+  /** A failed turn's provider error, scrubbed and bounded when recorded. */
+  failure: z.string().min(1).optional(),
 });
 export type AgentUsageEvent = z.infer<typeof agentUsageEvent>;
 

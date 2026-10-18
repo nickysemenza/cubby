@@ -524,6 +524,57 @@ describe("AiUsage accounting", () => {
     });
   });
 
+  // Plan refusals were invisible: the failed row kept no body, so a rejected
+  // request shape could not be identified without a deploy.
+  it("records a ChatGPT plan refusal's scrubbed body on its failed row", async () => {
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
+    const faux = fauxProvider();
+    const body = JSON.stringify({
+      error: {
+        type: "invalid_request_error",
+        param: "input",
+        code: "subscription_sharing_unsupported_capability",
+        message: "Synthetic refusal echoing Bearer sk-example-secret-value",
+      },
+    });
+    const ports: StructuredRunPorts = {
+      callTarget: (_model, call) => ({
+        model: faux.getModel(),
+        complete: async () => {
+          call.onTransport?.("chatgpt");
+          call.onErrorResponse?.({
+            status: 400,
+            statusText: "Bad Request",
+            body,
+            retryAfter: null,
+          });
+          throw new Error("Synthetic provider error");
+        },
+      }),
+    };
+
+    await expect(
+      runStructuredFeature(
+        LOCATION_DESCRIPTION_FEATURE,
+        {
+          systemPrompts: ["frame"],
+          messages: [{ role: "user", content: "x" }],
+        },
+        { db: ctx.db, runId, operation: "locationDescription" },
+        ports,
+      ),
+    ).rejects.toThrow(/subscription_sharing_unsupported_capability/);
+
+    const rows = await usageRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ status: "failed", transport: "chatgpt" });
+    expect(rows[0]?.failure).toContain("HTTP 400 Bad Request");
+    expect(rows[0]?.failure).toContain(
+      "subscription_sharing_unsupported_capability",
+    );
+    expect(rows[0]?.failure).not.toContain("sk-example-secret-value");
+  });
+
   // The model answered and was billed; only the forced tool call / schema
   // check failed. The row keeps the response's usage and cost.
   it("keeps a billed response's usage when its answer fails validation", async () => {

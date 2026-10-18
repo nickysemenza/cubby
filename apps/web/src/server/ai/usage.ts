@@ -7,6 +7,7 @@ import {
   type AiCostEvidence,
 } from "@cubby/shared/ai/pricing";
 import { createLogger } from "@cubby/worker-tracing";
+import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
 
 import { afterResponse } from "~/server/cf-env";
 import type { Database } from "~/server/db";
@@ -48,6 +49,8 @@ export type RecordAiUsageInput = {
   attempt?: number;
   status?: "succeeded" | "failed";
   gatewayLogId?: string | null;
+  /** A failed call's provider refusal or error; scrubbed and bounded here. */
+  failure?: string | null;
   /**
    * The gateway's own response-cache verdict. Not persisted: a `hit` was not
    * billed, so charged cost is zero; comparison evidence and caller cache stay.
@@ -189,6 +192,9 @@ async function emitAiUsage(
       cacheWriteTokens: input.cacheWriteTokens ?? null,
       status: input.status ?? "succeeded",
       gatewayLogId: input.gatewayLogId ?? null,
+      // Omitted unless set: the preceding consumer's strict schema rejects
+      // the key, so a rollback drops only queued failures, not every row.
+      ...(input.failure ? { failure: scrubErrorMessage(input.failure) } : {}),
       durationMs: input.durationMs,
       cacheStatus: input.cacheStatus ?? null,
       applicationCacheStatus: input.applicationCacheStatus ?? null,

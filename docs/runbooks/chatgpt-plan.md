@@ -70,6 +70,11 @@ the OAuth access token. They set `store: false` and `stream: true`, resend the
 conversation input, convert system messages to developer messages, and supply
 function/custom tools as developer `additional_tools` input. Unsupported preview
 parameters are removed. Unsupported hosted tools fail before inference.
+pi-ai carries reasoning effort for gpt-6 models as `configuration_update` input
+items unless it sees the direct OpenAI base URL, which Cubby's gateway
+placeholders hide; subscription sharing refuses those items with HTTP 400
+`subscription_sharing_unsupported_capability`, so the adapter drops them and
+sends the latest one's effort as `reasoning.effort`.
 The existing application response cache still serves valid identical results.
 Caller cancellation propagates to the inference owner through request IDs,
 including after streaming starts. Calls have a five-minute maximum deadline;
@@ -90,7 +95,12 @@ failed `chatgpt` row. Only callers with an explicit funding fallback policy
 advance recognized plan refusals to the paid gateway: a quota 429, or a 400
 `subscription_sharing_unsupported_capability` for a request the plan cannot carry. The
 telemetry writer records plan coverage for every `chatgpt` row while retaining
-its token evidence and standard-price comparison. `cache` means an application replay with no upstream call (the
+its token evidence and standard-price comparison. A failed row's `failure`
+column keeps the provider's status and body (or the error text), scrubbed by
+`scrubErrorMessage` and bounded to 2,000 characters, including a refusal the
+funding ladder recovered from. The plan's Durable Object also logs each non-OK
+response as `plan refused inference` (scope `chatgpt-plan`) in Workers
+observability. `cache` means an application replay with no upstream call (the
 application response cache or a stored `AiAnalysis`); a Gateway response-cache
 hit still went through the gateway and stays `gateway`. Failed attempts record
 a failed row on their selected transport, keeping a billed response's usage

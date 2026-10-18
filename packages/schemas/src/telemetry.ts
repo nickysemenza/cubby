@@ -90,6 +90,8 @@ export const aiUsageTelemetrySchema = z.strictObject({
   attempt: z.number().int().nonnegative().optional(),
   status: z.enum(["succeeded", "failed"]).optional(),
   gatewayLogId: z.string().min(1).nullable().optional(),
+  // Optional so messages queued by the preceding deployment still validate.
+  failure: z.string().min(1).nullable().optional(),
   durationMs: z.number().int().nonnegative(),
   cacheStatus: z.enum(["hit", "miss", "none"]).nullable(),
   applicationCacheStatus: z.enum(["hit", "miss", "none"]).nullable().optional(),

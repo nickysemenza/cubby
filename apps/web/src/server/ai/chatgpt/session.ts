@@ -5,10 +5,14 @@ import {
   type ChatGptStatus,
 } from "@cubby/schemas/chatgpt";
 import type { GatewayQuery } from "@cubby/shared/ai/gateway-request";
+import { createLogger } from "@cubby/worker-tracing";
+import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { z } from "zod";
 
 import { chatGptRequest } from "./transport";
+
+const log = createLogger("chatgpt-plan");
 
 const AUTH = "https://auth.openai.com";
 const TOKEN = `${AUTH}/api/accounts/oauth/token`;
@@ -298,7 +302,7 @@ export class ChatGptSession {
     signal?.throwIfAborted();
     const saved = await this.active();
     signal?.throwIfAborted();
-    return this.upstream(`${API}/responses`, {
+    const response = await this.upstream(`${API}/responses`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${saved.accessToken}`,
@@ -306,6 +310,20 @@ export class ChatGptSession {
       },
       body: JSON.stringify(chatGptRequest(body, model)),
       signal,
+    });
+    if (response.ok) return response;
+    // Every plan caller passes through here; callers that fall back to paid
+    // inference otherwise keep no copy of the plan's refusal.
+    const failure = await response.text();
+    log.warn("plan refused inference", {
+      model,
+      status: response.status,
+      body: scrubErrorMessage(failure),
+    });
+    return new Response(failure, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
     });
   }
 }

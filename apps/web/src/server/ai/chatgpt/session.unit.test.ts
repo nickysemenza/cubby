@@ -172,6 +172,43 @@ describe("ChatGPT credential ownership", () => {
     );
     expect(put).not.toHaveBeenCalled();
   });
+  // Budgeted callers replay a plan refusal on paid inference; the refusal
+  // body must stay readable in Workers logs and reach the caller unchanged.
+  it("logs a refused inference and returns its body to the caller", async () => {
+    const refusal = JSON.stringify({
+      error: {
+        type: "invalid_request_error",
+        param: "input",
+        code: "subscription_sharing_unsupported_capability",
+        message: "Synthetic refusal for Bearer sk-example-secret-value",
+      },
+    });
+    const record = {
+      connected: true,
+      clientId: "oaiapp_example",
+      subject: "example-subject",
+      email: null,
+      accessToken: "access-example",
+      refreshToken: "refresh-example",
+      expiresAt: Date.now() + 3_600_000,
+    };
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const session = new ChatGptSession(
+        { get: async () => record, put: vi.fn(), delete: vi.fn() },
+        async () => new Response(refusal, { status: 400 }),
+      );
+      const response = await session.infer({ input: [] }, "gpt-6-sol");
+      expect(response.status).toBe(400);
+      expect(await response.text()).toBe(refusal);
+      const logged = JSON.stringify(warn.mock.calls);
+      expect(logged).toContain("subscription_sharing_unsupported_capability");
+      expect(logged).not.toContain("sk-example-secret-value");
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it("clears terminally unusable tokens and retains registration for reauthorization", async () => {
     let saved: ChatGptConnection | string | undefined = {
       connected: true,
