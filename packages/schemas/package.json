@@ -66,6 +66,7 @@
     "./pagination": "./src/pagination.ts",
     "./context": "./src/context.ts",
     "./context-breakdown": "./src/context-breakdown.ts",
+    "./coordinator-models": "./src/coordinator-models.ts",
     "./data-quality": "./src/data-quality.ts",
     "./data-quality-facets": "./src/data-quality-facets.ts",
     "./data-quality-shape": "./src/data-quality-shape.ts",

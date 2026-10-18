@@ -1,3 +1,4 @@
+import type { CoordinatorModels } from "@cubby/schemas/coordinator-models";
 /**
  * Everything the import agent can reach. The agent reads untrusted mail and
  * photos, so it holds no database, binding, secret, or raw
@@ -138,7 +139,7 @@ export interface PurchaseAgentEnvironment {
    * Harness only: replace the manifest's primary and escalation models, so
    * an offline eval runs a candidate coordinator as production would.
    */
-  coordinatorModels?: import("./escalation").CoordinatorModels;
+  coordinatorModels?: CoordinatorModels;
   /**
    * Workerd harness only: a shorter settlement poll, so a scripted Run settles
    * without waiting out production's interval.

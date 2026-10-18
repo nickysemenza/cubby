@@ -391,7 +391,7 @@ it.each([
   },
 );
 
-it.each([
+it.each<Pick<RunOut, "status" | "failureCode">>([
   { status: "paused_auth", failureCode: null },
   { status: "running", failureCode: "execution_limit" },
 ])(

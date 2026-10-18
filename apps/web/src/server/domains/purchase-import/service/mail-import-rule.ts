@@ -32,7 +32,7 @@ const EXCLUDED_SUBJECT =
 // Past-tense reversals in the body; footer policy text ("Returns are free",
 // "non-refundable") names no event and does not count.
 const BODY_REVERSAL =
-  /\brefunded\b|\brefund (?:has|have|was|were) (?:been )?(?:issued|processed|initiated|sent|credited)\b|\bissued (?:a|your) refund\b|\b(?:been|was|were|is) (?:cancell?ed|returned)\b|\border cancell?ation\b|\b(?:return|returns) (?:has been |was )?(?:received|processed)\b|\breceived your return\b/u;
+  /\b(?:refunded|cancell?ed)\b|\brefund (?:has|have|was|were) (?:been )?(?:issued|processed|initiated|sent|credited)\b|\bissued (?:a|your) refund\b|\b(?:been|was|were|is) returned\b|\border cancell?ation\b|\b(?:return|returns) (?:has been |was )?(?:received|processed)\b|\breceived your return\b/u;
 const DELIVERED =
   /\bdelivered\b|\bdelivery (?:complete|completed|confirmed|confirmation)\b/u;
 const NOT_YET_DELIVERED =

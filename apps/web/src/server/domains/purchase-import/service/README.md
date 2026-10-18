@@ -101,7 +101,8 @@ pending: nothing here starts Product research.
    (`service/mail-import-rule.ts`, revision `MAIL_IMPORT_RULE_REVISION`)
    through `mail.resolve`'s own writer, with no model call: a shipped,
    delivered or duplicate confirmation notice (subject phrase; no refund,
-   cancellation, return or failure wording) whose printed order identifier
+   cancellation, return or failure wording, including item cancellations in
+   the body) whose complete compact read's printed order identifier
    (`purchase_cues`) names exactly one live Purchase of the sender-proof
    Vendor (`senderProofVendor`) on the Email owner's own account there, with
    no retained attachment bytes and, for a confirmation, an accepted import
@@ -110,7 +111,8 @@ pending: nothing here starts Product research.
    `rule`, `decision` or `model`, in a Run the member did not select) resolves
    `unrelated` (its resolution observation carries the revision, so its
    `email_relevance` Assessment's producer is that rule). Everything else,
-   and any refusal `mail.resolve` returns, goes to the coordinator. A rule
+   an incomplete or paged compact read, and any refusal `mail.resolve`
+   returns, goes to the coordinator. A rule
    link skips the `mail-attribution` judgment: on the owner's own account it
    cannot change what the link writes.
 4. **Writes**: `imports_read.mail` reads a retained Email (`mail-tool.ts`

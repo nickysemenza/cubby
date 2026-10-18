@@ -1,3 +1,4 @@
+import type { CoordinatorModels } from "@cubby/schemas/coordinator-models";
 import type { ImportRunAgentConfig } from "@cubby/schemas/import-run-agent";
 import type { SupportedChatModel } from "@cubby/shared/ai/models";
 import type { ToolExecutionResult } from "@earendil-works/pi-durable";
@@ -8,12 +9,6 @@ const PREPARE_TOOL = "mcp__cubby__purchase_import";
 const MAIL_TOOL = "mcp__cubby__mail";
 /** The refusal of one Email's `prepare` that escalates it. */
 const PREPARE_REFUSAL_LIMIT = 2;
-
-export type CoordinatorModels = {
-  primary: SupportedChatModel;
-  /** Absent or equal to `primary`: escalation is off. */
-  escalation?: SupportedChatModel;
-};
 
 /** A purpose's models: the harness override when present, else its manifest. */
 export function coordinatorModelsFor(

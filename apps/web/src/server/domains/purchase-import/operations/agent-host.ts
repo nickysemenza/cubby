@@ -1,7 +1,7 @@
 import { agentConversationSchema } from "@cubby/schemas/agent-conversation";
+import { coordinatorModelsSchema } from "@cubby/schemas/coordinator-models";
 import { importRunIdFromAgentIdentity } from "@cubby/schemas/import-run-agent";
 import { aiGatewayId } from "@cubby/shared/ai/gateway-metadata";
-import { supportedChatModelSchema } from "@cubby/shared/ai/models";
 import { createLogger } from "@cubby/worker-tracing";
 /**
  * The purchase agent's host: the exported Durable Object and the narrowed
@@ -19,7 +19,6 @@ import { createLogger } from "@cubby/worker-tracing";
  */
 import * as Sentry from "@sentry/cloudflare";
 import { DurableObject } from "cloudflare:workers";
-import { z } from "zod";
 
 import { connectedChatGptInference } from "~/server/ai/chatgpt/client";
 import { gatewayEnvironment } from "~/server/ai/gateway";
@@ -46,10 +45,6 @@ import {
 } from "./agent-services";
 
 type HostContext = { waitUntil(promise: Promise<unknown>): void };
-const harnessCoordinatorModels = z.object({
-  primary: supportedChatModelSchema,
-  escalation: supportedChatModelSchema.optional(),
-});
 const retirementLog = createLogger("purchase-agent.retirement");
 
 /**
@@ -105,7 +100,7 @@ function purchaseAgentEnvironment(
     // the manifest's coordinator models.
     ...(testModel &&
       coordinatorModels && {
-        coordinatorModels: harnessCoordinatorModels.parse(
+        coordinatorModels: coordinatorModelsSchema.parse(
           JSON.parse(coordinatorModels),
         ),
       }),

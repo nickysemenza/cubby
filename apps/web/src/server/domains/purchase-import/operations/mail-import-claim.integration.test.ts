@@ -5,7 +5,8 @@
  * unrelated classification is not disposed of exactly as `mail.resolve`
  * `unrelated` would; a refund notice is settled without the coordinator; the
  * claimed Email arrives without its compact read; a repeated claim duplicates
- * a rule outcome.
+ * a rule outcome; a first-page order match hides a cancellation on a later
+ * page and is incorrectly settled without the coordinator.
  */
 import type { ActorContext } from "@cubby/schemas/context";
 import type { RunId } from "@cubby/schemas/identifiers";
@@ -184,6 +185,29 @@ describe("Mail import claim", () => {
       target,
     };
   }
+
+  it("claims an incomplete lifecycle read instead of settling its first-page match", async () => {
+    const { party, order, retain } = await world();
+    await order("SYN-3001");
+    const mail = await retain(
+      "paged-cancellation",
+      "Your order SYN-3001 has shipped",
+      `Order #SYN-3001 shipped.\n${"Tracking details.\n".repeat(10000)}We cancelled the unavailable item.`,
+    );
+    const { owner } = await admit(party, [mail]);
+    const claimed = await claimMailImportWork(ctx.db, owner.id);
+    expect(claimed).toMatchObject({
+      kind: "email",
+      email: { messageId: mail.messageId },
+      read: { content: { truncated: true, nextOffset: expect.any(Number) } },
+    });
+    expect((await linkRows(mail)).events).toEqual([]);
+    const [email] = await getDb(ctx.db)
+      .select({ status: emailTable.status })
+      .from(emailTable)
+      .where(eq(emailTable.orderMailId, mail.id));
+    expect(email?.status).toBe("researching");
+  });
 
   it("settles same-Vendor lifecycle and confident unrelated Emails without the coordinator, as mail.resolve does", async () => {
     const { party, seller, order, retain } = await world();

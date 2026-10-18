@@ -91,6 +91,16 @@ describe("mail import rule", () => {
     ).toBe("shipped");
   });
 
+  it("leaves an active-voice item cancellation to the coordinator", () => {
+    expect(
+      decideMailByRule(
+        evidence({
+          text: "Order #SYN-1001 shipped. We cancelled the unavailable item.",
+        }),
+      ).kind,
+    ).toBe("coordinator");
+  });
+
   it("finds printed order identifiers, not amounts or phrases", () => {
     expect(
       orderIdentifiers(

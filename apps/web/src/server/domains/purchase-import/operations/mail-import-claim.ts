@@ -56,6 +56,9 @@ async function settleByRule(
   });
   if (!mail || mail.rawChecksum !== source.checksum) return false;
   const content = mailReadContent(mail.content, {});
+  // A later page or omitted evidence may reverse an apparent lifecycle notice.
+  // The coordinator can page the read; a deterministic link cannot assume it.
+  if (content.truncated || content.nextOffset !== null) return false;
   const text = [content.preheader, content.bodyText].filter(Boolean).join("\n");
   const proof = await senderProofVendor(db, mail.sender);
   const decision = decideMailByRule({
