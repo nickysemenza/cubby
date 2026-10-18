@@ -62,7 +62,7 @@ function MailSearchSummary({
   );
 }
 
-/** One switch per mailbox; paid model work shares the household budget window. */
+/** Discovery waits for free capacity unless the member allows paid work. */
 export function MailImportSettings() {
   const queryClient = useQueryClient();
   const status = useQuery({
@@ -142,11 +142,13 @@ export function MailImportSettings() {
                     label="Run discovery now, paid allowed"
                     budget={budget}
                     pending={discover.isPending}
-                    onConfirm={(paidOverBudgetUsd) => discover.mutate({
-                      mailboxId: mailbox.mailboxId,
-                      paidAllowed: true,
-                      paidOverBudgetUsd,
-                    })}
+                    onConfirm={(paidOverBudgetUsd) =>
+                      discover.mutate({
+                        mailboxId: mailbox.mailboxId,
+                        paidAllowed: true,
+                        paidOverBudgetUsd,
+                      })
+                    }
                   />
                 </div>
               ) : null}
