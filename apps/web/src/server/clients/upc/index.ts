@@ -19,7 +19,6 @@ import type {
   UPCLookupResponse,
 } from "~/contracts/upc.schemas";
 import { env } from "~/env";
-import { decideUpcOfferComparability } from "~/server/ai/semantic-decisions";
 import type { Database } from "~/server/db";
 import {
   getCachedUpcRows,
@@ -105,6 +104,10 @@ export class UpcLookupService {
       aiCallRunInput(this.actorContext),
     );
     const runId = await this.runId;
+    // Every browser request constructs this service; load AI only for an
+    // uncached offer comparison, outside the browser dispatch closure.
+    const { decideUpcOfferComparability } =
+      await import("~/server/ai/semantic-decisions");
     return decideUpcOfferComparability({
       ...input,
       usage: {
