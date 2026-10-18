@@ -93,13 +93,21 @@ const tuples = (charges: readonly ChargeRef[]) =>
 /** Unmatched charges in `(source, chargeKey)` order after the cursor. */
 async function nextUnmatchedCharges(
   db: Database,
-  input: { after: ChargeRef | null; limit: number },
+  input: { after: ChargeRef | null; limit: number; importId: string | null },
 ): Promise<ChargeRef[]> {
   const after = input.after
     ? sql`AND (cs.source, cs."chargeKey") > (${input.after.source}, ${input.after.chargeKey})`
     : sql``;
+  // An import's pass covers only the charges it observed.
+  const state = input.importId
+    ? chargeStateOf(sql`(r.source, ${chargeKeyOf("r")}) IN (
+        SELECT seen.source, ${chargeKeyOf("seen")} FROM ${statementImportMembers} m
+        JOIN "StatementRow" seen ON seen.id = m."statementRowId" AND seen."deletedAt" IS NULL
+        WHERE m."importId" = ${input.importId}::uuid
+      )`)
+    : CHARGE_STATE;
   const { rows } = await unwrapDb(db).execute<ChargeRef>(sql`
-    SELECT cs.source, cs."chargeKey" FROM ${CHARGE_STATE} cs
+    SELECT cs.source, cs."chargeKey" FROM ${state} cs
     WHERE NOT cs.ignored AND NOT cs.superseded AND cs.shortcode IS NULL ${after}
     ORDER BY cs.source, cs."chargeKey"
     LIMIT ${input.limit}
@@ -893,7 +901,13 @@ const ruleProducer = (runId: string | null): AssessmentProducer => ({
 /** One generation page: deterministic, safe to repeat, resumable at `next`. */
 export async function generateStatementSuggestionPage(
   db: Database,
-  input: { after: ChargeRef | null; runId: string | null; limit?: number },
+  input: {
+    after: ChargeRef | null;
+    runId: string | null;
+    limit?: number;
+    /** Restrict the pass to one import's charges; omit for the whole ledger. */
+    importId?: string | null;
+  },
 ): Promise<{
   published: number;
   unchanged: number;
@@ -903,6 +917,7 @@ export async function generateStatementSuggestionPage(
   const charges = await nextUnmatchedCharges(db, {
     after: input.after,
     limit,
+    importId: input.importId ?? null,
   });
   let published = 0;
   let unchanged = 0;

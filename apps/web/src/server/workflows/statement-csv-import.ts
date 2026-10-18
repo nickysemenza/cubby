@@ -281,6 +281,7 @@ export async function commitStatementCsv(
   }
   const selected = validateDecisions(input.selected, previewRows);
   let evidence = 0;
+  let importId: string | null = null;
   for (
     let offset = 0;
     offset < parsed.recordRows.length;
@@ -292,6 +293,7 @@ export async function commitStatementCsv(
       actor,
     );
     evidence += result.inserted;
+    importId = result.batchId;
   }
   const { transactions, attached } = await commitPreviewRows(
     db,
@@ -301,7 +303,7 @@ export async function commitStatementCsv(
     selected,
   );
   // Rows left unmatched by this commit become Transaction suggestions.
-  if (evidence) await scheduleStatementSuggestions(db);
+  if (evidence && importId) await scheduleStatementSuggestions(db, importId);
   return {
     transactions,
     attached,

@@ -13,20 +13,24 @@ import {
   publishInBackground,
 } from "~/server/workflows/background-tasks/publish";
 
-const pageTask = (after: ChargeRef | null) => ({
+const pageTask = (after: ChargeRef | null, importId: string | null) => ({
   kind: "statement-suggestions.generate" as const,
   requestedAt: new Date().toISOString(),
   after,
+  importId,
 });
 
 /**
- * Start a full generation pass once the caller's write commits. Without a
- * queue binding (Node dev, tests) nothing is published; the member's Refresh
- * action pages inline instead.
+ * Generate suggestions for one import's charges once the caller's write
+ * commits. A whole-ledger pass is the member's Refresh. Without a queue
+ * binding (Node dev, tests) nothing is published.
  */
-export function scheduleStatementSuggestions(db: Database): Promise<void> {
+export function scheduleStatementSuggestions(
+  db: Database,
+  importId: string,
+): Promise<void> {
   if (!getBackgroundQueue()) return Promise.resolve();
-  return publishInBackground(db, [pageTask(null)], {
+  return publishInBackground(db, [pageTask(null, importId)], {
     source: "statement-suggestions",
   });
 }
@@ -44,11 +48,12 @@ export async function continueStatementSuggestions(
   const page = await generateStatementSuggestionPage(db, {
     after: task.after,
     runId: task.runId ?? null,
+    importId: task.importId,
   });
   await publishBackgroundTasks(
     db,
     [
-      ...(page.next ? [pageTask(page.next)] : []),
+      ...(page.next ? [pageTask(page.next, task.importId)] : []),
       ...(page.published ? [labelTask()] : []),
     ],
     { source: "statement-suggestions" },
@@ -89,7 +94,7 @@ export async function refreshStatementSuggestions(
     await publishBackgroundTasks(
       db,
       [
-        ...(page.next ? [pageTask(page.next)] : []),
+        ...(page.next ? [pageTask(page.next, null)] : []),
         ...(page.published ? [labelTask()] : []),
       ],
       { source: "statement-suggestions.refresh" },

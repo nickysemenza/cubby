@@ -148,6 +148,8 @@ export const statementSuggestionsGenerateTaskSchema = z.object({
   after: z
     .object({ source: z.string().min(1), chargeKey: z.string().min(1) })
     .nullable(),
+  /** One import's charges after it was recorded; absent for a full pass. */
+  importId: z.uuid().nullable().default(null),
 });
 
 /** Advisory decision-model labels for pending statement suggestions, one batch per message. */

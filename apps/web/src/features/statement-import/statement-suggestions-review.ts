@@ -88,7 +88,7 @@ export function applyItem(
   };
 }
 
-/** Dismiss: settle without applying, suppressed until the evidence changes. */
+/** Dismiss: settle without applying; the charge stays suppressed on every later pass. */
 export function dismissItem(suggestion: StatementSuggestionOut): ReviewItem {
   return {
     assessmentId: suggestion.assessmentId,

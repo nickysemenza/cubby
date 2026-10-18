@@ -524,4 +524,24 @@ describe("statement Transaction suggestions", () => {
       matchState: "matched",
     });
   });
+
+  // Failure mode: every recorded chunk regenerates the whole ledger.
+  it("limits an import's pass to the charges it observed", async () => {
+    await card(ctx);
+    await record(ctx, [rowInput({ rawDescription: "EXAMPLE OLDER CHARGE" })]);
+    const later = await record(
+      ctx,
+      [rowInput({ rawDescription: "EXAMPLE NEWER CHARGE" })],
+      { fingerprint: "fp-later-import" },
+    );
+    const page = await generateStatementSuggestionPage(ctx.db, {
+      after: null,
+      runId: null,
+      importId: later.batchId,
+    });
+    expect(page).toMatchObject({ published: 1, next: null });
+    expect((await suggestions(ctx)).map((row) => row.rawDescription)).toEqual([
+      "EXAMPLE NEWER CHARGE",
+    ]);
+  });
 });
