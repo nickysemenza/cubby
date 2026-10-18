@@ -617,6 +617,13 @@
       "when": 1792293113864,
       "tag": "0087_confirmed_purchase_acquisition",
       "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1792295633995,
+      "tag": "0088_statement_transaction_suggestions",
+      "breakpoints": true
     }
   ]
 }
