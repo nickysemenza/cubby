@@ -1,7 +1,7 @@
 import { aiProvenance } from "@cubby/schemas/ai-evaluation";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
@@ -15,6 +15,7 @@ import {
   executeAiRefreshTarget,
 } from "~/server/domains/run/service/ai-refresh";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
 
 import { originalChecksum } from "../../repo/gmail/checksum";
 import { normalizeMessage } from "../../repo/gmail/normalize";
@@ -25,6 +26,7 @@ import { syntheticMailImportRun } from "./execution.fixtures";
 // Script only external Gmail/model ports; ownership, ledger and publication are real.
 describe("Email prompt refresh publication", () => {
   const ctx = withTestDb();
+  beforeEach(() => createSystemUserFixture(ctx.db));
   afterEach(() => vi.restoreAllMocks());
   it("reuses current triage, evaluates stale relevance and commits its receipt without transferring the source Run", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {

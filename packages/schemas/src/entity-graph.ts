@@ -12,7 +12,12 @@ import { imageUrlSummary } from "./image-summary";
  */
 export const entityGraphRootSchema = entityRefSchema
   .extend({
-    entityId: anyShortcodeSchema(nonEmptyTuple(shortcodeEntities)),
+    // Advertise canonical IDs; the owning parser below also accepts old QR labels.
+    entityId: z.string().meta({
+      pattern: z.toJSONSchema(
+        anyShortcodeSchema(nonEmptyTuple(shortcodeEntities)),
+      ).pattern,
+    }),
   })
   .superRefine((root, context) => {
     const parsed = parseShortcode(root.entityId);

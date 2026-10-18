@@ -1,3 +1,4 @@
+import { entityGraphRootSchema } from "@cubby/schemas/entity-graph";
 import { PUBLIC_SHORTCODE_PREFIXES } from "@cubby/shared";
 import { Ajv } from "@modelcontextprotocol/client/validators/ajv";
 import { McpServer } from "@modelcontextprotocol/server";
@@ -171,6 +172,27 @@ function concreteOutputSchema(value: JSONType): boolean {
 }
 
 describe("MCP catalog schemas", () => {
+  // Physical QR labels must remain valid while the catalog advertises canonical IDs.
+  it("accepts legacy graph labels without accepting another entity's label", () => {
+    expect(
+      entityGraphRootSchema.safeParse({
+        entityKind: "product",
+        entityId: "P-4K7M",
+      }).success,
+    ).toBe(true);
+    expect(
+      entityGraphRootSchema.safeParse({
+        entityKind: "location",
+        entityId: "L-4K7M",
+      }).success,
+    ).toBe(true);
+    expect(
+      entityGraphRootSchema.safeParse({
+        entityKind: "location",
+        entityId: "P-4K7M",
+      }).success,
+    ).toBe(false);
+  });
   it("accepts returned audit cursors and record-backed Sources in the published catalog", async () => {
     const tools = (await listMcpToolCatalog()).tools;
     const validator = new Ajv({ strict: false, validateFormats: true });

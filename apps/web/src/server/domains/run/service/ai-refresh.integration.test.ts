@@ -10,7 +10,7 @@ import {
   taxonomyShortcode,
 } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { compiledRefreshManifest } from "~/server/ai/policy/refresh-manifest";
 import {
@@ -35,6 +35,7 @@ import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
 import { controlWorkflowRun } from "~/server/workflows/runs/control";
 
 import { aiRefreshRelaunchCandidates } from "../repo/ai-refresh-state";
@@ -53,6 +54,7 @@ import {
 // Real database/publication boundaries; only the external decision model is scripted.
 describe("targeted prompt refresh", () => {
   const ctx = withTestDb();
+  beforeEach(() => createSystemUserFixture(ctx.db));
   const fieldTarget = aiEvaluationTarget.options.find(
     (target) => target.shape.kind.value === "field",
   )!;

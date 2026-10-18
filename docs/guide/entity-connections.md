@@ -50,7 +50,8 @@ Existing automatic domain behavior is unchanged.
 a publisher for the guarded evaluation transaction. `readEntityConnections`
 reads typed `connectionProposal` records from stored Assessments; `readEntityConnectionsBatch`
 accepts up to 250 sources and returns arrays in the same order. Public endpoints
-validate shortcode ownership through `entityGraphRootSchema`. Existing physical
+validate shortcode ownership through `entityGraphRootSchema`, including legacy
+Product and Location QR labels; the published pattern advertises canonical codes. Existing physical
 connection exports in the schema module keep their original meaning.
 
 The public Find connections mutation schedules a durable evaluation in the

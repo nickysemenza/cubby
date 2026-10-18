@@ -8,19 +8,13 @@ import { describe, expect, it } from "vitest";
 
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
-import {
-  product,
-  productCategory,
-  run,
-  runFinding,
-  user,
-} from "~/server/db/schema";
-import { systemActor } from "~/server/domains/run/repo/ensure-run";
+import { product, productCategory, run, runFinding } from "~/server/db/schema";
 import {
   categoryPorts,
   kernelCtx,
   PRIMARY_MODEL,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
 
 import { sweepImportedProductCategories } from "../service/import-category-sweep";
 import { commitPurchaseImport } from "./import-orders";
@@ -61,14 +55,7 @@ describe("post-commit category suggestions", () => {
   };
 
   it("sweeps exactly the created Products and settles the arrival prompt once they are untracked", async () => {
-    await getDb(ctx.db).insert(user).values({
-      id: systemActor().userId,
-      name: "Synthetic system",
-      email: "synthetic-system@example.test",
-      emailVerified: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    await createSystemUserFixture(ctx.db);
     await activateAiRefresh(ctx.db, "synthetic-release", {
       enabled: true,
       startDiscovery: false,
