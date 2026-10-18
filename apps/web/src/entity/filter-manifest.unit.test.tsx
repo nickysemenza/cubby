@@ -213,7 +213,9 @@ describe("manifestFilterConfig", () => {
             continue;
           }
           checked += 1;
-          for (const probe of ["-1", "1.5", "123456789"])
+          // Declarations carry no maximum, so the large probes stand in for
+          // any upper limit a hand-written request schema keeps.
+          for (const probe of ["-1", "1.5", "123456789", "1000000000000000"])
             if (
               parseNumberBound(probe, number) !== undefined &&
               !accepts(entity, { [key]: Number(probe) })

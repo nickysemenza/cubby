@@ -326,7 +326,9 @@ function DateBound({
   bound: string | undefined;
   onChange: (bound: string | undefined) => void;
 }) {
-  const [mode, setMode] = useState<BoundMode>(() => modeOf(bound));
+  // Every mode change emits a bound of that mode, so the bound alone says
+  // which mode it is — including a bound changed from outside.
+  const mode = modeOf(bound);
   const days = bound === undefined ? undefined : relativeDateOffset(bound);
   const relative = days ?? 0;
   const ahead = bound?.startsWith(`${RELATIVE_DATE_TODAY}+`) ?? false;
@@ -343,7 +345,6 @@ function DateBound({
         onValueChange={(value) => {
           const next = MODES.find((option) => option.value === value)?.value;
           if (next === undefined) return;
-          setMode(next);
           // Date starts on the household's today, as the Apple editor does,
           // so switching never drops the bound while a day is being picked.
           onChange(
@@ -406,7 +407,8 @@ function DateBound({
 /**
  * Custom bounds for a date range filter, beside its presets. The value is
  * the filter's `from..to` bounds, so a relative bound survives the URL, a
- * saved view and an edit as its token.
+ * saved view and an edit as its token. Every edit is emitted, so the editor
+ * holds no draft and follows a value changed from outside (Back/Forward).
  */
 function DateRangeBounds({
   value,
@@ -416,13 +418,10 @@ function DateRangeBounds({
   onChange: (value: string | undefined) => void;
 }) {
   const bounds = value === undefined ? undefined : parseRangeBounds(value);
-  const [from, setFrom] = useState(bounds?.from);
-  const [to, setTo] = useState(bounds?.to);
-  const update = (nextFrom: string | undefined, nextTo: string | undefined) => {
-    setFrom(nextFrom);
-    setTo(nextTo);
+  const from = bounds?.from;
+  const to = bounds?.to;
+  const update = (nextFrom: string | undefined, nextTo: string | undefined) =>
     onChange(formatRangeBounds(nextFrom, nextTo));
-  };
   return (
     <div className="flex flex-col gap-3 border-t border-border pt-3">
       <DateBound
@@ -502,9 +501,27 @@ function NumberRangeBounds({
   value: string | undefined;
   onChange: (value: string | undefined) => void;
 }) {
-  const bounds = value === undefined ? undefined : parseRangeBounds(value);
-  const [min, setMin] = useState(bounds?.from ?? "");
-  const [max, setMax] = useState(bounds?.to ?? "");
+  const draftsOf = (bounds: string | undefined) => {
+    const parsed = bounds === undefined ? undefined : parseRangeBounds(bounds);
+    return { min: parsed?.from ?? "", max: parsed?.to ?? "" };
+  };
+  const [min, setMin] = useState(() => draftsOf(value).min);
+  const [max, setMax] = useState(() => draftsOf(value).max);
+  // A new incoming value the editor did not emit itself (Back/Forward, a
+  // preset, Clear) replaces the drafts. The echo of its own emission, a
+  // parent that has not caught up yet, or an invalid draft that was never
+  // emitted leaves the typed text alone.
+  const [seen, setSeen] = useState(value);
+  const [emitted, setEmitted] = useState(value);
+  if (value !== seen) {
+    setSeen(value);
+    if (value !== emitted) {
+      const drafts = draftsOf(value);
+      setEmitted(value);
+      setMin(drafts.min);
+      setMax(drafts.max);
+    }
+  }
   const update = (nextMin: string, nextMax: string) => {
     setMin(nextMin);
     setMax(nextMax);
@@ -514,12 +531,12 @@ function NumberRangeBounds({
     const high = parse(nextMax);
     if (low === undefined || high === undefined) return;
     if (low !== null && high !== null && low > high) return;
-    onChange(
-      formatRangeBounds(
-        low === null ? undefined : formatNumberBound(low),
-        high === null ? undefined : formatNumberBound(high),
-      ),
+    const next = formatRangeBounds(
+      low === null ? undefined : formatNumberBound(low),
+      high === null ? undefined : formatNumberBound(high),
     );
+    setEmitted(next);
+    onChange(next);
   };
   const low = parseNumberBound(min, range);
   const high = parseNumberBound(max, range);
@@ -616,10 +633,6 @@ function FilterValueEditor({
   setValues: (values: string[]) => void;
   clear: () => void;
 }) {
-  // A picked preset replaces the bounds, so the bounds editor starts over.
-  // It is keyed by picks, not by the value: typing the first digit after a
-  // preset changes the value and must not remount (and blur) the input.
-  const [presetPicks, setPresetPicks] = useState(0);
   const options = visibleOptions(field, filter);
   if (field.type === "text") {
     return (
@@ -660,10 +673,7 @@ function FilterValueEditor({
     <Picker
       options={options}
       value={isBounds ? null : (value ?? null)}
-      onValueChange={(value) => {
-        setValues(value === null ? [] : [value]);
-        setPresetPicks((picks) => picks + 1);
-      }}
+      onValueChange={(value) => setValues(value === null ? [] : [value])}
       placeholder={
         isBounds ? "Custom range" : `Filter ${field.label ?? field.key}`
       }
@@ -682,7 +692,6 @@ function FilterValueEditor({
       <>
         {options.length > 0 && picker}
         <NumberRangeBounds
-          key={presetPicks}
           label={field.label ?? field.key}
           range={field.numberRange}
           value={isBounds ? value : undefined}
@@ -697,7 +706,6 @@ function FilterValueEditor({
     <>
       {options.length > 0 && picker}
       <DateRangeBounds
-        key={presetPicks}
         value={isBounds ? value : undefined}
         onChange={(next) => setValues(next === undefined ? [] : [next])}
       />

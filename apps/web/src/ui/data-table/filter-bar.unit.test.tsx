@@ -426,3 +426,86 @@ describe("selectedValues", () => {
     ).toEqual(["home", "attic"]);
   });
 });
+
+describe("range bounds editors", () => {
+  const rangeFields: FilterBarField[] = [
+    {
+      key: "age",
+      label: "Age",
+      type: "select",
+      numberRange: { nonnegative: true },
+      options: [{ value: "5", label: "5+" }],
+    },
+    {
+      key: "made",
+      label: "Made",
+      type: "select",
+      dateRange: true,
+      options: [{ value: "30d", label: "Last 30 days" }],
+    },
+  ];
+  const filterOf = (field: string, value: string): Filter[] => [
+    { id: `filter-${field}`, field, operator: "is", values: [value] },
+  ];
+  const renderRanges = (filters: Filter[]) => {
+    const onChange = vi.fn();
+    const view = render(
+      <FilterBar filters={filters} fields={rangeFields} onChange={onChange} />,
+    );
+    const rerender = (next: Filter[]) =>
+      view.rerender(
+        <FilterBar filters={next} fields={rangeFields} onChange={onChange} />,
+      );
+    return { onChange, rerender };
+  };
+  const input = (name: string) =>
+    screen.getByRole<HTMLInputElement>("spinbutton", { name });
+
+  // Failure mode: the bounds editor read its value once, so a value changed
+  // while it was open (Back/Forward, a deep link) left stale inputs, and the
+  // next edit wrote the stale side back over the restored one.
+  it("follows a number range value changed from outside", () => {
+    const { onChange, rerender } = renderRanges(filterOf("age", "1..8"));
+    fireEvent.click(screen.getByRole("button", { name: "Age: 1 to 8" }));
+    rerender(filterOf("age", "5"));
+    expect(input("Age minimum").value).toBe("");
+    rerender(filterOf("age", "2..10"));
+    expect(input("Age minimum").value).toBe("2");
+    expect(input("Age maximum").value).toBe("10");
+    fireEvent.change(input("Age maximum"), { target: { value: "12" } });
+    expect(onChange).toHaveBeenLastCalledWith(filterOf("age", "2..12"));
+  });
+
+  it("keeps an uncommitted number draft across an unchanged rerender", () => {
+    const { onChange, rerender } = renderRanges(filterOf("age", "1..8"));
+    fireEvent.click(screen.getByRole("button", { name: "Age: 1 to 8" }));
+    fireEvent.change(input("Age minimum"), { target: { value: "-3" } });
+    expect(onChange).not.toHaveBeenCalled();
+    rerender(filterOf("age", "1..8"));
+    expect(input("Age minimum").value).toBe("-3");
+    fireEvent.change(input("Age minimum"), { target: { value: "1.50" } });
+    rerender(filterOf("age", "1.5..8"));
+    expect(input("Age minimum").value).toBe("1.50");
+  });
+
+  it("follows a date range value changed from outside", () => {
+    const { onChange, rerender } = renderRanges(
+      filterOf("made", "2026-01-01..2026-02-01"),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Made: 2026-01-01 to 2026-02-01$/ }),
+    );
+    rerender(filterOf("made", "30d"));
+    expect(screen.queryByLabelText("From date")).toBeNull();
+    rerender(filterOf("made", "2026-03-01..2026-04-01"));
+    expect(screen.getByLabelText<HTMLInputElement>("From date").value).toBe(
+      "2026-03-01",
+    );
+    fireEvent.change(screen.getByLabelText("To date"), {
+      target: { value: "2026-04-15" },
+    });
+    expect(onChange).toHaveBeenLastCalledWith(
+      filterOf("made", "2026-03-01..2026-04-15"),
+    );
+  });
+});
