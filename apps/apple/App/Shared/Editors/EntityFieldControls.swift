@@ -571,22 +571,12 @@ struct EntityFieldControl: View {
 
     private func decode(_ value: JSONValue) -> Date? {
         guard let string = value.stringValue else { return nil }
-        if field.kind == .timestamp {
-            let iso = ISO8601DateFormatter()
-            iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            if let date = iso.date(from: string) { return date }
-            iso.formatOptions = [.withInternetDateTime]
-            if let date = iso.date(from: string) { return date }
-        }
+        if field.kind == .timestamp, let date = DatePresentation.parse(string) { return date }
         return PlainDate(rawValue: string).date()
     }
 
     private func encode(_ date: Date) -> JSONValue {
-        if field.kind == .timestamp {
-            let iso = ISO8601DateFormatter()
-            iso.formatOptions = [.withInternetDateTime]
-            return .string(iso.string(from: date))
-        }
+        if field.kind == .timestamp { return .string(date.ISO8601Format()) }
         return .string(PlainDate(date).rawValue)
     }
 

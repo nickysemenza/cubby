@@ -756,16 +756,8 @@ struct TodayContent: View {
 /// the server contract for this field isn't pinned. Anything else prints as-is rather than hiding
 /// what the server actually sent.
 private func formattedDueDate(_ raw: String) -> String {
-    let dayFormatter = DateFormatter()
-    dayFormatter.locale = Locale(identifier: "en_US_POSIX")
-    dayFormatter.dateFormat = "yyyy-MM-dd"
-    if let date = dayFormatter.date(from: raw) {
-        return date.formatted(.dateTime.month(.abbreviated).day())
-    }
-    if let date = ISO8601DateFormatter().date(from: raw) {
-        return date.formatted(.dateTime.month(.abbreviated).day())
-    }
-    return raw
+    guard let date = PlainDate(rawValue: raw).date() ?? DatePresentation.parse(raw) else { return raw }
+    return date.formatted(.dateTime.month(.abbreviated).day())
 }
 
 #Preview("Today", traits: .modifier(SignedInPreview())) {

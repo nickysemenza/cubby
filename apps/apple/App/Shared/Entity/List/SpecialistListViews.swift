@@ -103,9 +103,7 @@ private func dollars(_ value: JSONValue?) -> String {
 }
 
 private func isoDay(_ date: Date) -> String {
-    let formatter = DateFormatter()
-    formatter.dateFormat = "yyyy-MM-dd"
-    return formatter.string(from: date)
+    PlainDate(date).rawValue
 }
 
 private extension Array where Element: Hashable {
@@ -408,7 +406,11 @@ struct LocationGalleryListView: View {
                             Thumb(url: url, size: 48, symbol: "shippingbox")
                             VStack(alignment: .leading) {
                                 Text(node.name)
-                                EntityQualityFact(key: .location, id: node.id.rawValue, raw: wire(node))
+                                // The fact reads only `dataQuality`; encoding the whole node would re-encode its
+                                // subtree and inventory once per row.
+                                EntityQualityFact(
+                                    key: .location, id: node.id.rawValue,
+                                    raw: .object(["dataQuality": wire(node.dataQuality)]))
                                 Text("\(node.totalItems) items · \(node.childNodes.count) sublocations")
                                     .font(.caption).foregroundStyle(.secondary)
                             }
