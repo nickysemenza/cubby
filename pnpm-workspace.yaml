@@ -44,7 +44,7 @@ overrides:
   # Patched recursive brace parsing used by Nx and transitive minimatch.
   # Covers GHSA-qhr7-859c-m2p7, GHSA-6j4f-fj2g-mc7p, GHSA-q2hr-2g5m-vwhr.
   brace-expansion: ^5.0.12
-  effect: ^3.22.2
+  effect: ^4.0.0
   esbuild: ^0.28.2
   # GHSA-7p8r-x3mc-p8w7 / GHSA-v2hh-gcrm-f6hx (host confusion). Transitive via
   # ajv under @modelcontextprotocol/sdk; in-major patch bump from 3.1.3.
