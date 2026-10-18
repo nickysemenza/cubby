@@ -74,7 +74,7 @@ overrides:
   undici@7.28.0: 8.12.1
   # GHSA-rfgv-xxqx-mfg5 / GHSA-w293-vg96-wgc3. guarded-fetch (via the agent's
   # pi/Agents SDK tree) pins 7.29.0; keep it on the patched 7.x line.
-  undici@7.29.0: 7.30.0
+  undici@7.29.0: 8.11.2
   vite: ^8.3.4
   webpack: ^5.111.1
   wrangler: 4.151.0
