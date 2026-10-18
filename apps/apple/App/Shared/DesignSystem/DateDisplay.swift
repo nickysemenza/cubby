@@ -18,7 +18,9 @@ public struct DateDisplay: View {
 
     public init(date: Date, compact: Bool = false, stacked: Bool = false) {
         self.value = date.ISO8601Format()
-        self.date = date
+        // Whole seconds, as `value` carries: the relative age must not shift when the same
+        // instant arrives as a `Date` instead of its ISO string.
+        self.date = Date(timeIntervalSince1970: date.timeIntervalSince1970.rounded(.down))
         self.compact = compact
         self.stacked = stacked
     }
