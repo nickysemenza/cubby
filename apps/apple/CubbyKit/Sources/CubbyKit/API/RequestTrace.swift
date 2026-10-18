@@ -28,7 +28,7 @@ public final class RequestTrace: @unchecked Sendable {
     public private(set) var entries: [Entry] = []
     public var last: Entry? { entries.last }
     /// Latched by the first 426 from the server's version gate: the app is too old for the
-    /// server, every later request fails the same way, and only an update (a relaunch) clears it.
+    /// server, every later write fails the same way, and only an update (a relaunch) clears it.
     /// Lives here because every request already reports to this observer, whichever screen or
     /// background task made it.
     public private(set) var clientUpdateRequired = false

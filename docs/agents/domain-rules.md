@@ -10,7 +10,8 @@ iOS/macOS, HTTP, MCP connections), so change contracts in place:
   old code reloads, reconnects, or updates; a wire break for the native app
   bumps `APPLE_CLIENT_COMPATIBILITY_VERSION` in
   `packages/shared/src/apple-client-version.ts` (shared by the server minimum
-  and generated Apple marketing version).
+  and generated Apple marketing version). Older builds keep their reads; the
+  server refuses their writes until they update.
 - Household data is real: carry it through a migration that transforms it.
 
 ## Production changes

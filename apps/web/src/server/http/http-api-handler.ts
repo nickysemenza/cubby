@@ -166,22 +166,45 @@ const routerQuery = z.record(
   z.union([z.string(), z.array(z.string())]),
 );
 
+const routeKey = (route: AppRoute) => route.path.replace(/:[^/]+/gu, ":id");
+const routePattern = (key: string) =>
+  new RegExp(
+    `^${key.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&").replace(/:id/gu, "[^/]+")}$`,
+    "u",
+  );
+
 /** Method-not-allowed needs the route table; the adapter only knows 404. */
 function methodTable(router: AppRouter) {
   const byPath = new Map<string, { pattern: RegExp; methods: Set<string> }>();
   for (const route of httpRoutes(router)) {
-    const key = route.path.replace(/:[^/]+/gu, ":id");
+    const key = routeKey(route);
     const entry = byPath.get(key) ?? {
-      pattern: new RegExp(
-        `^${key.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&").replace(/:id/gu, "[^/]+")}$`,
-        "u",
-      ),
+      pattern: routePattern(key),
       methods: new Set<string>(),
     };
     entry.methods.add(route.method);
     byPath.set(key, entry);
   }
   return [...byPath.values()];
+}
+
+/**
+ * Every route an outdated native build may not call: anything but a query.
+ * Its reads keep running so one changed shape fails one screen, not the app;
+ * a write could carry a field whose meaning changed, so it is refused.
+ */
+function writeRoutes(router: AppRouter) {
+  return httpRoutes(router)
+    .filter(
+      (route) =>
+        startOperationDefinitionFor(
+          httpMetadataSchema.parse(route.metadata).operation,
+        )?.kind !== "query",
+    )
+    .map((route) => ({
+      method: route.method,
+      pattern: routePattern(routeKey(route)),
+    }));
 }
 
 /**
@@ -241,6 +264,7 @@ async function nativeRequest(request: Request): Promise<Request> {
 
 export function createHttpApiHandler(ports: HttpApiPorts) {
   const methods = methodTable(httpContract);
+  const writes = writeRoutes(httpContract);
   const diagnosticContexts = new WeakMap<
     Request,
     { authenticated: boolean; operation: string; stage: OperationStage }
@@ -460,13 +484,19 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
     incoming: Request,
   ): Promise<Response> {
     const outdated = appleClientUpdateRequired(incoming.headers);
-    if (outdated)
+    const pathname = new URL(incoming.url).pathname;
+    if (
+      outdated &&
+      writes.some(
+        (route) =>
+          route.method === incoming.method && route.pattern.test(pathname),
+      )
+    )
       return Response.json(appleClientUpdateError(outdated), {
         status: StatusCodes.UPGRADE_REQUIRED,
         headers: { "Cache-Control": "no-store" },
       });
     const request = await nativeRequest(incoming);
-    const pathname = new URL(request.url).pathname;
     const matching = methods.filter((entry) => entry.pattern.test(pathname));
     if (
       matching.length &&

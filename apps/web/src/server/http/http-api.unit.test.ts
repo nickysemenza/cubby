@@ -49,9 +49,23 @@ beforeEach(() => {
 });
 
 describe("HTTP boundary", () => {
-  it("answers an outdated native app with a structured update-required error before authenticating", async () => {
+  it("still serves reads to an outdated native app", async () => {
     const response = await request("entity/list", {
       headers: { "user-agent": "cubby-apple/1.0 (ios; none)" },
+    });
+    expect(response.status).toBe(200);
+    expect(ports.dispatch).toHaveBeenCalledOnce();
+  });
+
+  it("refuses an outdated native app's writes with a structured update-required error before authenticating", async () => {
+    const response = await request("entity/mutate", {
+      method: "POST",
+      body: "{}",
+      headers: {
+        "content-type": "application/json",
+        origin: "https://cubby.example",
+        "user-agent": "cubby-apple/1.0 (ios; none)",
+      },
     });
     expect(response.status).toBe(426);
     expect(response.headers.get("cache-control")).toBe("no-store");

@@ -63,15 +63,27 @@ test("Run evidence uses native bearer cookies and confines the hosted experiment
     code: "UPGRADE_REQUIRED",
     reason: "CLIENT_UPDATE_REQUIRED",
   });
-  const outdatedApi = await entityApi(authenticatedPage.request).get(
+  if (!baseURL) throw new Error("E2E baseURL missing");
+  const outdatedHeaders = {
+    headers: {
+      Origin: new URL(baseURL).origin,
+      "User-Agent": "cubby-apple/1.0 (ios; fixture)",
+    },
+  };
+  const outdatedRead = await entityApi(authenticatedPage.request).get(
     "run",
     run.shortcode,
-    {
-      headers: { "User-Agent": "cubby-apple/1.0 (ios; fixture)" },
-    },
+    outdatedHeaders,
   );
-  expect(outdatedApi.status()).toBe(426);
-  expect(await outdatedApi.json()).toEqual(await outdated.json());
+  expect(outdatedRead.status()).toBe(200);
+  const outdatedWrite = await entityApi(authenticatedPage.request).update(
+    "product",
+    product.id,
+    { name: "Workspace drill renamed" },
+    outdatedHeaders,
+  );
+  expect(outdatedWrite.status()).toBe(426);
+  expect(await outdatedWrite.json()).toEqual(await outdated.json());
   const productRow = await getDb(getFixtureDb()).query.product.findFirst({
     where: eq(productTable.shortcode, product.id),
   });
