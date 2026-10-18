@@ -26,6 +26,7 @@ export type InheritedRow = string | { readonly id: SQL };
 
 type Source = GeneratedInherit["from"][number];
 type Hop = Extract<Source, { kind: "effective" }>["hops"][number];
+type Same = Extract<Source, { kind: "hierarchy" }>["whileSame"];
 
 const chainOf = (entity: Entity, field: string): GeneratedInherit | null =>
   Object.entries(generatedEntityListFields[entity].inherit).find(
@@ -83,6 +84,29 @@ const ownValue = (chain: GeneratedInherit, alias: string): SQL => {
     sql`, `,
   )}) THEN NULL ELSE ${value} END`;
 };
+
+/** A same-record field's value over a row alias: effective when inherited. */
+const fieldValueSql = (
+  entity: Entity,
+  { field, column }: NonNullable<Same>,
+  alias: string,
+  depth: number,
+): SQL =>
+  chainOf(entity, field) === null
+    ? ref(alias, column)
+    : effectiveSql(entity, field, alias, depth);
+
+/** ` AND` the record at `node` shares the row's `whileSame` value, if any. */
+const sameAsSql = (
+  entity: Entity,
+  same: Same,
+  node: string,
+  row: SQL,
+  depth: number,
+): SQL =>
+  same === null
+    ? sql``
+    : sql` AND ${fieldValueSql(entity, same, node, depth)} IS NOT DISTINCT FROM ${row}`;
 
 /**
  * The live records a path of to-one references leads to, starting at
@@ -179,16 +203,25 @@ const sourceSql = (
           columns.map((column) => ref(from, column)),
           sql`, `,
         );
+      const same = sameAsSql(
+        entity,
+        source.whileSame,
+        node,
+        source.whileSame === null
+          ? sql``
+          : fieldValueSql(entity, source.whileSame, alias, depth + 1),
+        depth + 1,
+      );
       return sql`SELECT ${rank} AS prio, ${found}.v, ${found}.src FROM (
         WITH RECURSIVE ${name(walk)} AS (
           SELECT ${select(node)}, 1 AS ih_depth, array_remove(ARRAY[${ref(alias, "id")}, ${ref(node, "id")}], NULL) AS ih_visited
           FROM ${table} ${name(node)}
-          WHERE ${ref(node, "id")} = ${ref(alias, source.parentColumn)}${live(node, softDelete)}
+          WHERE ${ref(node, "id")} = ${ref(alias, source.parentColumn)}${live(node, softDelete)}${same}
           UNION ALL
           SELECT ${select(node)}, ${ref(walk, "ih_depth")} + 1, ${ref(walk, "ih_visited")} || ${ref(node, "id")}
           FROM ${table} ${name(node)} JOIN ${name(walk)} ON ${ref(node, "id")} = ${ref(walk, source.parentColumn)}
           WHERE ${ref(walk, "ih_depth")} < ${sql.raw(String(source.maxDepth))}
-            AND array_position(${ref(walk, "ih_visited")}, ${ref(node, "id")}) IS NULL${live(node, softDelete)}
+            AND array_position(${ref(walk, "ih_visited")}, ${ref(node, "id")}) IS NULL${live(node, softDelete)}${same}
         )
         SELECT ${ownValue(chain, walk)} AS v, ${ref(walk, "id")} AS src FROM ${name(walk)}
         WHERE ${ownDecides(chain, walk)} ORDER BY ${ref(walk, "ih_depth")} LIMIT 1
@@ -339,7 +372,12 @@ export const effectiveFieldInSql = (
 ): SQL<boolean> | null => {
   const chain = requireChain(entity, field);
   const [source, ...rest] = chain.from;
-  if (source?.kind !== "hierarchy" || rest.length > 0 || chain.empty !== null)
+  if (
+    source?.kind !== "hierarchy" ||
+    source.whileSame !== null ||
+    rest.length > 0 ||
+    chain.empty !== null
+  )
     return null;
   const { table, softDelete } = tableOf(entity);
   const set = name("ih0s");
@@ -384,10 +422,12 @@ export const effectiveSourceSql = (
 
 /**
  * Each live record a hierarchy chain reads, the row first: `{ id, depth,
- * value, decides }` ordered by depth, cycle-guarded and capped at
- * `maxDepth` like the walk itself. Explanations show it as the ladder of
- * places a value could come from. Only a chain that inherits through its
- * hierarchy first has a ladder.
+ * value, decides, eligible }` ordered by depth, cycle-guarded and capped at
+ * `maxDepth` like the walk itself. `eligible` turns false from the first
+ * ancestor a `whileSame` walk stops at, so an explanation can show it
+ * without letting it decide. Explanations show it as the ladder of places a
+ * value could come from. Only a chain that inherits through its hierarchy
+ * first has a ladder.
  */
 export const inheritanceLadderSql = (
   entity: Entity,
@@ -413,18 +453,27 @@ export const inheritanceLadderSql = (
     columns.map((column) => ref(node, column)),
     sql`, `,
   );
+  // The row's `whileSame` value rides along the walk; it is NULL-safe
+  // compared, so a row with no value still matches ancestors with none.
+  const same =
+    source.whileSame === null
+      ? sql`NULL`
+      : fieldValueSql(entity, source.whileSame, node, 1);
   return sql`(
     WITH RECURSIVE ${name(walk)} AS (
-      SELECT ${select}, 0 AS ih_depth, ARRAY[${ref(node, "id")}] AS ih_visited
+      SELECT ${select}, 0 AS ih_depth, ARRAY[${ref(node, "id")}] AS ih_visited,
+        ${same} AS ih_same, true AS ih_eligible
       FROM ${table} ${name(node)} WHERE ${ref(node, "id")} = ${rowId}${live(node, softDelete)}
       UNION ALL
-      SELECT ${select}, ${ref(walk, "ih_depth")} + 1, ${ref(walk, "ih_visited")} || ${ref(node, "id")}
+      SELECT ${select}, ${ref(walk, "ih_depth")} + 1, ${ref(walk, "ih_visited")} || ${ref(node, "id")},
+        ${ref(walk, "ih_same")}, ${ref(walk, "ih_eligible")}${sameAsSql(entity, source.whileSame, node, ref(walk, "ih_same"), 1)}
       FROM ${table} ${name(node)} JOIN ${name(walk)} ON ${ref(node, "id")} = ${ref(walk, source.parentColumn)}
       WHERE ${ref(walk, "ih_depth")} < ${sql.raw(String(source.maxDepth))}
         AND array_position(${ref(walk, "ih_visited")}, ${ref(node, "id")}) IS NULL${live(node, softDelete)}
     )
     SELECT ${ref(walk, "id")} AS id, ${ref(walk, "ih_depth")} AS depth,
-      ${ownValue(chain, walk)} AS value, ${ownDecides(chain, walk)} AS decides
+      ${ownValue(chain, walk)} AS value, ${ownDecides(chain, walk)} AS decides,
+      ${ref(walk, "ih_eligible")} AS eligible
     FROM ${name(walk)}
   )`;
 };

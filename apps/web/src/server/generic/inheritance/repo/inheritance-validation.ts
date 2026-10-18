@@ -2,11 +2,11 @@ import { publicImpactItemSchema } from "@cubby/schemas/entity-integrity";
 import { sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { unwrapDb } from "~/server/db/helpers";
 import { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
 import { effectiveExpenseTradeSql } from "~/server/domains/expense/repo/expense-inheritance";
 import { classificationPolicySql } from "~/server/domains/spending-category/repo/classification-field-policy";
-import { effectiveTaskTradeSql } from "~/server/domains/task/repo/task-project-inheritance";
 import { createBlockedError } from "~/server/errors/app-error";
 
 /**
@@ -35,7 +35,7 @@ export async function validateLiveEffectiveTrades(
   }>(sql`
     SELECT 'task' AS entity, t."shortcode", t."name"
     FROM "Task" t
-    WHERE t."deletedAt" IS NULL AND ${effectiveTaskTradeSql("t")} IS NULL
+    WHERE t."deletedAt" IS NULL AND ${effectiveFieldSql("task", "trade", "t")} IS NULL
     UNION ALL
     SELECT 'expense', e."shortcode", e."name"
     FROM "Expense" e

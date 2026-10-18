@@ -237,8 +237,8 @@ inheriting record. Scalar edits retain explicit-write meaning.
   member; a login without a linked live member matches no tasks.
 - Project site names: own names or explicit None → parent’s resolved names.
   Project trade: own default → nearest ancestor default.
-- Task trade: own choice → parent task trade when effective projects match →
-  effective project default. Principal expense trade: own choice → purchase trade
+- Task trade: own choice → nearest ancestor task trade while ancestors share
+  the task's effective project → effective project default. Principal expense trade: own choice → purchase trade
   default → effective project default. Adjustment expense trade: own choice →
   its principals' trades through the joint allocation. An unresolved required trade blocks writes;
   Other is available only as a deliberate classification.

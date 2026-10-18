@@ -33,16 +33,13 @@ import {
 import { parseCompleteListRead } from "~/server/generic/list/repo/list-read-adapters";
 
 import { taskDependencyIds, taskSubtaskCounts } from "./crud";
-import {
-  effectiveTaskTradeSql,
-  hydrateTaskInheritanceRows,
-} from "./task-project-inheritance";
+import { hydrateTaskInheritanceRows } from "./task-project-inheritance";
 
 // The effective project, subject product and assignee compile from their
 // declared `via` paths through the inherited references.
 const taskScaffold = listScaffold("task", task, {
   derived: {
-    effectiveTrade: effectiveTaskTradeSql(),
+    effectiveTrade: effectiveFieldSql("task", "trade"),
     // Effective due date — `dueEndDate ?? dueDate` — so a ranged task still
     // inside its window isn't treated as overdue, matching the board/stat
     // tiles. A task with both due columns null falls out of any window.

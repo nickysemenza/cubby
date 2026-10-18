@@ -45,17 +45,14 @@ import { getPlanting } from "~/server/domains/garden/repo/garden";
 import { getMealsByDateRange } from "~/server/domains/meal/repo/crud";
 import { getProductCoverImageUrlsByProductIds } from "~/server/domains/product/repo/crud";
 import {
-  collectDescendantIds,
   loadProjectDateWindows,
+  loadProjectSubtreeIds,
   loadProjectTree,
 } from "~/server/domains/project/repo/subtree";
 import { getRecipeCoverImageUrlsByShortcodes } from "~/server/domains/recipe/repo/crud";
 import { getTasksByIDs } from "~/server/domains/task/repo/crud";
 import { dbTaskToAPI } from "~/server/domains/task/repo/helpers";
-import {
-  effectiveTaskTradeSql,
-  hydrateTaskInheritanceRows,
-} from "~/server/domains/task/repo/task-project-inheritance";
+import { hydrateTaskInheritanceRows } from "~/server/domains/task/repo/task-project-inheritance";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { resolveAllPresent } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -106,19 +103,12 @@ const loadCalendarProjectScope = async (
   const selectedProjectIds = projectRequested
     ? await resolveAllPresent(db, "project", projectCodes)
     : [];
-  const tree =
-    projectRequested || wantsProjects ? await loadProjectTree(db) : undefined;
-  const scopeIds =
-    tree && selectedProjectIds.length
-      ? uniq(
-          selectedProjectIds.flatMap((id) => [
-            id,
-            ...(input.includeSubProjects
-              ? collectDescendantIds(tree.childrenByParent, id)
-              : []),
-          ]),
-        )
-      : selectedProjectIds;
+  const [tree, scopeIds] = await Promise.all([
+    wantsProjects ? loadProjectTree(db) : undefined,
+    input.includeSubProjects
+      ? loadProjectSubtreeIds(db, selectedProjectIds)
+      : selectedProjectIds,
+  ]);
   return { projectRequested, scopeIds, tree };
 };
 
@@ -177,7 +167,10 @@ const loadCalendarTasks = async (
       gte(sql`coalesce(${task.dueEndDate}, ${task.dueDate})`, input.startDate),
       eqAny(task.status, input.taskStatus),
       input.taskTrade
-        ? inArray(effectiveTaskTradeSql("task"), [input.taskTrade].flat())
+        ? inArray(
+            effectiveFieldSql("task", "trade", "task"),
+            [input.taskTrade].flat(),
+          )
         : undefined,
       projectScopeOn(
         effectiveFieldSql("task", "projectId", "task"),
@@ -605,7 +598,7 @@ export async function getCalendarSchedule(
               eqAny(task.status, input.taskStatus),
               input.taskTrade
                 ? inArray(
-                    effectiveTaskTradeSql("Task"),
+                    effectiveFieldSql("task", "trade", "Task"),
                     [input.taskTrade].flat(),
                   )
                 : undefined,

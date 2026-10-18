@@ -82,7 +82,6 @@ import {
 } from "~/server/domains/expense/repo/expense-inheritance";
 import { categoryFeatureSql } from "~/server/domains/product-category/repo/category-feature";
 import { loadProductOwnershipTimelines } from "~/server/domains/product/repo/ownership";
-import { effectiveTaskTradeSql } from "~/server/domains/task/repo/task-project-inheritance";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
 
 import { buildDashboardProjectWhere } from "./dashboard-shared";
@@ -113,7 +112,7 @@ const effectiveTaskProject = effectiveFieldSql<ProjectId | null>(
   "task",
   "projectId",
 );
-const effectiveTaskTrade = effectiveTaskTradeSql();
+const effectiveTaskTrade = effectiveFieldSql<Trade | null>("task", "trade");
 type ProjectDateWindows = Awaited<ReturnType<typeof loadProjectDateWindows>>;
 
 type MatrixCellKey = `${ProjectId}:${ProductId}`;

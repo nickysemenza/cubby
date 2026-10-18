@@ -68,7 +68,6 @@ import {
 import { getCategoryFeature } from "~/server/domains/product-category/repo/product-category";
 import { getProductCoverImageUrlsByProductIds } from "~/server/domains/product/repo/crud";
 import { loadProductOwnershipTimelines } from "~/server/domains/product/repo/ownership";
-import { effectiveTaskTradeSql } from "~/server/domains/task/repo/task-project-inheritance";
 import { linkRelationAdapter } from "~/server/entity-kernel/repo/relation-mutation-adapter";
 import {
   emptyPreflight,
@@ -97,7 +96,7 @@ export const MAX_SUGGESTIONS_PER_TRADE = 5;
 const effectiveExpenseProject = effectiveExpenseProjectSql();
 const effectiveExpenseTrade = effectiveExpenseTradeSql();
 const effectiveTaskProject = effectiveFieldSql("task", "projectId");
-const effectiveTaskTrade = effectiveTaskTradeSql();
+const effectiveTaskTrade = effectiveFieldSql<Trade | null>("task", "trade");
 
 /** Project-resource features that land in the `'tools'` bucket — everything
  * eligible except `software`, which is its own bucket. A `tool-accessories`

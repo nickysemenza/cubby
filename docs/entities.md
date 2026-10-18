@@ -58,30 +58,60 @@ row's own stored value decides (absent: NULL inherits; a `none` mode value is
 an explicit None); `from` lists the ordered sources, and the first that
 decides (a value or an explicit None) ends the chain: `"hierarchy"` is the
 nearest live ancestor along `model.hierarchy` whose own value decides
-(cycle-guarded, capped at `maxDepth`), and `{ path }` the effective value of
-the field a to-one path ends at. Project assignee, locations and default
-trade, product category feature, spending mapping and stock tracking, and
-task project, subject product and assignee walk their hierarchy; the task
-assignee then falls back to its effective project's default, and a
-Product's stock tracking reads its category's (ADR 0013).
+(cycle-guarded, capped at `maxDepth`); `{ hierarchy: { whileSame } }` is that
+walk stopped at the first ancestor whose effective `whileSame` field differs
+from the row's; and `{ path }` the effective value of the field a to-one path
+ends at. Project assignee, locations and default trade, product category
+feature, spending mapping and stock tracking, and task project, subject
+product and assignee walk their hierarchy; the task assignee then falls back
+to its effective project's default, and a Product's stock tracking reads its
+category's (ADR 0013). Task trade walks only ancestors on the task's
+effective project (`whileSame: "projectId"`), then reads that project's
+default trade.
 
 `effectiveFieldSql` is the value every read, list row, filter, sort and group
 uses; `inheritedFieldSql` the fallback; `effectiveSourceSql` and
 `inheritedSourceSql` the record that decided the value or the fallback,
 which `fieldResolutions.sourceEntity` names; `inheritanceLadderSql` every
-record a hierarchy chain reads, for "why this value" explanations. A stored
+record a hierarchy chain reads, for "why this value" explanations, with
+`eligible` false from where a `whileSame` walk stops. A stored
 filter over an inherited field, a `via` path ending at one, and a relation
 edge whose foreign key is one all read the effective value (a batched
 traversal that walks such an edge toward its source may join a statement-local
 relation of each row's effective value, so the match is an equality join
-rather than a per-pair walk); a hierarchy-only
+rather than a per-pair walk); an unconditional hierarchy-only
 chain filters in the top-down set form (`effectiveFieldInSql`), resolved once
 per query. Repositories format provenance labels and nothing else; never
-hand-write an ancestor walk or fallback for a declared field. Fields whose
-rule does not fit this shape (task trade, expense project, trade and
-spending category, inventory owner, product price, recipe servings,
-itemization expectation) keep their own resolution until #2616 declares a
-variant or records why not. A set-valued fallback is outside `resolution.inherit`:
+hand-write an ancestor walk or fallback for a declared field.
+
+These fields keep their own resolution because their rule is not
+inheritance, or would need more than a small step kind (#2616):
+
+- Expense `projectId` and `trade`: only principal lines resolve (other lines
+  read no project, or their own trade); the Purchase default counts only
+  through a live Project; and a food line's last fallback is a
+  classification policy, the designated household Project chosen by
+  shortcode when the Product's category feature is food. The allocation
+  join form (`principalExpenseInheritanceSql`) must equal the scalar one.
+  Declaring them needs a row gate, per-step conditions and a fixed-record
+  step.
+- Expense `spendingCategoryId`: a ladder of override, vendor food context,
+  category mapping, purchase and vendor defaults whose category step reads
+  draft values projected into the walk for review previews.
+- Inventory `ownerLedgerPartyId`: resolved in JS from acquisition evidence.
+- Product `price`: a derived kit or expense price, not inherited.
+- Recipe `servings`: derived from the record's own yield when measured in
+  servings (`resolveRecipeServingValue`, shared with older embedded reads).
+- Purchase and financial transaction `itemizationExpectation`: a policy
+  ladder across vendor and category.
+
+Project subtree expansion has two forms. A caller that needs only ids reads
+`loadProjectSubtreeIds` (`hierarchyDescendantsSql`, the list filter's
+expansion). A caller that already loaded the project tree for its rows,
+estimates, rollups or date windows walks that tree with
+`collectDescendantIds` instead of a second query; project tree pages walk
+their filtered children map, which is not the stored hierarchy.
+A set-valued fallback is outside `resolution.inherit`:
 Purchase `paymentAccounts` stores only explicit `purchasePaymentAccount` links
 and otherwise derives its accounts on read from payment evidence
 (`purchasePayingAccountIdsSql`), like derived funding beside explicit

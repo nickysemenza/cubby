@@ -52,7 +52,6 @@ import {
   purchaseEvidenceFieldResolutionsSql,
   vendorItemizationPolicySql,
 } from "~/server/domains/purchase/repo/purchase-evidence-policy";
-import { eligibleParentTaskTradeSql } from "~/server/domains/task/repo/task-project-inheritance";
 import { shortcodeLabels } from "~/server/generic/shortcode/repo/shortcode-labels";
 
 const categoryOrigin = purchaseOut.shape.spendingCategoryOrigin.unwrap();
@@ -69,6 +68,8 @@ const nodeSchema = z.object({
   depth: z.number(),
   value: z.json(),
   assigned: z.boolean(),
+  /** False from the first ancestor a `whileSame` walk stops at. */
+  eligible: z.boolean(),
 });
 type Node = z.infer<typeof nodeSchema>;
 type AncestryKind = "project" | "task" | "productCategory";
@@ -99,8 +100,7 @@ const source = (kind: AncestryKind, node: Node | undefined) =>
  * The places a hierarchy value could come from, the record first, with each
  * one's own value and whether it decides. A declared chain
  * (`resolution.inherit`) reads the generator's ladder, so the explanation
- * walks exactly what the value walks; task trade, a different rule (#2616),
- * keeps its own one-parent walk.
+ * walks exactly what the value walks.
  */
 async function ancestors(
   db: Database,
@@ -119,19 +119,8 @@ async function ancestors(
   const chainField =
     kind === "project" && field === "trade" ? "defaultTrade" : field;
   const declared = hierarchyInheritance(kind, chainField);
-  if (declared === null) {
-    if (kind !== "task" || field !== "trade")
-      throw new Error(`${kind}.${field} declares no hierarchy inheritance`);
-    const rows = await unwrapDb(db).execute(sql`
-      SELECT p.shortcode,p.name,to_jsonb(p.trade) AS value,p.trade IS NOT NULL AS assigned,0 AS depth
-      FROM "Task" p WHERE p.id=${start} AND p."deletedAt" IS NULL
-      UNION ALL
-      SELECT parent.shortcode,parent.name,to_jsonb(parent.trade),parent.trade IS NOT NULL,1
-      FROM "Task" p JOIN "Task" parent ON parent.id=p."parentTaskId" AND parent."deletedAt" IS NULL
-      WHERE p.id=${start} AND p."deletedAt" IS NULL
-      ORDER BY 5`);
-    return z.array(nodeSchema).parse(rows.rows);
-  }
+  if (declared === null)
+    throw new Error(`${kind}.${field} declares no hierarchy inheritance`);
   const target =
     declared.reference === null ? null : entityManifest[declared.reference];
   const shown =
@@ -142,7 +131,7 @@ async function ancestors(
         ? sql`to_jsonb((SELECT c.shortcode FROM ${sql.identifier(target.dbTable)} c WHERE c.id=l.value${target.softDelete ? sql` AND c."deletedAt" IS NULL` : sql``}))`
         : sql`to_jsonb(l.value)`;
   const rows = await unwrapDb(db).execute(sql`
-    SELECT p.shortcode,p.name,${shown} AS value,l.decides AS assigned,l.depth
+    SELECT p.shortcode,p.name,${shown} AS value,l.decides AS assigned,l.depth,l.eligible
     FROM ${inheritanceLadderSql(kind, chainField, start)} l JOIN ${table} p ON p.id=l.id
     ORDER BY l.depth`);
   return z.array(nodeSchema).parse(rows.rows);
@@ -179,25 +168,6 @@ const selfStep = (entity: Entity, resolution: FieldResolution): Step => ({
   self: true,
   ...(entity === "inventory" ? { nullLabel: "Household" } : {}),
 });
-
-async function eligibleTaskTradeSource(
-  db: Database,
-  shortcode: string,
-  nodes: Node[],
-) {
-  const eligible = await unwrapDb(db).execute(sql`
-    SELECT ${eligibleParentTaskTradeSql("t")} AS trade
-    FROM "Task" t WHERE t.shortcode=${shortcode} AND t."deletedAt" IS NULL`);
-  const parentEligible = z
-    .array(z.object({ trade: z.string().nullable() }))
-    .parse(eligible.rows)[0]?.trade;
-  return parentEligible
-    ? source(
-        "task",
-        nodes.find((node) => node.depth === 1),
-      )
-    : null;
-}
 
 const OWNERSHIP_STEP_TITLES = {
   acquisition: "Acquisition context",
@@ -711,19 +681,17 @@ async function fieldSteps(
       sql`(SELECT id FROM "Task" WHERE shortcode=${shortcode} AND "deletedAt" IS NULL)`,
       field,
     );
-    let fallbackSource =
-      field === "trade"
-        ? await eligibleTaskTradeSource(db, shortcode, nodes)
-        : source(
-            "task",
-            nodes.find((node) => node.depth > 0 && node.assigned),
-          );
+    let fallbackSource = source(
+      "task",
+      nodes.find((node) => node.depth > 0 && node.assigned && node.eligible),
+    );
     const steps = nodeSteps("task", nodes, subject);
-    if (field === "trade" && !fallbackSource) {
-      // A parent on another effective Project is inspected but never eligible.
-      const parent = steps[1];
-      if (parent?.assigned)
-        parent.unavailableReason = "Different effective Project";
+    // An ancestor on another effective Project is inspected but never
+    // eligible (trade's `whileSame` walk).
+    for (const [index, node] of nodes.entries()) {
+      const step = steps[index];
+      if (step && node.assigned && !node.eligible)
+        step.unavailableReason = "Different effective Project";
     }
     if (field === "trade") {
       const projects = await ancestors(

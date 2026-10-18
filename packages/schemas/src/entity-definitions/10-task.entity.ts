@@ -501,11 +501,17 @@ export default defineEntity({
         resolution: {
           reset: { trade: null },
           redundancy: "eligible",
+          inherit: {
+            from: [
+              { hierarchy: { whileSame: "projectId" } },
+              { path: "project.defaultTrade" },
+            ],
+          },
         },
         explanation: {
           ruleId: "task.effective-trade",
           description:
-            "A task trade override wins; otherwise the matching parent task or project default supplies it.",
+            "A task trade override wins; otherwise the nearest ancestor task on the same effective project, then that project's default trade, supplies it.",
           projections: {
             list: "fieldResolutions.trade.value",
             detail: "fieldResolutions.trade.value",
