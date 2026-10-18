@@ -1,7 +1,11 @@
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { AiUsageTransport } from "@cubby/schemas/telemetry";
 import { getErrorMessage } from "@cubby/shared";
-import { accountAiUsage, type AiCostEvidence } from "@cubby/shared/ai/pricing";
+import {
+  accountAiUsage,
+  type AiAvoidedUsage,
+  type AiCostEvidence,
+} from "@cubby/shared/ai/pricing";
 import { createLogger } from "@cubby/worker-tracing";
 
 import { afterResponse } from "~/server/cf-env";
@@ -57,13 +61,19 @@ export type RecordAiUsageInput = {
   /** What carried the call; `unknown` only when the caller has no evidence. */
   transport: AiUsageTransport;
   entity?: { entityKind: string; entityId: string } | null;
+  /**
+   * An application-cache replay's original token usage. It prices the
+   * replay's standard comparison; the row's token columns stay as reported.
+   */
+  avoidedUsage?: AiAvoidedUsage | null;
 };
 
 /**
  * Best-effort AI usage telemetry; never changes the owning AI operation.
  *
  * Every row passes through here, so the accounting rules live here: a `cache`
- * replay made no model call (zero attempts and charged cost), and neither ChatGPT plan
+ * replay made no model call (zero attempts and charged cost; its comparison
+ * prices `avoidedUsage` when the entry retained it), and neither ChatGPT plan
  * usage nor a gateway response-cache hit is API spend — both keep their
  * attempts, transport, and token evidence.
  */
@@ -97,8 +107,21 @@ async function usageBilling(
     ? retainedComparison
     : !gatewayReplay || positiveTokens || retainedComparison;
   const quotableTokens = (!replayed && !gatewayReplay) || positiveTokens;
-  const snapshot =
-    supportedComparison && quotableTokens
+  // A replay's comparison is the original inference it avoided, priced now.
+  const avoidedUsage =
+    replayed &&
+    input.avoidedUsage &&
+    [
+      input.avoidedUsage.inputTokens,
+      input.avoidedUsage.outputTokens,
+      input.avoidedUsage.cacheReadTokens,
+      input.avoidedUsage.cacheWriteTokens,
+    ].some((tokens) => tokens != null && tokens > 0)
+      ? input.avoidedUsage
+      : null;
+  const snapshot = avoidedUsage
+    ? await snapshotPrice(input.provider, input.model, avoidedUsage)
+    : supportedComparison && quotableTokens
       ? await snapshotPrice(input.provider, input.model, input)
       : null;
   const standardCost =
@@ -123,6 +146,7 @@ async function usageBilling(
         ...input.costEvidence,
         billingReason: reason,
         chargedCost: input.chargedCost,
+        ...(snapshot && avoidedUsage ? { avoidedUsage } : {}),
       },
       input,
     ),

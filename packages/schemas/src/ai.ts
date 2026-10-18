@@ -317,7 +317,7 @@ export type AiUsageCacheStatus = z.infer<typeof aiUsageCacheStatus>;
 
 export { aiUsageTransport, aiUsageTransportValues, type AiUsageTransport };
 
-const aiUsageStatus = z.enum(["succeeded", "failed"]);
+export const aiUsageStatus = z.enum(["succeeded", "failed"]);
 
 /** Filters narrow the whole history before `limit` takes the newest rows. */
 const aiUsageRecentFilters = z.object({
@@ -427,6 +427,14 @@ export const aiUsageSummaryRowSchema = z.object({
   cacheReadTokens: z.number().int(),
   cacheWriteTokens: z.number().int(),
   ...aiCostSummaryFields,
+  failedWithoutUsageCount: z.number().int().nonnegative(),
+  /** Standard minus charged cost, split by why the charge was lower. */
+  savingsByReason: z.object({
+    plan: z.number(),
+    subscriberCredit: z.number(),
+    cache: z.number(),
+    discount: z.number(),
+  }),
   durationMs: z.number().int(),
 });
 

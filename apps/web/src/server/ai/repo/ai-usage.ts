@@ -1,6 +1,7 @@
-import type {
-  AiUsageRecentFilters,
-  AiUsageRecentInput,
+import {
+  type AiUsageRecentFilters,
+  type AiUsageRecentInput,
+  aiUsageStatus,
 } from "@cubby/schemas/ai";
 import type { RunId } from "@cubby/schemas/identifiers";
 import { imageProcessingAttemptState } from "@cubby/schemas/image-processing";
@@ -20,15 +21,22 @@ import {
 } from "~/server/db/helpers";
 import { aiUsage } from "~/server/db/schema";
 
+/**
+ * A failed call that reported no tokens had nothing to price: it is counted
+ * separately rather than as an unpriced call.
+ */
+const failedWithoutUsage = sql`(${aiUsage.status} = ${aiUsageStatus.enum.failed} and ${aiUsage.inputTokens} is null and ${aiUsage.outputTokens} is null and ${aiUsage.cacheReadTokens} is null and ${aiUsage.cacheWriteTokens} is null)`;
+
 export function aiCostSummarySql() {
   return {
     standardCost: sql<number>`coalesce(sum(${aiUsage.standardCost}), 0)`,
     chargedCost: sql<number>`coalesce(sum(${aiUsage.chargedCost}), 0)`,
-    standardUnpricedCount: sql<number>`(count(${aiUsage.id}) filter (where ${aiUsage.standardCost} is null))::int`,
-    chargedUnpricedCount: sql<number>`(count(${aiUsage.id}) filter (where ${aiUsage.chargedCost} is null))::int`,
+    standardUnpricedCount: sql<number>`(count(${aiUsage.id}) filter (where ${aiUsage.standardCost} is null and not ${failedWithoutUsage}))::int`,
+    chargedUnpricedCount: sql<number>`(count(${aiUsage.id}) filter (where ${aiUsage.chargedCost} is null and not ${failedWithoutUsage}))::int`,
     savings: sql<number>`coalesce(sum(${aiUsage.standardCost} - ${aiUsage.chargedCost}) filter (where ${aiUsage.standardCost} is not null and ${aiUsage.chargedCost} is not null), 0)`,
     comparedCalls: sql<number>`(count(${aiUsage.id}) filter (where ${aiUsage.standardCost} is not null and ${aiUsage.chargedCost} is not null))::int`,
     count: sql<number>`count(${aiUsage.id})::int`,
+    failedWithoutUsageCount: sql<number>`(count(${aiUsage.id}) filter (where ${failedWithoutUsage}))::int`,
     billingReasons: sql<
       AiCostEvidence["billingReason"][]
     >`coalesce(jsonb_agg(distinct ${aiUsage.costEvidence}->>'billingReason') filter (where ${aiUsage.costEvidence}->>'billingReason' is not null), '[]'::jsonb)`,
@@ -114,6 +122,9 @@ export async function listRecentAiUsage(
   return rows;
 }
 
+const savingsFor = (reason: AiCostEvidence["billingReason"]) =>
+  sql<number>`coalesce(sum(${aiUsage.standardCost} - ${aiUsage.chargedCost}) filter (where ${aiUsage.standardCost} is not null and ${aiUsage.chargedCost} is not null and ${aiUsage.costEvidence}->>'billingReason' = ${reason}), 0)`;
+
 export async function summarizeAiUsage(db: Database, days: number) {
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
   const usageDayGroup = householdDaySql(aiUsage.createdAt);
@@ -138,6 +149,12 @@ export async function summarizeAiUsage(db: Database, days: number) {
       cacheReadTokens: sql<string>`coalesce(sum(${aiUsage.cacheReadTokens}), 0)::bigint`,
       cacheWriteTokens: sql<string>`coalesce(sum(${aiUsage.cacheWriteTokens}), 0)::bigint`,
       ...aiCostSummarySql(),
+      savingsByReason: {
+        plan: savingsFor("plan"),
+        subscriberCredit: savingsFor("subscriber_credit"),
+        cache: savingsFor("cache"),
+        discount: savingsFor("discount"),
+      },
       durationMs: sql<string>`coalesce(sum(${aiUsage.durationMs}), 0)::bigint`,
     })
     .from(aiUsage)
@@ -315,6 +332,7 @@ export async function listAiUsageForRun(
       savings: 0,
       comparedCalls: 0,
       count: 0,
+      failedWithoutUsageCount: 0,
       billingReasons: [],
     }),
     chargedComplete:

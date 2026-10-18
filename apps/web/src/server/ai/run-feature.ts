@@ -14,7 +14,7 @@ import {
   type SupportedEmbeddingModel,
 } from "@cubby/shared/ai/models";
 import { piTokenUsage } from "@cubby/shared/ai/pi-providers";
-import type { AiCostEvidence } from "@cubby/shared/ai/pricing";
+import type { AiAvoidedUsage, AiCostEvidence } from "@cubby/shared/ai/pricing";
 import {
   fetchExternalResponse,
   readResponseWithLimit,
@@ -195,6 +195,7 @@ export interface FeatureUsageOutcome {
   /** Overrides the context's caller-cache status for this row. */
   cacheStatus?: "hit" | "miss" | "none";
   applicationCacheStatus?: ApplicationCacheStatus;
+  avoidedUsage?: AiAvoidedUsage | null;
 }
 
 /**
@@ -235,19 +236,22 @@ export async function recordFeatureUsage(
     cacheStatus: outcome.cacheStatus ?? ctx.cacheStatus ?? "none",
     applicationCacheStatus: outcome.applicationCacheStatus,
     transport: outcome.transport,
+    avoidedUsage: outcome.avoidedUsage ?? null,
   });
 }
 
 /**
  * An application response-cache (`withAiResponseCache`) answer: no upstream
- * call, so transport `cache`, no tokens, zero charged cost and attempts;
- * its equivalent standard inference stays unknown. A Gateway
+ * call, so transport `cache`, no tokens, zero charged cost and attempts. The
+ * standard comparison prices the tokens the cached answer originally
+ * consumed; an entry published without them leaves it unknown. A Gateway
  * response-cache hit is different — it still went through the gateway.
  */
 export function recordApplicationCacheHit(
   spec: Pick<AiFeature, "feature" | "model">,
   ctx: UsageCallContext,
   durationMs: number,
+  avoidedUsage: AiAvoidedUsage | null,
 ): Promise<void> {
   return recordFeatureUsage(spec, ctx, {
     transport: "cache",
@@ -255,6 +259,7 @@ export function recordApplicationCacheHit(
     inputTokens: 0,
     outputTokens: 0,
     applicationCacheStatus: "hit",
+    avoidedUsage,
   });
 }
 
@@ -767,6 +772,7 @@ export async function runStructuredFeature<T>(
     callCtx: UsageCallContext & {
       applicationCacheStatus?: ApplicationCacheStatus;
     },
+    recordUsage: (usage: AiAvoidedUsage) => void,
   ): Promise<Answered<T>> => {
     let responseFailure: GatewayResponseFailure | undefined;
     const recoveredFailures: GatewayResponseFailure[] = [];
@@ -840,12 +846,14 @@ export async function runStructuredFeature<T>(
           response = message;
         },
       });
+      const usage = messageUsage(message, gateway);
+      recordUsage(usage);
       if (callCtx.db) {
         await recordFeatureUsage(
           { ...spec, model: answeredBy(message) },
           callCtx,
           {
-            ...messageUsage(message, gateway),
+            ...usage,
             transport,
             durationMs: Math.round(performance.now() - startedAt),
             applicationCacheStatus: callCtx.applicationCacheStatus,
@@ -925,18 +933,20 @@ export async function runStructuredFeature<T>(
       return { value: validate(entry.value), model: entry.model };
     },
     // A replayed answer is booked under the model that originally produced it.
-    onHit: (durationMs) =>
+    onHit: (durationMs, avoidedUsage) =>
       recordApplicationCacheHit(
         { ...spec, model: hitModel ?? spec.model },
         ctx,
         durationMs,
+        avoidedUsage,
       ),
-    compute: async (applicationCacheStatus) => {
+    compute: async (applicationCacheStatus, recordUsage) => {
       const callContext = { ...ctx, applicationCacheStatus };
       const firstResult = await placeCall(
         request,
         planStructuredRun(spec, callContext),
         callContext,
+        recordUsage,
       );
       if (!ctx.validate) return firstResult;
       const firstValidation = ctx.validate(firstResult.value);
@@ -953,6 +963,7 @@ export async function runStructuredFeature<T>(
         repairRequest,
         planStructuredRun(spec, repairCallContext),
         repairCallContext,
+        recordUsage,
       );
       const repairValidation = ctx.validate(repairedResult.value);
       if (repairValidation.ok) return repairedResult;

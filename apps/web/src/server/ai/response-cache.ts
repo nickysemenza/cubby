@@ -1,3 +1,7 @@
+import {
+  type AiAvoidedUsage,
+  aiAvoidedUsageSchema,
+} from "@cubby/shared/ai/pricing";
 import { sleep } from "@cubby/shared/retry";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { createLogger } from "@cubby/worker-tracing";
@@ -131,6 +135,44 @@ class LocalCacheStore implements CacheStore {
 
 const localStore = new LocalCacheStore();
 
+const ignoreUsage = () => undefined;
+
+// Entries published before usage retention hold the bare answer. The marker
+// key cannot occur in an answer, so both shapes stay readable through the TTL
+// instead of recomputing every legacy entry.
+const ENTRY_MARKER = "$cubbyResponseCacheEntry";
+const ENTRY_VERSION = 2;
+const versionedEntrySchema = z.object({
+  [ENTRY_MARKER]: z.literal(ENTRY_VERSION),
+  value: jsonSchema,
+  usage: aiAvoidedUsageSchema.nullable(),
+});
+
+function readEntry(stored: string): {
+  value: JsonValue;
+  usage: AiAvoidedUsage | null;
+} {
+  const value = jsonSchema.parse(JSON.parse(stored));
+  const entry = versionedEntrySchema.safeParse(value);
+  return entry.success
+    ? { value: entry.data.value, usage: entry.data.usage }
+    : { value, usage: null };
+}
+
+/** Every call that produced the answer; a hit avoids all of them. */
+function sumUsage(usage: readonly AiAvoidedUsage[]): AiAvoidedUsage {
+  const total = (key: keyof AiAvoidedUsage) =>
+    usage.every((entry) => entry[key] == null)
+      ? null
+      : usage.reduce((sum, entry) => sum + (entry[key] ?? 0), 0);
+  return {
+    inputTokens: total("inputTokens"),
+    outputTokens: total("outputTokens"),
+    cacheReadTokens: total("cacheReadTokens"),
+    cacheWriteTokens: total("cacheWriteTokens"),
+  };
+}
+
 function canonical(value: JsonValue): JsonValue {
   if (jsonScalarSchema.safeParse(value).success) return value;
   if (Array.isArray(value)) return value.map(canonical);
@@ -242,19 +284,24 @@ export async function withAiResponseCache<T>(args: {
   keyInput: AiResponseCacheKeyInput;
   force?: boolean;
   validate(value: JsonValue): T;
-  compute(status: ApplicationCacheStatus): Promise<T>;
-  onHit?(durationMs: number): Promise<void>;
+  /** `recordUsage` keeps the tokens this answer consumed with its entry. */
+  compute(
+    status: ApplicationCacheStatus,
+    recordUsage: (usage: AiAvoidedUsage) => void,
+  ): Promise<T>;
+  /** `avoided` is null for entries published before usage was retained. */
+  onHit?(durationMs: number, avoided: AiAvoidedUsage | null): Promise<void>;
   /** A batch may dispatch its owned misses while another request owns this key. */
   onWait?(): void;
 }): Promise<T> {
   if (!args.enabled) {
     args.batch?.batch.ready(args.batch.index);
-    return args.compute("none");
+    return args.compute("none", ignoreUsage);
   }
   const key = await aiResponseCacheKey(args.keyInput);
   if (!key) {
     args.batch?.batch.ready(args.batch.index);
-    return args.compute("none");
+    return args.compute("none", ignoreUsage);
   }
   const store = cacheStore(key);
   const start = performance.now();
@@ -268,12 +315,15 @@ export async function withAiResponseCache<T>(args: {
         : store.readOrClaim(key, force));
     } catch (error) {
       log.error("lookup failed", { error });
-      return args.compute("none");
+      return args.compute("none", ignoreUsage);
     }
     if (claim.kind === "hit") {
       let result: T;
+      let avoided: AiAvoidedUsage | null;
       try {
-        result = args.validate(jsonSchema.parse(JSON.parse(claim.value)));
+        const entry = readEntry(claim.value);
+        avoided = entry.usage;
+        result = args.validate(entry.value);
       } catch (error) {
         // SILENT: An invalid cached value is discarded so the model can answer.
         log.warn("entry rejected", { error });
@@ -281,11 +331,14 @@ export async function withAiResponseCache<T>(args: {
           await store.invalidate(key, claim.value);
         } catch (error) {
           log.error("invalidation failed", { error });
-          return args.compute("none");
+          return args.compute("none", ignoreUsage);
         }
         continue;
       }
-      await args.onHit?.(Math.max(0, Math.round(performance.now() - start)));
+      await args.onHit?.(
+        Math.max(0, Math.round(performance.now() - start)),
+        avoided,
+      );
       return result;
     }
     if (claim.kind === "busy") {
@@ -302,10 +355,17 @@ export async function withAiResponseCache<T>(args: {
       });
     }, 15_000);
     try {
+      const usage: AiAvoidedUsage[] = [];
       const result = args.validate(
-        jsonSchema.parse(await args.compute("miss")),
+        jsonSchema.parse(
+          await args.compute("miss", (recorded) => usage.push(recorded)),
+        ),
       );
-      const value = JSON.stringify(result);
+      const value = JSON.stringify({
+        [ENTRY_MARKER]: ENTRY_VERSION,
+        value: result,
+        usage: usage.length ? sumUsage(usage) : null,
+      });
       if (new TextEncoder().encode(value).byteLength <= MAX_VALUE_BYTES) {
         // The answer does not wait on its cache write; the claim's lease covers
         // concurrent readers until the publish lands.
@@ -334,5 +394,5 @@ export async function withAiResponseCache<T>(args: {
       clearInterval(heartbeat);
     }
   }
-  return args.compute("none");
+  return args.compute("none", ignoreUsage);
 }

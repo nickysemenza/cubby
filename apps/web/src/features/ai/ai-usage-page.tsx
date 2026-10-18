@@ -5,7 +5,7 @@ import type {
   AiUsageTransport,
 } from "@cubby/schemas/ai";
 import { AI_USAGE_TRANSPORT_LABELS as transportLabels } from "@cubby/schemas/telemetry";
-import { parseShortcode } from "@cubby/shared";
+import { mapRecord, parseShortcode, recordKeys } from "@cubby/shared";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { RowData } from "@tanstack/react-table";
@@ -13,6 +13,13 @@ import { type ReactNode, useId, useMemo, useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import RTable from "~/entity/table/table";
+import {
+  AiUsageChart,
+  type UsageChartDimension,
+  type UsageChartMeasure,
+  type UsageChartSelection,
+  usageChartDimensions,
+} from "~/features/ai/ai-usage-chart";
 import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCount } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
@@ -53,18 +60,27 @@ const statusLabels = {
   failed: "Failed",
 } satisfies Record<AiUsageStatus, string>;
 
-interface UsageTotals {
-  calls: number;
-  inputTokens: number;
-  outputTokens: number;
-  chargedCost: number;
-  standardCost: number;
-  chargedUnpricedCount: number;
-  standardUnpricedCount: number;
-  savings: number;
-  comparedCalls: number;
-  durationMs: number;
-}
+type UsageTotals = Pick<
+  AiUsageSummaryRow,
+  | "inputTokens"
+  | "outputTokens"
+  | "chargedCost"
+  | "standardCost"
+  | "chargedUnpricedCount"
+  | "standardUnpricedCount"
+  | "failedWithoutUsageCount"
+  | "savings"
+  | "savingsByReason"
+  | "comparedCalls"
+  | "durationMs"
+> & { calls: number };
+
+const SAVINGS_REASON_LABELS = {
+  plan: "plan",
+  subscriberCredit: "credits",
+  cache: "cache",
+  discount: "discount",
+} satisfies Record<keyof AiUsageSummaryRow["savingsByReason"], string>;
 
 function isSupportedEntityKind(
   value: string | null,
@@ -114,7 +130,14 @@ function usageTotals(rows: AiUsageSummaryRow[]): UsageTotals {
         totals.chargedUnpricedCount + row.chargedUnpricedCount,
       standardUnpricedCount:
         totals.standardUnpricedCount + row.standardUnpricedCount,
+      failedWithoutUsageCount:
+        totals.failedWithoutUsageCount + row.failedWithoutUsageCount,
       savings: totals.savings + row.savings,
+      savingsByReason: mapRecord(
+        recordKeys(SAVINGS_REASON_LABELS),
+        (reason) =>
+          totals.savingsByReason[reason] + row.savingsByReason[reason],
+      ),
       comparedCalls: totals.comparedCalls + row.comparedCalls,
       durationMs: totals.durationMs + row.durationMs,
     }),
@@ -126,11 +149,32 @@ function usageTotals(rows: AiUsageSummaryRow[]): UsageTotals {
       standardCost: 0,
       chargedUnpricedCount: 0,
       standardUnpricedCount: 0,
+      failedWithoutUsageCount: 0,
       savings: 0,
+      savingsByReason: { plan: 0, subscriberCredit: 0, cache: 0, discount: 0 },
       comparedCalls: 0,
       durationMs: 0,
     },
   );
+}
+
+function savingsBreakdown(totals: UsageTotals): string {
+  const parts = recordKeys(SAVINGS_REASON_LABELS)
+    .filter((reason) => totals.savingsByReason[reason] !== 0)
+    .map(
+      (reason) =>
+        `${SAVINGS_REASON_LABELS[reason]} ${formatUsageCost(totals.savingsByReason[reason])}`,
+    );
+  return [
+    ...parts,
+    `${totals.comparedCalls} of ${totals.calls} calls compared`,
+  ].join(" · ");
+}
+
+function unpricedDetail(unpriced: number, totals: UsageTotals): string {
+  return totals.failedWithoutUsageCount > 0
+    ? `${unpriced} calls unpriced · ${totals.failedWithoutUsageCount} failed without usage`
+    : `${unpriced} calls unpriced`;
 }
 
 function UsageMetric({
@@ -637,6 +681,21 @@ export function AiUsagePage() {
     () => usageTotals((hydrated ? summaryRows : undefined) ?? []),
     [hydrated, summaryRows],
   );
+  const [chartDimension, setChartDimension] =
+    useState<UsageChartDimension>("feature");
+  const [chartMeasure, setChartMeasure] =
+    useState<UsageChartMeasure>("charged");
+  const [chartSelection, setChartSelection] =
+    useState<UsageChartSelection | null>(null);
+  const selectedSummaryRows = useMemo(
+    () =>
+      chartSelection
+        ? summaryRows?.filter(
+            (row) => row[chartSelection.dimension] === chartSelection.value,
+          )
+        : summaryRows,
+    [summaryRows, chartSelection],
+  );
   const setFilter = <K extends keyof typeof filters>(
     key: K,
     value: (typeof filters)[K],
@@ -769,7 +828,7 @@ export function AiUsagePage() {
               totals.chargedUnpricedCount,
               totals.calls,
             )}
-            detail={`${totals.chargedUnpricedCount} calls unpriced`}
+            detail={unpricedDetail(totals.chargedUnpricedCount, totals)}
           />
           <UsageMetric
             label="Standard cost"
@@ -778,7 +837,7 @@ export function AiUsagePage() {
               totals.standardUnpricedCount,
               totals.calls,
             )}
-            detail={`${totals.standardUnpricedCount} calls unpriced`}
+            detail={unpricedDetail(totals.standardUnpricedCount, totals)}
           />
           <UsageMetric
             label="Savings"
@@ -787,7 +846,7 @@ export function AiUsagePage() {
                 ? formatUsageCost(totals.savings)
                 : "unavailable"
             }
-            detail={`${totals.comparedCalls} of ${totals.calls} calls compared`}
+            detail={savingsBreakdown(totals)}
           />
           <UsageMetric
             label="Provider time"
@@ -796,9 +855,48 @@ export function AiUsagePage() {
         </Grid>
       ) : null}
 
+      <UsageSection title="Cost by day">
+        {summaryQuery.error ? (
+          <ErrorDisplay
+            error={summaryQuery.error}
+            onRetry={async () => {
+              await summaryQuery.refetch();
+            }}
+          />
+        ) : (
+          <AiUsageChart
+            rows={hydrated ? (summaryRows ?? []) : []}
+            days={days}
+            loading={!hydrated || summaryQuery.isLoading}
+            dimension={chartDimension}
+            onDimensionChange={setChartDimension}
+            measure={chartMeasure}
+            onMeasureChange={setChartMeasure}
+            selection={chartSelection}
+            onSelect={setChartSelection}
+          />
+        )}
+      </UsageSection>
+
       <UsageSection title="Usage by feature / model / day">
+        {chartSelection ? (
+          <Row gap="sm" align="center">
+            <Badge variant="secondary">
+              {usageChartDimensions[chartSelection.dimension]}:{" "}
+              {chartSelection.value}
+            </Badge>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setChartSelection(null)}
+            >
+              Clear
+            </Button>
+          </Row>
+        ) : null}
         <SummaryTable
-          rows={summaryRows}
+          rows={selectedSummaryRows}
           isLoading={summaryQuery.isLoading}
           error={summaryQuery.error}
           onRetry={async () => {

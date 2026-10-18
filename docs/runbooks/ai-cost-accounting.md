@@ -24,14 +24,23 @@ pricing source. Provider-reported amounts remain distinguishable from
 usage-based estimates.
 
 Application replays have zero incremental charge and an unknown comparison
-unless equivalent inference evidence was retained. A device executor establishes
+unless equivalent inference evidence was retained. A response-cache entry
+retains the token usage of every call that produced its answer (a batched
+decision question keeps its even share of the shared call); a hit prices that
+avoided usage at the current catalog rate when it is recorded and keeps it in
+`costEvidence.avoidedUsage`, while the hit's own token columns stay zero.
+Entries published before usage retention, and caller caches without token
+evidence, keep the comparison unknown. A device executor establishes
 zero incremental charge for local image work; lack of usage rows alone does not
 establish that work was free. Image jobs without an executor or usage retain
 incomplete price coverage, including while waiting for Apple. Unknown prices remain unknown.
 
-Summaries retain independent known subtotals and unpriced-call counts. Savings
-sum standard minus charged only where both are known, with comparison coverage
-shown separately. Sources without a complete call roster retain explicit cost
+Summaries retain independent known subtotals and unpriced-call counts. A failed
+call that reported no usage had nothing to price: it is counted as failed
+without usage, not as unpriced. Savings sum standard minus charged only where
+both are known, with comparison coverage shown separately; the household usage
+summary also splits them by billing reason (plan, subscriber credit, cache,
+discount). Sources without a complete call roster retain explicit cost
 coverage flags rather than inventing calls. The external cookbook extractor
 currently reports a single cost estimate: fresh reports identify it as a caller
 estimate, retained legacy reports as historical, and their standard comparison

@@ -1,4 +1,5 @@
 import {
+  aiUsageCacheStatus,
   aiUsageRecentOut,
   aiUsageTransport,
   aiUsageEntrySchema,
@@ -52,6 +53,9 @@ test("recent AI calls filter transport and status before limiting rows", async (
   await expect(recent.getByText("<$0.000001 charged").first()).toBeVisible();
 
   const tinyCost = recent.getByText("<$0.000001 charged").first();
+  // The spill overlay hides on scroll; settle the page before hovering so the
+  // hover's own scroll-into-view cannot dismiss it.
+  await tinyCost.scrollIntoViewIfNeeded();
   await tinyCost.hover();
   await expect(page.getByRole("tooltip")).toContainText("Charged: $0.00000001");
   await expect(page.locator("[data-cell-spill-overlay]")).toContainText(
@@ -158,4 +162,65 @@ test("recent AI calls filter transport and status before limiting rows", async (
     path: testInfo.outputPath("ai-usage.png"),
     fullPage: true,
   });
+});
+
+// Savings are split by why the charge was lower, a failed call without usage
+// is not an unpriced call, and the daily chart narrows the summary table.
+test("daily cost chart splits savings and filters the summary table", async ({
+  page,
+}, testInfo) => {
+  const { db, actor } = await createEvidenceHarnessContext(page);
+  const runId = await ensureRun(db, actor, { purpose: "ai_suggest" });
+  const evidence = (billingReason: string) =>
+    JSON.stringify({
+      standard: { source: "estimate" },
+      charged: { source: "estimate" },
+      billingReason,
+    });
+  await getDb(db).execute(sql`
+    INSERT INTO "AiUsage" (
+      "runId", "feature", "provider", "model", "operation", "transport",
+      "status", "durationMs", "inputTokens", "outputTokens", "standardCost",
+      "chargedCost", "costEvidence", "applicationCacheStatus"
+    ) VALUES
+      (${runId}, 'synthetic-chart-paid', 'openai', 'gpt-6-luna', 'synthetic.paid',
+        ${aiUsageTransport.enum.gateway}, ${aiUsageEntrySchema.shape.status.enum.succeeded},
+        10, 100, 10, 0.05, 0.05, ${evidence("standard")}::jsonb, ${aiUsageCacheStatus.enum.none}),
+      (${runId}, 'synthetic-chart-cached', 'typesafe', 'typesafe/jev', 'synthetic.cached',
+        ${aiUsageTransport.enum.cache}, ${aiUsageEntrySchema.shape.status.enum.succeeded},
+        10, 0, 0, 0.02, 0, ${evidence("cache")}::jsonb, ${aiUsageCacheStatus.enum.hit}),
+      (${runId}, 'synthetic-chart-paid', 'openai', 'gpt-6-sol', 'synthetic.plan',
+        ${aiUsageTransport.enum.chatgpt}, ${aiUsageEntrySchema.shape.status.enum.succeeded},
+        10, 100, 10, 0.03, 0, ${evidence("plan")}::jsonb, ${aiUsageCacheStatus.enum.none}),
+      (${runId}, 'synthetic-chart-paid', 'openai', 'gpt-6-sol', 'synthetic.failed',
+        ${aiUsageTransport.enum.chatgpt}, ${aiUsageEntrySchema.shape.status.enum.failed},
+        10, NULL, NULL, NULL, NULL, ${evidence("unknown")}::jsonb, ${aiUsageCacheStatus.enum.none})
+  `);
+  await gotoAuthenticatedPage(page, "/ai?tab=usage");
+
+  await expect(page.getByText(/plan \$0\.03/)).toBeVisible();
+  await expect(page.getByText(/cache \$0\.02/)).toBeVisible();
+  await expect(page.getByText(/failed without usage/).first()).toBeVisible();
+
+  const chart = page.getByRole("region", { name: "Cost by day" });
+  const summary = page.getByRole("region", {
+    name: "Usage by feature / model / day",
+  });
+  await expect(summary.getByText("synthetic-chart-cached")).toBeVisible();
+  await chart.getByRole("button", { name: "synthetic-chart-paid" }).click();
+  await expect(
+    summary.getByText("Feature: synthetic-chart-paid"),
+  ).toBeVisible();
+  await expect(summary.getByText("synthetic-chart-cached")).toHaveCount(0);
+  await summary.getByRole("button", { name: "Clear", exact: true }).click();
+  await expect(summary.getByText("synthetic-chart-cached")).toBeVisible();
+
+  await chart.getByRole("button", { name: "Standard", exact: true }).click();
+  for (const part of ["Charged", "Plan covered", "Cache"])
+    await expect(
+      chart.getByRole("listitem").getByText(part, { exact: true }),
+    ).toBeVisible();
+  await page.getByRole("button", { name: "30d" }).click();
+  await chart.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath("ai-usage-chart.png") });
 });

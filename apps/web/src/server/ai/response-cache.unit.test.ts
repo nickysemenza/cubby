@@ -168,6 +168,62 @@ describe("AI response cache", () => {
     expect(await withAiResponseCache(args)).toEqual({ choice: "two" });
   });
 
+  // A hit's standard comparison prices the inference its entry avoided, so
+  // every call that produced the answer travels with the entry.
+  it("hands a hit the usage of every call that produced its entry", async () => {
+    const keyInput = input(crypto.randomUUID());
+    const onHit = vi.fn(async () => undefined);
+    const args = { enabled: true, keyInput, validate, onHit };
+    await withAiResponseCache({
+      ...args,
+      compute: async (_status, recordUsage) => {
+        recordUsage({ inputTokens: 100, outputTokens: 10 });
+        recordUsage({ inputTokens: 50, outputTokens: null });
+        return { choice: "one" };
+      },
+    });
+    expect(onHit).not.toHaveBeenCalled();
+    expect(await withAiResponseCache({ ...args, compute: vi.fn() })).toEqual({
+      choice: "one",
+    });
+    expect(onHit).toHaveBeenCalledWith(expect.any(Number), {
+      inputTokens: 150,
+      outputTokens: 10,
+      cacheReadTokens: null,
+      cacheWriteTokens: null,
+    });
+  });
+
+  // Entries published before usage retention stay valid answers until expiry.
+  it("replays a bare legacy entry with unknown avoided usage", async () => {
+    const namespace = fromPartial<
+      NonNullable<ReturnType<typeof cfEnv.getAiResponseCacheNamespace>>
+    >({
+      getByName: () =>
+        fromPartial({
+          readOrClaim: () => ({
+            kind: "hit" as const,
+            value: '{"choice":"legacy"}',
+          }),
+        }),
+    });
+    vi.spyOn(cfEnv, "getAiResponseCacheNamespace").mockReturnValue(namespace);
+    const onHit = vi.fn(async () => undefined);
+    const compute = vi.fn();
+    expect(
+      await withAiResponseCache({
+        enabled: true,
+        keyInput: input(crypto.randomUUID()),
+        validate,
+        compute,
+        onHit,
+      }),
+    ).toEqual({ choice: "legacy" });
+    expect(compute).not.toHaveBeenCalled();
+    expect(onHit).toHaveBeenCalledWith(expect.any(Number), null);
+    vi.restoreAllMocks();
+  });
+
   it("does not retain failures or invalid answers", async () => {
     const keyInput = input(crypto.randomUUID());
     await expect(
