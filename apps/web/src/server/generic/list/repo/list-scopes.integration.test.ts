@@ -4,7 +4,7 @@ import type {
   ProjectDashboardFilters,
   ProjectFilters,
 } from "@cubby/schemas/project";
-import { and, inArray, type SQL, sql } from "drizzle-orm";
+import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -326,6 +326,33 @@ describe("declared list scopes", () => {
         await buildTaskWhere(db(), { projectScope: { search: "raised beds" } }),
       ),
     ).toEqual(codes(own, child, grandchild, posts));
+    // A scope that selects no live project matches no task: neither one
+    // selecting nothing nor one whose only match is soft-deleted lifts it.
+    const gone = await insertWithShortcode(db(), "project", {
+      name: "Zqscope retired trip",
+      kind: "trip",
+      status: "done",
+      locationsMode: "inherit",
+      locations: [],
+      defaultTrade: "other",
+    });
+    const stranded = await insert("Zqscope pack bags", { project: gone });
+    await getDb(db())
+      .update(projectTable)
+      .set({ deletedAt: new Date() })
+      .where(eq(projectTable.id, gone.id));
+    for (const scope of [
+      { kind: ["trip"] },
+      { search: "zqscope nothing" },
+    ] satisfies ProjectFilters[])
+      expect({
+        scope,
+        rows: await matching(
+          taskTable,
+          [...rows, stranded],
+          await buildTaskWhere(db(), { projectScope: scope }),
+        ),
+      }).toEqual({ scope, rows: [] });
     // End to end, beside an ordinary task filter.
     expect(
       (
