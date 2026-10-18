@@ -69,7 +69,7 @@ export function RecordList({
 }: {
   variant?: "plain" | "timeline";
   /**
-   * Align rows' `facts` into these columns under one header. Below 32rem the
+   * Align rows' `facts` into these columns under one header. Below 40rem the
    * header hides and each row's facts wrap inline with their labels.
    */
   columns?: readonly RecordColumn[];

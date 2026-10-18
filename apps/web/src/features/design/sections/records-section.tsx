@@ -182,7 +182,7 @@ export function RecordsSection() {
         </Demo>
         <Demo
           name="<RecordList columns> · facts"
-          note="Rows' labelled facts align under one header; below 32rem the header hides and labels sit inline."
+          note="Rows' labelled facts align under one header; below 40rem the header hides and labels sit inline."
         >
           <ColumnsDemo />
         </Demo>

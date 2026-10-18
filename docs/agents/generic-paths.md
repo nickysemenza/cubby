@@ -211,7 +211,7 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 - Read-only record lists: `RecordList` (`ui/common/record-list.tsx`) for
   rows, groups with "+N more", folded absences, the Activity/timeline
   variant, and shared trailing formats; `columns` + row `facts` align
-  labelled values under one header (inline labels below 32rem). Inline
+  labelled values under one header (inline labels below 40rem). Inline
   labelled values anywhere else: `FactList` (`ui/common/fact-list.tsx`);
   stacked label/value grids stay `Ledger variant="facts"`. Detail-page connected records read
   `entity.connectedRecordsPreview` once per record; `/connections` and
