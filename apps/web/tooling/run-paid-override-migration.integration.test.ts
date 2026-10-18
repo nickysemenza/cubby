@@ -15,7 +15,7 @@ it("preserves Run control history while admitting explicit paid overrides", asyn
       VALUES ('synthetic-paid-migration','Example Member','member@example.invalid')`);
     await client.query(`INSERT INTO "Run"
       (shortcode,"actorName","actorUserId","actorEmail",purpose,trigger,status,input)
-      VALUES ('RUN-4K7M','Example Member','synthetic-paid-migration','member@example.invalid','mail_import','discovery','paused_auth','{}')`);
+      VALUES ('RUN-4K7M','Example Member','synthetic-paid-migration','member@example.invalid','ai_suggest','discovery','paused_auth','{}')`);
     await client.query(`INSERT INTO "RunControlEvent"
       ("runId",action,"controllerUserId","controllerName","controllerEmail",
        "controllerLedgerPartyId","controllerLedgerPartyShortcode","controllerLedgerPartyName","controllerLedgerPartyKind")
