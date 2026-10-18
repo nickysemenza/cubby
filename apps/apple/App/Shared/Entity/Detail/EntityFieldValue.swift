@@ -30,8 +30,7 @@ nonisolated enum EntityFieldValue {
 
     static func resolvedItems(_ value: JSONValue?) -> [ResolvedItem] {
         guard let value, value != .null,
-            let items = try? JSONDecoder.cubby().decode(
-                ResolvedList.self, from: JSONEncoder.cubby().encode(value))
+            let items = try? value.decoded(ResolvedList.self)
         else { return [] }
         return items.map { item in
             ResolvedItem(

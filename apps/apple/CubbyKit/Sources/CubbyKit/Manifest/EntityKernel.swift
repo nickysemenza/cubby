@@ -230,9 +230,3 @@ extension EntityKernelCapabilities.Parameter {
         }
     }
 }
-
-extension JSONValue {
-    func decoded<T: Decodable>() throws -> T {
-        try JSONDecoder.cubby().decode(T.self, from: JSONEncoder.cubby().encode(self))
-    }
-}

@@ -33,7 +33,7 @@ public struct EntityRow: Identifiable, Sendable, Hashable {
     /// that needs more than keyed access. `raw` was projected from the decoded typed value with
     /// the same date spelling `JSONDecoder.cubby()` reads, so the round trip is lossless.
     public func decode<T: Decodable>(_ type: T.Type = T.self) throws -> T {
-        try JSONDecoder.cubby().decode(T.self, from: JSONEncoder.cubby().encode(raw))
+        try raw.decoded(T.self)
     }
 
     /// Where facts about this record were seen (the detail read's `sources`); a list row, or a
@@ -41,8 +41,7 @@ public struct EntityRow: Identifiable, Sendable, Hashable {
     public var sources: [EntitySourceRead] {
         guard let sources = raw["sources"], sources != .null else { return [] }
         return
-            (try? JSONDecoder.cubby().decode(
-                [EntitySourceRead].self, from: JSONEncoder.cubby().encode(sources))) ?? []
+            (try? sources.decoded([EntitySourceRead].self)) ?? []
     }
 
     /// The entity's image ids in display order — the order `setImageOrder` rewrites. Read from a

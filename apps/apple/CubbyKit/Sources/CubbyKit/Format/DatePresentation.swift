@@ -7,13 +7,13 @@ public struct DatePresentation: Sendable, Equatable {
     public let exact: String
     public var text: String { "\(absolute) · \(relative)" }
 
+    /// Fractional seconds first, then whole seconds, through one shared transcoder: every
+    /// rendered timestamp parses here, and allocating a formatter per call dominated it.
     public static func parse(_ value: String) -> Date? {
-        let parser = ISO8601DateFormatter()
-        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = parser.date(from: value) { return date }
-        parser.formatOptions = [.withInternetDateTime]
-        return parser.date(from: value)
+        try? transcoder.decode(value)
     }
+
+    private static let transcoder = LenientISO8601DateTranscoder()
 
     public static func timestamp(_ date: Date, now: Date = .now, compact: Bool = false) -> Self {
         let sameYear = calendar.component(.year, from: date) == calendar.component(.year, from: now)
