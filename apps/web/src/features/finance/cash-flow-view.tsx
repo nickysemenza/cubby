@@ -25,8 +25,9 @@ import { monthLabel } from "~/features/project/project-formatting";
 import { cashFlow } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
+import { IndexedSections } from "~/ui/data-table/indexed-sections";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
-import { Row, Section, Stack } from "~/ui/layout";
+import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 import { StatGrid, StatTile } from "~/ui/primitives/stat-tile";
@@ -427,120 +428,176 @@ export function CashFlowView({
         </StatGrid>
       ) : null}
 
-      <Section
-        title="Monthly projection"
-        meta={
-          data
-            ? `Baseline from ${data.baselineWindow.from} to ${data.baselineWindow.to}`
-            : null
-        }
-      >
-        <Visualization
-          state={state}
-          icon={ChartBarIcon}
-          message="Nothing to project."
-          subMessage="No landed spend in the last 12 months, no project envelopes, no committed Expenses, and no scenarios."
-          height={340}
-        >
-          {data ? (
-            <figure aria-label={chartSummary(data)} className="m-0 space-y-2">
-              <figcaption className="sr-only">{chartSummary(data)}</figcaption>
-              <CashFlowChart data={data} onOpen={open} />
-              <Legend data={data} />
-            </figure>
-          ) : null}
-        </Visualization>
-      </Section>
-
-      <Section title="Scenarios">
-        <ScenarioEditor
-          scenarios={search.scenarios ?? []}
-          onChange={(next) =>
-            onSearchChange({ scenarios: next.length > 0 ? next : undefined })
-          }
-        />
-      </Section>
-
-      {data && data.baseline.length > 0 ? (
-        <Section title="Baseline by Spending Category">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Category</TableHead>
-                <TableHead className={numeric}>Months with spend</TableHead>
-                <TableHead className={numeric}>Trailing 12 months</TableHead>
-                <TableHead className={numeric}>Per month</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.baseline.map((row) => (
-                <TableRow key={row.key}>
-                  <TableCell>
-                    {row.ledgerFilter ? (
-                      <Link
-                        to="/expenses"
-                        search={{ ...row.ledgerFilter, view: "table" }}
-                        className="underline-offset-4 hover:underline"
+      <IndexedSections
+        groups={[
+          {
+            id: "detail-group-projection",
+            title: "Projection",
+            sections: [
+              {
+                id: "monthly-projection",
+                icon: ChartBarIcon,
+                overflowVisible: true,
+                title: "Monthly projection",
+                description: data
+                  ? `Baseline from ${data.baselineWindow.from} to ${data.baselineWindow.to}`
+                  : null,
+                content: (
+                  <Visualization
+                    state={state}
+                    icon={ChartBarIcon}
+                    message="Nothing to project."
+                    subMessage="No landed spend in the last 12 months, no project envelopes, no committed Expenses, and no scenarios."
+                    height={340}
+                  >
+                    {data ? (
+                      <figure
+                        aria-label={chartSummary(data)}
+                        className="m-0 space-y-2"
                       >
-                        {row.label}
-                      </Link>
-                    ) : (
-                      row.label
-                    )}
-                    {row.irregular ? (
-                      <span className="ml-2 text-xs text-muted-foreground">
-                        {row.key === "irregular"
-                          ? "Categories with spend in fewer than 3 months"
-                          : "Irregular"}
-                      </span>
+                        <figcaption className="sr-only">
+                          {chartSummary(data)}
+                        </figcaption>
+                        <CashFlowChart data={data} onOpen={open} />
+                        <Legend data={data} />
+                      </figure>
                     ) : null}
-                  </TableCell>
-                  <TableCell className={numeric}>
-                    {row.activeMonths} of 12
-                  </TableCell>
-                  <TableCell className={numeric}>
-                    {formatCurrency(row.trailingTotal)}
-                  </TableCell>
-                  <TableCell className={numeric}>
-                    {formatCurrency(row.monthly)}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Section>
-      ) : null}
-
-      {data ? (
-        <ProjectTable
-          title="Scheduled envelopes"
-          empty="No counted project has an estimate and a future end date."
-          rows={data.envelopes.map((row) => ({
-            ...row,
-            note:
-              row.beyondHorizon > 0
-                ? `${formatCurrency(row.beyondHorizon)} beyond horizon`
-                : null,
-          }))}
-        />
-      ) : null}
-      {data ? (
-        <ProjectTable
-          title="Unscheduled"
-          empty="Every counted project with an estimate has a future end date."
-          rows={data.unscheduled.map((row) => ({ ...row, note: null }))}
-        />
-      ) : null}
+                  </Visualization>
+                ),
+              },
+              {
+                id: "scenarios",
+                icon: ChartBarIcon,
+                overflowVisible: true,
+                title: "Scenarios",
+                content: (
+                  <ScenarioEditor
+                    scenarios={search.scenarios ?? []}
+                    onChange={(next) =>
+                      onSearchChange({
+                        scenarios: next.length > 0 ? next : undefined,
+                      })
+                    }
+                  />
+                ),
+              },
+            ],
+          },
+          ...(data
+            ? [
+                {
+                  id: "detail-group-breakdown",
+                  title: "Breakdown",
+                  sections: [
+                    {
+                      id: "baseline",
+                      icon: ChartBarIcon,
+                      overflowVisible: true,
+                      title: "Baseline by Spending Category",
+                      content: (
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Category</TableHead>
+                              <TableHead className={numeric}>
+                                Months with spend
+                              </TableHead>
+                              <TableHead className={numeric}>
+                                Trailing 12 months
+                              </TableHead>
+                              <TableHead className={numeric}>
+                                Per month
+                              </TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {data.baseline.map((row) => (
+                              <TableRow key={row.key}>
+                                <TableCell>
+                                  {row.ledgerFilter ? (
+                                    <Link
+                                      to="/expenses"
+                                      search={{
+                                        ...row.ledgerFilter,
+                                        view: "table",
+                                      }}
+                                      className="underline-offset-4 hover:underline"
+                                    >
+                                      {row.label}
+                                    </Link>
+                                  ) : (
+                                    row.label
+                                  )}
+                                  {row.irregular ? (
+                                    <span className="ml-2 text-xs text-muted-foreground">
+                                      {row.key === "irregular"
+                                        ? "Categories with spend in fewer than 3 months"
+                                        : "Irregular"}
+                                    </span>
+                                  ) : null}
+                                </TableCell>
+                                <TableCell className={numeric}>
+                                  {row.activeMonths} of 12
+                                </TableCell>
+                                <TableCell className={numeric}>
+                                  {formatCurrency(row.trailingTotal)}
+                                </TableCell>
+                                <TableCell className={numeric}>
+                                  {formatCurrency(row.monthly)}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      ),
+                    },
+                    {
+                      id: "scheduled-envelopes",
+                      title: "Scheduled envelopes",
+                      icon: ChartBarIcon,
+                      overflowVisible: true,
+                      content: (
+                        <ProjectTable
+                          empty="No counted project has an estimate and a future end date."
+                          rows={data.envelopes.map((row) => ({
+                            ...row,
+                            note:
+                              row.beyondHorizon > 0
+                                ? `${formatCurrency(row.beyondHorizon)} beyond horizon`
+                                : null,
+                          }))}
+                        />
+                      ),
+                    },
+                    {
+                      id: "unscheduled",
+                      title: "Unscheduled",
+                      icon: ChartBarIcon,
+                      overflowVisible: true,
+                      content: (
+                        <ProjectTable
+                          empty="Every counted project with an estimate has a future end date."
+                          rows={data.unscheduled.map((row) => ({
+                            ...row,
+                            note: null,
+                          }))}
+                        />
+                      ),
+                    },
+                  ],
+                },
+              ]
+            : []),
+        ]}
+      />
     </Stack>
   );
 }
 
 function ProjectTable({
-  title,
   empty,
   rows,
 }: {
-  title: string;
   empty: string;
   rows: ReadonlyArray<{
     id: string;
@@ -554,7 +611,7 @@ function ProjectTable({
   }>;
 }) {
   return (
-    <Section title={title}>
+    <>
       {rows.length === 0 ? (
         <p className="my-0 text-xs text-muted-foreground">{empty}</p>
       ) : (
@@ -606,6 +663,6 @@ function ProjectTable({
           </TableBody>
         </Table>
       )}
-    </Section>
+    </>
   );
 }

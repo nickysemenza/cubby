@@ -40,6 +40,13 @@ test("expense analytics breaks spend down by root Spending Category and charts m
     page.getByRole("heading", { name: "Spending by Cost Type" }),
   ).toBeVisible();
 
+  await page
+    .getByRole("navigation", { name: "Section index" })
+    .getByRole("link", { name: "Money flow", exact: true })
+    .click();
+  await expect(page.locator("#money-flow")).toBeFocused();
+  await expect(page).toHaveURL(new RegExp(`project=${project.id}#money-flow$`));
+
   // Child spend rolls up to its root; no-category spend stays its own bucket.
   const breakdown = page.getByRole("figure", {
     name: /Net spend by root Spending Category/,
@@ -51,6 +58,17 @@ test("expense analytics breaks spend down by root Spending Category and charts m
 
   const flow = page.getByRole("figure", { name: /^Money flow of/ });
   await expect(flow).toHaveAccessibleName(/\$101/);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: /^Jump to:/ }).click();
+  await page
+    .getByRole("menuitem", { name: "Monthly Spend", exact: true })
+    .click();
+  await expect(page.locator("#monthly-spend")).toBeFocused();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
 });
 
 test("cash flow spreads a live project's remaining estimate to its end date", async ({

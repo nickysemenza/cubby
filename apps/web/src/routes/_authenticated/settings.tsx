@@ -2,9 +2,12 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { purchaseAgentConnectionStatus } from "@cubby/schemas/purchase-import-debug";
 import { getErrorMessage } from "@cubby/shared";
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
+import { CalendarIcon } from "@phosphor-icons/react/dist/csr/Calendar";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 import { EnvelopeIcon } from "@phosphor-icons/react/dist/csr/Envelope";
+import { PlugsIcon } from "@phosphor-icons/react/dist/csr/Plugs";
+import { UsersIcon } from "@phosphor-icons/react/dist/csr/Users";
 import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
@@ -19,10 +22,10 @@ import {
   buildVendorComboboxItem,
 } from "~/entity/picker/combobox-builders";
 import { Picker } from "~/entity/picker/picker";
-import { ChatGptPlanCard } from "~/features/account/chatgpt-plan-card";
+import { ChatGptPlanSettings } from "~/features/account/chatgpt-plan-card";
 import { PurchaseImportAgentConnection } from "~/features/activity/purchase-import-agent-connection";
 import { CalendarConnectDialog } from "~/features/calendar/calendar-connect-dialog";
-import { MailImportCard } from "~/features/email/mail-import-card";
+import { MailImportSettings } from "~/features/email/mail-import-card";
 import {
   calendar,
   ledgerParty,
@@ -39,6 +42,7 @@ import {
 } from "~/lib/perf/timing.contract";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { DateDisplay } from "~/ui/common/date-display";
+import { IndexedSections } from "~/ui/data-table/indexed-sections";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -55,7 +59,6 @@ import {
   CollapsibleTrigger,
 } from "~/ui/primitives/collapsible";
 import { Description } from "~/ui/primitives/description";
-import { Eyebrow } from "~/ui/primitives/eyebrow";
 import { Input } from "~/ui/primitives/input";
 import { StatusText } from "~/ui/primitives/status-text";
 
@@ -72,55 +75,123 @@ function SettingsPage() {
   const [devOpen, setDevOpen] = useState(false);
   return (
     <Page variant="list" title="Settings">
-      <Stack gap="md" className="max-w-2xl pb-6 md:gap-6">
-        {/* User-facing settings — the everyday prefs, kept above the fold. */}
-        <CalendarAccessCard />
-        <ChatGptPlanCard />
-        <GmailAccessCard />
-        <MailImportCard />
-        <PurchaseImportAgentConnection feedback={purchaseAgent} />
-        <MemberLoginsCard />
-        <MerchantVendorRulesCard />
-
-        {/* Everything dev/debug/maintenance lives behind one collapsed
-            disclosure so the user-facing prefs above aren't drowned in flags. */}
-        <Collapsible open={devOpen} onOpenChange={setDevOpen}>
-          <CollapsibleTrigger
-            render={
-              <button
-                type="button"
-                aria-label="Toggle developer tools"
-                className="flex min-h-11 w-full items-center justify-between border border-[var(--border)] bg-muted/40 px-2 py-2 text-left transition-colors hover:bg-muted md:px-4"
-              />
-            }
-          >
-            <Row align="center" gap="sm">
-              <WrenchIcon className="size-4 text-muted-foreground" />
-              <Stack gap="tight">
-                <Eyebrow as="span">Developer / Diagnostics</Eyebrow>
-                <Description size="xs">Connection diagnostics.</Description>
-              </Stack>
-            </Row>
-            <CaretDownIcon
-              className={`size-4 shrink-0 text-muted-foreground transition-transform ${
-                devOpen ? "rotate-180" : ""
-              }`}
-            />
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <Stack gap="lg" className="pt-4">
-              <DiagnosticsCard />
-
-              <CalendarFeedInspectorCard enabled={devOpen} />
-            </Stack>
-          </CollapsibleContent>
-        </Collapsible>
-      </Stack>
+      <IndexedSections
+        groups={[
+          {
+            id: "detail-group-connections",
+            title: "Connections",
+            sections: [
+              {
+                id: "calendar",
+                title: "Calendar",
+                icon: CalendarIcon,
+                overflowVisible: true,
+                description:
+                  "Set up editable Calendar access or read-only subscriptions.",
+                content: <CalendarConnectDialog />,
+              },
+              {
+                id: "chatgpt",
+                title: "ChatGPT plan",
+                icon: PlugsIcon,
+                overflowVisible: true,
+                content: <ChatGptPlanSettings />,
+              },
+            ],
+          },
+          {
+            id: "detail-group-purchases",
+            title: "Mail & purchases",
+            sections: [
+              {
+                id: "purchase-email",
+                title: "Purchase email",
+                icon: EnvelopeIcon,
+                overflowVisible: true,
+                content: <GmailAccessSettings />,
+              },
+              {
+                id: "mail-import",
+                title: "Mail import",
+                icon: EnvelopeIcon,
+                overflowVisible: true,
+                content: <MailImportSettings />,
+              },
+              {
+                id: "purchase-agent",
+                title: "Purchase import agent",
+                icon: PlugsIcon,
+                overflowVisible: true,
+                content: (
+                  <PurchaseImportAgentConnection feedback={purchaseAgent} />
+                ),
+              },
+              {
+                id: "merchant-routing",
+                title: "Purchase merchant routing",
+                icon: PlugsIcon,
+                overflowVisible: true,
+                content: <MerchantVendorRulesSettings />,
+              },
+            ],
+          },
+          {
+            id: "detail-group-household",
+            title: "Household access",
+            sections: [
+              {
+                id: "member-logins",
+                title: "Member logins",
+                icon: UsersIcon,
+                overflowVisible: true,
+                content: <MemberLoginsSettings />,
+              },
+            ],
+          },
+          {
+            id: "detail-group-maintenance",
+            title: "Maintenance",
+            sections: [
+              {
+                id: "diagnostics",
+                title: "Developer / Diagnostics",
+                icon: WrenchIcon,
+                overflowVisible: true,
+                content: (
+                  <Collapsible open={devOpen} onOpenChange={setDevOpen}>
+                    <CollapsibleTrigger
+                      render={
+                        <Button
+                          variant="outline"
+                          aria-label="Toggle developer tools"
+                        />
+                      }
+                    >
+                      {devOpen
+                        ? "Hide connection diagnostics"
+                        : "Show connection diagnostics"}
+                      <CaretDownIcon
+                        className={`size-4 transition-transform ${devOpen ? "rotate-180" : ""}`}
+                      />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <Stack gap="lg" className="pt-4">
+                        <DiagnosticsCard />
+                        <CalendarFeedInspectorCard enabled={devOpen} />
+                      </Stack>
+                    </CollapsibleContent>
+                  </Collapsible>
+                ),
+              },
+            ],
+          },
+        ]}
+      />
     </Page>
   );
 }
 
-function MerchantVendorRulesCard() {
+function MerchantVendorRulesSettings() {
   const queryClient = useQueryClient();
   const [merchant, setMerchant] = useState("");
   const [vendorId, setVendorId] = useState("");
@@ -151,81 +222,75 @@ function MerchantVendorRulesCard() {
     },
   });
   return (
-    <Card className="max-md:border-x-0">
-      <CardHeader>
-        <CardTitle>Purchase merchant routing</CardTitle>
-        <CardDescription>
-          Route a statement merchant label to the vendor whose orders should be
-          searched.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {rules.isError ? (
-          <StatusText tone="destructive">
-            {getErrorMessage(rules.error)}
-          </StatusText>
-        ) : (
-          <Stack gap="md">
-            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
-              <label
-                className="grid gap-1 text-sm font-medium"
-                htmlFor="purchase-merchant-label"
-              >
-                Merchant label
-                <Input
-                  id="purchase-merchant-label"
-                  value={merchant}
-                  onChange={(event) => setMerchant(event.target.value)}
-                  placeholder="AMZN Mktp"
-                />
-              </label>
-              <div className="grid gap-1 text-sm font-medium">
-                <label htmlFor="purchase-merchant-vendor">Vendor</label>
-                <Picker
-                  inputId="purchase-merchant-vendor"
-                  label="Vendor"
-                  placeholder="Choose a vendor"
-                  entity="vendor"
-                  items={vendorItems}
-                  value={
-                    vendorItems.find((item) => item.id === vendorId) ?? null
-                  }
-                  setValue={(next) => setVendorId(next?.id ?? "")}
-                />
-              </div>
-              <Button
-                type="button"
-                disabled={!merchant.trim() || !vendorId || save.isPending}
-                onClick={() => save.mutate()}
-              >
-                Save rule
-              </Button>
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        Route a statement merchant label to the vendor whose orders should be
+        searched.
+      </p>
+
+      {rules.isError ? (
+        <StatusText tone="destructive">
+          {getErrorMessage(rules.error)}
+        </StatusText>
+      ) : (
+        <Stack gap="md">
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
+            <label
+              className="grid gap-1 text-sm font-medium"
+              htmlFor="purchase-merchant-label"
+            >
+              Merchant label
+              <Input
+                id="purchase-merchant-label"
+                value={merchant}
+                onChange={(event) => setMerchant(event.target.value)}
+                placeholder="AMZN Mktp"
+              />
+            </label>
+            <div className="grid gap-1 text-sm font-medium">
+              <label htmlFor="purchase-merchant-vendor">Vendor</label>
+              <Picker
+                inputId="purchase-merchant-vendor"
+                label="Vendor"
+                placeholder="Choose a vendor"
+                entity="vendor"
+                items={vendorItems}
+                value={vendorItems.find((item) => item.id === vendorId) ?? null}
+                setValue={(next) => setVendorId(next?.id ?? "")}
+              />
             </div>
-            {rules.data?.rules.length ? (
-              <Stack gap="tight">
-                {rules.data.rules.map((rule) => (
-                  <div
-                    key={rule.merchant}
-                    className="flex justify-between gap-4 border-b border-border py-2 text-sm last:border-0"
-                  >
-                    <span>{rule.merchant}</span>
-                    <span className="text-muted-foreground">
-                      {rule.vendorName}
-                    </span>
-                  </div>
-                ))}
-              </Stack>
-            ) : (
-              <StatusText>No merchant routing rules yet.</StatusText>
-            )}
-          </Stack>
-        )}
-      </CardContent>
-    </Card>
+            <Button
+              type="button"
+              disabled={!merchant.trim() || !vendorId || save.isPending}
+              onClick={() => save.mutate()}
+            >
+              Save rule
+            </Button>
+          </div>
+          {rules.data?.rules.length ? (
+            <Stack gap="tight">
+              {rules.data.rules.map((rule) => (
+                <div
+                  key={rule.merchant}
+                  className="flex justify-between gap-4 border-b border-border py-2 text-sm last:border-0"
+                >
+                  <span>{rule.merchant}</span>
+                  <span className="text-muted-foreground">
+                    {rule.vendorName}
+                  </span>
+                </div>
+              ))}
+            </Stack>
+          ) : (
+            <StatusText>No merchant routing rules yet.</StatusText>
+          )}
+        </Stack>
+      )}
+    </div>
   );
 }
 
-function MemberLoginsCard() {
+function MemberLoginsSettings() {
   const roster = useQuery(ledgerParty.memberLogins.queryOptions(null));
   const update = useMutation(
     ledgerParty.setMemberLogin.mutationOptions({
@@ -237,53 +302,49 @@ function MemberLoginsCard() {
   );
 
   return (
-    <Card className="max-md:border-x-0">
-      <CardHeader>
-        <CardTitle>Member logins</CardTitle>
-        <CardDescription>
-          Link each signed-in account to the household member it represents.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {roster.isLoading ? (
-          <StatusText>Loading member logins…</StatusText>
-        ) : roster.isError ? (
-          <StatusText tone="destructive">
-            {getErrorMessage(roster.error)}
-          </StatusText>
-        ) : roster.data?.users.length ? (
-          <Stack gap="sm">
-            {roster.data.users.map((authUser) => (
-              <div
-                key={authUser.id}
-                className="grid gap-2 border-b border-border pb-3 last:border-0 last:pb-0 md:grid-cols-[minmax(0,1fr)_minmax(12rem,0.8fr)] md:items-center"
-              >
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium">
-                    {authUser.name}
-                  </div>
-                  <div className="truncate text-sm text-muted-foreground">
-                    {authUser.email}
-                  </div>
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        Link each signed-in account to the household member it represents.
+      </p>
+
+      {roster.isLoading ? (
+        <StatusText>Loading member logins…</StatusText>
+      ) : roster.isError ? (
+        <StatusText tone="destructive">
+          {getErrorMessage(roster.error)}
+        </StatusText>
+      ) : roster.data?.users.length ? (
+        <Stack gap="sm">
+          {roster.data.users.map((authUser) => (
+            <div
+              key={authUser.id}
+              className="grid gap-2 border-b border-border pb-3 last:border-0 last:pb-0 md:grid-cols-[minmax(0,1fr)_minmax(12rem,0.8fr)] md:items-center"
+            >
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium">
+                  {authUser.name}
                 </div>
-                <MemberLoginPicker
-                  userId={authUser.id}
-                  userName={authUser.name}
-                  value={authUser.ledgerParty?.shortcode ?? ""}
-                  parties={roster.data.parties}
-                  disabled={update.isPending}
-                  onChange={(ledgerParty) =>
-                    update.mutate({ userId: authUser.id, ledgerParty })
-                  }
-                />
+                <div className="truncate text-sm text-muted-foreground">
+                  {authUser.email}
+                </div>
               </div>
-            ))}
-          </Stack>
-        ) : (
-          <StatusText>No Better Auth users exist yet.</StatusText>
-        )}
-      </CardContent>
-    </Card>
+              <MemberLoginPicker
+                userId={authUser.id}
+                userName={authUser.name}
+                value={authUser.ledgerParty?.shortcode ?? ""}
+                parties={roster.data.parties}
+                disabled={update.isPending}
+                onChange={(ledgerParty) =>
+                  update.mutate({ userId: authUser.id, ledgerParty })
+                }
+              />
+            </div>
+          ))}
+        </Stack>
+      ) : (
+        <StatusText>No Better Auth users exist yet.</StatusText>
+      )}
+    </div>
   );
 }
 
@@ -342,7 +403,7 @@ function MemberLoginPicker({
   );
 }
 
-function GmailAccessCard() {
+function GmailAccessSettings() {
   const accounts = useQuery({
     queryKey: ["auth", "accounts"],
     queryFn: async () => {
@@ -391,67 +452,34 @@ function GmailAccessCard() {
   };
 
   return (
-    <Card className="max-md:border-x-0">
-      <CardHeader>
-        <Row
-          align="start"
-          justify="between"
-          gap="md"
-          className="max-md:flex-col"
+    <div className="space-y-3">
+      <Row align="start" justify="between" gap="md" className="max-md:flex-col">
+        <Stack gap="tight">
+          <p className="text-xs text-muted-foreground">
+            {connected
+              ? "Google sign-in and read-only Gmail access are connected for order discovery and receipt attachments."
+              : googleAccount
+                ? "Google is linked, but read-only Gmail access is missing. Reconnect to restore order matching."
+                : "Connect Google and read-only Gmail so Cubby can sign you in and match order mail to statement charges."}
+          </p>
+        </Stack>
+        <Button
+          type="button"
+          variant={connected ? "outline" : "default"}
+          disabled={busy || accounts.isLoading}
+          onClick={() => void (connected ? disconnect() : connect())}
         >
-          <Stack gap="tight">
-            <CardTitle>Purchase email</CardTitle>
-            <CardDescription>
-              {connected
-                ? "Google sign-in and read-only Gmail access are connected for order discovery and receipt attachments."
-                : googleAccount
-                  ? "Google is linked, but read-only Gmail access is missing. Reconnect to restore order matching."
-                  : "Connect Google and read-only Gmail so Cubby can sign you in and match order mail to statement charges."}
-            </CardDescription>
-          </Stack>
-          <Button
-            type="button"
-            variant={connected ? "outline" : "default"}
-            disabled={busy || accounts.isLoading}
-            onClick={() => void (connected ? disconnect() : connect())}
-          >
-            <EnvelopeIcon className="size-4" />
-            {busy
-              ? "Working…"
-              : connected
-                ? "Disconnect Google & Gmail"
-                : googleAccount
-                  ? "Reconnect Google & Gmail"
-                  : "Connect Google & Gmail"}
-          </Button>
-        </Row>
-      </CardHeader>
-    </Card>
-  );
-}
-
-function CalendarAccessCard() {
-  return (
-    <Card className="max-md:border-x-0">
-      <CardHeader>
-        <Row
-          align="start"
-          justify="between"
-          gap="md"
-          className="max-md:flex-col"
-        >
-          <Stack gap="tight">
-            <CardTitle>Calendar</CardTitle>
-            <CardDescription>
-              Set up editable Calendar access or read-only subscriptions.
-            </CardDescription>
-          </Stack>
-          <div className="shrink-0">
-            <CalendarConnectDialog />
-          </div>
-        </Row>
-      </CardHeader>
-    </Card>
+          <EnvelopeIcon className="size-4" />
+          {busy
+            ? "Working…"
+            : connected
+              ? "Disconnect Google & Gmail"
+              : googleAccount
+                ? "Reconnect Google & Gmail"
+                : "Connect Google & Gmail"}
+        </Button>
+      </Row>
+    </div>
   );
 }
 

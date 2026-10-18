@@ -17,6 +17,12 @@ Testing Library role queries use exact string names by default; Playwright's
 `exact` option is not a Testing Library option.
 For conditional expected output, construct expected data and assert once; keep
 `expect` calls and asymmetric matchers outside branches.
+
+An isolated E2E login starts without a linked member LedgerParty; the synthetic
+HMR household already has one. Before visiting a member-scoped surface such as
+Settings merchant routing or Mail import, call `ensureMemberParty(page, name)`
+from `tests/e2e/fixtures/core.ts` so its queries can resolve the acting member.
+
 Create searchable picker fixtures through `createEntityFixture` so the entity
 kernel also creates their SearchDocument. A raw row insert can appear in the
 initial picker list and disappear when typed search resolves. For typed search,

@@ -29,7 +29,7 @@ test("settings explains local authorization and exposes no model selectors", asy
   });
   expect(crossOrigin.status()).toBe(403);
   await gotoAuthenticatedPage(page, "/settings");
-  const card = page.getByTestId("chatgpt-plan");
+  const card = page.getByRole("region", { name: "ChatGPT plan", exact: true });
   await expect(
     card.getByRole("heading", { name: "ChatGPT plan" }),
   ).toBeVisible();
@@ -87,7 +87,7 @@ test("settings renders the complete returned catalog, refresh errors, and discon
       });
   });
   await gotoAuthenticatedPage(page, "/settings");
-  const card = page.getByTestId("chatgpt-plan");
+  const card = page.getByRole("region", { name: "ChatGPT plan", exact: true });
   await expect(
     card.getByText("example-future-model", { exact: true }),
   ).toBeVisible();
