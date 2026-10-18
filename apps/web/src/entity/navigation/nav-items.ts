@@ -4,6 +4,7 @@ import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
 import { FileTextIcon } from "@phosphor-icons/react/dist/csr/FileText";
 import { GearIcon } from "@phosphor-icons/react/dist/csr/Gear";
 import { HouseIcon } from "@phosphor-icons/react/dist/csr/House";
+import { LightbulbIcon } from "@phosphor-icons/react/dist/csr/Lightbulb";
 import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { NetworkIcon } from "@phosphor-icons/react/dist/csr/Network";
@@ -136,6 +137,7 @@ export const desktopNav: NavNode[] = [
       { to: "/labels", label: "Labels", icon: QrCodeIcon },
       { to: "/problems", label: "Problems", icon: WarningIcon },
       { to: "/work-queue", label: "Work queue", icon: ListChecksIcon },
+      { to: "/suggestions", label: "Suggestions", icon: LightbulbIcon },
       { to: "/activity", label: "Activity", icon: PulseIcon },
       { to: "/collections", label: "Collections", icon: PaletteIcon },
       { to: "/entities", label: "Entity explorer", icon: NetworkIcon },
@@ -150,7 +152,6 @@ export const desktopNav: NavNode[] = [
     tier: "developer",
     children: [
       { to: "/design", label: "Design", icon: PaletteIcon },
-      { to: "/suggestions", label: "Suggestions", icon: ListChecksIcon },
       { to: "/ai", label: "AI", icon: SparkleIcon },
       { to: "/search/debug", label: "Search debug", icon: MagnifyingGlassIcon },
       { to: "/mcp", label: "MCP tools", icon: PlugIcon },
