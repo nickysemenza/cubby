@@ -257,7 +257,11 @@ function entityTypeOption(entity: Entity) {
  */
 function suggestionsSearch(row: QueueTableRow) {
   if (row.suggestionFamily) return { family: row.suggestionFamily };
-  if (row.source !== "suggestion" || row.entity === null || row.recordId === null)
+  if (
+    row.source !== "suggestion" ||
+    row.entity === null ||
+    row.recordId === null
+  )
     return null;
   return { record: `${row.entity}:${row.recordId}` };
 }
@@ -265,7 +269,11 @@ function suggestionsSearch(row: QueueTableRow) {
 function queueHref(row: QueueTableRow) {
   const suggestions = suggestionsSearch(row);
   if (suggestions)
-    return `/suggestions?${new URLSearchParams(suggestions).toString()}`;
+    return `/suggestions?${new URLSearchParams(
+      "family" in suggestions && suggestions.family
+        ? { family: suggestions.family }
+        : { record: suggestions.record ?? "" },
+    ).toString()}`;
   if (row.entity === null || row.recordId === null) return "/problems";
   return isBrowserRoutedEntity(row.entity)
     ? `/${entities[row.entity].basePath}/${row.recordId}`
@@ -673,7 +681,8 @@ function WorkQueueTable() {
     (row: CubbyRow<QueueTableRow>) => {
       const { entity } = row.original;
       const suggestions = suggestionsSearch(row.original);
-      if (suggestions) void navigate({ to: "/suggestions", search: suggestions });
+      if (suggestions)
+        void navigate({ to: "/suggestions", search: suggestions });
       else if (canPreview(row)) previewClick(previewRow(row));
       else if (entity === "run" && row.original.recordId)
         void navigate({
