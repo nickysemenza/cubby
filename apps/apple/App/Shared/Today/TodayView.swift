@@ -783,8 +783,8 @@ private func formattedDueDate(_ raw: String) -> String {
                     AuditLogEntryOut(
                         entryKey: "synthetic-change", entityKind: .product,
                         entityId: "PRD-2345", entityName: "Sample Product", action: .update,
-                        references: .init(),
-                        userId: "synthetic-user", channel: .web, createdAt: .now)
+                        references: .init(additionalProperties: [:]), userId: "synthetic-user",
+                        channel: .web, createdAt: .now)
                 ])
         )
         .navigationTitle("Today")
