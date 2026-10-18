@@ -36,14 +36,13 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 import {
   resolveAllOrThrow,
-  resolveCreatedOrInvariant,
   resolveLiveShortcode,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { observeOperationPhase } from "~/server/observability/observed-request";
 
 import {
-  createProduct as createProductRepo,
+  createProductRecord,
   getProductByID as getProductByIDRepo,
   getProductImagesByProductIds,
   getProductsForFoodLookup,
@@ -256,7 +255,7 @@ const createProductWithOutput = async <TOutput>(
   const growsPlantEntityId = data.growsPlantId
     ? await resolveOrThrow(db, "plant", data.growsPlantId)
     : null;
-  const product = await createProductRepo(
+  const { output: product, entityId: productId } = await createProductRecord(
     db,
     {
       ...data,
@@ -269,7 +268,6 @@ const createProductWithOutput = async <TOutput>(
     },
     actor,
   );
-  const productId = await resolveCreatedOrInvariant(db, "product", product.id);
   try {
     return {
       output: await readOutput(product, productId),

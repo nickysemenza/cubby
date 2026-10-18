@@ -121,7 +121,7 @@ export const createProductWithSideEffects = (
   services: ProductWriteServices & { upcLookupClient: UpcLookupPort },
   input: ProductCreateInput,
   actor: ActorContext,
-): Promise<ProductWithFoodAndSideEffectsOut> =>
+): Promise<{ output: ProductWithFoodAndSideEffectsOut; entityId: ProductId }> =>
   createProductWithReadSideEffects(services, input, actor);
 
 export const updateProductWithSideEffects = (
@@ -138,7 +138,10 @@ export async function createProductWithReadSideEffects<
   services: ProductWriteServices<TOutput> & { upcLookupClient: UpcLookupPort },
   input: ProductCreateInput,
   actor: ActorContext,
-): Promise<TOutput & { sideEffects: MutationSideEffects }> {
+): Promise<{
+  output: TOutput & { sideEffects: MutationSideEffects };
+  entityId: ProductId;
+}> {
   const { output: product, entityId } = await services.product.createProduct(
     input,
     actor,
@@ -171,8 +174,11 @@ export async function createProductWithReadSideEffects<
   }
 
   return {
-    ...product,
-    sideEffects: mutationSideEffectsWithWarnings(warnings),
+    output: {
+      ...product,
+      sideEffects: mutationSideEffectsWithWarnings(warnings),
+    },
+    entityId,
   };
 }
 
