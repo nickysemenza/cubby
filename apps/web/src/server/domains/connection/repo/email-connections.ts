@@ -27,6 +27,40 @@ const endpointPair = z.object({
   purchaseCode: z.string(),
 });
 
+/** Retained evidence is scoped before ownership filtering so correcting an
+ * account can revive a negative scan. Unrelated mail never participates.
+ */
+export async function emailDiscoveryBasis(db: Database, source: EntityRef) {
+  if (source.entityKind !== "email" && source.entityKind !== "purchase")
+    return null;
+  const id = await resolveOrThrow(db, source.entityKind, source.entityId);
+  const [basis] = await getDb(db)
+    .select({
+      fingerprint: sql<string>`md5(jsonb_build_array(
+      (SELECT jsonb_build_array(o.id, o."ledgerPartyId", o."vendorId", o."rawChecksum")
+       FROM "Email" e JOIN "OrderMail" o ON o.id=e."orderMailId"
+       WHERE ${source.entityKind === "email"} AND e.id=${id}::uuid),
+      (SELECT coalesce(jsonb_agg(jsonb_build_array(
+        "Email".id, "Email"."checksum", "Email"."ledgerPartyId", "Email"."receivedAt",
+        original.id, original."rawChecksum", original."vendorId", original."ledgerPartyId",
+        event.id, event.event, event."orderId", event.amount, event."sourceKey",
+        p.id, p."vendorAccountId", p."orderId", p."vendorId", p.date, p."statedTotal",
+        account.id, account."ledgerPartyId", account."deletedAt",
+        evidence.kind, evidence.changed
+      ) ORDER BY "Email".id, p.id, event.id, evidence.kind), '[]'::jsonb)
+       FROM "Email"
+       CROSS JOIN LATERAL (${emailPurchaseEvidenceSql("ignore")}) evidence
+       JOIN "Purchase" p ON p.id=evidence."purchaseId" AND p."deletedAt" IS NULL
+       LEFT JOIN "OrderMail" original ON original.id="Email"."orderMailId"
+       LEFT JOIN "OrderMailEvent" event ON event.id=evidence."eventId"
+       LEFT JOIN "VendorAccount" account ON account.id=p."vendorAccountId"
+       WHERE "Email"."deletedAt" IS NULL AND ${source.entityKind === "email" ? sql`"Email".id=${id}::uuid` : sql`p.id=${id}::uuid`})
+    )::text)`,
+    })
+    .from(sql`(SELECT 1) AS scoped_mail_basis`);
+  return basis?.fingerprint ?? null;
+}
+
 /** Retrieval reuses the retained event policy, including account ownership. */
 export async function retrieveEmailConnectionCandidates(
   db: Database,

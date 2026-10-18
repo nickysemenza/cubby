@@ -151,6 +151,50 @@ describe("fresh retained Email connection recommendations", () => {
     );
   });
 
+  it("ignores another vendor's purchases and retained mail", async () => {
+    const f = await fixture();
+    const before = await Promise.all([
+      connectionSourceFingerprint(ctx.db, f.source),
+      connectionSourceFingerprint(ctx.db, f.target),
+    ]);
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic unrelated vendor",
+    });
+    await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      orderId: "SYNTHETIC-UNRELATED",
+      date: "2026-10-01",
+      statedTotal: 24,
+    });
+    const original = await syntheticRetainedMail(ctx.db, {
+      ledgerPartyId: f.message.ledgerPartyId,
+      mailboxId: "synthetic-other-mailbox",
+      messageId: "synthetic-other-message",
+      vendorId: vendor.id,
+      sender: "orders@other.example.test",
+      subject: "Synthetic unrelated receipt",
+      receivedAt: new Date("2026-10-01T12:00:00Z"),
+      rawChecksum: "c".repeat(64),
+      content: {
+        bodyText: "Synthetic other receipt",
+        bodyHtml: null,
+        snippet: null,
+      },
+    });
+    await getDb(ctx.db).insert(orderMailEvent).values({
+      orderMailId: original.id,
+      event: "placed",
+      orderId: "SYNTHETIC-UNRELATED",
+      sourceKey: "synthetic-other-event",
+    });
+    expect(
+      await Promise.all([
+        connectionSourceFingerprint(ctx.db, f.source),
+        connectionSourceFingerprint(ctx.db, f.target),
+      ]),
+    ).toEqual(before);
+  });
+
   it("invalidates negative discovery after account assignment and ownership corrections", async () => {
     const f = await fixture();
     const foreign = await insertWithShortcode(ctx.db, "ledgerParty", {
@@ -197,7 +241,8 @@ describe("fresh retained Email connection recommendations", () => {
       .update(vendorAccount)
       .set({ deletedAt: new Date() })
       .where(eq(vendorAccount.id, account.id));
-    expect(await connectionSourceFingerprint(ctx.db, f.source)).not.toBe(
+    // Once unassigned, this account no longer participates in the candidate.
+    expect(await connectionSourceFingerprint(ctx.db, f.source)).toBe(
       unassigned[0],
     );
   });

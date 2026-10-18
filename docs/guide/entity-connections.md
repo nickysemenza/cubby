@@ -33,6 +33,16 @@ Existing automatic domain behavior is unchanged.
   cannot consume another endpoint's result allowance.
 - Background discovery publishes Assessments only inside the evaluation's
   attempt and generation fence. Candidate-roster changes invalidate negative scans.
+- Discovery fingerprints include only the source's family inputs: deterministic
+  candidate evidence, exact-Product stock for placement, scoped retained mail,
+  and eligible target corpora for field inference and indexed/semantic retrieval.
+  Unrelated families, orphaned account changes, projection rebuild timestamps,
+  and inventory verification stamps do not invalidate completed scans or running
+  evaluations. A target corpus can remain broad when any eligible target may be
+  selected; its relevant content changes still invalidate negative scans.
+  Indexed retrieval hashes cover every eligible field target, including aliases;
+  Both acquisition endpoints retain their blocked counterpart set even when no
+  candidate is currently eligible.
 - Retained Email checksums, order events, reviewed links and accepted sources
   participate in discovery currentness, including scans with no candidates.
   Purchase account assignments and account ownership/deletion participate too.
@@ -53,6 +63,13 @@ accepts up to 250 sources and returns arrays in the same order. Public endpoints
 validate shortcode ownership through `entityGraphRootSchema`, including legacy
 Product and Location QR labels; the published pattern advertises canonical codes. Existing physical
 connection exports in the schema module keep their original meaning.
+
+`connectionSourceFingerprints(db, sources)` returns fingerprints in input order,
+including duplicate sources. It shares each broad target-corpus hash once per
+kind within that call and retains no cache across pages. Per-source candidate
+and recommendation evidence is still read separately. Evaluation and publication
+fences continue to use a fresh `connectionSourceFingerprint(db, source)`; a page
+estimate does not authorize publishing against old evidence.
 
 The public Find connections mutation schedules a durable evaluation in the
 active AI refresh generation and returns its Run handle alongside stored
