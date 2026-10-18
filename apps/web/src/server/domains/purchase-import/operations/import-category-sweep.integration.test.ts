@@ -8,7 +8,14 @@ import { describe, expect, it } from "vitest";
 
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
-import { product, productCategory, run, runFinding } from "~/server/db/schema";
+import {
+  product,
+  productCategory,
+  run,
+  runFinding,
+  user,
+} from "~/server/db/schema";
+import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import {
   categoryPorts,
   kernelCtx,
@@ -54,6 +61,14 @@ describe("post-commit category suggestions", () => {
   };
 
   it("sweeps exactly the created Products and settles the arrival prompt once they are untracked", async () => {
+    await getDb(ctx.db).insert(user).values({
+      id: systemActor().userId,
+      name: "Synthetic system",
+      email: "synthetic-system@example.test",
+      emailVerified: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
     await activateAiRefresh(ctx.db, "synthetic-release", {
       enabled: true,
       startDiscovery: false,

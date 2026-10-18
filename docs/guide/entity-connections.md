@@ -55,7 +55,9 @@ connection exports in the schema module keep their original meaning.
 
 The public Find connections mutation schedules a durable evaluation in the
 active AI refresh generation and returns its Run handle alongside stored
-results. It requires that generation to be enabled. Background cursor passes
+results. It requires that generation to be enabled. Member-initiated discovery
+retains the initiating actor; unattended discovery uses the reserved system actor.
+Background cursor passes
 cover all eligible records and revisit them when endpoint roster content changes.
 Relations on both endpoints, Work, and RTable review affordances read stored
 proposals. RTable uses the owning field or the endpoint's declared title column.

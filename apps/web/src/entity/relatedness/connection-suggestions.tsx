@@ -102,7 +102,7 @@ export function ConnectionSuggestionsProvider({
   return <ConnectionContext value={value}>{children}</ConnectionContext>;
 }
 
-export function ConnectionReviewRows({
+function ConnectionReviewRows({
   proposals,
   source,
 }: {

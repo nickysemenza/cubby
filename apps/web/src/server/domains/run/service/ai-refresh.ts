@@ -295,6 +295,7 @@ const emailCursorFor = (rows: readonly { item: { id: string } }[]) =>
 async function scheduleConnectionDiscovery(
   db: Database,
   cursor: Awaited<ReturnType<typeof readAiDiscoveryCursor>>,
+  ports: AiRefreshPorts,
 ) {
   const rows = cursor.connectionDone
     ? []
@@ -305,7 +306,11 @@ async function scheduleConnectionDiscovery(
       );
   const runs: string[] = [];
   for (const row of rows) {
-    const run = await scheduleConnectionRefresh(db, row.source);
+    const run = await scheduleConnectionRefresh(
+      db,
+      row.source,
+      ports.context?.actorContext,
+    );
     if (run) runs.push(run);
   }
   return {
@@ -547,7 +552,11 @@ export async function discoverAiRefresh(
     ports,
   );
   for (const productRun of productDiscovery.runs) runs.add(productRun);
-  const connectionDiscovery = await scheduleConnectionDiscovery(db, cursor);
+  const connectionDiscovery = await scheduleConnectionDiscovery(
+    db,
+    cursor,
+    ports,
+  );
   for (const connectionRun of connectionDiscovery.runs) runs.add(connectionRun);
   await saveAiDiscoveryCursor(db, {
     revision: activation.revision,

@@ -2,14 +2,19 @@ import { z } from "zod";
 import { parseShortcode } from "@cubby/shared";
 
 import { entityRefSchema, entitySchema } from "./entity";
+import { shortcodeEntities } from "./entity-manifest";
+import { anyShortcodeSchema, nonEmptyTuple } from "./identifier-fields";
 import { imageUrlSummary } from "./image-summary";
 
 /**
  * A bounded, manifest-backed expansion of local entity relationships. UUIDs
  * never leave this contract: every reference is an entity plus shortcode.
  */
-export const entityGraphRootSchema = entityRefSchema.superRefine(
-  (root, context) => {
+export const entityGraphRootSchema = entityRefSchema
+  .extend({
+    entityId: anyShortcodeSchema(nonEmptyTuple(shortcodeEntities)),
+  })
+  .superRefine((root, context) => {
     const parsed = parseShortcode(root.entityId);
     if (!parsed || parsed.type !== root.entityKind) {
       context.addIssue({
@@ -17,8 +22,7 @@ export const entityGraphRootSchema = entityRefSchema.superRefine(
         message: "expected a shortcode for the declared entity",
       });
     }
-  },
-);
+  });
 
 export const entityGraphInputSchema = z.object({
   roots: z.array(entityGraphRootSchema).min(1).max(25),

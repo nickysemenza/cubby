@@ -51,6 +51,7 @@ const discoveryEntitySet = new Set<string>(discoveryEntities);
 export async function scheduleConnectionRefresh(
   db: Database,
   source: EntityRef,
+  actor: Parameters<typeof scheduleEvaluationRun>[1] = systemActor(),
 ) {
   if (!discoveryEntitySet.has(source.entityKind)) return null;
   const activation = await readAiRefreshActivation(db);
@@ -79,7 +80,7 @@ export async function scheduleConnectionRefresh(
   const key = await sha256Hex(JSON.stringify([target, provenance]));
   const scheduled = await scheduleEvaluationRun(
     db,
-    systemActor(),
+    actor,
     {
       purpose: "ai_refresh",
       trigger: "scheduled",

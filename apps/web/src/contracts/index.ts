@@ -10,14 +10,16 @@ export { aiContract, aiStreamsContract } from "./ai.contract";
 export { auditLogContract } from "./audit-log.contract";
 export { calendarContract } from "./calendar.contract";
 export { collectionContract } from "./collection.contract";
-export { connectionContract } from "./connection.contract";
 export { oauthContract } from "./connected-apps.contract";
 export { cookbookContract } from "./cookbook.contract";
 export { dashboardContract } from "./dashboard.contract";
 export { dataQualityContract } from "./data-quality.contract";
 export { entityDetailContract } from "./entity-detail.contract";
 export { entityFilterOptionsContract } from "./entity-filter-options.contract";
-export { entityGraphContract } from "./entity-graph.contract";
+export {
+  connectionContract,
+  entityGraphContract,
+} from "./entity-graph.contract";
 export { entityInspectorHealthContract } from "./entity-inspector-health.contract";
 export {
   entityIntegrityContract,

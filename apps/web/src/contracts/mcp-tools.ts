@@ -21,9 +21,9 @@ import { z } from "zod";
 
 import { aiContract } from "~/contracts/ai.contract";
 import { auditLogContract } from "~/contracts/audit-log.contract";
-import { connectionContract } from "~/contracts/connection.contract";
 import { cookbookContract } from "~/contracts/cookbook.contract";
 import { dataQualityContract } from "~/contracts/data-quality.contract";
+import { connectionContract } from "~/contracts/entity-graph.contract";
 import { entityGraphContract } from "~/contracts/entity-graph.contract";
 import { expenseContract } from "~/contracts/expense.contract";
 import {
