@@ -57,6 +57,7 @@ import {
   type ExternalIdPair,
 } from "~/server/domains/product/repo/find-by-external-ids";
 import { resolveProductIdentifierSource } from "~/server/domains/product/repo/product-identifier-source";
+import { productIdentityOverlap } from "~/server/domains/product/repo/product-identity-overlap";
 import {
   findExactProductNameMatches,
   findProductIdentityReviewCandidates,
@@ -302,8 +303,25 @@ async function productCandidates(
   const modelRankedIds = new Set(modelRanked.map(({ id }) => id));
   // Exact names rank right after exact identifiers: commit refuses a new
   // Product beside either without a Distinct-from decision.
+  // Name lookup admits a single shared token; past exact names, a fuzzy hit
+  // must also share the item's identity, its own brand counting only when the
+  // line names it.
   const fuzzyRest = fuzzy.filter(
-    ({ id }) => !exactProductIds.has(id) && !modelRankedIds.has(id),
+    (hit) =>
+      !exactProductIds.has(hit.id) &&
+      !modelRankedIds.has(hit.id) &&
+      (exactNameIds.has(hit.id) ||
+        productIdentityOverlap(
+          {
+            name: line.title,
+            manufacturer:
+              hit.manufacturer &&
+              line.title.toLowerCase().includes(hit.manufacturer.toLowerCase())
+                ? hit.manufacturer
+                : null,
+          },
+          hit,
+        ).relevant),
   );
   return [
     ...exact,
@@ -755,12 +773,16 @@ export async function preparePurchaseImport(
           for (const [position, line] of preparedCandidateLines.entries()) {
             const stableLineId = order.lineIds[position];
             if (!stableLineId) throw new Error("Prepared line id is missing");
-            const candidates = await productCandidates(
-              transactionDb,
-              exactRequests[position] ?? [],
-              exactHits,
-              line,
-            );
+            // Tax, shipping and other adjustments never resolve a Product.
+            const candidates =
+              line.lineKind === "principal"
+                ? await productCandidates(
+                    transactionDb,
+                    exactRequests[position] ?? [],
+                    exactHits,
+                    line,
+                  )
+                : [];
             const identifiers = Object.fromEntries(
               [
                 line.sku ? ["sku", line.sku] : null,

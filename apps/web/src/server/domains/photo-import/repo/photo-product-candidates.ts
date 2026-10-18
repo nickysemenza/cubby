@@ -36,6 +36,10 @@ import {
   getProductImagesByProductIds,
 } from "~/server/domains/product/repo/crud";
 import { loadProductInventoryEntries } from "~/server/domains/product/repo/lookup";
+import {
+  productIdentityOverlap,
+  productIdentityWords,
+} from "~/server/domains/product/repo/product-identity-overlap";
 import { unknownProductVariantComparison } from "~/server/domains/product/repo/product-variant-comparison";
 import { loadProductQuantitySummaries } from "~/server/domains/product/repo/quantity-ledger";
 import { sourceObservationIdentitySql } from "~/server/domains/purchase-import/repo/reconciliation-observations";
@@ -193,20 +197,6 @@ type RankedCandidate = CandidateFact & {
   factors: { label: string; points: number }[];
 };
 
-/** Splits compact vendor titles like `ForgeWearMenPocketShirtBlackSmall`. */
-function productIdentityWords(value: string): Set<string> {
-  const spaced = value.replace(/([a-z])([A-Z])/g, "$1 $2");
-  return new Set(
-    spaced
-      .toLowerCase()
-      .split(/[^a-z0-9]+/)
-      .filter((word) => word.length > 2 && !/^[0-9]+$/.test(word))
-      .filter(
-        (word) => !["the", "and", "for", "size", "unconfirmed"].includes(word),
-      ),
-  );
-}
-
 export function rankPhotoProductCandidates(
   name: string,
   manufacturer: string | null,
@@ -216,27 +206,10 @@ export function rankPhotoProductCandidates(
   limit = SUGGESTION_LIMIT,
 ): RankedCandidate[] {
   const wanted = productIdentityWords(name);
-  const brand = manufacturer?.toLowerCase().trim() || null;
-  const brandWords = manufacturer
-    ? productIdentityWords(manufacturer)
-    : new Set<string>();
   const scored = candidates.flatMap((candidate) => {
-    const words = productIdentityWords(
-      [candidate.name, candidate.model, ...(candidate.aliases ?? [])]
-        .filter(Boolean)
-        .join(" "),
-    );
-    const shared = [...wanted].filter((word) => words.has(word));
-    const sharedIdentity = shared.filter((word) => !brandWords.has(word));
-    const brandMatch =
-      !!brand &&
-      (candidate.manufacturer?.toLowerCase() === brand ||
-        candidate.name.toLowerCase().includes(brand));
-    if (
-      !candidate.exactIdentifier &&
-      sharedIdentity.length < (brandMatch ? 1 : 2)
-    )
-      return [];
+    const { shared, sharedIdentity, brandMatch, relevant } =
+      productIdentityOverlap({ name, manufacturer }, candidate);
+    if (!relevant) return [];
     const firstTitle = [name, ...evidenceTexts].join("\n");
     const secondTitle = [
       candidate.name,

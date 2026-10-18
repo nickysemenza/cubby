@@ -48,6 +48,7 @@ import {
 import { effectiveExpenseTradeSql } from "~/server/domains/expense/repo/expense-inheritance";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
+import { refreshSearchDocuments } from "~/server/generic/search/repo/search-document";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductFixture,
@@ -1879,6 +1880,82 @@ describe("shared purchase-import prepare and commit", () => {
       productId: photoProductRow.shortcode,
       exactIdentifierMatch: true,
     });
+  });
+
+  // An unmatched line once listed whatever shared one prefix token (a spice
+  // jar got a wall mount); tax and shipping got candidates they never resolve.
+  it("offers only identity-sharing Product candidates, and none for non-principal lines", async () => {
+    const { vendor } = await memberImportWorld(ctx.db, ctx.actor);
+    const seed = async (name: string, manufacturer: string) => {
+      const { entityId } = await createProductFixture(
+        ctx.db,
+        makeProductInput({ name, manufacturer }),
+        ctx.actor,
+      );
+      await refreshSearchDocuments(ctx.db, [
+        { entityKind: "product", entityId },
+      ]);
+      const [row] = await getDb(ctx.db)
+        .select({ shortcode: product.shortcode })
+        .from(product)
+        .where(eq(product.id, entityId));
+      return row!;
+    };
+    const cumin = await seed("Ground cumin jar", "Synthetic Spice Co");
+    await seed("Synthetic television wall mount", "Synthetic Mounts");
+    await seed("Synthetic Spice Co crimp connectors", "Synthetic Spice Co");
+    await seed("Shipping tape roll", "Synthetic Office");
+    await seed("Tax ledger office chair casters", "Synthetic Office");
+    const { prepared } = await prepareMemberImport(ctx.db, ctx.actor, {
+      key: "noise",
+      orders: [
+        {
+          stableOrderId: "noise",
+          vendorId: vendor.shortcode,
+          source: {
+            kind: "receipt_photo",
+            externalKey: "synthetic:noise-receipt",
+            checksum: checksum("e"),
+          },
+          extraction: {
+            status: "ready",
+            candidate: {
+              orderId: "SYN-NOISE",
+              orderedAt: "2026-09-20T12:00:00.000Z",
+              merchant: "Synthetic pantry shop",
+              currency: "USD",
+              printedGrandTotal: 14,
+              lines: [
+                {
+                  title: "Synthetic Spice Co ground cumin jar 2oz",
+                  amount: 6,
+                  lineKind: "principal",
+                },
+                {
+                  title: "Smoked paprika refill jar",
+                  amount: 5,
+                  lineKind: "principal",
+                },
+                { title: "Shipping", amount: 2, lineKind: "shipping" },
+                { title: "Tax", amount: 1, lineKind: "tax" },
+              ],
+              payments: [],
+              allShipmentsDelivered: false,
+            },
+          },
+        },
+      ],
+    });
+    const lines = prepared.orders[0]!.lines;
+    expect(
+      lines.map((line) => line.candidates.map((c) => c.productId)),
+    ).toEqual([[cumin.shortcode], [], [], []]);
+    expect(lines.map((line) => line.requiresProductResolution)).toEqual([
+      true,
+      true,
+      false,
+      false,
+    ]);
   });
 
   it("commits tax and shipping lines using only the principal line's resolution", async () => {
