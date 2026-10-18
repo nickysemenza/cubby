@@ -77,6 +77,8 @@ export type StepContext = {
   run: RunRow;
   step: RunStepRow;
   attempt: number;
+  /** Launches a step's child Run (tests inject a recording fake). */
+  launcher: WorkflowLauncher;
 };
 
 export interface StepDriver extends RunStepDefinition {
@@ -121,6 +123,7 @@ export async function advanceStepRun(
   db: Database,
   params: WorkflowRunParams,
   drivers?: StepRunDrivers,
+  launcher: WorkflowLauncher = productionWorkflowLauncher,
 ): Promise<StepAdvance> {
   const owner = await claimWorkflowRun(db, params);
   if (!owner || !isStepRunPurpose(owner.purpose)) return { kind: "lost" };
@@ -162,6 +165,7 @@ export async function advanceStepRun(
       run: owner,
       step: current,
       attempt: params.attempt,
+      launcher,
     });
   } catch (error) {
     // A thrown page ends this step only; the Run moves on to the next one.

@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
 import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
@@ -97,10 +98,12 @@ describe("Sweeps", () => {
       .object({ attempt: z.number() })
       .parse(owner?.progress).attempt;
     for (let page = 0; page < 50; page++) {
-      const advance = await advanceStepRun(ctx.db, {
-        runId,
-        attempt,
-      });
+      const advance = await advanceStepRun(
+        ctx.db,
+        { runId, attempt },
+        undefined,
+        launcher,
+      );
       if (advance.kind !== "continue") return advance.kind;
     }
     return "unbounded";
@@ -204,5 +207,46 @@ describe("Sweeps", () => {
     });
     expect(second.failed).toEqual([]);
     expect(second).toMatchObject({ labelled: 1, stale: 0, next: null });
+  });
+
+  // Failure mode: a connection Sweep re-evaluates sources whose evidence has
+  // not changed since they were last scanned.
+  it("queues connection sources once and skips them on a repeat Sweep", async () => {
+    await activateAiRefresh(ctx.db, "synthetic-sweep-connections", {
+      enabled: true,
+    });
+    await createRepoEntity(ctx, "project", { name: "Synthetic shed repair" });
+    await createRepoEntity(ctx, "project", { name: "Synthetic fence repair" });
+    const families = [
+      {
+        family: "recommendation" as const,
+        scope: { entityKinds: ["project"] },
+      },
+    ];
+    const first = await startSweep(
+      ctx.db,
+      ctx.actor,
+      { trigger: "manual", families },
+      launcher,
+    );
+    // The roster queues both sources on one child Run, then waits on it.
+    expect(await drive(first)).toBe("wait");
+    const [queued] = await readRunSteps(ctx.db, first);
+    expect(queued).toMatchObject({ state: "waiting", found: 2, skipped: 0 });
+    expect(queued?.childRunId).not.toBeNull();
+    const second = await startSweep(
+      ctx.db,
+      ctx.actor,
+      { trigger: "manual", families },
+      launcher,
+    );
+    expect(await drive(second)).toBe("finished");
+    const [repeat] = await readRunSteps(ctx.db, second);
+    expect(repeat).toMatchObject({
+      state: "done",
+      found: 2,
+      skipped: 2,
+      left: 0,
+    });
   });
 });

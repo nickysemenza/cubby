@@ -155,14 +155,14 @@ describe("cross-family Suggestion list", () => {
       makeProductInput({ name: "Synthetic ordered product" }),
       ctx.actor,
     );
-    const strong = await fieldSuggestion(
+    const confident = await fieldSuggestion(
       ctx,
       product,
       "model",
       0.95,
       new Date("2026-01-01T00:00:00Z"),
     );
-    const medium = await fieldSuggestion(
+    const unsure = await fieldSuggestion(
       ctx,
       product,
       "manufacturer",
@@ -188,14 +188,19 @@ describe("cross-family Suggestion list", () => {
       ).toBe(true);
     }
     const ids = page.items.map((row) => row.id);
-    expect(ids.indexOf(strong)).toBeLessThan(ids.indexOf(medium));
+    expect(ids.indexOf(confident)).toBeLessThan(ids.indexOf(unsure));
     const connectionRow = page.items.find(
       (row) => row.id === proposal.review.assessmentId,
     );
     expect(connectionRow).toMatchObject({ clean: false, strength: "strong" });
-    expect(page.items.find((row) => row.id === strong)).toMatchObject({
-      clean: true,
-      strength: "strong",
+    // Model confidence alone is never strong or clean, however high.
+    expect(page.items.find((row) => row.id === confident)).toMatchObject({
+      clean: false,
+      strength: "medium",
+    });
+    expect(page.items.find((row) => row.id === unsure)).toMatchObject({
+      clean: false,
+      strength: "weak",
     });
 
     // Keyset and offset pages walk the same order without gaps.
@@ -323,8 +328,8 @@ describe("cross-family Suggestion list", () => {
     const byFamily = new Map(families.map((row) => [row.family, row]));
     expect(byFamily.get("field")).toMatchObject({
       pending: 1,
-      clean: 1,
-      strong: 1,
+      clean: 0,
+      strong: 0,
     });
     expect(byFamily.get("recommendation")).toMatchObject({
       pending: 1,

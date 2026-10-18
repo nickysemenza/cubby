@@ -5,6 +5,7 @@ import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
 import {
   suggestionSweepRunProgress,
+  sweepFamilyScope,
   sweepRunInput,
   type SweepFamilyScope,
 } from "@cubby/schemas/run-fields";
@@ -30,8 +31,9 @@ import {
   ensureConnectionSweepRun,
   prepareConnectionSweepPage,
 } from "../repo/connection-refresh";
-import { ensureRun } from "../repo/ensure-run";
+import { ensureRun, systemActor } from "../repo/ensure-run";
 import {
+  activeSweepFor,
   readChildRun,
   settleEmptyChildRun,
   type StepRunOwner,
@@ -65,6 +67,27 @@ export async function startSweep(
   });
   await launchWorkflowRun(db, { runId, purpose: "sweep" }, launcher);
   return runId;
+}
+
+/**
+ * The automatic pass over one whole family: a routine Sweep, unless one
+ * covering that family is already unfinished.
+ */
+export async function startRoutineSweep(
+  db: Database,
+  family: SweepFamilyScope["family"],
+  launcher: WorkflowLauncher = productionWorkflowLauncher,
+) {
+  if (await activeSweepFor(db, family)) return null;
+  return startSweep(
+    db,
+    systemActor(),
+    {
+      trigger: "scheduled",
+      families: [sweepFamilyScope.parse({ family, scope: {} })],
+    },
+    launcher,
+  );
 }
 
 /** What a Sweep would look at, from stored state; nothing runs. */
@@ -234,7 +257,7 @@ const connectionTotals = z
 const ROSTER_PAGE = 200;
 
 async function connectionPage(
-  { db, run, step }: PageContext,
+  { db, run, step, launcher }: PageContext,
   scope: Extract<SweepFamilyScope, { family: "recommendation" }>["scope"],
 ): Promise<StepPage> {
   const cursor = connectionCursor.safeParse(step.cursor).success
@@ -282,7 +305,11 @@ async function connectionPage(
         meta: { detail: next },
       };
     }
-    await launchWorkflowRun(db, { runId: childRunId, purpose: "ai_refresh" });
+    await launchWorkflowRun(
+      db,
+      { runId: childRunId, purpose: "ai_refresh" },
+      launcher,
+    );
     return {
       kind: "child",
       childRunId,
@@ -350,7 +377,7 @@ function fieldTargets(
 }
 
 async function fieldPage(
-  { db, run, step }: PageContext,
+  { db, run, step, launcher }: PageContext,
   scope: Extract<SweepFamilyScope, { family: "field" }>["scope"],
 ): Promise<StepPage> {
   const targets = fieldTargets(scope.targets);
@@ -374,14 +401,15 @@ async function fieldPage(
         state: total.failed > 0 ? "failed" : "done",
         meta: { detail: total },
       };
-    return startFieldChild(db, run, targets, nextIndex, total);
+    return startFieldChild(db, run, launcher, targets, nextIndex, total);
   }
-  return startFieldChild(db, run, targets, cursor.index, finished);
+  return startFieldChild(db, run, launcher, targets, cursor.index, finished);
 }
 
 async function startFieldChild(
   db: Database,
   run: StepRunOwner,
+  launcher: WorkflowLauncher,
   targets: ReturnType<typeof fieldTargets>,
   index: number,
   finished: RunStepCounts,
@@ -400,6 +428,7 @@ async function startFieldChild(
       parentRunId: run.id,
     },
     {
+      launcher,
       context: {
         ...buildCrudServices(db),
         actorContext: buildActorContext(run.actorUserId, run.channel),

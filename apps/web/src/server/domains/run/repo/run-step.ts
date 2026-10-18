@@ -345,3 +345,19 @@ export async function settleEmptyChildRun(db: Database, childRunId: RunId) {
       and(eq(run.id, childRunId), eq(run.status, "running"), attemptIs(0)),
     );
 }
+
+/** An unfinished Sweep that already covers this family, if one exists. */
+export async function activeSweepFor(db: Database, family: string) {
+  const [row] = await getDb(db)
+    .select({ id: run.id })
+    .from(run)
+    .where(
+      and(
+        eq(run.purpose, "sweep"),
+        inArray(run.status, ["running", "paused_auth"]),
+        sql`${run.input}->'families' @> ${JSON.stringify([{ family }])}::jsonb`,
+      ),
+    )
+    .limit(1);
+  return row?.id ?? null;
+}

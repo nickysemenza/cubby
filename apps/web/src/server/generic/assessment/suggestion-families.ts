@@ -19,7 +19,6 @@ import {
 } from "@cubby/schemas/entity-connections";
 import { entityGraphRootSchema } from "@cubby/schemas/entity-graph";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
-import { requiresSuggestionReview } from "@cubby/schemas/field-suggestion";
 import type {
   StatementSuggestionOut,
   StatementTransactionAction,
@@ -164,20 +163,14 @@ for (const [entity, checks] of Object.entries(dataChecksByEntity))
     fieldChecks.set(key, [...(fieldChecks.get(key) ?? []), check]);
   }
 
-/** Strong needs an Addition the field lets apply without review, not confidence alone. */
-const fieldStrength = (
-  entity: ShortcodeEntity,
-  field: string,
-  kind: "correction" | "addition",
-  confidence: number,
-): SuggestionStrength =>
-  confidence >= 0.85 &&
-  kind === "addition" &&
-  !requiresSuggestionReview(entity, field)
-    ? "strong"
-    : confidence >= 0.6
-      ? "medium"
-      : "weak";
+/**
+ * A field Suggestion's only evidence is the decision model's confidence, and
+ * confidence alone never makes a Suggestion strong or clean (terminology:
+ * Strength; ADR 0016 amendment). Its Automatic rule, not bulk accept, is
+ * what may apply a confident Addition unattended.
+ */
+const fieldStrength = (confidence: number): SuggestionStrength =>
+  confidence >= 0.85 ? "medium" : "weak";
 
 const shortcodeEntity = z.enum(shortcodeEntities);
 const fieldKind = z.enum(["correction", "addition"]);
@@ -196,13 +189,13 @@ const field: SuggestionFamilyPresentation<"field"> = {
     return rows.map((row) => {
       const entity = shortcodeEntity.parse(row.entity);
       const kind = fieldKind.parse(row.kind);
-      const strength = fieldStrength(entity, row.field, kind, row.confidence);
+      const strength = fieldStrength(row.confidence);
       return {
         family: "field" as const,
         assessmentId: row.id,
         fingerprint: row.fingerprint,
         strength,
-        clean: strength === "strong",
+        clean: false,
         impact:
           kind === "addition"
             ? (fieldChecks.get(`${entity}.${row.field}`) ?? []).map(

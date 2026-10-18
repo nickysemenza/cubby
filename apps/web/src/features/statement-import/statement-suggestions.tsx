@@ -8,15 +8,14 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 
-import { runHref } from "~/entity/routing/purchase-import-links";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { runHref } from "~/entity/routing/purchase-import-links";
 import { createCurrencyColumn } from "~/entity/table/column-helpers";
 import RTable from "~/entity/table/table";
 import { rippleFor } from "~/integrations/tanstack-query/cache-tags";
 import {
   assessment,
   run,
-  statementRow,
   suggestions,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";

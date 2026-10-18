@@ -87,11 +87,7 @@ import {
   readRun,
   storeAiEvaluationResult,
 } from "../repo/ai-work-state";
-import {
-  connectionDiscoveryRecords,
-  connectionSourceFingerprint,
-  scheduleConnectionRefresh,
-} from "../repo/connection-refresh";
+import { connectionSourceFingerprint } from "../repo/connection-refresh";
 import { systemActor } from "../repo/ensure-run";
 import {
   makeSweepSuggestion,
@@ -292,33 +288,26 @@ const fieldCursorFor = (pending: readonly FieldRefreshCursor[]) =>
 const emailCursorFor = (rows: readonly { item: { id: string } }[]) =>
   rows.length === EMAIL_RECLASSIFY_LIMIT * 2 ? rows.at(-1)!.item.id : null;
 
+/**
+ * Connection coverage is one routine Sweep per discovery generation: a
+ * visible Run with its own step, instead of one Run per record. Sources
+ * already evaluated under their current fingerprint are skipped by it.
+ */
 async function scheduleConnectionDiscovery(
   db: Database,
   cursor: Awaited<ReturnType<typeof readAiDiscoveryCursor>>,
-  ports: AiRefreshPorts,
 ) {
-  const rows = cursor.connectionDone
-    ? []
-    : await connectionDiscoveryRecords(
-        db,
-        cursor.connection,
-        EMAIL_RECLASSIFY_LIMIT,
-      );
-  const runs: string[] = [];
-  for (const row of rows) {
-    const run = await scheduleConnectionRefresh(
-      db,
-      row.source,
-      ports.context?.actorContext,
-    );
-    if (run) runs.push(run);
-  }
-  return {
-    runs,
-    done: cursor.connectionDone || rows.length < EMAIL_RECLASSIFY_LIMIT,
-    cursor:
-      rows.length === EMAIL_RECLASSIFY_LIMIT ? (rows.at(-1)?.id ?? null) : null,
-  };
+  if (!cursor.connectionDone)
+    try {
+      const { startRoutineSweep } = await import("./sweep");
+      await startRoutineSweep(db, "recommendation");
+    } catch (error) {
+      // An unlaunched Sweep is relaunched by step-run recovery.
+      log.error("Connection discovery Sweep failed to start", {
+        error: scrubErrorMessage(String(error)),
+      });
+    }
+  return { done: true, cursor: null };
 }
 
 /** Preparation enumerates evidence using live renderers; no model calls happen here. */
@@ -552,12 +541,7 @@ export async function discoverAiRefresh(
     ports,
   );
   for (const productRun of productDiscovery.runs) runs.add(productRun);
-  const connectionDiscovery = await scheduleConnectionDiscovery(
-    db,
-    cursor,
-    ports,
-  );
-  for (const connectionRun of connectionDiscovery.runs) runs.add(connectionRun);
+  const connectionDiscovery = await scheduleConnectionDiscovery(db, cursor);
   await saveAiDiscoveryCursor(db, {
     revision: activation.revision,
     productDone: productDiscovery.productDone,
