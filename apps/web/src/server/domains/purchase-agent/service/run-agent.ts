@@ -383,6 +383,10 @@ export class PurchaseImportRunAgent
         ...piTokenUsage(message),
         durationMs: Math.max(0, Date.now() - this.requestStartedAt),
         status: message.stopReason === "error" ? "failed" : "succeeded",
+        failure:
+          message.stopReason === "error"
+            ? message.errorMessage || undefined
+            : undefined,
         transport: this.requestTransport,
         gatewayLogId: this.requestGateway?.gatewayLogId ?? undefined,
         gatewayCacheStatus:

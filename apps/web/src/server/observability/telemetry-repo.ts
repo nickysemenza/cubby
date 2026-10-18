@@ -185,6 +185,7 @@ export async function persistTelemetryMessages(
             attempt: event.attempt ?? 1,
             status: event.status ?? "succeeded",
             gatewayLogId: event.gatewayLogId ?? null,
+            failure: event.failure ?? null,
             standardCost: event.standardCost,
             chargedCost: event.chargedCost,
             costEvidence: event.costEvidence,

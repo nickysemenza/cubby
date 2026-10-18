@@ -550,6 +550,8 @@ export const aiUsage = pgTable(
       .$type<"succeeded" | "failed">()
       .default("succeeded"),
     gatewayLogId: text("gatewayLogId"),
+    // A failed call's scrubbed, bounded provider refusal or error.
+    failure: text("failure"),
     standardCost: doublePrecision("standardCost"),
     chargedCost: doublePrecision("chargedCost"),
     costEvidence: jsonb("costEvidence").$type<AiCostEvidence>(),
