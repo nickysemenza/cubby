@@ -50,8 +50,9 @@ export const joinFilterList = (values: readonly string[]): string =>
 
 /**
  * A URL param back into the values {@link joinFilterList} wrote: split on
- * unescaped commas, unescaped, trimmed, empties dropped. An unescaped link
- * (`?tags=a,b`) reads as before.
+ * unescaped commas, unescaped, trimmed, empties dropped. Only `\,` and `\\`
+ * are escapes; any other backslash stays literal, so a link written before
+ * escaping (`?tags=a,b`, `?tags=path\alpha`) reads as it always did.
  */
 export const splitFilterList = (raw: string | undefined): string[] => {
   const values: string[] = [];
@@ -59,9 +60,13 @@ export const splitFilterList = (raw: string | undefined): string[] => {
   const text = raw ?? "";
   for (let index = 0; index < text.length; index += 1) {
     const char = text[index]!;
-    if (char === FILTER_LIST_ESCAPE && index + 1 < text.length) {
+    const next = text[index + 1];
+    if (
+      char === FILTER_LIST_ESCAPE &&
+      (next === FILTER_LIST_SEPARATOR || next === FILTER_LIST_ESCAPE)
+    ) {
       index += 1;
-      current += text[index];
+      current += next;
     } else if (char === FILTER_LIST_SEPARATOR) {
       values.push(current);
       current = "";

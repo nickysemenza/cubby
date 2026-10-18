@@ -650,6 +650,20 @@ describe("value lists in the URL", () => {
     ]);
     expect(splitTypedList("ext-a, ext-b,")).toEqual(["ext-a", "ext-b"]);
   });
+
+  it("keeps a backslash literal unless it escapes a comma or backslash", () => {
+    // A bookmark from before escaping (`?tags=path%5Calpha`) once decoded to
+    // `pathalpha`, and URL sync rewrote it.
+    const codec = compileFilterCodec(specs);
+    expect(codec.decode({ tags: "path\\alpha,trailing\\" })).toEqual([
+      { id: "tags", value: ["path\\alpha", "trailing\\"] },
+    ]);
+    const picked = ["path\\alpha", "a\\,b"];
+    const url = codec.encode((columnId) =>
+      columnId === "tags" ? picked : undefined,
+    );
+    expect(codec.decode(url)).toEqual([{ id: "tags", value: picked }]);
+  });
 });
 
 describe("filter aliases", () => {
