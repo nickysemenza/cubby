@@ -27,7 +27,7 @@ import { GearSixIcon } from "@phosphor-icons/react/dist/csr/GearSix";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import type { RowData } from "@tanstack/react-table";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 
 import { householdLocalDate } from "~/lib/household-date";
 import { cn } from "~/lib/utils";
@@ -342,6 +342,7 @@ function DateBound({
     setSeenBound(bound);
     setDaysText(String(Math.abs(relative)));
   }
+  const daysHintId = useId();
   const daysInvalid =
     daysText !== "" &&
     !(/^\d+$/.test(daysText) && Number(daysText) <= RELATIVE_DATE_MAX_DAYS);
@@ -386,6 +387,7 @@ function DateBound({
               inputMode="numeric"
               aria-label={`${label} days`}
               aria-invalid={daysInvalid || undefined}
+              aria-describedby={daysHintId}
               className="w-20 tabular-nums"
               value={daysText}
               onChange={(event) => {
@@ -408,12 +410,12 @@ function DateBound({
             />
           </div>
           {daysInvalid ? (
-            <p className="px-1 text-xs text-destructive">
+            <p id={daysHintId} className="px-1 text-xs text-destructive">
               Enter whole days, up to{" "}
               {RELATIVE_DATE_MAX_DAYS.toLocaleString("en-US")}.
             </p>
           ) : (
-            <p className="px-1 text-xs text-muted-foreground">
+            <p id={daysHintId} className="px-1 text-xs text-muted-foreground">
               {describeRelativeDate(relative)}, counted from the household's
               today
             </p>
@@ -477,6 +479,8 @@ function NumberBound({
 }) {
   const invalid =
     text.trim() !== "" && parseNumberBound(text, range) === undefined;
+  const hintId = useId();
+  const hint = invalid ? numberBoundError(range) : description;
   return (
     <div className="flex flex-col gap-1">
       {/* Text, not `type="number"`: a number input reports incomplete text
@@ -485,17 +489,19 @@ function NumberBound({
         inputMode={range.int ? "numeric" : "decimal"}
         aria-label={label}
         aria-invalid={invalid || undefined}
+        aria-describedby={hint ? hintId : undefined}
         className="tabular-nums"
         value={text}
         onChange={(event) => onChange(event.target.value)}
       />
       <p
+        id={hintId}
         className={cn(
           "px-1 text-xs",
           invalid ? "text-destructive" : "text-muted-foreground",
         )}
       >
-        {invalid ? numberBoundError(range) : description}
+        {hint}
       </p>
     </div>
   );
@@ -558,8 +564,10 @@ function NumberRangeBounds({
       low === null ? undefined : formatNumberBound(low),
       high === null ? undefined : formatNumberBound(high),
     );
-    // The current value is never echoed back, so it is not queued.
-    if (next !== seen) setPending((queue) => [...queue, next]);
+    // With nothing outstanding, the current value is never echoed back, so
+    // it is not queued; behind outstanding emissions its echo still comes.
+    if (next !== seen || pending.length > 0)
+      setPending((queue) => [...queue, next]);
     onChange(next);
   };
   const low = parseNumberBound(min, range);
