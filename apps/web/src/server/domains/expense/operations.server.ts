@@ -127,7 +127,9 @@ const expenseAnalyzeDefinition = workflow<Database, ExpenseAnalyzeInput>(
   "expense.analyze",
 )
   .call("currentWhere", ({ context }, { input }) =>
-    buildExpenseWhereClause(context, input.filters),
+    buildExpenseWhereClause(context, input.filters, {
+      omitAllocationScope: true,
+    }),
   )
   .call("comparison", async (_, { input }) =>
     input.comparison === "previousPeriod"
@@ -136,7 +138,9 @@ const expenseAnalyzeDefinition = workflow<Database, ExpenseAnalyzeInput>(
   )
   .call("previousWhere", ({ context }, { comparison }) =>
     comparison
-      ? buildExpenseWhereClause(context, comparison.filters)
+      ? buildExpenseWhereClause(context, comparison.filters, {
+          omitAllocationScope: true,
+        })
       : Promise.resolve(undefined),
   )
   .call("projectScope", ({ context }, { input }) =>

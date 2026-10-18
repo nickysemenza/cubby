@@ -246,22 +246,64 @@ const embeddedProjectMembership = async (
 };
 
 /**
+ * The allocation filters an analytics scope (`resolveExpenseProjectAllocationScope`)
+ * expresses itself: any-of values and project or category presence, all on
+ * one share.
+ */
+const scopedAllocationKeys = new Set([
+  "projectId",
+  "projectPresenceFilter",
+  "includeSubProjects",
+  "spendingCategoryId",
+  "spendingCategoryPresenceFilter",
+  "includeSubSpendingCategories",
+  "trade",
+  "costType",
+]);
+
+/**
+ * The filters an analytics read selects expenses by. Its scope already
+ * carries the embedded project scope and, when it expresses them, the
+ * allocation filters, which then leave the where so the shares allocate
+ * once. A key it cannot express (Match all, Exclude, trade or cost type
+ * presence) keeps every allocation filter in the where, so the read selects
+ * the expenses the list does.
+ */
+const analyticsFilters = (filters: ExpenseFilters): ExpenseFilters => {
+  const { projectScope: _embedded, ...rest } = filters;
+  const values = listFilterValues.parse(rest);
+  const unscoped = [...shareKeys].some(
+    (key) => !scopedAllocationKeys.has(key) && values[key] !== undefined,
+  );
+  if (unscoped) return rest;
+  const scoped: Partial<ExpenseFilters> = { ...rest };
+  for (const key of shareKeys)
+    if (Object.hasOwn(scoped, key)) Reflect.deleteProperty(scoped, key);
+  return scoped;
+};
+
+/**
  * Shared by list and analytics so identical filter sets select identical
- * expenses: the allocation filters select whole expenses here (one share
- * matching them all, Match all, Exclude), and analytics that join the
- * allocation shares themselves apportion amounts by their own scope.
+ * expenses. `omitAllocationScope` is for analytics that join the allocation
+ * shares themselves (`analyticsFilters`).
  */
 export const buildExpenseWhereClause = async (
   db: Database,
   filters: ExpenseFilters,
-  options?: { context?: ListContext },
+  options?: { omitAllocationScope?: boolean; context?: ListContext },
 ): Promise<SQL | undefined> => {
+  const selected = options?.omitAllocationScope
+    ? analyticsFilters(filters)
+    : filters;
   const context =
     options?.context ??
-    (await expenseScaffold.context(db, { filters, readIntent: "count" }));
+    (await expenseScaffold.context(db, {
+      filters: selected,
+      readIntent: "count",
+    }));
   return and(
-    expenseScaffold.where(filters, { context }),
-    await embeddedProjectMembership(db, filters),
+    expenseScaffold.where(selected, { context }),
+    await embeddedProjectMembership(db, selected),
   );
 };
 
