@@ -72,9 +72,10 @@ local native `sim-e2e` artifacts; no custom bundle is required for every E2E
 journey or runtime acquisition.
 
 Run one affected E2E scenario when it exposes the behavior. While iterating on
-web code, run `pnpm test:related src/...` for the fast-tier tests that import
-the edited files, or `pnpm test:changed` for everything changed since
-`origin/main`; `pnpm test:file src/...` runs named test files. Run them from
+web code, run `pnpm test:changed` for the fast-tier tests affected by changes
+since `origin/main`; `pnpm test:file src/...` runs named test files. Do not use
+Vitest's own `related` or `run --changed`: selecting and running in one
+process fails `ui` tests falsely. Run them from
 the repository root; paths are relative to `apps/web`. For PostgreSQL
 contracts use `pnpm test:postgres src/...`. Read failed tests from
 `apps/web/.vitest-results.json` before deciding what to change; do not rerun an

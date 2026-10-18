@@ -25,15 +25,31 @@ Object.defineProperty(globalThis, "localStorage", {
   value: createMemoryStorage(),
 });
 
+// Every step runs even when an earlier one throws: the ui project shares one
+// jsdom document per worker (`isolate: false`), so a single failed unmount
+// that skipped the DOM reset leaked its tree into every later file's queries
+// ("Found multiple elements"). The first failure is still reported.
 afterEach(() => {
-  cleanup();
-  document.body.replaceChildren();
-  localStorage.clear();
-  sessionStorage.clear();
-  vi.unstubAllGlobals();
-  vi.unstubAllEnvs();
-  vi.clearAllMocks();
-  vi.useRealTimers();
+  const errors: unknown[] = [];
+  for (const step of [
+    () => cleanup(),
+    () => document.body.replaceChildren(),
+    () => localStorage.clear(),
+    () => sessionStorage.clear(),
+    () => vi.unstubAllGlobals(),
+    () => vi.unstubAllEnvs(),
+    () => vi.clearAllMocks(),
+    () => vi.useRealTimers(),
+  ]) {
+    try {
+      step();
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+  if (errors.length === 1) throw errors[0];
+  if (errors.length)
+    throw new AggregateError(errors, "ui test teardown failed");
 });
 
 // A synchronous test can render a `React.lazy` section (detail slots) and

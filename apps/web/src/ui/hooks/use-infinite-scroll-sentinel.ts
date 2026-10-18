@@ -29,7 +29,8 @@ export function useInfiniteScrollSentinel(
   useEffect(() => {
     if (!controls) return;
     const sentinel = sentinelRef.current;
-    if (!sentinel) return;
+    // jsdom has no observer; without one there is nothing to page on.
+    if (!sentinel || typeof IntersectionObserver === "undefined") return;
     const observer = new IntersectionObserver(handleIntersect, { rootMargin });
     observer.observe(sentinel);
     return () => observer.disconnect();

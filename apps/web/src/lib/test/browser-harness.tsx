@@ -11,6 +11,7 @@ import {
   type RouteComponent,
   RouterContextProvider,
 } from "@tanstack/react-router";
+import { cleanup } from "@testing-library/react";
 import {
   createContext as createReactContext,
   useContext,
@@ -261,15 +262,24 @@ export function createBrowserTestHarness(options?: BrowserTestHarnessOptions) {
     wrapper: BrowserTestProviders,
     routerWrapper: BrowserRouterTestProviders,
     dispose: () => {
-      queryClient.clear();
-      router.history.destroy();
-      restoreLayoutMetrics();
-      restoreScrollIntoView();
-      restoreMatchMedia();
-      restoreStartDispatch();
-      if (needsResizeObserver)
-        Reflect.deleteProperty(globalThis, "ResizeObserver");
-      if (options?.clock) vi.useRealTimers();
+      // Unmount before tearing anything down. Test files dispose in their own
+      // afterEach, which runs before the setup file's `cleanup()`; clearing the
+      // cache or removing the stubs under a still-mounted tree re-rendered it
+      // against missing globals (uncaught `matchMedia`/`IntersectionObserver`
+      // errors). An unmount that throws still restores every global below.
+      try {
+        cleanup();
+      } finally {
+        queryClient.clear();
+        router.history.destroy();
+        restoreLayoutMetrics();
+        restoreScrollIntoView();
+        restoreMatchMedia();
+        restoreStartDispatch();
+        if (needsResizeObserver)
+          Reflect.deleteProperty(globalThis, "ResizeObserver");
+        if (options?.clock) vi.useRealTimers();
+      }
     },
   };
 }
