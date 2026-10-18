@@ -14,5 +14,5 @@
     "cf": "1.0.0-beta.18",
     "vite": "^8.3.4"
   },
-  "packageManager": "pnpm@12.11.2"
+  "packageManager": "pnpm@12.12.0"
 }
