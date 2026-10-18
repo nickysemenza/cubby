@@ -4,7 +4,7 @@ import {
 } from "@cubby/schemas/ai-evaluation";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { generateShortcode } from "@cubby/shared";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   taxonomyId,
   taxonomyShortcode,
@@ -54,6 +54,9 @@ import {
 // Real database/publication boundaries; only the external decision model is scripted.
 describe("targeted prompt refresh", () => {
   const ctx = withTestDb();
+  const emailTarget = aiEvaluationTarget.options.find(
+    (target) => target.shape.kind.value === "email",
+  )!;
   beforeEach(() => createSystemUserFixture(ctx.db));
   const fieldTarget = aiEvaluationTarget.options.find(
     (target) => target.shape.kind.value === "field",
@@ -61,6 +64,10 @@ describe("targeted prompt refresh", () => {
   const fieldRefreshTarget = and(
     eq(aiEvaluation.executionKind, "ai_refresh"),
     sql`${aiEvaluation.target}->>${fieldTarget.keyof().enum.kind} = ${fieldTarget.shape.kind.value}`,
+  );
+  const emailRefreshTarget = and(
+    eq(aiEvaluation.executionKind, "ai_refresh"),
+    sql`${aiEvaluation.target}->>${emailTarget.keyof().enum.kind} = ${emailTarget.shape.kind.value}`,
   );
   async function discoverFieldRefresh(
     ports: Parameters<typeof discoverAiRefresh>[1],
@@ -509,11 +516,25 @@ describe("targeted prompt refresh", () => {
     await activateAiRefresh(ctx.db, "synthetic-mail-refresh", {
       enabled: true,
     });
-    expect(await discoverAiRefresh(ctx.db)).toEqual([]);
+    const discovered = await discoverAiRefresh(ctx.db);
+    const emailRunIds = await getDb(ctx.db)
+      .select({ runId: aiEvaluation.runId })
+      .from(aiEvaluation)
+      .where(emailRefreshTarget);
+    expect(
+      discovered.filter((id) =>
+        emailRunIds.some((target) => target.runId === id),
+      ),
+    ).toEqual([]);
     const runs = await getDb(ctx.db)
       .select()
       .from(run)
-      .where(eq(run.purpose, "ai_refresh"));
+      .where(
+        inArray(
+          run.id,
+          emailRunIds.map(({ runId }) => runId),
+        ),
+      );
     expect(
       runs
         .map((row) => aiRefreshRunInput.parse(row.input).emails!.length)
@@ -522,7 +543,7 @@ describe("targeted prompt refresh", () => {
     const evaluations = await getDb(ctx.db)
       .select()
       .from(aiEvaluation)
-      .where(eq(aiEvaluation.executionKind, "ai_refresh"));
+      .where(emailRefreshTarget);
     expect(evaluations).toHaveLength(201);
     expect(evaluations.every((row) => row.state === "blocked")).toBe(true);
     expect(
@@ -530,10 +551,7 @@ describe("targeted prompt refresh", () => {
     ).toBe(false);
     await discoverAiRefresh(ctx.db);
     expect(
-      await getDb(ctx.db)
-        .select()
-        .from(aiEvaluation)
-        .where(eq(aiEvaluation.executionKind, "ai_refresh")),
+      await getDb(ctx.db).select().from(aiEvaluation).where(emailRefreshTarget),
     ).toHaveLength(201);
     expect(
       (

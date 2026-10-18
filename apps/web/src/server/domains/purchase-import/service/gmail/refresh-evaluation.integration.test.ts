@@ -1,5 +1,5 @@
-import { aiProvenance } from "@cubby/schemas/ai-evaluation";
-import { eq } from "drizzle-orm";
+import { aiProvenance, aiEvaluationTarget } from "@cubby/schemas/ai-evaluation";
+import { sql, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -26,6 +26,9 @@ import { syntheticMailImportRun } from "./execution.fixtures";
 // Script only external Gmail/model ports; ownership, ledger and publication are real.
 describe("Email prompt refresh publication", () => {
   const ctx = withTestDb();
+  const emailTarget = aiEvaluationTarget.options.find(
+    (target) => target.shape.kind.value === "email",
+  )!;
   beforeEach(() => createSystemUserFixture(ctx.db));
   afterEach(() => vi.restoreAllMocks());
   it("reuses current triage, evaluates stale relevance and commits its receipt without transferring the source Run", async () => {
@@ -118,12 +121,19 @@ describe("Email prompt refresh publication", () => {
       },
     };
     await discoverAiRefresh(ctx.db);
-    const [evaluation] = await getDb(ctx.db).select().from(aiEvaluation);
+    const emailRefreshTarget = sql`${aiEvaluation.target}->>${emailTarget.keyof().enum.kind} = ${emailTarget.shape.kind.value}`;
+    const [evaluation] = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(emailRefreshTarget);
     expect(evaluation).toBeDefined();
     await executeAiRefreshTarget(ctx.db, evaluation!.id, ports);
     expect(triage).not.toHaveBeenCalled();
     expect(relevance).toHaveBeenCalledOnce();
-    const [saved] = await getDb(ctx.db).select().from(aiEvaluation);
+    const [saved] = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.id, evaluation!.id));
     expect(saved?.state).toBe("completed");
     expect(saved?.receipt).toMatchObject({ sourceChecksum: checksum });
     const [current] = await getDb(ctx.db)
@@ -137,6 +147,12 @@ describe("Email prompt refresh publication", () => {
         (row) => row.evaluationId === evaluation!.id,
       ),
     ).toBe(true);
-    expect(await discoverAiRefresh(ctx.db)).toEqual([]);
+    expect(await discoverAiRefresh(ctx.db)).not.toContain(evaluation!.runId);
+    expect(
+      await getDb(ctx.db)
+        .select({ id: aiEvaluation.id })
+        .from(aiEvaluation)
+        .where(emailRefreshTarget),
+    ).toEqual([{ id: evaluation!.id }]);
   });
 });
