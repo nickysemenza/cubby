@@ -1,3 +1,4 @@
+import { SETTLEMENT_CANDIDATE_LIMIT } from "@cubby/schemas/financial-transaction";
 import { and, eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -8,7 +9,10 @@ import { financialTransactionAllocation } from "~/server/db/schema";
 import { applyFinancialSettlementAllocation } from "~/server/domains/financial-transaction/repo/financial-settlement-allocation";
 
 import { proposeSettlementAllocations } from "./purchase-settlement-allocation";
-import { listPurchaseSettlementCandidates } from "./purchase-settlement-candidates";
+import {
+  listPurchaseSettlementCandidates,
+  listPurchasesSettlementCandidates,
+} from "./purchase-settlement-candidates";
 
 // SQL retrieval must not hide split/differently named evidence before a model
 // can see it. Proposal defaults must preserve previously accepted split edges.
@@ -237,5 +241,59 @@ describe("settlement candidate graph preservation", () => {
         { purchaseId: second.entityId, amount: 30 },
       ]),
     );
+  });
+
+  // Connection freshness ranks many Purchases at once. Each one's LATERAL
+  // search must see only its own facts, keep its own order, and stop at its
+  // own limit.
+  it("ranks a batch of Purchases exactly as each alone", async () => {
+    const account = await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic batch card",
+      identity: { kind: "cash" },
+    });
+    const [hardware, grocer] = await Promise.all([
+      createRepoEntity(ctx, "vendor", { name: "Synthetic hardware" }),
+      createRepoEntity(ctx, "vendor", { name: "Synthetic grocer" }),
+    ]);
+    const priced = await createRepoEntity(ctx, "purchase", {
+      vendorId: hardware.output.id,
+      date: "2026-09-10",
+      statedTotal: 30,
+    });
+    const unpriced = await createRepoEntity(ctx, "purchase", {
+      vendorId: grocer.output.id,
+      date: "2026-09-12",
+    });
+    const undated = await createRepoEntity(ctx, "purchase", {
+      vendorId: grocer.output.id,
+    });
+    for (let index = 0; index < 24; index++)
+      await createRepoEntity(ctx, "financialTransaction", {
+        accountId: account.output.id,
+        amount: index % 3 === 0 ? 30 : 10 + index,
+        kind: "purchase",
+        status: "posted",
+        postedDate: `2026-09-${String(5 + (index % 15)).padStart(2, "0")}`,
+        merchant:
+          index % 2 === 0 ? "Synthetic hardware store" : "Synthetic grocer",
+      });
+    const codes = [priced.output.id, unpriced.output.id, undated.output.id];
+    const batch = await listPurchasesSettlementCandidates(ctx.db, codes);
+    for (const code of codes)
+      expect(batch.get(code)).toEqual(
+        await listPurchaseSettlementCandidates(ctx.db, code),
+      );
+    expect(batch.get(priced.output.id)).toHaveLength(
+      SETTLEMENT_CANDIDATE_LIMIT,
+    );
+    expect(batch.get(priced.output.id)?.[0]).toMatchObject({
+      exactAmount: true,
+      merchantMatches: true,
+    });
+    expect(batch.get(unpriced.output.id)?.[0]).toMatchObject({
+      exactAmount: false,
+      merchantMatches: true,
+    });
+    expect(batch.get(undated.output.id)).toEqual([]);
   });
 });
