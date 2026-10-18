@@ -80,33 +80,41 @@ export async function connectionDiscoveryFingerprint(
       basis: await captureConnectionBasis(db, candidate, false, prepared),
     });
   let context: ReturnType<typeof snapshotJson> = null;
-  if (source.entityKind === "purchase") {
+  if (source.entityKind === "purchase" || source.entityKind === "product") {
     // Retrieval can have no candidate precisely because an acquisition is
     // already confirmed. Retiring the blocker must wake that negative scan.
+    const purchaseSource = source.entityKind === "purchase";
     const acquisitions = await getDb(db)
-      .selectDistinct({ productId: expense.productId })
+      .selectDistinct({
+        otherId: purchaseSource ? expense.productId : expense.purchaseId,
+      })
       .from(expense)
       .where(
         expenseAcquisitionPairPredicate(
-          sql`${expense.purchaseId}=${record.id}::uuid`,
+          sql`${purchaseSource ? expense.purchaseId : expense.productId}=${record.id}::uuid`,
         ),
       );
     const confirmations = await getDb(db)
-      .select({ productId: entityLink.toEntityId })
+      .select({
+        otherId: purchaseSource
+          ? entityLink.toEntityId
+          : entityLink.fromEntityId,
+      })
       .from(entityLink)
       .where(
         and(
           liveLinks("purchaseProduct"),
-          eq(entityLink.fromEntityId, record.id),
+          eq(
+            purchaseSource ? entityLink.fromEntityId : entityLink.toEntityId,
+            record.id,
+          ),
           eq(entityLink.acquisitionConfirmed, true),
         ),
       );
     context = [
       ...new Set([
-        ...acquisitions.flatMap(({ productId }) =>
-          productId ? [productId] : [],
-        ),
-        ...confirmations.map(({ productId }) => productId),
+        ...acquisitions.flatMap(({ otherId }) => (otherId ? [otherId] : [])),
+        ...confirmations.map(({ otherId }) => otherId),
       ]),
     ].sort();
   }

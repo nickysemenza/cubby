@@ -124,7 +124,7 @@ describe("connection discovery roster freshness", () => {
     expect(await connectionSourceFingerprint(ctx.db, ref)).not.toBe(before);
   });
   it.each(["expense", "confirmation"] as const)(
-    "revisits a Purchase negative after its %s acquisition blocker is removed",
+    "revisits both acquisition endpoints after their %s acquisition blocker is removed",
     async (blocker) => {
       const vendor = await createRepoEntity(ctx, "vendor", {
         name: "Synthetic acquisition supplier",
@@ -142,6 +142,7 @@ describe("connection discovery roster freshness", () => {
         entityKind: "purchase" as const,
         entityId: order.output.id,
       };
+      const productRef = { entityKind: "product" as const, entityId: item.id };
       if (blocker === "expense")
         await createRepoEntity(ctx, "expense", {
           name: "Synthetic acquired tool",
@@ -160,6 +161,10 @@ describe("connection discovery roster freshness", () => {
         await acquisitionPairEligible(ctx.db, item.id, order.output.id),
       ).toBe(false);
       const before = await connectionSourceFingerprint(ctx.db, ref);
+      const beforeProduct = await connectionSourceFingerprint(
+        ctx.db,
+        productRef,
+      );
       if (blocker === "expense")
         await getDb(ctx.db)
           .update(expense)
@@ -174,6 +179,9 @@ describe("connection discovery roster freshness", () => {
         await acquisitionPairEligible(ctx.db, item.id, order.output.id),
       ).toBe(true);
       expect(await connectionSourceFingerprint(ctx.db, ref)).not.toBe(before);
+      expect(await connectionSourceFingerprint(ctx.db, productRef)).not.toBe(
+        beforeProduct,
+      );
     },
   );
   it("scopes inventory discovery to the exact Product's stock and locations", async () => {
