@@ -242,12 +242,12 @@ function FamilyChips({
                 : "rounded-full border bg-card px-2.5 py-0.5 text-xs font-medium hover:bg-muted max-md:min-h-11"
             }
           >
-            {chip.label}
+            {chip.label}{" "}
             <span
               className={
                 active
-                  ? "ml-1 tabular-nums opacity-75"
-                  : "ml-1 text-muted-foreground tabular-nums"
+                  ? "tabular-nums opacity-75"
+                  : "text-muted-foreground tabular-nums"
               }
             >
               {counts.data ? formatCount(pending(chip.family)) : "…"}

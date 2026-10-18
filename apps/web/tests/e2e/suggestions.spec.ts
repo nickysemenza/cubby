@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
+import { user } from "~/server/db/auth.schema";
 import {
   product as productTable,
   assessmentState as suggestionTable,
@@ -33,6 +34,7 @@ import { startOperation } from "./support/start-operation";
 import {
   createEntityFixture,
   createEvidenceHarnessContext,
+  ensureMemberParty,
 } from "./fixtures/core";
 
 type Db = Awaited<ReturnType<typeof createEvidenceHarnessContext>>["db"];
@@ -49,6 +51,22 @@ async function generateStatementSuggestions(db: Db) {
     if (!page.next) return;
     after = page.next;
   }
+}
+
+/**
+ * The reserved system user an import's routine Sweep runs as. Production
+ * has it; a fresh E2E database does not.
+ */
+// TODO(#2722): seed the system user in the E2E base world instead.
+async function ensureSystemUser(db: Db) {
+  await getDb(db)
+    .insert(user)
+    .values({
+      id: "cubby-system",
+      name: "Cubby",
+      email: "cubby-system@example.invalid",
+    })
+    .onConflictDoNothing();
 }
 
 /** Synthetic Monarch rows on one account alias. */
@@ -84,6 +102,7 @@ test("Suggestions lists every family with named records and category pills, and 
   page,
 }, testInfo) => {
   const { db, actor } = await createEvidenceHarnessContext(page);
+  await ensureSystemUser(db);
   const categoryName = uniqueName(testInfo, "Suggested category");
   const category = await createEntityFixture(page, "productCategory", {
     name: categoryName,
@@ -167,20 +186,8 @@ test("Suggestions lists every family with named records and category pills, and 
     ),
   ).toContainText(categoryName);
 
-  await field.getByRole("button", { name: "Accept", exact: true }).click();
-  await expect
-    .poll(
-      async () =>
-        (
-          await getDb(db)
-            .select({ categoryId: productTable.categoryId })
-            .from(productTable)
-            .where(eq(productTable.id, itemId))
-        )[0]?.categoryId,
-    )
-    .toBe(await resolveOrThrow(db, "productCategory", category.id));
-  await expect(field).toHaveCount(0);
-
+  // Confirm first: the field write changes the Product, which retires its
+  // pending connection evidence.
   await connection
     .getByRole("button", { name: "Confirm", exact: true })
     .click();
@@ -201,6 +208,21 @@ test("Suggestions lists every family with named records and category pills, and 
         ).productId,
     )
     .toBe(item.id);
+  await expect(connection).toHaveCount(0);
+
+  await field.getByRole("button", { name: "Accept", exact: true }).click();
+  await expect
+    .poll(
+      async () =>
+        (
+          await getDb(db)
+            .select({ categoryId: productTable.categoryId })
+            .from(productTable)
+            .where(eq(productTable.id, itemId))
+        )[0]?.categoryId,
+    )
+    .toBe(await resolveOrThrow(db, "productCategory", category.id));
+  await expect(field).toHaveCount(0);
 });
 
 // Failure modes: an attach applies to the first candidate instead of the one
@@ -211,6 +233,7 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
 }, testInfo) => {
   test.slow();
   const { db } = await createEvidenceHarnessContext(page);
+  await ensureSystemUser(db);
   const alias = uniqueName(testInfo, "Statement card");
   const account = await createEntityFixture(page, "financialAccount", {
     name: alias,
@@ -344,7 +367,9 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
 // read, or the Sweep it starts has no visible Steps.
 test("Find suggestions estimates a Sweep before it starts, then follows its Steps", async ({
   page,
-}) => {
+}, testInfo) => {
+  // Sweeps are member work: the login needs its member party.
+  await ensureMemberParty(page, uniqueName(testInfo, "Sweep member"));
   await gotoAuthenticatedPage(page, "/suggestions");
   await page.getByRole("button", { name: "Find suggestions…" }).click();
   const dialog = page.getByRole("dialog", { name: "Find suggestions" });
