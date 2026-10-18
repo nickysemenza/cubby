@@ -249,4 +249,56 @@ describe("Sweeps", () => {
       left: 0,
     });
   });
+
+  // Failure mode: a field Sweep step finishes before its per-entity child
+  // Runs do, or loses their counts.
+  it("runs one field-sweep child per entity and reports its totals", async () => {
+    const runId = await startSweep(
+      ctx.db,
+      ctx.actor,
+      {
+        trigger: "manual",
+        families: [
+          {
+            family: "field",
+            scope: {
+              targets: [{ entity: "project", fields: ["kind"], filters: {} }],
+            },
+          },
+        ],
+      },
+      launcher,
+    );
+    expect(await drive(runId)).toBe("wait");
+    const [waiting] = await readRunSteps(ctx.db, runId);
+    expect(waiting).toMatchObject({ key: "field", state: "waiting" });
+    const childRunId = waiting?.childRunId;
+    if (!childRunId) throw new Error("expected a field-sweep child Run");
+    const [child] = await getDb(ctx.db)
+      .select({ purpose: run.purpose, parentRunId: run.parentRunId })
+      .from(run)
+      .where(eq(run.id, childRunId));
+    expect(child).toEqual({ purpose: "suggestion_sweep", parentRunId: runId });
+    await getDb(ctx.db)
+      .update(run)
+      .set({
+        status: "completed",
+        progress: {
+          total: 3,
+          done: 3,
+          applied: 0,
+          queued: 0,
+          failed: 0,
+          diagnostics: [],
+        },
+      })
+      .where(eq(run.id, childRunId));
+    expect(await drive(runId)).toBe("finished");
+    expect((await readRunSteps(ctx.db, runId))[0]).toMatchObject({
+      state: "done",
+      found: 3,
+      done: 3,
+      left: 0,
+    });
+  });
 });
