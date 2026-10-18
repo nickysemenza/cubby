@@ -24,6 +24,8 @@ import { entityReportOut } from "@cubby/schemas/entity-report";
 import {
   mailImportOutcomesInput,
   mailImportOutcomesOut,
+} from "@cubby/schemas/mail-import-outcome";
+import {
   mailReadInput,
   mailReadOut,
   mailResolveInput,

@@ -18,6 +18,8 @@ import {
 import {
   mailImportOutcomesInput,
   mailImportOutcomesOut,
+} from "@cubby/schemas/mail-import-outcome";
+import {
   mailReadInput,
   mailReadOut,
   mailSearchInput,
