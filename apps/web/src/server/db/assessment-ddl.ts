@@ -9,6 +9,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS "AssessmentState_email_one_link_key" ON "Asses
 -- Match linked association reads: both the UUID key and linked predicate keep
 -- the planner from choosing an unselective scan of the text uniqueness key.
 CREATE INDEX IF NOT EXISTS "AssessmentState_email_linked_event_uuid_idx" ON "AssessmentState" (((data->>'eventId')::uuid)) WHERE family='email_link' AND active AND data->>'decision'='linked';
+-- A Purchase's reviewed links, read per row by purchaseAssociatedEmailsSql.
+CREATE INDEX IF NOT EXISTS "AssessmentState_email_purchase_uuid_idx" ON "AssessmentState" (((data->>'purchaseId')::uuid)) WHERE family='email_link' AND active;
 
 -- Operational mail authority follows retained events, independently of Email lifecycle.
 CREATE OR REPLACE FUNCTION "assessment_mail_lifecycle"() RETURNS trigger LANGUAGE plpgsql AS $$

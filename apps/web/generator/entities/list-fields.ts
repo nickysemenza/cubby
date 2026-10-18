@@ -437,6 +437,8 @@ const compatibleKinds = (
     case "predicate":
       return [field.predicate];
     // Any value reads presence: a boolean as true, any other as non-NULL.
+    // A text value may hold a record's shortcode (Purchase's effective
+    // purchaser), which a branded idMulti matches by code.
     case "value":
       return field.type === "number" ||
         field.type === "date" ||
@@ -444,7 +446,9 @@ const compatibleKinds = (
         ? ["range", "presence"]
         : field.type === "boolean"
           ? ["boolean", "presence"]
-          : ["text", "multiselect", "presence"];
+          : field.type === "text"
+            ? ["text", "multiselect", "idMulti", "presence"]
+            : ["text", "multiselect", "presence"];
     case "via":
       return field.terminal.kind === "record"
         ? ["idMulti", "text", "presence"]

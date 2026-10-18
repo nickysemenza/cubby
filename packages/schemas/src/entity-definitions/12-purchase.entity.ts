@@ -1186,6 +1186,8 @@ export default defineEntity({
         type: "enum",
         options: [...purchaseReconciliation.options],
       },
+      // The effective purchaserId, filtered through its candidate row set.
+      effectivePurchaser: { type: "text" },
     },
     sort: {
       fields: [
@@ -1337,6 +1339,19 @@ export default defineEntity({
         currentMember: true,
         deriveSchema: true,
         stored: true,
+      },
+      {
+        columnId: "purchaserId",
+        urlKey: "purchaser",
+        kind: "idMulti",
+        label: "Purchaser",
+        placeholder: "Filter by purchaser...",
+        brandRef: { entity: "ledgerParty" },
+        currentMember: true,
+        deriveSchema: true,
+        derived: "effectivePurchaser",
+        schemaDescription:
+          "Effective purchaser (the displayed purchaserId): Ledger Party codes or @me. Values OR together.",
       },
       {
         columnId: "financialReconciliation",
@@ -1616,6 +1631,8 @@ export default defineEntity({
       label: "Purchaser override",
       target: "ledgerParty",
       cardinality: "one",
+      inverseOmit:
+        "LedgerParty.purchases lists the effective purchaser, which every override already decides.",
       provenance: {
         kind: "local-path",
         steps: [

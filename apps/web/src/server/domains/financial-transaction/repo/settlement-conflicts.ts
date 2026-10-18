@@ -75,16 +75,20 @@ const accountPeopleSql = (account: SQL, date: SQL) => sql`(
 )`;
 
 /** True when the account's people admit `party` on `date` (see module doc). */
+// `party` is bound once: inlined, Postgres re-evaluates the order's member
+// (an Email association read) at every reference and per person row.
 const accountAdmitsPartySql = (account: SQL, date: SQL, party: SQL) => sql`(
-  ${party} IS NULL
-  OR NOT EXISTS (
-    SELECT 1 FROM ${accountPeopleSql(account, date)} people(id) WHERE people.id IS NOT NULL
-  )
-  OR EXISTS (
-    SELECT 1 FROM ${accountPeopleSql(account, date)} people(id)
-    JOIN "LedgerParty" person ON person.id = people.id AND person."deletedAt" IS NULL
-    WHERE person.id = ${party} OR person.kind = ${ledgerPartyKind.enum.household}
-  )
+  WITH admitted AS MATERIALIZED (SELECT ${party} AS id)
+  SELECT admitted.id IS NULL
+    OR NOT EXISTS (
+      SELECT 1 FROM ${accountPeopleSql(account, date)} people(id) WHERE people.id IS NOT NULL
+    )
+    OR EXISTS (
+      SELECT 1 FROM ${accountPeopleSql(account, date)} people(id)
+      JOIN "LedgerParty" person ON person.id = people.id AND person."deletedAt" IS NULL
+      WHERE person.id = admitted.id OR person.kind = ${ledgerPartyKind.enum.household}
+    )
+  FROM admitted
 )`;
 
 /**

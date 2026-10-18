@@ -83,6 +83,7 @@ describe("list field compiler", () => {
     hasDocuments: sql`false`,
     financialReconciliation: sql`0`,
     reconciliation: sql`0`,
+    effectivePurchaser: sql`null`,
   };
 
   it("keeps a part's declared NULL placement and fixed direction", () => {

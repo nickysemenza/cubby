@@ -45,6 +45,7 @@ const relationView = z.object({
   provenance: z.object({
     kind: z.string(),
     steps: z.array(stepSchema).optional(),
+    filter: z.string().optional(),
   }),
   inverse: z.object({ steps: z.array(stepSchema) }).optional(),
   inverseOmit: z.string().optional(),
@@ -385,11 +386,17 @@ const backFilter = (
       descriptor.brandRef?.entity === entity.key &&
       !used.has(descriptor.columnId),
   );
-  if (candidates.length === 1 && target.key !== entity.key)
-    return { descriptor: candidates[0]!.columnId };
   const provenance = relationView.shape.provenance.safeParse(
     relation.provenance,
   );
+  // A derived relation names the filter that answers it (ADR 0011).
+  const named =
+    provenance.success && provenance.data.kind === "derived"
+      ? candidates.find(({ columnId }) => columnId === provenance.data.filter)
+      : undefined;
+  if (named !== undefined) return { descriptor: named.columnId };
+  if (candidates.length === 1 && target.key !== entity.key)
+    return { descriptor: candidates[0]!.columnId };
   const column = provenance.success
     ? (singleEdgeColumn({ provenance: provenance.data }, "incoming") ??
       undefined)
