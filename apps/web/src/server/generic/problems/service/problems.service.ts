@@ -1243,6 +1243,12 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
             "stale-parent-recipes",
             allProblemsSchema.shape.staleParentRecipes,
           ),
+        imageMetadataOutcomes: () =>
+          diagnosticItems(
+            db,
+            "image-metadata-outcomes",
+            allProblemsSchema.shape.imageMetadataOutcomes,
+          ),
         weightSoldProducts: () =>
           diagnosticItems(
             db,
@@ -1329,6 +1335,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     toolsUsedOutsideOwnership: r.toolsUsedOutsideOwnership.items,
     entitiesMissingEmbeddings: r.entitiesMissingEmbeddings.items,
     staleParentRecipes: r.staleParentRecipes.items,
+    imageMetadataOutcomes: r.imageMetadataOutcomes.items,
     weightSoldProducts: r.weightSoldProducts.items,
     manufacturerSpellingVariants: r.manufacturerSpellingVariants.items,
     duplicateVendors: r.duplicateVendors.items,

@@ -27,7 +27,7 @@ import {
 import { Spinner } from "~/ui/primitives/spinner";
 
 import { AutoFixButton } from "./components/auto-fix-button";
-import { AwaitingWorkList } from "./components/awaiting-work";
+import { MaintenanceRunCard } from "./components/maintenance-run-card";
 import { MaintenanceTools } from "./components/maintenance-tools";
 import { ProblemImagesProvider } from "./components/problem-images";
 import type { ProblemSectionKind } from "./components/problem-section";
@@ -185,16 +185,16 @@ export function ProblemsOverview() {
       title: "Upkeep",
       sections: [
         {
-          id: "awaiting-work",
-          title: "Awaiting work",
-          description:
-            "Derived data whose background update hasn't landed. Recovery runs automatically on app open and during daily maintenance.",
-          icon: ClockIcon,
-          content: <AwaitingWorkList />,
-        },
-        {
           id: "maintenance",
           title: "Maintenance",
+          description:
+            "The nightly pass drains every backlog as one Run; Run now starts one.",
+          icon: ClockIcon,
+          content: <MaintenanceRunCard />,
+        },
+        {
+          id: "repair-tools",
+          title: "Repair tools",
           description:
             "Rebuilds derived data on demand. Routine upkeep happens at write time; these are one-off tools.",
           icon: WrenchIcon,

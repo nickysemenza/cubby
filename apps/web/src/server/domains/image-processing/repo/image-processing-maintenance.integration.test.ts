@@ -9,10 +9,7 @@ import {
   imageProcessingJob,
   imageProcessingSubmission,
 } from "~/server/db/schema";
-import {
-  backfillImageProcessing,
-  repairImageProcessingWork,
-} from "~/server/domains/image-processing/service/image-processing-maintenance";
+import { backfillImageProcessing } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 
@@ -54,7 +51,7 @@ describe("backfillImageProcessing", () => {
   // recovery must neither duplicate jobs nor manufacture empty submissions.
   it("automatically backfills missing jobs and leaves settled work alone", async () => {
     const row = await seedImage();
-    await repairImageProcessingWork(ctx.db);
+    await backfillImageProcessing(ctx.db, { batchSize: 25 });
     expect(await jobKinds(row.id)).toEqual([
       "describe_image",
       "describe_image",
@@ -62,7 +59,7 @@ describe("backfillImageProcessing", () => {
       "subject_lift",
     ]);
     const before = await getDb(ctx.db).select().from(imageProcessingSubmission);
-    await repairImageProcessingWork(ctx.db);
+    await backfillImageProcessing(ctx.db, { batchSize: 25 });
     expect(
       await getDb(ctx.db).select().from(imageProcessingSubmission),
     ).toEqual(before);
@@ -81,7 +78,6 @@ describe("backfillImageProcessing", () => {
     const row = await seedImage();
     const result = await backfillImageProcessing(ctx.db, {
       batchSize: 10,
-      retryFailures: false,
     });
     expect(result).toMatchObject({ scheduled: 1 });
     expect(await jobKinds(row.id)).toEqual([
@@ -96,7 +92,7 @@ describe("backfillImageProcessing", () => {
     const row = await seedImage();
     const result = await backfillImageProcessing(ctx.db, {
       batchSize: 10,
-      retryFailures: false,
+
       kinds: ["describe_image"],
     });
     expect(result).toMatchObject({ scheduled: 1 });
@@ -110,7 +106,6 @@ describe("backfillImageProcessing", () => {
     const row = await seedImage();
     await backfillImageProcessing(ctx.db, {
       batchSize: 10,
-      retryFailures: false,
     });
     expect(await jobKinds(row.id)).toEqual([
       "describe_image",

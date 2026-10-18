@@ -348,17 +348,24 @@ native PostgreSQL installation remain owned by their existing runners.
   `cubby-background`. There is no execution table and no dead-letter queue.
   - Every handler re-checks its row's own freshness marker, so redelivery is a
     no-op.
-  - App-open recovery and daily maintenance republish stale recipe totals,
-    configured search embeddings, and image metadata work, and cull uploads
-    abandoned for more than a day. Embeddings and metadata use bounded pages.
-    Problems retains live counts for diagnosis. Missing image-processing jobs
-    are backfilled automatically in batches of 25 without retrying failed jobs.
+  - Daily maintenance is a `maintenance` Run (cron `scheduled`, the Problems
+    card's Run now `manual`; one active pass at a time) whose steps
+    (`domains/maintenance/service/maintenance-run.ts`) drain every backlog page
+    by page: image-processing repair, EXIF/GPS, embeddings, stale recipe
+    totals, abandoned uploads, Run housekeeping, original disposal, vector
+    reconcile, calendar, mail discovery, then the image-processing backfill.
+    The backfill runs each image's describe/identify/cutout jobs inline and
+    pauses the Run at the AI budget until its window ends. An EXIF row whose
+    original is gone (404) or whose extraction fails three times gets a
+    terminal `Image.metadataOutcome` with its raw error, leaves the backlog
+    and is listed on Problems; a step's Retry failed re-admits its failed refs.
+    Failed image jobs are never re-queued silently.
+  - App-open recovery (`requestCatchUp`) only resumes paused or lost Runs and
+    starts mail discovery; it does not drain backlogs.
   - Image processing always accepts uploads and queued work; historical
     enabled/paused settings are ignored. Device availability and capability
     still determine which companion work can execute. Exceptional repair tools
     live on Problems; Settings contains connection diagnostics.
-  - The daily cron reports remaining backlog after requesting recovery;
-    queued work completes asynchronously.
 - Inventory and location valuation are computed on every read. Search
   projections are written inside the entity write transaction.
 - Secrets are set with `wrangler secret put NAME --name cubby`. Production is the only deployed

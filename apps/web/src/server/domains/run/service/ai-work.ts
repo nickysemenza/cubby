@@ -412,6 +412,8 @@ export async function recoverManualAiWork(
     await (
       await import("./reclassification-recovery")
     ).recoverHistoricalReclassification(db);
+  // Paused (budget window over) or lost step-ledger Runs: maintenance, Sweeps.
+  await (await import("./step-run")).recoverStepRuns(db, launcher, runIds);
   const candidates = await recoverableManualAiWorkRuns(db, runIds);
   for (const owner of candidates) {
     if (owner.status === "running") {

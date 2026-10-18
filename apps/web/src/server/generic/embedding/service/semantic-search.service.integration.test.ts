@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { type getAiGateway, setCfEnv } from "~/server/cf-env";
 import type { Database } from "~/server/db";
+import { countUnembeddedEntities } from "~/server/domains/maintenance/service/maintenance.service";
 import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
 import { getDuplicateProductRecommendationWorkflow } from "~/server/domains/recommendation/operations/recommendations.server";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
@@ -28,10 +29,6 @@ import {
   refreshSearchDocument,
   selectUnembeddedSearchDocumentRefs,
 } from "~/server/generic/search/repo/search-document";
-import {
-  countAwaitingWork,
-  settleAwaitingWork,
-} from "~/server/generic/work-queue/service/awaiting-work.service";
 import {
   createProductFixture as createProduct,
   makeExpenseInput,
@@ -499,28 +496,20 @@ describe("semantic search background tasks", () => {
     expect(seen.size).toBe(pageSize + 5);
   });
 
-  it("settle now republishes exactly what the awaiting counts describe", async () => {
+  it("the maintenance embeddings backlog counts only embeddable documents", async () => {
     await seedSearchDocumentsFixtureRaw(ctx.db, "product", 3);
     // A financial entity with no EntityEmbedding row: searchable but not
-    // embeddable, so `countAwaitingWork`/`settleAwaitingWork` must never
-    // count or publish a refresh for it (see `unembeddedDocumentsSql`'s
-    // `embeddableEntityKindsSql` filter).
+    // embeddable, so the maintenance embeddings step must never count or
+    // refresh it (see `unembeddedDocumentsSql`'s `embeddableEntityKindsSql`
+    // filter, which both the count and the step's page selection share).
     await createRepoEntity(
       ctx,
       "expense",
       makeExpenseInput({ name: "Example unembeddable expense" }),
     );
-    const published: Array<{ task: { kind: string } }> = [];
     setCfEnv(
       fromPartial<Env>({
-        BACKGROUND_QUEUE: {
-          sendBatch: async (
-            messages: Iterable<{ body: { task: { kind: string } } }>,
-          ) => {
-            published.push(...[...messages].map((m) => m.body));
-          },
-        },
-        // countAwaitingWork now gates the count on semanticEmbeddingsConfigured(),
+        // The backlog count gates on semanticEmbeddingsConfigured(),
         // which needs both a reachable gateway (the AI binding stands in for
         // AI_GATEWAY_API_KEY, unset under vitest) and a configured vector store.
         AI: {
@@ -529,19 +518,16 @@ describe("semantic search background tasks", () => {
         VECTORIZE: createInMemoryVectorizeIndex(),
       }),
     );
-    const before = await countAwaitingWork(ctx.db);
-    expect(before.unembeddedEntities).toBe(3);
-
-    const settled = await settleAwaitingWork(ctx.db);
-    expect(settled).toMatchObject({
-      publishedEmbeddingTasks: 3,
-      publishedRecipeTasks: 0,
-      transport: "queue",
-    });
-    const embeddingTasks = published.filter(
-      (m) => m.task.kind === "entity-embedding.refresh",
+    expect(await countUnembeddedEntities(ctx.db)).toBe(3);
+    const page = await selectUnembeddedSearchDocumentRefs(
+      ctx.db,
+      getSemanticEmbeddingConfig(),
     );
-    expect(embeddingTasks).toHaveLength(3);
+    expect(page.refs.map((ref) => ref.entityKind)).toEqual([
+      "product",
+      "product",
+      "product",
+    ]);
   });
 
   it("unembeddedEntities is 0 when semantic embeddings are unconfigured", async () => {
@@ -549,7 +535,6 @@ describe("semantic search background tasks", () => {
     // No setCfEnv call: no VECTORIZE binding, so semanticEmbeddingsConfigured()
     // is false and the count must degrade to 0 rather than report an
     // unfixable backlog (mirrors problems.service.ts countMissingEmbeddings).
-    const result = await countAwaitingWork(ctx.db);
-    expect(result.unembeddedEntities).toBe(0);
+    expect(await countUnembeddedEntities(ctx.db)).toBe(0);
   });
 });

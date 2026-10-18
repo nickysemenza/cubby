@@ -2,6 +2,7 @@ import { imageChildren } from "../child-tables/image.js";
 import {
   imageCaptureAttribution,
   imageCaptureLocation,
+  imageMetadataOutcome,
   imageProvenanceEvidence,
   imageSourceEvidence,
 } from "../image-capture-fields.js";
@@ -518,6 +519,18 @@ export default defineEntity({
         nullable: true,
       },
       {
+        // Terminal EXIF/GPS outcome: a row that can never extract leaves the
+        // `metadataRevision` backlog with its raw error instead of pinning it.
+        key: "metadataOutcome",
+        kind: "enum",
+        nullable: true,
+      },
+      {
+        key: "metadataError",
+        kind: "text",
+        nullable: true,
+      },
+      {
         key: "createdAt",
         kind: "timestamp",
         display: { detail: true },
@@ -611,6 +624,8 @@ export default defineEntity({
       { key: "sourceEvidence", specialized: "json:sourceEvidence" },
       "metadataRevision",
       { key: "embeddedMetadata", specialized: "json:embeddedMetadata" },
+      { key: "metadataOutcome", specialized: "enum:ImageMetadataOutcome" },
+      "metadataError",
       { key: "createdAt" },
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
@@ -706,6 +721,7 @@ export default defineEntity({
       { column: "status" },
       { column: "renderStatus" },
       { column: "storageStatus" },
+      { column: "metadataOutcome", values: imageMetadataOutcome.options },
       {
         name: "Image_perceptualHash_format_check",
         sql: "{perceptualHash} IS NULL OR {perceptualHash} ~ '^[0-9a-f]{16}$'",

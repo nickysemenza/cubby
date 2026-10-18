@@ -113,7 +113,10 @@ import {
   workRunReviewOwners,
   workRunReviewRead,
 } from "~/server/generic/work-queue/repo/work-queue-routing";
-import { WORKFLOW_RUN_PURPOSES } from "~/server/workflows/runs/contract";
+import {
+  isStepRunPurpose,
+  WORKFLOW_RUN_PURPOSES,
+} from "~/server/workflows/runs/contract";
 
 import { loadWorkContexts } from "./work-context";
 import { projectWorkExplanations } from "./work-explanation";
@@ -478,7 +481,11 @@ async function workQueueProjection(
       id: sql`"Run".shortcode`,
       name: sql`"Run".purpose || ' · ' || "Run".status`,
       where: sql`"Run"."deletedAt" IS NULL AND (("Run".status = ${runStatus.enum.running} AND ("Run".purpose IN (${sql.join(
-        WORKFLOW_RUN_PURPOSES.map((purpose) => sql`${purpose}`),
+        // A running maintenance pass or Sweep is not member work; its failed
+        // or stalled outcomes still surface through the failure paths.
+        WORKFLOW_RUN_PURPOSES.filter(
+          (purpose) => !isStepRunPurpose(purpose),
+        ).map((purpose) => sql`${purpose}`),
         sql`, `,
       )}) OR "Run"."dispatchEventId" IS NOT NULL)) OR ("Run".status = ${runStatus.enum.needs_review} AND "Run"."failureCode" IN ('execution_limit')))`,
       details: {

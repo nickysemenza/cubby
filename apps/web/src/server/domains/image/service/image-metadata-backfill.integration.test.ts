@@ -15,8 +15,6 @@ import {
   type ExtractImageMetadataPorts,
 } from "~/server/domains/image/service/image-metadata-extraction.service";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
-import { settleAwaitingWork } from "~/server/generic/work-queue/service/awaiting-work.service";
-import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import { createImageFixture } from "~/server/testing/repo.fixtures";
 
 // ---------------------------------------------------------------------------
@@ -264,44 +262,5 @@ describe("image metadata extraction + backfill (real Postgres)", () => {
     expect(row.captureLocation).toEqual({ lat: 51.5, lng: -0.12 });
     expect(row.captureAttribution).toBe("derived");
     expect(row.provenanceEvidence).toEqual({ basis: "sighting" });
-  });
-
-  it("automatic recovery queues stale metadata and extraction clears the backlog", async () => {
-    const jpeg = buildJpegWithExif("2025:03:03 03:03:00", 0, 0);
-    const images = await Promise.all(
-      Array.from({ length: 3 }, (_, i) =>
-        createImageFixture(ctx.db, `backfill-${i}`, {
-          contentType: "image/jpeg",
-        }),
-      ),
-    );
-
-    const queue = captureBackgroundQueue();
-    try {
-      await settleAwaitingWork(ctx.db);
-      const tasks = queue.tasks.filter(
-        (task) => task.kind === "image-metadata.extract",
-      );
-      for (const image of images)
-        expect(tasks.some((task) => task.imageId === image.id)).toBe(true);
-      for (const task of tasks)
-        await extractAndStoreImageMetadata(
-          ctx.db,
-          task.imageId,
-          stubbedPorts(jpeg),
-        );
-      queue.tasks.length = 0;
-      await settleAwaitingWork(ctx.db);
-      expect(
-        queue.tasks.filter((task) => task.kind === "image-metadata.extract"),
-      ).toEqual([]);
-    } finally {
-      queue.restore();
-    }
-
-    for (const image of images) {
-      const row = await getImageById(ctx.db, image.id);
-      expect(row.capturedAt?.toISOString()).toBe("2025-03-03T03:03:00.000Z");
-    }
   });
 });

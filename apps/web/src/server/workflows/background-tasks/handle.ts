@@ -30,7 +30,8 @@ const productionExtractImageMetadata: ExtractImageMetadataPort = async (
 ) => {
   const { extractAndStoreImageMetadata } =
     await import("~/server/domains/image/service/image-metadata-extraction.service");
-  return extractAndStoreImageMetadata(db, imageId);
+  const outcome = await extractAndStoreImageMetadata(db, imageId);
+  return outcome === "succeeded" ? "succeeded" : "skipped";
 };
 
 type MarkCalendarFeedDirtyPort = (

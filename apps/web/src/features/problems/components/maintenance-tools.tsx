@@ -26,7 +26,6 @@ import { Description } from "~/ui/primitives/description";
 import { Eyebrow } from "~/ui/primitives/eyebrow";
 
 import { BACKFILL } from "./backfill-registry";
-import { ImageProcessingMaintenance } from "./image-processing-maintenance";
 import { BackfillButton } from "./problem-backfill-action";
 
 /** One labeled maintenance action: description left, dry-run count + run-button right. */
@@ -437,7 +436,6 @@ export function MaintenanceTools() {
 
   return (
     <Stack gap="lg">
-      <ImageProcessingMaintenance />
       {MAINTENANCE_GROUPS.map(({ group, tools }) => (
         <Stack key={group} gap="tight">
           <Eyebrow>{group}</Eyebrow>

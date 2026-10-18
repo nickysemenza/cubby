@@ -47,6 +47,7 @@ const loadPurchaseDetectors = () =>
   import("~/server/generic/problems/repo/detectors-purchase");
 const loadRecipeDetectors = () =>
   import("~/server/generic/problems/repo/detectors-recipe");
+const loadImageRepo = () => import("~/server/domains/image/repo/image");
 const loadTitleSize = () => import("~/server/lib/title-unit-size");
 
 type DiagnosticStatus =
@@ -347,6 +348,17 @@ export const diagnosticAdapters = {
       return healthyCount(
         (await findParentRecipesWithDeletedSubRecipes(db)).length,
       );
+    },
+  },
+  "image-metadata-outcomes": {
+    sample: async (db, _options, limit) => {
+      const { listImageMetadataOutcomes } = await loadImageRepo();
+      return healthySample(listImageMetadataOutcomes(db), limit);
+    },
+    count: async (db) => {
+      const { countImageMetadataOutcomes } = await loadImageRepo();
+      const counts = await countImageMetadataOutcomes(db);
+      return healthyCount(counts.original_missing + counts.extraction_failed);
     },
   },
   "weight-sold-products": {

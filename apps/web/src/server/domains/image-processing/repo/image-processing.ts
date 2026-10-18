@@ -722,6 +722,22 @@ async function skipObsoleteImageProcessingDispatchJobs(
   });
 }
 
+/** Each job's state and last raw error, for a caller that just ran them. */
+export async function readImageProcessingJobStates(
+  db: Database,
+  jobIds: readonly string[],
+) {
+  if (!jobIds.length) return [];
+  return getDb(db)
+    .select({
+      id: imageProcessingJob.id,
+      state: imageProcessingJob.state,
+      lastError: imageProcessingJob.lastError,
+    })
+    .from(imageProcessingJob)
+    .where(inArray(imageProcessingJob.id, [...jobIds]));
+}
+
 /** Bounded repair after a post-commit queue publication was missed. */
 export async function findImageProcessingDispatchRepairs(
   db: Database,

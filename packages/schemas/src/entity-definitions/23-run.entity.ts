@@ -824,6 +824,15 @@ export default defineEntity({
         unique: true,
         where: "{purpose} = 'mail_discovery' AND {status} = 'running'",
       },
+      {
+        // One maintenance pass at a time: a cron and a "Run now" racing each
+        // other lose the insert and return the active pass instead.
+        name: "Run_one_active_maintenance",
+        on: ["purpose"],
+        unique: true,
+        where:
+          "{purpose} = 'maintenance' AND {status} IN ('running', 'paused_auth')",
+      },
     ],
     checks: [
       { column: "trigger" },
