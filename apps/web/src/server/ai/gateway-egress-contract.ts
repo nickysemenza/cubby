@@ -22,6 +22,7 @@ const gatewayAdmission = z.discriminatedUnion("kind", [
 export type GatewayAdmission = z.infer<typeof gatewayAdmission>;
 export interface AiGatewayEgressRpc {
   scheduleAiWorkRecovery(runId?: string): Promise<void>;
+  scheduleFundingResume(at: number): Promise<void>;
   fetch(request: Request): Promise<Response>;
   admit(bucket: string, now?: number): Promise<GatewayAdmission>;
   finish(

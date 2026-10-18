@@ -1,3 +1,7 @@
+import {
+  assessmentSubjects,
+  mailImportOutcome,
+} from "@cubby/schemas/assessment";
 import type { ActorContext } from "@cubby/schemas/context";
 /**
  * The public `mail` tool: read a member's retained Email and record what it
@@ -8,10 +12,13 @@ import type { ActorContext } from "@cubby/schemas/context";
 import {
   parseEntityId,
   parseShortcodeFor,
-  runEntityId,
   type RunId,
   type UserId,
 } from "@cubby/schemas/identifiers";
+import {
+  mailImportOutcomesInput,
+  mailImportOutcomesOut,
+} from "@cubby/schemas/mail-import-outcome";
 import {
   mailReadInput,
   mailReadOut,
@@ -27,7 +34,8 @@ import {
 } from "@cubby/schemas/mailbox-research";
 import { runTargetOutcomeReceipt } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, asc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
+import type { z } from "zod";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
 import type { Database } from "~/server/db";
@@ -40,6 +48,8 @@ import {
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import {
+  assessment,
+  assessmentState,
   entityAttachment,
   ledgerParty,
   email as emailTable,
@@ -67,7 +77,6 @@ import { GmailApiError } from "~/server/domains/purchase-import/repo/gmail/types
 import {
   assertMailRunMembership,
   assertMailRunReadAuthority,
-  readMailRunSources,
 } from "~/server/domains/purchase-import/repo/mail-run-membership";
 import { createAppError } from "~/server/errors/app-error";
 import { publishEmailLinkDecision } from "~/server/generic/assessment/repo/assessment-email-link";
@@ -93,6 +102,11 @@ import {
   recordMailFinancialEvidence,
   recordMailFinancialReview,
 } from "../repo/mail-financial-review";
+import {
+  importedMailJudgment,
+  linkedMailJudgment,
+  publishMailImportOutcome,
+} from "../repo/mail-outcome/assessment";
 import { ingestGmailMessages } from "../service/gmail/ingest";
 import { prepareMailFinancialEvent } from "../service/mail-financial-event";
 import {
@@ -247,6 +261,73 @@ async function associationsForMail(
     acceptedSourceOrders: await readEmailAcceptedSourceOrders(db, id),
     financialAssociations: await readEmailFinancialAssociations(db, id),
   };
+}
+
+/** Read predictions separately so the original can be graded blind first. */
+export async function readMailImportOutcomes(
+  db: Database,
+  raw: z.input<typeof mailImportOutcomesInput>,
+  actor: ActorContext,
+) {
+  const input = mailImportOutcomesInput.parse(raw);
+  const parties = await memberPartyIds(db, actor.userId);
+  const [source] = parties.length
+    ? await getDb(db)
+        .select({ id: emailTable.id })
+        .from(emailTable)
+        .where(
+          and(
+            inArray(emailTable.ledgerPartyId, parties),
+            eq(emailTable.provider, "gmail"),
+            eq(emailTable.mailboxId, input.mailboxId),
+            eq(emailTable.messageId, input.messageId),
+            notDeleted(emailTable),
+          ),
+        )
+        .limit(1)
+    : [];
+  if (!source)
+    throw createAppError(
+      "EMAIL_NOT_FOUND",
+      "No Email in this mailbox belongs to this member.",
+    );
+  const rows = await getDb(db)
+    .select({
+      assessmentId: assessment.id,
+      judgment: assessment.judgment,
+      producer: assessment.producer,
+      producerRun: runTable.shortcode,
+      subject: assessment.subject,
+      createdAt: assessment.createdAt,
+    })
+    .from(assessment)
+    .innerJoin(assessmentState, eq(assessmentState.id, assessment.id))
+    .leftJoin(runTable, eq(runTable.id, assessmentState.runId))
+    .where(
+      and(
+        eq(assessmentState.family, "mail_import_outcome"),
+        eq(assessmentState.entity, "email"),
+        eq(assessmentState.recordId, source.id),
+      ),
+    )
+    .orderBy(desc(assessment.createdAt), desc(assessment.id))
+    .offset(input.offset)
+    .limit(input.limit + 1);
+  return mailImportOutcomesOut.parse({
+    items: rows.slice(0, input.limit).map((row) => ({
+      ...row,
+      producer: row.producer
+        ? {
+            ...row.producer,
+            runId: row.producer.runId ? row.producerRun : null,
+          }
+        : null,
+      checksum: assessmentSubjects.mail_import_outcome.parse(row.subject)
+        .checksum,
+      createdAt: row.createdAt.toISOString(),
+    })),
+    nextOffset: rows.length > input.limit ? input.offset + input.limit : null,
+  });
 }
 
 export async function readMail(
@@ -424,15 +505,19 @@ async function attachRetainedSource(
  * (Email, Purchase, event, checksum), so a replay adds nothing; a member's
  * dismissal of this Email for the Purchase refuses the link.
  */
-export async function linkOrderMail(
+async function linkOrderMail(
   db: Database,
   input: {
     mail: RetainedMail;
     purchaseId: string;
     event: MailEvent;
     actorUserId: string;
-    /** `agent` for a `mail.resolve` session or Pi, `import` for a commit. */
-    proposedBy: "agent" | "import";
+    /**
+     * `agent` for a `mail.resolve` session or Pi, `import` for a commit,
+     * `heuristic` for a Mail import rule (`rule` names its revision and Run).
+     */
+    proposedBy: "agent" | "import" | "heuristic";
+    rule?: { revision: string; runId: RunId };
     /**
      * False for an Email whose transaction is not attributed to its
      * recipient: it may evidence the Purchase, but a forwarded copy never
@@ -566,6 +651,8 @@ export async function linkOrderMail(
         proposedBy: input.proposedBy,
       },
       "automatic",
+      undefined,
+      input.rule,
     );
   if (input.attributed !== false)
     await ensureMailVendorAccount(db, {
@@ -608,6 +695,9 @@ export async function settleMail(
     classification?: "unrelated";
     /** What settled the Email: an import, a link, or the member-facing gap. */
     detail: string;
+    /** The Mail import rule revision that applied a classification. */
+    ruleRevision?: string;
+    judgment?: z.infer<typeof mailImportOutcome>;
   },
   actor?: ActorContext,
 ) {
@@ -690,6 +780,7 @@ export async function settleMail(
           stage: "resolution",
           reason: input.detail,
           classificationVersion: originalEmail.classificationVersion,
+          promptVersion: input.ruleRevision ?? null,
         },
         actor,
       );
@@ -705,6 +796,31 @@ export async function settleMail(
           "Email assignment changed before settlement.",
         );
       const emailId = settledEmails[0]!.id;
+      const judgment =
+        input.judgment ??
+        mailImportOutcome.parse(
+          input.status === "blocked"
+            ? { kind: "unresolved", reason: input.detail }
+            : input.classification === "unrelated"
+              ? {
+                  kind: "unrelated",
+                  reason: input.detail.replace(/^unrelated: /u, ""),
+                }
+              : input.detail.startsWith("linked:")
+                ? {
+                    kind: "linked",
+                    event: input.detail.slice("linked:".length),
+                    purchases: [],
+                  }
+                : { kind: "linked", event: "financial", purchases: [] },
+        );
+      await publishMailImportOutcome(databaseForTransaction(tx), {
+        emailId,
+        runId: input.importRunId,
+        checksum: input.mail.rawChecksum,
+        judgment,
+        ruleRevision: input.ruleRevision,
+      });
       const fingerprint = await sha256Hex(
         JSON.stringify({
           emailId,
@@ -787,6 +903,12 @@ export async function resolveMail(
   actor: ActorContext,
   storage: OrderMailAttachmentStorage = productionOrderMailAttachmentStorage,
   decisionPort?: DecisionPort,
+  /**
+   * A Mail import rule settling the Email for its Run. It links only a
+   * Purchase on the Email owner's own account at that Vendor, so recipient
+   * attribution cannot change the write and is not judged.
+   */
+  rule?: { revision: string },
 ) {
   const input = mailResolveInput.parse(rawInput);
   const { disposition } = input;
@@ -832,7 +954,7 @@ export async function resolveMail(
         "MAIL_REQUEST_REFUSED",
         "via admits connecting Emails to a Mail import Run; this Email is not on one, so link it without via.",
       );
-    if (importRunId)
+    if (importRunId && !rule)
       admissions = await prepareMailSourceAdmissions(
         db,
         importRunId,
@@ -963,7 +1085,11 @@ export async function resolveMail(
             purchaseId: id,
             event: disposition.event,
             actorUserId: actor.userId,
-            proposedBy: "agent",
+            proposedBy: rule ? "heuristic" : "agent",
+            rule:
+              rule && importRunId
+                ? { revision: rule.revision, runId: importRunId }
+                : undefined,
             attachmentDecisions,
             attributed: mailAttributedToRecipient(
               admissions.find((admission) => admission.mail.id === mail.id),
@@ -995,6 +1121,11 @@ export async function resolveMail(
           importRunId,
           status: "completed",
           detail: `linked:${disposition.event}`,
+          ruleRevision: rule?.revision,
+          judgment: await linkedMailJudgment(tdb, {
+            purchaseIds: ids,
+            event: disposition.event,
+          }),
         },
         actor,
       );
@@ -1063,6 +1194,7 @@ export async function resolveMail(
         status: "completed",
         classification: "unrelated",
         detail: `unrelated: ${disposition.reason}`,
+        ruleRevision: rule?.revision,
       },
       actor,
     );
@@ -1093,15 +1225,14 @@ export async function resolveMail(
 }
 
 /**
- * A mail-sourced import commit links its Email for the event it records. An
- * attachment's commit links its parent Email, by the Email's own checksum.
+ * Link every Purchase reached by one Email commit, then publish its complete
+ * outcome once. An attachment links its parent Email by the Email's checksum.
  */
 export async function linkImportedMail(
   db: Database,
   input: {
     mail: RetainedMail;
-    event: MailEvent;
-    purchaseId: string;
+    purchases: { event: MailEvent; purchaseId: string }[];
     actorUserId: string;
     runId: RunId;
     attachmentDecisions: PreparedMailAttachmentDecisions;
@@ -1123,58 +1254,27 @@ export async function linkImportedMail(
       "MAIL_EVIDENCE_STALE",
       "The imported Email changed or was disposed of; read it again.",
     );
-  await linkOrderMail(db, {
-    mail: { ...input.mail, ...mail },
-    purchaseId: input.purchaseId,
-    event: input.event,
-    actorUserId: input.actorUserId,
-    proposedBy: "import",
-    attachmentDecisions: input.attachmentDecisions,
-  });
+  for (const target of input.purchases)
+    await linkOrderMail(db, {
+      mail: { ...input.mail, ...mail },
+      purchaseId: target.purchaseId,
+      event: target.event,
+      actorUserId: input.actorUserId,
+      proposedBy: "import",
+      attachmentDecisions: input.attachmentDecisions,
+    });
   await settleMail(db, {
     mail: { ...input.mail, ...mail },
     importRunId: await mailImportRun(db, input.runId),
     status: "completed",
     detail: "imported",
+    judgment: await importedMailJudgment(
+      db,
+      input.purchases.map((target) =>
+        parseEntityId("purchase", target.purchaseId),
+      ),
+    ),
   });
-}
-
-/**
- * Pi's next admitted Email. Each Email stays the current item until
- * `mail.resolve` or a mail-sourced commit settles its target.
- */
-export async function claimMailImportWork(db: Database, runId: string) {
-  const id = runEntityId.parse(runId);
-  const database = getDb(db);
-  const [current] = await database
-    .select({ shortcode: runTable.shortcode, status: runTable.status })
-    .from(runTable)
-    .where(eq(runTable.id, id))
-    .limit(1);
-  if (!current) throw new Error("Mail import Run was not found");
-  if (current.status !== "running") return { kind: "none" as const };
-  const pending = (await readMailRunSources(database, id))
-    .filter(
-      (source) =>
-        source.owned &&
-        source.unchanged &&
-        source.email.status === "researching",
-    )
-    .map(({ email }) => ({
-      mailboxId: email.mailboxId,
-      messageId: email.messageId,
-      sender: email.sender,
-      subject: email.subject,
-      receivedAt: email.receivedAt,
-    }));
-  const [next] = pending;
-  if (!next) return { kind: "none" as const };
-  return {
-    kind: "email" as const,
-    runId: current.shortcode,
-    remaining: pending.length,
-    email: { ...next, receivedAt: next.receivedAt?.toISOString() ?? null },
-  };
 }
 
 /**

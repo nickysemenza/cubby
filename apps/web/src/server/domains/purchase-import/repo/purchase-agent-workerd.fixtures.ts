@@ -6,7 +6,10 @@ import {
   scenarioControls,
 } from "tooling/purchase-agent-workerd-harness";
 import type { TestDbContext } from "tooling/test-setup";
-import { openWorkerdRuntime } from "tooling/workerd-runtime";
+import {
+  openWorkerdRuntime,
+  type WorkerdRuntimeOptions,
+} from "tooling/workerd-runtime";
 import type { TestHarness } from "wrangler";
 
 import { account } from "~/server/db/auth.schema";
@@ -169,12 +172,14 @@ export async function startScenarioHarness(
   databaseUrl: string,
   scenario: ScriptedScenario,
   profile: "purchase-agent" | "gmail-research" = "purchase-agent",
+  options: Pick<WorkerdRuntimeOptions, "coordinatorModels"> = {},
 ) {
   const { runtime, prepared: controls } = await openWorkerdRuntime(
     {
       profile,
       database: { borrowed: databaseUrl },
       objectStorage: {},
+      ...options,
     },
     async ({ harness }) => {
       const controls = scenarioControls(harness);

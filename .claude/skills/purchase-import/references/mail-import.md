@@ -6,12 +6,18 @@ search. What an Email cannot establish stays an honest gap; a member's
 Claude or Codex session researches it later through the Research queue.
 
 1. Call `claim_next_import_work`. It names the next admitted Email by
-   `mailboxId` and `messageId`, or returns `none` when every Email is settled.
-   It takes no arguments. The host gives each call a durable identity; a new
-   call observes current work, while retrying that same call preserves its result.
-2. `mcp__cubby__imports_read` `mail` reads the Email. Read an attachment's original with
-   `attachmentId` when the order details live in a PDF or image. Note the
-   returned `checksum`. The read is compact text, never HTML: `preheader`,
+   `mailboxId` and `messageId` with its `read`, or returns `none` when every
+   Email is settled. It takes no arguments. The host gives each call a durable
+   identity; a new call observes current work, while retrying that same call
+   preserves its result. Cubby itself settles, before claiming, a shipped,
+   delivered or duplicate confirmation notice whose printed order id names
+   exactly one recorded Purchase of the sender's Vendor, and an Email its
+   classifier confidently called unrelated.
+2. The claim's `read` is the Email's first `mcp__cubby__imports_read` `mail`
+   read; `readError` instead names why Cubby could not read it. Call
+   `imports_read` `mail` only for an attachment's original (`attachmentId`,
+   when the order details live in a PDF or image) or a later page. Note the
+   read's `checksum`. The read is compact text, never HTML: `preheader`,
    `bodyText`, cue-first `links`, item `images` (exact `src` for a line's
    `imageUrl`) and `structuredData`. When `content.nextOffset` is not null,
    read again with `offset` set to it until it is null before extracting

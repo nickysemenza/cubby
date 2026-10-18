@@ -23,6 +23,7 @@ import {
 import {
   cubbyPiProviders,
   fundedCubbyPiProviders,
+  type GatewayFetchFor,
 } from "@cubby/shared/ai/pi-providers";
 import type { AssistantMessage, Provider } from "@earendil-works/pi-ai";
 import { z } from "zod";
@@ -31,6 +32,7 @@ import { type ContextRecorder, withContextCapture } from "./context-breakdown";
 import type { AgentGateway, PurchaseAgentEnvironment } from "./environment";
 
 type TestModel = NonNullable<PurchaseAgentEnvironment["testModel"]>;
+type FundingRefusal = (message: AssistantMessage) => Promise<void>;
 type AgentTransport = Extract<AiUsageTransport, "gateway" | "chatgpt">;
 
 /**
@@ -59,6 +61,95 @@ export function withSequentialToolCalls(
   return { ...body, parallel_tool_calls: false };
 }
 
+const CLAIM_TOOL = "claim_next_import_work";
+// Anthropic allows at most four cache breakpoints per request; pi-ai already
+// marks the system prompt, the last tool and the latest user message.
+const ANTHROPIC_MAX_BREAKPOINTS = 4;
+
+const wireBlock = z.looseObject({
+  type: z.string().optional(),
+  name: z.string().optional(),
+  cache_control: z.unknown().optional(),
+});
+const wireMessage = z.looseObject({
+  role: z.string(),
+  content: z.union([z.string(), z.array(wireBlock)]),
+});
+const anthropicBody = z.looseObject({ messages: z.array(wireMessage) });
+
+const breakpoints = (value: unknown): number =>
+  Array.isArray(value)
+    ? value.reduce((sum: number, item) => sum + breakpoints(item), 0)
+    : typeof value === "object" && value !== null
+      ? (Object.hasOwn(value, "cache_control") ? 1 : 0) +
+        Object.values(value).reduce(
+          (sum: number, item) => sum + breakpoints(item),
+          0,
+        )
+      : 0;
+
+/**
+ * Cache hints for a coordinator request. Work-item trimming replaces
+ * everything after the latest claim each Email, so the conversation
+ * breakpoint pi-ai places on the latest user message never matches the next
+ * Email: mark the end of the kept prefix (kickoff, member and system
+ * messages) so it is read from cache instead of re-written. OpenAI requests
+ * key their prompt cache to the Run.
+ */
+export function withWorkItemCaching(
+  route: ChatGatewayProvider,
+  body: GatewayQuery,
+  cacheKey: string | undefined,
+): GatewayQuery {
+  if (route !== "anthropic")
+    return cacheKey && body.prompt_cache_key === undefined
+      ? { ...body, prompt_cache_key: cacheKey }
+      : body;
+  const parsed = anthropicBody.safeParse(body);
+  if (!parsed.success || breakpoints(body) >= ANTHROPIC_MAX_BREAKPOINTS)
+    return body;
+  const { messages } = parsed.data;
+  let claim = -1;
+  messages.forEach((message, index) => {
+    if (
+      message.role === "assistant" &&
+      Array.isArray(message.content) &&
+      message.content.some(
+        (block) => block.type === "tool_use" && block.name === CLAIM_TOOL,
+      )
+    )
+      claim = index;
+  });
+  const end = messages[claim - 1];
+  if (claim < 1 || !end || breakpoints(end) > 0) return body;
+  const cacheControl =
+    JSON.stringify(body).match(/"cache_control":(\{[^}]*\})/)?.[1] ??
+    '{"type":"ephemeral"}';
+  const blocks =
+    typeof end.content === "string"
+      ? [{ type: "text", text: end.content }]
+      : end.content;
+  const last = blocks.at(-1);
+  if (!last) return body;
+  const marked = {
+    ...end,
+    content: [
+      ...blocks.slice(0, -1),
+      { ...last, cache_control: JSON.parse(cacheControl) },
+    ],
+  };
+  return {
+    ...body,
+    messages: z
+      .array(z.json())
+      .parse(
+        messages.map((message, index) =>
+          index === claim - 1 ? marked : message,
+        ),
+      ),
+  };
+}
+
 /**
  * Every coordinator model call's gateway labels; `run-agent` books the same
  * feature and operation, with the Run, in its usage rows.
@@ -70,22 +161,30 @@ const COORDINATOR_CALL = {
 
 interface AgentFetchOptions extends Pick<
   GatewayFetchRoutes,
-  "subscriptionRequired" | "subscriptionFallback" | "beforePaidRequest"
+  | "subscriptionRequired"
+  | "subscriptionFallback"
+  | "beforePaidRequest"
+  | "beforeCreditRequest"
 > {
   funding?: InferenceFunding;
   fundingFallback?: boolean;
   fixedModel?: PurchaseAgentEnvironment["fixedModel"];
-  onFundingRefusal?: (message: AssistantMessage) => Promise<void>;
+  onFundingRefusal?: FundingRefusal;
   /** Pi may open before dispatch binds a Run; resolve its policy per request. */
   transportPolicy?: () => Pick<
     GatewayFetchRoutes,
-    "subscriptionRequired" | "subscriptionFallback" | "beforePaidRequest"
+    | "subscriptionRequired"
+    | "subscriptionFallback"
+    | "beforePaidRequest"
+    | "beforeCreditRequest"
   >;
   gateway: () => AgentGateway;
   testModel?: TestModel;
   subscription?: ChatGptInference;
   /** Host admission can reject locally before any provider route transmits. */
   beforeTransmission?: () => Response | undefined;
+  /** Prompt-cache key for OpenAI requests: one per Run. */
+  cacheKey?: () => string | undefined;
   /** Each model request's transport, reported before it leaves. */
   onTransport?: (transport: AgentTransport) => void;
   /** Each received model response's gateway log id and cache verdict. */
@@ -107,13 +206,21 @@ export function createCubbyGatewayFetch(
   const routedFetch = (
     policy: Pick<
       GatewayFetchRoutes,
-      "subscriptionRequired" | "subscriptionFallback" | "beforePaidRequest"
+      | "subscriptionRequired"
+      | "subscriptionFallback"
+      | "beforePaidRequest"
+      | "beforeCreditRequest"
     >,
   ) =>
     gatewayFetchThrough({
       provider: route,
       funding: options.funding,
-      rewriteQuery: (body) => withSequentialToolCalls(route, body),
+      rewriteQuery: (body) =>
+        withWorkItemCaching(
+          route,
+          withSequentialToolCalls(route, body),
+          options.cacheKey?.(),
+        ),
       chatGpt: options.subscription,
       ...policy,
       onTransport: options.onTransport,
@@ -155,9 +262,11 @@ export function createCubbyGatewayFetch(
       subscriptionRequired: options.subscriptionRequired,
       subscriptionFallback: options.subscriptionFallback,
       beforePaidRequest: options.beforePaidRequest,
+      beforeCreditRequest: options.beforeCreditRequest,
       ...options.transportPolicy?.(),
     };
     const admit = policy.beforePaidRequest;
+    const admitCredit = policy.beforeCreditRequest;
     let refusal: { error: unknown } | undefined;
     try {
       return await routedFetch({
@@ -167,6 +276,16 @@ export function createCubbyGatewayFetch(
           (async (request) => {
             try {
               await admit(request);
+            } catch (error: unknown) {
+              refusal = { error };
+              throw error;
+            }
+          }),
+        beforeCreditRequest:
+          admitCredit &&
+          (async (request) => {
+            try {
+              return await admitCredit(request);
             } catch (error: unknown) {
               refusal = { error };
               throw error;
@@ -220,9 +339,15 @@ function transportFailure(error: unknown): Response {
 export function cubbyAgentProviders(
   input: AgentFetchOptions & { recorder: ContextRecorder },
 ): Provider[] {
+  // The coordinator's configured model (its manifest primary, or the
+  // escalation model for an escalated Email) answers first.
   const providers =
     input.fundingFallback && !input.fixedModel
-      ? fundedCubbyPiProviders
+      ? (fetchFor: GatewayFetchFor, onRefused?: FundingRefusal) =>
+          fundedCubbyPiProviders(fetchFor, onRefused, {
+            paid: true,
+            leadWithRequested: true,
+          })
       : cubbyPiProviders;
   return providers((route, onUnbilledResponse, funding) => {
     let finalTransport: AgentTransport | undefined;

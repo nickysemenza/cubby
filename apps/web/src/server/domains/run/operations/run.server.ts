@@ -5,7 +5,8 @@ import { and, eq, isNull } from "drizzle-orm";
 import type { z } from "zod";
 
 import { runContract } from "~/contracts/run.contract";
-import { readAiBudget } from "~/server/ai/budget";
+import { setCreditBudget } from "~/server/ai/budget";
+import { readAiFundingStatus } from "~/server/ai/funding";
 import { listAiUsageForRun } from "~/server/ai/repo/ai-usage";
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
@@ -45,6 +46,8 @@ import {
   loadMailDiscoveryRead,
 } from "~/server/domains/run/repo/run-discovery-read";
 import { loadMailReclassificationRead } from "~/server/domains/run/repo/run-reclassification-read";
+import { resumeFundingPausedRuns } from "~/server/domains/run/service/ai-work";
+import { assertPaidOverride } from "~/server/domains/run/service/paid-override";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import type { AuthenticatedRequestContext } from "~/server/http/request-context";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
@@ -63,6 +66,10 @@ async function controlRunOperation(
   { runId, ...input }: z.infer<typeof runContract.ops.control.input>,
 ): Promise<z.input<typeof runContract.ops.control.output>> {
   await memberParty(context);
+  if (input.action === "run_now_paid")
+    await assertPaidOverride(context.db, input.paidOverBudgetUsd);
+  else if (input.paidOverBudgetUsd !== undefined)
+    throw new Error("paidOverBudgetUsd applies only to run_now_paid.");
   const [target] = await getDb(context.db)
     .select({ purpose: runTable.purpose })
     .from(runTable)
@@ -79,7 +86,7 @@ async function controlRunOperation(
     await controlWorkflowRun(
       context.db,
       context.actorContext,
-      { runPublicId: runId, action: input.action },
+      { runPublicId: runId, ...input },
       target.purpose,
     );
     return { run: await loadRunDetail(context.db, runId), successor: null };
@@ -112,7 +119,7 @@ async function controlRunOperation(
   };
 }
 
-/** The member's connected Google mailboxes with their switches, search progress and the budget window. */
+/** The member's connected Google mailboxes with their switches, search progress, both budgets and the plan. */
 async function mailImportStatusFor(
   context: Parameters<typeof memberParty>[0],
 ): Promise<MailImportStatus> {
@@ -129,7 +136,7 @@ async function mailImportStatusFor(
       )
       .orderBy(account.accountId),
     readMailImportSettings(context.db),
-    readAiBudget(context.db),
+    readAiFundingStatus(context.db),
   ]);
   return {
     mailboxes: await withMailSearchProgress(
@@ -155,14 +162,34 @@ export const runHandlers = implementOperationDomain(runContract, {
     await setMailImport(context.db, input);
     return mailImportStatusFor(context);
   },
-  discoverMail: async (context, input) =>
-    startMailDiscovery(context.db, {
+  setCreditBudget: async (context, input) => {
+    await memberParty(context);
+    await setCreditBudget(context.db, input.creditLimitUsd);
+    // Work paused on the old limit this window may proceed under the new one;
+    // anything still without capacity pauses again before spending.
+    await resumeFundingPausedRuns(context.db, { anyWindow: true });
+    return mailImportStatusFor(context);
+  },
+  discoverMail: async (context, input) => {
+    const party = await memberParty(context);
+    if (input.paidAllowed)
+      await assertPaidOverride(context.db, input.paidOverBudgetUsd);
+    else if (input.paidOverBudgetUsd !== undefined)
+      throw new Error("paidOverBudgetUsd applies only with paidAllowed.");
+    return startMailDiscovery(context.db, {
       target: {
-        ledgerPartyId: (await memberParty(context)).id,
+        ledgerPartyId: party.id,
         userId: context.auth.userId,
         mailboxId: input.mailboxId,
       },
-    }),
+      ...(input.paidAllowed && {
+        paidGrant: {
+          actor: context.actorContext,
+          paidOverBudgetUsd: input.paidOverBudgetUsd,
+        },
+      }),
+    });
+  },
   transcript: async (context, input) => {
     const party = await memberParty(context);
     const discovery = await findOwnedMailDiscovery(context.db, input.runId, {

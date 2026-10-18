@@ -95,6 +95,26 @@ pending: nothing here starts Product research.
    MCP handler with a run-bound delegation (`agent-services.ts`
    `mcpFetch`). Instructions: `.claude/skills/purchase-import/references/mail-import.md`
    via `server/domains/purchase-agent/service/import-run-workflows.ts`.
+   A Mail import claim (`operations/mail-import-claim.ts`) returns the
+   claimed Email's compact read (`readMail`, bounded by `fitMailRead`). Before
+   claiming, it settles leading roster Emails a Mail import rule decides
+   (`service/mail-import-rule.ts`, revision `MAIL_IMPORT_RULE_REVISION`)
+   through `mail.resolve`'s own writer, with no model call: a shipped,
+   delivered or duplicate confirmation notice (subject phrase; no refund,
+   cancellation, return or failure wording, including item cancellations in
+   the body) whose complete compact read's printed order identifier
+   (`purchase_cues`) names exactly one live Purchase of the sender-proof
+   Vendor (`senderProofVendor`) on the Email owner's own account there, with
+   no retained attachment bytes and, for a confirmation, an accepted import
+   source, links as that event (proposer `heuristic`, Assessment producer
+   `rule`); an Email the classifier confidently called unrelated (stage
+   `rule`, `decision` or `model`, in a Run the member did not select) resolves
+   `unrelated` (its resolution observation carries the revision, so its
+   `email_relevance` Assessment's producer is that rule). Everything else,
+   an incomplete or paged compact read, and any refusal `mail.resolve`
+   returns, goes to the coordinator. A rule
+   link skips the `mail-attribution` judgment: on the owner's own account it
+   cannot change what the link writes.
 4. **Writes**: `imports_read.mail` reads a retained Email (`mail-tool.ts`
    `readMail`); `purchase_import.prepare/commit` (`import-orders.ts`) import an
    order through `writer.ts`, and a mail-sourced commit (message or
@@ -120,7 +140,8 @@ pending: nothing here starts Product research.
    only from an Email attributed to its recipient: forwarding alone never
    proves ownership, and an unattributed Email may still link to an existing
    Purchase without creating the recipient's VendorAccount. Attribution
-   (`service/mail-source-judgment.ts`) always asks `mail-attribution`, with
+   (`service/mail-source-judgment.ts`) always asks `mail-attribution` (apart
+   from the rule link above), with
    the owner and household members as trusted evidence: the owner
    LedgerParty's linked sign-in email and connected Gmail profile address
    (cached per isolate by `repo/mail-owner.ts`; an unreadable profile is

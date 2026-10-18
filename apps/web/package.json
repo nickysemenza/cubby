@@ -12,6 +12,8 @@
     "test:e2e": "NODE_ENV=test node tooling/dev-services/test-services.ts -- playwright test",
     "test:changed": "node tooling/test-changed.ts",
     "test:e2e:household": "pnpm build:cf --ensure && pnpm test:e2e --project=\"Household exploration\"",
+    "eval:mail-replay": "NODE_ENV=test node tooling/dev-services/test-services.ts -- vitest run --project live-eval --silent=false src/server/domains/purchase-import/repo/mail-outcome/replay.live-eval.ts",
+    "eval:mail-replay:stdin": "tsx tooling/ai/mail-replay-stdin.ts",
     "eval:agent-models": "NODE_ENV=test node tooling/dev-services/test-services.ts -- vitest run --project live-eval src/server/domains/purchase-import/repo/agent-model-eval.live-eval.ts",
     "eval:mail-prompts:stdin": "tsx tooling/ai/mail-prompt-stdin.ts",
     "eval:mail-prompts": "NODE_ENV=test node tooling/dev-services/test-services.ts -- vitest run --project live-eval --silent=false src/server/ai/mail-prompt.live-eval.ts",

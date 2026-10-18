@@ -1,4 +1,5 @@
 import { agentConversationSchema } from "@cubby/schemas/agent-conversation";
+import { coordinatorModelsSchema } from "@cubby/schemas/coordinator-models";
 import { importRunIdFromAgentIdentity } from "@cubby/schemas/import-run-agent";
 import { aiGatewayId } from "@cubby/shared/ai/gateway-metadata";
 import { createLogger } from "@cubby/worker-tracing";
@@ -60,9 +61,11 @@ function purchaseAgentEnvironment(
   const {
     CUBBY_PURCHASE_AGENT_TEST_MODEL: testModel,
     CUBBY_PURCHASE_AGENT_FIXED_MODEL: fixedModel,
+    CUBBY_PURCHASE_AGENT_COORDINATOR_MODELS: coordinatorModels,
   } = env as Env & {
     CUBBY_PURCHASE_AGENT_TEST_MODEL?: PurchaseAgentEnvironment["testModel"];
     CUBBY_PURCHASE_AGENT_FIXED_MODEL?: string;
+    CUBBY_PURCHASE_AGENT_COORDINATOR_MODELS?: string;
   };
   return {
     chatGptInference: (body, options) =>
@@ -92,6 +95,14 @@ function purchaseAgentEnvironment(
     ...(testModel &&
       fixedModel === "openai-responses" && {
         fixedModel,
+      }),
+    // Like the fixed model, only a harness with a model peer can override
+    // the manifest's coordinator models.
+    ...(testModel &&
+      coordinatorModels && {
+        coordinatorModels: coordinatorModelsSchema.parse(
+          JSON.parse(coordinatorModels),
+        ),
       }),
     settlementPollMs: testDurationOverrideMs(env.CUBBY_TEST_SETTLEMENT_POLL_MS),
   };

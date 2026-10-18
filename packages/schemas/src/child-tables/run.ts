@@ -546,6 +546,9 @@ export const runChildren = [
         notNull: true,
         default: { now: true },
       },
+      // `run_now_paid` only: the confirmed spend past the paid budget, valid
+      // in the six-hour window the member granted it.
+      { key: "paidOverBudgetUsd", kind: "doublePrecision" },
     ],
     types: [
       {
@@ -559,7 +562,11 @@ export const runChildren = [
     checks: [
       {
         name: "RunControlEvent_action_check",
-        sql: "{action} IN ('prompt', 'abort', 'pause', 'resume', 'cancel', 'approve', 'reject', 'retry', 'retry_dispatch', 'upload_evidence', 'no_evidence_available', 'escalate_sol')",
+        sql: "{action} IN ('prompt', 'abort', 'pause', 'resume', 'cancel', 'approve', 'reject', 'retry', 'retry_dispatch', 'upload_evidence', 'no_evidence_available', 'escalate_sol', 'run_now_paid')",
+      },
+      {
+        name: "RunControlEvent_paid_over_budget_check",
+        sql: "{paidOverBudgetUsd} IS NULL OR ({action} = 'run_now_paid' AND {paidOverBudgetUsd} > 0)",
       },
     ],
   }),

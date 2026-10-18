@@ -54,6 +54,7 @@ import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { StatusText } from "~/ui/primitives/status-text";
 
+import { PaidRunButton } from "../email/ai-funding";
 import { AgentContextPerCall } from "./agent-context-breakdown";
 import {
   formatWorkDuration,
@@ -167,9 +168,48 @@ function RunActionButtons({
   );
 }
 
+/** Paused by a funding stop (`pauseExecutionRun`): waiting for free capacity or the paid budget. */
+const waitsForFunding = (run: Pick<RunDetail, "status" | "failureCode">) =>
+  run.status === "paused_auth" && run.failureCode === "execution_limit";
+
+/** The member's one-Run override: resume now with paid models allowed. */
+function PaidRunControl({ run }: { run: RunDetail }) {
+  const funding = useQuery(runOperations.mailImport.queryOptions({}));
+  const control = useMutation(runOperations.control.mutationOptions());
+  return (
+    <Stack gap="sm" className="items-end">
+      <PaidRunButton
+        label="Run now, paid allowed"
+        budget={funding.data?.budget}
+        pending={control.isPending}
+        onConfirm={(paidOverBudgetUsd) =>
+          control.mutate({
+            runId: run.publicId,
+            action: "run_now_paid",
+            ...(paidOverBudgetUsd !== undefined && { paidOverBudgetUsd }),
+          })
+        }
+      />
+      {run.dispatch.error ? (
+        <p className="max-w-md text-right text-xs break-words text-muted-foreground">
+          {run.dispatch.error}
+        </p>
+      ) : null}
+      {control.isError ? (
+        <StatusText tone="destructive">{control.error.message}</StatusText>
+      ) : null}
+    </Stack>
+  );
+}
+
 function RunControls({ run }: { run: RunDetail }) {
   return (
     <Stack gap="sm">
+      {waitsForFunding(run) ? (
+        <DetailAction>
+          <PaidRunControl run={run} />
+        </DetailAction>
+      ) : null}
       <DetailAction>
         <RunActionButtons runId={run.publicId} actions={runActions(run)}>
           {run.purpose === "photo_inventory" &&
@@ -930,6 +970,7 @@ const isStoppedRun = (run: RunDetail) => !isActiveRun(run);
 function hasRunControls(run: RunDetail): boolean {
   return (
     runActions(run).length > 0 ||
+    waitsForFunding(run) ||
     runInputsErased(run.retirementReason) ||
     Boolean(
       run.restartInputs ||
@@ -1056,23 +1097,29 @@ function RunLink({ label, publicId }: { label: string; publicId: string }) {
   );
 }
 
-/** The same cached work read supplies agent controls on every detail tab. */
+/** Funding controls apply to every Run; agent commands stay with imports. */
 export function RunAgentActions({ record }: { record: RunOut }) {
-  return agentImportRunPurpose.safeParse(record.purpose).success ? (
+  return agentImportRunPurpose.safeParse(record.purpose).success ||
+    waitsForFunding(record) ? (
     <RunAgentActionRead record={record} />
   ) : null;
 }
 function RunAgentActionRead({ record }: { record: RunOut }) {
   const query = useSyncedRun(record, true);
+  const agentRun =
+    query.data && agentImportRunPurpose.safeParse(query.data.purpose).success;
   return query.data ? (
     <>
+      {waitsForFunding(query.data) ? <PaidRunControl run={query.data} /> : null}
       {query.data.purpose === "photo_inventory" ? (
         <PhotoRunGroupingAction run={query.data} />
       ) : null}
-      <RunActionButtons
-        runId={query.data.publicId}
-        actions={runActions(query.data)}
-      />
+      {agentRun ? (
+        <RunActionButtons
+          runId={query.data.publicId}
+          actions={runActions(query.data)}
+        />
+      ) : null}
     </>
   ) : null;
 }

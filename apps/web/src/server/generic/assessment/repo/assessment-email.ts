@@ -37,10 +37,13 @@ export async function ensureEmailAssessment(
       observationId: row.id,
     },
     judgment: { classification: row.classification, stage: row.stage },
+    // A resolution carries a revision only when a rule applied it for a Run.
     producer:
-      row.model || row.stage === "rule"
+      row.model ||
+      row.stage === "rule" ||
+      (row.stage === "resolution" && row.promptVersion)
         ? {
-            kind: row.stage === "rule" ? "rule" : "model",
+            kind: row.stage === "rule" || !row.model ? "rule" : "model",
             model: row.model,
             revision: row.promptVersion,
             runId: row.runId,

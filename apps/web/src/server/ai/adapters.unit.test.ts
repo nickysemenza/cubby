@@ -55,6 +55,26 @@ describe("chatCompletionOptionsFor", () => {
     ).not.toHaveProperty("effort");
   });
 
+  // Haiku 5.5 is not Haiku 4.5: it 400s on a forced tool or a thinking
+  // budget, and only adaptive thinking with effort is accepted.
+  it.each(["claude-haiku-5-5", "claude-sonnet-5-5"] as const)(
+    "sends %s adaptive thinking with effort and an unforced tool",
+    (model) => {
+      expect(
+        chatCompletionOptionsFor(
+          model,
+          { maxTokens: 300, effort: "low" },
+          "respond",
+        ),
+      ).toEqual({
+        maxTokens: 300,
+        thinkingEnabled: true,
+        effort: "low",
+        toolChoice: "auto",
+      });
+    },
+  );
+
   it("drops thinking and effort for models that reject them", () => {
     const options = chatCompletionOptionsFor(
       "claude-haiku-4-5",

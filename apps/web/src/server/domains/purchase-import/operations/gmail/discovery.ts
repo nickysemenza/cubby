@@ -1,5 +1,10 @@
-import { buildActorContext } from "@cubby/schemas/context";
-import { runEntityId, userId } from "@cubby/schemas/identifiers";
+import { buildActorContext, type ActorContext } from "@cubby/schemas/context";
+import {
+  ledgerPartyId,
+  runEntityId,
+  userId,
+  type RunId,
+} from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
   mailboxDiscoveryInput,
@@ -14,6 +19,7 @@ import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
 import {
   getDb,
+  notDeleted,
   withTransaction,
   withTransactionDatabase,
 } from "~/server/db/helpers";
@@ -29,6 +35,7 @@ import {
 } from "~/server/domains/purchase-import/repo/gmail/types";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { recordPaidGrant } from "~/server/domains/run/repo/paid-grant";
 import { recordRunProgress } from "~/server/domains/run/repo/run-progress";
 import { isUniqueViolation } from "~/server/errors/db-errors";
 import { reportServerError } from "~/server/errors/report-error";
@@ -202,13 +209,52 @@ const pauseAuthorization = async (
   return true;
 };
 
+/** The mailbox's discovery a funding stop paused; it resumes in place. */
+async function fundingPausedDiscovery(
+  db: Database,
+  target: Pick<GmailSyncTarget, "ledgerPartyId" | "mailboxId">,
+  status: "paused_auth" | "running",
+) {
+  const [row] = await getDb(db)
+    .select({ id: runTable.id })
+    .from(runTable)
+    .where(
+      and(
+        eq(runTable.purpose, "mail_discovery"),
+        eq(runTable.ledgerPartyId, ledgerPartyId.parse(target.ledgerPartyId)),
+        sql`${runTable.input}->>'mailboxId' = ${target.mailboxId}`,
+        eq(runTable.status, status),
+        status === "paused_auth"
+          ? eq(runTable.failureCode, "execution_limit")
+          : undefined,
+        notDeleted(runTable),
+      ),
+    )
+    .limit(1);
+  return row;
+}
+
+/**
+ * Starts discovery for each eligible mailbox. A mailbox whose discovery is
+ * waiting for free AI capacity keeps that Run instead of starting another;
+ * a member's `paidGrant` ("Run discovery now, paid allowed") records the
+ * paid grant on the discovery it starts, resumes or joins.
+ */
 export async function startMailDiscovery(
   db: Database,
   options: {
     launcher?: WorkflowLauncher;
     target?: Pick<GmailSyncTarget, "ledgerPartyId" | "userId" | "mailboxId">;
+    paidGrant?: { actor: ActorContext; paidOverBudgetUsd?: number };
   } = {},
 ): Promise<MailboxDiscoveryStartOutput> {
+  const grantPaid = async (runId: RunId) => {
+    if (!options.paidGrant) return;
+    await recordPaidGrant(db, options.paidGrant.actor, {
+      runId,
+      paidOverBudgetUsd: options.paidGrant.paidOverBudgetUsd,
+    });
+  };
   let started = 0;
   let running = 0;
   const targets = await listGmailSyncTargets(db);
@@ -231,6 +277,21 @@ export async function startMailDiscovery(
         throw new Error(
           "Mail import is off for this mailbox; turn it on in Settings first.",
         );
+      continue;
+    }
+    const waiting = await fundingPausedDiscovery(db, target, "paused_auth");
+    if (waiting) {
+      if (!options.paidGrant) {
+        running += 1;
+        continue;
+      }
+      await grantPaid(waiting.id);
+      await launchWorkflowRun(
+        db,
+        { runId: waiting.id, purpose: "mail_discovery" },
+        options.launcher ?? productionWorkflowLauncher,
+      );
+      started += 1;
       continue;
     }
     let runId;
@@ -264,9 +325,12 @@ export async function startMailDiscovery(
       );
     } catch (error) {
       if (!isUniqueViolation(error, MAIL_DISCOVERY_CONSTRAINT)) throw error;
+      const active = await fundingPausedDiscovery(db, target, "running");
+      if (active) await grantPaid(active.id);
       running += 1;
       continue;
     }
+    await grantPaid(runId);
     await launchWorkflowRun(
       db,
       { runId, purpose: "mail_discovery" },

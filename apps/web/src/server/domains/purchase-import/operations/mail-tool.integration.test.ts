@@ -1245,7 +1245,8 @@ describe("public mail tool", () => {
     expect(new TextEncoder().encode(JSON.stringify(read)).length).toBeLessThan(
       MAIL_READ_RESPONSE_MAX_BYTES,
     );
-    expect(read.content.links.length).toBeGreaterThan(0);
+    // Every link here is a 3 KB tracker: counted, never returned.
+    expect(read.content.links).toEqual([]);
     expect(read.content.linksOmitted).toBeGreaterThan(0);
     expect(read.purchaseAssociations).toEqual([]);
   });

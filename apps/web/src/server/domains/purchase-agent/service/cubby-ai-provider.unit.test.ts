@@ -7,6 +7,7 @@ import {
   createCubbyGatewayFetch,
   cubbyAgentProviders,
   withSequentialToolCalls,
+  withWorkItemCaching,
 } from "./cubby-ai-provider";
 import type { AgentGateway } from "./environment";
 
@@ -513,5 +514,93 @@ describe("withSequentialToolCalls", () => {
   it("leaves tool-less requests such as compaction summaries unchanged", () => {
     const body = { input: [] };
     expect(withSequentialToolCalls("openai", body)).toBe(body);
+  });
+});
+
+// Failures: each Email's request re-wrote the kickoff and every kept message
+// after the system/tools prefix at cache-write price ($5/M vs $0.20/M read),
+// because the only conversation breakpoint sat on the latest user message,
+// which trimming replaces every Email; the plan/Sol rung never reused a cache.
+describe("withWorkItemCaching", () => {
+  const claimCall = (id: string) => ({
+    role: "assistant",
+    content: [
+      { type: "tool_use", id, name: "claim_next_import_work", input: {} },
+    ],
+  });
+  const result = (id: string) => ({
+    role: "user",
+    content: [{ type: "tool_result", tool_use_id: id, content: "claimed" }],
+  });
+  const cache = { type: "ephemeral" };
+  const body = {
+    system: [{ type: "text", text: "Instructions", cache_control: cache }],
+    tools: [{ name: "claim_next_import_work", cache_control: cache }],
+    messages: [
+      { role: "user", content: "Import the Run's Emails." },
+      claimCall("c2"),
+      {
+        role: "user",
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: "c2",
+            content: "read",
+            cache_control: cache,
+          },
+        ],
+      },
+    ],
+  };
+
+  it("marks the end of the kept prefix before the latest claim", () => {
+    const out = withWorkItemCaching(
+      "anthropic",
+      body,
+      undefined,
+    ) as typeof body;
+    expect(out.messages[0]).toEqual({
+      role: "user",
+      content: [
+        {
+          type: "text",
+          text: "Import the Run's Emails.",
+          cache_control: cache,
+        },
+      ],
+    });
+    expect(body.messages[0]).toEqual({
+      role: "user",
+      content: "Import the Run's Emails.",
+    });
+  });
+
+  it("never exceeds Anthropic's four breakpoints or marks twice", () => {
+    const full = {
+      ...body,
+      system: [
+        ...body.system,
+        { type: "text", text: "More", cache_control: cache },
+      ],
+    };
+    expect(withWorkItemCaching("anthropic", full, undefined)).toBe(full);
+    const noClaim = {
+      ...body,
+      messages: [{ role: "user", content: "Import." }, result("c1")],
+    };
+    expect(withWorkItemCaching("anthropic", noClaim, undefined)).toBe(noClaim);
+  });
+
+  it("keys OpenAI prompt caching to the Run", () => {
+    expect(
+      withWorkItemCaching("openai", { model: "gpt-6-sol", input: [] }, "run-a"),
+    ).toEqual({ model: "gpt-6-sol", input: [], prompt_cache_key: "run-a" });
+    expect(
+      withWorkItemCaching(
+        "openai",
+        { model: "gpt-6-sol", input: [] },
+        undefined,
+      ),
+    ).toEqual({ model: "gpt-6-sol", input: [] });
   });
 });

@@ -22,6 +22,10 @@ import {
 } from "@cubby/schemas/email-actions";
 import { entityReportOut } from "@cubby/schemas/entity-report";
 import {
+  mailImportOutcomesInput,
+  mailImportOutcomesOut,
+} from "@cubby/schemas/mail-import-outcome";
+import {
   mailReadInput,
   mailReadOut,
   mailResolveInput,
@@ -155,6 +159,13 @@ export const purchaseImportContract = defineContract("purchaseImport", {
     output: confirmMerchantVendorRuleOut,
   }),
   /** Read one retained Email, optionally one attachment's original bytes. */
+  mailImportOutcomes: query({
+    input: mailImportOutcomesInput,
+    output: mailImportOutcomesOut,
+    readPolicy: "strong",
+    transport: "post",
+    native: "Read immutable Mail import outcome history",
+  }),
   mailRead: query({
     input: mailReadInput,
     output: mailReadOut,

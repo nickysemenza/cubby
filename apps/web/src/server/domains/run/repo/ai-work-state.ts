@@ -1,7 +1,7 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { runStatus } from "@cubby/schemas/run-fields";
 import { MAX_AUTOMATIC_WORKFLOW_FAILURES } from "@cubby/schemas/workflow-runs";
-import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
 
 import { guardAiEvaluation } from "~/server/ai/repo/ai-evaluation";
 import type { Database } from "~/server/db";
@@ -104,6 +104,26 @@ export async function recordAiEvaluationAttemptFailure(
         inArray(aiEvaluation.state, ["running", "result_ready"]),
       ),
     );
+}
+
+/** Mail discovery a funding stop paused before `pausedBefore`. */
+export async function fundingPausedDiscoveryRuns(
+  db: Database,
+  pausedBefore: Date,
+) {
+  const rows = await getDb(db)
+    .select({ id: run.id })
+    .from(run)
+    .where(
+      and(
+        eq(run.purpose, "mail_discovery"),
+        eq(run.status, "paused_auth"),
+        eq(run.failureCode, "execution_limit"),
+        lt(run.updatedAt, pausedBefore),
+        notDeleted(run),
+      ),
+    );
+  return rows.map((row) => row.id);
 }
 
 /** Waits for the next budget window or a reconnected mailbox; recovery resumes it. */

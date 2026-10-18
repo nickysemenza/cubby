@@ -58,6 +58,9 @@ Discovery admits retained candidates to Pi, which imports what is unambiguous
 under the writer contracts and leaves the rest in the Work queue. Keep a
 minimal identity and classification footprint for scanned negatives; retain
 useful related evidence and uncertain candidates for resolution.
+Retained attachments and reversal or lifecycle exception evidence always go to
+the coordinator, including Emails classified unrelated; neither rule shortcut
+can clear those originals without review.
 Catch-up also admits older retained related Emails in enabled mailboxes. Only
 usable text or retained attachments count toward its bounded page; empty shells
 and historical sources with unresolved ownership stay out. An admission failure

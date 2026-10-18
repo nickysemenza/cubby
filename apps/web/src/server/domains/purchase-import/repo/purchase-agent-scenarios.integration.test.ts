@@ -602,16 +602,11 @@ describe("current purchase-agent system boundaries", () => {
     ): ScriptStep[] => [
       call(`${prefix}-claim`, "claim_next_import_work"),
       { check: `${prefix}-claim`, includes: ambiguous.messageId },
-      mcpRead(`${prefix}-read`, "imports_read", {
-        action: "mail",
-        mailboxId,
-        messageId: ambiguous.messageId,
-      }),
       mcp(`${prefix}-resolve`, "mail", runId, {
         action: "resolve",
         mailboxId,
         messageId: ambiguous.messageId,
-        checksum: from(`${prefix}-read`, "checksum"),
+        checksum: from(`${prefix}-claim`, "read.checksum"),
         disposition: {
           kind: "unresolved",
           reason:
@@ -633,11 +628,6 @@ describe("current purchase-agent system boundaries", () => {
     const supportedSteps: ScriptStep[] = [
       call("supported-claim", "claim_next_import_work"),
       { check: "supported-claim", includes: supported.messageId },
-      mcpRead("supported-read", "imports_read", {
-        action: "mail",
-        mailboxId,
-        messageId: supported.messageId,
-      }),
       mcp("supported-prepare", "purchase_import", parent.id, {
         action: "prepare",
         orders: [
@@ -648,9 +638,9 @@ describe("current purchase-agent system boundaries", () => {
             source: {
               kind: "mail_message",
               externalKey,
-              checksum: from("supported-read", "checksum"),
+              checksum: from("supported-claim", "read.checksum"),
             },
-            evidenceChecksum: from("supported-read", "checksum"),
+            evidenceChecksum: from("supported-claim", "read.checksum"),
             extractionRevision: "synthetic@1",
             extraction: {
               status: "ready",
@@ -860,6 +850,117 @@ describe("current purchase-agent system boundaries", () => {
     ).toHaveLength(2);
   }, 60_000);
 
+  // Failures: a cheaper primary records `unresolved` before the escalation
+  // model tries; the escalation model keeps answering later Emails; the
+  // funding ladder replaces the requested model with Opus anyway.
+  it("mail escalation: one Email moves to the escalation model and the next claim returns to the primary", async () => {
+    const mailboxId = "synthetic-escalation-mailbox";
+    const { party } = await memberImportWorld(ctx.db, ctx.actor);
+    const retain = async (messageId: string, receivedAt: string) => {
+      const body = `Synthetic inquiry ${messageId}: no order id, itemization or amount.`;
+      return retainedMailFixture(ctx.db, {
+        ledgerPartyId: party.id,
+        mailboxId,
+        messageId,
+        sender: "orders@escalation.example.test",
+        subject: "Synthetic inquiry",
+        receivedAt: new Date(receivedAt),
+        checksum: await sha256Hex(body),
+        content: { snippet: null, bodyText: body, bodyHtml: null },
+        classificationVersion: "synthetic-source-v1",
+      });
+    };
+    const first = await retain(
+      "synthetic-escalation-a",
+      "2026-09-20T12:00:00Z",
+    );
+    const second = await retain(
+      "synthetic-escalation-b",
+      "2026-09-21T12:00:00Z",
+    );
+    await enableSyntheticMailImport(ctx, mailboxId);
+    const events: PurchaseAgentEvent[] = [];
+    const [started] = await startMailImport(
+      ctx.db,
+      {
+        ledgerPartyId: party.id,
+        userId: ctx.actor.userId,
+        messageIds: [first.id, second.id],
+      },
+      {
+        send: async (event: PurchaseAgentEvent) => {
+          events.push(event);
+        },
+      },
+    );
+    if (!started || events.length !== 1)
+      throw new Error("Synthetic escalation admission missing");
+    scenarioRunId = started.runId;
+    await authorizePurchaseAgent(ctx.db, ctx.actor.userId);
+    const unresolved = (id: string, claim: string): ScriptStep =>
+      mcp(id, "mail", started.runId, {
+        action: "resolve",
+        mailboxId,
+        messageId: from(claim, "email.messageId"),
+        checksum: from(claim, "read.checksum"),
+        disposition: {
+          kind: "unresolved",
+          reason: "Synthetic inquiry names no order or amount.",
+        },
+      });
+    scenario = await startScenarioHarness(
+      ctx.databaseUrl,
+      {
+        steps: [
+          call("a-claim", "claim_next_import_work"),
+          // The primary's unresolved resolution is held for the escalation model.
+          unresolved("a-held", "a-claim"),
+          { check: "a-held", includes: "claude-opus-5-5" },
+          unresolved("a-escalated", "a-claim"),
+          { check: "a-escalated", includes: "unresolved" },
+          call("b-claim", "claim_next_import_work"),
+          call("b-escalate", "escalate_import_work", {
+            reason: "Synthetic evidence needs the stronger model.",
+          }),
+          { check: "b-escalate", includes: "claude-opus-5-5" },
+          unresolved("b-escalated", "b-claim"),
+          call("done", "claim_next_import_work"),
+          { check: "done", includes: "none" },
+        ],
+      },
+      "purchase-agent",
+      {
+        coordinatorModels: {
+          primary: "claude-haiku-5-5",
+          escalation: "claude-opus-5-5",
+        },
+      },
+    );
+    await scenario.dispatch(events[0]!);
+    await waitForStatus(started.runId, "needs_review");
+    expect(await scenario.violations()).toEqual([]);
+    const modelAfter = new Map(
+      (await scenario.requests()).map((request) => [
+        request.afterCall,
+        request.model,
+      ]),
+    );
+    expect(Object.fromEntries(modelAfter)).toMatchObject({
+      "a-claim": "claude-haiku-5-5",
+      "a-held": "claude-opus-5-5",
+      "b-claim": "claude-haiku-5-5",
+      "b-escalate": "claude-opus-5-5",
+    });
+    const detail = await loadRunDetail(
+      ctx.db,
+      (await runRow(started.runId)).shortcode,
+    );
+    expect(detail.targets.map((target) => target.state)).toEqual([
+      "unresolved",
+      "unresolved",
+    ]);
+  }, 60_000);
+
   it("provider discovery: searches the known Vendor's mail and imports only the related Email automatically", async () => {
     const database = getDb(ctx.db);
     const mailboxId = "synthetic-google-user";
@@ -932,11 +1033,6 @@ describe("current purchase-agent system boundaries", () => {
         steps: [
           call("fan-claim", "claim_next_import_work"),
           { check: "fan-claim", includes: original.id },
-          mcpRead("fan-read", "imports_read", {
-            action: "mail",
-            mailboxId,
-            messageId: original.id,
-          }),
           mcp(
             "fan-prepare",
             "purchase_import",
@@ -951,9 +1047,9 @@ describe("current purchase-agent system boundaries", () => {
                   source: {
                     kind: "mail_message",
                     externalKey: `gmail:${mailboxId}:${original.id}`,
-                    checksum: from("fan-read", "checksum"),
+                    checksum: from("fan-claim", "read.checksum"),
                   },
-                  evidenceChecksum: from("fan-read", "checksum"),
+                  evidenceChecksum: from("fan-claim", "read.checksum"),
                   extractionRevision: "synthetic@1",
                   extraction: {
                     status: "ready",

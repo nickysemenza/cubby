@@ -324,7 +324,7 @@ flowchart TB
   Email --> Accuracy["Independent accuracy review<br/>Classification and import costs"]
   Email --> Manual["Member chooses one Email<br/>Run import + cost estimate"]
   Manual --> Pi["Pi Mail import<br/>Public MCP tools"]
-  Email -. "Mail import switch on<br/>within the AI budget" .-> Pi
+  Email -. "Mail import switch on<br/>free AI capacity, else waits" .-> Pi
 
   Retailer["Retailer history / export"] --> Client["Claude / Codex client<br/>Browser, connectors and MCP"]
   Receipt["Receipt photo / document"] --> Client

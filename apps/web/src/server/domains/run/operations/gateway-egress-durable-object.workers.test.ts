@@ -20,6 +20,67 @@ describe("shared Gateway admission", () => {
       await stub.finish(unified.token, 200, null, now + 1);
   });
 
+  // Work paused for free AI capacity must wake at the earliest window end, and
+  // no other wake may clear that pending resume.
+  it("keeps one funding resume armed at the earliest requested time", async () => {
+    const stub = env.AI_GATEWAY_EGRESS.getByName(crypto.randomUUID());
+    const later = Date.now() + 6 * 60 * 60_000;
+    const sooner = later - 60 * 60_000;
+    await stub.scheduleFundingResume(later);
+    await stub.scheduleFundingResume(sooner);
+    await stub.scheduleFundingResume(later);
+    await runInDurableObject(stub, async (_instance, state) => {
+      expect(await state.storage.get("fundingResumeAt")).toBe(sooner);
+      expect(await state.storage.getAlarm()).toBe(sooner);
+    });
+  });
+
+  // A recovered Run can exhaust free capacity again while its alarm awaits
+  // the database. The old acknowledgement must not erase the next window.
+  it.each([false, true])(
+    "preserves a funding wake requested during recovery (failure: %s)",
+    async (fail) => {
+      const stub = env.AI_GATEWAY_EGRESS.getByName(crypto.randomUUID());
+      await runInDurableObject(stub, async (instance, state) => {
+        const version = "synthetic-funding-recovery";
+        Object.defineProperty(instance, "env", {
+          value: { CF_VERSION_METADATA: { id: version } },
+        });
+        await state.storage.put("aiRefreshObservedVersion", version);
+        const expired = Date.now() - 1;
+        const next = Date.now() + 6 * 60 * 60_000;
+        await state.storage.put("fundingResumeAt", expired);
+        Object.defineProperty(instance, "recoverFundingRuns", {
+          configurable: true,
+          value: async () => {
+            await instance.scheduleFundingResume(next);
+            if (fail) throw new Error("Synthetic recovery failure");
+          },
+        });
+        const outcome = await instance.alarm().then(
+          () => "resolved",
+          (error: unknown) =>
+            error instanceof Error ? error.message : String(error),
+        );
+        expect(outcome).toBe(fail ? "Synthetic recovery failure" : "resolved");
+        expect(await state.storage.get("fundingResumeAt")).toBe(next);
+        if (fail) {
+          Object.defineProperty(instance, "recoverFundingRuns", {
+            value: async () => {},
+          });
+          // Direct alarm invocation consumes the scheduled retry as workerd does.
+          await state.storage.deleteAlarm();
+          await instance.alarm();
+        }
+        expect(await state.storage.get("fundingResumeAt")).toBe(next);
+        expect(
+          await state.storage.get("fundingResumeInFlight"),
+        ).toBeUndefined();
+        expect(await state.storage.getAlarm()).toBe(next);
+      });
+    },
+  );
+
   it("shares the aggregate budget and cooldown across callers without spending capacity on a refusal", async () => {
     const name = crypto.randomUUID();
     const first = env.AI_GATEWAY_EGRESS.getByName(name);

@@ -1,6 +1,6 @@
 # ADR 0017: Subscription-funded model fallback
 
-Status: Amended. The funding and gateway amendment below supersedes the original design for Pi agents and Tester Army.
+Status: Amended. The funding and gateway amendment supersedes the original design for Pi agents and Tester Army; the background-work amendment narrows it for background Runs.
 
 Production chat runs on the household's ChatGPT plan (Luna and Sol at ~$0
 marginal cost); Anthropic is nearly unused. An eligible Claude Max or Team plan
@@ -122,3 +122,39 @@ Ordinary invalid requests, invalid credentials and unknown provider failures
 retain their diagnostics instead of authorizing spend on another provider.
 The pre-existing ChatGPT OAuth transports remain separate from AI Gateway;
 billed Anthropic and OpenAI requests continue through the gateway.
+
+## Background work waits instead of paying
+
+Amended after Claude credit drained at standard cost uncounted and background
+relevance and Mail import calls paid Unified Billing while free capacity was
+hours away. Interactive work (member-started Runs, member-selected Email
+imports and calls outside a background Run) keeps the ladder above. Background
+work — a Run whose lineage root has purpose `background` or was scheduled,
+discovered or backfilled — follows a narrower ladder. This includes automatic
+feature refreshes with the default `ephemeral` trigger, Mail discovery, its
+relevance fallback and the Mail import Runs it starts:
+
+1. Claude subscriber credit, while the window's credit budget (standard cost of
+   `subscriber_credit` usage, default $5 per six-hour window, member-editable)
+   has room and Anthropic does not refuse.
+2. The ChatGPT plan, while connected and not quota-refused.
+3. Otherwise the Run pauses. The credit window resets within six hours by
+   construction, and a plan quota resets at its hint or is assumed back by the
+   next window. When neither can return — Anthropic's Console limit refused the
+   credit and the plan is disconnected or needs reauthorization — the Run still
+   never pays automatically; its pause reason says so with the raw diagnostics.
+   Paused Runs resume when the next window starts.
+
+A member's "Run now, paid allowed" override, available in the Run header's
+More actions menu and on the Mail import card, authorizes paid funding for one
+Run (and the imports its discovery starts) within the paid budget; spending past a
+spent paid budget requires a second confirmation naming the amount, valid for
+the window it was granted in. The paid budget counts charged cost only, so
+credit usage never consumes it.
+The header exposes this funding action for discovery and suggestion Runs too,
+without giving them import-agent commands. Every frontier admission path reads
+the same Run grant and window-scoped allowance.
+
+Considered: pausing interactive work too (rejected: rare interactive work stays
+interactive); a scheduled six-hour cron for resume (rejected: frequent crons
+must not wake Neon; the egress Durable Object holds one alarm instead).

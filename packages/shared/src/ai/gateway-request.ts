@@ -486,7 +486,7 @@ export function isInferenceFundingRefusal(
         body,
       )
     );
-  return /credit balance is too low|reached your specified[^\n]*API usage limits|enforced_spend_limit_reached/iu.test(
+  return /credit balance is too low|reached your specified[^\n]*API usage limits|enforced_spend_limit_reached|cubby_credit_budget_reached/iu.test(
     body,
   );
 }
@@ -919,6 +919,14 @@ export interface GatewayFetchRoutes extends GatewayResponseObservers {
   subscriptionFallback?: "budgeted";
   /** Admission completes before each actual paid or synthetic-peer transmission. */
   beforePaidRequest?: (request: GatewayFetchRequest) => Promise<void>;
+  /**
+   * Credit-rung admission: a returned reason refuses this subscriber-credit
+   * attempt as a funding refusal (`cubby_credit_budget_reached`), so the
+   * ladder moves to the ChatGPT plan. A thrown error is an admission failure.
+   */
+  beforeCreditRequest?: (
+    request: GatewayFetchRequest,
+  ) => Promise<string | null>;
   requestTimeoutMs?: number;
   /** Rewrites the provider body on every route that decodes it. */
   rewriteQuery?: (query: GatewayQuery) => GatewayQuery;
@@ -1031,6 +1039,21 @@ export function gatewayFetchThrough(routes: GatewayFetchRoutes): typeof fetch {
     };
     const observe = async (response: Response) =>
       observeGatewayResponse(response, routes, await streamRequested());
+
+    if (routes.funding === "subscriber_credit" && routes.beforeCreditRequest) {
+      const refusal = await routes.beforeCreditRequest(request);
+      if (refusal) {
+        routes.onTransport?.("gateway");
+        return observe(
+          Response.json(
+            {
+              error: { type: "cubby_credit_budget_reached", message: refusal },
+            },
+            { status: 429 },
+          ),
+        );
+      }
+    }
 
     const testPeer = routes.testPeer?.();
     if (testPeer) {

@@ -1,3 +1,4 @@
+import type { CoordinatorModels } from "@cubby/schemas/coordinator-models";
 /**
  * Everything the import agent can reach. The agent reads untrusted mail and
  * photos, so it holds no database, binding, secret, or raw
@@ -70,6 +71,8 @@ export interface RunServices {
   authorize(): Promise<void>;
   /** Commit the bound Run allowance before one physical paid transmission. */
   admitPaidInference(request: GatewayFetchRequest): Promise<void>;
+  /** A refusal when background work has spent the window's Claude credit budget. */
+  admitCreditInference(request: GatewayFetchRequest): Promise<string | null>;
   /** The Run's public identity: its purpose and agent instance name. */
   loadScope(): Promise<{
     purpose: AgentImportRunPurpose;
@@ -132,6 +135,11 @@ export interface PurchaseAgentEnvironment {
   testModel?: { fetch(request: Request): Promise<Response> };
   /** Harness only: select Responses before serialization; never switch funding models. */
   fixedModel?: "openai-responses";
+  /**
+   * Harness only: replace the manifest's primary and escalation models, so
+   * an offline eval runs a candidate coordinator as production would.
+   */
+  coordinatorModels?: CoordinatorModels;
   /**
    * Workerd harness only: a shorter settlement poll, so a scripted Run settles
    * without waiting out production's interval.

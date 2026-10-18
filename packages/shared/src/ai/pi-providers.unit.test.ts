@@ -53,6 +53,73 @@ it("restarts a credit-refused generation on the subscription with its actual mod
   ]);
 });
 
+// A coordinator whose manifest names a cheaper primary (or escalates to
+// another model) must be answered by that model: the household ladder alone
+// always led with Opus, silently replacing the requested model.
+describe("a ladder that leads with the requested model", () => {
+  const credit = {
+    error: {
+      type: "invalid_request_error",
+      message: "Your credit balance is too low to access the Anthropic API.",
+    },
+  };
+  it.each([
+    ["claude-haiku-5-5", "anthropic:subscriber_credit:claude-haiku-5-5"],
+    ["claude-sonnet-5-5", "anthropic:subscriber_credit:claude-sonnet-5-5"],
+  ] as const)(
+    "funds %s from the Claude credit first, then the household ladder",
+    async (requested, first) => {
+      const attempts: string[] = [];
+      const models = createModels();
+      for (const provider of fundedCubbyPiProviders(
+        (route, _unbilled, funding) => async (_input, init) => {
+          const body = z
+            .object({ model: z.string() })
+            .parse(JSON.parse(String(init?.body)));
+          attempts.push(`${route}:${funding}:${body.model}`);
+          if (funding === "subscriber_credit")
+            return Response.json(credit, { status: 400 });
+          return openAiCompleted();
+        },
+        undefined,
+        { paid: true, leadWithRequested: true },
+      ))
+        models.setProvider(provider);
+      const model = models.getModel("anthropic", requested);
+      if (!model) throw new Error(`Missing ${requested}`);
+      const response = await models.completeSimple(model, { messages: [] });
+      expect(response.errorMessage).toBeUndefined();
+      expect(attempts).toEqual([
+        first,
+        "anthropic:subscriber_credit:claude-opus-5-5",
+        "openai:subscription:gpt-6-sol",
+      ]);
+    },
+  );
+
+  it("funds an OpenAI primary from the ChatGPT plan first", async () => {
+    const attempts: string[] = [];
+    const models = createModels();
+    for (const provider of fundedCubbyPiProviders(
+      (route, _unbilled, funding) => async (_input, init) => {
+        const body = z
+          .object({ model: z.string() })
+          .parse(JSON.parse(String(init?.body)));
+        attempts.push(`${route}:${funding}:${body.model}`);
+        return openAiCompleted();
+      },
+      undefined,
+      { paid: true, leadWithRequested: true },
+    ))
+      models.setProvider(provider);
+    const model = models.getModel("openai", "gpt-6-luna");
+    if (!model) throw new Error("Missing Luna");
+    const response = await models.completeSimple(model, { messages: [] });
+    expect(response.model).toBe("gpt-6-luna");
+    expect(attempts).toEqual(["openai:subscription:gpt-6-luna"]);
+  });
+});
+
 /** The paid step answers on the plan's model through the gateway. */
 const openAiCompleted = () =>
   new Response(

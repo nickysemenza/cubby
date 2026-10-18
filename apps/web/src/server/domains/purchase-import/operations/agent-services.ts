@@ -102,11 +102,15 @@ export function runServicesFor(
           import("~/server/domains/run/service/execution-transport"),
           import("@cubby/schemas/identifiers"),
         ]);
-        await paidRunPreflight(
-          db,
-          runEntityId.parse(runId),
-          "purchase_import_agent",
-        )(request);
+        await paidRunPreflight(db, runEntityId.parse(runId))(request);
+      }),
+    admitCreditInference: (request) =>
+      withDatabase(async (db) => {
+        const [{ creditRunPreflight }, { runEntityId }] = await Promise.all([
+          import("~/server/domains/run/service/execution-transport"),
+          import("@cubby/schemas/identifiers"),
+        ]);
+        return creditRunPreflight(db, runEntityId.parse(runId))(request);
       }),
     coordinatorRetired: () =>
       withDatabase(async (db) => {
@@ -210,7 +214,10 @@ export function runServicesFor(
           },
           async () =>
             scope.public.purpose === "mail_import"
-              ? (await import("./mail-tool")).claimMailImportWork(db, runId)
+              ? (await import("./mail-import-claim")).claimMailImportWork(
+                  db,
+                  runId,
+                )
               : service.claimPhotoInventoryWork(db, runId),
         );
       });

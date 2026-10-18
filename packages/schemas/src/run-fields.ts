@@ -80,6 +80,8 @@ export const runControlAction = z.enum([
   "abort",
   "upload_evidence",
   "no_evidence_available",
+  // A paused background Run resumes now with paid funding allowed.
+  "run_now_paid",
 ]);
 export type RunControlAction = z.infer<typeof runControlAction>;
 /** Why a new immutable attempt was admitted; historical lineage remains unknown. */

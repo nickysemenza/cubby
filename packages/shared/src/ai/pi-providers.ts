@@ -31,6 +31,7 @@ import {
   type ChatGatewayProvider,
   openAiChatModelSchema,
   getChatModelConfig,
+  supportedChatModelSchema,
   type SupportedChatModel,
 } from "./models";
 
@@ -308,30 +309,61 @@ export function cubbyPiProviders(fetchFor: GatewayFetchFor): Provider[] {
  * subscriber credit first, then the ChatGPT plan, then paid only where the
  * caller allows it. Each step advances only on a funding refusal.
  */
-export function fundedChatAttempts(policy: { paid: boolean }): readonly {
+export function fundedChatAttempts(policy: {
+  paid: boolean;
+  /**
+   * A model that answers first, on its own vendor's plan funding (the
+   * Claude credit or the ChatGPT plan), before the household order.
+   */
+  lead?: SupportedChatModel;
+}): readonly {
   model: SupportedChatModel;
   funding: InferenceFunding;
 }[] {
-  return [
+  const household = [
     { model: "claude-opus-5-5", funding: "subscriber_credit" },
     { model: "gpt-6-sol", funding: "subscription" },
     ...(policy.paid
       ? [{ model: "gpt-6-sol" as const, funding: "paid" as const }]
       : []),
+  ] as const;
+  if (!policy.lead) return household;
+  const lead = {
+    model: policy.lead,
+    funding:
+      getChatModelConfig(policy.lead).gatewayProvider === "anthropic"
+        ? ("subscriber_credit" as const)
+        : ("subscription" as const),
+  };
+  return [
+    lead,
+    ...household.filter(
+      (attempt) =>
+        attempt.model !== lead.model || attempt.funding !== lead.funding,
+    ),
   ];
 }
+
+type FundingPolicy = {
+  paid: boolean;
+  /**
+   * The requested model answers first (`fundedChatAttempts`'s `lead`); the
+   * purchase coordinator sets it so its manifest's primary and escalation
+   * models are the ones that run. Otherwise the requested model only selects
+   * the provider entry and the household order decides which model answers.
+   */
+  leadWithRequested?: boolean;
+};
 
 /**
  * Funding retries restart one generation from its input transcript. Hold every
  * event until that attempt settles, so a refused partial tool call never runs.
  * Completed prior turns and their writes remain in pi's durable transcript.
- * The requested model only selects the provider entry; `fundedChatAttempts`
- * decides which model answers.
  */
 export function fundedCubbyPiProviders(
   fetchFor: GatewayFetchFor,
   onRefusedAttempt?: (message: AssistantMessage) => Promise<void>,
-  policy: { paid: boolean } = { paid: true },
+  policy: FundingPolicy = { paid: true },
 ): Provider[] {
   const base = cubbyPiProviders(fetchFor);
   return base.map((provider): Provider => {
@@ -343,7 +375,12 @@ export function fundedCubbyPiProviders(
     ) => {
       const output = createAssistantMessageEventStream();
       void (async () => {
-        const attempts = fundedChatAttempts(policy);
+        const attempts = fundedChatAttempts({
+          paid: policy.paid,
+          lead: policy.leadWithRequested
+            ? supportedChatModelSchema.parse(model.id)
+            : undefined,
+        });
         for (const [index, attempt] of attempts.entries()) {
           let refused = false;
           const providers = cubbyPiProviders((route, unbilled) => {

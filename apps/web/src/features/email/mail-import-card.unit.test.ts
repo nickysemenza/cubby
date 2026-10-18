@@ -22,8 +22,9 @@ const status = (
   budget: {
     windowStart: "2026-10-01T00:00:00.000Z",
     windowEnd: "2026-10-01T06:00:00.000Z",
-    limitUsd: 1,
-    spentUsd: 0,
+    credit: { limitUsd: 5, spentUsd: 0 },
+    paid: { limitUsd: 1, spentUsd: 0 },
+    plan: { state: "available", until: null, reason: null },
   },
 });
 const query = { key: "merchant:synthetic shop", query: '"synthetic shop"' };

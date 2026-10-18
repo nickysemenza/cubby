@@ -83,8 +83,8 @@ describe("purchase import audit recovery", () => {
     const exhausted = new AiBudgetExhaustedError({
       windowStart: "2026-10-17T06:00:00.000Z",
       windowEnd: "2026-10-17T12:00:00.000Z",
-      limitUsd: 1,
-      spentUsd: 1,
+      credit: { limitUsd: 5, spentUsd: 0 },
+      paid: { limitUsd: 1, spentUsd: 1 },
     });
     const gateway = vi.fn();
     const db = createDatabase(() => {

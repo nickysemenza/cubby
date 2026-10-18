@@ -7,6 +7,7 @@ import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { ledgerParty, run as runTable } from "~/server/db/schema";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
+import { recordPaidGrant } from "~/server/domains/run/repo/paid-grant";
 import { createAppError } from "~/server/errors/app-error";
 
 import { workflowInstanceId, type WorkflowRunPurpose } from "./contract";
@@ -22,7 +23,11 @@ import { launchWorkflowRun, recordRunProgress } from "./lifecycle";
 export async function controlWorkflowRun(
   db: Database,
   actor: ActorContext,
-  input: { runPublicId: string; action: RunControlAction },
+  input: {
+    runPublicId: string;
+    action: RunControlAction;
+    paidOverBudgetUsd?: number;
+  },
   purpose: WorkflowRunPurpose,
   launcher: WorkflowLauncher = productionWorkflowLauncher,
 ): Promise<void> {
@@ -32,6 +37,7 @@ export async function controlWorkflowRun(
       id: runTable.id,
       shortcode: runTable.shortcode,
       status: runTable.status,
+      failureCode: runTable.failureCode,
       actorUserId: runTable.actorUserId,
       memberUserId: ledgerParty.userId,
       attempt: sql<number>`coalesce((${runTable.progress}->>'attempt')::int, 0)`,
@@ -60,6 +66,21 @@ export async function controlWorkflowRun(
       .update(runTable)
       .set({ status: "paused" })
       .where(and(eq(runTable.id, row.id), eq(runTable.status, "running")));
+    return;
+  }
+  if (input.action === "run_now_paid") {
+    // Every background frontier Workflow shares funding admission. Discovery
+    // grants also cover its child imports; unrelated auth pauses stay blocked.
+    if (row.status !== "paused_auth" || row.failureCode !== "execution_limit")
+      throw createAppError(
+        "RUN_CONTROL_REFUSED",
+        `Only a funding-paused Run can run now with paid models (${purpose}, ${row.status}, ${row.failureCode})`,
+      );
+    await recordPaidGrant(db, actor, {
+      runId: row.id,
+      paidOverBudgetUsd: input.paidOverBudgetUsd,
+    });
+    await launchWorkflowRun(db, { runId: row.id, purpose }, launcher);
     return;
   }
   if (input.action === "resume") {

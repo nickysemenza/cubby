@@ -12,6 +12,11 @@ iOS/macOS, HTTP, MCP connections), so change contracts in place:
   `packages/shared/src/apple-client-version.ts` (shared by the server minimum
   and generated Apple marketing version). Older builds keep their reads; the
   server refuses their writes until they update.
+- MCP clients cache `tools/list` across deploys and validate results against
+  it, so published output schemas are open objects: an added output field is
+  safe for an open session, while removing, renaming or retyping one breaks
+  it until the client reconnects. A client that cached an older closed schema
+  must reconnect once to load the open schema. Input schemas stay closed.
 - Household data is real: carry it through a migration that transforms it.
 
 ## Production changes

@@ -48,7 +48,11 @@ const RUN_AGENT_TOOLS = [
   "report_agent_progress",
   "stop_import_run_for_review",
 ] as const;
-export type ImportRunAgentToolName = (typeof RUN_AGENT_TOOLS)[number];
+/** Mounted only while a purpose's escalation model differs from its primary. */
+export const ESCALATE_TOOL = "escalate_import_work";
+export type ImportRunAgentToolName =
+  | (typeof RUN_AGENT_TOOLS)[number]
+  | typeof ESCALATE_TOOL;
 
 /** Mail import reads Email and writes through the same public tools a member uses. */
 const MAIL_IMPORT_MCP_ACTIONS = [
@@ -88,8 +92,18 @@ const toolsOf = <const Actions extends readonly CubbyMcpToolAction[]>(
   >;
 
 export type ImportRunAgentConfig = {
-  /** Primary model; the runtime owns the ordered funding fallback. */
+  /**
+   * Primary model. It answers first; the runtime's funding fallback follows
+   * only when its funding refuses.
+   */
   model: SupportedChatModel;
+  /**
+   * The model one work item escalates to (Mail import: an `escalate_import_work`
+   * call, a second `purchase_import.prepare` refusal, or an `unresolved`
+   * resolution the primary would record). Absent, or equal to `model`, turns
+   * escalation off: no tool is mounted and no request changes.
+   */
+  escalationModel?: SupportedChatModel;
   effort: "low" | "medium" | "high";
   agentTools: readonly ImportRunAgentToolName[];
   /**
@@ -105,6 +119,13 @@ export type ImportRunAgentConfig = {
    * records carry what earlier ones settled; `all` keeps every item.
    */
   workItemContext: "current" | "all";
+  /**
+   * Entity kinds `entity_read` serves this purpose's agent. Its per-kind list
+   * filters are most of the mounted schema, resent on every call, so the
+   * agent's copy carries only these and other kinds are refused. Omitted:
+   * every kind.
+   */
+  mcpEntityKinds?: readonly string[];
 };
 
 /** Each purpose's model and authority: host tools plus narrowed MCP actions. */
@@ -119,11 +140,13 @@ export const importRunAgentManifest = {
   },
   mail_import: {
     model: "claude-opus-5-5",
+    escalationModel: "claude-opus-5-5",
     effort: "medium",
-    agentTools: RUN_AGENT_TOOLS,
+    agentTools: [...RUN_AGENT_TOOLS, ESCALATE_TOOL],
     mcpActions: MAIL_IMPORT_MCP_ACTIONS,
     mcpTools: toolsOf(MAIL_IMPORT_MCP_ACTIONS),
     workItemContext: "current",
+    mcpEntityKinds: ["purchase", "vendor", "product"],
   },
 } as const satisfies Record<AgentImportRunPurpose, ImportRunAgentConfig>;
 

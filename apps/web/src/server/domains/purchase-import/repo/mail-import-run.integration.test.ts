@@ -16,6 +16,8 @@ import {
 } from "~/server/db/helpers";
 import {
   aiUsage,
+  assessment,
+  feedback,
   orderMail,
   email as emailTable,
   run,
@@ -32,7 +34,7 @@ import {
 } from "~/server/testing/mcp-test-utils";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
-import { settleMail } from "../operations/mail-tool";
+import { readMailImportOutcomes, settleMail } from "../operations/mail-tool";
 import { retainedMailFixture } from "../operations/order-import.fixtures";
 import { startAgentRunFixture } from "../service/import-run.fixtures";
 import { writeOutcomeReceipts } from "../service/run-outcome.fixtures";
@@ -243,6 +245,105 @@ describe("mail research admission", () => {
     } finally {
       interleaving.mockRestore();
     }
+  });
+
+  // Settlement must publish once, preserve the actual producer, and allow a
+  // history grade without granting authority to rewrite the imported ledger.
+  it("freezes Mail import outcomes with rule provenance and immutable retry identity", async () => {
+    const { party, mail } = await source();
+    const [admitted] = await startMailImport(
+      ctx.db,
+      {
+        ledgerPartyId: party.id,
+        userId: ctx.actor.userId,
+        messageIds: [mail.id],
+      },
+      { send: async () => {} },
+    );
+    if (!admitted) throw new Error("Synthetic Run missing");
+    const input = {
+      mail,
+      importRunId: parseEntityId("run", admitted.runId),
+      status: "completed" as const,
+      classification: "unrelated" as const,
+      detail: "unrelated: Synthetic newsletter",
+      ruleRevision: "synthetic-rule-v1",
+    };
+    await settleMail(ctx.db, input);
+    await settleMail(ctx.db, input);
+    const rows = await getDb(ctx.db)
+      .select()
+      .from(assessment)
+      .where(eq(assessment.family, "mail_import_outcome"));
+    expect(rows).toMatchObject([
+      {
+        subject: {
+          kind: "mail_import_outcome",
+          checksum: mail.rawChecksum,
+          runId: admitted.runId,
+        },
+        judgment: { kind: "unrelated", reason: "Synthetic newsletter" },
+        producer: { kind: "rule", model: null, revision: "synthetic-rule-v1" },
+      },
+    ]);
+    const prediction = rows[0]!;
+    const history = await readMailImportOutcomes(
+      ctx.db,
+      {
+        mailboxId: mail.mailboxId,
+        messageId: mail.messageId,
+      },
+      ctx.actor,
+    );
+    expect(history.items.map((item) => item.assessmentId)).toEqual([
+      prediction.id,
+    ]);
+    expect(history.nextOffset).toBeNull();
+    expect(history.items[0]?.producer?.runId).toMatch(/^RUN-/);
+    await expect(
+      readMailImportOutcomes(
+        ctx.db,
+        {
+          mailboxId: "synthetic-unowned-mailbox",
+          messageId: mail.messageId,
+        },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({ code: "NOT_FOUND", reason: "EMAIL_NOT_FOUND" });
+    const { reviewAssessment } =
+      await import("~/server/generic/assessment/repo/assessment-review");
+    const { kernelCtx } =
+      await import("~/server/domains/run/service/suggestion-sweep.fixtures");
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      assessmentId: prediction.id,
+      operationId: "synthetic-member-grade",
+      verdict: "wrong",
+      intent: "history",
+      reason: "Synthetic member correction",
+      correction: {
+        present: true,
+        value: { kind: "unresolved", reason: "Needs evidence" },
+      },
+    });
+    await expect(
+      reviewAssessment(ctx.db, kernelCtx(ctx), {
+        assessmentId: prediction.id,
+        operationId: "synthetic-apply-refused",
+        verdict: "correct",
+        intent: "apply",
+      }),
+    ).rejects.toThrow(/history only/);
+    expect(
+      await getDb(ctx.db)
+        .select({ operationId: feedback.operationId })
+        .from(feedback)
+        .where(eq(feedback.assessmentId, prediction.id)),
+    ).toEqual([{ operationId: "synthetic-member-grade" }]);
+    const [unchanged] = await getDb(ctx.db)
+      .select()
+      .from(assessment)
+      .where(eq(assessment.id, prediction.id));
+    expect(unchanged?.judgment).toEqual(prediction.judgment);
   });
 
   it("preserves the parent Email outcome after a retry transfers its live assignment", async () => {
@@ -475,7 +576,6 @@ describe("mail research admission", () => {
       beforePaidRequest: paidRunPreflight(
         ctx.db,
         parseEntityId("run", admitted.runId),
-        "purchase_import_agent",
       ),
       gateway: async () => {
         transmissions += 1;
@@ -534,7 +634,6 @@ describe("mail research admission", () => {
         beforePaidRequest: paidRunPreflight(
           ctx.db,
           parseEntityId("run", admitted.runId),
-          "purchase_import_agent",
         ),
         gateway: async () => {
           transmissions += 1;
@@ -599,7 +698,6 @@ describe("mail research admission", () => {
         beforePaidRequest: paidRunPreflight(
           ctx.db,
           parseEntityId("run", successor.successorRunId),
-          "purchase_import_agent",
         ),
         gateway: async () => {
           transmissions += 1;
@@ -676,7 +774,6 @@ describe("mail research admission", () => {
         beforePaidRequest: paidRunPreflight(
           ctx.db,
           parseEntityId("run", successor.successorRunId),
-          "purchase_import_agent",
         ),
         gateway: async () => {
           transmissions += 1;

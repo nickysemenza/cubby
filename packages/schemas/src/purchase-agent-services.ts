@@ -116,4 +116,12 @@ export const photoInventoryToolInputs = {
     detail: agentProgressReport.shape.detail.unwrap().max(1_000).optional(),
   }),
   stop_import_run_for_review: stopForReviewInput.extend(modelId),
+  escalate_import_work: z.object({
+    reason: z
+      .string()
+      .trim()
+      .min(1)
+      .max(1_000)
+      .describe("What about this Email needs the stronger model."),
+  }),
 };

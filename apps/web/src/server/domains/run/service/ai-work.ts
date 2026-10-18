@@ -7,10 +7,15 @@ import {
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { suggestionSweepRunProgress } from "@cubby/schemas/run-fields";
 import { workflowRecoveryProgress } from "@cubby/schemas/workflow-runs";
+import { createLogger } from "@cubby/worker-tracing";
 import { z } from "zod";
 
 import { findErrorCause } from "~/lib/error-diagnostics";
-import { AiBudgetExhaustedError, readAiBudget } from "~/server/ai/budget";
+import {
+  AiBudgetExhaustedError,
+  aiBudgetWindow,
+  readAiBudget,
+} from "~/server/ai/budget";
 import {
   aiEvaluationProgress,
   claimAiEvaluation,
@@ -27,6 +32,7 @@ import {
 import {
   aiEvaluationsForRun,
   completeRecoveredAiWorkRun,
+  fundingPausedDiscoveryRuns,
   guardAiEvaluationAttempt,
   pauseRunForAiWork,
   readAiEvaluation,
@@ -60,6 +66,8 @@ import {
   executeSuggestionSweepTarget,
   type SuggestionSweepPorts,
 } from "./suggestion-sweep";
+
+const log = createLogger("ai-work");
 
 export type AiWorkPorts = {
   reclassification?: ReclassificationPorts;
@@ -209,7 +217,7 @@ export async function executeAiWorkTarget(
         attempts: waiting ? item.attempts - 1 : item.attempts,
         error: message,
         nextAttemptAt: budget
-          ? new Date(budget.status.windowEnd)
+          ? new Date(budget.resumeAt)
           : new Date(Date.now() + 60_000 * Math.max(1, item.attempts)),
       },
     );
@@ -351,16 +359,46 @@ function aiWorkProgress(
 
 /** Existing catch-up/nightly callers repair lost dispatch independently of refresh activation. */
 const aiBudgetSpent = async (db: Database) => {
-  const budget = await readAiBudget(db);
-  return budget.spentUsd >= budget.limitUsd;
+  const { paid } = await readAiBudget(db);
+  return paid.spentUsd >= paid.limitUsd;
 };
 
-/** Budget-paused agent imports resume once the current window has room. */
-export async function resumeBudgetPausedImports(db: Database) {
-  if (await aiBudgetSpent(db)) return 0;
-  return (
+/**
+ * Agent imports and Mail discovery a funding stop paused (`pauseExecutionRun`)
+ * resume once a later six-hour window starts: both budgets reset, and a plan
+ * quota without a reset hint is assumed back by then. A Run still without
+ * capacity pauses again before any paid transmission, so a resume never
+ * spends. `anyWindow` also resumes this window's pauses (a raised credit
+ * budget). The window cron, catch-up and the nightly backstop call this.
+ */
+export async function resumeFundingPausedRuns(
+  db: Database,
+  {
+    now = new Date(),
+    launcher = productionWorkflowLauncher,
+    anyWindow = false,
+  }: { now?: Date; launcher?: WorkflowLauncher; anyWindow?: boolean } = {},
+) {
+  const pausedBefore = anyWindow ? now : aiBudgetWindow(now).start;
+  const imports = await (
     await import("~/server/domains/purchase-import/repo/run-service")
-  ).redispatchBudgetPausedImports(db);
+  ).redispatchBudgetPausedImports(db, now, pausedBefore);
+  let discoveries = 0;
+  for (const runId of await fundingPausedDiscoveryRuns(db, pausedBefore)) {
+    try {
+      await launchWorkflowRun(
+        db,
+        { runId, purpose: "mail_discovery", automatic: true },
+        launcher,
+      );
+      discoveries += 1;
+    } catch (error) {
+      // SILENT: another discovery for the mailbox now runs, or the launch
+      // failed the Run with its reason; the next window retries the rest.
+      log.warn("funding-paused discovery did not resume", { runId, error });
+    }
+  }
+  return imports + discoveries;
 }
 
 export async function recoverManualAiWork(

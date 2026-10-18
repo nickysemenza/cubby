@@ -544,6 +544,67 @@ describe("MCP catalog schemas", () => {
     ).toEqual([]);
   });
 
+  // Regression: #2741 added compact-read fields (preheader, images,
+  // structured data, paging) and every member session's Email read failed
+  // client-side output validation with "must NOT have additional properties".
+  it("accepts a compact Email read in the published imports_read output schema", async () => {
+    const tool = (await listMcpToolCatalog()).tools.find(
+      (candidate) => candidate.name === "imports_read",
+    );
+    if (!tool?.outputSchema) throw new Error("Missing imports_read output");
+    const validate = new Ajv({ strict: false, validateFormats: true }).compile(
+      tool.outputSchema,
+    );
+    const read = {
+      mailboxId: "member@example.com",
+      messageId: "synthetic-message",
+      id: "EML-4K7M",
+      threadId: null,
+      checksum: "a".repeat(64),
+      sender: "orders@vendor.example",
+      subject: "Your order SYN-1001",
+      receivedAt: "2026-02-01T12:00:00.000Z",
+      content: {
+        snippet: null,
+        preheader: "Your synthetic order is confirmed",
+        bodyText: "Synthetic shoe $104.00",
+        textBytes: 22,
+        bodyHtml: null,
+        nextOffset: null,
+        headers: { from: "orders@vendor.example" },
+        htmlBytes: 2048,
+        compacted: true,
+        truncated: false,
+        links: [{ href: "https://vendor.example/p/1", text: "Shoe" }],
+        linksOmitted: 0,
+        images: [{ src: "https://img.vendor.example/1.jpg", alt: "Shoe" }],
+        imagesOmitted: 0,
+        structuredData: ['{"@type":"Order"}'],
+        structuredDataOmitted: 0,
+        headersOmitted: false,
+        bodyShortened: false,
+      },
+      attachments: [],
+      boundToRun: false,
+      purchaseIds: [],
+      purchaseAssociations: [],
+      acceptedSourceOrders: [],
+      financialAssociations: [],
+    };
+    const valid = validate(read);
+    expect(validate.errors ?? []).toEqual([]);
+    expect(valid).toBe(true);
+    // A client holding this schema keeps working when a later release adds
+    // an output field: published outputs are open objects.
+    expect(
+      validate({
+        ...read,
+        addedLater: true,
+        content: { ...read.content, addedLater: 1 },
+      }),
+    ).toBe(true);
+  });
+
   it("publishes valid Draft-7 schemas with resolvable references and empty merchant candidate tuples", async () => {
     const validator = new Ajv({ strict: false, validateFormats: false });
     const invalid: string[] = [];

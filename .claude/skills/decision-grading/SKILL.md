@@ -1,6 +1,6 @@
 ---
 name: decision-grading
-description: Measure Cubby's Jev/Clef decisions and Email relevance from a Claude/Codex session over Cubby MCP — grade samples, replay records through each decision model, compare before/after a prompt or option change. Use when calibrating field suggestions, Email triage, the Jev/Clef traffic split, or option sets.
+description: Measure Cubby's Jev/Clef decisions and Email relevance/import outcomes from a Claude/Codex session over Cubby MCP — grade samples, replay records through each decision model, compare before/after a prompt or option change. Use when calibrating field suggestions, Email triage, the Jev/Clef traffic split, or option sets.
 ---
 
 # Decision grading
@@ -89,6 +89,52 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
    fresh previews; the report's confusion matrices cover member-graded samples.
    Report unavailable originals, ambiguous grades, and unpredicted population
    coverage separately. Never substitute current routing fields for frozen weights.
+
+## Mail import outcomes
+
+1. Read the sampled Email's retained original through `imports_read.mail` before
+   revealing its `mail_import_outcome` Assessment. Lock a session-only judgment:
+   imported lines and signed total, linked lifecycle event and order/vendor targets, unrelated with reason,
+   or unresolved with the missing evidence. Missing original/attachments or
+   unavailable Purchase context stays unavailable; a body-only replay cannot
+   establish full-context parity.
+2. Read the Email's Assessment history through `imports_read.mail_outcomes`
+   and retain its Assessment handle and producer in session memory. Rule and
+   coordinator outcomes are separate evidence; do not attribute a rule result
+   to the coordinator model. Agent producer model is null until a causal settling
+   call receipt exists; latest Run-level usage cannot establish that attribution.
+   Historical outcomes stay immutable after retries.
+3. Before paid inference, show the sample size, chosen primary/escalation model,
+   and the per-case eight-minute replay timeout. With the member's authorization,
+   pass originals and frozen outcomes through `eval:mail-replay:stdin`, using
+   `MAIL_REPLAY_MODEL` and optional `MAIL_REPLAY_ESCALATION_MODEL`. Supply an array
+   of `{subject, sender, receivedAt, bodyText, bodyHtml?, baseline}`; `baseline`
+   follows `mailImportOutcome` in `packages/schemas/src/assessment.ts`. The socket
+   keeps private input in memory. Each case gets a fresh throwaway database and
+   the real coordinator/public writers; Gmail is unreachable. No production
+   writes occur. Existing Purchases, catalog, attachments and supporting Emails
+   are absent, so report that context gap before interpreting differences.
+4. Repeat the same cases under the baseline and candidate model. The report
+   contains parity counts and disagreement case positions/field names only.
+   Join those positions to the session worklist, then review only disagreements
+   from the originals via authenticated MCP. Inspect `actualModels`: funding
+   recovery can substitute a model. Missing stable linked-target identity is unavailable, never parity. Reason-text differences are mechanical
+   disagreements, not automatically wrong decisions. Keep unserved candidate
+   judgments in the session; production MCP cannot grade disposable database
+   handles.
+5. After member confirmation, record each served outcome's grade through
+   `entity.review_assessments` with `assessmentId`, unique `operationId`,
+   `intent: "history"`, `verdict`, and optional `reason`/`correction`. A correction
+   carries the complete outcome, including reason or imported lines/total.
+   Session model opinions remain independent grades until the member confirms
+   them. Outcome Feedback never applies ledger changes; use the owning domain
+   operation for any requested correction. Report aggregate parity, unavailable
+   cases, member grades, context gaps and funding substitutions separately.
+
+Keep the production Mail import coordinator on Opus until real held-out replay
+and member grading justify a change. The synthetic scripted mode checks plumbing
+only; it provides no model-quality evidence. UI grading is tracked separately in
+[#2753](https://github.com/nickysemenza/cubby/issues/2753).
 
 ## Before/after a change
 

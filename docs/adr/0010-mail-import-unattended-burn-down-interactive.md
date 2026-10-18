@@ -41,3 +41,47 @@ member/source ownership, transaction fences and audit receipts remain enforced.
 Historical approval-paused Runs resume through the normal dispatch path; existing
 approval history remains stored. Photo group review and ambiguous business
 choices keep their domain review flows.
+
+## Mail import outcome measurement
+
+Each delegated Email settlement publishes an immutable `mail_import_outcome`
+Assessment with its checksum, Run, producer and terminal disposition. Imported
+lines and totals freeze the actual Expense ledger, including credits, across
+all Purchases reached for that Email by the commit. A multi-order commit links
+each Purchase, then publishes one complete Email outcome; operation replay
+reuses it. The total remains `SUM(Expense.cost)`. Linked outcomes freeze the actual targets' order and
+Vendor names; replay compares those identities across databases and reports missing
+identity as unavailable. Rules retain their revision. The public writer has no
+causal model receipt, so agent outcome model attribution remains null. Never
+infer it from the latest Run usage: asynchronous telemetry or an earlier turn
+can name the wrong model after escalation or funding recovery. Evaluator reports
+show observed Run-level model usage separately, including parity cases; that is
+routing evidence rather than per-outcome producer attribution. Retries reuse
+the first producer and evidence. Feedback
+records history-only grades and never rewrites the ledger or Email disposition.
+The outcome read exposes its producing Run as a shortcode; Assessment and
+evaluation IDs remain opaque grading and receipt handles.
+
+The local Mail replay evaluator copies supplied retained originals into a fresh
+throwaway database per case and runs the real coordinator and public writers.
+It publishes no production records. Its session-only stdin transport and reports
+keep originals and entity handles out of files; reports show parity counts and
+only disagreement case positions/fields. Existing Purchases, catalog, attachments
+and supporting Emails are not copied, so a replay with those dependencies is
+context-limited rather than evidence of a model regression. The decision-grading
+skill owns blind review and member-confirmed MCP grading. Replay observation runs
+before Worker teardown on both completion and failure; timeouts retain observed
+successful-call models while their outcome remains unavailable rather than
+counting as parity.
+
+Production continues to use Opus. Candidate model and escalation settings are
+harness-only overrides until held-out real replay and member grading justify a
+change. With distinct primary and escalation models, one Email escalates on an
+explicit request, two refused prepares, or before the primary records unresolved;
+the next claim returns to the primary. Coordinator model transitions retain a pending/applied configuration receipt.
+Recovery reconciles the desired model before accepting a replayed escalation,
+held resolution, refused prepare or next-Email reset. A failed configuration may
+already have taken effect, so pending transitions always reapply idempotently. A
+new unresolved call arriving while configuration is pending is held before
+reconciliation: changing the configuration does not establish that the escalation
+model authored the call. The subsequent escalation-model turn may settle it.

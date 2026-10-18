@@ -106,6 +106,12 @@ export async function inferChatGptPlan(
   }
 }
 
+/** The household plan's connection; null where this runtime has no plan storage. */
+export async function chatGptPlanConnection() {
+  const plan = chatGptPlan();
+  return plan ? plan.status() : null;
+}
+
 export function requireChatGptPlan(): ChatGptPlanRpc {
   const plan = chatGptPlan();
   if (!plan)
