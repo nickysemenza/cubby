@@ -828,6 +828,7 @@ struct EntityListView: View {
         let visibleMeta = model.isSearching ? model.searchModel?.summaryMeta : model.summaryMeta
         let sections = model.sections
         let actions = sectionActions(model)
+        let fields = tableFields
         #if os(macOS)
             // Native table cells are rehosted when sorting replaces the rows. Capture the
             // owning model before that boundary so explanation views keep their dependency.
@@ -854,12 +855,12 @@ struct EntityListView: View {
                         .width(min: 240)
                         .customizationID("title")
                     }
-                    TableColumnForEach(tableFields, id: \.key) { field in
+                    TableColumnForEach(fields, id: \.key) { field in
                         if let sortKey = sortKey(for: field) {
                             TableColumn(
                                 Text(field.label), sortUsing: EntityRowFieldComparator(fieldKey: sortKey)
                             ) { row in
-                                tableCell(field, row: row)
+                                tableCell(field, row: row, fact: tableFact(field, row: row))
                                     .environment(cellAppModel)
                             }
                             .width(min: 180)
@@ -867,7 +868,7 @@ struct EntityListView: View {
                         }
                         if sortKey(for: field) == nil {
                             TableColumn(Text(field.label)) { (row: EntityRow) in
-                                tableCell(field, row: row)
+                                tableCell(field, row: row, fact: tableFact(field, row: row))
                                     .environment(cellAppModel)
                             }
                             .width(min: 180)
@@ -908,7 +909,7 @@ struct EntityListView: View {
                                     ? descriptor.titleField : nil, model: model
                             )
                             .frame(width: titleColumnWidth, alignment: .leading)
-                            ForEach(tableFields, id: \.key) { field in
+                            ForEach(fields, id: \.key) { field in
                                 sortHeading(field.label, key: sortKey(for: field), model: model)
                                     .frame(width: fieldColumnWidth, alignment: .leading)
                             }
@@ -919,14 +920,14 @@ struct EntityListView: View {
                         if let sections {
                             ForEach(sections) { section in
                                 Section {
-                                    ForEach(section.rows) { row in compactTableRow(row) }
+                                    ForEach(section.rows) { row in compactTableRow(row, fields: fields) }
                                 } header: {
                                     EntityListSectionHeader(
                                         section: section, entity: key, actions: actions(section))
                                 }
                             }
                         } else {
-                            ForEach(visibleRows) { row in compactTableRow(row) }
+                            ForEach(visibleRows) { row in compactTableRow(row, fields: fields) }
                         }
                     }
                 }
@@ -948,8 +949,12 @@ struct EntityListView: View {
     }
 
     #if !os(macOS)
-        private func compactTableRow(_ row: EntityRow) -> some View {
-            VStack(spacing: 0) {
+        private func compactTableRow(_ row: EntityRow, fields: [FieldDescriptor]) -> some View {
+            // A fact depends only on its own field, so one resolve serves every cell in the row.
+            let facts = EntityRowPresentation.resolve(
+                descriptor: descriptor, row: row, columns: fields.map(\.key)
+            ).facts
+            return VStack(spacing: 0) {
                 HStack(spacing: 0) {
                     NavigationLink(value: Route.entityDetail(key, id: row.id)) {
                         Text(row.title)
@@ -962,8 +967,8 @@ struct EntityListView: View {
                                 "browse.\(key.rawValue).table.row.\(row.id)")
                     }
                     .buttonStyle(.plain)
-                    ForEach(tableFields, id: \.key) { field in
-                        tableCell(field, row: row)
+                    ForEach(fields, id: \.key) { field in
+                        tableCell(field, row: row, fact: facts.first { $0.id == field.key })
                             .frame(width: fieldColumnWidth, alignment: .leading)
                     }
                 }
@@ -1004,11 +1009,17 @@ struct EntityListView: View {
         }
     }
 
+    #if os(macOS)
+        private func tableFact(_ field: FieldDescriptor, row: EntityRow) -> EntityRowPresentation.Fact? {
+            EntityRowPresentation.resolve(descriptor: descriptor, row: row, columns: [field.key])
+                .facts.first { $0.id == field.key }
+        }
+    #endif
+
     @ViewBuilder
-    private func tableCell(_ field: FieldDescriptor, row: EntityRow) -> some View {
-        let fact = EntityRowPresentation.resolve(
-            descriptor: descriptor, row: row, columns: [field.key]
-        ).facts.first(where: { $0.id == field.key })
+    private func tableCell(
+        _ field: FieldDescriptor, row: EntityRow, fact: EntityRowPresentation.Fact?
+    ) -> some View {
         if let fact {
             HStack(spacing: FieldGuideTokens.Space.xs) {
                 if let reference = EntityFieldValue.reference(in: row.raw, field: field, surface: "list") {

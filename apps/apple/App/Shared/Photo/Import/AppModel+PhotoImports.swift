@@ -46,7 +46,7 @@ extension AppModel {
                         }
                     } else if state.shouldResume {
                         guard existing == nil else { continue }
-                        try flow.recover(from: url)
+                        try flow.recover(state, from: url)
                         photoImportFlows.append(flow)
                     }
                 } catch {

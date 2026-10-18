@@ -99,8 +99,12 @@ final class PhotoImportRunFlow {
     }
 
     func recover(from checkpointURL: URL) throws {
-        let state = try JSONDecoder().decode(
-            PhotoImportRunCheckpoint.self, from: Data(contentsOf: checkpointURL))
+        try recover(
+            JSONDecoder().decode(PhotoImportRunCheckpoint.self, from: Data(contentsOf: checkpointURL)),
+            from: checkpointURL)
+    }
+
+    func recover(_ state: PhotoImportRunCheckpoint, from checkpointURL: URL) throws {
         notifyWhenReady = state.notificationsRequested
         preparedPhotos = try state.materializedPhotos(at: checkpointURL)
         step = .running
