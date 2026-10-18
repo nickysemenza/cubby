@@ -63,6 +63,10 @@ test("statement suggestions accept a clean create by group and dismiss another",
     .filter({ hasText: tag });
   await expect(group).toHaveCount(1);
   await group.getByRole("button", { name: "Accept 1 clean" }).click();
+  await page
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "Accept 1" })
+    .click();
   await expect(page.getByText(/Accepted 1 of 1/)).toBeVisible();
   await expect(
     page.getByRole("list", { name: "Failed suggestions" }),
