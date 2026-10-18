@@ -178,3 +178,92 @@ test("Linked transactions reference pickers load their rosters", async ({
     page.getByRole("option", { name: new RegExp(accountName) }),
   ).toBeVisible();
 });
+
+// Failure mode: the codec split every picked value on commas, so the tag
+// `quick, easy` reached the server as two tags and decoded as two on reload.
+test("a picked tag containing a comma stays one tag through URL and reload", async ({
+  page,
+}, testInfo) => {
+  const tag = `${uniqueName(testInfo, "quick")}, easy`;
+  const tagged = uniqueName(testInfo, "Comma Tag Recipe");
+  const untagged = uniqueName(testInfo, "Untagged Recipe");
+  await createEntityFixture(page, "recipe", { name: tagged, tags: [tag] });
+  await createEntityFixture(page, "recipe", { name: untagged });
+  const recipe = (name: string) =>
+    page.getByRole("link", { name, exact: true });
+
+  await gotoAuthenticatedPage(page, "/recipes");
+  await page.getByRole("button", { name: "Filters", exact: true }).click();
+  await page
+    .getByRole("button", { name: /^Tags: / })
+    .last()
+    .click();
+  const picker = page.getByRole("combobox", { name: "Filter Tags" });
+  await picker.click();
+  await picker.fill(tag);
+  await page.getByRole("option", { name: tag, exact: true }).click();
+  await picker.click();
+  const filtered = succeedsWith(page, (body) =>
+    body.includes(JSON.stringify([tag])),
+  );
+  await page.getByRole("button", { name: "Apply", exact: true }).click();
+  await filtered;
+  await closePopovers(page);
+  await expect(recipe(tagged)).toBeVisible();
+  await expect(recipe(untagged)).toHaveCount(0);
+
+  // Split into `quick` and `easy`, the reloaded query would match nothing.
+  await reloadAuthenticatedPage(page);
+  await expect(
+    page.getByRole("button", { name: `Tags: ${tag}`, exact: true }),
+  ).toBeVisible();
+  await expect(recipe(tagged)).toBeVisible();
+  await expect(recipe(untagged)).toHaveCount(0);
+});
+
+// Failure mode: landing on the `?parentTaskId=` alias then picking another
+// parent kept two states, and the alias's stale value won the request.
+test("editing Parent task after landing on its deep-link alias", async ({
+  page,
+}, testInfo) => {
+  const task = async (label: string, parentTaskId?: string) => {
+    const name = uniqueName(testInfo, label);
+    const { id } = await createEntityFixture(page, "task", {
+      name,
+      trade: "other",
+      ...(parentTaskId ? { parentTaskId } : {}),
+    });
+    return { id, name };
+  };
+  const parentA = await task("Alias Parent A");
+  const parentB = await task("Alias Parent B");
+  const childA = await task("Alias Child A", parentA.id);
+  const childB = await task("Alias Child B", parentB.id);
+  const row = (name: string) => page.getByRole("link", { name, exact: true });
+
+  await gotoAuthenticatedPage(page, `/tasks?parentTaskId=${parentA.id}`);
+  await expect(row(childA.name)).toBeVisible();
+  await expect(row(childB.name)).toHaveCount(0);
+  // The alias is read into the Parent task filter and the URL moves to its key.
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("parentTask"))
+    .toBe(parentA.id);
+  expect(new URL(page.url()).searchParams.has("parentTaskId")).toBe(false);
+
+  await page
+    .getByRole("button", { name: `Parent task: ${parentA.name}`, exact: true })
+    .click();
+  const picker = page.getByRole("combobox", { name: "Filter Parent task" });
+  for (const parent of [parentA, parentB]) {
+    await picker.click();
+    await picker.fill(parent.name);
+    await page.getByRole("option", { name: parent.name, exact: true }).click();
+  }
+  await picker.click();
+  await page.getByRole("button", { name: "Apply", exact: true }).click();
+  await closePopovers(page);
+
+  await expect(row(childB.name)).toBeVisible();
+  await expect(row(childA.name)).toHaveCount(0);
+  expect(new URL(page.url()).searchParams.get("parentTask")).toBe(parentB.id);
+});

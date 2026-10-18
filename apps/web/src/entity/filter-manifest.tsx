@@ -216,9 +216,9 @@ const isExpressible = (spec: FilterSpec): boolean =>
 /**
  * The specs a list's Filters menu offers beside its columns' own: every
  * declared filter no column hosts, except one whose key the list fixes or
- * hides, and an alias of a filter already offered — the same request field
- * under a deep-link key (`relatedParentTaskId` beside `parentTaskId`) —
- * unless the alias is the one holding a value, so a deep link keeps its chip.
+ * hides, and a declared `aliasOf` (its value decodes into the filter it
+ * aliases). Another spec writing a request field already offered stays out
+ * too, unless it is the one holding a value, so a deep link keeps its chip.
  */
 export const menuOnlyFilterSpecs = (
   specs: readonly FilterSpec[],
@@ -239,6 +239,7 @@ export const menuOnlyFilterSpecs = (
   const menu: FilterSpec[] = [];
   for (const spec of editableFilterSpecs(specs)) {
     if (
+      spec.aliasOf !== undefined ||
       hostedIds.has(spec.columnId) ||
       excludedKeys.has(spec.columnId) ||
       excludedKeys.has(wire(spec)) ||

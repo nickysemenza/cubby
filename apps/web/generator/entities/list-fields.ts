@@ -486,6 +486,7 @@ const toggleDescriptor = (target: CompiledEntity): FilterDescriptor => {
     currentMember: false,
     singleValue: null,
     exclusiveGroup: null,
+    aliasOf: null,
     wire: { kind: "param", name: key },
   };
 };
@@ -660,6 +661,41 @@ const withDerivedOptions = (
           label: value[0]!.toUpperCase() + value.slice(1),
         })),
       };
+
+/**
+ * Two declarations of one request field — a list column's filter and an
+ * older deep-link key for it (task `relatedParentTaskId` beside
+ * `parentTaskId`) — hold one state: the non-column one becomes the column
+ * filter's alias, which the URL codec reads into that state and never writes.
+ */
+const withAliases = (
+  descriptors: readonly FilterDescriptor[],
+  entity: CompiledEntity,
+): FilterDescriptor[] => {
+  const listColumns = new Set(
+    entity.fieldModel.fields
+      .filter((field) => field.display.list)
+      .map((field) => field.display.columnId ?? field.key),
+  );
+  const hosted = (descriptor: FilterDescriptor) =>
+    listColumns.has(descriptor.columnId) ||
+    descriptor.columnId.startsWith("related:");
+  const wire = (descriptor: FilterDescriptor) =>
+    descriptor.field ?? descriptor.columnId;
+  return descriptors.map((descriptor) => {
+    if (hosted(descriptor)) return descriptor;
+    const canonical = descriptors.filter(
+      (peer) =>
+        peer !== descriptor &&
+        hosted(peer) &&
+        peer.kind === descriptor.kind &&
+        wire(peer) === wire(descriptor),
+    );
+    return canonical.length === 1
+      ? { ...descriptor, aliasOf: canonical[0]!.columnId }
+      : descriptor;
+  });
+};
 
 const enumOptions = (
   field: CompiledEntity["fieldModel"]["fields"][number] | undefined,
@@ -1010,7 +1046,7 @@ export const compileListFields = (
         toggles.push(toggle);
     }
     const filterDescriptors = [
-      ...withDistinctMenuLabels(compiled, entity, byKey),
+      ...withAliases(withDistinctMenuLabels(compiled, entity, byKey), entity),
       ...toggles,
     ];
     const urlKeys = filterDescriptors.flatMap(({ urlKey, exclude }) =>

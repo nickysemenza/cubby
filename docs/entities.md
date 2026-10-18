@@ -1517,8 +1517,12 @@ header; a related view's text search is generated as "<Target> search" so it
 never shares a name with the relation's record picker. Every list loads a
 deferred roster for each reference filter (`useEntityList`); a caller's
 `optionsKey` list wins when supplied. A multiselect with nothing to pick
-from takes typed, comma-separated values, split by the same
-`splitFilterList` the URL codec and server builder use.
+from takes typed, comma-separated values. A URL value list escapes a comma
+inside a value (`joinFilterList` / `splitFilterList`), so a picked tag
+`quick, easy` stays one value. Two declarations of one request field — a
+list column's filter and an older deep-link key for it — compile to one
+`aliasOf` the other: the codec decodes the alias into the column filter's
+state and writes only the canonical key.
 `singleValue.group` names scopes that share one value (Email's Purchase,
 Vendor and Vendor account): picking one in the menu replaces the others.
 

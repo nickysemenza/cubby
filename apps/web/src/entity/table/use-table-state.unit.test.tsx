@@ -24,6 +24,8 @@ interface TableSearch {
   productId?: string;
   vendor?: string;
   filters?: string;
+  parentTask?: string;
+  parentTaskId?: string;
 }
 
 type TableSearchKey = keyof TableSearch;
@@ -37,6 +39,8 @@ const TABLE_SEARCH_KEYS: readonly TableSearchKey[] = [
   "productId",
   "vendor",
   "filters",
+  "parentTask",
+  "parentTaskId",
 ];
 
 let searchState: TableSearch = {};
@@ -596,6 +600,44 @@ describe("useTableState — filters no column hosts", () => {
         vendor: "Corner Grocer",
       }),
     );
+  });
+
+  it("edits one state after landing on an alias deep link", async () => {
+    const specs: readonly FilterSpecCore[] = [
+      { columnId: "parentTaskId", kind: "idMulti" },
+      {
+        columnId: "relatedParentTaskId",
+        urlKey: "parentTask",
+        field: "parentTaskId",
+        kind: "idMulti",
+        aliasOf: "parentTaskId",
+      },
+    ];
+    searchState = { parentTask: "TSK-AAAA" };
+    const { result } = await renderHook(() =>
+      useTableState({ filterSpecs: specs, urlSync: true }),
+    );
+    expect(result.current.columnFilters).toEqual([
+      { id: "parentTaskId", value: ["TSK-AAAA"] },
+    ]);
+
+    await act(async () => {
+      result.current.setColumnFilters([
+        { id: "parentTaskId", value: ["TSK-BBBB"] },
+      ]);
+    });
+    await waitFor(() =>
+      expect(tableHarness().search()).toMatchObject({
+        parentTaskId: "TSK-BBBB",
+      }),
+    );
+    expect(tableHarness().search()).not.toHaveProperty("parentTask");
+    expect(
+      buildFiltersFromManifest(
+        specs,
+        filterGetterFromColumnFilters(result.current.columnFilters),
+      ),
+    ).toEqual({ parentTaskId: ["TSK-BBBB"] });
   });
 
   it("follows the URL when navigation changes the scope", async () => {

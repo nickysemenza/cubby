@@ -5,6 +5,7 @@ import {
   FILTER_ANY,
   FILTER_EXACT,
   FILTER_LIST_SEPARATOR,
+  joinFilterList,
   FILTER_NONE,
   FILTER_NOT_PREFIX,
   splitExcluded,
@@ -80,6 +81,12 @@ export interface FilterSpecCore {
    * Vendor and Vendor account): picking one replaces the others.
    */
   exclusiveGroup?: string;
+  /**
+   * The filter this one duplicates under an older deep-link key (task
+   * `relatedParentTaskId` → `parentTaskId`). The codec decodes it into that
+   * filter's state and never writes it, so there is one editable state.
+   */
+  aliasOf?: string;
   /**
    * Marks a picklist as covering a NULLABLE column: the control gains the
    * Any value / No value options below, and the builder routes them to
@@ -167,10 +174,8 @@ const single = (value: FilterValue): string | undefined =>
  * Everything funnels through here so one shape reaches the wire.
  */
 const many = (value: FilterValue): string[] | undefined => {
-  // A typed entry can hold `a, b` before the URL codec splits it.
-  const values = (Array.isArray(value) ? value : value ? [value] : []).flatMap(
-    splitFilterList,
-  );
+  // Picked values pass through whole: a tag may contain a comma.
+  const values = Array.isArray(value) ? value : value ? [value] : [];
   return values.length ? values : undefined;
 };
 
@@ -213,6 +218,8 @@ export function buildFiltersFromManifest(
   };
 
   for (const spec of specs) {
+    // An alias's value lives in its canonical filter's state.
+    if (spec.aliasOf) continue;
     const raw = get(spec.columnId);
     const field = spec.field ?? spec.columnId;
 
@@ -416,8 +423,9 @@ export const soleValue = <T>(value: T | T[] | undefined): T | undefined => {
 // TanStack Router's default `stringifySearch` JSON-encodes a non-string value,
 // which would give `?trade=%5B%22drywall%22%2C...%5D`. There's no custom
 // parseSearch/stringifySearch on this router, so arrays are joined on write and
-// split on read here — uniformly, from the manifest, so no two keys can end up
-// encoding differently.
+// split on read here (`joinFilterList` / `splitFilterList`, which escape a
+// comma inside a value) — uniformly, from the manifest, so no two keys can end
+// up encoding differently.
 
 const LIST_SEPARATOR = FILTER_LIST_SEPARATOR;
 
@@ -516,7 +524,14 @@ export function encodeFilters(
   const folded = new Set(
     specs.flatMap((spec) => (spec.subtree ? [spec.subtree] : [])),
   );
-  for (const spec of specs) {
+  const [aliases, canonical] = partition(specs, (spec) => !!spec.aliasOf);
+  // An alias is read, never written: its own keys clear (the URL moves to
+  // the canonical key), except one it shares with a canonical filter.
+  const canonicalKeys = new Set(canonical.flatMap(ownedUrlKeys));
+  for (const alias of aliases)
+    for (const key of ownedUrlKeys(alias))
+      if (!canonicalKeys.has(key)) params[key] = undefined;
+  for (const spec of canonical) {
     if (folded.has(filterUrlKey(spec))) continue;
     const raw = get(spec.columnId);
     const all = Array.isArray(raw) ? raw : raw ? [raw] : [];
@@ -529,12 +544,10 @@ export function encodeFilters(
     // undefined, never "" — `stripSearchParams` only strips on undefined, so
     // an empty string would stick in the URL forever.
     params[filterUrlKey(spec)] = values.length
-      ? values.join(LIST_SEPARATOR)
+      ? joinFilterList(values)
       : undefined;
     if (exclude)
-      params[exclude] = excluded.length
-        ? excluded.join(LIST_SEPARATOR)
-        : undefined;
+      params[exclude] = excluded.length ? joinFilterList(excluded) : undefined;
     if (spec.subtree)
       params[spec.subtree] =
         exact && (values.length || excluded.length) ? "false" : undefined;
@@ -549,7 +562,12 @@ export function decodeFilters<TSearch extends {}>(
 ): ColumnFilterValue[] {
   const parsedSearch = parseFilterSearch(search);
   const filters: ColumnFilterValue[] = [];
+  const present = new Set(specs.map((spec) => spec.columnId));
   for (const spec of specs) {
+    // An alias decodes into its canonical filter's state when that filter is
+    // in play, merging with any value the canonical key carries.
+    const id =
+      spec.aliasOf && present.has(spec.aliasOf) ? spec.aliasOf : spec.columnId;
     const exclude = excludeKey(spec);
     const excluded = exclude
       ? splitFilterList(parsedSearch[exclude]).map(
@@ -564,17 +582,18 @@ export function decodeFilters<TSearch extends {}>(
     if (first === undefined) continue;
     const exact =
       spec.subtree !== undefined && parsedSearch[spec.subtree] === "false";
-    filters.push({
-      id: spec.columnId,
-      // A multi column always holds an array, even for one value — mixing the
-      // two shapes is what splits the React Query cache. A single value in a
-      // URL or saved view therefore reads as a one-element list.
-      value: isMultiFilterKind(spec.kind)
-        ? exact
-          ? [...parts, FILTER_EXACT]
-          : parts
-        : first,
-    });
+    // A multi column always holds an array, even for one value — mixing the
+    // two shapes is what splits the React Query cache. A single value in a
+    // URL or saved view therefore reads as a one-element list.
+    const value = isMultiFilterKind(spec.kind)
+      ? exact
+        ? [...parts, FILTER_EXACT]
+        : parts
+      : first;
+    const existing = filters.find((filter) => filter.id === id);
+    if (!existing) filters.push({ id, value });
+    else if (Array.isArray(existing.value) && Array.isArray(value))
+      existing.value = [...new Set([...existing.value, ...value])];
   }
   return filters;
 }

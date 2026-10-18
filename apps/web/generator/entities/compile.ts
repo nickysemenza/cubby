@@ -1283,6 +1283,7 @@ const filterDescriptor = (
     currentMember: value.currentMember === true,
     singleValue: value.singleValue?.reason ?? null,
     exclusiveGroup: value.singleValue?.group ?? null,
+    aliasOf: null,
     sentinels: value.sentinels ?? null,
     wire: filterWire(value, parsedKind, range, modelField),
   };
@@ -1958,6 +1959,7 @@ const suggestionFilterDescriptors = (
       currentMember: false,
       singleValue: null,
       exclusiveGroup: null,
+      aliasOf: null,
       wire: { kind: "param", name: "suggestionKind" },
     },
   ];
@@ -2115,6 +2117,7 @@ export const compileEntity = (
           currentMember: false,
           singleValue: null,
           exclusiveGroup: null,
+          aliasOf: null,
           wire: { kind: "range", from: "createdFrom", to: "createdTo" },
         },
         {
@@ -2152,6 +2155,7 @@ export const compileEntity = (
           currentMember: false,
           singleValue: null,
           exclusiveGroup: null,
+          aliasOf: null,
           wire: { kind: "range", from: "updatedFrom", to: "updatedTo" },
         },
       ]

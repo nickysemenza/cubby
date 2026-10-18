@@ -142,6 +142,9 @@ export const renderFilterArtifacts = (
       ...(descriptor.exclusiveGroup === null
         ? []
         : [`exclusiveGroup:${JSON.stringify(descriptor.exclusiveGroup)}`]),
+      ...(descriptor.aliasOf === null
+        ? []
+        : [`aliasOf:${JSON.stringify(descriptor.aliasOf)}`]),
       ...(descriptor.sentinels === null
         ? []
         : [`sentinels:${compactLiteral(descriptor.sentinels)}`]),

@@ -17,6 +17,7 @@ import {
   FILTER_ANY,
   FILTER_NONE,
   filterGetterFromSearch,
+  filterUrlKey,
 } from "./filters";
 import { entitySearch } from "./generated/entity-search.gen";
 
@@ -24,6 +25,8 @@ const VENDOR_ONE = testShortcode("vendor", "VEN-4K7M");
 const VENDOR_TWO = testShortcode("vendor", "VEN-9Q2X");
 const PRODUCT_ID = testShortcode("product", "PRD-4K7M");
 const PURCHASE_ID = testShortcode("purchase", "PUR-4K7M");
+const TASK_ONE = testShortcode("task", "TSK-4K7M");
+const TASK_TWO = testShortcode("task", "TSK-9Q2X");
 
 describe("manifestFilterConfig", () => {
   it("exposes the generated suggestion filter only on entities with suggest targets", () => {
@@ -241,18 +244,27 @@ describe("manifestFilterConfig", () => {
     expect(duplicates).toEqual([]);
   });
 
-  it("offers one menu field per request field, keeping an active alias", () => {
+  it("reads Task's parent deep-link alias into the Parent task filter", () => {
+    // Landing on the alias then picking another parent once kept both
+    // states, and the alias's stale value overwrote the request field.
     const task = getEntityFilters("task");
-    const menu = (activeIds: ReadonlySet<string>) =>
+    const alias = task.find((spec) => spec.columnId === "relatedParentTaskId");
+    expect(alias?.aliasOf).toBe("parentTaskId");
+    const landed = decodeFilters(task, {
+      [alias ? filterUrlKey(alias) : "relatedParentTaskId"]: TASK_ONE,
+    });
+    expect(landed.map(({ id }) => id)).toEqual(["parentTaskId"]);
+    const edited = buildFiltersFromManifest(task, (columnId) =>
+      columnId === "parentTaskId" ? [TASK_TWO] : undefined,
+    );
+    expect(edited).toMatchObject({ parentTaskId: [TASK_TWO] });
+    expect(
       menuOnlyFilterSpecs(task, {
         hostedIds: new Set(["parentTaskId"]),
         excludedKeys: new Set(),
-        activeIds,
-      }).map((spec) => spec.columnId);
-    expect(menu(new Set())).not.toContain("relatedParentTaskId");
-    expect(menu(new Set(["relatedParentTaskId"]))).toContain(
-      "relatedParentTaskId",
-    );
+        activeIds: new Set(["relatedParentTaskId"]),
+      }).map((spec) => spec.columnId),
+    ).not.toContain("relatedParentTaskId");
   });
 
   it("names a related view's text search for the search", () => {

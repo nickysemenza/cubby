@@ -25,16 +25,55 @@ export const excludedFilterValue = (value: string): string | undefined =>
     ? value.slice(FILTER_NOT_PREFIX.length)
     : undefined;
 
-/** The separator a value list's URL param and typed entry share. */
+/** The separator between a value list's items, in its URL param and typed entry. */
 export const FILTER_LIST_SEPARATOR = ",";
+const FILTER_LIST_ESCAPE = "\\";
 
 /**
- * A comma-separated value list as its values: trimmed, empties dropped. The
- * URL codec, typed entry, and server-filter builder all read lists through
- * this, so `ext-a, ext-b` is the same two values however it arrived.
+ * A value list as one URL param. A comma or backslash inside a value is
+ * backslash-escaped, so a picked tag `quick, easy` stays one value.
  */
-export const splitFilterList = (raw: string | undefined): string[] =>
-  (raw ?? "")
+export const joinFilterList = (values: readonly string[]): string =>
+  values
+    .map((value) =>
+      value
+        .replaceAll(
+          FILTER_LIST_ESCAPE,
+          `${FILTER_LIST_ESCAPE}${FILTER_LIST_ESCAPE}`,
+        )
+        .replaceAll(
+          FILTER_LIST_SEPARATOR,
+          `${FILTER_LIST_ESCAPE}${FILTER_LIST_SEPARATOR}`,
+        ),
+    )
+    .join(FILTER_LIST_SEPARATOR);
+
+/**
+ * A URL param back into the values {@link joinFilterList} wrote: split on
+ * unescaped commas, unescaped, trimmed, empties dropped. An unescaped link
+ * (`?tags=a,b`) reads as before.
+ */
+export const splitFilterList = (raw: string | undefined): string[] => {
+  const values: string[] = [];
+  let current = "";
+  const text = raw ?? "";
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index]!;
+    if (char === FILTER_LIST_ESCAPE && index + 1 < text.length) {
+      index += 1;
+      current += text[index];
+    } else if (char === FILTER_LIST_SEPARATOR) {
+      values.push(current);
+      current = "";
+    } else current += char;
+  }
+  values.push(current);
+  return values.map((value) => value.trim()).filter(Boolean);
+};
+
+/** Typed entry (an external id list): every comma separates two values. */
+export const splitTypedList = (raw: string): string[] =>
+  raw
     .split(FILTER_LIST_SEPARATOR)
     .map((part) => part.trim())
     .filter(Boolean);

@@ -4,7 +4,7 @@ import {
   FILTER_EXACT,
   FILTER_LIST_SEPARATOR,
   FILTER_NONE,
-  splitFilterList,
+  splitTypedList,
 } from "@cubby/schemas/filter-sentinel-fields";
 import {
   describeRangeBounds,
@@ -437,8 +437,8 @@ function DateRangeBounds({
 /**
  * A rosterless multiselect (an external id): values typed comma-separated.
  * The input keeps what was typed (spacing, a trailing comma); the filter
- * holds the list `splitFilterList` makes of it, the same list a reload
- * decodes from the URL. Excluded values ride along untouched.
+ * holds the values it separates, which the URL codec writes and a reload
+ * decodes back unchanged. Excluded values ride along untouched.
  */
 function TypedValuesEditor({
   field,
@@ -453,7 +453,7 @@ function TypedValuesEditor({
   const key = values.join(FILTER_LIST_SEPARATOR);
   const [draft, setDraft] = useState(() => values.join(", "));
   // A change from outside (reload, Clear, a saved view) replaces the text.
-  if (splitFilterList(draft).join(FILTER_LIST_SEPARATOR) !== key)
+  if (splitTypedList(draft).join(FILTER_LIST_SEPARATOR) !== key)
     setDraft(values.join(", "));
   const label = field.label ?? field.key;
   return (
@@ -467,7 +467,7 @@ function TypedValuesEditor({
             withSideValues(
               filter?.values ?? [],
               "is",
-              splitFilterList(event.target.value),
+              splitTypedList(event.target.value),
             ),
           );
         }}

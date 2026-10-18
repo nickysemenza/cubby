@@ -1,3 +1,4 @@
+import { splitTypedList } from "@cubby/schemas/filter-sentinel-fields";
 import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -621,22 +622,63 @@ describe("paramToSort / sortToParam", () => {
   });
 });
 
-describe("typed value lists", () => {
-  it("builds the same server values from typed entry and from the URL", () => {
-    // Typed `ext-a, ext-b` once reached the server as one value, while a
-    // reload of the same URL decoded two.
-    const specs = [
-      { columnId: "externalId", kind: "multiselect" },
-    ] as const satisfies readonly FilterSpecCore[];
-    const typed = buildFiltersFromManifest(specs, () => "ext-a, ext-b");
-    const reloaded = buildFiltersFromManifest(
-      specs,
-      filterGetterFromColumnFilters(
-        compileFilterCodec(specs).decode({ externalId: "ext-a,ext-b" }),
-      ),
+describe("value lists in the URL", () => {
+  const specs = [
+    { columnId: "tags", field: "tagFilters", kind: "multiselect" },
+  ] as const satisfies readonly FilterSpecCore[];
+
+  it("keeps a picked value containing a comma whole through URL and reload", () => {
+    // The tag `quick, easy` once reached the server as two tags.
+    const codec = compileFilterCodec(specs);
+    const picked = ["quick, easy", "dinner"];
+    const url = codec.encode((columnId) =>
+      columnId === "tags" ? picked : undefined,
     );
-    expect(typed).toEqual({ externalId: ["ext-a", "ext-b"] });
-    expect(reloaded).toEqual(typed);
+    const reloaded = codec.decode(url);
+    expect(reloaded).toEqual([{ id: "tags", value: picked }]);
+    expect(
+      buildFiltersFromManifest(specs, filterGetterFromColumnFilters(reloaded)),
+    ).toEqual({ tagFilters: picked });
+    expect(buildFiltersFromManifest(specs, () => picked)).toEqual({
+      tagFilters: picked,
+    });
+  });
+
+  it("still splits an unescaped link and typed entry on every comma", () => {
+    expect(compileFilterCodec(specs).decode({ tags: "a, b" })).toEqual([
+      { id: "tags", value: ["a", "b"] },
+    ]);
+    expect(splitTypedList("ext-a, ext-b,")).toEqual(["ext-a", "ext-b"]);
+  });
+});
+
+describe("filter aliases", () => {
+  const specs = [
+    { columnId: "parentTaskId", kind: "idMulti" },
+    {
+      columnId: "relatedParentTaskId",
+      urlKey: "parentTask",
+      field: "parentTaskId",
+      kind: "idMulti",
+      aliasOf: "parentTaskId",
+    },
+  ] as const satisfies readonly FilterSpecCore[];
+
+  it("decodes an alias into its canonical state and writes the canonical key", () => {
+    const codec = compileFilterCodec(specs);
+    expect(codec.decode({ parentTask: "TSK-AAAA" })).toEqual([
+      { id: "parentTaskId", value: ["TSK-AAAA"] },
+    ]);
+    expect(
+      codec.encode((columnId) =>
+        columnId === "parentTaskId" ? ["TSK-BBBB"] : undefined,
+      ),
+    ).toEqual({ parentTaskId: "TSK-BBBB", parentTask: undefined });
+    expect(
+      buildFiltersFromManifest(specs, (columnId) =>
+        columnId === "parentTaskId" ? ["TSK-BBBB"] : ["TSK-AAAA"],
+      ),
+    ).toEqual({ parentTaskId: ["TSK-BBBB"] });
   });
 });
 

@@ -239,6 +239,7 @@ export const compileDataQuality = (
     currentMember: false,
     singleValue: null,
     exclusiveGroup: null,
+    aliasOf: null,
   } as const;
   const statusDescriptor: FilterDescriptor = {
     ...descriptorBase,

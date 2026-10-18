@@ -125,6 +125,11 @@ export type FilterDescriptor = Readonly<{
   singleValue: string | null;
   /** Single-value scopes that share one value between them. */
   exclusiveGroup: string | null;
+  /**
+   * The list-column filter this one duplicates (the same request field
+   * under an older deep-link key); the URL codec reads it into that state.
+   */
+  aliasOf: string | null;
   sentinels: readonly Readonly<{ value: string; label: string }>[] | null;
   wire: FilterWire;
 }>;
