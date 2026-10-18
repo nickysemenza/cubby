@@ -12,7 +12,8 @@ describe("statementTransactionKind", () => {
     ["Balance Adjustments", 3, "adjustment", "rule"],
     ["Financial Fees", 35, "fee", "rule"],
     ["Groceries", 42.1, "purchase", "rule"],
-    ["Groceries", -12, "refund", "rule"],
+    ["Payment", -74.38, "credit_card_payment", "rule"],
+    ["Credit", -12, "refund", "rule"],
     ["Dividends & Capital Gains", -10, "income", "rule"],
   ] as const)("maps %s at %d to %s", (category, amount, kind, source) => {
     expect(
@@ -26,6 +27,17 @@ describe("statementTransactionKind", () => {
     ).toEqual({ kind: "purchase", kindSource: "sign" });
     expect(
       statementTransactionKind({ sourceCategory: null, amount: -20 }),
+    ).toEqual({ kind: "refund", kindSource: "sign" });
+  });
+
+  // A card payment under a provider's own "Payment" category was once read as a
+  // spending refund and offered for bulk acceptance.
+  it("leaves an inflow under an unrecognized category for a label", () => {
+    expect(
+      statementTransactionKind({ sourceCategory: "Groceries", amount: -12 }),
+    ).toEqual({ kind: "refund", kindSource: "sign" });
+    expect(
+      statementTransactionKind({ sourceCategory: "Other", amount: -74.38 }),
     ).toEqual({ kind: "refund", kindSource: "sign" });
   });
 

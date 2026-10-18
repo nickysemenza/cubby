@@ -28,6 +28,9 @@ const CATEGORY_RULES = new Map<string, KindRule>(
     transfers: { kind: "account_transfer" },
     "internal transfer": { kind: "account_transfer" },
     "credit card payment": { kind: "credit_card_payment" },
+    payment: { kind: "credit_card_payment" },
+    payments: { kind: "credit_card_payment" },
+    credit: { kind: "refund", direction: "inflow" },
     "balance adjustments": { kind: "adjustment" },
     "financial fees": { kind: "fee" },
     fees: { kind: "fee" },
@@ -60,7 +63,11 @@ export function statementTransactionKind(input: {
   if (rule && (!rule.direction || rule.direction === direction))
     return { kind: rule.kind, kindSource: "rule" };
   if (rule) return { kind: signKind, kindSource: "sign" };
-  // Any other provider category is a spending category, which settles the
-  // direction's ordinary meaning: a charge is a purchase, a credit a refund.
-  return { kind: signKind, kindSource: "rule" };
+  // Any other category is read as spending, which settles an outflow as a
+  // purchase. An inflow under one may still be a payment, transfer or income
+  // the provider filed under a generic category, so it waits for a label.
+  return {
+    kind: signKind,
+    kindSource: direction === "outflow" ? "rule" : "sign",
+  };
 }
