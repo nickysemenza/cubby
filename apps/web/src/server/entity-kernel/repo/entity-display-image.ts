@@ -49,7 +49,11 @@ import {
 import { displayableImageSql } from "~/server/domains/image/repo/image-displayability";
 import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-read-projection";
 import { previousShortcodesFor } from "~/server/entity-kernel/repo/entity-identity";
-import { compileTraversal } from "~/server/generic/relatedness/repo/traversal";
+import {
+  compileTraversal,
+  inheritedRelationSql,
+  type InheritedRelation,
+} from "~/server/generic/relatedness/repo/traversal";
 import { resolveLiveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { withRecordEmoji } from "./entity-emoji";
@@ -80,7 +84,24 @@ type DisplayBranch = Readonly<{
   entity: Entity;
   branch: SQL;
   usesExpenseProjectRelation: boolean;
+  inheritedRelations: readonly InheritedRelation[];
 }>;
+
+/** One statement-local relation per inherited field a borrowed path follows. */
+const inheritedRelationName = (entity: Entity, field: string) =>
+  `display_inherited_${sourceAlias(entity)}_${sourceAlias(field)}`;
+
+/** Each inherited relation the selected branches use, once. */
+const inheritedRelationsSql = (branches: readonly DisplayBranch[]): SQL => {
+  const relations = new Map(
+    branches
+      .flatMap((branch) => branch.inheritedRelations)
+      .map((relation) => [relation.name, relation]),
+  );
+  return relations.size
+    ? sql`, ${sql.join([...relations.values()].map(inheritedRelationSql), sql`, `)}`
+    : sql``;
+};
 
 const EXPENSE_PROJECT_RELATION = "display_expense_project";
 
@@ -208,12 +229,20 @@ const directStorageBranch = (entity: Entity): SQL | null => {
 const displaySourceBranch = (
   source: DisplaySource,
   index: number,
-): Pick<DisplayBranch, "branch" | "usesExpenseProjectRelation"> => {
+): Pick<
+  DisplayBranch,
+  "branch" | "usesExpenseProjectRelation" | "inheritedRelations"
+> => {
   const traversal = compileTraversal(
     source.entity,
     source.path,
     `display_source_${index}_${sourceAlias(source.entity)}`,
-    { root: "s", leaf: "i", expenseProjectRelation: EXPENSE_PROJECT_RELATION },
+    {
+      root: "s",
+      leaf: "i",
+      expenseProjectRelation: EXPENSE_PROJECT_RELATION,
+      inheritedRelation: inheritedRelationName,
+    },
   );
   const targetImageSteps =
     source.target === "image"
@@ -242,6 +271,7 @@ const displaySourceBranch = (
     : aliasColumn(groupAlias, "createdAt");
   return {
     usesExpenseProjectRelation: traversal.usesExpenseProjectRelation,
+    inheritedRelations: traversal.inheritedRelations,
     branch: sql`
         SELECT i.key, i.shortcode, ${source.priority} AS priority,
                ${groupCreatedAt} AS "groupCreatedAt", ${aliasColumn(groupAlias, "id")} AS "groupId",
@@ -261,7 +291,14 @@ const DISPLAY_BRANCHES: readonly DisplayBranch[] = [
     const branch = directStorageBranch(entity);
     return branch === null
       ? []
-      : [{ entity, branch, usesExpenseProjectRelation: false }];
+      : [
+          {
+            entity,
+            branch,
+            usesExpenseProjectRelation: false,
+            inheritedRelations: [],
+          },
+        ];
   }),
   ...DISPLAY_SOURCES.map((source, index) => ({
     entity: source.entity,
@@ -283,6 +320,7 @@ export const entityDisplayImagePresenceSql = (entity: Entity, id: SQL): SQL => {
           AND e."lineKind" = 'principal' AND e."productId" IS NOT NULL
       )`
     : sql``;
+  const inheritedRelations = inheritedRelationsSql(selected);
   const branches = selected.map(({ branch }) => branch);
   if (entity === "image")
     branches.push(sql`
@@ -294,6 +332,7 @@ export const entityDisplayImagePresenceSql = (entity: Entity, id: SQL): SQL => {
   return sql`EXISTS (
     WITH refs AS (SELECT ${entity}::text AS "entityKind", ${id} AS "entityId")
     ${expenseRelation}
+    ${inheritedRelations}
     SELECT 1 FROM refs JOIN LATERAL (
       ${sql.join(branches, sql` UNION ALL `)}
     ) candidates ON true
@@ -378,6 +417,7 @@ async function resolveDisplayImageListsFromSqlRefs(
   const result = await unwrapDb(db).execute(sql`
     WITH ${refsSql}
     ${expenseProjectRelation}
+    ${inheritedRelationsSql(selectedBranches)}
     SELECT refs."entityKind", refs."entityId"::text AS "entityId", refs."refKey", (
       SELECT COALESCE(
         json_agg(

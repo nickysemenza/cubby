@@ -1,6 +1,6 @@
 import { entityRefKey } from "@cubby/schemas/entity";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -52,6 +52,7 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { taxonomyShortcode } from "../../../../tooling/product-category-fixtures";
 import {
+  entityDisplayImagePresenceSql,
   resolveEntityDisplayImages,
   resolveEntityAttachments,
   withDisplayImages,
@@ -997,6 +998,50 @@ describe("entity display image resolver", () => {
       );
       expect(rows[1]?.displayImages).toEqual([expectedDisplayImage(photo)]);
       expect(rows[2]?.displayImages).toEqual([]);
+    });
+  });
+
+  describe("project through tasks", () => {
+    // An inherited Task project joins through a statement-local effective
+    // relation; a child Task with no project of its own still lends its image
+    // to its parent's project, and never to another project.
+    it("borrows images from tasks whose project is inherited from a parent task", async () => {
+      const owner = await insertWithShortcode(ctx.db, "project", {
+        name: `Task image owner ${crypto.randomUUID()}`,
+      });
+      const unrelated = await insertWithShortcode(ctx.db, "project", {
+        name: `Task image unrelated ${crypto.randomUUID()}`,
+      });
+      const parent = await insertWithShortcode(ctx.db, "task", {
+        name: "Synthetic parent task",
+        projectId: owner.id,
+        projectMode: "explicit",
+      });
+      const child = await insertWithShortcode(ctx.db, "task", {
+        name: "Synthetic inheriting task",
+        parentTaskId: parent.id,
+        projectMode: "inherit",
+      });
+      const photo = await makeImage();
+      await insertEntityAttachments(ctx.db, {
+        entityId: child.id,
+        imageId: photo.id,
+        sortOrder: 0,
+      });
+
+      const rows = await withDisplayImages(
+        ctx.db,
+        "project",
+        [{ id: owner.id }, { id: unrelated.id }],
+        (row) => ({ id: row.id }),
+      );
+      expect(rows[0]?.displayImages).toEqual([expectedDisplayImage(photo)]);
+      expect(rows[1]?.displayImages).toEqual([]);
+      // Image-presence filters read the same inherited relation.
+      const presence = await getDb(ctx.db).execute(sql`SELECT
+        ${entityDisplayImagePresenceSql("project", sql`${owner.id}::uuid`)} AS owner,
+        ${entityDisplayImagePresenceSql("project", sql`${unrelated.id}::uuid`)} AS unrelated`);
+      expect(presence.rows).toEqual([{ owner: true, unrelated: false }]);
     });
   });
 
