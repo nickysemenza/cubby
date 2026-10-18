@@ -129,6 +129,11 @@ photos or member say it is counted, historical, or only a reference. Historical 
 already counted attach evidence without receiving anything; historical intent
 does not record a sale. If receiving is intended but ownership/location is
 unresolved, keep an explicit `unresolvedReason` and ask before approval.
+Never downgrade an intended receive to `evidence` because an `inventory`
+payload was refused: the run page then defaults to reference-only and hides the
+destination. Member ownership needs no ownership fields, so drop
+`ownershipMode`/`ownerPartyId` and resend; if it still fails, keep `receive`
+with the refusal as `unresolvedReason`.
 
 Attaching to an existing Product preserves its fields, existing gallery order,
 and cover. Only explicit `review.productChanges` updates the selected name,
