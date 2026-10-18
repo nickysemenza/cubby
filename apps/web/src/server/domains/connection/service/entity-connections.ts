@@ -20,7 +20,7 @@ import {
 import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import { retrieveConnectionCandidates } from "~/server/domains/connection/repo/connection-candidates";
-import { publishEntityConnection } from "~/server/domains/connection/repo/entity-connections";
+import { prepareEntityConnection } from "~/server/domains/connection/repo/entity-connections";
 import {
   prepareConnectionFieldGuard,
   saveConnectionFieldGuard,
@@ -61,18 +61,24 @@ export async function prepareEntityConnections(
 ) {
   const source = entityGraphRootSchema.parse(raw);
   const publishers: ((transactionDb: Database) => Promise<void>)[] = [];
-  const retrieved = [
-    ...(await retrieveConnectionCandidates(db, source)),
-    ...(await discoverAcquisitionCandidates(db, source)),
-  ];
-  const candidates: ConnectionCandidate[] = [
-    ...new Map(
-      retrieved.map((candidate) => [
-        `${candidate.relation}:${candidate.source.entityId}:${candidate.target.entityId}`,
-        candidate,
-      ]),
-    ).values(),
-  ];
+  const captured = new Set<string>();
+  const captureCandidates = async (
+    candidates: readonly ConnectionCandidate[],
+  ) => {
+    for (const candidate of candidates) {
+      const key = `${candidate.relation}:${candidate.source.entityId}:${candidate.target.entityId}`;
+      if (captured.has(key)) continue;
+      const publish = await prepareEntityConnection(db, candidate);
+      captured.add(key);
+      publishers.push(async (transactionDb) => {
+        await publish(transactionDb);
+      });
+    }
+  };
+  await captureCandidates(await retrieveConnectionCandidates(db, source));
+  // Indexed/semantic retrieval may call a model; preserve earlier candidates first.
+  await captureCandidates(await discoverAcquisitionCandidates(db, source));
+  const candidates: ConnectionCandidate[] = [];
   if (source.entityKind === "expense" || source.entityKind === "inventory") {
     const recommendations = await getEntityRecommendations(db, source);
     for (const group of recommendations.groups) {
@@ -108,10 +114,7 @@ export async function prepareEntityConnections(
           });
     }
   }
-  for (const candidate of candidates)
-    publishers.push(async (transactionDb) => {
-      await publishEntityConnection(transactionDb, candidate);
-    });
+  await captureCandidates(candidates);
   if (source.entityKind === "product") {
     const runId = await ensureRun(db, context.actorContext, {
       purpose: "ai_suggest",

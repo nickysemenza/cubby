@@ -8,6 +8,7 @@ struct EntityRelationshipsSection: View {
     let model: EntityRelationshipsModel
     let onAccepted: (RelationshipAcceptance) -> Void
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(AppModel.self) private var appModel
 
     var body: some View {
         Group {
@@ -74,17 +75,41 @@ struct EntityRelationshipsSection: View {
             }
             .disabled(model.connectionControlsDisabled)
             .accessibilityIdentifier("relationships.findConnections")
+            if let runID = model.discoveryRunID {
+                if model.isFindingConnections {
+                    ProgressView("Discovery Run: \(model.discoveryRunStatus ?? "starting")")
+                }
+                Button("Open discovery Run", systemImage: "arrow.up.right.square") {
+                    appModel.navigator.openRecord(.init(key: .run, id: runID))
+                }
+                .frame(minHeight: FieldGuideTokens.touchTarget)
+                if !model.isFindingConnections, model.discoveryRunStatus != "completed" {
+                    Button("Retry discovery status") { requestConnectionDiscoveryObservation(model: model) }
+                        .disabled(model.connectionControlsDisabled)
+                        .frame(minHeight: FieldGuideTokens.touchTarget)
+                }
+            }
             if let document = model.connectionDocument {
                 if document.proposals.isEmpty {
-                    Text("No pending connections. Find connections to check current evidence.")
-                        .font(.callout).foregroundStyle(.secondary)
+                    Text(
+                        model.isFindingConnections
+                            ? "Discovery is still running. Connections will appear when it finishes."
+                            : "No pending connections. Find connections to check current evidence."
+                    )
+                    .font(.callout).foregroundStyle(.secondary)
                 }
                 ForEach(document.proposals, id: \.review.assessmentId) { proposal in
                     ConnectionProposalRow(proposal: proposal, model: model, onAccepted: onAccepted)
                 }
             }
             if let error = model.connectionError {
-                InlineLoadFailure(message: error) { model.requestRefresh() }
+                InlineLoadFailure(message: error) {
+                    if model.discoveryRunID != nil {
+                        requestConnectionDiscoveryObservation(model: model)
+                    } else {
+                        model.requestRefresh()
+                    }
+                }
             }
         }
     }
@@ -848,6 +873,9 @@ private actor PreviewEntityRelationshipsClient: EntityRelationshipsClient {
     }
     func discoverConnections(_ input: EntityGraphRootInput) async throws -> ConnectionDiscoveryOut {
         try await waitOrThrow()
+    }
+    func discoveryRunSnapshot(runID: RunShortcode) throws -> RunWorkSnapshotOutput {
+        throw URLError(.resourceUnavailable)
     }
     func reviewAssessment(_ input: AssessmentReviewInput) throws -> AssessmentReviewOut {
         throw URLError(.resourceUnavailable)

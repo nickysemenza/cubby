@@ -196,6 +196,7 @@ public struct RelationshipAcceptance: Sendable, Hashable {
 public protocol EntityRelationshipsClient: Sendable {
     func storedConnections(_ input: EntityGraphRootInput) async throws -> ConnectionDiscoveryOut
     func discoverConnections(_ input: EntityGraphRootInput) async throws -> ConnectionDiscoveryOut
+    func discoveryRunSnapshot(runID: RunShortcode) async throws -> RunWorkSnapshotOutput
     func reviewAssessment(_ input: AssessmentReviewInput) async throws -> AssessmentReviewOut
     func exploreRelationships(root: EntityRef, depth: Int) async throws -> EntityGraph
     func relationshipPage(
@@ -226,6 +227,8 @@ public final class EntityRelationshipsModel {
     public private(set) var connectionDocument: ConnectionDiscoveryOut?
     public private(set) var connectionError: String?
     public private(set) var isFindingConnections = false
+    public private(set) var discoveryRunID: RunShortcode?
+    public private(set) var discoveryRunStatus: String?
     public private(set) var reviewingConnectionID: String?
     public private(set) var phase: Phase = .idle
     public private(set) var activity: Activity = .idle
@@ -242,14 +245,20 @@ public final class EntityRelationshipsModel {
     private var acceptTask: Task<RelationshipAcceptance, Error>?
     private var connectionTask: Task<ConnectionDiscoveryOut, Error>?
     private var connectionReviewTask: Task<AssessmentReviewOut, Error>?
+    private var discoveryObservationTask: Task<Void, Error>?
+    private let waitForDiscoveryPoll: @Sendable () async throws -> Void
 
     public init(
         client: any EntityRelationshipsClient,
         initialGraph: EntityGraph? = nil,
         initialRecommendations: EntityRecommendationsOut? = nil,
-        initialConnections: ConnectionDiscoveryOut? = nil
+        initialConnections: ConnectionDiscoveryOut? = nil,
+        waitForDiscoveryPoll: @escaping @Sendable () async throws -> Void = {
+            try await Task.sleep(for: .seconds(3))
+        }
     ) {
         self.client = client
+        self.waitForDiscoveryPoll = waitForDiscoveryPoll
         graph = initialGraph
         recommendationDocument = initialRecommendations
         connectionDocument = initialConnections
@@ -306,6 +315,8 @@ public final class EntityRelationshipsModel {
         let generation = requestGeneration
         isFindingConnections = true
         connectionError = nil
+        discoveryRunID = nil
+        discoveryRunStatus = nil
         let client = client
         let task = Task {
             try Task.checkCancellation()
@@ -324,6 +335,10 @@ public final class EntityRelationshipsModel {
                 throw ConnectionReviewError.sourceMismatch
             }
             connectionDocument = document
+            if let runID = document.discoveryRunId {
+                discoveryRunID = runID
+                try await observeDiscoveryRun(runID: runID, source: source, generation: generation)
+            }
         } catch is CancellationError {
             // Navigation and source changes do not surface as failures.
         } catch {
@@ -332,6 +347,66 @@ public final class EntityRelationshipsModel {
         if generation == requestGeneration {
             connectionTask = nil
             isFindingConnections = false
+        }
+    }
+
+    /// Retries observation of the existing durable work without starting another discovery Run.
+    public func retryConnectionDiscoveryObservation() async {
+        guard !connectionControlsDisabled, let runID = discoveryRunID, let source else { return }
+        let generation = requestGeneration
+        isFindingConnections = true
+        connectionError = nil
+        do {
+            try await observeDiscoveryRun(runID: runID, source: source, generation: generation)
+        } catch is CancellationError {
+            // The detail no longer owns observation.
+        } catch {
+            if generation == requestGeneration { connectionError = error.userMessage }
+        }
+        if generation == requestGeneration { isFindingConnections = false }
+    }
+
+    private func observeDiscoveryRun(runID: RunShortcode, source: EntityRef, generation: Int) async throws {
+        let task = Task {
+            while true {
+                try Task.checkCancellation()
+                let snapshot = try await client.discoveryRunSnapshot(runID: runID)
+                try Task.checkCancellation()
+                guard generation == requestGeneration, self.source == source else {
+                    throw CancellationError()
+                }
+                guard snapshot.runId == runID else { throw ConnectionReviewError.discoveryRunMismatch }
+                discoveryRunStatus = snapshot.status.rawValue
+                if snapshot.status != .running {
+                    let document = try await client.storedConnections(source.graphRootInput)
+                    try Task.checkCancellation()
+                    guard generation == requestGeneration, self.source == source else {
+                        throw CancellationError()
+                    }
+                    guard EntityRef(document.source) == source else {
+                        throw ConnectionReviewError.sourceMismatch
+                    }
+                    connectionDocument = document
+                    guard snapshot.status == .completed else {
+                        let errors = snapshot.operations.compactMap(\.error)
+                        throw ConnectionReviewError.discoveryStopped(
+                            (["Discovery Run \(runID) stopped with status \(snapshot.status.rawValue)."]
+                                + errors)
+                                .joined(separator: "\n"))
+                    }
+                    return
+                }
+                try await waitForDiscoveryPoll()
+            }
+        }
+        discoveryObservationTask = task
+        defer {
+            if generation == requestGeneration { discoveryObservationTask = nil }
+        }
+        try await withTaskCancellationHandler {
+            try await task.value
+        } onCancel: {
+            task.cancel()
         }
     }
 
@@ -512,6 +587,10 @@ public final class EntityRelationshipsModel {
         cancelRequests()
         requestGeneration += 1
         let generation = requestGeneration
+        if self.source != source {
+            discoveryRunID = nil
+            discoveryRunStatus = nil
+        }
         self.source = source
         graphError = nil
         recommendationError = nil
@@ -592,6 +671,9 @@ public final class EntityRelationshipsModel {
         } else {
             phase = .loaded
         }
+        if discoveryRunStatus == "running", discoveryRunID != nil {
+            await retryConnectionDiscoveryObservation()
+        }
     }
 
     private func cancelRequests() {
@@ -600,12 +682,14 @@ public final class EntityRelationshipsModel {
         acceptTask?.cancel()
         connectionTask?.cancel()
         connectionReviewTask?.cancel()
+        discoveryObservationTask?.cancel()
         graphTask = nil
         recommendationTask = nil
         acceptTask = nil
         acceptingRecommendationID = nil
         connectionTask = nil
         connectionReviewTask = nil
+        discoveryObservationTask = nil
         isFindingConnections = false
         reviewingConnectionID = nil
     }
@@ -623,7 +707,8 @@ extension ConnectionProposal {
 }
 
 private enum ConnectionReviewError: LocalizedError {
-    case sourceMismatch, notApplied, missingApplicationResult, invalidApplicationResult
+    case sourceMismatch, notApplied, missingApplicationResult, invalidApplicationResult, discoveryRunMismatch
+    case discoveryStopped(String)
     var errorDescription: String? {
         switch self {
         case .sourceMismatch: "Connection response source does not match the requested record."
@@ -631,6 +716,8 @@ private enum ConnectionReviewError: LocalizedError {
         case .missingApplicationResult: "Inventory connection review returned no applicationResult."
         case .invalidApplicationResult:
             "Assessment applicationResult does not match the reviewed connection endpoints."
+        case .discoveryRunMismatch: "Run status response does not match the connection discovery Run."
+        case .discoveryStopped(let message): message
         }
     }
 }

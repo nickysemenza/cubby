@@ -32,6 +32,13 @@ import { captureEmailConnectionBasis } from "./email-connections";
 
 const relevantFields = new Map<string, readonly string[]>(
   Object.entries({
+    email: [
+      "checksum",
+      "orderMailId",
+      "ledgerPartyId",
+      "receivedAt",
+      "subject",
+    ],
     product: [
       "name",
       "manufacturer",

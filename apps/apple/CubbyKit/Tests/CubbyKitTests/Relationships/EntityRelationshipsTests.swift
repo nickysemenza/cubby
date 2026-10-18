@@ -311,6 +311,10 @@ struct EntityRelationshipsTests {
 }
 
 private actor RelationshipClientStub: EntityRelationshipsClient {
+    func discoveryRunSnapshot(runID: RunShortcode) throws -> RunWorkSnapshotOutput {
+        throw URLError(.unsupportedURL)
+    }
+
     func storedConnections(_ input: EntityGraphRootInput) async throws -> ConnectionDiscoveryOut {
         if shouldFail { throw URLError(.notConnectedToInternet) }
         return .init(source: .init(entityKind: input.entityKind, entityId: input.entityId), proposals: [])
@@ -355,6 +359,10 @@ private actor RelationshipClientStub: EntityRelationshipsClient {
 }
 
 private actor SuspendedRelationshipClient: EntityRelationshipsClient {
+    func discoveryRunSnapshot(runID: RunShortcode) throws -> RunWorkSnapshotOutput {
+        throw URLError(.unsupportedURL)
+    }
+
     func storedConnections(_ input: EntityGraphRootInput) async throws -> ConnectionDiscoveryOut {
         return .init(source: .init(entityKind: input.entityKind, entityId: input.entityId), proposals: [])
     }
@@ -402,6 +410,10 @@ private actor SuspendedRelationshipClient: EntityRelationshipsClient {
 }
 
 private actor SuspendedAcceptanceClient: EntityRelationshipsClient {
+    func discoveryRunSnapshot(runID: RunShortcode) throws -> RunWorkSnapshotOutput {
+        throw URLError(.unsupportedURL)
+    }
+
     func storedConnections(_ input: EntityGraphRootInput) async throws -> ConnectionDiscoveryOut {
         return .init(source: .init(entityKind: input.entityKind, entityId: input.entityId), proposals: [])
     }
@@ -446,6 +458,10 @@ private actor SuspendedAcceptanceClient: EntityRelationshipsClient {
 }
 
 private actor RetryingAcceptanceClient: EntityRelationshipsClient {
+    func discoveryRunSnapshot(runID: RunShortcode) throws -> RunWorkSnapshotOutput {
+        throw URLError(.unsupportedURL)
+    }
+
     func storedConnections(_ input: EntityGraphRootInput) async throws -> ConnectionDiscoveryOut {
         return .init(source: .init(entityKind: input.entityKind, entityId: input.entityId), proposals: [])
     }
@@ -508,6 +524,10 @@ private actor RetryingAcceptanceClient: EntityRelationshipsClient {
 }
 
 private actor MergedInventoryAcceptanceClient: EntityRelationshipsClient {
+    func discoveryRunSnapshot(runID: RunShortcode) throws -> RunWorkSnapshotOutput {
+        throw URLError(.unsupportedURL)
+    }
+
     func storedConnections(_ input: EntityGraphRootInput) async throws -> ConnectionDiscoveryOut {
         return .init(source: .init(entityKind: input.entityKind, entityId: input.entityId), proposals: [])
     }

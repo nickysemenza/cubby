@@ -1,16 +1,26 @@
 import type { Entity, EntityRef } from "@cubby/schemas/entity";
 import type { ConnectionProposal } from "@cubby/schemas/entity-connections";
 import { entitySummary } from "@cubby/schemas/entity-summary";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
+  parseShortcodeFor,
+  type RunShortcode,
+} from "@cubby/schemas/identifiers";
 import { parseShortcode } from "@cubby/shared";
 import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
 import {
   useQueries,
   useQuery,
+  useQueryClient,
   type UseQueryResult,
 } from "@tanstack/react-query";
 import { Link, useRouter } from "@tanstack/react-router";
-import { createContext, useContext, useMemo, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  type ReactNode,
+} from "react";
 import { z } from "zod";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
@@ -20,10 +30,13 @@ import {
   isBrowserRoutedEntity,
 } from "~/entity/entities";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   assessment,
   connection,
+  run,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -251,6 +264,43 @@ export function ConnectionReviewRows({
   );
 }
 
+function ConnectionDiscoveryProgress({ runId }: { runId: RunShortcode }) {
+  const queryClient = useQueryClient();
+  const status = useQuery({
+    ...run.workSnapshot.queryOptions({ runId }),
+    refetchInterval: (query) =>
+      query.state.data?.status === "running" ? 3000 : false,
+  });
+  const current = status.data?.status;
+  useEffect(() => {
+    if (current && current !== "running")
+      void invalidateOperationTags(queryClient, ripple.connections);
+  }, [current, queryClient]);
+  return (
+    <Stack gap="xs">
+      <p className="text-sm text-muted-foreground">
+        Connection discovery: {current ?? "loading"}.{" "}
+        <Link to="/runs/$shortcode" params={{ shortcode: runId }}>
+          Open Run
+        </Link>
+      </p>
+      {status.error && (
+        <ErrorDisplay error={status.error} title="connection discovery Run" />
+      )}
+      {(status.error ||
+        (current && current !== "running" && current !== "completed")) && (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => void status.refetch()}
+        >
+          Refresh discovery status
+        </Button>
+      )}
+    </Stack>
+  );
+}
+
 export function ConnectionSuggestions({ source }: { source: EntityRef }) {
   const query = useQuery(connection.read.queryOptions(source));
   const discover = useActionMutation({
@@ -290,10 +340,7 @@ export function ConnectionSuggestions({ source }: { source: EntityRef }) {
         <ErrorDisplay error={discover.error} title="connection discovery" />
       )}
       {discover.data?.discoveryRunId && (
-        <p className="text-sm text-muted-foreground">
-          Connection discovery queued. Results appear when the background run
-          completes.
-        </p>
+        <ConnectionDiscoveryProgress runId={discover.data.discoveryRunId} />
       )}
     </Stack>
   );

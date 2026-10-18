@@ -39,12 +39,12 @@ describe("connection application through generic Feedback", () => {
     );
     const origin = await createLocationFixture(
       ctx.db,
-      { name: "Synthetic origin", type: "room" },
+      { name: "Synthetic origin", type: "room", aliases: [] },
       ctx.actor,
     );
     const destination = await createLocationFixture(
       ctx.db,
-      { name: "Synthetic destination", type: "room" },
+      { name: "Synthetic destination", type: "room", aliases: [] },
       ctx.actor,
     );
     const sourceStock = await createInventoryFixture(
@@ -163,13 +163,11 @@ describe("connection application through generic Feedback", () => {
       postedDate: "2026-09-03",
       merchant: "Synthetic tools",
     });
-    await getDb(ctx.db)
-      .insert(financialTransactionAllocation)
-      .values({
-        transactionId: transaction.entityId,
-        purchaseId: prior.entityId,
-        amount: 70,
-      });
+    await getDb(ctx.db).insert(financialTransactionAllocation).values({
+      transactionId: transaction.entityId,
+      purchaseId: prior.entityId,
+      amount: 70,
+    });
     const before = await getDb(ctx.db)
       .select()
       .from(financialTransactionAllocation);

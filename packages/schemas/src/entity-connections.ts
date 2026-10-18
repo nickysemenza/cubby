@@ -9,6 +9,7 @@ import { entitySchema } from "./entity-core";
 import { edgeRoleSchema, operationDispositionSchema } from "./entity-integrity";
 import { shortcodeEntities } from "./entity-manifest";
 import { anyShortcodeSchema, nonEmptyTuple } from "./identifier-fields";
+import { runShortcode } from "./identifiers";
 
 /**
  * One-hop physical connections of an entity, read from the generated
@@ -157,5 +158,5 @@ export const connectionAssessmentEvidence = z.object({
 export const connectionDiscoveryOut = z.object({
   source: entityGraphRootSchema,
   proposals: z.array(connectionProposal),
-  discoveryRunId: z.uuid().nullable().optional(),
+  discoveryRunId: runShortcode.nullable().optional(),
 });

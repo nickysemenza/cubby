@@ -1,3 +1,5 @@
+import { parseEntityRef, runShortcode } from "@cubby/schemas/identifiers";
+
 import { connectionContract } from "~/contracts/connection.contract";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import {
@@ -5,6 +7,7 @@ import {
   readEntityConnectionsBatch,
 } from "~/server/domains/connection/repo/entity-connections";
 import { scheduleConnectionRefresh } from "~/server/domains/run/repo/connection-refresh";
+import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 
 export const connectionHandlers = implementOperationDomain(connectionContract, {
@@ -25,7 +28,13 @@ export const connectionHandlers = implementOperationDomain(connectionContract, {
       throw new Error(
         "Connection discovery requires an active AI refresh generation",
       );
-    const discoveryRunId = await scheduleConnectionRefresh(context.db, source);
+    const runId = await scheduleConnectionRefresh(context.db, source);
+    const codes = runId
+      ? await lookupShortcodes(context.db, [parseEntityRef("run", runId)])
+      : new Map<string, string>();
+    const discoveryRunId = runId
+      ? runShortcode.parse(codes.get(`run:${runId}`))
+      : null;
     return {
       source,
       proposals: await readEntityConnections(context.db, source),

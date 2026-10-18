@@ -9,8 +9,94 @@ import Testing
 // Inventory confirmation can coalesce away its source. Its persisted application result must
 // replace the Inventory detail without reading the deleted row; a Location endpoint must stay
 // on Location and refresh. Missing/mismatched results must not guess a survivor or navigate.
+// Durable discovery can outlive its HTTP response: keep observing its public Run until stopped,
+// then reread stored proposals. Dismissal/source changes stop observation and discard late results.
 @Suite("Connection review", .timeLimit(.minutes(1)))
 struct ConnectionReviewTests {
+    @Test @MainActor func slowDiscoveryPublishesStoredCandidatesAfterRunCompletion() async throws {
+        let polls = Gate()
+        let client = ConnectionClient(
+            discoveryRunStatuses: Array(repeating: .running, count: 12) + [.completed])
+        let model = EntityRelationshipsModel(client: client, waitForDiscoveryPoll: { try await polls.pass() })
+        await model.loadInitial(source: ConnectionClient.expense)
+        let discovery = Task { await model.findConnections() }
+        for count in 1...12 {
+            await polls.arrivals(count)
+            #expect(model.isFindingConnections)
+            #expect(model.discoveryRunID == "RUN-2345")
+            #expect(model.connectionDocument?.proposals.isEmpty == true)
+            polls.release()
+        }
+        await discovery.value
+        #expect(model.connectionDocument?.proposals.count == 1)
+        #expect(model.discoveryRunStatus == "completed")
+        #expect(!model.isFindingConnections)
+        #expect(await client.runSnapshots == 13)
+        #expect(await client.reads == 2)
+    }
+
+    @Test @MainActor func failedRunExposesDiagnosticsAndRetryObservesSameRun() async throws {
+        let client = ConnectionClient(discoveryRunStatuses: [.failed, .completed])
+        let model = EntityRelationshipsModel(client: client)
+        await model.loadInitial(source: ConnectionClient.expense)
+        await model.findConnections()
+        #expect(model.connectionError?.contains("SQLSTATE 23505") == true)
+        #expect(!model.connectionControlsDisabled)
+        #expect(model.discoveryRunID == "RUN-2345")
+        await model.retryConnectionDiscoveryObservation()
+        #expect(model.connectionError == nil)
+        #expect(model.connectionDocument?.proposals.count == 1)
+        #expect(await client.discoveries == 1)
+        #expect(await client.runSnapshots == 2)
+    }
+
+    @Test @MainActor func dismissCancelsDiscoveryWaitWithoutFurtherRunReads() async throws {
+        let polls = Gate()
+        let client = ConnectionClient(discoveryRunStatuses: [.running, .completed])
+        let model = EntityRelationshipsModel(client: client, waitForDiscoveryPoll: { try await polls.pass() })
+        await model.loadInitial(source: ConnectionClient.expense)
+        let discovery = Task { await model.findConnections() }
+        await polls.arrivals()
+        model.cancel()
+        await discovery.value
+        #expect(await client.runSnapshots == 1)
+        #expect(await client.reads == 1)
+        #expect(!model.isFindingConnections)
+        #expect(model.connectionError == nil)
+    }
+
+    @Test @MainActor func lateDiscoverySnapshotCannotReplaceNewSource() async throws {
+        let snapshots = Gate()
+        let client = ConnectionClient(discoveryRunStatuses: [.completed], snapshotGate: snapshots)
+        let model = EntityRelationshipsModel(client: client)
+        await model.loadInitial(source: ConnectionClient.expense)
+        let discovery = Task { await model.findConnections() }
+        await snapshots.arrivals()
+        await model.loadInitial(source: ConnectionClient.project)
+        snapshots.open()
+        await discovery.value
+        #expect(model.source == ConnectionClient.project)
+        #expect(model.connectionDocument?.source.entityId == ConnectionClient.project.id)
+        #expect(model.discoveryRunID == nil)
+        #expect(await client.reads == 2)
+    }
+
+    @Test(arguments: [false, true])
+    @MainActor func emailReplacementReasonIsConfirmableWhileContradictionsRemainBlocked(conflict: Bool)
+        async throws
+    {
+        let client = ConnectionClient()
+        var proposal = try ConnectionClient.proposal(kind: "email-link-review")
+        proposal.label = "Replace reviewed Email purchase link"
+        proposal.evidence.reasons = ["Replaces the previously reviewed purchase link"]
+        proposal.evidence.contradictions = conflict ? ["Conflicting order number"] : []
+        let model = EntityRelationshipsModel(
+            client: client, initialConnections: .init(source: proposal.source, proposals: [proposal]))
+        let accepted = await model.reviewConnection(proposal, verdict: .correct)
+        #expect(accepted == !conflict)
+        #expect(await client.reviews.count == (conflict ? 0 : 1))
+    }
+
     @Test @MainActor func mergedInventoryUsesExistingReplacementCallbackWithoutRefreshingDeletedSource()
         async throws
     {
@@ -264,11 +350,15 @@ private actor ConnectionClient: EntityRelationshipsClient {
     let proposalKind: String
     let inventoryMode: Bool
     let inventoryDestination: EntityRef?
+    var discoveryRunStatuses: [RunStatus]
+    let snapshotGate: Gate?
+    var runSnapshots = 0
 
     init(
         discoveryGate: Gate? = nil, reviewGate: Gate? = nil, readGate: Gate? = nil,
         failDiscovery: Bool = false, proposalKind: String = "connection-review",
-        inventoryMode: Bool = false, inventoryDestination: EntityRef? = nil
+        inventoryMode: Bool = false, inventoryDestination: EntityRef? = nil,
+        discoveryRunStatuses: [RunStatus] = [], snapshotGate: Gate? = nil
     ) {
         self.discoveryGate = discoveryGate
         self.reviewGate = reviewGate
@@ -277,6 +367,8 @@ private actor ConnectionClient: EntityRelationshipsClient {
         self.proposalKind = proposalKind
         self.inventoryMode = inventoryMode
         self.inventoryDestination = inventoryDestination
+        self.discoveryRunStatuses = discoveryRunStatuses
+        self.snapshotGate = snapshotGate
     }
 
     func storedConnections(_ input: EntityGraphRootInput) async throws -> ConnectionDiscoveryOut {
@@ -289,7 +381,31 @@ private actor ConnectionClient: EntityRelationshipsClient {
         discoveries += 1
         if let discoveryGate { await discoveryGate.hold() }
         if failDiscovery { throw FixtureError() }
-        return try document(input)
+        var result = try document(input)
+        if !discoveryRunStatuses.isEmpty {
+            result.discoveryRunId = "RUN-2345"
+            result.proposals = []
+        }
+        return result
+    }
+
+    func discoveryRunSnapshot(runID: RunShortcode) async throws -> RunWorkSnapshotOutput {
+        runSnapshots += 1
+        if let snapshotGate { await snapshotGate.hold() }
+        let status = try #require(discoveryRunStatuses.first)
+        if discoveryRunStatuses.count > 1 { discoveryRunStatuses.removeFirst() }
+        return .init(
+            runId: runID, purpose: .aiRefresh, status: status, startedAt: .distantPast,
+            endedAt: status == .running ? nil : .distantPast,
+            coordinatorModel: nil, agentModelMs: 0, ordersSeen: 0, imported: 0, updated: 0,
+            skipped: 0, findings: [], targetsTotal: 0, targetsCompleted: 0, targets: [], progress: [],
+            operations: status == .failed
+                ? [
+                    .init(
+                        kind: "discovery", state: "failed", startedAt: .distantPast,
+                        completedAt: .distantPast, error: "SQLSTATE 23505: synthetic discovery failure")
+                ]
+                : [])
     }
 
     func reviewAssessment(_ input: AssessmentReviewInput) async throws -> AssessmentReviewOut {

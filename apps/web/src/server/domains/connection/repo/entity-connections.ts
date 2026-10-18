@@ -42,6 +42,10 @@ import {
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
+import {
+  acquisitionPairEligible,
+  expenseConnectionEligible,
+} from "./connection-candidates";
 import { captureConnectionBasis } from "./connection-evidence";
 import { applyEmailConnection } from "./email-connections";
 import { readExistingConnectionAssessments } from "./existing-assessments";
@@ -55,13 +59,43 @@ const keyFor = (candidate: ConnectionCandidate) =>
     sourceKey(candidate.target),
   ]);
 
+/** Capture candidate evidence before later inference; no proposal is published here. */
+export async function prepareEntityConnection(
+  db: Database,
+  raw: ConnectionCandidate,
+) {
+  const candidate = connectionCandidate.parse(raw);
+  const prepared = connectionAssessmentEvidence.parse({
+    version: 1,
+    candidate,
+    basis: await captureConnectionBasis(db, candidate),
+  });
+  await assertAcquisitionConnectionEligible(db, candidate);
+  return (transactionDb: Database) =>
+    publishPreparedEntityConnection(transactionDb, prepared);
+}
+
+/** Immediate callers still capture their basis before entering publication locks. */
 export async function publishEntityConnection(
   db: Database,
   raw: ConnectionCandidate,
 ): Promise<ConnectionProposal> {
-  const candidate = connectionCandidate.parse(raw);
+  const publish = await prepareEntityConnection(db, raw);
+  return publish(db);
+}
+
+async function publishPreparedEntityConnection(
+  db: Database,
+  prepared: z.infer<typeof connectionAssessmentEvidence>,
+): Promise<ConnectionProposal> {
+  const { candidate } = prepared;
   return withTransactionDatabase(db, async (db) => {
     const basis = await captureConnectionBasis(db, candidate, true);
+    if (canonicalJson(basis) !== canonicalJson(prepared.basis))
+      throw new Error(
+        "Connection evidence changed after candidate retrieval; discover again before publishing",
+      );
+    await assertAcquisitionConnectionEligible(db, candidate);
     if (
       candidate.relation === "email-purchase" &&
       !z
@@ -334,6 +368,7 @@ export async function applyEntityConnection(
       throw new Error(
         "Connection evidence changed; discover again before applying",
       );
+    await assertAcquisitionConnectionEligible(db, candidate);
     const actor = context.actorContext;
     switch (candidate.relation) {
       case "email-purchase":
@@ -473,4 +508,29 @@ export async function applyEntityConnection(
         );
     }
   });
+}
+
+/** A matching snapshot never authorizes replacing an existing acquisition decision. */
+async function assertAcquisitionConnectionEligible(
+  db: Database,
+  candidate: ConnectionCandidate,
+): Promise<void> {
+  if (
+    candidate.relation === "product-expense" &&
+    !(await expenseConnectionEligible(db, candidate.target.entityId))
+  )
+    throw new Error(
+      "Connection Expense is no longer eligible for acquisition or is already assigned to a Product",
+    );
+  if (
+    candidate.relation === "product-purchase" &&
+    !(await acquisitionPairEligible(
+      db,
+      candidate.source.entityId,
+      candidate.target.entityId,
+    ))
+  )
+    throw new Error(
+      "Connection Product/Purchase pair is no longer eligible because acquisition is already recorded",
+    );
 }

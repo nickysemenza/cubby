@@ -6,6 +6,11 @@ func requestConnectionDiscovery(model: EntityRelationshipsModel) {
 }
 
 @MainActor
+func requestConnectionDiscoveryObservation(model: EntityRelationshipsModel) {
+    Task { await model.retryConnectionDiscoveryObservation() }
+}
+
+@MainActor
 func requestConnectionReview(
     model: EntityRelationshipsModel,
     proposal: ConnectionProposal,

@@ -6,13 +6,22 @@ import {
 import { entitySchema, type EntityRef } from "@cubby/schemas/entity";
 import { searchableEntities } from "@cubby/schemas/search";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, asc, gt, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, ne, sql } from "drizzle-orm";
 
 import { dependencyStamps } from "~/server/ai/policy/refresh-manifest";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
-import { entityIdentity, searchDocument } from "~/server/db/schema";
+import {
+  entityIdentity,
+  searchDocument,
+  orderMail,
+  orderMailEvent,
+  assessmentEmailLink,
+  importSourceOrder,
+  run,
+  aiEvaluation,
+} from "~/server/db/schema";
 import { connectionRecord } from "~/server/domains/connection/repo/connection-evidence";
 import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
 import { refreshSearchDocuments } from "~/server/generic/search/repo/search-document";
@@ -66,7 +75,7 @@ export async function scheduleConnectionRefresh(
     assessmentIds: [],
   });
   const key = await sha256Hex(JSON.stringify([target, provenance]));
-  return scheduleEvaluationRun(
+  const scheduled = await scheduleEvaluationRun(
     db,
     systemActor(),
     {
@@ -78,6 +87,21 @@ export async function scheduleConnectionRefresh(
     },
     [{ target, provenance, snapshot: source }],
   );
+  if (scheduled) return scheduled;
+  const [existing] = await getDb(db)
+    .select({ id: run.id })
+    .from(run)
+    .innerJoin(aiEvaluation, eq(aiEvaluation.runId, run.id))
+    .where(
+      and(
+        eq(run.clientKey, `ai-refresh:connection:${key}`),
+        ne(run.status, "completed"),
+        ne(aiEvaluation.state, "completed"),
+        notDeleted(run),
+      ),
+    )
+    .limit(1);
+  return existing?.id ?? null;
 }
 
 export async function connectionSourceFingerprint(
@@ -107,11 +131,22 @@ export async function connectionSourceFingerprint(
     })
     .from(entityIdentity)
     .where(inArray(entityIdentity.kind, [...discoveryEntities]));
+  const [mail] = await getDb(db)
+    .select({
+      fingerprint: sql<string>`md5(jsonb_build_array(
+    (SELECT coalesce(jsonb_agg(jsonb_build_array(o.id, o."ledgerPartyId", o."vendorId", o."rawChecksum") ORDER BY o.id), '[]'::jsonb) FROM ${orderMail} o),
+    (SELECT coalesce(jsonb_agg(jsonb_build_array(e.id, e."orderMailId", e.event, e."orderId", e.amount, e."sourceKey", e."supersededAt") ORDER BY e.id), '[]'::jsonb) FROM ${orderMailEvent} e),
+    (SELECT coalesce(jsonb_agg(jsonb_build_array(l.id, l."eventId", l."purchaseId", l.decision, l."evidenceChecksum") ORDER BY l.id), '[]'::jsonb) FROM ${assessmentEmailLink} l),
+    (SELECT coalesce(jsonb_agg(jsonb_build_array(a.id, a."sourceClaimId", a."purchaseId", a.checksum) ORDER BY a.id), '[]'::jsonb) FROM ${importSourceOrder} a)
+  )::text)`,
+    })
+    .from(sql`(SELECT 1) AS connection_mail_roster`);
   return sha256Hex(
     canonicalJson({
       source: record.row,
       roster: roster?.fingerprint ?? null,
       identities: identities?.fingerprint ?? null,
+      mail: mail?.fingerprint ?? null,
     }),
   );
 }

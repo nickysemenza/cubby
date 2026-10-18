@@ -1,3 +1,4 @@
+import { sha256Hex } from "@cubby/shared/sha256";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -12,8 +13,13 @@ import {
   expense,
 } from "~/server/db/schema";
 import { discoverAcquisitionCandidates } from "~/server/domains/connection/service/acquisition-discovery";
+import { confirmPurchaseAcquisition } from "~/server/domains/purchase/repo/purchase-products";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
-import { recordFeedback } from "~/server/generic/assessment/repo/assessment";
+import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
+import {
+  publishAssessment,
+  recordFeedback,
+} from "~/server/generic/assessment/repo/assessment";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
 import {
@@ -21,6 +27,7 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
+import { captureConnectionBasis } from "./connection-evidence";
 import {
   publishEntityConnection,
   readEntityConnections,
@@ -57,6 +64,140 @@ describe("stored connection evidence", () => {
     const proposal = await publishEntityConnection(ctx.db, candidate);
     return { item, charge, candidate, proposal };
   }
+
+  it("refuses direct publication for an Expense already assigned to another Product", async () => {
+    const { candidate, charge } = await fixture();
+    const other = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic prior owner" }),
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(expense)
+      .set({ productId: other.entityId })
+      .where(eq(expense.id, charge.entityId));
+    await expect(publishEntityConnection(ctx.db, candidate)).rejects.toThrow(
+      /eligible|already assigned/i,
+    );
+    expect(
+      (
+        await getDb(ctx.db)
+          .select({ productId: expense.productId })
+          .from(expense)
+          .where(eq(expense.id, charge.entityId))
+      )[0]?.productId,
+    ).toBe(other.entityId);
+  });
+
+  it("does not let a fresh forged basis authorize replacing an assignment or reconfirming an acquired pair", async () => {
+    const { candidate, charge, item, proposal } = await fixture();
+    const other = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic protected owner" }),
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(expense)
+      .set({ productId: other.entityId })
+      .where(eq(expense.id, charge.entityId));
+    const [original] = await getDb(ctx.db)
+      .select()
+      .from(assessment)
+      .where(eq(assessment.id, proposal.review.assessmentId));
+    if (!original) throw new Error("Synthetic original Assessment is missing");
+    const evidence = {
+      version: 1,
+      candidate,
+      basis: await captureConnectionBasis(ctx.db, candidate),
+    };
+    const fingerprint = await sha256Hex(canonicalJson(evidence));
+    const forged = await publishAssessment(ctx.db, {
+      publicationKey: "synthetic-owned-expense-proposal",
+      family: "recommendation",
+      subject: original.subject,
+      judgment: original.judgment,
+      producer: null,
+      evidence,
+      fingerprint,
+    });
+    await expect(
+      applyEntityConnection(
+        ctx.db,
+        kernelCtx(ctx),
+        { id: forged.id },
+        {
+          verdict: "correct",
+          expectedFingerprint: fingerprint,
+          correction: { present: false },
+        },
+      ),
+    ).rejects.toThrow(/eligible|already assigned/i);
+    expect(
+      (
+        await getDb(ctx.db)
+          .select({ productId: expense.productId })
+          .from(expense)
+          .where(eq(expense.id, charge.entityId))
+      )[0]?.productId,
+    ).toBe(other.entityId);
+
+    const vendor = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic acquisition guard shop",
+    });
+    const order = await createRepoEntity(ctx, "purchase", {
+      vendorId: vendor.output.id,
+      date: "2026-02-01",
+      defaultTrade: "electrical",
+    });
+    const acquisition = {
+      ...candidate,
+      relation: "product-purchase" as const,
+      target: { entityKind: "purchase" as const, entityId: order.output.id },
+    };
+    const pending = await publishEntityConnection(ctx.db, acquisition);
+    await confirmPurchaseAcquisition(ctx.db, {
+      productId: item.id,
+      purchaseId: order.output.id,
+    });
+    await expect(publishEntityConnection(ctx.db, acquisition)).rejects.toThrow(
+      /eligible|already acquired/i,
+    );
+    const [purchasePrediction] = await getDb(ctx.db)
+      .select()
+      .from(assessment)
+      .where(eq(assessment.id, pending.review.assessmentId));
+    if (!purchasePrediction)
+      throw new Error("Synthetic purchase Assessment is missing");
+    const confirmedEvidence = {
+      version: 1,
+      candidate: acquisition,
+      basis: await captureConnectionBasis(ctx.db, acquisition),
+    };
+    const confirmedFingerprint = await sha256Hex(
+      canonicalJson(confirmedEvidence),
+    );
+    const confirmedForgery = await publishAssessment(ctx.db, {
+      publicationKey: "synthetic-confirmed-purchase-proposal",
+      family: "recommendation",
+      subject: purchasePrediction.subject,
+      judgment: purchasePrediction.judgment,
+      producer: null,
+      evidence: confirmedEvidence,
+      fingerprint: confirmedFingerprint,
+    });
+    await expect(
+      applyEntityConnection(
+        ctx.db,
+        kernelCtx(ctx),
+        { id: confirmedForgery.id },
+        {
+          verdict: "correct",
+          expectedFingerprint: confirmedFingerprint,
+          correction: { present: false },
+        },
+      ),
+    ).rejects.toThrow(/eligible|already acquired/i);
+  });
 
   it("does not let stale candidates consume another endpoint's results", async () => {
     const { item, candidate } = await fixture();

@@ -323,7 +323,28 @@ async function workQueueProjection(
   // One row per suggested field, never one per Suggestion: the Review list
   // is where each is accepted or rejected. It names no record, so a record
   // read never includes it.
-  if (scopeAdmitsUnrecorded(scope))
+  if (scopeAdmitsUnrecorded(scope)) {
+    const guarded = await getDb(db)
+      .execute(sql`SELECT DISTINCT data->'connectionEvidence'->'candidate'->${"source"} AS source FROM ${suggestionTable}
+      WHERE ${suggestionTable.family}=${assessmentFamily.enum.field} AND ${suggestionTable.status}=${suggestionStatus.enum.pending}
+        AND ${suggestionTable.data} ? 'connectionEvidence'`);
+    const sources = z
+      .array(z.object({ source: entityGraphRootSchema }))
+      .parse(guarded.rows)
+      .map((row) => row.source);
+    const freshFieldIds: string[] = [];
+    for (let offset = 0; offset < sources.length; offset += 250) {
+      const groups = await readEntityConnectionsBatch(
+        db,
+        sources.slice(offset, offset + 250),
+      );
+      freshFieldIds.push(
+        ...groups
+          .flat()
+          .filter((proposal) => proposal.integration.kind === "field-review")
+          .map((proposal) => proposal.review.assessmentId),
+      );
+    }
     selections.push(sql`SELECT ${suggestionTable.entity}::text AS entity, NULL::text AS id,
     ${suggestionTable.entity} || '.' || ${suggestionTable.field} AS name,
     'suggestion:' || ${suggestionTable.entity} || '.' || ${suggestionTable.field} AS key,
@@ -333,7 +354,9 @@ async function workQueueProjection(
     ARRAY[]::uuid[] AS owners, true AS shared, NULL::text AS "problemKey", ${NO_FACT_COLUMNS}
     FROM ${suggestionTable} LEFT JOIN ${runTable} ON ${runTable.id} = ${suggestionTable.runId}
     WHERE ${suggestionTable.status} = ${suggestionStatus.enum.pending} AND ${suggestionTable.family} = ${"field"} AND ${reviewableSuggestionSql}
+      AND (NOT coalesce(${suggestionTable.data} ? 'connectionEvidence', false) OR ${freshFieldIds.length ? inArray(suggestionTable.id, freshFieldIds) : sql`false`})
     GROUP BY ${suggestionTable.entity}, ${suggestionTable.field}`);
+  }
 
   // The declared unsettled view owns missing payment evidence. Receipt
   // research remains independent; settlement authority includes every tender.

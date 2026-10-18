@@ -1,5 +1,7 @@
+import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
 import { and, eq } from "drizzle-orm";
 import { TEST_AI_WORK_LAUNCHER } from "tooling/ai-work";
+import { buildEntity } from "tooling/factories/build";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -7,7 +9,15 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { DecisionPort } from "~/server/ai/decision-model";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
-import { aiEvaluation, assessmentState, run, user } from "~/server/db/schema";
+import {
+  aiEvaluation,
+  assessmentState,
+  run,
+  user,
+  expense,
+  searchDocument,
+  product,
+} from "~/server/db/schema";
 import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";
 import { scheduleConnectionRefresh } from "~/server/domains/run/repo/connection-refresh";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
@@ -18,12 +28,15 @@ import {
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
+import { readWorkQueueWith } from "~/server/generic/work-queue/repo/work-queue";
 import {
   createProductFixture,
+  createIngredientFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 import { controlWorkflowRun } from "~/server/workflows/runs/control";
 
+import { readEntityConnections } from "../repo/entity-connections";
 import { prepareEntityConnections } from "./entity-connections";
 
 // Failure modes: model preparation publishes before cancellation is checked;
@@ -32,16 +45,14 @@ import { prepareEntityConnections } from "./entity-connections";
 describe("connection preparation and publication authority", () => {
   const ctx = withTestDb();
   beforeEach(async () => {
-    await getDb(ctx.db)
-      .insert(user)
-      .values({
-        id: systemActor().userId,
-        name: "Synthetic system",
-        email: "synthetic-system@example.test",
-        emailVerified: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
+    await getDb(ctx.db).insert(user).values({
+      id: systemActor().userId,
+      name: "Synthetic system",
+      email: "synthetic-system@example.test",
+      emailVerified: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
   });
   async function fixture() {
     const name = "Synthetic publication fence wrench";
@@ -60,6 +71,7 @@ describe("connection preparation and publication authority", () => {
       source: { entityKind: "task" as const, entityId: task.output.id },
       task,
       name,
+      item,
     };
   }
   const chooseFirst: DecisionPort = async (input) => {
@@ -187,6 +199,111 @@ describe("connection preparation and publication authority", () => {
       expect(settled?.state).not.toBe("completed");
     });
 
+  it("refuses an acquisition candidate assigned to another Product while subsequent inference is pending", async () => {
+    const item = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic basil powder",
+        manufacturer: "Synthetic pantry",
+      }),
+      ctx.actor,
+    );
+    const other = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic unrelated socket",
+        manufacturer: "Synthetic hardware",
+      }),
+      ctx.actor,
+    );
+    const ingredient = await createIngredientFixture(
+      ctx.db,
+      buildEntity("ingredient", { name: "Synthetic basil powder" }),
+      ctx.actor,
+    );
+    await refreshSearchDocument(ctx.db, "ingredient", ingredient.entityId);
+    const charge = await createRepoEntity(ctx, "expense", {
+      name: "Synthetic basil powder",
+      trade: "electrical",
+      cost: 18,
+      costType: "materials",
+    });
+    await refreshSearchDocument(ctx.db, "expense", charge.entityId);
+    const [before] = await getDb(ctx.db)
+      .select({ hash: searchDocument.sourceHash })
+      .from(searchDocument)
+      .where(eq(searchDocument.entityId, charge.entityId));
+    if (!before)
+      throw new Error("Synthetic expense search projection is missing");
+    const entered = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const preparation = prepareEntityConnections(
+      ctx.db,
+      kernelCtx(ctx),
+      { entityKind: "product", entityId: item.id },
+      {
+        suggestPorts: {
+          decisionModel: PRIMARY_MODEL,
+          decisionPort: async (input) => {
+            entered.resolve();
+            await release.promise;
+            return chooseFirst(input);
+          },
+        },
+      },
+    );
+    try {
+      await Promise.race([
+        entered.promise,
+        preparation.then(() => {
+          throw new Error(
+            "Connection preparation ended before external inference",
+          );
+        }),
+      ]);
+      // This real stored-value drift intentionally leaves SearchDocument unchanged.
+      await getDb(ctx.db)
+        .update(expense)
+        .set({ productId: other.entityId })
+        .where(eq(expense.id, charge.entityId));
+      expect(
+        (
+          await getDb(ctx.db)
+            .select({ hash: searchDocument.sourceHash })
+            .from(searchDocument)
+            .where(eq(searchDocument.entityId, charge.entityId))
+        )[0],
+      ).toEqual(before);
+    } finally {
+      release.resolve();
+    }
+    const publish = await preparation;
+    await expect(withTransactionDatabase(ctx.db, publish)).rejects.toThrow(
+      /evidence changed|no longer eligible|already assigned/i,
+    );
+    expect(
+      (
+        await getDb(ctx.db)
+          .select({ productId: expense.productId })
+          .from(expense)
+          .where(eq(expense.id, charge.entityId))
+      )[0]?.productId,
+    ).toBe(other.entityId);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(assessmentState)
+        .where(
+          and(
+            eq(assessmentState.family, "recommendation"),
+            eq(assessmentState.recordId, item.entityId),
+            eq(assessmentState.active, true),
+            eq(assessmentState.status, "pending"),
+          ),
+        ),
+    ).toEqual([]);
+  });
+
   it("rolls field publication back with the fenced caller transaction", async () => {
     const { source, task } = await fixture();
     const publish = await prepareEntityConnections(
@@ -236,6 +353,55 @@ describe("connection preparation and publication authority", () => {
           ),
         ),
     ).toEqual([]);
+  });
+
+  it("removes stale field connections from Relations and the household Work aggregate", async () => {
+    const { source, item } = await fixture();
+    const publish = await prepareEntityConnections(
+      ctx.db,
+      kernelCtx(ctx),
+      source,
+      {
+        suggestPorts: {
+          decisionModel: PRIMARY_MODEL,
+          decisionPort: chooseFirst,
+        },
+      },
+    );
+    await withTransactionDatabase(ctx.db, publish);
+    expect(await readEntityConnections(ctx.db, source)).toContainEqual(
+      expect.objectContaining({
+        relation: "task-subject-product",
+        integration: { kind: "field-review", field: "subjectProductId" },
+      }),
+    );
+    const before = await readWorkQueueWith(
+      async () => [],
+      ctx.db,
+      null,
+      workQueueHouseholdInput.parse({ pageSize: 100 }),
+      false,
+      ctx.actor,
+    );
+    expect(before.items).toContainEqual(
+      expect.objectContaining({ key: "suggestion:task.subjectProductId" }),
+    );
+    await getDb(ctx.db)
+      .update(product)
+      .set({ name: "Synthetic renamed target evidence" })
+      .where(eq(product.id, item.entityId));
+    expect(await readEntityConnections(ctx.db, source)).toEqual([]);
+    const after = await readWorkQueueWith(
+      async () => [],
+      ctx.db,
+      null,
+      workQueueHouseholdInput.parse({ pageSize: 100 }),
+      false,
+      ctx.actor,
+    );
+    expect(after.items).not.toContainEqual(
+      expect.objectContaining({ key: "suggestion:task.subjectProductId" }),
+    );
   });
 
   it("withholds the same served field evidence after inline Wrong Feedback", async () => {

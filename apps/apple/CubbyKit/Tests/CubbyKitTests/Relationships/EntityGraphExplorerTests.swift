@@ -116,6 +116,10 @@ struct EntityGraphExplorerTests {
 }
 
 private actor GraphExplorerClient: EntityRelationshipsClient {
+    func discoveryRunSnapshot(runID: RunShortcode) throws -> RunWorkSnapshotOutput {
+        throw URLError(.unsupportedURL)
+    }
+
     func storedConnections(_ input: EntityGraphRootInput) async throws -> ConnectionDiscoveryOut {
         return .init(source: .init(entityKind: input.entityKind, entityId: input.entityId), proposals: [])
     }

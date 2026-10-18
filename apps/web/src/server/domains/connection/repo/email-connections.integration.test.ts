@@ -15,6 +15,7 @@ import {
 } from "~/server/db/schema";
 import { decideEmailPurchase } from "~/server/domains/purchase-import/repo/email-purchase-decision";
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
+import { connectionSourceFingerprint } from "~/server/domains/run/repo/connection-refresh";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
@@ -122,6 +123,31 @@ describe("fresh retained Email connection recommendations", () => {
         },
       },
     });
+  });
+
+  it("invalidates negative discovery when retained event or checksum evidence changes", async () => {
+    const f = await fixture();
+    const before = await Promise.all([
+      connectionSourceFingerprint(ctx.db, f.source),
+      connectionSourceFingerprint(ctx.db, f.target),
+    ]);
+    await getDb(ctx.db)
+      .update(orderMailEvent)
+      .set({ orderId: "SYNTHETIC-CORRECTED" })
+      .where(eq(orderMailEvent.id, f.event.id));
+    const changed = await Promise.all([
+      connectionSourceFingerprint(ctx.db, f.source),
+      connectionSourceFingerprint(ctx.db, f.target),
+    ]);
+    expect(changed[0]).not.toBe(before[0]);
+    expect(changed[1]).not.toBe(before[1]);
+    await getDb(ctx.db)
+      .update(orderMail)
+      .set({ rawChecksum: "b".repeat(64) })
+      .where(eq(orderMail.id, f.original.id));
+    expect(await connectionSourceFingerprint(ctx.db, f.source)).not.toBe(
+      changed[0],
+    );
   });
 
   it("rejects subject-only retrieval and superseded events", async () => {
@@ -292,15 +318,13 @@ describe("fresh retained Email connection recommendations", () => {
       })
       .returning();
     if (!claim) throw new Error("Missing synthetic accepted claim");
-    await getDb(ctx.db)
-      .insert(importSourceOrder)
-      .values({
-        sourceClaimId: claim.id,
-        orderKey: "synthetic-accepted-connection",
-        purchaseId: f.purchase.id,
-        checksum: f.message.checksum,
-        outputFingerprint: "synthetic-accepted-output",
-      });
+    await getDb(ctx.db).insert(importSourceOrder).values({
+      sourceClaimId: claim.id,
+      orderKey: "synthetic-accepted-connection",
+      purchaseId: f.purchase.id,
+      checksum: f.message.checksum,
+      outputFingerprint: "synthetic-accepted-output",
+    });
     expect(await retrieveConnectionCandidates(ctx.db, f.source)).toEqual([]);
     expect(await readEntityConnections(ctx.db, f.target)).toEqual([]);
     await expect(
@@ -358,9 +382,11 @@ describe("fresh retained Email connection recommendations", () => {
     );
     const [candidate] = await retrieveConnectionCandidates(ctx.db, f.source);
     if (!candidate) throw new Error("Missing synthetic replacement candidate");
-    expect(candidate.evidence.contradictions).toEqual([
+    expect(candidate.label).toBe("Replace reviewed Email purchase link");
+    expect(candidate.evidence.contradictions).toEqual([]);
+    expect(candidate.evidence.reasons).toContain(
       `Acceptance replaces this event's reviewed link to ${previous.shortcode}`,
-    ]);
+    );
     const proposal = await publishEntityConnection(ctx.db, candidate);
     await reviewAssessment(ctx.db, kernelCtx(ctx), {
       assessmentId: proposal.review.assessmentId,

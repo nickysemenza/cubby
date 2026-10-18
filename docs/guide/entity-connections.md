@@ -8,6 +8,8 @@ Existing automatic domain behavior is unchanged.
 
 ## Failure modes
 
+- A retrieved candidate keeps its pre-inference evidence through publication; a later assignment cannot be adopted as a new basis. Confirmation must still refuse an assigned or acquisition-ineligible Expense and an already acquired Product/Purchase pair, even when a supplied Assessment fingerprint matches the current rows.
+
 - A read must not infer, publish, or spend model budget.
 - Repeated discovery must reuse an identical immutable Assessment; changed
   evidence must publish a different event, preserving previous Feedback.
@@ -31,6 +33,12 @@ Existing automatic domain behavior is unchanged.
   cannot consume another endpoint's result allowance.
 - Background discovery publishes Assessments only inside the evaluation's
   attempt and generation fence. Candidate-roster changes invalidate negative scans.
+- Retained Email checksums, order events, reviewed links and accepted sources
+  participate in discovery currentness, including scans with no candidates.
+- The initiating client observes the public discovery Run through completion,
+  refreshes stored proposals, and exposes stopped or failed work through that Run.
+- Replacing a reviewed Email event link is an explicit consequence shown before
+  confirmation; it is not a blocking contradiction.
 
 ## Interface and review
 

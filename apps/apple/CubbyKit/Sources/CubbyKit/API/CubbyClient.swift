@@ -247,6 +247,10 @@ public actor CubbyClient {
 
     // MARK: - Entity relationships
 
+    public func discoveryRunSnapshot(runID: RunShortcode) async throws -> RunWorkSnapshotOutput {
+        try await runWorkSnapshot(.init(runId: runID))
+    }
+
     public func storedConnections(_ input: EntityGraphRootInput) async throws -> ConnectionDiscoveryOut {
         guard let kind = ReadConnectionsQuery.EntityKindPayload(rawValue: input.entityKind.rawValue) else {
             throw DecodingError.dataCorrupted(

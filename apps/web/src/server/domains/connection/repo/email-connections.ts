@@ -65,7 +65,7 @@ export async function retrieveEmailConnectionCandidates(
     const basis = await captureEmailConnectionBasis(db, candidate);
     const dependencies = basis.dependencies;
     if (dependencies) {
-      candidate.evidence.contradictions = [
+      const replacements = [
         ...new Set(
           dependencies.evidence
             .filter(
@@ -80,6 +80,10 @@ export async function retrieveEmailConnectionCandidates(
             ),
         ),
       ];
+      if (replacements.length) {
+        candidate.label = "Replace reviewed Email purchase link";
+        candidate.evidence.reasons.push(...replacements);
+      }
       candidates.push(candidate);
     }
   }
