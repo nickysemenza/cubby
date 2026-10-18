@@ -46,6 +46,7 @@ import {
   sourceFinancialFacts,
 } from "~/server/domains/purchase-import/repo/writer-policy";
 import { assertClassificationPolicies } from "~/server/domains/spending-category/repo/classification-field-policy";
+import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
 import { cascadeRemoval } from "~/server/generic/removal/repo/core";
@@ -199,7 +200,8 @@ export async function reviewResolution(
     resolution.kind === "attach_only" &&
     new Set(bindings.map((row) => row.expenseId)).size !== bindings.length
   )
-    throw new Error(
+    throw createAppError(
+      "PURCHASE_IMPORT_REVIEW_INVALID",
       "Attach-only bindings require a distinct Expense for each proposed line.",
     );
   if (
@@ -207,14 +209,20 @@ export async function reviewResolution(
     new Set(bindings.map((row) => row.lineIndex)).size !== bindings.length ||
     bindings.some((row) => !candidate.lines[row.lineIndex])
   )
-    throw new Error("Review exactly one binding for each proposed order line.");
+    throw createAppError(
+      "PURCHASE_IMPORT_REVIEW_INVALID",
+      "Review exactly one binding for each proposed order line.",
+    );
   for (const binding of bindings) {
     const line = candidate.lines[binding.lineIndex]!;
     const selected = binding.expenseId
       ? state.expenses.find((row) => row.shortcode === binding.expenseId)
       : null;
     if (binding.expenseId && !selected)
-      throw new Error("A reviewed Expense no longer belongs to this Purchase.");
+      throw createAppError(
+        "PURCHASE_IMPORT_REVIEW_STALE",
+        "A reviewed Expense no longer belongs to this Purchase.",
+      );
     if (
       binding.productId &&
       (!state.products.some(
@@ -222,7 +230,10 @@ export async function reviewResolution(
       ) ||
         line.lineKind !== "principal")
     )
-      throw new Error("Review a live Product for a principal line.");
+      throw createAppError(
+        "PURCHASE_IMPORT_REVIEW_INVALID",
+        "Review a live Product for a principal line.",
+      );
     if (
       resolution.kind === "attach_only" &&
       (!selected ||
@@ -236,7 +247,8 @@ export async function reviewResolution(
           state.products.find((row) => row.id === selected.productId)
             ?.shortcode !== binding.productId))
     )
-      throw new Error(
+      throw createAppError(
+        "PURCHASE_IMPORT_REVIEW_INVALID",
         "Attach-only evidence must preserve each reviewed ledger amount, line kind and Product.",
       );
   }
@@ -276,17 +288,20 @@ export async function reviewResolution(
       selectedIds.size !== resolution.expenseIds.length ||
       selected.some((row) => row.cost === null || row.economicRole !== "vendor")
     )
-      throw new Error(
+      throw createAppError(
+        "PURCHASE_IMPORT_REVIEW_INVALID",
         "Review live vendor Expenses with known costs for replacement.",
       );
     if (
       bindings.some((row) => row.expenseId && !selectedIds.has(row.expenseId))
     )
-      throw new Error(
+      throw createAppError(
+        "PURCHASE_IMPORT_REVIEW_INVALID",
         "Each reused Expense must be in the reviewed replacement roster.",
       );
     if (selected.length && bindings.some((row) => row.expenseId === null))
-      throw new Error(
+      throw createAppError(
+        "PURCHASE_IMPORT_REVIEW_INVALID",
         "Choose the original Expense context for each replacement line, including a split line.",
       );
     const selectedInternal = new Set(selected.map((row) => row.id));
@@ -307,7 +322,8 @@ export async function reviewResolution(
       0,
     );
     if (selectedTotal !== proposedTotal && !resolution.attributionTargets)
-      throw new Error(
+      throw createAppError(
+        "PURCHASE_IMPORT_REVIEW_INVALID",
         "Changed total requires explicit reviewed beneficiary and funder cent targets.",
       );
     if (resolution.attributionTargets) {
@@ -315,7 +331,8 @@ export async function reviewResolution(
         (row) => `${row.role}:${row.partyId ?? "~unattributed"}`,
       );
       if (new Set(keys).size !== keys.length)
-        throw new Error(
+        throw createAppError(
+          "PURCHASE_IMPORT_REVIEW_INVALID",
           "Attribution cent targets must be unique per party and role.",
         );
       for (const role of ["beneficiary", "funder"] as const)
@@ -324,7 +341,8 @@ export async function reviewResolution(
             .filter((row) => row.role === role)
             .reduce((sum, row) => sum + cents(row.amount), 0) !== proposedTotal
         )
-          throw new Error(
+          throw createAppError(
+            "PURCHASE_IMPORT_REVIEW_INVALID",
             "Reviewed attribution cent targets must conserve the proposed total for both roles.",
           );
       const targets = [];
@@ -361,7 +379,8 @@ export async function reviewResolution(
               (targetCents.get(party) ?? 0n),
           )
         )
-          throw new Error(
+          throw createAppError(
+            "PURCHASE_IMPORT_REVIEW_INVALID",
             "Same-total replacements must preserve each party's beneficiary and funder cents.",
           );
       }
@@ -503,7 +522,10 @@ export async function prepareSourceOrderReconciliation(
       .where(eq(runFinding.id, input.id))
       .for("update");
     if (!finding || finding.status !== "open")
-      throw new Error("This source finding has already been resolved.");
+      throw createAppError(
+        "PURCHASE_IMPORT_REVIEW_STALE",
+        "This source finding has already been resolved.",
+      );
     const fix = storedImportFix.parse(finding.proposedFix);
     if (
       !fix ||
@@ -583,7 +605,8 @@ export async function commitSourceOrderReconciliation(
   intent: "financial" | "product_binding" = "financial",
 ) {
   if (!fix.review)
-    throw new Error(
+    throw createAppError(
+      "PURCHASE_IMPORT_REVIEW_STALE",
       "Review the source-order reconciliation before applying it.",
     );
   const state = await loadSourceReconciliationState(tx, fix, ownerId);
@@ -595,7 +618,8 @@ export async function commitSourceOrderReconciliation(
       fix.review.resolution,
     )) !== fix.reviewedFingerprint
   )
-    throw new Error(
+    throw createAppError(
+      "PURCHASE_IMPORT_REVIEW_STALE",
       "Reconciliation state changed after review; prepare it again.",
     );
   const current = await reviewResolution(
@@ -609,7 +633,8 @@ export async function commitSourceOrderReconciliation(
     (await reconciliationFingerprint(current)) !==
     (await reconciliationFingerprint(fix.review))
   )
-    throw new Error(
+    throw createAppError(
+      "PURCHASE_IMPORT_REVIEW_STALE",
       "Reconciliation state changed after review; prepare it again.",
     );
   const candidate = fix.proposedExtraction.candidate!;

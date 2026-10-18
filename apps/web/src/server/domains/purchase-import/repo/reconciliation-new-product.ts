@@ -21,6 +21,7 @@ import {
   importedLineMatchesExpense,
   sameLineTitle,
 } from "~/server/domains/purchase-import/repo/writer-policy";
+import { createAppError } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
@@ -148,7 +149,8 @@ async function newProductRepairLine(
     siblings.competingBindings > 0 ||
     siblings.contradicting > 0
   )
-    throw new Error(
+    throw createAppError(
+      "PURCHASE_IMPORT_REVIEW_STALE",
       `New Product repair requires one exact unbound item Expense without competing source ownership. Line ${binding.lineIndex}: line kind ${line?.lineKind ?? "missing"}; requested existing Product ${binding.productId ? "yes" : "no"}; selected Expense ${selected ? "found" : "missing"}; selected Product ${selected?.productId ? "bound" : "unbound"}; economic role ${selected?.economicRole ?? "missing"}; line basis ${selected?.lineBasis ?? "missing"}; exact matching item Expenses: ${sameRows.length}; selected exact match ${selected && sameRows[0]?.id === selected.id ? "yes" : "no"}; ledger source claims: ${ledgerClaimCount}; competing accepted source bindings: ${siblings.competingBindings}; contradicting accepted sources: ${siblings.contradicting}.`,
     );
   return line;
@@ -169,7 +171,10 @@ async function freezePreparedNewProductLine(
       extractedPurchaseLine.parse(stored.line),
     )) !== (await reconciliationFingerprint(line))
   )
-    throw new Error("Accepted original prepared line is missing or changed.");
+    throw createAppError(
+      "PURCHASE_IMPORT_REVIEW_STALE",
+      "Accepted original prepared line is missing or changed.",
+    );
   const preparedFingerprint = await reconciliationFingerprint({
     order,
     line: {
@@ -193,7 +198,8 @@ async function freezePreparedNewProductLine(
     binding.newProduct?.preparedFingerprint &&
     binding.newProduct.preparedFingerprint !== preparedFingerprint
   )
-    throw new Error(
+    throw createAppError(
+      "PURCHASE_IMPORT_REVIEW_STALE",
       "Accepted original preparation changed after review; prepare it again.",
     );
   return preparedFingerprint;
@@ -214,7 +220,8 @@ export async function reviewPreparedNewProducts(
     (state.association.acceptedObservationId !== state.observation.id &&
       !state.currentOriginalReview)
   )
-    throw new Error(
+    throw createAppError(
+      "PURCHASE_IMPORT_REVIEW_STALE",
       "New Product repair requires a known accepted original and its preparation.",
     );
   const source = state.currentOriginalReview
@@ -281,7 +288,8 @@ export async function reviewPreparedNewProducts(
       state.target.vendorId,
     ))
   )
-    throw new Error(
+    throw createAppError(
+      "PURCHASE_IMPORT_REVIEW_STALE",
       "Accepted original preparation is missing, changed or ambiguous.",
     );
   const lines = await tx

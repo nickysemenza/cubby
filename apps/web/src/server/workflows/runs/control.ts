@@ -7,6 +7,7 @@ import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { ledgerParty, run as runTable } from "~/server/db/schema";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
+import { createAppError } from "~/server/errors/app-error";
 
 import { workflowInstanceId, type WorkflowRunPurpose } from "./contract";
 import { productionWorkflowLauncher, type WorkflowLauncher } from "./launcher";
@@ -39,7 +40,7 @@ export async function controlWorkflowRun(
     .leftJoin(ledgerParty, eq(ledgerParty.id, runTable.ledgerPartyId))
     .where(eq(runTable.shortcode, runShortcode.parse(input.runPublicId)))
     .limit(1);
-  if (!row) throw new Error("Run was not found");
+  if (!row) throw createAppError("RUN_NOT_FOUND", "Run was not found");
   if (
     !(purpose === "ai_refresh" && row.actorUserId === systemActor().userId) &&
     row.actorUserId !== actor.userId &&
@@ -51,7 +52,10 @@ export async function controlWorkflowRun(
       !["mail_reclassify", "suggestion_sweep"].includes(purpose) ||
       row.status !== "running"
     )
-      throw new Error("Only running member-requested AI work can be paused");
+      throw createAppError(
+        "RUN_CONTROL_REFUSED",
+        "Only running member-requested AI work can be paused",
+      );
     await database
       .update(runTable)
       .set({ status: "paused" })
@@ -60,13 +64,19 @@ export async function controlWorkflowRun(
   }
   if (input.action === "resume") {
     if (row.status !== "paused")
-      throw new Error("Only paused AI work can be resumed");
+      throw createAppError(
+        "RUN_CONTROL_REFUSED",
+        "Only paused AI work can be resumed",
+      );
     await launchWorkflowRun(db, { runId: row.id, purpose }, launcher);
     return;
   }
   if (input.action === "retry") {
     if (row.status !== "failed")
-      throw new Error(`Only a failed Run can be retried (${row.status})`);
+      throw createAppError(
+        "RUN_CONTROL_REFUSED",
+        `Only a failed Run can be retried (${row.status})`,
+      );
     if (purpose === "ai_refresh") {
       const { aiEvaluation } = await import("~/server/db/schema");
       const failed = await database
@@ -111,7 +121,8 @@ export async function controlWorkflowRun(
         currentOnly: true,
       });
       if (purpose === "mail_reclassify" && !requested.length)
-        throw new Error(
+        throw createAppError(
+          "RUN_CONTROL_REFUSED",
           "This legacy Run retains historical receipts; historical recovery creates a linked continuation rather than retrying its empty roster.",
         );
       for (const item of requested) {
@@ -150,9 +161,15 @@ export async function controlWorkflowRun(
     return;
   }
   if (input.action !== "cancel")
-    throw new Error(`A ${purpose} Run supports cancel and retry only`);
+    throw createAppError(
+      "RUN_CONTROL_UNSUPPORTED",
+      `A ${purpose} Run supports cancel and retry only`,
+    );
   if (!["running", "paused", "paused_auth"].includes(row.status))
-    throw new Error(`Only active work can be cancelled (${row.status})`);
+    throw createAppError(
+      "RUN_CONTROL_REFUSED",
+      `Only active work can be cancelled (${row.status})`,
+    );
   const sharedDemand = await withTransactionDatabase(db, async (tx) => {
     const database = getDb(tx);
     await database.execute(
@@ -176,7 +193,11 @@ export async function controlWorkflowRun(
         ),
       )
       .returning({ id: runTable.id });
-    if (!cancelled) throw new Error("The Run finished before it was cancelled");
+    if (!cancelled)
+      throw createAppError(
+        "RUN_CONTROL_REFUSED",
+        "The Run finished before it was cancelled",
+      );
     if (purpose === "ai_refresh") {
       const { aiEvaluation } = await import("~/server/db/schema");
       await database

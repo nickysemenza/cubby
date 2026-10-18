@@ -31,6 +31,7 @@ import {
   readImportSourceClaimFamily,
   readSourceFamilyOrder,
 } from "~/server/domains/purchase-import/repo/source-claim-family";
+import { createAppError } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
@@ -208,7 +209,10 @@ export async function loadSourceReconciliationState(
       (row) => row.purchaseId !== null && row.purchaseId !== target.id,
     )
   )
-    throw new Error("A selected Expense belongs to a different Purchase.");
+    throw createAppError(
+      "PURCHASE_IMPORT_REVIEW_STALE",
+      "A selected Expense belongs to a different Purchase.",
+    );
   const expenseIds = expenses.map((row) => row.id);
   const attributions = expenseIds.length
     ? await tx
