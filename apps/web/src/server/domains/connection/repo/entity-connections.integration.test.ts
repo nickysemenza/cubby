@@ -1,3 +1,4 @@
+import { assessmentJudgments } from "@cubby/schemas/assessment";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -115,7 +116,7 @@ describe("stored connection evidence", () => {
       publicationKey: "synthetic-owned-expense-proposal",
       family: "recommendation",
       subject: original.subject,
-      judgment: original.judgment,
+      judgment: assessmentJudgments.recommendation.parse(original.judgment),
       producer: null,
       evidence,
       fingerprint,
@@ -180,7 +181,9 @@ describe("stored connection evidence", () => {
       publicationKey: "synthetic-confirmed-purchase-proposal",
       family: "recommendation",
       subject: purchasePrediction.subject,
-      judgment: purchasePrediction.judgment,
+      judgment: assessmentJudgments.recommendation.parse(
+        purchasePrediction.judgment,
+      ),
       producer: null,
       evidence: confirmedEvidence,
       fingerprint: confirmedFingerprint,
