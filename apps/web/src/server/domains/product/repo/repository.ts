@@ -82,7 +82,7 @@ export const productRepository = defineRepository("product", {
     ),
   listSummary: (ctx, filters) => productListSummary(ctx.db, filters),
   create: async (ctx, data) => {
-    const result = await createProductWithSideEffects(
+    const { output: result, entityId } = await createProductWithSideEffects(
       {
         db: ctx.db,
         product: createProductWriteActions(ctx.db, ctx.usdaClient),
@@ -94,12 +94,12 @@ export const productRepository = defineRepository("product", {
     );
     return {
       output: result,
-      entityId: await productShortcodes.one(ctx.db, result.id),
+      entityId,
       warnings: result.sideEffects.warnings,
     };
   },
   createRead: async (ctx, data, fields) => {
-    const output = await createProductWithReadSideEffects(
+    const { output, entityId } = await createProductWithReadSideEffects(
       {
         db: ctx.db,
         product: createProductReadActions(
@@ -122,7 +122,7 @@ export const productRepository = defineRepository("product", {
     );
     return {
       output,
-      entityId: await productShortcodes.one(ctx.db, output.id),
+      entityId,
       warnings: output.sideEffects.warnings,
     };
   },

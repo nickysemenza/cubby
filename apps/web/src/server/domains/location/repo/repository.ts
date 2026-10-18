@@ -10,7 +10,7 @@ import { createAppError } from "~/server/errors/app-error";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
-  createLocation,
+  createLocationRecord,
   deleteLocations,
   getLocationById,
   LOCATION_DELETE_EDGE_POLICY,
@@ -37,8 +37,11 @@ export const locationRepository = defineRepository("location", {
   listRead: (ctx, filters, sorts, pagination, projection) =>
     locationListRead(ctx.db, filters, sorts, pagination, projection),
   create: async (ctx, data) => {
-    const output = await createLocation(ctx.db, data, ctx.actorContext);
-    const entityId = await locationShortcodes.one(ctx.db, output.id);
+    const { output, entityId } = await createLocationRecord(
+      ctx.db,
+      data,
+      ctx.actorContext,
+    );
     await runMutationSideEffects(ctx.db, {
       action: "created",
       entity: { entity: "location", id: entityId },

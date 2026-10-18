@@ -346,7 +346,7 @@ async function resolveProduct(
     }),
     actor,
   );
-  return created.id;
+  return created.output.id;
 }
 
 /**

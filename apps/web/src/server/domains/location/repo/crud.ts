@@ -195,6 +195,13 @@ export const createLocation = async (
   db: Database,
   data: LocationCreateInput,
   actor: ActorContext,
+) => (await createLocationRecord(db, data, actor)).output;
+
+/** `createLocation` with the inserted row's id, so a caller never re-resolves the code it just minted. */
+export const createLocationRecord = async (
+  db: Database,
+  data: LocationCreateInput,
+  actor: ActorContext,
 ) => {
   try {
     return await createLocationTx(db, data, actor);
@@ -295,7 +302,10 @@ const createLocationTx = async (
       action: "create",
     });
 
-    return getLocationById(tx, newLocation.id);
+    return {
+      output: await getLocationById(tx, newLocation.id),
+      entityId: newLocation.id,
+    };
   });
 };
 

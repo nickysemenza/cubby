@@ -1516,7 +1516,16 @@ export const createProduct = async (
   data: ProductRepoCreateInput,
   actor: ActorContext,
   reads: ProductCreateReads = defaultProductCreateReads,
-): Promise<ProductTopLevelOut> => {
+): Promise<ProductTopLevelOut> =>
+  (await createProductRecord(db, data, actor, reads)).output;
+
+/** `createProduct` with the inserted row's id, so a caller never re-resolves the code it just minted. */
+export const createProductRecord = async (
+  db: Database,
+  data: ProductRepoCreateInput,
+  actor: ActorContext,
+  reads: ProductCreateReads = defaultProductCreateReads,
+): Promise<{ output: ProductTopLevelOut; entityId: ProductId }> => {
   const {
     ingredientId,
     unitMappings,
@@ -1682,7 +1691,7 @@ export const createProduct = async (
         >;
       }>(sql`SELECT ${categorySummarySql(sql`${newProduct.categoryId}::uuid`)} AS category,
         ${categoryStockTrackingSql(sql`${newProduct.categoryId}::uuid`)} AS "categoryStockTracking"`);
-      return dbProductToTopLevelAPI({
+      const output = dbProductToTopLevelAPI({
         classificationEvidence: await getProductClassificationEvidence(
           tx,
           newProduct.id,
@@ -1694,6 +1703,7 @@ export const createProduct = async (
         pricing: resolveProductPricing(created.price),
         dataQuality: qualities.get(created.id)!,
       });
+      return { output, entityId: newProduct.id };
     });
   } catch (error) {
     await throwIfDuplicateProduct(db, data, error);
