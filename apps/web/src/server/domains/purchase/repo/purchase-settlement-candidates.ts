@@ -5,14 +5,18 @@ import { and, asc, desc, eq, isNull, ne, type SQL, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
-import { financialAccount, financialTransaction } from "~/server/db/schema";
+import {
+  financialAccount,
+  financialTransaction,
+  purchase as purchaseTable,
+} from "~/server/db/schema";
 import {
   type SettlementConflictKind,
   settlementConflictKinds,
   settlementConflictSql,
 } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
-import { getPurchaseByShortcode } from "~/server/domains/purchase/repo/purchase";
 import { createAppError } from "~/server/errors/app-error";
+import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 /** Eligibility and rank apply to the full live set before the advisory limit.
  * Allocation mutations remain authoritative when a suggestion is reviewed.
@@ -21,7 +25,20 @@ export async function listPurchaseSettlementCandidates(
   db: Database,
   purchaseId: PurchaseShortcode,
 ) {
-  const purchase = await getPurchaseByShortcode(db, purchaseId);
+  // Only the facts ranking reads: a full Purchase read planned its whole
+  // detail projection for every connection freshness check.
+  const id = await resolveLiveShortcode(db, purchaseId, "purchase");
+  const [purchase] = id
+    ? await getDb(db)
+        .select({
+          date: purchaseTable.date,
+          statedTotal: purchaseTable.statedTotal,
+          vendorName: sql<string | null>`(SELECT v."name" FROM "Vendor" v
+            WHERE v."id" = ${purchaseTable.vendorId} AND v."deletedAt" IS NULL)`,
+        })
+        .from(purchaseTable)
+        .where(and(eq(purchaseTable.id, id), notDeleted(purchaseTable)))
+    : [];
   if (!purchase)
     throw createAppError("PURCHASE_NOT_FOUND", "Purchase not found");
   if (!purchase.date) return [];
