@@ -393,6 +393,7 @@ export const photoGroupProposal = z.object({
     .object({
       /** Null only when the chosen Location was deleted after proposing. */
       locationId: locationShortcode.nullable(),
+      /** Breadcrumb label, ancestors first ("Bedroom › Closet"). */
       locationName: z.string().nullable(),
       ownershipMode: inventoryOwnershipMode.optional(),
       ownerPartyId: ledgerPartyShortcode.nullable().optional(),

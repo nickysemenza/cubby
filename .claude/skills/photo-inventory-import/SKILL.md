@@ -122,7 +122,10 @@ Only `receive` includes `inventory`: a whole-number quantity, real location,
 and ownership. Omit both ownership fields to use the Run member, or pass
 `ownershipMode: "explicit"` and `ownerPartyId` (null means household stock).
 Never use the retired `person` value. Resolve the location from the Run's notes
-or ask; never invent a holding location. Historical or sold items and stock
+or ask; never invent a holding location. Notes that say where items are stored
+("stored in bedroom closet") mean the pictured items are owned and kept there:
+propose `receive` into that Location for each item, not `evidence`, unless the
+photos or member say it is counted, historical, or only a reference. Historical or sold items and stock
 already counted attach evidence without receiving anything; historical intent
 does not record a sale. If receiving is intended but ownership/location is
 unresolved, keep an explicit `unresolvedReason` and ask before approval.

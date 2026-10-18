@@ -1472,6 +1472,7 @@ function ProductPanel({
   save,
   busy,
   step,
+  runLocation,
   labelText,
 }: {
   runId: string;
@@ -1479,6 +1480,7 @@ function ProductPanel({
   save: Save;
   busy: boolean;
   step: string;
+  runLocation: RunLocation | null;
   labelText: string;
 }) {
   const saveGroup: SaveGroup = (build) =>
@@ -1580,7 +1582,14 @@ function ProductPanel({
       </Stack>
     );
   if (step === "ownership")
-    return <InventoryFields proposal={proposal} save={saveGroup} busy={busy} />;
+    return (
+      <InventoryFields
+        proposal={proposal}
+        save={saveGroup}
+        busy={busy}
+        runLocation={runLocation}
+      />
+    );
   return (
     <Stack gap="sm" className="min-w-0">
       <IdentityDecision runId={runId} proposal={proposal} busy={busy} />
@@ -2053,14 +2062,40 @@ function PhotoProductSuggestions({
   );
 }
 
+type RunLocation = {
+  id: NonNullable<NonNullable<PhotoGroupProposal["inventory"]>["locationId"]>;
+  name: string;
+};
+
+/** The Location most of this run's groups receive into, so switching a
+ * reference-only group to "add to inventory" lands where its siblings did. */
+function usualRunLocation(
+  proposals: readonly PhotoGroupProposal[],
+): RunLocation | null {
+  const counts = new Map<RunLocation["id"], RunLocation & { count: number }>();
+  for (const { inventory } of proposals) {
+    if (!inventory?.locationId || !inventory.locationName) continue;
+    const seen = counts.get(inventory.locationId);
+    counts.set(inventory.locationId, {
+      id: inventory.locationId,
+      name: inventory.locationName,
+      count: (seen?.count ?? 0) + 1,
+    });
+  }
+  const [usual] = [...counts.values()].sort((a, b) => b.count - a.count);
+  return usual ? { id: usual.id, name: usual.name } : null;
+}
+
 function InventoryFields({
   proposal,
   save,
   busy,
+  runLocation,
 }: {
   proposal: PhotoGroupProposal;
   save: SaveGroup;
   busy: boolean;
+  runLocation: RunLocation | null;
 }) {
   const inventory = proposal.inventory;
   const quantity = inventory?.quantity ?? 1;
@@ -2085,9 +2120,16 @@ function InventoryFields({
     saveStock(() => ({
       ...toGroupInput(proposal, {
         inventory:
-          stockIntent === "receive"
-            ? toGroupInput(proposal).inventory
-            : undefined,
+          stockIntent !== "receive"
+            ? undefined
+            : (toGroupInput(proposal).inventory ??
+              (runLocation
+                ? {
+                    locationId: runLocation.id,
+                    quantity: 1,
+                    mode: "create",
+                  }
+                : undefined)),
       }),
       review: { ...review, stockIntent },
     }));
@@ -2381,6 +2423,7 @@ function ProposalCard({
   // the group unapprovable and undiscardable; removing it is the way out.
   const stale = isStaleGroup(proposal, imagesById, runStatus);
   const descriptionsPending = awaitingDescriptions(proposal, imagesById);
+  const runLocation = usualRunLocation(proposals);
   return (
     <Card
       className="rounded-none border-x-0 border-b-0 shadow-none"
@@ -2539,6 +2582,7 @@ function ProposalCard({
               save={save}
               busy={working}
               step={step.key}
+              runLocation={runLocation}
               labelText={proposal.images
                 .map((entry) => imagesById.get(entry.id)?.recognizedText)
                 .filter(Boolean)
@@ -2861,6 +2905,98 @@ function PhotoTable({
   );
 }
 
+const STOCK_OUTCOME = {
+  evidence: "Reference photo only · no stock change",
+  counted: "Already counted · no stock change",
+  historical: "Historical or sold · no stock change",
+  receive: "No stock received",
+} satisfies Record<PhotoGroupDecision["stockIntent"], string>;
+
+function SettledGroup({
+  runId,
+  proposal,
+  imagesById,
+}: {
+  runId: string;
+  proposal: PhotoGroupProposal;
+  imagesById: ImagesById;
+}) {
+  const committed = proposal.state === "committed";
+  return (
+    <Stack gap="sm" className="mt-2">
+      <Row gap="sm" align="start" className="min-w-0">
+        {proposal.images.length ? (
+          <Row gap="xs" className="shrink-0">
+            {proposal.images.map((entry) => (
+              <PhotoThumb
+                key={entry.id}
+                image={imagesById.get(entry.id)}
+                size={48}
+                dimmed={!committed}
+              />
+            ))}
+          </Row>
+        ) : null}
+        <Stack gap="xs" className="min-w-0 text-xs">
+          {proposal.committedProduct ? (
+            <span className="text-sm">
+              <EntityRefLink
+                entity="product"
+                data={{
+                  id: proposal.committedProduct.id,
+                  name: proposal.committedProduct.name,
+                }}
+                displayImage={null}
+              />
+            </span>
+          ) : null}
+          {proposal.committedInventoryId ? (
+            <span>
+              Received {proposal.inventory?.quantity ?? 0} at{" "}
+              <EntityRefLink
+                entity="inventory"
+                data={{
+                  id: proposal.committedInventoryId,
+                  name:
+                    proposal.inventory?.locationName ||
+                    proposal.committedInventoryId,
+                }}
+                displayImage={null}
+              />
+            </span>
+          ) : (
+            <span className="text-muted-foreground">
+              {committed
+                ? STOCK_OUTCOME[reviewDecision(proposal).stockIntent]
+                : "Nothing written"}
+            </span>
+          )}
+        </Stack>
+      </Row>
+      {committed ? (
+        <Section
+          headingAs="h4"
+          disclosure={{}}
+          className="border-t border-border pt-2"
+          title="Link a purchase line"
+        >
+          <ExpenseLinkReview runId={runId} proposal={proposal} />
+        </Section>
+      ) : null}
+      {committed && proposal.product.kind === "create" ? (
+        <Section
+          headingAs="h4"
+          disclosure={{}}
+          className="border-t border-border pt-2"
+          title="Review possible matches"
+        >
+          <PhotoProductSuggestions runId={runId} proposal={proposal} settled />
+        </Section>
+      ) : null}
+    </Stack>
+  );
+}
+
 function ExpenseLinkReview({
   runId,
   proposal,
@@ -2897,18 +3033,11 @@ function ExpenseLinkReview({
     onError: (error) => showErrorToast(error),
   });
   return (
-    <section
-      className="mt-4 border-t border-border pt-3"
-      aria-label="Unlinked purchase lines"
-    >
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h4 className="text-sm font-semibold">
-          Missing Expense → Product link
-        </h4>
-        <span className="text-2xs text-muted-foreground">
-          Separate from photo approval · cost and quantity stay unchanged
-        </span>
-      </div>
+    <section aria-label="Unlinked purchase lines">
+      <p className="text-2xs text-muted-foreground">
+        Attach an existing Expense to this Product · cost and quantity stay
+        unchanged
+      </p>
       <Input
         aria-label="Search unlinked purchase lines"
         placeholder="Search unlinked purchase lines"
@@ -2993,7 +3122,7 @@ function ExpenseLinkReview({
                 ))
               ) : (
                 <span className="text-muted-foreground">
-                  Accepted source evidence required
+                  Needs an accepted order line
                 </span>
               )}
             </div>
@@ -3647,61 +3776,11 @@ export function PhotoGroupReview({
                       </span>
                     }
                   >
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {selected.images
-                        .map((entry) => `${entry.purpose} ${entry.id}`)
-                        .join(" · ") || "No attached photos"}
-                    </p>
-                    {selected.committedProduct && (
-                      <p className="mt-2 text-sm">
-                        <EntityRefLink
-                          entity="product"
-                          data={{
-                            id: selected.committedProduct.id,
-                            name: selected.committedProduct.name,
-                          }}
-                          displayImage={null}
-                        />
-                      </p>
-                    )}
-                    {selected.committedInventoryId ? (
-                      <p className="mt-1 text-xs">
-                        Inventory entry{" "}
-                        <EntityRefLink
-                          entity="inventory"
-                          data={{
-                            id: selected.committedInventoryId,
-                            name:
-                              selected.inventory?.locationName ||
-                              selected.committedInventoryId,
-                          }}
-                          displayImage={null}
-                        />{" "}
-                        · {selected.inventory?.quantity ?? 0} received
-                      </p>
-                    ) : (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        No Inventory write
-                      </p>
-                    )}
-                    {selected.state === "committed" && (
-                      <ExpenseLinkReview runId={runId} proposal={selected} />
-                    )}
-                    {selected.state === "committed" &&
-                      selected.product.kind === "create" && (
-                        <Section
-                          headingAs="h4"
-                          disclosure={{}}
-                          className="mt-4 border-t border-border pt-3"
-                          title="Review possible matches"
-                        >
-                          <PhotoProductSuggestions
-                            runId={runId}
-                            proposal={selected}
-                            settled
-                          />
-                        </Section>
-                      )}
+                    <SettledGroup
+                      runId={runId}
+                      proposal={selected}
+                      imagesById={imagesById}
+                    />
                   </Section>
                 )}
               </div>
