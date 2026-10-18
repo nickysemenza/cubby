@@ -25,7 +25,7 @@ import {
 } from "drizzle-orm";
 
 import { describeErrorCauses } from "~/lib/error-diagnostics";
-import type { Database } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import { account } from "~/server/db/auth.schema";
 import {
   databaseForTransaction,
@@ -171,6 +171,49 @@ const messageWhere = (input: {
     eq(emailTable.mailboxId, input.mailboxId),
     eq(emailTable.messageId, input.messageId),
   );
+/** Migrated rows carry `legacy:<ledgerPartyId>` because their mailbox was unknown. */
+const LEGACY_MAILBOX_PREFIX = "legacy:";
+
+/**
+ * A current mailbox's copy supersedes the migrated legacy row of the same
+ * message, which no sync writes again: a pending one is excluded. Rows held
+ * for historical ownership review stay as they are.
+ */
+async function supersedeLegacyEmail(
+  tx: DrizzleTransaction,
+  input: { ledgerPartyId: string; mailboxId: string; messageId: string },
+) {
+  if (input.mailboxId.startsWith(LEGACY_MAILBOX_PREFIX)) return;
+  await tx
+    .update(emailTable)
+    .set({ status: "excluded", updatedAt: new Date() })
+    .where(
+      and(
+        eq(
+          emailTable.ledgerPartyId,
+          parseEntityId("ledgerParty", input.ledgerPartyId),
+        ),
+        eq(emailTable.provider, "gmail"),
+        // Migration 0025 wrote exactly `legacy:<ledgerPartyId>`; an exact key
+        // uses the mailbox/message index instead of scanning the party.
+        eq(
+          emailTable.mailboxId,
+          `${LEGACY_MAILBOX_PREFIX}${input.ledgerPartyId}`,
+        ),
+        eq(emailTable.messageId, input.messageId),
+        eq(emailTable.status, "pending"),
+        isNull(emailTable.deletedAt),
+        or(
+          isNull(emailTable.classificationVersion),
+          ne(
+            emailTable.classificationVersion,
+            HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
+          ),
+        ),
+      ),
+    );
+}
+
 export async function readEmail(
   db: Database,
   input: { ledgerPartyId: string; mailboxId: string; messageId: string },
@@ -216,6 +259,7 @@ export async function saveEmail(
         ...fields,
       }),
     });
+    await supersedeLegacyEmail(tx, input);
     if (created) return;
     // Routine routing and provider removal cannot resolve historical ownership.
     await tx
@@ -295,6 +339,7 @@ export async function saveMailboxMetadata(
         status: "pending",
       }),
     });
+    await supersedeLegacyEmail(tx, identity);
     const fields = mailboxMetadataFields(input, row);
     const changed =
       (

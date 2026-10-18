@@ -8,6 +8,7 @@
  */
 import type { ActorContext } from "@cubby/schemas/context";
 import type { RunId } from "@cubby/schemas/identifiers";
+import type { MailMessageRef } from "@cubby/schemas/mailbox-research";
 import { and, eq } from "drizzle-orm";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
@@ -26,6 +27,7 @@ import {
   aiCallRunInput,
   ensureRun,
 } from "~/server/domains/run/repo/ensure-run";
+import { createAppError } from "~/server/errors/app-error";
 
 import { readMailOwnerEvidence } from "../repo/mail-owner";
 import {
@@ -36,7 +38,10 @@ import {
   type MailAttributionJudgment,
 } from "../service/mail-source-judgment";
 
-export type MailSourceRef = { mailboxId: string; messageId: string };
+/** `via`: retained Emails connecting this one to an admitted Email, nearest it first. */
+export type MailSourceRef = MailMessageRef & {
+  via?: readonly MailMessageRef[];
+};
 
 export type MailSourceAdmission = {
   mail: RetainedMail;
@@ -55,7 +60,8 @@ const ANCHOR_LIMIT = 3;
  * Before the writer's transaction: judge every named source the Run needs a
  * decision for. Refuses a supporting original that is not confidently the
  * same purchase or the recipient's own transaction; paid judgment draws from
- * the household AI budget.
+ * the household AI budget. A `via` path admits each Email on it in order, each
+ * judged against the one before it and the first against the roster.
  */
 export async function prepareMailSourceAdmissions(
   db: Database,
@@ -86,15 +92,43 @@ export async function prepareMailSourceAdmissions(
     );
   if (!party) return [];
   const roster = await readMailRunSources(database, runId);
+  const retained = async (ref: MailMessageRef) =>
+    (
+      await readRetainedMail(db, {
+        ledgerPartyIds: [party.id],
+        mailboxId: ref.mailboxId,
+        messageId: ref.messageId,
+      })
+    )[0];
   const mails: RetainedMail[] = [];
+  /** The Email a path names before each of its members. */
+  const previous = new Map<string, RetainedMail>();
   for (const ref of refs) {
-    const [mail] = await readRetainedMail(db, {
-      ledgerPartyIds: [party.id],
-      mailboxId: ref.mailboxId,
-      messageId: ref.messageId,
-    });
+    const mail = await retained(ref);
     // Missing originals fail the writer's own source checks.
-    if (mail && !mails.some((known) => known.id === mail.id)) mails.push(mail);
+    if (!mail) continue;
+    const path: RetainedMail[] = [];
+    for (const step of ref.via ?? []) {
+      const bridge = await retained(step);
+      if (!bridge || bridge.mailboxId !== mail.mailboxId)
+        throw createAppError(
+          "MAIL_SOURCE_ADMISSION_REFUSED",
+          `The via Email ${step.mailboxId}/${step.messageId} is not a retained original of this member in mailbox ${mail.mailboxId}.`,
+        );
+      path.push(bridge);
+    }
+    path.push(mail);
+    // A repeated Email would be judged against itself, skipping the roster link.
+    if (new Set(path.map(({ id }) => id)).size !== path.length)
+      throw createAppError(
+        "MAIL_SOURCE_ADMISSION_REFUSED",
+        `The via path for Email ${mail.messageId} names an Email more than once or names the Email itself; list each connecting Email once, nearest the admitted Email first.`,
+      );
+    path.forEach((step, index) => {
+      const before = path[index - 1];
+      if (before && !previous.has(step.id)) previous.set(step.id, before);
+      if (!mails.some((known) => known.id === step.id)) mails.push(step);
+    });
   }
   const member = (mail: RetainedMail) =>
     roster.some(
@@ -132,9 +166,20 @@ export async function prepareMailSourceAdmissions(
       continue;
     }
     if (attribution !== "recipient")
-      throw new Error(
+      throw createAppError(
+        "MAIL_SOURCE_ADMISSION_REFUSED",
         `Cubby cannot attribute that supporting Email's transaction to the recipient (${judgment ? describeMailAttribution(judgment) : attribution}); forwarding alone never proves ownership.`,
       );
+    const before = previous.get(mail.id);
+    if (before) {
+      if (!(await judgeSameMailPurchase([before], mail, usage, port)))
+        throw createAppError(
+          "MAIL_SOURCE_ADMISSION_REFUSED",
+          `Cubby could not establish that Email ${mail.messageId} is the same purchase as via Email ${before.messageId}; each Email on a via path must share an order, tracking or invoice identifier with the one before it.`,
+        );
+      admissions.push({ mail, supporting: true, attribution, judgment });
+      continue;
+    }
     const anchors = roster
       .filter(
         (source) =>
@@ -164,8 +209,9 @@ export async function prepareMailSourceAdmissions(
       ),
     );
     if (!(await judgeSameMailPurchase(anchorMails, mail, usage, port)))
-      throw new Error(
-        "Cubby could not establish that the supporting Email is the same purchase as an Email this Run admitted.",
+      throw createAppError(
+        "MAIL_SOURCE_ADMISSION_REFUSED",
+        `Cubby could not establish that the supporting Email ${mail.messageId} is the same purchase as an Email this Run admitted. When other retained Emails connect it to one (a shipping Email naming both a tracking and an order number), name them in via, nearest the admitted Email first.`,
       );
     admissions.push({ mail, supporting: true, attribution, judgment });
   }
@@ -191,7 +237,8 @@ export async function applyMailSourceAdmissions(
       admission.attribution !== "explicit" &&
       admission.attribution !== "recipient"
     )
-      throw new Error(
+      throw createAppError(
+        "MAIL_SOURCE_ADMISSION_REFUSED",
         `Automatic import needs the recipient's own transaction; this Email's attribution is ${admission.judgment ? describeMailAttribution(admission.judgment) : admission.attribution}. Resolve it unresolved so the member can select it explicitly.`,
       );
   }

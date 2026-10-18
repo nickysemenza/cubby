@@ -112,7 +112,8 @@ pending: nothing here starts Product research.
    once it is cancelled, finished, retired or deleted. Naming another original
    in `prepare` or a `linked` resolve admits it to the roster
    (`operations/mail-source-admission.ts`) only when the `mail-source-relation`
-   decision confidently finds the same purchase as a roster Email and
+   decision confidently finds the same purchase as a roster Email (or, along
+   a `via` path, as the Email before it, the first against the roster) and
    `mail-attribution` finds the recipient's own transaction, within the
    roster's 50 Emails and the Run's execution claims. A Run the member did not
    explicitly select (`trigger` other than `foreground`) prepares a Purchase

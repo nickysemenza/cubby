@@ -10,8 +10,13 @@ import {
   runEntityId,
 } from "@cubby/schemas/identifiers";
 import { runPurpose } from "@cubby/schemas/purchase-import";
-import { runProgressEvent, runProgressStamp } from "@cubby/schemas/run-fields";
+import {
+  runProgressEvent,
+  runProgressStamp,
+  runTargetOutcomeReceipt,
+} from "@cubby/schemas/run-fields";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
+import { countLabel } from "@cubby/shared/pluralize";
 import { sha256Hex } from "@cubby/shared/sha256";
 import {
   and,
@@ -27,7 +32,7 @@ import {
 } from "drizzle-orm";
 import { z } from "zod";
 
-import type { Database } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import { getDb, withTransaction } from "~/server/db/helpers";
 import {
   auditLog,
@@ -183,10 +188,12 @@ async function reconcileSettledRunOnce(
       return { reconciled: false as const, status: "running" as const };
   }
   // A Mail import has no explicit finish tool: once every admitted Email is
-  // imported, linked or disposed of, Pi's settled submission completes it.
-  // Without this every fully resolved Mail import ended in needs_review.
+  // imported, linked, excluded or resolved unresolved, Pi's settled submission
+  // completes it, or reviews it under one finding naming each unresolved
+  // Email. Only an Email still being researched means the coordinator ended
+  // without finishing.
   if (scope.public.purpose === "mail_import") {
-    const completed = await withTransaction(db, async (tx) => {
+    const settled = await withTransaction(db, async (tx) => {
       const [locked] = await tx
         .select({
           status: runTable.status,
@@ -207,10 +214,22 @@ async function reconcileSettledRunOnce(
           (source) =>
             !source.owned ||
             !source.unchanged ||
-            source.email.status !== "completed",
+            !SETTLED_MAIL_STATUSES.has(source.email.status),
         )
       )
-        return false;
+        return null;
+      const unresolved = sources.filter(
+        (source) => source.email.status === "blocked",
+      );
+      if (unresolved.length)
+        return {
+          unresolved: unresolved.map(({ email }) => email),
+          reasons: await unresolvedMailReasons(
+            tx,
+            scope.public.runId,
+            unresolved.map(({ email }) => email.id),
+          ),
+        };
       await tx
         .update(runTable)
         .set({
@@ -219,10 +238,21 @@ async function reconcileSettledRunOnce(
           updatedAt: new Date(),
         })
         .where(eq(runTable.id, scope.public.runId));
-      return true;
+      return { unresolved: [], reasons: new Map<string, string>() };
     });
-    if (completed)
+    if (settled && !settled.unresolved.length)
       return { reconciled: true as const, status: "completed" as const };
+    if (settled) {
+      await stopRunForReview(db, {
+        runId: input.runId,
+        operationId: input.operationId,
+        kind: "unresolved_targets",
+        dispatchEventId: input.generation,
+        summary: unresolvedTargetsSummary(settled.unresolved, settled.reasons),
+      });
+      const status = (await loadRunScope(db, input.runId)).public.status;
+      return { reconciled: status === "needs_review", status };
+    }
   }
   await stopRunForReview(db, {
     runId: input.runId,
@@ -449,6 +479,55 @@ export async function auditAllImportBatches(
   }
 }
 
+/** Admitted Email outcomes a settled Mail import accepts as final. */
+const SETTLED_MAIL_STATUSES = new Set(["completed", "excluded", "blocked"]);
+
+/** Pi's latest recorded reason for each unresolved Email, by Email id. */
+async function unresolvedMailReasons(
+  tx: DrizzleTransaction,
+  runId: string,
+  emailIds: readonly string[],
+) {
+  const rows = await tx
+    .select({ result: runOperation.result })
+    .from(runOperation)
+    .where(
+      and(
+        eq(runOperation.runId, runEntityId.parse(runId)),
+        eq(runOperation.kind, "target_outcome"),
+      ),
+    )
+    .orderBy(runOperation.completedAt);
+  const reasons = new Map<string, string>();
+  for (const row of rows) {
+    const parsed = runTargetOutcomeReceipt.safeParse(row.result);
+    if (
+      parsed.success &&
+      parsed.data.target.warning &&
+      emailIds.includes(parsed.data.target.entityId)
+    )
+      reasons.set(parsed.data.target.entityId, parsed.data.target.warning);
+  }
+  return reasons;
+}
+
+function unresolvedTargetsSummary(
+  emails: readonly {
+    id: string;
+    shortcode: string;
+    subject: string | null;
+    messageId: string;
+  }[],
+  reasons: ReadonlyMap<string, string>,
+) {
+  const lines = emails.map(
+    (email) =>
+      `${email.shortcode} (${email.subject ?? email.messageId}): ${reasons.get(email.id) ?? "no reason recorded"}`,
+  );
+  const summary = `${countLabel(emails.length, "admitted Email")} unresolved; settle each with mail.resolve. ${lines.join("; ")}`;
+  return summary.length > 1_000 ? `${summary.slice(0, 999)}…` : summary;
+}
+
 async function stopRunForReviewOnce(
   db: Database,
   input: {
@@ -467,6 +546,7 @@ async function stopRunForReviewOnce(
       "auth_required",
       "expected_order_not_found",
       "unclassified_vendor",
+      "unresolved_targets",
       "other",
     ])
     .parse(input.kind);

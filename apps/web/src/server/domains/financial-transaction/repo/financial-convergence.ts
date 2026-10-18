@@ -33,7 +33,10 @@ import {
   vendor,
 } from "~/server/db/schema";
 import { emailPurchaseEvidenceSql } from "~/server/domains/email/repo/email-purchase-links";
-import { accountFundingPartySql } from "~/server/domains/financial-account/repo/funding-sql";
+import {
+  paymentDateWindowSql,
+  paymentFundingPartySql,
+} from "~/server/domains/financial-account/repo/funding-sql";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
   assertMailFinancialEvidenceCurrent,
@@ -384,18 +387,35 @@ async function runFinancialConvergence(
         return review(
           "Automatic booking requires a posted purchase payment. Transfers, repayments, refunds, reimbursements and incoming payments retain their meaning.",
         );
+      // The funder on the charge date (a lag-safe posting date when only that
+      // is known) is the household or the member, and the member owns the
+      // account or holds the card: a household-funded card owned by another
+      // member's party is still its cardholder's to settle.
+      const window = paymentDateWindowSql(sql`payment`);
       const accountAuthority = await tx.execute<{ authorized: boolean }>(sql`
       SELECT EXISTS (
         SELECT 1 FROM "FinancialAccount" a
-        JOIN "LedgerParty" owner ON owner.id = a."ledgerPartyId" AND owner."deletedAt" IS NULL
-        JOIN "LedgerParty" funder ON funder.id = ${accountFundingPartySql(sql`a`, sql`${row.transactionDate}::date`)} AND funder."deletedAt" IS NULL
+        JOIN "FinancialTransaction" payment ON payment.id = ${row.id} AND payment."deletedAt" IS NULL
+        JOIN "LedgerParty" funder ON funder.id = ${paymentFundingPartySql(sql`a`, sql`payment`)} AND funder."deletedAt" IS NULL
+        LEFT JOIN "LedgerParty" owner ON owner.id = a."ledgerPartyId" AND owner."deletedAt" IS NULL
+        LEFT JOIN "LedgerParty" member ON member."userId" = ${actor.userId} AND member.kind = ${ledgerPartyKind.enum.member} AND member."deletedAt" IS NULL
         WHERE a.id = ${row.accountId} AND a."deletedAt" IS NULL AND NOT a.provisional
-          AND (owner.kind = ${ledgerPartyKind.enum.household} OR (owner.kind = ${ledgerPartyKind.enum.member} AND owner."userId" = ${actor.userId}))
-          AND (funder.kind = ${ledgerPartyKind.enum.household} OR (funder.kind = ${ledgerPartyKind.enum.member} AND funder."userId" = ${actor.userId}))
+          AND (funder.kind = ${ledgerPartyKind.enum.household} OR funder.id = member.id)
+          AND (
+            owner.kind = ${ledgerPartyKind.enum.household}
+            OR owner.id = member.id
+            OR a."primaryCardholderId" = member.id
+            OR EXISTS (
+              SELECT 1 FROM jsonb_array_elements(a."authorizedUsers") period
+              WHERE period->>'ledgerPartyId' = member.shortcode
+                AND (period->>'validFrom' IS NULL OR (period->>'validFrom')::date <= ${window.from})
+                AND (period->>'validTo' IS NULL OR ${window.to} <= (period->>'validTo')::date)
+            )
+          )
       ) AS authorized`);
-      if (!row.transactionDate || !accountAuthority.rows[0]?.authorized)
+      if (!accountAuthority.rows[0]?.authorized)
         return review(
-          "The payment needs a dated, confirmed funding account available to this member.",
+          "The payment needs a dated, confirmed funding account available to this member: the household or the member funds it on the charge date, and the member owns the account, is its primary cardholder, or is an authorized user then.",
         );
       const refs = (await settlementRefsFor(tx, [row.id])).get(row.id) ?? [];
       if (!refs.length)

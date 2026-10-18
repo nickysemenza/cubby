@@ -125,7 +125,10 @@ transaction date, not the Purchase date. A statement row with only a posting dat
 uses it when one period covers the 14 preceding days as well; nearer a boundary
 the charge may predate it, so the party remains unknown. Inclusive periods
 must not overlap. An empty history keeps the existing `ledgerPartyId` fallback;
-gaps in a nonempty history remain unknown. Expense
+gaps in a nonempty history remain unknown. Automatic payment convergence
+accepts a member's payment when that funding party is the household or the
+member and the member owns the account, is its primary cardholder, or is an
+authorized user on the charge date. Expense
 funder rows override that derivation. Existing account inventory defaults keep
 using their existing undated party and are unaffected by funding history.
 

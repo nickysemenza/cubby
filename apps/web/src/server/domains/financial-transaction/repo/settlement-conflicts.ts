@@ -65,7 +65,7 @@ const periodPartiesSql = (periods: SQL, date: SQL) => sql`(
 
 /**
  * Everyone who could use the account on `date`, NULLs included. Undated
- * funding history falls back to the owner, as in `accountFundingPartySql`.
+ * funding history falls back to the owner, as in `paymentFundingPartySql`.
  */
 const accountPeopleSql = (account: SQL, date: SQL) => sql`(
   SELECT ${account}."ledgerPartyId"

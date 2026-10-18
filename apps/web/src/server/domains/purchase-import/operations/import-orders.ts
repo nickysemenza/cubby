@@ -4,6 +4,7 @@ import {
   type LedgerPartyId,
   parseEntityId,
   type ProductId,
+  type RunId,
   type VendorId,
   runEntityId,
 } from "@cubby/schemas/identifiers";
@@ -55,6 +56,7 @@ import {
   type ProductHit,
   type ExternalIdPair,
 } from "~/server/domains/product/repo/find-by-external-ids";
+import { productIdentityOverlap } from "~/server/domains/product/repo/match/product-identity-overlap";
 import { resolveProductIdentifierSource } from "~/server/domains/product/repo/product-identifier-source";
 import {
   findExactProductNameMatches,
@@ -83,6 +85,7 @@ import { sourceOrderKey } from "~/server/domains/purchase-import/repo/source-ord
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { executeAtomicOperation } from "~/server/domains/run/repo/operation";
 import { readOperation } from "~/server/domains/run/repo/run-operation";
+import { createAppError } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { ensureMailVendorAccount } from "../repo/gmail/mail-account";
@@ -300,8 +303,25 @@ async function productCandidates(
   const modelRankedIds = new Set(modelRanked.map(({ id }) => id));
   // Exact names rank right after exact identifiers: commit refuses a new
   // Product beside either without a Distinct-from decision.
+  // Name lookup admits a single shared token; past exact names, a fuzzy hit
+  // must also share the item's identity, its own brand counting only when the
+  // line names it.
   const fuzzyRest = fuzzy.filter(
-    ({ id }) => !exactProductIds.has(id) && !modelRankedIds.has(id),
+    (hit) =>
+      !exactProductIds.has(hit.id) &&
+      !modelRankedIds.has(hit.id) &&
+      (exactNameIds.has(hit.id) ||
+        productIdentityOverlap(
+          {
+            name: line.title,
+            manufacturer:
+              hit.manufacturer &&
+              line.title.toLowerCase().includes(hit.manufacturer.toLowerCase())
+                ? hit.manufacturer
+                : null,
+          },
+          hit,
+        ).relevant),
   );
   return [
     ...exact,
@@ -559,6 +579,8 @@ export async function preparePurchaseImport(
     async (ledger) => {
       const recorded = await ledger.replay(getDb(db), preparePurchaseImportOut);
       if (recorded) return recorded;
+      const prior = await priorPreparation(db, scope.runId, input.orders);
+      if (prior) return prior;
       // Invalid keys or altered originals never reach paid source judgments.
       // The writer repeats these checks under its transaction after admission.
       if (scope.purpose === "mail_import")
@@ -574,7 +596,7 @@ export async function preparePurchaseImport(
           ? await prepareMailSourceAdmissions(
               db,
               scope.runId,
-              input.orders.flatMap(({ source }) => {
+              input.orders.flatMap(({ source, via }) => {
                 const { mailboxId, messageId } = parseMailSourceKey(
                   source.externalKey,
                 );
@@ -582,7 +604,7 @@ export async function preparePurchaseImport(
                   source.kind === "mail_attachment") &&
                   mailboxId &&
                   messageId
-                  ? [{ mailboxId, messageId }]
+                  ? [{ mailboxId, messageId, via }]
                   : [];
               }),
               actor,
@@ -751,12 +773,16 @@ export async function preparePurchaseImport(
           for (const [position, line] of preparedCandidateLines.entries()) {
             const stableLineId = order.lineIds[position];
             if (!stableLineId) throw new Error("Prepared line id is missing");
-            const candidates = await productCandidates(
-              transactionDb,
-              exactRequests[position] ?? [],
-              exactHits,
-              line,
-            );
+            // Tax, shipping and other adjustments never resolve a Product.
+            const candidates =
+              line.lineKind === "principal"
+                ? await productCandidates(
+                    transactionDb,
+                    exactRequests[position] ?? [],
+                    exactHits,
+                    line,
+                  )
+                : [];
             const identifiers = Object.fromEntries(
               [
                 line.sku ? ["sku", line.sku] : null,
@@ -807,6 +833,61 @@ export async function preparePurchaseImport(
         return result;
       });
     },
+  );
+}
+
+/**
+ * A preparation an earlier prepare operation of this Run already recorded for
+ * these items, such as a retried coordinator's repeat under a new operation id.
+ * Identical orders read back that preparation (commit names its operation id);
+ * any other overlap with prepared items is a conflict naming it.
+ */
+async function priorPreparation(
+  db: Database,
+  runId: RunId,
+  orders: PreparePurchaseImportInput["orders"],
+) {
+  const database = getDb(db);
+  const prepared = await database
+    .select({
+      prepareOperationId: importPreparedOrder.prepareOperationId,
+      itemOperationId: importPreparedOrder.itemOperationId,
+    })
+    .from(importPreparedOrder)
+    .where(
+      and(
+        eq(importPreparedOrder.runId, runId),
+        inArray(
+          importPreparedOrder.itemOperationId,
+          orders.map((order) => order.itemOperationId),
+        ),
+      ),
+    );
+  const [first] = prepared;
+  if (!first) return undefined;
+  const operation = await readOperation(database, {
+    runId,
+    operationId: first.prepareOperationId,
+  });
+  if (
+    prepared.length === orders.length &&
+    prepared.every(
+      (row) => row.prepareOperationId === first.prepareOperationId,
+    ) &&
+    operation?.state === "completed" &&
+    operation.inputFingerprint === (await sha256Hex(JSON.stringify(orders)))
+  )
+    return preparePurchaseImportOut.parse(operation.result);
+  throw createAppError(
+    "PURCHASE_IMPORT_ITEM_PREPARED",
+    `This Run already prepared ${prepared
+      .map(
+        (row) =>
+          `itemOperationId ${row.itemOperationId} under prepare operation ${row.prepareOperationId}`,
+      )
+      .join(
+        ", ",
+      )} (${operation?.state ?? "unrecorded"}) with different orders. Commit that preparation by its prepareOperationId, or prepare changed evidence under new itemOperationIds.`,
   );
 }
 

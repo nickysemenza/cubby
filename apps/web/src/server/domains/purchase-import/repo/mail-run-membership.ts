@@ -11,6 +11,7 @@ import {
 } from "~/server/db/repository-access.boundary";
 import { email as emailTable, run } from "~/server/db/retained-tables";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
+import { createAppError } from "~/server/errors/app-error";
 
 /**
  * The admitted source roster is Run input: admission freezes it and a
@@ -141,7 +142,8 @@ export async function admitSupportingMailSource(
     return;
   }
   if (roster.sources.length >= 50)
-    throw new Error(
+    throw createAppError(
+      "MAIL_SOURCE_ADMISSION_REFUSED",
       "This Mail import Run already holds fifty Emails; the supporting original waits for a later import.",
     );
   const [message] = await tx
@@ -165,8 +167,9 @@ export async function admitSupportingMailSource(
     message.contentClearedAt ||
     !["pending", "blocked"].includes(message.status)
   )
-    throw new Error(
-      "A supporting original must be an unchanged, related Email no import has settled.",
+    throw createAppError(
+      "MAIL_SOURCE_ADMISSION_REFUSED",
+      `A supporting original must be an unchanged, related Email no import has settled; ${mail.messageId} is ${message ? `${message.deletedAt ? "deleted" : message.status}, classified ${message.classification ?? "unclassified"}${message.checksum === mail.rawChecksum ? "" : ", changed since read"}${message.contentClearedAt ? ", content cleared" : ""}` : "not a retained Email"}.`,
     );
   if (message.runId) {
     const [current] = await tx

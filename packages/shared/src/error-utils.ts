@@ -200,6 +200,13 @@ export const AppErrors = {
   MAIL_READ_TOO_LARGE: "BAD_REQUEST",
   // A Run coordinator asked for raw HTML; Run reads are compact text only.
   MAIL_READ_HTML_RUN: "BAD_REQUEST",
+  // A Mail import Run refusing to admit an Email it has not established as the
+  // recipient's same purchase (attribution, relation, roster bound, settled
+  // source); the message names the missing link.
+  MAIL_SOURCE_ADMISSION_REFUSED: "CONFLICT",
+  // A prepare naming an itemOperationId this Run already prepared under another
+  // operation with different orders; the message names that preparation.
+  PURCHASE_IMPORT_ITEM_PREPARED: "CONFLICT",
   // A Run control action its current status refuses (cancel an ended Run,
   // resume one that is not paused); the message names the status.
   RUN_CONTROL_REFUSED: "CONFLICT",

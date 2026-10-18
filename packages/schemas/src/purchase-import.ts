@@ -3,7 +3,7 @@ import { z } from "zod";
 import { agentImportRunPurpose } from "./import-run-agent";
 import { plainDate } from "./base-entity";
 
-import { mailEvent } from "./mailbox-research";
+import { mailAdmissionPath, mailEvent } from "./mailbox-research";
 import { importSourceIdentity, importSourceKind } from "./import-source";
 export { importSourceIdentity, importSourceKind } from "./import-source";
 import { ENTITY_SOURCE_QUOTE_MAX } from "./child-tables/modules";
@@ -372,6 +372,8 @@ export const runFindingKind = z.enum([
   "expected_order_not_found",
   "receipt_required",
   "unclassified_vendor",
+  /** A settled Mail import's admitted Email that Pi resolved unresolved. */
+  "unresolved_targets",
   "other",
 ]);
 export const replacementLineIdentity = z.object({
@@ -772,6 +774,7 @@ const preparedImportOrderInput = z
     source: importSourceIdentity.extend({
       kind: importSourceKind.exclude(["browser_order"]),
     }),
+    via: mailAdmissionPath.optional(),
     evidenceChecksum: z.string().regex(/^[a-f0-9]{64}$/),
     extractionRevision: z.string().trim().min(1).max(200),
     extraction: importExtractionOutcome,

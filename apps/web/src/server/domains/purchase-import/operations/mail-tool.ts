@@ -827,11 +827,16 @@ export async function resolveMail(
         "MAIL_EVIDENCE_STALE",
         "This Email changed since it was read; read it again before resolving.",
       );
+    if (disposition.via && !importRunId)
+      throw createAppError(
+        "MAIL_REQUEST_REFUSED",
+        "via admits connecting Emails to a Mail import Run; this Email is not on one, so link it without via.",
+      );
     if (importRunId)
       admissions = await prepareMailSourceAdmissions(
         db,
         importRunId,
-        [input],
+        [{ ...input, via: disposition.via }],
         actor,
         decisionPort,
       );

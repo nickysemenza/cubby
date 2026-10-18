@@ -1,7 +1,10 @@
 import type { DisplayItem } from "@cubby/schemas/entity-definitions/label-field";
 import { sql, type SQL } from "drizzle-orm";
 
-/** The party whose funding period covers every day from `from` through `to`. */
+/**
+ * The party whose funding period covers every day from `from` through `to`.
+ * Nonempty history replaces the undated fallback; a gap remains unknown.
+ */
 const fundingPartyCoveringSql = (account: SQL, from: SQL, to: SQL) => sql`(
   CASE WHEN jsonb_array_length(${account}."fundingPeriods") = 0 THEN ${account}."ledgerPartyId"
   ELSE (SELECT party.id FROM jsonb_array_elements(${account}."fundingPeriods") period
@@ -12,10 +15,6 @@ const fundingPartyCoveringSql = (account: SQL, from: SQL, to: SQL) => sql`(
   ) END
 )`;
 
-/** Nonempty history replaces the undated fallback; a gap remains unknown. */
-export const accountFundingPartySql = (account: SQL, date: SQL) =>
-  fundingPartyCoveringSql(account, date, date);
-
 /**
  * Statement imports store only `postedDate`, which can trail the charge by days
  * and cross a period boundary. A posting date therefore resolves a party only
@@ -23,17 +22,20 @@ export const accountFundingPartySql = (account: SQL, date: SQL) =>
  */
 const POSTING_LAG_DAYS = 14;
 
+/**
+ * The days a settlement row's charge may fall on: its charge date, else the
+ * posting date and the lag before it. A dated membership must cover them all.
+ */
+export const paymentDateWindowSql = (payment: SQL) => ({
+  from: sql`coalesce(${payment}."transactionDate", ${payment}."postedDate" - ${sql.raw(String(POSTING_LAG_DAYS))})`,
+  to: sql`coalesce(${payment}."transactionDate", ${payment}."postedDate")`,
+});
+
 /** Funding party for a settlement row, by charge date, else a boundary-safe posting date. */
-export const paymentFundingPartySql = (account: SQL, payment: SQL) => sql`(
-  CASE WHEN ${payment}."transactionDate" IS NOT NULL
-    THEN ${accountFundingPartySql(account, sql`${payment}."transactionDate"`)}
-    ELSE ${fundingPartyCoveringSql(
-      account,
-      sql`${payment}."postedDate" - ${sql.raw(String(POSTING_LAG_DAYS))}`,
-      sql`${payment}."postedDate"`,
-    )}
-  END
-)`;
+export const paymentFundingPartySql = (account: SQL, payment: SQL) => {
+  const { from, to } = paymentDateWindowSql(payment);
+  return fundingPartyCoveringSql(account, from, to);
+};
 
 /** Linked detail rows preserve dated membership order on every client. */
 // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- jsonb_build_object keys describe the DisplayItem wire shape, not enum values.

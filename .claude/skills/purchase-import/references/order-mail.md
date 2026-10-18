@@ -125,7 +125,9 @@ finds exactly one owned legacy copy with the historical checksum and identical
 message identity, sender, subject, received time and full bodies. This proof can
 bridge storage-checksum differences; it preserves the old claim, association and
 historical extraction. Changed bodies, ambiguous copies and unresolved ownership
-still refuse. Ordinary canonical-source reviews retain the accepted checksum
+still refuse. Saving the current mailbox's copy of a message excludes its pending
+legacy-mailbox duplicate (never one held for ownership review); the excluded copy
+stays readable for this proof. Ordinary canonical-source reviews retain the accepted checksum
 fence.
 
 Every accepted binding validates the current Expense title, quantity, role,
