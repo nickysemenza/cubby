@@ -443,34 +443,46 @@ function recordSuggestionBasis(
   return basis;
 }
 
+/** The record-independent part of each target's request, derived once for a
+ * page of records rather than once per record. */
+function suggestionTargetPlans(
+  entity: StandardEntity,
+  targets: SuggestTargets,
+) {
+  return targets.targets.map((target) => {
+    const ownTargets = suggestTargetsFor(entity, [target.key]);
+    return {
+      target,
+      ownTargets,
+      basisTargets: {
+        ...ownTargets,
+        basisKeys: [...new Set([...ownTargets.basisKeys, target.key])],
+      },
+      field: entityFieldModels[entity].fields.find(
+        (entry) => entry.key === target.key,
+      ),
+    };
+  });
+}
+
 /** Each target owns its question: deferred sibling projections and accepted
  * sibling assignments cannot replace an unchanged field's query observer. */
 function suggestionRequestsForRecord(
   entity: StandardEntity,
   record: SuggestionRecord,
-  targets: SuggestTargets,
+  plans: ReturnType<typeof suggestionTargetPlans>,
   runKey: string,
 ) {
-  return targets.targets.flatMap((target) => {
-    const ownTargets = suggestTargetsFor(entity, [target.key]);
-    const basis = recordSuggestionBasis(
-      entity,
-      {
-        ...ownTargets,
-        basisKeys: [...new Set([...ownTargets.basisKeys, target.key])],
-      },
-      record,
-    );
-    const field = entityFieldModels[entity].fields.find(
-      (entry) => entry.key === target.key,
-    );
-    const resolutions = recordFieldResolutions(record);
+  const resolutions = recordFieldResolutions(record);
+  return plans.flatMap(({ target, ownTargets, basisTargets, field }) => {
+    const basis = recordSuggestionBasis(entity, basisTargets, record);
+    const currentValue = recordValue(entity, record, target.key).value;
     const loaded =
       record[field?.readKey ?? target.key] !== undefined ||
       (field?.reference != null &&
         record[target.key.replace(/Ids?$/u, "")] !== undefined) ||
       resolutions[target.key] !== undefined ||
-      recordValue(entity, record, target.key).value !== null;
+      currentValue !== null;
     if (
       !loaded ||
       !isBasisSufficient(entity, ownTargets, basis) ||
@@ -482,7 +494,7 @@ function suggestionRequestsForRecord(
     const resolution = resolutions[target.key];
     const empty =
       target.mode !== "prune" &&
-      recordValue(entity, record, target.key).value === null &&
+      currentValue === null &&
       (resolution === undefined ||
         (resolution.mode === "inherit" && resolution.value === null));
     return [
@@ -667,15 +679,13 @@ function requestsForRecords(
   targets: SuggestTargets,
   runKey: string,
 ) {
+  if (targets.targets.length === 0) return [];
+  const plans = suggestionTargetPlans(entity, targets);
   return records.flatMap((raw) => {
     const parsed = recordSchema.safeParse(raw);
-    if (
-      !parsed.success ||
-      parseShortcode(parsed.data.id)?.type !== entity ||
-      targets.targets.length === 0
-    )
+    if (!parsed.success || parseShortcode(parsed.data.id)?.type !== entity)
       return [];
-    return suggestionRequestsForRecord(entity, parsed.data, targets, runKey);
+    return suggestionRequestsForRecord(entity, parsed.data, plans, runKey);
   });
 }
 
