@@ -23,6 +23,17 @@ export const runPurpose = z.enum([
 ]);
 export type RunPurpose = z.infer<typeof runPurpose>;
 
+/** Run purposes whose progress is an ordered RunStep ledger. */
+export const STEP_RUN_PURPOSES = [
+  "maintenance",
+  "sweep",
+] as const satisfies readonly RunPurpose[];
+export type StepRunPurpose = (typeof STEP_RUN_PURPOSES)[number];
+export const isStepRunPurpose = (
+  purpose: RunPurpose | string,
+): purpose is StepRunPurpose =>
+  STEP_RUN_PURPOSES.some((candidate) => candidate === purpose);
+
 /** Report presentation only; agent execution and discovery purposes are separate capabilities. */
 export const IMPORT_REPORT_RUN_PURPOSES = [
   "account_sync",

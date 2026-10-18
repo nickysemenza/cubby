@@ -19,14 +19,11 @@ export const WORKFLOW_RUN_PURPOSES = [
 ] as const;
 export type WorkflowRunPurpose = (typeof WORKFLOW_RUN_PURPOSES)[number];
 
-/** Workflow Runs whose progress is an ordered RunStep ledger (`StepRunWorkflow`). */
-export const STEP_RUN_PURPOSES = ["maintenance", "sweep"] as const;
-export type StepRunPurpose = (typeof STEP_RUN_PURPOSES)[number];
-
-export const isStepRunPurpose = (
-  purpose: RunPurpose | string,
-): purpose is StepRunPurpose =>
-  STEP_RUN_PURPOSES.some((candidate) => candidate === purpose);
+export {
+  isStepRunPurpose,
+  STEP_RUN_PURPOSES,
+  type StepRunPurpose,
+} from "@cubby/schemas/run-fields";
 
 export const isWorkflowRunPurpose = (
   purpose: RunPurpose | string,

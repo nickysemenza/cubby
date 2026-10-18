@@ -9,6 +9,11 @@ import { z } from "zod";
 import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import { RUN_PURPOSE_LABEL, runPurpose } from "./activity-fields";
 export {
+  isStepRunPurpose,
+  STEP_RUN_PURPOSES,
+  type StepRunPurpose,
+} from "./activity-fields";
+export {
   RUN_PURPOSE_LABEL,
   runPurpose,
   IMPORT_REPORT_RUN_PURPOSES,
