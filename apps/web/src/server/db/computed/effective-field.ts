@@ -423,9 +423,9 @@ export const effectiveSourceSql = (
 /**
  * Each live record a hierarchy chain reads, the row first: `{ id, depth,
  * value, decides, eligible }` ordered by depth, cycle-guarded and capped at
- * `maxDepth` like the walk itself. `eligible` turns false from the first
- * ancestor a `whileSame` walk stops at, so an explanation can show it
- * without letting it decide. Explanations show it as the ladder of places a
+ * `maxDepth` like the walk itself. A `whileSame` ladder ends at the first
+ * ancestor the walk stops at, with `eligible` false, so an explanation can
+ * show it without letting it decide; nothing above it can. Explanations show it as the ladder of places a
  * value could come from. Only a chain that inherits through its hierarchy
  * first has a ladder.
  */
@@ -468,7 +468,7 @@ export const inheritanceLadderSql = (
       SELECT ${select}, ${ref(walk, "ih_depth")} + 1, ${ref(walk, "ih_visited")} || ${ref(node, "id")},
         ${ref(walk, "ih_same")}, ${ref(walk, "ih_eligible")}${sameAsSql(entity, source.whileSame, node, ref(walk, "ih_same"), 1)}
       FROM ${table} ${name(node)} JOIN ${name(walk)} ON ${ref(node, "id")} = ${ref(walk, source.parentColumn)}
-      WHERE ${ref(walk, "ih_depth")} < ${sql.raw(String(source.maxDepth))}
+      WHERE ${ref(walk, "ih_depth")} < ${sql.raw(String(source.maxDepth))} AND ${ref(walk, "ih_eligible")}
         AND array_position(${ref(walk, "ih_visited")}, ${ref(node, "id")}) IS NULL${live(node, softDelete)}
     )
     SELECT ${ref(walk, "id")} AS id, ${ref(walk, "ih_depth")} AS depth,

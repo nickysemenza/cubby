@@ -73,8 +73,8 @@ default trade.
 uses; `inheritedFieldSql` the fallback; `effectiveSourceSql` and
 `inheritedSourceSql` the record that decided the value or the fallback,
 which `fieldResolutions.sourceEntity` names; `inheritanceLadderSql` every
-record a hierarchy chain reads, for "why this value" explanations, with
-`eligible` false from where a `whileSame` walk stops. A stored
+record a hierarchy chain reads, for "why this value" explanations, ending
+at the ancestor a `whileSame` walk stops at (`eligible` false). A stored
 filter over an inherited field, a `via` path ending at one, and a relation
 edge whose foreign key is one all read the effective value (a batched
 traversal that walks such an edge toward its source may join a statement-local

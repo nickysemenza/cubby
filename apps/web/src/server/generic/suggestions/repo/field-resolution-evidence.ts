@@ -68,7 +68,7 @@ const nodeSchema = z.object({
   depth: z.number(),
   value: z.json(),
   assigned: z.boolean(),
-  /** False from the first ancestor a `whileSame` walk stops at. */
+  /** False at the ancestor a `whileSame` walk stops at, the last listed. */
   eligible: z.boolean(),
 });
 type Node = z.infer<typeof nodeSchema>;
