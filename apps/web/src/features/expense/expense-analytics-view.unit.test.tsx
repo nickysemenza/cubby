@@ -15,6 +15,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
+// The view lazily loads its explorer; load it with the file so no test ends
+// with that import still in flight.
+import "./expense-aggregate-explorer";
 import { ProjectExpenseAnalytics } from "./expense-analytics-view";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;

@@ -20,7 +20,7 @@ import {
   getEntityDetailOutputSchema,
 } from "~/entity/generated/entity-details.gen";
 import { inventoryListItem } from "~/entity/generated/entity-lists.gen";
-import { installFeatures } from "~/features/registry";
+import { installFeatures, preloadFeatureFills } from "~/features/registry";
 import {
   fieldExplanation,
   entityList,
@@ -35,6 +35,8 @@ import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 import { GenericEntityDetail } from "./generic-entity-detail";
 
 installFeatures();
+// Every declared section renders here; load their lazy fills before the tests.
+await preloadFeatureFills();
 
 const genericDetailEntities: readonly GenericDetailEntity[] = [
   ...detailEntities,
