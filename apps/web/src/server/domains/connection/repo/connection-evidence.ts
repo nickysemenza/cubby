@@ -5,7 +5,9 @@ import {
 } from "@cubby/schemas/entity-connections";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { and, eq, sql } from "drizzle-orm";
+import { parseShortcode } from "@cubby/shared";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { uniqBy } from "es-toolkit";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -161,9 +163,56 @@ export async function connectionRecord(
 
 /** Dependency payloads several unlocked captures can share. */
 export type PreparedConnectionBases = {
+  records: Map<string, Awaited<ReturnType<typeof connectionRecord>>>;
   expenseProject: Map<string, unknown>;
   settlementCandidates: Map<string, unknown>;
 };
+
+const recordKey = (ref: EntityRef) => `${ref.entityKind}:${ref.entityId}`;
+
+/** `connectionRecord`'s unlocked rows, one statement per entity kind. Codes
+ * that do not resolve are left out, so their capture still raises. */
+async function connectionRecords(db: Database, refs: readonly EntityRef[]) {
+  const records: PreparedConnectionBases["records"] = new Map();
+  const kinds = z.enum(shortcodeEntities);
+  const unique = uniqBy(refs, recordKey);
+  for (const kind of new Set(
+    unique.map((ref) => kinds.parse(ref.entityKind)),
+  )) {
+    const kindRefs = unique.filter((ref) => ref.entityKind === kind);
+    const codes = new Map(
+      kindRefs.flatMap((ref) => {
+        const parsed = parseShortcode(ref.entityId);
+        return parsed?.type === kind ? [[ref.entityId, parsed.shortcode]] : [];
+      }),
+    );
+    if (codes.size === 0) continue;
+    const table: ShortcodeTable = SHORTCODE_TABLE[kind];
+    const rows = await getDb(db)
+      .select({
+        id: table.id,
+        shortcode: table.shortcode,
+        row: sql<unknown>`to_jsonb(${table})`,
+      })
+      .from(table)
+      .where(
+        and(
+          inArray(table.shortcode, [...new Set(codes.values())]),
+          notDeleted(table),
+        ),
+      );
+    const byShortcode = new Map(rows.map((row) => [row.shortcode, row]));
+    for (const [code, shortcode] of codes) {
+      const value = byShortcode.get(shortcode);
+      if (value)
+        records.set(`${kind}:${code}`, {
+          id: parseEntityId(kind, value.id),
+          row: snapshotJson(connectionRelevantRow(kind, value.row)),
+        });
+    }
+  }
+  return records;
+}
 
 /**
  * Batch the dependency reads of `captureConnectionBasis` for unlocked
@@ -175,6 +224,12 @@ export async function prepareConnectionBases(
   raws: readonly ConnectionCandidate[],
 ): Promise<PreparedConnectionBases> {
   const candidates = raws.map((raw) => connectionCandidate.parse(raw));
+  const records = await connectionRecords(
+    db,
+    candidates
+      .filter((candidate) => candidate.relation !== "email-purchase")
+      .flatMap((candidate) => [candidate.source, candidate.target]),
+  );
   const expenses = candidates
     .filter((candidate) => candidate.relation === "expense-project")
     .map((candidate) =>
@@ -190,6 +245,7 @@ export async function prepareConnectionBases(
       parseShortcodeFor("purchase", candidate.target.entityId),
     );
   return {
+    records,
     expenseProject: await expenseProjectRecommendationContexts(db, expenses),
     settlementCandidates: await listPurchasesSettlementCandidates(
       db,
@@ -214,15 +270,12 @@ export async function captureConnectionBasis(
     candidate.target.entityKind === "purchase" ||
     candidate.target.entityKind === "project" ||
     candidate.target.entityKind === "location";
-  const first = await connectionRecord(
-    db,
-    targetFirst ? candidate.target : candidate.source,
-    lock,
-  );
-  const second = await connectionRecord(
-    db,
+  const record = async (ref: EntityRef) =>
+    (!lock && prepared?.records.get(recordKey(ref))) ||
+    (await connectionRecord(db, ref, lock));
+  const first = await record(targetFirst ? candidate.target : candidate.source);
+  const second = await record(
     targetFirst ? candidate.source : candidate.target,
-    lock,
   );
   const source = targetFirst ? second : first;
   const target = targetFirst ? first : second;

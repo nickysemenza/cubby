@@ -5,7 +5,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { ProjectOptionsOut } from "@cubby/schemas/project";
 import type { Trade } from "@cubby/schemas/project";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import type { Database } from "~/server/db";
@@ -40,11 +40,11 @@ export async function expenseProjectRecommendationContexts(
   db: Database,
   ids: readonly ExpenseShortcode[],
 ) {
-  const sources: Array<{ id: ExpenseShortcode; source: EligibleSource }> = [];
-  for (const id of uniq(ids)) {
-    const source = await readSource(db, id);
-    if (source && isEligible(source)) sources.push({ id, source });
-  }
+  const read = await readSources(db, uniq(ids));
+  const sources = uniq(ids).flatMap((id) => {
+    const source = read.find((row) => row.shortcode === id);
+    return source && isEligible(source) ? [{ id, source }] : [];
+  });
   const rosters = await projectNameOptionsExcluding(
     db,
     sources.map(({ source }) => source.id),
@@ -123,7 +123,7 @@ const readHistory = async (
 };
 
 type RecommendationContext = Awaited<ReturnType<typeof sourceContext>>;
-type RecommendationSource = NonNullable<Awaited<ReturnType<typeof readSource>>>;
+type RecommendationSource = Awaited<ReturnType<typeof readSources>>[number];
 type EligibleSource = RecommendationSource & {
   effectiveTrade: NonNullable<RecommendationSource["effectiveTrade"]>;
 };
@@ -131,12 +131,14 @@ type EligibleSource = RecommendationSource & {
 const isEligible = (source: RecommendationSource): source is EligibleSource =>
   source.lineKind === "principal" && source.effectiveTrade !== null;
 
-const readSource = (db: Database, id: ExpenseShortcode) =>
-  getDb(db).query.expense.findFirst({
-    where: and(eq(expense.shortcode, id), notDeleted(expense)),
-    extras: expenseInheritanceReadExtras(),
-    with: { product: { columns: { kind: true } } },
-  });
+const readSources = async (db: Database, ids: readonly ExpenseShortcode[]) =>
+  ids.length === 0
+    ? []
+    : getDb(db).query.expense.findMany({
+        where: and(inArray(expense.shortcode, [...ids]), notDeleted(expense)),
+        extras: expenseInheritanceReadExtras(),
+        with: { product: { columns: { kind: true } } },
+      });
 
 async function sourceContext(
   db: Database,
