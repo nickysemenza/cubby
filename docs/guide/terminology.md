@@ -685,9 +685,18 @@ The contradictory facts need resolving before deciding whether records are
 duplicates.
 
 **Suggestion**:
-A classification or field value that has been computed for a record but not
+A classification, field value or record change that has been computed but not
 yet accepted by the household, with a confidence.
 _Avoid_: proposal, Jev suggestion, recommendation
+
+**Transaction suggestion**:
+A Suggestion, computed from one unmatched statement charge, to create a
+Financial Transaction, attach the charge to an existing one, supersede a
+recorded hold with its posted row, or void a hold a later export no longer
+contains. It is a Suggestion with the `statement_transaction` Assessment
+family; nothing is written until it is reviewed. A clean one is
+bulk-acceptable.
+_Avoid_: statement proposal, auto-match
 
 **Decision model**:
 The closed-set classifier behind every Suggestion and Mail triage: Jev or

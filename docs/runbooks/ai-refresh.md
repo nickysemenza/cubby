@@ -56,6 +56,10 @@ activation does not block interactive Gateway admission.
 The Workflow's preliminary Run guard selects only its identity under the running
 status and attempt predicate, omitting retained input and progress-history payloads. Callers that
 need the Run data keep the full read under the same status/attempt fence.
+Statement Transaction suggestion labels are not AiEvaluation targets: the
+background queue labels pending rule suggestions in batches of 20 only while
+the AI refresh activation is enabled, and a disabled activation leaves them
+unlabelled (still reviewable, never bulk-clean by label).
 Workflows own inference deadlines and retries. Nightly maintenance and existing
 app-open recovery reconcile stranded Runs and relevant evidence/option changes.
 The singleton uses its own compiled manifest, never a caller-supplied version;
