@@ -814,6 +814,14 @@ Rules:
       "googleDriveFolderUrl",
       "notionPageUrl",
     ],
+    rows: {
+      // The project's tracker attention items, one per rule it trips,
+      // computed by the attention rules the dashboard and Problems share.
+      attentionItems: {
+        label: "Attention items",
+        repository: { type: "text" },
+      },
+    },
     derived: {
       // Orders by the effective assignee's name.
       assigneeId: { via: "assignee" },
@@ -822,12 +830,8 @@ Rules:
       startDate: { type: "date" },
       // A displayable image (PDF attachments don't count).
       image: { type: "boolean" },
-      attention: {
-        predicate: "multiselect",
-        negatable: true,
-        reason:
-          "Tracker membership comes from the attention rules over tasks and budgets",
-      },
+      // Tracker membership, from the attention rules over tasks and budgets.
+      attention: { via: "attentionItems.type" },
       dateRange: {
         predicate: "range",
         reason:

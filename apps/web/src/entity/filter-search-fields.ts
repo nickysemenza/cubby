@@ -242,5 +242,11 @@ export const problemFilterSemantics = {
       nullable: { field: "parentTaskPresenceFilter", label: "parent task" },
     },
   ],
-  project: [{ columnId: "attention", kind: "multiselect" }],
+  project: [
+    {
+      columnId: "attention",
+      kind: "multiselect",
+      nullable: { field: "attentionPresenceFilter", label: "attention" },
+    },
+  ],
 } as const satisfies Partial<Record<Entity, readonly FilterSpecCore[]>>;

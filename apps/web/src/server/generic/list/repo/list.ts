@@ -120,7 +120,10 @@ import {
   ListContext,
   type ListPrepare,
   relatedExistsSql,
+  type AnyRowsSql,
   rowSetSql,
+  rowsPrepare,
+  type RowsSqlArg,
   shortcodeIdsSql,
 } from "./field-compiler";
 import { wantsListGroup } from "./list-projection";
@@ -487,6 +490,8 @@ const predicateValue = (
 /** Derived SQL and prepared request data a scaffold passes to its filters. */
 interface DerivedFilterInput {
   readonly derived: AnyDerivedSql;
+  /** Repository row sets' relations. */
+  readonly rows?: AnyRowsSql;
   readonly context: ListContext;
 }
 
@@ -836,8 +841,15 @@ const rowSetPredicates = (
   rows: string,
   descriptors: readonly (StoredDescriptorView & { derived: string })[],
   values: ListFilterValues,
+  input: DerivedFilterInput | undefined,
 ): SQL | undefined => {
-  const set = rowSetSql(entity, rows, getTableName(table));
+  const set = rowSetSql(
+    entity,
+    rows,
+    getTableName(table),
+    input?.rows,
+    input?.context,
+  );
   const conditions = descriptors.flatMap((descriptor): RowCondition[] => {
     const field = derivedFieldsOf(entity)[descriptor.derived];
     if (field?.shape !== "rows") return [];
@@ -932,14 +944,14 @@ const rowSetPredicates = (
     }
   });
   if (conditions.length === 0) return undefined;
-  // No row at all, matched only when every condition asks for No value.
-  const empty = (absent: boolean) =>
-    absent ? sql`NOT ${set.exists(undefined)}` : undefined;
+  // No row at all also matches when every condition asks for No value.
+  const matches = (condition: SQL | undefined, absent: boolean) =>
+    absent ? set.matchesOrEmpty(condition) : set.matches(condition);
   const everyValue = conditions.filter(({ all }) => all !== null);
   if (everyValue.length === 0)
-    return or(
-      set.exists(and(...conditions.map(({ any }) => any))),
-      empty(conditions.every(({ absent }) => absent)),
+    return matches(
+      and(...conditions.map(({ any }) => any)),
+      conditions.every(({ absent }) => absent),
     );
   // Each value of a Match all filter needs its own row, which also holds
   // every sibling's any-of condition (another Match all filter's included).
@@ -950,19 +962,52 @@ const rowSetPredicates = (
       return or(
         and(
           ...(condition.all ?? []).map((each) =>
-            set.exists(and(each, siblings)),
+            set.matches(and(each, siblings)),
           ),
         ),
         condition.presence === undefined
           ? undefined
-          : or(
-              set.exists(and(condition.presence, siblings)),
-              empty(condition.absent && others.every(({ absent }) => absent)),
+          : matches(
+              and(condition.presence, siblings),
+              condition.absent && others.every(({ absent }) => absent),
             ),
       );
     }),
   );
 };
+
+/**
+ * Every request key the filters through one row set (or one of its
+ * terminals) read, with their "Include sub-…" toggles: what a repository
+ * row set drops from the request that bounds its own relation, which cannot
+ * read itself, and which of its columns a request reads.
+ */
+export const rowSetFilterKeys = (
+  entity: Entity,
+  rows: string,
+  terminal?: string,
+): string[] =>
+  descriptorsFor(entity).flatMap((descriptor) => {
+    const field =
+      descriptor.derived === null
+        ? undefined
+        : derivedFieldsOf(entity)[descriptor.derived];
+    if (
+      field?.shape !== "rows" ||
+      field.rows !== rows ||
+      (terminal !== undefined && field.path !== `${rows}.${terminal}`)
+    )
+      return [];
+    const toggle = Object.entries(
+      generatedEntityListFields[entity].subtree,
+    ).find(
+      ([filter]) => filter === (descriptor.field ?? descriptor.columnId),
+    )?.[1];
+    return [
+      ...descriptorValueKeys(descriptor),
+      ...(toggle === undefined ? [] : [toggle]),
+    ];
+  });
 
 const nonEmpty = <T>(list: readonly T[] | undefined) =>
   list === undefined || list.length === 0 ? undefined : list;
@@ -1140,6 +1185,7 @@ export function declaredFilterPredicates<Filters extends object>(
                 (descriptor) => rowSetOf(descriptor) === rows,
               ),
               values,
+              derivedInput,
             ),
           ],
     ),
@@ -1482,15 +1528,24 @@ const loadGroupSummaries = async (
     }));
 };
 
-interface ListScaffoldOptions<E extends Entity> {
-  /** SQL for every declared `model.derived` value and predicate. */
-  derived: DerivedSqlArg<E>;
-}
-
-/** `options` is required exactly when the entity declares derived SQL. */
-type ListScaffoldArgs<E extends Entity> = [keyof DerivedSqlArg<E>] extends [
+/**
+ * SQL for every declared `model.derived` value and predicate, and the
+ * relation of every repository row set (`model.rows`); each key is required
+ * exactly when the entity declares one.
+ */
+type ListScaffoldOptions<E extends Entity> = ([keyof DerivedSqlArg<E>] extends [
   never,
 ]
+  ? { derived?: DerivedSqlArg<E> }
+  : { derived: DerivedSqlArg<E> }) &
+  ([keyof RowsSqlArg<E>] extends [never]
+    ? { rows?: RowsSqlArg<E> }
+    : { rows: RowsSqlArg<E> });
+
+/** `options` is required exactly when the entity declares SQL it reads. */
+type ListScaffoldArgs<E extends Entity> = [
+  keyof DerivedSqlArg<E> | keyof RowsSqlArg<E>,
+] extends [never]
   ? [options?: ListScaffoldOptions<E>]
   : [options: ListScaffoldOptions<E>];
 
@@ -1510,6 +1565,7 @@ export function listScaffold<
   },
 >(entity: E, table: T, ...[options]: ListScaffoldArgs<E>) {
   const derivedSql: AnyDerivedSql = options?.derived ?? {};
+  const rowsSql: AnyRowsSql = options?.rows ?? {};
   const derivedFields = derivedFieldsOf(entity);
   const fieldModel = fieldModelFor(entity);
   const readGroups = Object.entries(entitySummary).find(
@@ -1644,7 +1700,11 @@ export function listScaffold<
       );
       const prepares = new Set(
         requested.flatMap((key) => {
-          const prepare = derivedPrepare(derivedSql, key);
+          const field = derivedFields[key];
+          const prepare =
+            field?.shape === "rows"
+              ? rowsPrepare(rowsSql, field.rows)
+              : derivedPrepare(derivedSql, key);
           return prepare === null ? [] : [prepare];
         }),
       );
@@ -1719,6 +1779,7 @@ export function listScaffold<
     ): Array<SQL | undefined> {
       return declaredFilterPredicates(entity, table, filters, {
         derived: derivedSql,
+        rows: rowsSql,
         context,
       });
     },

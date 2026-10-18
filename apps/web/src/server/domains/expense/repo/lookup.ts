@@ -1,11 +1,6 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { oneOrManyValues } from "@cubby/schemas/pagination";
-import {
-  expenseCostSign,
-  expenseFiltersSchema,
-  expenseListItemOut,
-} from "@cubby/schemas/project";
+import { expenseCostSign, expenseListItemOut } from "@cubby/schemas/project";
 import type { ExpenseFilters } from "@cubby/schemas/project";
 import { and, inArray, type SQL, sql } from "drizzle-orm";
 
@@ -13,12 +8,9 @@ import { projectListRows } from "~/entity/model/list-read-schema";
 import type { Database } from "~/server/db";
 import {
   getDb,
-  isTransaction,
   type ListReadIntent,
   notDeleted,
-  presenceCondition,
   relations,
-  shortcodeSetCondition,
 } from "~/server/db/helpers";
 import {
   expense,
@@ -37,13 +29,15 @@ import { withDisplayImages } from "~/server/entity-kernel/repo/entity-display-im
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import {
   ListContext,
+  listFilterValues,
+  type ListFilterValues,
   listPrepare,
-  shortcodeIdsSql,
 } from "~/server/generic/list/repo/field-compiler";
 import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import {
   declaredFilterPredicates,
   listScaffold,
+  rowSetFilterKeys,
 } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
@@ -59,6 +53,7 @@ import {
 } from "./expense-inheritance";
 import {
   type ExpenseAllocationProjectScope,
+  expenseJointAllocationSql,
   loadExpenseProjectAllocations,
 } from "./expense-project-allocation";
 import { loadExpenseSpendingAllocations } from "./expense-spending-allocation";
@@ -152,9 +147,8 @@ export const resolveExpenseProjectAllocationScope = async (
 };
 
 /**
- * The allocation filters: each matches the expense's allocation shares, so
- * together they select one membership, read once. Trade presence reads the
- * row's own column and stays.
+ * The allocation filters the analytics reads omit (`omitAllocationScope`):
+ * they join the allocation shares themselves.
  */
 const allocationKeys = [
   "projectId",
@@ -174,23 +168,7 @@ const withoutAllocation = (filters: ExpenseFilters): ExpenseFilters => {
   return rest;
 };
 
-/** The first allocation filter set, which applies the shared membership. */
-const allocationLead = (filters: ExpenseFilters) =>
-  (oneOrManyValues(filters.projectId)?.length ?? 0) > 0 ||
-  filters.projectPresenceFilter !== undefined
-    ? "projectFilter"
-    : (oneOrManyValues(filters.spendingCategoryId)?.length ?? 0) > 0 ||
-        filters.spendingCategoryPresenceFilter !== undefined
-      ? "spendingCategoryFilter"
-      : (oneOrManyValues(filters.trade)?.length ?? 0) > 0
-        ? "tradeFilter"
-        : (oneOrManyValues(filters.costType)?.length ?? 0) > 0
-          ? "costTypeFilter"
-          : filters.projectScope !== undefined
-            ? "projectScope"
-            : null;
-
-/** The SQL of every declared non-allocation filter, by derived key. */
+/** The SQL of every declared filter outside the allocation shares, by derived key. */
 const rowDerived = {
   // The allocated spending categories' names.
   spendingCategoryId: expenseDerivedValueSql(
@@ -203,77 +181,91 @@ const rowDerived = {
   costSign: sql`CASE WHEN ${expense.cost} < 0 THEN ${expenseCostSign.enum.negative}::text
     WHEN ${expense.cost} > 0 THEN ${expenseCostSign.enum.positive}::text END`,
   disposalPurchase: inArray(expense.purchaseId, disposalPurchaseIds()),
-  ledgerPartyId: ({ values }: { values: readonly string[] }) => sql`EXISTS (
-    SELECT 1 FROM "ExpenseAttribution" ea
-    WHERE ea."expenseId" = ${expense.id}
-      AND ea."deletedAt" IS NULL
-      AND ea."ledgerPartyId" IN ${shortcodeIdsSql("ledgerParty", (shortcode) =>
-        shortcodeSetCondition(shortcode, values),
-      )})`,
 };
 
+const shareKeys = new Set(rowSetFilterKeys("expense", "allocationShares"));
+const readsShare = (values: ListFilterValues, terminal: string) =>
+  rowSetFilterKeys("expense", "allocationShares", terminal).some(
+    (key) => values[key] !== undefined,
+  );
+
 /**
- * The expenses whose allocation shares match the filters' allocation scope.
- * Only the independent row filters bound the allocation inputs; quality and
- * related-view conditions may themselves depend on allocation evidence.
+ * The expenses the request's other row filters select, which bound the
+ * allocation they are matched by. Quality and related-view conditions may
+ * themselves depend on allocation evidence, so they never bound it.
  */
-const allocationMembership = async (
-  db: Database,
-  filters: ExpenseFilters,
-): Promise<SQL | undefined> => {
-  const scope = await resolveExpenseProjectAllocationScope(db, filters);
-  if (!scope) return undefined;
+const allocationBound = (values: ListFilterValues): SQL | undefined => {
   const selected = and(
     ...declaredFilterPredicates(
       "expense",
       expense,
-      { ...withoutAllocation(filters), tradePresenceFilter: undefined },
+      Object.fromEntries(
+        Object.entries(values).filter(([key]) => !shareKeys.has(key)),
+      ),
       { derived: rowDerived, context: ListContext.empty },
     ),
   );
-  return expenseDerivedMembershipSql(
-    sql`${expense.id}`,
-    scope,
-    selected
-      ? expenseSelectionForWhere(and(notDeleted(expense), selected))
-      : undefined,
-  );
+  return selected
+    ? expenseSelectionForWhere(and(notDeleted(expense), selected)).select
+    : undefined;
 };
 
-const allocation = listPrepare(async (db, values) => {
-  // The project tree and embedded scope loaders read outside a transaction.
-  if (isTransaction(db))
-    throw new Error("Expense allocation filters cannot read in a transaction");
-  const filters = expenseFiltersSchema.parse(values);
-  return {
-    lead: allocationLead(filters),
-    membership: await allocationMembership(db, filters),
-  };
-});
-
-/** An allocation filter applies the membership when it leads the set. */
-const allocationFilter = (key: ReturnType<typeof allocationLead>) =>
-  allocation.predicate(({ lead, membership }) =>
-    lead === key ? membership : undefined,
-  );
+/**
+ * The `allocationShares` row set: every share of the bounded expenses,
+ * allocating only the dimensions the request filters by.
+ */
+const allocationShares = listPrepare(async (_db, values) => ({
+  bound: allocationBound(values),
+  projects: readsShare(values, "project"),
+  categories: readsShare(values, "spendingCategory"),
+  trades: readsShare(values, "trade"),
+}));
 
 // Allocation-backed sorts use one grouped lookup and retain the plain root
 // FROM; the product and purchase sorts compile from their declared paths.
 const expenseScaffold = listScaffold("expense", expense, {
-  derived: {
-    ...rowDerived,
-    projectFilter: allocationFilter("projectFilter"),
-    spendingCategoryFilter: allocationFilter("spendingCategoryFilter"),
-    costTypeFilter: allocationFilter("costTypeFilter"),
-    // The presence half reads the row's own trade column.
-    tradeFilter: allocation.predicate(({ lead, membership }, { presence }) =>
-      and(
-        lead === "tradeFilter" ? membership : undefined,
-        presenceCondition(expense.trade, presence),
-      ),
+  derived: rowDerived,
+  rows: {
+    allocationShares: allocationShares.rows(
+      ({ bound, projects, categories, trades }) =>
+        sql`SELECT share."expenseId" AS "owner", share."projectId" AS "project",
+          share."spendingCategoryId" AS "spendingCategory", share.trade AS "trade",
+          share."costType" AS "costType"
+        FROM (${expenseJointAllocationSql(
+          bound === undefined ? undefined : { select: bound },
+          undefined,
+          {
+            projects,
+            categories,
+            trades: categories || trades,
+            principals: false,
+          },
+        )}) share`,
     ),
   },
 });
+
+/**
+ * A project page's embedded scope: expenses with any share in a project
+ * the nested project filters select, bounded like the allocation filters.
+ */
+const embeddedProjectMembership = async (
+  db: Database,
+  filters: ExpenseFilters,
+): Promise<SQL | undefined> => {
+  if (filters.projectScope === undefined) return undefined;
+  const bound = allocationBound(listFilterValues.parse(filters));
+  return expenseDerivedMembershipSql(
+    sql`${expense.id}`,
+    {
+      membershipProjectIds: await matchingEmbeddedProjectIds(
+        db,
+        filters.projectScope,
+      ),
+    },
+    bound === undefined ? undefined : { select: bound },
+  );
+};
 
 /**
  * Shared by list and analytics so identical filter sets produce identical
@@ -296,10 +288,7 @@ export const buildExpenseWhereClause = async (
     }));
   return and(
     expenseScaffold.where(selected, { context }),
-    // A project page's embedded scope, when no allocation filter carries it.
-    allocationLead(selected) === "projectScope"
-      ? await allocationMembership(db, filters)
-      : undefined,
+    await embeddedProjectMembership(db, selected),
   );
 };
 

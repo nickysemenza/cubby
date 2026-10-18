@@ -10,6 +10,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import {
   type GeneratedDerivedPredicateKey,
   type GeneratedDerivedValueKey,
+  type GeneratedRepositoryRowSetKey,
   type GeneratedGroupChoice,
   type GeneratedListField,
   generatedEntityListFields,
@@ -129,6 +130,12 @@ export interface ListPrepare<P> {
   predicate<V>(
     render: (prepared: P, value: V) => SQL | undefined,
   ): PreparedPredicate<V>;
+  rows(render: (prepared: P) => SQL): PreparedRows;
+}
+
+interface PreparedRows {
+  readonly prepare: ListPrepare<unknown>;
+  readonly render: (context: ListContext) => SQL;
 }
 
 interface PreparedValue {
@@ -176,6 +183,10 @@ export const listPrepare = <P>(load: PrepareLoad<P>): ListPrepare<P> => {
     predicate: (render) => ({
       prepare: handle,
       render: (context, value) => render(context.get(handle), value),
+    }),
+    rows: (render) => ({
+      prepare: handle,
+      render: (context) => render(context.get(handle)),
     }),
   };
   return handle;
@@ -460,22 +471,48 @@ export const relatedExistsSql = (
 type RowsField = Extract<DerivedField, { shape: "rows" }>;
 
 /**
- * One declared row set (`model.rows`) correlated to the list's outer row:
- * `exists(condition)` is one row of the set matching `condition`, so every
- * condition passed together holds on the same row, and `column` is the SQL
- * of a terminal on that row (a column, a JSON item key, or the foreign key
- * of a referenced record).
+ * One declared row set (`model.rows`) of the list's outer row:
+ * `matches(condition)` holds when one row of the set matches `condition`, so
+ * every condition passed together holds on the same row; `empty()` when the
+ * record has no row; and `column` is the SQL of a terminal on that row (a
+ * column, a JSON item key, or the id of a referenced record).
  */
 export interface RowSetSql {
-  readonly exists: (condition: SQL | undefined) => SQL;
+  readonly matches: (condition: SQL | undefined) => SQL;
+  /** A row matches `condition`, or the record has no row at all. */
+  readonly matchesOrEmpty: (condition: SQL | undefined) => SQL;
   readonly column: (field: RowsField) => SQL;
 }
+
+/**
+ * A repository row set's relation: SQL selecting `"owner"` and its declared
+ * columns, or one rendered from a `listPrepare` (`prepare.rows`).
+ */
+export type RowsSql = SQL | PreparedRows;
+
+/** The relations a repository owes `listScaffold` for its repository row sets. */
+export type RowsSqlArg<E extends Entity> = {
+  readonly [K in GeneratedRepositoryRowSetKey<E>]: RowsSql;
+};
+
+export type AnyRowsSql = Readonly<Record<string, RowsSql>>;
+
+/** The prepare a repository row set's relation needs, if any. */
+export const rowsPrepare = (
+  rows: AnyRowsSql,
+  key: string,
+): ListPrepare<unknown> | null => {
+  const entry = rows[key];
+  return entry !== undefined && !(entry instanceof SQL) ? entry.prepare : null;
+};
 
 export const rowSetSql = (
   entity: Entity,
   key: string,
-  /** The list's outer table, which the set correlates to. */
+  /** The list's outer table, which the set belongs to. */
   outerTable: string,
+  rows: AnyRowsSql = {},
+  context: ListContext = ListContext.empty,
 ): RowSetSql => {
   const rowSet = Object.entries(generatedEntityListFields[entity].rows).find(
     ([name]) => name === key,
@@ -484,12 +521,46 @@ export const rowSetSql = (
     throw new Error(`${entity} declares no model.rows ${key}`);
   const outer = sql.identifier(outerTable);
   const { storage } = rowSet;
+  const correlated = (exists: (condition: SQL | undefined) => SQL) => ({
+    matches: exists,
+    matchesOrEmpty: (condition: SQL | undefined) =>
+      sql`(${exists(condition)} OR NOT ${exists(undefined)})`,
+  });
+  if (storage.kind === "repository") {
+    // Rendered only when a filter reads the set, so its prepare need not run
+    // otherwise.
+    const relation = () => {
+      const entry = rows[key];
+      if (entry === undefined)
+        throw new Error(
+          `${entity}.model.rows.${key} has no SQL; pass it in listScaffold's rows argument`,
+        );
+      return entry instanceof SQL ? entry : entry.render(context);
+    };
+    // Uncorrelated, so the relation is computed once for the whole list.
+    return {
+      matches: (condition) =>
+        sql`${outer}."id" IN (SELECT row_set."owner" FROM (${relation()}) row_set WHERE ${condition ?? sql`true`})`,
+      // One pass: drop exactly the owners with rows of which none matches.
+      matchesOrEmpty: (condition) =>
+        sql`${outer}."id" NOT IN (SELECT row_set."owner" FROM (${relation()}) row_set
+          GROUP BY row_set."owner" HAVING NOT bool_or(COALESCE(${condition ?? sql`true`}, false)))`,
+      column: (field) =>
+        sql`row_set.${sql.identifier(
+          field.terminal.kind === "column"
+            ? field.terminal.column
+            : field.path.slice(key.length + 1),
+        )}`,
+    };
+  }
   if (storage.kind === "json") {
     const array = sql`${outer}.${sql.identifier(storage.column)}`;
     const from = sql`jsonb_array_elements(CASE WHEN jsonb_typeof(${array}) = 'array' THEN ${array} ELSE '[]'::jsonb END) row_set`;
     return {
-      exists: (condition) =>
-        sql`EXISTS (SELECT 1 FROM ${from} WHERE ${condition ?? sql`true`})`,
+      ...correlated(
+        (condition) =>
+          sql`EXISTS (SELECT 1 FROM ${from} WHERE ${condition ?? sql`true`})`,
+      ),
       column: (field) => {
         if (field.terminal.kind !== "column")
           throw new Error(`${entity}.${field.path} reads a JSON row's record`);
@@ -519,8 +590,10 @@ export const rowSetSql = (
     ),
   );
   return {
-    exists: (condition) =>
-      sql`EXISTS (SELECT 1 FROM ${sql.identifier(first.relation ?? first.table)} ${firstAlias} ${renderJoins({ hops: rest })} WHERE ${and(where, condition)})`,
+    ...correlated(
+      (condition) =>
+        sql`EXISTS (SELECT 1 FROM ${sql.identifier(first.relation ?? first.table)} ${firstAlias} ${renderJoins({ hops: rest })} WHERE ${and(where, condition)})`,
+    ),
     column: (field) =>
       leaf(
         field.terminal.kind === "column"

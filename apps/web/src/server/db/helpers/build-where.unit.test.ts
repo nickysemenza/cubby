@@ -651,22 +651,17 @@ describe("buildExpenseWhereClause", () => {
     );
   });
 
-  it("applies the allocation scope once across allocation filters", async () => {
+  // The allocation filters match one share together, so the share
+  // relation is read once for the group, not once per filter.
+  it("reads the allocation shares once across allocation filters", async () => {
     const rendered = await where({
       trade: "electrical",
       costType: "materials",
     });
-    expect(rendered?.match(/member_share/g)).toHaveLength(1);
+    expect(rendered?.match(/row_set\."owner"/g)).toHaveLength(1);
   });
 
   it.each([
-    {
-      name: "ledgerPartyId",
-      filters: {
-        ledgerPartyId: [parseShortcodeFor("ledgerParty", "LPY-2345")],
-      },
-      contains: '"ExpenseAttribution" ea',
-    },
     {
       name: "costSign",
       filters: { costSign: "negative" as const },

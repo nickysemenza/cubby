@@ -10,8 +10,10 @@ import {
 /**
  * `model.rows` declaration errors (#2607): a `via` that walks past a row
  * set's terminal, a JSON item key the field's schema does not hold, a row
- * set that shadows a relation, and a JSON row set over a non-JSON field
- * would each compile SQL that reads nothing, so the generator rejects them.
+ * set that shadows a relation, a JSON row set over a non-JSON field, and a
+ * repository column the relation does not declare (or whose reference is
+ * not an entity) would each compile SQL that reads nothing, so the
+ * generator rejects them.
  */
 describe("row-set declarations", () => {
   let declarations: DeclarationObject[];
@@ -44,7 +46,10 @@ describe("row-set declarations", () => {
       { derived: { last4: { via: "cards.last4.digits" } } },
       /exactly one terminal/,
     ],
-    [{ derived: { last4: { via: "cards.pin" } } }, /pin is not a key of cards/],
+    [
+      { derived: { last4: { via: "cards.pin" } } },
+      /pin is not a column of cards/,
+    ],
     [
       { rows: { transactions: { label: "Rows", json: "cardNumbers" } } },
       /shares its key with a relation/,
@@ -52,6 +57,24 @@ describe("row-set declarations", () => {
     [
       { rows: { cards: { label: "Card numbers", json: "name" } } },
       /not a stored JSON field/,
+    ],
+    [
+      {
+        rows: {
+          shares: {
+            label: "Shares",
+            repository: { owner: { reference: "nope" } },
+          },
+        },
+      },
+      /references unknown entity nope/,
+    ],
+    [
+      {
+        rows: { shares: { label: "Shares", repository: { amount: "number" } } },
+        derived: { last4: { via: "shares.missing" } },
+      },
+      /missing is not a column of shares/,
     ],
   ])("rejects %j", (model, error) => {
     expect(() => compileWith(model)).toThrow(error);
