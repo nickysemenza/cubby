@@ -1,24 +1,27 @@
+import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
 import {
   parseShortcodeFor,
   type ExpenseShortcode,
 } from "@cubby/schemas/identifiers";
 import type { ProjectOptionsOut } from "@cubby/schemas/project";
-import { and, eq, isNotNull, ne, or } from "drizzle-orm";
+import type { Trade } from "@cubby/schemas/project";
+import { and, eq, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import type { Database } from "~/server/db";
-import { getDb, notDeleted } from "~/server/db/helpers";
+import {
+  getDb,
+  notDeleted,
+  unwrapDb,
+  uuidArrayParam,
+} from "~/server/db/helpers";
 import { expense, project } from "~/server/db/schema";
 import { projectNameOptionsExcluding } from "~/server/domains/project/repo/lookup";
 
 import {
-  effectiveExpenseProjectSql,
-  effectiveExpenseTradeSql,
   expenseInheritanceReadExtras,
+  principalExpenseInheritanceSql,
 } from "./expense-inheritance";
-
-const effectiveProjectId = effectiveExpenseProjectSql('"Expense"');
-const effectiveTrade = effectiveExpenseTradeSql('"Expense"');
 
 /** Excluding the source before folding dates also removes its vote from ancestors. */
 export async function expenseProjectRecommendationContext(
@@ -46,16 +49,78 @@ export async function expenseProjectRecommendationContexts(
     db,
     sources.map(({ source }) => source.id),
   );
+  const history = await readHistory(
+    db,
+    sources.map(({ source }) => source),
+  );
   const contexts = new Map<ExpenseShortcode, RecommendationContext | null>(
     ids.map((id) => [id, null]),
   );
   for (const { id, source } of sources)
     contexts.set(
       id,
-      await sourceContext(db, source, rosters.get(source.id) ?? []),
+      await sourceContext(
+        db,
+        source,
+        rosters.get(source.id) ?? [],
+        history.filter(
+          (row) =>
+            row.expenseId !== source.id &&
+            (row.trade === source.effectiveTrade ||
+              (source.productId !== null &&
+                row.productId === source.productId)),
+        ),
+      ),
     );
   return contexts;
 }
+
+/**
+ * Assigned principal lines sharing any source's trade or Product, in Expense
+ * id order: the order is part of each fingerprinted basis, so it must not
+ * follow physical tuple order. One read through the joined principal
+ * inheritance serves every source.
+ */
+const readHistory = async (
+  db: Database,
+  sources: readonly EligibleSource[],
+) => {
+  if (sources.length === 0) return [];
+  const trades = uniq(sources.map((source) => source.effectiveTrade));
+  const products = uniq(
+    sources.flatMap((source) => (source.productId ? [source.productId] : [])),
+  );
+  const inherited = principalExpenseInheritanceSql("e", "live_purchase");
+  const result = await unwrapDb(db).execute<{
+    expenseId: string;
+    id: string;
+    name: string;
+    projectId: string;
+    trade: Trade | null;
+    productId: string | null;
+  }>(sql`SELECT * FROM (
+      SELECT e.id AS "expenseId", e.shortcode AS id, e.name,
+        assigned.shortcode AS "projectId", ${inherited.trade} AS trade,
+        e."productId"
+      FROM "Expense" e
+      LEFT JOIN "Purchase" live_purchase
+        ON live_purchase.id = e."purchaseId" AND live_purchase."deletedAt" IS NULL
+      ${inherited.joins}
+      JOIN "Project" assigned
+        ON assigned.id = ${inherited.projectId} AND assigned."deletedAt" IS NULL
+      WHERE e."deletedAt" IS NULL AND e."lineKind" = ${expenseLineKindSchema.enum.principal}
+    ) history
+    WHERE history.trade IN (${sql.join(
+      trades.map((trade) => sql`${trade}`),
+      sql`, `,
+    )})${
+      products.length
+        ? sql` OR history."productId" = ANY(${uuidArrayParam(products)})`
+        : sql``
+    }
+    ORDER BY history."expenseId"`);
+  return result.rows;
+};
 
 type RecommendationContext = Awaited<ReturnType<typeof sourceContext>>;
 type RecommendationSource = NonNullable<Awaited<ReturnType<typeof readSource>>>;
@@ -77,47 +142,17 @@ async function sourceContext(
   db: Database,
   source: EligibleSource,
   projects: ProjectOptionsOut[],
+  history: Awaited<ReturnType<typeof readHistory>>,
 ) {
-  const [history, currentProject] = await Promise.all([
-    getDb(db)
-      .select({
-        id: expense.shortcode,
-        name: expense.name,
-        projectId: project.shortcode,
-        trade: effectiveTrade,
-        productId: expense.productId,
-      })
-      .from(expense)
-      .innerJoin(
-        project,
-        and(eq(effectiveProjectId, project.id), notDeleted(project)),
-      )
-      .where(
-        and(
-          notDeleted(expense),
-          ne(expense.id, source.id),
-          eq(expense.lineKind, "principal"),
-          isNotNull(effectiveProjectId),
-          or(
-            source.effectiveTrade
-              ? eq(effectiveTrade, source.effectiveTrade)
-              : undefined,
-            source.productId
-              ? eq(expense.productId, source.productId)
-              : undefined,
-          ),
+  const currentProject = source.effectiveProjectId
+    ? await getDb(db).query.project.findFirst({
+        where: and(
+          eq(project.id, source.effectiveProjectId),
+          notDeleted(project),
         ),
-      ),
-    source.effectiveProjectId
-      ? getDb(db).query.project.findFirst({
-          where: and(
-            eq(project.id, source.effectiveProjectId),
-            notDeleted(project),
-          ),
-          columns: { shortcode: true, name: true },
-        })
-      : undefined,
-  ]);
+        columns: { shortcode: true, name: true },
+      })
+    : undefined;
   return {
     source: {
       ...source,
@@ -126,7 +161,7 @@ async function sourceContext(
       productKind: source.product?.kind ?? null,
     },
     projects,
-    history: history.map((row) => ({
+    history: history.map(({ expenseId: _expenseId, ...row }) => ({
       ...row,
       id: parseShortcodeFor("expense", row.id),
       projectId: parseShortcodeFor("project", row.projectId),
