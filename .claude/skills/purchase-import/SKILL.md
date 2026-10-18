@@ -45,10 +45,13 @@ Retired coordinators return an absent transcript without reopening storage or
 execution; their retained Run status, operations and source associations remain
 separate evidence.
 `run.lifecycle` takes every Run `controlAction` (cancel, retry, restart,
-approve, reject …) through the shared member-owned controls. Spending and
-review decisions (`run.set_mail_import`, `run.discover_mail`,
-`run.commit_prepared`, `run.resolve_finding`, approve/reject) are callable, but
-only on the member's explicit instruction; never infer one. Respect an explicit member pause: do
+resume …) through the shared member-owned controls; cancel refuses a Run that
+already ended. Spending and review decisions (`run.set_mail_import`,
+`run.discover_mail`, `run.commit_prepared`, `run.resolve_finding`) are
+callable, but only on the member's explicit instruction; never infer one.
+Per-operation approvals no longer exist. A Run still `paused_approval` from
+before their removal continues with `lifecycle resume` once the member agrees
+to the paused operation; it re-runs that operation under the current rules. Respect an explicit member pause: do
 not retry or restart until imports are resumed. Follow the returned successor;
 the preceding attempt remains immutable.
 
@@ -250,6 +253,19 @@ same outcome without prescribing an agent runtime.
    Unknown historical observations or missing preparations require evidence
    review and cannot use this path. Re-importing an accepted original with
    changed Product choices returns a review finding.
+   A source-order reconciliation finding whose source differs from manual
+   Expenses (a single manual line versus an itemized original) is applied in
+   two steps. First `prepare_reconciliation` with the finding `id` and a
+   `replace_lines` resolution: list the replaced `expenseIds`; give every
+   proposed line, including shipping, tax and zero-amount lines, exactly one
+   binding whose `expenseId` names the replaced Expense it inherits context
+   from; bind principal lines to an existing `productId` (create a new Product
+   first through entity creation when none exists, since `newProduct` needs a
+   known accepted original); and, when the total changes, pass
+   `attributionTargets` for beneficiary and funder. Copy the parties from the
+   preview's `originalAttributions`: an empty `beneficiaries` field on the
+   Expense can still resolve to a named party. Then
+   `run.resolve_finding` with `apply` and the returned `reviewedFingerprint`.
 6. Inspect every ordered result. `created`, `updated`, and `replayed` are
    terminal; `conflict` requires review.
 7. Read back every principal merchandise line's Product binding and source
@@ -341,6 +357,11 @@ email/order lines for items and prefer matching existing photo-created Products
 when variant evidence agrees. Keep historical Expense attribution separate from
 current inventory ownership. Reconciliation never receives that inventory again.
 Record a historical acquisition (a known quantity whose earlier purchase is missing) as an Expense with `cost: null`, no `date`, and the known `productQuantity`; never invent price or date, and it receives no inventory.
+
+A card's primary cardholder and dated authorized users decide who a charge
+belongs to. A card with neither cannot attribute a Purchase's purchaser, and a
+payment convergence on it returns review-required ("a dated, confirmed funding
+account"). Confirm the holder with the member and set it before retrying.
 
 Statement previews carry `importFingerprint` and `rowPosition` on every row so
 two identical same-day charges keep distinct source references.

@@ -1008,7 +1008,7 @@ export const MCP_TOOLS = defineMcpTools({
 
   run: {
     description:
-      "Control Runs (Mail import, photo inventory, or a member's import); read one with imports_read.run_status. set_mail_import, discover_mail, commit_prepared, resolve_finding and approve/reject spend money or settle evidence: call them only on the member's explicit instruction.",
+      "Control Runs (Mail import, photo inventory, or a member's import); read one with imports_read.run_status. set_mail_import, discover_mail, commit_prepared and resolve_finding spend money or settle evidence: call them only on the member's explicit instruction.",
     actions: {
       lifecycle: mcpAction({
         op: runContract.ops.lifecycle,

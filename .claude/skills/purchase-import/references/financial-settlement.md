@@ -280,6 +280,16 @@ Keep refund Expenses on the original Purchase. Preserve the vendor's original
 stated total and record refund settlement separately. A reconciliation mismatch
 is an investigation cue, not a reason to rewrite spend or paperwork.
 
+An updated order confirmation that lowers the total after the charge, followed
+by a matching partial refund, is a refund, not a re-itemization. Keep the
+original lines and stated total. Add the removed item as a negative line and
+any recomputed discount as a positive `discount` line, both dated on the update
+and cited to the updated Email, then allocate both the original charge and the
+refund to the Purchase. For example, a $3 item dropped from a $116 order with a
+10% discount refunds $2.70: −$3.00 for the item and +$0.30 for the smaller
+discount. The Purchase then reads `refund_adjusted`, with its settlement
+matching.
+
 For a posted transaction, retain a truthful source reference whenever available.
 Without one, the Purchase may remain flagged for missing `settlement_reference`;
 do not manufacture a reference to clear that gap.
