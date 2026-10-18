@@ -945,9 +945,9 @@ const validateDerivedFilter = (
     throw new EntityDeclarationError(
       `${context} deriveSchema is unsupported for kind ${kind}.`,
     );
-  if (value.range != null && !(deriveSchema && kind === "range"))
+  if (value.range != null && kind !== "range")
     throw new EntityDeclarationError(
-      `${context} range options apply only to derived range descriptors.`,
+      `${context} range options apply only to range descriptors.`,
     );
 };
 
@@ -972,7 +972,11 @@ const resolveFilterRange = (
   modelField: EntityField | undefined,
   context: string,
 ): FilterDescriptor["range"] => {
-  if (!(value.deriveSchema ?? false) || kind !== "range") return null;
+  if (kind !== "range") return null;
+  // A hand-written request schema owns its own bounds; declaring `range`
+  // beside it states them for clients, and the web contract test holds the
+  // two in agreement.
+  if (!(value.deriveSchema ?? false) && value.range == null) return null;
   const options = value.range ?? {};
   const rangeKind = options.kind ?? inferredRangeKind(modelField);
   if (rangeKind === null)

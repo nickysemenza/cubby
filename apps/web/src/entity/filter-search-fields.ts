@@ -118,7 +118,7 @@ export const problemFilterSemantics = {
       range: {
         from: "directItemCountMin",
         to: "directItemCountMax",
-        number: {},
+        number: { nonnegative: true, int: true },
       },
       expand: (value) =>
         value === "none"

@@ -300,6 +300,13 @@ test("a number range filter keeps its bounds through entry, reload and clear", a
   await expect(page.getByText("Enter a number 0 or more.")).toBeVisible();
   await expect.poll(param).toBe("1.5..");
 
+  // Reversed bounds are an inline error, never a request.
+  await max.fill("1");
+  await expect(
+    page.getByText("The minimum is above the maximum."),
+  ).toBeVisible();
+  await expect.poll(param).toBe("1.5..");
+
   const ranged = succeedsWith(page, (body) =>
     body.includes('"uploadedAgeHoursMax":48'),
   );
@@ -337,4 +344,37 @@ test("a number range filter keeps its bounds through entry, reload and clear", a
   await expect(
     page.getByRole("button", { name: "Upload age: at least 2", exact: true }),
   ).toBeVisible();
+});
+
+// Failure mode: with a preset picked, the first typed digit of a custom bound
+// changed the bounds editor's key from the preset to "bounds", remounting the
+// input mid-typing so focus and every later digit were lost.
+test("typing a bound after picking a preset keeps every digit", async ({
+  page,
+}) => {
+  const param = () => new URL(page.url()).searchParams.get("purchaseCount");
+  await gotoAuthenticatedPage(page, "/vendors");
+  await page.getByRole("button", { name: "Filters", exact: true }).click();
+  await page
+    .getByRole("button", { name: /^Purchase count: / })
+    .last()
+    .click();
+  await selectComboboxItem(
+    page,
+    page.getByRole("combobox", { name: "Filter Purchase count" }),
+    "5+ purchases",
+  );
+  await expect(
+    page.getByRole("button", {
+      name: "Purchase count: 5+ purchases",
+      exact: true,
+    }),
+  ).toBeVisible();
+
+  const min = page.getByRole("spinbutton", { name: "Purchase count minimum" });
+  await min.click();
+  await min.pressSequentially("12");
+  await expect(min).toHaveValue("12");
+  await expect(min).toBeFocused();
+  await expect.poll(param).toBe("12..");
 });

@@ -10,6 +10,7 @@ import {
   describeNumberRangeBounds,
   describeRangeBounds,
   describeRelativeDate,
+  formatNumberBound,
   formatRangeBounds,
   type NumberRange,
   parseNumberBound,
@@ -512,13 +513,17 @@ function NumberRangeBounds({
     const low = parse(nextMin);
     const high = parse(nextMax);
     if (low === undefined || high === undefined) return;
+    if (low !== null && high !== null && low > high) return;
     onChange(
       formatRangeBounds(
-        low === null ? undefined : String(low),
-        high === null ? undefined : String(high),
+        low === null ? undefined : formatNumberBound(low),
+        high === null ? undefined : formatNumberBound(high),
       ),
     );
   };
+  const low = parseNumberBound(min, range);
+  const high = parseNumberBound(max, range);
+  const reversed = low !== undefined && high !== undefined && low > high;
   return (
     <div
       className={cn(
@@ -540,6 +545,11 @@ function NumberRangeBounds({
         text={max}
         onChange={(next) => update(min, next)}
       />
+      {reversed && (
+        <p role="alert" className="px-1 text-xs text-destructive">
+          The minimum is above the maximum.
+        </p>
+      )}
     </div>
   );
 }
@@ -606,6 +616,10 @@ function FilterValueEditor({
   setValues: (values: string[]) => void;
   clear: () => void;
 }) {
+  // A picked preset replaces the bounds, so the bounds editor starts over.
+  // It is keyed by picks, not by the value: typing the first digit after a
+  // preset changes the value and must not remount (and blur) the input.
+  const [presetPicks, setPresetPicks] = useState(0);
   const options = visibleOptions(field, filter);
   if (field.type === "text") {
     return (
@@ -646,7 +660,10 @@ function FilterValueEditor({
     <Picker
       options={options}
       value={isBounds ? null : (value ?? null)}
-      onValueChange={(value) => setValues(value === null ? [] : [value])}
+      onValueChange={(value) => {
+        setValues(value === null ? [] : [value]);
+        setPresetPicks((picks) => picks + 1);
+      }}
       placeholder={
         isBounds ? "Custom range" : `Filter ${field.label ?? field.key}`
       }
@@ -665,7 +682,7 @@ function FilterValueEditor({
       <>
         {options.length > 0 && picker}
         <NumberRangeBounds
-          key={isBounds || value === undefined ? "bounds" : value}
+          key={presetPicks}
           label={field.label ?? field.key}
           range={field.numberRange}
           value={isBounds ? value : undefined}
@@ -679,9 +696,8 @@ function FilterValueEditor({
   return (
     <>
       {options.length > 0 && picker}
-      {/* A preset replaces the bounds, so the bounds editor starts over. */}
       <DateRangeBounds
-        key={isBounds || value === undefined ? "bounds" : value}
+        key={presetPicks}
         value={isBounds ? value : undefined}
         onChange={(next) => setValues(next === undefined ? [] : [next])}
       />

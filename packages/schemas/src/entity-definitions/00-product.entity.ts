@@ -2424,6 +2424,8 @@ Rules:
         derived: true,
         urlKey: "expenses",
         kind: "range",
+        // The hand-written request schema takes whole counts only.
+        range: { kind: "number", int: true, nonnegative: true },
         wire: {
           kind: "range",
           from: "expenseCountMin",

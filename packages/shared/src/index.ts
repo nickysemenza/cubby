@@ -13,6 +13,7 @@ export {
   describeNumberRangeBounds,
   describeRangeBounds,
   describeRelativeDate,
+  formatNumberBound,
   formatRangeBounds,
   type NumberRange,
   OWNER_FILTER_HOUSEHOLD,

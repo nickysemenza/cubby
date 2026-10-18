@@ -831,6 +831,8 @@ Rules:
       {
         columnId: "inventoryEntries",
         kind: "range",
+        // The hand-written request schema takes whole counts only.
+        range: { kind: "number", int: true, nonnegative: true },
         derived: true,
         wire: {
           kind: "range",

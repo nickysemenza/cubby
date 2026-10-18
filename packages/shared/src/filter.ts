@@ -128,11 +128,14 @@ export type NumberRange = Readonly<{
   describe?: Readonly<{ lower: string; upper: string }>;
 }>;
 
-const NUMBER_BOUND_PATTERN = /^-?(?:\d+\.?\d*|\.\d+)$/;
+// A decimal never ends in `.`: `1.` before the `..` separator would read
+// as `1` and `.`. An exponent is accepted because a number input yields one.
+const NUMBER_BOUND_PATTERN = /^-?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i;
 
 /**
- * One typed number bound, or undefined when it is not a plain decimal the
- * declaration accepts (negative under `nonnegative`, fractional under `int`).
+ * One typed number bound, or undefined when it is not a finite decimal the
+ * declaration accepts (negative under `nonnegative`, fractional or beyond
+ * exact integers under `int`).
  */
 export const parseNumberBound = (
   text: string,
@@ -141,9 +144,28 @@ export const parseNumberBound = (
   const trimmed = text.trim();
   if (!NUMBER_BOUND_PATTERN.test(trimmed)) return undefined;
   const value = Number(trimmed);
+  if (!Number.isFinite(value)) return undefined;
   if (range.nonnegative && value < 0) return undefined;
-  if (range.int && !Number.isInteger(value)) return undefined;
+  if (range.int && !Number.isSafeInteger(value)) return undefined;
   return value;
+};
+
+/**
+ * A number bound as its URL text: the shortest digits that read back as the
+ * same number, never in exponent form (`1e-7` is written `0.0000001`).
+ */
+export const formatNumberBound = (value: number): string => {
+  const text = String(value);
+  const match = /^(-?)(\d)(?:\.(\d+))?e([+-]\d+)$/.exec(text);
+  if (match === null) return text;
+  const [, sign = "", lead = "", rest = "", exponent = "0"] = match;
+  const digits = lead + rest;
+  const point = 1 + Number(exponent);
+  // `String` switches to exponent form only below 1e-6 or from 1e21, where
+  // the point sits before the digits or past them.
+  return point <= 0
+    ? `${sign}0.${"0".repeat(-point)}${digits}`
+    : `${sign}${digits.padEnd(point, "0")}`;
 };
 
 /** A number range's `min..max` value with each invalid side dropped. */
