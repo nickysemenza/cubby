@@ -48,6 +48,15 @@ export async function readExistingConnectionAssessments(
   const from = alias(entityIdentity, "connection_from");
   const to = alias(entityIdentity, "connection_to");
   const keys = sources.map(key);
+  const codes = sql.join(
+    [...new Set(sources.map((source) => source.entityId))].map(
+      (code) => sql`${code}`,
+    ),
+    sql`, `,
+  );
+  const sourceIds = sql`SELECT source_entity."id" FROM "Entity" source_entity
+    WHERE source_entity."shortcode" IN (${codes})
+      AND ${inArray(sql`source_entity."kind" || ':' || source_entity."shortcode"`, keys)}`;
   const rows = await getDb(db)
     .select({
       prediction: assessment,
@@ -85,6 +94,12 @@ export async function readExistingConnectionAssessments(
         eq(assessmentState.active, true),
         eq(assessmentState.status, "pending"),
         inArray(assessment.family, ["field", "product_pair"]),
+        // Implied by the endpoint keys below, but sargable on the Assessment
+        // side: without it every pending state joined Entity before the keys
+        // could reject it.
+        sql`(${assessmentState.recordId} IN (${sourceIds})
+          OR (${assessment.family} = ${"field"} AND ${assessmentState.suggestedValue} #>> '{}' IN (${codes}))
+          OR (${assessment.family} = ${"product_pair"} AND ${assessment.subject}->>'otherId' IN (SELECT source_id::text FROM (${sourceIds}) source_ids(source_id))))`,
         sql`(${inArray(sql`${from.kind} || ':' || ${from.shortcode}`, keys)} OR ${inArray(sql`${to.kind} || ':' || ${to.shortcode}`, keys)})`,
         notExists(
           getDb(db)

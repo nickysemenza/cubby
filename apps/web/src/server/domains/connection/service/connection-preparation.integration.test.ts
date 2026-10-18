@@ -424,6 +424,18 @@ describe("connection preparation and publication authority", () => {
         integration: { kind: "field-review", field: "subjectProductId" },
       }),
     );
+    // The suggested value names the target, so the Product reads it too.
+    expect(
+      await readEntityConnections(ctx.db, {
+        entityKind: "product",
+        entityId: item.id,
+      }),
+    ).toContainEqual(
+      expect.objectContaining({
+        relation: "task-subject-product",
+        integration: { kind: "field-review", field: "subjectProductId" },
+      }),
+    );
     const before = await readWorkQueueWith(
       async () => [],
       ctx.db,
