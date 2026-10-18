@@ -180,7 +180,8 @@ export const expenseJointAllocationSql = (
       ? sql``
       : sql`principal_group AS (
     SELECT "purchaseId", "projectId", "spendingCategoryId", trade, "costType", basis,
-      sum(weight)::bigint AS weight, count(*) OVER (PARTITION BY "purchaseId") AS groups
+      -- numeric like the window denominator: summed cents can exceed bigint.
+      sum(weight) AS weight, count(*) OVER (PARTITION BY "purchaseId") AS groups
     FROM principal_weight
     GROUP BY "purchaseId", "projectId", "spendingCategoryId", trade, "costType", basis
   ),`

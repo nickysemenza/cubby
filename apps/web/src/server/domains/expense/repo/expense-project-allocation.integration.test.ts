@@ -1,5 +1,10 @@
 import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
-import type { ProjectId, PurchaseId } from "@cubby/schemas/identifiers";
+import type {
+  ProductCategoryId,
+  ProjectId,
+  PurchaseId,
+} from "@cubby/schemas/identifiers";
+import { productCategoryFeature } from "@cubby/schemas/product-category-fields";
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -17,7 +22,11 @@ import { loadRelatedSummary } from "~/server/generic/entity-links/repo/related-v
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { expenseDerivedCostsSql } from "./expense-derived-read";
-import { effectiveExpenseProjectSql } from "./expense-inheritance";
+import {
+  effectiveExpenseProjectSql,
+  effectiveExpenseTradeSql,
+  principalExpenseInheritanceSql,
+} from "./expense-inheritance";
 import {
   expenseJointAllocationSql,
   loadExpenseProjectAllocations,
@@ -647,6 +656,110 @@ describe("expense project allocation", () => {
     ).toBe(1n);
   });
 
+  // The allocation resolves principal projects and trades through joins; they
+  // must match the scalar resolvers line for line, including deleted
+  // overrides, deleted Purchases and the household food fallback.
+  it("joins the same project and trade inheritance as the scalar resolvers", async () => {
+    const [explicit, fallback, gone, tradeProject] = await Promise.all([
+      insertWithShortcode(ctx.db, "project", { name: "Synthetic explicit" }),
+      insertWithShortcode(ctx.db, "project", { name: "Synthetic default" }),
+      insertWithShortcode(ctx.db, "project", { name: "Synthetic removed" }),
+      insertWithShortcode(ctx.db, "project", {
+        name: "Synthetic trade default",
+        defaultTrade: "electrical",
+      }),
+    ]);
+    await unwrapDb(ctx.db).execute(
+      sql`UPDATE "Project" SET "deletedAt" = now() WHERE id = ${gone.id}`,
+    );
+    // The food fallback resolves the household Project by its fixed code.
+    const [household] = (
+      await unwrapDb(ctx.db).execute<{ id: string }>(
+        sql`INSERT INTO "Project" (shortcode, name) VALUES ('PRJ-HSHD', 'Synthetic household') RETURNING id`,
+      )
+    ).rows;
+    const food = await unwrapDb(ctx.db).execute<{ id: ProductCategoryId }>(
+      sql`SELECT id FROM "ProductCategory" WHERE feature = ${productCategoryFeature.enum.food} AND "deletedAt" IS NULL LIMIT 1`,
+    );
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic inheritance supplier",
+    });
+    const [withDefault, removedDefault, deleted] = await Promise.all([
+      insertWithShortcode(ctx.db, "purchase", {
+        vendorId: vendor.id,
+        defaultProjectId: fallback.id,
+        defaultTrade: "plumbing",
+      }),
+      insertWithShortcode(ctx.db, "purchase", {
+        vendorId: vendor.id,
+        defaultProjectId: gone.id,
+      }),
+      insertWithShortcode(ctx.db, "purchase", {
+        vendorId: vendor.id,
+        defaultProjectId: fallback.id,
+        defaultTrade: "plumbing",
+      }),
+    ]);
+    await unwrapDb(ctx.db).execute(
+      sql`UPDATE "Purchase" SET "deletedAt" = now() WHERE id = ${deleted.id}`,
+    );
+    const [foodCategory] = food.rows;
+    expect(foodCategory).toBeDefined();
+    const groceries = await insertWithShortcode(ctx.db, "product", {
+      name: "Synthetic oats",
+      manufacturer: "Synthetic mill",
+      categoryId: foodCategory!.id,
+    });
+    const principal = (extra: Partial<typeof expense.$inferInsert>) =>
+      insertWithShortcode(ctx.db, "expense", {
+        name: "Synthetic inherited line",
+        cost: 1,
+        date: "2026-09-20",
+        lineKind: "principal",
+        costType: "materials",
+        future: false,
+        ...extra,
+      });
+    await principal({ projectId: explicit.id, purchaseId: withDefault.id });
+    await principal({ projectId: gone.id, purchaseId: withDefault.id });
+    await principal({ purchaseId: withDefault.id, trade: "drywall" });
+    await principal({ purchaseId: removedDefault.id });
+    await principal({ purchaseId: deleted.id });
+    await principal({ projectId: tradeProject.id });
+    await principal({
+      productId: groceries.id,
+      purchaseId: removedDefault.id,
+    });
+    await principal({ productId: groceries.id, projectId: explicit.id });
+
+    const inherited = principalExpenseInheritanceSql("e", "live_purchase");
+    const lines = await unwrapDb(ctx.db).execute<{
+      scalarProject: string | null;
+      joinedProject: string | null;
+      scalarTrade: string | null;
+      joinedTrade: string | null;
+    }>(sql`SELECT
+        ${effectiveExpenseProjectSql("e")} AS "scalarProject", ${inherited.projectId} AS "joinedProject",
+        ${effectiveExpenseTradeSql("e")} AS "scalarTrade", ${inherited.trade} AS "joinedTrade"
+      FROM "Expense" e
+      LEFT JOIN "Purchase" live_purchase
+        ON live_purchase.id = e."purchaseId" AND live_purchase."deletedAt" IS NULL
+      ${inherited.joins}
+      WHERE e."deletedAt" IS NULL AND e."lineKind" = ${expenseLineKindSchema.enum.principal}`);
+    expect(lines.rows).toHaveLength(8);
+    for (const line of lines.rows) {
+      expect(line.joinedProject).toBe(line.scalarProject);
+      expect(line.joinedTrade).toBe(line.scalarTrade);
+    }
+    const projects = new Set(lines.rows.map((line) => line.scalarProject));
+    expect(projects).toEqual(
+      new Set([explicit.id, fallback.id, null, tradeProject.id, household!.id]),
+    );
+    expect(new Set(lines.rows.map((line) => line.scalarTrade))).toEqual(
+      new Set(["plumbing", "drywall", null, "electrical"]),
+    );
+  });
+
   // Grouped reads weigh a purchase whose principals share every dimension as
   // one line. Largest remainder must still hand that group exactly what the
   // per-principal split sums to, for every grouped read and purchase shape.
@@ -726,6 +839,19 @@ describe("expense project allocation", () => {
     await line(unpriced.id, "tax", 0.02);
     const fallback = await order(second.id);
     await line(fallback.id, "tax", 0.04);
+    const trades = await order();
+    await line(trades.id, "principal", 2, {
+      projectId: first.id,
+      trade: "plumbing",
+    });
+    await line(trades.id, "principal", 2, {
+      projectId: first.id,
+      trade: "electrical",
+    });
+    await line(trades.id, "tax", 0.03);
+    // A negative non-discount adjustment against positive principals keeps
+    // no category.
+    await line(trades.id, "fee", -0.05);
     const refund = await order();
     await line(refund.id, "principal", -1, { projectId: second.id });
     await line(refund.id, "principal", -2, { projectId: second.id });
@@ -750,18 +876,45 @@ describe("expense project allocation", () => {
         { categories: false, trades: true, projects: true },
         { trades: ["plumbing"] as const },
       ],
+      ["presence", projectsOnly, { presence: "none" as const }],
+      [
+        "costs",
+        projectsOnly,
+        { membershipProjectIds: [first.id], presence: "has" as const },
+      ],
+      ["categories", allDimensions, { spendingCategoryIds: [pantry.id] }],
+      [
+        "names",
+        { categories: true, trades: true, projects: true },
+        { categoryPresence: "has" as const, costTypes: ["materials"] as const },
+      ],
     ] as const;
-    for (const [read, dimensions, scope] of reads) {
-      const perPrincipal = expenseJointAllocationSql(undefined, undefined, {
-        ...dimensions,
-        principals: true,
-      });
-      expect(await rows(expenseDerivedReadSql(read, { scope }))).toEqual(
-        await rows(
-          expenseDerivedReadSql(read, { scope, source: perPrincipal }),
-        ),
-      );
-    }
+    // Selections allocate complete purchases, then keep the selected lines.
+    const selections = [
+      undefined,
+      {
+        select: sql`SELECT id FROM "Expense"
+          WHERE "purchaseId" IN (${uniform.id}, ${mixed.id}, ${trades.id}) AND "deletedAt" IS NULL`,
+      },
+    ];
+    for (const expenseIds of selections)
+      for (const [read, dimensions, scope] of reads) {
+        const perPrincipal = expenseJointAllocationSql(expenseIds, undefined, {
+          ...dimensions,
+          principals: true,
+        });
+        expect(
+          await rows(expenseDerivedReadSql(read, { scope, expenseIds })),
+        ).toEqual(
+          await rows(
+            expenseDerivedReadSql(read, {
+              scope,
+              expenseIds,
+              source: perPrincipal,
+            }),
+          ),
+        );
+      }
     const members = (source?: ReturnType<typeof sql>) =>
       rows(
         sql`SELECT DISTINCT "expenseId" FROM (${expenseDerivedReadSql(
