@@ -41,9 +41,9 @@ struct EntityFieldControl: View {
         if let resolved = model.resolutionForEditor(field) {
             resolutionLine(resolved)
         } else if let original = model.original,
-            FieldResolutionPresentation(raw: original, field: field) != nil
+            let saved = FieldResolutionPresentation(raw: original, field: field)
         {
-            Text("Inheritance updates when saved.").font(.caption).foregroundStyle(.secondary)
+            resolutionLine(saved, stale: true)
         } else if model.isCreate, let policy = field.resolution, policy.none != nil {
             // A new record inherits by default; an explicit None must stay reachable before save.
             HStack {
@@ -67,11 +67,27 @@ struct EntityFieldControl: View {
     /// One secondary line under the control: the state marker, the effective value and where it
     /// comes from, and a menu holding only the links that would change the field. A staged link
     /// is an ordinary draft edit, so Save needs no separate notice.
+    ///
+    /// `stale`: the draft differs from the saved record, so the server's effective value may no
+    /// longer hold (a reparent changes the source). Reset and Set to none stay offered from the
+    /// saved policy, staged as their plain patches; Confirm is withheld because it pins the saved
+    /// effective value.
     @ViewBuilder
-    private func resolutionLine(_ resolved: FieldResolutionPresentation) -> some View {
+    private func resolutionLine(_ resolved: FieldResolutionPresentation, stale: Bool = false) -> some View {
         let state = resolved.state(field: field)
-        let actions = resolved.actions(field: field)
-        if let caption = resolutionCaption(resolved, hasActions: !actions.isEmpty) {
+        let offered = resolved.actions(field: field).filter { !stale || $0.kind != .confirm }
+        let staged =
+            stale
+            ? offered.first { action in
+                action.payload.allSatisfy { (model.draft[$0.key] ?? .null) == $0.value }
+            }
+            : nil
+        let actions = offered.filter { $0 != staged }
+        let caption =
+            stale
+            ? staged.map { "\($0.label) on save" } ?? "Inheritance updates when saved"
+            : resolutionCaption(resolved, hasActions: !actions.isEmpty)
+        if let caption {
             HStack(spacing: FieldGuideTokens.Space.xs) {
                 Image(systemName: state.systemImage).imageScale(.small).accessibilityHidden(true)
                 Text(caption).fixedSize(horizontal: false, vertical: true)
@@ -80,7 +96,11 @@ struct EntityFieldControl: View {
                     resolutionMenu {
                         ForEach(actions) { action in
                             Button(actionLabel(action, resolved: resolved)) {
-                                model.stageResolution(action.kind, for: key)
+                                if stale {
+                                    model.stage(action.payload)
+                                } else {
+                                    model.stageResolution(action.kind, for: key)
+                                }
                             }
                             .accessibilityIdentifier(
                                 "editor.\(model.descriptor.key.rawValue).\(key).\(action.kind == .useInherited ? "reset" : action.kind == .setNone ? "none" : action.kind.rawValue)"
@@ -132,7 +152,7 @@ struct EntityFieldControl: View {
     }
 
     private func noneLabel(_ policy: FieldResolutionDescriptor) -> String {
-        "Set to \(policy.labels?.none ?? "None")"
+        "Set to \(policy.labels?.none ?? "none")"
     }
 
     private func resolutionMenu(@ViewBuilder content: () -> some View) -> some View {
@@ -481,7 +501,7 @@ struct EntityFieldControl: View {
     }
 
     private var tokenControl: some View {
-        tokenEditor(
+        TokenListRow(
             title: label, singular: field.label.lowercased(),
             entryID: "editor.\(model.descriptor.key.rawValue).\(key).add",
             tokens: value.arrayValue?.compactMap(\.stringValue) ?? [],
@@ -495,13 +515,13 @@ struct EntityFieldControl: View {
     private var productTagsControl: some View {
         let split = CollectionTag.split(value.arrayValue?.compactMap(\.stringValue) ?? [])
         return VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
-            tokenEditor(
+            TokenListRow(
                 title: "Tags", singular: "tag",
                 entryID: "editor.\(model.descriptor.key.rawValue).\(key).add",
                 tokens: split.tags, draft: $newToken,
                 normalize: { $0.trimmingCharacters(in: .whitespaces) }
             ) { writeProductTags(tags: $0, collections: split.collections) }
-            tokenEditor(
+            TokenListRow(
                 title: "Collections", singular: "collection",
                 entryID: "editor.\(model.descriptor.key.rawValue).\(key).collection.add",
                 tokens: split.collections,
@@ -517,16 +537,6 @@ struct EntityFieldControl: View {
 
     /// A list of removable tokens with an entry field. `normalize` shapes a typed entry; an empty
     /// or repeated one is ignored.
-    private func tokenEditor(
-        title: String, singular: String, entryID: String,
-        tokens: [String], draft: Binding<String>, normalize: @escaping (String) -> String,
-        commit: @escaping ([String]) -> Void
-    ) -> some View {
-        TokenListRow(
-            title: title, singular: singular, entryID: entryID, tokens: tokens, draft: draft,
-            normalize: normalize, commit: commit)
-    }
-
     // MARK: - Dates
 
     /// A `date` control writes `yyyy-MM-dd` for a `date` field and an ISO instant for a

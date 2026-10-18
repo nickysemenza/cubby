@@ -234,7 +234,6 @@ struct EntityListView: View {
                 }
             }
             if key.nativeActions.contains(.create), hasControls {
-                // Create and Controls are unrelated; split them into separate glass groups.
                 ToolbarSpacer(.fixed, placement: .topBarTrailing)
             }
             if hasControls {

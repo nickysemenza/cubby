@@ -16,6 +16,8 @@ wait "id=browse.run.list" 60000
 wait "label=\"Synthetic Simulator Member · Photo inventory, ${APPROVAL_RUN_ID}\"" 60000
 click "label=\"Synthetic Simulator Member · Photo inventory, ${APPROVAL_RUN_ID}\""
 
+wait "role=Button label=More" 90000
+click "role=Button label=More"
 wait "role=Button label=\"Transcript, logs and AI usage\"" 90000
 click "role=Button label=\"Transcript, logs and AI usage\""
 wait text "Durable transcript" 90000
@@ -26,6 +28,8 @@ wait text "run.started" 90000
 wait text "System and agent log" 90000
 click "role=Button label=Done"
 wait absent "text=\"Durable transcript\"" 90000
+wait "role=Button label=More" 90000
+click "role=Button label=More"
 wait "role=Button label=\"Transcript, logs and AI usage\"" 90000
 click "role=Button label=\"Transcript, logs and AI usage\""
 wait text "Durable transcript" 90000
@@ -35,4 +39,4 @@ is absent "text=\"Couldn’t load Run evidence\""
 wait text "run.started" 90000
 click "role=Button label=Done"
 wait absent "text=\"Durable transcript\"" 90000
-wait "role=Button label=\"Transcript, logs and AI usage\"" 90000
+wait "role=Button label=More" 90000
