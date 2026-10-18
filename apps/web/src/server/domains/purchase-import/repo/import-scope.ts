@@ -11,7 +11,7 @@ import {
   runPurpose,
   type RunPurpose,
 } from "@cubby/schemas/purchase-import";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { type Database } from "~/server/db/database";
@@ -124,6 +124,68 @@ export function parseMailSourceKey(externalKey: string) {
   const [, mailboxId, messageId, attachmentId] =
     /^gmail:(.+?):([^:]+)(?::attachment:(.+))?$/u.exec(externalKey) ?? [];
   return { mailboxId, messageId, attachmentId };
+}
+
+const attachmentKeyPrefix = (mailboxId: string, messageId: string) =>
+  `gmail:${mailboxId}:${messageId}:attachment:`;
+
+/**
+ * The stored provider ids an attachment key's segment may name. A read's
+ * `attachmentId` is itself the attachment's source key
+ * (`gmail:<mailboxId>:<messageId>:attachment:<part>`) while legacy rows hold
+ * the bare part, so a key built from either nests the prefix zero or more
+ * times; every depth names the same attachment.
+ */
+export function mailAttachmentIdCandidates(
+  mailboxId: string,
+  messageId: string,
+  attachmentId: string,
+): [bare: string, keyed: string] {
+  const prefix = attachmentKeyPrefix(mailboxId, messageId);
+  let part = attachmentId;
+  while (part.startsWith(prefix)) part = part.slice(prefix.length);
+  return [part, `${prefix}${part}`];
+}
+
+/**
+ * An attachment source key in its stored form,
+ * `gmail:<mailboxId>:<messageId>:attachment:<providerAttachmentId>` (the form
+ * Email source identity matches in `email-sql.ts`), however deeply the caller
+ * nested the attachment's own key. Other keys, and keys naming no retained
+ * attachment, return unchanged for the source checks to refuse.
+ */
+export async function canonicalMailSourceKey(
+  db: Database,
+  ledgerPartyId: LedgerPartyId,
+  source: z.infer<typeof importSourceIdentity>,
+): Promise<string> {
+  if (source.kind !== "mail_attachment") return source.externalKey;
+  const { mailboxId, messageId, attachmentId } = parseMailSourceKey(
+    source.externalKey,
+  );
+  if (!mailboxId || !messageId || !attachmentId) return source.externalKey;
+  const rows = await getDb(db)
+    .select({ id: orderMailAttachment.providerAttachmentId })
+    .from(orderMailAttachment)
+    .innerJoin(orderMail, eq(orderMail.id, orderMailAttachment.orderMailId))
+    .innerJoin(emailTable, retainedMailJoin)
+    .where(
+      and(
+        eq(orderMail.ledgerPartyId, ledgerPartyId),
+        eq(emailTable.provider, "gmail"),
+        notDeleted(emailTable),
+        eq(emailTable.mailboxId, mailboxId),
+        eq(emailTable.messageId, messageId),
+        inArray(
+          orderMailAttachment.providerAttachmentId,
+          mailAttachmentIdCandidates(mailboxId, messageId, attachmentId),
+        ),
+      ),
+    );
+  const stored = rows.find((row) => row.id === attachmentId)?.id ?? rows[0]?.id;
+  return stored
+    ? `${attachmentKeyPrefix(mailboxId, messageId)}${stored}`
+    : source.externalKey;
 }
 
 /**

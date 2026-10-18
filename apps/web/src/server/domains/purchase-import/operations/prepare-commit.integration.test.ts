@@ -1440,9 +1440,12 @@ describe("caller-driven purchase import writes", () => {
     const { party, vendor } = await memberImportWorld(ctx.db, ctx.actor);
     const mail = await retainedOrderMail(party.id, "attachment-original");
     const attachmentChecksum = await sha256Hex("synthetic attachment receipt");
+    // Gmail sync stores each attachment's own source key as its provider id,
+    // and a read returns that key as `attachmentId`.
+    const attachmentKey = `gmail:${mailboxId}:${mail.messageId}:attachment:receipt-part`;
     await getDb(ctx.db).insert(orderMailAttachment).values({
       orderMailId: mail.id,
-      providerAttachmentId: "receipt-part",
+      providerAttachmentId: attachmentKey,
       filename: "receipt.pdf",
       mimeType: "application/pdf",
       checksum: attachmentChecksum,
@@ -1455,7 +1458,8 @@ describe("caller-driven purchase import writes", () => {
           vendorId: vendor.shortcode,
           source: {
             kind: "mail_attachment",
-            externalKey: `gmail:${mailboxId}:${mail.messageId}:attachment:receipt-part`,
+            // The attachment's own key, not nested under the message key.
+            externalKey: attachmentKey,
             checksum: attachmentChecksum,
           },
           extraction: {
@@ -1487,15 +1491,23 @@ describe("caller-driven purchase import writes", () => {
       .from(emailTable)
       .where(eq(emailTable.messageId, mail.messageId));
     expect(message?.status).toBe("completed");
-    // The import-source identity keeps the attachment's own checksum.
+    // The import-source identity keeps the attachment's own checksum under
+    // the stored key form Email source identity matches.
     expect(
       await getDb(ctx.db)
         .select({
           kind: importSourceClaim.kind,
+          externalKey: importSourceClaim.externalKey,
           checksum: importSourceClaim.checksum,
         })
         .from(importSourceClaim),
-    ).toEqual([{ kind: "mail_attachment", checksum: attachmentChecksum }]);
+    ).toEqual([
+      {
+        kind: "mail_attachment",
+        externalKey: `gmail:${mailboxId}:${mail.messageId}:attachment:${attachmentKey}`,
+        checksum: attachmentChecksum,
+      },
+    ]);
   });
 
   it("records the shipping event when its Email creates the Purchase first", async () => {

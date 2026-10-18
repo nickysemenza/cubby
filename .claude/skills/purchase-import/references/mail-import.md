@@ -11,7 +11,12 @@ Claude or Codex session researches it later through the Research queue.
    call observes current work, while retrying that same call preserves its result.
 2. `mcp__cubby__imports_read` `mail` reads the Email. Read an attachment's original with
    `attachmentId` when the order details live in a PDF or image. Note the
-   returned `checksum`.
+   returned `checksum`. When `content.truncated` or `content.bodyShortened`
+   is true, the compact text stops before the end of the Email (long orders
+   lose their later item lines and totals): read the raw HTML with
+   `includeHtml: true` from `offset: 0`, then again with each page's
+   `content.nextOffset` until it is null, before extracting lines or a total.
+   Never import or resolve from a truncated read alone.
 3. Decide what the Email is:
    - **An order with priced lines** (confirmation, receipt, invoice): import it.
      Find the Vendor first with `search` / `entity_read`; name it by
@@ -23,8 +28,9 @@ Claude or Codex session researches it later through the Research queue.
      `gmail:<mailboxId>:<messageId>`, the read `checksum` as both source and
      evidence checksum, and the extraction rules below; when the order lives
      in an attachment, use `source.kind: "mail_attachment"`, `externalKey`
-     `gmail:<mailboxId>:<messageId>:attachment:<attachmentId>` and that
-     attachment's `checksum`). Then `commit` it,
+     `gmail:<mailboxId>:<messageId>:attachment:<attachmentId>` with the
+     read's `attachmentId` (itself the attachment's key, which Cubby also
+     accepts alone) and that attachment's `checksum`). Then `commit` it,
      resolving every principal line: an existing Product returned as a
      candidate when its exact item and variant match, `new` for a supported
      tracked item, `unresolved` with the identity gap, or `expense_only` for

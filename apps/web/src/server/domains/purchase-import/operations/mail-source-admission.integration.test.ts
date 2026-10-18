@@ -6,7 +6,11 @@
  * second-guessed; a supporting original of the same purchase cannot be
  * imported, or one of another purchase joins the roster; equivalent original
  * and forwarded copies of one order book spending twice in either arrival
- * order. Deterministic original checks precede all admission judgments.
+ * order; a vendor's direct mail to the mailbox owner's own address is
+ * refused because headers-only evidence leaves the model uncertain, or one
+ * the model confidently attributes to a third party, or one too large for the
+ * model to read, is imported anyway.
+ * Deterministic original checks precede all admission judgments.
  */
 import type { ActorContext } from "@cubby/schemas/context";
 import type { LedgerPartyId, RunId } from "@cubby/schemas/identifiers";
@@ -28,6 +32,7 @@ import {
   importPreparedOrder,
   purchase,
   run,
+  user,
   vendorAccount,
 } from "~/server/db/schema";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
@@ -106,7 +111,11 @@ describe("Mail import source admission", () => {
     partyId: LedgerPartyId,
     messageId: string,
     body: string,
-    overrides: { mailboxId?: string; threadId?: string } = {},
+    overrides: {
+      mailboxId?: string;
+      threadId?: string;
+      headers?: Record<string, string>;
+    } = {},
   ) {
     return retainedMailFixture(ctx.db, {
       ledgerPartyId: partyId,
@@ -115,7 +124,12 @@ describe("Mail import source admission", () => {
       threadId: overrides.threadId,
       checksum: await sha256Hex(`${messageId}:${body}`),
       sender: "orders@kettle.example.test",
-      content: { snippet: null, bodyText: body, bodyHtml: null },
+      content: {
+        snippet: null,
+        bodyText: body,
+        bodyHtml: null,
+        headers: overrides.headers,
+      },
     });
   }
 
@@ -303,6 +317,77 @@ describe("Mail import source admission", () => {
           ),
         ),
     ).toEqual([]);
+  });
+
+  async function ownInvoice(
+    partyId: LedgerPartyId,
+    messageId: string,
+    body = "Invoice attached.",
+  ) {
+    const [owner] = await getDb(ctx.db)
+      .select({ email: user.email })
+      .from(user)
+      .where(eq(user.id, ctx.actor.userId));
+    // An invoice whose body is only its PDF: headers are the whole evidence.
+    return retain(partyId, messageId, body, {
+      headers: {
+        from: "Synthetic kettle shop <orders@kettle.example.test>",
+        to: owner!.email.toUpperCase(),
+      },
+    });
+  }
+
+  it("imports a vendor's direct mail to the owner's address under an automatic Run when the model is uncertain", async () => {
+    const { party, vendor } = await world();
+    const invoice = await ownInvoice(party.id, "own-invoice");
+    const { id, actor } = await mailRun(party, [invoice], "discovery");
+    const port = decisions({ attribution: "uncertain" });
+    const prepared = await preparePurchaseImport(
+      ctx.db,
+      prepareInput(id, "own-invoice", vendor.shortcode, invoice, "SYN-9"),
+      actor,
+      port,
+    );
+    expect(prepared.orders).toHaveLength(1);
+    expect(port).toHaveBeenCalledOnce();
+    expect(JSON.parse(port.mock.calls[0]![0].state)).toMatchObject({
+      mailboxOwner: { owner: { name: party.name } },
+    });
+  });
+
+  it("refuses own mail too large for the model to judge", async () => {
+    const { party, vendor } = await world();
+    // Past the decision context: no model answer, so no owner default.
+    const invoice = await ownInvoice(
+      party.id,
+      "own-oversized-invoice",
+      "Synthetic kettle line. ".repeat(2_000),
+    );
+    const { id, actor } = await mailRun(party, [invoice], "discovery");
+    const port = decisions({ attribution: "recipient" });
+    await expect(
+      preparePurchaseImport(
+        ctx.db,
+        prepareInput(id, "oversized", vendor.shortcode, invoice, "SYN-11"),
+        actor,
+        port,
+      ),
+    ).rejects.toThrow(/attribution is uncertain; oversized/);
+    expect(port).not.toHaveBeenCalled();
+  });
+
+  it("refuses own mail the model confidently attributes to a third party", async () => {
+    const { party, vendor } = await world();
+    const invoice = await ownInvoice(party.id, "own-invoice-for-other");
+    const { id, actor } = await mailRun(party, [invoice], "discovery");
+    await expect(
+      preparePurchaseImport(
+        ctx.db,
+        prepareInput(id, "other", vendor.shortcode, invoice, "SYN-10"),
+        actor,
+        decisions({ attribution: "third_party" }),
+      ),
+    ).rejects.toThrow(/attribution is third_party; owner_default/);
   });
 
   it("imports a member-selected forwarded confirmation without second-guessing the selection", async () => {

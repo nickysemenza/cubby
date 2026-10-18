@@ -44,6 +44,18 @@ export const CLOUDFLARE_OBSERVABILITY_URL =
 
 export { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
 
+/**
+ * A capturable copy of an error carrying only its name and scrubbed message:
+ * no cause, response or extra properties that could hold credentials.
+ */
+export function scrubbedError<TError>(error: TError): Error {
+  const copy = new Error(
+    scrubErrorMessage(error instanceof Error ? error.message : String(error)),
+  );
+  if (error instanceof Error) copy.name = error.name;
+  return copy;
+}
+
 const errorNodeSchema = z.object({
   name: z.string().optional().catch(undefined),
   message: z.string().optional().catch(undefined),

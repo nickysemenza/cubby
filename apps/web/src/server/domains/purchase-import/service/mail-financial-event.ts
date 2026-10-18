@@ -28,12 +28,14 @@ import {
   readMailFinancialSource,
   type PreparedMailFinancialEvent,
 } from "~/server/domains/purchase-import/repo/mail-financial-event";
+import { readMailOwnerEvidence } from "~/server/domains/purchase-import/repo/mail-owner";
 import {
   aiCallRunInput,
   ensureRun,
 } from "~/server/domains/run/repo/ensure-run";
 
 import {
+  describeMailAttribution,
   judgeMailAttributions,
   mailJudgmentEvidence,
 } from "./mail-source-judgment";
@@ -108,13 +110,17 @@ export async function prepareMailFinancialEvent(
   };
   const [attribution] = await judgeMailAttributions(
     [mail],
+    await readMailOwnerEvidence(db, {
+      ledgerPartyId: mail.ledgerPartyId,
+      mailboxIds: [mail.mailboxId],
+    }),
     usage,
     ports.decide,
   );
-  if (attribution !== "recipient")
+  if (attribution?.label !== "recipient")
     return {
       status: "unverified",
-      reason: `The Email's transaction is not attributed to its recipient (${attribution ?? "uncertain"}); a forwarded copy alone never proves ownership.`,
+      reason: `The Email's transaction is not attributed to its recipient (${attribution ? describeMailAttribution(attribution) : "uncertain"}); a forwarded copy alone never proves ownership.`,
     };
   const request = MAIL_FINANCIAL_EVENT_FEATURE.request(
     JSON.stringify(mailJudgmentEvidence(mail)),

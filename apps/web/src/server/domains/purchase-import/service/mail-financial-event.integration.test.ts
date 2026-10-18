@@ -3,7 +3,10 @@
  * model-reported amount, identifier or account label absent from the original
  * is accepted; an ambiguous amount literal is read one way; a forged or
  * mutated preparation, or one whose Email changed after inference, still
- * passes the booking assertion; another member's Email is prepared.
+ * passes the booking assertion; another member's Email is prepared; a
+ * vendor's direct mail to the owner's own address stays unverified when the
+ * model is uncertain, or verifies when it confidently names a third party; a
+ * forwarded copy to that address takes the owner default.
  */
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { MailFinancialEventModelOutput } from "@cubby/schemas/mailbox-research";
@@ -14,7 +17,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
 import { getDb, withTransaction } from "~/server/db/helpers";
-import { email as emailTable, orderMail } from "~/server/db/schema";
+import { email as emailTable, orderMail, user } from "~/server/db/schema";
 
 import {
   memberImportWorld,
@@ -83,13 +86,13 @@ describe("literal amounts", () => {
 describe("mail financial event port", () => {
   const ctx = withTestDb();
 
-  async function retained() {
+  async function retained(headers?: Record<string, string>) {
     const { party } = await memberImportWorld(ctx.db, ctx.actor);
     const mail = await retainedMailFixture(ctx.db, {
       ledgerPartyId: party.id,
       messageId: "synthetic-payment",
       checksum: await sha256Hex(body),
-      content: { snippet: null, bodyText: body, bodyHtml: null },
+      content: { snippet: null, bodyText: body, bodyHtml: null, headers },
     });
     const [row] = await getDb(ctx.db)
       .select({ id: emailTable.id })
@@ -185,6 +188,67 @@ describe("mail financial event port", () => {
       status: "unverified",
       reason: expect.stringMatching(reason),
     });
+  });
+
+  async function ownerAddress() {
+    const [owner] = await getDb(ctx.db)
+      .select({ email: user.email })
+      .from(user)
+      .where(eq(user.id, ctx.actor.userId));
+    return owner!.email;
+  }
+
+  it("attributes a vendor's direct mail to the owner when the model is uncertain", async () => {
+    const { emailId } = await retained({
+      from: "Synthetic Gardens <billing@gardens.example.test>",
+      to: await ownerAddress(),
+    });
+    const decide = attribution("c2");
+    const result = await prepareMailFinancialEvent(
+      ctx.db,
+      { emailId },
+      ctx.actor,
+      { decide, extract: async () => reported() },
+    );
+    expect(result.status).toBe("verified");
+    expect(decide).toHaveBeenCalledOnce();
+  });
+
+  it("keeps a confident third party on own mail unverified", async () => {
+    const { emailId } = await retained({
+      from: "Synthetic Gardens <billing@gardens.example.test>",
+      to: await ownerAddress(),
+    });
+    await expect(
+      prepareMailFinancialEvent(ctx.db, { emailId }, ctx.actor, {
+        decide: attribution("c1"),
+        extract: async () => reported(),
+      }),
+    ).resolves.toEqual({
+      status: "unverified",
+      reason: expect.stringMatching(/third_party; owner_default/),
+    });
+  });
+
+  it("asks the model about a forwarded copy to the owner", async () => {
+    const { emailId } = await retained({
+      from: "Synthetic Gardens <billing@gardens.example.test>",
+      to: await ownerAddress(),
+      "x-forwarded-to": await ownerAddress(),
+    });
+    const decide = attribution("c2");
+    await expect(
+      prepareMailFinancialEvent(ctx.db, { emailId }, ctx.actor, {
+        decide,
+        extract: async () => reported(),
+      }),
+    ).resolves.toEqual({
+      status: "unverified",
+      reason: expect.stringMatching(
+        /uncertain; model; model uncertain at p=0\.97/,
+      ),
+    });
+    expect(decide).toHaveBeenCalledOnce();
   });
 
   it("refuses another member's Email before inference", async () => {

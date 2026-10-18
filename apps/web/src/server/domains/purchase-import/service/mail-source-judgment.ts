@@ -2,7 +2,8 @@
  * Declared semantic judgments about one retained original: whose transaction
  * it evidences and whether a supporting original is the same purchase. Both
  * are closed Decision features over checksum-bound evidence; only a confident
- * answer counts, and neither creates records.
+ * answer counts, and neither creates records. A vendor's direct mail to the
+ * mailbox owner (`mail-owner.ts`) defaults to the recipient instead.
  */
 import { wasm } from "~/lib/wasm";
 import {
@@ -16,6 +17,8 @@ import {
 } from "~/server/ai/policy/features";
 import type { AiRunContext } from "~/server/ai/run-feature";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
+
+import { isOwnMail, type MailOwnerContext } from "./mail-owner";
 
 export type MailAttribution = (typeof MAIL_ATTRIBUTION_FEATURE.choices)[number];
 
@@ -34,6 +37,9 @@ const ATTRIBUTION_HEADERS = [
   "sender",
   "x-forwarded-for",
   "x-forwarded-to",
+  "x-google-original-from",
+  "resent-from",
+  "resent-to",
 ] as const;
 
 export function mailJudgmentEvidence(mail: JudgedMail) {
@@ -58,33 +64,87 @@ export function mailJudgmentEvidence(mail: JudgedMail) {
   };
 }
 
-/** Each Email's attribution; anything short of a confident answer is uncertain. */
+/**
+ * One attribution decision. `model`: the decision model's label, which
+ * counts only at high confidence (otherwise uncertain). `owner_default`: own
+ * mail (`isOwnMail`) is `recipient` unless the model confidently answers
+ * third_party. `oversized`: the evidence exceeded the decision context, so
+ * no model answered and the label is uncertain, own mail included.
+ * `warnings` carry owner-evidence gaps, such as an unreadable Gmail profile.
+ */
+export type MailAttributionJudgment = {
+  label: MailAttribution;
+  basis: "owner_default" | "model" | "oversized";
+  modelLabel: MailAttribution | null;
+  probability: number | null;
+  warnings: readonly string[];
+};
+
+/** Raw decision diagnostics for refusal messages. */
+export const describeMailAttribution = (judgment: MailAttributionJudgment) =>
+  [
+    `${judgment.label}; ${judgment.basis}`,
+    judgment.modelLabel || judgment.probability !== null
+      ? `model ${judgment.modelLabel ?? "none"} at p=${judgment.probability ?? "?"}`
+      : null,
+    ...judgment.warnings,
+  ]
+    .filter(Boolean)
+    .join("; ");
+
+/**
+ * Each Email's attribution. Own mail defaults to recipient; any other Email
+ * short of a confident answer is uncertain.
+ */
 export async function judgeMailAttributions(
   mails: readonly JudgedMail[],
+  owner: MailOwnerContext | null,
   usage: AiRunContext,
   port?: DecisionPort,
-): Promise<MailAttribution[]> {
-  const prompts = mails.map((mail) =>
-    MAIL_ATTRIBUTION_FEATURE.prompt(JSON.stringify(mailJudgmentEvidence(mail))),
+): Promise<MailAttributionJudgment[]> {
+  const evidence = owner?.evidence ?? null;
+  const warnings = owner?.warnings ?? [];
+  const emails = mails.map((mail) => mailJudgmentEvidence(mail));
+  const own = mails.map((mail, index) =>
+    isOwnMail(mail, evidence, emails[index]!.htmlText),
+  );
+  const prompts = emails.map((email) =>
+    MAIL_ATTRIBUTION_FEATURE.prompt(
+      JSON.stringify({ mailboxOwner: evidence, email }),
+    ),
   );
   const fits = prompts.map((prompt) => decisionChoiceFitsContext(prompt));
   const results = await runDecisionChoices(
-    prompts
-      .filter((_, index) => fits[index])
-      .map((prompt) => ({
-        ...prompt,
-        feature: MAIL_ATTRIBUTION_FEATURE,
-        usage,
-        port,
-      })),
+    prompts.flatMap((prompt, index) =>
+      fits[index]
+        ? [{ ...prompt, feature: MAIL_ATTRIBUTION_FEATURE, usage, port }]
+        : [],
+    ),
   );
   let next = 0;
-  return fits.map((fit) => {
-    if (!fit) return "uncertain";
-    const result = results[next++];
-    const choice =
-      MAIL_ATTRIBUTION_FEATURE.choices[result?.selectedIndex ?? -1];
-    return result?.confidence === "high" && choice ? choice : "uncertain";
+  return mails.map((_, index): MailAttributionJudgment => {
+    const result = fits[index] ? results[next++] : undefined;
+    const modelLabel =
+      MAIL_ATTRIBUTION_FEATURE.choices[result?.selectedIndex ?? -1] ?? null;
+    const confident = result?.confidence === "high" ? modelLabel : null;
+    const decided = {
+      modelLabel,
+      probability: result?.probability ?? null,
+      warnings,
+    };
+    // The default needs the model's actual answer; oversized evidence that
+    // no model read stays uncertain even for own mail.
+    if (own[index] && result)
+      return {
+        ...decided,
+        label: confident === "third_party" ? "third_party" : "recipient",
+        basis: "owner_default",
+      };
+    return {
+      ...decided,
+      label: confident ?? "uncertain",
+      basis: fits[index] ? "model" : "oversized",
+    };
   });
 }
 

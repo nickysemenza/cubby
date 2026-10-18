@@ -533,9 +533,10 @@ async function runCase(
               .join("\n"),
           ),
         ],
+        null,
         { db, runId, operation: "smoke.mailAttribution" },
       );
-      return { result: { attribution } };
+      return { result: { attribution: attribution?.label } };
     }
     case "mailSourceRelation": {
       const { fixture } = aiSmokeInputs.mailSourceRelation.parse(raw);
