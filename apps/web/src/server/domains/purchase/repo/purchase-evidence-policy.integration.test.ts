@@ -1,3 +1,4 @@
+import type { VendorId } from "@cubby/schemas/identifiers";
 import { itemizationExpectation } from "@cubby/schemas/purchase-evidence-policy";
 import { sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -622,7 +623,8 @@ describe("purchase evidence policy", () => {
 
 // A Vendor's order evidence supplies its itemization default: an online
 // account means item lines are expected, no evidence means not expected, and
-// a receipt-only or unrecorded vendor stays unclassified. An explicit Vendor
+// a receipt-only or unrecorded vendor stays unclassified (no value, labelled
+// Unclassified, distinct from an explicit `unknown`). An explicit Vendor
 // value always wins, and an unclassified default must not mask the spending
 // category's policy downstream.
 describe("vendor itemization default from order evidence", () => {
@@ -641,8 +643,8 @@ describe("vendor itemization default from order evidence", () => {
   it.each([
     ["online_account", "required"],
     ["not_expected", "not_expected"],
-    ["receipt_only", "unknown"],
-    [null, "unknown"],
+    ["receipt_only", null],
+    [null, null],
   ] as const)(
     "derives %s order evidence as %s",
     async (orderEvidence, expected) => {
@@ -669,6 +671,82 @@ describe("vendor itemization default from order evidence", () => {
       fallbackValue: "required",
       canReset: true,
     });
+  });
+
+  // Regression: an unclassified fallback read as `unknown`, so a receipt-only
+  // Vendor's explicit `unknown` looked redundant; clearing it let the
+  // Purchase fall through to its category and flip to required. A stored
+  // value is redundant only when clearing it leaves downstream policy as is.
+  it("treats a stored value as redundant only when clearing it keeps downstream policy", async () => {
+    const category = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: "Fixture hardware",
+      itemizationExpectation: "required",
+    });
+    const account = await insertWithShortcode(ctx.db, "financialAccount", {
+      name: "Fixture redundancy card",
+      identity: { kind: "cash" },
+    });
+    const downstream = async (vendorId: VendorId) => {
+      const purchase = await insertWithShortcode(ctx.db, "purchase", {
+        vendorId,
+        spendingCategoryId: category.id,
+        date: "2026-09-01",
+      });
+      const charge = await insertWithShortcode(ctx.db, "financialTransaction", {
+        accountId: account.id,
+        amount: 25,
+        kind: "purchase",
+        status: "posted",
+        postedDate: "2026-09-01",
+        merchant: `Fixture merchant ${purchase.shortcode}`,
+      });
+      await unwrapDb(ctx.db).insert(financialTransactionAllocation).values({
+        transactionId: charge.id,
+        purchaseId: purchase.id,
+        amount: 25,
+      });
+      return async () => {
+        const result = await unwrapDb(ctx.db).execute(sql`
+          SELECT ${purchaseItemizationExpectationSql("p")} AS purchase,
+            (SELECT ${financialTransactionCoverageSql("t")}->>'expectation'
+             FROM "FinancialTransaction" t WHERE t.id = ${charge.id}) AS transaction
+          FROM "Purchase" p WHERE p.id = ${purchase.id}
+        `);
+        return result.rows[0];
+      };
+    };
+    const clear = (vendorId: VendorId) =>
+      unwrapDb(ctx.db).execute(
+        sql`UPDATE "Vendor" SET "itemizationExpectation" = NULL WHERE id = ${vendorId}`,
+      );
+
+    const explicitUnknown = await vendorWith("receipt_only", "unknown");
+    const unknownPolicy = await downstream(explicitUnknown.id);
+    expect(await unknownPolicy()).toEqual({
+      purchase: "unknown",
+      transaction: "unknown",
+    });
+    const unknownRead = await getVendorByID(ctx.db, explicitUnknown.id);
+    expect(unknownRead.fieldResolutions?.itemizationExpectation).toMatchObject({
+      mode: "explicit",
+      fallbackValue: null,
+      matchesFallback: false,
+    });
+    await clear(explicitUnknown.id);
+    expect(await unknownPolicy()).toEqual({
+      purchase: "required",
+      transaction: "required",
+    });
+
+    const matchingOverride = await vendorWith("online_account", "required");
+    const matchingPolicy = await downstream(matchingOverride.id);
+    const matchingRead = await getVendorByID(ctx.db, matchingOverride.id);
+    expect(matchingRead.fieldResolutions?.itemizationExpectation).toMatchObject(
+      { mode: "explicit", fallbackValue: "required", matchesFallback: true },
+    );
+    const before = await matchingPolicy();
+    await clear(matchingOverride.id);
+    expect(await matchingPolicy()).toEqual(before);
   });
 
   it("feeds the derived Vendor value to Purchase and transaction policy", async () => {

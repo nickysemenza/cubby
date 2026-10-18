@@ -1,5 +1,8 @@
 import { type Entity } from "@cubby/schemas/entity";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import {
+  entityFieldModels,
+  type EntityFieldModel,
+} from "@cubby/schemas/entity-fields";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
 import type { ReportRecordRow } from "@cubby/schemas/entity-report";
 import { entitySummary } from "@cubby/schemas/entity-summary";
@@ -889,7 +892,10 @@ async function chainBlock(
   const model = entityFieldModels[entity].fields.find(
     (candidate) => candidate.key === field,
   );
-  const noneLabel = model?.resolution?.labels?.none;
+  const resolution:
+    | EntityFieldModel["fields"][number]["resolution"]
+    | undefined = model?.resolution;
+  const noneLabel = resolution?.labels?.none;
   const rows: ReportRecordRow[] = steps
     .slice(0, MAX_CHAIN_ROWS)
     .map((step, index) => {

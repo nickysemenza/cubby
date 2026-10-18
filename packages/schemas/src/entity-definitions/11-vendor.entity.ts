@@ -287,6 +287,9 @@ export default defineEntity({
           kind: "select",
           suggest: {
             basis: ["name", "website", "notes"],
+            // The stored column reads blank under a value derived from order
+            // evidence, so a confident proposal must never auto-apply.
+            reviewRequired: true,
             rules: [
               `Suggest whether the household expects these purchases to be itemized: recorded as the order's own item lines, each goods line naming its Product. Online orders with retrievable order history (Amazon, Home Depot) are expected (required). Restaurant meals, groceries, in-store shops whose receipts are usually not kept, one-amount services, subscriptions and friend reimbursements are not_expected. No policy ever requires a receipt document. Use the actual purchase/source description when available; broad or mixed vendor/category evidence without a clear purpose remains unknown. Return a reviewed proposal only; never overwrite explicit decisions.`,
             ],
@@ -320,6 +323,9 @@ export default defineEntity({
         resolution: {
           reset: { itemizationExpectation: null },
           redundancy: "eligible",
+          // Receipt-only or unrecorded evidence implies no policy, so the
+          // Purchase ladder falls through to the spending category.
+          labels: { unresolved: "Unclassified" },
         },
         explanation: {
           ruleId: "vendor.effective-itemization-expectation",

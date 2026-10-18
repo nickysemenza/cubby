@@ -76,6 +76,40 @@ describe("previewEntity field suggestions", () => {
     expect(result.proposed.primaryCardholderId).not.toBe("LPY-4K7M");
   });
 
+  // A Vendor's item-line expectation can read blank while its order evidence
+  // supplies a value, so a confident proposal stays a review proposal.
+  it("keeps a high-confidence Vendor item-line suggestion out of the proposed body", async () => {
+    mocks.suggestFields.mockResolvedValue({
+      suggestions: {
+        itemizationExpectation: {
+          value: "required",
+          label: "Expected",
+          detail: null,
+          confidence: "high",
+          probability: 0.99,
+          reasoning: "Synthetic online order history",
+          alternatives: [],
+          operation: "set",
+          removals: [],
+        },
+      },
+    });
+    const result = await previewEntity(
+      kernelContext,
+      {
+        entity: "vendor",
+        data: {
+          name: "Synthetic online shop",
+          orderEvidence: "online_account",
+        },
+        context: { targets: ["itemizationExpectation"] },
+      },
+      ports,
+    );
+    expect(result.suggestions.itemizationExpectation?.applied).toBe(false);
+    expect(result.proposed.itemizationExpectation ?? null).toBeNull();
+  });
+
   it("keeps an unresolved receipt role pending before project suggestions", async () => {
     mocks.resolveExpense.mockResolvedValue({});
     mocks.suggestFields.mockResolvedValue({ suggestions: {} });

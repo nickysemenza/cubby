@@ -14,6 +14,7 @@ import {
   auditLog,
   expense as expenseTable,
   run as runTable,
+  vendor as vendorTable,
 } from "~/server/db/schema";
 import { loadFinanceSuggestionContext } from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
 import { listSuggestions } from "~/server/generic/assessment/repo/suggestion-review";
@@ -286,6 +287,45 @@ describe("persisted Suggestion sweeps", () => {
       }),
     ]);
     expect(await productCategoryId(ctx.db, addition.id)).toBeNull();
+  });
+
+  // Regression: a Vendor whose item-line expectation derives from its order
+  // evidence stores NULL, so the sweep sees a blank and treats a confident
+  // proposal as an Addition. The field is review-only, so it stays pending.
+  it("keeps a confident Vendor item-line proposal over a derived value pending", async () => {
+    const context = kernelCtx(ctx);
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic online shop",
+      orderEvidence: "online_account",
+    });
+    const suggest = vi.fn(async () =>
+      suggestion("itemizationExpectation", {
+        value: "required",
+        label: "Expected",
+        probability: 0.97,
+      }),
+    );
+    const started = await startSuggestionSweep(
+      ctx.db,
+      {
+        entity: "vendor",
+        fields: ["itemizationExpectation"],
+        filters: { ids: [vendor.shortcode] },
+      },
+      { context, suggest },
+    );
+    expect(await runSuggestions(ctx.db, started.id)).toEqual([
+      expect.objectContaining({
+        kind: "addition",
+        status: "pending",
+        confidence: 0.97,
+      }),
+    ]);
+    const [stored] = await getDb(ctx.db)
+      .select({ value: vendorTable.itemizationExpectation })
+      .from(vendorTable)
+      .where(eq(vendorTable.id, vendor.id));
+    expect(stored?.value).toBeNull();
   });
 
   it("stores a paired model row under one pair key without applying it", async () => {

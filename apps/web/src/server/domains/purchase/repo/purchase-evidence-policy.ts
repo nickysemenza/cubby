@@ -81,27 +81,26 @@ const evidenceFieldResolutionsSql = (values: {
     'mode',CASE WHEN policy.allocated THEN 'allocated' WHEN policy.stored IS NOT NULL THEN 'explicit' ELSE 'inherit' END,
     'storedValue',policy.stored,'value',policy.value,'fallbackValue',policy.fallback,
     'source',policy.source,'sourceEntity',policy."sourceEntity",
-    'matchesFallback',policy.value = policy.fallback,'canReset',policy.stored IS NOT NULL
+    'matchesFallback',policy.value IS NOT DISTINCT FROM policy.fallback,'canReset',policy.stored IS NOT NULL
   )) FROM (SELECT ${values.stored} AS stored,${values.value} AS value,${values.fallback} AS fallback,
     ${values.source} AS source,${values.sourceEntity} AS "sourceEntity",${values.allocated ?? sql`false`} AS allocated) policy
 )`;
 
 /** The Vendor read's `fieldResolutions.itemizationExpectation`: the stored
- * value is the override, and the order-evidence default reads `unknown` when
- * the evidence implies nothing. */
+ * value is the override, and the fallback is exactly what the Purchase ladder
+ * reads at the Vendor rung. When order evidence implies nothing the value and
+ * fallback stay NULL (labelled Unclassified), never `unknown`: an explicit
+ * `unknown` stops the ladder before the spending category, so it must not
+ * read as a redundant override that a reset could clear. */
 export const vendorEvidenceFieldResolutionsSql = (
   alias: string,
 ): SQL<FieldResolutions> => {
   const stored = column(alias, "itemizationExpectation");
   const implied = vendorOrderEvidenceItemizationSql(alias);
-  const unclassified = sqlEnumConstant(
-    itemizationExpectation,
-    itemizationExpectation.enum.unknown,
-  );
   return evidenceFieldResolutionsSql({
     stored,
-    value: sql`COALESCE(${vendorItemizationPolicySql(alias)},${unclassified})`,
-    fallback: sql`COALESCE(${implied},${unclassified})`,
+    value: vendorItemizationPolicySql(alias),
+    fallback: implied,
     source: sql`CASE WHEN ${stored} IS NOT NULL THEN 'vendor override'
       WHEN ${implied} IS NOT NULL THEN 'order evidence' ELSE 'unclassified policy' END`,
     sourceEntity: sql`NULL::jsonb`,
