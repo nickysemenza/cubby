@@ -368,6 +368,9 @@ describe("expense project allocation", () => {
     // The embedded project scope selects whole expenses, while a direct
     // project filter measures its shares. Different shares may satisfy each
     // predicate; intersecting projects would lose this shared charge.
+    // The scope is part of the where, through the bounded allocation-share
+    // row set, so the read allocates once per place the where appears, and
+    // each allocation still runs once, uncorrelated.
     const embeddedRead = await prepareExpenseDerivedRead(ctx.db, {
       projectId: smallProject.shortcode,
       projectScope: { search: largeProject.name },
@@ -385,7 +388,8 @@ describe("expense project allocation", () => {
     inspectPlan(
       allocationPlan.parse(embeddedPlan.rows[0]!["QUERY PLAN"])[0]!.Plan,
     );
-    expect(allocationLoops).toEqual([1]);
+    expect(allocationLoops).not.toEqual([]);
+    expect(allocationLoops.every((loops) => loops === 1)).toBe(true);
     expect(correlatedAllocations).toEqual([]);
 
     const summary = await loadRelatedSummary(ctx.db, {
@@ -877,11 +881,7 @@ describe("expense project allocation", () => {
         { trades: ["plumbing"] as const },
       ],
       ["presence", projectsOnly, { presence: "none" as const }],
-      [
-        "costs",
-        projectsOnly,
-        { membershipProjectIds: [first.id], presence: "has" as const },
-      ],
+      ["costs", projectsOnly, { presence: "has" as const }],
       ["categories", allDimensions, { spendingCategoryIds: [pantry.id] }],
       [
         "names",

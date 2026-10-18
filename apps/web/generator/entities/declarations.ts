@@ -479,6 +479,13 @@ export type CompiledEntity = Readonly<{
     merge: OperationOwner;
   }>;
   fieldModel: EntityFieldModel;
+  /** `presentation.list.scope`/`scopes` as declared; server-only. */
+  listScopes: Readonly<{
+    scope: readonly string[];
+    scopes: Readonly<
+      Record<string, Readonly<{ via: string; filters: string }>>
+    >;
+  }>;
   /** Compiled `model.derived`, hierarchy, and generated subtree toggles. */
   listFields: CompiledEntityListFields;
   /** The entity's own table, or null for a table-less entity (usda-food). */

@@ -303,8 +303,6 @@ export const expenseJointAllocationSql = (
 };
 
 export type ExpenseAllocationProjectScope = {
-  /** Select entire expenses independently of the shares being measured. */
-  membershipProjectIds?: readonly ProjectId[];
   projectIds?: readonly ProjectId[];
   presence?: "has" | "none";
   spendingCategoryIds?: readonly SpendingCategoryId[];

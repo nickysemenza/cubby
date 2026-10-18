@@ -10,7 +10,7 @@ import { and, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
-import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
+import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { expense, ledgerParty, project } from "~/server/db/schema";
 import {
   expenseDerivedReadSql,
@@ -142,14 +142,9 @@ export async function expenseFlowSankey(
   const condition = read.scope
     ? expenseAllocationScopeConditionSql("allocation", read.scope)
     : undefined;
-  const membership = read.scope?.membershipProjectIds;
   // The complete joint allocation of each selected Expense, flagged by scope,
   // so funder cents apportion over every share before the filter drops any.
-  const allocations = sql`(SELECT allocation.*, coalesce(${condition ?? sql`true`}${
-    membership === undefined
-      ? sql``
-      : sql` AND bool_or(allocation."projectId" = ANY(${uuidArrayParam(membership)})) OVER (PARTITION BY allocation."expenseId")`
-  }, false) AS "inScope"
+  const allocations = sql`(SELECT allocation.*, coalesce(${condition ?? sql`true`}, false) AS "inScope"
     FROM (${expenseDerivedReadSql("shares", { expenseIds: read.expenseIds })}) allocation) allocation`;
   const shareProject = alias(project, "flowShareProject");
   const { roots, root } = rootSpendingCategoryJoins;

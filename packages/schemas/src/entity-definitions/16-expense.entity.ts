@@ -86,6 +86,11 @@ export default defineEntity({
       ],
     },
     list: {
+      // A project page's embedded expense list: expenses with any allocation
+      // share in a project its project filters select.
+      scopes: {
+        projectScope: { via: "allocationShares.project", filters: "project" },
+      },
       savedViews: [
         {
           id: "research-queue",

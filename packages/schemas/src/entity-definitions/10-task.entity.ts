@@ -81,6 +81,9 @@ export default defineEntity({
       ],
     },
     list: {
+      // A project page's embedded task list: tasks whose effective project
+      // its project filters select.
+      scopes: { projectScope: { via: "project", filters: "project" } },
       savedViews: [
         {
           id: "my-tasks",

@@ -38,6 +38,9 @@ export default defineEntity({
       ],
     },
     list: {
+      // A recipe's own ingredient rows (a recipe used as an ingredient) are
+      // never listed or counted.
+      scope: ["recipeId"],
       savedViews: [
         {
           id: "needs-a-product",

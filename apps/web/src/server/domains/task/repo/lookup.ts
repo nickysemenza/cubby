@@ -5,19 +5,14 @@ import {
   taskStatusSchema,
 } from "@cubby/schemas/project";
 import type { TaskFilters } from "@cubby/schemas/project";
-import { and, isNull, sql } from "drizzle-orm";
+import { isNull, sql } from "drizzle-orm";
 
 import { projectListRows } from "~/entity/model/list-read-schema";
 import type { Database } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
-import {
-  getDb,
-  type ListReadIntent,
-  relations,
-  uuidArrayParam,
-} from "~/server/db/helpers";
+import { getDb, type ListReadIntent, relations } from "~/server/db/helpers";
 import { task } from "~/server/db/schema";
-import { matchingEmbeddedProjectIds } from "~/server/domains/project/repo/dashboard-shared";
+import { projectScaffold } from "~/server/domains/project/repo/lookup";
 import {
   dbTaskToAPI,
   effectiveTaskDueDateSql,
@@ -49,26 +44,17 @@ const taskScaffold = listScaffold("task", task, {
       ELSE ${taskCompletionSchema.enum.open}::text END`,
     topLevel: isNull(task.parentTaskId),
   },
+  scopes: { projectScope: () => projectScaffold },
 });
 
 /**
  * The complete WHERE for this entity's list. `getEntityCounts` calls it with
- * `{}` — see repo/dashboard.ts. `projectScope` is a project page's embedded
- * scope (the projects its own filters select), not a list filter.
+ * `{}` — see repo/dashboard.ts.
  */
-export const buildTaskWhere = async (db: Database, filters: TaskFilters) => {
-  const scopedProjectIds = filters.projectScope
-    ? await matchingEmbeddedProjectIds(db, filters.projectScope)
-    : null;
-  return and(
-    taskScaffold.where(filters),
-    scopedProjectIds
-      ? scopedProjectIds.length > 0
-        ? sql`${effectiveFieldSql("task", "projectId")} = ANY(${uuidArrayParam(scopedProjectIds)})`
-        : sql`false`
-      : undefined,
-  );
-};
+export const buildTaskWhere = async (db: Database, filters: TaskFilters) =>
+  taskScaffold.where(filters, {
+    context: await taskScaffold.context(db, { filters, readIntent: "count" }),
+  });
 
 export const taskListRead = async (
   db: Database,
@@ -78,12 +64,10 @@ export const taskListRead = async (
   projection: ListProjection,
   readIntent: ListReadIntent = "page",
 ) => {
-  const whereClause = await buildTaskWhere(db, filters);
   return taskScaffold.list(
     db,
     { filters, sorts, pagination, readIntent, projection },
     {
-      where: whereClause,
       load: (where) => {
         const declared = relations.task.withProject.with;
         const references =

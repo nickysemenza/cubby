@@ -11,10 +11,7 @@
  *     tests the project's dated CONTENT as well, not only the two columns.
  */
 import type { ProjectId } from "@cubby/schemas/identifiers";
-import type {
-  EmbeddedProjectScope,
-  ProjectDashboardFilters,
-} from "@cubby/schemas/project";
+import type { ProjectDashboardFilters } from "@cubby/schemas/project";
 import {
   and,
   gte,
@@ -29,14 +26,11 @@ import {
 } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 
-import type { Database } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
-import { buildSearchConditions, getDb, notDeleted } from "~/server/db/helpers";
+import { buildSearchConditions, notDeleted } from "~/server/db/helpers";
 import { project, task } from "~/server/db/schema";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { effectiveTaskDueDateSql } from "~/server/domains/task/repo/helpers";
-
-import { loadProjectDateWindows, projectCompletionYear } from "./subtree";
 
 export function dashboardKindLocationConditions(
   filters: Pick<ProjectDashboardFilters, "kinds" | "locations">,
@@ -259,36 +253,4 @@ export function buildUndatedProjectWhere(
       notInArray(project.id, datedExpenseProjectIds()),
     ],
   );
-}
-
-export async function matchingEmbeddedProjectIds(
-  db: Database,
-  scope: EmbeddedProjectScope,
-): Promise<ProjectId[]> {
-  const filters: ProjectDashboardFilters = {
-    statusScope: scope.statuses,
-    kinds: scope.kinds,
-    locations: scope.locations,
-    search: scope.search,
-    dateFrom: scope.dateFrom,
-    dateTo: scope.dateTo,
-    completionYear: scope.completionYear,
-  };
-  const dated = scope.completionYear ? await loadProjectDateWindows(db) : null;
-  const completionIds = dated
-    ? dated.tree.allRows
-        .filter((row) => {
-          const window = dated.dateWindows.get(row.id);
-          return (
-            window &&
-            projectCompletionYear(row, window) === scope.completionYear
-          );
-        })
-        .map((row) => row.id)
-    : undefined;
-  const rows = await getDb(db)
-    .select({ id: project.id })
-    .from(project)
-    .where(buildDashboardProjectWhere(filters, completionIds));
-  return rows.map((row) => row.id);
 }

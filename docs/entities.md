@@ -1592,11 +1592,10 @@ same request with the same text, unmasked
 Every list filter predicate compiles from its declaration: `scaffold.where`
 takes the filters and a read context, and no hand-written condition. A
 filter that cannot be a stored column, a `via` path, or a row set is a
-`model.derived` `predicate` whose `reason` lives in the declaration. A list's static row
-scope (ingredient lists never show recipe-scoped rows) and a project page's
-embedded `projectScope` (an object, not a filter descriptor; expenses match
-it as a membership beside their allocation filters) are ANDed with `where`
-by the repository. Email's
+`model.derived` `predicate` whose `reason` lives in the declaration. A list's
+static row scope and a project page's embedded scope are
+[declared scopes](#declared-list-scopes) that compile into `where` too, so no
+repository ANDs a condition beside it. Email's
 `purchaseId`/`vendorId`/`vendorAccountId` declare `singleValue: { reason }`
 (`linkState` is relative to one scope record): their schemas accept one value,
 the web and native pickers choose one record, and the repository rejects more than one
@@ -1702,6 +1701,21 @@ one shape:
   boolean, a presence, or `{ from, to, presence, param }` (`range`; `param`
   is the one request parameter of a range whose presets name a state).
 
+A predicate stays only when the filter value itself defines membership, so no
+value or row set exists apart from the request, or when its replacement needs
+a contract only that filter would use. Computing outside SQL does not qualify
+on its own: prepared values and prepared row sets carry app-computed data.
+Removing one adds an integration test that runs the old SQL beside the
+compiled filter over one synthetic fixture and compares row ids, with any
+intended behavior change in its expected diff, and deletes the old SQL in the
+same PR. Six remain, each with its `reason`:
+
+| Predicate                                         | Why it stays                                                                                                                                                                                                                                                                                                   |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| product, inventory `effectiveOwner`               | Its values mix Ledger Party references with owner states (`@household`, `@unknown`), resolved in app code over every live entry (`inventory/repo/ownership.ts`). A row set would need a column that holds a reference or a state, used by these two filters alone; the predicate receives the resolved id set. |
+| project `dateRange`                               | The project's own dates overlap, or a dated task through its effective project, or an expense through its allocation shares: a deliberate non-recursive approximation (`dashboardProjectDateCondition`). It could become `anyOf` over a `dateInterval` and two row-set paths.                                  |
+| email `purchaseId`, `vendorId`, `vendorAccountId` | The filter value defines membership: each resolves one scope record (`singleValue`) whose evidence SQL decides which Emails belong and anchors `linkState`, and each is the filter a `derived`-provenance relation names.                                                                                      |
+
 A stored `text` filter ORs several terms when its value is a list, and a text
 descriptor's `schemaRef` names that value schema (expense's
 `expenseSearchTerms`).
@@ -1734,11 +1748,10 @@ only when the request filters, sorts, groups, or projects on a field that
 reads it; a caller that already holds a prepare's data passes it as
 `context(db, request, [[handle, data]])` (project attention items). `where`/`orderBy`/`filterPredicates` stay synchronous and take that
 context, `list` builds it unless `spec.context` passes one, and `hydrate`
-receives it. A list's static row scope (ingredient lists never show
-recipe-scoped rows) is ANDed with `where` by the repository; it is not a
-filter. The generated `generatedEntityListFields` map
+receives it. The generated `generatedEntityListFields` map
 (`@cubby/schemas/entity-list-fields`) carries each entity's derived shapes,
-hierarchy, subtree toggles, and Group by choices.
+row sets, term expanders, inherited fields, hierarchy, subtree toggles, Group
+by choices, and declared scopes.
 
 A compiled id filter resolves its shortcodes inside the list query, through
 `shortcodeIdsSql`, rather than in a lookup before it: an unknown or
@@ -1830,6 +1843,40 @@ input into the terms it ORs as contains-matches; product `upcFilter` names
 `productCode`, every barcode encoding of the typed digits. Its key union is
 generated from the declarations, so an undeclared or unused expander fails
 typecheck. The compiler moves `terms` off the client descriptor.
+
+### Declared list scopes
+
+`presentation.list.scope` is a list's static row scope: stored fields pinned
+to NULL, the shape ingredient's `resolve.scope` uses (ingredient
+`["recipeId"]`: a recipe's own ingredient rows are never listed, searched, or
+counted). `scaffold.where` ANDs it into every list, count, and Problems read,
+so `getEntityCounts` reads it through the same `buildXWhere`. It shows no
+chip, and no request lifts it, `filters.ids` included.
+
+`presentation.list.scopes` declares related scopes: a request key whose value
+is another entity's list filter record, matched through `via`, a path or a
+row-set terminal that leads to that entity. A project page scopes its task
+list through `project` (the effective project, so subtasks that inherit it
+match) and its expense list through `allocationShares.project` (any share, so
+a fee shared onto the project matches). `projectScope` therefore holds the
+project list's own filter keys a project page sets (`status`, `kind`,
+`location`, `search`, `dateFrom`/`dateTo`, `completionYear`, picked from
+`projectFiltersSchema`): its `search` matches as the project list's does
+(name, notes, effective locations), and native filter state flattens it one
+level (`projectScopeKind`). The scope
+compiles to `EXISTS` over the path to a record in the target scaffold's
+`matchingIds`, the live records its `where` selects. The repository passes
+that scaffold as
+`listScaffold(entity, table, { scopes: { projectScope: () => projectScaffold } })`,
+a thunk because the target's repository may import this one; the argument
+type is generated, so a declared scope without its scaffold fails typecheck.
+`scaffold.context` builds the target's context, and the row set a row-set
+scope reads, only when the request sets the scope, so a list without one
+never loads project prepares. A scope is not a filter descriptor: it has no
+menu entry, chip, Exclude, any-of, sort, or group, and its key may not repeat
+a filter's. Expense analytics keep it in their where beside the allocation
+filters their own scope expresses, since it selects whole expenses as the
+list does.
 
 ## Child storage
 

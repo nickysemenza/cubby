@@ -236,7 +236,72 @@ export type CompiledEntityListFields = Readonly<{
   subtree: Readonly<Record<string, string>>;
   /** `model.grouping`, in menu order. */
   grouping: readonly CompiledGroupChoice[];
+  /** `presentation.list.scope`: columns pinned to NULL on every list read. */
+  scope: readonly string[];
+  /** `presentation.list.scopes`, by request key. */
+  scopes: Readonly<Record<string, CompiledListScope>>;
 }>;
+
+/**
+ * A related scope: the entity whose list filter record the request key
+ * holds, and the compiled path (to-one, to-many or a row-set terminal) that
+ * leads to its records.
+ */
+type CompiledListScope = Readonly<{
+  filters: string;
+  via: Extract<CompiledListField, { shape: "via" | "rows" }>;
+}>;
+
+/**
+ * Compiles `presentation.list.scope` to columns and each related scope's
+ * `via` to the path the list compiler walks. A path that does not end at
+ * the scope's `filters` entity, or a key a filter already uses, would
+ * scope by nothing or shadow a filter, so the generator rejects it.
+ */
+const compileListScopes = (
+  entity: CompiledEntity,
+  byKey: ReadonlyMap<string, CompiledEntity>,
+  rows: Readonly<Record<string, CompiledRowSet>>,
+  urlKeys: readonly string[],
+): Pick<CompiledEntityListFields, "scope" | "scopes"> => {
+  const context = `${entity.key}.presentation.list`;
+  const scope = entity.listScopes.scope.map((key) => {
+    const stored = entity.fieldModel.storage.find(
+      (candidate) => candidate.key === key,
+    );
+    if (stored === undefined)
+      throw new EntityDeclarationError(
+        `${context}.scope names ${key}, which is not a stored field.`,
+      );
+    return stored.column;
+  });
+  const scopes: Record<string, CompiledListScope> = {};
+  for (const [key, declared] of Object.entries(entity.listScopes.scopes)) {
+    const scopeContext = `${context}.scopes.${key}`;
+    if (urlKeys.includes(key))
+      throw new EntityDeclarationError(
+        `${scopeContext} shares its key with a filter.`,
+      );
+    const target = byKey.get(declared.filters);
+    if (target === undefined)
+      throw new EntityDeclarationError(
+        `${scopeContext}.filters names unknown entity ${declared.filters}.`,
+      );
+    const via = compileVia(entity, declared.via, byKey, scopeContext, rows);
+    const reaches =
+      via.shape === "via"
+        ? via.terminal.kind === "record" && via.target === target.key
+        : via.shape === "rows" &&
+          via.terminal.kind === "record" &&
+          via.terminal.target === target.key;
+    if (!reaches || (via.shape !== "via" && via.shape !== "rows"))
+      throw new EntityDeclarationError(
+        `${scopeContext} via ${declared.via} does not lead to a ${target.key} record.`,
+      );
+    scopes[key] = { filters: target.key, via };
+  }
+  return { scope, scopes };
+};
 
 const pascal = (text: string) =>
   text
@@ -1480,6 +1545,7 @@ export const compileListFields = (
           : { ...hierarchy, column: parentColumn },
       subtree,
       grouping,
+      ...compileListScopes(entity, byKey, rows, urlKeys),
     };
     return {
       ...entity,

@@ -8,7 +8,11 @@ import { suggestionStatus } from "@cubby/schemas/ai";
 import { scoredEntities, type ScoredEntity } from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
+import {
+  generatedEntityListFields,
+  type GeneratedListScopeKey,
+  type GeneratedListScopeTarget,
+} from "@cubby/schemas/entity-list-fields";
 import {
   entityInspectorMetadata,
   entityManifest,
@@ -43,6 +47,7 @@ import {
   getTableName,
   inArray,
   type InferSelectModel,
+  isNull,
   or,
   SQL,
   sql,
@@ -994,17 +999,18 @@ const rowSetPredicates = (
 };
 
 /**
- * Every request key the filters through one row set (or one of its
- * terminals) read, with their "Include sub-…" toggles: what a repository
- * row set drops from the request that bounds its own relation, which cannot
- * read itself, and which of its columns a request reads.
+ * Every request key the filters and related scopes through one row set (or
+ * one of its terminals) read, with the filters' "Include sub-…" toggles:
+ * what a repository row set drops from the request that bounds its own
+ * relation, which cannot read itself, and which of its columns a request
+ * reads.
  */
 export const rowSetFilterKeys = (
   entity: Entity,
   rows: string,
   terminal?: string,
-): string[] =>
-  descriptorsFor(entity).flatMap((descriptor) => {
+): string[] => [
+  ...descriptorsFor(entity).flatMap((descriptor) => {
     const field =
       descriptor.derived === null
         ? undefined
@@ -1024,7 +1030,16 @@ export const rowSetFilterKeys = (
       ...descriptorValueKeys(descriptor),
       ...(toggle === undefined ? [] : [toggle]),
     ];
-  });
+  }),
+  ...Object.entries(generatedEntityListFields[entity].scopes).flatMap(
+    ([key, { via }]) =>
+      via.shape === "rows" &&
+      via.rows === rows &&
+      (terminal === undefined || via.path === `${rows}.${terminal}`)
+        ? [key]
+        : [],
+  ),
+];
 
 const nonEmpty = <T>(list: readonly T[] | undefined) =>
   list === undefined || list.length === 0 ? undefined : list;
@@ -1546,9 +1561,37 @@ const loadGroupSummaries = async (
 };
 
 /**
- * SQL for every declared `model.derived` value and predicate, and the
- * relation of every repository row set (`model.rows`); each key is required
- * exactly when the entity declares one.
+ * The list a related scope (`presentation.list.scopes`) nests: its prepared
+ * data for the nested filter record, and the live records that record
+ * selects.
+ */
+export interface NestedListScaffold<T extends Entity> {
+  readonly entity: T;
+  context(
+    db: Database | DrizzleTransaction,
+    request: ListContextRequest<ListFilterValues>,
+  ): Promise<ListContext>;
+  matchingIds(
+    filters: ListFilterValues,
+    options: { context: ListContext },
+  ): SQL;
+}
+
+/**
+ * The target list of every related scope the entity declares, read when a
+ * request first sets the scope: the target's repository may import this
+ * one's, so its scaffold need not exist yet when this one is built.
+ */
+type ScopesArg<E extends Entity> = {
+  readonly [K in GeneratedListScopeKey<E>]: () => NestedListScaffold<
+    GeneratedListScopeTarget<E, K>
+  >;
+};
+
+/**
+ * SQL for every declared `model.derived` value and predicate, the relation
+ * of every repository row set (`model.rows`), and the target list of every
+ * related scope; each key is required exactly when the entity declares one.
  */
 type ListScaffoldOptions<E extends Entity> = ([keyof DerivedSqlArg<E>] extends [
   never,
@@ -1557,14 +1600,19 @@ type ListScaffoldOptions<E extends Entity> = ([keyof DerivedSqlArg<E>] extends [
   : { derived: DerivedSqlArg<E> }) &
   ([keyof RowsSqlArg<E>] extends [never]
     ? { rows?: RowsSqlArg<E> }
-    : { rows: RowsSqlArg<E> });
+    : { rows: RowsSqlArg<E> }) &
+  ([GeneratedListScopeKey<E>] extends [never]
+    ? { scopes?: ScopesArg<E> }
+    : { scopes: ScopesArg<E> });
 
 /** `options` is required exactly when the entity declares SQL it reads. */
 type ListScaffoldArgs<E extends Entity> = [
-  keyof DerivedSqlArg<E> | keyof RowsSqlArg<E>,
+  keyof DerivedSqlArg<E> | keyof RowsSqlArg<E> | GeneratedListScopeKey<E>,
 ] extends [never]
   ? [options?: ListScaffoldOptions<E>]
   : [options: ListScaffoldOptions<E>];
+
+const scopeValue = listFilterValues.optional();
 
 /**
  * `entity`/`table` scope the helpers to one entity's list. Call once per
@@ -1584,6 +1632,30 @@ export function listScaffold<
   const derivedSql: AnyDerivedSql = options?.derived ?? {};
   const rowsSql: AnyRowsSql = options?.rows ?? {};
   const derivedFields = derivedFieldsOf(entity);
+  const listFields = generatedEntityListFields[entity];
+  // The static scope: declared columns pinned to NULL on every read.
+  const tableColumns: AnyColumn[] = Object.values(getTableColumns(table));
+  const staticScope = listFields.scope.map((name) => {
+    const column = tableColumns.find((candidate) => candidate.name === name);
+    if (column === undefined)
+      throw new Error(`${entity}.presentation.list.scope: no column ${name}`);
+    return isNull(column);
+  });
+  const nestedScaffolds: Readonly<
+    Record<string, () => NestedListScaffold<Entity>>
+  > = options?.scopes ?? {};
+  /** Each related scope the request sets, with its nested filter record. */
+  const requestedScopes = (values: ListFilterValues) =>
+    Object.entries(listFields.scopes).flatMap(([key, scope]) => {
+      const value = scopeValue.parse(values[key]);
+      if (value === undefined) return [];
+      const nested = nestedScaffolds[key]?.();
+      if (nested === undefined || nested.entity !== scope.filters)
+        throw new Error(
+          `${entity}.presentation.list.scopes.${key} needs the ${scope.filters} list scaffold in listScaffold's scopes argument`,
+        );
+      return [{ via: scope.via, nested, value }];
+    });
   const fieldModel = fieldModelFor(entity);
   const readGroups = Object.entries(entitySummary).find(
     ([key]) => key === entity,
@@ -1677,6 +1749,21 @@ export function listScaffold<
     return new Map(rows.map((row) => [row.code, row.count]));
   };
   const scaffold = {
+    entity,
+
+    /**
+     * The live records `filters` selects, as an id subquery: what a related
+     * scope of another list matches through its path.
+     */
+    matchingIds(
+      filters: ListFilterValues,
+      { context }: { context: ListContext },
+    ): SQL {
+      return sql`(SELECT ${table.id} FROM ${table} WHERE ${
+        scaffold.where(filters, { context }) ?? sql`true`
+      })`;
+    },
+
     /**
      * Loads, once, the request data the requested derived fields read: a
      * field's `prepare` runs only when the request filters, sorts, groups or
@@ -1715,15 +1802,20 @@ export function listScaffold<
               listGroupByFromFilters(request.filters)?.key === key ||
               projects(key, request.projection ?? { kind: "full" }))),
       );
+      const scopes = requestedScopes(values);
       const prepares = new Set(
-        requested.flatMap((key) => {
-          const field = derivedFields[key];
-          const prepare =
-            field?.shape === "rows"
+        [
+          ...requested.map((key) => {
+            const field = derivedFields[key];
+            return field?.shape === "rows"
               ? rowsPrepare(rowsSql, field.rows)
               : derivedPrepare(derivedSql, key);
-          return prepare === null ? [] : [prepare];
-        }),
+          }),
+          // A related scope through a row set reads that set.
+          ...scopes.map(({ via }) =>
+            via.shape === "rows" ? rowsPrepare(rowsSql, via.rows) : null,
+          ),
+        ].filter((prepare) => prepare !== null),
       );
       const seeds = new Map<ListPrepare<unknown>, unknown>(seeded);
       const loaded = await Promise.all(
@@ -1736,14 +1828,23 @@ export function listScaffold<
           ],
         ),
       );
-      return new ListContext(new Map(loaded));
+      // A related scope's list prepares its own data, only when the request
+      // sets that scope.
+      const nested = await Promise.all(
+        scopes.map(({ nested, value }) =>
+          nested.context(db, { filters: value, readIntent: "count" }),
+        ),
+      );
+      return nested.reduce(
+        (context, scope) => context.with(scope),
+        new ListContext(new Map(loaded)),
+      );
     },
 
     /**
      * Every list filter compiles from the declaration (stored, `model.derived`,
-     * related views, quality, audit dates, ids, search); there is no
-     * hand-written predicate argument. A list's static row scope is ANDed
-     * with this by its repository.
+     * related views, quality, audit dates, ids, search), and so do the list's
+     * declared scopes; there is no hand-written predicate argument.
      */
     where<Filters extends object>(
       filters: Filters,
@@ -1773,6 +1874,28 @@ export function listScaffold<
           ...relatedWhereConditions(entity, filters, table.id),
           // The kernel's `filters.ids` restriction, by canonical shortcode.
           listIdsCondition(table.shortcode, filters),
+          ...staticScope,
+          ...requestedScopes(listFilterValues.parse(filters)).map(
+            ({ via, nested, value }) => {
+              const scopeContext = context.withRead(undefined);
+              const ids = nested.matchingIds(value, { context: scopeContext });
+              if (via.shape === "via")
+                return relatedExistsSql(
+                  entity,
+                  via,
+                  table.id,
+                  (leaf) => sql`${leaf}."id" IN ${ids}`,
+                );
+              const set = rowSetSql(
+                entity,
+                via.rows,
+                getTableName(table),
+                rowsSql,
+                scopeContext,
+              );
+              return set.matches(sql`${set.column(via)} IN ${ids}`);
+            },
+          ),
           ...(searchable
             ? [
                 lexicalEligibility(
