@@ -445,7 +445,10 @@ describe("connection preparation and publication authority", () => {
       ctx.actor,
     );
     expect(before.items).toContainEqual(
-      expect.objectContaining({ key: "suggestion:task.subjectProductId" }),
+      expect.objectContaining({
+        key: "suggestions:field",
+        suggestionFamily: "field",
+      }),
     );
     await getDb(ctx.db)
       .update(product)
@@ -461,7 +464,10 @@ describe("connection preparation and publication authority", () => {
       ctx.actor,
     );
     expect(after.items).not.toContainEqual(
-      expect.objectContaining({ key: "suggestion:task.subjectProductId" }),
+      expect.objectContaining({
+        key: "suggestions:field",
+        suggestionFamily: "field",
+      }),
     );
   });
 

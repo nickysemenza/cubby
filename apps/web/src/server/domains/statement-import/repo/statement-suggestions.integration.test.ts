@@ -18,6 +18,7 @@ import type { DecisionPort } from "~/server/ai/decision-model";
 import { getDb } from "~/server/db/helpers";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import { answering } from "~/server/domains/statement-import/repo/statement-decision-port.fixtures";
 import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
@@ -156,47 +157,6 @@ const stateOf = async (ctx: Ctx, assessmentId: string) =>
       sql`SELECT status, active FROM "AssessmentState" WHERE id = ${assessmentId}::uuid`,
     )
   ).rows[0];
-
-/** Answers each statement decision by its choice label, at a stated confidence. */
-const answering =
-  (answers: {
-    kind?: string | ((subject: string) => string);
-    counterparty?: string;
-    kindConfidence?: number;
-  }): DecisionPort =>
-  async (input) => {
-    const criteria = input.questions.selection.criteria;
-    const labels = Object.values(criteria);
-    const [wanted, confidence] = labels.includes("same_charge")
-      ? ["same_charge", 0.97]
-      : labels.includes("person")
-        ? [answers.counterparty ?? "insufficient_evidence", 0.97]
-        : [
-            typeof answers.kind === "function"
-              ? answers.kind(input.state)
-              : (answers.kind ?? "other"),
-            answers.kindConfidence ?? 0.97,
-          ];
-    const keys = Object.keys(criteria);
-    const choice = keys.find((key) => criteria[key] === wanted)!;
-    return {
-      answers: {
-        selection: {
-          type: "choice",
-          choice,
-          confidence,
-          probabilities: Object.fromEntries(
-            keys.map((key) => [
-              key,
-              key === choice
-                ? confidence
-                : (1 - confidence) / (keys.length - 1),
-            ]),
-          ),
-        },
-      },
-    };
-  };
 
 const label = async (ctx: Ctx, port: DecisionPort) =>
   labelStatementSuggestions(ctx.db, {

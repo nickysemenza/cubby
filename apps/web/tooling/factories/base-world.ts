@@ -6,8 +6,6 @@ import {
   location,
   productCategory,
 } from "../../src/server/db/schema";
-import { AUTOMATIC_RULES } from "~/server/generic/assessment/automatic-rules";
-
 import { taxonomyRootFixtures } from "../product-category-fixtures";
 
 /**
@@ -34,6 +32,16 @@ export const BASE_HOME_SHORTCODE = testShortcode("location", "LOC-HM3E");
 type InsertClient = Pick<ReturnType<typeof drizzle>, "insert">;
 
 /** Insert the starting rows. Idempotent: a re-seed is a no-op. */
+/**
+ * The rule revisions migration 0090 seeds. Literal because the global test
+ * setup loads this file before the test environment exists, so it cannot
+ * import the rule declarations; `automatic-rules.unit.test.ts` keeps them equal.
+ */
+export const SEEDED_RULE_REVISIONS = {
+  "field.addition": "2026-10-18.1",
+  "statement_transaction.attach": "2026-10-18.3/2026-10-17.1",
+} as const;
+
 export async function seedBaseWorld(db: InsertClient): Promise<void> {
   await db
     .insert(location)
@@ -56,7 +64,7 @@ export async function seedBaseWorld(db: InsertClient): Promise<void> {
       {
         family: "field",
         ruleKey: "field.addition",
-        revision: AUTOMATIC_RULES["field.addition"].revision(),
+        revision: SEEDED_RULE_REVISIONS["field.addition"],
         enabled: true,
         enabledAt: new Date(),
         enabledReason: "Synthetic base world: as migrated",
@@ -64,7 +72,7 @@ export async function seedBaseWorld(db: InsertClient): Promise<void> {
       {
         family: "statement_transaction",
         ruleKey: "statement_transaction.attach",
-        revision: AUTOMATIC_RULES["statement_transaction.attach"].revision(),
+        revision: SEEDED_RULE_REVISIONS["statement_transaction.attach"],
         enabled: false,
         disabledAt: new Date(),
         disabledReason: "Synthetic base world: as migrated",

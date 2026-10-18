@@ -7,11 +7,11 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import type { DecisionPort } from "~/server/ai/decision-model";
 import { getDb } from "~/server/db/helpers";
 import { assessment, assessmentState, feedback } from "~/server/db/schema";
 import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import { answering } from "~/server/domains/statement-import/repo/statement-decision-port.fixtures";
 import {
   listStatementRows,
   recordStatementRows,
@@ -235,21 +235,8 @@ async function soleCandidateCharge(ctx: Ctx) {
   return { account, existing };
 }
 
-const sameCharge: DecisionPort = async (input) => {
-  const keys = Object.keys(input.questions.selection.criteria);
-  return {
-    answers: {
-      selection: {
-        type: "choice",
-        choice: keys[0]!,
-        confidence: 0.97,
-        probabilities: Object.fromEntries(
-          keys.map((key, index) => [key, index === 0 ? 0.97 : 0.01]),
-        ),
-      },
-    },
-  };
-};
+// The candidate is the same charge; a create, if any, is a business purchase.
+const sameCharge = answering({ kind: "purchase", counterparty: "business" });
 
 const label = async (ctx: Ctx) =>
   labelStatementSuggestions(ctx.db, {

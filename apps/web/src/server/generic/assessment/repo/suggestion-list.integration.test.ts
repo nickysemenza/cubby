@@ -11,9 +11,12 @@ import { describe, expect, it } from "vitest";
 import { getDb } from "~/server/db/helpers";
 import { assessmentState } from "~/server/db/schema";
 import { publishEntityConnection } from "~/server/domains/connection/repo/entity-connections";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import { answering } from "~/server/domains/statement-import/repo/statement-decision-port.fixtures";
 import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
 import { generateStatementSuggestionPage } from "~/server/domains/statement-import/repo/statement-suggestions";
+import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
 import {
   createProductFixture,
   makeProductInput,
@@ -294,6 +297,11 @@ describe("cross-family Suggestion list", () => {
     await card(ctx);
     await record(ctx, [rowInput({ rawDescription: "EXAMPLE MKTPLACE PMTS" })]);
     await generate(ctx);
+    // A create is clean only once a label agrees with the category rule.
+    await labelStatementSuggestions(ctx.db, {
+      port: answering({ kind: "purchase", counterparty: "business" }),
+      runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
+    });
     const listed = await listSuggestionPage(ctx.db, {
       family: "statement_transaction",
     });
