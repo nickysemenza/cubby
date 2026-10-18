@@ -173,7 +173,8 @@ describe("isolated Mail coordinator replay", () => {
               },
             },
           );
-          if (!started || !events[0])
+          const event = events[0];
+          if (!started || !event)
             throw new Error(
               "Replay admission did not produce a coordinator event",
             );
@@ -252,7 +253,7 @@ describe("isolated Mail coordinator replay", () => {
             );
             try {
               observedOutcome = await observe(async () => {
-                await scenario.dispatch(events[0]);
+                await scenario.dispatch(event);
                 await waitForSettlement();
               });
             } finally {
@@ -286,7 +287,7 @@ describe("isolated Mail coordinator replay", () => {
                     .fetch("https://queue.test/dispatch", {
                       method: "POST",
                       headers: { "content-type": "application/json" },
-                      body: JSON.stringify(events[0]),
+                      body: JSON.stringify(event),
                     });
                   if (!response.ok)
                     throw new Error(
