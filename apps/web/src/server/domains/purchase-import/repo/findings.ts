@@ -49,6 +49,7 @@ import { validateExpenseInheritance } from "~/server/domains/expense/repo/expens
 import { receivableProductIds } from "~/server/domains/inventory/repo/stock-tracking";
 import { decideLineWrite } from "~/server/domains/purchase-import/repo/writer-policy";
 import { assertClassificationPolicies } from "~/server/domains/spending-category/repo/classification-field-policy";
+import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
 import { cascadeRemoval } from "~/server/generic/removal/repo/core";
@@ -538,11 +539,15 @@ export async function resolveRunFinding(
           id: finding.id,
           status: finding.status,
         });
-      throw new Error("This import finding has already been resolved.");
+      throw createAppError(
+        "PURCHASE_IMPORT_REVIEW_STALE",
+        "This import finding has already been resolved.",
+      );
     }
     if (input.action === "apply") {
       if (findingHasExpired(finding.expiresAt))
-        throw new Error(
+        throw createAppError(
+          "PURCHASE_IMPORT_REVIEW_STALE",
           "This import finding has expired. Review fresh source evidence before applying a fix.",
         );
       const fix = storedImportFix.parse(finding.proposedFix);
@@ -552,14 +557,16 @@ export async function resolveRunFinding(
         (!fix.reviewSnapshot ||
           input.reviewedFingerprint !== fix.reviewSnapshot.fingerprint)
       )
-        throw new Error(
+        throw createAppError(
+          "PURCHASE_IMPORT_REVIEW_STALE",
           "Review the current replacement preview before applying it.",
         );
       if (
         fix.kind === "reconcile_source_order" &&
         (!fix.review || input.reviewedFingerprint !== fix.reviewedFingerprint)
       )
-        throw new Error(
+        throw createAppError(
+          "PURCHASE_IMPORT_REVIEW_STALE",
           "Review the source-order reconciliation before applying it.",
         );
       assertFixTargetsFinding(finding, fix);

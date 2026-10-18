@@ -198,6 +198,17 @@ export const AppErrors = {
   MAIL_REQUEST_REFUSED: "BAD_REQUEST",
   // An Email read whose fixed metadata alone overflows the agent response cap.
   MAIL_READ_TOO_LARGE: "BAD_REQUEST",
+  // A Run control action its current status refuses (cancel an ended Run,
+  // resume one that is not paused); the message names the status.
+  RUN_CONTROL_REFUSED: "CONFLICT",
+  // A Run control action its purpose does not offer.
+  RUN_CONTROL_UNSUPPORTED: "BAD_REQUEST",
+  // A source-order or finding review whose bindings, roster or cent targets do
+  // not describe the proposal; the message names the fix.
+  PURCHASE_IMPORT_REVIEW_INVALID: "BAD_REQUEST",
+  // The finding, its review, or the reviewed Purchase state changed since the
+  // member reviewed it (resolved, expired, unreviewed, stale fingerprint).
+  PURCHASE_IMPORT_REVIEW_STALE: "CONFLICT",
 
   // Generic database constraint violations (translated centrally from Postgres
   // error codes — see server/errors/db-errors.ts)

@@ -429,7 +429,11 @@ describe("accepted source financial reconciliation", () => {
         { id: findings[0]!.id, action: "apply" },
         ctx.actor,
       ),
-    ).rejects.toThrow(/review/iu);
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      reason: "PURCHASE_IMPORT_REVIEW_STALE",
+      message: "Review the source-order reconciliation before applying it.",
+    });
     expect(await state()).toEqual(initial);
   });
 
@@ -958,6 +962,32 @@ describe("accepted source financial reconciliation", () => {
           id: finding!.id,
           resolution: {
             kind: "attach_only",
+            lines: [
+              {
+                lineIndex: 0,
+                expenseId: parseShortcodeFor(
+                  "expense",
+                  before.expenses[0]!.shortcode,
+                ),
+                productId: null,
+              },
+            ],
+          },
+        },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      reason: "PURCHASE_IMPORT_REVIEW_INVALID",
+      message: "Review exactly one binding for each proposed order line.",
+    });
+    await expect(
+      prepareSourceOrderReconciliation(
+        ctx.db,
+        {
+          id: finding!.id,
+          resolution: {
+            kind: "attach_only",
             lines: [0, 1].map((lineIndex) => ({
               lineIndex,
               expenseId: parseShortcodeFor(
@@ -970,7 +1000,12 @@ describe("accepted source financial reconciliation", () => {
         },
         ctx.actor,
       ),
-    ).rejects.toThrow(/distinct|unique/u);
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      reason: "PURCHASE_IMPORT_REVIEW_INVALID",
+      message:
+        "Attach-only bindings require a distinct Expense for each proposed line.",
+    });
     expect(await state()).toEqual(before);
   });
 
@@ -1028,7 +1063,12 @@ describe("accepted source financial reconciliation", () => {
         },
         ctx.actor,
       ),
-    ).rejects.toThrow(/preserve.*cents/u);
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      reason: "PURCHASE_IMPORT_REVIEW_INVALID",
+      message:
+        "Same-total replacements must preserve each party's beneficiary and funder cents.",
+    });
     expect(await state()).toEqual(before);
   });
 

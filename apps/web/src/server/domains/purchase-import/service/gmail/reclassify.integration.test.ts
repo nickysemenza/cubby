@@ -692,6 +692,32 @@ describe("member Reclassify", () => {
     expect(await getDb(ctx.db).select().from(aiEvaluation)).toHaveLength(2);
   });
 
+  // Cancelling a Run that already ended is a member-state refusal, not a 500.
+  it("refuses to cancel an ended Run as a CONFLICT with the raw status", async () => {
+    const f = await fixture();
+    const selected = await f.seed("synthetic-ended", "Synthetic order", {});
+    const { runIds } = await startReclassification(
+      ctx.db,
+      { ids: [selected.shortcode] },
+      ctx.actor,
+      { launcher: TEST_AI_WORK_LAUNCHER },
+    );
+    const cancel = () =>
+      controlWorkflowRun(
+        ctx.db,
+        ctx.actor,
+        { runPublicId: runIds[0]!, action: "cancel" },
+        "mail_reclassify",
+        TEST_AI_WORK_LAUNCHER,
+      );
+    await cancel();
+    await expect(cancel()).rejects.toMatchObject({
+      code: "CONFLICT",
+      reason: "RUN_CONTROL_REFUSED",
+      message: "Only active work can be cancelled (failed)",
+    });
+  });
+
   // Cancellation during a paid call cannot revoke another request's publication fence.
   it("finishes shared execution when its driver is cancelled during inference", async () => {
     vi.spyOn(models, "selectDecisionModel").mockReturnValue(
