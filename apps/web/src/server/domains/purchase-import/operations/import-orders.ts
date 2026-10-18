@@ -56,8 +56,8 @@ import {
   type ProductHit,
   type ExternalIdPair,
 } from "~/server/domains/product/repo/find-by-external-ids";
+import { productIdentityOverlap } from "~/server/domains/product/repo/match/product-identity-overlap";
 import { resolveProductIdentifierSource } from "~/server/domains/product/repo/product-identifier-source";
-import { productIdentityOverlap } from "~/server/domains/product/repo/product-identity-overlap";
 import {
   findExactProductNameMatches,
   findProductIdentityReviewCandidates,
