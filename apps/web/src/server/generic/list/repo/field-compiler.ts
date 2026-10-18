@@ -585,7 +585,7 @@ export const rowSetSql = (
   const where = and(
     first.condition,
     first.softDelete ? sql`${firstAlias}."deletedAt" IS NULL` : undefined,
-    ...Object.entries(storage.where).map(
+    ...Object.entries(storage.kind === "path" ? storage.where : {}).map(
       ([column, value]) => sql`${leaf(column)} = ${value}`,
     ),
   );
@@ -594,12 +594,18 @@ export const rowSetSql = (
       (condition) =>
         sql`EXISTS (SELECT 1 FROM ${sql.identifier(first.relation ?? first.table)} ${firstAlias} ${renderJoins({ hops: rest })} WHERE ${and(where, condition)})`,
     ),
-    column: (field) =>
-      leaf(
+    column: (field) => {
+      const column =
         field.terminal.kind === "column"
           ? field.terminal.column
-          : referenceColumn(traversal.leafTable, field.terminal.target),
-      ),
+          : (field.terminal.column ??
+            referenceColumn(traversal.leafTable, field.terminal.target));
+      const raw = leaf(column);
+      // A relation's entity field that inherits filters by its effective value.
+      return storage.kind === "relation"
+        ? terminalSql(storage.target, traversal.leafAlias, column)
+        : raw;
+    },
   };
 };
 

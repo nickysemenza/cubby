@@ -1993,6 +1993,8 @@ Rules:
         label: "External identifiers",
         path: [{ edge: "EntityExternalId.entityId", direction: "incoming" }],
       },
+      // Tasks whose effective subject is the product.
+      subjectTasks: { label: "Tasks", relation: "tasks" },
     },
     derived: {
       // The first live stock location by name, across all inventory.
@@ -2046,21 +2048,9 @@ Rules:
       // The category's effective feature, inherited from its ancestors.
       categoryFeature: { via: "category.feature" },
       externalIdSource: { via: "identifiers.source" },
-      taskStatus: {
-        predicate: "multiselect",
-        reason:
-          "A task's product is its own subject or one inherited from its parent task",
-      },
-      taskOpen: {
-        predicate: "boolean",
-        reason:
-          "A task's product is its own subject or one inherited from its parent task",
-      },
-      taskDue: {
-        predicate: "range",
-        reason:
-          "A task's product is its own subject or one inherited from its parent task",
-      },
+      // Both match on the same task, whose effective subject is the product.
+      taskStatus: { via: "subjectTasks.status" },
+      taskDue: { via: "subjectTasks.dueDate" },
     },
     sort: {
       fields: [
@@ -2649,13 +2639,6 @@ Rules:
         field: "taskStatusFilter",
         kind: "multiselect",
         placeholder: "Filter task status...",
-        derived: true,
-      },
-      {
-        columnId: "taskOpen",
-        field: "taskOpenOnly",
-        kind: "boolean",
-        placeholder: "Filter open tasks...",
         derived: true,
       },
       {

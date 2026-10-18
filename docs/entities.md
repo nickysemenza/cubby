@@ -1800,7 +1800,13 @@ expresses — any-of values ORed with their presence — and keep the group for
 Match all and Exclude); project `attentionItems`
 renders `VALUES` from the attention rules' items; gardenEntry
 `journalPlantings` is SQL (live journal links, plus whole-area entries at a
-planting's location inside its window). A row-set filter keeps a
+planting's location inside its window). `relation` names a stored-path
+relation to an entity (product `subjectTasks` over `tasks`, which joins on
+the task's effective subject product), whose stored fields are the row's
+columns: an enum field's filter offers its options, and a date or number
+field's takes bounds on the shared row. A related view's range column
+(product tasks by due date) leaves its presence key to the view ("has any
+task"), so an undated task still counts. A row-set filter keeps a
 presence key it was already published under (expense
 `projectPresenceFilter`); others get the generated
 `<columnId>PresenceFilter`.

@@ -94,8 +94,8 @@ struct EntityFilterTests {
             shape: "integer", entity: .product, wire: "expenseCountMin", value: ["2"],
             expected: ["expenseCountMin": 2]),
         Row(
-            shape: "boolean", entity: .product, wire: "taskOpenOnly", value: ["true"],
-            expected: ["taskOpenOnly": true]),
+            shape: "boolean", entity: .product, wire: "inventoryMultiplicity", value: ["true"],
+            expected: ["inventoryMultiplicity": true]),
         Row(
             shape: "string enum", entity: .product, wire: "imagePresenceFilter", value: ["none"],
             expected: ["imagePresenceFilter": "none"]),

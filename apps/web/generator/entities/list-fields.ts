@@ -46,11 +46,24 @@ type CompiledListField =
       rows: string;
       /** A column of the row (a JSON item key), or an entity it references. */
       terminal:
-        | Readonly<{ kind: "column"; column: string }>
+        | Readonly<{
+            kind: "column";
+            column: string;
+            /** The column's field kind, when the declaration knows it. */
+            fieldKind: string | null;
+            /** An enum column's options, labelled as its field's control. */
+            options: readonly GroupOption[] | null;
+          }>
         | Readonly<{
             kind: "record";
             target: string;
             titleColumn: string | null;
+            /**
+             * The row's foreign key to the record, when the declaration
+             * names it (a relation row set's field); else the row table's
+             * one foreign key to the target.
+             */
+            column: string | null;
           }>;
       sort: string;
       group: string;
@@ -96,9 +109,17 @@ type CompiledRowSet = Readonly<{
       }>
     | Readonly<{ kind: "json"; column: string; keys: readonly string[] }>
     | Readonly<{
+        kind: "relation";
+        steps: readonly RelationshipPathStep[];
+        /** The entity whose records the relation's rows are. */
+        target: string;
+      }>
+    | Readonly<{
         kind: "repository";
         /** Column → the entity it references, or null for a value. */
         columns: Readonly<Record<string, string | null>>;
+        /** A value column's declared type. */
+        types: Readonly<Record<string, string>>;
       }>;
 }>;
 
@@ -265,10 +286,39 @@ const compileRowSets = (
       throw new EntityDeclarationError(
         `${context} shares its key with a relation or model.derived entry; a via's first segment must name one.`,
       );
+    if ("relation" in declared) {
+      const relation = entity.relations.find(
+        (candidate) => candidate.key === declared.relation,
+      );
+      const provenance =
+        relation === undefined
+          ? undefined
+          : relationshipProvenanceSchema.parse(relation.provenance);
+      if (
+        relation === undefined ||
+        provenance?.kind !== "local-path" ||
+        !provenance.steps?.length ||
+        !byKey.has(relation.target)
+      )
+        throw new EntityDeclarationError(
+          `${context}.relation ${declared.relation} is not a stored-path relation of ${entity.key}.`,
+        );
+      compiled[key] = {
+        label: declared.label,
+        storage: {
+          kind: "relation",
+          steps: provenance.steps,
+          target: relation.target,
+        },
+      };
+      continue;
+    }
     if ("repository" in declared) {
       const columns: Record<string, string | null> = {};
+      const types: Record<string, string> = {};
       for (const [column, type] of Object.entries(declared.repository)) {
         const reference = typeof type === "string" ? null : type.reference;
+        if (typeof type === "string") types[column] = type;
         if (reference !== null && !byKey.has(reference))
           throw new EntityDeclarationError(
             `${context}.repository.${column} references unknown entity ${reference}.`,
@@ -277,7 +327,7 @@ const compileRowSets = (
       }
       compiled[key] = {
         label: declared.label,
-        storage: { kind: "repository", columns },
+        storage: { kind: "repository", columns, types },
       };
       continue;
     }
@@ -341,14 +391,30 @@ const compileRowsVia = (
     throw new EntityDeclarationError(
       `${context} via ${path}: ${terminal} is not a column of ${key} (${declared.join(", ")}).`,
     );
+  const related =
+    storage.kind === "relation" ? byKey.get(storage.target) : undefined;
+  const field = related?.fieldModel.fields.find(
+    (candidate) => candidate.key === terminal,
+  );
+  const stored = related?.fieldModel.storage.find(
+    (candidate) => candidate.key === terminal,
+  );
+  if (related !== undefined && stored === undefined)
+    throw new EntityDeclarationError(
+      `${context} via ${path}: ${terminal} is not a stored field of ${related.key}.`,
+    );
   const reference =
-    storage.kind === "repository" ? storage.columns[terminal] : undefined;
+    storage.kind === "repository"
+      ? storage.columns[terminal]
+      : (stored?.reference ?? undefined);
   const target =
     storage.kind === "path"
       ? byKey.get(terminal)
       : reference == null
         ? undefined
         : byKey.get(reference);
+  const repositoryType =
+    storage.kind === "repository" ? (storage.types[terminal] ?? null) : null;
   const reason = (verb: "sort" | "group") =>
     `Goes through a list of ${rowSet.label}. Only paths that lead to a single record can ${verb}.`;
   return {
@@ -357,11 +423,17 @@ const compileRowsVia = (
     rows: key,
     terminal:
       target === undefined
-        ? { kind: "column", column: terminal }
+        ? {
+            kind: "column",
+            column: stored?.column ?? terminal,
+            fieldKind: stored?.kind ?? repositoryType,
+            options: enumOptions(field),
+          }
         : {
             kind: "record",
             target: target.key,
             titleColumn: titleColumn(target),
+            column: stored?.column ?? null,
           },
     sort: reason("sort"),
     group: reason("group"),
@@ -663,10 +735,17 @@ const compatibleKinds = (
             ? ["text", "multiselect", "idMulti", "presence"]
             : ["text", "multiselect", "presence"];
     case "via":
-    case "rows":
       return field.terminal.kind === "record"
         ? ["idMulti", "text", "presence"]
         : ["text", "multiselect", "boolean", "presence"];
+    // A row-set column of a date or number field also takes bounds.
+    case "rows":
+      return field.terminal.kind === "record"
+        ? ["idMulti", "text", "presence"]
+        : field.terminal.fieldKind === "date" ||
+            field.terminal.fieldKind === "number"
+          ? ["text", "multiselect", "boolean", "presence", "range"]
+          : ["text", "multiselect", "boolean", "presence"];
   }
 };
 
@@ -751,6 +830,27 @@ const withViaKeys = (
         ? { field: `${descriptor.columnId}Match` }
         : null,
   };
+};
+
+/**
+ * A range over a row set filters by its bounds alone. Only a related view's
+ * column may also carry a presence key, which the view applies ("has any
+ * related record", product tasks), not the row set.
+ */
+const assertRowSetRange = (
+  descriptor: FilterDescriptor,
+  bound: CompiledListField | undefined,
+  context: string,
+) => {
+  if (
+    bound?.shape === "rows" &&
+    descriptor.wire.kind === "range" &&
+    descriptor.wire.presence !== undefined &&
+    !descriptor.columnId.startsWith("related:")
+  )
+    throw new EntityDeclarationError(
+      `${context}.filters ${descriptor.columnId} is a range over row set ${bound.rows}; only a related view's column may carry a presence key, which the view applies.`,
+    );
 };
 
 /**
@@ -867,26 +967,35 @@ const withDistinctMenuLabels = (
 
 /**
  * A multiselect over a derived enum value offers that value's options when it
- * declares none, labelled as its group sections are.
+ * declares none, labelled as its group sections are; one over a row set's
+ * enum field offers that field's options.
  */
 const withDerivedOptions = (
   descriptor: FilterDescriptor,
   bound: CompiledListField | undefined,
 ): FilterDescriptor =>
-  descriptor.kind !== "multiselect" ||
-  descriptor.options !== null ||
-  descriptor.optionsRef !== null ||
-  descriptor.optionsKey !== null ||
-  bound?.shape !== "value" ||
-  bound.options === null
-    ? descriptor
-    : {
-        ...descriptor,
-        options: bound.options.map((value) => ({
-          value,
-          label: value[0]!.toUpperCase() + value.slice(1),
-        })),
-      };
+  descriptor.kind === "multiselect" &&
+  descriptor.options === null &&
+  descriptor.optionsRef === null &&
+  descriptor.optionsKey === null &&
+  bound?.shape === "rows" &&
+  bound.terminal.kind === "column" &&
+  bound.terminal.options !== null
+    ? { ...descriptor, options: bound.terminal.options }
+    : descriptor.kind !== "multiselect" ||
+        descriptor.options !== null ||
+        descriptor.optionsRef !== null ||
+        descriptor.optionsKey !== null ||
+        bound?.shape !== "value" ||
+        bound.options === null
+      ? descriptor
+      : {
+          ...descriptor,
+          options: bound.options.map((value) => ({
+            value,
+            label: value[0]!.toUpperCase() + value.slice(1),
+          })),
+        };
 
 /**
  * Two declarations of one request field — a list column's filter and an
@@ -1279,6 +1388,7 @@ export const compileListFields = (
         throw new EntityDeclarationError(
           `${context}.filters ${descriptor.columnId} is a ${descriptor.kind} filter over derived ${bound.shape} field; expected ${compatibleKinds(bound).join(" | ")}.`,
         );
+      assertRowSetRange(descriptor, bound, context);
       if (descriptor.kind !== "idMulti") continue;
       // A declared idMulti predicate (an inherited reference) targets its
       // brand's entity.

@@ -122,6 +122,30 @@ describe("buildFiltersFromManifest", () => {
     expect(buildFiltersFromManifest(specs, getter({}))).toEqual({});
   });
 
+  // Product tasks: the Tasks column's "Has open task" preset and the status
+  // column both write `taskStatusFilter`; Open with Done means either.
+  it("unions an any-of list two filters write", () => {
+    const specs: FilterSpecCore[] = [
+      {
+        columnId: "taskStatus",
+        field: "taskStatusFilter",
+        kind: "multiselect",
+      },
+      {
+        columnId: "tasks",
+        kind: "range",
+        expand: (v) =>
+          v === "open" ? { taskStatusFilter: ["not_started", "blocked"] } : {},
+      },
+    ];
+    expect(
+      buildFiltersFromManifest(
+        specs,
+        getter({ taskStatus: ["done"], tasks: "open" }),
+      ),
+    ).toEqual({ taskStatusFilter: ["done", "not_started", "blocked"] });
+  });
+
   it("sets a date range's bounds from a from..to value, keeping tokens for the server", () => {
     const specs: FilterSpecCore[] = [
       {

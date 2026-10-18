@@ -922,7 +922,9 @@ const buildMetadataSchemas = () => {
    * row; `repository` is a relation the repository passes to `listScaffold`
    * as SQL selecting `"owner"` (the list row's id) and each declared column
    * (a reference column holds the referenced record's id), optionally from a
-   * `listPrepare`. Every include filter through one row set matches the same row;
+   * `listPrepare`. `relation` names a stored-path relation to an entity, whose
+   * stored fields are the row's columns, so its filters share one related
+   * record. Every include filter through one row set matches the same row;
    * independent matching needs a second row set over the same storage.
    */
   const entityRowSetMetadataSchema = z.union([
@@ -943,6 +945,7 @@ const buildMetadataSchemas = () => {
       })
       .strict(),
     z.object({ label: nonEmptyString(), json: nonEmptyString() }).strict(),
+    z.object({ label: nonEmptyString(), relation: nonEmptyString() }).strict(),
     z
       .object({
         label: nonEmptyString(),
