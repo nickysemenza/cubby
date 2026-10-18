@@ -14,7 +14,15 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { getDb, unwrapDb, insertAndReturn } from "~/server/db/helpers";
-import { auditLog, ledgerParty, orderMailEvent } from "~/server/db/schema";
+import {
+  auditLog,
+  financialTransaction,
+  importSourceClaim,
+  importSourceOrder,
+  ledgerParty,
+  orderMailAttachment,
+  orderMailEvent,
+} from "~/server/db/schema";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
 import {
   createFinancialAccount,
@@ -27,6 +35,7 @@ import {
   mergeLedgerParties,
 } from "~/server/domains/ledger-party/repo/ledger-party";
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
+import { startImportRunFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { createMcpServer } from "~/server/mcp/server";
 import {
@@ -450,29 +459,34 @@ describe("dated card attribution", () => {
 });
 
 // Failures: the purchaser filter disagreeing with the displayed purchaserId
-// (a candidate source missing, or a settlement_party_conflict order still
-// listed), `@me` not reaching MCP, and the member's Purchases section reading
-// only overrides.
+// (the set resolver dropping a source — accepted message or attachment
+// sources through a claim alias, a household card's sole holder — or keeping
+// a settlement_party_conflict order, shared card use or a deleted charge),
+// `@me` not reaching MCP, and the member's Purchases section reading only
+// overrides.
 describe("purchaser filter", () => {
   const ctx = withTestDb();
   it("lists exactly the purchases whose displayed purchaserId is the member", async () => {
     const member = async (name: string) =>
       createRepoEntity(ctx, "ledgerParty", { name, kind: "member" });
     const { output: alex, entityId: alexId } = await member("Alex");
-    const { output: morgan } = await member("Morgan");
+    const { output: morgan, entityId: morganId } = await member("Morgan");
+    const { output: household } = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Shared funds",
+      kind: "household",
+    });
     const { output: vendor, entityId: vendorId } = await createRepoEntity(
       ctx,
       "vendor",
     );
     const account = async (owner: string) =>
-      (
-        await createRepoEntity(ctx, "vendorAccount", {
-          vendorId: vendor.id,
-          ledgerPartyId: owner,
-        })
-      ).output.id;
-    const alexAccount = await account(alex.id);
-    const morganAccount = await account(morgan.id);
+      createRepoEntity(ctx, "vendorAccount", {
+        vendorId: vendor.id,
+        ledgerPartyId: owner,
+      });
+    const alexVendorAccount = await account(alex.id);
+    const alexAccount = alexVendorAccount.output.id;
+    const morganAccount = (await account(morgan.id)).output.id;
     const card = async (holder: string) =>
       (
         await createRepoEntity(ctx, "financialAccount", {
@@ -548,9 +562,118 @@ describe("purchaser filter", () => {
       vendorAccountId: alexAccount,
     });
     await settle(morganCard, conflicted.entityId);
+
     const morgans = await order("SYN-MORGAN", {
       vendorAccountId: morganAccount,
     });
+
+    // Alex is the signed-in member (`@me` below) and runs the import.
+    await getDb(ctx.db)
+      .update(ledgerParty)
+      .set({ userId: ctx.actor.userId })
+      .where(eq(ledgerParty.id, alexId));
+    // Morgan's mail-only orders, each accepted on an alias of the claim that
+    // names the Email (an attachment id may hold colons).
+    const run = await startImportRunFixture(ctx.db, {
+      ledgerPartyId: alexId,
+      vendorAccountId: alexVendorAccount.entityId,
+    });
+    const accepted = async (orderId: string, attachmentId?: string) => {
+      const created = await order(orderId);
+      const checksum = (attachmentId ? "b" : "a").repeat(64);
+      const messageId = `synthetic-${orderId}`;
+      const original = await syntheticRetainedMail(ctx.db, {
+        ledgerPartyId: morganId,
+        mailboxId: "synthetic-filter-morgan",
+        messageId,
+        vendorId,
+        sender: "receipts@example.test",
+        subject: "Synthetic receipt",
+        receivedAt: new Date("2026-06-01T12:00:00Z"),
+        rawChecksum: checksum,
+        content: {
+          bodyText: "Synthetic receipt",
+          bodyHtml: null,
+          snippet: null,
+        },
+      });
+      let externalKey = `gmail:synthetic-filter-morgan:${messageId}`;
+      if (attachmentId) {
+        await getDb(ctx.db)
+          .insert(orderMailAttachment)
+          .values({
+            orderMailId: original.id,
+            providerAttachmentId: attachmentId,
+            filename: "receipt.pdf",
+            mimeType: "application/pdf",
+            checksum: "c".repeat(64),
+          });
+        externalKey += `:attachment:${attachmentId}`;
+      }
+      const claim = async (key: string, canonicalClaimId?: string) => {
+        const [row] = await getDb(ctx.db)
+          .insert(importSourceClaim)
+          .values({
+            ledgerPartyId: morganId,
+            kind: attachmentId ? "mail_attachment" : "mail_message",
+            externalKey: key,
+            canonicalClaimId,
+            checksum,
+            firstRunId: run.id,
+            lastRunId: run.id,
+          })
+          .returning({ id: importSourceClaim.id });
+        if (!row) throw new Error("Synthetic claim missing");
+        return row.id;
+      };
+      const root = await claim(externalKey);
+      await getDb(ctx.db)
+        .insert(importSourceOrder)
+        .values({
+          sourceClaimId: await claim(`${externalKey}:historical-alias`, root),
+          orderKey: orderId,
+          purchaseId: created.entityId,
+          checksum,
+          outputFingerprint: `synthetic-${orderId}`,
+        });
+      return created;
+    };
+    const byMessage = await accepted("SYN-MESSAGE");
+    const byAttachment = await accepted("SYN-ATTACHMENT", "receipt:part-1");
+
+    // Household cards Morgan holds; Alex is authorized on the shared one by
+    // the order date. A household card never conflicts, so its sole holder
+    // outranks Alex's Vendor Account; shared use identifies nobody.
+    const householdCard = async (alexFrom: string) =>
+      (
+        await createRepoEntity(ctx, "financialAccount", {
+          identity: {
+            kind: "credit_card",
+            issuer: "Example Bank",
+            network: "visa",
+          },
+          ledgerPartyId: household.id,
+          primaryCardholderId: morgan.id,
+          authorizedUsers: [
+            { ledgerPartyId: alex.id, validFrom: alexFrom, validTo: null },
+          ],
+        })
+      ).entityId;
+    const bySoleCard = await order("SYN-SOLE-CARD", {
+      vendorAccountId: alexAccount,
+    });
+    await settle(await householdCard("2026-07-01"), bySoleCard.entityId);
+    const byShared = await order("SYN-SHARED-CARD");
+    await settle(await householdCard("2026-05-01"), byShared.entityId);
+    // A deleted charge on Morgan's card neither conflicts nor pays.
+    const deletedCharge = await order("SYN-DELETED-CHARGE", {
+      vendorAccountId: alexAccount,
+    });
+    const removed = await settle(morganCard, deletedCharge.entityId);
+    await getDb(ctx.db)
+      .update(financialTransaction)
+      .set({ deletedAt: new Date() })
+      .where(eq(financialTransaction.id, removed.id));
 
     const page = { pageIndex: 0, pageSize: 50 };
     const ids = async (filters: Parameters<typeof purchaseList>[1]) =>
@@ -563,15 +686,20 @@ describe("purchaser filter", () => {
         .filter((row) => row.purchaserId === party)
         .map((row) => row.id)
         .sort();
-    expect(
-      displayed.find((row) => row.id === conflicted.output.id)?.purchaserId,
-    ).toBeNull();
+    for (const unknown of [conflicted, byShared])
+      expect(
+        displayed.find((row) => row.id === unknown.output.id)?.purchaserId,
+      ).toBeNull();
     expect(shownFor(alex.id)).toEqual(
-      [overridden, byAccount, byCard, byEmail]
+      [overridden, byAccount, byCard, byEmail, deletedCharge]
         .map(({ output }) => output.id)
         .sort(),
     );
-    expect(shownFor(morgan.id)).toEqual([morgans.output.id]);
+    expect(shownFor(morgan.id)).toEqual(
+      [morgans, byMessage, byAttachment, bySoleCard]
+        .map(({ output }) => output.id)
+        .sort(),
+    );
     for (const party of [alex.id, morgan.id])
       expect(await ids({ purchaserId: [party] })).toEqual(shownFor(party));
     expect(await ids({ purchaserIdExclude: [alex.id] })).toEqual(
@@ -582,10 +710,6 @@ describe("purchaser filter", () => {
     );
 
     // MCP entity_read resolves `@me` to the actor's member.
-    await getDb(ctx.db)
-      .update(ledgerParty)
-      .set({ userId: ctx.actor.userId })
-      .where(eq(ledgerParty.id, alexId));
     const entityKernel = entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );

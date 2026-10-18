@@ -149,10 +149,7 @@ export const emailPurchaseAssociationsSql = (
  * purchase identities before the Email join prevents a mailbox × claims join;
  * materializing eligible metadata keeps the final policy off the entire mailbox.
  */
-export const purchaseAssociatedEmailsSql = (
-  purchaseId: SQL,
-  accountOwnerScope: "respect" | "ignore" = "respect",
-): SQL => sql`
+export const purchaseAssociatedEmailsSql = (purchaseId: SQL): SQL => sql`
   WITH accepted_roots AS MATERIALIZED (
     SELECT DISTINCT coalesce(family."canonicalClaimId", family."id") AS id
     FROM "ImportSourceOrder" accepted
@@ -196,9 +193,72 @@ export const purchaseAssociatedEmailsSql = (
     FROM candidate_ids ids JOIN "Email" candidate ON candidate."id" = ids."id" AND candidate."deletedAt" IS NULL
   )
   SELECT "Email".* FROM eligible "Email"
-  WHERE EXISTS (SELECT 1 FROM (${emailPurchaseAssociationsSql(false, accountOwnerScope)}) association
+  WHERE EXISTS (SELECT 1 FROM (${emailPurchaseAssociationsSql()}) association
     WHERE association."purchaseId" = ${purchaseId})
 `;
+
+const emailSourceKeySql = sql`"Email"."provider" || ':' || "Email"."mailboxId" || ':' || "Email"."messageId"`;
+
+/**
+ * `("purchaseId", "ledgerPartyId")` for each mailbox whose live Email
+ * `emailPurchaseAssociationsSql` associates with a live purchase of
+ * `purchases` (a relation with `id` and `"deletedAt"`), account owner scope
+ * ignored. The same policy read from the purchase side as plain joins, so a
+ * whole set of purchases resolves in one pass and one purchase through its
+ * indexes.
+ */
+export const purchaseMailPartiesSql = (purchases: SQL): SQL => {
+  // Inline subqueries, not CTEs: their row estimates let a whole set of
+  // purchases hash-join "Email" instead of probing it once per claim.
+  const roots = sql`
+    SELECT DISTINCT accepted."purchaseId", root."id", root."ledgerPartyId", root."kind", root."externalKey"
+    FROM (${purchases}) purchase
+    JOIN "ImportSourceOrder" accepted ON accepted."purchaseId" = purchase."id"
+    JOIN "ImportSourceClaim" family ON family."id" = accepted."sourceClaimId"
+    JOIN "ImportSourceClaim" root ON root."id" = coalesce(family."canonicalClaimId", family."id")
+      AND root."canonicalClaimId" IS NULL
+      AND root."ledgerPartyId" = family."ledgerPartyId" AND root."kind" = family."kind"
+    WHERE purchase."deletedAt" IS NULL`;
+  const identities = sql`(
+    SELECT "purchaseId", "ledgerPartyId", "kind", "externalKey" FROM (${roots}) roots
+    UNION ALL
+    SELECT roots."purchaseId", alias."ledgerPartyId", alias."kind", alias."externalKey"
+    FROM (${roots}) roots JOIN "ImportSourceClaim" alias ON alias."canonicalClaimId" = roots."id"
+      AND alias."ledgerPartyId" = roots."ledgerPartyId" AND alias."kind" = roots."kind"
+  )`;
+  return sql`
+  SELECT identity."purchaseId", identity."ledgerPartyId"
+  FROM ${identities} identity
+  JOIN "Email" ON "Email"."deletedAt" IS NULL
+    AND "Email"."ledgerPartyId" = identity."ledgerPartyId"
+    AND identity."kind" = ${importSourceKind.enum.mail_message}
+    AND ${emailSourceKeySql} = identity."externalKey"
+  UNION
+  SELECT identity."purchaseId", identity."ledgerPartyId"
+  FROM ${identities} identity
+  -- The message key ahead of ":attachment:" under the mail source key grammar
+  -- (parseMailSourceKey: the message id holds no colon) reaches
+  -- "Email_source_key_idx"; the attachment then matches exactly.
+  JOIN "Email" ON "Email"."deletedAt" IS NULL
+    AND "Email"."ledgerPartyId" = identity."ledgerPartyId"
+    AND identity."kind" = ${importSourceKind.enum.mail_attachment}
+    AND ${emailSourceKeySql} = substring(identity."externalKey" from '^(.+?:[^:]+):attachment:')
+  JOIN "OrderMail" original ON original."id" = "Email"."orderMailId"
+    AND original."ledgerPartyId" = "Email"."ledgerPartyId"
+  JOIN "OrderMailAttachment" attachment ON attachment."orderMailId" = original."id"
+    AND identity."externalKey" = ${emailSourceKeySql} || ':attachment:' || attachment."providerAttachmentId"
+  UNION
+  SELECT decision."purchaseId", "Email"."ledgerPartyId"
+  FROM (${purchases}) purchase
+  JOIN "AssessmentEmailLink" decision ON decision."purchaseId" = purchase."id"
+    AND decision."decision" = ${emailPurchaseLinkState.enum.linked}
+  JOIN "OrderMailEvent" event ON event."id" = decision."eventId" AND event."supersededAt" IS NULL
+  JOIN "OrderMail" original ON original."id" = event."orderMailId"
+  JOIN "Email" ON "Email"."orderMailId" = original."id"
+    AND "Email"."ledgerPartyId" = original."ledgerPartyId" AND "Email"."deletedAt" IS NULL
+  WHERE purchase."deletedAt" IS NULL
+`;
+};
 
 /**
  * The member's own Relevance for the current original: a resolution, else the

@@ -43,7 +43,7 @@ import { eq, inArray, type SQL, sql } from "drizzle-orm";
 
 import type { DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { financialTransaction, purchase } from "~/server/db/schema";
-import { purchaseAssociatedEmailsSql } from "~/server/domains/email/repo/email-sql";
+import { purchaseMailPartiesSql } from "~/server/domains/email/repo/email-sql";
 import { createAppError } from "~/server/errors/app-error";
 
 export const settlementConflictKinds = settlementConflictKind.options;
@@ -64,56 +64,78 @@ const periodPartiesSql = (periods: SQL, date: SQL) => sql`(
 )`;
 
 /**
- * Everyone who could use the account on `date`. Undated funding history falls
- * back to the owner, as in `accountFundingPartySql`.
+ * Everyone who could use the account on `date`, NULLs included. Undated
+ * funding history falls back to the owner, as in `accountFundingPartySql`.
  */
 const accountPeopleSql = (account: SQL, date: SQL) => sql`(
   SELECT ${account}."ledgerPartyId"
-  UNION SELECT ${account}."primaryCardholderId"
-  UNION SELECT party_id FROM ${periodPartiesSql(sql`${account}."fundingPeriods"`, date)} funded(party_id)
-  UNION SELECT party_id FROM ${periodPartiesSql(sql`${account}."authorizedUsers"`, date)} authorized(party_id)
-)`;
-
-/** True when the account's people admit `party` on `date` (see module doc). */
-// `party` is bound once: inlined, Postgres re-evaluates the order's member
-// (an Email association read) at every reference and per person row.
-const accountAdmitsPartySql = (account: SQL, date: SQL, party: SQL) => sql`(
-  WITH admitted AS MATERIALIZED (SELECT ${party} AS id)
-  SELECT admitted.id IS NULL
-    OR NOT EXISTS (
-      SELECT 1 FROM ${accountPeopleSql(account, date)} people(id) WHERE people.id IS NOT NULL
-    )
-    OR EXISTS (
-      SELECT 1 FROM ${accountPeopleSql(account, date)} people(id)
-      JOIN "LedgerParty" person ON person.id = people.id AND person."deletedAt" IS NULL
-      WHERE person.id = admitted.id OR person.kind = ${ledgerPartyKind.enum.household}
-    )
-  FROM admitted
+  UNION ALL SELECT ${account}."primaryCardholderId"
+  UNION ALL SELECT party_id FROM ${periodPartiesSql(sql`${account}."fundingPeriods"`, date)} funded(party_id)
+  UNION ALL SELECT party_id FROM ${periodPartiesSql(sql`${account}."authorizedUsers"`, date)} authorized(party_id)
 )`;
 
 /**
- * The order's member id, or NULL when unknown (see module doc). A purchaser
- * override that names no live member (a household purchaser) leaves it
- * unknown rather than falling through to Email. Never the card-derived
- * purchaser: that derives from the settling account this check judges.
+ * True when the account's people admit `party` on `date` (see module doc):
+ * no known party, nobody known to use the account, or a live person who is
+ * the party or the household.
  */
-const purchaseMemberSql = (purchase: SQL) => sql`coalesce(
-  (SELECT va."ledgerPartyId" FROM "VendorAccount" va
-    WHERE va.id = ${purchase}."vendorAccountId" AND va."deletedAt" IS NULL),
-  CASE WHEN ${purchase}."purchaserOverrideId" IS NOT NULL THEN (
-    SELECT override_party.id FROM "LedgerParty" override_party
-    WHERE override_party.id = ${purchase}."purchaserOverrideId"
-      AND override_party."deletedAt" IS NULL
-      AND override_party.kind = ${ledgerPartyKind.enum.member}
-  ) ELSE (
-    SELECT CASE WHEN count(DISTINCT mail_party.id) = 1
-      THEN (array_agg(mail_party.id))[1] END
-    FROM (${purchaseAssociatedEmailsSql(sql`${purchase}.id`, "ignore")}) "Email"
-    JOIN "LedgerParty" mail_party ON mail_party.id = "Email"."ledgerPartyId"
-      AND mail_party."deletedAt" IS NULL
-      AND mail_party.kind = ${ledgerPartyKind.enum.member}
-  ) END
+// `party` is bound once: inlined, Postgres re-evaluates the order's member
+// at every reference and per person row. One aggregate pass reads the people.
+const accountAdmitsPartySql = (account: SQL, date: SQL, party: SQL) => sql`(
+  WITH admitted AS MATERIALIZED (SELECT ${party} AS id)
+  SELECT admitted.id IS NULL
+    OR count(people.id) = 0
+    OR coalesce(bool_or(person.id = admitted.id OR person.kind = ${ledgerPartyKind.enum.household}), false)
+  FROM admitted
+  CROSS JOIN ${accountPeopleSql(account, date)} people(id)
+  LEFT JOIN "LedgerParty" person ON person.id = people.id AND person."deletedAt" IS NULL
+  GROUP BY admitted.id
 )`;
+
+/** The Purchase columns the purchase-set builders read, from one correlated row. */
+export const purchaseRowSql = (purchase: SQL) =>
+  sql`SELECT ${purchase}.id, ${purchase}."deletedAt", ${purchase}."vendorAccountId", ${purchase}."purchaserOverrideId", ${purchase}.date`;
+
+/** `("purchaseId", id, shortcode)`: live members whose mailbox holds the order's Email evidence. */
+export const purchaseMailMembersSql = (purchases: SQL) => sql`
+  SELECT mail."purchaseId", mail_party.id, mail_party.shortcode
+  FROM (${purchaseMailPartiesSql(purchases)}) mail
+  JOIN "LedgerParty" mail_party ON mail_party.id = mail."ledgerPartyId"
+    AND mail_party."deletedAt" IS NULL
+    AND mail_party.kind = ${ledgerPartyKind.enum.member}
+`;
+
+/**
+ * `(id, member)`: each purchase's member id, or NULL when unknown (see module
+ * doc). A purchaser override that names no live member (a household
+ * purchaser) leaves it unknown rather than falling through to Email. Never
+ * the card-derived purchaser: that derives from the settling account this
+ * check judges. `purchases` is a `purchaseRowSql`-shaped relation; a caller
+ * that already reads `purchaseMailMembersSql` passes it to read it once.
+ */
+export const purchaseMembersSql = (
+  purchases: SQL,
+  mailMembers: SQL = purchaseMailMembersSql(purchases),
+) => sql`
+  SELECT purchase.id, coalesce(
+    va."ledgerPartyId",
+    CASE WHEN purchase."purchaserOverrideId" IS NOT NULL THEN override_party.id ELSE mail.id END
+  ) AS member
+  FROM (${purchases}) purchase
+  LEFT JOIN "VendorAccount" va ON va.id = purchase."vendorAccountId" AND va."deletedAt" IS NULL
+  LEFT JOIN "LedgerParty" override_party ON override_party.id = purchase."purchaserOverrideId"
+    AND override_party."deletedAt" IS NULL
+    AND override_party.kind = ${ledgerPartyKind.enum.member}
+  LEFT JOIN (
+    SELECT member_mail."purchaseId",
+      CASE WHEN count(DISTINCT member_mail.id) = 1 THEN (array_agg(member_mail.id))[1] END AS id
+    FROM (${mailMembers}) member_mail
+    GROUP BY member_mail."purchaseId"
+  ) mail ON mail."purchaseId" = purchase.id
+`;
+
+const purchaseMemberSql = (purchase: SQL) =>
+  sql`(SELECT member FROM (${purchaseMembersSql(purchaseRowSql(purchase))}) order_member)`;
 
 /**
  * The one live account a payment evidence row names, or NULL when it names
@@ -188,6 +210,25 @@ export const purchasePayingAccountIdsSql = (purchaseAlias: string) => {
 )`;
 };
 
+/** A live settling transaction: what every settlement read allocates from. */
+export const settlementTransactionSql = (transaction: SQL) => sql`(
+  ${transaction}."deletedAt" IS NULL
+  AND ${transaction}.status <> ${financialTransactionStatus.enum.void}
+  AND ${transaction}.kind IN (${settlementKindList})
+)`;
+
+/** A charge on `account` the order's `member` (a `purchaseMembersSql` value) could not use. */
+export const settlementPartyConflictSql = (
+  account: SQL,
+  transaction: SQL,
+  member: SQL,
+) =>
+  sql`NOT ${accountAdmitsPartySql(
+    account,
+    sql`coalesce(${transaction}."transactionDate", ${transaction}."postedDate")`,
+    member,
+  )}`;
+
 /** One allocation's conflict of `kind`, given the purchase, account and transaction aliases. */
 export const settlementConflictSql = (
   kind: SettlementConflictKind,
@@ -197,11 +238,11 @@ export const settlementConflictSql = (
   const account = sql.raw(aliases.account);
   const transaction = sql.raw(aliases.transaction);
   if (kind === "party")
-    return sql`NOT ${accountAdmitsPartySql(
+    return settlementPartyConflictSql(
       account,
-      sql`coalesce(${transaction}."transactionDate", ${transaction}."postedDate")`,
+      transaction,
       purchaseMemberSql(purchase),
-    )}`;
+    );
   return sql`(${transaction}.kind <> ${financialTransactionKind.enum.refund}
     AND coalesce(NOT (${account}.id = ANY((${purchasePayingAccountIdsSql(aliases.purchase)})::uuid[])), false))`;
 };
@@ -214,9 +255,7 @@ const conflictingAllocationsSql = (
   SELECT ${select} FROM "FinancialTransactionAllocation" conflict_alloc
   JOIN "FinancialTransaction" conflict_tx
     ON conflict_tx.id = conflict_alloc."transactionId"
-    AND conflict_tx."deletedAt" IS NULL
-    AND conflict_tx.status <> ${financialTransactionStatus.enum.void}
-    AND conflict_tx.kind IN (${settlementKindList})
+    AND ${settlementTransactionSql(sql.raw("conflict_tx"))}
   JOIN "FinancialAccount" conflict_account
     ON conflict_account.id = conflict_tx."accountId"
   WHERE conflict_alloc."purchaseId" = ${sql.raw(purchase)}.id
