@@ -922,7 +922,19 @@ export async function loadInventoryOwnershipTraces(
   entries: OwnershipEntry[],
 ): Promise<Map<InventoryId, InventoryOwnershipTrace>> {
   const productIds = [...new Set(entries.map((entry) => entry.productId))];
-  const inheritedByProduct = await loadInheritedCandidates(db, productIds);
+  return traceInventoryOwnership(
+    db,
+    entries,
+    await loadInheritedCandidates(db, productIds),
+  );
+}
+
+/** Traces `entries` against already-loaded inherited candidates for their products. */
+async function traceInventoryOwnership(
+  db: Database | DrizzleTransaction,
+  entries: OwnershipEntry[],
+  inheritedByProduct: ReadonlyMap<ProductId, InheritedCandidate>,
+): Promise<Map<InventoryId, InventoryOwnershipTrace>> {
   const explicitIds = [
     ...new Set(
       entries.flatMap((entry) =>
@@ -1057,12 +1069,11 @@ const ownerFilterValue = (state: OwnerState) =>
       ? OWNER_FILTER_HOUSEHOLD
       : OWNER_FILTER_UNKNOWN;
 
-async function liveEntryOwnerStates(
+const liveOwnershipEntries = (
   db: Database | DrizzleTransaction,
   productIds?: readonly ProductId[],
-) {
-  if (productIds?.length === 0) return [];
-  const entries = await unwrapDb(db)
+) =>
+  unwrapDb(db)
     .select({
       id: inventoryEntry.id,
       productId: inventoryEntry.productId,
@@ -1078,13 +1089,28 @@ async function liveEntryOwnerStates(
           : undefined,
       ),
     );
-  const ownership = await loadEffectiveInventoryOwnership(db, entries);
-  return entries.flatMap((entry) => {
+
+const withOwnerStates = <Entry extends { id: InventoryId }>(
+  entries: readonly Entry[],
+  ownership: ReadonlyMap<InventoryId, EffectiveInventoryOwnership>,
+) =>
+  entries.flatMap((entry) => {
     const resolved = ownership.get(entry.id);
     return resolved
       ? [{ ...entry, ownership: resolved, state: ownerState(resolved) }]
       : [];
   });
+
+async function liveEntryOwnerStates(
+  db: Database | DrizzleTransaction,
+  productIds?: readonly ProductId[],
+) {
+  if (productIds?.length === 0) return [];
+  const entries = await liveOwnershipEntries(db, productIds);
+  return withOwnerStates(
+    entries,
+    await loadEffectiveInventoryOwnership(db, entries),
+  );
 }
 
 /**
@@ -1113,17 +1139,25 @@ export async function loadProductOwners(
   db: Database | DrizzleTransaction,
   productIds: readonly ProductId[],
 ): Promise<Map<ProductId, ResolvedListItem[]>> {
-  const states = await liveEntryOwnerStates(db, productIds);
-  const stocked = new Set(states.map((entry) => entry.productId));
-  const inherited = await loadInheritedProductOwners(
-    db,
-    productIds.filter((id) => !stocked.has(id)),
+  if (productIds.length === 0) return new Map();
+  // One inherited-candidate pass serves both stocked products (each entry
+  // traces against its product's candidate) and unstocked ones (the
+  // candidate's owner is the rollup); it needs no entry, so it runs beside
+  // the entry read rather than once after it for each population.
+  const [liveEntries, candidates] = await Promise.all([
+    liveOwnershipEntries(db, productIds),
+    loadInheritedCandidates(db, [...productIds]),
+  ]);
+  const traces = await traceInventoryOwnership(db, liveEntries, candidates);
+  const states = withOwnerStates(
+    liveEntries,
+    new Map([...traces].map(([id, trace]) => [id, trace.ownership] as const)),
   );
   const result = new Map<ProductId, ResolvedListItem[]>();
   for (const id of productIds) {
     const entries = states.filter((entry) => entry.productId === id);
     if (entries.length === 0) {
-      const owner = inherited.get(id);
+      const owner = candidates.get(id)?.owner;
       result.set(
         id,
         owner
@@ -1176,8 +1210,8 @@ export async function productIdsByOwner(
   presence?: "has" | "none",
 ): Promise<ProductId[]> {
   const wanted = new Set(values);
-  const [states, unstocked] = await Promise.all([
-    liveEntryOwnerStates(db),
+  const [liveEntries, unstocked] = await Promise.all([
+    liveOwnershipEntries(db),
     unwrapDb(db)
       .select({ id: product.id })
       .from(product)
@@ -1188,9 +1222,21 @@ export async function productIdsByOwner(
         ),
       ),
   ]);
-  const inherited = await loadInheritedProductOwners(
-    db,
-    unstocked.map(({ id }) => id),
+  // One inherited-candidate pass for both populations (see `loadProductOwners`).
+  const unstockedIds = unstocked.map(({ id }) => id);
+  const candidates = await loadInheritedCandidates(db, [
+    ...new Set([
+      ...liveEntries.map((entry) => entry.productId),
+      ...unstockedIds,
+    ]),
+  ]);
+  const traces = await traceInventoryOwnership(db, liveEntries, candidates);
+  const states = withOwnerStates(
+    liveEntries,
+    new Map([...traces].map(([id, trace]) => [id, trace.ownership] as const)),
+  );
+  const inherited = unstockedIds.map(
+    (id) => [id, candidates.get(id)?.owner ?? null] as const,
   );
   const matches = new Set<ProductId>();
   for (const { productId, state } of states)
