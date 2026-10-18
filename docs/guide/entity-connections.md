@@ -40,6 +40,9 @@ Existing automatic domain behavior is unchanged.
   and inventory verification stamps do not invalidate completed scans or running
   evaluations. A target corpus can remain broad when any eligible target may be
   selected; its relevant content changes still invalidate negative scans.
+  Indexed retrieval hashes cover every eligible field target, including aliases;
+  Purchase negatives also retain their acquisition-blocking Product set even
+  when no candidate is currently eligible.
 - Retained Email checksums, order events, reviewed links and accepted sources
   participate in discovery currentness, including scans with no candidates.
   Purchase account assignments and account ownership/deletion participate too.

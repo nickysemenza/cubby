@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { buildEntity } from "tooling/factories/build";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -11,14 +12,21 @@ import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
 import {
   aiEvaluation,
+  entityLink,
+  expense,
+  ingredient,
   inventoryEntry,
   location,
   product,
+  searchDocument,
   user,
 } from "~/server/db/schema";
+import { acquisitionPairEligible } from "~/server/domains/connection/repo/connection-candidates";
+import { confirmPurchaseAcquisition } from "~/server/domains/purchase/repo/purchase-products";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
 import {
   createInventoryFixture,
+  createIngredientFixture,
   createLocationFixture,
   createProductFixture,
   makeProductInput,
@@ -71,6 +79,103 @@ describe("connection discovery roster freshness", () => {
     );
     expect(await connectionSourceFingerprint(ctx.db, ref)).toBe(before);
   });
+  it("revisits Product field inference after an Ingredient alias changes indexed retrieval", async () => {
+    const source = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic alias source" }),
+      ctx.actor,
+    );
+    const target = await createIngredientFixture(
+      ctx.db,
+      buildEntity("ingredient", { name: "Synthetic herb" }),
+      ctx.actor,
+    );
+    const ref = { entityKind: "product" as const, entityId: source.id };
+    const before = await connectionSourceFingerprint(ctx.db, ref);
+    await getDb(ctx.db)
+      .update(ingredient)
+      .set({ aliases: ["Synthetic alias source"] })
+      .where(eq(ingredient.id, target.entityId));
+    expect(await connectionSourceFingerprint(ctx.db, ref)).not.toBe(before);
+    await refreshSearchDocument(ctx.db, "ingredient", target.entityId);
+    const changed = await connectionSourceFingerprint(ctx.db, ref);
+    expect(changed).not.toBe(before);
+    await refreshSearchDocument(ctx.db, "ingredient", target.entityId);
+    expect(await connectionSourceFingerprint(ctx.db, ref)).toBe(changed);
+  });
+  it("includes indexed Product retrieval content for Task field inference", async () => {
+    const source = await createRepoEntity(ctx, "task", {
+      name: "Synthetic field retrieval source",
+      trade: "other",
+    });
+    const target = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic indexed target" }),
+      ctx.actor,
+    );
+    await refreshSearchDocument(ctx.db, "product", target.entityId);
+    const ref = { entityKind: "task" as const, entityId: source.output.id };
+    const before = await connectionSourceFingerprint(ctx.db, ref);
+    // Derived retrieval text can change without changing the Product payload.
+    await getDb(ctx.db)
+      .update(searchDocument)
+      .set({ sourceHash: "synthetic-retrieval-content-change" })
+      .where(eq(searchDocument.entityId, target.entityId));
+    expect(await connectionSourceFingerprint(ctx.db, ref)).not.toBe(before);
+  });
+  it.each(["expense", "confirmation"] as const)(
+    "revisits a Purchase negative after its %s acquisition blocker is removed",
+    async (blocker) => {
+      const vendor = await createRepoEntity(ctx, "vendor", {
+        name: "Synthetic acquisition supplier",
+      });
+      const order = await createRepoEntity(ctx, "purchase", {
+        vendorId: vendor.output.id,
+        notes: "Synthetic acquired tool",
+      });
+      const item = await createProductFixture(
+        ctx.db,
+        makeProductInput({ name: "Synthetic acquired tool" }),
+        ctx.actor,
+      );
+      const ref = {
+        entityKind: "purchase" as const,
+        entityId: order.output.id,
+      };
+      if (blocker === "expense")
+        await createRepoEntity(ctx, "expense", {
+          name: "Synthetic acquired tool",
+          cost: 20,
+          trade: "electrical",
+          costType: "tools",
+          productId: item.id,
+          purchaseId: order.output.id,
+        });
+      else
+        await confirmPurchaseAcquisition(ctx.db, {
+          purchaseId: order.output.id,
+          productId: item.id,
+        });
+      expect(
+        await acquisitionPairEligible(ctx.db, item.id, order.output.id),
+      ).toBe(false);
+      const before = await connectionSourceFingerprint(ctx.db, ref);
+      if (blocker === "expense")
+        await getDb(ctx.db)
+          .update(expense)
+          .set({ deletedAt: new Date() })
+          .where(eq(expense.purchaseId, order.entityId));
+      else
+        await getDb(ctx.db)
+          .update(entityLink)
+          .set({ deletedAt: new Date() })
+          .where(eq(entityLink.fromEntityId, order.entityId));
+      expect(
+        await acquisitionPairEligible(ctx.db, item.id, order.output.id),
+      ).toBe(true);
+      expect(await connectionSourceFingerprint(ctx.db, ref)).not.toBe(before);
+    },
+  );
   it("scopes inventory discovery to the exact Product's stock and locations", async () => {
     const item = await createProductFixture(
       ctx.db,

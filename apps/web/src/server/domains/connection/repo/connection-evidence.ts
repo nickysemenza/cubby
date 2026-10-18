@@ -120,7 +120,7 @@ const relevantFields = new Map<string, readonly string[]>(
     ],
     cookbook: ["name", "author", "productId"],
     device: ["name", "platform", "productId"],
-    ingredient: ["name", "parentIngredientId"],
+    ingredient: ["name", "aliases", "parentIngredientId"],
     plant: ["name", "variety", "species"],
   }),
 );

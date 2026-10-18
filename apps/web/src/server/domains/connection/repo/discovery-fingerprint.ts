@@ -1,14 +1,16 @@
 import type { EntityRef } from "@cubby/schemas/entity";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
-import { inventoryEntry } from "~/server/db/schema";
+import { entityLink, expense, inventoryEntry } from "~/server/db/schema";
 import { expenseProjectRecommendationContext } from "~/server/domains/expense/repo/project-recommendations";
 import { getProductStockRows } from "~/server/domains/inventory/repo/scan";
+import { expenseAcquisitionPairPredicate } from "~/server/domains/purchase/repo/purchase-products";
 import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
+import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
 import { SHORTCODE_TABLE } from "~/server/generic/shortcode/repo/shortcode-tables";
 
 import { retrieveConnectionCandidates } from "./connection-candidates";
@@ -48,9 +50,6 @@ export async function connectionDiscoveryFingerprint(
   const kinds = targetCorpora.get(source.entityKind) ?? [];
   for (const kind of kinds) {
     const table = SHORTCODE_TABLE[kind];
-    const indexed =
-      ["product", "purchase", "expense"].includes(source.entityKind) &&
-      ["product", "purchase", "expense"].includes(kind);
     const relevant = sql`jsonb_build_object(${sql.join(
       connectionRelevantFields(kind).flatMap((key) => [
         sql`${key}::text`,
@@ -58,10 +57,8 @@ export async function connectionDiscoveryFingerprint(
       ]),
       sql`, `,
     )})`;
-    const projection = indexed
-      ? sql`(SELECT d."sourceHash" FROM "SearchDocument" d
-      WHERE d."entityId"=${table.id} AND d."entityKind"=${kind} AND d."deletedAt" IS NULL)`
-      : sql`NULL`;
+    const projection = sql`(SELECT d."sourceHash" FROM "SearchDocument" d
+      WHERE d."entityId"=${table.id} AND d."entityKind"=${kind} AND d."deletedAt" IS NULL)`;
     // Reduce in Postgres; a sweep must not transfer each entire target corpus
     // to the Worker once for every source and publication fence.
     const [corpus] = await getDb(db)
@@ -83,6 +80,36 @@ export async function connectionDiscoveryFingerprint(
       basis: await captureConnectionBasis(db, candidate, false, prepared),
     });
   let context: ReturnType<typeof snapshotJson> = null;
+  if (source.entityKind === "purchase") {
+    // Retrieval can have no candidate precisely because an acquisition is
+    // already confirmed. Retiring the blocker must wake that negative scan.
+    const acquisitions = await getDb(db)
+      .selectDistinct({ productId: expense.productId })
+      .from(expense)
+      .where(
+        expenseAcquisitionPairPredicate(
+          sql`${expense.purchaseId}=${record.id}::uuid`,
+        ),
+      );
+    const confirmations = await getDb(db)
+      .select({ productId: entityLink.toEntityId })
+      .from(entityLink)
+      .where(
+        and(
+          liveLinks("purchaseProduct"),
+          eq(entityLink.fromEntityId, record.id),
+          eq(entityLink.acquisitionConfirmed, true),
+        ),
+      );
+    context = [
+      ...new Set([
+        ...acquisitions.flatMap(({ productId }) =>
+          productId ? [productId] : [],
+        ),
+        ...confirmations.map(({ productId }) => productId),
+      ]),
+    ].sort();
+  }
   if (source.entityKind === "expense") {
     const recommendation = await expenseProjectRecommendationContext(
       db,
