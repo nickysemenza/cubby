@@ -242,7 +242,13 @@ by group (account × month):
 1. Accept `clean: true` suggestions in batches of up to 100 with
    `entity.review_assessments`: verdict `correct`, intent `apply`,
    `expectedFingerprint`, and `application {kind: "statement_transaction",
-   action: <recommended>}`.
+   action: <recommended>}`. A create is clean only when at least two of
+   `create.votes` (category `rule`, model `label`, merchant `history`) name
+   its kind and none disagrees, and `create.counterparty` is a business. A
+   card benefit, statement credit or issuer promotion is an `adjustment`, not a
+   `refund` (a merchant giving money back for returned goods), even when it
+   names the merchant of the purchase it offsets; merchant history is kept per
+   direction, so a couple of corrected credits teach it.
 2. Read every other suggestion before choosing. An attach candidate's model
    `label` is advisory — confirm the descriptors yourself, and below about $20
    read both. Attach to a different candidate, tick `fields`, override the
@@ -253,7 +259,17 @@ by group (account × month):
    pair may be one charge whose descriptor firmed up. Supersede the thinner row
    (`statement_rows.update` with `supersededByExternalId`) before creating
    either.
-4. Dismiss charges that should never become transactions with verdict
+4. A person counterparty is never clean. An outgoing payment to a person is
+   your share of a shared cost: create it as `purchase` and set the merchant.
+   An incoming one is a repayment: create it, then book it with
+   `finance.book_transaction` as `economicRole: "reimbursement"`.
+5. A `transfer` names the member's own balance account a cash-out or funding
+   descriptor points at (Venmo-style and payout balances are `stored_value`;
+   PayPal is read like a card). Create it as `account_transfer`; once the
+   other leg exists, pair it through `finance_read.transfer_pairs`. With
+   `ledgerTransfer: true` the accounts have different owners: accept the pair
+   with `finance.accept_transfer_pair` so the LedgerTransfer is recorded.
+6. Dismiss charges that should never become transactions with verdict
    `dismissed` and suppression `{scope: "statement_transaction", candidateKey:
    "<source>:<chargeKey>", fingerprint}`; prefer `disposition: "ignored"` with a
    reason when the whole row is out of scope, because that also settles every

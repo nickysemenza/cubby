@@ -695,7 +695,9 @@ Financial Transaction, attach the charge to an existing one, supersede a
 recorded hold with its posted row, or void a hold a later export no longer
 contains. It is a Suggestion with the `statement_transaction` Assessment
 family; nothing is written until it is reviewed. A clean one is
-bulk-acceptable.
+bulk-acceptable: a create is clean only when at least two of the category
+rule, the decision label and merchant history agree on its kind, none
+disagrees, and the counterparty is not a person.
 _Avoid_: statement proposal, auto-match
 
 **Decision model**:

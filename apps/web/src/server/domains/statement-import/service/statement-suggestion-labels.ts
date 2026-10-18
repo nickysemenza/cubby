@@ -1,5 +1,4 @@
 import { assessmentSubjects } from "@cubby/schemas/assessment";
-import { financialTransactionSettlementViolation } from "@cubby/schemas/financial-transaction";
 import type { RunId } from "@cubby/schemas/identifiers";
 import {
   statementTransactionJudgment,
@@ -12,10 +11,7 @@ import {
   type DecisionPort,
   runDecisionChoice,
 } from "~/server/ai/decision-model";
-import {
-  STATEMENT_CHARGE_IDENTITY_FEATURE,
-  STATEMENT_TRANSACTION_KIND_FEATURE,
-} from "~/server/ai/policy/features";
+import { STATEMENT_CHARGE_IDENTITY_FEATURE } from "~/server/ai/policy/features";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
@@ -26,6 +22,7 @@ import {
   publishChargeProposal,
   suggestionsNeedingLabels,
 } from "~/server/domains/statement-import/repo/statement-suggestions";
+import { labelStatementKind } from "~/server/domains/statement-import/service/statement-kind-labels";
 
 /** One queue message labels at most this many suggestions. */
 const STATEMENT_LABEL_BATCH = 20;
@@ -38,7 +35,7 @@ const identityLabel = {
 
 /**
  * Label pending rule suggestions with the decision model: whether each attach
- * candidate is the same charge, and the kind no provider category decided.
+ * candidate is the same charge, and every create's kind and counterparty.
  * Labels are advisory; they only decide whether a suggestion is
  * bulk-acceptable. Respects the automatic-work switch that gates AI refresh.
  */
@@ -105,37 +102,14 @@ export async function labelStatementSuggestions(
         model,
       };
     }
-    if (judgment.create?.kindSource === "sign") {
-      const prompt = STATEMENT_TRANSACTION_KIND_FEATURE.prompt(
-        JSON.stringify(statement),
-      );
-      if (decisionChoiceFitsContext(prompt)) {
-        const result = await runDecisionChoice({
-          ...prompt,
-          feature: STATEMENT_TRANSACTION_KIND_FEATURE,
-          decisionModel: model,
-          port: input.port,
-          usage,
-        });
-        const kind =
-          STATEMENT_TRANSACTION_KIND_FEATURE.choices[
-            result.selectedIndex ?? -1
-          ];
-        // Only a confident answer replaces the direction's default; either way
-        // a model kind stays a correction-reviewed choice, never bulk-accepted.
-        // A kind the settlement sign rule refuses could never be applied.
-        if (
-          kind &&
-          result.confidence === "high" &&
-          !financialTransactionSettlementViolation({
-            linked: false,
-            kind,
-            amount: judgment.create.amount,
-          })
-        )
-          judgment.create = { ...judgment.create, kind, kindSource: "model" };
-      }
-    }
+    if (judgment.create)
+      judgment.create = await labelStatementKind(judgment.create, {
+        subject: JSON.stringify(statement),
+        transfer: judgment.transfer,
+        model,
+        port: input.port,
+        usage,
+      });
     judgment.clean = isClean(judgment, current.canonical.amount);
     const outcome = await publishChargeProposal(
       db,

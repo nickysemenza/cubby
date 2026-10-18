@@ -3,20 +3,30 @@ import {
   assessmentFamily,
   assessmentJudgments,
   type AssessmentProducer,
+  feedbackEvent,
+  feedbackVerdict,
 } from "@cubby/schemas/assessment";
+import { financialAccountIdentity } from "@cubby/schemas/financial-account-fields";
+import { financialBookingInput } from "@cubby/schemas/financial-booking";
 import {
   FINANCIAL_STATEMENT_IMPORT_MAX_ROWS,
   type FinancialStatementImportRow,
 } from "@cubby/schemas/financial-transaction";
-import { financialTransactionStatus } from "@cubby/schemas/financial-transaction";
+import {
+  financialTransactionKind,
+  financialTransactionStatus,
+} from "@cubby/schemas/financial-transaction";
 import { statementRowProviderStatus } from "@cubby/schemas/statement-row";
 import {
+  type StatementCounterparty,
+  type StatementKindVotes,
   type StatementTransactionCandidate,
+  statementTransactionAction,
   type StatementTransactionJudgment,
 } from "@cubby/schemas/statement-suggestion";
 import { cents } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { sql } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { plainDateDaysBetween } from "~/lib/household-date";
@@ -37,16 +47,24 @@ import {
   suggestionRefKey,
 } from "~/server/domains/statement-import/repo/statement-charge";
 import { statementImportMembers } from "~/server/domains/statement-import/repo/statement-import-membership";
-import { statementTransactionKind } from "~/server/domains/statement-import/repo/statement-transaction-kind";
+import {
+  decideStatementKind,
+  kindAgreed,
+  type OwnAccount,
+  ownAccountNamed,
+  statementTransactionKind,
+} from "~/server/domains/statement-import/repo/statement-transaction-kind";
 import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 
 /** Rule revision stamped on every published suggestion; bump with any policy change. */
-const STATEMENT_SUGGESTION_REVISION = "2026-10-18.2";
+const STATEMENT_SUGGESTION_REVISION = "2026-10-18.3";
 const STATEMENT_SUGGESTION_PAGE = FINANCIAL_STATEMENT_IMPORT_MAX_ROWS;
 /** A hold's posted twin lands within this window, and a vanished hold is judged after it. */
 const PENDING_POST_WINDOW_DAYS = 7;
 const SIBLING_WINDOW_DAYS = 3;
+/** Merchant history votes only once this many member-made transactions agree. */
+const HISTORY_MIN_TRANSACTIONS = 2;
 
 export type ChargeRef = { source: string; chargeKey: string };
 const chargeId = (charge: ChargeRef) => `${charge.source}:${charge.chargeKey}`;
@@ -335,6 +353,141 @@ async function siblingsFor(
   return result;
 }
 
+/** Every live account, with the names a cash-out or funding descriptor may use. */
+async function ownAccounts(db: Database): Promise<OwnAccount[]> {
+  const { rows } = await unwrapDb(db).execute<{
+    id: string;
+    identity: unknown;
+    ledgerPartyId: string | null;
+    vendorName: string | null;
+  }>(sql`
+    SELECT fa.id, fa.identity, fa."ledgerPartyId", v.name AS "vendorName"
+    FROM "FinancialAccount" fa
+    LEFT JOIN "Vendor" v ON v.id = fa."providerVendorId" AND v."deletedAt" IS NULL
+    WHERE fa."deletedAt" IS NULL
+  `);
+  return rows.map((row) => {
+    const identity = financialAccountIdentity.parse(row.identity);
+    const names = [
+      identity.kind === "stored_value" ? identity.provider : null,
+      identity.kind === "bank_account" || identity.kind === "other"
+        ? identity.institution
+        : null,
+      row.vendorName,
+    ].filter((name): name is string => Boolean(name));
+    return {
+      id: String(row.id),
+      kind: identity.kind,
+      names,
+      ledgerPartyId:
+        row.ledgerPartyId === null ? null : String(row.ledgerPartyId),
+    };
+  });
+}
+
+type MerchantHistory = {
+  kind: StatementKindVotes["history"];
+  counterparty: StatementCounterparty["history"];
+};
+
+/**
+ * Earlier live transactions on the same account, normalized merchant and
+ * direction that a member created or chose. Direction keeps a card benefit
+ * credit (an inflow adjustment) apart from the purchases it offsets. A transaction a clean suggestion created when
+ * accepted as is records the rule's own vote, so it is left out: otherwise a
+ * category rule would agree with itself after one bulk acceptance.
+ */
+async function merchantHistory(
+  db: Database,
+  charges: readonly {
+    key: string;
+    accountId: string;
+    merchant: string | null;
+    date: string;
+    /** Cubby convention: positive is money out of the account. */
+    amount: number;
+  }[],
+): Promise<Map<string, MerchantHistory>> {
+  const result = new Map<string, MerchantHistory>();
+  const asked = charges.filter((charge) => charge.merchant?.trim());
+  if (!asked.length) return result;
+  const values = sql.join(
+    asked.map(
+      (charge) =>
+        sql`(${charge.key}, ${charge.accountId}::uuid, ${charge.merchant}, ${charge.date}::date, ${Math.sign(charge.amount)}::int)`,
+    ),
+    sql`, `,
+  );
+  const merchantKey = (column: SQL) =>
+    sql`btrim(regexp_replace(lower(${column}), '\\s+', ' ', 'g'))`;
+  const { rows } = await unwrapDb(db).execute<{
+    key: string;
+    kinds: string[];
+    count: number;
+    reimbursed: boolean;
+    purchased: boolean;
+  }>(sql`
+    WITH p AS MATERIALIZED (
+      SELECT v.key, v.account, ${merchantKey(sql`v.merchant`)} AS merchant, v.day, v.direction
+      FROM (VALUES ${values}) AS v(key, account, merchant, day, direction)
+    ),
+    -- Transactions clean creates on these accounts made when accepted as is,
+    -- derived once from the accept Feedback and probed through the
+    -- settlement-ref unique index. Ref keys split at the first ':', the
+    -- separator suggestionRefKey writes after the source.
+    ruled AS MATERIALIZED (
+      SELECT DISTINCT fx."entityId" AS id
+      FROM "Feedback" f
+      JOIN "Assessment" a ON a.id = f."assessmentId"
+        AND a.family = ${assessmentFamily.enum.statement_transaction}
+        AND (a.judgment->>'clean')::boolean
+        AND a.judgment->>'recommended' = ${statementTransactionAction.enum.create}
+      JOIN "AssessmentState" s ON s.id = a.id AND s.status = ${suggestionStatus.enum.applied}
+        AND (${suggestionField("accountId")})::uuid IN (SELECT account FROM p)
+      CROSS JOIN LATERAL jsonb_array_elements_text(s.data->'refs') ref(key)
+      JOIN "EntityExternalId" fx ON fx.kind = 'settlement_ref' AND fx."deletedAt" IS NULL
+        AND fx.source = split_part(ref.key, ':', 1)
+        AND fx."externalId" = substr(ref.key, length(split_part(ref.key, ':', 1)) + 2)
+      WHERE f.intent = ${feedbackEvent.shape.intent.unwrap().enum.apply}
+        AND f.verdict = ${feedbackVerdict.enum.correct}
+        AND f.correction = ${JSON.stringify({ present: false })}::jsonb
+    )
+    SELECT p.key, array_agg(DISTINCT ft.kind) AS kinds, count(*)::int AS count,
+      bool_or(EXISTS (
+        SELECT 1 FROM "Expense" e
+        WHERE e."bookingTransactionCode" = ft.shortcode AND e."deletedAt" IS NULL
+          AND e."economicRole" = ${financialBookingInput.shape.economicRole.unwrap().enum.reimbursement}
+      )) AS reimbursed,
+      bool_or(EXISTS (
+        SELECT 1 FROM "FinancialTransactionAllocation" fta
+        JOIN "Purchase" pu ON pu.id = fta."purchaseId" AND pu."deletedAt" IS NULL
+          AND pu."vendorId" IS NOT NULL
+        WHERE fta."transactionId" = ft.id AND fta."deletedAt" IS NULL
+      )) AS purchased
+    FROM p
+    JOIN "FinancialTransaction" ft ON ft."accountId" = p.account
+      AND ft."deletedAt" IS NULL AND ft.status <> ${financialTransactionStatus.enum.void}
+      AND ft.merchant IS NOT NULL AND ${merchantKey(sql`ft.merchant`)} = p.merchant
+      AND COALESCE(ft."postedDate", ft."transactionDate") < p.day
+      AND sign(ft.amount)::int = p.direction
+    WHERE ft.id NOT IN (SELECT id FROM ruled)
+    GROUP BY p.key
+  `);
+  for (const row of rows) {
+    if (Number(row.count) < HISTORY_MIN_TRANSACTIONS) continue;
+    const kinds = z.array(financialTransactionKind).parse(row.kinds);
+    result.set(row.key, {
+      kind: kinds.length === 1 ? kinds[0]! : "mixed",
+      counterparty: row.reimbursed
+        ? "person"
+        : row.purchased
+          ? "business"
+          : null,
+    });
+  }
+  return result;
+}
+
 const diffFor = (
   candidate: {
     amount: number;
@@ -427,10 +580,30 @@ export async function buildChargeProposals(
       ),
     ),
   ];
-  const [pendingTransactions, siblings] = await Promise.all([
+  const [pendingTransactions, siblings, accounts, history] = await Promise.all([
     statementPendingTransactions(db, accountIds),
     siblingsFor(db, grouped),
+    ownAccounts(db),
+    merchantHistory(
+      db,
+      grouped.flatMap(({ charge, canonical }) => {
+        const row = previewByKey.get(chargeId(charge));
+        const accountId = row?.accountId ? ids.get(row.accountId) : null;
+        return row && accountId
+          ? [
+              {
+                key: chargeId(charge),
+                accountId,
+                merchant: canonical.merchant,
+                date: canonical.statementDate,
+                amount: row.proposed.amount,
+              },
+            ]
+          : [];
+      }),
+    ),
   ]);
+  const accountById = new Map(accounts.map((account) => [account.id, account]));
 
   const proposals: ChargeProposal[] = [];
   for (const { charge, observations: rows, canonical } of grouped) {
@@ -519,9 +692,29 @@ export async function buildChargeProposals(
     const hold = holds.find((pending) =>
       candidates.some((c) => c.transactionId === pending.id),
     );
-    const { kind, kindSource } = statementTransactionKind({
+    const rule = statementTransactionKind({
       sourceCategory: canonical.sourceCategory,
       amount: statementAmount,
+    });
+    const account = accountById.get(accountId);
+    const transfer = account
+      ? ownAccountNamed(canonical.rawDescription, account, accounts)
+      : null;
+    const past = history.get(chargeId(charge));
+    const decision = decideStatementKind({
+      amount: statementAmount,
+      votes: {
+        // A descriptor naming an own account outranks the provider category.
+        rule: transfer
+          ? "account_transfer"
+          : rule.kindSource === "rule"
+            ? rule.kind
+            : null,
+        label: null,
+        history: past?.kind ?? null,
+      },
+      counterparty: { label: null, history: past?.counterparty ?? null },
+      transfer,
     });
     const chargeSiblings = siblings.get(chargeId(charge)) ?? [];
     const recommended = hold
@@ -535,8 +728,10 @@ export async function buildChargeProposals(
       statementDate: canonical.statementDate,
       providerStatus,
       create: {
-        kind,
-        kindSource,
+        kind: decision.kind,
+        kindSource: decision.kindSource,
+        votes: decision.votes,
+        counterparty: decision.counterparty,
         status: providerStatus,
         amount: statementAmount,
         transactionDate:
@@ -559,6 +754,7 @@ export async function buildChargeProposals(
         : null,
       void: null,
       siblings: chargeSiblings,
+      transfer,
       clean: false,
     };
     judgment.clean = isClean(judgment, statementAmount);
@@ -567,7 +763,7 @@ export async function buildChargeProposals(
   return proposals;
 }
 
-/** Bulk acceptance never changes an amount or relies on a heuristic kind. */
+/** Bulk acceptance never changes an amount or relies on a kind sources dispute. */
 export function isClean(
   judgment: StatementTransactionJudgment,
   statementAmount: number,
@@ -575,7 +771,9 @@ export function isClean(
   if (judgment.siblings.length) return false;
   if (judgment.recommended === "create")
     return (
-      judgment.candidates.length === 0 && judgment.create?.kindSource === "rule"
+      judgment.candidates.length === 0 &&
+      judgment.create !== null &&
+      kindAgreed(judgment.create, judgment.transfer)
     );
   if (judgment.candidates.length !== 1) return false;
   const [only] = judgment.candidates;
@@ -645,7 +843,12 @@ export async function labelledProposal(
         evidence: proposal.evidenceFingerprint,
         candidates: judgment.candidates.map((c) => [c.transactionId, c.label]),
         kind: judgment.create
-          ? [judgment.create.kind, judgment.create.kindSource]
+          ? [
+              judgment.create.kind,
+              judgment.create.kindSource,
+              judgment.create.votes,
+              judgment.create.counterparty,
+            ]
           : null,
       }),
     ),
@@ -702,6 +905,7 @@ export async function buildHoldVoidProposals(
         supersede: null,
         void: { transactionId: hold.id, coverageImportId: coverage },
         siblings: [],
+        transfer: null,
         clean: false,
       }),
     );
@@ -900,11 +1104,9 @@ export async function publishChargeProposal(
           clean: judgment.clean,
           refs: proposal.refs,
           evidenceFingerprint: proposal.evidenceFingerprint,
-          // Rule output awaits the decision model's advisory labels.
-          needsLabel:
-            producer.kind === "rule" &&
-            (judgment.candidates.length > 0 ||
-              judgment.create?.kindSource === "sign"),
+          // Rule output awaits the decision model's labels: candidate
+          // identity, and the kind and counterparty of every create.
+          needsLabel: producer.kind === "rule" && judgment.create !== null,
         },
       },
     );

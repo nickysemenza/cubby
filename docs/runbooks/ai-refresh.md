@@ -60,7 +60,9 @@ Statement Transaction suggestion labels are not AiEvaluation targets: the
 background queue labels pending rule suggestions in batches of 20 once the
 deployment's AI refresh activation exists. Unlabelled suggestions stay
 reviewable. A high-confidence same-charge label makes a single exact-amount
-attach bulk-acceptable; the label itself applies nothing.
+attach bulk-acceptable, and every create waits for its kind and counterparty
+labels (one vote beside the category rule and merchant history); a label
+itself applies nothing.
 Workflows own inference deadlines and retries. Nightly maintenance and existing
 app-open recovery reconcile stranded Runs and relevant evidence/option changes.
 The singleton uses its own compiled manifest, never a caller-supplied version;

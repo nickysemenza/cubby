@@ -1,7 +1,4 @@
-import {
-  financialTransactionKind,
-  type FinancialTransactionKind,
-} from "@cubby/schemas/financial-transaction";
+import type { FinancialTransactionKind } from "@cubby/schemas/financial-transaction";
 import {
   recordStatementRowsInput,
   type StatementImportInput,
@@ -152,6 +149,53 @@ const stateOf = async (ctx: Ctx, assessmentId: string) =>
     )
   ).rows[0];
 
+/** Answers each statement decision by its choice label, at a stated confidence. */
+const answering =
+  (answers: {
+    kind?: string | ((subject: string) => string);
+    counterparty?: string;
+    kindConfidence?: number;
+  }): DecisionPort =>
+  async (input) => {
+    const criteria = input.questions.selection.criteria;
+    const labels = Object.values(criteria);
+    const [wanted, confidence] = labels.includes("same_charge")
+      ? ["same_charge", 0.97]
+      : labels.includes("person")
+        ? [answers.counterparty ?? "insufficient_evidence", 0.97]
+        : [
+            typeof answers.kind === "function"
+              ? answers.kind(input.state)
+              : (answers.kind ?? "other"),
+            answers.kindConfidence ?? 0.97,
+          ];
+    const keys = Object.keys(criteria);
+    const choice = keys.find((key) => criteria[key] === wanted)!;
+    return {
+      answers: {
+        selection: {
+          type: "choice",
+          choice,
+          confidence,
+          probabilities: Object.fromEntries(
+            keys.map((key) => [
+              key,
+              key === choice
+                ? confidence
+                : (1 - confidence) / (keys.length - 1),
+            ]),
+          ),
+        },
+      },
+    };
+  };
+
+const label = async (ctx: Ctx, port: DecisionPort) =>
+  labelStatementSuggestions(ctx.db, {
+    port,
+    runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
+  });
+
 describe("statement Transaction suggestions", () => {
   const ctx = withTestDb();
 
@@ -194,13 +238,14 @@ describe("statement Transaction suggestions", () => {
     ).toEqual([
       expect.objectContaining({
         entity: "financialAccount",
-        reason: "2 transaction suggestions (2 ready to accept)",
+        // A category rule is one vote: nothing is clean before a label.
+        reason: "2 transaction suggestions (0 ready to accept)",
       }),
     ]);
     const [first] = (await suggestions(ctx)).filter(
       (row) => row.merchant === "Example Cafe",
     );
-    expect(first).toMatchObject({ recommended: "create", clean: true });
+    expect(first).toMatchObject({ recommended: "create", clean: false });
     expect(first?.create?.kind).toBe("purchase");
 
     const rows = await listStatementRows(ctx.db, { search: "EXAMPLE CAFE" });
@@ -490,24 +535,9 @@ describe("statement Transaction suggestions", () => {
     await generate(ctx);
     const [rule] = await suggestions(ctx);
     expect(rule).toMatchObject({ recommended: "attach", clean: false });
-    const firstChoice: DecisionPort = async (input) => {
-      const keys = Object.keys(input.questions.selection.criteria);
-      return {
-        answers: {
-          selection: {
-            type: "choice",
-            choice: keys[0]!,
-            confidence: 0.97,
-            probabilities: Object.fromEntries(
-              keys.map((key, index) => [key, index === 0 ? 0.97 : 0.01]),
-            ),
-          },
-        },
-      };
-    };
     expect(
       await labelStatementSuggestions(ctx.db, {
-        port: firstChoice,
+        port: answering({ kind: "purchase", counterparty: "business" }),
         runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
       }),
     ).toMatchObject({ labelled: 1 });
@@ -542,39 +572,15 @@ describe("statement Transaction suggestions", () => {
       }),
     ]);
     await generate(ctx);
-    // Choice keys are positional over the kind enum.
-    const choose =
-      (kind: FinancialTransactionKind): DecisionPort =>
-      async (input) => {
-        const keys = Object.keys(input.questions.selection.criteria);
-        const chosen = keys[financialTransactionKind.options.indexOf(kind)]!;
-        return {
-          answers: {
-            selection: {
-              type: "choice",
-              choice: chosen,
-              confidence: 0.97,
-              probabilities: Object.fromEntries(
-                keys.map((key) => [
-                  key,
-                  key === chosen ? 0.97 : 0.03 / (keys.length - 1),
-                ]),
-              ),
-            },
-          },
-        };
-      };
-    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "background" });
-    await labelStatementSuggestions(ctx.db, {
-      port: choose("interest"),
-      runId,
-    });
+    await label(ctx, answering({ kind: "interest", counterparty: "business" }));
     const [suggestion] = await suggestions(ctx);
     expect(suggestion!.create).toMatchObject({
       amount: -8.66,
       kind: "refund",
       kindSource: "sign",
+      votes: { label: "interest" },
     });
+    expect(suggestion!.clean).toBe(false);
   });
 
   // Failure mode: every recorded chunk regenerates the whole ledger.
@@ -666,5 +672,312 @@ describe("statement Transaction suggestions", () => {
       ],
     });
     expect(twin!.rawDescription).not.toBe(first!.rawDescription);
+  });
+
+  // Failure modes: a category rule alone makes a create bulk-acceptable; a
+  // label that disagrees with the rule still leaves it clean.
+  it("cleans a create only when a label agrees with the category rule", async () => {
+    await card(ctx);
+    await record(ctx, [
+      rowInput({
+        merchant: "Example Cafe",
+        rawDescription: "EXAMPLE CAFE",
+        sourceCategory: "Coffee Shops",
+        providerAmount: -6.25,
+      }),
+      rowInput({
+        merchant: "Example Market",
+        rawDescription: "EXAMPLE MARKET",
+        sourceCategory: "Shopping",
+        providerAmount: -8.5,
+      }),
+    ]);
+    await generate(ctx);
+    expect((await suggestions(ctx)).every((row) => !row.clean)).toBe(true);
+
+    await label(
+      ctx,
+      answering({
+        kind: (subject) => (subject.includes("CAFE") ? "purchase" : "fee"),
+        counterparty: "business",
+      }),
+    );
+    const rows = await suggestions(ctx);
+    expect(rows.find((row) => row.merchant === "Example Cafe")).toMatchObject({
+      clean: true,
+      create: {
+        kind: "purchase",
+        kindSource: "rule",
+        votes: { rule: "purchase", label: "purchase", history: null },
+        counterparty: { label: "business", history: null },
+      },
+    });
+    expect(rows.find((row) => row.merchant === "Example Market")).toMatchObject(
+      {
+        clean: false,
+        create: {
+          kind: "purchase",
+          votes: { rule: "purchase", label: "fee", history: null },
+        },
+      },
+    );
+  });
+
+  // Failure modes: a payment-app credit from a friend under Paychecks becomes
+  // clean income; a payment to a person is offered as a transfer or in bulk.
+  it("never cleans a payment with a person, in either direction", async () => {
+    await card(ctx);
+    await record(ctx, [
+      rowInput({
+        merchant: "Sample Friend",
+        rawDescription: "PAYFRIEND FROM SAMPLE FRIEND",
+        sourceCategory: "Paychecks",
+        providerAmount: 40,
+      }),
+      rowInput({
+        merchant: "Sample Friend",
+        rawDescription: "PAYFRIEND *SAMPLE FRIEND",
+        sourceCategory: "Shopping",
+        providerAmount: -25,
+      }),
+    ]);
+    await generate(ctx);
+    await label(
+      ctx,
+      answering({ kind: "account_transfer", counterparty: "person" }),
+    );
+    const rows = await suggestions(ctx);
+    expect(rows.find((row) => row.amount < 0)).toMatchObject({
+      clean: false,
+      create: { kind: "income", counterparty: { label: "person" } },
+    });
+    expect(rows.find((row) => row.amount > 0)).toMatchObject({
+      clean: false,
+      create: { kind: "purchase", counterparty: { label: "person" } },
+    });
+  });
+
+  // Failure modes: a cash-out from the member's own balance account is read
+  // as income from its provider category; a move between two owners is bulk
+  // accepted without its LedgerTransfer.
+  it("reads a cash-out naming an own balance account as a transfer", async () => {
+    const member = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Avery Example",
+      kind: "member",
+    });
+    const partner = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Blake Example",
+      kind: "member",
+    });
+    await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic Checking",
+      identity: {
+        kind: "bank_account",
+        institution: "Example Bank",
+        accountType: "checking",
+      },
+      ledgerPartyId: member.output.id,
+      sourceAliases: [
+        {
+          source: "monarch",
+          alias: "Synthetic Checking (...1111)",
+          externalAccountId: null,
+        },
+      ],
+    });
+    const wallet = await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic PayFriend",
+      identity: { kind: "stored_value", provider: "PayFriend" },
+      ledgerPartyId: member.output.id,
+    });
+    const partnerWallet = await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic SplitPay",
+      identity: { kind: "stored_value", provider: "SplitPay" },
+      ledgerPartyId: partner.output.id,
+    });
+    await record(ctx, [
+      rowInput({
+        accountDescriptor: "Synthetic Checking (...1111)",
+        merchant: "PayFriend",
+        rawDescription: "PAYFRIEND CASHOUT 8812",
+        sourceCategory: "Other Income",
+        providerAmount: 150,
+      }),
+      rowInput({
+        accountDescriptor: "Synthetic Checking (...1111)",
+        merchant: "SplitPay",
+        rawDescription: "SPLITPAY TRANSFER 7731",
+        sourceCategory: "Transfer",
+        providerAmount: 60,
+      }),
+    ]);
+    await generate(ctx);
+    await label(
+      ctx,
+      answering({ kind: "account_transfer", counterparty: "business" }),
+    );
+    const rows = await suggestions(ctx);
+    expect(rows.find((row) => row.merchant === "PayFriend")).toMatchObject({
+      clean: true,
+      create: {
+        kind: "account_transfer",
+        votes: { rule: "account_transfer", label: "account_transfer" },
+      },
+      transfer: { accountId: wallet.output.id, ledgerTransfer: false },
+    });
+    expect(rows.find((row) => row.merchant === "SplitPay")).toMatchObject({
+      clean: false,
+      create: { kind: "account_transfer" },
+      transfer: { accountId: partnerWallet.output.id, ledgerTransfer: true },
+    });
+  });
+
+  // Failure modes: a card benefit credit naming the same merchant as the
+  // subscription it offsets reads that merchant's purchases as `mixed`
+  // history, or is proposed as a refund.
+  it("keys merchant history on direction for a benefit credit", async () => {
+    const account = (await card(ctx)).output;
+    const prior = (amount: number, postedDate: string) =>
+      createRepoEntity(ctx, "financialTransaction", {
+        accountId: account.id,
+        kind: amount > 0 ? "purchase" : "adjustment",
+        status: "posted",
+        amount,
+        postedDate,
+        merchant: "Example Rides",
+        rawDescription:
+          amount > 0 ? "EXAMPLE RIDES PASS" : "EXAMPLE RIDES BENEFIT CREDIT",
+        sourceRefs: [],
+      });
+    for (const postedDate of ["2026-02-03", "2026-03-03"]) {
+      await prior(9.99, postedDate);
+      await prior(-9.99, postedDate);
+    }
+    const rides = (providerAmount: number, rawDescription: string) =>
+      rowInput({
+        merchant: "Example Rides",
+        rawDescription,
+        sourceCategory: "Taxi & Ride Shares",
+        providerAmount,
+      });
+    await record(ctx, [
+      rides(-9.99, "EXAMPLE RIDES PASS"),
+      rides(9.99, "SYNTHETIC CARD EXAMPLE RIDES BENEFIT CREDIT"),
+    ]);
+    await generate(ctx);
+    await label(
+      ctx,
+      answering({
+        kind: (subject) =>
+          subject.includes("BENEFIT") ? "adjustment" : "purchase",
+        counterparty: "business",
+      }),
+    );
+    const rows = await suggestions(ctx);
+    expect(rows.find((row) => row.amount > 0)).toMatchObject({
+      clean: true,
+      create: {
+        kind: "purchase",
+        votes: { rule: "purchase", label: "purchase", history: "purchase" },
+      },
+    });
+    expect(rows.find((row) => row.amount < 0)).toMatchObject({
+      clean: true,
+      create: {
+        kind: "adjustment",
+        votes: { rule: null, label: "adjustment", history: "adjustment" },
+      },
+    });
+  });
+
+  // Failure modes: a rule votes for itself through the transactions its own
+  // bulk acceptance created; mixed history reads as agreement.
+  it("counts member-made merchant history and excludes rule bulk-accepts", async () => {
+    const account = (await card(ctx)).output;
+    const prior = (
+      merchant: string,
+      kind: FinancialTransactionKind,
+      postedDate: string,
+    ) =>
+      createRepoEntity(ctx, "financialTransaction", {
+        accountId: account.id,
+        kind,
+        status: "posted",
+        amount: 9.5,
+        postedDate,
+        merchant,
+        rawDescription: merchant.toUpperCase(),
+        sourceRefs: [],
+      });
+    await prior("Example Bakery", "purchase", "2026-03-02");
+    await prior("example  bakery", "purchase", "2026-03-09");
+    await prior("Example Deli", "purchase", "2026-03-03");
+    await prior("Example Deli", "fee", "2026-03-10");
+    const cafe = (statementDate: string, providerAmount: number) =>
+      rowInput({
+        statementDate,
+        merchant: "Example Cafe",
+        rawDescription: `EXAMPLE CAFE ${statementDate}`,
+        sourceCategory: "Coffee Shops",
+        providerAmount,
+      });
+    // By the third accept two earlier cafe transactions exist: were they
+    // counted, its history vote would move and its evidence check refuse it.
+    await record(ctx, [
+      cafe("2026-04-01", -3.25),
+      cafe("2026-04-08", -4.75),
+      cafe("2026-04-15", -2.5),
+    ]);
+    await generate(ctx);
+    await label(ctx, answering({ kind: "purchase", counterparty: "business" }));
+    for (const suggestion of await suggestions(ctx)) {
+      expect(suggestion.clean).toBe(true);
+      await accept(ctx, suggestion);
+    }
+
+    await record(
+      ctx,
+      [
+        cafe("2026-05-01", -5.5),
+        rowInput({
+          merchant: "Example Bakery",
+          rawDescription: "EXAMPLE BAKERY",
+          sourceCategory: "Restaurants",
+          providerAmount: -11,
+        }),
+        rowInput({
+          merchant: "Example Deli",
+          rawDescription: "EXAMPLE DELI",
+          sourceCategory: "Restaurants",
+          providerAmount: -13,
+        }),
+      ],
+      { fingerprint: "fp-history-2" },
+    );
+    await generate(ctx);
+    // A low-confidence kind abstains, so rule and history decide.
+    await label(
+      ctx,
+      answering({
+        kind: "purchase",
+        counterparty: "business",
+        kindConfidence: 0.4,
+      }),
+    );
+    const rows = await suggestions(ctx);
+    const by = (merchant: string) =>
+      rows.find((row) => row.merchant === merchant);
+    expect(by("Example Cafe")).toMatchObject({
+      clean: false,
+      create: { votes: { rule: "purchase", label: null, history: null } },
+    });
+    expect(by("Example Bakery")).toMatchObject({
+      clean: true,
+      create: { votes: { rule: "purchase", label: null, history: "purchase" } },
+    });
+    expect(by("Example Deli")).toMatchObject({
+      clean: false,
+      create: { votes: { history: "mixed" } },
+    });
   });
 });
