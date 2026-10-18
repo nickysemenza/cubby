@@ -41,10 +41,13 @@ public struct CompanionImageCommandExecutor: Sendable {
                 diagnostics: .init(processingMilliseconds: milliseconds(since: started)))
         } catch CompanionImageDescriptionFailure.unavailable {
             execution = failureExecution(command, "model_unavailable", true, started)
+        } catch CompanionImageDescriptionFailure.model(let reason, let retryable) {
+            execution = failureExecution(command, reason, retryable, started)
         } catch let error as URLError {
             execution = failureExecution(command, "network_\(error.code.rawValue)", true, started)
         } catch {
-            execution = failureExecution(command, "processing_failed", true, started)
+            execution = failureExecution(
+                command, "processing_failed: \(String(reflecting: error))", true, started)
         }
         return result(
             for: command, outcome: execution.outcome, diagnostics: execution.diagnostics)
