@@ -1,6 +1,7 @@
 import {
   MAIL_READ_HTML_PAGE_MAX_BYTES,
   MAIL_READ_IMAGES_MAX_BYTES,
+  MAIL_READ_LINK_HREF_MAX_BYTES,
   MAIL_READ_LINKS_MAX_BYTES,
   MAIL_READ_RESPONSE_MAX_BYTES,
   MAIL_READ_STRUCTURED_MAX_BYTES,
@@ -77,15 +78,17 @@ function jsonPage(text: string, offset: number, maxBytes: number) {
 }
 
 /**
- * The compactor's cue-first links that fit MAIL_READ_LINKS_MAX_BYTES. Trackers
- * labelled "Track delivery" rank first, so an oversized one is skipped rather
- * than ending the list, leaving room for a later short product link.
+ * The compactor's cue-first links that fit MAIL_READ_LINKS_MAX_BYTES. A href
+ * over MAIL_READ_LINK_HREF_MAX_BYTES is a click-tracking redirect: it cannot
+ * become a line's product URL (that must be on the Vendor's own site) and
+ * costs about a token per byte, so it is counted in `linksOmitted` instead.
  */
 function boundedLinks(links: readonly { href: string; text: string }[]) {
   const kept: { href: string; text: string }[] = [];
   let bytes = 0;
   for (const { href, text } of links) {
     if (kept.length === MAIL_READ_MAX_LINKS) break;
+    if (encoder.encode(href).length > MAIL_READ_LINK_HREF_MAX_BYTES) continue;
     const size = encoder.encode(JSON.stringify({ href, text })).length;
     if (bytes + size > MAIL_READ_LINKS_MAX_BYTES) continue;
     kept.push({ href, text });

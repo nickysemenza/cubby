@@ -16,6 +16,7 @@ import {
   runFinding,
 } from "~/server/db/schema";
 import { startPhotoInventoryRun } from "~/server/domains/purchase-import/repo/run-service";
+import { syntheticMailImportRun } from "~/server/domains/purchase-import/service/gmail/execution.fixtures";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -414,6 +415,40 @@ describe("MCP catalog", () => {
         ],
       }),
     ).toHaveProperty("proposals");
+  });
+
+  // The Mail import agent's entity_read schema carries only its entity kinds;
+  // the server must refuse the others, not just leave them unadvertised.
+  it("refuses entity_read of a kind outside the Mail import agent's kinds", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Catalog kinds member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const runId = await syntheticMailImportRun(ctx.db, ctx.actor, {
+      ledgerPartyId: party.id,
+      mailboxId: "catalog-kinds@example.com",
+    });
+    const kernel = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const read = (entity: string) =>
+      callMcpTool(
+        createMcpServer(),
+        "entity_read",
+        { action: "list", entity },
+        kernelRequestContext(kernel),
+        {
+          entityKernel: kernel,
+          purchaseAgent: { runId, grantId: "catalog-kinds-grant" },
+        },
+      );
+    const recipe = await read("recipe");
+    expect(recipe.isError).toBe(true);
+    expect(JSON.stringify(recipe.content)).toContain(
+      "reads only purchase, vendor, product",
+    );
+    expect((await read("purchase")).isError).not.toBe(true);
   });
 
   it("refuses purchase_import mutations for a run purpose that does not mount them", async () => {

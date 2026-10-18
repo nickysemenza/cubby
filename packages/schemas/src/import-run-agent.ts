@@ -105,6 +105,13 @@ export type ImportRunAgentConfig = {
    * records carry what earlier ones settled; `all` keeps every item.
    */
   workItemContext: "current" | "all";
+  /**
+   * Entity kinds `entity_read` serves this purpose's agent. Its per-kind list
+   * filters are most of the mounted schema, resent on every call, so the
+   * agent's copy carries only these and other kinds are refused. Omitted:
+   * every kind.
+   */
+  mcpEntityKinds?: readonly string[];
 };
 
 /** Each purpose's model and authority: host tools plus narrowed MCP actions. */
@@ -124,6 +131,7 @@ export const importRunAgentManifest = {
     mcpActions: MAIL_IMPORT_MCP_ACTIONS,
     mcpTools: toolsOf(MAIL_IMPORT_MCP_ACTIONS),
     workItemContext: "current",
+    mcpEntityKinds: ["purchase", "vendor", "product"],
   },
 } as const satisfies Record<AgentImportRunPurpose, ImportRunAgentConfig>;
 

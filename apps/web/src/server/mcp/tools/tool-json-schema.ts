@@ -60,6 +60,12 @@ export function safeToJsonSchema(
       io,
       unrepresentable: "any",
       override: ({ jsonSchema }) => {
+        // Clients cache `tools/list` across deploys and validate results
+        // against it; a closed output object turns every added output field
+        // into a failure for every open session. Outputs are published open;
+        // the server still parses each result with the exact Zod schema.
+        if (io === "output" && jsonSchema.additionalProperties === false)
+          delete jsonSchema.additionalProperties;
         // Clients validate tool schemas as 2020-12, where `items` is one
         // schema; a draft-7 tuple (`items: [...]`) made them reject the whole
         // tool. Publish a tuple as an array of its member schemas bounded to

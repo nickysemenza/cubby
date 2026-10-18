@@ -379,6 +379,9 @@ export const MAIL_READ_STRUCTURED_MAX_BYTES = 4_000;
  */
 export const MAIL_READ_LINKS_MAX_BYTES = 8_000;
 
+/** Longer hrefs are click-tracking redirects, left out of compact reads. */
+export const MAIL_READ_LINK_HREF_MAX_BYTES = 512;
+
 const MAIL_ADDRESSING_HEADERS = new Set([
   "from",
   "to",

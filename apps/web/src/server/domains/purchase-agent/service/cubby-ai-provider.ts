@@ -59,6 +59,95 @@ export function withSequentialToolCalls(
   return { ...body, parallel_tool_calls: false };
 }
 
+const CLAIM_TOOL = "claim_next_import_work";
+// Anthropic allows at most four cache breakpoints per request; pi-ai already
+// marks the system prompt, the last tool and the latest user message.
+const ANTHROPIC_MAX_BREAKPOINTS = 4;
+
+const wireBlock = z.looseObject({
+  type: z.string().optional(),
+  name: z.string().optional(),
+  cache_control: z.unknown().optional(),
+});
+const wireMessage = z.looseObject({
+  role: z.string(),
+  content: z.union([z.string(), z.array(wireBlock)]),
+});
+const anthropicBody = z.looseObject({ messages: z.array(wireMessage) });
+
+const breakpoints = (value: unknown): number =>
+  Array.isArray(value)
+    ? value.reduce((sum: number, item) => sum + breakpoints(item), 0)
+    : typeof value === "object" && value !== null
+      ? (Object.hasOwn(value, "cache_control") ? 1 : 0) +
+        Object.values(value).reduce(
+          (sum: number, item) => sum + breakpoints(item),
+          0,
+        )
+      : 0;
+
+/**
+ * Cache hints for a coordinator request. Work-item trimming replaces
+ * everything after the latest claim each Email, so the conversation
+ * breakpoint pi-ai places on the latest user message never matches the next
+ * Email: mark the end of the kept prefix (kickoff, member and system
+ * messages) so it is read from cache instead of re-written. OpenAI requests
+ * key their prompt cache to the Run.
+ */
+export function withWorkItemCaching(
+  route: ChatGatewayProvider,
+  body: GatewayQuery,
+  cacheKey: string | undefined,
+): GatewayQuery {
+  if (route !== "anthropic")
+    return cacheKey && body.prompt_cache_key === undefined
+      ? { ...body, prompt_cache_key: cacheKey }
+      : body;
+  const parsed = anthropicBody.safeParse(body);
+  if (!parsed.success || breakpoints(body) >= ANTHROPIC_MAX_BREAKPOINTS)
+    return body;
+  const { messages } = parsed.data;
+  let claim = -1;
+  messages.forEach((message, index) => {
+    if (
+      message.role === "assistant" &&
+      Array.isArray(message.content) &&
+      message.content.some(
+        (block) => block.type === "tool_use" && block.name === CLAIM_TOOL,
+      )
+    )
+      claim = index;
+  });
+  const end = messages[claim - 1];
+  if (claim < 1 || !end || breakpoints(end) > 0) return body;
+  const cacheControl =
+    JSON.stringify(body).match(/"cache_control":(\{[^}]*\})/)?.[1] ??
+    '{"type":"ephemeral"}';
+  const blocks =
+    typeof end.content === "string"
+      ? [{ type: "text", text: end.content }]
+      : end.content;
+  const last = blocks.at(-1);
+  if (!last) return body;
+  const marked = {
+    ...end,
+    content: [
+      ...blocks.slice(0, -1),
+      { ...last, cache_control: JSON.parse(cacheControl) },
+    ],
+  };
+  return {
+    ...body,
+    messages: z
+      .array(z.json())
+      .parse(
+        messages.map((message, index) =>
+          index === claim - 1 ? marked : message,
+        ),
+      ),
+  };
+}
+
 /**
  * Every coordinator model call's gateway labels; `run-agent` books the same
  * feature and operation, with the Run, in its usage rows.
@@ -86,6 +175,8 @@ interface AgentFetchOptions extends Pick<
   subscription?: ChatGptInference;
   /** Host admission can reject locally before any provider route transmits. */
   beforeTransmission?: () => Response | undefined;
+  /** Prompt-cache key for OpenAI requests: one per Run. */
+  cacheKey?: () => string | undefined;
   /** Each model request's transport, reported before it leaves. */
   onTransport?: (transport: AgentTransport) => void;
   /** Each received model response's gateway log id and cache verdict. */
@@ -113,7 +204,12 @@ export function createCubbyGatewayFetch(
     gatewayFetchThrough({
       provider: route,
       funding: options.funding,
-      rewriteQuery: (body) => withSequentialToolCalls(route, body),
+      rewriteQuery: (body) =>
+        withWorkItemCaching(
+          route,
+          withSequentialToolCalls(route, body),
+          options.cacheKey?.(),
+        ),
       chatGpt: options.subscription,
       ...policy,
       onTransport: options.onTransport,

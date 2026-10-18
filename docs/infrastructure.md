@@ -104,9 +104,15 @@ checked-in configuration is part of `apps/web/cloudflare.config.ts`:
   carrying its reason, not a network error;
 - each request's context per the purpose's `workItemContext`
   (`@cubby/schemas/import-run-agent`): Mail import sends only the kickoff, user
-  messages, and the latest `claim_next_import_work` onward, because each Email
-  is independent and durable records carry what earlier ones settled. The
-  stored transcript keeps every Email for the Run page.
+  and system messages, and the latest `claim_next_import_work` onward, because
+  each Email is independent and durable records carry what earlier ones
+  settled. The stored transcript keeps every Email for the Run page. Each
+  Anthropic request marks a cache breakpoint at the end of that kept prefix,
+  and each OpenAI request keys `prompt_cache_key` to the Run
+  (`withWorkItemCaching`), so the prefix is read from cache on every Email;
+- the agent's `entity_read` schema narrowed to the purpose's `mcpEntityKinds`
+  (Mail import: purchase, vendor, product); other kinds are refused for the
+  Run, while members' `tools/list` keeps every kind.
 
 pi-durable owns migrations of its stored tool tasks. Validate preservation of
 live call identities, arguments, and replay checkpoints when upgrading it.

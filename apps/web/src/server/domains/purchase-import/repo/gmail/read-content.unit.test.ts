@@ -187,7 +187,10 @@ describe("mailReadContent default read size", () => {
       "https://vendor.example/p/widget",
     );
     expect(read.linksOmitted).toBeGreaterThan(0);
-    expect(serialized(read)).toBeLessThan(12_000);
+    // Redirect trackers tokenize at ~1 token per byte and can never become a
+    // line's product URL (that must be on the Vendor's own site).
+    expect(read.links.every(({ href }) => href.length <= 512)).toBe(true);
+    expect(serialized(read)).toBeLessThan(4_000);
   });
 
   it("keeps addressing, identity and forwarding headers only", () => {

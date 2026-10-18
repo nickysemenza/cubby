@@ -594,6 +594,15 @@ describe("MCP catalog schemas", () => {
     const valid = validate(read);
     expect(validate.errors ?? []).toEqual([]);
     expect(valid).toBe(true);
+    // A client holding this schema keeps working when a later release adds
+    // an output field: published outputs are open objects.
+    expect(
+      validate({
+        ...read,
+        addedLater: true,
+        content: { ...read.content, addedLater: 1 },
+      }),
+    ).toBe(true);
   });
 
   it("publishes valid Draft-7 schemas with resolvable references and empty merchant candidate tuples", async () => {

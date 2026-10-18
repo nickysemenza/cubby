@@ -253,6 +253,7 @@ export class PurchaseImportRunAgent
     for (const provider of cubbyAgentProviders({
       fundingFallback: true,
       fixedModel: this.agentEnv.fixedModel,
+      cacheKey: () => this.identity()?.runId,
       onFundingRefusal: async (message) => {
         // The usage row records the refusal text in `failure`.
         await this.afterResponse(message);

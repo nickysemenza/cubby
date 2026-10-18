@@ -37,4 +37,22 @@ describe("import run agent manifest", () => {
       expect(imports?.description).toContain(`- ${action}:`);
     expect(imports?.description).not.toContain("- purchase_status:");
   });
+
+  // Regression: entity_read's per-kind list filters were 134 KB of the Mail
+  // import coordinator's ~61k-token tool schemas, resent on every call.
+  it("narrows entity_read to the purpose's entity kinds for the agent only", async () => {
+    const kinds = importRunAgentManifest.mail_import.mcpEntityKinds;
+    const agent = purchaseAgentToolCatalog("mail_import").find(
+      (tool) => tool.name === "entity_read",
+    );
+    const schema = JSON.stringify(agent?.inputSchema);
+    expect(schema.length).toBeLessThan(45_000);
+    const entity = JSON.parse(schema).properties.entity.enum;
+    expect([...entity].sort()).toEqual([...kinds].sort());
+    expect(schema).not.toContain("entity=recipe");
+    const member = (await listMcpToolCatalog()).tools.find(
+      (tool) => tool.name === "entity_read",
+    );
+    expect(JSON.stringify(member?.inputSchema)).toContain("entity=recipe");
+  });
 });

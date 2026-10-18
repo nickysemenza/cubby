@@ -868,6 +868,7 @@ function registerCompiledTool(
               trusted.runId,
               action.name,
               mutation,
+              entity,
             );
           const governed = selfGoverned(action);
           // A self-governed writer that reads the envelope must name the

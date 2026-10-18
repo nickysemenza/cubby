@@ -2,6 +2,7 @@ import { runEntityId } from "@cubby/schemas/identifiers";
 import {
   agentImportRunPurpose,
   importRunAgentManifest,
+  type ImportRunAgentConfig,
 } from "@cubby/schemas/import-run-agent";
 import type { CubbyMcpMutationAction } from "@cubby/schemas/mcp-tools";
 import { runPurpose, type RunPurpose } from "@cubby/schemas/purchase-import";
@@ -172,28 +173,43 @@ export async function purchaseAgentRunActions(db: Database, runId: string) {
   if (!run) throw new Error("Import run was not found");
   const purpose = runPurpose.parse(run.purpose);
   const agentPurpose = agentImportRunPurpose.safeParse(purpose);
-  const allowed: readonly string[] = agentPurpose.success
-    ? importRunAgentManifest[agentPurpose.data].mcpActions
-    : [];
-  return { purpose, allowed };
+  const config: ImportRunAgentConfig | undefined = agentPurpose.success
+    ? importRunAgentManifest[agentPurpose.data]
+    : undefined;
+  const allowed: readonly string[] = config?.mcpActions ?? [];
+  return { purpose, allowed, entityKinds: config?.mcpEntityKinds };
 }
 
 /**
  * Gate one trusted purchase-agent call: the run's purpose must mount the
  * action (`importRunAgentManifest[purpose].mcpActions`), and a write must also
- * hold its capability. Reads outside the manifest are refused too, so a
- * mounted tool never exposes more than the purpose lists.
+ * hold its capability. Reads outside the manifest, and `entity_read` of a
+ * kind outside `mcpEntityKinds`, are refused too, so a mounted tool never
+ * exposes more than the purpose lists.
  */
 export async function assertPurchaseAgentAction(
   db: Database,
   runId: string,
   action: string,
   mutation: boolean,
+  entity?: string,
 ): Promise<void> {
-  const { purpose, allowed } = await purchaseAgentRunActions(db, runId);
+  const { purpose, allowed, entityKinds } = await purchaseAgentRunActions(
+    db,
+    runId,
+  );
   if (!allowed.includes(action))
     throw new Error(
       `Import run purpose ${purpose} does not mount ${action}; its agent may call only ${allowed.join(", ") || "nothing"}`,
+    );
+  if (
+    action.startsWith("entity_read.") &&
+    entityKinds &&
+    entity !== undefined &&
+    !entityKinds.includes(entity)
+  )
+    throw new Error(
+      `Import run purpose ${purpose} reads only ${entityKinds.join(", ")} through entity_read, not ${entity}`,
     );
   if (!mutation) return;
   if (!isMutationAction(action))
