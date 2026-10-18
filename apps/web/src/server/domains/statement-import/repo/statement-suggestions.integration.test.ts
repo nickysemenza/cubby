@@ -12,8 +12,11 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import type { DecisionPort } from "~/server/ai/decision-model";
 import { getDb } from "~/server/db/helpers";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 
 import {
@@ -446,5 +449,63 @@ describe("statement Transaction suggestions", () => {
     const rows = await suggestions(ctx);
     expect(rows).toHaveLength(2);
     expect(rows.every((row) => !row.clean && row.siblings === 1)).toBe(true);
+  });
+
+  // Failure modes: a model "same" leaves a descriptor-different attach
+  // unreviewable in bulk; a label silently changes the evidence fingerprint
+  // the apply step checks.
+  it("labels attach candidates and lets a confident same-charge attach go in bulk", async () => {
+    const account = (await card(ctx)).output;
+    await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.id,
+      kind: "purchase",
+      status: "posted",
+      amount: 42.5,
+      postedDate: "2026-05-05",
+      merchant: "Older import label",
+      rawDescription: "EXMPL GRCR #1 SYNTHETIC",
+      sourceRefs: [],
+    });
+    await record(ctx, [rowInput()]);
+    await generate(ctx);
+    const [rule] = await suggestions(ctx);
+    expect(rule).toMatchObject({ recommended: "attach", clean: false });
+    const firstChoice: DecisionPort = async (input) => {
+      const keys = Object.keys(input.questions.selection.criteria);
+      return {
+        answers: {
+          selection: {
+            type: "choice",
+            choice: keys[0]!,
+            confidence: 0.97,
+            probabilities: Object.fromEntries(
+              keys.map((key, index) => [key, index === 0 ? 0.97 : 0.01]),
+            ),
+          },
+        },
+      };
+    };
+    expect(
+      await labelStatementSuggestions(ctx.db, {
+        port: firstChoice,
+        runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
+      }),
+    ).toMatchObject({ labelled: 1 });
+    const [labelled] = await suggestions(ctx);
+    expect(labelled).toMatchObject({
+      recommended: "attach",
+      clean: true,
+      candidates: [{ label: { same: "same", confidence: "high" } }],
+    });
+    expect(labelled!.model).not.toBeNull();
+    expect(await stateOf(ctx, rule!.assessmentId)).toMatchObject({
+      active: false,
+    });
+    // A rule pass over unchanged evidence keeps the labels.
+    expect(await generate(ctx)).toBe(0);
+    await accept(ctx, labelled!);
+    expect((await listStatementRows(ctx.db, {})).data[0]).toMatchObject({
+      matchState: "matched",
+    });
   });
 });

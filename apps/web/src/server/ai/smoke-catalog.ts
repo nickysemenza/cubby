@@ -19,6 +19,8 @@ import {
   MAIL_ATTACHMENT_PURPOSE_FEATURE,
   MAIL_ATTRIBUTION_FEATURE,
   MAIL_FINANCIAL_EVENT_FEATURE,
+  STATEMENT_CHARGE_IDENTITY_FEATURE,
+  STATEMENT_TRANSACTION_KIND_FEATURE,
   MAIL_SOURCE_RELATION_FEATURE,
   UPC_OFFER_COMPARABILITY_FEATURE,
   IMAGE_PROVENANCE_CLASSIFICATION_FEATURE,
@@ -191,6 +193,19 @@ export const AI_SMOKE_CASES = {
     description:
       "Copy one synthetic payment Email's verified financial event literals",
     group: "Purchase research",
+  },
+  statementChargeIdentity: {
+    feature: STATEMENT_CHARGE_IDENTITY_FEATURE,
+    label: "Statement charge identity",
+    description:
+      "Judge whether a synthetic statement row and transaction are one charge",
+    group: "Decisions",
+  },
+  statementTransactionKind: {
+    feature: STATEMENT_TRANSACTION_KIND_FEATURE,
+    label: "Statement transaction kind",
+    description: "Classify a synthetic uncategorized statement row",
+    group: "Decisions",
   },
 
   purchaseProductIdentity: {

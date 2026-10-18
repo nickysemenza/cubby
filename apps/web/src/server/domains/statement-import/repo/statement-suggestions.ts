@@ -26,6 +26,7 @@ import { previewFinancialStatementImport } from "~/server/domains/financial-tran
 import {
   CHARGE_STATE,
   chargeKeyOf,
+  pendingSuggestion,
   suggestionField,
   suggestionRefKey,
 } from "~/server/domains/statement-import/repo/statement-charge";
@@ -854,6 +855,11 @@ export async function publishChargeProposal(
           clean: judgment.clean,
           refs: proposal.refs,
           evidenceFingerprint: proposal.evidenceFingerprint,
+          // Rule output awaits the decision model's advisory labels.
+          needsLabel:
+            producer.kind === "rule" &&
+            (judgment.candidates.length > 0 ||
+              judgment.create?.kindSource === "sign"),
         },
       },
     );
@@ -903,4 +909,19 @@ export async function generateStatementSuggestionPage(
     unchanged,
     next: charges.length === limit ? charges.at(-1)! : null,
   };
+}
+
+/** Oldest pending rule suggestions awaiting decision-model labels. */
+export async function suggestionsNeedingLabels(db: Database, limit: number) {
+  const { rows } = await unwrapDb(db).execute<{
+    subject: unknown;
+    evidenceFingerprint: string;
+  }>(sql`
+    SELECT a.subject, ${suggestionField("evidenceFingerprint")} AS "evidenceFingerprint"
+    FROM "AssessmentState" s JOIN "Assessment" a ON a.id = s.id
+    WHERE ${pendingSuggestion()} AND (${suggestionField("needsLabel")})::boolean
+    ORDER BY s."createdAt", s.id
+    LIMIT ${limit}
+  `);
+  return rows;
 }

@@ -1,4 +1,5 @@
 import type { BackgroundTask } from "@cubby/schemas/background-tasks";
+import { runEntityId } from "@cubby/schemas/identifiers";
 
 import { getBackgroundQueue } from "~/server/cf-env";
 import type { Database } from "~/server/db";
@@ -6,6 +7,7 @@ import {
   generateStatementSuggestionPage,
   type ChargeRef,
 } from "~/server/domains/statement-import/repo/statement-suggestions";
+import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
 import {
   publishBackgroundTasks,
   publishInBackground,
@@ -29,6 +31,11 @@ export function scheduleStatementSuggestions(db: Database): Promise<void> {
   });
 }
 
+const labelTask = () => ({
+  kind: "statement-suggestions.label" as const,
+  requestedAt: new Date().toISOString(),
+});
+
 /** Queue consumer: one page, then hand the cursor to the next message. */
 export async function continueStatementSuggestions(
   db: Database,
@@ -38,11 +45,30 @@ export async function continueStatementSuggestions(
     after: task.after,
     runId: task.runId ?? null,
   });
-  if (page.next)
-    await publishBackgroundTasks(db, [pageTask(page.next)], {
-      source: "statement-suggestions",
-    });
+  await publishBackgroundTasks(
+    db,
+    [
+      ...(page.next ? [pageTask(page.next)] : []),
+      ...(page.published ? [labelTask()] : []),
+    ],
+    { source: "statement-suggestions" },
+  );
   return page.published ? ("succeeded" as const) : ("skipped" as const);
+}
+
+/** Queue consumer: one label batch, continuing while batches make progress. */
+export async function continueStatementSuggestionLabels(
+  db: Database,
+  task: Extract<BackgroundTask, { kind: "statement-suggestions.label" }>,
+) {
+  const outcome = await labelStatementSuggestions(db, {
+    runId: task.runId ? runEntityId.parse(task.runId) : null,
+  });
+  if (outcome.remaining)
+    await publishBackgroundTasks(db, [labelTask()], {
+      source: "statement-suggestions.label",
+    });
+  return outcome.labelled ? ("succeeded" as const) : ("skipped" as const);
 }
 
 /**
@@ -59,10 +85,15 @@ export async function refreshStatementSuggestions(
     runId: null,
   });
   const queued = Boolean(page.next && getBackgroundQueue());
-  if (queued)
-    await publishBackgroundTasks(db, [pageTask(page.next)], {
-      source: "statement-suggestions.refresh",
-    });
+  if (getBackgroundQueue())
+    await publishBackgroundTasks(
+      db,
+      [
+        ...(page.next ? [pageTask(page.next)] : []),
+        ...(page.published ? [labelTask()] : []),
+      ],
+      { source: "statement-suggestions.refresh" },
+    );
   return {
     published: page.published,
     unchanged: page.unchanged,

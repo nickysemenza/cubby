@@ -66,7 +66,8 @@ export const suggestionField = (
     | "amount"
     | "recommended"
     | "clean"
-    | "evidenceFingerprint",
+    | "evidenceFingerprint"
+    | "needsLabel",
   alias = "s",
 ) => sql`${sql.raw(`"${alias}"`)}.data->>${key}`;
 

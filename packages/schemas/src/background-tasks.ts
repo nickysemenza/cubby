@@ -25,6 +25,7 @@ export const backgroundTaskKinds = [
   "maintenance.purchase-discovery",
   "calendar-feed.mark-dirty",
   "statement-suggestions.generate",
+  "statement-suggestions.label",
 ] as const;
 
 export const backgroundTaskKindSchema = z.enum(backgroundTaskKinds);
@@ -149,6 +150,12 @@ export const statementSuggestionsGenerateTaskSchema = z.object({
     .nullable(),
 });
 
+/** Advisory decision-model labels for pending statement suggestions, one batch per message. */
+export const statementSuggestionsLabelTaskSchema = z.object({
+  kind: z.literal("statement-suggestions.label"),
+  ...taskEnvelopeFields,
+});
+
 export const backgroundTaskSchema = z.discriminatedUnion("kind", [
   recipeTotalsRecomputeTaskSchema,
   entityEmbeddingRefreshTaskSchema,
@@ -161,6 +168,7 @@ export const backgroundTaskSchema = z.discriminatedUnion("kind", [
   maintenancePurchaseDiscoveryTaskSchema,
   calendarFeedMarkDirtyTaskSchema,
   statementSuggestionsGenerateTaskSchema,
+  statementSuggestionsLabelTaskSchema,
 ]);
 
 /** The parsed (branded) task a handler receives. */
