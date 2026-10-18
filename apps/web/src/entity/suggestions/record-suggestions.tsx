@@ -280,12 +280,10 @@ const productionStoredSuggestionOperations: StoredSuggestionOperations = {
   settled: (input) => ai.settledSuggestionQuestions.call(input),
 };
 
+const recordIdentitySchema = z.object({ id: z.string() });
+
 const recordPublicId = (record: unknown) => {
-  const parsed = z
-    .looseObject({
-      id: z.string(),
-    })
-    .safeParse(record);
+  const parsed = recordIdentitySchema.safeParse(record);
   return parsed.success ? parsed.data.id : null;
 };
 

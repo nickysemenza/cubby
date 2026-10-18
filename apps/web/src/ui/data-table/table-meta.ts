@@ -94,6 +94,8 @@ export function declaredColumnExplanation(
     : undefined;
 }
 
+const rowIdentitySchema = z.object({ id: z.string() });
+
 export const resolveColumnExplanation = <TData>(
   explanation: ColumnExplanation | RowColumnExplanation<TData> | undefined,
   row: TData,
@@ -101,7 +103,7 @@ export const resolveColumnExplanation = <TData>(
 ): ColumnExplanation | undefined => {
   if (explanation)
     return "resolve" in explanation ? explanation.resolve(row) : explanation;
-  const identity = z.object({ id: z.string() }).safeParse(row);
+  const identity = rowIdentitySchema.safeParse(row);
   const parsed = identity.success ? parseShortcode(identity.data.id) : null;
   if (!parsed || !columnId) return undefined;
   return declaredColumnExplanation(parsed.type, columnId);

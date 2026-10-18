@@ -107,6 +107,8 @@ import {
 import { EditableEntityCell } from "./editable-entity-cell";
 import { ImageThumbnail } from "./image-thumbnail";
 
+const recordEmojiSchema = z.object({ emoji: z.string().nullable().optional() });
+
 type UnitMapping = Parameters<typeof UnitMappingDisplay>[0]["mappings"][number];
 
 export { multiSelectFilterFn };
@@ -261,9 +263,7 @@ export function createNameColumn<T extends BaseRow>(
         options?.emptyLabel,
       );
       const suffix = options?.nameSuffix?.(info.row.original);
-      const recordEmoji = z
-        .object({ emoji: z.string().nullable().optional() })
-        .parse(info.row.original).emoji;
+      const recordEmoji = recordEmojiSchema.parse(info.row.original).emoji;
       const prefix =
         recordEmoji || entitySummary[entity].recordIconEntityField ? (
           <RecordEmoji

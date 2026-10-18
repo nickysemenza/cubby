@@ -27,27 +27,45 @@ export interface ReferenceFieldValue {
   items: ReferenceItem[];
 }
 
-const projection = z.looseObject({});
-
 /**
  * One declared key off a read projection, parsed with the schema the caller
  * knows that key by. The manifest names the key; the schema is the value's
  * own contract.
+ *
+ * Reads the record's own property (a projection row carries its keys itself),
+ * not a loose-object parse: reference cells call this several times each, and
+ * that parse copied the whole row per call.
  */
 export const readRecordField = <TRecord extends object, TValue>(
   record: TRecord,
   key: string,
   schema: z.ZodType<TValue>,
-): TValue => schema.parse(projection.parse(record)[key]);
+): TValue => {
+  if (Array.isArray(record))
+    throw new TypeError(`Cannot read "${key}" off an array as a record`);
+  const property = Object.getOwnPropertyDescriptor(record, key);
+  return schema.parse(
+    property?.get ? property.get.call(record) : property?.value,
+  );
+};
+
+const unknownValue = z.unknown();
+const optionalString = z.string().nullish();
+const numberValue = z.number();
+const optionalNumber = z.number().nullish();
+const nullableString = z.string().nullable();
+const optionalBoolean = z.boolean().optional();
+const allocationShares = z.array(z.looseObject({})).optional();
 
 const referenceIds = z.union([z.string(), z.array(z.string())]).nullish();
 
 const referenceObjectValue = referenceObject.nullish();
 const referenceObjects = z.array(referenceObject).nullish();
+const referenceIdList = z.array(z.string()).nullish();
 
 const multipleItems = (raw: unknown, nested: unknown): ReferenceItem[] => {
-  const ids = z.array(z.string()).nullish().parse(raw) ?? [];
-  const nestedItems = z.array(referenceObject).nullish().safeParse(nested);
+  const ids = referenceIdList.parse(raw) ?? [];
+  const nestedItems = referenceObjects.safeParse(nested);
   if (ids.length === 0 && nestedItems.success && nestedItems.data)
     return nestedItems.data.map((item) => ({
       id: item.id,
@@ -62,8 +80,8 @@ const singleItem = (
   nested: unknown,
   nestedName: string | null,
 ): ReferenceItem[] => {
-  const id = z.string().nullish().parse(raw) ?? null;
-  const nestedItem = referenceObject.nullish().safeParse(nested);
+  const id = optionalString.parse(raw) ?? null;
+  const nestedItem = referenceObjectValue.safeParse(nested);
   const resolved = nestedItem.success ? (nestedItem.data ?? null) : null;
   const itemId = id ?? resolved?.id ?? null;
   return itemId === null
@@ -90,22 +108,19 @@ const storedReference = <TRecord extends object>(
     fieldResolutionsSchema.optional(),
   )?.[field.key];
   if (!resolution) return null;
-  const id = z.string().nullable().parse(resolution.storedValue);
+  const id = nullableString.parse(resolution.storedValue);
   const base = field.key.replace(/Ids?$/u, "");
   const raw =
     field.readKey === null
       ? undefined
-      : readRecordField(record, field.readKey, z.unknown());
+      : readRecordField(record, field.readKey, unknownValue);
   const carriesStoredTarget = raw === id;
-  const nested = readRecordField(record, base, z.unknown());
+  const nested = readRecordField(record, base, unknownValue);
   const nestedName =
     (field.display.labelPath === null
       ? null
-      : z
-          .string()
-          .nullish()
-          .parse(readPathValue(record, field.display.labelPath))) ??
-    readRecordField(record, `${base}Name`, z.string().nullish()) ??
+      : optionalString.parse(readPathValue(record, field.display.labelPath))) ??
+    readRecordField(record, `${base}Name`, optionalString) ??
     null;
   return {
     entity: field.reference.entity,
@@ -134,21 +149,18 @@ export function readReferenceField<TRecord extends object>(
   const reference = field.reference;
   if (reference === null) return null;
   const base = field.key.replace(/Ids?$/u, "");
-  const nested = readRecordField(record, base, z.unknown());
-  if (z.number().safeParse(nested).success) return null;
+  const nested = readRecordField(record, base, unknownValue);
+  if (numberValue.safeParse(nested).success) return null;
   const nestedName =
     (field.display.labelPath === null
       ? null
-      : z
-          .string()
-          .nullish()
-          .parse(readPathValue(record, field.display.labelPath))) ??
-    readRecordField(record, `${base}Name`, z.string().nullish()) ??
+      : optionalString.parse(readPathValue(record, field.display.labelPath))) ??
+    readRecordField(record, `${base}Name`, optionalString) ??
     null;
   const raw =
     field.readKey === null
       ? undefined
-      : readRecordField(record, field.readKey, z.unknown());
+      : readRecordField(record, field.readKey, unknownValue);
   const assigned = storedReference(record, field, intent);
   if (assigned) return assigned;
   // A reference whose read key carries a count (recipe `meals` reads
@@ -180,7 +192,7 @@ export function readReferenceField<TRecord extends object>(
           ...item,
           emoji:
             item.emoji ??
-            readRecordField(record, `${base}Emoji`, z.string().nullish()),
+            readRecordField(record, `${base}Emoji`, optionalString),
         })),
   };
 }
@@ -209,14 +221,13 @@ export function readDisplayReferenceField<TRecord extends object>(
   const allocations = readRecordField(
     record,
     `${stem}Allocations`,
-    z.array(z.looseObject({})).optional(),
+    allocationShares,
   );
   const shares = (allocations ?? []).map((share) => ({
-    id: readRecordField(share, `${stem}Id`, z.string().nullish()) ?? null,
-    name: readRecordField(share, `${stem}Name`, z.string().nullish()) ?? null,
-    incomplete:
-      readRecordField(share, "incomplete", z.boolean().optional()) ?? false,
-    amount: readRecordField(share, "amount", z.number().nullish()),
+    id: readRecordField(share, `${stem}Id`, optionalString) ?? null,
+    name: readRecordField(share, `${stem}Name`, optionalString) ?? null,
+    incomplete: readRecordField(share, "incomplete", optionalBoolean) ?? false,
+    amount: readRecordField(share, "amount", optionalNumber),
   }));
   if (resolution.mode === "allocated") {
     const items = new Map<string, ReferenceItem>();
@@ -237,7 +248,7 @@ export function readDisplayReferenceField<TRecord extends object>(
         shares.some((share) => !share.id || share.incomplete),
     };
   }
-  const effectiveID = z.string().nullable().parse(resolution.value);
+  const effectiveID = nullableString.parse(resolution.value);
   if (effectiveID === null) return { entity: stored.entity, items: [] };
   const sameTarget = stored.items.find((item) => item.id === effectiveID);
   const source = resolution.sourceEntity;

@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { util } from "zod/v4/core";
 
 /**
  * Evaluates a manifest `display.readPath` against a row: dotted keys, `[n]`
@@ -29,8 +29,6 @@ function parseSteps(path: string): readonly Step[] {
   return steps;
 }
 
-const recordSchema = z.record(z.string(), z.unknown());
-
 // oxlint-disable-next-line anti-slop/no-unknown-returns -- A row path is untyped by construction; the caller parses the projected value.
 function walk(value: unknown, steps: readonly Step[]): unknown {
   let current = value;
@@ -47,8 +45,12 @@ function walk(value: unknown, steps: readonly Step[]): unknown {
       current = Array.isArray(current) ? current[step.index] : undefined;
       continue;
     }
-    const record = recordSchema.safeParse(current);
-    current = record.success ? record.data[step.key] : undefined;
+    // The objects and own keys a `z.record` parse accepted, without that
+    // parse's copy of the object at every step of every cell's path.
+    current =
+      util.isPlainObject(current) && Object.hasOwn(current, step.key)
+        ? current[step.key]
+        : undefined;
   }
   return current;
 }
