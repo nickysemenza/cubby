@@ -683,6 +683,12 @@ final class PhotoImportManifest {
         return "Assigning \(selectedIDs.count) of \(items.count) photo\(items.count == 1 ? "" : "s")"
     }
 
+    /// Routing and duplicate decisions only come from explicit picks, so any entry is staged work
+    /// that Cancel or swipe-down would discard.
+    var hasStagedChanges: Bool {
+        !hasCommitted && (!assignments.isEmpty || !duplicateDecisions.isEmpty)
+    }
+
     func chooseExisting(_ imageID: ImageCode, for itemID: String) {
         duplicateDecisions[itemID] = .reuse(imageID)
     }

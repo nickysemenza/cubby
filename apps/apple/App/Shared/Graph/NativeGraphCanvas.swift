@@ -98,6 +98,12 @@ struct NativeGraphCanvas: View {
                     VStack {
                         Text("Relationship graph")
                         ForEach(graph.nodes) { node in Button(node.label) { onSelect(node) } }
+                        // Edges are drawn in a Canvas, so VoiceOver reaches them only through
+                        // these buttons, which share the tap path's edge selection.
+                        ForEach(graph.edges) { edge in
+                            Button(edgeAccessibilityLabel(edge)) { onSelectEdge(edge.id) }
+                                .accessibilityAddTraits(selectedEdgeID == edge.id ? .isSelected : [])
+                        }
                     }
                 }
             }
@@ -310,6 +316,13 @@ struct NativeGraphCanvas: View {
         }
         return false
     }
+    private func edgeAccessibilityLabel(_ edge: EntityGraphEdge) -> String {
+        let label = { (ref: EntityRef) in
+            graph.nodes.first { $0.id == ref.stableKey }?.label ?? ref.id
+        }
+        return "\(label(edge.source)) → \(label(edge.target)), \(edge.label)"
+    }
+
     private func selectEdge(at point: CGPoint) {
         var nearest: (String, CGFloat)?
         for edge in graph.edges {

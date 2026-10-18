@@ -18,6 +18,24 @@ extension View {
     func keyboardDismissBar() -> some View {
         modifier(KeyboardDismissBar())
     }
+
+    /// A leading glyph column whose width grows with Dynamic Type, so a scaled glyph is never
+    /// clipped by a fixed slot and the row's text stays aligned across rows.
+    func fieldGuideIconSlot(width: CGFloat = 20, relativeTo textStyle: Font.TextStyle = .body) -> some View {
+        modifier(IconSlot(width: width, textStyle: textStyle))
+    }
+}
+
+private struct IconSlot: ViewModifier {
+    @ScaledMetric private var width: CGFloat
+
+    init(width: CGFloat, textStyle: Font.TextStyle) {
+        _width = ScaledMetric(wrappedValue: width, relativeTo: textStyle)
+    }
+
+    func body(content: Content) -> some View {
+        content.frame(width: width)
+    }
 }
 
 /// The one failed-load state for a screen or sheet body whose content never arrived: what failed,
@@ -180,7 +198,7 @@ struct ActionTile: View {
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             Image(systemName: symbol)
-                .font(.system(size: 20, weight: .regular))
+                .font(.title3)
                 .foregroundStyle(FieldGuideTokens.interaction)
                 .accessibilityHidden(true)
             Text(title)

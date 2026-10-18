@@ -52,7 +52,7 @@ Run evidence sheet against the synthetic approval Run: enter from the native
 Runs catalog, load its durable operation and structured log, confirm that the
 native loading/error overlays are absent, dismiss the sheet, reopen and load
 it again. Each Done must remove the hosted transcript from the accessibility tree.
-The return check uses the native evidence button, since Run has no edit action.
+The return check reopens the native evidence item from the detail More menu, since Run has no edit action.
 This journey does not establish Retry, logout, host switching, auth/update gates,
 or record handoff and refresh acceptance.
 

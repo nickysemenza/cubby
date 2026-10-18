@@ -14,6 +14,7 @@ struct HeroActionSheet: View {
     @State private var confirming = false
     @State private var pickingLocation = false
     @State private var pickedLocationTitle: String?
+    @State private var draftDismissal = DraftDismissalState()
 
     private var isDestructive: Bool { model.plan.confirmation == .destructive }
 
@@ -32,15 +33,30 @@ struct HeroActionSheet: View {
                 .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        draftDismissal.request(
+                            isDirty: model.hasEdits, isSaving: model.isRunning, dismiss: dismiss)
+                    }
+                    .disabled(model.isRunning)
+                }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(model.plan.label, role: isDestructive ? .destructive : nil) {
+                    Button(role: isDestructive ? .destructive : nil) {
                         if isDestructive { confirming = true } else { run(confirmed: false) }
+                    } label: {
+                        if model.isRunning {
+                            ProgressView { Text("\(model.plan.label)…") }
+                        } else {
+                            Text(model.plan.label)
+                        }
                     }
                     .disabled(!model.canSubmit)
                     .accessibilityIdentifier("heroAction.submit")
                 }
             }
+            .draftDismissal(
+                $draftDismissal, isDirty: model.hasEdits, isSaving: model.isRunning
+            ) { dismiss() }
             .confirmationDialog(
                 "\(model.plan.label) \(model.row.title)?", isPresented: $confirming, titleVisibility: .visible
             ) {
@@ -130,13 +146,26 @@ struct HeroActionSheet: View {
             if let existing = model.existingStock {
                 Text(existing).font(.caption).foregroundStyle(.secondary)
             }
-            HStack {
-                TextField(field.label, value: amountValueBinding(field.key), format: .number)
+            LabeledContent(field.label) {
+                TextField(
+                    field.label, value: amountValueBinding(field.key), format: .number, prompt: Text("0")
+                )
+                .multilineTextAlignment(.trailing)
+                .labelsHidden()
+                .textFieldStyle(.roundedBorder)
+                #if os(iOS)
+                    .keyboardType(.decimalPad)
+                #endif
+            }
+            LabeledContent("Unit") {
+                TextField("Unit", text: amountUnitBinding(field.key), prompt: Text("unit"))
+                    .multilineTextAlignment(.trailing)
+                    .labelsHidden()
+                    .textFieldStyle(.roundedBorder)
+                    .autocorrectionDisabled()
                     #if os(iOS)
-                        .keyboardType(.decimalPad)
+                        .textInputAutocapitalization(.never)
                     #endif
-                TextField("Unit", text: amountUnitBinding(field.key))
-                    .frame(maxWidth: 100)
             }
         case .shelf:
             Picker(field.label, selection: stringBinding(field.key)) {

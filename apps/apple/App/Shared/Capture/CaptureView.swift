@@ -62,9 +62,12 @@ extension CaptureView {
 }
 
 private struct CaptureContent: View {
+    @Environment(AppModel.self) private var appModel
     @Bindable var capture: CaptureModel
     @Binding var pickingLocation: Bool
     @Binding var showingStrays: Bool
+    /// Shared by the location glyph column and the chip dividers so both track Dynamic Type.
+    @ScaledMetric(relativeTo: .body) private var iconSlotWidth: CGFloat = 20
 
     var body: some View {
         ScrollView {
@@ -73,6 +76,7 @@ private struct CaptureContent: View {
                     scannerSlot
                 #endif
                 locationRow
+                walkShelf
                 manualEntry
                 tally
                 chips
@@ -90,19 +94,19 @@ private struct CaptureContent: View {
         )
         .toolbar {
             ToolbarItem {
-                NavigationLink(value: Route.identify) {
-                    Label("Identify a photo", systemImage: "camera.metering.center.weighted")
+                // Menu items cannot host NavigationLinks reliably, so they push onto Capture's
+                // own stack, which is where this screen is always the root.
+                Menu {
+                    Button("Identify a photo", systemImage: "camera.metering.center.weighted") {
+                        push(.identify)
+                    }
+                    Button("Location photo pass", systemImage: "camera.on.rectangle") {
+                        push(.locationPhotoPass(scope: capture.location?.id))
+                    }
+                } label: {
+                    Label("Photo tools", systemImage: "camera")
                 }
-            }
-            ToolbarItem {
-                NavigationLink(value: Route.locationPhotoPass(scope: capture.location?.id)) {
-                    Label("Location photo pass", systemImage: "camera.on.rectangle")
-                }
-            }
-            ToolbarItem {
-                NavigationLink(value: Route.audit(locationID: capture.location?.id)) {
-                    Label("Walk the shelf", systemImage: "checklist")
-                }
+                .accessibilityIdentifier("capture.photoTools")
             }
             ToolbarItem {
                 Button {
@@ -114,6 +118,24 @@ private struct CaptureContent: View {
                 .disabled(capture.session.strays.isEmpty)
             }
         }
+    }
+
+    private func push(_ route: Route) {
+        appModel.navigator.paths[.capture, default: []].append(route)
+    }
+
+    /// Walking the shelf is the screen's other main job, so it sits in the body beside the
+    /// location it walks rather than among the toolbar glyphs.
+    private var walkShelf: some View {
+        NavigationLink(value: Route.audit(locationID: capture.location?.id)) {
+            Label("Walk the shelf", systemImage: "checklist")
+                .font(.fieldGuideTitle)
+                .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget)
+        }
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.roundedRectangle(radius: FieldGuideTokens.radiusControl))
+        .tint(FieldGuideTokens.interaction)
+        .accessibilityIdentifier("capture.walkShelf")
     }
 
     #if os(iOS)
@@ -131,7 +153,7 @@ private struct CaptureContent: View {
                     if capture.session.location == nil {
                         VStack(spacing: FieldGuideTokens.Space.sm) {
                             Image(systemName: "barcode.viewfinder")
-                                .font(.system(size: 32, weight: .light))
+                                .font(.largeTitle.weight(.light))
                                 .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                             Text("Pick a location to start the scanner")
                                 .font(.fieldGuideBody)
@@ -164,7 +186,7 @@ private struct CaptureContent: View {
                 } label: {
                     HStack(spacing: FieldGuideTokens.Space.md) {
                         DomainMark(.location, style: .symbol, size: 15)
-                            .frame(width: 20)
+                            .frame(width: iconSlotWidth)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(capture.location?.name ?? "Choose a location")
                                 .font(.fieldGuideTitle)
@@ -331,7 +353,7 @@ private struct CaptureContent: View {
         } else {
             Panel(padding: 0, spacing: 0) {
                 ForEach(Array(capture.session.chips.enumerated()), id: \.element.id) { index, chip in
-                    if index > 0 { PanelDivider(inset: FieldGuideTokens.Space.lg + 20) }
+                    if index > 0 { PanelDivider(inset: FieldGuideTokens.Space.lg + iconSlotWidth) }
                     ScanChipRow(chip: chip)
                 }
             }
@@ -348,9 +370,9 @@ struct ScanChipRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: FieldGuideTokens.Space.md) {
             Image(systemName: symbol)
-                .font(.system(size: 15))
+                .font(.subheadline)
                 .foregroundStyle(tint)
-                .frame(width: 20)
+                .fieldGuideIconSlot()
                 // Motion is a secondary cue only: the label and chip already spell the outcome out.
                 .symbolEffect(.pulse, isActive: !reduceMotion && isPending)
                 .symbolEffect(.bounce, options: .nonRepeating, isActive: !reduceMotion && isSettled)
@@ -363,7 +385,7 @@ struct ScanChipRow: View {
                     Text(message)
                         .font(.fieldGuideLabel)
                         .foregroundStyle(FieldGuideTokens.destructive)
-                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer(minLength: FieldGuideTokens.Space.sm)

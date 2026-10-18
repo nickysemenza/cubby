@@ -384,7 +384,11 @@ private struct ZoomablePhoto: View {
             }
         )
         .onTapGesture(count: 2) { scale = scale > 1 ? 1 : 2 }
-        .accessibilityLabel("\(filename), pinch to zoom")
+        .accessibilityLabel(filename)
+        .accessibilityValue(scale > 1 ? "Zoomed in" : "")
+        .accessibilityAddTraits(.isImage)
+        // Pinch and double-tap are gesture-only; this is their assistive equivalent.
+        .accessibilityAction(named: scale > 1 ? "Zoom out" : "Zoom in") { scale = scale > 1 ? 1 : 2 }
     }
 }
 
@@ -501,18 +505,20 @@ private struct ProvenanceMapRow: View {
     }
 
     var body: some View {
-        ZStack {
+        Button(action: openInMaps) {
             Map(initialPosition: .region(region)) {
                 Marker("", coordinate: coordinate)
             }
             .allowsHitTesting(false)
-            Color.clear.contentShape(.rect)
+            .frame(height: 110)
+            .clipShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel))
+            .contentShape(.rect)
         }
-        .frame(height: 110)
-        .clipShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel))
+        .buttonStyle(.plain)
         .padding(.horizontal, FieldGuideTokens.Space.md)
-        .onTapGesture { openInMaps() }
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel("Capture location")
+        .accessibilityHint("Opens in Maps")
         .accessibilityAddTraits(.isButton)
     }
 

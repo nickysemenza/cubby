@@ -54,6 +54,10 @@ struct EntityListView: View {
     let key: EntityKey
     @Environment(AppModel.self) private var appModel
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// Phone table column widths grow with Dynamic Type so cells wrap less as text scales; the
+    /// header and every row read the same metrics, keeping columns aligned.
+    @ScaledMetric(relativeTo: .body) private var titleColumnWidth: CGFloat = 240
+    @ScaledMetric(relativeTo: .body) private var fieldColumnWidth: CGFloat = 180
     @State private var model: GenericEntityListModel?
     @State private var showingFilters = false
     @State private var creating = false
@@ -228,6 +232,9 @@ struct EntityListView: View {
                     }
                     .accessibilityIdentifier("browse.\(key.rawValue).create")
                 }
+            }
+            if key.nativeActions.contains(.create), hasControls {
+                ToolbarSpacer(.fixed, placement: .topBarTrailing)
             }
             if hasControls {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -900,10 +907,10 @@ struct EntityListView: View {
                                 key: descriptor.sortFields.contains(descriptor.titleField)
                                     ? descriptor.titleField : nil, model: model
                             )
-                            .frame(width: 240, alignment: .leading)
+                            .frame(width: titleColumnWidth, alignment: .leading)
                             ForEach(tableFields, id: \.key) { field in
                                 sortHeading(field.label, key: sortKey(for: field), model: model)
-                                    .frame(width: 180, alignment: .leading)
+                                    .frame(width: fieldColumnWidth, alignment: .leading)
                             }
                         }
                         .padding(.horizontal, FieldGuideTokens.Space.md)
@@ -948,7 +955,7 @@ struct EntityListView: View {
                         Text(row.title)
                             .font(.body.weight(.medium))
                             .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
-                            .frame(width: 240, alignment: .leading)
+                            .frame(width: titleColumnWidth, alignment: .leading)
                             .frame(minHeight: FieldGuideTokens.touchTarget)
                             .contentShape(Rectangle())
                             .accessibilityIdentifier(
@@ -957,11 +964,11 @@ struct EntityListView: View {
                     .buttonStyle(.plain)
                     ForEach(tableFields, id: \.key) { field in
                         tableCell(field, row: row)
-                            .frame(width: 180, alignment: .leading)
+                            .frame(width: fieldColumnWidth, alignment: .leading)
                     }
                 }
                 .padding(.horizontal, FieldGuideTokens.Space.md)
-                .frame(minHeight: 48)
+                .frame(minHeight: FieldGuideTokens.touchTarget)
                 .contentShape(Rectangle())
                 .contextMenu {
                     Button("Copy link", systemImage: "link") {

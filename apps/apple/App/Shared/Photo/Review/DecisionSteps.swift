@@ -8,6 +8,8 @@ struct DecisionSteps<Media: View, StepBody: View>: View {
     @ViewBuilder let stepBody: (DecisionStep, @escaping () -> Void) -> StepBody
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// The status-mark column; the rail line runs through its center.
+    @ScaledMetric(relativeTo: .caption) private var markWidth: CGFloat = 16
     @State private var openKey: String?
     @State private var collapsed = false
     @AccessibilityFocusState private var focusedStep: String?
@@ -26,7 +28,8 @@ struct DecisionSteps<Media: View, StepBody: View>: View {
             if !dynamicTypeSize.isAccessibilitySize {
                 HStack(alignment: .top, spacing: FieldGuideTokens.Space.md) {
                     media().frame(width: 112)
-                    ledger.frame(minWidth: 340, maxWidth: .infinity)
+                    // Side-by-side only when the ledger keeps room for wrapping summaries.
+                    ledger.frame(minWidth: 440, maxWidth: .infinity)
                 }
             }
             VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
@@ -41,8 +44,9 @@ struct DecisionSteps<Media: View, StepBody: View>: View {
             ForEach(visibleSteps, id: \.key) { step in
                 HStack(alignment: .top, spacing: FieldGuideTokens.Space.sm) {
                     mark(step)
-                        .background { Circle().fill(Color("Canvas")).frame(width: 14, height: 14) }
-                        .frame(width: 16, height: rowHeight)
+                        .font(.caption)
+                        .background { Circle().fill(Color("Canvas")) }
+                        .frame(width: markWidth, height: rowHeight)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 0) {
                         Button {
@@ -58,7 +62,7 @@ struct DecisionSteps<Media: View, StepBody: View>: View {
                                 }
                                 Text(step.label).fontWeight(.medium)
                                 if let summary = step.summary, effectiveKey != step.key {
-                                    Text(summary).foregroundStyle(.secondary).lineLimit(1)
+                                    Text(summary).foregroundStyle(.secondary)
                                 }
                                 Spacer(minLength: 0)
                                 if isEnabled(step) {
@@ -89,7 +93,7 @@ struct DecisionSteps<Media: View, StepBody: View>: View {
         }
         .background(alignment: .leading) {
             Rectangle().fill(.quaternary).frame(width: 1)
-                .padding(.leading, 7.5)
+                .padding(.leading, (markWidth - 1) / 2)
                 .padding(.vertical, rowHeight / 2)
                 .accessibilityHidden(true)
         }
@@ -123,12 +127,20 @@ struct DecisionSteps<Media: View, StepBody: View>: View {
         }
     }
 
+    /// Each status has its own glyph shape, so the mark never depends on color alone.
     @ViewBuilder private func mark(_ step: DecisionStep) -> some View {
         switch step.status.rawValue {
-        case "done": Circle().fill(FieldGuideTokens.positive).frame(width: 8, height: 8)
-        case "needs_input": Circle().fill(FieldGuideTokens.signal).frame(width: 10, height: 10)
-        case "not_needed": Circle().stroke(.secondary, lineWidth: 1).frame(width: 8, height: 8)
-        default: Circle().fill(.quaternary).frame(width: 4, height: 4)
+        case "done":
+            Image(systemName: "checkmark.circle.fill").foregroundStyle(FieldGuideTokens.positive)
+        case "needs_input":
+            // Citron alone is too light for a glyph on the canvas; the dark mark carries contrast.
+            Image(systemName: "exclamationmark.circle.fill")
+                .symbolRenderingMode(.palette)
+                .foregroundStyle(Color.black, FieldGuideTokens.signal)
+        case "not_needed":
+            Image(systemName: "minus.circle").foregroundStyle(.secondary)
+        default:
+            Image(systemName: "circle.dashed").foregroundStyle(.secondary)
         }
     }
 
@@ -157,6 +169,8 @@ struct DecisionSteps<Media: View, StepBody: View>: View {
             steps: [
                 .init(key: "product", label: "Product", status: .done, summary: "Synthetic shirt"),
                 .init(key: "identity", label: "Right one?", status: .needsInput),
+                .init(key: "ownership", label: "Whose is it?", status: .notNeeded),
+                .init(key: "inventory", label: "Where is it?", status: .blocked),
             ],
             media: { Image(systemName: "tshirt").font(.largeTitle) },
             stepBody: { _, next in Button("Yes, this is it", action: next) }

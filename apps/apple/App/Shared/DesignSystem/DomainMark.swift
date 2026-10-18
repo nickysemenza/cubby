@@ -13,6 +13,8 @@ struct DomainMark: View {
     private let glyph: String?
     private let style: Style
     private let size: CGFloat
+    /// The symbol grows with Dynamic Type from its declared point size; the dot stays a mark.
+    @ScaledMetric(relativeTo: .body) private var symbolScale: CGFloat = 1
 
     init(_ key: EntityKey, style: Style = .dot, size: CGFloat = 8) {
         self.domain = key.domain
@@ -37,7 +39,7 @@ struct DomainMark: View {
                 .accessibilityHidden(true)
         case .symbol:
             Image(systemName: glyph ?? domain.symbol)
-                .font(.system(size: size))
+                .font(.system(size: size * symbolScale))
                 .foregroundStyle(domain.color)
                 .accessibilityHidden(true)
         }

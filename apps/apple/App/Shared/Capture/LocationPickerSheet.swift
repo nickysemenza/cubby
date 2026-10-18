@@ -23,7 +23,7 @@ struct LocationPickerSheet: View {
                 } label: {
                     HStack(spacing: FieldGuideTokens.Space.md) {
                         DomainMark(.location, style: .symbol, size: 15)
-                            .frame(width: 20)
+                            .fieldGuideIconSlot()
                         VStack(alignment: .leading, spacing: 1) {
                             Text(option.name)
                                 .font(.fieldGuideBody)
@@ -55,8 +55,18 @@ struct LocationPickerSheet: View {
             .listStyle(.plain)
             .fieldGuideScreen()
             .overlay {
-                if capture.loadingLocations && capture.locations.isEmpty {
+                if capture.locations.isEmpty, capture.loadingLocations {
                     LoadingIndicator(label: "Loading locations")
+                } else if capture.locations.isEmpty, let error = capture.locationError {
+                    LoadFailureView(title: "Couldn't load locations", message: error) {
+                        await capture.loadLocations()
+                    }
+                } else if filtered.isEmpty, !query.isEmpty {
+                    ContentUnavailableView.search(text: query)
+                } else if filtered.isEmpty {
+                    ContentUnavailableView(
+                        "No locations", systemImage: "mappin.slash",
+                        description: Text("Locations added in Cubby appear here."))
                 }
             }
             .searchable(text: $query, prompt: "Filter locations")

@@ -15,6 +15,43 @@ struct BinRowView: View {
     @State private var showingMoveTo = false
 
     var body: some View {
+        Button {
+            showingDialog = true
+        } label: {
+            rowContent
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Shows every count decision for this item")
+        .accessibilityAction(named: "Adjust count") { showingAdjust = true }
+        .accessibilityAction(named: "Move to…") { showingMoveTo = true }
+        .accessibilityAction(named: "Move to Unknown") { Task { await session.relocateToUnknown(row.id) } }
+        .swipeActions(edge: .leading) {
+            Button("Verify") { session.stage(.verify, for: row.id) }
+                .tint(FieldGuideTokens.positive)
+        }
+        .swipeActions(edge: .trailing) {
+            Button("Remove", role: .destructive) { session.stage(.remove, for: row.id) }
+        }
+        .confirmationDialog(row.product.name, isPresented: $showingDialog, titleVisibility: .visible) {
+            Button("Verify") { session.stage(.verify, for: row.id) }
+            Button("Adjust count…") { showingAdjust = true }
+            Button("Remove", role: .destructive) { session.stage(.remove, for: row.id) }
+            Button("Move to Unknown") { Task { await session.relocateToUnknown(row.id) } }
+            Button("Move to…") { showingMoveTo = true }
+            if resolution != nil {
+                Button("Clear") { session.clearResolution(for: row.id) }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .sheet(isPresented: $showingAdjust) {
+            AdjustCountSheet(session: session, id: row.id, amount: row.amount)
+        }
+        .sheet(isPresented: $showingMoveTo) {
+            BinMoveToSheet(session: session, id: row.id)
+        }
+    }
+
+    private var rowContent: some View {
         HStack(alignment: .top, spacing: FieldGuideTokens.Space.md) {
             Thumb(url: row.product.coverImageURL, size: 48, symbol: "shippingbox")
             VStack(alignment: .leading, spacing: 2) {
@@ -43,31 +80,6 @@ struct BinRowView: View {
         .padding(.horizontal, FieldGuideTokens.Space.md)
         .padding(.vertical, FieldGuideTokens.Space.md)
         .contentShape(Rectangle())
-        .onTapGesture { showingDialog = true }
-        .swipeActions(edge: .leading) {
-            Button("Verify") { session.stage(.verify, for: row.id) }
-                .tint(FieldGuideTokens.positive)
-        }
-        .swipeActions(edge: .trailing) {
-            Button("Remove", role: .destructive) { session.stage(.remove, for: row.id) }
-        }
-        .confirmationDialog(row.product.name, isPresented: $showingDialog, titleVisibility: .visible) {
-            Button("Verify") { session.stage(.verify, for: row.id) }
-            Button("Adjust count…") { showingAdjust = true }
-            Button("Remove", role: .destructive) { session.stage(.remove, for: row.id) }
-            Button("Move to Unknown") { Task { await session.relocateToUnknown(row.id) } }
-            Button("Move to…") { showingMoveTo = true }
-            if resolution != nil {
-                Button("Clear") { session.clearResolution(for: row.id) }
-            }
-            Button("Cancel", role: .cancel) {}
-        }
-        .sheet(isPresented: $showingAdjust) {
-            AdjustCountSheet(session: session, id: row.id, amount: row.amount)
-        }
-        .sheet(isPresented: $showingMoveTo) {
-            BinMoveToSheet(session: session, id: row.id)
-        }
     }
 
     private var statusLabel: String {

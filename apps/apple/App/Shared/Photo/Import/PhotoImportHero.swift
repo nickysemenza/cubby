@@ -276,7 +276,7 @@ private struct PhotoImportProgressiveImage: View {
         .accessibilityLabel("Photo preview")
         .accessibilityHint(
             fullResolution
-                ? "Pinch or double tap to zoom. Swipe or use the navigation buttons to inspect other photos."
+                ? "Pinch, double tap, or use the Zoom action to zoom. Swipe or use the navigation buttons to inspect other photos."
                 : "Opens a full-screen photo viewer"
         )
         .simultaneousGesture(
@@ -290,6 +290,15 @@ private struct PhotoImportProgressiveImage: View {
             withAnimation(.easeInOut(duration: 0.2)) {
                 zoomScale = zoomScale > 1.01 ? 1 : 2
                 magnificationStart = zoomScale
+            }
+        }
+        // Pinch and double-tap are gesture-only; the full-resolution viewer also zooms by action.
+        .accessibilityActions {
+            if fullResolution {
+                Button(zoomScale > 1.01 ? "Zoom out" : "Zoom in") {
+                    zoomScale = zoomScale > 1.01 ? 1 : 2
+                    magnificationStart = zoomScale
+                }
             }
         }
         .id(item.id)

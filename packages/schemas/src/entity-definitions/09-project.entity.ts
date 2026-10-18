@@ -35,6 +35,16 @@ export default defineEntity({
     edit: {
       sections: [
         {
+          id: "defaults",
+          title: "Defaults",
+          fields: ["locations", "assigneeId", "defaultTrade"],
+        },
+        {
+          id: "budget",
+          title: "Budget",
+          fields: ["costEstimate"],
+        },
+        {
           id: "schedule",
           title: "Schedule",
           fields: ["startDate", "endDate"],

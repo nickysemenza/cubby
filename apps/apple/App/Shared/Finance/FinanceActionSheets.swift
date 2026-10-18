@@ -115,23 +115,33 @@ struct SplitExpenseSheet: View {
         _ part: ExpenseSplitSession.Part, number: Int, start: PurchaseSplitStartOut
     ) -> some View {
         Section("Part \(number)") {
-            TextField(
-                "What this part is",
-                text: Binding(
-                    get: { part.name }, set: { value in session.update(part.id) { $0.name = value } })
-            )
-            .accessibilityLabel("Part \(number) name")
-            .accessibilityIdentifier("split.part.\(number).name")
-            TextField(
-                "0.00",
-                text: Binding(
-                    get: { part.cost }, set: { value in session.update(part.id) { $0.cost = value } })
-            )
-            #if os(iOS)
-                .keyboardType(.numbersAndPunctuation)
-            #endif
-            .accessibilityLabel("Part \(number) cost")
-            .accessibilityIdentifier("split.part.\(number).cost")
+            LabeledContent("Name") {
+                TextField(
+                    "Name",
+                    text: Binding(
+                        get: { part.name }, set: { value in session.update(part.id) { $0.name = value } }),
+                    prompt: Text("What this part is")
+                )
+                .multilineTextAlignment(.trailing)
+                .labelsHidden()
+                .accessibilityLabel("Part \(number) name")
+                .accessibilityIdentifier("split.part.\(number).name")
+            }
+            LabeledContent("Cost") {
+                TextField(
+                    "Cost",
+                    text: Binding(
+                        get: { part.cost }, set: { value in session.update(part.id) { $0.cost = value } }),
+                    prompt: Text("0.00")
+                )
+                .multilineTextAlignment(.trailing)
+                .labelsHidden()
+                #if os(iOS)
+                    .keyboardType(.numbersAndPunctuation)
+                #endif
+                .accessibilityLabel("Part \(number) cost")
+                .accessibilityIdentifier("split.part.\(number).cost")
+            }
             Picker(
                 "Receipt role",
                 selection: Binding(
