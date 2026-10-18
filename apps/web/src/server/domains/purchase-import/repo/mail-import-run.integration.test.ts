@@ -143,17 +143,15 @@ describe("mail research admission", () => {
 
   // Historical ownership blocks and contentless shells must not consume the
   // automatic admission page or prevent healthy retained evidence progressing.
-  it("skips unresolved ownership and more than a page of empty shells before admitting retained content", async () => {
+  it("admits usable evidence past blocked sources and fifty empty shells", async () => {
     const { party, mail } = await source();
-    await getDb(ctx.db)
-      .insert(account)
-      .values({
-        id: crypto.randomUUID(),
-        accountId: "synthetic-mailbox",
-        providerId: "google",
-        userId: ctx.actor.userId,
-        updatedAt: new Date(),
-      });
+    await getDb(ctx.db).insert(account).values({
+      id: crypto.randomUUID(),
+      accountId: "synthetic-mailbox",
+      providerId: "google",
+      userId: ctx.actor.userId,
+      updatedAt: new Date(),
+    });
     await setMailImport(ctx.db, {
       mailboxId: "synthetic-mailbox",
       enabled: true,
@@ -202,15 +200,13 @@ describe("mail research admission", () => {
   // retain that error while allowing the rest of the page to progress.
   it("isolates an admission failure without abandoning healthy retained sources", async () => {
     const { party, mail } = await source();
-    await getDb(ctx.db)
-      .insert(account)
-      .values({
-        id: crypto.randomUUID(),
-        accountId: "synthetic-mailbox",
-        providerId: "google",
-        userId: ctx.actor.userId,
-        updatedAt: new Date(),
-      });
+    await getDb(ctx.db).insert(account).values({
+      id: crypto.randomUUID(),
+      accountId: "synthetic-mailbox",
+      providerId: "google",
+      userId: ctx.actor.userId,
+      updatedAt: new Date(),
+    });
     await setMailImport(ctx.db, {
       mailboxId: "synthetic-mailbox",
       enabled: true,
