@@ -64,6 +64,8 @@ const relevantFields = new Map<string, readonly string[]>(
       "notes",
     ],
     purchase: [
+      "orderId",
+      "vendorAccountId",
       "date",
       "vendorId",
       "statedTotal",

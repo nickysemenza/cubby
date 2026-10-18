@@ -21,6 +21,8 @@ import {
   importSourceOrder,
   run,
   aiEvaluation,
+  purchase,
+  vendorAccount,
 } from "~/server/db/schema";
 import { connectionRecord } from "~/server/domains/connection/repo/connection-evidence";
 import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
@@ -137,7 +139,9 @@ export async function connectionSourceFingerprint(
     (SELECT coalesce(jsonb_agg(jsonb_build_array(o.id, o."ledgerPartyId", o."vendorId", o."rawChecksum") ORDER BY o.id), '[]'::jsonb) FROM ${orderMail} o),
     (SELECT coalesce(jsonb_agg(jsonb_build_array(e.id, e."orderMailId", e.event, e."orderId", e.amount, e."sourceKey", e."supersededAt") ORDER BY e.id), '[]'::jsonb) FROM ${orderMailEvent} e),
     (SELECT coalesce(jsonb_agg(jsonb_build_array(l.id, l."eventId", l."purchaseId", l.decision, l."evidenceChecksum") ORDER BY l.id), '[]'::jsonb) FROM ${assessmentEmailLink} l),
-    (SELECT coalesce(jsonb_agg(jsonb_build_array(a.id, a."sourceClaimId", a."purchaseId", a.checksum) ORDER BY a.id), '[]'::jsonb) FROM ${importSourceOrder} a)
+    (SELECT coalesce(jsonb_agg(jsonb_build_array(a.id, a."sourceClaimId", a."purchaseId", a.checksum) ORDER BY a.id), '[]'::jsonb) FROM ${importSourceOrder} a),
+    (SELECT coalesce(jsonb_agg(jsonb_build_array(p.id, p."vendorAccountId", p."orderId", p."vendorId", p.date, p."statedTotal", p."deletedAt") ORDER BY p.id), '[]'::jsonb) FROM ${purchase} p),
+    (SELECT coalesce(jsonb_agg(jsonb_build_array(a.id, a."vendorId", a."ledgerPartyId", a."deletedAt") ORDER BY a.id), '[]'::jsonb) FROM ${vendorAccount} a)
   )::text)`,
     })
     .from(sql`(SELECT 1) AS connection_mail_roster`);

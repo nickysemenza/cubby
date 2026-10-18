@@ -4,6 +4,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import { purchase as purchaseTable, vendorAccount } from "~/server/db/schema";
 import {
   assessment,
   assessmentEmailLink,
@@ -147,6 +148,57 @@ describe("fresh retained Email connection recommendations", () => {
       .where(eq(orderMail.id, f.original.id));
     expect(await connectionSourceFingerprint(ctx.db, f.source)).not.toBe(
       changed[0],
+    );
+  });
+
+  it("invalidates negative discovery after account assignment and ownership corrections", async () => {
+    const f = await fixture();
+    const foreign = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic other account member",
+      kind: "member",
+    });
+    const account = await insertWithShortcode(ctx.db, "vendorAccount", {
+      vendorId: f.purchase.vendorId,
+      ledgerPartyId: foreign.id,
+    });
+    await getDb(ctx.db)
+      .update(purchaseTable)
+      .set({ vendorAccountId: account.id })
+      .where(eq(purchaseTable.id, f.purchase.id));
+    expect(await retrieveConnectionCandidates(ctx.db, f.source)).toEqual([]);
+    const before = await Promise.all([
+      connectionSourceFingerprint(ctx.db, f.source),
+      connectionSourceFingerprint(ctx.db, f.target),
+    ]);
+    await getDb(ctx.db)
+      .update(vendorAccount)
+      .set({ ledgerPartyId: f.message.ledgerPartyId })
+      .where(eq(vendorAccount.id, account.id));
+    const owned = await Promise.all([
+      connectionSourceFingerprint(ctx.db, f.source),
+      connectionSourceFingerprint(ctx.db, f.target),
+    ]);
+    expect(owned[0]).not.toBe(before[0]);
+    expect(owned[1]).not.toBe(before[1]);
+    expect(await retrieveConnectionCandidates(ctx.db, f.source)).toHaveLength(
+      1,
+    );
+    await getDb(ctx.db)
+      .update(purchaseTable)
+      .set({ vendorAccountId: null })
+      .where(eq(purchaseTable.id, f.purchase.id));
+    const unassigned = await Promise.all([
+      connectionSourceFingerprint(ctx.db, f.source),
+      connectionSourceFingerprint(ctx.db, f.target),
+    ]);
+    expect(unassigned[0]).not.toBe(owned[0]);
+    expect(unassigned[1]).not.toBe(owned[1]);
+    await getDb(ctx.db)
+      .update(vendorAccount)
+      .set({ deletedAt: new Date() })
+      .where(eq(vendorAccount.id, account.id));
+    expect(await connectionSourceFingerprint(ctx.db, f.source)).not.toBe(
+      unassigned[0],
     );
   });
 

@@ -35,6 +35,10 @@ Existing automatic domain behavior is unchanged.
   attempt and generation fence. Candidate-roster changes invalidate negative scans.
 - Retained Email checksums, order events, reviewed links and accepted sources
   participate in discovery currentness, including scans with no candidates.
+  Purchase account assignments and account ownership/deletion participate too.
+- Field inference snapshots source and possible target rows before building
+  model inputs. A selected target must match that snapshot after inference and
+  again under publication locks; stale search projections cannot bless drift.
 - The initiating client observes the public discovery Run through completion,
   refreshes stored proposals, and exposes stopped or failed work through that Run.
 - Replacing a reviewed Email event link is an explicit consequence shown before

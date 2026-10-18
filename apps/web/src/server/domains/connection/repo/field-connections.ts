@@ -5,21 +5,29 @@ import {
   type ConnectionCandidate,
   type ConnectionRelation,
 } from "@cubby/schemas/entity-connections";
+import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import type { RunId } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import {
+  getDb,
+  notDeleted,
+  withTransactionDatabase,
+} from "~/server/db/helpers";
 import { assessmentState } from "~/server/db/schema";
 import { saveSweepSuggestions } from "~/server/domains/run/repo/suggestion-sweep-state";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
+import { SHORTCODE_TABLE } from "~/server/generic/shortcode/repo/shortcode-tables";
 
 import {
   captureConnectionBasis,
   connectionRecord,
+  connectionRelevantRow,
+  snapshotJson,
 } from "./connection-evidence";
 
 const targets = new Map<
@@ -53,8 +61,26 @@ const targets = new Map<
 export async function prepareConnectionFieldGuard(
   db: Database,
   source: EntityRef,
+  field: string,
 ) {
-  return (await connectionRecord(db, source)).row;
+  const target = targets.get(`${source.entityKind}.${field}`);
+  if (!target) throw new Error("Unsupported connection field");
+  const table =
+    SHORTCODE_TABLE[z.enum(shortcodeEntities).parse(target.entityKind)];
+  const rows = await getDb(db)
+    .select({ code: table.shortcode, row: sql<unknown>`to_jsonb(${table})` })
+    .from(table)
+    .where(notDeleted(table));
+  const targetBasis = new Map<string, ReturnType<typeof snapshotJson>>();
+  for (const row of rows)
+    targetBasis.set(
+      row.code,
+      snapshotJson(connectionRelevantRow(target.entityKind, row.row)),
+    );
+  return {
+    source: (await connectionRecord(db, source)).row,
+    targets: targetBasis,
+  };
 }
 
 export async function saveConnectionFieldGuard(
@@ -63,7 +89,7 @@ export async function saveConnectionFieldGuard(
     source: EntityRef;
     field: string;
     decision: unknown;
-    before: unknown;
+    before: Awaited<ReturnType<typeof prepareConnectionFieldGuard>>;
     inputs: unknown;
     dependencies: AiProvenance["dependencies"];
     model: string;
@@ -87,12 +113,17 @@ export async function saveConnectionFieldGuard(
     },
   };
   const basis = await captureConnectionBasis(db, candidate);
-  const parsedBasis = z.object({ source: z.json() }).parse(basis);
-  if (
-    canonicalJson(parsedBasis.source) !==
-    canonicalJson(z.json().parse(input.before))
-  )
+  const parsedBasis = z
+    .object({ source: z.json(), target: z.json() })
+    .parse(basis);
+  if (canonicalJson(parsedBasis.source) !== canonicalJson(input.before.source))
     throw new Error("Connection source changed during inference");
+  const servedTarget = input.before.targets.get(candidate.target.entityId);
+  if (
+    servedTarget === undefined ||
+    canonicalJson(servedTarget) !== canonicalJson(parsedBasis.target)
+  )
+    throw new Error("Connection target changed during inference");
   const evidence = connectionAssessmentEvidence.parse({
     version: 1,
     candidate,

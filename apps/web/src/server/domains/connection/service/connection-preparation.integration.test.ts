@@ -199,6 +199,55 @@ describe("connection preparation and publication authority", () => {
       expect(settled?.state).not.toBe("completed");
     });
 
+  it("refuses a field target changed while inference is pending even without a refreshed search projection", async () => {
+    const { source, item, task } = await fixture();
+    const entered = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const preparation = prepareEntityConnections(
+      ctx.db,
+      kernelCtx(ctx),
+      source,
+      {
+        suggestPorts: {
+          decisionModel: PRIMARY_MODEL,
+          decisionPort: async (input) => {
+            entered.resolve();
+            await release.promise;
+            return chooseFirst(input);
+          },
+        },
+      },
+    );
+    try {
+      await Promise.race([
+        entered.promise,
+        preparation.then(() => {
+          throw new Error("Preparation ended before field inference");
+        }),
+      ]);
+      await getDb(ctx.db)
+        .update(product)
+        .set({ name: "Synthetic changed target identity" })
+        .where(eq(product.id, item.entityId));
+    } finally {
+      release.resolve();
+    }
+    await expect(preparation).rejects.toThrow(
+      /target changed during inference/i,
+    );
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(assessmentState)
+        .where(
+          and(
+            eq(assessmentState.recordId, task.entityId),
+            eq(assessmentState.status, "pending"),
+          ),
+        ),
+    ).toEqual([]);
+  });
+
   it("refuses an acquisition candidate assigned to another Product while subsequent inference is pending", async () => {
     const item = await createProductFixture(
       ctx.db,

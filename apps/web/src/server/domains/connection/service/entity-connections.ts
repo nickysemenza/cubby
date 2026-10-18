@@ -156,6 +156,12 @@ async function prepareFieldConnections(
     );
   const entity = entityResult.data;
   const recordId = await resolveOrThrow(db, entity, source.entityId);
+  const guards = new Map<
+    string,
+    Awaited<ReturnType<typeof prepareConnectionFieldGuard>>
+  >();
+  for (const field of fields)
+    guards.set(field, await prepareConnectionFieldGuard(db, source, field));
   const found = await executeEntity(
     { ...context, db },
     entityCommandSchema.parse({ action: "get", entity, id: source.entityId }),
@@ -185,7 +191,9 @@ async function prepareFieldConnections(
     const currentValue = jsonValue(row[field] ?? null);
     const fieldDecisionId =
       (await latestFieldWrite(db, entity, recordId, field))?.id ?? null;
-    const before = await prepareConnectionFieldGuard(db, source);
+    const before = guards.get(field);
+    if (!before)
+      throw new Error(`Missing prepared field evidence ${entity}.${field}`);
     const captured = await withAiInputs(false, () =>
       suggestFields(
         db,
