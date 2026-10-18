@@ -1,8 +1,9 @@
 import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "@cubby/shared/apple-client-version";
 
-// The oldest native app build the HTTP API still serves is the version this
-// checkout's app ships. An older build would otherwise fail deep inside a
-// generated decoder; the gate turns that into one actionable message.
+// The oldest native app build the HTTP API accepts writes from is the version
+// this checkout's app ships. An older build's write could carry a field whose
+// meaning changed; the gate turns that into one actionable message. Its reads
+// still run and fail per screen if a shape changed.
 
 /**
  * `ClientIdentity.userAgent` in CubbyKit: `<product>/<version> (<platform>; <install>)`.

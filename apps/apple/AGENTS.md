@@ -48,9 +48,10 @@ loops. [Validation](../../docs/agents/validation.md) owns check selection and de
   not know and an installed build survives a server deploy that adds one. Request bodies
   stay closed. Never hand-add `additionalProperties: false` to an output, and never rely on
   the client to reject an unknown response key.
-- The server refuses outdated `cubby-apple` builds with 426 and
-  `reason: CLIENT_UPDATE_REQUIRED`; `RequestTrace` latches it and `RootView`
-  shows `UpdateRequiredView`. Follow the shared
+- The server answers an outdated `cubby-apple` build's writes (every non-query
+  operation) with 426 and `reason: CLIENT_UPDATE_REQUIRED` and still serves its
+  reads; `RequestTrace` latches it and `RootView` pins `UpdateAvailableBanner`
+  above the app, which stays usable. Follow the shared
   [version rule](../../docs/agents/domain-rules.md#breaking-changes)
   and [release policy](../../docs/ci.md#apple-testflight-release).
 - The generated client encodes every optional with `encodeIfPresent`, so a typed request body

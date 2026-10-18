@@ -231,6 +231,8 @@ final class RunEvidenceHost: NSObject, WKNavigationDelegate, WKScriptMessageHand
     }
     private func requireUpdate() {
         readinessTask?.cancel()
+        ready = false
+        error = "This version of Cubby is too old for the server. Update Cubby from TestFlight."
         Task { await model.requestTrace.record(operationID: "nativeWorkspace.bridge", ms: 0, status: 426) }
     }
 
