@@ -87,7 +87,7 @@ export const ENTITY_LINK_KINDS = {
       role: "association",
       label: "products",
       description:
-        "A Product this order bought. Carries no money — spend stays entirely on Expense — so this never doubles as a second ledger path.",
+        "A Product associated with this order; acquisition requires explicit confirmation. Carries no money — spend stays entirely on Expense — so this never doubles as a second ledger path.",
       liveness: MUST_TARGET_LIVE,
       onMergeCollision: "dropLoser",
     },
@@ -95,7 +95,7 @@ export const ENTITY_LINK_KINDS = {
       role: "acquisition",
       label: "purchase links",
       description:
-        "The vendor order this Product was bought on. Provenance, not money — it exists because an order paid in installments is an `allocation` whose Expenses can never carry a productId, leaving the goods with no path back to the order.",
+        "The vendor order linked to this Product; an unconfirmed link is identity evidence only. Provenance, not money — it exists because an order paid in installments is an `allocation` whose Expenses can never carry a productId, leaving the goods with no path back to the order.",
       liveness: MUST_TARGET_LIVE,
       onMergeCollision: "dropLoser",
     },

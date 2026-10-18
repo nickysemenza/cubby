@@ -362,6 +362,9 @@ export const entityLink = pgTable(
     toEntityId: uuid("toEntityId").notNull(),
     toKind: text("toKind").notNull().$type<Entity>(),
     quantity: integer("quantity"),
+    acquisitionConfirmed: boolean("acquisitionConfirmed")
+      .notNull()
+      .default(false),
     ...baseTimestamps(),
     ...softDeletedAt(),
   },
@@ -378,6 +381,10 @@ export const entityLink = pgTable(
     }),
     check("EntityLink_kind_check", sql.raw(entityLinkKindCheckSql())),
     check("EntityLink_quantity_check", sql.raw(entityLinkQuantityCheckSql())),
+    check(
+      "EntityLink_acquisition_confirmed_check",
+      sql`NOT ${table.acquisitionConfirmed} OR ${table.kind} = 'purchaseProduct'`,
+    ),
     check("EntityLink_no_self_check", sql.raw(entityLinkNoSelfCheckSql())),
     uniqueIndex("EntityLink_kind_from_to_key")
       .on(table.kind, table.fromEntityId, table.toEntityId)

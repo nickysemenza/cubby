@@ -167,7 +167,11 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "product" },
-        control: { kind: "specialized", renderer: "entity-select" },
+        control: {
+          kind: "specialized",
+          renderer: "entity-select",
+          suggest: { basis: ["name", "platform"], reviewRequired: true },
+        },
         display: { detail: true },
         validation: {
           read: productShortcode.nullable(),

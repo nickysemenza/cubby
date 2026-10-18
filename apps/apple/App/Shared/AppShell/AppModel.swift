@@ -514,12 +514,7 @@ final class AppModel {
     /// An accepted recommendation is an entity mutation on the kinds it links, plus a jump to the
     /// surviving row when accepting merged the subject away.
     func recordRelationshipMutation(_ acceptance: RelationshipAcceptance) {
-        switch acceptance.recommendation {
-        case .expenseProject:
-            recordEntityMutation(keys: [.expense, .project])
-        case .inventoryPlacement:
-            recordEntityMutation(keys: [.inventory, .location, .product])
-        }
+        recordEntityMutation(keys: acceptance.affectedEntities)
         relationshipMutationReplacement = acceptance.replacedSubject ? acceptance : nil
         if acceptance.replacedSubject {
             navigator.replaceCurrentRecord(

@@ -69,7 +69,7 @@ type Handler = {
     context: EntityKernelContext,
     state: typeof assessmentState.$inferSelect,
     input: Review,
-  ) => Promise<void>;
+  ) => Promise<z.infer<typeof assessmentReviewOut>["applicationResult"] | void>;
 };
 /** Each family validates its own subject and uses its transaction-bound domain mutation. */
 const assessmentFamilies = {
@@ -265,10 +265,12 @@ const assessmentFamilies = {
   recommendation: {
     subject: assessmentSubjects.recommendation,
     target: assessmentProjectionTargets.recommendation,
-    transactionBound: true,
-    actions: ["wrong", "uncertain", "dismissed"],
-    apply: async () => {
-      throw new Error("Recommendation Feedback has no domain application");
+    transactionBound: false,
+    actions: ["correct", "wrong", "uncertain", "dismissed"],
+    apply: async (db, context, state, input) => {
+      const { applyEntityConnection } =
+        await import("~/server/domains/connection/repo/entity-connections");
+      return applyEntityConnection(db, context, state, input);
     },
   },
 } satisfies Record<AssessmentFamily, Handler>;
@@ -411,7 +413,7 @@ export async function reviewAssessment(
     };
   }
   if (input.intent === "apply") {
-    const outcome = {
+    const outcome: z.infer<typeof assessmentReviewOut> = {
       assessmentId: prediction.id,
       feedbackId: event.id,
       status: "applied",
@@ -438,11 +440,17 @@ export async function reviewAssessment(
         .limit(1);
       if (receipt) {
         assertApplicationReceipt(receipt, event, "assessment_application");
-        if (!isEqual(assessmentReviewOut.parse(receipt.receipt), outcome))
+        const priorOutcome = assessmentReviewOut.parse(receipt.receipt);
+        if (
+          !isEqual(
+            { ...priorOutcome, applicationResult: undefined },
+            { ...outcome, applicationResult: undefined },
+          )
+        )
           throw new Error(
             "Application receipt does not match this command outcome",
           );
-        return outcome;
+        return priorOutcome;
       }
       if (input.application?.kind === "saved_field") {
         await acknowledgeSavedField(transactionDb, context, prediction, {
@@ -452,6 +460,11 @@ export async function reviewAssessment(
           commandFeedback: event,
         });
       } else {
+        if (prediction.family === "field") {
+          const { assertConnectionFieldFresh } =
+            await import("~/server/domains/connection/repo/field-connections");
+          await assertConnectionFieldFresh(transactionDb, prediction.id);
+        }
         const query = getDb(transactionDb)
           .select()
           .from(assessmentState)
@@ -477,12 +490,13 @@ export async function reviewAssessment(
         )
           throw new Error("Assessment evidence fingerprint changed");
         family.target.parse(state);
-        await family.apply(
+        const applicationResult = await family.apply(
           transactionDb,
           { ...context, db: transactionDb },
           state,
           input,
         );
+        if (applicationResult) outcome.applicationResult = applicationResult;
         if (!family.transactionBound)
           await getDb(transactionDb)
             .update(assessmentState)

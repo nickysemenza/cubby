@@ -1,4 +1,9 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
+import {
+  assessmentFamily,
+  feedbackAuthority,
+  feedbackVerdict,
+} from "@cubby/schemas/assessment";
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   dataCheck,
@@ -7,6 +12,7 @@ import {
 } from "@cubby/schemas/data-quality";
 import { entityRefKey, entitySchema, type Entity } from "@cubby/schemas/entity";
 import { entityFieldByKey } from "@cubby/schemas/entity-fields";
+import { entityGraphRootSchema } from "@cubby/schemas/entity-graph";
 import {
   shortcodeEntities,
   type ShortcodeEntity,
@@ -41,7 +47,7 @@ import {
   type WorkQueueRow,
 } from "@cubby/schemas/work-queue";
 import { CURRENT_MEMBER_FILTER, parseShortcode } from "@cubby/shared";
-import { or, sql, type SQL } from "drizzle-orm";
+import { inArray, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
@@ -58,6 +64,7 @@ import {
   run as runTable,
   assessmentState as suggestionTable,
 } from "~/server/db/schema";
+import { readEntityConnectionsBatch } from "~/server/domains/connection/repo/entity-connections";
 import { buildEmailWhere } from "~/server/domains/email/repo/email";
 import { buildExpenseWhereClause } from "~/server/domains/expense/repo/lookup";
 import { buildFinancialTransactionWhere } from "~/server/domains/financial-transaction/repo/financial-transaction";
@@ -157,6 +164,59 @@ async function workQueueProjection(
   quality: StatementQualityRelations,
 ): Promise<SQL> {
   const selections: SQL[] = [];
+  if (!scope.check) {
+    // Use the same currentness check as Relations before counting or paginating Work.
+    const pending = await getDb(db)
+      .execute(sql`SELECT DISTINCT root.kind AS "entityKind", root.shortcode AS "entityId"
+      FROM "AssessmentState" current JOIN "Assessment" prediction ON prediction.id=current.id
+      JOIN "Entity" root ON root.id=current."recordId" AND root.kind=current.entity
+      WHERE current.active AND current.status=${suggestionStatus.enum.pending}
+        AND prediction.subject->>'scope' LIKE 'connection.%'
+        AND root."deletedAt" IS NULL AND root."mergedIntoId" IS NULL
+        ${scope.record ? sql`AND root.kind=${scope.record.entity} AND root.shortcode=${scope.record.id}` : sql``}`);
+    const sources = z.array(entityGraphRootSchema).parse(pending.rows);
+    const freshIds: string[] = [];
+    for (let offset = 0; offset < sources.length; offset += 250) {
+      const groups = await readEntityConnectionsBatch(
+        db,
+        sources.slice(offset, offset + 250),
+      );
+      freshIds.push(
+        ...groups
+          .flat()
+          .filter(
+            (proposal) => proposal.integration.kind === "connection-review",
+          )
+          .map((proposal) => proposal.review.assessmentId),
+      );
+    }
+    const record = scope.record
+      ? sql`AND root.kind = ${scope.record.entity} AND root.shortcode = ${scope.record.id}`
+      : sql``;
+    selections.push(sql`SELECT root.kind::text AS entity, root.shortcode::text AS id,
+      coalesce(document.title, root.shortcode)::text AS name,
+      'connection:' || root.id::text AS key, ${workQueueSourceSchema.enum.suggestion}::text AS source, ${workQueueKindSchema.enum.review}::text AS kind,
+      count(*)::text || ' pending connection candidates' AS reason,
+      'Review the proposed connection and its evidence in Relations.'::text AS "nextAction",
+      ARRAY[]::uuid[] AS owners, true AS shared, NULL::text AS "problemKey", ${NO_FACT_COLUMNS}
+      FROM "AssessmentState" current
+      JOIN "Assessment" prediction ON prediction.id = current.id
+      JOIN "Entity" root ON root.id = current."recordId" AND root.kind = current.entity
+      LEFT JOIN "SearchDocument" document ON document."entityId" = root.id AND document."entityKind" = root.kind AND document."deletedAt" IS NULL
+      WHERE current.family = ${assessmentFamily.enum.recommendation} AND current.active AND current.status = ${suggestionStatus.enum.pending}
+        AND ${freshIds.length ? inArray(sql`current.id`, freshIds) : sql`false`}
+        AND prediction.subject->>'scope' LIKE 'connection.%'
+        AND root."deletedAt" IS NULL AND root."mergedIntoId" IS NULL ${record}
+        AND NOT EXISTS (SELECT 1 FROM "Feedback" reviewed WHERE reviewed."assessmentId" = prediction.id
+          AND reviewed.authority = ${feedbackAuthority.enum.member} AND reviewed.verdict IN (${feedbackVerdict.enum.wrong}, ${feedbackVerdict.enum.dismissed}))
+        AND NOT EXISTS (SELECT 1 FROM "AssessmentState" hidden WHERE hidden.active AND hidden.entity = current.entity
+          AND hidden."recordId" = current."recordId" AND hidden.suppression->>'scope' = prediction.subject->>'scope'
+          AND hidden.suppression->>'candidateKey' = prediction.subject->>'candidateKey'
+          AND (hidden.suppression->>'fingerprint' IS NULL OR hidden.suppression->>'fingerprint' = prediction.fingerprint))
+        AND EXISTS (SELECT 1 FROM "Entity" target WHERE target.shortcode = prediction.evidence->'candidate'->${"target"}->>'entityId'
+          AND target.kind = prediction.evidence->'candidate'->${"target"}->>'entityKind' AND target."deletedAt" IS NULL AND target."mergedIntoId" IS NULL)
+      GROUP BY root.kind, root.shortcode, root.id, document.title`);
+  }
   // Skips building a branch the scope would drop anyway.
   const admits = (entity: Entity, carriesGaps = false) =>
     (!scope.check || carriesGaps) &&
@@ -788,7 +848,7 @@ async function queryWorkQueue(
           WHEN ${members} THEN jsonb_build_object('kind', ${members}::text, 'members', (SELECT jsonb_agg(jsonb_build_object('id', member.shortcode, 'name', member.name) ORDER BY member.name, member.shortcode) FROM members member WHERE member.id = ANY(page.owners)))
           ELSE jsonb_build_object('kind', ${unresolved}::text, 'reason', 'Current private source ownership is not established.') END
       ) || CASE WHEN "problemKey" IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('problemKey', "problemKey") END
-        || CASE WHEN source = ${workQueueSourceSchema.enum.suggestion} THEN jsonb_build_object('suggestionField', split_part(key, '.', 2)) ELSE '{}'::jsonb END ORDER BY position) FROM page), '[]'::jsonb) AS items
+        || CASE WHEN source = ${workQueueSourceSchema.enum.suggestion} AND key LIKE 'suggestion:%' THEN jsonb_build_object('suggestionField', split_part(key, '.', 2)) ELSE '{}'::jsonb END ORDER BY position) FROM page), '[]'::jsonb) AS items
   `);
   const row = z
     .object({

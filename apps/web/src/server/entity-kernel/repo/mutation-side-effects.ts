@@ -1,5 +1,6 @@
 import type { BackgroundTaskInput } from "@cubby/schemas/background-tasks";
 import type { EntityId, EntityRef, RunId } from "@cubby/schemas/identifiers";
+import { parseEntityRef } from "@cubby/schemas/identifiers";
 import {
   isEmbeddableEntity,
   searchableEntities,
@@ -44,6 +45,7 @@ const mutationSideEffectEntities = [
   "ingredient",
   "recipe",
   "cookbook",
+  "device",
   "inventory",
   "meal",
   "project",
@@ -85,6 +87,11 @@ export const isMutationSideEffectRef = (
   mutationSideEffectEntitySet.has(ref.entity);
 
 export interface MutationSideEffectPorts {
+  readonly scheduleConnections?: (
+    db: Database,
+    events: readonly MutationSideEffectEvent[],
+    refs: readonly SearchableEntityRef[],
+  ) => Promise<void>;
   /** Publish after commit; failures are reported, never surfaced as rollback. */
   readonly publishTasks: (
     db: Database,
@@ -95,6 +102,30 @@ export interface MutationSideEffectPorts {
 
 const productionMutationSideEffectPorts: MutationSideEffectPorts = {
   publishTasks: publishInBackground,
+  scheduleConnections: async (db, events, refs) => {
+    const { lookupShortcodes } =
+      await import("~/server/generic/shortcode/repo/shortcode-resolver");
+    const { scheduleConnectionRefresh } =
+      await import("~/server/domains/run/repo/connection-refresh");
+    const liveRefs = [
+      ...events
+        .filter((event) => event.action !== "deleted")
+        .map((event) => event.entity),
+      ...refs.map((ref) => parseEntityRef(ref.entityKind, ref.entityId)),
+    ];
+    const codes = await lookupShortcodes(db, liveRefs);
+    const seen = new Set<string>();
+    for (const ref of liveRefs) {
+      const key = `${ref.entity}:${ref.id}`;
+      const code = codes.get(key);
+      if (!code || seen.has(key)) continue;
+      seen.add(key);
+      await scheduleConnectionRefresh(db, {
+        entityKind: ref.entity,
+        entityId: code,
+      });
+    }
+  },
 };
 
 /** The search documents that embed text from a batch of one entity's rows. */
@@ -130,6 +161,7 @@ const findImageSearchOwnerRefs: SearchDependent<"image"> = async (db, ids) => {
  * every delete transaction, including direct repo deletes that skip this path.
  */
 const searchDependents: SearchDependents = {
+  device: {},
   product: {
     created: [findInventoryEmbeddingRefsForProducts],
     updated: [
@@ -371,6 +403,7 @@ export async function runMutationSideEffectsForEntities(
     ports,
   );
   for (const event of events) await enqueueLocationAiRefresh(db, event, ports);
+  await ports.scheduleConnections?.(db, events, refs);
 }
 
 /**
@@ -400,6 +433,7 @@ const ENTITY_REF_BUILDER: EntityRefBuilderMap = {
   plant: (id) => ({ entity: "plant", id }),
   recipe: (id) => ({ entity: "recipe", id }),
   cookbook: (id) => ({ entity: "cookbook", id }),
+  device: (id) => ({ entity: "device", id }),
   inventory: (id) => ({ entity: "inventory", id }),
   meal: (id) => ({ entity: "meal", id }),
   project: (id) => ({ entity: "project", id }),

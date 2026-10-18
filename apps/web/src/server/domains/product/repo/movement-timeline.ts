@@ -207,6 +207,7 @@ const movementDates = (db: Database) =>
                   eq(expense.productId, entityLink.toEntityId),
                   eq(expense.future, false),
                   notDeleted(expense),
+                  sql`(NOT ${entityLink.acquisitionConfirmed} OR ${expense.cost} > 0 OR (coalesce(${expense.cost}, 0) = 0 AND ${expense.productQuantity} > 0))`,
                 ),
               ),
           ),
@@ -359,6 +360,7 @@ export async function getProductMovementTimeline(
   const provenanceRows = await getDb(db)
     .select({
       productId: entityLink.toEntityId,
+      acquisitionConfirmed: entityLink.acquisitionConfirmed,
       purchaseId: purchase.id,
       purchaseCode: purchase.shortcode,
       purchaseDate: purchase.date,
@@ -385,8 +387,20 @@ export async function getProductMovementTimeline(
         productId: parseEntityId("product", row.productId),
       })),
     );
+  const acquiringPairs = new Set(
+    actualRows.flatMap((row) =>
+      row.purchaseId &&
+      row.productId &&
+      classifyProductMovement(row.cost, row.quantity).kind === "acquired"
+        ? [`${row.purchaseId}:${row.productId}`]
+        : [],
+    ),
+  );
   const unitemizedRows = provenanceRows.filter(
-    (row) => !itemizedPairs.has(`${row.purchaseId}:${row.productId}`),
+    (row) =>
+      !(row.acquisitionConfirmed ? acquiringPairs : itemizedPairs).has(
+        `${row.purchaseId}:${row.productId}`,
+      ),
   );
 
   const expenseMovementRows = actualRows.flatMap((row) => {
@@ -463,11 +477,11 @@ export async function getProductMovementTimeline(
         row.purchaseDisplayLabel ??
         row.orderId ??
         "Unitemized purchase product",
-      kind: "linked",
+      kind: row.acquisitionConfirmed ? "acquired" : "linked",
       cost: null,
       quantity: null,
       signedQuantity: null,
-      expenseDate: row.purchaseDate,
+      expenseDate: null,
       chargedTo: null,
       provenanceOnly: true,
     };

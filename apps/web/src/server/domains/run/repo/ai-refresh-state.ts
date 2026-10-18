@@ -71,11 +71,13 @@ async function insertTarget(
     .values({
       runId: runEntityId.parse(runId),
       feature:
-        target.kind === "field"
-          ? "field-suggestion"
-          : target.kind === "product"
-            ? "product-identity"
-            : "mailbox-triage",
+        target.kind === "connection"
+          ? "entity-connections"
+          : target.kind === "field"
+            ? "field-suggestion"
+            : target.kind === "product"
+              ? "product-identity"
+              : "mailbox-triage",
       workKey,
       target,
       provenance,

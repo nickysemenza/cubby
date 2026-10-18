@@ -298,7 +298,7 @@ async function getSearchDocumentSources(
       SELECT 'vendor', v."id"::text, v."shortcode", v."name", v."website", NULL, ARRAY[]::text[], ARRAY[v."website"]::text[]
       FROM "Vendor" v WHERE v."deletedAt" IS NULL AND 'vendor' IN (${types}) AND ${requested(sql`v."id"`)}`,
     purchase: sql`
-      SELECT 'purchase', pu."id"::text, pu."shortcode", COALESCE(NULLIF(pu."orderId", ''), v."name" || ' · ' || pu."date"::text), v."name", NULL, ARRAY[]::text[], ARRAY[pu."orderId", pu."displayLabel", v."name", v."website", pu."date"::text]::text[]
+      SELECT 'purchase', pu."id"::text, pu."shortcode", COALESCE(NULLIF(pu."orderId", ''), v."name" || ' · ' || pu."date"::text), v."name", NULL, ARRAY[]::text[], ARRAY[pu."orderId", pu."displayLabel", pu."notes", v."name", v."website", pu."date"::text]::text[]
       FROM "Purchase" pu JOIN "Vendor" v ON v."id" = pu."vendorId" AND v."deletedAt" IS NULL
       WHERE pu."deletedAt" IS NULL AND 'purchase' IN (${types}) AND ${requested(sql`pu."id"`)}`,
     financialAccount: sql`
@@ -317,7 +317,7 @@ async function getSearchDocumentSources(
       FROM "FinancialTransaction" ft JOIN "FinancialAccount" fa ON fa."id" = ft."accountId" AND fa."deletedAt" IS NULL
       WHERE ft."deletedAt" IS NULL AND 'financialTransaction' IN (${types}) AND ${requested(sql`ft."id"`)}`,
     expense: sql`
-      SELECT 'expense', e."id"::text, e."shortcode", e."name", names."projectNames", CASE WHEN e."lineKind" = 'principal' THEN e."costType" ELSE e."lineKind" END, ARRAY[]::text[], ARRAY[e."lineKind", ${effectiveExpenseTradeSql("e")}, e."costType"]::text[]
+      SELECT 'expense', e."id"::text, e."shortcode", e."name", names."projectNames", CASE WHEN e."lineKind" = 'principal' THEN e."costType" ELSE e."lineKind" END, ARRAY[]::text[], ARRAY[e."lineKind", ${effectiveExpenseTradeSql("e")}, e."costType", e."notes"]::text[]
       FROM "Expense" e
       LEFT JOIN (${expenseDerivedReadSql("names", { expenseIds: expenseNameIds })}) names ON names."expenseId" = e."id"
       WHERE e."deletedAt" IS NULL AND 'expense' IN (${types}) AND ${requested(sql`e."id"`)}`,

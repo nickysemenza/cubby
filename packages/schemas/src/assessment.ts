@@ -15,6 +15,7 @@ import {
 } from "./identifiers";
 import { shortcodeEntities } from "./entity-manifest";
 import { z } from "zod";
+import { entityGraphRootSchema } from "./entity-graph";
 
 /** Unknown historical values stay nullable; corrections explicitly distinguish absent from JSON null. */
 export const assessmentCorrection = z.discriminatedUnion("present", [
@@ -232,6 +233,12 @@ export const assessmentReviewOut = z.object({
   feedbackId: assessmentChildHandle,
   status: z.string(),
   applied: z.boolean(),
+  applicationResult: z
+    .object({
+      source: entityGraphRootSchema,
+      destination: entityGraphRootSchema,
+    })
+    .optional(),
 });
 export const assessmentReviewBatchInput = z.object({
   items: z.array(assessmentReviewInput).min(1).max(100),

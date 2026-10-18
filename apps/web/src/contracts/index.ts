@@ -10,6 +10,7 @@ export { aiContract, aiStreamsContract } from "./ai.contract";
 export { auditLogContract } from "./audit-log.contract";
 export { calendarContract } from "./calendar.contract";
 export { collectionContract } from "./collection.contract";
+export { connectionContract } from "./connection.contract";
 export { oauthContract } from "./connected-apps.contract";
 export { cookbookContract } from "./cookbook.contract";
 export { dashboardContract } from "./dashboard.contract";

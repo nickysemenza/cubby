@@ -143,6 +143,13 @@ changes include the derived-DDL migration, not only the table migration.
 
 A typed family registry owns subject and judgment schemas, fingerprints,
 authority checks, supported review actions and projection invalidation.
+Typed connection recommendations use the existing recommendation family with
+relation-specific scopes and retained evidence. Their acceptance routes through
+the shared review operation to a typed domain action; unrelated recommendation
+scopes remain history-only. Existing field, Product-pair and Email-link
+Assessments retain their original handles and authority. A connection can be
+read from either endpoint without creating a second judgment or review ledger.
+The [connection journey](../guide/entity-connections.md) owns its behavior.
 The shared public review operation supports historical review without applying,
 or review plus a prepared domain action. Saved-field inference mints Assessment
 references before review; draft acceptance is review history, and saved

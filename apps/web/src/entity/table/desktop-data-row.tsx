@@ -20,6 +20,7 @@ import {
   resolutionIsDerived,
   resolutionIsInherited,
 } from "~/entity/fields/field-resolution";
+import { ConnectionCell } from "~/entity/relatedness/connection-suggestions";
 import { RecordFieldSuggestion } from "~/entity/suggestions/record-suggestions";
 import { cn } from "~/lib/utils";
 import { DenseCellContext } from "~/ui/common/stacked-value";
@@ -219,13 +220,15 @@ function DesktopDataCell<TItem extends RowData>({
           <DenseCellContext
             value={{ linksTo: cell.column.columnDef.meta?.linksTo ?? null }}
           >
-            <RecordFieldSuggestion
-              record={cell.row.original}
-              field={cell.column.id}
-              surface="cell"
-            >
-              {explained}
-            </RecordFieldSuggestion>
+            <ConnectionCell record={cell.row.original} field={cell.column.id}>
+              <RecordFieldSuggestion
+                record={cell.row.original}
+                field={cell.column.id}
+                surface="cell"
+              >
+                {explained}
+              </RecordFieldSuggestion>
+            </ConnectionCell>
           </DenseCellContext>
         </div>
       </div>

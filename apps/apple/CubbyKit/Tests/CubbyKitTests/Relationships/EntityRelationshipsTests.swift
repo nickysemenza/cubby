@@ -302,7 +302,7 @@ struct EntityRelationshipsTests {
             basisKey: "inventory-basis"
         )
 
-        #expect(acceptance?.recommendation.subject == source)
+        #expect(acceptance?.subject == source)
         #expect(acceptance?.destination == survivor)
         #expect(acceptance?.replacedSubject == true)
         #expect(await client.refreshRequestCount() == 0)
@@ -311,6 +311,17 @@ struct EntityRelationshipsTests {
 }
 
 private actor RelationshipClientStub: EntityRelationshipsClient {
+    func storedConnections(_ input: EntityGraphRootInput) async throws -> ConnectionDiscoveryOut {
+        if shouldFail { throw URLError(.notConnectedToInternet) }
+        return .init(source: .init(entityKind: input.entityKind, entityId: input.entityId), proposals: [])
+    }
+    func discoverConnections(_ input: EntityGraphRootInput) throws -> ConnectionDiscoveryOut {
+        throw URLError(.unsupportedURL)
+    }
+    func reviewAssessment(_ input: AssessmentReviewInput) throws -> AssessmentReviewOut {
+        throw URLError(.unsupportedURL)
+    }
+
     let graphs: [EntityRef: EntityGraph]
     var shouldFail = false
 
@@ -344,6 +355,16 @@ private actor RelationshipClientStub: EntityRelationshipsClient {
 }
 
 private actor SuspendedRelationshipClient: EntityRelationshipsClient {
+    func storedConnections(_ input: EntityGraphRootInput) async throws -> ConnectionDiscoveryOut {
+        return .init(source: .init(entityKind: input.entityKind, entityId: input.entityId), proposals: [])
+    }
+    func discoverConnections(_ input: EntityGraphRootInput) throws -> ConnectionDiscoveryOut {
+        throw URLError(.unsupportedURL)
+    }
+    func reviewAssessment(_ input: AssessmentReviewInput) throws -> AssessmentReviewOut {
+        throw URLError(.unsupportedURL)
+    }
+
     let firstSource: EntityRef
     let graphs: [EntityRef: EntityGraph]
     let first = Gate()
@@ -381,6 +402,16 @@ private actor SuspendedRelationshipClient: EntityRelationshipsClient {
 }
 
 private actor SuspendedAcceptanceClient: EntityRelationshipsClient {
+    func storedConnections(_ input: EntityGraphRootInput) async throws -> ConnectionDiscoveryOut {
+        return .init(source: .init(entityKind: input.entityKind, entityId: input.entityId), proposals: [])
+    }
+    func discoverConnections(_ input: EntityGraphRootInput) throws -> ConnectionDiscoveryOut {
+        throw URLError(.unsupportedURL)
+    }
+    func reviewAssessment(_ input: AssessmentReviewInput) throws -> AssessmentReviewOut {
+        throw URLError(.unsupportedURL)
+    }
+
     let graphs: [EntityRef: EntityGraph]
     let acceptance = Gate()
 
@@ -415,6 +446,16 @@ private actor SuspendedAcceptanceClient: EntityRelationshipsClient {
 }
 
 private actor RetryingAcceptanceClient: EntityRelationshipsClient {
+    func storedConnections(_ input: EntityGraphRootInput) async throws -> ConnectionDiscoveryOut {
+        return .init(source: .init(entityKind: input.entityKind, entityId: input.entityId), proposals: [])
+    }
+    func discoverConnections(_ input: EntityGraphRootInput) throws -> ConnectionDiscoveryOut {
+        throw URLError(.unsupportedURL)
+    }
+    func reviewAssessment(_ input: AssessmentReviewInput) throws -> AssessmentReviewOut {
+        throw URLError(.unsupportedURL)
+    }
+
     enum Action: Sendable, Equatable {
         case expense(expenseID: String, projectID: String)
         case inventory(inventoryID: String, locationID: String)
@@ -467,6 +508,16 @@ private actor RetryingAcceptanceClient: EntityRelationshipsClient {
 }
 
 private actor MergedInventoryAcceptanceClient: EntityRelationshipsClient {
+    func storedConnections(_ input: EntityGraphRootInput) async throws -> ConnectionDiscoveryOut {
+        return .init(source: .init(entityKind: input.entityKind, entityId: input.entityId), proposals: [])
+    }
+    func discoverConnections(_ input: EntityGraphRootInput) throws -> ConnectionDiscoveryOut {
+        throw URLError(.unsupportedURL)
+    }
+    func reviewAssessment(_ input: AssessmentReviewInput) throws -> AssessmentReviewOut {
+        throw URLError(.unsupportedURL)
+    }
+
     let graph: EntityGraph
     let recommendationDocument: EntityRecommendationsOut
     let survivor: EntityRef

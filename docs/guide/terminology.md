@@ -657,6 +657,17 @@ A computed judgment about a record, field or relationship, based on specified
 evidence. It may support a Suggestion or a Problem; it is not a confirmed
 household fact.
 
+**Connection candidate**:
+A proposed, specifically named relationship between existing records, with
+evidence and an explicit effect of acceptance. It is an Assessment, not a
+generic similarity link. [Connection discovery](entity-connections.md) owns
+discovery and review behavior.
+
+**Acquisition candidate**:
+A Connection candidate proposing that a particular Purchase or Expense
+acquired a Product. Repeat purchases of the same exact variant are separate
+acquisition events; item cost and quantity can remain unknown.
+
 **Feedback**:
 The household's review of an Assessment, including its verdict and any
 corrected value, reason or supporting evidence. Feedback supplies evidence for

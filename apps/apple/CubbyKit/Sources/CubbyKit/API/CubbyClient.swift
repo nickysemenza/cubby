@@ -247,6 +247,17 @@ public actor CubbyClient {
 
     // MARK: - Entity relationships
 
+    public func storedConnections(_ input: EntityGraphRootInput) async throws -> ConnectionDiscoveryOut {
+        guard let kind = ReadConnectionsQuery.EntityKindPayload(rawValue: input.entityKind.rawValue) else {
+            throw DecodingError.dataCorrupted(
+                .init(
+                    codingPath: [],
+                    debugDescription:
+                        "connection.read does not support entityKind=\(input.entityKind.rawValue)"))
+        }
+        return try await readConnections(.init(entityKind: kind, entityId: input.entityId))
+    }
+
     /// Physical graph edges and the advisory disposition for delete or merge.
     public func physicalConnections(id: String, previewDelete: Bool = false) async throws
         -> EntityConnectionsOut
