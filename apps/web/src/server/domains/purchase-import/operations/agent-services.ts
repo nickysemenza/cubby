@@ -210,7 +210,10 @@ export function runServicesFor(
           },
           async () =>
             scope.public.purpose === "mail_import"
-              ? (await import("./mail-tool")).claimMailImportWork(db, runId)
+              ? (await import("./mail-import-claim")).claimMailImportWork(
+                  db,
+                  runId,
+                )
               : service.claimPhotoInventoryWork(db, runId),
         );
       });

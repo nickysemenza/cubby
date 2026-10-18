@@ -181,6 +181,44 @@ async function learnSenderAlias(
 }
 
 /**
+ * The Vendor a sender proves (terminology "Sender proof"): the one Vendor
+ * recording the exact sender address, else, when none records it, the one
+ * Vendor whose website registrable domain is the sender's distinct domain.
+ * Reads only; null when the sender proves no single Vendor.
+ */
+export async function senderProofVendor(db: Db, sender: string | null) {
+  const address = senderAddress(sender);
+  if (!address) return null;
+  const columns = { id: vendor.id, name: vendor.name, aliases: vendor.aliases };
+  const proven = await unwrapDb(db)
+    .select(columns)
+    .from(vendor)
+    .where(
+      and(
+        notDeleted(vendor),
+        arrayContains(vendor.orderEmailSenders, [address]),
+      ),
+    );
+  if (proven.length > 1) return null;
+  if (proven[0]) return { vendor: proven[0], address };
+  const domain = distinctSenderDomain(address);
+  if (!domain) return null;
+  const sameDomain = (
+    await unwrapDb(db)
+      .select({ ...columns, website: vendor.website })
+      .from(vendor)
+      .where(notDeleted(vendor))
+  ).filter((row) => vendorWebsiteDomain(row.website) === domain);
+  const [only, ...others] = sameDomain;
+  return only && !others.length
+    ? {
+        vendor: { id: only.id, name: only.name, aliases: only.aliases },
+        address,
+      }
+    : null;
+}
+
+/**
  * An imported order's Vendor (terminology "Sender proof", "Vendor alias"):
  * an exact sender address one Vendor records, else the one Vendor whose
  * website registrable domain is the sender's (a shared domain never counts),
@@ -194,41 +232,15 @@ export async function resolveImportVendor(
   actor: ActorContext,
 ): Promise<VendorId> {
   const name = input.name.trim();
-  const address = senderAddress(input.sender);
-  const proven = address
-    ? await unwrapDb(db)
-        .select({ id: vendor.id, name: vendor.name, aliases: vendor.aliases })
-        .from(vendor)
-        .where(
-          and(
-            notDeleted(vendor),
-            arrayContains(vendor.orderEmailSenders, [address]),
-          ),
-        )
-    : [];
-  if (address && proven.length === 1)
+  const proof = await senderProofVendor(db, input.sender);
+  if (proof)
     return learnSenderAlias(
       db,
-      proven[0]!,
-      { name, address, evidence: input.evidence },
+      proof.vendor,
+      { name, address: proof.address, evidence: input.evidence },
       actor,
     );
   const candidates = await importVendorCandidates(db, input);
-  const sameDomain = candidates.filter(
-    ({ candidate }) => candidate.websiteDomainMatch,
-  );
-  if (address && proven.length === 0 && sameDomain.length === 1) {
-    const [owner] = await unwrapDb(db)
-      .select({ id: vendor.id, name: vendor.name, aliases: vendor.aliases })
-      .from(vendor)
-      .where(eq(vendor.id, sameDomain[0]!.id));
-    return learnSenderAlias(
-      db,
-      owner!,
-      { name, address, evidence: input.evidence },
-      actor,
-    );
-  }
   if (candidates.some(({ candidate }) => candidate.exactNameMatch))
     return findOrCreateVendor(db, name);
   const cleared = new Set(

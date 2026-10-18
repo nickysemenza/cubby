@@ -602,16 +602,11 @@ describe("current purchase-agent system boundaries", () => {
     ): ScriptStep[] => [
       call(`${prefix}-claim`, "claim_next_import_work"),
       { check: `${prefix}-claim`, includes: ambiguous.messageId },
-      mcpRead(`${prefix}-read`, "imports_read", {
-        action: "mail",
-        mailboxId,
-        messageId: ambiguous.messageId,
-      }),
       mcp(`${prefix}-resolve`, "mail", runId, {
         action: "resolve",
         mailboxId,
         messageId: ambiguous.messageId,
-        checksum: from(`${prefix}-read`, "checksum"),
+        checksum: from(`${prefix}-claim`, "read.checksum"),
         disposition: {
           kind: "unresolved",
           reason:
@@ -633,11 +628,6 @@ describe("current purchase-agent system boundaries", () => {
     const supportedSteps: ScriptStep[] = [
       call("supported-claim", "claim_next_import_work"),
       { check: "supported-claim", includes: supported.messageId },
-      mcpRead("supported-read", "imports_read", {
-        action: "mail",
-        mailboxId,
-        messageId: supported.messageId,
-      }),
       mcp("supported-prepare", "purchase_import", parent.id, {
         action: "prepare",
         orders: [
@@ -648,9 +638,9 @@ describe("current purchase-agent system boundaries", () => {
             source: {
               kind: "mail_message",
               externalKey,
-              checksum: from("supported-read", "checksum"),
+              checksum: from("supported-claim", "read.checksum"),
             },
-            evidenceChecksum: from("supported-read", "checksum"),
+            evidenceChecksum: from("supported-claim", "read.checksum"),
             extractionRevision: "synthetic@1",
             extraction: {
               status: "ready",
@@ -932,11 +922,6 @@ describe("current purchase-agent system boundaries", () => {
         steps: [
           call("fan-claim", "claim_next_import_work"),
           { check: "fan-claim", includes: original.id },
-          mcpRead("fan-read", "imports_read", {
-            action: "mail",
-            mailboxId,
-            messageId: original.id,
-          }),
           mcp(
             "fan-prepare",
             "purchase_import",
@@ -951,9 +936,9 @@ describe("current purchase-agent system boundaries", () => {
                   source: {
                     kind: "mail_message",
                     externalKey: `gmail:${mailboxId}:${original.id}`,
-                    checksum: from("fan-read", "checksum"),
+                    checksum: from("fan-claim", "read.checksum"),
                   },
-                  evidenceChecksum: from("fan-read", "checksum"),
+                  evidenceChecksum: from("fan-claim", "read.checksum"),
                   extractionRevision: "synthetic@1",
                   extraction: {
                     status: "ready",

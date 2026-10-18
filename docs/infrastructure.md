@@ -106,7 +106,10 @@ checked-in configuration is part of `apps/web/cloudflare.config.ts`:
   (`@cubby/schemas/import-run-agent`): Mail import sends only the kickoff, user
   and system messages, and the latest `claim_next_import_work` onward, because
   each Email is independent and durable records carry what earlier ones
-  settled. The stored transcript keeps every Email for the Run page. Each
+  settled. The stored transcript keeps every Email for the Run page. A Mail
+  import claim carries the Email's compact read and first settles
+  rule-decided Emails without a model turn
+  (`server/domains/purchase-import/service/README.md`). Each
   Anthropic request marks a cache breakpoint at the end of that kept prefix,
   and each OpenAI request keys `prompt_cache_key` to the Run
   (`withWorkItemCaching`), so the prefix is read from cache on every Email;

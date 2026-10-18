@@ -34,6 +34,8 @@ export async function publishEmailLinkDecision(
   },
   authority: "member" | "automatic" = "member",
   expected?: { assessmentId: string; emailId: string },
+  /** The revision and Run of the rule that settled a `heuristic` link automatically. */
+  rule?: { revision: string; runId: string | null },
 ) {
   return withTransactionDatabase(db, async (transactionDb) => {
     db = transactionDb;
@@ -131,8 +133,8 @@ export async function publishEmailLinkDecision(
             ? {
                 kind: input.proposedBy === "heuristic" ? "rule" : "agent",
                 model: null,
-                revision: null,
-                runId: null,
+                revision: rule?.revision ?? null,
+                runId: rule?.runId ?? null,
                 evaluationId: null,
               }
             : null,

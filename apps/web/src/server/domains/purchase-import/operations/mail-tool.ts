@@ -8,7 +8,6 @@ import type { ActorContext } from "@cubby/schemas/context";
 import {
   parseEntityId,
   parseShortcodeFor,
-  runEntityId,
   type RunId,
   type UserId,
 } from "@cubby/schemas/identifiers";
@@ -67,7 +66,6 @@ import { GmailApiError } from "~/server/domains/purchase-import/repo/gmail/types
 import {
   assertMailRunMembership,
   assertMailRunReadAuthority,
-  readMailRunSources,
 } from "~/server/domains/purchase-import/repo/mail-run-membership";
 import { createAppError } from "~/server/errors/app-error";
 import { publishEmailLinkDecision } from "~/server/generic/assessment/repo/assessment-email-link";
@@ -431,8 +429,12 @@ export async function linkOrderMail(
     purchaseId: string;
     event: MailEvent;
     actorUserId: string;
-    /** `agent` for a `mail.resolve` session or Pi, `import` for a commit. */
-    proposedBy: "agent" | "import";
+    /**
+     * `agent` for a `mail.resolve` session or Pi, `import` for a commit,
+     * `heuristic` for a Mail import rule (`rule` names its revision and Run).
+     */
+    proposedBy: "agent" | "import" | "heuristic";
+    rule?: { revision: string; runId: RunId };
     /**
      * False for an Email whose transaction is not attributed to its
      * recipient: it may evidence the Purchase, but a forwarded copy never
@@ -566,6 +568,8 @@ export async function linkOrderMail(
         proposedBy: input.proposedBy,
       },
       "automatic",
+      undefined,
+      input.rule,
     );
   if (input.attributed !== false)
     await ensureMailVendorAccount(db, {
@@ -608,6 +612,8 @@ export async function settleMail(
     classification?: "unrelated";
     /** What settled the Email: an import, a link, or the member-facing gap. */
     detail: string;
+    /** The Mail import rule revision that applied a classification. */
+    ruleRevision?: string;
   },
   actor?: ActorContext,
 ) {
@@ -690,6 +696,7 @@ export async function settleMail(
           stage: "resolution",
           reason: input.detail,
           classificationVersion: originalEmail.classificationVersion,
+          promptVersion: input.ruleRevision ?? null,
         },
         actor,
       );
@@ -787,6 +794,12 @@ export async function resolveMail(
   actor: ActorContext,
   storage: OrderMailAttachmentStorage = productionOrderMailAttachmentStorage,
   decisionPort?: DecisionPort,
+  /**
+   * A Mail import rule settling the Email for its Run. It links only a
+   * Purchase on the Email owner's own account at that Vendor, so recipient
+   * attribution cannot change the write and is not judged.
+   */
+  rule?: { revision: string },
 ) {
   const input = mailResolveInput.parse(rawInput);
   const { disposition } = input;
@@ -832,7 +845,7 @@ export async function resolveMail(
         "MAIL_REQUEST_REFUSED",
         "via admits connecting Emails to a Mail import Run; this Email is not on one, so link it without via.",
       );
-    if (importRunId)
+    if (importRunId && !rule)
       admissions = await prepareMailSourceAdmissions(
         db,
         importRunId,
@@ -963,7 +976,11 @@ export async function resolveMail(
             purchaseId: id,
             event: disposition.event,
             actorUserId: actor.userId,
-            proposedBy: "agent",
+            proposedBy: rule ? "heuristic" : "agent",
+            rule:
+              rule && importRunId
+                ? { revision: rule.revision, runId: importRunId }
+                : undefined,
             attachmentDecisions,
             attributed: mailAttributedToRecipient(
               admissions.find((admission) => admission.mail.id === mail.id),
@@ -1063,6 +1080,7 @@ export async function resolveMail(
         status: "completed",
         classification: "unrelated",
         detail: `unrelated: ${disposition.reason}`,
+        ruleRevision: rule?.revision,
       },
       actor,
     );
@@ -1137,44 +1155,6 @@ export async function linkImportedMail(
     status: "completed",
     detail: "imported",
   });
-}
-
-/**
- * Pi's next admitted Email. Each Email stays the current item until
- * `mail.resolve` or a mail-sourced commit settles its target.
- */
-export async function claimMailImportWork(db: Database, runId: string) {
-  const id = runEntityId.parse(runId);
-  const database = getDb(db);
-  const [current] = await database
-    .select({ shortcode: runTable.shortcode, status: runTable.status })
-    .from(runTable)
-    .where(eq(runTable.id, id))
-    .limit(1);
-  if (!current) throw new Error("Mail import Run was not found");
-  if (current.status !== "running") return { kind: "none" as const };
-  const pending = (await readMailRunSources(database, id))
-    .filter(
-      (source) =>
-        source.owned &&
-        source.unchanged &&
-        source.email.status === "researching",
-    )
-    .map(({ email }) => ({
-      mailboxId: email.mailboxId,
-      messageId: email.messageId,
-      sender: email.sender,
-      subject: email.subject,
-      receivedAt: email.receivedAt,
-    }));
-  const [next] = pending;
-  if (!next) return { kind: "none" as const };
-  return {
-    kind: "email" as const,
-    runId: current.shortcode,
-    remaining: pending.length,
-    email: { ...next, receivedAt: next.receivedAt?.toISOString() ?? null },
-  };
 }
 
 /**

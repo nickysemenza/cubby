@@ -176,7 +176,7 @@ export function runAgentTools(
   return [
     tool("claim_next_import_work", {
       description:
-        "Claim and describe the run's next admitted work item (an Email for Mail import, a photo group for photo inventory). Call it again after resolving each item; continue until it returns done.",
+        "Claim and describe the run's next admitted work item (an Email for Mail import, with its compact read; a photo group for photo inventory). Call it again after resolving each item; continue until it returns done.",
       execute: async (_args, api, context) => {
         // New tool tasks observe current work; replay of this task keeps its result.
         const operationId = `claim:${await sha256Hex(String(api.taskId))}`;
