@@ -96,9 +96,6 @@ export const resolveExpenseProjectAllocationScope = async (
         )
     ).map((row) => row.id);
   }
-  if (codes.length > 0 && selectedIds.length === 0) {
-    return { projectIds: [] };
-  }
   const projectIds = selectedIds.map((id) => parseEntityId("project", id));
   const categoryCodes = filters.spendingCategoryId
     ? [filters.spendingCategoryId].flat()
@@ -126,23 +123,29 @@ export const resolveExpenseProjectAllocationScope = async (
   const trades = filters.trade ? [filters.trade].flat() : [];
   const costTypes = filters.costType ? [filters.costType].flat() : [];
   if (
-    projectIds.length === 0 &&
+    codes.length === 0 &&
     !filters.projectPresenceFilter &&
     categoryCodes.length === 0 &&
     !filters.spendingCategoryPresenceFilter &&
     trades.length === 0 &&
+    !filters.tradePresenceFilter &&
     costTypes.length === 0 &&
+    !filters.costTypePresenceFilter &&
     membershipProjectIds === undefined
   )
     return undefined;
   return {
     membershipProjectIds,
-    projectIds: projectIds.length > 0 ? projectIds : undefined,
+    // Requested codes that resolve to nothing match no project, though No
+    // project may still match beside them.
+    projectIds: codes.length > 0 ? projectIds : undefined,
     presence: filters.projectPresenceFilter,
     spendingCategoryIds: categoryCodes.length ? categoryIds : undefined,
     categoryPresence: filters.spendingCategoryPresenceFilter,
     trades: trades.length ? trades : undefined,
+    tradePresence: filters.tradePresenceFilter,
     costTypes: costTypes.length ? costTypes : undefined,
+    costTypePresence: filters.costTypePresenceFilter,
   };
 };
 
@@ -247,8 +250,7 @@ const embeddedProjectMembership = async (
 
 /**
  * The allocation filters an analytics scope (`resolveExpenseProjectAllocationScope`)
- * expresses itself: any-of values and project or category presence, all on
- * one share.
+ * expresses itself: any-of values ORed with their presence, all on one share.
  */
 const scopedAllocationKeys = new Set([
   "projectId",
@@ -258,15 +260,17 @@ const scopedAllocationKeys = new Set([
   "spendingCategoryPresenceFilter",
   "includeSubSpendingCategories",
   "trade",
+  "tradePresenceFilter",
   "costType",
+  "costTypePresenceFilter",
 ]);
 
 /**
  * The filters an analytics read selects expenses by. Its scope already
  * carries the embedded project scope and, when it expresses them, the
  * allocation filters, which then leave the where so the shares allocate
- * once. A key it cannot express (Match all, Exclude, trade or cost type
- * presence) keeps every allocation filter in the where, so the read selects
+ * once. A key it cannot express (Match all, Exclude) keeps every allocation
+ * filter in the where, so the read selects
  * the expenses the list does.
  */
 const analyticsFilters = (filters: ExpenseFilters): ExpenseFilters => {

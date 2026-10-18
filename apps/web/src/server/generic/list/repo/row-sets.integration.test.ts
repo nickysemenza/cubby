@@ -708,9 +708,9 @@ describe("row-set filters", () => {
       expect(
         labelled(filters, inFixture(await listed("expense", filters))),
       ).toEqual(labelled(filters, sorted(rows.map((row) => row.id))));
-    // Analytics select the same expenses as the list, though they apportion
-    // share amounts by their own scope: Match all and same-share trade
-    // presence included.
+    // Analytics count the same expenses as the list, though they apportion
+    // share amounts by their own scope: Match all, Exclude, values mixed
+    // with presence, and an unresolved project beside No project.
     for (const filters of [
       { projectId: [parentCode, childCode], projectIdMatch: "all" },
       {
@@ -718,11 +718,20 @@ describe("row-set filters", () => {
         includeSubProjects: false,
         tradePresenceFilter: "has",
       },
+      { trade: ["plumbing"], tradePresenceFilter: "has" },
+      { costType: ["tools"], costTypePresenceFilter: "none" },
       { projectIdExclude: [parentCode] },
+      {
+        projectId: [parseShortcodeFor("project", "PRJ-4K7M")],
+        projectPresenceFilter: "none",
+      },
     ] satisfies ExpenseFilters[]) {
-      const { where } = await prepareExpenseDerivedRead(ctx.db, filters);
+      const read = await prepareExpenseDerivedRead(ctx.db, filters);
+      const counted = await read
+        .select({ id: expenseTable.shortcode })
+        .where(read.where);
       expect(
-        labelled(filters, inFixture(await oracle("Expense", where!))),
+        labelled(filters, inFixture(sorted(counted.map((row) => row.id)))),
       ).toEqual(labelled(filters, inFixture(await listed("expense", filters))));
     }
   });

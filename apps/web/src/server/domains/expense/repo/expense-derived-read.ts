@@ -66,7 +66,10 @@ export function expenseDerivedReadSql(
     derivedReads[read].categories ||
     scope?.spendingCategoryIds !== undefined ||
     scope?.categoryPresence !== undefined;
-  const trades = categories || scope?.trades !== undefined;
+  const trades =
+    categories ||
+    scope?.trades !== undefined ||
+    scope?.tradePresence !== undefined;
   const projects =
     derivedReads[read].projects ||
     scope?.projectIds !== undefined ||

@@ -1796,8 +1796,8 @@ expense `allocationShares` bounds its computed shares by the request's
 other row filters (`rowSetFilterKeys` names the keys to leave out) and
 allocates only the dimensions a filter reads (expense analytics, which
 allocate the shares themselves, drop the allocation filters their scope
-expresses and keep the group for Match all, Exclude, or trade and cost type
-presence); project `attentionItems`
+expresses — any-of values ORed with their presence — and keep the group for
+Match all and Exclude); project `attentionItems`
 renders `VALUES` from the attention rules' items; gardenEntry
 `journalPlantings` is SQL (live journal links, plus whole-area entries at a
 planting's location inside its window). A row-set filter keeps a
