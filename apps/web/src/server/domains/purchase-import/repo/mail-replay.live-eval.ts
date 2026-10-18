@@ -115,6 +115,12 @@ describe("isolated Mail coordinator replay", () => {
         escalation: escalation ?? null,
         cases: reports.length,
         parity: reports.length - disagreements.length,
+        actualModels: [
+          ...new Set(reports.flatMap((report) => report.actualModels)),
+        ],
+        requestedPrimaryObservedCases: reports.filter((report) =>
+          report.actualModels.includes(primary),
+        ).length,
         disagreements,
         limitations: [
           "Mechanical parity is not a human quality grade; review disagreements through authenticated MCP.",
