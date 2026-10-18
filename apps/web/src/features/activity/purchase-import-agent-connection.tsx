@@ -7,13 +7,6 @@ import { run } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatTimestamp } from "~/lib/date-format";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/ui/primitives/card";
 import { StatusText } from "~/ui/primitives/status-text";
 
 export function PurchaseImportAgentConnection({
@@ -28,81 +21,75 @@ export function PurchaseImportAgentConnection({
     }),
   );
   return (
-    <Card className="max-w-2xl">
-      <CardHeader>
-        <CardTitle>Purchase import agent</CardTitle>
-        <CardDescription>
-          Authorize the private agent to continue an interactive vendor import
-          on your behalf.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {feedback === "authorized" ? (
-          <StatusText tone="positive">
-            Purchase import agent authorized.
-          </StatusText>
-        ) : feedback === "denied" ? (
-          <StatusText tone="destructive">
-            Purchase import authorization was not completed.
-          </StatusText>
-        ) : feedback === "failed" ? (
-          <StatusText tone="destructive">
-            Authorization expired or could not be completed. Authorize the agent
-            again.
-          </StatusText>
-        ) : feedback === "dispatch_failed" ? (
-          <StatusText tone="destructive">
-            The agent is authorized, but some work could not be dispatched. Open
-            the affected run and retry dispatch.
-          </StatusText>
-        ) : null}
-        {access.isLoading ? (
-          <StatusText>Checking agent access…</StatusText>
-        ) : access.isError ? (
-          <StatusText tone="destructive">
-            {getErrorMessage(access.error)}
-          </StatusText>
-        ) : access.data?.authorized ? (
-          <Row align="center" justify="between" gap="sm" wrap>
-            <span className="text-sm text-muted-foreground">
-              Authorized
-              {access.data.expiresAt
-                ? ` until ${formatTimestamp(access.data.expiresAt)}`
-                : ""}
-              .
-            </span>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => disconnect.mutate()}
-              disabled={disconnect.isPending}
-            >
-              Disconnect agent
-            </Button>
-          </Row>
-        ) : (
-          <Row align="center" justify="between" gap="sm" wrap>
-            <span className="text-sm text-muted-foreground">
-              Not authorized.
-            </span>
-            <Button
-              render={
-                <a
-                  href="/api/import/agent/oauth/start"
-                  aria-label="Authorize purchase import agent"
-                />
-              }
-            >
-              Authorize agent
-            </Button>
-          </Row>
-        )}
-        {disconnect.isError ? (
-          <StatusText tone="destructive">
-            {getErrorMessage(disconnect.error)}
-          </StatusText>
-        ) : null}
-      </CardContent>
-    </Card>
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        Authorize the private agent to continue an interactive vendor import on
+        your behalf.
+      </p>
+
+      {feedback === "authorized" ? (
+        <StatusText tone="positive">
+          Purchase import agent authorized.
+        </StatusText>
+      ) : feedback === "denied" ? (
+        <StatusText tone="destructive">
+          Purchase import authorization was not completed.
+        </StatusText>
+      ) : feedback === "failed" ? (
+        <StatusText tone="destructive">
+          Authorization expired or could not be completed. Authorize the agent
+          again.
+        </StatusText>
+      ) : feedback === "dispatch_failed" ? (
+        <StatusText tone="destructive">
+          The agent is authorized, but some work could not be dispatched. Open
+          the affected run and retry dispatch.
+        </StatusText>
+      ) : null}
+      {access.isLoading ? (
+        <StatusText>Checking agent access…</StatusText>
+      ) : access.isError ? (
+        <StatusText tone="destructive">
+          {getErrorMessage(access.error)}
+        </StatusText>
+      ) : access.data?.authorized ? (
+        <Row align="center" justify="between" gap="sm" wrap>
+          <span className="text-sm text-muted-foreground">
+            Authorized
+            {access.data.expiresAt
+              ? ` until ${formatTimestamp(access.data.expiresAt)}`
+              : ""}
+            .
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => disconnect.mutate()}
+            disabled={disconnect.isPending}
+          >
+            Disconnect agent
+          </Button>
+        </Row>
+      ) : (
+        <Row align="center" justify="between" gap="sm" wrap>
+          <span className="text-sm text-muted-foreground">Not authorized.</span>
+          <Button
+            render={
+              <a
+                href="/api/import/agent/oauth/start"
+                aria-label="Authorize purchase import agent"
+              />
+            }
+          >
+            Authorize agent
+          </Button>
+        </Row>
+      )}
+      {disconnect.isError ? (
+        <StatusText tone="destructive">
+          {getErrorMessage(disconnect.error)}
+        </StatusText>
+      ) : null}
+    </div>
   );
 }

@@ -1,6 +1,7 @@
 import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
+import { ChartBarIcon } from "@phosphor-icons/react/dist/csr/ChartBar";
 
-import { Section, Stack } from "~/ui/layout";
+import { IndexedSections } from "~/ui/data-table/indexed-sections";
 import {
   Visualization,
   visualizationState,
@@ -41,35 +42,52 @@ export function ProjectPortfolioAnalyticsView({
       height={400}
     >
       {data && (
-        <Stack className="pt-4">
-          <Section
-            title="Cost vs Estimate"
-            description="% of budget spent — projects with an estimate only"
-          >
-            <CostVsEstimate data={data.costVsEstimate} />
-          </Section>
-
-          <Section
-            title="Planned vs Actual"
-            description="Committed spend vs future-flagged expenses, by month"
-          >
-            <PlannedVsActualByMonth data={data.plannedVsActual} />
-          </Section>
-
-          <Section
-            title="Spend by Trade"
-            description="Actual + committed spend per trade"
-          >
-            <TradeActivity data={data.tradeActivity} />
-          </Section>
-
-          <Section
-            title="Open Tasks by Project"
-            description="Where open work is concentrated"
-          >
-            <OpenTasksByProject data={data.taskHeatmap} />
-          </Section>
-        </Stack>
+        <IndexedSections
+          groups={[
+            {
+              id: "detail-group-analytics",
+              title: "Portfolio analytics",
+              sections: [
+                {
+                  id: "cost-vs-estimate",
+                  icon: ChartBarIcon,
+                  overflowVisible: true,
+                  title: "Cost vs Estimate",
+                  description:
+                    "% of budget spent — projects with an estimate only",
+                  content: <CostVsEstimate data={data.costVsEstimate} />,
+                },
+                {
+                  id: "planned-vs-actual",
+                  icon: ChartBarIcon,
+                  overflowVisible: true,
+                  title: "Planned vs Actual",
+                  description:
+                    "Committed spend vs future-flagged expenses, by month",
+                  content: (
+                    <PlannedVsActualByMonth data={data.plannedVsActual} />
+                  ),
+                },
+                {
+                  id: "spend-by-trade",
+                  icon: ChartBarIcon,
+                  overflowVisible: true,
+                  title: "Spend by Trade",
+                  description: "Actual + committed spend per trade",
+                  content: <TradeActivity data={data.tradeActivity} />,
+                },
+                {
+                  id: "open-tasks",
+                  icon: ChartBarIcon,
+                  overflowVisible: true,
+                  title: "Open Tasks by Project",
+                  description: "Where open work is concentrated",
+                  content: <OpenTasksByProject data={data.taskHeatmap} />,
+                },
+              ],
+            },
+          ]}
+        />
       )}
     </Visualization>
   );

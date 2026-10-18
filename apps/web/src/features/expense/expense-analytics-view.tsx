@@ -4,6 +4,7 @@ import {
   expenseFiltersSchema,
   type Trade,
 } from "@cubby/schemas/project";
+import { ChartBarIcon } from "@phosphor-icons/react/dist/csr/ChartBar";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { lazy, Suspense, useCallback, useMemo, useState } from "react";
@@ -15,8 +16,13 @@ import {
   filterGetterFromSearch,
   soleValue,
 } from "~/entity/filters";
+import {
+  type IndexedSection,
+  IndexedSections,
+  SectionStack,
+} from "~/ui/data-table/indexed-sections";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
-import { Grid, Section, Stack } from "~/ui/layout";
+import { Stack } from "~/ui/layout";
 import { Skeleton } from "~/ui/primitives/skeleton";
 import {
   Visualization,
@@ -202,6 +208,7 @@ export function ProjectExpenseAnalytics({ projectId }: { projectId: string }) {
   );
   return (
     <ExpenseAnalytics
+      embedded
       filters={filters}
       analyzeConfig={analyzeConfig}
       onAnalyzeConfigChange={(next) =>
@@ -217,6 +224,7 @@ export function ProjectExpenseAnalytics({ projectId }: { projectId: string }) {
 }
 
 function ExpenseAnalytics({
+  embedded = false,
   filters,
   analyzeConfig,
   onAnalyzeConfigChange,
@@ -224,6 +232,7 @@ function ExpenseAnalytics({
   onCellClick,
   onOpenLedger,
 }: {
+  embedded?: boolean;
   filters: ExpenseFilters;
   analyzeConfig: ExpenseAnalyzeConfig;
   onAnalyzeConfigChange: (next: ExpenseAnalyzeConfig) => void;
@@ -271,47 +280,66 @@ function ExpenseAnalytics({
           summary={summary}
         />
 
-        <Section
-          title="Analyze"
-          description="Complete server-calculated buckets over the same filters as the Ledger. No raw rows are grouped in the browser."
-        >
-          <Suspense fallback={<Skeleton className="h-[300px] w-full" />}>
-            <ExpenseAggregateExplorer
-              filters={filters}
-              config={analyzeConfig}
-              onConfigChange={onAnalyzeConfigChange}
-              onOpenLedger={onOpenLedger}
-            />
-          </Suspense>
-        </Section>
-
-        <Section
-          title="Spending by Spending Category"
-          description="Net per root category. Tax, shipping, and fees follow the items they were charged on; Uncategorized and Unclassified close the total. Click a bar to open its rows in the Ledger."
-        >
-          <SpendingCategoryBreakdown
-            filters={filters}
-            onOpenLedger={onOpenLedger}
-          />
-        </Section>
-
-        <Grid cols="pair">
-          <Section
-            title="Spending by Cost Type"
-            description="Tax, shipping, and fees follow the items they were charged on."
-          >
-            <CostTypeDonut
-              byCostType={byCostType}
-              selected={selectedCostType}
-              onSelect={(key) =>
-                setSelectedCostType((current) => (current === key ? null : key))
-              }
-            />
-          </Section>
-          <Section
-            title="Spending by Trade"
-            description={
-              selectedCostType ? (
+        <ExpenseAnalyticsSections
+          embedded={embedded}
+          sections={[
+            {
+              id: "analyze",
+              icon: ChartBarIcon,
+              overflowVisible: true,
+              title: "Analyze",
+              description:
+                "Complete server-calculated buckets over the same filters as the Ledger. No raw rows are grouped in the browser.",
+              content: (
+                <Suspense fallback={<Skeleton className="h-[300px] w-full" />}>
+                  <ExpenseAggregateExplorer
+                    filters={filters}
+                    config={analyzeConfig}
+                    onConfigChange={onAnalyzeConfigChange}
+                    onOpenLedger={onOpenLedger}
+                  />
+                </Suspense>
+              ),
+            },
+            {
+              id: "spending-category",
+              icon: ChartBarIcon,
+              overflowVisible: true,
+              title: "Spending by Spending Category",
+              description:
+                "Net per root category. Tax, shipping, and fees follow the items they were charged on; Uncategorized and Unclassified close the total. Click a bar to open its rows in the Ledger.",
+              content: (
+                <SpendingCategoryBreakdown
+                  filters={filters}
+                  onOpenLedger={onOpenLedger}
+                />
+              ),
+            },
+            {
+              id: "cost-type",
+              icon: ChartBarIcon,
+              overflowVisible: true,
+              title: "Spending by Cost Type",
+              description:
+                "Tax, shipping, and fees follow the items they were charged on.",
+              content: (
+                <CostTypeDonut
+                  byCostType={byCostType}
+                  selected={selectedCostType}
+                  onSelect={(key) =>
+                    setSelectedCostType((current) =>
+                      current === key ? null : key,
+                    )
+                  }
+                />
+              ),
+            },
+            {
+              id: "trade",
+              icon: ChartBarIcon,
+              overflowVisible: true,
+              title: "Spending by Trade",
+              description: selectedCostType ? (
                 <button
                   type="button"
                   className="underline underline-offset-2 transition-colors hover:text-foreground"
@@ -321,68 +349,104 @@ function ExpenseAnalytics({
                 </button>
               ) : (
                 "Tax, shipping, and fees follow the items they were charged on."
-              )
-            }
-          >
-            <TradeBarsAggregate
-              tradeCostMatrix={
-                selectedCostType
-                  ? tradeCostMatrix.filter(
-                      (row) => row.costType === selectedCostType,
-                    )
-                  : tradeCostMatrix
-              }
-            />
-          </Section>
-        </Grid>
-
-        <Section
-          title="Trade × Cost Type"
-          description="Tax, shipping, and fees follow the items they were charged on. Click a cell to filter the Ledger view."
-        >
-          <TradeCostMatrixAggregate
-            tradeCostMatrix={tradeCostMatrix}
-            onCellClick={onCellClick}
-            activeCell={activeCell}
-          />
-        </Section>
-
-        <Section
-          title="Monthly Spend"
-          description="Net spend per calendar month — recurring installments and spend rhythm show up as a repeating pattern. Negative months (refunds, credits) render below the axis."
-        >
-          <MonthlySpend monthly={monthly} />
-        </Section>
-
-        <Section
-          title="Cumulative Spend"
-          description="Running net total across the filtered set."
-        >
-          <CumulativeSpend cumulative={cumulative} />
-        </Section>
-
-        <Section
-          title="Money flow"
-          description="Who paid, through which project, into which root category. Net per path; Credits net inside their path. Click a band to open its rows in the Ledger."
-        >
-          <MoneyFlowSankey filters={filters} onOpenLedger={onOpenLedger} />
-        </Section>
-
-        {byProject.length > 0 && (
-          <Section title="By Project" description="Net spend per project.">
-            <ProjectBreakdown byProject={byProject} />
-          </Section>
-        )}
-
-        {byVendor.length > 0 && (
-          <Section
-            title="By Vendor"
-            description="Net spend per vendor. Expenses with no vendor recorded are excluded, so these bars total less than Net above."
-          >
-            <VendorBreakdown byVendor={byVendor} />
-          </Section>
-        )}
+              ),
+              content: (
+                <TradeBarsAggregate
+                  tradeCostMatrix={
+                    selectedCostType
+                      ? tradeCostMatrix.filter(
+                          (row) => row.costType === selectedCostType,
+                        )
+                      : tradeCostMatrix
+                  }
+                />
+              ),
+            },
+            {
+              id: "trade-cost-type",
+              icon: ChartBarIcon,
+              overflowVisible: true,
+              title: "Trade × Cost Type",
+              description:
+                "Tax, shipping, and fees follow the items they were charged on. Click a cell to filter the Ledger view.",
+              content: (
+                <TradeCostMatrixAggregate
+                  tradeCostMatrix={tradeCostMatrix}
+                  onCellClick={onCellClick}
+                  activeCell={activeCell}
+                />
+              ),
+            },
+            {
+              id: "monthly-spend",
+              icon: ChartBarIcon,
+              overflowVisible: true,
+              title: "Monthly Spend",
+              description:
+                "Net spend per calendar month — recurring installments and spend rhythm show up as a repeating pattern. Negative months (refunds, credits) render below the axis.",
+              content: <MonthlySpend monthly={monthly} />,
+            },
+            {
+              id: "cumulative-spend",
+              icon: ChartBarIcon,
+              overflowVisible: true,
+              title: "Cumulative Spend",
+              description: "Running net total across the filtered set.",
+              content: <CumulativeSpend cumulative={cumulative} />,
+            },
+            {
+              id: "money-flow",
+              icon: ChartBarIcon,
+              overflowVisible: true,
+              title: "Money flow",
+              description:
+                "Who paid, through which project, into which root category. Net per path; Credits net inside their path. Click a band to open its rows in the Ledger.",
+              content: (
+                <MoneyFlowSankey
+                  filters={filters}
+                  onOpenLedger={onOpenLedger}
+                />
+              ),
+            },
+            {
+              id: "by-project",
+              icon: ChartBarIcon,
+              overflowVisible: true,
+              title: "By Project",
+              description: "Net spend per project.",
+              content: <ProjectBreakdown byProject={byProject} />,
+            },
+            {
+              id: "by-vendor",
+              icon: ChartBarIcon,
+              overflowVisible: true,
+              title: "By Vendor",
+              description:
+                "Net spend per vendor. Expenses with no vendor recorded are excluded, so these bars total less than Net above.",
+              content: <VendorBreakdown byVendor={byVendor} />,
+            },
+          ]}
+        />
       </Stack>
     </Visualization>
+  );
+}
+
+/** Record slots keep the record's existing contents rail. */
+function ExpenseAnalyticsSections({
+  sections,
+  embedded,
+}: {
+  sections: IndexedSection[];
+  embedded: boolean;
+}) {
+  return embedded ? (
+    <SectionStack sections={sections} />
+  ) : (
+    <IndexedSections
+      groups={[
+        { id: "detail-group-analytics", title: "Expense analytics", sections },
+      ]}
+    />
   );
 }

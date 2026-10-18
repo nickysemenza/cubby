@@ -540,6 +540,7 @@ export function IndexedSections({
     focusTarget(id);
     void navigate({
       to: ".",
+      search: true,
       hash: hashForDetailTarget(id, groups),
       replace: false,
       resetScroll: false,

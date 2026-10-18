@@ -45,6 +45,8 @@ The desktop shell has a collapsible navigation sidebar containing global search 
 
 Detail content is one scrolling column. Keep the sticky, independently scrolling ToC alongside wide content and the same hierarchy in phone “Jump to”; the switch follows available record width (800px). All empty fields and sections stay visible. A small identity thumbnail (48px) sits beside the title; the full gallery appears later in Images. Header actions wrap before squeezing identity. Lists retain compact workbench controls and horizontal table overflow rather than horizontal page overflow. Ownership evidence uses the shared RecordList in one content column.
 
+Settings and long analytical workspaces (expense analytics, portfolio analytics, and cash flow) use `IndexedSections`: a continuous column with sticky contents navigation at 800px available width and phone “Jump to”, stable section hashes that preserve search parameters, and mounted drafts. Embedded expense analytics stays inside the record’s existing contents navigation. Keep controls and summaries above the indexed body. Settings groups connections, mail and purchases, household access, and maintenance; connection diagnostics remain behind an explicit disclosure. Use tabs for distinct workflows rather than sections of the same page.
+
 Today/Home uses open dashboard frames and shared section bands. Current work leads, household context follows, and exploration stays behind disclosure. Summaries report existing query values; never invent progress scores, risk predictions, or AI panels.
 
 ## Elevation & Depth
