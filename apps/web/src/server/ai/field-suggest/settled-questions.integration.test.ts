@@ -1,4 +1,5 @@
 import type { FieldSuggestionsInput } from "@cubby/schemas/ai";
+import { eq } from "drizzle-orm";
 import {
   taxonomyId,
   taxonomyShortcode,
@@ -7,7 +8,11 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { markPreparationIncomplete } from "~/server/ai/evaluation-inputs";
 import { NONE_KEY } from "~/server/ai/policy/decision-choice";
+import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
+import { getDb } from "~/server/db/helpers";
+import { aiAnalysis } from "~/server/db/schema";
 import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";
 import {
   categoryPorts,
@@ -18,7 +23,11 @@ import { executeEntity } from "~/server/entity-kernel";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import { readSettledQuestions } from "./settled-questions";
+import {
+  fieldQuestionKey,
+  readSettledQuestions,
+  rememberSettledQuestions,
+} from "./settled-questions";
 
 const declines: DecisionPort = async (input) => {
   const keys = Object.keys(input.questions.selection.criteria);
@@ -71,7 +80,7 @@ describe("settled suggestion questions", () => {
       },
       ports,
     );
-  const read = async (
+  const readAnswer = async (
     { entity, ...question }: Question,
     ports: Parameters<typeof readSettledQuestions>[2] = {
       decisionPort: declines,
@@ -84,8 +93,12 @@ describe("settled suggestion questions", () => {
     );
     const [result] = results;
     if (!result?.ok) throw new Error(result?.message ?? "No settled result");
-    return result.value.outcome;
+    return result.value;
   };
+  const read = async (
+    question: Question,
+    ports?: Parameters<typeof readSettledQuestions>[2],
+  ) => (await readAnswer(question, ports)).outcome;
   const gadget = (name: string): Question => ({
     entity: "product",
     field: "categoryId",
@@ -120,9 +133,85 @@ describe("settled suggestion questions", () => {
       verdict: "wrong",
       intent: "history",
     });
-    expect(
-      await read(gadget("Synthetic unplaceable gadget"), fakeRoster),
-    ).toBeNull();
+    // The reopened live ask is keyed by the review, never by the original.
+    const reopened = await readAnswer(
+      gadget("Synthetic unplaceable gadget"),
+      fakeRoster,
+    );
+    expect(reopened.outcome).toBeNull();
+    expect(reopened.revision).toMatch(/^miss:/u);
+  });
+
+  // Regression: every unverifiable recheck shared one revision, so a live
+  // answer cached by an earlier cold recheck answered a later, changed one.
+  it("gives each unverifiable recheck its own revision", async () => {
+    const spec = fakeRoster.registry["product.categoryId"];
+    const coldRoster = {
+      ...fakeRoster,
+      registry: {
+        "product.categoryId": {
+          ...spec,
+          roster: async (...args: Parameters<typeof spec.roster>) => {
+            markPreparationIncomplete();
+            return spec.roster(...args);
+          },
+        },
+      },
+    };
+    const question = gadget("Synthetic cold gadget");
+    await ask(question, coldRoster);
+    const first = await readAnswer(question, coldRoster);
+    const second = await readAnswer(question, coldRoster);
+    expect(first.outcome).toBeNull();
+    expect(first.revision).toMatch(/^unverified:/u);
+    expect(second.revision).toMatch(/^unverified:/u);
+    expect(second.revision).not.toBe(first.revision);
+  });
+
+  // Regression: an UPDATE-then-INSERT replacement let concurrent first
+  // settles both insert; the unordered read then picked either row.
+  it("keeps one effective memory row per question", async () => {
+    const question = gadget("Synthetic contended gadget");
+    const answer = await ask(question, fakeRoster);
+    const outcome = answer.outcomes?.categoryId;
+    if (!outcome) throw new Error("Synthetic decline missing");
+    const key = await fieldQuestionKey(
+      { ...question, basisMode: "suggested" },
+      await producingAiManifest(ctx.db),
+    );
+    const rowsFor = (fingerprint: string) =>
+      getDb(ctx.db)
+        .select({ id: aiAnalysis.id })
+        .from(aiAnalysis)
+        .where(eq(aiAnalysis.inputFingerprint, fingerprint));
+
+    const contended = `synthetic-contended-${crypto.randomUUID()}`;
+    await Promise.all(
+      ["first", "second", "third"].map((signature) =>
+        rememberSettledQuestions(ctx.db, [
+          { key: contended, outcome, signature },
+        ]),
+      ),
+    );
+    expect(await rowsFor(contended)).toHaveLength(1);
+
+    // A duplicate left by an older writer never shadows the newest row.
+    await getDb(ctx.db)
+      .insert(aiAnalysis)
+      .values({
+        entityKind: "global",
+        entityId: null,
+        feature: "field-suggestion.settled-question",
+        model: "any",
+        promptVersion: "2",
+        inputFingerprint: key,
+        result: { outcome, signature: "synthetic-stale" },
+        createdAt: new Date("2026-01-01T00:00:00Z"),
+        updatedAt: new Date("2026-01-01T00:00:00Z"),
+      });
+    expect(await rowsFor(key)).toHaveLength(2);
+    for (let attempt = 0; attempt < 5; attempt += 1)
+      expect(await read(question, fakeRoster)).toEqual(outcome);
   });
 
   it("does not remember a pinned-model replay", async () => {

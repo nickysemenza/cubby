@@ -9,7 +9,7 @@ import {
 import type { AiRefreshManifest } from "@cubby/schemas/ai-evaluation";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, eq, inArray, isNull, notExists, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -26,7 +26,7 @@ import {
 } from "~/server/ai/policy/refresh-manifest";
 import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
+import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { aiAnalysis, feedback } from "~/server/db/schema";
 import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
 import { settleBatch } from "~/server/workflows/settle-batch";
@@ -113,9 +113,12 @@ export const settledSignature = (
   );
 
 /**
- * One statement per question. A re-settle of a key replaces its outcome and
- * signature: after its inputs change, a fresh decline must become the
- * comparison point, or every later read would reopen it again.
+ * A re-settle of a key replaces its outcome and signature: after its inputs
+ * change, a fresh decline must become the comparison point, or every later
+ * read would reopen it again. `AiAnalysis_active_key` cannot enforce one row
+ * per key (its `entityId` is always NULL here), so each replacement holds a
+ * transaction lock on the key: its upsert statement then sees any concurrent
+ * first insert, and the key keeps one effective row.
  */
 export async function rememberSettledQuestions(
   db: Database,
@@ -129,7 +132,11 @@ export async function rememberSettledQuestions(
     const result = JSON.stringify(
       rememberedSchema.parse({ outcome, signature }),
     );
-    await getDb(db).execute(sql`
+    await withTransactionDatabase(db, async (transactionDb) => {
+      await getDb(transactionDb).execute(
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${`${SETTLED_QUESTION.feature}:${key}`}, 0))`,
+      );
+      await getDb(transactionDb).execute(sql`
       WITH replaced AS (
         UPDATE "AiAnalysis" SET "result" = ${result}::jsonb, "updatedAt" = now()
         WHERE "entityKind" = ${SETTLED_QUESTION.entityKind}
@@ -146,6 +153,7 @@ export async function rememberSettledQuestions(
       SELECT ${SETTLED_QUESTION.entityKind}, NULL, ${SETTLED_QUESTION.feature},
         ${SETTLED_QUESTION.model}, ${SETTLED_QUESTION.promptVersion}, ${key}, ${result}::jsonb
       WHERE NOT EXISTS (SELECT 1 FROM replaced)`);
+    });
   }
 }
 
@@ -181,10 +189,11 @@ async function recheck(
     // the raw diagnostic on its own surface.
   ).catch(() => null);
   const preparedOutcome = prepared?.result.outcomes?.[question.field];
-  // Inputs that cannot be prepared for free cannot be verified: ask live
-  // under a revision distinct from the remembered inputs' cache entry.
+  // Inputs that cannot be prepared for free cannot be verified, so no earlier
+  // live answer can be known to match them either: each such read asks live
+  // under a revision of its own.
   if (!prepared || !preparedOutcome || prepared.incomplete)
-    return { outcome: null, revision: `unverified:${remembered.signature}` };
+    return { outcome: null, revision: `unverified:${crypto.randomUUID()}` };
   const signature = await settledSignature(
     { entity, field: question.field },
     preparedOutcome,
@@ -213,7 +222,18 @@ export async function readSettledQuestions(
     ),
   );
   const rows = await getDb(db)
-    .select({ key: aiAnalysis.inputFingerprint, result: aiAnalysis.result })
+    .select({
+      key: aiAnalysis.inputFingerprint,
+      result: aiAnalysis.result,
+      missId: sql<string | null>`(
+        SELECT ${feedback.id}::text FROM ${feedback}
+        WHERE ${feedback.assessmentId}::text = ${aiAnalysis.result}->'outcome'->>'assessmentId'
+          AND ${feedback.authority} = ${"member"}
+          AND ${feedback.verdict} = ${"wrong"}
+        ORDER BY ${feedback.createdAt} DESC, ${feedback.id} DESC
+        LIMIT 1
+      )`,
+    })
     .from(aiAnalysis)
     .where(
       and(
@@ -224,33 +244,30 @@ export async function readSettledQuestions(
         eq(aiAnalysis.promptVersion, SETTLED_QUESTION.promptVersion),
         inArray(aiAnalysis.inputFingerprint, [...new Set(keys)]),
         isNull(aiAnalysis.deletedAt),
-        notExists(
-          getDb(db)
-            .select({ id: feedback.id })
-            .from(feedback)
-            .where(
-              and(
-                sql`${feedback.assessmentId}::text = ${aiAnalysis.result}->'outcome'->>'assessmentId'`,
-                eq(feedback.authority, "member"),
-                eq(feedback.verdict, "wrong"),
-              ),
-            ),
-        ),
       ),
-    );
-  const byKey = new Map(
-    rows.flatMap((row) => {
-      const parsed = rememberedSchema.safeParse(row.result);
-      return parsed.success ? [[row.key, parsed.data] as const] : [];
-    }),
-  );
+    )
+    // Rows written before replacements were serialized may share a key; the
+    // newest is the effective one.
+    .orderBy(desc(aiAnalysis.updatedAt), desc(aiAnalysis.id));
+  const byKey = new Map<
+    string,
+    { remembered: z.infer<typeof rememberedSchema>; missId: string | null }
+  >();
+  for (const row of rows) {
+    const parsed = rememberedSchema.safeParse(row.result);
+    if (parsed.success && !byKey.has(row.key))
+      byKey.set(row.key, { remembered: parsed.data, missId: row.missId });
+  }
   return settleBatch(
     input.questions,
     async (question, index): Promise<SettledSuggestionAnswer> => {
-      const remembered = byKey.get(keys[index]!);
-      return remembered
-        ? recheck(db, input.entity, question, remembered, ports)
-        : { outcome: null, revision: null };
+      const entry = byKey.get(keys[index]!);
+      if (!entry) return { outcome: null, revision: null };
+      // A member's recorded miss reopens the question under that review's
+      // identity, so the live answer cached before it is never restored.
+      if (entry.missId)
+        return { outcome: null, revision: `miss:${entry.missId}` };
+      return recheck(db, input.entity, question, entry.remembered, ports);
     },
     { concurrency: 1 },
   );

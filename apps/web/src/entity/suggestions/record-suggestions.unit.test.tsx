@@ -478,67 +478,78 @@ describe("record suggestions", () => {
   });
 
   // Regression: a reopened question restored the cached live `none` for its
-  // old inputs, because the live query key was the basis alone.
-  it("asks a reopened question live instead of reusing its old answer", async () => {
-    const asked = vi.fn();
-    const operations: EntitySuggestionsOperations = {
-      suggestFields: ai.suggestFields.withTransport(async ({ input }) => {
-        asked(input.inputRevision ?? null);
-        return {
-          suggestions: { categoryId: null },
-          outcomes: { categoryId: decline },
-        };
-      }),
-    };
-    // Production never refetches a passive cache entry on remount.
-    harness.queryClient.setDefaultOptions({
-      queries: { retry: false, refetchOnMount: false },
-    });
-    let answer: SettledSuggestionAnswer = { outcome: null, revision: null };
-    const settled = settledBy(() => answer);
-    render(
-      <RecordSuggestionsProvider
-        entity="product"
-        records={[
-          {
-            id,
-            name: "Synthetic gadget",
-            manufacturer: null,
-            categoryId: null,
-          },
-        ]}
-        fieldKeys={["categoryId"]}
-        operations={operations}
-        storedSuggestionOperations={{
-          ...emptyStoredSuggestionOperations,
-          settled,
-        }}
-      >
-        <span>rows</span>
-      </RecordSuggestionsProvider>,
-      { wrapper: harness.wrapper },
-    );
-    await waitFor(() => expect(asked).toHaveBeenCalledExactlyOnceWith(null));
-
-    // The decline is remembered, then a write to a record it read reopens it.
-    const productWrite = () =>
-      act(() =>
-        invalidateOperationTags(harness.queryClient, rippleFor(["product"])),
+  // old inputs, because the live query key was the basis alone. A member's
+  // miss reopens under that review's revision rather than the original key.
+  it.each([
+    {
+      trigger: "product write",
+      ripple: "product",
+      revision: "synthetic-inputs",
+    },
+    {
+      trigger: "member miss",
+      ripple: "settledSuggestions",
+      revision: "miss:synthetic-feedback",
+    },
+  ] as const)(
+    "asks a question reopened by a $trigger live",
+    async ({ ripple, revision }) => {
+      const asked = vi.fn();
+      const operations: EntitySuggestionsOperations = {
+        suggestFields: ai.suggestFields.withTransport(async ({ input }) => {
+          asked(input.inputRevision ?? null);
+          return {
+            suggestions: { categoryId: null },
+            outcomes: { categoryId: decline },
+          };
+        }),
+      };
+      // Production never refetches a passive cache entry on remount.
+      harness.queryClient.setDefaultOptions({
+        queries: { retry: false, refetchOnMount: false },
+      });
+      let answer: SettledSuggestionAnswer = { outcome: null, revision: null };
+      const settled = settledBy(() => answer);
+      render(
+        <RecordSuggestionsProvider
+          entity="product"
+          records={[
+            {
+              id,
+              name: "Synthetic gadget",
+              manufacturer: null,
+              categoryId: null,
+            },
+          ]}
+          fieldKeys={["categoryId"]}
+          operations={operations}
+          storedSuggestionOperations={{
+            ...emptyStoredSuggestionOperations,
+            settled,
+          }}
+        >
+          <span>rows</span>
+        </RecordSuggestionsProvider>,
+        { wrapper: harness.wrapper },
       );
-    answer = { outcome: decline, revision: null };
-    await productWrite();
-    await waitFor(() => expect(settled).toHaveBeenCalledTimes(2));
-    answer = { outcome: null, revision: "synthetic-revision" };
-    await productWrite();
-    await waitFor(() =>
-      expect(asked).toHaveBeenLastCalledWith("synthetic-revision"),
-    );
-    expect(
-      asked.mock.calls.filter(
-        ([revision]) => revision === "synthetic-revision",
-      ),
-    ).toHaveLength(1);
-  });
+      await waitFor(() => expect(asked).toHaveBeenCalledExactlyOnceWith(null));
+
+      // The decline is remembered, then the trigger reopens it.
+      const invalidate = () =>
+        act(() =>
+          invalidateOperationTags(harness.queryClient, rippleFor([ripple])),
+        );
+      answer = { outcome: decline, revision: null };
+      await invalidate();
+      await waitFor(() => expect(settled).toHaveBeenCalledTimes(2));
+      answer = { outcome: null, revision };
+      await invalidate();
+      await waitFor(() => expect(asked).toHaveBeenLastCalledWith(revision));
+      expect(
+        asked.mock.calls.filter(([asked]) => asked === revision),
+      ).toHaveLength(1);
+    },
+  );
 
   // Regression: each settled question was its own unscheduled read, so a page
   // of rows fanned out past the database limiter.
