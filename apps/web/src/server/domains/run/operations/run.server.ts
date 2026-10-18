@@ -5,7 +5,8 @@ import { and, eq, isNull } from "drizzle-orm";
 import type { z } from "zod";
 
 import { runContract } from "~/contracts/run.contract";
-import { readAiFundingStatus, setCreditBudget } from "~/server/ai/budget";
+import { setCreditBudget } from "~/server/ai/budget";
+import { readAiFundingStatus } from "~/server/ai/funding";
 import { listAiUsageForRun } from "~/server/ai/repo/ai-usage";
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";

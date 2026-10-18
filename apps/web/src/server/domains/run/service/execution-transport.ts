@@ -12,11 +12,13 @@ import {
   aiBudgetCovers,
   aiBudgetWindow,
   assertAiBudget,
+} from "~/server/ai/budget";
+import {
   creditBudgetRefusal,
   fundingWaitError,
   isBackgroundRun,
   type FundingStatusPorts,
-} from "~/server/ai/budget";
+} from "~/server/ai/funding";
 import { getAiGatewayEgress } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import {

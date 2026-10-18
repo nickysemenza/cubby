@@ -13,8 +13,8 @@ import {
   DEFAULT_CREDIT_BUDGET_USD,
   aiBudgetWindow,
   readAiBudget,
-  readChatGptPlanAvailability,
 } from "~/server/ai/budget";
+import { readChatGptPlanAvailability } from "~/server/ai/funding";
 import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
 import { aiUsage, run, runControlEvent } from "~/server/db/schema";
