@@ -1089,8 +1089,9 @@ struct EntityListView: View {
     }
 
     private func listRows(_ rows: [EntityRow]) -> some View {
-        ForEach(rows) { row in
-            rowContent(row)
+        let columns = EntityRowPresentation.defaultColumns(descriptor: descriptor)
+        return ForEach(rows) { row in
+            rowContent(row, columns: columns)
                 .contextMenu {
                     Button("Copy link", systemImage: "link") {
                         Clipboard.copy(appModel.webURL(for: key, id: row.id).absoluteString)
@@ -1161,19 +1162,20 @@ struct EntityListView: View {
         }
     }
 
-    @ViewBuilder private func rowContent(_ row: EntityRow) -> some View {
+    @ViewBuilder private func rowContent(_ row: EntityRow, columns: [String]) -> some View {
         Group {
             #if os(macOS)
                 if usesBrowseSelection {
-                    EntityRowView(key: key, row: row).tag(RecordSelection(key: key, id: row.id))
+                    EntityRowView(key: key, row: row, columns: columns)
+                        .tag(RecordSelection(key: key, id: row.id))
                 } else {
                     NavigationLink(value: Route.entityDetail(key, id: row.id)) {
-                        EntityRowView(key: key, row: row)
+                        EntityRowView(key: key, row: row, columns: columns)
                     }
                 }
             #else
                 NavigationLink(value: Route.entityDetail(key, id: row.id)) {
-                    EntityRowView(key: key, row: row)
+                    EntityRowView(key: key, row: row, columns: columns)
                 }
             #endif
         }

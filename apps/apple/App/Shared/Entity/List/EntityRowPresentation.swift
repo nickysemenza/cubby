@@ -113,7 +113,7 @@ struct EntityRowPresentation: Sendable, Hashable {
         columns: [String]? = nil,
         photoMode: Bool = false
     ) -> EntityRowPresentation {
-        let declaredKeys = columns ?? defaultKeys(descriptor: descriptor)
+        let declaredKeys = columns ?? defaultColumns(descriptor: descriptor)
         let selectedKeys =
             descriptor.fields.contains { $0.key == "dataQuality" }
             ? ["dataQuality"] + declaredKeys.filter { $0 != "dataQuality" } : declaredKeys
@@ -223,7 +223,9 @@ struct EntityRowPresentation: Sendable, Hashable {
             })
     }
 
-    private static func defaultKeys(descriptor: EntityDescriptor) -> [String] {
+    /// The columns a row shows when its caller names none. A list resolves this once and passes
+    /// it to every row: it filters and sorts the descriptor's fields.
+    static func defaultColumns(descriptor: EntityDescriptor) -> [String] {
         let contextKeys = listContextKeys(descriptor: descriptor)
         // Relation context can replace a separate web column while remaining a native list fact.
         return descriptor.fields
