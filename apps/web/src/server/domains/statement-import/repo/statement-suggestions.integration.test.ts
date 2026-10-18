@@ -7,6 +7,7 @@ import type {
   StatementSuggestionOut,
   StatementTransactionApplication,
 } from "@cubby/schemas/statement-suggestion";
+import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
 import { sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -18,6 +19,7 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
 
 import {
   getStatementRowSummary,
@@ -177,6 +179,20 @@ describe("statement Transaction suggestions", () => {
 
     expect(await generate(ctx)).toBe(2);
     expect(await generate(ctx)).toBe(0);
+    const queue = await readWorkQueue(
+      ctx.db,
+      null,
+      workQueueHouseholdInput.parse({ pageSize: 100 }),
+      false,
+    );
+    expect(
+      queue.items.filter((row) => row.source === "statement_suggestion"),
+    ).toEqual([
+      expect.objectContaining({
+        entity: "financialAccount",
+        reason: "2 transaction suggestions (2 ready to accept)",
+      }),
+    ]);
     const [first] = (await suggestions(ctx)).filter(
       (row) => row.merchant === "Example Cafe",
     );
