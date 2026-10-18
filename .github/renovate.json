@@ -29,6 +29,13 @@
       "automerge": false
     },
     {
+      "description": "guarded-fetch pins undici 7.29.0 and builds its SSRF-pinning Agent on undici's buildConnector; its pnpm override stays on the patched 7.x line until guarded-fetch supports 8",
+      "matchDepTypes": ["pnpm-workspace.overrides"],
+      "matchDepNames": ["undici@7.29.0"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
       "matchManagers": ["cargo"],
       "matchPackageNames": [
         "ingredient",
