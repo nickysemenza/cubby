@@ -401,7 +401,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Search spending categories...",
         deriveSchema: true,
-        stored: { columns: ["name"] },
+        anyOf: ["name"],
       },
       {
         columnId: "parentId",

@@ -53,13 +53,6 @@ describe("buildWishWhere", () => {
   const where = (filters: WishFilters) =>
     Promise.resolve(renderWhereSql(buildWishWhere(filters)));
 
-  it("searches name, notes and candidate products in one OR", async () => {
-    const rendered = await where({ search: "kettle" });
-    expect(rendered).toContain('"Wish"."name" ilike');
-    expect(rendered).toContain('"Wish"."notes" ilike');
-    expect(rendered).toContain('p."manufacturer" ILIKE');
-  });
-
   it("filters candidates through the related view's productId", async () => {
     expect(
       await where({ productId: [parseShortcodeFor("product", "PRD-2345")] }),
@@ -790,11 +783,6 @@ describe("buildTaskWhere", () => {
   });
 
   it.each([
-    {
-      name: "search (name or inherited subject product)",
-      filters: { search: "filter" },
-      contains: '"Product"."name" ilike',
-    },
     {
       name: "completion",
       filters: { completion: "open" as const },

@@ -806,11 +806,7 @@ export default defineEntity({
       effectiveDueDate: { type: "date" },
       completion: { type: "enum", options: ["open", "done"] },
       topLevel: { type: "boolean" },
-      search: {
-        predicate: "text",
-        reason:
-          "Searches the task name and its inherited subject product's name",
-      },
+      subjectName: { via: "subject.name" },
     },
     sort: {
       fields: [
@@ -937,7 +933,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Search tasks...",
         deriveSchema: true,
-        derived: "search",
+        anyOf: ["name", "subjectName"],
       },
       {
         columnId: "status",

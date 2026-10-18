@@ -574,14 +574,14 @@ export default defineEntity({
         kind: "text",
         placeholder: "Filter by sender...",
         deriveSchema: true,
-        stored: true,
+        anyOf: ["sender"],
       },
       {
         columnId: "subject",
         kind: "text",
         placeholder: "Filter by subject...",
         deriveSchema: true,
-        stored: true,
+        anyOf: ["subject"],
       },
       {
         columnId: "receivedAt",
@@ -611,7 +611,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Filter by Relevance reason...",
         deriveSchema: true,
-        stored: true,
+        anyOf: ["classificationReason"],
       },
       {
         columnId: "status",
@@ -626,14 +626,14 @@ export default defineEntity({
         kind: "text",
         placeholder: "Filter by mailbox...",
         deriveSchema: true,
-        stored: true,
+        anyOf: ["mailboxId"],
       },
       {
         columnId: "provider",
         kind: "text",
         placeholder: "Filter by provider...",
         deriveSchema: true,
-        stored: true,
+        anyOf: ["provider"],
       },
       {
         columnId: "ledgerPartyId",

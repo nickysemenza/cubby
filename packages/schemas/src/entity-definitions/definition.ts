@@ -2182,12 +2182,12 @@ const buildMetadataSchemas = () => {
       /** A named schema for select/multiselect values (an enum export). */
       schemaRef: sourceRefMetadataSchema.nullable().optional(),
       /**
-       * The filter is the standard predicate over stored columns, so the
+       * The filter is the standard predicate over a stored column, so the
        * repository composes it from the declaration. `true` reads the column
-       * named by `columnId`; `columns` names one or more stored fields when
-       * the descriptor id is virtual (`search`) or the match spans columns;
-       * `array` marks a multiselect over a `text-array` column (overlap, not
-       * membership).
+       * named by `columnId`; `columns` names the stored field when the
+       * descriptor id is virtual; `array` marks a multiselect over a
+       * `text-array` column (overlap, not membership). A text filter
+       * declares `anyOf` instead.
        */
       stored: z
         .union([
@@ -2199,6 +2199,21 @@ const buildMetadataSchemas = () => {
             })
             .strict(),
         ])
+        .optional(),
+      /**
+       * A text filter that matches when any of these list fields does: a
+       * stored model field (its effective value when inherited, a `text[]`
+       * field by element) or a `model.derived` key (a `via` path, to-many as
+       * `EXISTS`, or a `type: "text"` value).
+       */
+      anyOf: z
+        .array(
+          nonEmptyString().regex(
+            /^[A-Za-z_][A-Za-z0-9_]*$/,
+            "must be an identifier",
+          ),
+        )
+        .min(1)
         .optional(),
       /**
        * The filter compiles through a `model.derived` entry (a related path, a

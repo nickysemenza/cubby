@@ -1158,7 +1158,7 @@ export default defineEntity({
         placeholder: "Search transactions...",
         deriveSchema: true,
         schemaDescription: "Substring match on merchant or raw description",
-        stored: { columns: ["merchant", "rawDescription"] },
+        anyOf: ["merchant", "rawDescription"],
       },
       {
         columnId: "kind",
@@ -1271,7 +1271,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Filter by merchant...",
         deriveSchema: true,
-        stored: true,
+        anyOf: ["merchant"],
       },
       {
         columnId: "transactionDate",

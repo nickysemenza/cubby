@@ -11,7 +11,7 @@ import type {
   ProjectFilters,
   ProjectOptionsOut,
 } from "@cubby/schemas/project";
-import { and, asc, eq, inArray, or, type SQL, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
@@ -20,9 +20,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import {
   getDb,
-  formatSearchTerm,
   isTransaction,
-  textArrayMatches,
   type ListReadIntent,
   notDeleted,
 } from "~/server/db/helpers";
@@ -78,8 +76,6 @@ const projectIdsWithImages = qb
   )
   .where(and(notDeleted(entityAttachment), displayableImageWhere));
 
-const effectiveLocationsSql = effectiveFieldSql("project", "locations");
-
 // The tree and attention reads take the request's Database handle; a project
 // list never reads inside a write transaction.
 const projectReadDatabase = (db: Database | DrizzleTransaction): Database => {
@@ -112,12 +108,6 @@ const projectCompletion = listPrepare(async (db) => {
 const projectScaffold = listScaffold("project", project, {
   derived: {
     image: inArray(project.id, projectIdsWithImages),
-    search: (term) =>
-      or(
-        formatSearchTerm(project.name, term),
-        formatSearchTerm(project.notes, term),
-        textArrayMatches(effectiveLocationsSql, term),
-      ),
     attention: projectAttention.predicate((items, { values }) => {
       const types = new Set<string>(
         Object.entries(projectAttentionFilterTypes)

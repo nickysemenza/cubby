@@ -895,7 +895,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Filter by recipe name...",
         deriveSchema: true,
-        stored: { columns: ["name", "notes"] },
+        anyOf: ["name", "notes"],
       },
       {
         columnId: "tags",

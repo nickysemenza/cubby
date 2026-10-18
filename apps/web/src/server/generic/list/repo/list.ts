@@ -153,6 +153,12 @@ interface StoredDescriptorView {
     columns: readonly string[];
     array: boolean;
   }> | null;
+  readonly anyOf:
+    | readonly Readonly<{
+        key: string;
+        source: "field" | "derived";
+      }>[]
+    | null;
   readonly nullable: Readonly<{ field: string }> | null;
   readonly match: Readonly<{ field: string }> | null;
   readonly exclude: Readonly<{ field: string; reason: string | null }> | null;
@@ -183,48 +189,43 @@ const descriptorsFor = (entity: Entity): readonly StoredDescriptorView[] =>
 const fieldModelFor = (entity: Entity) =>
   Object.entries(entityFieldModels).find(([key]) => key === entity)?.[1];
 
-const storedColumns = (
+const storedColumn = (
   entity: Entity,
   table: PgTable,
   descriptor: StoredDescriptorView,
-): StoredColumn[] => {
+  key: string,
+): StoredColumn => {
   const storage = fieldModelFor(entity)?.storage ?? [];
   const columns: Record<string, AnyColumn> = getTableColumns(table);
-  return (descriptor.stored?.columns ?? []).map((key) => {
-    const stored = storage.find(({ key: k }) => k === key);
-    const column =
-      columns[key] ??
-      Object.values(columns).find((c) => c.name === stored?.column);
-    if (!column || !stored)
-      throw new Error(
-        `${entity}.${descriptor.columnId} has no table column ${key} for its stored filter`,
-      );
-    const inherited = inheritedFieldOfColumn(entity, stored.column);
-    return {
-      column,
-      value:
-        inherited === null
-          ? column
-          : effectiveFieldSql(entity, inherited, getTableName(table)),
-      kind: stored.kind,
-      nullable: stored.nullable,
-      reference: stored.reference,
-    };
-  });
+  const stored = storage.find(({ key: k }) => k === key);
+  const column =
+    columns[key] ??
+    Object.values(columns).find((c) => c.name === stored?.column);
+  if (!column || !stored)
+    throw new Error(
+      `${entity}.${descriptor.columnId} has no table column ${key} for its stored filter`,
+    );
+  const inherited = inheritedFieldOfColumn(entity, stored.column);
+  return {
+    column,
+    value:
+      inherited === null
+        ? column
+        : effectiveFieldSql(entity, inherited, getTableName(table)),
+    kind: stored.kind,
+    nullable: stored.nullable,
+    reference: stored.reference,
+  };
 };
 
-/** `formatSearchTerm` over every declared column, `text[]` columns by element. */
+/** `formatSearchTerm` over a stored column, a `text[]` column by element. */
 const textPredicate = (
-  columns: readonly StoredColumn[],
-  term: string | undefined,
+  { value, kind }: StoredColumn,
+  term: string,
 ): SQL | undefined =>
-  or(
-    ...columns.map(({ value, kind }) =>
-      kind === "text-array"
-        ? textArrayMatches(value, term)
-        : formatSearchTerm(value, term),
-    ),
-  );
+  kind === "text-array"
+    ? textArrayMatches(value, term)
+    : formatSearchTerm(value, term);
 
 /**
  * A boolean filter over a boolean column is equality; over any other
@@ -488,6 +489,94 @@ interface DerivedFilterInput {
 }
 
 /**
+ * A condition over a `model.derived` value: a set value tests its relation
+ * once per condition; any other value tests its per-row scalar.
+ */
+const derivedValueTest =
+  (
+    entity: Entity,
+    table: PgTable & { id: AnyColumn },
+    key: string,
+    input: DerivedFilterInput | undefined,
+  ): ValueTest =>
+  (condition) => {
+    const derived = input?.derived ?? {};
+    const set = derivedValueSet(derived, key);
+    if (set === null)
+      return condition(
+        derivedValueSql(
+          entity,
+          derived,
+          key,
+          input?.context ?? ListContext.empty,
+        ),
+      );
+    const matched = condition(sql`value_set."value"`);
+    return matched === undefined
+      ? undefined
+      : sql`${table.id} IN (SELECT value_set."id" FROM (${set}) value_set WHERE ${matched})`;
+  };
+
+/**
+ * A text term against a `model.derived` entry: a `via` path matches when any
+ * related record's field (or title) does, a value when it contains the term.
+ */
+const derivedTextMatch = (
+  entity: Entity,
+  table: PgTable & { id: AnyColumn },
+  key: string,
+  term: string,
+  input: DerivedFilterInput | undefined,
+): SQL | undefined => {
+  const field = derivedFieldsOf(entity)[key];
+  if (field?.shape === "via")
+    return relatedExistsSql(entity, field, table.id, (_leaf, column) =>
+      formatSearchTerm(column, term),
+    );
+  if (field?.shape === "value")
+    return derivedValueTest(
+      entity,
+      table,
+      key,
+      input,
+    )((column) => formatSearchTerm(column, term));
+  throw new Error(`${entity}.model.derived.${key} cannot match text`);
+};
+
+/**
+ * A text filter declared `anyOf`: each term matches when any member field
+ * does, and several terms OR (an agent guessing at synonyms).
+ */
+const anyOfPredicate = (
+  entity: Entity,
+  table: PgTable & { id: AnyColumn },
+  descriptor: StoredDescriptorView,
+  members: NonNullable<StoredDescriptorView["anyOf"]>,
+  values: ListFilterValues,
+  input: DerivedFilterInput | undefined,
+): SQL | undefined =>
+  or(
+    ...(
+      optionalTextList.parse(values[descriptor.field ?? descriptor.columnId]) ??
+      []
+    )
+      .map((term) => term.trim())
+      .filter((term) => term !== "")
+      .map((term) =>
+        or(
+          ...members.map(({ key, source }) =>
+            source === "field"
+              ? textPredicate(
+                  storedColumn(entity, table, descriptor, key),
+                  term,
+                )
+              : derivedTextMatch(entity, table, key, term, input),
+          ),
+        ),
+      ),
+  );
+
+/**
  * The predicate of a filter descriptor declared `derived`: a related path
  * compiles to `EXISTS` (any cardinality), a repository value through its
  * SQL, and a declared predicate through the repository's function.
@@ -532,21 +621,13 @@ const derivedFilterPredicates = (
     ];
   }
   if (field.shape === "value") {
-    // A set value tests its relation once per condition; any other value
-    // tests its per-row scalar.
-    const set = derivedValueSet(derived, derivedKey);
-    const test: ValueTest = (condition) => {
-      if (set === null)
-        return condition(derivedValueSql(entity, derived, derivedKey, context));
-      const matched = condition(sql`value_set."value"`);
-      return matched === undefined
-        ? undefined
-        : sql`${table.id} IN (SELECT value_set."id" FROM (${set}) value_set WHERE ${matched})`;
-    };
+    const test = derivedValueTest(entity, table, derivedKey, input);
     switch (descriptor.kind) {
       case "text": {
         const term = optionalText.parse(value)?.trim();
-        return term ? [test((column) => formatSearchTerm(column, term))] : [];
+        return term
+          ? [derivedTextMatch(entity, table, derivedKey, term, input)]
+          : [];
       }
       case "boolean":
         // An UNKNOWN value counts as not met, as `flagCondition` reads it.
@@ -675,12 +756,9 @@ const derivedFilterPredicates = (
       return [relatedPresence(presenceFilter.parse(value))];
     case "text": {
       const term = optionalText.parse(value)?.trim();
-      if (!term) return [];
-      return [
-        relatedExistsSql(entity, field, table.id, (_leaf, column) =>
-          formatSearchTerm(column, term),
-        ),
-      ];
+      return term
+        ? [derivedTextMatch(entity, table, derivedKey, term, input)]
+        : [];
     }
     case "boolean": {
       const flag = optionalBoolean.parse(value);
@@ -825,10 +903,10 @@ const suggestionPredicate = (
 };
 
 /**
- * The predicates a repository owes to descriptors declared `stored`: the
- * standard column predicate for each descriptor kind over the declared
- * stored columns. Text is a substring match ORed across its columns (a
- * `text[]` column matches by element), enum filters are equality or
+ * The predicates of every declared filter. Text is a substring match ORed
+ * across its `anyOf` fields (a `text[]` column matches by element, a `via`
+ * path by any related record). A `stored` filter is the standard column
+ * predicate for its kind: enum filters are equality or
  * membership with the declared nullable presence filter ORed in, a
  * multiselect declared `array` is an overlap with the same presence rule,
  * boolean is equality or presence, presence checks NULL, ranges are
@@ -871,27 +949,30 @@ export function declaredFilterPredicates<Filters extends object>(
           derivedInput,
         ),
       ),
+    ...descriptorsFor(entity).map((descriptor) =>
+      descriptor.anyOf === null
+        ? undefined
+        : anyOfPredicate(
+            entity,
+            table,
+            descriptor,
+            descriptor.anyOf,
+            values,
+            derivedInput,
+          ),
+    ),
     ...descriptorsFor(entity)
       .filter((descriptor) => descriptor.stored !== null)
       .flatMap((descriptor): Array<SQL | undefined> => {
         const key = descriptor.field ?? descriptor.columnId;
-        const columns = storedColumns(entity, table, descriptor);
-        const [first] = columns;
-        if (first === undefined) return [];
+        const [column] = descriptor.stored?.columns ?? [];
+        if (column === undefined) return [];
+        const first = storedColumn(entity, table, descriptor, column);
         const value = values[key];
         const presence = descriptor.nullable
           ? presenceFilter.parse(values[descriptor.nullable.field])
           : undefined;
         switch (descriptor.kind) {
-          case "text":
-            // Several terms OR (an agent guessing at synonyms).
-            return [
-              or(
-                ...(optionalTextList.parse(value) ?? []).map((term) =>
-                  textPredicate(columns, term.trim()),
-                ),
-              ),
-            ];
           case "boolean":
             return [booleanPredicate(first, optionalBoolean.parse(value))];
           case "multiselect":

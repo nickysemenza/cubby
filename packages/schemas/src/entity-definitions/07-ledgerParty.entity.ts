@@ -218,7 +218,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Search ledger parties...",
         deriveSchema: true,
-        stored: true,
+        anyOf: ["name"],
       },
       {
         columnId: "kind",

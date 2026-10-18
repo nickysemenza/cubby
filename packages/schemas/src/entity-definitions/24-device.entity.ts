@@ -363,14 +363,14 @@ export default defineEntity({
         kind: "text",
         placeholder: "Search devices...",
         deriveSchema: true,
-        stored: { columns: ["name"] },
+        anyOf: ["name"],
       },
       {
         columnId: "installationId",
         kind: "text",
         placeholder: "Filter by installation ID...",
         deriveSchema: true,
-        stored: true,
+        anyOf: ["installationId"],
       },
       {
         columnId: "platform",

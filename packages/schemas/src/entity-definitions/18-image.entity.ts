@@ -722,7 +722,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Filter by filename...",
         deriveSchema: true,
-        stored: true,
+        anyOf: ["filename"],
         schemaDescription: "Filter by filename (substring)",
       },
       {

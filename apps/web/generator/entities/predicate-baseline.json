@@ -21,7 +21,5 @@
     "taskOpen",
     "taskStatus"
   ],
-  "project": ["attention", "dateRange", "search"],
-  "task": ["search"],
-  "wish": ["search"]
+  "project": ["attention", "dateRange"]
 }

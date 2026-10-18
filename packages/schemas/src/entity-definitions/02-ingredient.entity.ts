@@ -375,7 +375,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Filter by ingredient name...",
         deriveSchema: true,
-        stored: { columns: ["name", "aliases"] },
+        anyOf: ["name", "aliases"],
         schemaDescription: "Filter by ingredient name or alias (substring)",
       },
       {
