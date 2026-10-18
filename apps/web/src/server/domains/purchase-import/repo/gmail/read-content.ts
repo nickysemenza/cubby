@@ -132,6 +132,25 @@ function boundedImages(
   return { images: kept, imagesOmitted: omitted };
 }
 
+/**
+ * Purchase evidence decides between the parts before readable length does:
+ * retailers often send a long boilerplate text part while the order table
+ * (lines, totals, order number) exists only in the HTML.
+ */
+function htmlIsRicher(
+  compact: { text: string; cues: string[]; readable_chars: number },
+  plain: string,
+) {
+  const missingFrom = (text: string, cues: readonly string[]) => {
+    const lower = text.toLowerCase();
+    return cues.filter((cue) => !lower.includes(cue.toLowerCase())).length;
+  };
+  const htmlOnly = missingFrom(plain, compact.cues);
+  const plainOnly = missingFrom(compact.text, wasm.purchase_cues(plain).cues);
+  if (htmlOnly !== plainOnly) return htmlOnly > plainOnly;
+  return compact.readable_chars > readableChars(plain);
+}
+
 const readableChars = (text: string) =>
   (text.match(/[\p{L}\p{N}]/gu) ?? []).length;
 
@@ -155,7 +174,7 @@ export function mailReadContent(
   const compacted =
     compact !== null &&
     compact.text.trim() !== "" &&
-    (plain === null || compact.readable_chars > readableChars(plain));
+    (plain === null || htmlIsRicher(compact, plain));
   const body = compacted ? compact.text : plain;
   const page =
     input.includeHtml && htmlBytes !== null

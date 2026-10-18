@@ -302,3 +302,28 @@ describe("mailReadContent compact evidence", () => {
     ).toBe(true);
   });
 });
+
+// Regression: a retailer's text part is long loyalty boilerplate while its
+// order table lives only in the HTML (with a hidden mobile duplicate). The
+// read chose the text part by readable characters, so a Run coordinator,
+// refused raw HTML, could not see the items or total.
+describe("mailReadContent text versus HTML choice", () => {
+  const boilerplate = Array.from(
+    { length: 120 },
+    (_, index) =>
+      `Members earn points on every purchase. Visit our help center for returns and exchanges, section ${index}.`,
+  ).join("\n");
+  const rows = `<tr><td>Synthetic runner shoe</td><td>$104.00</td></tr><tr><td>Synthetic trail shoe</td><td>$110.00</td></tr><tr><td>Subtotal</td><td>$214.00</td></tr><tr><td>Total</td><td>$232.46</td></tr>`;
+  const bodyHtml = `<p>Order number SYN-AD1001</p><table>${rows}</table><div style="display:none"><table>${rows}</table></div>`;
+
+  it("reads the HTML when only it carries the order's purchase evidence", () => {
+    const read = mailReadContent(
+      { snippet: null, bodyText: boilerplate, bodyHtml },
+      {},
+    );
+    expect(read.compacted).toBe(true);
+    for (const value of ["$104.00", "$110.00", "$214.00", "$232.46"])
+      expect(read.bodyText).toContain(value);
+    expect(read.bodyText).toContain("Synthetic trail shoe");
+  });
+});
