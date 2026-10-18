@@ -144,8 +144,9 @@ starts — follows a narrower ladder:
    never pays automatically; its pause reason says so with the raw diagnostics.
    Paused Runs resume when the next window starts.
 
-A member's "Run now, paid allowed" override authorizes paid funding for one Run
-(and the imports its discovery starts) within the paid budget; spending past a
+A member's "Run now, paid allowed" override, available in the Run header's
+More actions menu and on the Mail import card, authorizes paid funding for one
+Run (and the imports its discovery starts) within the paid budget; spending past a
 spent paid budget requires a second confirmation naming the amount, valid for
 the window it was granted in. The paid budget counts charged cost only, so
 credit usage never consumes it.

@@ -1107,6 +1107,7 @@ function RunAgentActionRead({ record }: { record: RunOut }) {
   const query = useSyncedRun(record, true);
   return query.data ? (
     <>
+      {waitsForFunding(query.data) ? <PaidRunControl run={query.data} /> : null}
       {query.data.purpose === "photo_inventory" ? (
         <PhotoRunGroupingAction run={query.data} />
       ) : null}

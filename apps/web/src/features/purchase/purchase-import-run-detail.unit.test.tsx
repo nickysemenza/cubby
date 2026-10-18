@@ -11,6 +11,7 @@ import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { importReportBlocks } from "~/server/generic/entity-report/repo/run";
 
 import {
+  RunAgentActions,
   RunImportAgentActive,
   RunImportAgentStopped,
   RunImportControls,
@@ -324,7 +325,7 @@ it("runs a waiting import now with paid models after confirmation", async () => 
     failureCode: "execution_limit",
     endedAt: null,
   };
-  render(<RunImportControls record={record} />, { wrapper: harness.wrapper });
+  render(<RunAgentActions record={record} />, { wrapper: harness.wrapper });
   const button = await screen.findByRole("button", {
     name: "Run now, paid allowed",
   });
