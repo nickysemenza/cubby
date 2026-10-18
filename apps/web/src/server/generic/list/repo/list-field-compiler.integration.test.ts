@@ -398,12 +398,17 @@ describe("compiled list fields", () => {
         .filter((id) => ours.has(id)),
     ).toEqual([loose]);
 
-    // Expense allocation filters read data prepared from the include values,
-    // so negating them would silently ignore the excluded ones.
+    // A product's effective owner is resolved from the include values in app
+    // code, so negating it would silently ignore the excluded ones.
     await expect(
-      expenseList(ctx.db, { projectIdExclude: [renovation.id] }, [], page),
+      productList(
+        ctx.db,
+        { ownerLedgerPartyIdExclude: ["@household"] },
+        [],
+        page,
+      ),
     ).rejects.toThrow(
-      /Cannot exclude expense by "projectId": Include only: Matches the expense's allocation shares/,
+      /Cannot exclude product by "ownerLedgerPartyId": Include only: The effective owner/,
     );
   });
 

@@ -488,7 +488,7 @@ export interface RowSetSql {
  * A repository row set's relation: SQL selecting `"owner"` and its declared
  * columns, or one rendered from a `listPrepare` (`prepare.rows`).
  */
-export type RowsSql = SQL | PreparedRows;
+type RowsSql = SQL | PreparedRows;
 
 /** The relations a repository owes `listScaffold` for its repository row sets. */
 export type RowsSqlArg<E extends Entity> = {
