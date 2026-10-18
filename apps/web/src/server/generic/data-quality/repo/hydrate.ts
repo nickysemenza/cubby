@@ -332,8 +332,8 @@ WHERE ${t.id} = ANY(${uuidArrayParam(ids)}) AND ${liveQualityRow(t)}`);
   ${t.id} AS "id",
   ${sql.join(
     compared.map(
-      ({ check, index }) =>
-        sql`${fingerprintSql(entity, check, t, fingerprinted.context)} AS ${sql.identifier(fingerprintKey(index))}`,
+      ({ check, index, rowIds }) =>
+        sql`CASE WHEN ${t.id} = ANY(${uuidArrayParam(rowIds)}) THEN ${fingerprintSql(entity, check, t, fingerprinted.context)} END AS ${sql.identifier(fingerprintKey(index))}`,
     ),
     sql`, `,
   )}
@@ -346,19 +346,8 @@ WHERE ${t.id} = ANY(${uuidArrayParam(fingerprintIds)}) AND ${liveQualityRow(t)}`
       .parse(fingerprints.rows)
       .map((row) => [row.id, row]),
   );
-  return rows.map((row) => {
-    const fingerprint = byId.get(row.id);
-    if (!fingerprint) return row;
-    const values = Object.fromEntries(
-      compared
-        .filter(({ rowIds }) => rowIds.includes(row.id))
-        .map(({ index }) => [
-          fingerprintKey(index),
-          fingerprint[fingerprintKey(index)] ?? null,
-        ]),
-    );
-    return { ...row, ...values };
-  });
+  // Each fingerprint is NULL outside its own compared rows.
+  return rows.map((row) => ({ ...row, ...byId.get(row.id) }));
 };
 
 type Evaluated = Omit<DataQuality, "relatedGaps" | "relatedExceptions">;

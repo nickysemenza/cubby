@@ -736,22 +736,33 @@ describe("data quality: list filters, sort and hydration agree", () => {
   // A batch mixing those rows with exception-free and stale ones must keep
   // each state, and exception-free rows must not evaluate fingerprints.
   it("product: compares fingerprints only for rows with an exception on a live gap", async () => {
-    const make = (name: string) =>
+    const make = (name: string, manufacturer = "Acme") =>
       createProductFixture(
         ctx.db,
         makeProductInput({
           name,
-          manufacturer: "Acme",
+          manufacturer,
           categoryId: taxonomyShortcode("tools"),
           model: null,
         }),
         TEST_ACTOR,
       );
-    const [accepted, open, mismatched] = [
+    const [accepted, open, mismatched, both] = [
       await make("DQ batch accepted"),
       await make("DQ batch open"),
       await make("DQ batch mismatched"),
+      await make("DQ batch both", "(unspecified)"),
     ];
+    // Two checks on one row, and a check no other row in the batch compares.
+    for (const [check, reason] of [
+      ["product_external_id", "not_issued"],
+      ["product_manufacturer", "unavailable"],
+    ] as const)
+      await setDataException(
+        ctx.db,
+        { entityId: both.id, check, reason, note: "Synthetic both." },
+        TEST_ACTOR,
+      );
     await unwrapDb(ctx.db)
       .insert(dataExceptionRecord)
       .values([
@@ -776,25 +787,31 @@ describe("data quality: list filters, sort and hydration agree", () => {
       accepted.entityId,
       open.entityId,
       mismatched.entityId,
+      both.entityId,
     ]);
-    const state = (id: typeof accepted.entityId) => ({
-      gap: qualities
-        .get(id)
-        ?.gaps.some((gap) => gap.check === "product_external_id"),
+    const state = (
+      id: typeof accepted.entityId,
+      check: "product_external_id" | "product_manufacturer",
+    ) => ({
+      gap: qualities.get(id)?.gaps.some((gap) => gap.check === check),
       exception: qualities
         .get(id)
-        ?.exceptions.find(
-          (exception) => exception.check === "product_external_id",
-        )?.state,
+        ?.exceptions.find((exception) => exception.check === check)?.state,
     });
     expect([
-      state(accepted.entityId),
-      state(open.entityId),
-      state(mismatched.entityId),
+      state(accepted.entityId, "product_external_id"),
+      state(open.entityId, "product_external_id"),
+      state(mismatched.entityId, "product_external_id"),
+      state(both.entityId, "product_external_id"),
+      state(both.entityId, "product_manufacturer"),
+      state(accepted.entityId, "product_manufacturer"),
     ]).toEqual([
       { gap: false, exception: "active" },
       { gap: true, exception: undefined },
       { gap: true, exception: "stale" },
+      { gap: false, exception: "active" },
+      { gap: false, exception: "active" },
+      { gap: false, exception: undefined },
     ]);
     const statements = (ids: (typeof accepted.entityId)[]) =>
       withDatabaseOperationMetrics(async (metrics) => {
