@@ -26,7 +26,7 @@ import {
 } from "~/ui/primitives/empty";
 import { Spinner } from "~/ui/primitives/spinner";
 
-import { AuditRecordRow } from "./audit-log-entry";
+import { AUDIT_COLUMNS, AuditRecordRow, auditFacts } from "./audit-log-entry";
 import { foldAuditEntries } from "./audit-log-fold";
 
 export interface AuditLogListOperations {
@@ -116,6 +116,18 @@ export function AuditLogList({
     }
     return result;
   }, [entries]);
+  // A row speaks for its group's newest entry, so only those name columns;
+  // a page with no client, device or Run shows none.
+  const columns = useMemo(() => {
+    const present = new Set(
+      days.flatMap((day) =>
+        day.groups.flatMap((group) =>
+          group[0] ? auditFacts(group[0]).map((fact) => fact.id) : [],
+        ),
+      ),
+    );
+    return AUDIT_COLUMNS.filter((column) => present.has(column.id));
+  }, [days]);
 
   useSectionEmpty(
     data !== undefined &&
@@ -172,6 +184,7 @@ export function AuditLogList({
     <RecordList
       variant="timeline"
       aria-label="Activity"
+      columns={columns}
       footer={
         hasNextPage ? (
           <Row justify="center" className="pt-2">

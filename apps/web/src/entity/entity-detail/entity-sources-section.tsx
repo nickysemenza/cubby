@@ -8,13 +8,13 @@ import {
 } from "@cubby/schemas/entity-source";
 import { countLabel } from "@cubby/shared/pluralize";
 import { useQuery } from "@tanstack/react-query";
-import type { ReactNode } from "react";
 import { z } from "zod";
 
 import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatTimestamp } from "~/lib/date-format";
 import { DateDisplay } from "~/ui/common/date-display";
-import type { RecordListState } from "~/ui/common/record-list";
+import type { Fact } from "~/ui/common/fact-list";
+import type { RecordColumn, RecordListState } from "~/ui/common/record-list";
 import {
   RecordDetail,
   RecordList,
@@ -69,16 +69,23 @@ const fieldLabel = (entity: Entity, source: Source) =>
       )?.label ?? source.fieldPath)
     : "Record";
 
-/** What a document supports, in one line: its cited fields, earlier values named as such. */
-function Supports({
+const SOURCE_COLUMNS = [
+  { id: "supports", label: "Supports" },
+  { id: "earlier", label: "Earlier" },
+  { id: "related", label: "Related" },
+  { id: "seen", label: "Seen" },
+] as const satisfies readonly RecordColumn[];
+
+/** What a document supports: its cited fields, earlier values apart, related paths and when it was seen. */
+function sourceFacts({
   entity,
   citations,
-  related,
+  paths,
 }: {
   entity: Entity;
   citations: readonly Source[];
-  related: ReactNode;
-}) {
+  paths: Parameters<typeof RecordPaths>[0]["paths"];
+}): Fact[] {
   const current = new Set<string>();
   const earlier = new Set<string>();
   for (const source of citations)
@@ -86,19 +93,48 @@ function Supports({
       fieldLabel(entity, source),
     );
   for (const label of current) earlier.delete(label);
-  const parts = [
-    ...(current.size ? [[...current].join(", ")] : []),
-    ...(earlier.size ? [`earlier ${[...earlier].join(", ")}`] : []),
+  const seen = latestSeen(citations);
+  return [
+    ...(current.size
+      ? [
+          {
+            id: "supports",
+            label: "Supports",
+            value: [...current].join(", "),
+            title: [...current].join(", "),
+            className: "text-foreground",
+          },
+        ]
+      : []),
+    ...(earlier.size
+      ? [
+          {
+            id: "earlier",
+            label: "Earlier",
+            value: [...earlier].join(", "),
+            title: [...earlier].join(", "),
+          },
+        ]
+      : []),
+    ...(paths.length
+      ? [
+          {
+            id: "related",
+            label: "Related",
+            value: <RecordPaths paths={paths} compact />,
+          },
+        ]
+      : []),
+    ...(seen
+      ? [
+          {
+            id: "seen",
+            label: "Seen",
+            value: <DateDisplay timestamp={seen} clock="day" />,
+          },
+        ]
+      : []),
   ];
-  return (
-    <span className="flex min-w-0 flex-wrap items-center gap-x-1">
-      {parts.length ? (
-        <span className="text-foreground">{parts.join(" · ")}</span>
-      ) : null}
-      {parts.length && related ? <span aria-hidden> · </span> : null}
-      {related}
-    </span>
-  );
 }
 
 /** One quote under its document: the field it supports, the variant seen, and when. */
@@ -247,53 +283,42 @@ function EntitySourcesList({
       : undefined,
   );
   useSectionEmpty(state.status === "success" && groups.size === 0);
+  const rows = [...groups].map(([key, group]) => ({
+    key,
+    group,
+    facts: sourceFacts({
+      entity,
+      citations: group.citations,
+      paths: group.paths,
+    }),
+  }));
   return (
     <>
       <RecordList
         aria-label="Sources"
         empty={state.status === "success" ? "No sources." : undefined}
+        columns={SOURCE_COLUMNS.filter((column) =>
+          rows.some(({ facts }) => facts.some((fact) => fact.id === column.id)),
+        )}
       >
-        {[...groups].map(([key, group]) => {
-          const seen = latestSeen(group.citations);
+        {rows.map(({ key, group, facts }) => {
           const target = group.target.sourceEntity;
           return (
             <RecordRow
               key={key}
               primary={
                 group.target.sourceEntity || group.target.url ? (
-                  <>
-                    <SourceTargetLink source={group.target} />
-                    {target ? (
-                      <span className="shrink-0 font-mono text-2xs text-muted-foreground">
-                        {target.entityId}
-                      </span>
-                    ) : null}
-                  </>
+                  <SourceTargetLink source={group.target} />
                 ) : (
                   `by ${group.citations[0] ? recorderLabel(group.citations[0].recorder) : "unknown recorder"}`
                 )
               }
               secondary={
-                <Supports
-                  entity={entity}
-                  citations={group.citations}
-                  related={
-                    group.paths.length ? (
-                      <span className="inline-flex min-w-0 items-center gap-1">
-                        Related
-                        <RecordPaths paths={group.paths} compact />
-                      </span>
-                    ) : null
-                  }
-                />
-              }
-              trailing={
-                seen ? (
-                  <>
-                    Seen <DateDisplay timestamp={seen} clock="day" />
-                  </>
+                target ? (
+                  <span className="font-mono text-2xs">{target.entityId}</span>
                 ) : null
               }
+              facts={facts}
               detail={
                 // Every citation keeps its variant, observation and recorder, quoted or not.
                 group.citations.length > 0 ? (

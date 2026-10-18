@@ -279,7 +279,7 @@ export interface LedgerContext {
   detailRows: readonly string[] | undefined;
 }
 
-function LedgerRow({
+function ReportRecordLine({
   row,
   context,
 }: {
@@ -308,6 +308,10 @@ function LedgerRow({
           <ReportVerb key={action} action={action} record={record} row={row} />
         ));
   const hasLinks = Boolean(row.commands?.length || row.externalLink);
+  // Several lines, or a loud line that wraps in full, read as a block beneath
+  // the row; one quiet line stays inline evidence.
+  const lineCount = row.lines?.length ?? 0;
+  const blockText = lineCount > 1 || (lineCount === 1 && isLoud(row));
   return (
     <RecordRow
       leading={
@@ -352,7 +356,7 @@ function LedgerRow({
         </span>
       }
       clip={false}
-      secondary={row.lines?.length ? <RowText row={row} /> : null}
+      secondary={lineCount === 1 && !blockText ? <RowText row={row} /> : null}
       trailing={<RowTrailing row={row} sharedDay={context.day !== null} />}
       actions={
         hasLinks || verbs.length > 0 ? (
@@ -364,8 +368,9 @@ function LedgerRow({
         ) : null
       }
       detail={
-        opened || row.detail || (choice && context.choices) ? (
+        blockText || opened || row.detail || (choice && context.choices) ? (
           <>
+            {blockText ? <RowText row={row} /> : null}
             {opened ? (
               <div className="flex flex-wrap items-center gap-2">
                 <CommandButton
@@ -430,7 +435,7 @@ export function RecordLedger({
         <RecordHeading label={<DateDisplay start={context.day} />} />
       ) : null}
       {rows.map((row, index) => (
-        <LedgerRow key={keys[index]} row={row} context={context} />
+        <ReportRecordLine key={keys[index]} row={row} context={context} />
       ))}
     </RecordList>
   );

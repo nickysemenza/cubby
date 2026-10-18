@@ -185,7 +185,7 @@ describe("PROBLEM_SECTIONS", () => {
     harness.dispose();
   });
 
-  it("renders a uniform problem row as an entity link with its badges", async () => {
+  it("renders a uniform problem row as a titled entity link with its facts", async () => {
     const harness = createBrowserTestHarness();
     await act(async () => {
       await harness.loadRouter();
@@ -198,8 +198,14 @@ describe("PROBLEM_SECTIONS", () => {
       entity: "image",
       id: testShortcode("image", "needs-review"),
       name: "garden-photo.jpg",
-      subtitle: "Cutout eligibility needs review",
-      badges: [{ label: "Needs review", entity: null, id: null }],
+      fields: [
+        {
+          label: "Issue",
+          value: "Cutout eligibility needs review",
+          tone: "warning",
+        },
+      ],
+      badges: [],
     });
     const problems: AllProblems = {
       ...EMPTY_PROBLEM_ARRAYS,
@@ -211,12 +217,13 @@ describe("PROBLEM_SECTIONS", () => {
     render(section.node(problems, undefined), { wrapper: harness.wrapper });
 
     expect(
-      screen.getByText("Needs review", { selector: '[data-slot="badge"]' }),
+      screen.getByText("Cutout eligibility needs review"),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Open image" })).toHaveAttribute(
-      "href",
-      `/images/${issue.id}`,
-    );
+    // The title is the way in, so the row drops its icon-only Open button.
+    expect(
+      screen.getByRole("link", { name: "garden-photo.jpg" }),
+    ).toHaveAttribute("href", `/images/${issue.id}`);
+    expect(screen.queryByRole("button", { name: "Open image" })).toBeNull();
     // The card names its record by a copyable shortcode read off the route.
     expect(screen.getByRole("button", { name: issue.id })).toHaveAttribute(
       "title",
@@ -254,10 +261,11 @@ describe("PROBLEM_SECTIONS", () => {
 
     render(section.node(problems, undefined), { wrapper: harness.wrapper });
 
-    expect(screen.getByRole("button", { name: "Open email" })).toHaveAttribute(
-      "href",
-      `/emails/${email}`,
-    );
+    expect(
+      screen.getByRole("link", {
+        name: "Purchase mail from Example Shop does not match a vendor",
+      }),
+    ).toHaveAttribute("href", `/emails/${email}`);
     expect(screen.getByRole("button", { name: email })).toBeInTheDocument();
     harness.dispose();
   });

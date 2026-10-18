@@ -1,5 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { parseShortcode } from "@cubby/shared";
+import { countLabel } from "@cubby/shared/pluralize";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
@@ -8,16 +10,30 @@ import type { Icon } from "@phosphor-icons/react/lib";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
 
-import type { EntityDetailParams, EntityDetailRoute } from "~/entity/entities";
+import { EntityIdentityMark } from "~/entity/components/entity-identity-mark";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import {
+  type EntityDetailParams,
+  type EntityDetailRoute,
+  entityDetailLink,
+  isBrowserRoutedEntity,
+} from "~/entity/entities";
+import { useEntityDisplayImage } from "~/entity/entity-media/entity-display-images";
+import {
+  hoverPreviewEntities,
+  type HoverPreviewEntity,
+} from "~/entity/preview/preview-entities";
 import { formatCount } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import { CopyableShortcode } from "~/ui/common/copyable-shortcode";
+import type { Fact } from "~/ui/common/fact-list";
 import {
   RecordDot,
   RecordFold,
   RecordGroup,
   RecordList,
   RecordMore,
+  recordColumnsOf,
   RecordRow,
   type RecordTone,
 } from "~/ui/common/record-list";
@@ -30,6 +46,7 @@ import {
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
 
+import { useProblemImageRefs } from "./problem-images";
 import { useRecipeUsage } from "./recipe-usage-context";
 
 // Cap each group's initial render so one noisy detector (e.g. 50+ unit-coverage
@@ -100,13 +117,19 @@ export type RenderedProblemItem = {
    */
   key?: string;
   title: string;
-  subtitle?: string;
+  /**
+   * Labelled facts; a section aligns its rows' facts into columns by label.
+   * A record another row names (a location, a vendor) is a fact whose value
+   * is an `EntityRefLink` chip.
+   */
+  fields?: Fact[];
   /**
    * The copyable code beside the subtitle. Defaults to the code `route` points
    * at; set `null` when the route opens a sample rather than the card's own
    * subject (a manufacturer spelling links one product that uses it).
    */
   shortcode?: string | null;
+  /** Status pills beside the title (a code, a "New image" stamp). */
   badges?: ReactNode[];
   details?: ReactNode[];
   /**
@@ -253,6 +276,21 @@ export function ProblemSection<T>({
   // Every COUNT below is about the population; `items` is only what we render.
   const total = count ?? items.length;
   const groups = groupBy ? groupBy(items) : { "": items };
+  // `renderItem` is pure, so render once: the columns and the image batch
+  // both read every row before any group renders.
+  const rendered = new Map(items.map((item) => [item, renderItem(item)]));
+  const renderedItems = [...rendered.values()];
+  const columns = recordColumnsOf(
+    renderedItems.map((item) => ({ facts: item.fields })),
+  );
+  useProblemImageRefs(
+    renderedItems.flatMap((item) => {
+      const ref = rowRef(item);
+      return ref && !item.imageSlot
+        ? [{ entityKind: ref.entity, entityId: ref.id }]
+        : [];
+    }),
+  );
   const isGrouped =
     Object.keys(groups).length > 1 && Object.keys(groups)[0] !== "";
   const unloaded = total - items.length;
@@ -279,13 +317,13 @@ export function ProblemSection<T>({
       {items.length === 0 ? (
         <p className="text-xs/5 text-muted-foreground">{emptyMessage}</p>
       ) : (
-        <RecordList>
+        <RecordList columns={columns}>
           {Object.entries(groups).map(([groupName, groupItems]) => (
             <ProblemGroup
               key={groupName}
               groupName={isGrouped ? groupName : ""}
               items={groupItems}
-              renderItem={renderItem}
+              renderItem={(item) => rendered.get(item) ?? renderItem(item)}
               kind={kind}
               visible={visible}
               // The list link covers every row, loaded or not, so it stands in
@@ -406,11 +444,73 @@ const routeShortcode = (route: RoutePattern): string | null =>
       : route.params.shortcode,
   )?.shortcode ?? null;
 
+type RowRef = { entity: BrowserRoutedEntity; id: string };
+
 /**
- * One problem as a record row: its mark, the full message (wrapping, never
- * clipped), the copyable code and evidence beneath, and quiet actions in the
- * shared right-hand column. Holds its own expand state so opening an inline fix
- * on one row doesn't re-render or collapse the others.
+ * The record a row is about, when its title names it: the route's shortcode,
+ * unless the row says its route opens a sample (`shortcode: null`) or the
+ * route ends in no code (a filtered list, a workbench).
+ */
+const rowRef = (rendered: RenderedProblemItem): RowRef | null => {
+  if (rendered.shortcode === null || !rendered.route) return null;
+  const parsed = parseShortcode(
+    rendered.shortcode ?? routeShortcode(rendered.route) ?? "",
+  );
+  if (!parsed || !isBrowserRoutedEntity(parsed.type)) return null;
+  return { entity: parsed.type, id: parsed.shortcode };
+};
+
+const isHoverPreviewEntity = (
+  entity: BrowserRoutedEntity,
+): entity is HoverPreviewEntity =>
+  hoverPreviewEntities.some((candidate) => candidate === entity);
+
+/** The row's own record as a link: hover preview where the entity has one. */
+function RowTitle({ refTo, title }: { refTo: RowRef; title: string }) {
+  const image = useEntityDisplayImage({
+    entityKind: refTo.entity,
+    entityId: refTo.id,
+  });
+  const text = <span className="min-w-0 text-sm/5 break-words">{title}</span>;
+  const entity = refTo.entity;
+  return isHoverPreviewEntity(entity) ? (
+    <EntityRefLink
+      variant="preview"
+      entity={entity}
+      id={refTo.id}
+      displayImage={image}
+      showIdentityMark={false}
+      className="min-w-0 underline-offset-2 hover:underline"
+    >
+      {text}
+    </EntityRefLink>
+  ) : (
+    <Link
+      {...entityDetailLink(entity, refTo.id)}
+      className="min-w-0 underline-offset-2 hover:underline"
+    >
+      {text}
+    </Link>
+  );
+}
+
+/** The row's leading identity: its record's cover, or the entity's mark. */
+function RowMark({ refTo }: { refTo: RowRef }) {
+  const image = useEntityDisplayImage({
+    entityKind: refTo.entity,
+    entityId: refTo.id,
+  });
+  return (
+    <EntityIdentityMark entity={refTo.entity} displayImage={image} size="row" />
+  );
+}
+
+/**
+ * One problem as a record row: its record's image, the record's name as a
+ * link (wrapping, never clipped), the copyable code, labelled facts in the
+ * section's columns, and quiet actions in the shared right-hand column. Holds
+ * its own expand state so opening an inline fix on one row doesn't re-render
+ * or collapse the others.
  */
 function ProblemRow({
   rendered,
@@ -422,7 +522,7 @@ function ProblemRow({
   const [open, setOpen] = useState(false);
   const {
     title,
-    subtitle,
+    fields,
     badges = [],
     details = [],
     route,
@@ -438,110 +538,118 @@ function ProblemRow({
         ? routeShortcode(route)
         : null
       : rendered.shortcode;
-  const openLabel = route ? (editLabel ?? `Open ${routeNoun(route)}`) : "";
+  const refTo = rowRef(rendered);
+  // A linked title is the way in; the icon button only remains for rows whose
+  // title names something other than the route's record.
+  const openLabel =
+    route && !refTo ? (editLabel ?? `Open ${routeNoun(route)}`) : "";
   const mark = tone ? TONE_DOT[tone] : KIND_DOT[kind];
 
   // How many recipes use this product (via its ingredient) — a "how much does
   // fixing this matter" signal. Only set for ingredient-linked products.
   const recipeUsage = useRecipeUsage();
   const recipeCount =
-    route && "to" in route && route.to === "/products/$shortcode"
-      ? recipeUsage[routeEntityId(route)]
-      : undefined;
+    refTo?.entity === "product" ? recipeUsage[refTo.id] : undefined;
 
-  const hasDetail =
-    details.length > 0 || badges.length > 0 || (inlineFix && open);
+  const hasDetail = details.length > 0 || (inlineFix && open);
 
   return (
     <RecordRow
       leading={
         imageSlot ? (
-          <div className="size-8 shrink-0 overflow-hidden bg-muted">
+          <div className="size-6 shrink-0 overflow-hidden bg-muted">
             {imageSlot}
           </div>
+        ) : refTo && !tone ? (
+          // An explicit tone is per-row signal and keeps its dot; the
+          // section-wide default is already the heading's.
+          <RowMark refTo={refTo} />
         ) : (
           <RecordDot tone={mark.tone} label={mark.label} />
         )
       }
-      primary={<span className="min-w-0 text-sm/5 break-words">{title}</span>}
+      primary={
+        <span className="inline-flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+          {refTo ? (
+            <RowTitle refTo={refTo} title={title} />
+          ) : (
+            <span className="min-w-0 text-sm/5 break-words">{title}</span>
+          )}
+          {badges}
+        </span>
+      }
       secondary={
-        shortcode || subtitle ? (
-          <span className="inline-flex min-w-0 flex-wrap items-center gap-x-1.5">
-            {shortcode && (
-              <CopyableShortcode
-                code={shortcode}
-                className="shrink-0 pointer-coarse:min-h-11"
-              />
-            )}
-            {shortcode && subtitle && <span aria-hidden>·</span>}
-            {subtitle && <span className="min-w-0">{subtitle}</span>}
-          </span>
+        shortcode ? (
+          <CopyableShortcode
+            code={shortcode}
+            className="shrink-0 pointer-coarse:min-h-11"
+          />
         ) : undefined
       }
+      facts={fields}
       clip={false}
       trailing={
         recipeCount === undefined
           ? undefined
-          : `${recipeCount} ${recipeCount === 1 ? "recipe" : "recipes"}`
+          : countLabel(recipeCount, "recipe")
       }
       actions={
-        <div className="flex flex-wrap items-center justify-end gap-1">
-          {inlineFix && (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className={cn(
-                      inlineFix.destructive && !open && "text-destructive",
-                    )}
-                    onClick={() => setOpen((o) => !o)}
-                  />
-                }
-              >
-                {open ? <XIcon /> : <WrenchIcon />}
-                {open ? "Cancel" : inlineFix.label}
-              </TooltipTrigger>
-              <TooltipContent>Quick fix — just this item</TooltipContent>
-            </Tooltip>
-          )}
-          {route && (
-            // Icon-only: the label lives in the accessible name and tooltip,
-            // so the title keeps the width a repeated "Open product" took.
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={openLabel}
-                    render={
-                      "href" in route ? (
-                        <Link to={route.href} />
-                      ) : (
-                        <Link to={route.to} params={route.params} />
-                      )
-                    }
-                    nativeButton={false}
-                  />
-                }
-              >
-                <ArrowSquareOutIcon />
-              </TooltipTrigger>
-              <TooltipContent>{openLabel}</TooltipContent>
-            </Tooltip>
-          )}
-          {customActions}
-        </div>
+        inlineFix || openLabel || customActions ? (
+          // One line: a wrapped command column steals height from every row.
+          <div className="flex items-center justify-end gap-1 whitespace-nowrap">
+            {inlineFix && (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className={cn(
+                        inlineFix.destructive && !open && "text-destructive",
+                      )}
+                      onClick={() => setOpen((o) => !o)}
+                    />
+                  }
+                >
+                  {open ? <XIcon /> : <WrenchIcon />}
+                  {open ? "Cancel" : inlineFix.label}
+                </TooltipTrigger>
+                <TooltipContent>Quick fix — just this item</TooltipContent>
+              </Tooltip>
+            )}
+            {route && openLabel && (
+              // Icon-only: the label lives in the accessible name and tooltip.
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={openLabel}
+                      render={
+                        "href" in route ? (
+                          <Link to={route.href} />
+                        ) : (
+                          <Link to={route.to} params={route.params} />
+                        )
+                      }
+                      nativeButton={false}
+                    />
+                  }
+                >
+                  <ArrowSquareOutIcon />
+                </TooltipTrigger>
+                <TooltipContent>{openLabel}</TooltipContent>
+              </Tooltip>
+            )}
+            {customActions}
+          </div>
+        ) : undefined
       }
       detail={
         hasDetail ? (
           <Stack gap="xs" className="text-xs">
             {details.length > 0 && <Stack gap="xs">{details}</Stack>}
-            {badges.length > 0 && (
-              <div className="flex flex-wrap gap-1">{badges}</div>
-            )}
             {inlineFix && open && (
               <div className="border-t pt-2">
                 {inlineFix.render(() => setOpen(false))}

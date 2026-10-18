@@ -60,6 +60,7 @@ import { invalidateOperationTags } from "~/integrations/tanstack-query/operation
 import { formatCurrency } from "~/lib/number-format";
 import { DateDisplay } from "~/ui/common/date-display";
 import { DecisionSteps } from "~/ui/common/decision-steps";
+import { FactList } from "~/ui/common/fact-list";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { useIndexedSubsections } from "~/ui/data-table/indexed-sections";
 import { showErrorToast } from "~/ui/feedback/error-details";
@@ -1979,13 +1980,6 @@ function PhotoProductSuggestions({
                   displayImage={null}
                 />
               }
-              secondary={
-                <ProductVariantEvidence
-                  comparison={candidate.match.variant}
-                  firstLabel="Photo"
-                  secondLabel="Product"
-                />
-              }
               trailing={
                 candidate.match.matchedIdentifiers?.length ? (
                   <Badge variant="positive">Exact identifier</Badge>
@@ -2025,13 +2019,26 @@ function PhotoProductSuggestions({
               }
               detail={
                 <Stack gap="xs">
-                  <p className="text-xs">
-                    Recorded count:{" "}
-                    {candidate.quantity?.onHandUnits ?? "Not counted"} ·
-                    Expected:{" "}
-                    {candidate.quantity?.quantityLedger.expectedQuantity ??
-                      "Unknown"}
-                  </p>
+                  <ProductVariantEvidence
+                    comparison={candidate.match.variant}
+                    firstLabel="Photo"
+                    secondLabel="Product"
+                  />
+                  <FactList
+                    className="text-xs"
+                    facts={[
+                      {
+                        label: "Recorded count",
+                        value: candidate.quantity?.onHandUnits ?? "Not counted",
+                      },
+                      {
+                        label: "Expected",
+                        value:
+                          candidate.quantity?.quantityLedger.expectedQuantity ??
+                          "Unknown",
+                      },
+                    ]}
+                  />
                   {candidate.purchaseLines?.map((line) => (
                     <p key={line.expenseId} className="text-xs">
                       {line.dateLabel ?? "Paid"}{" "}

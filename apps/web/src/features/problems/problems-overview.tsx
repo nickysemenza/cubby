@@ -29,6 +29,7 @@ import { Spinner } from "~/ui/primitives/spinner";
 import { AutoFixButton } from "./components/auto-fix-button";
 import { AwaitingWorkList } from "./components/awaiting-work";
 import { MaintenanceTools } from "./components/maintenance-tools";
+import { ProblemImagesProvider } from "./components/problem-images";
 import type { ProblemSectionKind } from "./components/problem-section";
 import {
   PROBLEM_SECTIONS,
@@ -212,10 +213,12 @@ export function ProblemsOverview() {
         analyzing={detectorsLoading}
         fix={<AutoFixButton problems={problems} />}
       />
-      <IndexedSections
-        groups={groups}
-        footer={<PassingChecks entries={passing} />}
-      />
+      <ProblemImagesProvider>
+        <IndexedSections
+          groups={groups}
+          footer={<PassingChecks entries={passing} />}
+        />
+      </ProblemImagesProvider>
     </RecipeUsageContext.Provider>
   );
 }

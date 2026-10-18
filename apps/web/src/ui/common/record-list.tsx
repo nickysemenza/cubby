@@ -1,17 +1,50 @@
 import type { ReportRowState } from "@cubby/schemas/entity-report";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { Link, type LinkProps } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import {
+  createContext,
+  type CSSProperties,
+  type ReactNode,
+  useContext,
+} from "react";
 
 import { cn } from "~/lib/utils";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
+import { type Fact, factColumnStyle, FactList } from "./fact-list";
 import { Ledger, LedgerCell, LedgerRow } from "./ledger";
 
 import "./record-list.css";
 
 export type RecordTone = "positive" | "warning" | "destructive" | "muted";
+
+/** One aligned fact column of a columnar `RecordList`; rows supply `facts` keyed by `id`. */
+export type RecordColumn = { id: string; label: string };
+
+// Grid lines: 1 leading, 2 primary, 3 secondary, then one per column, then
+// trailing and actions.
+const FIRST_FACT_COLUMN = 4;
+
+const RecordColumnsContext = createContext<ReadonlyMap<string, number> | null>(
+  null,
+);
+
+/**
+ * Columns in first-seen order across rows' facts, for lists whose columns are
+ * whatever their rows say rather than a fixed declaration.
+ */
+export function recordColumnsOf(
+  rows: readonly { facts?: readonly Fact[] | undefined }[],
+): RecordColumn[] {
+  const columns = new Map<string, string>();
+  for (const row of rows)
+    for (const fact of row.facts ?? []) {
+      const id = fact.id ?? fact.label;
+      if (!columns.has(id)) columns.set(id, fact.label);
+    }
+  return [...columns].map(([id, label]) => ({ id, label }));
+}
 
 /** Query state a list renders before its rows; loading and failure never read as empty. */
 export type RecordListState =
@@ -29,11 +62,17 @@ export function RecordList({
   state = { status: "success" },
   empty,
   footer,
+  columns,
   children,
   className,
   ...props
 }: {
   variant?: "plain" | "timeline";
+  /**
+   * Align rows' `facts` into these columns under one header. Below 32rem the
+   * header hides and each row's facts wrap inline with their labels.
+   */
+  columns?: readonly RecordColumn[];
   state?: RecordListState;
   /** Rendered instead of the ledger when the loaded list has no rows. */
   empty?: ReactNode;
@@ -55,6 +94,46 @@ export function RecordList({
     );
   if (empty !== undefined && isEmpty(children))
     return <p className="text-xs/5 text-muted-foreground">{empty}</p>;
+  if (columns?.length) {
+    const columnOf = new Map(
+      columns.map((column, index) => [column.id, FIRST_FACT_COLUMN + index]),
+    );
+    const trailing = FIRST_FACT_COLUMN + columns.length;
+    // SAFETY: React CSSProperties has no index signature for custom
+    // properties; these three are consumed only by ledger.css's columns rules.
+    const style = {
+      "--ledger-columns": `auto minmax(12rem, 1fr) fit-content(16rem) repeat(${columns.length}, fit-content(14rem)) auto auto`,
+      "--ledger-trailing-column": trailing,
+      "--ledger-actions-column": trailing + 1,
+    } as CSSProperties;
+    return (
+      <div className="flex w-full min-w-0 flex-col gap-1">
+        <Ledger
+          variant="columns"
+          data-record-list={variant}
+          className={className}
+          style={style}
+          {...props}
+        >
+          <LedgerRow aria-hidden data-ledger-header>
+            {columns.map((column) => (
+              <span
+                key={column.id}
+                data-ledger-column={column.id}
+                style={factColumnStyle(columnOf.get(column.id))}
+              >
+                {column.label}
+              </span>
+            ))}
+          </LedgerRow>
+          <RecordColumnsContext.Provider value={columnOf}>
+            {children}
+          </RecordColumnsContext.Provider>
+        </Ledger>
+        {footer}
+      </div>
+    );
+  }
   return (
     <div className="flex w-full min-w-0 flex-col gap-1">
       <Ledger data-record-list={variant} className={className} {...props}>
@@ -96,12 +175,15 @@ function RecordListSkeleton({ rows }: { rows: number }) {
 
 /**
  * One record row. `primary` is identity (usually an `EntityRefLink`), `secondary`
- * its one-line evidence, `trailing` a short muted fact (time, score, hops).
+ * its one-line evidence, `facts` its labelled values (aligned into columns
+ * when the list declares `columns`), `trailing` a short muted fact (time,
+ * score, hops).
  */
 export function RecordRow({
   leading,
   primary,
   secondary,
+  facts,
   trailing,
   actions,
   detail,
@@ -112,6 +194,7 @@ export function RecordRow({
   leading?: ReactNode;
   primary: ReactNode;
   secondary?: ReactNode;
+  facts?: readonly Fact[];
   trailing?: ReactNode;
   actions?: ReactNode;
   /** Content beneath the row, such as an expanded diff. */
@@ -121,6 +204,7 @@ export function RecordRow({
   className?: string;
   "data-testid"?: string;
 }) {
+  const columnOf = useContext(RecordColumnsContext);
   return (
     <LedgerRow className={className} {...props}>
       {leading !== undefined ? (
@@ -138,6 +222,14 @@ export function RecordRow({
           )}
         >
           {secondary}
+        </LedgerCell>
+      ) : null}
+      {facts?.length ? (
+        <LedgerCell as="div" slot="facts">
+          <FactList
+            facts={facts}
+            columnOf={columnOf ? (id) => columnOf.get(id) : undefined}
+          />
         </LedgerCell>
       ) : null}
       {trailing !== undefined && trailing !== null ? (

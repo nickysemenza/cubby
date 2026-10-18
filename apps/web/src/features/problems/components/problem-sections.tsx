@@ -60,6 +60,7 @@ import { formatDateSpan } from "~/lib/date-span";
 import { formatCurrency } from "~/lib/number-format";
 import { toastMutationWarnings } from "~/lib/recompute-summary";
 import { DateDisplay } from "~/ui/common/date-display";
+import type { Fact } from "~/ui/common/fact-list";
 import { Row } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
@@ -80,7 +81,14 @@ import {
   type ProblemSectionKind,
   type RenderedProblemItem,
 } from "./problem-section";
-import { byManufacturer, CodeChip, createdAgoDetail } from "./render-helpers";
+import {
+  CodeChip,
+  createdAgoDetail,
+  fact,
+  facts,
+  manufacturerFact,
+  recordFact,
+} from "./render-helpers";
 import {
   DuplicateProductMergeFix,
   DuplicateAccountAliasFix,
@@ -351,14 +359,24 @@ function customSection<T, K extends CoverageProblemKey = never>(
   };
 }
 
-/** A badge that names a record links to it; a plain one is evidence text. */
-function problemRowBadge(badge: ProblemRow["badges"][number]): ReactNode {
-  return badge.entity && badge.id ? (
-    entityBadge(badge.entity, { id: badge.id, name: badge.label })
-  ) : (
-    <Badge key={badge.label} variant="outline">
-      {badge.label}
-    </Badge>
+/**
+ * A server row's facts, then the records it names grouped by entity so each
+ * kind (Location, Product, Vendor) is one aligned column of chips.
+ */
+function problemRowFacts(row: ProblemRow): Fact[] {
+  const named = groupBy(row.badges, (badge) => badge.entity);
+  return facts(
+    ...row.fields.map((entry) =>
+      fact(entry.label, entry.value, entry.tone ?? undefined),
+    ),
+    ...Object.entries(named).map(([, badges]) =>
+      badges[0]
+        ? recordFact(
+            badges[0].entity,
+            badges.map((badge) => ({ id: badge.id, name: badge.label })),
+          )
+        : null,
+    ),
   );
 }
 
@@ -372,8 +390,7 @@ function renderProblemRow(row: ProblemRow): RenderedProblemItem {
   return {
     key: `${row.entity}:${row.id}`,
     title: row.name,
-    subtitle: row.subtitle ?? undefined,
-    badges: row.badges.map(problemRowBadge),
+    fields: problemRowFacts(row),
     route: isBrowserRoutedEntity(row.entity)
       ? entityDetailLink(row.entity, row.id)
       : undefined,
@@ -613,18 +630,15 @@ function renderTrackerItem(item: ProjectAttentionItem): RenderedProblemItem {
   return {
     key: item.key,
     title: item.name,
-    subtitle: attentionEvidence(item),
+    fields: facts(
+      fact("Evidence", attentionEvidence(item)),
+      item.parentProject &&
+        recordFact("project", [item.parentProject], "Project"),
+      // Only drift gets a side, and it is load-bearing: it is the sole thing
+      // distinguishing the two rows one project can emit under this rule.
+      item.type === "date_window_drift" && fact("Side", item.facts.side),
+    ),
     tone: item.severity,
-    // Only drift gets a badge, and it is load-bearing: it is the sole thing
-    // distinguishing the two rows one project can emit under this rule.
-    badges:
-      item.type === "date_window_drift"
-        ? [
-            <Badge key="side" variant="outline">
-              {item.facts.side}
-            </Badge>,
-          ]
-        : [],
     details: missingBudgetDetail(item),
     route: { href: item.href },
     editLabel: `Open ${item.entityKind}`,
@@ -663,13 +677,16 @@ function ManufacturerVariantLink({ manufacturer }: { manufacturer: string }) {
   );
 }
 
-const variantSubtitle = (
+const variantFacts = (
   v: Pick<
     ProblemItem<"manufacturerSpellingVariants">,
     "count" | "canonical" | "canonicalCount"
   >,
   noun: string,
-) => `${countLabel(v.count, noun)} — "${v.canonical}" has ${v.canonicalCount}`;
+): Fact[] => [
+  fact("This spelling", countLabel(v.count, noun), "warning"),
+  fact("Canonical", `"${v.canonical}" · ${countLabel(v.canonicalCount, noun)}`),
+];
 
 function WorkbenchFixLink({ ingredientId }: { ingredientId: string | null }) {
   return (
@@ -693,7 +710,7 @@ function WorkbenchFixLink({ ingredientId }: { ingredientId: string | null }) {
 function renderUnitCoverageItem(item: UnitCoverageItem): RenderedProblemItem {
   const base = {
     title: item.name,
-    subtitle: byManufacturer(item.manufacturer),
+    fields: facts(manufacturerFact(item.manufacturer)),
     route: entityDetailLink("product", item.id),
     editLabel: "Open product",
   };
@@ -777,27 +794,33 @@ function renderUnitCoverageItem(item: UnitCoverageItem): RenderedProblemItem {
 const mealDay = (meal: { date: string }): string =>
   `${mealDateLabel(meal)}, ${meal.date.slice(0, 4)}`;
 
-function shortcodeChips(
-  key: string,
+/**
+ * Records named only by code, as a fact of code links. A chip would resolve
+ * each code's name with its own request; these rows carry codes only.
+ */
+function shortcodeFact(
   label: string,
-  entity: "financialTransaction" | "financialAccount" | "purchase",
+  entity: Parameters<typeof entityDetailLink>[0],
   ids: readonly string[],
-): ReactNode {
-  return (
-    <Row key={key} align="center" gap="xs" wrap className="text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      {ids.map((id) => (
-        <Badge
-          key={id}
-          variant="outline"
-          className="font-sans tracking-normal normal-case"
-          render={<Link {...entityDetailLink(entity, id)} />}
-        >
-          {id}
-        </Badge>
-      ))}
-    </Row>
-  );
+): Fact {
+  return {
+    id: `record:${entity}`,
+    label,
+    value: (
+      <span className="inline-flex flex-wrap gap-x-2">
+        {ids.map((id) => (
+          <Link
+            key={id}
+            {...entityDetailLink(entity, id)}
+            className="font-mono underline-offset-2 hover:underline"
+          >
+            {id}
+          </Link>
+        ))}
+      </span>
+    ),
+    title: ids.join(", "),
+  };
 }
 
 const ALLOCATION_DEFECT_LABEL = {
@@ -811,45 +834,34 @@ const ALLOCATION_DEFECT_LABEL = {
   string
 >;
 
-function outsideOwnershipSubtitle(
+function outsideOwnershipFacts(
   row: ProblemItem<"toolsUsedOutsideOwnership">,
-): string {
+): Fact[] {
   // `projectBoundary` already has the detector's grace period applied, so it is
   // not the project's stated date — say "grace" rather than let the reader
   // compare it against the project page and conclude the card is wrong.
   const tool = formatCalendarDay(row.toolDate, "dateShort");
   const boundary = `${formatCalendarDay(row.projectBoundary, "dateShort")} (incl. grace)`;
-  return row.conflict === "acquired_after_end"
-    ? `${byManufacturer(row.manufacturer)} · acquired ${tool}, after ${row.projectName} ended ${boundary}`
-    : `${byManufacturer(row.manufacturer)} · disposed of ${tool}, before ${row.projectName} started ${boundary}`;
-}
-
-function entityBadge(
-  entity: ShortcodeEntity,
-  ref: { id: string; name: string },
-): ReactNode {
-  const routed = isBrowserRoutedEntity(entity);
-  return (
-    <Badge
-      key={ref.id}
-      variant="outline"
-      // Free-form entity names — opt out of the mono-uppercase stamp.
-      className="flex items-center gap-1 font-sans tracking-normal normal-case hover:bg-accent"
-      render={
-        routed ? <Link {...entityDetailLink(entity, ref.id)} /> : <span />
-      }
-    >
-      {routed && <EntityIcon entity={entity} colored className="size-3" />}
-      {ref.name}
-    </Badge>
+  const acquired = row.conflict === "acquired_after_end";
+  return facts(
+    manufacturerFact(row.manufacturer),
+    recordFact("project", [{ id: row.projectId, name: row.projectName }]),
+    fact(acquired ? "Acquired" : "Disposed of", tool, "warning"),
+    fact(acquired ? "Project ended" : "Project started", boundary),
   );
 }
 
-function purchaseSubtitle(
+function purchaseFacts(
   purchase: ProblemItem<"purchasesNotReconciling">,
-): string {
-  const expenses = `${purchase.expenseCount} ${purchase.expenseCount === 1 ? "expense" : "expenses"}`;
-  return `Stated ${formatCurrency(purchase.statedTotal)} · expenses ${formatCurrency(purchase.expenseTotal)} across ${expenses}`;
+): Fact[] {
+  return facts(
+    fact("Stated", formatCurrency(purchase.statedTotal)),
+    fact(
+      "Expenses",
+      `${formatCurrency(purchase.expenseTotal)} (${countLabel(purchase.expenseCount, "expense")})`,
+      "warning",
+    ),
+  );
 }
 
 function purchaseDeltaHint(
@@ -920,7 +932,10 @@ const DECLARED_SECTIONS = [
     renderItem: (finding) => ({
       key: finding.id,
       title: finding.summary,
-      subtitle: `${finding.kind.replaceAll("_", " ")} · ${formatTimestamp(finding.createdAt)}`,
+      fields: facts(
+        fact("Kind", humanize(finding.kind)),
+        fact("Found", formatTimestamp(finding.createdAt)),
+      ),
       route: findingTargetRoute(finding.targetId),
       customActions: <RunFindingActions finding={finding} />,
     }),
@@ -939,10 +954,16 @@ const DECLARED_SECTIONS = [
     renderItem: (dupe) => ({
       key: dupe.assessmentId,
       title: `${dupe.manufacturer} ${dupe.model}`,
-      subtitle: dupe.identityConflict
-        ? "Exact identifier conflicts with verified identity evidence"
-        : "An independently assessed Product pair",
-      badges: dupe.products.map((p) => entityBadge("product", p)),
+      fields: facts(
+        fact(
+          "Evidence",
+          dupe.identityConflict
+            ? "Exact identifier conflicts with verified identity evidence"
+            : "An independently assessed Product pair",
+          dupe.identityConflict ? "warning" : undefined,
+        ),
+        recordFact("product", dupe.products, "Products"),
+      ),
       details: [
         ...dupe.products.map((p) => (
           <div key={p.id} className="text-sm text-muted-foreground">
@@ -992,7 +1013,7 @@ const DECLARED_SECTIONS = [
       ) : null,
     renderItem: (product) => ({
       title: product.name,
-      subtitle: byManufacturer(product.manufacturer),
+      fields: facts(manufacturerFact(product.manufacturer)),
       details: [createdAgoDetail(product.createdAt)],
       route: entityDetailLink("product", product.id),
       inlineFix: {
@@ -1017,7 +1038,7 @@ const DECLARED_SECTIONS = [
     renderItem: (item) => ({
       key: `${item.kind}:${item.id}`,
       title: item.name ?? item.id,
-      subtitle: entityLabel(item.kind),
+      fields: facts(fact("Kind", entityLabel(item.kind))),
       route:
         isBrowserRoutedEntity(item.kind) && item.kind !== "usda-food"
           ? entityDetailLink(item.kind, item.id)
@@ -1068,16 +1089,7 @@ const DECLARED_SECTIONS = [
     entity: "product",
     renderItem: (row) => ({
       title: row.name,
-      subtitle: outsideOwnershipSubtitle(row),
-      badges: [
-        <Link
-          key={row.projectId}
-          {...entityDetailLink("project", row.projectId)}
-          className="hover:underline"
-        >
-          <Badge variant="outline">{row.projectName}</Badge>
-        </Link>,
-      ],
+      fields: outsideOwnershipFacts(row),
       route: entityDetailLink("product", row.id),
     }),
   }),
@@ -1270,7 +1282,7 @@ const DECLARED_SECTIONS = [
     renderItem: (v) => ({
       key: v.value,
       title: v.value,
-      subtitle: variantSubtitle(v, "product"),
+      fields: variantFacts(v, "product"),
       // The route opens one product using this spelling, not the spelling itself.
       shortcode: null,
       route: entityDetailLink("product", v.sampleId),
@@ -1291,7 +1303,14 @@ const DECLARED_SECTIONS = [
       title: v.value,
       // Weighed by purchases, not by roster rows — a duplicate is 1 row either way,
       // so the purchase count is what says which spelling is the real one.
-      subtitle: variantSubtitle(v, "purchase"),
+      fields: facts(
+        ...variantFacts(v, "purchase"),
+        recordFact(
+          "vendor",
+          [{ id: v.canonicalSampleId, name: v.canonical }],
+          "Merge into",
+        ),
+      ),
       route: entityDetailLink("vendor", v.sampleId),
       editLabel: "Open vendor",
       inlineFix: {
@@ -1317,17 +1336,11 @@ const DECLARED_SECTIONS = [
     icon: StorefrontIcon,
     renderItem: (vendor) => ({
       title: vendor.name,
-      subtitle: vendor.website ?? "No website recorded",
-      badges: [
-        <Badge key="purchases" variant="secondary">
-          {vendor.purchaseCount}{" "}
-          {vendor.purchaseCount === 1 ? "purchase" : "purchases"}
-        </Badge>,
-        <Badge key="expenses" variant="outline">
-          {vendor.expenseRowCount}{" "}
-          {vendor.expenseRowCount === 1 ? "expense line" : "expense lines"}
-        </Badge>,
-      ],
+      fields: facts(
+        fact("Website", vendor.website ?? "None recorded"),
+        fact("Purchases", String(vendor.purchaseCount)),
+        fact("Expense lines", String(vendor.expenseRowCount)),
+      ),
       route: entityDetailLink("vendor", vendor.id),
       editLabel: "Open vendor",
       customActions: <VendorLogoFetchAction vendor={vendor} />,
@@ -1389,7 +1402,10 @@ const DECLARED_SECTIONS = [
       // it is a public shortcode, so slicing only risked cutting a real code in
       // half for no gain.
       title: entity.entityId,
-      subtitle: `${entities[entity.entityKind].label} · not in the search index`,
+      fields: facts(
+        fact("Kind", entities[entity.entityKind].label),
+        fact("Search index", "Missing", "warning"),
+      ),
       // Live entity ⇒ always resolvable to a real page, unlike the orphaned
       // side of this pair — see the note on `entityMissingEmbeddingSchema`.
       route: entityDetailLink(entity.entityKind, entity.entityId),
@@ -1410,18 +1426,18 @@ const DECLARED_SECTIONS = [
       title: product.name,
       // The spread IS the evidence, so the card shows it rather than asserting
       // "sold by weight" and asking the reader to take that on trust.
-      subtitle: `${product.lineCount} priced lines from ${formatCurrency(
-        product.lowUnitCost,
-      )} to ${formatCurrency(product.highUnitCost)} each — needs a weight-to-money mapping`,
-      badges: product.ingredientId
-        ? [
-            // Only a linked product can mis-cost a recipe; unlinked ones are
-            // just an unusable per-each price.
-            <Badge key="linked" variant="outline">
-              Used by a recipe
-            </Badge>,
-          ]
-        : [],
+      fields: facts(
+        fact("Priced lines", String(product.lineCount)),
+        fact(
+          "Unit cost",
+          `${formatCurrency(product.lowUnitCost)} – ${formatCurrency(product.highUnitCost)}`,
+          "warning",
+        ),
+        // Only a linked product can mis-cost a recipe; unlinked ones are just
+        // an unusable per-each price.
+        product.ingredientId &&
+          shortcodeFact("Ingredient", "ingredient", [product.ingredientId]),
+      ),
       route: entityDetailLink("product", product.id),
     }),
   }),
@@ -1436,7 +1452,7 @@ const DECLARED_SECTIONS = [
       // The detector returns only {id, name}, so the card cannot yet name WHICH
       // sub-recipe went missing — but it can at least state the finding rather
       // than leaving a card that is a title and a button.
-      subtitle: "References a sub-recipe that has been deleted",
+      fields: facts(fact("Sub-recipe", "Deleted", "destructive")),
       route: entityDetailLink("recipe", recipe.id),
     }),
   }),
@@ -1448,7 +1464,13 @@ const DECLARED_SECTIONS = [
     entity: "cookbook",
     renderItem: (cookbook) => ({
       title: cookbook.name,
-      subtitle: `${cookbook.recipeCount} / ${cookbook.sourceRecipeCount} imported · ${cookbook.missingRecipeCount} missing`,
+      fields: facts(
+        fact(
+          "Imported",
+          `${cookbook.recipeCount} of ${cookbook.sourceRecipeCount}`,
+        ),
+        fact("Missing", String(cookbook.missingRecipeCount), "warning"),
+      ),
       route: entityDetailLink("cookbook", cookbook.id),
       editLabel: "Open cookbook",
     }),
@@ -1460,10 +1482,12 @@ const DECLARED_SECTIONS = [
     problemKeys: ["understatedCostMeals"],
     entity: "meal",
     renderItem: (meal) => {
-      const recipes = `${countLabel(meal.recipeCount, "recipe")} with unpriced ingredients`;
       return {
         title: meal.name ?? mealDay(meal),
-        subtitle: meal.name ? `${mealDay(meal)} · ${recipes}` : recipes,
+        fields: facts(
+          meal.name && fact("Day", mealDay(meal)),
+          fact("Unpriced recipes", String(meal.recipeCount), "warning"),
+        ),
         details: meal.affectedRecipes.map((recipe) => (
           <Link
             key={recipe.id}
@@ -1529,10 +1553,32 @@ const DECLARED_SECTIONS = [
     renderItem: (cycle) => ({
       key: `${cycle.entity}-${cycle.path.join("-")}`,
       title: cycle.description,
-      details: [
-        <div key="path" className="font-mono text-xs text-muted-foreground">
-          {cycle.path.join(" → ")}
-        </div>,
+      fields: [
+        {
+          label: "Cycle",
+          // Codes, not chips: each chip would resolve its name with a request.
+          value: (
+            <span className="inline-flex flex-wrap items-baseline gap-x-1 font-mono">
+              {cycle.path.map((code, index) => (
+                // A cycle repeats its first code at the end, so the path up to
+                // this step is the unique key.
+                <span
+                  key={cycle.path.slice(0, index + 1).join(">")}
+                  className="inline-flex gap-x-1"
+                >
+                  {index > 0 && <span aria-hidden>→</span>}
+                  <Link
+                    {...entityDetailLink(cycle.entity, code)}
+                    className="underline-offset-2 hover:underline"
+                  >
+                    {code}
+                  </Link>
+                </span>
+              ))}
+            </span>
+          ),
+          title: cycle.path.join(" → "),
+        },
       ],
     }),
   }),
@@ -1566,30 +1612,18 @@ const DECLARED_SECTIONS = [
     icon: DownloadIcon,
     renderItem: (product) => {
       const { proposed } = product;
-      // Show the actual value a fresh lookup would write per field — not just
-      // which fields are missing — so it's clear what "Apply" changes.
-      const details: ReactNode[] = [];
-      if (proposed.manufacturer != null) {
-        details.push(
-          <div key="manufacturer" className="text-sm">
-            <span className="text-muted-foreground">Manufacturer → </span>
-            <span className="font-medium">{proposed.manufacturer}</span>
-          </div>,
-        );
-      }
-      if (proposed.price != null) {
-        details.push(
-          <div key="price" className="text-sm">
-            <span className="text-muted-foreground">Price → </span>
-            <span className="font-medium">
-              {formatCurrency(proposed.price)}
-            </span>
-          </div>,
-        );
-      }
       return {
         title: product.name,
-        subtitle: byManufacturer(product.manufacturer),
+        // Show the actual value a fresh lookup would write per field — not
+        // just which fields are missing — so it's clear what "Apply" changes.
+        fields: facts(
+          manufacturerFact(product.manufacturer),
+          fact("UPC", product.upc),
+          proposed.manufacturer != null &&
+            fact("New manufacturer", proposed.manufacturer, "positive"),
+          proposed.price != null &&
+            fact("New price", formatCurrency(proposed.price), "positive"),
+        ),
         imageSlot: proposed.imageUrl ? (
           <img
             src={proposed.imageUrl}
@@ -1602,17 +1636,13 @@ const DECLARED_SECTIONS = [
             }}
           />
         ) : undefined,
-        details,
-        badges: [
-          ...(proposed.imageUrl
-            ? [
-                <Badge key="image" variant="secondary">
-                  New image
-                </Badge>,
-              ]
-            : []),
-          <CodeChip key="upc">{product.upc}</CodeChip>,
-        ],
+        badges: proposed.imageUrl
+          ? [
+              <Badge key="image" variant="secondary">
+                New image
+              </Badge>,
+            ]
+          : [],
         route: entityDetailLink("product", product.id),
         editLabel: "Open product",
         customActions: <UpcApplyAction product={product} />,
@@ -1637,7 +1667,29 @@ const DECLARED_SECTIONS = [
         // share a card key by way of the title.
         key: purchase.id,
         title: purchase.vendorName ?? "Vendor deleted",
-        subtitle: purchaseSubtitle(purchase),
+        fields: facts(
+          ...purchaseFacts(purchase),
+          purchase.date &&
+            fact("Ordered", <DateDisplay start={purchase.date} />),
+          purchase.orderId &&
+            fact(
+              "Order",
+              <span className="inline-flex items-center gap-1">
+                <span className="font-mono">{purchase.orderId}</span>
+                <EntityRefLink
+                  variant="order"
+                  orderUrl={purchase.orderUrl}
+                  orderId={purchase.orderId}
+                  vendorName={purchase.vendorName}
+                />
+              </span>,
+            ),
+          purchase.vendorId &&
+            purchase.vendorName &&
+            recordFact("vendor", [
+              { id: purchase.vendorId, name: purchase.vendorName },
+            ]),
+        ),
         details: hint
           ? [
               <div key="hint" className="text-sm text-muted-foreground">
@@ -1649,26 +1701,6 @@ const DECLARED_SECTIONS = [
           // The same soft `warning`-tone verdict the ledger column and the purchase
           // page show, from the same classifier — never a defect red.
           <ReconciliationStatus key="reconciliation" purchase={purchase} />,
-          ...(purchase.orderId
-            ? [
-                <Row key="order" align="center" gap="xs">
-                  <CodeChip>{purchase.orderId}</CodeChip>
-                  <EntityRefLink
-                    variant="order"
-                    orderUrl={purchase.orderUrl}
-                    orderId={purchase.orderId}
-                    vendorName={purchase.vendorName}
-                  />
-                </Row>,
-              ]
-            : []),
-          ...(purchase.date
-            ? [
-                <Badge key="date" variant="outline">
-                  Ordered <DateDisplay start={purchase.date} />
-                </Badge>,
-              ]
-            : []),
         ],
         route: entityDetailLink("purchase", purchase.id),
         editLabel: "Open purchase",
@@ -1685,19 +1717,27 @@ const DECLARED_SECTIONS = [
     entity: "purchase",
     renderItem: (item) => ({
       title: item.vendorName ?? "Vendor deleted",
-      subtitle: `Expenses ${formatCurrency(item.expenseTotal)} · projected ${formatCurrency(item.financialReconciliation.projectedTotal)}`,
-      badges: [
-        // The gap itself, signed — the finding, which the card previously made
-        // the reader compute from the two totals in the subtitle. The old badge
-        // here just repeated the section heading.
-        <Badge key="delta" variant="warning">
-          {item.financialReconciliation.delta > 0 ? "Over by " : "Short by "}
-          {formatCurrency(Math.abs(item.financialReconciliation.delta))}
-        </Badge>,
-        <Badge key="transactions" variant="outline">
-          {item.financialReconciliation.transactionCount} transactions
-        </Badge>,
-      ],
+      fields: facts(
+        fact("Expenses", formatCurrency(item.expenseTotal)),
+        fact(
+          "Projected",
+          formatCurrency(item.financialReconciliation.projectedTotal),
+        ),
+        // The gap itself, signed — the finding, rather than making the reader
+        // compute it from the two totals beside it.
+        fact(
+          item.financialReconciliation.delta > 0 ? "Over by" : "Short by",
+          formatCurrency(Math.abs(item.financialReconciliation.delta)),
+          "warning",
+        ),
+        fact(
+          "Transactions",
+          String(item.financialReconciliation.transactionCount),
+        ),
+        item.vendorId &&
+          item.vendorName &&
+          recordFact("vendor", [{ id: item.vendorId, name: item.vendorName }]),
+      ),
       route: entityDetailLink("purchase", item.id),
       editLabel: "Open purchase",
     }),
@@ -1718,51 +1758,44 @@ const DECLARED_SECTIONS = [
       // Two lump rows can share a name, and the name is the card title.
       key: item.id,
       title: item.expenseName,
-      subtitle: `${formatCurrency(item.cost)} · matches ${item.vendorName ?? "deleted vendor"} ${
-        item.matchedOn === "stated_total" ? "stated total" : "expense total"
-      } of ${formatCurrency(
-        item.matchedOn === "stated_total" && item.purchaseStatedTotal !== null
-          ? item.purchaseStatedTotal
-          : item.purchaseExpenseTotal,
-      )} across ${countLabel(item.purchaseExpenseCount, "line")}`,
-      details: [
+      fields: facts(
+        fact("Cost", formatCurrency(item.cost)),
+        fact(
+          item.matchedOn === "stated_total"
+            ? "Matches stated total"
+            : "Matches expense total",
+          `${formatCurrency(
+            item.matchedOn === "stated_total" &&
+              item.purchaseStatedTotal !== null
+              ? item.purchaseStatedTotal
+              : item.purchaseExpenseTotal,
+          )} (${countLabel(item.purchaseExpenseCount, "line")})`,
+          "warning",
+        ),
+        item.vendorId && item.vendorName
+          ? recordFact("vendor", [{ id: item.vendorId, name: item.vendorName }])
+          : fact("Vendor", item.vendorName ?? "Deleted"),
+        // Labeled but deliberately NOT a link: the expense is the actionable
+        // row and the purchase is only context, so every route out of this
+        // card points at the expense (see the section note above).
+        fact("Purchase", item.purchaseId),
         // Name both days. "3 days apart" alone is a claim the reader can't
         // check without opening both records — exactly the work the card is
         // meant to save.
-        <div key="dates" className="text-sm text-muted-foreground">
-          {[
-            item.expenseDate
-              ? `Expense ${formatDateSpan(item.expenseDate, null)}`
-              : "Expense date unknown",
-            item.purchaseDate
-              ? `purchase ${formatDateSpan(item.purchaseDate, null)}`
-              : "purchase date unknown",
-          ].join(" · ")}
-        </div>,
-      ],
-      badges: [
-        // No "Possible duplicate" stamp — that is the section's own title, on
-        // every card in it. Labeled but deliberately NOT a link: the expense is
-        // the actionable row and the purchase is only context, so every route
-        // out of this card points at the expense (see the section note above).
-        <Badge key="purchase" variant="outline">
-          Purchase {item.purchaseId}
-        </Badge>,
-        ...(item.dayDelta > 0
-          ? [
-              <Badge key="gap" variant="outline">
-                {countLabel(item.dayDelta, "day")} apart
-              </Badge>,
-            ]
-          : []),
-        ...(item.alternateMatchCount > 0
-          ? [
-              <Badge key="alternates" variant="outline">
-                +{countLabel(item.alternateMatchCount, "weaker match")}
-              </Badge>,
-            ]
-          : []),
-      ],
+        fact(
+          "Expense date",
+          item.expenseDate ? formatDateSpan(item.expenseDate, null) : "Unknown",
+        ),
+        fact(
+          "Purchase date",
+          item.purchaseDate
+            ? formatDateSpan(item.purchaseDate, null)
+            : "Unknown",
+        ),
+        item.dayDelta > 0 && fact("Apart", countLabel(item.dayDelta, "day")),
+        item.alternateMatchCount > 0 &&
+          fact("Weaker matches", String(item.alternateMatchCount)),
+      ),
       route: entityDetailLink("expense", item.id),
       editLabel: "Open expense",
     }),
@@ -1776,17 +1809,16 @@ const DECLARED_SECTIONS = [
     renderItem: (item) => ({
       key: `${item.source}:${item.externalId}`,
       // The reference IS the subject here — these rows have no other identity —
-      // so it leads, and the subtitle says what is wrong with it.
+      // so it leads, and the facts say what is wrong with it.
       title: item.externalId,
-      subtitle: `${item.transactionIds.length} transactions claim this ${item.source} reference`,
-      details: [
-        shortcodeChips(
-          "txns",
-          "Transactions",
+      fields: facts(
+        fact("Source", item.source),
+        shortcodeFact(
+          "Claimed by",
           "financialTransaction",
           item.transactionIds,
         ),
-      ],
+      ),
       inlineFix: {
         label: "Choose keeper",
         render: (close) => (
@@ -1804,15 +1836,10 @@ const DECLARED_SECTIONS = [
     renderItem: (item) => ({
       key: `${item.source}:${item.externalAccountId}`,
       title: item.externalAccountId,
-      subtitle: `${item.accountIds.length} accounts claim this ${item.source} alias`,
-      details: [
-        shortcodeChips(
-          "accounts",
-          "Accounts",
-          "financialAccount",
-          item.accountIds,
-        ),
-      ],
+      fields: facts(
+        fact("Source", item.source),
+        shortcodeFact("Claimed by", "financialAccount", item.accountIds),
+      ),
       inlineFix: {
         label: "Choose keeper",
         render: (close) => (
@@ -1832,7 +1859,10 @@ const DECLARED_SECTIONS = [
     entity: "financialAccount",
     renderItem: (item) => ({
       title: item.name,
-      subtitle: `${countLabel(item.transactionCount, "transaction")} · no provider alias or statement reference`,
+      fields: facts(
+        fact("Transactions", String(item.transactionCount)),
+        fact("Alias or statement ref", "None", "warning"),
+      ),
       route: entityDetailLink("financialAccount", item.id),
       editLabel: "Link account",
     }),
@@ -1845,20 +1875,19 @@ const DECLARED_SECTIONS = [
     entity: "financialTransaction",
     renderItem: (item) => ({
       title: item.name ?? item.id,
-      subtitle: [
-        formatCurrency(item.amount),
-        `${countLabel(item.allocationCount, "allocation")} totalling ${formatCurrency(item.allocatedTotal)}`,
-        item.postedDate
-          ? `posted ${formatDateSpan(item.postedDate, null)}`
-          : null,
-      ]
-        .filter(Boolean)
-        .join(" · "),
-      badges: [
-        <Badge key="kind" variant="outline">
-          {item.kind}
-        </Badge>,
-      ],
+      fields: facts(
+        fact("Kind", item.kind),
+        fact("Amount", formatCurrency(item.amount)),
+        fact(
+          "Allocated",
+          `${formatCurrency(item.allocatedTotal)} (${countLabel(item.allocationCount, "allocation")})`,
+          "warning",
+        ),
+        item.postedDate &&
+          fact("Posted", formatDateSpan(item.postedDate, null)),
+        item.purchaseIds.length > 0 &&
+          shortcodeFact("Settles", "purchase", item.purchaseIds),
+      ),
       details: [
         // The reasons in words. The raw enum slugs (`sum-mismatch`,
         // `kind-sign-violation`) were reaching the page verbatim.
@@ -1867,16 +1896,6 @@ const DECLARED_SECTIONS = [
             .map((reason) => ALLOCATION_DEFECT_LABEL[reason] ?? reason)
             .join("; ")}
         </div>,
-        ...(item.purchaseIds.length
-          ? [
-              shortcodeChips(
-                "purchases",
-                "Settles",
-                "purchase",
-                item.purchaseIds,
-              ),
-            ]
-          : []),
       ],
       route: entityDetailLink("financialTransaction", item.id),
     }),
@@ -1890,10 +1909,11 @@ const DECLARED_SECTIONS = [
     renderItem: (item) => ({
       key: `${item.id}:${item.field}`,
       // The record, then which of its fields won't parse — rather than a schema
-      // type name plus a column name, with the one actionable id demoted to an
-      // unlabeled subtitle.
+      // type name plus a column name.
       title: item.id,
-      subtitle: `Stored ${humanize(item.field).toLowerCase()} no longer parses`,
+      fields: facts(
+        fact(humanize(item.field), "No longer parses", "destructive"),
+      ),
       details: [
         <div key="message" className="text-sm text-muted-foreground">
           {item.message}
@@ -1914,9 +1934,15 @@ const DECLARED_SECTIONS = [
     renderItem: (item) => ({
       key: item.fingerprint,
       title: item.label,
-      subtitle: `${item.rowCountStored} of ${item.rowCountDeclared} rows attached — ${
-        item.rowCountDeclared - item.rowCountStored
-      } need a coverage check`,
+      fields: facts(
+        fact("Source", item.source),
+        fact("Attached", `${item.rowCountStored} of ${item.rowCountDeclared}`),
+        fact(
+          "To check",
+          String(item.rowCountDeclared - item.rowCountStored),
+          "warning",
+        ),
+      ),
       details: [
         <p key="overlap" className="text-sm text-muted-foreground">
           Rows already present in another import are not attached here. Reopen
@@ -1925,11 +1951,6 @@ const DECLARED_SECTIONS = [
       ],
       route: { href: "/statement-rows/import" },
       editLabel: "Open statement importer",
-      badges: [
-        <Badge key="source" variant="outline">
-          {item.source}
-        </Badge>,
-      ],
     }),
   }),
 ];

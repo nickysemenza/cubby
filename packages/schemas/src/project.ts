@@ -1589,6 +1589,10 @@ const projectAttentionItemFields = {
   date: plainDate.nullable(),
   amount: z.number().nullable(),
   href: z.string().describe("Direct link to the corrective view"),
+  /** The project a task or expense row belongs to; absent on project rows. */
+  parentProject: z
+    .object({ id: projectShortcode, name: z.string() })
+    .optional(),
 } as const;
 
 /**

@@ -312,10 +312,10 @@ describe("Problems card read projections", () => {
     expect(grouped.understatedCostMeals[0]?.recipeCount).toBe(1);
     // Inventory's embedded `price` is already resolved. Reading the Product
     // detail field name here used to silently turn a known price into zero.
-    expect(grouped.inventoryWithoutPricePath[0]?.badges).toContainEqual({
-      label: "Unreachable $10.00 each",
-      entity: null,
-      id: null,
+    expect(grouped.inventoryWithoutPricePath[0]?.fields).toContainEqual({
+      label: "Unreachable price",
+      value: "$10.00 each",
+      tone: "warning",
     });
   });
 });
@@ -490,31 +490,42 @@ describe("problems — view-backed uniform rows", () => {
       entity: "inventory",
       id: entry.id,
       name: "Unpriced test good",
-      subtitle: "2 each",
-      badges: [shelfBadge],
+      fields: [{ label: "Amount", value: "2 each", tone: null }],
+      // The inventory row links the product it counts as well as its shelf.
+      badges: [
+        { label: "Unpriced test good", entity: "product", id: thing.id },
+        shelfBadge,
+      ],
     });
     expect(
       views.productsMissingPrice.find((row) => row.id === thing.id),
     ).toMatchObject({
       entity: "product",
-      subtitle: "by Test Manufacturer · 2 units unvalued",
+      fields: [
+        { label: "Manufacturer", value: "Test Manufacturer", tone: null },
+        { label: "Unvalued", value: "2 units", tone: "warning" },
+      ],
       badges: [shelfBadge],
     });
     expect(views.staleLocations.find((row) => row.id === shelf.id)).toEqual({
       entity: "location",
       id: shelf.id,
       name: "Test shelf",
-      subtitle: "never recounted",
-      badges: [
-        { label: "shelf", entity: null, id: null },
-        { label: "2 items", entity: null, id: null },
+      fields: [
+        { label: "Last recount", value: "Never", tone: "warning" },
+        { label: "Type", value: "shelf", tone: null },
+        { label: "Items", value: "2", tone: null },
       ],
+      badges: [],
     });
     expect(
       views.unusedIngredientsWithoutProduct.find((row) => row.id === unused.id),
     ).toMatchObject({
       entity: "ingredient",
-      subtitle: "Used in no recipes · no product attached",
+      fields: [
+        { label: "Recipes", value: "None", tone: "warning" },
+        { label: "Product", value: "None", tone: null },
+      ],
     });
   });
 });

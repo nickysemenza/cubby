@@ -1,5 +1,7 @@
 import type { ProductVariantComparison } from "@cubby/schemas/product-variant-comparison";
 
+import { FactList } from "~/ui/common/fact-list";
+
 /** Closed-choice relations plus the original source text, for human review. */
 export function ProductVariantEvidence({
   comparison,
@@ -12,29 +14,21 @@ export function ProductVariantEvidence({
 }) {
   return (
     <div className="min-w-0 text-xs">
-      <dl className="flex flex-wrap gap-x-3 gap-y-1">
-        {(["color", "size"] as const).map((field) => {
+      <FactList
+        facts={(["color", "size"] as const).map((field) => {
           const relation = comparison[field].relation;
-          return (
-            <div key={field} className="flex min-w-0 flex-wrap gap-x-1.5">
-              <dt className="font-medium capitalize">{field}</dt>
-              <dd
-                className={
-                  relation === "different"
-                    ? "text-warning"
-                    : "text-muted-foreground"
-                }
-              >
-                {relation === "same"
-                  ? "Titles agree"
-                  : relation === "different"
-                    ? "Titles conflict — check evidence"
-                    : "Unknown"}
-              </dd>
-            </div>
-          );
+          return {
+            label: field === "color" ? "Color" : "Size",
+            tone: relation === "different" ? "warning" : undefined,
+            value:
+              relation === "same"
+                ? "Titles agree"
+                : relation === "different"
+                  ? "Titles conflict — check evidence"
+                  : "Unknown",
+          };
         })}
-      </dl>
+      />
       <details className="mt-1">
         <summary className="cursor-pointer text-muted-foreground">
           Original comparison text

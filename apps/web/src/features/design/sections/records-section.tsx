@@ -2,6 +2,7 @@ import { type ReportBlock } from "@cubby/schemas/entity-report";
 import { useState } from "react";
 
 import { RecordsBlockView } from "~/entity/entity-detail/records-block";
+import { FactList, type Fact } from "~/ui/common/fact-list";
 import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import {
   RecordDetail,
@@ -10,6 +11,7 @@ import {
   RecordGroup,
   RecordHeading,
   RecordHops,
+  recordColumnsOf,
   RecordList,
   RecordMore,
   RecordRow,
@@ -179,6 +181,32 @@ export function RecordsSection() {
           <RecordPrimitivesDemo />
         </Demo>
         <Demo
+          name="<RecordList columns> · facts"
+          note="Rows' labelled facts align under one header; below 32rem the header hides and labels sit inline."
+        >
+          <ColumnsDemo />
+        </Demo>
+        <Demo
+          name="<FactList>"
+          note="Inline labelled values: bold label for row facts, emphasis=value for headline figures."
+        >
+          <Stack gap="sm">
+            <FactList
+              facts={[
+                { label: "Manufacturer", value: "Example Footwear" },
+                { label: "Unvalued", value: "1 unit", tone: "warning" },
+              ]}
+            />
+            <FactList
+              emphasis="value"
+              facts={[
+                { label: "Total", value: "$128.40" },
+                { label: "Items", value: "12" },
+              ]}
+            />
+          </Stack>
+        </Demo>
+        <Demo
           name={'<RecordList variant="timeline">'}
           note="Activity: kind-coloured dots on a rail, a heading per household day, rows print only their time."
         >
@@ -210,5 +238,41 @@ export function RecordsSection() {
         </Demo>
       </DemoGrid>
     </Stack>
+  );
+}
+
+const COLUMN_ROWS: { name: string; code: string; facts: Fact[] }[] = [
+  {
+    name: "Canvas low-top sneakers",
+    code: "PRD-7QX2",
+    facts: [
+      { label: "Manufacturer", value: "Example Footwear" },
+      { label: "Unvalued", value: "1 unit", tone: "warning" },
+      { label: "Location", value: "Hall closet" },
+    ],
+  },
+  {
+    name: "Book ISBN 9780000000002",
+    code: "PRD-2AB4",
+    facts: [
+      { label: "Unvalued", value: "1 unit", tone: "warning" },
+      { label: "Location", value: "Kitchen bookshelf" },
+    ],
+  },
+];
+
+function ColumnsDemo() {
+  return (
+    <RecordList columns={recordColumnsOf(COLUMN_ROWS)} aria-label="Unpriced">
+      {COLUMN_ROWS.map((row) => (
+        <RecordRow
+          key={row.code}
+          leading={<RecordDot tone="destructive" label="Needs a decision" />}
+          primary={row.name}
+          secondary={<span className="font-mono">{row.code}</span>}
+          facts={row.facts}
+        />
+      ))}
+    </RecordList>
   );
 }

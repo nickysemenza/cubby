@@ -41,23 +41,32 @@ const problemRowEntity = z.enum(
   nonEmptyTuple<ShortcodeEntity>(shortcodeEntities),
 );
 
+/** A record the row names besides its own; the page links it as a chip. */
 const problemRowBadgeSchema = z.object({
   label: z.string(),
-  /** Set when the badge names a record, so it links to that record. */
-  entity: problemRowEntity.nullable(),
-  id: publicEntityIdSchema.nullable(),
+  entity: problemRowEntity,
+  id: publicEntityIdSchema,
+});
+
+/** One labelled fact of a Problems row; the page aligns rows' facts into columns. */
+const problemRowFieldSchema = z.object({
+  label: z.string(),
+  value: z.string(),
+  /** Set when this value is itself the defect (a missing manufacturer on an identity card). */
+  tone: z.enum(["warning", "destructive"]).nullable(),
 });
 
 /**
  * The uniform Problems row: the flagged record (public shortcode) plus the
- * evidence line and badges its detector computed. Detectors whose section has
- * no inline fix return this; the page renders every such section the same way.
+ * labelled facts and record badges its detector computed. Detectors whose
+ * section has no inline fix return this; the page renders every such section
+ * the same way.
  */
 export const problemRowSchema = z.object({
   entity: problemRowEntity,
   id: publicEntityIdSchema,
   name: z.string(),
-  subtitle: z.string().nullable(),
+  fields: z.array(problemRowFieldSchema),
   badges: z.array(problemRowBadgeSchema),
 });
 export type ProblemRow = z.infer<typeof problemRowSchema>;
@@ -385,6 +394,7 @@ export const purchaseNotReconcilingSchema = z.object({
   id: purchaseShortcode,
   /** Through the join; null only if the vendor was soft-deleted. */
   vendorName: z.string().nullable(),
+  vendorId: vendorShortcode.nullable(),
   orderId: z.string().nullable(),
   orderUrl: z.url().nullable(),
   date: plainDate.nullable(),
@@ -405,6 +415,7 @@ export const purchaseNotReconcilingSchema = z.object({
 export const purchaseFinancialSettlementMismatchSchema = z.object({
   id: purchaseShortcode,
   vendorName: z.string().nullable(),
+  vendorId: vendorShortcode.nullable(),
   expenseTotal: money,
   // Spreads the canonical field map rather than hand-restating it, so the
   // `.finite()` guards cannot be dropped again. Two fields genuinely narrow
@@ -428,6 +439,7 @@ export const duplicateSpendCandidateSchema = z.object({
   purchaseId: purchaseShortcode,
   /** Through the join; null only if the vendor was soft-deleted. */
   vendorName: z.string().nullable(),
+  vendorId: vendorShortcode.nullable(),
   purchaseDate: plainDate.nullable(),
   /** `SUM(cost)` over the purchase's live expenses. */
   purchaseExpenseTotal: money,

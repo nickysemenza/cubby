@@ -17,6 +17,7 @@
 import type {
   ExpenseShortcode,
   PurchaseShortcode,
+  VendorShortcode,
 } from "@cubby/schemas/identifiers";
 import {
   DUPLICATE_SPEND_DAY_WINDOW,
@@ -41,6 +42,7 @@ type DuplicateSpendRow = {
   expenseDate: string | null;
   purchaseId: PurchaseShortcode;
   vendorName: string | null;
+  vendorId: VendorShortcode | null;
   purchaseDate: string | null;
   purchaseExpenseTotal: number;
   purchaseStatedTotal: number | null;
@@ -142,6 +144,7 @@ export const findDuplicateSpendCandidates = async (
         p."date",
         p."statedTotal",
         v."name" AS "vendorName",
+        v."shortcode" AS "vendorId",
         ${expenseTotal}::double precision AS "expenseTotal",
         count(le."id")::int AS "expenseCount"
       FROM ${purchase} p
@@ -150,7 +153,8 @@ export const findDuplicateSpendCandidates = async (
       LEFT JOIN ${expense} le
         ON le."purchaseId" = p."id" AND le."deletedAt" IS NULL
       WHERE p."deletedAt" IS NULL
-      GROUP BY p."id", p."shortcode", p."date", p."statedTotal", v."name"
+      GROUP BY
+        p."id", p."shortcode", p."date", p."statedTotal", v."name", v."shortcode"
     ),
     pair AS (
       SELECT
@@ -160,6 +164,7 @@ export const findDuplicateSpendCandidates = async (
         o."date"::text AS "expenseDate",
         t."shortcode" AS "purchaseId",
         t."vendorName",
+        t."vendorId",
         t."date"::text AS "purchaseDate",
         t."expenseTotal" AS "purchaseExpenseTotal",
         t."statedTotal"::double precision AS "purchaseStatedTotal",
@@ -186,7 +191,7 @@ export const findDuplicateSpendCandidates = async (
         ON pd."id" = le."productId" AND pd."deletedAt" IS NULL
       GROUP BY
         o."shortcode", o."name", o."cost", o."date",
-        t."shortcode", t."vendorName", t."date",
+        t."shortcode", t."vendorName", t."vendorId", t."date",
         t."expenseTotal", t."statedTotal", t."expenseCount"
     ),
     ranked AS (
@@ -209,6 +214,7 @@ export const findDuplicateSpendCandidates = async (
     expenseDate: row.expenseDate,
     purchaseId: row.purchaseId,
     vendorName: row.vendorName,
+    vendorId: row.vendorId,
     purchaseDate: row.purchaseDate,
     purchaseExpenseTotal: Number(row.purchaseExpenseTotal),
     purchaseStatedTotal:

@@ -7,7 +7,9 @@ import { useMemo } from "react";
 
 import { formatMinutesSeconds } from "~/lib/format-duration";
 import { AiCost, formatAiCostSubtotal } from "~/ui/common/ai-cost";
+import type { Fact } from "~/ui/common/fact-list";
 import {
+  type RecordColumn,
   RecordDetail,
   RecordDot,
   RecordList,
@@ -94,7 +96,7 @@ export function FailuresPanel({
       </Row>
 
       {troubled.length > 0 && (
-        <RecordList aria-label="Troubled chunks">
+        <RecordList aria-label="Troubled chunks" columns={CHUNK_COLUMNS}>
           {troubled.map((chunk) => (
             <ChunkRecord key={chunk.id} chunk={chunk} />
           ))}
@@ -111,26 +113,60 @@ export function FailuresPanel({
   );
 }
 
+const CHUNK_COLUMNS = [
+  { id: "lines", label: "Lines" },
+  { id: "model", label: "Model" },
+  { id: "attempts", label: "Attempts" },
+  { id: "flags", label: "Flags" },
+] as const satisfies readonly RecordColumn[];
+
 /** One troubled chunk: its outcome as the mark, where it sits and how it ran, and why. */
 function ChunkRecord({ chunk }: { chunk: ChunkRow }) {
   const failed = chunk.status === "failed";
-  const facts = [
+  const flags = [...new Set(chunk.flags.map((flag) => flag.flag))];
+  const facts: Fact[] = [
     ...(chunk.start !== undefined && chunk.end !== undefined
       ? [
-          <span key="lines">
-            lines {chunk.start}–{chunk.end}
-          </span>,
+          {
+            id: "lines",
+            label: "Lines",
+            value: `${chunk.start}–${chunk.end}`,
+            className: "tabular-nums",
+          },
         ]
       : []),
     ...(chunk.final_model
       ? [
-          <code key="model" className="font-mono text-2xs">
-            {chunk.final_model}
-          </code>,
+          {
+            id: "model",
+            label: "Model",
+            value: chunk.final_model,
+            title: chunk.final_model,
+            className: "font-mono text-2xs",
+          },
         ]
       : []),
     ...(chunk.attempts !== undefined
-      ? [<span key="attempts">{countLabel(chunk.attempts, "attempt")}</span>]
+      ? [
+          {
+            id: "attempts",
+            label: "Attempts",
+            value: chunk.attempts,
+            className: "tabular-nums",
+          },
+        ]
+      : []),
+    ...(flags.length > 0
+      ? [
+          {
+            id: "flags",
+            label: "Flags",
+            value: flags.join(", "),
+            title: flags.join(", "),
+            tone: "warning" as const,
+            className: "font-mono text-2xs",
+          },
+        ]
       : []),
   ];
   // A flag's tag is shown inline; anything else the crate wrote on it is kept as raw evidence.
@@ -150,44 +186,23 @@ function ChunkRecord({ chunk }: { chunk: ChunkRow }) {
         />
       }
       primary={<code className="font-mono text-xs">{chunk.id}</code>}
-      clip={false}
-      secondary={
-        <span className="grid gap-0.5">
-          {facts.length > 0 ? (
-            <span>
-              {facts.map((fact, index) => (
-                <span key={fact.key}>
-                  {index > 0 ? " · " : null}
-                  {fact}
-                </span>
-              ))}
-            </span>
-          ) : null}
-          {chunk.flags.length > 0 ? (
-            <span className="flex flex-wrap gap-x-2 text-warning-ink">
-              {[...new Set(chunk.flags.map((flag) => flag.flag))].map(
-                (flag) => (
-                  <code key={flag} className="font-mono text-2xs">
-                    {flag}
-                  </code>
-                ),
-              )}
-            </span>
-          ) : null}
-          {failed ? (
-            <span className="break-words text-destructive">
-              Failed — the recipes in this chunk were lost.
-            </span>
-          ) : null}
-        </span>
-      }
+      facts={facts}
       detail={
-        diagnostics.length > 0 ? (
-          <RecordDetail summary="Flag details">
-            <pre className="max-h-60 overflow-auto bg-muted/30 p-2 font-mono text-2xs break-words whitespace-pre-wrap">
-              {JSON.stringify(diagnostics, null, 2)}
-            </pre>
-          </RecordDetail>
+        failed || diagnostics.length > 0 ? (
+          <>
+            {failed ? (
+              <p className="text-xs break-words text-destructive">
+                Failed — the recipes in this chunk were lost.
+              </p>
+            ) : null}
+            {diagnostics.length > 0 ? (
+              <RecordDetail summary="Flag details">
+                <pre className="max-h-60 overflow-auto bg-muted/30 p-2 font-mono text-2xs break-words whitespace-pre-wrap">
+                  {JSON.stringify(diagnostics, null, 2)}
+                </pre>
+              </RecordDetail>
+            ) : null}
+          </>
         ) : null
       }
     />

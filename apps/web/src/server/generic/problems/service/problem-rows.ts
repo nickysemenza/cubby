@@ -23,31 +23,43 @@ export const recordBadge = (entity: ShortcodeEntity, ref: Ref): BadgeInput => ({
   id: ref.id,
 });
 
-export const textBadge = (label: string): BadgeInput => ({
-  label,
-  entity: null,
-  id: null,
-});
-
 export const locationBadges = (locations: readonly Ref[]): BadgeInput[] =>
   locations.map((location) => recordBadge("location", location));
 
-/** The uniform Problems row; falsy subtitle parts are dropped, the rest joined. */
+type FieldInput = ProblemRowInput["fields"][number];
+
+/** A labelled fact; `tone` marks a value that is itself the defect. */
+export const field = (
+  label: string,
+  value: string,
+  tone: FieldInput["tone"] = null,
+): FieldInput => ({ label, value, tone });
+
+/** The uniform Problems row; falsy fields are dropped. */
 export const problemRow = (
   entity: ShortcodeEntity,
   ref: Ref,
-  subtitle: readonly (string | null | undefined | false)[],
+  fields: readonly (FieldInput | null | undefined | false)[],
   badges: BadgeInput[] = [],
-): ProblemRowInput => {
-  const parts = subtitle.filter((part): part is string => Boolean(part));
-  return {
-    entity,
-    id: ref.id,
-    name: ref.name,
-    subtitle: parts.length ? parts.join(" · ") : null,
-    badges,
-  };
-};
+): ProblemRowInput => ({
+  entity,
+  id: ref.id,
+  name: ref.name,
+  fields: fields.filter((entry): entry is FieldInput => Boolean(entry)),
+  badges,
+});
 
-export const byManufacturer = (manufacturer: string | null | undefined) =>
-  manufacturer ? `by ${manufacturer}` : null;
+/**
+ * `Product.manufacturer` is free text, so it is a fact rather than a link.
+ * Absent stays absent unless the card is about identity, where the gap is the
+ * defect and reads as a warning dash.
+ */
+export const manufacturerField = (
+  manufacturer: string | null | undefined,
+  { missingIsDefect = false }: { missingIsDefect?: boolean } = {},
+) =>
+  manufacturer
+    ? field("Manufacturer", manufacturer)
+    : missingIsDefect
+      ? field("Manufacturer", "—", "warning")
+      : null;

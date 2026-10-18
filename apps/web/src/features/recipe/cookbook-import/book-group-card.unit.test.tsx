@@ -360,9 +360,10 @@ describe("cookbook book card", () => {
     expect(screen.getByText(/1 chunk failed/)).toBeVisible();
     const chunks = screen.getByRole("list", { name: "Troubled chunks" });
     expect(chunks.textContent).toMatch(/c2/);
-    expect(chunks.textContent).toMatch(
-      /lines 100–200 · claude-sonnet · 3 attempts/,
-    );
+    // Each fact sits in its own labelled column.
+    expect(within(chunks).getByText("100–200")).toBeInTheDocument();
+    expect(within(chunks).getByText("claude-sonnet")).toBeInTheDocument();
+    expect(within(chunks).getByText("3")).toBeInTheDocument();
     expect(chunks.textContent).toMatch(/recipes in this chunk were lost/);
     expect(within(chunks).getByText("Failed")).toBeInTheDocument();
     expect(screen.getByText(/Cherry Pie/)).toBeVisible();

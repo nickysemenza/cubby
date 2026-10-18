@@ -142,3 +142,59 @@ it("starts evidence and detail under identity when no row has a leading cell", a
   expect(Math.abs(rect("evidence").left - identity)).toBeLessThanOrEqual(1);
   expect(Math.abs(rect("detail").left - identity)).toBeLessThanOrEqual(1);
 });
+
+it("places each fact under its column and keeps the label for assistive tech", async () => {
+  await page.viewport(1440, 900);
+  const { container } = render(
+    <div style={{ width: 960 }}>
+      <RecordList
+        columns={[
+          { id: "Amount", label: "Amount" },
+          { id: "Location", label: "Location" },
+        ]}
+      >
+        <RecordRow
+          primary="Synthetic oats"
+          facts={[
+            { label: "Location", value: "Synthetic pantry" },
+            { label: "Amount", value: "500 g" },
+          ]}
+        />
+        <RecordRow
+          primary="Synthetic lentils"
+          facts={[{ label: "Location", value: "Synthetic shelf" }]}
+        />
+      </RecordList>
+    </div>,
+  );
+  const header = container.querySelector("[data-ledger-header]");
+  expect(header).toHaveAttribute("aria-hidden", "true");
+  expect(header).toBeVisible();
+  const column = (text: string) =>
+    getComputedStyle(screen.getByText(text).closest("[data-fact]") as Element)
+      .gridColumnStart;
+  // Order in the row does not matter; the column id does.
+  expect(column("500 g")).toBe("4");
+  expect(column("Synthetic pantry")).toBe("5");
+  expect(column("Synthetic shelf")).toBe("5");
+  // The term stays in the accessibility tree even though the header shows it.
+  expect(
+    screen.getAllByText("Amount", { selector: "dt" }).length,
+  ).toBeGreaterThan(0);
+});
+
+it("drops the header and shows labels inline in a narrow list", async () => {
+  await page.viewport(1440, 900);
+  const { container } = render(
+    <div style={{ width: 320 }}>
+      <RecordList columns={[{ id: "Amount", label: "Amount" }]}>
+        <RecordRow
+          primary="Synthetic oats"
+          facts={[{ label: "Amount", value: "500 g" }]}
+        />
+      </RecordList>
+    </div>,
+  );
+  expect(container.querySelector("[data-ledger-header]")).not.toBeVisible();
+  expect(screen.getByText("Amount", { selector: "dt" })).toBeVisible();
+});

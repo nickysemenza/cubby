@@ -111,13 +111,13 @@ import {
 } from "~/server/generic/problems/service/problem-diagnostics.service";
 import { executeProblem } from "~/server/generic/problems/service/problem-execution.service";
 import {
-  byManufacturer,
+  field,
   locationBadges,
+  manufacturerField,
   problemRow,
   type ProblemRowInput,
   recordBadge,
   selectedProblemCard,
-  textBadge,
 } from "~/server/generic/problems/service/problem-rows";
 import { countViewProblem } from "~/server/generic/problems/service/problem-views.service";
 import { resolveLiveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -659,6 +659,7 @@ const exactProblemPresentationRowSchema = z.object({
   date: z.string().nullish(),
   purchaseId: z.string().nullish(),
   vendor: z.string().nullish(),
+  vendorId: z.string().nullish(),
   projectName: z.string().nullish(),
   primaryGtin: z.string().nullish(),
   quantityLedger: z
@@ -754,29 +755,30 @@ const productRef = (row: ExactProblemPresentationRow) => ({
   name: String(row.name),
 });
 
-const amountLabel = (row: ExactProblemPresentationRow) =>
-  row.amount ? `${row.amount.value} ${row.amount.unit}` : null;
+const amountField = (row: ExactProblemPresentationRow) =>
+  row.amount ? field("Amount", `${row.amount.value} ${row.amount.unit}`) : null;
 
-/** An inventory row names its product; the location badge carries the recount root. */
+/**
+ * An inventory row names its product and links it; the location badge
+ * carries the recount root.
+ */
 const inventoryRow = (
   row: ExactProblemPresentationRow,
-  subtitle: readonly (string | null)[],
-  badges: ReturnType<typeof textBadge>[] = [],
+  fields: Parameters<typeof problemRow>[2],
 ) =>
   problemRow(
     "inventory",
     { id: row.id, name: row.product?.name ?? row.id },
-    subtitle,
-    [...badges, ...(row.location ? locationBadges([row.location]) : [])],
+    fields,
+    [
+      ...(row.product ? [recordBadge("product", row.product)] : []),
+      ...(row.location ? locationBadges([row.location]) : []),
+    ],
   );
 
-const exitExpenseSubtitle = (
-  row: ExactProblemPresentationRow,
-  context: string | null | undefined,
-) => [
-  context,
-  formatCurrency(Math.abs(Number(row.cost))),
-  row.date ? `sold ${row.date}` : null,
+const exitExpenseFields = (row: ExactProblemPresentationRow) => [
+  field("Cost", formatCurrency(Math.abs(Number(row.cost)))),
+  row.date ? field("Sold", row.date) : null,
 ];
 
 const fastExactPresenters = {
@@ -796,10 +798,14 @@ const fastExactPresenters = {
         "product",
         productRef(row),
         [
-          byManufacturer(row.manufacturer),
-          `${countLabel(locations.length, "entry")} across ${countLabel(uniqBy(locations, (l) => l.id).length, "location")}`,
+          manufacturerField(row.manufacturer),
+          field(
+            "Entries",
+            `${countLabel(locations.length, "entry")} across ${countLabel(uniqBy(locations, (l) => l.id).length, "location")}`,
+            "warning",
+          ),
           row.expectedQuantity != null
-            ? `${row.expectedQuantity} expected`
+            ? field("Expected", String(row.expectedQuantity))
             : null,
         ],
         locationBadges(uniqBy(locations, (l) => l.id)),
@@ -827,9 +833,10 @@ const fastExactPresenters = {
         "product",
         productRef(row),
         [
-          byManufacturer(row.manufacturer),
-          `sold ${totals.soldQuantity}, ${Number(row.onHandUnits ?? 0)} still on a shelf`,
-          `${formatCurrency(Math.abs(totals.proceeds))} recovered`,
+          manufacturerField(row.manufacturer),
+          field("Sold", String(totals.soldQuantity)),
+          field("On a shelf", String(Number(row.onHandUnits ?? 0)), "warning"),
+          field("Recovered", formatCurrency(Math.abs(totals.proceeds))),
         ],
         locationBadges(
           uniqBy(
@@ -848,46 +855,46 @@ const fastExactPresenters = {
         cost: true,
         date: true,
         vendor: true,
+        vendorId: true,
         purchaseId: true,
       })
       .required(),
     (row) =>
-      problemRow(
-        "expense",
-        productRef(row),
-        exitExpenseSubtitle(row, row.vendor),
-        row.purchaseId
+      problemRow("expense", productRef(row), exitExpenseFields(row), [
+        // A chip whose name is its code resolves through a per-row lookup;
+        // naming it here keeps the section to one request.
+        ...(row.purchaseId
           ? [
               recordBadge("purchase", {
                 id: row.purchaseId,
-                name: row.purchaseId,
+                name: row.vendor ? `${row.vendor} purchase` : "Purchase",
               }),
             ]
-          : [],
-      ),
+          : []),
+        ...(row.vendorId && row.vendor
+          ? [recordBadge("vendor", { id: row.vendorId, name: row.vendor })]
+          : []),
+      ]),
   ),
   purchaselessExitExpenses: selectedFastCard(
     exactProblemPresentationRowSchema
       .pick({ id: true, name: true, cost: true, date: true, projectName: true })
       .required(),
     (row) =>
-      problemRow(
-        "expense",
-        productRef(row),
-        exitExpenseSubtitle(row, row.projectName),
-      ),
+      problemRow("expense", productRef(row), [
+        row.projectName ? field("Project", row.projectName) : null,
+        ...exitExpenseFields(row),
+      ]),
   ),
   productsWithNoImages: selectedFastCard(
     exactProblemPresentationRowSchema
       .pick({ id: true, name: true, manufacturer: true, primaryGtin: true })
       .required(),
     (row) =>
-      problemRow(
-        "product",
-        productRef(row),
-        [byManufacturer(row.manufacturer)],
-        row.primaryGtin ? [textBadge(displayGtin(row.primaryGtin))] : [],
-      ),
+      problemRow("product", productRef(row), [
+        manufacturerField(row.manufacturer, { missingIsDefect: true }),
+        row.primaryGtin ? field("GTIN", displayGtin(row.primaryGtin)) : null,
+      ]),
   ),
   imageProcessingIssues: selectedFastCard(
     exactProblemPresentationRowSchema
@@ -899,13 +906,8 @@ const fastExactPresenters = {
         { id: row.id, name: row.filename ?? "(unnamed image)" },
         [
           row.processingIssue === "failed"
-            ? "Processing failed"
-            : "Cutout eligibility needs review",
-        ],
-        [
-          textBadge(
-            row.processingIssue === "failed" ? "Failed" : "Needs review",
-          ),
+            ? field("Issue", "Processing failed", "destructive")
+            : field("Issue", "Cutout eligibility needs review", "warning"),
         ],
       ),
   ),
@@ -921,9 +923,16 @@ const fastExactPresenters = {
       .required(),
     (row) =>
       problemRow("product", productRef(row), [
-        byManufacturer(row.manufacturer),
-        `${Number(row.onHandUnits ?? 0)} stocked as itself, plus its parts`,
-        `more than the ${Number(row.quantityLedger?.expectedQuantity ?? 0)} bought`,
+        manufacturerField(row.manufacturer),
+        field(
+          "Stocked",
+          `${Number(row.onHandUnits ?? 0)} as itself, plus its parts`,
+          "warning",
+        ),
+        field(
+          "Bought",
+          String(Number(row.quantityLedger?.expectedQuantity ?? 0)),
+        ),
       ]),
   ),
   understatedCostMeals: selectedFastCard(
@@ -959,7 +968,7 @@ const fastExactPresenters = {
     exactProblemPresentationRowSchema
       .pick({ id: true, amount: true, product: true, location: true })
       .required(),
-    (row) => inventoryRow(row, [amountLabel(row)]),
+    (row) => inventoryRow(row, [amountField(row)]),
   ),
   inventoryWithoutPricePath: selectedFastCard(
     exactProblemPresentationRowSchema
@@ -975,11 +984,14 @@ const fastExactPresenters = {
     (row) =>
       // The price is what the unit WOULD be valued against — the row exists
       // precisely because no conversion reaches it.
-      inventoryRow(
-        row,
-        [amountLabel(row)],
-        [textBadge(`Unreachable ${formatCurrency(row.product.price)} each`)],
-      ),
+      inventoryRow(row, [
+        amountField(row),
+        field(
+          "Unreachable price",
+          `${formatCurrency(row.product.price)} each`,
+          "warning",
+        ),
+      ]),
   ),
   vendorsWithoutLogos: selectedFastCard(
     exactProblemPresentationRowSchema
@@ -1006,6 +1018,7 @@ const fastExactPresenters = {
       .pick({
         id: true,
         vendorName: true,
+        vendorId: true,
         orderId: true,
         orderUrl: true,
         date: true,
@@ -1020,6 +1033,7 @@ const fastExactPresenters = {
       allProblemsSchema.shape.purchasesNotReconciling.element.parse({
         id: row.id,
         vendorName: row.vendorName ?? null,
+        vendorId: row.vendorId ?? null,
         orderId: row.orderId ?? null,
         orderUrl: row.orderUrl ?? null,
         date: row.date ?? null,
@@ -1037,6 +1051,7 @@ const fastExactPresenters = {
       .pick({
         id: true,
         vendorName: true,
+        vendorId: true,
         expenseTotal: true,
         financialReconciliation: true,
       })
@@ -1046,6 +1061,7 @@ const fastExactPresenters = {
         {
           id: row.id,
           vendorName: row.vendorName ?? null,
+          vendorId: row.vendorId ?? null,
           expenseTotal: Number(row.expenseTotal),
           financialReconciliation: row.financialReconciliation,
         },

@@ -115,6 +115,8 @@ const attentionItem = <T extends ProjectAttentionType>(
     date: string | null;
     amount: number | null;
     href: string;
+    // Parsed by `projectAttentionItemSchema` below, which brands the code.
+    parentProject?: { id: string; name: string };
     discriminator?: string;
   },
 ): ProjectAttentionItem =>
@@ -129,6 +131,7 @@ const attentionItem = <T extends ProjectAttentionType>(
     date: row.date,
     amount: row.amount,
     href: row.href,
+    parentProject: row.parentProject,
     facts: row.facts,
   });
 
@@ -239,6 +242,11 @@ export async function computeAttentionItems(
       ),
     readTaskActionability(db),
   ]);
+  const projectRowById = new Map(allProjectRows.map((row) => [row.id, row]));
+  const parentProject = (projectId: ProjectId | null) => {
+    const project = projectId ? projectRowById.get(projectId) : undefined;
+    return project ? { id: project.shortcode, name: project.name } : undefined;
+  };
   const inProgressProjectRows = allProjectRows.filter(
     (row) => row.status === "in_progress" && projectInScope(row.id),
   );
@@ -260,6 +268,7 @@ export async function computeAttentionItems(
           date: effectiveDue,
           amount: null,
           href: `/tasks/${row.shortcode}`,
+          parentProject: parentProject(row.projectId),
           facts: {
             due: effectiveDue,
             daysOverdue: plainDateDaysBetween(effectiveDue, today),
@@ -348,13 +357,12 @@ export async function computeAttentionItems(
   // rollup as the budget strip. It cannot tell whether spend landed elsewhere
   // or the estimate was wrong, so it names both.
   const appendSpendBelowEstimate = () => {
-    const rowsById = new Map(allProjectRows.map((row) => [row.id, row]));
     const hasEstimatedAncestor = (parentId: ProjectId | null): boolean => {
       const seen = new Set<ProjectId>();
       let current = parentId;
       while (current !== null && !seen.has(current)) {
         seen.add(current);
-        const parent = rowsById.get(current);
+        const parent = projectRowById.get(current);
         if (!parent) return false;
         if (parent.costEstimate !== null) return true;
         current = parent.parentProjectId;
@@ -407,6 +415,7 @@ export async function computeAttentionItems(
           date: plannedFor,
           amount: row.cost,
           href: `/expenses/${row.shortcode}`,
+          parentProject: parentProject(row.projectId),
           facts: {
             plannedFor,
             daysPastDue: plainDateDaysBetween(plannedFor, today),
@@ -432,6 +441,7 @@ export async function computeAttentionItems(
         date: row.date,
         amount: null,
         href: `/expenses/${row.shortcode}`,
+        parentProject: parentProject(row.projectId),
         facts: { date: row.date },
       }),
     ),

@@ -795,7 +795,10 @@ test("reviews an occupied location and links a chosen unlinked Expense after pho
   await expect(comparison.getByText(existingName).first()).toBeVisible();
   await expect(comparison.getByText(/Titles agree/).first()).toBeVisible();
   await expect(
-    comparison.getByText(/Recorded count:.*Expected:/).first(),
+    comparison.getByText("Recorded count", { exact: true }).first(),
+  ).toBeVisible();
+  await expect(
+    comparison.getByText("Expected", { exact: true }).first(),
   ).toBeVisible();
   await page
     .locator("#photo-group-g1")

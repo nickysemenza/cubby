@@ -8,7 +8,7 @@ import {
   householdContribution,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/number-format";
-import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
+import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Button } from "~/ui/primitives/button";
 
@@ -44,13 +44,18 @@ export function TransferPairAccept({
     [];
   if (candidates.length === 0) return null;
   return (
-    <Ledger aria-label="Transfer pair candidates">
+    <RecordList aria-label="Transfer pair candidates" columns={PAIR_COLUMNS}>
       {candidates.map((candidate) => (
         <CandidateRow key={candidate.transactionId} candidate={candidate} />
       ))}
-    </Ledger>
+    </RecordList>
   );
 }
+
+const PAIR_COLUMNS = [
+  { id: "amount", label: "Amount" },
+  { id: "apart", label: "Apart" },
+];
 
 function partyName(party: Candidate["from"]) {
   return party?.name ?? "No owner";
@@ -73,42 +78,30 @@ function CandidateRow({ candidate }: { candidate: Candidate }) {
     candidate.to !== null &&
     candidate.from.id === candidate.to.id;
   return (
-    <LedgerRow>
-      <LedgerCell
-        as="div"
-        slot="primary"
-        className="flex flex-wrap items-center gap-1"
-      >
+    <RecordRow
+      primary={
         <EntityRefLink
           variant="byId"
           entityKind="financialTransaction"
           entityId={candidate.transactionId}
         />
-        <span className="text-muted-foreground">
-          {partyName(candidate.from)} → {partyName(candidate.to)}
-          {internal ? " · internal move" : ""}
-        </span>
-      </LedgerCell>
-      <LedgerCell
-        as="div"
-        slot="secondary"
-        className="text-muted-foreground tabular-nums"
-      >
-        {formatCurrency(candidate.amount)} · {candidate.dateDistanceDays}d apart
-        {refusal ? (
-          <span role="alert" className="block text-destructive">
-            {refusal}
-          </span>
-        ) : null}
-        {accept.isError ? (
-          <span role="alert" className="block text-destructive">
-            {accept.error instanceof Error
-              ? accept.error.message
-              : String(accept.error)}
-          </span>
-        ) : null}
-      </LedgerCell>
-      <LedgerCell as="div" slot="trailing">
+      }
+      secondary={`${partyName(candidate.from)} → ${partyName(candidate.to)}${internal ? " · internal move" : ""}`}
+      facts={[
+        {
+          id: "amount",
+          label: "Amount",
+          value: formatCurrency(candidate.amount),
+          className: "tabular-nums",
+        },
+        {
+          id: "apart",
+          label: "Apart",
+          value: `${candidate.dateDistanceDays}d`,
+          className: "tabular-nums",
+        },
+      ]}
+      actions={
         <Button
           type="button"
           size="xs"
@@ -119,7 +112,25 @@ function CandidateRow({ candidate }: { candidate: Candidate }) {
         >
           {accept.data?.canProceed ? "Accepted" : "Accept"}
         </Button>
-      </LedgerCell>
-    </LedgerRow>
+      }
+      detail={
+        refusal || accept.isError ? (
+          <>
+            {refusal ? (
+              <p role="alert" className="text-xs text-destructive">
+                {refusal}
+              </p>
+            ) : null}
+            {accept.isError ? (
+              <p role="alert" className="text-xs text-destructive">
+                {accept.error instanceof Error
+                  ? accept.error.message
+                  : String(accept.error)}
+              </p>
+            ) : null}
+          </>
+        ) : null
+      }
+    />
   );
 }

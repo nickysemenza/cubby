@@ -2,7 +2,12 @@ import { humanize } from "@cubby/shared";
 import { type ComponentProps, useMemo } from "react";
 
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
-import { RecordList, RecordRow } from "~/ui/common/record-list";
+import type { Fact } from "~/ui/common/fact-list";
+import {
+  RecordList,
+  RecordRow,
+  recordColumnsOf,
+} from "~/ui/common/record-list";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
@@ -19,6 +24,27 @@ import {
 } from "./dependency-graph-model";
 
 import "./dependency-graph.css";
+
+/**
+ * Metadata strings are unlabelled per graph source, so they share one Details
+ * column; graph-derived flags share State.
+ */
+function graphNodeFacts(node: GraphNode, inCycle: boolean): Fact[] {
+  const state = [
+    node.completed ? "Completed" : null,
+    node.overdue ? "Overdue" : null,
+    node.external ? "Outside scope" : null,
+    inCycle ? "Cycle" : null,
+  ].filter((part) => part !== null);
+  return [
+    ...(node.metadata?.length
+      ? [{ id: "details", label: "Details", value: node.metadata.join(" · ") }]
+      : []),
+    ...(state.length
+      ? [{ id: "state", label: "State", value: state.join(" · ") }]
+      : []),
+  ];
+}
 
 const LayoutLoading = () => <output>Loading graph layout…</output>;
 
@@ -75,6 +101,14 @@ export function DependencyGraphViewer({
       ).entries(),
     ],
     [graph.nodes],
+  );
+  const rows = useMemo(
+    () =>
+      graph.nodes.map((node) => ({
+        node,
+        facts: graphNodeFacts(node, graph.cycleIds.includes(node.id)),
+      })),
+    [graph],
   );
   const layout = useMemo(
     () =>
@@ -160,8 +194,11 @@ export function DependencyGraphViewer({
         <summary className="cursor-pointer text-sm font-medium">
           Record and relationship list ({graph.nodes.length})
         </summary>
-        <RecordList aria-label="Records and relationships">
-          {graph.nodes.map((node) => {
+        <RecordList
+          aria-label="Records and relationships"
+          columns={recordColumnsOf(rows)}
+        >
+          {rows.map(({ node, facts }) => {
             const outgoing = graph.edges.filter(
               (edge) => edge.source === node.id,
             );
@@ -177,16 +214,10 @@ export function DependencyGraphViewer({
                     </a>
                   )
                 }
-                secondary={[
-                  node.id,
-                  ...(node.metadata ?? []),
-                  node.completed ? "Completed" : null,
-                  node.overdue ? "Overdue" : null,
-                  node.external ? "Outside scope" : null,
-                  graph.cycleIds.includes(node.id) ? "Cycle" : null,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
+                secondary={
+                  <span className="font-mono text-2xs">{node.id}</span>
+                }
+                facts={facts}
                 actions={
                   onSelectNode && (
                     <Button

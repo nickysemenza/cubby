@@ -9,7 +9,12 @@
   padding-block: var(--brand-space-3) var(--brand-space-1);
   border-top: 0;
 }
-.ledger[data-record-list] > .ledger-row[data-record-heading]:first-child {
+/* A columnar list's header row comes first; the first real row follows it. */
+.ledger[data-record-list]
+  > .ledger-row[data-record-heading]:is(
+    :first-child,
+    [data-ledger-header] + *
+  ) {
   padding-top: 0;
 }
 .ledger[data-record-list]
@@ -86,6 +91,7 @@
 .ledger[data-record-list="timeline"]
   > .ledger-row:has(> [data-ledger-slot="leading"]):is(
     :first-child,
+    [data-ledger-header] + *,
     [data-record-heading] + *
   )::before {
   top: var(--record-mark-center);
@@ -100,7 +106,11 @@
 }
 /* A lone mark has nothing to connect; first-and-last rows draw no rail. */
 .ledger[data-record-list="timeline"]
-  > .ledger-row:is(:first-child, [data-record-heading] + *):is(
+  > .ledger-row:is(
+    :first-child,
+    [data-ledger-header] + *,
+    [data-record-heading] + *
+  ):is(
     :last-child,
     :has(+ :is([data-record-heading], [data-record-more], [data-record-fold]))
   )::before {

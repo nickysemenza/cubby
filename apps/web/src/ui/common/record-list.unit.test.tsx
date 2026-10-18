@@ -1,7 +1,12 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, it } from "vitest";
 
-import { RecordDetail, RecordList, RecordRow } from "./record-list";
+import {
+  RecordDetail,
+  recordColumnsOf,
+  RecordList,
+  RecordRow,
+} from "./record-list";
 
 it("opens and closes a disclosure, default-open or not", async () => {
   render(
@@ -30,4 +35,22 @@ it("opens and closes a disclosure, default-open or not", async () => {
   await expect
     .poll(() => screen.getByText("Synthetic lone quote"))
     .not.toBeVisible();
+});
+
+it("derives columns from rows' facts in first-seen order", () => {
+  expect(
+    recordColumnsOf([
+      { facts: [{ label: "Amount", value: "2 each" }] },
+      {
+        facts: [
+          { label: "Location", value: "Synthetic shelf" },
+          { label: "Amount", value: "3 each" },
+        ],
+      },
+      {},
+    ]),
+  ).toEqual([
+    { id: "Amount", label: "Amount" },
+    { id: "Location", label: "Location" },
+  ]);
 });
