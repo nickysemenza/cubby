@@ -112,14 +112,13 @@ purchaser attribution does not change beneficiaries or inventory ownership.
 
 The Purchase list's Purchaser filter (`purchaserId`: Ledger Party codes or
 `@me`, with its generated Exclude) matches the displayed `purchaserId`
-exactly, and each member's detail lists those Purchases. It never runs the
-resolver over every Purchase: it gathers each requested party's candidates
-from its own override, the cards it primarily holds, its Vendor Accounts and
-its mailbox's accepted sources and reviewed links, then confirms each with
-`purchasePurchaserSql` (`purchasePurchaserSetSql`). A new resolver branch adds
-its candidate source there. Cost scales with the party's candidates (about
-70 µs each on a local container); Any value / No value is not offered, since
-it would confirm nearly every Purchase.
+exactly, and each member's detail lists those Purchases. The column and the
+filter read one set-based resolver (`purchasePurchasersSql`): over one row it
+follows that Purchase's indexed edges; for the filter it resolves every
+Purchase in a single pass of joins over overrides, paying cards, settlement
+party conflicts, Vendor Accounts and Email evidence, so its cost does not
+depend on how many Purchases the requested member made. A new resolver branch
+belongs in that relation. Any value / No value is not offered.
 
 Account `fundingPeriods` independently selects the funding party at each payment's
 transaction date, not the Purchase date. A statement row with only a posting date
