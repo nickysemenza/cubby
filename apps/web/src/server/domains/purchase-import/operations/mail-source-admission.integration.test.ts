@@ -12,7 +12,8 @@
  * model to read, is imported anyway; a refused admission surfaces as a server
  * error instead of a client conflict; an order traced from an admitted carrier
  * notice through a shipping Email that ties tracking to the order number has
- * no admission path.
+ * no admission path; batched via paths can form a cycle without reaching the
+ * Run's admitted Emails.
  * Deterministic original checks precede all admission judgments.
  */
 import type { ActorContext } from "@cubby/schemas/context";
@@ -650,6 +651,60 @@ describe("Mail import source admission", () => {
         message: expect.stringContaining("more than once"),
       });
     expect(await rosterOf(id)).toEqual([notice.id]);
+  });
+
+  it("refuses a batch whose via paths form a cycle without a Run roster anchor", async () => {
+    const { party, vendor } = await world();
+    const notice = await retain(party.id, "cycle-anchor", "Tracking TRK-20");
+    const first = await retain(
+      party.id,
+      "cycle-first",
+      "Order SYN-21 confirmed",
+    );
+    const second = await retain(
+      party.id,
+      "cycle-second",
+      "Order SYN-21 shipped",
+    );
+    const { id, actor } = await mailRun(party, [notice], "discovery");
+    const firstOrder = prepareInput(
+      id,
+      "cycle-first",
+      vendor.shortcode,
+      first,
+      "SYN-21",
+      [second],
+    ).orders[0]!;
+    const secondOrder = prepareInput(
+      id,
+      "cycle-second",
+      vendor.shortcode,
+      second,
+      "SYN-21",
+      [first],
+    ).orders[0]!;
+    const input = preparePurchaseImportInput.parse({
+      _runExecution: {
+        runId: id,
+        operationId: "prepare:via-cycle",
+        itemOperationIds: [
+          firstOrder.itemOperationId,
+          secondOrder.itemOperationId,
+        ],
+      },
+      orders: [firstOrder, secondOrder],
+    });
+
+    await expect(
+      preparePurchaseImport(ctx.db, input, actor, sharedIdentifierDecisions()),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      reason: "MAIL_SOURCE_ADMISSION_REFUSED",
+      message: expect.stringContaining("cycle"),
+    });
+    expect(await rosterOf(id)).toEqual([notice.id]);
+    expect(await emailRow(first)).toEqual({ runId: null, status: "pending" });
+    expect(await emailRow(second)).toEqual({ runId: null, status: "pending" });
   });
 
   it.each([

@@ -130,6 +130,26 @@ export async function prepareMailSourceAdmissions(
       if (!mails.some((known) => known.id === step.id)) mails.push(step);
     });
   }
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  for (const mail of mails) {
+    let current: RetainedMail | undefined = mail;
+    const branch: string[] = [];
+    while (current && !visited.has(current.id)) {
+      if (visiting.has(current.id))
+        throw createAppError(
+          "MAIL_SOURCE_ADMISSION_REFUSED",
+          "The requested via paths form a cycle; each path must lead to an Email already admitted to this Run.",
+        );
+      visiting.add(current.id);
+      branch.push(current.id);
+      current = previous.get(current.id);
+    }
+    for (const id of branch) {
+      visiting.delete(id);
+      visited.add(id);
+    }
+  }
   const member = (mail: RetainedMail) =>
     roster.some(
       (source) =>

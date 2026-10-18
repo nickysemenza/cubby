@@ -39,7 +39,7 @@ import { loadProductInventoryEntries } from "~/server/domains/product/repo/looku
 import {
   productIdentityOverlap,
   productIdentityWords,
-} from "~/server/domains/product/repo/product-identity-overlap";
+} from "~/server/domains/product/repo/match/product-identity-overlap";
 import { unknownProductVariantComparison } from "~/server/domains/product/repo/product-variant-comparison";
 import { loadProductQuantitySummaries } from "~/server/domains/product/repo/quantity-ledger";
 import { sourceObservationIdentitySql } from "~/server/domains/purchase-import/repo/reconciliation-observations";
