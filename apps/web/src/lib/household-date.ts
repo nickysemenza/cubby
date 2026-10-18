@@ -60,6 +60,8 @@ export function householdDateTime(plainDate: string, minutes = 0): Date {
   return new Date(zoned.getTime());
 }
 
+let householdDayFormat: Intl.DateTimeFormat | undefined;
+
 /**
  * Household-local calendar date, e.g. "2026-07-22". Never derive this via
  * `date.toISOString().slice(0, 10)` (a UTC day — misreads a same-day
@@ -69,12 +71,16 @@ export function householdDateTime(plainDate: string, minutes = 0): Date {
  * `Intl.DateTimeFormat` to emit ISO (`yyyy-MM-dd`) order directly.
  */
 export function householdLocalDate(date: Date = new Date()): string {
-  return new Intl.DateTimeFormat("en-CA", {
+  // Constructing an `Intl.DateTimeFormat` costs ~100x a `format` call, and
+  // every rendered `DateDisplay` reads today. Built on first use so Worker
+  // startup does not pay for it.
+  householdDayFormat ??= new Intl.DateTimeFormat("en-CA", {
     timeZone: HOUSEHOLD_TIMEZONE,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(date);
+  });
+  return householdDayFormat.format(date);
 }
 
 /** Household-local calendar date `days` ago, for activity-cutoff checks. */
