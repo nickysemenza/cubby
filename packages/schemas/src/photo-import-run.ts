@@ -728,7 +728,6 @@ export const photoRunReviewResponse = z.object({
   review: photoGroupProposalList,
   images: z.array(photoRunImage),
   /** Household image work is paused, so queued descriptions wait and grouping cannot start. */
-  imageProcessingPaused: z.boolean(),
   lifecycle: photoRunLifecycle,
 });
 export type PhotoRunReview = z.infer<typeof photoRunReviewResponse>;

@@ -83,7 +83,7 @@ describe("backfillImageProcessing", () => {
       batchSize: 10,
       retryFailures: false,
     });
-    expect(result).toMatchObject({ scheduled: 1, paused: false });
+    expect(result).toMatchObject({ scheduled: 1 });
     expect(await jobKinds(row.id)).toEqual([
       "describe_image",
       "describe_image",
@@ -99,7 +99,7 @@ describe("backfillImageProcessing", () => {
       retryFailures: false,
       kinds: ["describe_image"],
     });
-    expect(result).toMatchObject({ scheduled: 1, paused: false });
+    expect(result).toMatchObject({ scheduled: 1 });
     expect(await jobKinds(row.id)).toEqual([
       "describe_image",
       "describe_image",

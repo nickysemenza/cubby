@@ -28,6 +28,10 @@ eligible work plus shared work, before counts and pagination. Routing follows
 current source/account authority rather than inventory ownership or historical
 actor snapshots; private originals keep their existing access checks. Queue
 reads create no records, launch no inference and authorize no execution.
+Automatic maintenance remains in its existing controls.
+
+## Amendment: automatic routine work (2026-10-17)
+
 Automatic maintenance recovers missed queue publications on app open and daily.
 Related retained Emails from enabled connected mailboxes enter import automatically,
 including unclaimed Email classified before automatic admission was introduced.

@@ -269,7 +269,7 @@ export const nativeCoverage = {
       "expense.settlement",
       // A run's progress, findings, transcript, log, usage and changes: the same report
       // view draws the server's `records` rows, polls (one batched read) while the run is live,
-      // and runs the commands the server offers (approve, reject, apply, dismiss, retry) only
+      // and runs the commands the server offers (apply, dismiss, retry) only
       // after the confirmation each declares. Web keeps its corrections review (targets) and
       // audit diffs (changes) as richer fills of the same slots.
       "run.ai-usage",

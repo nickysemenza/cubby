@@ -2296,24 +2296,31 @@ export async function resumeApprovalPausedRuns(db: Database) {
       ),
     )
     .limit(50);
+  const errors: unknown[] = [];
   for (const row of pending) {
-    const result = await controlRun(
-      db,
-      buildActorContext(row.actorUserId, "system"),
-      {
-        runPublicId: row.shortcode,
-        action: "resume",
-      },
-    );
-    if (
-      "dispatchRunId" in result &&
-      result.dispatchRunId &&
-      result.dispatchEventId
-    )
-      await dispatchStartedRun(db, {
-        id: result.dispatchRunId,
-        eventId: result.dispatchEventId,
-        purpose: result.dispatchPurpose,
-      });
+    try {
+      const result = await controlRun(
+        db,
+        buildActorContext(row.actorUserId, "system"),
+        {
+          runPublicId: row.shortcode,
+          action: "resume",
+        },
+      );
+      if (
+        "dispatchRunId" in result &&
+        result.dispatchRunId &&
+        result.dispatchEventId
+      )
+        await dispatchStartedRun(db, {
+          id: result.dispatchRunId,
+          eventId: result.dispatchEventId,
+          purpose: result.dispatchPurpose,
+        });
+    } catch (error) {
+      errors.push(error);
+    }
   }
+  if (errors.length)
+    throw new AggregateError(errors, "Legacy Run recovery failed");
 }

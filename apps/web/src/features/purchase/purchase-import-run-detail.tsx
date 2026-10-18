@@ -263,7 +263,7 @@ function agentWorkHeadline(
 ): string {
   if (run.status === "completed")
     return isPhotoRun ? "Photo review complete" : "Purchase import complete";
-  if (run.status === "paused_approval") return "Waiting for your approval";
+  if (run.status === "paused_approval") return "Resuming background work";
   if (run.status === "failed" || run.status === "dispatch_failed")
     return "Agent work stopped";
   if (isPhotoRun && proposedGroups)

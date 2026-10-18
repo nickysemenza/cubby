@@ -213,7 +213,7 @@ private struct ProductJourneySummaryView: View {
 /// `run.import-controls` for a paused import: the Run is paused, and web holds the controls that
 /// resume or stop it.
 private struct RunPausedHandoff: View {
-    static let pausedStatuses: Set<String> = ["paused_auth", "paused_offline"]
+    static let pausedStatuses: Set<String> = ["paused", "paused_auth", "paused_offline"]
 
     let runID: String
     @Environment(AppModel.self) private var appModel

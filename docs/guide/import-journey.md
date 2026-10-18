@@ -62,6 +62,10 @@ Catch-up also admits older retained related Emails in enabled mailboxes. Only
 usable text or retained attachments count toward its bounded page; empty shells
 and historical sources with unresolved ownership stay out. An admission failure
 does not stop other sources or new-mail discovery, and retains its diagnostics.
+Manual Run pauses remain active ownership: they can be resumed or cancelled,
+and retain the vendor account's active-Run exclusion. Recovery resumes only
+historical approval pauses, isolates failures per Run and reports them after
+attempting the remaining Runs.
 
 The household AI budget is a stopgap safety net on frontier chat-model spend:
 $1 per fixed six-hour UTC window (`server/ai/budget.ts`), summed from

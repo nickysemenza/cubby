@@ -37,7 +37,6 @@ export async function backfillImageProcessing(
     await publishImageProcessingWakeups(db, jobs);
     return {
       scheduled: jobs.length,
-      paused: false,
       submissionId: submission.publicId,
     };
   }
@@ -46,7 +45,7 @@ export async function backfillImageProcessing(
     kinds,
     input.batchSize,
   );
-  if (shortcodes.length === 0) return { scheduled: 0, paused: false };
+  if (shortcodes.length === 0) return { scheduled: 0 };
   const submission = await createImageProcessingSubmission(db);
   const jobs: string[] = [];
   for (const shortcode of shortcodes) {
@@ -61,7 +60,6 @@ export async function backfillImageProcessing(
   await publishImageProcessingWakeups(db, jobs);
   return {
     scheduled: shortcodes.length,
-    paused: false,
     submissionId: submission.publicId,
   };
 }

@@ -164,6 +164,4 @@ export const imageProcessingBatchInput = z.object({
 export const imageProcessingBatchOutput = z.object({
   submissionId: z.string().nullable().optional(),
   scheduled: z.number().int().nonnegative(),
-  /** Processing is always active; retained for native result decoding. */
-  paused: z.boolean(),
 });

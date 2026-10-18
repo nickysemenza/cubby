@@ -155,8 +155,7 @@ export async function loadWorkContexts(
                         {
                           code: "member_approval",
                           state: "missing",
-                          reason:
-                            "Review the pending decision before execution continues.",
+                          reason: "Background work will resume automatically.",
                           record: null,
                         },
                       ]

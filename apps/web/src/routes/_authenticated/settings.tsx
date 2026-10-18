@@ -97,7 +97,7 @@ function SettingsPage() {
             <Row align="center" gap="sm">
               <WrenchIcon className="size-4 text-muted-foreground" />
               <Stack gap="tight">
-                <Eyebrow as="span">Developer / Maintenance</Eyebrow>
+                <Eyebrow as="span">Developer / Diagnostics</Eyebrow>
                 <Description size="xs">Connection diagnostics.</Description>
               </Stack>
             </Row>

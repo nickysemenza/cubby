@@ -194,7 +194,6 @@ beforeEach(() => {
             committedGroupCount: 0,
             dispatchError: null,
           },
-          imageProcessingPaused: false,
         },
       };
     throw new Error(`Unexpected operation: ${operation}`);

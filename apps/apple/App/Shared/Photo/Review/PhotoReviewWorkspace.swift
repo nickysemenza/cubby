@@ -54,8 +54,7 @@ final class PhotoReviewWorkspace {
             let review = session.review,
             review.review.proposals.isEmpty,
             PhotoReviewPolicy.groupingReadiness(
-                images: review.images, runStatus: session.snapshot?.status,
-                processingPaused: review.imageProcessingPaused) == .readyToStart
+                images: review.images, runStatus: session.snapshot?.status) == .readyToStart
         else { return }
         autoStartAttempted = true
         await session.execute(.startGrouping, runID: runID, client: client)

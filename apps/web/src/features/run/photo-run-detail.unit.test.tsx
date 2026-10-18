@@ -174,7 +174,6 @@ const review: PhotoRunReview = {
     committedGroupCount: 0,
     dispatchError: null,
   },
-  imageProcessingPaused: false,
   review: {
     runId: RUN_ID,
     runStatus: "completed",
@@ -237,7 +236,6 @@ describe("PhotoImportRunView", () => {
   it("keeps approval available for unresolved photos on a stopped review run", async () => {
     const stoppedReview: PhotoRunReview = {
       ...review,
-      imageProcessingPaused: false,
       review: {
         ...review.review,
         runStatus: "needs_review",
@@ -407,12 +405,11 @@ describe("PhotoImportRunView", () => {
     ).toHaveLength(0);
   });
 
-  it("names paused image processing as the reason grouping waits", async () => {
+  it("keeps pending descriptions processing automatically", async () => {
     harness.queryClient.setQueryData(
       photoImport.review.queryKey({ runId: RUN_ID }),
       {
         ...review,
-        imageProcessingPaused: true,
         review: { ...review.review, proposals: [] },
         images: review.images.map((image) => ({
           ...image,
@@ -438,7 +435,7 @@ describe("PhotoImportRunView", () => {
     );
 
     expect(
-      await screen.findByText(/Image processing is paused/),
+      await screen.findByText(/Grouping starts once descriptions are ready/),
     ).toBeInTheDocument();
   });
 
@@ -515,7 +512,6 @@ describe("PhotoImportRunView", () => {
   it("holds approval while cloud description runs, then enables it without waiting for device analysis or cutout", async () => {
     const pendingReview: PhotoRunReview = {
       ...review,
-      imageProcessingPaused: false,
       review: {
         ...review.review,
         runStatus: "running",

@@ -71,7 +71,6 @@ export const photoImportHandlers = implementOperationDomain(
       return {
         review: snapshot.review,
         images: snapshot.images,
-        imageProcessingPaused: false,
         lifecycle: snapshot.lifecycle,
       };
     },

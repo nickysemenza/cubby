@@ -405,7 +405,7 @@ export async function claimImageProcessingJob(
   const now = sql`now()`;
   const leaseExpiresAt = sql`now() + ${input.leaseMs} * interval '1 millisecond'`;
   return await withTransaction(db, async (tx) => {
-    // The policy is internal so a new caller cannot accidentally bypass pause.
+    // The internal policy keeps claims within the device’s supported job kinds.
     const [candidate] = await tx
       .select({
         id: imageProcessingJob.id,
