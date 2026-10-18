@@ -456,10 +456,7 @@ const compatibleKinds = (
   }
 };
 
-const toggleDescriptor = (
-  target: CompiledEntity,
-  parent: FilterDescriptor,
-): FilterDescriptor => {
+const toggleDescriptor = (target: CompiledEntity): FilterDescriptor => {
   const key = `includeSub${pascal(pluralOf(target))}`;
   const label = `Include sub-${pluralOf(target).toLowerCase()}`;
   return {
@@ -481,7 +478,6 @@ const toggleDescriptor = (
     stored: null,
     derived: null,
     range: null,
-    urlOnly: parent.urlOnly,
     nullable: null,
     sentinels: null,
     match: null,
@@ -508,8 +504,7 @@ const withViaKeys = (
     descriptor.derived === null ? undefined : derived[descriptor.derived];
   if (
     bound?.shape !== "via" ||
-    (descriptor.kind !== "multiselect" && descriptor.kind !== "idMulti") ||
-    descriptor.urlOnly
+    (descriptor.kind !== "multiselect" && descriptor.kind !== "idMulti")
   )
     return descriptor;
   if (descriptor.nullable !== null)
@@ -534,7 +529,7 @@ const withViaKeys = (
  * Every compiled value filter gets a generated Exclude key: the negation of
  * the predicate its include builds, so rows with no value stay. A declared
  * predicate that is not `negatable` keeps the key with the reason it cannot
- * exclude. A URL-only scope is not a filter a person edits, so it has none.
+ * exclude. A single-value scope has none.
  */
 const withExcludeKey = (
   descriptor: FilterDescriptor,
@@ -542,7 +537,6 @@ const withExcludeKey = (
 ): FilterDescriptor => {
   if (
     (descriptor.kind !== "multiselect" && descriptor.kind !== "idMulti") ||
-    descriptor.urlOnly ||
     descriptor.singleValue !== null ||
     (descriptor.stored === null && bound === undefined)
   )
@@ -555,6 +549,29 @@ const withExcludeKey = (
     },
   };
 };
+
+/**
+ * A multiselect over a derived enum value offers that value's options when it
+ * declares none, labelled as its group sections are.
+ */
+const withDerivedOptions = (
+  descriptor: FilterDescriptor,
+  bound: CompiledListField | undefined,
+): FilterDescriptor =>
+  descriptor.kind !== "multiselect" ||
+  descriptor.options !== null ||
+  descriptor.optionsRef !== null ||
+  descriptor.optionsKey !== null ||
+  bound?.shape !== "value" ||
+  bound.options === null
+    ? descriptor
+    : {
+        ...descriptor,
+        options: bound.options.map((value) => ({
+          value,
+          label: value[0]!.toUpperCase() + value.slice(1),
+        })),
+      };
 
 const enumOptions = (
   field: CompiledEntity["fieldModel"]["fields"][number] | undefined,
@@ -607,7 +624,6 @@ const compileGroupChoice = (
     ];
     return descriptors.find(
       (candidate) =>
-        !candidate.urlOnly &&
         (candidate.kind === "multiselect" || candidate.kind === "idMulti") &&
         (keys.includes(candidate.columnId) ||
           (candidate.field !== null && keys.includes(candidate.field)) ||
@@ -869,8 +885,8 @@ export const compileListFields = (
         throw new EntityDeclarationError(
           `${context}.filters ${declared.columnId} is derived but names no model.derived entry ${declared.derived}.`,
         );
-      const descriptor = withExcludeKey(
-        withViaKeys(declared, derived, byKey, context),
+      const descriptor = withDerivedOptions(
+        withExcludeKey(withViaKeys(declared, derived, byKey, context), bound),
         bound,
       );
       compiled.push(descriptor);
@@ -896,7 +912,7 @@ export const compileListFields = (
                 )?.reference ?? null);
       const target = referenced === null ? undefined : byKey.get(referenced);
       if (target?.fieldModel.hierarchy == null) continue;
-      const toggle = toggleDescriptor(target, descriptor);
+      const toggle = toggleDescriptor(target);
       subtree[descriptor.field ?? descriptor.columnId] = toggle.columnId;
       compiled[compiled.length - 1] = {
         ...descriptor,

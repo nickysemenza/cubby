@@ -1035,13 +1035,11 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by related recent expenses id...",
         brandRef: { entity: "expense" },
-        urlOnly: true,
       },
       {
         columnId: "expensePresenceFilter",
         kind: "presence",
         placeholder: "Filter related recent expenses presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:vendor.purchases",
@@ -1055,13 +1053,11 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by related purchases id...",
         brandRef: { entity: "purchase" },
-        urlOnly: true,
       },
       {
         columnId: "purchasePresenceFilter",
         kind: "presence",
         placeholder: "Filter related purchases presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:vendor.products",
@@ -1075,13 +1071,11 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by related products id...",
         brandRef: { entity: "product" },
-        urlOnly: true,
       },
       {
         columnId: "productPresenceFilter",
         kind: "presence",
         placeholder: "Filter related products presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:vendor.projects",
@@ -1095,13 +1089,11 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by related projects id...",
         brandRef: { entity: "project" },
-        urlOnly: true,
       },
       {
         columnId: "projectPresenceFilter",
         kind: "presence",
         placeholder: "Filter related projects presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:vendor.transactions",
@@ -1115,13 +1107,11 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by related financial transactions id...",
         brandRef: { entity: "financialTransaction" },
-        urlOnly: true,
       },
       {
         columnId: "financialTransactionPresenceFilter",
         kind: "presence",
         placeholder: "Filter related financial transactions presence...",
-        urlOnly: true,
       },
     ],
   },

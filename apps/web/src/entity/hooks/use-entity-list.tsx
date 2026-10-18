@@ -12,7 +12,10 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import { browserEntityDefinition, entities } from "~/entity/entities";
-import { getEntityFilters } from "~/entity/filter-manifest";
+import {
+  getEntityFilters,
+  manifestFilterFields,
+} from "~/entity/filter-manifest";
 import {
   buildFiltersFromManifest,
   FILTER_EXACT,
@@ -424,12 +427,10 @@ export function useEntityList<
       const resolvedFilters = {
         ...buildFiltersFromManifest(
           getEntityFilters(entity),
-          // `allFilters`, not `columnFilters` — a URL-only scope (`?productId=`)
-          // never enters the table's state, but still has to reach the server.
           // Reads raw state rather than `getColumnFilter`, which deliberately
           // throws on an array — the builder is the one caller that handles
           // both shapes, per each spec's `kind`.
-          filterGetterFromColumnFilters(ts.allFilters),
+          filterGetterFromColumnFilters(ts.columnFilters),
         ),
         ...scopeFilters,
       };
@@ -658,6 +659,28 @@ export function useEntityList<
     rowContentVersion,
   } = presentation;
 
+  // A declared filter no column hosts (a relation scope such as expenses'
+  // `productId`) still gets a Filters-menu field. A scope the caller fixes
+  // or hides stays out, as does the primary search, which has its own input.
+  const scopeKeys = Object.keys(scopeFilters ?? {}).join("|");
+  const hiddenFilterKey = (hiddenFilterColumns ?? []).join("|");
+  const filterFields = useMemo(() => {
+    const hosted = new Set(allColumns.visit(listReadColumnId));
+    const excluded = new Set([
+      ...scopeKeys.split("|"),
+      ...hiddenFilterKey.split("|"),
+      entitySummary[entity].primarySearch?.key,
+    ]);
+    return manifestFilterFields(
+      getEntityFilters(entity),
+      filterOptions,
+      (spec) =>
+        !hosted.has(spec.columnId) &&
+        !excluded.has(spec.columnId) &&
+        !excluded.has(spec.field ?? spec.columnId),
+    );
+  }, [allColumns, entity, filterOptions, hiddenFilterKey, scopeKeys]);
+
   useEffect(() => {
     const fields = allColumns
       .visit((column) =>
@@ -817,6 +840,7 @@ export function useEntityList<
     onColumnVisibilityChange: setColumnVisibility,
     scrollRestorationId: entity,
     serverTotals,
+    filterFields,
     rowContentVersion: progressiveContentVersion,
   });
 

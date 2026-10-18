@@ -2231,7 +2231,6 @@ const buildMetadataSchemas = () => {
         .strict()
         .nullable()
         .optional(),
-      urlOnly: z.boolean({ error: "must be a boolean" }).optional(),
       /**
        * The Any value / No value request key of a hand-written value filter.
        * A compiled (`stored`/`derived`) filter over a nullable field gets it

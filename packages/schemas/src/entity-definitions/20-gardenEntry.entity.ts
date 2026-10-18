@@ -421,7 +421,6 @@ export default defineEntity({
         derived: true,
         placeholder: "Journal for planting...",
         brandRef: { entity: "planting" },
-        urlOnly: true,
       },
     ],
   },

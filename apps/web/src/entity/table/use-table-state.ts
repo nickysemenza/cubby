@@ -129,14 +129,13 @@ export interface TableStateReturn {
   setSorting: (
     value: SortingState | ((old: SortingState) => SortingState),
   ) => void;
-  columnFilters: ColumnFiltersState;
   /**
-   * `columnFilters` plus the URL-only scopes (see `urlOnly` in
-   * `entities/filters`). This — not `columnFilters` — is what the server
-   * filters are built from; the two are the same array when the entity
-   * declares no URL-only spec.
+   * Every active filter, whether or not a table column hosts it (a relation
+   * scope such as expenses' `?productId=` has no column). The server filters
+   * are built from it; `useTableConfig` keeps column-less ids away from a
+   * client-filtered table.
    */
-  allFilters: ColumnFiltersState;
+  columnFilters: ColumnFiltersState;
   setColumnFilters: (
     value:
       | ColumnFiltersState
@@ -173,12 +172,8 @@ export function useTableState(
 
   const [, startTransition] = useTransition();
 
-  // A URL-only spec has no column to hold its value, so it's excluded from
-  // every columnFilters-shaped path below (seed, encode, managed URL keys) —
-  // the page that deep-links it owns that param and clears it by navigating.
-  // The codec compiles that split, the keys each side owns, and the
-  // encode/decode over them from one walk, so this hook never re-derives a
-  // URL key on its own.
+  // The codec compiles the keys the filters own and the encode/decode over
+  // them from one walk, so this hook never re-derives a URL key on its own.
   const codec = useMemo(
     () =>
       compileFilterCodec(
@@ -195,7 +190,6 @@ export function useTableState(
       ),
     [filterSpecs, primarySearch],
   );
-  const { urlOnlyKeys } = codec;
 
   const search = routerSearchSchema.parse(useSearch({ strict: false }));
   const navigate = useNavigate();
@@ -216,39 +210,13 @@ export function useTableState(
   const [columnFilters, setColumnFiltersRaw] = useState<ColumnFiltersState>(
     () =>
       resolveOpeningFilters(
-        codec.decodeColumns(urlStateSource),
+        codec.decode(urlStateSource),
         urlStateSource,
         initialFilter,
       ),
   );
   const hasPrimarySearch = columnFilters.some(
     (filter) => filter.id === primarySearch?.key && Boolean(filter.value),
-  );
-  // URL-only scopes are read from the LIVE url rather than seeded into state:
-  // the only way to change one is to navigate (the ScopeChip's clear), and the
-  // list query has to follow that.
-  //
-  // Keyed on the scope VALUES, never on `search` itself: the router hands back
-  // a fresh `search` object on every navigation — including this hook's own
-  // write-through, which fires on any sort/page/filter change — and depending
-  // on that reference would churn `allFilters`, this hook's returned object,
-  // and every memo downstream of it (`useEntityList`'s `currentFilters`,
-  // `usePaginatedTableCore`'s `filters`). Same reason `projects-dashboard`
-  // keys its filters memo off joined primitives.
-  const urlOnlyKey = JSON.stringify(
-    urlOnlyKeys.map((key) => urlStateSource[key] ?? null),
-  );
-  const urlOnlyFilters = useMemo(
-    () => codec.decodeUrlOnly(urlStateSource),
-    // oxlint-disable-next-line react/exhaustive-deps -- keyed on the serialized values above, not `search`'s reference, on purpose
-    [codec, urlOnlyKey],
-  );
-  const allFilters = useMemo(
-    () =>
-      urlOnlyFilters.length
-        ? [...columnFilters, ...urlOnlyFilters]
-        : columnFilters,
-    [columnFilters, urlOnlyFilters],
   );
   const [pagination, setPaginationRaw] = useState<PaginationState>(() => {
     const page = syncPaginationToUrl
@@ -267,10 +235,9 @@ export function useTableState(
     };
   });
 
-  // Every key this hook owns. URL-only keys are deliberately absent: no
-  // column state can produce them, so this table must never delete them.
+  // Every key this hook owns.
   const managedKeys = useMemo(
-    () => [...codec.columnKeys, FILTERS_KEY, SORT_KEY, PAGE_KEY, SIZE_KEY],
+    () => [...codec.keys, FILTERS_KEY, SORT_KEY, PAGE_KEY, SIZE_KEY],
     [codec],
   );
   const managedSearchKey = JSON.stringify(
@@ -281,7 +248,7 @@ export function useTableState(
   // gives Back/Forward and same-route links a canonical comparison target,
   // while absent/invalid values continue to fall back to the caller defaults.
   const urlState = useMemo(() => {
-    const urlFilters = codec.decodeColumns(urlStateSource);
+    const urlFilters = codec.decode(urlStateSource);
     const page = syncPaginationToUrl
       ? Number(urlStateSource[PAGE_KEY])
       : Number.NaN;
@@ -568,7 +535,6 @@ export function useTableState(
       sorting,
       setSorting,
       columnFilters,
-      allFilters,
       setColumnFilters,
       pagination,
       setPagination,
@@ -583,7 +549,6 @@ export function useTableState(
       sorting,
       setSorting,
       columnFilters,
-      allFilters,
       setColumnFilters,
       pagination,
       setPagination,

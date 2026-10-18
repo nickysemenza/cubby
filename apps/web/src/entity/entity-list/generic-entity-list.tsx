@@ -76,7 +76,6 @@ import { Button } from "~/ui/primitives/button";
 
 import { EntityShelf } from "./entity-shelf";
 import { listNested, nestSearchValue } from "./list-nesting";
-import { ListScopeChips } from "./list-scope-chips";
 import {
   type ListNavigate,
   type ListSearch,
@@ -407,15 +406,6 @@ function ServerListBody({
     )
       list.workbench.table.resetRowSelection();
   }, [list.workbench.table, renderedView]);
-  const scopeChips = (
-    <ListScopeChips
-      entity={entity}
-      search={context.search}
-      onClear={(urlKey) =>
-        context.navigate({ [urlKey]: undefined }, { replace: true })
-      }
-    />
-  );
   const sweepEntity = z.enum(shortcodeEntities).safeParse(entity);
   const sweepAction = sweepEntity.success ? (
     <SuggestionSweepAction
@@ -423,15 +413,7 @@ function ServerListBody({
       filters={list.currentFilters}
     />
   ) : null;
-  const contextualStatus =
-    workbenchProps.contextualStatus === undefined ? (
-      scopeChips
-    ) : (
-      <>
-        {scopeChips}
-        {workbenchProps.contextualStatus}
-      </>
-    );
+  const { contextualStatus } = workbenchProps;
 
   const body = (
     <>

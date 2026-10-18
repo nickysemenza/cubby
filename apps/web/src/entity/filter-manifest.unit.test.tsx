@@ -3,7 +3,12 @@ import { browserRoutedEntities } from "@cubby/schemas/entity-manifest";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
-import { getEntityFilters, manifestFilterConfig } from "./filter-manifest";
+import {
+  filterSpecLabel,
+  getEntityFilters,
+  manifestFilterConfig,
+  manifestFilterFields,
+} from "./filter-manifest";
 import {
   buildFiltersFromManifest,
   decodeFilters,
@@ -11,7 +16,6 @@ import {
   FILTER_ANY,
   FILTER_NONE,
   filterGetterFromSearch,
-  partitionFilterSpecs,
 } from "./filters";
 import { entitySearch } from "./generated/entity-search.gen";
 
@@ -103,7 +107,7 @@ describe("manifestFilterConfig", () => {
     expect(options?.some((o) => o.meta)).toBe(false);
   });
 
-  it("keeps Inventory's product cohort URL-only and its location filter visible", () => {
+  it("maps Inventory's product cohort and location filters to their request fields", () => {
     const filters = getEntityFilters("inventory");
 
     expect(
@@ -111,15 +115,12 @@ describe("manifestFilterConfig", () => {
     ).toMatchObject({
       field: "productIdFilter",
       kind: "idMulti",
-      urlOnly: true,
     });
-    // Visible, so a Location section header can filter to its value.
     const location = filters.find((filter) => filter.columnId === "locationId");
     expect(location).toMatchObject({
       field: "locationIdFilter",
       kind: "idMulti",
     });
-    expect(location?.urlOnly).toBeFalsy();
     expect(
       filters.find((filter) => filter.columnId === "product"),
     ).toMatchObject({ field: "productNameFilter", kind: "text" });
@@ -176,40 +177,50 @@ describe("manifestFilterConfig", () => {
     expect(manifestFilterConfig("expense", "updatedBy")).toBeUndefined();
   });
 
-  it("returns undefined for a urlOnly spec even when a column shares its id", () => {
-    // `partitionFilterSpecs` keeps a urlOnly spec out of `columnFilters`, so a
-    // header control bound to one can neither read its current value nor write
-    // a new one — it renders an inert combobox over an empty option list. The
-    // usual loud failure (`[Table] Column with id 'x' does not exist`) can't
-    // fire here precisely BECAUSE the column exists, which is how the
-    // transactions table shipped two dead headers. Every other urlOnly spec
-    // escaped only by not colliding with a rendered column's id.
-    const [, urlOnly] = partitionFilterSpecs(getEntityFilters("expense"));
-    expect(urlOnly.length).toBeGreaterThan(0);
-    for (const spec of urlOnly) {
-      expect(manifestFilterConfig("expense", spec.columnId)).toBeUndefined();
-    }
-  });
-
-  it("gives every rendered picklist something to render", () => {
-    // The mirror-image defect: a spec that IS column-backed but declares
-    // neither `options` nor an `optionsKey` renders the same empty dropdown
-    // from the opposite direction. Product's model/UPC/notes presence filters
-    // sat that way unnoticed. Text, boolean and range kinds are exempt — they
-    // aren't picklists (boolean synthesizes Yes/No, range carries its own
-    // static buckets, checked by the schema suite below).
-    const pickerKinds = new Set(["select", "multiselect", "presence", "id"]);
+  it("gives every Filters-menu picklist something to pick", () => {
+    // Every declared filter is a menu entry, column-hosted or not. A picker
+    // with no options and no runtime roster would be an empty dropdown.
     const violations: string[] = [];
     for (const entity of browserRoutedEntities) {
-      for (const spec of getEntityFilters(entity)) {
-        if (spec.urlOnly || !pickerKinds.has(spec.kind)) continue;
-        if (spec.optionsKey || spec.nullable) continue;
-        if (!spec.options?.length) {
-          violations.push(`${entity}.${spec.columnId}`);
-        }
+      const specs = getEntityFilters(entity);
+      for (const field of manifestFilterFields(specs)) {
+        if (field.type === "text" || field.dateRange) continue;
+        const spec = specs.find(({ columnId }) => columnId === field.key);
+        if (spec?.optionsKey || spec?.referenceEntity) continue;
+        if (!field.options?.length) violations.push(`${entity}.${field.key}`);
       }
     }
     expect(violations).toEqual([]);
+  });
+
+  it("labels a column-less relation filter by the noun it names", () => {
+    const vendorAccount = getEntityFilters("vendorAccount");
+    const label = (columnId: string) => {
+      const spec = vendorAccount.find((s) => s.columnId === columnId);
+      return spec && filterSpecLabel(spec);
+    };
+    expect(label("purchaseId")).toBe("Purchase");
+    expect(label("purchasePresenceFilter")).toBe("Has purchases");
+  });
+
+  it("offers Yes / No for a presence filter that declares no options", () => {
+    const presence = manifestFilterFields(
+      getEntityFilters("vendorAccount"),
+    ).find((field) => field.key === "purchasePresenceFilter");
+    expect(
+      presence?.options?.map(({ value, label }) => [value, label]),
+    ).toEqual([
+      ["has", "Yes"],
+      ["none", "No"],
+    ]);
+  });
+
+  it("makes a single-value scope a one-record picker", () => {
+    expect(
+      manifestFilterFields(getEntityFilters("email")).find(
+        (field) => field.key === "vendorAccountId",
+      )?.type,
+    ).toBe("select");
   });
 });
 
@@ -462,7 +473,7 @@ describe("purchase filters", () => {
   });
 });
 
-describe("expense URL-only scopes", () => {
+describe("expense deep-link scopes", () => {
   it("routes the Cost column's preset to either presence or a bound", () => {
     const specs = getEntityFilters("expense");
     expect(
@@ -528,7 +539,7 @@ describe("expense URL-only scopes", () => {
     ).toMatchObject({ purchaseId: [PURCHASE_ID] });
   });
 
-  it("still declares a search field for every URL-only key", () => {
+  it("declares a search field for every deep-link key", () => {
     const fields = entitySearch.expense.schema.shape;
     expect(Object.keys(fields)).toEqual(
       expect.arrayContaining([

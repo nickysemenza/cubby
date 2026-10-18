@@ -9,6 +9,7 @@ import type { PickerOption } from "~/ui/combobox/picker-option";
 
 import type { ColumnCellData } from "./cell-data";
 import type { CubbyDefaultTableLayout } from "./column-layout";
+import type { FilterBarField } from "./filter-bar-core";
 import type { CubbyColumn } from "./table-features";
 
 /** Configuration for an inline column-header filter. */
@@ -163,7 +164,12 @@ export interface CubbyTableMeta {
   /** Bounded server contracts can narrow the shared pager choices. */
   pageSizeOptions?: readonly number[];
   serverTotals?: ServerTotals;
-  urlScopeCount?: number;
+  /**
+   * Filters-menu fields for declared filters no column hosts (a relation
+   * scope such as expenses' `productId`); their values ride in
+   * `columnFilters` beside the column-hosted ones.
+   */
+  filterFields?: readonly FilterBarField[];
   rowContentVersion?: unknown;
   /** Code-defined layout a "Customized" badge and "Restore default" compare against. */
   defaultLayout?: CubbyDefaultTableLayout;

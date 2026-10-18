@@ -14,11 +14,10 @@ import {
 } from "~/ui/hooks/filter-option-types";
 
 import {
-  type FilterKind,
+  editableFilterSpecs,
   type FilterSpecCore,
   isMultiFilterKind,
   nullableSentinelOptions,
-  partitionFilterSpecs,
 } from "./filters";
 import { generatedEntityFilters } from "./generated/entity-filter-bindings.gen";
 import { entityFilterFieldMaps } from "./generated/entity-filter-fields.gen";
@@ -43,17 +42,70 @@ export const referenceFilterOptionsKey = (
     ? `reference:${spec.referenceEntity}:${spec.columnId}`
     : undefined;
 
-const filterTypeForKind = (
-  kind: FilterKind,
+/** A picklist kind with nothing to pick from. */
+const hasNoRoster = (spec: FilterSpec): boolean =>
+  !spec.options?.length && !spec.optionsKey && !spec.nullable;
+
+/**
+ * A multiselect with no roster (an external id) takes a typed value; its
+ * comma-separated list round-trips through the URL codec. So does a range
+ * with neither presets nor date bounds that passes its value through
+ * (planting `activeOn`).
+ */
+const filterTypeForSpec = (
+  spec: FilterSpec,
 ): "text" | "select" | "multiselect" =>
-  kind === "text" ? "text" : isMultiFilterKind(kind) ? "multiselect" : "select";
+  spec.kind === "text" ||
+  (spec.kind === "multiselect" && hasNoRoster(spec)) ||
+  (spec.kind === "range" && hasNoRoster(spec) && !spec.range)
+    ? "text"
+    : isMultiFilterKind(spec.kind) && !spec.singleValue
+      ? "multiselect"
+      : "select";
+
+/**
+ * A spec's Filters-menu label: its declared `label`, else the noun its
+ * placeholder names ("Filter by related expenses id..." → "Expenses"). A
+ * presence filter reads as its predicate ("Has expenses") so it never
+ * shares a label with the relation's picker.
+ */
+export const filterSpecLabel = (
+  spec: Pick<FilterSpec, "label" | "placeholder" | "columnId" | "kind">,
+): string => {
+  if (spec.label) return spec.label;
+  const noun = spec.placeholder
+    .replace(/^(Filter|Search)( by)?( related)?\s*/iu, "")
+    .replace(/\s*(id|presence)?\.\.\.$/iu, "")
+    .trim();
+  if (!noun) return humanize(spec.columnId);
+  return spec.kind === "presence"
+    ? `Has ${noun.toLowerCase()}`
+    : noun.slice(0, 1).toUpperCase() + noun.slice(1);
+};
+
+/**
+ * Options for a picklist kind that declares none. The label already names
+ * the predicate ("Has expenses", "Open tasks"), so the values answer it.
+ */
+const fallbackOptions = (spec: FilterSpec): PickerOption[] =>
+  spec.kind === "presence"
+    ? [
+        { value: "has", label: "Yes" },
+        { value: "none", label: "No" },
+      ]
+    : spec.kind === "boolean"
+      ? [
+          { value: "true", label: "Yes" },
+          { value: "false", label: "No" },
+        ]
+      : [];
 
 /** The "Include sub-…" toggle a reference filter's editor shows. */
 const subtreeControl = (
   spec: FilterSpec,
   specs: readonly FilterSpec[],
 ): FilterConfig["subtree"] => {
-  if (!spec.subtree || spec.urlOnly) return undefined;
+  if (!spec.subtree) return undefined;
   const toggle = specs.find((candidate) => candidate.columnId === spec.subtree);
   return {
     label: toggle?.label ?? humanize(spec.subtree),
@@ -67,7 +119,7 @@ const resolveSpecOptions = (
   const optionsKey = spec.optionsKey ?? referenceFilterOptionsKey(spec);
   const resolved = optionsKey
     ? filterOptionItems(runtimeOptions?.[optionsKey])
-    : (spec.options ?? []);
+    : (spec.options ?? fallbackOptions(spec));
   // A filter declaring `currentMember` offers the signed-in member as `@me`.
   const me = spec.currentMember
     ? [{ value: CURRENT_MEMBER_FILTER, label: "Me", meta: true as const }]
@@ -94,7 +146,7 @@ const specFilterConfig = (
     : undefined;
   return {
     placeholder: spec.placeholder,
-    filterType: filterTypeForKind(spec.kind),
+    filterType: filterTypeForSpec(spec),
     options: resolveSpecOptions(spec, runtimeOptions),
     matchAll: spec.match === undefined ? undefined : true,
     exclude: spec.exclude && { reason: spec.exclude.reason },
@@ -113,20 +165,37 @@ export function manifestFilterConfig(
 ): FilterConfig | undefined {
   const specs = getEntityFilters(entity);
   const spec = specs.find((candidate) => candidate.columnId === columnId);
-  if (!spec || spec.urlOnly) return undefined;
+  if (!spec) return undefined;
   return specFilterConfig(spec, specs, runtimeOptions);
 }
 
+/**
+ * A range with no presets, no date bounds and no pass-through value has no
+ * web encoding at all (image `uploadedAgeHours`, a number range that only
+ * MCP and native send), so it has no menu field to offer.
+ */
+const isExpressible = (spec: FilterSpec): boolean =>
+  spec.kind !== "range" ||
+  spec.range !== undefined ||
+  spec.expand !== undefined ||
+  !hasNoRoster(spec);
+
+/**
+ * Filters-menu fields for an entity's specs. `include` narrows them — a
+ * table passes the specs no column of its own hosts.
+ */
 export function manifestFilterFields(
   specs: readonly FilterSpec[],
   runtimeOptions?: RuntimeFilterOptions,
+  include: (spec: FilterSpec) => boolean = () => true,
 ): FilterBarField[] {
-  const [columnSpecs] = partitionFilterSpecs(specs);
-  return columnSpecs.map((spec) =>
-    barFieldFromConfig(
-      spec.columnId,
-      spec.label ?? humanize(spec.columnId),
-      specFilterConfig(spec, specs, runtimeOptions),
-    ),
-  );
+  return editableFilterSpecs(specs)
+    .filter((spec) => isExpressible(spec) && include(spec))
+    .map((spec) =>
+      barFieldFromConfig(
+        spec.columnId,
+        filterSpecLabel(spec),
+        specFilterConfig(spec, specs, runtimeOptions),
+      ),
+    );
 }

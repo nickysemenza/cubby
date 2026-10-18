@@ -1016,7 +1016,6 @@ export default defineEntity({
           { value: "open", label: "Open" },
           { value: "done", label: "Done" },
         ],
-        urlOnly: true,
       },
       {
         columnId: "projectId",
@@ -1035,7 +1034,6 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by product id...",
         brandRef: { entity: "product" },
-        urlOnly: true,
       },
       {
         columnId: "subjectProductId",
@@ -1062,7 +1060,6 @@ export default defineEntity({
         columnId: "topLevelOnly",
         kind: "boolean",
         placeholder: "Top-level tasks only",
-        urlOnly: true,
         derived: "topLevel",
       },
       {
@@ -1077,13 +1074,11 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by related blocked by id...",
         brandRef: { entity: "task" },
-        urlOnly: true,
       },
       {
         columnId: "blockedByTaskPresenceFilter",
         kind: "presence",
         placeholder: "Filter related blocked by presence...",
-        urlOnly: true,
       },
       {
         columnId: "related:task.parent",
@@ -1100,13 +1095,11 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by related parent task id...",
         brandRef: { entity: "task" },
-        urlOnly: true,
       },
       {
         columnId: "parentTaskPresenceFilter",
         kind: "presence",
         placeholder: "Filter related parent task presence...",
-        urlOnly: true,
       },
     ],
   },

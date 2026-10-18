@@ -107,7 +107,6 @@ export type FilterDescriptor = Readonly<{
     finite: boolean;
     describe: Readonly<{ lower: string; upper: string }> | null;
   }> | null;
-  urlOnly: boolean;
   /** The Any value / No value request key (`presenceFilter`). */
   nullable: Readonly<{ field: string; label: string }> | null;
   /** The Match all request key of a multi-valued compiled filter. */

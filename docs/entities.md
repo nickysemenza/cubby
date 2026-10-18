@@ -505,8 +505,8 @@ already declares one over the same path or the relation sets
 `inverseOmit: "<reason>"`. A `many` relation over a single incoming FK gets a
 stored `idMulti` back-filter on its target when none names this entity, so
 the generated predicate serves it without repository code. Every
-id/idMulti filter declares `brandRef` (`null` for an id that names no
-entity), so URL-only related-view filters stay usable as back-filters.
+idMulti filter declares a `brandRef`, so its URL values stay shortcode-native
+and related-view filters stay usable as back-filters.
 A relation section's create button seeds the descriptor's field on the new
 record: the descriptor key itself when it is a create field there, otherwise
 the one reference field on the target whose `reference.entity` equals the
@@ -1506,7 +1506,15 @@ cover household questions, and a rare cross-filter one is a second query or
 the agent's. The Work queue and calendar pages read their own pipelines, not
 the entity list.
 
-Every compiled value filter (a non-URL-only `multiselect`/`idMulti` over a
+Every declared filter is a list Filters-menu entry. One no list column hosts
+(a relation scope such as expenses' `productId`) gets its field from the
+descriptor — `label`, else the noun its placeholder names, and Yes/No for a
+presence or boolean filter without options — and its value rides in the
+table's filter state beside the column-hosted ones, through the same URL
+codec and server builder. Only a client-filtered table keeps column-less ids
+out of TanStack's state.
+
+Every compiled value filter (a `multiselect`/`idMulti` over a
 stored column or a `model.derived` entry, plus the generic data-quality and
 pending-suggestion filters) also generates `<columnId>Exclude`, "is not",
 with the value key's schema; the filter record stays flat, so URLs, saved
@@ -1544,10 +1552,10 @@ filter that cannot be a stored column or a `via` path is a `model.derived`
 `predicate` whose `reason` lives in the declaration. A list's static row
 scope (ingredient lists never show recipe-scoped rows) and a project page's
 embedded `projectScope` (an object, not a filter descriptor) are ANDed with
-`where` by the repository. Email's urlOnly
+`where` by the repository. Email's
 `purchaseId`/`vendorId`/`vendorAccountId` declare `singleValue: { reason }`
 (`linkState` is relative to one scope record): their schemas accept one value,
-the native picker chooses one record, and the repository rejects more than one
+the web and native pickers choose one record, and the repository rejects more than one
 across the three. Each is also a `model.derived` predicate over the one scope
 record they resolve.
 

@@ -25,7 +25,8 @@ function isColumnLabel(value: unknown): value is string {
 
 /**
  * The table-backed manifest filter bar: fields come from the mounted columns'
- * `meta.filterConfig`, state from TanStack. Everything else lives in
+ * `meta.filterConfig` plus the table's `meta.filterFields` (declared filters
+ * no column hosts), state from TanStack. Everything else lives in
  * `filter-bar-core` / `useFilterBarDraft`, shared with the URL-backed bar.
  */
 function getLedgerFields<TData extends RowData>(
@@ -33,7 +34,7 @@ function getLedgerFields<TData extends RowData>(
   optionHints?: Readonly<Record<string, Readonly<Record<string, string>>>>,
   primarySearch?: { key: string; placeholder: string } | null,
 ): FilterBarField[] {
-  const fields = table.getAllLeafColumns().flatMap((column) => {
+  const columnFields = table.getAllLeafColumns().flatMap((column) => {
     const config = column.columnDef.meta?.filterConfig;
     if (!config) return [];
     const header = column.columnDef.header;
@@ -42,6 +43,7 @@ function getLedgerFields<TData extends RowData>(
       barFieldFromConfig(column.id, label, config, optionHints?.[column.id]),
     ];
   });
+  const fields = [...columnFields, ...(table.options.meta?.filterFields ?? [])];
   return primarySearch
     ? [
         {
@@ -95,6 +97,7 @@ export function LedgerFilters<TData extends RowData>({
     [
       table,
       table.options.columns,
+      table.options.meta?.filterFields,
       optionHints,
       filterColumnsKey,
       primarySearch,

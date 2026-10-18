@@ -676,7 +676,6 @@ export default defineEntity({
         derived: true,
         placeholder: "Emails for Purchase...",
         brandRef: { entity: "purchase" },
-        urlOnly: true,
         singleValue: { reason: EMAIL_SCOPE_REASON },
       },
       {
@@ -685,7 +684,6 @@ export default defineEntity({
         derived: true,
         placeholder: "Emails for Vendor...",
         brandRef: { entity: "vendor" },
-        urlOnly: true,
         singleValue: { reason: EMAIL_SCOPE_REASON },
       },
       {
@@ -694,7 +692,6 @@ export default defineEntity({
         derived: true,
         placeholder: "Emails for Vendor account...",
         brandRef: { entity: "vendorAccount" },
-        urlOnly: true,
         singleValue: { reason: EMAIL_SCOPE_REASON },
       },
       {

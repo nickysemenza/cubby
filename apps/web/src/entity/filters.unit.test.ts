@@ -10,6 +10,7 @@ import {
   FILTER_ANY,
   FILTER_EXACT,
   FILTER_NONE,
+  filterGetterFromColumnFilters,
   type FilterSpecCore,
   type FilterSearch,
   type FilterValue,
@@ -626,9 +627,9 @@ describe("compileFilterCodec", () => {
       { columnId: "parent", kind: "idMulti", subtree: "includeSubCategories" },
       { columnId: "includeSubCategories", kind: "boolean" },
     ]);
-    expect(codec.columnKeys).toEqual(["parent", "includeSubCategories"]);
+    expect(codec.keys).toEqual(["parent", "includeSubCategories"]);
     const search = { parent: "SCAT-4K7M", includeSubCategories: "false" };
-    expect(codec.decodeColumns(search)).toEqual([
+    expect(codec.decode(search)).toEqual([
       { id: "parent", value: ["SCAT-4K7M", FILTER_EXACT] },
     ]);
     expect(
@@ -659,29 +660,21 @@ describe("compileFilterCodec", () => {
   const specs = [
     { columnId: "name", kind: "text" },
     { columnId: "trade", kind: "multiselect" },
-    { columnId: "scope", kind: "text", urlKey: "in", urlOnly: true },
+    { columnId: "scope", kind: "text", urlKey: "in" },
   ] as const satisfies readonly FilterSpecCore[];
 
-  it("owns exactly the column-backed keys and encodes only those", () => {
+  it("round-trips every spec through one key set, urlKey included", () => {
     const codec = compileFilterCodec(specs);
-    expect(codec.columnKeys).toEqual(["name", "trade"]);
-    expect(codec.urlOnlyKeys).toEqual(["in"]);
-    expect(
-      codec.encode((columnId) =>
-        columnId === "trade" ? ["drywall", "electrical"] : undefined,
-      ),
-    ).toEqual({ name: undefined, trade: "drywall,electrical" });
-  });
-
-  it("decodes each side from the same search", () => {
-    const codec = compileFilterCodec(specs);
+    expect(codec.keys).toEqual(["name", "trade", "in"]);
     const search = { name: "saw", trade: "drywall,electrical", in: "LOC-4K7M" };
-    expect(codec.decodeColumns(search)).toEqual([
+    const decoded = codec.decode(search);
+    expect(decoded).toEqual([
       { id: "name", value: "saw" },
       { id: "trade", value: ["drywall", "electrical"] },
-    ]);
-    expect(codec.decodeUrlOnly(search)).toEqual([
       { id: "scope", value: "LOC-4K7M" },
     ]);
+    expect(codec.encode(filterGetterFromColumnFilters(decoded))).toEqual(
+      search,
+    );
   });
 });

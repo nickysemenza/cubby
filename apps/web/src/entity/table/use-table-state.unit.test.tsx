@@ -5,7 +5,11 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import type { FilterSpecCore } from "~/entity/filters";
+import {
+  buildFiltersFromManifest,
+  filterGetterFromColumnFilters,
+  type FilterSpecCore,
+} from "~/entity/filters";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { useTableState } from "./use-table-state";
@@ -255,7 +259,6 @@ describe("useTableState — pageIndex reset on filter change", () => {
 
     expect(result.current.sorting).toEqual([{ id: "dueDate", desc: true }]);
     expect(result.current.columnFilters).toEqual(initialFilter);
-    expect(result.current.allFilters).toBe(result.current.columnFilters);
     expect(result.current.pagination).toEqual({ pageIndex: 0, pageSize: 50 });
     expect(tableHarness().navigationCount()).toBe(initialNavigationCount);
   });
@@ -517,92 +520,96 @@ describe("useTableState — URL-backed column filters", () => {
 });
 
 /**
- * A `urlOnly` spec (expenses' `?productId=` / `?order=`) has no table column.
- * Letting it into `columnFilters` made TanStack log
- * `[Table] Column with id 'productId' does not exist.` on every render, so it
- * is held apart — but it must still reach the server filters, and its URL param
- * must survive the write-through that owns the column-backed keys.
+ * A spec no table column hosts (expenses' `?productId=` relation scope) is an
+ * ordinary filter: it decodes from the URL into the same filter state, reaches
+ * the server filters, and a Filters-menu edit or clear writes its param back.
  */
-describe("useTableState — URL-only filter specs", () => {
+describe("useTableState — filters no column hosts", () => {
   const SPECS: readonly FilterSpecCore[] = [
     { columnId: "vendor", kind: "multiselect" },
-    { columnId: "productId", kind: "idMulti", urlOnly: true },
+    {
+      columnId: "productId",
+      kind: "idMulti",
+      brand: (value) => `branded:${value}`,
+    },
   ];
 
   beforeEach(() => {
     searchState = {};
   });
 
-  it("keeps a URL-only scope out of columnFilters but in allFilters", async () => {
-    searchState = { vendor: "Home Depot", productId: "prod-1" };
+  it("decodes a column-less scope into filter state and the server filters", async () => {
+    searchState = { vendor: "Corner Grocer", productId: "PRD-AAAA" };
     const { result } = await renderHook(() =>
       useTableState({ filterSpecs: SPECS }),
     );
 
     expect(result.current.columnFilters).toEqual([
-      { id: "vendor", value: ["Home Depot"] },
+      { id: "vendor", value: ["Corner Grocer"] },
+      { id: "productId", value: ["PRD-AAAA"] },
     ]);
-    expect(result.current.allFilters).toEqual([
-      { id: "vendor", value: ["Home Depot"] },
-      { id: "productId", value: ["prod-1"] },
-    ]);
+    expect(
+      buildFiltersFromManifest(
+        SPECS,
+        filterGetterFromColumnFilters(result.current.columnFilters),
+      ),
+    ).toEqual({ vendor: ["Corner Grocer"], productId: ["branded:PRD-AAAA"] });
   });
 
-  it("hands back columnFilters itself when no URL-only scope is set", async () => {
-    searchState = { vendor: "Home Depot" };
-    const { result } = await renderHook(() =>
-      useTableState({ filterSpecs: SPECS }),
-    );
-
-    expect(result.current.allFilters).toBe(result.current.columnFilters);
-  });
-
-  it("holds allFilters stable across a fresh search object with the same values", async () => {
-    // The router reparses and hands back a NEW `search` object on every
-    // navigation — including this hook's own write-through on any sort / page /
-    // filter change. Keying the scope memo on that reference would churn
-    // `allFilters` → the returned tableState → every memo downstream of it.
-    searchState = { productId: "prod-1" };
-    const { result } = await renderHook(() =>
-      useTableState({ filterSpecs: SPECS }),
-    );
-    const first = result.current.allFilters;
-
-    await navigateSearch({ productId: "prod-1" });
-
-    expect(result.current.allFilters).toBe(first);
-  });
-
-  it("still follows the URL when a scope's value actually changes", async () => {
-    searchState = { productId: "prod-1" };
-    const { result } = await renderHook(() =>
-      useTableState({ filterSpecs: SPECS }),
-    );
-
-    await navigateSearch({ productId: "prod-2" });
-
-    expect(result.current.allFilters).toEqual([
-      { id: "productId", value: ["prod-2"] },
-    ]);
-  });
-
-  it("leaves the URL-only param alone on write-through", async () => {
-    // No column state can produce `productId`, so the sync must not claim (and
-    // therefore delete) its key — the ScopeChip's clear is the only writer.
-    searchState = { productId: "prod-1" };
+  it("writes a menu-picked scope to the URL and clears it again", async () => {
     const { result } = await renderHook(() =>
       useTableState({ filterSpecs: SPECS, urlSync: true }),
     );
     await act(async () => {
       result.current.setColumnFilters([
-        { id: "vendor", value: ["Home Depot"] },
+        { id: "productId", value: ["PRD-AAAA", "PRD-BBBB"] },
       ]);
     });
     await waitFor(() =>
       expect(tableHarness().search()).toMatchObject({
-        productId: "prod-1",
-        vendor: "Home Depot",
+        productId: "PRD-AAAA,PRD-BBBB",
       }),
+    );
+
+    await act(async () => {
+      result.current.setColumnFilters([]);
+    });
+    await waitFor(() =>
+      expect(tableHarness().search()).not.toHaveProperty("productId"),
+    );
+  });
+
+  it("keeps a deep-linked scope through an unrelated filter edit", async () => {
+    searchState = { productId: "PRD-AAAA" };
+    const { result } = await renderHook(() =>
+      useTableState({ filterSpecs: SPECS, urlSync: true }),
+    );
+    await act(async () => {
+      result.current.setColumnFilters((old) => [
+        ...old,
+        { id: "vendor", value: ["Corner Grocer"] },
+      ]);
+    });
+    await waitFor(() =>
+      expect(tableHarness().search()).toMatchObject({
+        productId: "PRD-AAAA",
+        vendor: "Corner Grocer",
+      }),
+    );
+  });
+
+  it("follows the URL when navigation changes the scope", async () => {
+    searchState = { productId: "PRD-AAAA" };
+    const { result } = await renderHook(() =>
+      useTableState({ filterSpecs: SPECS, urlSync: true }),
+    );
+
+    await navigateSearch({ productId: "PRD-BBBB" });
+
+    await waitFor(() =>
+      expect(result.current.columnFilters).toEqual([
+        { id: "productId", value: ["PRD-BBBB"] },
+      ]),
     );
   });
 });

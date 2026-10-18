@@ -5,7 +5,6 @@ import { DateDisplay } from "~/ui/common/date-display";
 import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import { FilterBar } from "~/ui/data-table/filter-bar";
 import type { Filter, FilterBarField } from "~/ui/data-table/filter-bar-core";
-import { ScopeChip } from "~/ui/data-table/scope-chip";
 import { Row, Stack } from "~/ui/layout";
 import { EnumPill } from "~/ui/primitives/enum-pill";
 
@@ -55,10 +54,6 @@ export function ValuesSection() {
       operator: "is_any_of",
       values: ["dairy", "grains"],
     },
-  ]);
-  const [scopes, setScopes] = useState([
-    { name: "Vendor", value: "Corner grocer" },
-    { name: "Project", value: "Pantry refresh" },
   ]);
   return (
     <Stack gap="md">
@@ -124,25 +119,6 @@ export function ValuesSection() {
             onChange={setFilters}
             searchKey="q"
           />
-        </Demo>
-        <Demo
-          name="<ScopeChip name value onClear />"
-          note="URL-only scopes keep their own clearable chips."
-        >
-          <Row wrap gap="sm">
-            {scopes.map((scope) => (
-              <ScopeChip
-                key={scope.name}
-                name={scope.name}
-                value={scope.value}
-                onClear={() =>
-                  setScopes((current) =>
-                    current.filter((item) => item.name !== scope.name),
-                  )
-                }
-              />
-            ))}
-          </Row>
         </Demo>
       </DemoGrid>
     </Stack>

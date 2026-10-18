@@ -231,7 +231,6 @@ export const compileDataQuality = (
     stored: null,
     derived: null,
     range: null,
-    urlOnly: false,
     nullable: null,
     sentinels: null,
     match: null,
