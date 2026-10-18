@@ -9,6 +9,7 @@ import { money } from "@cubby/schemas/money";
 import { plainDate } from "@cubby/schemas/base-entity";
 import { z } from "zod";
 import { mailSearchState } from "../mail-search-fields.js";
+import { optionalFieldResolutionsSchema } from "../field-resolution.js";
 import {
   vendorAgentHints,
   vendorDomainList,
@@ -105,7 +106,13 @@ export default defineEntity({
           "defaultSpendingCategoryEmoji",
         ],
         media: ["logo", "displayImages"],
-        derived: ["purchaseCount", "spend", "latestPurchaseDate", "mailSearch"],
+        derived: [
+          "purchaseCount",
+          "spend",
+          "latestPurchaseDate",
+          "mailSearch",
+          "fieldResolutions",
+        ],
         quality: ["dataQuality"],
       },
       totals: [
@@ -264,6 +271,15 @@ export default defineEntity({
         },
       },
       {
+        key: "fieldResolutions",
+        kind: "json",
+        validation: {
+          read: optionalFieldResolutionsSchema,
+          create: null,
+          update: null,
+        },
+      },
+      {
         key: "itemizationExpectation",
         kind: "enum",
         nullable: true,
@@ -297,9 +313,34 @@ export default defineEntity({
           ],
         },
         display: {
-          columnLabel: "Evidence",
+          columnLabel: "Item lines",
           list: true,
           detail: true,
+        },
+        resolution: {
+          reset: { itemizationExpectation: null },
+          redundancy: "eligible",
+        },
+        explanation: {
+          ruleId: "vendor.effective-itemization-expectation",
+          description:
+            "An explicit Vendor itemization policy wins; otherwise its order evidence supplies it: an online account expects item lines, no order evidence expects none, and receipt-only or unrecorded evidence stays unclassified.",
+          projections: {
+            list: "fieldResolutions.itemizationExpectation.value",
+            detail: "fieldResolutions.itemizationExpectation.value",
+            summary: "fieldResolutions.itemizationExpectation.value",
+          },
+          sourceDependencies: [
+            { path: "orderEvidence", label: "Order evidence" },
+            {
+              path: "fieldResolutions.itemizationExpectation.storedValue",
+              label: "Stored override",
+            },
+            {
+              path: "fieldResolutions.itemizationExpectation.fallbackValue",
+              label: "Inherited value",
+            },
+          ],
         },
         validation: {
           read: z
@@ -398,7 +439,7 @@ export default defineEntity({
             { value: "not_expected", label: "Not expected" },
           ],
         },
-        display: { detail: true },
+        display: { columnLabel: "Evidence", list: true, detail: true },
         validation: {
           read: vendorOrderEvidence.nullable(),
           create: vendorOrderEvidence.nullable().default(null),
@@ -766,6 +807,7 @@ export default defineEntity({
         "purchaseCount",
         "latestPurchaseDate",
         "mailSearch",
+        "orderEvidence",
         "createdAt",
         "updatedAt",
       ],
@@ -805,6 +847,7 @@ export default defineEntity({
       "defaultSpendingCategoryEmoji",
       "spendingProfile",
       "defaultSpendingCategoryId",
+      "fieldResolutions",
       "itemizationExpectation",
       "id",
       "name",
@@ -949,6 +992,18 @@ export default defineEntity({
           { value: "not_started", label: "Not started" },
           { value: "in_progress", label: "In progress" },
           { value: "done", label: "Done" },
+        ],
+      },
+      {
+        columnId: "orderEvidence",
+        kind: "multiselect",
+        placeholder: "Filter evidence...",
+        deriveSchema: true,
+        stored: true,
+        options: [
+          { value: "online_account", label: "Online account" },
+          { value: "receipt_only", label: "Receipt only" },
+          { value: "not_expected", label: "Not expected" },
         ],
       },
       {

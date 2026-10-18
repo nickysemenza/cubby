@@ -38,7 +38,11 @@ automatic matching authority. Split proposals preserve existing edges;
 SpendingCategory is independent of ProductCategory. Purchase defaults flow to
 Expense lines unless a line has its own category. Itemization expectation resolves
 from transaction/Purchase overrides, Vendor, then spending category, and decides
-whether a Purchase should be itemized; a primary document (receipt, invoice,
+whether a Purchase should be itemized. A Vendor's explicit value wins; otherwise
+its order evidence supplies it (an online account expects item lines, no order
+evidence expects none), and receipt-only or unrecorded evidence implies nothing,
+so the Vendor reads Unclassified and its Purchases fall through to the spending
+category; a primary document (receipt, invoice,
 order confirmation, sales order) makes itemization expected whatever the
 policy. No policy requires a document: attachments are optional evidence and
 never a gap. Itemization is derived from the lines, not recorded: at least one

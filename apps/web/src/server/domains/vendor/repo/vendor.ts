@@ -69,6 +69,7 @@ import { listMemberMailboxes } from "~/server/domains/purchase-import/repo/gmail
 import { vendorSearchTerms } from "~/server/domains/purchase-import/repo/gmail/vendor-identity";
 import { vendorMailQueries } from "~/server/domains/purchase-import/repo/gmail/vendor-mail-scope";
 import { foldChargeInto } from "~/server/domains/purchase/repo/purchase";
+import { vendorEvidenceFieldResolutionsSql } from "~/server/domains/purchase/repo/purchase-evidence-policy";
 import { assertReviewedSpendingClassification } from "~/server/domains/spending-category/repo/spending-classification-review-authorization";
 import { foldVendorAccountsInto } from "~/server/domains/vendor-account/repo/vendor-account";
 import { agentHintsLabel } from "~/server/entity-kernel/repo/detail-display-labels";
@@ -397,6 +398,7 @@ const vendorColumns = {
   >`(SELECT sc.emoji FROM "SpendingCategory" sc WHERE sc.id = ${vendor.defaultSpendingCategoryId} AND sc."deletedAt" IS NULL)`,
   defaultSpendingCategoryId: sql<SpendingCategoryShortcode | null>`(SELECT sc.shortcode FROM "SpendingCategory" sc WHERE sc.id = ${vendor.defaultSpendingCategoryId} AND sc."deletedAt" IS NULL)`,
   itemizationExpectation: vendor.itemizationExpectation,
+  fieldResolutions: vendorEvidenceFieldResolutionsSql("Vendor"),
   orderEvidence: vendor.orderEvidence,
   aliases: vendor.aliases,
   orderEmailSenders: vendor.orderEmailSenders,
@@ -454,6 +456,7 @@ type VendorRow = {
   defaultSpendingCategoryName: string | null;
   defaultSpendingCategoryEmoji: string | null;
   itemizationExpectation: VendorOut["itemizationExpectation"];
+  fieldResolutions: VendorOut["fieldResolutions"];
   orderEvidence: string | null;
   orderEmailSenders: string[];
   browserDomains: string[];
@@ -546,6 +549,7 @@ const dbVendorToAPI = (row: VendorRow, dataQuality: DataQuality): VendorOut => {
     spendingProfile: vendorSpendingProfile.parse(row.spendingProfile),
     defaultSpendingCategoryId: row.defaultSpendingCategoryId,
     itemizationExpectation: row.itemizationExpectation,
+    fieldResolutions: row.fieldResolutions,
     orderEvidence: vendorOrderEvidence.nullable().parse(row.orderEvidence),
     orderEmailSenders: row.orderEmailSenders,
     browserDomains: row.browserDomains,
@@ -590,8 +594,14 @@ export const vendorListRead = async (
   readIntent: ListReadIntent = "page",
   projection: ListProjection = { kind: "full" },
 ) => {
-  const { purchaseCount, spend, latestPurchaseDate, logo, ...core } =
-    vendorColumns;
+  const {
+    purchaseCount,
+    spend,
+    latestPurchaseDate,
+    fieldResolutions,
+    logo,
+    ...core
+  } = vendorColumns;
   const request = { filters, sorts, pagination, readIntent, projection };
   const context = await vendorScaffold.context(db, request);
   return vendorScaffold.list(db, request, {
@@ -605,6 +615,7 @@ export const vendorListRead = async (
             purchaseCount,
             spend,
             latestPurchaseDate,
+            fieldResolutions,
             mailSearch: vendorMailSearchSql(context.get(vendorMailSearch)),
           })),
           ...listGroupFields(projection, "media", () => ({ logo })),
