@@ -88,8 +88,9 @@ These fields keep their own resolution because their rule is not
 inheritance, or would need more than a small step kind (#2616):
 
 - Expense `projectId` and `trade`: only principal lines resolve (other lines
-  read no project, or their own trade); the Purchase default counts only
-  through a live Project; and a food line's last fallback is a
+  read no project, or their own trade); a Purchase's default project counts
+  only when that Project is live (its default trade needs only a live
+  Purchase); and a food line's last project fallback is a
   classification policy, the designated household Project chosen by
   shortcode when the Product's category feature is food. The allocation
   join form (`principalExpenseInheritanceSql`) must equal the scalar one.
