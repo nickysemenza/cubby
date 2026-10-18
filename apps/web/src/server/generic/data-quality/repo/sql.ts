@@ -152,9 +152,16 @@ export const fingerprintSql = (
   )})`;
 };
 
+/** The alias an excepted row is fingerprinted under. */
+const EXCEPTED_ALIAS = "dq_excepted";
+
 /**
  * An exception row whose stored fingerprint still matches the live evidence;
  * `null` when the check cannot be excepted. A stale exception is not active.
+ *
+ * The set is read from the exception side, so only excepted rows are
+ * fingerprinted. Correlated to `t`, the planner hashed `(entityId,
+ * fingerprint)` and fingerprinted every candidate row of a bulk read.
  */
 export const activeExceptionSql = (
   entity: ScoredEntity,
@@ -162,11 +169,19 @@ export const activeExceptionSql = (
   t: ScoredTable,
 ): SQL | null => {
   if (!hasExceptions(entity) || !dataCheckExemptible[check]) return null;
-  return sql`EXISTS (
-  SELECT 1 FROM "DataException" dq_exception
-  WHERE dq_exception."entityId" = ${t.id}
-    AND dq_exception."check" = ${check}
-    AND dq_exception."fingerprint" = ${fingerprintSql(entity, check, t)}
+  const table = dataQualityEntries[entity].table;
+  const excepted = alias(table, EXCEPTED_ALIAS);
+  // A raw `${excepted}` renders only the alias; the FROM needs both names.
+  const from = sql.raw(`"${getTableName(table)}" "${EXCEPTED_ALIAS}"`);
+  // A scalar subquery per exception row: as a join clause the planner hashed
+  // the fingerprint, evaluating it for every row of the excepted table.
+  return sql`${t.id} IN (
+  SELECT dq_exception."entityId" FROM "DataException" dq_exception
+  WHERE dq_exception."check" = ${check}
+    AND dq_exception."fingerprint" = (
+      SELECT ${fingerprintSql(entity, check, excepted)} FROM ${from}
+      WHERE ${excepted.id} = dq_exception."entityId"
+    )
 )`;
 };
 
