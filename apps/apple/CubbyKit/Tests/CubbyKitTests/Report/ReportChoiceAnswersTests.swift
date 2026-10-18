@@ -220,6 +220,7 @@ private final class FakeCommit: ReportServing {
     }
     func reports(slots: [ReportSlot], id: String) async throws -> [(ReportSlot, EntityReportOut)] { [] }
     func controlRun(_ input: RunControlInput) async throws -> String? { nil }
+    func retryRunStep(_ input: RunRetryStepInput) async throws {}
     func resolveFinding(_ input: ResolveRunFindingInput) async throws -> Bool { false }
     func commitPrepared(_ input: RunCommitPreparedInput) async throws {
         if let failure { throw failure }

@@ -68,6 +68,9 @@ export default defineEntity({
         breadcrumb: "vendorAccountId",
       },
       additionalSections: [
+        // A step-ledger Run (maintenance, sweep) leads with its steps; the
+        // slot is empty for every other purpose.
+        { kind: "slot", id: "steps", title: "Steps" },
         { kind: "slot", id: "live-progress", title: "Progress" },
         // What the run counted and the records it worked, before its
         // controls and agent: the first questions about any run.

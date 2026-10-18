@@ -21,6 +21,7 @@ private final class FakeReports: ReportServing {
         var prepared: [SaveMealRecipePreparationInput] = []
         var reclassified: [ReclassifyEmailsInput] = []
         var corrections: [CorrectEmailRelevanceInput] = []
+        var stepRetries: [RunRetryStepInput] = []
     }
     let calls = Mutex(Calls())
     /// The import call (1-based) that reports a failure; 0 means none do.
@@ -59,6 +60,9 @@ private final class FakeReports: ReportServing {
         calls.withLock { $0.controls.append(input) }
         if controlFails.withLock({ $0 }) { throw URLError(.badServerResponse) }
         return nil
+    }
+    func retryRunStep(_ input: RunRetryStepInput) async throws {
+        calls.withLock { $0.stepRetries.append(input) }
     }
     func resolveFinding(_ input: ResolveRunFindingInput) async throws -> Bool {
         calls.withLock { $0.findings.append(input) }
@@ -492,6 +496,21 @@ struct ReportSlotModelTests {
         #expect(sent.action == .dismiss)
         #expect(sent.reviewedFingerprint == nil)
         #expect(service.calls.withLock { $0.reads.count } == 1)
+    }
+
+    @Test("A step's Retry failed sends the Run and step it names")
+    func retriesOneStep() async throws {
+        let retry: ReportCommand = try decode(
+            #"""
+            {"id": "retry:exif", "label": "Retry failed", "prominent": true, "confirm": null,
+             "request": {"kind": "retry-run-step", "runId": "RUN-4K7M", "stepKey": "exif"}}
+            """#)
+        let service = FakeReports([try report(live: false, status: "needs_review")])
+        let model = model(service)
+        #expect(await model.run(retry, confirmed: false) == .done("Retrying the step's failures"))
+        let sent = try #require(service.calls.withLock { $0.stepRetries.first })
+        #expect(sent.runId == "RUN-4K7M")
+        #expect(sent.stepKey == "exif")
     }
 
     @Test("A failed action keeps the server's raw error and does not look done")

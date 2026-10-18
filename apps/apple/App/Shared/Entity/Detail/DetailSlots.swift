@@ -81,6 +81,8 @@ enum DetailSlotRegistry {
             return AnyView(SpendingClassificationView(key: .productCategory, row: row))
         case .purchaseReceiving:
             return AnyView(PurchaseReceivingSlot(purchaseID: row.id))
+        case .runSteps:
+            return runReportSlot(.run_steps, row, imports: false)
         case .runLiveProgress:
             return runReportSlot(.run_liveProgress, row, imports: false)
         case .runImportStats:

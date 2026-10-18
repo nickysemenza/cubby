@@ -159,6 +159,25 @@ export async function reopenRunStep(
   return row ?? null;
 }
 
+/** Steps with `left` and the shortcode of the child Run a step delegates to. */
+export async function readRunStepsReport(db: Database, runId: RunId) {
+  const steps = await readRunSteps(db, runId);
+  const childIds = steps.flatMap((step) =>
+    step.childRunId ? [step.childRunId] : [],
+  );
+  const children = childIds.length
+    ? await getDb(db)
+        .select({ id: run.id, shortcode: run.shortcode })
+        .from(run)
+        .where(inArray(run.id, childIds))
+    : [];
+  return steps.map((step) => ({
+    ...step,
+    childShortcode:
+      children.find((child) => child.id === step.childRunId)?.shortcode ?? null,
+  }));
+}
+
 /** Steps with their derived `left`, in order. */
 export async function readRunSteps(
   db: Database,

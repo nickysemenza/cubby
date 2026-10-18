@@ -237,6 +237,12 @@ const runControlInput = z.object({
    */
   paidOverBudgetUsd: paidOverBudgetUsd.optional(),
 });
+const runRetryStepInput = z.object({
+  runId: runShortcode,
+  /** The RunStep key (`exif`, `statement_transaction`) whose failures run again. */
+  stepKey: z.string().min(1),
+});
+
 const runControlOutput = z.object({
   run: runDetail,
   successor: z
@@ -414,6 +420,13 @@ export const runContract = defineContract("run", {
     native: "Stop, resume or retry a Run from its detail sections",
     input: runControlInput,
     output: runControlOutput,
+    invalidates: ["runOnly"],
+  }),
+  retryStep: mutation({
+    mcp: { omit: "operator_maintenance" },
+    native: "Retry one step's failures from a Run's Steps section",
+    input: runRetryStepInput,
+    output: z.object({ run: runDetail }),
     invalidates: ["runOnly"],
   }),
   lifecycle: mutation({

@@ -312,6 +312,18 @@ export const runHandlers = implementOperationDomain(runContract, {
     );
   },
   control: controlRunOperation,
+  retryStep: async (context, { runId, stepKey }) => {
+    await memberParty(context);
+    const [target] = await getDb(context.db)
+      .select({ id: runTable.id })
+      .from(runTable)
+      .where(eq(runTable.shortcode, runShortcode.parse(runId)))
+      .limit(1);
+    if (!target) throw new Error(`Run ${runId} was not found`);
+    const { retryRunStep } = await import("../service/step-run");
+    await retryRunStep(context.db, target.id, stepKey);
+    return { run: await loadRunDetail(context.db, runId) };
+  },
   lifecycle: (context, { controlAction, ...input }) =>
     controlRunOperation(context, { ...input, action: controlAction }),
   logs: async (context, input) => {
