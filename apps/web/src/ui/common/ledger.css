@@ -120,6 +120,13 @@
   .ledger[data-ledger="records"] {
     grid-template-columns: auto fit-content(16rem) minmax(0, 1fr) auto auto;
   }
+  /* Without leading media, spanning prose must stay in the capped identity
+     track instead of growing the empty auto track at the action's expense. */
+  .ledger[data-ledger="records"]:not(
+      :has(> .ledger-row > [data-ledger-slot="leading"])
+    ) {
+    grid-template-columns: 0 fit-content(16rem) minmax(0, 1fr) auto auto;
+  }
   .ledger[data-ledger="records"]
     > .ledger-row
     > [data-ledger-slot="secondary"] {
