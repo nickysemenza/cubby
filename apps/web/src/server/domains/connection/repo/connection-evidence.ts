@@ -166,7 +166,14 @@ export type PreparedConnectionBases = {
   records: Map<string, Awaited<ReturnType<typeof connectionRecord>>>;
   expenseProject: Map<string, unknown>;
   settlementCandidates: Map<string, unknown>;
+  /** By transaction id. */
+  allocations: Map<string, unknown[]>;
+  /** By `${purchaseId}:${productId}`. */
+  purchaseProducts: Map<string, { links: unknown[]; expenses: unknown[] }>;
 };
+
+const pairKey = (purchaseId: string, productId: string) =>
+  `${purchaseId}:${productId}`;
 
 const recordKey = (ref: EntityRef) => `${ref.entityKind}:${ref.entityId}`;
 
@@ -244,8 +251,94 @@ export async function prepareConnectionBases(
     .map((candidate) =>
       parseShortcodeFor("purchase", candidate.target.entityId),
     );
+  const idOf = (ref: EntityRef) => records.get(recordKey(ref))?.id;
+  const transactionIds = [
+    ...new Set(
+      candidates.flatMap((candidate) => {
+        const id =
+          candidate.relation === "transaction-purchase" ||
+          candidate.relation === "transaction-refund"
+            ? idOf(candidate.source)
+            : undefined;
+        return id ? [id] : [];
+      }),
+    ),
+  ];
+  const pairs = candidates.flatMap((candidate) => {
+    if (candidate.relation !== "product-purchase") return [];
+    const productId = idOf(candidate.source);
+    const purchaseId = idOf(candidate.target);
+    return productId && purchaseId ? [{ productId, purchaseId }] : [];
+  });
+  const allocations = new Map<string, unknown[]>(
+    transactionIds.map((id) => [id, []]),
+  );
+  if (transactionIds.length)
+    for (const row of await getDb(db)
+      .select()
+      .from(financialTransactionAllocation)
+      .where(
+        and(
+          inArray(
+            financialTransactionAllocation.transactionId,
+            transactionIds.map((id) =>
+              parseEntityId("financialTransaction", id),
+            ),
+          ),
+          notDeleted(financialTransactionAllocation),
+        ),
+      )
+      .orderBy(financialTransactionAllocation.id))
+      allocations.get(row.transactionId)?.push(row);
+  const purchaseProducts: PreparedConnectionBases["purchaseProducts"] = new Map(
+    pairs.map((pair) => [
+      pairKey(pair.purchaseId, pair.productId),
+      { links: [], expenses: [] },
+    ]),
+  );
+  if (pairs.length) {
+    const purchaseIds = [...new Set(pairs.map((pair) => pair.purchaseId))];
+    const productIds = [...new Set(pairs.map((pair) => pair.productId))];
+    for (const row of await getDb(db)
+      .select()
+      .from(entityLink)
+      .where(
+        and(
+          liveLinks("purchaseProduct"),
+          inArray(entityLink.fromEntityId, purchaseIds),
+          inArray(entityLink.toEntityId, productIds),
+        ),
+      )
+      .orderBy(entityLink.id))
+      purchaseProducts
+        .get(pairKey(row.fromEntityId, row.toEntityId))
+        ?.links.push(row);
+    for (const row of await getDb(db)
+      .select()
+      .from(expense)
+      .where(
+        and(
+          inArray(
+            expense.purchaseId,
+            purchaseIds.map((id) => parseEntityId("purchase", id)),
+          ),
+          inArray(
+            expense.productId,
+            productIds.map((id) => parseEntityId("product", id)),
+          ),
+          notDeleted(expense),
+        ),
+      )
+      .orderBy(expense.id))
+      if (row.purchaseId && row.productId)
+        purchaseProducts
+          .get(pairKey(row.purchaseId, row.productId))
+          ?.expenses.push(row);
+  }
   return {
     records,
+    allocations,
+    purchaseProducts,
     expenseProject: await expenseProjectRecommendationContexts(db, expenses),
     settlementCandidates: await listPurchasesSettlementCandidates(
       db,
@@ -319,19 +412,21 @@ export async function captureConnectionBasis(
           !lock && prepared?.settlementCandidates.has(purchaseId)
             ? prepared.settlementCandidates.get(purchaseId)
             : await listPurchaseSettlementCandidates(db, purchaseId),
-        allocations: await getDb(db)
-          .select()
-          .from(financialTransactionAllocation)
-          .where(
-            and(
-              eq(
-                financialTransactionAllocation.transactionId,
-                parseEntityId("financialTransaction", source.id),
+        allocations:
+          (!lock && prepared?.allocations.get(source.id)) ||
+          (await getDb(db)
+            .select()
+            .from(financialTransactionAllocation)
+            .where(
+              and(
+                eq(
+                  financialTransactionAllocation.transactionId,
+                  parseEntityId("financialTransaction", source.id),
+                ),
+                notDeleted(financialTransactionAllocation),
               ),
-              notDeleted(financialTransactionAllocation),
-            ),
-          )
-          .orderBy(financialTransactionAllocation.id),
+            )
+            .orderBy(financialTransactionAllocation.id)),
       });
       break;
     }
@@ -349,7 +444,13 @@ export async function captureConnectionBasis(
         }),
       );
       break;
-    case "product-purchase":
+    case "product-purchase": {
+      const prepared_ =
+        !lock && prepared?.purchaseProducts.get(pairKey(target.id, source.id));
+      if (prepared_) {
+        dependencies = snapshotJson(prepared_);
+        break;
+      }
       dependencies = snapshotJson({
         links: await getDb(db)
           .select()
@@ -375,6 +476,7 @@ export async function captureConnectionBasis(
           .orderBy(expense.id),
       });
       break;
+    }
     default:
       break;
   }
