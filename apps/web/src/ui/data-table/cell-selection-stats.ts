@@ -41,10 +41,11 @@ export function getCellSelectionStats<TData extends RowData>(
 
   for (const row of rows) {
     // Indexed once per row: a drag-select recomputes this per hovered cell,
-    // and a per-column scan made it rows × columns².
-    const cells = new Map(
-      row.getAllCells().map((cell) => [cell.column.id, cell]),
-    );
+    // and a per-column scan made it rows × columns². The first cell per id
+    // wins, as the scan's `find` did.
+    const cells = new Map<string, ReturnType<typeof row.getAllCells>[number]>();
+    for (const cell of row.getAllCells())
+      if (!cells.has(cell.column.id)) cells.set(cell.column.id, cell);
     for (const column of columns) {
       const cell = cells.get(column.id);
       if (!cell?.getIsSelected()) continue;

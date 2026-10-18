@@ -1,3 +1,5 @@
+import { util } from "zod/v4/core";
+
 /**
  * Evaluates a manifest `display.readPath` against a row: dotted keys, `[n]`
  * indexing, and a `[]` projection that maps the rest of the path over an
@@ -43,13 +45,12 @@ function walk(value: unknown, steps: readonly Step[]): unknown {
       current = Array.isArray(current) ? current[step.index] : undefined;
       continue;
     }
-    // An own-property read of a plain object (what `z.record` accepted), not a
-    // `z.record` parse: that copied the object at every step of every cell's
-    // path.
-    if (typeof current !== "object" || Array.isArray(current)) return undefined;
-    const prototype: unknown = Object.getPrototypeOf(current);
-    if (prototype !== Object.prototype && prototype !== null) return undefined;
-    current = Object.getOwnPropertyDescriptor(current, step.key)?.value;
+    // The objects and own keys a `z.record` parse accepted, without that
+    // parse's copy of the object at every step of every cell's path.
+    current =
+      util.isPlainObject(current) && Object.hasOwn(current, step.key)
+        ? current[step.key]
+        : undefined;
   }
   return current;
 }

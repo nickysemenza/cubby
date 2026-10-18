@@ -30,14 +30,24 @@ export interface ReferenceFieldValue {
 /**
  * One declared key off a read projection, parsed with the schema the caller
  * knows that key by. The manifest names the key; the schema is the value's
- * own contract. Reads the one own property: reference cells call this several
- * times each, and a loose-object parse would copy the whole row per call.
+ * own contract.
+ *
+ * Reads the record's own property (a projection row carries its keys itself),
+ * not a loose-object parse: reference cells call this several times each, and
+ * that parse copied the whole row per call.
  */
 export const readRecordField = <TRecord extends object, TValue>(
   record: TRecord,
   key: string,
   schema: z.ZodType<TValue>,
-): TValue => schema.parse(Object.getOwnPropertyDescriptor(record, key)?.value);
+): TValue => {
+  if (Array.isArray(record))
+    throw new TypeError(`Cannot read "${key}" off an array as a record`);
+  const property = Object.getOwnPropertyDescriptor(record, key);
+  return schema.parse(
+    property?.get ? property.get.call(record) : property?.value,
+  );
+};
 
 const unknownValue = z.unknown();
 const optionalString = z.string().nullish();

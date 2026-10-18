@@ -34,4 +34,26 @@ describe("readPathValue", () => {
       undefined,
     );
   });
+
+  it("reads what a z.record parse read: own getters, and objects with a plain constructor", () => {
+    expect(
+      readPathValue(
+        {
+          get name() {
+            return "Example";
+          },
+        },
+        "name",
+      ),
+    ).toBe("Example");
+    expect(
+      readPathValue(
+        Object.assign(Object.create({}), { name: "Example" }),
+        "name",
+      ),
+    ).toBe("Example");
+    expect(
+      readPathValue({ constructor: () => undefined, name: "Example" }, "name"),
+    ).toBeUndefined();
+  });
 });
