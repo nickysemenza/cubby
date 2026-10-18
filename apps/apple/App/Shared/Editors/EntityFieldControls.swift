@@ -576,11 +576,7 @@ struct EntityFieldControl: View {
     }
 
     private func encode(_ date: Date) -> JSONValue {
-        if field.kind == .timestamp {
-            let iso = ISO8601DateFormatter()
-            iso.formatOptions = [.withInternetDateTime]
-            return .string(iso.string(from: date))
-        }
+        if field.kind == .timestamp { return .string(date.ISO8601Format()) }
         return .string(PlainDate(date).rawValue)
     }
 
