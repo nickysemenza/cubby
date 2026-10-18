@@ -94,7 +94,7 @@ export async function listPurchasesSettlementCandidates(
     dated.map(
       (subject, ordinal) =>
         sql`(${ordinal}::int, ${subject.code}::text, ${subject.date}::date,
-          ${subject.statedTotal === null ? null : cents(subject.statedTotal)}::bigint,
+          ${subject.statedTotal === null ? null : cents(subject.statedTotal)}::numeric,
           ${subject.vendorName}::text)`,
     ),
     sql`, `,
