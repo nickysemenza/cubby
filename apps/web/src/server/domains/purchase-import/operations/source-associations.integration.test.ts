@@ -3,13 +3,15 @@ import {
   commitPurchaseImportInput,
   type ExtractedOrderCandidate,
 } from "@cubby/schemas/purchase-import";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
 import { getDb } from "~/server/db/helpers";
 import {
+  assessment,
+  assessmentState,
   expense,
   importPreparedOrder,
   importPreparedLine,
@@ -220,6 +222,111 @@ describe("retained mail source associations", () => {
     memberImportWorld(ctx.db, ctx.actor, {
       vendor: { name: "Source association vendor" },
     });
+
+  // One Email can contain several orders. Publishing after each order hides
+  // earlier ledger lines behind the last outcome and corrupts replay grading.
+  it("publishes one complete Email outcome for a multi-order commit and its replay", async () => {
+    const { party, vendor } = await member();
+    const mail = await retainMail(
+      party.id,
+      "multi-order-outcome",
+      "a".repeat(64),
+    );
+    const admitted = await admitMailImport(ctx.db, {
+      ledgerPartyId: party.id,
+      userId: ctx.actor.userId,
+      messageIds: [mail.id],
+      expectedChecksums: [{ orderMailId: mail.id, checksum: mail.rawChecksum }],
+    });
+    const runId = admitted[0]?.row.id;
+    if (!runId) throw new Error("Synthetic Mail import was not admitted");
+    const orders = [10, 20].map(
+      (
+        amount,
+        index,
+      ): Parameters<typeof preparePurchaseImport>[1]["orders"][number] => ({
+        stableOrderId: `multi-${index}`,
+        itemOperationId: `prepare-multi-${index}`,
+        vendorId: vendor.shortcode,
+        source: mailSource(mail),
+        evidenceChecksum: mail.rawChecksum,
+        extractionRevision: "synthetic-multi-order@1",
+        extraction: {
+          status: "ready",
+          candidate: workshop(
+            `SYN-MULTI-${index}`,
+            amount,
+            `Workshop ${index}`,
+          ),
+        },
+        lineIds: [`multi-${index}:line`],
+        primaryDocumentImageId: null,
+        screenshotImageId: null,
+      }),
+    );
+    await preparePurchaseImport(
+      ctx.db,
+      {
+        _runExecution: { runId, operationId: "prepare:multi-outcome" },
+        orders,
+      },
+      ctx.actor,
+      async () => {
+        throw new Error("Synthetic selected Email requires no model decision");
+      },
+    );
+    const input = commitPurchaseImportInput.parse({
+      _runExecution: { runId, operationId: "commit:multi-outcome" },
+      prepareOperationId: "prepare:multi-outcome",
+      defaultTrade: "other",
+      resolutions: orders.map((order) => ({
+        stableOrderId: order.stableOrderId,
+        stableLineId: order.lineIds[0],
+        resolution: { kind: "expense_only" },
+      })),
+    });
+    const committed = await commitPurchaseImport(ctx.db, input, ctx.actor);
+    expect(committed.items.every((item) => item.purchaseId !== null)).toBe(
+      true,
+    );
+    const outcomes = () =>
+      getDb(ctx.db)
+        .select({
+          judgment: assessment.judgment,
+          active: assessmentState.active,
+        })
+        .from(assessment)
+        .innerJoin(assessmentState, eq(assessmentState.id, assessment.id))
+        .where(
+          and(
+            eq(assessmentState.family, "mail_import_outcome"),
+            eq(assessmentState.runId, runId),
+          ),
+        );
+    const expected = [
+      {
+        active: true,
+        judgment: {
+          kind: "imported",
+          total: 30,
+          lines: expect.arrayContaining([
+            { name: "Workshop 0", cost: 10 },
+            { name: "Workshop 1", cost: 20 },
+          ]),
+        },
+      },
+    ];
+    expect(await outcomes()).toEqual(expected);
+    expect(await commitPurchaseImport(ctx.db, input, ctx.actor)).toEqual(
+      committed,
+    );
+    expect(await outcomes()).toEqual(expected);
+    expect(
+      (await getDb(ctx.db).select({ cost: expense.cost }).from(expense))
+        .map((row) => row.cost)
+        .sort((a, b) => (a ?? 0) - (b ?? 0)),
+    ).toEqual([10, 20]);
+  });
 
   it("retains two orders from one source and replays both without duplicate Expenses", async () => {
     const { vendor } = await member();

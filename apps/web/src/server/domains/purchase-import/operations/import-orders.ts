@@ -110,6 +110,17 @@ import {
 } from "./mail-source-admission";
 import { linkImportedMail } from "./mail-tool";
 
+type ImportedMailCommit = Parameters<typeof linkImportedMail>[1];
+
+function collectImportedMail(
+  imports: Map<string, ImportedMailCommit>,
+  input: ImportedMailCommit,
+) {
+  const existing = imports.get(input.mail.id);
+  if (existing) existing.purchases.push(...input.purchases);
+  else imports.set(input.mail.id, input);
+}
+
 const operationArgs = (input: {
   prepareOperationId: string;
   defaultTrade?: CommitPurchaseImportInput["defaultTrade"];
@@ -1090,6 +1101,7 @@ export async function commitPurchaseImport(
         // Mail orders whose line thumbnails are fetched after commit.
         const thumbnailWork: Parameters<typeof attachOrderLineThumbnails>[1][] =
           [];
+        const importedMail = new Map<string, ImportedMailCommit>();
         const createdProductIds: ProductId[] = [];
         let requiresReview = false;
         // Adjustment lines (tax/shipping/discount/etc.) never carry a
@@ -1268,10 +1280,15 @@ export async function commitPurchaseImport(
             const attachmentDecisions = preparedAttachments.get(mailSource.id);
             if (!attachmentDecisions)
               throw new Error("Email attachment purposes were not reviewed.");
-            await linkImportedMail(transactionDb, {
-              mail: mailSource,
+            const target: Parameters<
+              typeof linkImportedMail
+            >[1]["purchases"][number] = {
               event: extraction.candidate?.sourceEvent ?? "confirmation",
               purchaseId: result.purchaseId,
+            };
+            collectImportedMail(importedMail, {
+              mail: mailSource,
+              purchases: [target],
               actorUserId: actor.userId,
               runId: scope.runId,
               attachmentDecisions,
@@ -1292,6 +1309,8 @@ export async function commitPurchaseImport(
         }
         if (resolutionMap.size !== consumedResolutionIds.size)
           throw new Error("Product resolutions include unknown line ids");
+        for (const emailImport of importedMail.values())
+          await linkImportedMail(transactionDb, emailImport);
         const publicResult = commitPurchaseImportOut.parse({
           runId: scope.shortcode,
           operationId: input._runExecution.operationId,

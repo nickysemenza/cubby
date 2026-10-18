@@ -18,15 +18,15 @@ import {
 } from "~/server/db/schema";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 
-/** Freeze the ledger the writer actually reached, including credits and unknown costs. */
+/** Freeze every Purchase reached by this Email commit, including credits and unknown costs. */
 export async function importedMailJudgment(
   db: Database,
-  purchaseId: NonNullable<typeof expense.$inferSelect.purchaseId>,
+  purchaseIds: NonNullable<typeof expense.$inferSelect.purchaseId>[],
 ) {
   const lines = await getDb(db)
     .select({ name: expense.name, cost: expense.cost })
     .from(expense)
-    .where(and(eq(expense.purchaseId, purchaseId), notDeleted(expense)))
+    .where(and(inArray(expense.purchaseId, purchaseIds), notDeleted(expense)))
     .orderBy(expense.id);
   return mailImportOutcome.parse({
     kind: "imported",

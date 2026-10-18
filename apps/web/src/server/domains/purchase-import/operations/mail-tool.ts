@@ -1217,15 +1217,14 @@ export async function resolveMail(
 }
 
 /**
- * A mail-sourced import commit links its Email for the event it records. An
- * attachment's commit links its parent Email, by the Email's own checksum.
+ * Link every Purchase reached by one Email commit, then publish its complete
+ * outcome once. An attachment links its parent Email by the Email's checksum.
  */
 export async function linkImportedMail(
   db: Database,
   input: {
     mail: RetainedMail;
-    event: MailEvent;
-    purchaseId: string;
+    purchases: { event: MailEvent; purchaseId: string }[];
     actorUserId: string;
     runId: RunId;
     attachmentDecisions: PreparedMailAttachmentDecisions;
@@ -1247,14 +1246,15 @@ export async function linkImportedMail(
       "MAIL_EVIDENCE_STALE",
       "The imported Email changed or was disposed of; read it again.",
     );
-  await linkOrderMail(db, {
-    mail: { ...input.mail, ...mail },
-    purchaseId: input.purchaseId,
-    event: input.event,
-    actorUserId: input.actorUserId,
-    proposedBy: "import",
-    attachmentDecisions: input.attachmentDecisions,
-  });
+  for (const target of input.purchases)
+    await linkOrderMail(db, {
+      mail: { ...input.mail, ...mail },
+      purchaseId: target.purchaseId,
+      event: target.event,
+      actorUserId: input.actorUserId,
+      proposedBy: "import",
+      attachmentDecisions: input.attachmentDecisions,
+    });
   await settleMail(db, {
     mail: { ...input.mail, ...mail },
     importRunId: await mailImportRun(db, input.runId),
@@ -1262,7 +1262,9 @@ export async function linkImportedMail(
     detail: "imported",
     judgment: await importedMailJudgment(
       db,
-      parseEntityId("purchase", input.purchaseId),
+      input.purchases.map((target) =>
+        parseEntityId("purchase", target.purchaseId),
+      ),
     ),
   });
 }

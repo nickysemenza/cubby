@@ -46,8 +46,10 @@ choices keep their domain review flows.
 
 Each delegated Email settlement publishes an immutable `mail_import_outcome`
 Assessment with its checksum, Run, producer and terminal disposition. Imported
-lines and totals freeze the actual Expense ledger, including credits; the total
-remains `SUM(Expense.cost)`. Linked outcomes freeze the actual targets' order and
+lines and totals freeze the actual Expense ledger, including credits, across
+all Purchases reached for that Email by the commit. A multi-order commit links
+each Purchase, then publishes one complete Email outcome; operation replay
+reuses it. The total remains `SUM(Expense.cost)`. Linked outcomes freeze the actual targets' order and
 Vendor names; replay compares those identities across databases and reports missing
 identity as unavailable. Rules retain their revision. The public writer has no
 causal model receipt, so agent outcome model attribution remains null. Never
