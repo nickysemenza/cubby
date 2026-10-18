@@ -105,15 +105,18 @@ const projectCompletion = listPrepare(async (db) => {
   return { tree, dateWindows };
 });
 
-/** Each project-grain attention type's list filter value. */
-const attentionFilterOf = new Map<string, string>(
-  Object.entries(projectAttentionFilterTypes).map(([filter, type]) => [
-    type,
-    filter,
-  ]),
-);
+/**
+ * Each project-grain attention type's list filter value. Read on render, not
+ * at load: task and expense lists import `projectScaffold` for their project
+ * scope, and `attention.ts` reaches the task list (through task
+ * actionability) before its own exports exist.
+ */
+const attentionFilterOf = (type: string) =>
+  Object.entries(projectAttentionFilterTypes).find(
+    ([, attention]) => attention === type,
+  )?.[0];
 
-const projectScaffold = listScaffold("project", project, {
+export const projectScaffold = listScaffold("project", project, {
   derived: {
     image: inArray(project.id, projectIdsWithImages),
     dateRange: ({ from, to }) =>
@@ -157,7 +160,7 @@ const projectScaffold = listScaffold("project", project, {
   rows: {
     attentionItems: projectAttention.rows((items) => {
       const rows = items.flatMap((item) => {
-        const filter = attentionFilterOf.get(item.type);
+        const filter = attentionFilterOf(item.type);
         return filter === undefined ? [] : [sql`(${item.entityId}, ${filter})`];
       });
       return rows.length === 0

@@ -2330,6 +2330,10 @@ export const compileEntity = (
     filterSchema,
     filterAudit,
     filterDescriptors: filterDescriptorsWithAudit,
+    listScopes: {
+      scope: declaration.presentation.list.scope,
+      scopes: declaration.presentation.list.scopes,
+    },
     // Resolved across entities by `compileListFields`.
     listFields: {
       derived: {},
@@ -2339,6 +2343,8 @@ export const compileEntity = (
       hierarchy: null,
       subtree: {},
       grouping: [],
+      scope: [],
+      scopes: {},
     },
     bulkUpdateFields,
     ports,

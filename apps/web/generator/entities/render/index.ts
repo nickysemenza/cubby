@@ -1404,13 +1404,15 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         "type GroupOptions = readonly { readonly value: string; readonly label: string }[] | null;\n" +
         "/** One Group by choice: `value` is null exactly when `reason` is set. */\n" +
         'export type GeneratedGroupChoice = { readonly key: string; readonly label: string; readonly noValueLabel: string; readonly reason: string | null; readonly value: { readonly kind: "column"; readonly column: string; readonly options: GroupOptions } | { readonly kind: "record"; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity; readonly titleColumn: string } | { readonly kind: "field"; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity; readonly column: string; readonly options: GroupOptions } | { readonly kind: "derived"; readonly options: GroupOptions } | null; readonly filter: { readonly columnId: string; readonly noValue: boolean; readonly subtree: string | null } | null; readonly levels: number; readonly levelReason: string | null };\n\n' +
+        "/** A related list scope (`presentation.list.scopes`): the entity whose list filter record its key holds, and the path to that entity's records. */\n" +
+        'export type GeneratedListScope = { readonly filters: Entity; readonly via: Extract<GeneratedListField, { shape: "via" | "rows" }> };\n\n' +
         renderRecord({
           name: "generatedEntityListFields",
           entries: Object.fromEntries(
             entities.map(({ key, listFields }) => [key, listFields]),
           ),
           satisfies:
-            "Record<Entity, { derived: Record<string, GeneratedListField>; rows: Record<string, GeneratedRowSet>; terms: Record<string, GeneratedListTermKey>; inherit: Record<string, GeneratedInherit>; hierarchy: { parentField: string; column: string; maxDepth: number } | null; subtree: Record<string, string>; grouping: readonly GeneratedGroupChoice[] }>",
+            "Record<Entity, { derived: Record<string, GeneratedListField>; rows: Record<string, GeneratedRowSet>; terms: Record<string, GeneratedListTermKey>; inherit: Record<string, GeneratedInherit>; hierarchy: { parentField: string; column: string; maxDepth: number } | null; subtree: Record<string, string>; grouping: readonly GeneratedGroupChoice[]; scope: readonly string[]; scopes: Record<string, GeneratedListScope> }>",
           comment: "// Generated list fields stay one entity per line.",
         }) +
         "\n" +
@@ -1423,6 +1425,10 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         "export type GeneratedRepositoryRowSetKey<E extends Entity> = {\n" +
         '  [K in keyof (typeof generatedEntityListFields)[E]["rows"]]: (typeof generatedEntityListFields)[E]["rows"][K] extends { storage: { kind: "repository" } } ? K : never;\n' +
         '}[keyof (typeof generatedEntityListFields)[E]["rows"]] & string;\n' +
+        "/** Related scope keys whose target list scaffold the repository passes to `listScaffold`. */\n" +
+        'export type GeneratedListScopeKey<E extends Entity> = keyof (typeof generatedEntityListFields)[E]["scopes"] & string;\n' +
+        "/** The entity whose list filter record a related scope key holds. */\n" +
+        'export type GeneratedListScopeTarget<E extends Entity, K extends GeneratedListScopeKey<E>> = (typeof generatedEntityListFields)[E]["scopes"][K] extends { readonly filters: infer T extends Entity } ? T : never;\n' +
         "/** Derived keys whose filter predicate the repository passes to `listScaffold`. */\n" +
         "export type GeneratedDerivedPredicateKey<E extends Entity> = {\n" +
         '  [K in keyof DerivedOf<E>]: DerivedOf<E>[K] extends { shape: "predicate" } ? K : never;\n' +

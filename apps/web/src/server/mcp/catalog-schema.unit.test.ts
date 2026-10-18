@@ -759,10 +759,12 @@ const write = ({ destructive = false, openWorld = false } = {}) => ({
  * Both rose one step when every scope filter (a relation back-filter, a
  * deep-link id) gained the generated Exclude / Any value keys every other
  * compiled value filter has. The kernel ceiling rose again when the filters
- * over row sets (`model.rows`, #2607) gained the same keys plus Match all.
+ * over row sets (`model.rows`, #2607) gained the same keys plus Match all,
+ * and the workflow ceiling when a project page's embedded scope became the
+ * project list's own filter keys (`projectScope`, #2610).
  */
 const KERNEL_SCHEMA_BUDGET = 143_360;
-const WORKFLOW_SCHEMA_BUDGET = 18_432;
+const WORKFLOW_SCHEMA_BUDGET = 19_456;
 const KERNEL_TOOLS = new Set(["entity", "entity_read"]);
 
 function isObject(value: JSONType | undefined): value is JsonObject {

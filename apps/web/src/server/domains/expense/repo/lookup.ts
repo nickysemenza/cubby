@@ -1,3 +1,4 @@
+import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { expenseCostSign, expenseListItemOut } from "@cubby/schemas/project";
@@ -19,12 +20,11 @@ import {
   spendingCategory,
 } from "~/server/db/schema";
 import {
-  expenseDerivedMembershipSql,
   expenseDerivedValueSql,
   expenseSelectionForWhere,
 } from "~/server/domains/expense/repo/expense-derived-read";
 import { disposalPurchaseIds } from "~/server/domains/product/repo/ownership";
-import { matchingEmbeddedProjectIds } from "~/server/domains/project/repo/dashboard-shared";
+import { projectScaffold } from "~/server/domains/project/repo/lookup";
 import { withDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import {
@@ -115,9 +115,6 @@ export const resolveExpenseProjectAllocationScope = async (
             )
         ).map((row) => row.id)
       : selectedCategoryIds;
-  const membershipProjectIds = filters.projectScope
-    ? await matchingEmbeddedProjectIds(db, filters.projectScope)
-    : undefined;
   // Trade and cost type follow the same per-share split as category: an
   // adjustment matches through the shares it allocates to its principals.
   const trades = filters.trade ? [filters.trade].flat() : [];
@@ -130,12 +127,10 @@ export const resolveExpenseProjectAllocationScope = async (
     trades.length === 0 &&
     !filters.tradePresenceFilter &&
     costTypes.length === 0 &&
-    !filters.costTypePresenceFilter &&
-    membershipProjectIds === undefined
+    !filters.costTypePresenceFilter
   )
     return undefined;
   return {
-    membershipProjectIds,
     // Requested codes that resolve to nothing match no project, though No
     // project may still match beside them.
     projectIds: codes.length > 0 ? projectIds : undefined,
@@ -224,29 +219,8 @@ const expenseScaffold = listScaffold("expense", expense, {
         )}) share`,
     ),
   },
+  scopes: { projectScope: () => projectScaffold },
 });
-
-/**
- * A project page's embedded scope: expenses with any share in a project
- * the nested project filters select, bounded like the allocation filters.
- */
-const embeddedProjectMembership = async (
-  db: Database,
-  filters: ExpenseFilters,
-): Promise<SQL | undefined> => {
-  if (filters.projectScope === undefined) return undefined;
-  const bound = allocationBound(listFilterValues.parse(filters));
-  return expenseDerivedMembershipSql(
-    sql`${expense.id}`,
-    {
-      membershipProjectIds: await matchingEmbeddedProjectIds(
-        db,
-        filters.projectScope,
-      ),
-    },
-    bound === undefined ? undefined : { select: bound },
-  );
-};
 
 /**
  * The allocation filters an analytics scope (`resolveExpenseProjectAllocationScope`)
@@ -265,23 +239,27 @@ const scopedAllocationKeys = new Set([
   "costTypePresenceFilter",
 ]);
 
+// A related scope (the embedded project scope) selects whole expenses, as
+// the list does, so it stays in an analytics where.
+const filterShareKeys = [...shareKeys].filter(
+  (key) => !Object.hasOwn(generatedEntityListFields.expense.scopes, key),
+);
+
 /**
  * The filters an analytics read selects expenses by. Its scope already
- * carries the embedded project scope and, when it expresses them, the
- * allocation filters, which then leave the where so the shares allocate
- * once. A key it cannot express (Match all, Exclude) keeps every allocation
- * filter in the where, so the read selects
- * the expenses the list does.
+ * carries the allocation filters it expresses, which then leave the where so
+ * the shares allocate once. A key it cannot express (Match all, Exclude)
+ * keeps every allocation filter in the where, so the read selects the
+ * expenses the list does.
  */
 const analyticsFilters = (filters: ExpenseFilters): ExpenseFilters => {
-  const { projectScope: _embedded, ...rest } = filters;
-  const values = listFilterValues.parse(rest);
-  const unscoped = [...shareKeys].some(
+  const values = listFilterValues.parse(filters);
+  const unscoped = filterShareKeys.some(
     (key) => !scopedAllocationKeys.has(key) && values[key] !== undefined,
   );
-  if (unscoped) return rest;
-  const scoped: Partial<ExpenseFilters> = { ...rest };
-  for (const key of shareKeys)
+  if (unscoped) return filters;
+  const scoped: Partial<ExpenseFilters> = { ...filters };
+  for (const key of filterShareKeys)
     if (Object.hasOwn(scoped, key)) Reflect.deleteProperty(scoped, key);
   return scoped;
 };
@@ -305,10 +283,7 @@ export const buildExpenseWhereClause = async (
       filters: selected,
       readIntent: "count",
     }));
-  return and(
-    expenseScaffold.where(selected, { context }),
-    await embeddedProjectMembership(db, selected),
-  );
+  return expenseScaffold.where(selected, { context });
 };
 
 export const expenseListRead = async (

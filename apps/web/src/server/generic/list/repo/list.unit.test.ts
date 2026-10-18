@@ -1,12 +1,20 @@
 import { and, isNotNull, sql } from "drizzle-orm";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { task } from "~/server/db/schema";
 import { renderWhereSql } from "~/server/testing/mock-db";
 
-import { listScaffold } from "./list";
+import { ListContext } from "./field-compiler";
+import { listScaffold, type NestedListScaffold } from "./list";
 
 describe("listScaffold", () => {
+  const nestedContext = vi.fn(async () => ListContext.empty);
+  const projects: NestedListScaffold<"project"> = {
+    entity: "project",
+    context: nestedContext,
+    matchingIds: () =>
+      sql`(SELECT "Project"."id" FROM "Project" WHERE "Project"."name" = 'Stub scope')`,
+  };
   const scaffold = listScaffold("task", task, {
     derived: {
       effectiveTrade: sql`NULL`,
@@ -14,6 +22,33 @@ describe("listScaffold", () => {
       completion: sql`NULL`,
       topLevel: sql`true`,
     },
+    scopes: { projectScope: () => projects },
+  });
+
+  // Plan §10: a related scope runs the target list's prepares, so a list
+  // that does not set the scope must never load them.
+  it("prepares a related scope's list only when the request sets it", async () => {
+    // SAFETY: no stubbed field prepares, so the database is never read.
+    const db = {} as never;
+    nestedContext.mockClear();
+    await scaffold.context(db, { filters: { status: "done" } });
+    expect(nestedContext).not.toHaveBeenCalled();
+    await scaffold.context(db, {
+      filters: { projectScope: { kind: ["garden"] } },
+    });
+    expect(nestedContext).toHaveBeenCalledExactlyOnceWith(db, {
+      filters: { kind: ["garden"] },
+      readIntent: "count",
+    });
+  });
+
+  it("matches a related scope through its declared path", () => {
+    const rendered = renderWhereSql(
+      scaffold.where({ projectScope: { kind: ["garden"] } }),
+    );
+    expect(rendered).toContain("EXISTS");
+    expect(rendered).toContain(`"Project"."name" = 'Stub scope'`);
+    expect(renderWhereSql(scaffold.where({}))).not.toContain("Stub scope");
   });
 
   describe("where", () => {

@@ -119,8 +119,8 @@ struct EntityFilterTests {
             shape: "strings minLength", entity: .financialAccount, wire: "source",
             value: ["synthetic-bank"], expected: ["source": ["synthetic-bank"]]),
         Row(
-            shape: "nested", entity: .expense, wire: "projectScopeKinds",
-            value: ["garden"], expected: ["projectScope": ["kinds": ["garden"]]]),
+            shape: "nested", entity: .expense, wire: "projectScopeKind",
+            value: ["garden"], expected: ["projectScope": ["kind": ["garden"]]]),
     ]
 
     @Test(arguments: rows)

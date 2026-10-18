@@ -208,6 +208,16 @@ export class ListContext {
     return read === this.read ? this : new ListContext(this.prepared, read);
   }
 
+  /** This context plus a related scope's nested one (distinct handles). */
+  with(nested: ListContext): ListContext {
+    return nested.prepared.size === 0
+      ? this
+      : new ListContext(
+          new Map([...this.prepared, ...nested.prepared]),
+          this.read,
+        );
+  }
+
   has(prepare: ListPrepare<unknown>): boolean {
     return this.prepared.has(prepare);
   }

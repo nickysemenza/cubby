@@ -154,16 +154,6 @@ export type ProjectOptionsOut = z.infer<typeof projectOptionsOut>;
 const completionYearValue = z.string().regex(/^\d{4}$/);
 const completionYear = completionYearValue.optional();
 
-export const embeddedProjectScopeSchema = z.object({
-  statuses: z.array(projectStatusSchema).optional(),
-  kinds: z.array(projectKindSchema).optional(),
-  locations: z.array(z.string()).optional(),
-  search: z.string().optional(),
-  ...dateRangeFields("date"),
-  completionYear,
-});
-export type EmbeddedProjectScope = z.infer<typeof embeddedProjectScopeSchema>;
-
 export const projectFilterFields = {
   ...projectBaseFilterFields,
   assigneeId: partyFilterList(ledgerPartyShortcode).optional(),
@@ -171,6 +161,22 @@ export const projectFilterFields = {
   completionYear: oneOrMany(completionYearValue).optional(),
 };
 export const projectFiltersSchema = z.object(projectFilterFields);
+/**
+ * A project page's embedded scope on its task and expense lists
+ * (`presentation.list.scopes`): the project list filters a project page
+ * sets, whose projects those lists match.
+ */
+const projectScope = projectFiltersSchema
+  .pick({
+    status: true,
+    kind: true,
+    location: true,
+    search: true,
+    dateFrom: true,
+    dateTo: true,
+    completionYear: true,
+  })
+  .optional();
 export type ProjectFilters = z.infer<typeof projectFiltersSchema>;
 
 export type ProjectSortField = GeneratedEntitySortField<"project">;
@@ -296,7 +302,7 @@ export const taskFilterFields = {
   completion: oneOrMany(taskCompletionSchema)
     .optional()
     .describe('Undefined = "all" (today\'s default, unchanged)'),
-  projectScope: embeddedProjectScopeSchema.optional(),
+  projectScope,
 };
 export const taskFiltersSchema = z.object(taskFilterFields);
 export type TaskFilters = z.infer<typeof taskFiltersSchema>;
@@ -499,7 +505,7 @@ export const expenseFilterFields = {
    * The two together are the group key.
    */
   orderId: oneOrMany(z.string()).optional(),
-  projectScope: embeddedProjectScopeSchema.optional(),
+  projectScope,
 };
 export const expenseFiltersSchema = z.object(expenseFilterFields);
 export type ExpenseFilters = z.infer<typeof expenseFiltersSchema>;

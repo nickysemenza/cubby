@@ -131,9 +131,10 @@ export type CompiledEntityPresentation = Omit<
       actions: readonly string[];
     };
   };
+  // `scope` and `scopes` compile into the server's list fields only.
   list: Omit<
     EntityPresentation["list"],
-    "timeline" | "shelf" | "actions" | "tree"
+    "timeline" | "shelf" | "actions" | "tree" | "scope" | "scopes"
   > & {
     actions: readonly string[];
     /** `list.tree` resolved against `model.hierarchy`. */
@@ -1525,6 +1526,30 @@ const buildMetadataSchemas = () => {
             .optional()
             .default(null),
           /**
+           * Stored fields pinned to NULL on every list and count read: the
+           * list's static row scope (an ingredient list holds standalone rows,
+           * never a recipe's own). It shows no chip, and a request cannot
+           * lift it.
+           */
+          scope: z.array(fieldKey).optional().default([]),
+          /**
+           * Related scopes: a request key whose value is the `filters`
+           * entity's own list filter record, matched through `via` (a path or
+           * a row-set terminal that leads to that entity). A project page
+           * scopes its task and expense lists by the projects its filters
+           * select. A scope is not a filter descriptor: no chip, Exclude,
+           * any-of, sort or group.
+           */
+          scopes: z
+            .record(
+              nonEmptyString(),
+              z
+                .object({ via: nonEmptyString(), filters: nonEmptyString() })
+                .strict(),
+            )
+            .optional()
+            .default({}),
+          /**
            * Nest the table under the declared `model.hierarchy`: each row
            * sits under its parent. The server pages the roots and each
            * parent's children (`nesting` on every list read); a row whose
@@ -1595,6 +1620,8 @@ const buildMetadataSchemas = () => {
             initialFilter,
             savedViews,
             primarySearch,
+            scope,
+            scopes,
             tree,
             links,
             timeline,
@@ -1610,6 +1637,8 @@ const buildMetadataSchemas = () => {
                 : { subtitle: shelfSubtitleOverride },
             initialFilter,
             primarySearch,
+            scope,
+            scopes,
             tree,
             actions: extraActions,
             links,
