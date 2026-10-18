@@ -15,11 +15,17 @@ public enum CollectionTag {
         let prefix = SharedConstants.collectionTagPrefix
         guard tag.hasPrefix(prefix) else { return nil }
         let slug = String(tag.dropFirst(prefix.count))
-        guard let pattern = try? Regex(SharedConstants.collectionSlugPattern),
-            slug.wholeMatch(of: pattern) != nil
+        // A whole-range match, not just the pattern's anchors: ICU's `$` also matches before a
+        // trailing newline, which the web pattern rejects.
+        let range = NSRange(slug.startIndex..., in: slug)
+        guard let pattern = slugPattern, pattern.firstMatch(in: slug, range: range)?.range == range
         else { return nil }
         return slug
     }
+
+    /// Compiled once: building a pattern costs ~300x matching it, and Tags split per keystroke.
+    private static let slugPattern = try? NSRegularExpression(
+        pattern: SharedConstants.collectionSlugPattern)
 
     /// Lowercase ASCII letters and digits, any other run collapsed to one `-`, ends trimmed.
     public static func normalizedSlug(_ value: String) -> String {
@@ -40,8 +46,12 @@ public enum CollectionTag {
     /// Compatibility tags (everything that is not a valid Collection tag, in order) and the
     /// distinct Collection slugs, sorted.
     public static func split(_ tags: [String]) -> (tags: [String], collections: [String]) {
-        let collections = Set(tags.compactMap(slug(fromTag:))).sorted()
-        return (tags.filter { !isCollectionTag($0) }, collections)
+        var plain: [String] = []
+        var collections = Set<String>()
+        for tag in tags {
+            if let slug = slug(fromTag: tag) { collections.insert(slug) } else { plain.append(tag) }
+        }
+        return (plain, collections.sorted())
     }
 
     /// The stored list for edited Tags and Collections: collections normalized to slugs,

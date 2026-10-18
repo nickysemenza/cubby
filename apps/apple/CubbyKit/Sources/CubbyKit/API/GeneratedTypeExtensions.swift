@@ -236,13 +236,23 @@ extension MacroSummary {
 // MARK: - Dashboard and Today
 
 extension DashboardCountsOut {
-    /// Row counts keyed by `EntityKey.rawValue`, read off the JSON projection so a newly counted
-    /// entity needs no hand-listed arm here. The response spells the USDA food count `usdaFoods`
-    /// (plural), so that key is mapped by hand.
-    public func count(for key: EntityKey) -> Int? {
+    /// The response as per-entity counts. Encodes once, so a Browse list reading every entity's
+    /// count does not re-encode the whole response per row.
+    public var entityCounts: EntityCounts {
         guard let counts = try? JSONValue(encoding: self), case .object(let fields) = counts else {
-            return nil
+            return EntityCounts(fields: [:])
         }
+        return EntityCounts(fields: fields)
+    }
+}
+
+/// Row counts keyed by `EntityKey.rawValue`, read off the JSON projection so a newly counted
+/// entity needs no hand-listed arm here. The response spells the USDA food count `usdaFoods`
+/// (plural), so that key is mapped by hand.
+public struct EntityCounts: Sendable, Equatable {
+    let fields: [String: JSONValue]
+
+    public func count(for key: EntityKey) -> Int? {
         if key == .usdaFood, fields["usdaFoodsAvailable"] != .bool(true) { return nil }
         let field = key == .usdaFood ? "usdaFoods" : key.rawValue
         if case .number(let value) = fields[field] ?? .null { return Int(value) }

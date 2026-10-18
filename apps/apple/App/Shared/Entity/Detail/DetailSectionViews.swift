@@ -199,7 +199,7 @@ struct FieldsSectionView<Inline: View>: View {
 
     var body: some View {
         let rows = rows
-        ForEach(fieldGroups) { group in
+        ForEach(fieldGroups(rows)) { group in
             if group.compact {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(group.fields, id: \.key) { field in
@@ -243,7 +243,7 @@ struct FieldsSectionView<Inline: View>: View {
 
     /// Ordinary facts and their evidence share a Form child. Specialist/prose layouts keep
     /// their own row, and grouping preserves manifest order.
-    private var fieldGroups: [FieldGroup] {
+    private func fieldGroups(_ rows: [FieldDescriptor]) -> [FieldGroup] {
         var groups: [FieldGroup] = []
         for field in rows {
             let compact =
