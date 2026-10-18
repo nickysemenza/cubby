@@ -6,6 +6,8 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { getDb } from "~/server/db/helpers";
+import { entityLink, financialTransactionAllocation } from "~/server/db/schema";
 import { deletePurchases } from "~/server/domains/purchase/repo/purchase";
 import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -70,6 +72,31 @@ describe("prepared connection bases", () => {
       trade: "electrical",
       costType: "materials",
       cost: 40,
+      purchaseId: order.output.id,
+    });
+    // Payload rows each relation reads: an allocation of the charge, and a
+    // linked line of the Product on the order.
+    await getDb(ctx.db).insert(financialTransactionAllocation).values({
+      transactionId: charge.entityId,
+      purchaseId: order.entityId,
+      amount: 25,
+    });
+    await getDb(ctx.db)
+      .insert(entityLink)
+      .values({
+        kind: "purchaseProduct",
+        fromEntityId: order.entityId,
+        fromKind: "purchase",
+        toEntityId: product.id,
+        toKind: "product",
+      } as typeof entityLink.$inferInsert);
+    await createRepoEntity(ctx, "expense", {
+      name: "Synthetic basis drill line",
+      date: "2026-09-10",
+      trade: "electrical",
+      costType: "tools",
+      cost: 15,
+      productId: product.shortcode,
       purchaseId: order.output.id,
     });
     const evidence = { reasons: [], contradictions: [], unknowns: [] };
