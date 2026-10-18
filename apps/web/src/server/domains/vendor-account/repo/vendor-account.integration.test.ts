@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getDb } from "~/server/db/helpers";
+import { getDb, withTransaction } from "~/server/db/helpers";
 import {
   ledgerParty,
   run,
@@ -15,6 +15,7 @@ import { getRunByID } from "~/server/domains/run/repo/run";
 import {
   getVendorAccountByShortcode,
   listVendorAccountsRead,
+  foldVendorAccountsInto,
 } from "~/server/domains/vendor-account/repo/vendor-account";
 import { getEntityGraph } from "~/server/generic/entity-graph/repo/entity-graph";
 import { getFilterOptions } from "~/server/generic/list/repo/filter-options";
@@ -34,6 +35,61 @@ import {
  */
 describe("vendor account run activity", () => {
   const ctx = withTestDb();
+
+  // The preflight must match the index, including manually paused Runs, and
+  // refuse before repointing either account's import history.
+  it("refuses folding accounts with paused and running imports before the unique index fires", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic fold member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const keeper = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic keeper",
+    });
+    const loser = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic duplicate",
+    });
+    const keepAccount = await insertWithShortcode(ctx.db, "vendorAccount", {
+      vendorId: keeper.id,
+      ledgerPartyId: party.id,
+    });
+    const loseAccount = await insertWithShortcode(ctx.db, "vendorAccount", {
+      vendorId: loser.id,
+      ledgerPartyId: party.id,
+    });
+    const paused = await startImportRunFixture(ctx.db, {
+      ledgerPartyId: party.id,
+      vendorAccountId: loseAccount.id,
+    });
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "paused" })
+      .where(eq(run.id, paused.id));
+    await startImportRunFixture(ctx.db, {
+      ledgerPartyId: party.id,
+      vendorAccountId: keepAccount.id,
+    });
+    await expect(
+      withTransaction(ctx.db, (tx) =>
+        foldVendorAccountsInto(tx, {
+          keepVendorId: keeper.id,
+          loserVendorIds: [loser.id],
+          actor: ctx.actor,
+        }),
+      ),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      reason: "CONSTRAINT_VIOLATION",
+      message: expect.stringContaining("have an active import Run"),
+    });
+    const [saved] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, paused.id));
+    expect(saved?.vendorAccountId).toBe(loseAccount.id);
+    expect(saved?.status).toBe("paused");
+  });
 
   it("reads lastRunAt and lastSuccessAt from the account's runs", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {

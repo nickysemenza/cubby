@@ -16,6 +16,7 @@ import type {
 } from "@cubby/schemas/vendor-account";
 import { vendorAccountOut } from "@cubby/schemas/vendor-account";
 import { vendorAccountCursor } from "@cubby/schemas/vendor-account-fields";
+import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import {
   and,
   count,
@@ -101,13 +102,6 @@ const VENDOR_ACCOUNT_FOLD_EDGE_POLICY = {
     description: "Replay-safe source claims scope to the surviving account.",
   },
 } as const satisfies IncomingEdgePolicy<"vendorAccount", OperationDisposition>;
-
-const ACTIVE_RUN_STATUSES = [
-  "running",
-  "paused_auth",
-  "paused_offline",
-  "paused_approval",
-] as const;
 
 const newestOrderAt = (cursor: unknown) =>
   vendorAccountCursor.safeParse(cursor).data?.newestOrderAt ?? "";

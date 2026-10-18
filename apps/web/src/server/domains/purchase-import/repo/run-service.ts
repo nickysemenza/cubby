@@ -1851,6 +1851,7 @@ export async function controlRun(
   db: Database,
   actor: ActorContext,
   rawInput: z.input<typeof runControlInput>,
+  precondition?: { status: "paused_approval" },
 ) {
   const input = runControlInput.parse(rawInput);
   const scope = await loadRunScopeByShortcode(db, input.runPublicId);
@@ -1921,6 +1922,9 @@ export async function controlRun(
       throw new Error("Purchase import control account changed.");
     if (locked.ledgerPartyId !== scope.ledgerPartyId)
       throw new Error("Purchase import control owner changed.");
+    // Automated recovery must not undo a member's newer pause or completion.
+    if (precondition && locked.status !== precondition.status)
+      return { publicId: input.runPublicId, status: locked.status };
     if (input.action === "restart") {
       if (
         !new Set([
@@ -2295,6 +2299,7 @@ export async function resumeApprovalPausedRuns(db: Database) {
         notDeleted(runTable),
       ),
     )
+    .orderBy(asc(runTable.startedAt), asc(runTable.id))
     .limit(50);
   const errors: unknown[] = [];
   for (const row of pending) {
@@ -2306,6 +2311,7 @@ export async function resumeApprovalPausedRuns(db: Database) {
           runPublicId: row.shortcode,
           action: "resume",
         },
+        { status: "paused_approval" },
       );
       if (
         "dispatchRunId" in result &&

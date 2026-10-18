@@ -127,7 +127,7 @@ export async function recoverMissedWork(
     approvalsResult,
   ]
     .filter((result) => result.status === "rejected")
-    .map((result) => String(result.reason));
+    .map((result) => result.reason);
   const stale = staleResult.status === "fulfilled" ? staleResult.value : null;
   log.info("purchase runs expired", {
     staleExpired: stale?.expired,
@@ -150,7 +150,8 @@ export async function recoverMissedWork(
       `Stale purchase run could not be moved to review: ${failure.error}`,
       "warning",
     );
-  if (errors.length) throw new Error(errors.join("; "));
+  if (errors.length)
+    throw new AggregateError(errors, "Background recovery failed");
   return { stale };
 }
 

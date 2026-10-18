@@ -10,6 +10,7 @@ import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
 import type { RunOut } from "@cubby/schemas/run";
 import { runInputsErased } from "@cubby/schemas/run-fields";
 import { humanize } from "@cubby/shared";
+import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -62,13 +63,7 @@ import {
   type AgentWorkItem,
 } from "./agent-work-summary";
 
-const ACTIVE_RUN_STATUSES = new Set([
-  "running",
-  "paused_auth",
-  "paused_offline",
-  "paused_approval",
-  "paused",
-]);
+const ACTIVE_STATUSES = new Set<string>(ACTIVE_RUN_STATUSES);
 
 const TERMINAL_RUN_STATUSES = new Set([
   "completed",
@@ -96,7 +91,7 @@ interface RunAction {
  */
 function runActions(run: RunDetail): RunAction[] {
   const actions: RunAction[] = [];
-  if (ACTIVE_RUN_STATUSES.has(run.status))
+  if (ACTIVE_STATUSES.has(run.status))
     actions.push({ action: "cancel", label: "Stop run", variant: "outline" });
   const { dispatch } = run;
   if (!dispatch.coordinatorStartedAt && dispatch.state !== "started")
@@ -250,7 +245,7 @@ function RunLineageAndInputs({ run }: { run: RunDetail }) {
 }
 
 function AgentSurface({ run }: { run: RunDetail }) {
-  if (!ACTIVE_RUN_STATUSES.has(run.status)) {
+  if (!ACTIVE_STATUSES.has(run.status)) {
     return <TerminalAgentSurface run={run} />;
   }
   return <ActiveAgentSurface run={run} />;
@@ -892,7 +887,7 @@ function useRun(runId: RunOut["id"]) {
   return useQuery({
     ...runOperations.work.queryOptions({ runId }),
     refetchInterval: (query) =>
-      query.state.data && ACTIVE_RUN_STATUSES.has(query.state.data.status)
+      query.state.data && ACTIVE_STATUSES.has(query.state.data.status)
         ? 3_000
         : false,
   });
@@ -928,7 +923,7 @@ function RunGate({
   return runQuery.data ? children(runQuery.data) : null;
 }
 
-const isActiveRun = (run: RunDetail) => ACTIVE_RUN_STATUSES.has(run.status);
+const isActiveRun = (run: RunDetail) => ACTIVE_STATUSES.has(run.status);
 const isStoppedRun = (run: RunDetail) => !isActiveRun(run);
 
 /** Whether the controls slot has anything to offer for this run's state. */

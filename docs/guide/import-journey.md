@@ -66,6 +66,8 @@ Manual Run pauses remain active ownership: they can be resumed or cancelled,
 and retain the vendor account's active-Run exclusion. Recovery resumes only
 historical approval pauses, isolates failures per Run and reports them after
 attempting the remaining Runs.
+Recovery rechecks the legacy status under the Run lock so a member's newer
+pause stays paused. Nested recovery errors retain their original diagnostics.
 
 The household AI budget is a stopgap safety net on frontier chat-model spend:
 $1 per fixed six-hour UTC window (`server/ai/budget.ts`), summed from

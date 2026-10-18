@@ -13,6 +13,7 @@ import {
 import { executeLeasedOperation } from "~/server/domains/run/repo/operation";
 import { importReportBlocks } from "~/server/generic/entity-report/repo/run";
 import { findOpenRunFindings } from "~/server/generic/problems/repo/detectors-import";
+import { recoverMissedWork } from "~/server/workflows/catch-up";
 
 import { dispatchRunEvent, recordRunDispatchAttempt } from "./dispatch";
 import * as dispatch from "./dispatch";
@@ -146,6 +147,64 @@ describe("purchase import run admission", () => {
         .select()
         .from(runTable)
         .where(eq(runTable.id, manual.id));
+      expect(saved?.status).toBe("paused");
+      await getDb(ctx.db)
+        .update(runTable)
+        .set({ status: "paused_approval" })
+        .where(eq(runTable.id, first.id));
+      await expect(recoverMissedWork(ctx.db)).rejects.toMatchObject({
+        errors: expect.arrayContaining([
+          expect.objectContaining({
+            errors: expect.arrayContaining([
+              expect.objectContaining({
+                message: "Synthetic dispatch unavailable",
+              }),
+            ]),
+          }),
+        ]),
+      });
+    } finally {
+      send.mockRestore();
+    }
+  });
+
+  // Selection is stale by the time later Runs are locked: recovery must not
+  // undo a member's resume-then-pause while an earlier dispatch is in flight.
+  it("preserves a manual pause placed after legacy recovery selected its batch", async () => {
+    const { eq } = await import("drizzle-orm");
+    const { run: runTable } = await import("~/server/db/schema");
+    const party = await createMember();
+    const first = await startAgentRun(party);
+    const later = await startAgentRun(party);
+    for (const run of [first, later])
+      await getDb(ctx.db)
+        .update(runTable)
+        .set({ status: "paused_approval" })
+        .where(eq(runTable.id, run.id));
+    const sent: string[] = [];
+    const send = vi
+      .spyOn(dispatch, "dispatchStartedRun")
+      .mockImplementation(async (_db, input) => {
+        sent.push(input.id);
+        if (input.id === first.id) {
+          await controlRun(ctx.db, ctx.actor, {
+            runPublicId: later.publicId,
+            action: "resume",
+          });
+          await controlRun(ctx.db, ctx.actor, {
+            runPublicId: later.publicId,
+            action: "pause",
+          });
+        }
+        return "running";
+      });
+    try {
+      await resumeApprovalPausedRuns(ctx.db);
+      expect(sent).toEqual([first.id]);
+      const [saved] = await getDb(ctx.db)
+        .select()
+        .from(runTable)
+        .where(eq(runTable.id, later.id));
       expect(saved?.status).toBe("paused");
     } finally {
       send.mockRestore();
