@@ -234,7 +234,8 @@ const projectOptionRows = (db: Database) =>
     })
     .from(project)
     .where(notDeleted(project))
-    .orderBy(asc(project.name));
+    // Recommendation evidence fingerprints this order; the id breaks name ties.
+    .orderBy(asc(project.name), asc(project.id));
 
 const projectOptions = (
   rows: Awaited<ReturnType<typeof projectOptionRows>>,

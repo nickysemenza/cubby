@@ -1,4 +1,5 @@
 import { entityRecommendationsOut } from "@cubby/schemas/entity-recommendations";
+import { costTypeSchema } from "@cubby/schemas/expense-fields";
 import { parseShortcodeFor, type ProjectId } from "@cubby/schemas/identifiers";
 import { sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -7,6 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import { unwrapDb } from "~/server/db/helpers";
 import { expense } from "~/server/db/schema";
+import { snapshotJson } from "~/server/domains/connection/repo/connection-evidence";
 import {
   deleteExpenses,
   getExpenseByShortcode,
@@ -16,10 +18,14 @@ import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-der
 import { createProduct } from "~/server/domains/product/repo/crud";
 import { projectContentDatesExcluding } from "~/server/domains/project/repo/analytics";
 import { getEntityRecommendations } from "~/server/domains/recommendation/service/entity-recommendations.service";
+import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { makeProductInput } from "~/server/testing/repo.fixtures";
 
-import { expenseProjectRecommendationContexts } from "./project-recommendations";
+import {
+  expenseProjectRecommendationContext,
+  expenseProjectRecommendationContexts,
+} from "./project-recommendations";
 
 describe("expense project recommendation evidence", () => {
   const ctx = withTestDb();
@@ -275,5 +281,63 @@ describe("expense project recommendation evidence", () => {
       false,
       false,
     ]);
+  });
+
+  // A basis is fingerprinted: rewriting a column the evidence does not read
+  // moves the line's tuple, and must not reorder or otherwise change it.
+  // Contexts read together must also equal contexts read alone.
+  it("keeps recommendation evidence stable and identical in batches", async () => {
+    const [kitchen, garage] = await Promise.all([
+      insertWithShortcode(ctx.db, "project", { name: "Synthetic kitchen" }),
+      insertWithShortcode(ctx.db, "project", { name: "Synthetic garage" }),
+    ]);
+    const product = await insertWithShortcode(ctx.db, "product", {
+      name: "Synthetic breaker",
+      manufacturer: "Synthetic maker",
+    });
+    const line = (values: Partial<typeof expense.$inferInsert>) =>
+      insertWithShortcode(ctx.db, "expense", {
+        name: "Synthetic wiring",
+        cost: 5,
+        date: "2024-06-01",
+        lineKind: "principal",
+        costType: "materials",
+        trade: "electrical",
+        future: false,
+        ...values,
+      });
+    const history = [
+      await line({ projectId: kitchen.id }),
+      await line({ projectId: garage.id }),
+      await line({
+        projectId: kitchen.id,
+        trade: "plumbing",
+        productId: product.id,
+      }),
+      await line({ projectId: garage.id, trade: "plumbing" }),
+    ];
+    const sources = [
+      await line({ projectId: kitchen.id, productId: product.id }),
+      await line({ projectId: garage.id, trade: "plumbing" }),
+    ];
+    const codes = sources.map((row) => row.shortcode);
+    const read = async () =>
+      new Map(
+        [...(await expenseProjectRecommendationContexts(ctx.db, codes))].map(
+          ([code, context]) => [code, canonicalJson(snapshotJson(context))],
+        ),
+      );
+    const before = await read();
+    for (const code of codes)
+      expect(before.get(code)).toBe(
+        canonicalJson(
+          snapshotJson(await expenseProjectRecommendationContext(ctx.db, code)),
+        ),
+      );
+    await unwrapDb(ctx.db).execute(
+      // An indexed column, so the update cannot stay HOT and the row moves.
+      sql`UPDATE "Expense" SET "costType" = ${costTypeSchema.enum.tools} WHERE id = ${history[0]!.id}`,
+    );
+    expect(await read()).toEqual(before);
   });
 });
