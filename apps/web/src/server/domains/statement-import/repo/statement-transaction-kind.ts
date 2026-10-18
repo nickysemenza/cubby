@@ -29,7 +29,7 @@ const CATEGORY_RULES = new Map<string, KindRule>(
     income: { kind: "income", direction: "inflow" },
     "dividends capital gains": { kind: "income", direction: "inflow" },
     // `interest` and `fee` are charges and must be positive: interest earned is
-    // income, and a fee coming back is a refund.
+    // income, and a reversed fee is an adjustment (a refund is goods returned).
     interest: { kind: "interest", inflow: "income" },
     transfer: { kind: "account_transfer" },
     transfers: { kind: "account_transfer" },
@@ -39,8 +39,8 @@ const CATEGORY_RULES = new Map<string, KindRule>(
     payments: { kind: "credit_card_payment" },
     credit: { kind: "refund", direction: "inflow" },
     "balance adjustments": { kind: "adjustment" },
-    "financial fees": { kind: "fee", inflow: "refund" },
-    fees: { kind: "fee", inflow: "refund" },
+    "financial fees": { kind: "fee", inflow: "adjustment" },
+    fees: { kind: "fee", inflow: "adjustment" },
   } satisfies Record<string, KindRule>),
 );
 

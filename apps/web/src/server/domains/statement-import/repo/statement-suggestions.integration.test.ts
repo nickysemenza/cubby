@@ -1,4 +1,8 @@
 import {
+  financialTransactionKind,
+  type FinancialTransactionKind,
+} from "@cubby/schemas/financial-transaction";
+import {
   recordStatementRowsInput,
   type StatementImportInput,
   type StatementRowInput,
@@ -522,6 +526,54 @@ describe("statement Transaction suggestions", () => {
     await accept(ctx, labelled!);
     expect((await listStatementRows(ctx.db, {})).data[0]).toMatchObject({
       matchState: "matched",
+    });
+  });
+
+  // Failure mode: the model picks `interest` for interest earned, which the
+  // settlement sign rule refuses, so the accept could never apply.
+  it("ignores a model kind the transaction could not be created as", async () => {
+    await card(ctx);
+    await record(ctx, [
+      rowInput({
+        providerAmount: 8.66,
+        merchant: "Example Bank",
+        rawDescription: "EXAMPLE INTEREST PAID",
+        sourceCategory: null,
+      }),
+    ]);
+    await generate(ctx);
+    // Choice keys are positional over the kind enum.
+    const choose =
+      (kind: FinancialTransactionKind): DecisionPort =>
+      async (input) => {
+        const keys = Object.keys(input.questions.selection.criteria);
+        const chosen = keys[financialTransactionKind.options.indexOf(kind)]!;
+        return {
+          answers: {
+            selection: {
+              type: "choice",
+              choice: chosen,
+              confidence: 0.97,
+              probabilities: Object.fromEntries(
+                keys.map((key) => [
+                  key,
+                  key === chosen ? 0.97 : 0.03 / (keys.length - 1),
+                ]),
+              ),
+            },
+          },
+        };
+      };
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "background" });
+    await labelStatementSuggestions(ctx.db, {
+      port: choose("interest"),
+      runId,
+    });
+    const [suggestion] = await suggestions(ctx);
+    expect(suggestion!.create).toMatchObject({
+      amount: -8.66,
+      kind: "refund",
+      kindSource: "sign",
     });
   });
 

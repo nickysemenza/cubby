@@ -223,7 +223,7 @@ export const STATEMENT_TRANSACTION_KIND_FEATURE = defineFeature({
   prompt: statementTransactionKindPrompt,
   choices: statementTransactionKindChoices,
   feature: "statement-transaction-kind",
-  promptVersion: "2026-10-17.1",
+  promptVersion: "2026-10-18.1",
   tier: "decision",
   cache: true,
   collectPayload: false,

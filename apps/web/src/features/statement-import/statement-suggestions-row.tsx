@@ -1,5 +1,8 @@
 import type { FinancialTransactionKind } from "@cubby/schemas/financial-transaction";
-import { financialTransactionKind } from "@cubby/schemas/financial-transaction";
+import {
+  financialTransactionKind,
+  financialTransactionSettlementViolation,
+} from "@cubby/schemas/financial-transaction";
 import type {
   StatementSuggestionOut,
   StatementTransactionAction,
@@ -172,7 +175,15 @@ export function StatementSuggestionRow({
               compact
               label={`Transaction kind for ${descriptor}`}
               className="w-44 flex-none"
-              options={KIND_OPTIONS}
+              // Offer only kinds the transaction can actually be created as.
+              options={KIND_OPTIONS.filter(
+                (option) =>
+                  !financialTransactionSettlementViolation({
+                    linked: false,
+                    kind: financialTransactionKind.parse(option.value),
+                    amount: create.amount,
+                  }),
+              )}
               value={kind ?? null}
               disabled={busy}
               onValueChange={(next) => {
