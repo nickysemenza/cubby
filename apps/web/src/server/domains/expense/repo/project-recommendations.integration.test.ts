@@ -226,8 +226,17 @@ describe("expense project recommendation evidence", () => {
         purchaseId: order.id,
       }),
     ];
-    const ids = lines.map((row) => row.id);
-    const batched = await projectContentDatesExcluding(ctx.db, ids);
+    const undated = await line({ trade: "plumbing", cost: null });
+    const ids = [...lines.map((row) => row.id), undated.id];
+    // Duplicates and another spelling of a uuid resolve to the same exclusion.
+    const batched = await projectContentDatesExcluding(ctx.db, [
+      ...ids,
+      ids[0]!,
+      ids[1]!.toUpperCase() as (typeof ids)[number],
+    ]);
+    expect(batched.get(ids[1]!.toUpperCase() as (typeof ids)[number])).toEqual(
+      batched.get(ids[1]!),
+    );
     for (const id of ids) {
       const alone = await unwrapDb(ctx.db).execute<{
         projectId: ProjectId;

@@ -259,7 +259,8 @@ export async function projectContentDatesExcluding(
       id,
       mergeProjectContentDates(
         taskRows,
-        expenseRows.filter((row) => row.excludedId === id),
+        // Postgres renders uuids lowercase; the map keeps the caller's spelling.
+        expenseRows.filter((row) => row.excludedId === id.toLowerCase()),
       ),
     ]),
   );
