@@ -1237,9 +1237,7 @@ export async function loadExpenseFacetCounts(
     if (!prepared) {
       prepared = (async () => {
         const scope = await resolveExpenseProjectAllocationScope(db, filters);
-        const where = await buildExpenseWhereClause(db, filters, {
-          omitAllocationScope: true,
-        });
+        const where = await buildExpenseWhereClause(db, filters);
         return {
           scope,
           where,

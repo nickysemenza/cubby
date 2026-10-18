@@ -146,28 +146,6 @@ export const resolveExpenseProjectAllocationScope = async (
   };
 };
 
-/**
- * The allocation filters the analytics reads omit (`omitAllocationScope`):
- * they join the allocation shares themselves.
- */
-const allocationKeys = [
-  "projectId",
-  "projectPresenceFilter",
-  "includeSubProjects",
-  "spendingCategoryId",
-  "spendingCategoryPresenceFilter",
-  "includeSubSpendingCategories",
-  "trade",
-  "costType",
-  "projectScope",
-] as const;
-
-const withoutAllocation = (filters: ExpenseFilters): ExpenseFilters => {
-  const rest: Partial<ExpenseFilters> = { ...filters };
-  for (const key of allocationKeys) delete rest[key];
-  return rest;
-};
-
 /** The SQL of every declared filter outside the allocation shares, by derived key. */
 const rowDerived = {
   // The allocated spending categories' names.
@@ -268,27 +246,22 @@ const embeddedProjectMembership = async (
 };
 
 /**
- * Shared by list and analytics so identical filter sets produce identical
- * totals. `omitAllocationScope` drops the allocation filters for analytics
- * that join the allocation shares themselves.
+ * Shared by list and analytics so identical filter sets select identical
+ * expenses: the allocation filters select whole expenses here (one share
+ * matching them all, Match all, Exclude), and analytics that join the
+ * allocation shares themselves apportion amounts by their own scope.
  */
 export const buildExpenseWhereClause = async (
   db: Database,
   filters: ExpenseFilters,
-  options?: { omitAllocationScope?: boolean; context?: ListContext },
+  options?: { context?: ListContext },
 ): Promise<SQL | undefined> => {
-  const selected = options?.omitAllocationScope
-    ? withoutAllocation(filters)
-    : filters;
   const context =
     options?.context ??
-    (await expenseScaffold.context(db, {
-      filters: selected,
-      readIntent: "count",
-    }));
+    (await expenseScaffold.context(db, { filters, readIntent: "count" }));
   return and(
-    expenseScaffold.where(selected, { context }),
-    await embeddedProjectMembership(db, selected),
+    expenseScaffold.where(filters, { context }),
+    await embeddedProjectMembership(db, filters),
   );
 };
 

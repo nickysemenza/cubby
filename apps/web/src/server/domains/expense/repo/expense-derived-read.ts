@@ -225,9 +225,7 @@ export async function prepareExpenseDerivedRead(
   const scope = prepared
     ? prepared.scope
     : await resolveExpenseProjectAllocationScope(db, filters);
-  const where = await buildExpenseWhereClause(db, filters, {
-    omitAllocationScope: true,
-  });
+  const where = await buildExpenseWhereClause(db, filters);
   const selectedIds = expenseSelectionForWhere(where);
   return {
     scope,

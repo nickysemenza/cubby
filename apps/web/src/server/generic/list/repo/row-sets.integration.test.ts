@@ -13,11 +13,15 @@ import {
   image as imageTable,
   expense as expenseTable,
   expenseAttribution,
+  ledgerParty as ledgerPartyTable,
   imageProcessingSubmission,
   photoRunImage,
   run,
 } from "~/server/db/schema";
-import { expenseDerivedMembershipSql } from "~/server/domains/expense/repo/expense-derived-read";
+import {
+  expenseDerivedMembershipSql,
+  prepareExpenseDerivedRead,
+} from "~/server/domains/expense/repo/expense-derived-read";
 import { resolveExpenseProjectAllocationScope } from "~/server/domains/expense/repo/lookup";
 import { scheduleImageProcessingJobs } from "~/server/domains/image-processing/service/image-processing.service";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
@@ -542,80 +546,94 @@ describe("row-set filters", () => {
   });
 
   it("matches an expense's allocation filters on one share and its parties through attributions", async () => {
-    const parent = await insertWithShortcode(ctx.db, "project", {
-      name: "Row-set parent project",
-    });
-    const child = await insertWithShortcode(ctx.db, "project", {
-      name: "Row-set child project",
-      parentProjectId: parent.id,
-    });
-    const other = await insertWithShortcode(ctx.db, "project", {
-      name: "Row-set other project",
-    });
+    const project = async (name: string, parentProjectId?: string) =>
+      (
+        await createRepoEntity(ctx, "project", {
+          name,
+          ...(parentProjectId === undefined
+            ? {}
+            : {
+                parentProjectId: parseShortcodeFor("project", parentProjectId),
+              }),
+        })
+      ).output.id;
+    const parent = await project("Row-set parent project");
+    const child = await project("Row-set child project", parent);
+    const other = await project("Row-set other project");
+    // Spending categories have no repository writer in the factory roster.
     const category = await insertWithShortcode(ctx.db, "spendingCategory", {
       name: "Row-set materials category",
     });
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+    const vendor = await createRepoEntity(ctx, "vendor", {
       name: "Row-set allocation vendor",
     });
-    const line = async (
-      name: string,
-      values: Partial<typeof expenseTable.$inferInsert>,
-    ) =>
-      insertWithShortcode(ctx.db, "expense", {
-        name,
-        cost: 50,
-        date: "2026-09-20",
-        lineKind: "principal",
-        costType: "materials",
-        trade: null,
-        future: false,
-        ...values,
-      });
-    const mixed = await insertWithShortcode(ctx.db, "purchase", {
-      vendorId: vendor.id,
+    const mixed = await createRepoEntity(ctx, "purchase", {
+      vendorId: vendor.output.id,
       date: "2026-09-20",
     });
+    const line = async (name: string, values: EntityOverrides<"expense">) =>
+      (
+        await createRepoEntity(ctx, "expense", {
+          name,
+          cost: 50,
+          date: "2026-09-20",
+          lineKind: "principal",
+          costType: "materials",
+          trade: null,
+          future: false,
+          ...values,
+        })
+      ).output;
     // Two principals, one on the parent project and one unassigned; the fee
     // splits into a share for each.
     const assigned = await line("Row-set assigned principal", {
-      projectId: parent.id,
-      purchaseId: mixed.id,
+      projectId: parseShortcodeFor("project", parent),
+      purchaseId: mixed.output.id,
       trade: "plumbing",
-      spendingCategoryId: category.id,
+      spendingCategoryId: parseShortcodeFor(
+        "spendingCategory",
+        category.shortcode,
+      ),
     });
     const unassigned = await line("Row-set unassigned principal", {
-      purchaseId: mixed.id,
+      purchaseId: mixed.output.id,
       trade: "electrical",
     });
     const fee = await line("Row-set mixed fee", {
       cost: 0.04,
       lineKind: "fee",
       costType: "services",
-      purchaseId: mixed.id,
+      purchaseId: mixed.output.id,
     });
     const childLine = await line("Row-set child project line", {
-      projectId: child.id,
+      projectId: parseShortcodeFor("project", child),
       costType: "tools",
+      trade: "other",
     });
     const otherLine = await line("Row-set other project line", {
-      projectId: other.id,
+      projectId: parseShortcodeFor("project", other),
       trade: "plumbing",
     });
-    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+    const party = await createRepoEntity(ctx, "ledgerParty", {
       name: "Row-set beneficiary",
       kind: "member",
     });
+    const [lineRow] = await getDb(ctx.db)
+      .select({ id: expenseTable.id })
+      .from(expenseTable)
+      .where(eq(expenseTable.shortcode, childLine.id));
+    const [partyRow] = await getDb(ctx.db)
+      .select({ id: ledgerPartyTable.id })
+      .from(ledgerPartyTable)
+      .where(eq(ledgerPartyTable.shortcode, party.output.id));
     await getDb(ctx.db).insert(expenseAttribution).values({
-      expenseId: childLine.id,
-      ledgerPartyId: party.id,
+      expenseId: lineRow!.id,
+      ledgerPartyId: partyRow!.id,
       role: "beneficiary",
       weight: 1,
     });
     const fixture = new Set<string>(
-      [assigned, unassigned, fee, childLine, otherLine].map(
-        (row) => row.shortcode,
-      ),
+      [assigned, unassigned, fee, childLine, otherLine].map((row) => row.id),
     );
     const inFixture = (ids: string[]) => ids.filter((id) => fixture.has(id));
     /**
@@ -631,7 +649,8 @@ describe("row-set filters", () => {
           : expenseDerivedMembershipSql(sql`"Expense"."id"`, scope),
       )!;
     };
-    const parentCode = parseShortcodeFor("project", parent.shortcode);
+    const parentCode = parseShortcodeFor("project", parent);
+    const childCode = parseShortcodeFor("project", child);
     const categoryCode = parseShortcodeFor(
       "spendingCategory",
       category.shortcode,
@@ -658,12 +677,12 @@ describe("row-set filters", () => {
           inFixture(await oracle("Expense", await retired(filters))),
         ),
       );
-    const partyCode = parseShortcodeFor("ledgerParty", party.shortcode);
+    const partyCode = parseShortcodeFor("ledgerParty", party.output.id);
     expect(
       inFixture(await listed("expense", { ledgerPartyId: [partyCode] })),
-    ).toEqual([childLine.shortcode]);
+    ).toEqual([childLine.id]);
     // Generic row-set keys the predicates never offered.
-    const expected: [ListFilterValues, { shortcode: string }[]][] = [
+    const expected: [ListFilterValues, { id: string }[]][] = [
       // A share with no project keeps the unassigned principal.
       [{ projectIdExclude: [parentCode] }, [unassigned, otherLine]],
       [
@@ -677,33 +696,54 @@ describe("row-set filters", () => {
       // The fee's share follows the plumbing principal.
       [{ tradeExclude: ["plumbing"] }, [unassigned, childLine]],
       // Behavior change (plan §8): trade presence reads the shares, not the
-      // line's own column, so a fee has the trades its principals give it.
-      [{ tradePresenceFilter: "none" }, [childLine]],
-      [{ tradePresenceFilter: "has" }, [assigned, unassigned, fee, otherLine]],
+      // line's own column, so the untraded fee has the trades its
+      // principals give it (it read as no trade before).
+      [{ tradePresenceFilter: "none" }, []],
+      [
+        { tradePresenceFilter: "has" },
+        [assigned, unassigned, fee, childLine, otherLine],
+      ],
     ];
     for (const [filters, rows] of expected)
       expect(
         labelled(filters, inFixture(await listed("expense", filters))),
-      ).toEqual(labelled(filters, sorted(rows.map((row) => row.shortcode))));
+      ).toEqual(labelled(filters, sorted(rows.map((row) => row.id))));
+    // Analytics select the same expenses as the list, though they apportion
+    // share amounts by their own scope: Match all and same-share trade
+    // presence included.
+    for (const filters of [
+      { projectId: [parentCode, childCode], projectIdMatch: "all" },
+      {
+        projectId: [parentCode],
+        includeSubProjects: false,
+        tradePresenceFilter: "has",
+      },
+      { projectIdExclude: [parentCode] },
+    ] satisfies ExpenseFilters[]) {
+      const { where } = await prepareExpenseDerivedRead(ctx.db, filters);
+      expect(
+        labelled(filters, inFixture(await oracle("Expense", where!))),
+      ).toEqual(labelled(filters, inFixture(await listed("expense", filters))));
+    }
   });
 
   it("matches a project's attention through its prepared attention items", async () => {
     const project = async (name: string, costEstimate: number | null) => {
-      const row = await insertWithShortcode(ctx.db, "project", {
+      const { output } = await createRepoEntity(ctx, "project", {
         name,
         costEstimate,
       });
-      await insertWithShortcode(ctx.db, "expense", {
+      await createRepoEntity(ctx, "expense", {
         name: `${name} spend`,
-        projectId: row.id,
+        projectId: parseShortcodeFor("project", output.id),
         cost: 20,
         date: "2026-09-20",
         future: false,
         lineKind: "principal",
         costType: "materials",
-        trade: null,
+        trade: "other",
       });
-      return row.shortcode;
+      return output.id;
     };
     const unbudgeted = await project("Row-set unbudgeted project", null);
     const budgeted = await project("Row-set budgeted project", 500);
