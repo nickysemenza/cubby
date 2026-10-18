@@ -259,8 +259,10 @@ by group (account × month):
    reason when the whole row is out of scope, because that also settles every
    observation.
 
-A refusal (evidence changed, a live candidate, a stale hold) writes nothing;
-refresh and review again. Supersede suggestions settle a hold this ledger
+A refusal (evidence changed, a live candidate, a stale hold, an attach with
+several candidates and no named `transactionId`) writes nothing. Labelling
+republishes a suggestion under a new assessment id, so a stale-Assessment
+error means re-list the group and review the replacement. Supersede suggestions settle a hold this ledger
 recorded from a provider-pending row: the posted amount may exceed the hold by
 up to the larger of 25% or $20 within seven days, and the review shows the new
 amount. A void suggestion is the one absence judgment: a hold recorded from

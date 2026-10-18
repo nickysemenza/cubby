@@ -39,8 +39,14 @@ function statementApplication(
   return {
     kind: "statement_transaction",
     action: choice.action,
-    ...(choice.action === "attach" && choice.transactionId
-      ? { transactionId: choice.transactionId }
+    // An attach always names its target; the server refuses an unnamed one
+    // when several candidates are live.
+    ...(choice.action === "attach" &&
+    (choice.transactionId ?? suggestion.candidates[0]?.transactionId)
+      ? {
+          transactionId:
+            choice.transactionId ?? suggestion.candidates[0]!.transactionId,
+        }
       : {}),
     fields: choice.action === "attach" ? (choice.fields ?? []) : [],
     ...(choice.action === "create" && kindOverride ? { kindOverride } : {}),

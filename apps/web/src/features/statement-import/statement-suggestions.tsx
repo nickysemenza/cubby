@@ -7,8 +7,7 @@ import type {
 import { STATEMENT_SUGGESTION_PAGE_MAX } from "@cubby/schemas/statement-suggestion";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
-import { chunk } from "es-toolkit";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import type { z } from "zod";
 
 import { createCurrencyColumn } from "~/entity/table/column-helpers";
@@ -29,6 +28,16 @@ import {
 } from "~/ui/data-table/table-features";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Section, Stack } from "~/ui/layout";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "~/ui/primitives/alert-dialog";
 import { Button } from "~/ui/primitives/button";
 import {
   Empty,
@@ -160,10 +169,14 @@ export function StatementSuggestions() {
     });
     const failures: GroupAcceptState["failures"] = [];
     try {
-      // Read every clean page before settling any: accepting shrinks the
-      // pending set, so paging by offset afterwards would skip suggestions.
-      const clean: StatementSuggestionOut[] = [];
-      for (let offset = 0; ; offset += STATEMENT_SUGGESTION_PAGE_MAX) {
+      // Re-list before every chunk rather than reading the group once: labels
+      // republish a charge's suggestion under a new id while this runs, and
+      // accepting shrinks the set, so a single up-front read goes stale.
+      // Attempted ids are never retried; failures stay pending for review.
+      const attempted = new Set<string>();
+      let done = 0;
+      let total = group.clean;
+      for (;;) {
         const page = await statementRow.suggestions.call({
           filters: {
             accountId: group.accountId,
@@ -171,23 +184,17 @@ export function StatementSuggestions() {
             clean: true,
           },
           limit: STATEMENT_SUGGESTION_PAGE_MAX,
-          offset,
+          offset: 0,
         });
-        clean.push(...page.data);
-        if (!page.data.length || clean.length >= page.count) break;
-      }
-      const byAssessment = new Map(
-        clean.map((suggestion) => [suggestion.assessmentId, suggestion]),
-      );
-      let done = 0;
-      setGroupAccept({
-        label,
-        total: clean.length,
-        done,
-        running: true,
-        failures,
-      });
-      for (const batch of chunk(clean, REVIEW_BATCH_MAX)) {
+        const batch = page.data
+          .filter((suggestion) => !attempted.has(suggestion.assessmentId))
+          .slice(0, REVIEW_BATCH_MAX);
+        if (!batch.length) break;
+        total = Math.max(total, done + page.count - failures.length);
+        const byAssessment = new Map(
+          batch.map((suggestion) => [suggestion.assessmentId, suggestion]),
+        );
+        for (const suggestion of batch) attempted.add(suggestion.assessmentId);
         const results = await assessment.reviewBatch.call({
           items: batch.map((suggestion) => applyItem(suggestion)),
         });
@@ -206,7 +213,7 @@ export function StatementSuggestions() {
         done += batch.length;
         setGroupAccept({
           label,
-          total: clean.length,
+          total,
           done,
           running: true,
           failures: [...failures],
@@ -214,7 +221,7 @@ export function StatementSuggestions() {
       }
       setGroupAccept({
         label,
-        total: clean.length,
+        total: done,
         done,
         running: false,
         failures,
@@ -232,8 +239,7 @@ export function StatementSuggestions() {
     await invalidateOperationTags(queryClient, REVIEW_RIPPLE);
   };
 
-  const acceptGroupRef = useRef(acceptGroup);
-  acceptGroupRef.current = acceptGroup;
+  const [confirming, setConfirming] = useState<Group | null>(null);
   const busy = refresh.state === "running" || groupAccept?.running === true;
 
   const columns = useMemo(
@@ -308,7 +314,7 @@ export function StatementSuggestions() {
                   disabled={group.clean === 0 || busy}
                   onClick={(event) => {
                     event.stopPropagation();
-                    void acceptGroupRef.current(group);
+                    setConfirming(group);
                   }}
                 >
                   Accept {formatCount(group.clean)} clean
@@ -391,6 +397,37 @@ export function StatementSuggestions() {
         </p>
       ) : null}
       {groupAccept ? <GroupAcceptProgress state={groupAccept} /> : null}
+      <AlertDialog
+        open={confirming !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirming(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Accept {formatCount(confirming?.clean ?? 0)} clean suggestions?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirming
+                ? `${confirming.accountName} · ${monthLabel(confirming.month)}. Each creates or settles a transaction from its statement row; there is no undo.`
+                : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const group = confirming;
+                setConfirming(null);
+                if (group) void acceptGroup(group);
+              }}
+            >
+              Accept {formatCount(confirming?.clean ?? 0)}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {groupsQuery.error ? (
         <ErrorDisplay error={groupsQuery.error} />
       ) : groupsQuery.data && groups.length === 0 ? (

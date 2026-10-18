@@ -280,7 +280,6 @@ const assessmentFamilies = {
       await applyStatementTransactionSuggestion(db, context, state, {
         application: input.application,
         corrected: input.correction.present,
-        expectedFingerprint: input.expectedFingerprint ?? null,
       });
     },
   },

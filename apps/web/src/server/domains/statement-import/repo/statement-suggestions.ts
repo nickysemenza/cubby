@@ -786,7 +786,11 @@ async function postedTwinExists(
   );
 }
 
-export type PublishOutcome = "published" | "unchanged" | "suppressed";
+export type PublishOutcome =
+  | "published"
+  | "unchanged"
+  | "suppressed"
+  | "settled";
 
 /**
  * Publish one charge's proposal. The charge's current suggestions are locked
@@ -821,6 +825,19 @@ export async function publishChargeProposal(
       FOR UPDATE
     `);
     if (prior.some((row) => row.suppression !== null)) return "suppressed";
+    // A charge matched, ignored or superseded after it was listed (an accept or
+    // an import-page attach in between) needs no suggestion; a ref inserted
+    // before publication never reaches the retiring trigger. Holds are the
+    // exception: their charge is matched by the hold transaction itself.
+    if (proposal.judgment.recommended !== "void") {
+      const { rows: settled } = await client.execute(sql`
+        SELECT 1 FROM ${chargeStateOf(
+          sql`r.source = ${charge.source} AND ${chargeKeyOf("r")} = ${charge.chargeKey}`,
+        )} cs
+        WHERE cs.ignored OR cs.superseded OR cs.shortcode IS NOT NULL
+      `);
+      if (settled.length) return "settled";
+    }
     // A rule re-run never displaces labels a model added to the same evidence.
     if (
       prior.some(
@@ -897,6 +914,15 @@ const ruleProducer = (runId: string | null): AssessmentProducer => ({
   runId,
   evaluationId: null,
 });
+
+/** Recompute and publish named charges, e.g. the siblings of an applied one. */
+export async function regenerateCharges(
+  db: Database,
+  charges: readonly ChargeRef[],
+) {
+  for (const proposal of await buildChargeProposals(db, charges))
+    await publishChargeProposal(db, proposal, ruleProducer(null));
+}
 
 /** One generation page: deterministic, safe to repeat, resumable at `next`. */
 export async function generateStatementSuggestionPage(

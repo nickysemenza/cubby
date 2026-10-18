@@ -16,7 +16,12 @@ import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { getDb, unwrapDb, withTransaction } from "~/server/db/helpers";
+import {
+  getDb,
+  runAfterCommit,
+  unwrapDb,
+  withTransaction,
+} from "~/server/db/helpers";
 import { assessment, assessmentState } from "~/server/db/schema";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
@@ -28,6 +33,7 @@ import {
   buildChargeProposals,
   buildHoldVoidProposals,
   type ChargeProposal,
+  regenerateCharges,
 } from "~/server/domains/statement-import/repo/statement-suggestions";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
@@ -74,7 +80,6 @@ export async function applyStatementTransactionSuggestion(
   input: {
     application: StatementTransactionApplication;
     corrected: boolean;
-    expectedFingerprint: string | null;
   },
 ) {
   const [prediction] = await getDb(db)
@@ -98,7 +103,8 @@ export async function applyStatementTransactionSuggestion(
     throw refused("Changing the kind is a correction to the suggestion.");
 
   await withTransaction(db, async (tx) => {
-    // Evidence keys before entity rows, the order every settlement writer uses.
+    // Evidence keys before the transaction writers below take their rows. The
+    // keys name unmatched charges, which no other transaction's refs hold.
     await lockFinancialEvidenceKeys(
       tx,
       "transaction-ref",
@@ -157,20 +163,36 @@ export async function applyStatementTransactionSuggestion(
 
   switch (application.action) {
     case "create":
-      return applyCreate(db, judgment, application, codeOf, accountCode, {
+      await applyCreate(db, judgment, application, codeOf, accountCode, {
         claimRows,
         actor,
       });
+      break;
     case "attach":
-      return applyAttach(db, judgment, application, codeOf, {
+      await applyAttach(db, judgment, application, codeOf, {
         claimRows,
         actor,
       });
+      break;
     case "supersede":
-      return applySupersede(db, current, codeOf, { claimRows, actor });
+      await applySupersede(db, current, codeOf, { claimRows, actor });
+      break;
     case "void":
-      return applyVoid(db, judgment, application, codeOf, actor);
+      await applyVoid(db, judgment, application, codeOf, actor);
+      break;
   }
+  // A sibling's evidence included this charge being unmatched; refresh it
+  // now rather than leaving it stale until a whole-ledger pass.
+  if (judgment.siblings.length)
+    await runAfterCommit(db, (committed) =>
+      regenerateCharges(
+        committed,
+        judgment.siblings.map((chargeKey) => ({
+          source: charge.source,
+          chargeKey,
+        })),
+      ),
+    );
 }
 
 type Effects = {
@@ -241,6 +263,12 @@ async function applyAttach(
   codeOf: (id: string) => FinancialTransactionShortcode,
   effects: Effects,
 ) {
+  // With several candidates the target must be named: a default would put the
+  // charge's ref on whichever transaction happened to sort first.
+  if (!application.transactionId && judgment.candidates.length > 1)
+    throw refused(
+      `Name the transaction to attach to: ${judgment.candidates.map((candidate) => codeOf(candidate.transactionId)).join(", ")}.`,
+    );
   const target = application.transactionId
     ? judgment.candidates.find(
         (candidate) =>

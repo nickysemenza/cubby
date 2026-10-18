@@ -544,4 +544,75 @@ describe("statement Transaction suggestions", () => {
       "EXAMPLE NEWER CHARGE",
     ]);
   });
+
+  // Failure modes: a ref attached on another path (the import page, an
+  // agent's entity.update) leaves the suggestion live, and accepting it
+  // records the charge twice.
+  it("retires a suggestion when its charge's ref is attached elsewhere", async () => {
+    const account = (await card(ctx)).output;
+    await record(ctx, [rowInput()]);
+    await generate(ctx);
+    const [suggestion] = await suggestions(ctx);
+    const [row] = (await listStatementRows(ctx.db, {})).data;
+    await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.id,
+      kind: "purchase",
+      status: "posted",
+      amount: 42.5,
+      postedDate: "2026-05-04",
+      merchant: "Example Grocer",
+      rawDescription: "EXAMPLE GROCER 0001",
+      sourceRefs: [{ source: "monarch", externalId: row!.externalId }],
+    });
+    expect(await stateOf(ctx, suggestion!.assessmentId)).toMatchObject({
+      status: "superseded",
+      active: false,
+    });
+    await expect(accept(ctx, suggestion!)).rejects.toThrow(/stale/);
+    expect(await generate(ctx)).toBe(0);
+  });
+
+  // Failure mode: two members (or an agent and a member) accepting the same
+  // suggestion at once create two transactions for one charge.
+  it("applies concurrent accepts of one suggestion once", async () => {
+    await card(ctx);
+    await record(ctx, [rowInput()]);
+    await generate(ctx);
+    const [suggestion] = await suggestions(ctx);
+    const outcomes = await Promise.allSettled([
+      accept(ctx, suggestion!),
+      accept(ctx, suggestion!),
+    ]);
+    expect(outcomes.filter((o) => o.status === "fulfilled")).toHaveLength(1);
+    const created = await getDb(ctx.db).execute<{ count: number }>(
+      sql`SELECT count(*)::int AS count FROM "FinancialTransaction" WHERE "deletedAt" IS NULL`,
+    );
+    expect(created.rows[0]?.count).toBe(1);
+  });
+
+  // Failure mode: accepting one of two firmed-up twins leaves the other's
+  // suggestion stale until a whole-ledger refresh.
+  it("refreshes a sibling's suggestion after its twin is applied", async () => {
+    await card(ctx);
+    await record(ctx, [rowInput({ rawDescription: "EXAMPLE MKTPLACE PMTS" })]);
+    await record(
+      ctx,
+      [rowInput({ rawDescription: "EXAMPLE MKTPL*AB12CD34" })],
+      { fingerprint: "fp-firmed" },
+    );
+    await generate(ctx);
+    const [first] = await suggestions(ctx);
+    await accept(ctx, first!);
+    const [twin] = await suggestions(ctx);
+    expect(twin).toMatchObject({
+      recommended: "attach",
+      siblings: 0,
+      candidates: [
+        expect.objectContaining({
+          transactionId: expect.stringMatching(/^FTX-/),
+        }),
+      ],
+    });
+    expect(twin!.rawDescription).not.toBe(first!.rawDescription);
+  });
 });
