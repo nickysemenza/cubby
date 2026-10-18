@@ -288,8 +288,10 @@ export function AutomaticWrongCell({ row }: { row: SuggestionListRow }) {
           <AlertDialogHeader>
             <AlertDialogTitle>Record a Miss against {name}?</AlertDialogTitle>
             <AlertDialogDescription>
-              This marks the automatic change Wrong and lowers the rule's
-              measured precision. The change itself stays; correct it on{" "}
+              This records a Miss, counted as a corrected automatic application
+              of the rule. Automatic applications sit outside its precision
+              window, so precision does not move. There is no undo: the change
+              itself stays; correct it on{" "}
               <RecordLink record={row.other ?? row.record} />.
             </AlertDialogDescription>
           </AlertDialogHeader>

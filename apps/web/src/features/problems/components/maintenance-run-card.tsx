@@ -2,14 +2,17 @@ import type {
   MaintenanceRunSummary,
   MaintenanceStatus,
 } from "@cubby/schemas/maintenance";
+import { countLabel } from "@cubby/shared/pluralize";
 import { useQuery } from "@tanstack/react-query";
 import pluralize from "pluralize";
 import type { ReactNode } from "react";
 
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { maintenance } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatInstant } from "~/lib/date-format";
 import { formatDuration } from "~/lib/format-duration";
+import { formatCount } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
@@ -79,8 +82,6 @@ const IMAGE_STATES = [
   ["remaining", "Not processed"],
 ] as const;
 
-const runHref = (runId: string) => `/runs/${encodeURIComponent(runId)}`;
-
 export interface MaintenanceRunOperations {
   status: typeof maintenance.status.queryOptions;
   run: typeof maintenance.run.mutationOptions;
@@ -105,11 +106,10 @@ export function MaintenanceRunCard({
     mutationFn: operations.run,
     onSuccess: () => void status.refetch(),
     success: (data) => (
-      <a className="underline" href={runHref(data.runId)}>
-        {data.existing
-          ? `${data.runId} is already running. View run`
-          : `Started ${data.runId}. View run`}
-      </a>
+      <span className="inline-flex flex-wrap items-center gap-1">
+        {data.existing ? "Already running:" : "Started"}
+        <RunLink runId={data.runId} />
+      </span>
     ),
   });
   const data = status.data;
@@ -164,6 +164,13 @@ export function MaintenanceRunCard({
   );
 }
 
+/** The pass's Run, named and linked like every other record. */
+function RunLink({ runId }: { runId: string }) {
+  return (
+    <EntityRefLink variant="byId" entityKind="run" entityId={runId} compact />
+  );
+}
+
 function ActivePass({ run }: { run: MaintenanceRunSummary }) {
   const step = run.current;
   return (
@@ -179,16 +186,14 @@ function ActivePass({ run }: { run: MaintenanceRunSummary }) {
             "Finishing…"
           )}
         </span>
-        <a className="text-sm underline" href={runHref(run.runId)}>
-          View run
-        </a>
+        <RunLink runId={run.runId} />
       </Row>
       {step && step.found > 0 && (
         <>
           <span className="font-mono text-xs text-muted-foreground tabular-nums">
-            {(step.done + step.failed + step.skipped).toLocaleString()} of{" "}
-            {step.found.toLocaleString()} · {step.left.toLocaleString()} left
-            {step.failed > 0 && ` · ${step.failed.toLocaleString()} failed`}
+            {formatCount(step.done + step.failed + step.skipped)} of{" "}
+            {formatCount(step.found)} · {formatCount(step.left)} left
+            {step.failed > 0 && ` · ${formatCount(step.failed)} failed`}
           </span>
           <Progress
             value={step.done + step.failed + step.skipped}
@@ -238,15 +243,13 @@ function LastPass({ run }: { run: MaintenanceRunSummary }) {
             <span className="text-warning">
               {" · "}
               {run.failedSteps > 0
-                ? `${run.failedSteps} ${pluralize("step", run.failedSteps)} with failures`
+                ? `${countLabel(run.failedSteps, "step", { formatted: true })} with failures`
                 : (run.failure?.split("\n", 1)[0] ?? run.status)}
             </span>
           )}
         </span>
       </span>
-      <a className="text-sm underline" href={runHref(run.runId)}>
-        View run
-      </a>
+      <RunLink runId={run.runId} />
     </Row>
   );
 }
@@ -261,7 +264,7 @@ function Backlog({ status }: { status: MaintenanceStatus }) {
           {lines.map((line) => (
             <li key={line.key} className="flex items-baseline gap-2 text-sm">
               <span className="min-w-12 text-right font-mono tabular-nums">
-                {status.backlog[line.key].toLocaleString()}
+                {formatCount(status.backlog[line.key])}
               </span>
               <span className={cn(line.problem && "text-destructive")}>
                 {pluralize(line.noun, status.backlog[line.key])} {line.detail}

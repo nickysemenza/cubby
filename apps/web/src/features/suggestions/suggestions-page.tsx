@@ -11,7 +11,7 @@ import { countLabel } from "@cubby/shared/pluralize";
 import { EyeSlashIcon } from "@phosphor-icons/react/dist/csr/EyeSlash";
 import { ProhibitIcon } from "@phosphor-icons/react/dist/csr/Prohibit";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   useCallback,
   useMemo,
@@ -30,7 +30,9 @@ import {
   useTableState,
   type TableStateReturn,
 } from "~/entity/table/use-table-state";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { suggestions } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatCount, formatCurrency } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
@@ -47,6 +49,7 @@ import { Button } from "~/ui/primitives/button";
 
 import { useAcceptClean, type CleanTarget } from "./accept-clean";
 import { AutomaticRulesSection } from "./automatic-rules";
+import { MobileEvidenceDisclosure } from "./suggestion-actions";
 import { SuggestionEvidence } from "./suggestion-evidence";
 import { acceptItem, dismissItem, neverSuggestItem } from "./suggestion-review";
 import {
@@ -106,41 +109,9 @@ const familyOf = (search: SuggestionsSearch) =>
 const viewOf = (search: SuggestionsSearch): SuggestionView =>
   search.status === "applied_automatically" ? "applied" : familyOf(search);
 
-function Chip({
-  active,
-  label,
-  count,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  count: number | undefined;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      className={
-        active
-          ? "rounded-full border border-primary bg-primary px-2.5 py-0.5 text-xs font-medium text-primary-foreground max-md:min-h-11"
-          : "rounded-full border bg-card px-2.5 py-0.5 text-xs font-medium hover:bg-muted max-md:min-h-11"
-      }
-    >
-      {label}{" "}
-      <span
-        className={
-          active
-            ? "tabular-nums opacity-75"
-            : "text-muted-foreground tabular-nums"
-        }
-      >
-        {count === undefined ? "…" : formatCount(count)}
-      </span>
-    </button>
-  );
-}
+/** A count as a segment's trailing hint; "…" while it loads. */
+const countHint = (count: number | undefined) =>
+  count === undefined ? "…" : formatCount(count);
 
 /** Pending Suggestions, or the changes Automatic rules applied without review. */
 function StatusChips({
@@ -171,23 +142,26 @@ function StatusChips({
   );
   const status = search.status;
   return (
-    <fieldset className="flex flex-wrap gap-1.5">
-      <legend className="sr-only">Suggestion status</legend>
-      <Chip
-        active={!status}
-        label="Pending"
-        count={pending}
-        onClick={() => onSearch({ status: undefined })}
-      />
-      <Chip
-        active={status === "applied_automatically"}
-        label="Applied automatically"
-        count={applied.data?.meta.totalCount}
-        onClick={() =>
-          onSearch({ status: "applied_automatically", group: undefined })
-        }
-      />
-    </fieldset>
+    <Picker
+      mode="segmented"
+      label="Suggestion status"
+      options={[
+        { value: "pending", label: "Pending", hint: countHint(pending) },
+        {
+          value: "applied_automatically",
+          label: "Applied automatically",
+          hint: countHint(applied.data?.meta.totalCount),
+        },
+      ]}
+      value={status ?? "pending"}
+      onValueChange={(value) =>
+        onSearch(
+          value === "applied_automatically"
+            ? { status: "applied_automatically", group: undefined }
+            : { status: undefined },
+        )
+      }
+    />
   );
 }
 
@@ -248,13 +222,25 @@ const ACCOUNT_MONTH_CHOICE: GroupConfig["choice"] = {
   levelReason: "Account × month is a statement section, not a hierarchy.",
 };
 
-const isEditable = (target: EventTarget | null) =>
+/**
+ * Focus that owns the arrow keys: text entry, a picker, a menu, a dialog,
+ * or a segmented group. Review shortcuts never steal keys from them.
+ */
+const ownsKeys = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
   (target.isContentEditable ||
     ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) ||
     target.closest(
-      "[role=menu],[role=dialog],[role=listbox],[role=alertdialog]",
+      "[role=combobox],[role=listbox],[role=menu],[role=menubar],[role=menuitem],[role=option],[role=dialog],[role=alertdialog],[role=group][aria-label],[aria-haspopup]:not([aria-haspopup=false])",
     ) !== null);
+
+/** Brings the keyboard-current row into view without moving focus. */
+const revealRow = (container: HTMLElement | null) =>
+  requestAnimationFrame(() =>
+    container
+      ?.querySelector("[data-current=true]")
+      ?.scrollIntoView({ block: "nearest" }),
+  );
 
 /** The Suggestions page: one table over every family's pending Suggestions. */
 export function SuggestionsPage({
@@ -265,6 +251,11 @@ export function SuggestionsPage({
   onSearch: (patch: Partial<SuggestionsSearch>, replace?: boolean) => void;
 }) {
   const [finding, setFinding] = useState(false);
+  const queryClient = useQueryClient();
+  const refreshSuggestions = useCallback(
+    () => void invalidateOperationTags(queryClient, ripple.suggestions),
+    [queryClient],
+  );
   const runningSweep = useRunningSweep(!search.sweep);
   const sweep = search.sweep ?? runningSweep;
   return (
@@ -285,7 +276,14 @@ export function SuggestionsPage({
         onStarted={(runId) => onSearch({ sweep: runId })}
       />
       <div className="flex flex-col gap-2 px-2 pt-2 md:px-4">
-        {sweep ? <SweepStatusLine key={sweep} runId={sweep} /> : null}
+        {sweep ? (
+          <SweepStatusLine
+            key={sweep}
+            runId={sweep}
+            // A finished Sweep published new Suggestions: refresh rows and counts.
+            onSettled={refreshSuggestions}
+          />
+        ) : null}
         <AutomaticRulesSection />
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
           <StatusChips search={search} onSearch={onSearch} />
@@ -345,20 +343,26 @@ function FamilyChips({
       .filter((row) => !family || row.family === family)
       .reduce((sum, row) => sum + row.pending, 0);
   };
-  const chips = [{ family: undefined, label: "All" }, ...FAMILY_CHIPS] as const;
   return (
-    <fieldset className="flex flex-wrap gap-1.5">
-      <legend className="sr-only">Suggestion families</legend>
-      {chips.map((chip) => (
-        <Chip
-          key={chip.label}
-          active={familyOf(search) === (chip.family ?? "all")}
-          label={chip.label}
-          count={count(chip.family)}
-          onClick={() => onSearch({ family: chip.family, group: undefined })}
-        />
-      ))}
-    </fieldset>
+    <Picker
+      mode="segmented"
+      label="Suggestion families"
+      options={[
+        { value: "all", label: "All", hint: countHint(count()) },
+        ...FAMILY_CHIPS.map((chip) => ({
+          value: chip.family,
+          label: chip.label,
+          hint: countHint(count(chip.family)),
+        })),
+      ]}
+      value={familyOf(search)}
+      onValueChange={(value) =>
+        onSearch({
+          family: FAMILY_CHIPS.find((chip) => chip.family === value)?.family,
+          group: undefined,
+        })
+      }
+    />
   );
 }
 
@@ -541,7 +545,11 @@ function SuggestionsTableBody({
   cleanFilters: NonNullable<CleanTarget["filters"]>;
 }) {
   const review = useSuggestionReview();
-  const accept = useAcceptClean();
+  const rowsById = useMemo(
+    () => new Map(list.data.map((row) => [row.id, row.record])),
+    [list.data],
+  );
+  const accept = useAcceptClean((id) => rowsById.get(id));
   const rosters = useDeferredEntityRosters(STATEMENT_ROSTERS);
   const firstPage = list.pages?.[0];
   const sources = useMemo(
@@ -694,7 +702,7 @@ function SuggestionsTableBody({
       event.metaKey ||
       event.ctrlKey ||
       event.altKey ||
-      isEditable(event.target)
+      ownsKeys(event.target)
     )
       return;
     const rows = list.data;
@@ -702,6 +710,11 @@ function SuggestionsTableBody({
     const row = rows[index];
     // Applied rows are already settled: A and D have nothing to review.
     const reviewable = view === "applied" ? undefined : row;
+    // A settled row leaves the list: the next row (else the previous) stays current.
+    const advance = () => {
+      const next = rows[index + 1] ?? rows[index - 1];
+      setCurrent(next?.id);
+    };
     const handled = (() => {
       switch (event.key) {
         case "ArrowDown":
@@ -714,6 +727,7 @@ function SuggestionsTableBody({
               )
             ];
           if (next) setCurrent(next.id);
+          revealRow(event.currentTarget);
           return true;
         }
         case "ArrowRight":
@@ -724,14 +738,21 @@ function SuggestionsTableBody({
           return Boolean(row);
         case "a":
         case "A":
-          if (reviewable)
+          if (reviewable) {
             void review.review([reviewable], (target) =>
               acceptItem(target, review.statementChoice(target)),
             );
+            advance();
+            revealRow(event.currentTarget);
+          }
           return Boolean(reviewable);
         case "d":
         case "D":
-          if (reviewable) void review.review([reviewable], dismissItem);
+          if (reviewable) {
+            void review.review([reviewable], dismissItem);
+            advance();
+            revealRow(event.currentTarget);
+          }
           return Boolean(reviewable);
         default:
           return false;
@@ -888,9 +909,11 @@ function SuggestionsTableBody({
         onRowClick={(row) => setCurrent(row.id)}
         getMobileDetailsHref={() => undefined}
         disableMobileDetailsHref
-        renderMobileRowFooter={(row) =>
-          review.isOpen(row.id) ? <SuggestionEvidence row={row} /> : null
-        }
+        renderMobileRowFooter={(row) => (
+          <MobileEvidenceDisclosure row={row}>
+            <SuggestionEvidence row={row} />
+          </MobileEvidenceDisclosure>
+        )}
         bulkActionBar={
           <BulkActionBar
             selectedCount={selection.selectedCount}

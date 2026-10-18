@@ -299,7 +299,7 @@ export const findParentRecipeIdsBatch = async (
  * staled them or an earlier one did. This is what a recompute publishes after
  * commit: it depends on the present state of the parents, not on observing a
  * fresh→stale transition, so a parent whose publication was lost is picked up
- * by any later wakeup of any of its children (or by "Settle now").
+ * by any later wakeup of any of its children (or by a Maintenance Run).
  */
 export const findStaleParentRecipeIds = async (
   db: Database | DrizzleTransaction,
@@ -384,7 +384,7 @@ const findSubRecipeDescendantIds = async (
  * recipes, and the invalidation of every parent whose sub-recipe cost changed,
  * in ONE transaction. Publishing the parents' wakeups happens after commit —
  * so if publication fails the parents are already durably stale and any later
- * read, wakeup, or "Settle now" recovers them.
+ * read, wakeup, or Maintenance Run recovers them.
  *
  * Returns the parents this commit staled (for an inline cascade to recurse
  * into) — only those that were fresh; a parent already stale from an earlier

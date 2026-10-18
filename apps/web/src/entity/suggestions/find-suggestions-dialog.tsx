@@ -6,7 +6,10 @@ import {
 } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { financialAccountShortcode } from "@cubby/schemas/identifiers";
-import type { sweepFieldTargets } from "@cubby/schemas/run-fields";
+import {
+  SWEEP_FAMILY_LABEL,
+  type sweepFieldTargets,
+} from "@cubby/schemas/run-fields";
 import type { SweepStartInput } from "@cubby/schemas/sweep";
 import { countLabel } from "@cubby/shared/pluralize";
 import { useDebouncedValue } from "@tanstack/react-pacer";
@@ -58,17 +61,17 @@ const CONNECTION_KIND_OPTIONS = shortcodeEntities
 const FAMILY_ROWS = [
   {
     family: "statement_transaction",
-    label: "Statements",
+    label: SWEEP_FAMILY_LABEL.statement_transaction,
     hint: "create, attach, settle and void holds",
   },
   {
     family: "recommendation",
-    label: "Connections",
+    label: SWEEP_FAMILY_LABEL.recommendation,
     hint: "acquisitions, settlements, Emails, placements",
   },
   {
     family: "field",
-    label: "Fields",
+    label: SWEEP_FAMILY_LABEL.field,
     hint: "categories and other decision fields",
   },
 ] as const satisfies readonly { family: Family; label: string; hint: string }[];

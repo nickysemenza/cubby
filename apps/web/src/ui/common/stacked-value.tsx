@@ -1,5 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { createContext, useContext } from "react";
+import { createContext, useContext, type ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
 
@@ -42,7 +42,8 @@ export function StackedValue({
   suppressSecondaryHydrationWarning,
 }: {
   primary: string;
-  secondary: string | null;
+  /** Muted context: text, or a compact record link naming the owner. */
+  secondary: ReactNode;
   title?: string;
   primarySpillText?: string;
   secondarySpillText?: string;
@@ -59,7 +60,7 @@ export function StackedValue({
       >
         {primary}
       </span>
-      {secondary && (
+      {secondary != null && secondary !== "" && (
         <span
           data-stacked-line=""
           data-cell-spill-text={secondarySpillText}

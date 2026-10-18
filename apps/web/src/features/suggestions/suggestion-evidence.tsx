@@ -1,4 +1,5 @@
 import { formatConfidence } from "@cubby/schemas/ai";
+import { financialTransactionKind } from "@cubby/schemas/financial-transaction";
 import type { SuggestionListRow } from "@cubby/schemas/suggestion-list";
 import { humanize } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
@@ -12,6 +13,7 @@ import {
 } from "~/entity/suggestions/suggestion-body";
 import { renderOptionCell } from "~/entity/table/column-helpers";
 import { formatCurrency } from "~/lib/number-format";
+import { Picker } from "~/ui/combobox/picker";
 import { DateDisplay } from "~/ui/common/date-display";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
@@ -75,6 +77,27 @@ type StatementRow = Extract<
   { family: "statement_transaction" }
 >;
 
+/** The kind a created transaction takes; a change stays a draft until review. */
+function KindPicker({ row }: { row: StatementRow }) {
+  const { draft, setDraft, outcome } = useSuggestionReview();
+  const kind = draft(row.id).kind ?? row.evidence.create?.kind ?? null;
+  return (
+    <Picker
+      mode="choose"
+      compact
+      label="Transaction kind"
+      className="w-44"
+      options={KIND_OPTIONS}
+      value={kind}
+      disabled={outcome(row.id)?.state === "pending"}
+      onValueChange={(value) => {
+        const next = financialTransactionKind.safeParse(value);
+        if (next.success) setDraft(row.id, { kind: next.data });
+      }}
+    />
+  );
+}
+
 /** The charge beside each candidate it could be, with what attaching would copy. */
 function StatementEvidence({ row }: { row: StatementRow }) {
   const charge = row.evidence;
@@ -132,9 +155,7 @@ function StatementEvidence({ row }: { row: StatementRow }) {
       <EvidenceBox
         title={
           charge.candidates.length
-            ? charge.candidates.length === 1
-              ? "Candidate"
-              : `${charge.candidates.length} candidates`
+            ? countLabel(charge.candidates.length, "candidate")
             : charge.recommended === "void"
               ? "Hold"
               : "New transaction"
@@ -228,7 +249,14 @@ function StatementEvidence({ row }: { row: StatementRow }) {
         ) : charge.create ? (
           <Facts
             rows={[
-              ["Kind", renderOptionCell(kind, KIND_OPTIONS)],
+              [
+                "Kind",
+                settled ? (
+                  renderOptionCell(kind, KIND_OPTIONS)
+                ) : (
+                  <KindPicker key="kind" row={row} />
+                ),
+              ],
               [
                 "Amount",
                 <span key="amount" className="tabular-nums">
@@ -277,6 +305,10 @@ function StatementEvidence({ row }: { row: StatementRow }) {
           {charge.create ? (
             <>
               <KindVotes create={charge.create} />
+              {/* With candidates the kind only matters to Create anyway. */}
+              {charge.candidates.length && !settled ? (
+                <KindPicker row={row} />
+              ) : null}
               {rowDraft.kind && rowDraft.kind !== charge.create.kind ? (
                 <p className="text-muted-foreground">
                   You changed the kind to {humanize(rowDraft.kind)}.

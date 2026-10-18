@@ -1,12 +1,11 @@
-import { financialTransactionKind } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { SuggestionListRow } from "@cubby/schemas/suggestion-list";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
 import { Link } from "@tanstack/react-router";
+import type { ReactNode } from "react";
 
-import { fieldEnumOptions } from "~/entity/display/enum-field-display";
 import { formatCurrency } from "~/lib/number-format";
 import type { CubbyRow } from "~/ui/data-table/table-features";
 import { Button } from "~/ui/primitives/button";
@@ -32,7 +31,6 @@ import {
 } from "./suggestion-review";
 import { useSuggestionReview } from "./suggestion-review-context";
 
-const KIND_OPTIONS = fieldEnumOptions("financialTransaction", "kind");
 const stop = (event: { stopPropagation: () => void }) =>
   event.stopPropagation();
 
@@ -60,6 +58,43 @@ export function ExpandCell({ row }: { row: CubbyRow<SuggestionListRow> }) {
   );
 }
 
+/**
+ * The phone card's evidence disclosure: the desktop caret column has no phone
+ * projection, so the card footer owns this 44px toggle and the evidence below.
+ */
+export function MobileEvidenceDisclosure({
+  row,
+  children,
+}: {
+  row: SuggestionListRow;
+  children: ReactNode;
+}) {
+  const { isOpen, toggleOpen } = useSuggestionReview();
+  const open = isOpen(row.id);
+  return (
+    <div className="flex flex-col gap-1.5 pt-1">
+      <Button
+        size="sm"
+        variant="ghost"
+        aria-expanded={open}
+        className="min-h-11 self-start text-muted-foreground"
+        onClick={(event) => {
+          stop(event);
+          toggleOpen(row.id);
+        }}
+      >
+        {open ? (
+          <CaretDownIcon aria-hidden className="size-3.5" />
+        ) : (
+          <CaretRightIcon aria-hidden className="size-3.5" />
+        )}
+        {open ? "Hide evidence" : "Show evidence"}
+      </Button>
+      {open ? children : null}
+    </div>
+  );
+}
+
 /** One row's review: its leading verb, Dismiss, and the family's alternatives. */
 export function SuggestionActionsCell({
   row,
@@ -67,7 +102,7 @@ export function SuggestionActionsCell({
   row: CubbyRow<SuggestionListRow>;
 }) {
   const suggestion = row.original;
-  const { review, outcome, statementChoice, draft, setDraft, toggleOpen } =
+  const { review, outcome, statementChoice, draft, toggleOpen } =
     useSuggestionReview();
   const state = outcome(suggestion.id);
   const busy = state?.state === "pending";
@@ -187,30 +222,12 @@ export function SuggestionActionsCell({
           <DropdownMenuContent align="end" className="min-w-52">
             <DropdownMenuGroup>
               {statement?.create ? (
-                <DropdownMenuSubmenu>
-                  <DropdownMenuSubmenuTrigger>
-                    Change kind
-                    <CaretRightIcon className="ml-auto" />
-                  </DropdownMenuSubmenuTrigger>
-                  <DropdownMenuSubmenuContent>
-                    {KIND_OPTIONS.map((option) => (
-                      <DropdownMenuItem
-                        key={option.value}
-                        onClick={() =>
-                          setDraft(suggestion.id, {
-                            kind: financialTransactionKind.parse(option.value),
-                          })
-                        }
-                      >
-                        {option.label}
-                        {(rowDraft.kind ?? statement.create?.kind) ===
-                        option.value
-                          ? " ✓"
-                          : ""}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuSubmenuContent>
-                </DropdownMenuSubmenu>
+                // The kind is a value: its Picker lives in the evidence.
+                <DropdownMenuItem
+                  onClick={() => toggleOpen(suggestion.id, true)}
+                >
+                  Change kind…
+                </DropdownMenuItem>
               ) : null}
               {statement && alternatives.length ? (
                 <DropdownMenuSubmenu>

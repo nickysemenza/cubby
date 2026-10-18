@@ -408,6 +408,12 @@ export const sweepFamilyScope = z.discriminatedUnion("family", [
 ]);
 export type SweepFamilyScope = z.infer<typeof sweepFamilyScope>;
 export type SweepFamily = SweepFamilyScope["family"];
+/** Each Suggestion family's plural name, shared by Sweep steps, chips, and dialogs. */
+export const SWEEP_FAMILY_LABEL = {
+  statement_transaction: "Statements",
+  recommendation: "Connections",
+  field: "Fields",
+} as const satisfies Record<SweepFamily, string>;
 export const sweepRunInput = z.strictObject({
   kind: z.literal("sweep"),
   families: z.array(sweepFamilyScope).min(1).max(3),

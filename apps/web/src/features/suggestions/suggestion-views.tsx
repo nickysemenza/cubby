@@ -20,6 +20,7 @@ import type { TableStateReturn } from "~/entity/table/use-table-state";
 import { formatCurrency } from "~/lib/number-format";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { DateDisplay } from "~/ui/common/date-display";
+import { StackedValue } from "~/ui/common/stacked-value";
 import { buildSelectColumn } from "~/ui/data-table/row-selection";
 import {
   createCubbyColumnCollection,
@@ -601,16 +602,10 @@ function statementColumns(
           const value = evidence(row.original);
           if (!value) return null;
           return (
-            <span className="flex min-w-0 flex-col">
-              <span className="truncate font-medium">
-                {value.merchant ?? value.rawDescription}
-              </span>
-              {value.merchant ? (
-                <span className="truncate text-2xs text-muted-foreground">
-                  {value.rawDescription}
-                </span>
-              ) : null}
-            </span>
+            <StackedValue
+              primary={value.merchant ?? value.rawDescription}
+              secondary={value.merchant ? value.rawDescription : null}
+            />
           );
         },
       }),

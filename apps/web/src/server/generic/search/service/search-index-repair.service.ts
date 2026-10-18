@@ -6,7 +6,7 @@
  * row whose document is missing or whose projected text drifted is rebuilt in
  * place. Embedding work is handed to the queue, whose handler skips anything
  * already current. The final counters are this run's findings and outcomes —
- * not a live claim about the index; the awaiting-work counts are that.
+ * not a live claim about the index; the Maintenance backlog counts are that.
  */
 
 import {

@@ -1,8 +1,10 @@
 import {
   SUGGESTION_ACCEPT_CLEAN_MAX,
   type acceptCleanSuggestionsInput,
+  type SuggestionRecordRef,
 } from "@cubby/schemas/suggestion-list";
 import { getErrorMessage } from "@cubby/shared";
+import { countLabel } from "@cubby/shared/pluralize";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import type { z } from "zod";
@@ -22,6 +24,8 @@ import {
 } from "~/ui/primitives/alert-dialog";
 import { Progress } from "~/ui/primitives/progress";
 
+import { RecordLink } from "./suggestion-values";
+
 type CleanFilters = z.input<typeof acceptCleanSuggestionsInput>["filters"];
 
 /** What one "Accept N clean" covers: its filters and the count it showed. */
@@ -36,7 +40,14 @@ type Progressing = {
   total: number;
   done: number;
   running: boolean;
-  failures: { label: string; error: string }[];
+  failures: Failure[];
+};
+
+/** A failed accept names its record when the row is loaded, else the scope. */
+type Failure = {
+  record: SuggestionRecordRef | null;
+  label: string;
+  error: string;
 };
 
 /**
@@ -46,7 +57,10 @@ type Progressing = {
  * the set, so one up-front read goes stale. Attempted ids are never retried;
  * failures stay pending for review and show their raw errors.
  */
-export function useAcceptClean() {
+export function useAcceptClean(
+  /** The loaded row's record for an Assessment id, to name a failure. */
+  recordOf: (assessmentId: string) => SuggestionRecordRef | undefined,
+) {
   const queryClient = useQueryClient();
   const [confirming, setConfirming] = useState<CleanTarget | null>(null);
   const [progress, setProgress] = useState<Progressing | null>(null);
@@ -75,7 +89,11 @@ export function useAcceptClean() {
           if (result.assessmentId) attempted.add(result.assessmentId);
           if (!result.ok)
             failures.push({
-              label: result.assessmentId ?? "Unknown suggestion",
+              record:
+                (result.assessmentId && recordOf(result.assessmentId)) || null,
+              label: result.assessmentId
+                ? "A suggestion outside the loaded rows"
+                : "A suggestion the server could not identify",
               error: result.error,
             });
         }
@@ -90,7 +108,11 @@ export function useAcceptClean() {
         });
       }
     } catch (error) {
-      failures.push({ label: target.label, error: getErrorMessage(error) });
+      failures.push({
+        record: null,
+        label: target.label,
+        error: getErrorMessage(error),
+      });
     }
     setProgress({
       label: target.label,
@@ -116,7 +138,11 @@ export function useAcceptClean() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Accept {formatCount(confirming?.count ?? 0)} clean suggestions?
+              Accept{" "}
+              {countLabel(confirming?.count ?? 0, "clean suggestion", {
+                formatted: true,
+              })}
+              ?
             </AlertDialogTitle>
             <AlertDialogDescription>
               {confirming?.label}. Each records or settles a transaction from
@@ -169,8 +195,12 @@ function AcceptProgress({ state }: { state: Progressing }) {
               key={index}
               className="text-destructive"
             >
-              <span className="font-medium">{failure.label}</span>:{" "}
-              <span className="whitespace-pre-wrap">{failure.error}</span>
+              {failure.record ? (
+                <RecordLink record={failure.record} />
+              ) : (
+                <span className="font-medium">{failure.label}</span>
+              )}
+              : <span className="whitespace-pre-wrap">{failure.error}</span>
             </li>
           ))}
         </ul>

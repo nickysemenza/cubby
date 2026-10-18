@@ -6,6 +6,7 @@ import type {
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { entityPreviewQueryOptions } from "~/entity/entity-query";
 import { maintenance } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
@@ -84,6 +85,12 @@ let harness: ReturnType<typeof createBrowserTestHarness>;
 describe("MaintenanceRunCard", () => {
   beforeEach(() => {
     harness = createBrowserTestHarness();
+    const queryKey = entityPreviewQueryOptions("run", "RUN-4K7M").queryKey;
+    harness.queryClient.setQueryDefaults(queryKey, { enabled: false });
+    harness.queryClient.setQueryData(queryKey, {
+      id: "RUN-4K7M",
+      displayName: "Synthetic maintenance pass",
+    });
   });
   afterEach(() => {
     harness.dispose();
@@ -107,10 +114,11 @@ describe("MaintenanceRunCard", () => {
     expect(screen.getByText(/awaiting EXIF\/GPS extraction/)).toBeVisible();
     expect(screen.getByText(/missing in storage/)).toBeVisible();
     expect(screen.queryByText(/awaiting a search embedding/)).toBeNull();
-    expect(screen.getByRole("link", { name: "View run" })).toHaveAttribute(
-      "href",
-      "/runs/RUN-4K7M",
-    );
+    // The pass names its Run through the shared record link, never a bare id.
+    expect(
+      await screen.findByRole("link", { name: /Synthetic maintenance pass/ }),
+    ).toHaveAttribute("href", expect.stringContaining("RUN-4K7M"));
+    expect(screen.queryByText(/RUN-4K7M/)).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Run now" }));
     await waitFor(() => expect(launches).toHaveLength(1));

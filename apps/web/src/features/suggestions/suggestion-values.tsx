@@ -1,6 +1,7 @@
 import { entityFieldByKey } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import { SWEEP_FAMILY_LABEL } from "@cubby/schemas/run-fields";
 import type { StatementTransactionAction } from "@cubby/schemas/statement-suggestion";
 import type {
   SuggestionImpact,
@@ -16,6 +17,7 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { renderSuggestedListFieldValue } from "~/entity/display/entity-display";
 import { formatCurrency } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
+import { StackedValue } from "~/ui/common/stacked-value";
 import { Badge } from "~/ui/primitives/badge";
 import { NoneValue } from "~/ui/primitives/none-value";
 
@@ -26,14 +28,9 @@ export const FAMILY_LABEL = {
 } satisfies Record<SuggestionListFamily, string>;
 
 /** Chip order on the page: the family most often bulk-reviewed first. */
-export const FAMILY_CHIPS = [
-  { family: "statement_transaction", label: "Statements" },
-  { family: "recommendation", label: "Connections" },
-  { family: "field", label: "Fields" },
-] as const satisfies readonly {
-  family: SuggestionListFamily;
-  label: string;
-}[];
+export const FAMILY_CHIPS = (
+  ["statement_transaction", "recommendation", "field"] as const
+).map((family) => ({ family, label: SWEEP_FAMILY_LABEL[family] }));
 
 const STRENGTH_BARS = { strong: 3, medium: 2, weak: 1 } as const;
 
@@ -243,14 +240,10 @@ export function SuggestionRecord({ row }: { row: SuggestionListRow }) {
   if (row.family === "statement_transaction") {
     const charge = row.evidence;
     return (
-      <span className="flex min-w-0 flex-col">
-        <span className="truncate font-medium">
-          {charge.merchant ?? charge.rawDescription}
-        </span>
-        <span className="flex min-w-0 items-center gap-1 text-2xs text-muted-foreground">
-          <RecordLink record={row.record} />
-        </span>
-      </span>
+      <StackedValue
+        primary={charge.merchant ?? charge.rawDescription}
+        secondary={<RecordLink record={row.record} />}
+      />
     );
   }
   return <RecordLink record={row.record} />;
