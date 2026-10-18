@@ -20,7 +20,7 @@ import type {
   PresenceFilter,
   SortParams,
 } from "@cubby/schemas/pagination";
-import { type AnyColumn, getTableName, SQL, sql } from "drizzle-orm";
+import { and, type AnyColumn, getTableName, SQL, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
@@ -38,7 +38,9 @@ import {
 } from "~/server/generic/list/repo/hierarchy";
 import {
   compileTraversal,
+  referenceColumn,
   renderJoins,
+  tableFacts,
 } from "~/server/generic/relatedness/repo/traversal";
 
 /** A list request's raw filter values, by URL key. */
@@ -455,6 +457,79 @@ export const relatedExistsSql = (
   return sql`EXISTS (SELECT 1 FROM ${from} WHERE ${root}."id" = ${outerId} AND ${condition})`;
 };
 
+type RowsField = Extract<DerivedField, { shape: "rows" }>;
+
+/**
+ * One declared row set (`model.rows`) correlated to the list's outer row:
+ * `exists(condition)` is one row of the set matching `condition`, so every
+ * condition passed together holds on the same row, and `column` is the SQL
+ * of a terminal on that row (a column, a JSON item key, or the foreign key
+ * of a referenced record).
+ */
+export interface RowSetSql {
+  readonly exists: (condition: SQL | undefined) => SQL;
+  readonly column: (field: RowsField) => SQL;
+}
+
+export const rowSetSql = (
+  entity: Entity,
+  key: string,
+  /** The list's outer table, which the set correlates to. */
+  outerTable: string,
+): RowSetSql => {
+  const rowSet = Object.entries(generatedEntityListFields[entity].rows).find(
+    ([name]) => name === key,
+  )?.[1];
+  if (rowSet === undefined)
+    throw new Error(`${entity} declares no model.rows ${key}`);
+  const outer = sql.identifier(outerTable);
+  const { storage } = rowSet;
+  if (storage.kind === "json") {
+    const array = sql`${outer}.${sql.identifier(storage.column)}`;
+    const from = sql`jsonb_array_elements(CASE WHEN jsonb_typeof(${array}) = 'array' THEN ${array} ELSE '[]'::jsonb END) row_set`;
+    return {
+      exists: (condition) =>
+        sql`EXISTS (SELECT 1 FROM ${from} WHERE ${condition ?? sql`true`})`,
+      column: (field) => {
+        if (field.terminal.kind !== "column")
+          throw new Error(`${entity}.${field.path} reads a JSON row's record`);
+        return sql`(row_set->>${field.terminal.column})`;
+      },
+    };
+  }
+  const traversal = compileTraversal(entity, storage.steps, "rs", {
+    root: `"${outerTable}"`,
+  });
+  const [first, ...rest] = traversal.hops;
+  if (first === undefined) throw new Error(`${entity}.rows.${key} has no step`);
+  const facts = tableFacts(traversal.leafTable);
+  const leaf = (column: string) => {
+    if (!facts.columns.has(column))
+      throw new Error(
+        `${entity}.rows.${key}: ${traversal.leafTable} has no column ${column}`,
+      );
+    return sql`${sql.raw(traversal.leafAlias)}.${sql.identifier(column)}`;
+  };
+  const firstAlias = sql.raw(first.alias);
+  const where = and(
+    first.condition,
+    first.softDelete ? sql`${firstAlias}."deletedAt" IS NULL` : undefined,
+    ...Object.entries(storage.where).map(
+      ([column, value]) => sql`${leaf(column)} = ${value}`,
+    ),
+  );
+  return {
+    exists: (condition) =>
+      sql`EXISTS (SELECT 1 FROM ${sql.identifier(first.relation ?? first.table)} ${firstAlias} ${renderJoins({ hops: rest })} WHERE ${and(where, condition)})`,
+    column: (field) =>
+      leaf(
+        field.terminal.kind === "column"
+          ? field.terminal.column
+          : referenceColumn(traversal.leafTable, field.terminal.target),
+      ),
+  };
+};
+
 /**
  * The id subquery of the requested public shortcodes of live `target` rows,
  * resolved inside the list query (#2333): an unknown or soft-deleted code
@@ -512,6 +587,7 @@ export const derivedOrderBy = (
       return order([relatedScalarSql(entity, field, table)]);
     case "value":
       return order(derivedValueParts(entity, derived, sort.orderBy, context));
+    case "rows":
     case "predicate":
       throw createAppError("CONSTRAINT_VIOLATION", field.sort);
   }

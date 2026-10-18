@@ -61,14 +61,14 @@ const runtimeOptionsKey = (
 
 /**
  * A multiselect with nothing to pick from takes typed values: an external
- * id, or an `optionsKey` list this list's caller does not supply.
+ * id, or an `optionsKey` list this list's caller does not supply. Its Any
+ * value / No value keys alone are nothing to pick a value from.
  */
 const isFreeText = (
   spec: FilterSpec,
   runtimeOptions: RuntimeFilterOptions | undefined,
 ): boolean => {
-  if (spec.kind !== "multiselect" || spec.options?.length || spec.nullable)
-    return false;
+  if (spec.kind !== "multiselect" || spec.options?.length) return false;
   const key = runtimeOptionsKey(spec, runtimeOptions);
   return key === undefined || runtimeOptions?.[key] === undefined;
 };

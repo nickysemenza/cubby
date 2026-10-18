@@ -54,7 +54,6 @@ export {
   householdDayRangeConditions,
   householdDaySql,
   householdDaySqlText,
-  idSetPresence,
   isNotDeleted,
   lockAndValidateForDelete,
   matchesStringValues,

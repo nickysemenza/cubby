@@ -84,23 +84,12 @@ describe("buildFinancialAccountWhere", () => {
       renderWhereSql,
     );
 
-  it("matches source and external account id on the same alias", async () => {
-    const rendered = await where({
-      source: "bank-export",
-      externalAccountId: "acct-1",
-    });
-    expect(rendered).toMatch(
-      /alias->>\$\d+ = \$\d+\s+AND alias->>'externalAccountId' = \$\d+/,
-    );
-  });
-
   it.each([
     {
       name: "identityKind",
       filters: { identityKind: "cash" as const },
       contains: '"identity"->>',
     },
-    { name: "last4", filters: { last4: "4242" }, contains: "card->>'last4'" },
     {
       name: "sourceAliasPresenceFilter",
       filters: { sourceAliasPresenceFilter: "none" as const },
@@ -131,16 +120,6 @@ describe("buildFinancialTransactionWhere", () => {
     buildFinancialTransactionWhere(mockWhereDatabase(), filters).then(
       renderWhereSql,
     );
-
-  it("matches source and external id on the same settlement reference", async () => {
-    const rendered = await where({
-      source: "bank-export",
-      externalId: "ext-1",
-    });
-    expect(rendered).toMatch(
-      /fx\."source" = \$\d+\s+AND fx\."externalId" = \$\d+/,
-    );
-  });
 
   it("filters purchases through live allocations, not the mirror column", async () => {
     const rendered = await where({

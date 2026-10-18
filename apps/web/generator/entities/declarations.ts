@@ -139,6 +139,11 @@ export type FilterDescriptor = Readonly<{
   aliasOf: string | null;
   sentinels: readonly Readonly<{ value: string; label: string }>[] | null;
   wire: FilterWire;
+  /**
+   * The declared `listTermExpanders` key of a text filter; server-only, so
+   * `compileListFields` moves it into `listFields.terms`.
+   */
+  terms?: string;
 }>;
 /**
  * A date range filter's bound keys, which accept relative date tokens and
@@ -360,6 +365,8 @@ export type EntityFieldModel = Readonly<{
   derived: Readonly<
     Record<string, EntityFieldModelMetadata["derived"][string]>
   >;
+  /** `model.rows`: to-many row sets a `via` may start at. */
+  rows: Readonly<Record<string, EntityFieldModelMetadata["rows"][string]>>;
   hierarchy: Readonly<{ parentField: string; maxDepth: number }> | null;
   /** `model.grouping`: the Group by choices, compiled in `list-fields.ts`. */
   grouping: readonly string[];

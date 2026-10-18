@@ -11,7 +11,7 @@ import {
   type SortParams,
 } from "@cubby/schemas/pagination";
 import { type AppErrorReason, parseShortcode } from "@cubby/shared";
-import type { AnyColumn, SQLWrapper } from "drizzle-orm";
+import type { AnyColumn } from "drizzle-orm";
 import {
   and,
   SQL,
@@ -25,7 +25,6 @@ import {
   isNotNull,
   isNull,
   not,
-  notInArray,
   or,
   sql,
 } from "drizzle-orm";
@@ -627,37 +626,6 @@ export const flagCondition = (
   if (met === undefined) return undefined;
   return flag ? met : sql`NOT COALESCE((${met}), false)`;
 };
-
-/**
- * A cross-entity presence sentinel: "this row's id is / isn't in that set".
- *
- * `idSet` MUST be an UNCORRELATED subquery — one that references only the child
- * table, never back at the root's id. Every list repo pairs a Drizzle
- * relational-query-builder data query (which aliases the root table to its own
- * name) with an unaliased `$count`, and `productList` adds a third unaliased
- * aggregate. A correlated EXISTS resolves against different table names in each
- * of those contexts; `inArray`/`notInArray` sidestep it because the root column
- * is referenced at the WHERE's top level, where every builder rewrites it
- * correctly.
- *
- * Two things the caller owns, because SQL won't warn about either:
- * - **Soft deletes.** Guard the subquery with `notDeleted(...)` at *every* join
- *   level. The `cubby/require-soft-delete-filter` oxlint rule only scans
- *   `exists`/`notExists` bodies, so it cannot see a hoisted `inArray` subquery.
- * - **Nullable FKs.** If the selected column is nullable, add `isNotNull(...)`
- *   to the subquery: a NULL inside a `NOT IN` list makes the whole predicate
- *   UNKNOWN, so `"none"` would match zero rows instead of every unlinked row.
- */
-export const idSetPresence = <TColumn extends AnyColumn>(
-  column: TColumn,
-  presence: PresenceFilter,
-  idSet: SQLWrapper,
-): SQL | undefined =>
-  match(presence)
-    .with("has", () => inArray(column, idSet))
-    .with("none", () => notInArray(column, idSet))
-    .with(undefined, () => undefined)
-    .exhaustive();
 
 /**
  * `eqAny` OR the column's presence sentinel.

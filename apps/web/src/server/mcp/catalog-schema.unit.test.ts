@@ -758,9 +758,10 @@ const write = ({ destructive = false, openWorld = false } = {}) => ({
  * workflow ceiling, about twice that largest pre-consolidation workflow tool.
  * Both rose one step when every scope filter (a relation back-filter, a
  * deep-link id) gained the generated Exclude / Any value keys every other
- * compiled value filter has.
+ * compiled value filter has. The kernel ceiling rose again when the filters
+ * over row sets (`model.rows`, #2607) gained the same keys plus Match all.
  */
-const KERNEL_SCHEMA_BUDGET = 139_264;
+const KERNEL_SCHEMA_BUDGET = 143_360;
 const WORKFLOW_SCHEMA_BUDGET = 18_432;
 const KERNEL_TOOLS = new Set(["entity", "entity_read"]);
 

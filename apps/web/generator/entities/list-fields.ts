@@ -40,6 +40,22 @@ type CompiledListField =
       group: string | null;
     }>
   | Readonly<{
+      shape: "rows";
+      path: string;
+      /** The `model.rows` key the path starts at. */
+      rows: string;
+      /** A column of the row (a JSON item key), or an entity it references. */
+      terminal:
+        | Readonly<{ kind: "column"; column: string }>
+        | Readonly<{
+            kind: "record";
+            target: string;
+            titleColumn: string | null;
+          }>;
+      sort: string;
+      group: string;
+    }>
+  | Readonly<{
       shape: "value";
       type: "text" | "number" | "date" | "dateInterval" | "boolean" | "enum";
       options: readonly string[] | null;
@@ -64,6 +80,22 @@ type CompiledListField =
     }>;
 
 type GroupOption = Readonly<{ value: string; label: string }>;
+
+/**
+ * A compiled `model.rows` entry. A path's row table and its `where` columns
+ * are checked when the server loads (`rowSetSql`); a JSON row set's `keys`
+ * come from its field's item schema.
+ */
+type CompiledRowSet = Readonly<{
+  label: string;
+  storage:
+    | Readonly<{
+        kind: "path";
+        steps: readonly RelationshipPathStep[];
+        where: Readonly<Record<string, string>>;
+      }>
+    | Readonly<{ kind: "json"; column: string; keys: readonly string[] }>;
+}>;
 
 /**
  * What a section key reads: an own column, a to-one related record (keyed by
@@ -157,6 +189,10 @@ type CompiledInherit = Readonly<{
 
 export type CompiledEntityListFields = Readonly<{
   derived: Readonly<Record<string, CompiledListField>>;
+  /** `model.rows`, the row sets a `via` may start at. */
+  rows: Readonly<Record<string, CompiledRowSet>>;
+  /** Text filter key → its declared `listTermExpanders` entry. */
+  terms: Readonly<Record<string, string>>;
   /** Field key → its compiled `resolution.inherit`. */
   inherit: Readonly<Record<string, CompiledInherit>>;
   hierarchy: Readonly<{
@@ -185,13 +221,130 @@ const titleColumn = (entity: CompiledEntity): string | null =>
     (stored) => stored.key === entity.inspector.titleField,
   )?.column ?? null;
 
+/**
+ * The record keys of a JSON field's item schema (`z.array(z.object(…))`),
+ * through any default, optional, nullable or refinement wrapper.
+ */
+const jsonItemKeys = (schema: unknown): readonly string[] | null => {
+  let current = schema instanceof z.ZodType ? schema : null;
+  for (let depth = 0; current !== null && depth < 8; depth += 1) {
+    if (current instanceof z.ZodArray) {
+      const element: unknown = current.element;
+      return element instanceof z.ZodObject ? Object.keys(element.shape) : null;
+    }
+    const inner: unknown =
+      "innerType" in current.def ? current.def.innerType : undefined;
+    current = inner instanceof z.ZodType ? inner : null;
+  }
+  return null;
+};
+
+/** Compiles `model.rows`, rejecting a row set no `via` could read. */
+const compileRowSets = (entity: CompiledEntity) => {
+  const compiled: Record<string, CompiledRowSet> = {};
+  for (const [key, declared] of Object.entries(entity.fieldModel.rows)) {
+    const context = `${entity.key}.model.rows.${key}`;
+    if (
+      entity.relations.some((relation) => relation.key === key) ||
+      Object.hasOwn(entity.fieldModel.derived, key)
+    )
+      throw new EntityDeclarationError(
+        `${context} shares its key with a relation or model.derived entry; a via's first segment must name one.`,
+      );
+    if ("json" in declared) {
+      const stored = entity.fieldModel.storage.find(
+        (candidate) => candidate.key === declared.json,
+      );
+      const keys = jsonItemKeys(
+        entity.fieldModel.fields.find(
+          (candidate) => candidate.key === declared.json,
+        )?.validation.read,
+      );
+      if (stored?.kind !== "json" || keys === null)
+        throw new EntityDeclarationError(
+          `${context}.json ${declared.json} is not a stored JSON field whose read schema is an array of records.`,
+        );
+      compiled[key] = {
+        label: declared.label,
+        storage: { kind: "json", column: stored.column, keys },
+      };
+      continue;
+    }
+    const where = declared.where ?? {};
+    if (Object.keys(where).some((column) => !sqlWord.test(column)))
+      throw new EntityDeclarationError(
+        `${context}.where columns must be plain words.`,
+      );
+    compiled[key] = {
+      label: declared.label,
+      storage: { kind: "path", steps: declared.path, where },
+    };
+  }
+  return compiled;
+};
+
+/**
+ * A `via` that starts at a row set: one terminal after it, a column of the
+ * row (a JSON item key) or an entity the row references.
+ */
+const compileRowsVia = (
+  path: string,
+  key: string,
+  rowSet: CompiledRowSet,
+  terminal: string | undefined,
+  more: number,
+  byKey: ReadonlyMap<string, CompiledEntity>,
+  context: string,
+): Extract<CompiledListField, { shape: "rows" }> => {
+  if (terminal === undefined || more > 0)
+    throw new EntityDeclarationError(
+      `${context} via ${path}: row set ${key} takes exactly one terminal (a column or a referenced entity).`,
+    );
+  const target =
+    rowSet.storage.kind === "path" ? byKey.get(terminal) : undefined;
+  if (rowSet.storage.kind === "json" && !rowSet.storage.keys.includes(terminal))
+    throw new EntityDeclarationError(
+      `${context} via ${path}: ${terminal} is not a key of ${key}'s items (${rowSet.storage.keys.join(", ")}).`,
+    );
+  const reason = (verb: "sort" | "group") =>
+    `Goes through a list of ${rowSet.label}. Only paths that lead to a single record can ${verb}.`;
+  return {
+    shape: "rows",
+    path,
+    rows: key,
+    terminal:
+      target === undefined
+        ? { kind: "column", column: terminal }
+        : {
+            kind: "record",
+            target: target.key,
+            titleColumn: titleColumn(target),
+          },
+    sort: reason("sort"),
+    group: reason("group"),
+  };
+};
+
 const compileVia = (
   owner: CompiledEntity,
   path: string,
   byKey: ReadonlyMap<string, CompiledEntity>,
   context: string,
-): Extract<CompiledListField, { shape: "via" }> => {
+  rows: Readonly<Record<string, CompiledRowSet>> = {},
+): CompiledListField => {
   const segments = path.split(".");
+  const [first, rowTerminal, ...more] = segments;
+  const rowSet = first === undefined ? undefined : rows[first];
+  if (first !== undefined && rowSet !== undefined)
+    return compileRowsVia(
+      path,
+      first,
+      rowSet,
+      rowTerminal,
+      more.length,
+      byKey,
+      context,
+    );
   let current = owner;
   const steps: RelationshipPathStep[] = [];
   let toMany: CompiledEntity | null = null;
@@ -450,6 +603,7 @@ const compatibleKinds = (
             ? ["text", "multiselect", "idMulti", "presence"]
             : ["text", "multiselect", "presence"];
     case "via":
+    case "rows":
       return field.terminal.kind === "record"
         ? ["idMulti", "text", "presence"]
         : ["text", "multiselect", "boolean", "presence"];
@@ -506,10 +660,16 @@ const withViaKeys = (
   const bound =
     descriptor.derived === null ? undefined : derived[descriptor.derived];
   if (
-    bound?.shape !== "via" ||
+    (bound?.shape !== "via" && bound?.shape !== "rows") ||
     (descriptor.kind !== "multiselect" && descriptor.kind !== "idMulti")
   )
     return descriptor;
+  const target =
+    bound.shape === "via"
+      ? bound.target
+      : bound.terminal.kind === "record"
+        ? bound.terminal.target
+        : null;
   if (descriptor.nullable !== null)
     throw new EntityDeclarationError(
       `${context}.filters ${descriptor.columnId} is compiled, so its Any value / No value key is generated; remove nullable.`,
@@ -520,11 +680,15 @@ const withViaKeys = (
       field: `${descriptor.columnId}PresenceFilter`,
       label: (
         descriptor.label ??
-        byKey.get(bound.target)?.inspector.singular ??
-        descriptor.columnId
+        (target === null ? undefined : byKey.get(target)?.inspector.singular) ??
+        humanize(descriptor.columnId)
       ).toLowerCase(),
     },
-    match: bound.many ? { field: `${descriptor.columnId}Match` } : null,
+    // A row set always holds several rows per record.
+    match:
+      bound.shape === "rows" || bound.many
+        ? { field: `${descriptor.columnId}Match` }
+        : null,
   };
 };
 
@@ -881,7 +1045,12 @@ const compileGroupChoice = (
         throw new EntityDeclarationError(
           `${where}: no to-one relation follows ${stored.column}.`,
         );
-      return viaValue(compileVia(entity, relation.key, byKey, where));
+      const via = compileVia(entity, relation.key, byKey, where);
+      if (via.shape !== "via")
+        throw new EntityDeclarationError(
+          `${where}: ${relation.key} is not a related path.`,
+        );
+      return viaValue(via);
     }
     if (field.kind === "enum" || field.kind === "text")
       return choice(
@@ -987,12 +1156,13 @@ export const compileListFields = (
   assertAcyclicInherit(entities, inherit);
   return entities.map((entity) => {
     const context = entity.key;
+    const rows = compileRowSets(entity);
     const derived: Record<string, CompiledListField> = {};
     for (const [key, entry] of Object.entries(entity.fieldModel.derived)) {
       const derivedContext = `${context}.model.derived.${key}`;
       derived[key] =
         "via" in entry
-          ? compileVia(entity, entry.via, byKey, derivedContext)
+          ? compileVia(entity, entry.via, byKey, derivedContext, rows)
           : "type" in entry
             ? {
                 shape: "value",
@@ -1054,13 +1224,15 @@ export const compileListFields = (
       const referenced =
         bound?.shape === "via" && bound.terminal.kind === "record"
           ? bound.target
-          : bound?.shape === "predicate"
-            ? (descriptor.brandRef?.entity ?? null)
-            : descriptor.stored === null
-              ? null
-              : (entity.fieldModel.storage.find(
-                  ({ key }) => key === descriptor.stored?.columns[0],
-                )?.reference ?? null);
+          : bound?.shape === "rows" && bound.terminal.kind === "record"
+            ? bound.terminal.target
+            : bound?.shape === "predicate"
+              ? (descriptor.brandRef?.entity ?? null)
+              : descriptor.stored === null
+                ? null
+                : (entity.fieldModel.storage.find(
+                    ({ key }) => key === descriptor.stored?.columns[0],
+                  )?.reference ?? null);
       const target = referenced === null ? undefined : byKey.get(referenced);
       if (target?.fieldModel.hierarchy == null) continue;
       const toggle = toggleDescriptor(target);
@@ -1072,8 +1244,22 @@ export const compileListFields = (
       if (!toggles.some(({ columnId }) => columnId === toggle.columnId))
         toggles.push(toggle);
     }
+    // A term expander is server-only: it leaves the client descriptor.
+    const terms: Record<string, string> = {};
+    const withoutTerms = compiled.map(({ terms: expander, ...descriptor }) => {
+      if (expander === undefined) return descriptor;
+      if (descriptor.kind !== "text" || descriptor.derived === null)
+        throw new EntityDeclarationError(
+          `${context}.filters ${descriptor.columnId} declares terms, which only a derived text filter reads.`,
+        );
+      terms[descriptor.field ?? descriptor.columnId] = expander;
+      return descriptor;
+    });
     const filterDescriptors = [
-      ...withAliases(withDistinctMenuLabels(compiled, entity, byKey), entity),
+      ...withAliases(
+        withDistinctMenuLabels(withoutTerms, entity, byKey),
+        entity,
+      ),
       ...toggles,
     ];
     const urlKeys = filterDescriptors.flatMap(({ urlKey, exclude }) =>
@@ -1114,6 +1300,8 @@ export const compileListFields = (
     validateSavedViewGrouping(entity, grouping, context);
     const listFields: CompiledEntityListFields = {
       derived,
+      rows,
+      terms,
       inherit: inherit.get(entity.key) ?? {},
       hierarchy:
         hierarchy === null || parentColumn === undefined

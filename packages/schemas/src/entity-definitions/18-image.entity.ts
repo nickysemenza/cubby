@@ -628,20 +628,20 @@ export default defineEntity({
     ],
     bulk: [],
     audit: [],
+    rows: {
+      importTargets: {
+        label: "Import targets",
+        path: [{ edge: "PhotoRunImage.imageId", direction: "incoming" }],
+      },
+    },
     derived: {
       // Referenced by a live owner (an attachment, an order document).
       referenced: { type: "boolean" },
       processingIssue: { type: "enum", options: ["failed", "review_needed"] },
       uploadedAgeHours: { type: "number" },
-      runId: {
-        predicate: "idMulti",
-        reason:
-          "Matches an import-run target row, together with targetState on the same row",
-      },
-      targetState: {
-        predicate: "multiselect",
-        reason: "Matches the state of any import-run target row",
-      },
+      // Both match on the same import-run target row.
+      runId: { via: "importTargets.run" },
+      targetState: { via: "importTargets.state" },
     },
     sort: {
       fields: ["createdAt", "updatedAt", "filename", "size", "status"],

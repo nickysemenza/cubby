@@ -1983,6 +1983,17 @@ Rules:
       "price",
       "labelNutrition",
     ],
+    rows: {
+      barcodes: {
+        label: "Barcodes",
+        path: [{ edge: "EntityExternalId.entityId", direction: "incoming" }],
+        where: { source: "gtin" },
+      },
+      identifiers: {
+        label: "External identifiers",
+        path: [{ edge: "EntityExternalId.entityId", direction: "incoming" }],
+      },
+    },
     derived: {
       // The first live stock location by name, across all inventory.
       location: { type: "text" },
@@ -2025,11 +2036,8 @@ Rules:
       miscBucket: { type: "boolean" },
       unknownQuantityLines: { type: "boolean" },
       priced: { type: "boolean" },
-      anyGtin: {
-        predicate: "text",
-        reason:
-          "Matches any of the product's barcodes, not only the primary one its column shows",
-      },
+      // Any of the product's barcodes, not only the primary its column shows.
+      anyGtin: { via: "barcodes.externalId" },
       effectiveOwner: {
         predicate: "idMulti",
         reason:
@@ -2037,12 +2045,7 @@ Rules:
       },
       // The category's effective feature, inherited from its ancestors.
       categoryFeature: { via: "category.feature" },
-      externalIdSource: {
-        predicate: "multiselect",
-        negatable: true,
-        reason:
-          "External identifiers are rows keyed by source with no declared relation",
-      },
+      externalIdSource: { via: "identifiers.source" },
       taskStatus: {
         predicate: "multiselect",
         reason:
@@ -2305,6 +2308,7 @@ Rules:
         derived: "anyGtin",
         field: "upcFilter",
         kind: "text",
+        terms: "productCode",
         placeholder: "Filter by UPC...",
         deriveSchema: true,
         schemaDescription:
@@ -2563,7 +2567,6 @@ Rules:
         kind: "multiselect",
         placeholder: "Filter by external ID source...",
         optionsKey: "externalIdSources",
-        nullable: { field: "externalIdPresenceFilter", label: "external ID" },
       },
       {
         columnId: "purchaseDate",

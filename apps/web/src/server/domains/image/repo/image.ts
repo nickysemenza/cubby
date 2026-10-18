@@ -16,7 +16,6 @@ import {
   type AttachableImageEntity,
   type ImageAssociation,
   type ImageListFilters,
-  imageListFiltersSchema,
   type ImageHashIndex,
   type ImportTargetSummary,
   type SetPerceptualHashesInput,
@@ -98,7 +97,6 @@ import {
   isNotDeleted,
   type ListReadIntent,
   nextImageSortOrder,
-  matchesStringValues,
   notDeleted,
   shortcodeSetCondition,
   unwrapDb,
@@ -153,10 +151,7 @@ import { retireAssessmentTargetsTx } from "~/server/generic/assessment/repo/asse
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { softDeleteEntitySearchArtifactsTx } from "~/server/generic/embedding/repo/entity-embedding-cleanup";
-import {
-  listPrepare,
-  shortcodeIdsSql,
-} from "~/server/generic/list/repo/field-compiler";
+import { shortcodeIdsSql } from "~/server/generic/list/repo/field-compiler";
 import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
@@ -1281,7 +1276,7 @@ const cullablePendingImageWhere = (cutoffDate: Date) =>
 
 /**
  * The live ids of the requested run codes, resolved inside the query, with
- * their sub-runs unless the generated toggle is off.
+ * their sub-runs unless the generated toggle is off: a run's capture order.
  */
 const requestedRunIds = (
   codes: readonly string[],
@@ -1295,46 +1290,11 @@ const requestedRunIds = (
     : selected;
 };
 
-// A `runId` filter matches `targetState` on the same target row, so it reads
-// that sibling filter.
-const targetStates = listPrepare(
-  async (_db, filters) =>
-    oneOrManyValues(
-      imageListFiltersSchema.pick({ targetState: true }).parse(filters)
-        .targetState,
-    ) ?? [],
-);
-
-const importTargetExists = (condition: SQL | undefined) =>
-  exists(
-    qb
-      .select({ one: sql`1` })
-      .from(photoRunImage)
-      .where(and(eq(photoRunImage.imageId, image.id), condition)),
-  );
-
 const imageScaffold = listScaffold("image", image, {
   derived: {
     referenced: imageReferenceCondition(image, "active"),
     processingIssue: imageProcessingIssueExpression(image),
     uploadedAgeHours: sql`(extract(epoch from (now() - ${image.createdAt})) / 3600)`,
-    runId: targetStates.predicate((states, { values, includeDescendants }) =>
-      importTargetExists(
-        and(
-          inArray(
-            photoRunImage.runId,
-            requestedRunIds(values, includeDescendants),
-          ),
-          states.length > 0
-            ? matchesStringValues(sql`${photoRunImage.state}`, [...states])
-            : undefined,
-        ),
-      ),
-    ),
-    targetState: ({ values }) =>
-      importTargetExists(
-        matchesStringValues(sql`${photoRunImage.state}`, [...values]),
-      ),
   },
 });
 
