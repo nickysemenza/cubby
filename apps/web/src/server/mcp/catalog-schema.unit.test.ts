@@ -624,6 +624,10 @@ describe("MCP catalog schemas", () => {
       "imports_read.attachmentId",
       "mail.mailboxId",
       "mail.messageId",
+      "mail.disposition.via[].mailboxId",
+      "mail.disposition.via[].messageId",
+      "purchase_import.orders[].via[].mailboxId",
+      "purchase_import.orders[].via[].messageId",
       "run.mailboxId",
       // Assessment child handles and caller-generated idempotency keys do
       // not address shortcode entities. Batch review uses the same contract.
