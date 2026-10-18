@@ -104,12 +104,18 @@ test("picking one Email scope replaces the other", async ({
     page.getByRole("button", { name: `Vendor: ${storeName}`, exact: true }),
   ).toBeVisible();
 
-  const scoped = succeedsWith(
-    page,
-    (body) =>
-      body.includes('"vendorAccountId"') &&
-      body.includes(account.id) &&
-      !body.includes('"vendorId"'),
+  // The request, not the response: picking rewrites the URL, and Playwright
+  // cannot read a response body after that navigation, which failed this
+  // test intermittently.
+  const scoped = page.waitForRequest((request) =>
+    dispatchOperations(request).some((item) => {
+      const body = inputText(item.input);
+      return (
+        body.includes('"vendorAccountId"') &&
+        body.includes(account.id) &&
+        !body.includes('"vendorId"')
+      );
+    }),
   );
   await pick("Vendor account", `${storeName} · ${memberName}`);
   await scoped;
