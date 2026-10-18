@@ -13,7 +13,6 @@ describe("listScaffold", () => {
       effectiveDueDate: sql`NULL`,
       completion: sql`NULL`,
       topLevel: sql`true`,
-      search: () => undefined,
     },
   });
 

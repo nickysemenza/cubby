@@ -1370,7 +1370,7 @@ Rules:
           module: "@cubby/schemas/expense-fields",
           export: "expenseSearchTerms",
         },
-        stored: true,
+        anyOf: ["name"],
       },
       {
         columnId: "date",
@@ -1633,7 +1633,7 @@ Rules:
         placeholder: "Search notes...",
         deriveSchema: true,
         schemaDescription: "Substring match on notes",
-        stored: { columns: ["notes"] },
+        anyOf: ["notes"],
       },
       {
         columnId: "urlSearch",
@@ -1641,7 +1641,7 @@ Rules:
         placeholder: "Search url...",
         deriveSchema: true,
         schemaDescription: "Substring match on url",
-        stored: { columns: ["url"] },
+        anyOf: ["url"],
       },
       {
         columnId: "spendingCategoryId",

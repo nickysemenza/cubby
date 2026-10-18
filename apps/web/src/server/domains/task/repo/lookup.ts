@@ -5,21 +5,18 @@ import {
   taskStatusSchema,
 } from "@cubby/schemas/project";
 import type { TaskFilters } from "@cubby/schemas/project";
-import { and, isNull, or, sql } from "drizzle-orm";
-import { QueryBuilder } from "drizzle-orm/pg-core";
+import { and, isNull, sql } from "drizzle-orm";
 
 import { projectListRows } from "~/entity/model/list-read-schema";
 import type { Database } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import {
-  formatSearchTerm,
   getDb,
   type ListReadIntent,
-  notDeleted,
   relations,
   uuidArrayParam,
 } from "~/server/db/helpers";
-import { product, task } from "~/server/db/schema";
+import { task } from "~/server/db/schema";
 import { matchingEmbeddedProjectIds } from "~/server/domains/project/repo/dashboard-shared";
 import {
   dbTaskToAPI,
@@ -41,8 +38,6 @@ import {
   hydrateTaskInheritanceRows,
 } from "./task-project-inheritance";
 
-const qb = new QueryBuilder();
-
 // The effective project, subject product and assignee compile from their
 // declared `via` paths through the inherited references.
 const taskScaffold = listScaffold("task", task, {
@@ -56,16 +51,6 @@ const taskScaffold = listScaffold("task", task, {
       THEN ${taskCompletionSchema.enum.done}::text
       ELSE ${taskCompletionSchema.enum.open}::text END`,
     topLevel: isNull(task.parentTaskId),
-    search: (term) =>
-      or(
-        formatSearchTerm(task.name, term),
-        sql`${effectiveFieldSql("task", "subjectProductId")} IN ${qb
-          .select({ id: product.id })
-          .from(product)
-          .where(
-            and(notDeleted(product), formatSearchTerm(product.name, term)),
-          )}`,
-      ),
   },
 });
 

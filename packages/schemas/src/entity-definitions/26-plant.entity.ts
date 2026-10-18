@@ -365,7 +365,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Search plants...",
         deriveSchema: true,
-        stored: true,
+        anyOf: ["name"],
       },
       {
         columnId: "gardenGuideKey",

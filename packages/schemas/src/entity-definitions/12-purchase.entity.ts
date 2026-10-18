@@ -1367,7 +1367,7 @@ export default defineEntity({
         placeholder: "Search order id or label...",
         deriveSchema: true,
         schemaDescription: "Substring match on order id or human display label",
-        stored: { columns: ["orderId", "displayLabel"] },
+        anyOf: ["orderId", "displayLabel"],
       },
       {
         columnId: "displayLabel",
@@ -1376,7 +1376,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Search display label...",
         deriveSchema: true,
-        stored: true,
+        anyOf: ["displayLabel"],
         schemaDescription: "Substring match on the human display label only",
       },
       {

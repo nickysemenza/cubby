@@ -476,6 +476,7 @@ const toggleDescriptor = (target: CompiledEntity): FilterDescriptor => {
     expandRef: null,
     schemaRef: null,
     stored: null,
+    anyOf: null,
     derived: null,
     range: null,
     nullable: null,
@@ -945,6 +946,31 @@ const validateSavedViewGrouping = (
 };
 
 /**
+ * Each `model.derived` member of a text filter's `anyOf` must read text: a
+ * `via` path to a text field or a titled record, or a `type: "text"` value.
+ */
+const validateAnyOfMembers = (
+  descriptor: FilterDescriptor,
+  derived: Readonly<Record<string, CompiledListField>>,
+  context: string,
+): void => {
+  for (const member of descriptor.anyOf ?? []) {
+    const entry = member.source === "derived" ? derived[member.key] : null;
+    if (entry === null || entry === undefined) continue;
+    const text =
+      entry.shape === "via"
+        ? entry.terminal.kind === "record"
+          ? entry.terminal.titleColumn !== null
+          : entry.terminal.fieldKind === "text"
+        : entry.shape === "value" && entry.type === "text";
+    if (!text)
+      throw new EntityDeclarationError(
+        `${context}.filters ${descriptor.columnId} anyOf ${member.key} is not text: name a via path to a text field or a titled record, or a type "text" value.`,
+      );
+  }
+};
+
+/**
  * The cross-entity half of the list-field compiler: resolves `via` paths
  * through declared relations, derives each sort/group rejection reason,
  * binds filter descriptors to derived fields, and generates the
@@ -1009,6 +1035,7 @@ export const compileListFields = (
         throw new EntityDeclarationError(
           `${context}.filters ${declared.columnId} is derived but names no model.derived entry ${declared.derived}.`,
         );
+      validateAnyOfMembers(declared, derived, context);
       const descriptor = withDerivedOptions(
         withExcludeKey(withViaKeys(declared, derived, byKey, context), bound),
         bound,

@@ -229,6 +229,7 @@ export const compileDataQuality = (
     expandRef: null,
     schemaRef: null,
     stored: null,
+    anyOf: null,
     derived: null,
     range: null,
     nullable: null,

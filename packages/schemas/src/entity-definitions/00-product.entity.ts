@@ -2279,7 +2279,7 @@ Rules:
         kind: "text",
         placeholder: "Filter by name...",
         deriveSchema: true,
-        stored: true,
+        anyOf: ["name"],
         schemaDescription: "Filter by product name",
       },
       {
@@ -2298,7 +2298,7 @@ Rules:
         placeholder: "Search manufacturer...",
         deriveSchema: true,
         schemaDescription: "Filter by manufacturer",
-        stored: { columns: ["manufacturer"] },
+        anyOf: ["manufacturer"],
       },
       {
         columnId: "primaryGtin",
@@ -2316,7 +2316,7 @@ Rules:
         kind: "text",
         placeholder: "Filter by model...",
         deriveSchema: true,
-        stored: true,
+        anyOf: ["model"],
         schemaDescription:
           "Filter by model number — a tool's real identity when the name is generic.",
       },
@@ -2542,7 +2542,7 @@ Rules:
         kind: "text",
         placeholder: "Search notes...",
         deriveSchema: true,
-        stored: true,
+        anyOf: ["notes"],
       },
       {
         columnId: "notesPresence",

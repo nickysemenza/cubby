@@ -822,11 +822,6 @@ Rules:
       startDate: { type: "date" },
       // A displayable image (PDF attachments don't count).
       image: { type: "boolean" },
-      search: {
-        predicate: "text",
-        reason:
-          "Matches name, notes, or any effective location, which a project may inherit as a list",
-      },
       attention: {
         predicate: "multiselect",
         negatable: true,
@@ -994,7 +989,7 @@ Rules:
         kind: "text",
         placeholder: "Filter by project name...",
         deriveSchema: true,
-        derived: "search",
+        anyOf: ["name", "notes", "locations"],
       },
       {
         columnId: "status",

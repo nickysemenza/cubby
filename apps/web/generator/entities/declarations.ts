@@ -96,6 +96,13 @@ export type FilterDescriptor = Readonly<{
   schemaRef: SourceRef | null;
   stored: Readonly<{ columns: readonly string[]; array: boolean }> | null;
   /**
+   * The list fields a text filter matches any of: a stored model field or a
+   * `model.derived` key (`via` or a text value).
+   */
+  anyOf:
+    | readonly Readonly<{ key: string; source: "field" | "derived" }>[]
+    | null;
+  /**
    * The `model.derived` key the filter compiles through (`columnId` unless
    * the declaration names another), or null for a stored/hand-written filter.
    */

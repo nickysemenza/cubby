@@ -20,7 +20,6 @@ describe("list selection and relation loading", () => {
       effectiveDueDate: sql`NULL`,
       completion: sql`NULL`,
       topLevel: sql`true`,
-      search: () => undefined,
     },
   });
 
@@ -119,7 +118,6 @@ describe("list selection and relation loading", () => {
         effectiveDueDate: sql`NULL`,
         completion: sql`NULL`,
         topLevel: sql`true`,
-        search: () => undefined,
       },
     }).list(
       ctx.db,

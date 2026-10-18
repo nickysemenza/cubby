@@ -791,7 +791,7 @@ Rules:
         placeholder: "Filter by location name...",
         deriveSchema: true,
         schemaDescription: "Filter by location name (substring)",
-        stored: { columns: ["name", "aliases"] },
+        anyOf: ["name", "aliases"],
       },
       {
         columnId: "type",

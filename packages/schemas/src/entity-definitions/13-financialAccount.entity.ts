@@ -719,7 +719,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Search accounts...",
         deriveSchema: true,
-        stored: true,
+        anyOf: ["name"],
       },
       {
         columnId: "identity",

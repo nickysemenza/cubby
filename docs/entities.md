@@ -1047,8 +1047,8 @@ Filter descriptors are typed metadata. Static choices stay in the declaration;
 icon-bearing option lists, identifier brands, and compound preset expansion use
 explicit `{ module, export }` references. The compiler rejects unsupported
 kinds/properties and duplicate columns or derived URL keys. `audit: true`
-expands the standard created/updated date filters. A `stored` or `derived`
-descriptor compiles its predicate in the list scaffold; any other descriptor's
+expands the standard created/updated date filters. A `stored`, `anyOf` or
+`derived` descriptor compiles its predicate in the list scaffold; any other descriptor's
 SQL stays in the repository's filter builder
 ([Filters and search](#filters-and-search)).
 
@@ -1478,8 +1478,8 @@ A filter declaration compiles its Zod-field binding and canonical URL keys used
 by shared route search-parameter assembly, inspector metadata, and generated
 contract cases. Static and deferred controls still live in the explicit filter
 catalog; compound presets retain explicit codecs and option loaders. A
-descriptor declared `stored` or `derived` compiles its predicate; the compiler
-infers no database behavior from any other URL key.
+descriptor declared `stored`, `anyOf` or `derived` compiles its predicate; the
+compiler infers no database behavior from any other URL key.
 
 Every value filter is any-of: `multiselect` and `idMulti` (a single-option
 flag is a `boolean`), and a single value in a URL, saved view, or MCP call
@@ -1571,12 +1571,21 @@ the web and native pickers choose one record, and the repository rejects more th
 across the three. Each is also a `model.derived` predicate over the one scope
 record they resolve.
 
-A `stored` descriptor names the standard predicate over stored columns, and
-`declaredFilterPredicates` composes it for the repository: `stored: true`
-reads the column named by `columnId`; `stored: { columns }` lists one or more
-stored fields when the descriptor id is virtual (`search`) or a text match
-spans columns (ORed, a `text[]` column matched by element); `stored: { array:
-true }` marks a multiselect over a `text[]` column as an overlap. Enum filters
+A text filter declares `anyOf`, the list fields it matches when any one does,
+and `declaredFilterPredicates` ORs a case-insensitive substring match across
+them. A member is a stored `text` or `text[]` field (matched by element, and
+read as its effective value when it declares `resolution.inherit`, so project
+search finds an inherited location) or a `model.derived` key: a `via` path to
+a text field or a titled record (to-many as `EXISTS`, so wish search matches
+any live candidate's name, manufacturer or model, and task search the
+effective subject product's name) or a `type: "text"` value. A multi-field
+search is that declared list, never a predicate. `anyOf` does not sort or
+group, and a text filter never declares `stored`.
+
+A `stored` descriptor names the standard predicate over one stored column:
+`stored: true` reads the column named by `columnId`; `stored: { columns }`
+names it when the descriptor id is virtual; `stored: { array: true }` marks a
+multiselect over a `text[]` column as an overlap. Enum filters
 OR their declared `nullable` presence in, a boolean over a nullable
 non-boolean column reads as presence (`true` is NOT NULL), and ranges are
 inclusive bounds: a range reads its `wire` keys (`from`/`to`, and `presence`
