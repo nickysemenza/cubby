@@ -54,11 +54,11 @@ export const suggestionSummaryPart = z.discriminatedUnion("kind", [
 export type SuggestionSummaryPart = z.infer<typeof suggestionSummaryPart>;
 
 /**
- * What accepting restores: a data-quality check it resolves, an outcome
- * that resolves no check, or a caution about what it may open.
+ * What accepting restores: a data-quality check it closes, another state it
+ * resolves (a statement charge matched), or a caution about what it may open.
  */
 export const suggestionImpact = z.object({
-  kind: z.enum(["quality_check", "outcome", "caution"]),
+  kind: z.enum(["quality_check", "resolves", "caution"]),
   label: z.string(),
   qualityCheck: dataCheck.optional(),
 });

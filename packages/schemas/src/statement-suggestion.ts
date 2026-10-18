@@ -198,4 +198,3 @@ export const statementSuggestionOut = z.object({
   createdAt: z.iso.datetime(),
 });
 export type StatementSuggestionOut = z.infer<typeof statementSuggestionOut>;
-

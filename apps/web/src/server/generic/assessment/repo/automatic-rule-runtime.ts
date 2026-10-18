@@ -35,17 +35,17 @@ import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import {
+  automaticApplicationRule,
+  matchedRulesOf,
+} from "~/server/generic/assessment/repo/assessment";
+import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import {
   AUTOMATIC_RULES,
   type AutomaticRuleMatch,
   matchFieldRules,
   matchStatementRules,
   ruleBase,
 } from "~/server/generic/assessment/repo/automatic-rules";
-import {
-  automaticApplicationRule,
-  matchedRulesOf,
-} from "~/server/generic/assessment/repo/assessment";
-import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 
 const log = createLogger("automatic-rules");
 
@@ -68,7 +68,7 @@ const eligibleWindow = (n: number, hits: number) =>
  * refused application. An automatic application never enters it; one a
  * member later marks Wrong counts as a corrected automatic application.
  */
-export async function ruleWindows(
+async function ruleWindows(
   db: Database,
   key: AutomaticRuleKey,
 ): Promise<AutomaticRuleWindow[]> {

@@ -15,13 +15,13 @@ import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
+import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import {
   type AuditSampler,
   automaticRuleStamp,
   fieldSubjectKey,
   matchFieldRules,
 } from "~/server/generic/assessment/repo/automatic-rules";
-import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/audit-log";
 
 export type SuggestionValue =

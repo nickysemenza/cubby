@@ -102,9 +102,6 @@ export async function scheduleConnectionRefresh(
   return existing?.id ?? null;
 }
 
-/** The kinds a connection Sweep can cover. */
-export const connectionSweepEntities: readonly string[] = discoveryEntities;
-
 /**
  * The child `ai_refresh` Run that evaluates one Sweep's connection sources.
  * It is created `running` at attempt 0 and launched once its roster is ready.
@@ -210,7 +207,7 @@ export const connectionSourceFingerprint = connectionDiscoveryFingerprint;
 export const connectionSourceFingerprints = connectionDiscoveryFingerprints;
 
 /** Cursor coverage includes records without stock or prior acquisition. */
-export async function connectionDiscoveryRecords(
+async function connectionDiscoveryRecords(
   db: Database,
   after: string | null,
   limit: number,

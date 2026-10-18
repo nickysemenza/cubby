@@ -18,13 +18,13 @@ import {
 } from "~/server/domains/statement-import/repo/statement-row";
 import { generateStatementSuggestionPage } from "~/server/domains/statement-import/repo/statement-suggestions";
 import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
-import { ruleBase } from "~/server/generic/assessment/repo/automatic-rules";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import {
   applyAutomaticRules,
   listAutomaticRules,
   setAutomaticRule,
 } from "~/server/generic/assessment/repo/automatic-rule-runtime";
+import { ruleBase } from "~/server/generic/assessment/repo/automatic-rules";
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
 

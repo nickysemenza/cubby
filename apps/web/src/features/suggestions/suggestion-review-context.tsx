@@ -24,15 +24,13 @@ import type {
 /** `assessment.reviewBatch` takes at most this many items per call. */
 const REVIEW_BATCH_MAX = 100;
 
-export type RowOutcome =
-  | { state: "pending" }
-  | { state: "failed"; error: string };
+type RowOutcome = { state: "pending" } | { state: "failed"; error: string };
 
 /** A failed review, kept with the row as it was so the error has a home after a refetch drops it. */
-export type ReviewFailure = { row: SuggestionListRow; error: string };
+type ReviewFailure = { row: SuggestionListRow; error: string };
 
 /** A statement row's draft alternatives, shared by its actions menu and its evidence. */
-export type StatementDraft = {
+type StatementDraft = {
   kind?: FinancialTransactionKind;
   /** Ticked "apply" fields per candidate transaction. */
   fields: Readonly<Record<string, readonly StatementTransactionField[]>>;

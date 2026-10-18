@@ -39,7 +39,7 @@ const RULE_NAME = {
 } satisfies Record<AutomaticRuleKey, string>;
 
 /** `<ruleKey>@<revision>[@<model>]` as its rule and revision, or null when unknown. */
-export function parseRuleStamp(stamp: string) {
+function parseRuleStamp(stamp: string) {
   const [key, revision, model] = stamp.split("@");
   const ruleKey = automaticRuleKey.safeParse(key).data;
   return ruleKey && revision
@@ -48,11 +48,11 @@ export function parseRuleStamp(stamp: string) {
 }
 
 /** Floored to a tenth so a rule just under the bar never reads as at it. */
-export const formatPrecision = (precision: number) =>
+const formatPrecision = (precision: number) =>
   `${Math.floor(Math.round(precision * 1e6) / 1e3) / 10}%`;
 
 /** The measured numbers, e.g. "98.6% precision over 140 reviewed · 2 corrected automatic". */
-export function ruleNumbers(
+function ruleNumbers(
   rule: Pick<AutomaticRuleOut, "n" | "precision" | "correctedAutomatic">,
 ) {
   const measured =

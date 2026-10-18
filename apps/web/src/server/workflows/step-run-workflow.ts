@@ -20,7 +20,7 @@ import {
  * child wait counts toward one instance's bound; past it the attempt hands off
  * to a fresh instance that resumes from the RunStep cursors.
  */
-export const STEP_RUN_PAGES_PER_INSTANCE = 200;
+const STEP_RUN_PAGES_PER_INSTANCE = 200;
 
 export class StepRunWorkflow extends WorkflowEntrypoint<
   Env,

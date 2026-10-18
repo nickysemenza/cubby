@@ -78,7 +78,7 @@ type ScopeFilters = Omit<
  * Suggestions belong to its StatementRows, so an account record filters the
  * statement family's account column; any other record lists by `recordIds`.
  */
-export function scopeFilters(search: SuggestionsSearch): ScopeFilters {
+function scopeFilters(search: SuggestionsSearch): ScopeFilters {
   const record = parseRecordParam(search.record);
   const recordScope: ScopeFilters = record
     ? record.entity === "financialAccount"

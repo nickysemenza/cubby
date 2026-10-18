@@ -94,9 +94,6 @@ const ACTION_PRESENTATION = {
   { label: string; className: string }
 >;
 
-export const statementActionLabel = (action: StatementTransactionAction) =>
-  ACTION_PRESENTATION[action].label;
-
 export function ActionBadge({
   action,
 }: {

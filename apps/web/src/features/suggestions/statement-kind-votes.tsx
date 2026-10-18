@@ -22,7 +22,7 @@ const SOURCES = [
 ] as const;
 
 type Stance = "agree" | "disagree" | "abstain";
-export type KindVote = {
+type KindVote = {
   source: (typeof SOURCES)[number]["source"];
   label: string;
   hint: string;

@@ -39,7 +39,7 @@ import {
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 /** Shared executions publish one suggestion history; every live requester can inspect it. */
-export const requestedSuggestionRun = (code: string) => sql`(
+const requestedSuggestionRun = (code: string) => sql`(
   ${runTable.shortcode} = ${code} OR EXISTS (
     SELECT 1 FROM "AiEvaluationRequest" AS demand JOIN "Run" AS requester ON requester.id = demand."runId"
     WHERE demand."evaluationId" = ${suggestionTable.evaluationId} AND demand."cancelledAt" IS NULL

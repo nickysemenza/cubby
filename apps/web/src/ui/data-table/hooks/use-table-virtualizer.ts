@@ -37,7 +37,7 @@ export type GroupedItem =
   | { kind: "detail"; rowIndex: number };
 
 /** First estimate for a row detail; the rendered element is then measured. */
-export const ROW_DETAIL_ESTIMATE = 160;
+const ROW_DETAIL_ESTIMATE = 160;
 
 /**
  * What `virtualRow.index` points at, given the grouped/flat index space.

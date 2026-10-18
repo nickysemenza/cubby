@@ -55,12 +55,12 @@ import {
   statementTransactionKind,
 } from "~/server/domains/statement-import/repo/statement-transaction-kind";
 import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
+import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import {
   automaticRuleStamp,
   matchStatementRules,
   statementSubjectKey,
 } from "~/server/generic/assessment/repo/automatic-rules";
-import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 
 /** Rule revision stamped on every published suggestion; bump with any policy change. */
 export const STATEMENT_SUGGESTION_REVISION = "2026-10-18.3";

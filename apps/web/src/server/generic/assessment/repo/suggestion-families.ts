@@ -93,7 +93,7 @@ type RowOf<F extends SuggestionListFamily> = Extract<
   { family: F }
 >;
 
-export type SuggestionOutcomes = {
+type SuggestionOutcomes = {
   applied: number;
   rejected: number;
   superseded: number;
@@ -133,7 +133,7 @@ const qualityImpact = (check: DataCheck): SuggestionImpact => ({
   qualityCheck: check,
 });
 const outcome = (label: string): SuggestionImpact => ({
-  kind: "outcome",
+  kind: "resolves",
   label,
 });
 
@@ -324,7 +324,7 @@ const otherTransaction = (row: StatementSuggestionOut) => {
 };
 
 /** Accept as is: the recommended action; an attach always names its candidate. */
-export function statementAcceptApplication(
+function statementAcceptApplication(
   row: StatementSuggestionOut,
 ): StatementTransactionApplication | null {
   const target = row.candidates[0]?.transactionId;

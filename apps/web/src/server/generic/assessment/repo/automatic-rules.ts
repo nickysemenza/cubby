@@ -30,7 +30,7 @@ type FactsOf = {
 };
 
 /** What an automatic application does, before the family's review input. */
-export type RuleApplication =
+type RuleApplication =
   | { kind: "accept_as_is" }
   /** Attach to this candidate (internal id); no diff field is ever ticked. */
   | { kind: "statement_attach"; transactionId: string };
@@ -150,7 +150,7 @@ export const matchStatementRules = (judgment: StatementTransactionJudgment) =>
   );
 
 /** The deterministic 5% of a family's subjects held for review. */
-export async function isAuditSample(family: string, subjectKey: string) {
+async function isAuditSample(family: string, subjectKey: string) {
   const digest = await sha256Hex(`${family}:${subjectKey}`);
   return BigInt(`0x${digest}`) % BigInt(AUTOMATIC_RULE_AUDIT_EVERY) === 0n;
 }
