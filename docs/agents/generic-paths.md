@@ -22,7 +22,17 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   (`apps/web/src/entity/display/entity-display.tsx`); named renderers in
   `apps/web/src/entity/display/list-field-renderers.tsx`. Hand overrides in
   `entity/list-columns/` are only for mutation-bound cells.
-- Run detail: every Run route (`Route.entityDetail(.run, …)`) opens `RunConsoleView`, the
+- Bulk passes and backlogs: a step-ledger Run (`STEP_RUN_PURPOSES`) whose purpose
+  registers drivers with `server/domains/run/service/step-run.ts`; each step's counts,
+  raw errors, cursor and Retry failed render through the `run.steps` slot. Suggestion
+  families extend the Sweep's drivers (`server/domains/run/service/sweep.ts`); backlogs
+  extend maintenance (`server/domains/maintenance/service/maintenance-run.ts`). Never a
+  queue chain or an ad hoc counter.
+- Suggestion review: `suggestions.list`/`acceptClean` over the family registry
+  (`server/generic/assessment/suggestion-families.ts`) and the Suggestions page; apply
+  stays the family's `reviewAssessment` handler. Never a family-specific review list.
+- Run detail: web renders `GenericEntityDetail` with the declared `run` slots; on Apple
+  every Run route (`Route.entityDetail(.run, …)`) opens `RunConsoleView`, the
   declared hero and `run` slots through `DetailSlotRegistry`. Its status follows the batched
   report poll (`ReportBatchModel.status`/`revision`), never a second Run poll. Specialist
   reviews are slots or owned sections of it: a photo Run's review is the `photo-batch` slot

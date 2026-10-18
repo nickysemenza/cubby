@@ -233,11 +233,12 @@ Three reconciliation traps:
 
 ### Working the backlog through Transaction suggestions
 
-Recording rows queues a pass that turns each unmatched charge into one
-Transaction suggestion (`entity_read.suggestion_queue` with `family:
+Recording rows starts a routine Sweep that turns each unmatched charge into
+one Transaction suggestion (`entity_read.suggestion_queue` with `family:
 "statement_transaction"`; `groups: "account_month"` adds per account × month
-sections with clean counts); `statement_rows.refresh_suggestions` reruns it
-after hand edits to transactions or accounts. Burn the backlog group by group,
+sections with clean counts); `run.sweep {families: [{family:
+"statement_transaction"}]}` reruns it after hand edits to transactions or
+accounts, and `imports_read.run_status` follows its Steps. Burn the backlog group by group,
 filtering a group with `where {account: {in: [FAC-…]}, month: {in: [YYYY-MM]}}`:
 
 1. Accept `clean: true` suggestions in batches of up to 100 with
