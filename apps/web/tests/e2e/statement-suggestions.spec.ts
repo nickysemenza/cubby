@@ -1,9 +1,11 @@
+import type { StatementRowInput } from "@cubby/schemas/statement-row";
+
 import { createEntityFixture } from "./fixtures/core";
 import { gotoAuthenticatedPage } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 import { startOperation } from "./support/start-operation";
 
-test("statement suggestions accept a clean create by group and dismiss another", async ({
+test("statement suggestions accept a clean supersede by group and dismiss another", async ({
   page,
 }) => {
   test.slow();
@@ -14,54 +16,85 @@ test("statement suggestions accept a clean create by group and dismiss another",
     identity: { kind: "credit_card", issuer: null, network: "visa" },
     sourceAliases: [{ source: "monarch", alias: tag, externalAccountId: null }],
   });
+  const hold = `${tag} HOLD`;
   const grocer = `${tag} GROCER`;
   const cafe = `${tag} CAFE`;
-  const recorded = await startOperation(page.request, "statementRow.record", {
-    import: {
-      source: "monarch",
-      label: `${tag}.csv`,
-      fingerprint: tag,
-      dateKind: "posted",
+  const record = (fingerprint: string, rows: Partial<StatementRowInput>[]) =>
+    startOperation(page.request, "statementRow.record", {
+      import: {
+        source: "monarch",
+        label: `${fingerprint}.csv`,
+        fingerprint,
+        dateKind: "posted",
+      },
+      rows: rows.map((row) => ({
+        accountDescriptor: tag,
+        merchant: null,
+        providerStatus: "posted",
+        ...row,
+      })),
+    });
+  const recorded = await record(tag, [
+    {
+      rowPosition: 1,
+      statementDate: "2026-05-04",
+      providerAmount: -42.5,
+      rawDescription: hold,
+      sourceCategory: "Groceries",
+      providerStatus: "pending",
     },
-    rows: [
-      {
-        // A spending category settles the kind by rule: a clean create.
-        rowPosition: 1,
-        accountDescriptor: tag,
-        statementDate: "2026-05-04",
-        providerAmount: -42.5,
-        merchant: null,
-        rawDescription: grocer,
-        sourceCategory: "Groceries",
-        providerStatus: "posted",
-      },
-      {
-        // No category: only the sign speaks to the kind, so it needs review.
-        rowPosition: 2,
-        accountDescriptor: tag,
-        statementDate: "2026-05-11",
-        providerAmount: -17.25,
-        merchant: null,
-        rawDescription: cafe,
-        sourceCategory: null,
-        providerStatus: "posted",
-      },
-    ],
-  });
+    {
+      // No category: only the sign speaks to the kind, so it needs review.
+      rowPosition: 2,
+      statementDate: "2026-05-11",
+      providerAmount: -17.25,
+      rawDescription: cafe,
+      sourceCategory: null,
+    },
+  ]);
   expect(recorded.ok(), await recorded.text()).toBe(true);
 
   // No background queue in E2E: the client pages the refresh inline.
-  await page
-    .getByRole("button", { name: "Refresh suggestions" })
-    .first()
-    .click();
-  await expect(page.getByText(/Refreshed: /)).toBeVisible({ timeout: 60_000 });
-
+  const refresh = async () => {
+    await gotoAuthenticatedPage(page, "/statement-rows?tab=suggestions");
+    await page
+      .getByRole("button", { name: "Refresh suggestions" })
+      .first()
+      .click();
+    await expect(page.getByText(/Refreshed: /)).toBeVisible({
+      timeout: 60_000,
+    });
+  };
+  await refresh();
   const group = page
     .getByRole("table", { name: "Suggestion groups" })
     .getByRole("row")
     .filter({ hasText: tag });
   await expect(group).toHaveCount(1);
+  // Without decision labels no create's kind is agreed, so the hold is
+  // reviewed on its own.
+  await expect(
+    group.getByRole("button", { name: "Accept 0 clean" }),
+  ).toBeDisabled();
+  await group.click();
+  const pending = page.getByRole("listitem", {
+    name: `Suggestion for ${hold}`,
+  });
+  await pending.getByRole("button", { name: "Accept", exact: true }).click();
+  await expect(pending).toHaveCount(0);
+
+  const posted = await record(`${tag}-posted`, [
+    {
+      rowPosition: 1,
+      statementDate: "2026-05-06",
+      providerAmount: -42.5,
+      rawDescription: grocer,
+      sourceCategory: "Groceries",
+    },
+  ]);
+  expect(posted.ok(), await posted.text()).toBe(true);
+  // Settling the recorded hold at its exact amount is clean without labels.
+  await refresh();
   await group.getByRole("button", { name: "Accept 1 clean" }).click();
   await page
     .getByRole("alertdialog")

@@ -1,7 +1,12 @@
 import { financialTransactionSettlementViolation } from "@cubby/schemas/financial-transaction";
 import { describe, expect, it } from "vitest";
 
-import { statementTransactionKind } from "./statement-transaction-kind";
+import {
+  decideStatementKind,
+  kindAgreed,
+  ownAccountNamed,
+  statementTransactionKind,
+} from "./statement-transaction-kind";
 
 describe("statementTransactionKind", () => {
   it.each([
@@ -84,5 +89,200 @@ describe("statementTransactionKind", () => {
     expect(
       statementTransactionKind({ sourceCategory: "Paychecks", amount: 100 }),
     ).toEqual({ kind: "purchase", kindSource: "sign" });
+  });
+});
+
+const noVotes = { rule: null, label: null, history: null } as const;
+const noCounterparty = { label: null, history: null } as const;
+
+describe("decideStatementKind and kindAgreed", () => {
+  // A provider category alone once made a friend's payment-app credit a clean
+  // `income` suggestion.
+  it("never cleans a payment-app credit from a person filed under Paychecks", () => {
+    const create = decideStatementKind({
+      amount: -40,
+      votes: { ...noVotes, rule: "income", label: "income" },
+      counterparty: { label: "person", history: null },
+      transfer: null,
+    });
+    expect(create).toMatchObject({ kind: "income", kindSource: "model" });
+    expect(kindAgreed(create, null)).toBe(false);
+  });
+
+  it("reads an outgoing payment to a person as a purchase, never clean", () => {
+    const create = decideStatementKind({
+      amount: 25,
+      votes: { rule: "purchase", label: "account_transfer", history: null },
+      counterparty: { label: "person", history: null },
+      transfer: null,
+    });
+    expect(create).toMatchObject({ kind: "purchase", kindSource: "model" });
+    expect(kindAgreed(create, null)).toBe(false);
+  });
+
+  it("cleans a kind only when two sources agree and none disagrees", () => {
+    const agreed = decideStatementKind({
+      amount: 12,
+      votes: { ...noVotes, rule: "purchase", label: "purchase" },
+      counterparty: { ...noCounterparty, label: "business" },
+      transfer: null,
+    });
+    expect(agreed).toMatchObject({ kind: "purchase", kindSource: "rule" });
+    expect(kindAgreed(agreed, null)).toBe(true);
+
+    const alone = decideStatementKind({
+      amount: 12,
+      votes: { ...noVotes, rule: "purchase" },
+      counterparty: { ...noCounterparty, label: "business" },
+      transfer: null,
+    });
+    expect(kindAgreed(alone, null)).toBe(false);
+
+    const disputed = decideStatementKind({
+      amount: -12,
+      votes: { rule: "income", label: "refund", history: "refund" },
+      counterparty: { ...noCounterparty, label: "business" },
+      transfer: null,
+    });
+    expect(disputed).toMatchObject({ kind: "refund", kindSource: "model" });
+    expect(kindAgreed(disputed, null)).toBe(false);
+
+    const mixed = decideStatementKind({
+      amount: 12,
+      votes: { rule: "purchase", label: "purchase", history: "mixed" },
+      counterparty: { ...noCounterparty, label: "business" },
+      transfer: null,
+    });
+    expect(kindAgreed(mixed, null)).toBe(false);
+  });
+
+  it("lets a label and history settle a kind no category spoke to", () => {
+    const create = decideStatementKind({
+      amount: -900,
+      votes: {
+        rule: null,
+        label: "credit_card_payment",
+        history: "credit_card_payment",
+      },
+      counterparty: { ...noCounterparty, label: "business" },
+      transfer: null,
+    });
+    expect(create).toMatchObject({
+      kind: "credit_card_payment",
+      kindSource: "model",
+    });
+    expect(kindAgreed(create, null)).toBe(true);
+  });
+
+  it("holds an unlabelled counterparty back from bulk acceptance", () => {
+    const create = decideStatementKind({
+      amount: 12,
+      votes: { rule: "purchase", label: null, history: "purchase" },
+      counterparty: noCounterparty,
+      transfer: null,
+    });
+    expect(kindAgreed(create, null)).toBe(false);
+  });
+
+  it("records an own-account move as a transfer whatever the category says", () => {
+    const create = decideStatementKind({
+      amount: -150,
+      votes: {
+        rule: "account_transfer",
+        label: "account_transfer",
+        history: null,
+      },
+      counterparty: noCounterparty,
+      transfer: { accountId: crypto.randomUUID(), ledgerTransfer: false },
+    });
+    expect(create).toMatchObject({ kind: "account_transfer" });
+    expect(
+      kindAgreed(create, {
+        accountId: crypto.randomUUID(),
+        ledgerTransfer: false,
+      }),
+    ).toBe(true);
+    // Between two owners the move is also a LedgerTransfer, a reviewed write.
+    expect(
+      kindAgreed(create, {
+        accountId: crypto.randomUUID(),
+        ledgerTransfer: true,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("ownAccountNamed", () => {
+  const bank = {
+    id: "bank",
+    kind: "bank_account" as const,
+    names: ["Example Bank"],
+    ledgerPartyId: "member-a",
+  };
+  const wallet = {
+    id: "wallet",
+    kind: "stored_value" as const,
+    names: ["PayFriend"],
+    ledgerPartyId: "member-a",
+  };
+  const otherWallet = { ...wallet, id: "wallet-b", ledgerPartyId: "member-b" };
+  const card = {
+    id: "card",
+    kind: "credit_card" as const,
+    names: ["Example Card Co"],
+    ledgerPartyId: "member-a",
+  };
+
+  it("matches a cash-out on the bank side and the transfer on the wallet side", () => {
+    expect(
+      ownAccountNamed("PAYFRIEND CASHOUT 8812", bank, [bank, wallet, card]),
+    ).toEqual({ accountId: "wallet", ledgerTransfer: false });
+    expect(
+      ownAccountNamed("Standard transfer to EXAMPLE BANK", wallet, [
+        bank,
+        wallet,
+      ]),
+    ).toEqual({ accountId: "bank", ledgerTransfer: false });
+  });
+
+  it("ignores a payment through the app to someone else", () => {
+    expect(
+      ownAccountNamed("PAYFRIEND *SAMPLE PERSON", card, [bank, wallet, card]),
+    ).toBeNull();
+    expect(
+      ownAccountNamed("PAYFRIEND PAYMENT 1234", bank, [bank, wallet]),
+    ).toBeNull();
+  });
+
+  it("prefers the same owner and flags a move between owners", () => {
+    expect(
+      ownAccountNamed("PAYFRIEND CASHOUT", bank, [bank, wallet, otherWallet]),
+    ).toEqual({ accountId: "wallet", ledgerTransfer: false });
+    expect(
+      ownAccountNamed("PAYFRIEND CASHOUT", bank, [bank, otherWallet]),
+    ).toEqual({ accountId: "wallet-b", ledgerTransfer: true });
+    // Several fits under other owners name no account but still owe one.
+    expect(
+      ownAccountNamed("PAYFRIEND CASHOUT", bank, [
+        bank,
+        otherWallet,
+        { ...otherWallet, id: "wallet-c", ledgerPartyId: "member-c" },
+      ]),
+    ).toEqual({ accountId: null, ledgerTransfer: true });
+  });
+});
+
+describe("decideStatementKind sign rules", () => {
+  // `interest` and `fee` must be positive: an inflow labelled either became an
+  // unappliable suggestion.
+  it("never proposes or cleans a kind the transaction's sign refuses", () => {
+    const create = decideStatementKind({
+      amount: -1.25,
+      votes: { rule: null, label: "interest", history: "interest" },
+      counterparty: { label: "business", history: null },
+      transfer: null,
+    });
+    expect(create).toMatchObject({ kind: "refund", kindSource: "sign" });
+    expect(kindAgreed(create, null)).toBe(false);
   });
 });

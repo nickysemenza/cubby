@@ -24,8 +24,41 @@ export type StatementTransactionAction = z.infer<
   typeof statementTransactionAction
 >;
 
-/** How the proposed kind was chosen; only `rule` is bulk-acceptable. */
+/** Which source chose the proposed kind; agreement, not the source, decides `clean`. */
 export const statementTransactionKindSource = z.enum(["rule", "model", "sign"]);
+
+/**
+ * Each source's vote on a create's kind. A kind is bulk-acceptable only when
+ * at least two votes name it and none names another; `null` abstains and
+ * `mixed` (merchant history of several kinds) disagrees with every kind.
+ * Defaults carry judgments published before the votes were recorded.
+ */
+export const statementKindVotes = z.object({
+  /** The provider-category rule, or an own-account move the descriptor names. */
+  rule: kind.nullable(),
+  /** A high-confidence decision-model label. */
+  label: kind.nullable(),
+  /** Earlier member-made transactions on the account with the same merchant. */
+  history: z.union([kind, z.literal("mixed")]).nullable(),
+});
+export type StatementKindVotes = z.infer<typeof statementKindVotes>;
+
+const counterpartyKind = z.enum(["person", "business"]);
+/** Who is on the other side; a person counterparty is never bulk-acceptable. */
+export const statementCounterparty = z.object({
+  /** A high-confidence decision-model label. */
+  label: counterpartyKind.nullable(),
+  history: counterpartyKind.nullable(),
+});
+export type StatementCounterparty = z.infer<typeof statementCounterparty>;
+
+/** The member's own balance account a cash-out or funding descriptor names. */
+export const statementOwnAccountMove = z.object({
+  /** Null when several of the member's accounts fit the descriptor. */
+  accountId: z.uuid().nullable(),
+  /** The accounts have different owners: a LedgerTransfer is also owed. */
+  ledgerTransfer: z.boolean(),
+});
 
 // Transaction column names rather than a vocabulary of their own, so they are
 // declared outside an inline enum: SQL that names these columns is not using
@@ -62,6 +95,8 @@ export type StatementTransactionCandidate = z.infer<
 export const statementTransactionCreate = z.object({
   kind,
   kindSource: statementTransactionKindSource,
+  votes: statementKindVotes.default({ rule: null, label: null, history: null }),
+  counterparty: statementCounterparty.default({ label: null, history: null }),
   status: z.enum(["posted", "pending"]),
   amount: z.number(),
   transactionDate: plainDate.nullable(),
@@ -92,6 +127,7 @@ export const statementTransactionJudgment = z.object({
     .nullable(),
   /** Other unmatched charges that could be the same money under a firmed-up descriptor. */
   siblings: z.array(z.string()),
+  transfer: statementOwnAccountMove.nullable().default(null),
   clean: z.boolean(),
 });
 export type StatementTransactionJudgment = z.infer<
@@ -160,6 +196,11 @@ export const statementSuggestionOut = z.object({
   candidates: z.array(publicCandidate),
   supersedeTransactionId: financialTransactionShortcode.nullable(),
   voidTransactionId: financialTransactionShortcode.nullable(),
+  /** Pair through finance_read.transfer_pairs once the other leg is recorded. */
+  transfer: statementOwnAccountMove
+    .extend({ accountId: financialAccountShortcode.nullable() })
+    .nullable()
+    .default(null),
   siblings: z.number().int(),
   model: z.string().nullable(),
   createdAt: z.iso.datetime(),

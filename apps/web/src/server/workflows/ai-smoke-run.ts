@@ -31,6 +31,7 @@ import {
   MAILBOX_RELEVANCE_FEATURE,
   MAIL_FINANCIAL_EVENT_FEATURE,
   STATEMENT_CHARGE_IDENTITY_FEATURE,
+  STATEMENT_COUNTERPARTY_FEATURE,
   STATEMENT_TRANSACTION_KIND_FEATURE,
   PURCHASE_IMPORT_EXTRACTION_FEATURE,
   PURCHASE_IMPORT_MAIL_FEATURE,
@@ -626,6 +627,30 @@ async function runCase(
           ),
           feature: STATEMENT_TRANSACTION_KIND_FEATURE,
           usage: { db, runId, operation: "smoke.statementTransactionKind" },
+        }),
+      };
+    }
+    case "statementCounterparty": {
+      const { fixture } = aiSmokeInputs.statementCounterparty.parse(raw);
+      return {
+        result: await runDecisionChoice({
+          ...STATEMENT_COUNTERPARTY_FEATURE.prompt(
+            JSON.stringify(
+              fixture === "friend_repayment"
+                ? {
+                    descriptor: "PAYFRIEND FROM SAMPLE FRIEND",
+                    amount: -40,
+                    category: "Paychecks",
+                  }
+                : {
+                    descriptor: "EXAMPLE HARDWARE CO #12",
+                    amount: 18.4,
+                    category: "Home Improvement",
+                  },
+            ),
+          ),
+          feature: STATEMENT_COUNTERPARTY_FEATURE,
+          usage: { db, runId, operation: "smoke.statementCounterparty" },
         }),
       };
     }

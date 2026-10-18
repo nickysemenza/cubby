@@ -20,6 +20,7 @@ import {
   MAIL_ATTRIBUTION_FEATURE,
   MAIL_FINANCIAL_EVENT_FEATURE,
   STATEMENT_CHARGE_IDENTITY_FEATURE,
+  STATEMENT_COUNTERPARTY_FEATURE,
   STATEMENT_TRANSACTION_KIND_FEATURE,
   MAIL_SOURCE_RELATION_FEATURE,
   UPC_OFFER_COMPARABILITY_FEATURE,
@@ -204,7 +205,14 @@ export const AI_SMOKE_CASES = {
   statementTransactionKind: {
     feature: STATEMENT_TRANSACTION_KIND_FEATURE,
     label: "Statement transaction kind",
-    description: "Classify a synthetic uncategorized statement row",
+    description: "Classify a synthetic statement row's kind",
+    group: "Decisions",
+  },
+  statementCounterparty: {
+    feature: STATEMENT_COUNTERPARTY_FEATURE,
+    label: "Statement counterparty",
+    description:
+      "Decide whether a synthetic statement row's other side is a person or a business",
     group: "Decisions",
   },
 

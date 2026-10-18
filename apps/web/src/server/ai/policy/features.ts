@@ -104,6 +104,8 @@ import {
 import {
   statementChargeIdentityChoices,
   statementChargeIdentityPrompt,
+  statementCounterpartyChoices,
+  statementCounterpartyPrompt,
   statementTransactionKindChoices,
   statementTransactionKindPrompt,
 } from "./prompts/statement";
@@ -218,11 +220,22 @@ export const STATEMENT_CHARGE_IDENTITY_FEATURE = defineFeature({
   collectPayload: false,
 });
 
-/** Fallback kind for a statement row no provider category classified. */
+/** The decision model's vote on a statement Transaction suggestion's kind. */
 export const STATEMENT_TRANSACTION_KIND_FEATURE = defineFeature({
   prompt: statementTransactionKindPrompt,
   choices: statementTransactionKindChoices,
   feature: "statement-transaction-kind",
+  promptVersion: "2026-10-18.2",
+  tier: "decision",
+  cache: true,
+  collectPayload: false,
+});
+
+/** Person or business on the other side of a statement Transaction suggestion. */
+export const STATEMENT_COUNTERPARTY_FEATURE = defineFeature({
+  prompt: statementCounterpartyPrompt,
+  choices: statementCounterpartyChoices,
+  feature: "statement-counterparty",
   promptVersion: "2026-10-18.1",
   tier: "decision",
   cache: true,
@@ -562,6 +575,7 @@ export const AI_FEATURES = [
   MAIL_FINANCIAL_EVENT_FEATURE,
   STATEMENT_CHARGE_IDENTITY_FEATURE,
   STATEMENT_TRANSACTION_KIND_FEATURE,
+  STATEMENT_COUNTERPARTY_FEATURE,
   UPC_OFFER_COMPARABILITY_FEATURE,
   IMAGE_PROVENANCE_CLASSIFICATION_FEATURE,
   PRODUCT_VARIANT_RELATION_FEATURE,

@@ -220,3 +220,20 @@ labels republish the same evidence fingerprint under a model producer; apply
 recomputes that evidence fingerprint inside the review transaction and marks
 the state applied before writing refs, because a new live ref supersedes
 every pending suggestion naming it.
+
+A create's kind is clean only by agreement (2026-10-18). Three sources vote:
+the provider-category rule (overridden by a descriptor naming the member's own
+balance account, which makes the charge an `account_transfer`), a
+high-confidence decision label that sees the category only as a hint, and
+merchant history — at least two earlier live transactions on the account with
+the same normalized merchant, all of one kind. History counts only
+transactions a member created or chose: one created by accepting a clean
+create as is records the rule's own vote, read from its applied Assessment
+and Correct Feedback, and is excluded. Mixed history disagrees. The judgment
+records every vote; a kind is clean when at least two name it and none names
+another, the label says the counterparty is a business (or the descriptor
+names one same-owner own account), and neither the label nor history says a
+person. A person counterparty is never clean: an outflow is the member's share
+of a shared cost (`purchase`), an inflow a repayment (`income`, booked as a
+reimbursement). An own-account move between different owners also owes a
+LedgerTransfer and is never clean.

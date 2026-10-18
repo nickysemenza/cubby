@@ -95,6 +95,27 @@ export async function listStatementSuggestions(
   }
   const code = (id: string) =>
     parseShortcodeFor("financialTransaction", codes.get(id)!);
+  const transferAccountIds = [
+    ...new Set(
+      judgments.flatMap((judgment) =>
+        judgment.transfer?.accountId ? [judgment.transfer.accountId] : [],
+      ),
+    ),
+  ];
+  const accountCodes = new Map<string, string>();
+  if (transferAccountIds.length) {
+    const { rows } = await unwrapDb(db).execute<{
+      id: string;
+      shortcode: string;
+    }>(sql`
+      SELECT id, shortcode FROM "FinancialAccount"
+      WHERE "deletedAt" IS NULL AND id IN (${sql.join(
+        transferAccountIds.map((id) => sql`${id}::uuid`),
+        sql`, `,
+      )})
+    `);
+    for (const row of rows) accountCodes.set(String(row.id), row.shortcode);
+  }
   const data: StatementSuggestionOut[] = page.rows.flatMap((row, index) => {
     const judgment = judgments[index]!;
     // A candidate deleted since publication drops out; the trigger-free
@@ -135,6 +156,16 @@ export async function listStatementSuggestions(
           judgment.void && codes.has(judgment.void.transactionId)
             ? code(judgment.void.transactionId)
             : null,
+        transfer: judgment.transfer && {
+          ledgerTransfer: judgment.transfer.ledgerTransfer,
+          // An account deleted since publication names no account.
+          accountId: accountCodes.has(judgment.transfer.accountId ?? "")
+            ? parseShortcodeFor(
+                "financialAccount",
+                accountCodes.get(judgment.transfer.accountId!)!,
+              )
+            : null,
+        },
         siblings: judgment.siblings.length,
         model: row.model === "rule" ? null : row.model,
         createdAt: new Date(row.createdAt).toISOString(),
