@@ -176,7 +176,10 @@ import {
   purchaseCoverageSql,
   purchaseEvidenceFieldResolutionsSql,
 } from "./purchase-evidence-policy";
-import { purchasePurchaserSql } from "./purchase-purchaser";
+import {
+  purchasePurchaserSetSql,
+  purchasePurchaserSql,
+} from "./purchase-purchaser";
 
 export const PURCHASE_DELETE_EDGE_POLICY = {
   "SourceOrderObservation.purchaseId": {
@@ -635,6 +638,10 @@ const purchaseScaffold = listScaffold("purchase", purchase, {
         sql`CASE WHEN ${gapCondition("purchase", "settlement_mismatch", undefined, read)} THEN ${purchaseFinancialReconciliation.enum.mismatch}::text END`,
     ),
     reconciliation: listReadValue(reconciliationSql),
+    effectivePurchaser: {
+      value: purchasePurchaserSql,
+      set: purchasePurchaserSetSql,
+    },
   },
 });
 

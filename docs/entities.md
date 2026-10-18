@@ -372,7 +372,9 @@ inferred from stored evidence rather than one FK path and stores nothing of its
 own (ADR 0011). It names the target's list filter descriptor that answers
 "records related to this one"; a relation section, HTTP, MCP and native read it
 through that filter, and the graph walker, delete policy and FK manifest test
-skip it. Purchase, Vendor and Vendor Account declare `emails` this way.
+skip it. Purchase, Vendor and Vendor Account declare `emails` this way, and
+Ledger Party declares `purchases` over Purchase's effective `purchaserId`
+filter; a derived section uses the filter its relation names.
 
 **Emails sections.** Purchase, Vendor and Vendor Account detail embed the Email
 list scoped by its `purchaseId`, `vendorId` or `vendorAccountId` filter, one
@@ -1614,7 +1616,11 @@ one shape:
   and its filters match `id IN (SELECT "id" FROM set WHERE …)`, so one
   set-based walk serves the filter while sort, group, and projection read the
   per-row `value`, which must agree with it row for row (product
-  `ledgerExpectedQuantity` shares one kit walk).
+  `ledgerExpectedQuantity` shares one kit walk). A filter's `value IN (…)`
+  pushes into a set whose branches expose `value` from an indexed column, so
+  purchase `effectivePurchaser` reads only the requested parties'
+  candidates before confirming them. A `text` value that holds a record's
+  shortcode backs a branded `idMulti` filter, as that one does.
 - `{ predicate, reason }` is filter-only SQL the repository passes the same
   way; `reason` says why it is not one row value (an effective owner is
   resolved outside SQL). Predicates are the countable declared exception and

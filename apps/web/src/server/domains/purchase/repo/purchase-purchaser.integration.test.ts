@@ -1,3 +1,9 @@
+import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
+import type {
+  FinancialAccountId,
+  PurchaseId,
+} from "@cubby/schemas/identifiers";
+import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -5,9 +11,10 @@ import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { seedEmailLinkDecision } from "tooling/shared-assessment-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
-import { unwrapDb, insertAndReturn } from "~/server/db/helpers";
-import { auditLog, orderMailEvent } from "~/server/db/schema";
+import { getDb, unwrapDb, insertAndReturn } from "~/server/db/helpers";
+import { auditLog, ledgerParty, orderMailEvent } from "~/server/db/schema";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
 import {
   createFinancialAccount,
@@ -20,6 +27,13 @@ import {
   mergeLedgerParties,
 } from "~/server/domains/ledger-party/repo/ledger-party";
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
+import { entityKernelContextSchema } from "~/server/entity-kernel";
+import { createMcpServer } from "~/server/mcp/server";
+import {
+  callMcpTool,
+  kernelRequestContext,
+} from "~/server/testing/mcp-test-utils";
+import { createTestRequestContext } from "~/server/testing/request-context";
 
 import {
   mergePurchases,
@@ -432,5 +446,176 @@ describe("dated card attribution", () => {
         ctx.actor,
       ),
     ).rejects.toThrow("conflicting purchaser overrides");
+  });
+});
+
+// Failures: the purchaser filter disagreeing with the displayed purchaserId
+// (a candidate source missing, or a settlement_party_conflict order still
+// listed), `@me` not reaching MCP, and the member's Purchases section reading
+// only overrides.
+describe("purchaser filter", () => {
+  const ctx = withTestDb();
+  it("lists exactly the purchases whose displayed purchaserId is the member", async () => {
+    const member = async (name: string) =>
+      createRepoEntity(ctx, "ledgerParty", { name, kind: "member" });
+    const { output: alex, entityId: alexId } = await member("Alex");
+    const { output: morgan } = await member("Morgan");
+    const { output: vendor, entityId: vendorId } = await createRepoEntity(
+      ctx,
+      "vendor",
+    );
+    const account = async (owner: string) =>
+      (
+        await createRepoEntity(ctx, "vendorAccount", {
+          vendorId: vendor.id,
+          ledgerPartyId: owner,
+        })
+      ).output.id;
+    const alexAccount = await account(alex.id);
+    const morganAccount = await account(morgan.id);
+    const card = async (holder: string) =>
+      (
+        await createRepoEntity(ctx, "financialAccount", {
+          identity: {
+            kind: "credit_card",
+            issuer: "Example Bank",
+            network: "visa",
+          },
+          ledgerPartyId: holder,
+          primaryCardholderId: holder,
+        })
+      ).entityId;
+    const alexCard = await card(alex.id);
+    const morganCard = await card(morgan.id);
+    const order = async (
+      orderId: string,
+      fields: { vendorAccountId?: string; purchaserOverrideId?: string } = {},
+    ) =>
+      createRepoEntity(ctx, "purchase", {
+        vendorId: vendor.id,
+        orderId,
+        date: "2026-06-01",
+        ...fields,
+      });
+    const settle = (accountId: FinancialAccountId, purchaseId: PurchaseId) =>
+      insertSettlementTransaction(ctx.db, {
+        accountId,
+        purchaseId,
+        kind: "purchase",
+        status: "posted",
+        amount: 25,
+        transactionDate: "2026-06-01",
+        postedDate: "2026-06-02",
+      });
+
+    const overridden = await order("SYN-OVERRIDE", {
+      vendorAccountId: morganAccount,
+      purchaserOverrideId: alex.id,
+    });
+    const byAccount = await order("SYN-ACCOUNT", {
+      vendorAccountId: alexAccount,
+    });
+    const byCard = await order("SYN-CARD");
+    await settle(alexCard, byCard.entityId);
+    const byEmail = await order("SYN-EMAIL");
+    const original = await syntheticRetainedMail(ctx.db, {
+      ledgerPartyId: alexId,
+      mailboxId: "synthetic-filter",
+      messageId: "synthetic-filter-message",
+      vendorId,
+      sender: "receipts@example.test",
+      subject: "Synthetic receipt",
+      receivedAt: new Date("2026-06-01T12:00:00Z"),
+      rawChecksum: "f".repeat(64),
+      content: { bodyText: "Synthetic receipt", bodyHtml: null, snippet: null },
+    });
+    const event = await insertAndReturn(ctx.db, orderMailEvent, {
+      orderMailId: original.id,
+      event: "placed",
+      orderId: "SYN-EMAIL",
+      sourceKey: "synthetic-filter-event",
+    });
+    await seedEmailLinkDecision(ctx.db, {
+      eventId: event.id,
+      purchaseId: byEmail.entityId,
+      decision: "linked",
+      evidenceChecksum: "f".repeat(64),
+      decidedByUserId: ctx.actor.userId,
+      proposedBy: "member",
+    });
+    // Alex's order paid on Morgan's card: a candidate for both, decided for neither.
+    const conflicted = await order("SYN-CONFLICT", {
+      vendorAccountId: alexAccount,
+    });
+    await settle(morganCard, conflicted.entityId);
+    const morgans = await order("SYN-MORGAN", {
+      vendorAccountId: morganAccount,
+    });
+
+    const page = { pageIndex: 0, pageSize: 50 };
+    const ids = async (filters: Parameters<typeof purchaseList>[1]) =>
+      (await purchaseList(ctx.db, filters, [], page)).data
+        .map((row) => row.id)
+        .sort();
+    const displayed = (await purchaseList(ctx.db, {}, [], page)).data;
+    const shownFor = (party: string) =>
+      displayed
+        .filter((row) => row.purchaserId === party)
+        .map((row) => row.id)
+        .sort();
+    expect(
+      displayed.find((row) => row.id === conflicted.output.id)?.purchaserId,
+    ).toBeNull();
+    expect(shownFor(alex.id)).toEqual(
+      [overridden, byAccount, byCard, byEmail]
+        .map(({ output }) => output.id)
+        .sort(),
+    );
+    expect(shownFor(morgan.id)).toEqual([morgans.output.id]);
+    for (const party of [alex.id, morgan.id])
+      expect(await ids({ purchaserId: [party] })).toEqual(shownFor(party));
+    expect(await ids({ purchaserIdExclude: [alex.id] })).toEqual(
+      displayed
+        .filter((row) => row.purchaserId !== alex.id)
+        .map((row) => row.id)
+        .sort(),
+    );
+
+    // MCP entity_read resolves `@me` to the actor's member.
+    await getDb(ctx.db)
+      .update(ledgerParty)
+      .set({ userId: ctx.actor.userId })
+      .where(eq(ledgerParty.id, alexId));
+    const entityKernel = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const listed = await callMcpTool(
+      createMcpServer(),
+      "entity_read",
+      {
+        action: "list",
+        entity: "purchase",
+        filters: { purchaserId: [CURRENT_MEMBER_FILTER] },
+        fields: ["id"],
+      },
+      kernelRequestContext(entityKernel),
+      { entityKernel },
+    );
+    expect(listed.isError).not.toBe(true);
+    expect(
+      z
+        .object({ items: z.array(z.object({ id: z.string() })) })
+        .parse(listed.structuredContent)
+        .items.map((item) => item.id)
+        .sort(),
+    ).toEqual(shownFor(alex.id));
+
+    // The member's Purchases section reads through the same filter.
+    expect(
+      entityInspectorMetadata.ledgerParty.detail.sections.find(
+        (section) =>
+          section.kind === "relation" && section.relation === "purchases",
+      ),
+    ).toMatchObject({ filter: { descriptor: "purchaserId" } });
   });
 });

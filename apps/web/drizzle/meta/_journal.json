@@ -596,6 +596,13 @@
       "when": 1792271301338,
       "tag": "0084_payment_tender_and_payment_account_link",
       "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1792282036937,
+      "tag": "0085_purchaser_filter_indexes",
+      "breakpoints": true
     }
   ]
 }

@@ -532,6 +532,14 @@ export default defineEntity({
         name: "Email_pending_idx",
         on: ["ledgerPartyId", "mailboxId", "status"],
       },
+      {
+        // An import claim's message key (`purchaseAssociatedEmailsSql`).
+        name: "Email_source_key_idx",
+        on: [
+          "ledgerPartyId",
+          { sql: "({provider} || ':' || {mailboxId} || ':' || {messageId})" },
+        ],
+      },
       { on: ["orderMailId"], unique: true, where: "{orderMailId} IS NOT NULL" },
       { on: ["ledgerPartyId", { column: "receivedAt", desc: true }] },
     ],

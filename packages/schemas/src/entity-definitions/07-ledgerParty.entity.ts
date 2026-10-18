@@ -280,6 +280,24 @@ export default defineEntity({
   },
   relations: [
     {
+      key: "purchases",
+      label: "Purchases",
+      target: "purchase",
+      cardinality: "many",
+      // The Purchases whose effective purchaserId is this member (ADR 0011).
+      provenance: {
+        kind: "derived",
+        filter: "purchaserId",
+        evidence: [
+          "Purchase",
+          "FinancialTransactionAllocation",
+          "VendorAccount",
+          "ImportSourceOrder",
+          "OrderMailEvent",
+        ],
+      },
+    },
+    {
       key: "expenses",
       label: "Attributed expenses",
       target: "expense",

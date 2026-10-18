@@ -153,24 +153,36 @@ export const purchaseAssociatedEmailsSql = (
   purchaseId: SQL,
   accountOwnerScope: "respect" | "ignore" = "respect",
 ): SQL => sql`
-  WITH accepted_identities AS MATERIALIZED (
-    SELECT DISTINCT identity."ledgerPartyId", identity."kind", identity."externalKey"
+  WITH accepted_roots AS MATERIALIZED (
+    SELECT DISTINCT coalesce(family."canonicalClaimId", family."id") AS id
     FROM "ImportSourceOrder" accepted
     JOIN "ImportSourceClaim" family ON family."id" = accepted."sourceClaimId"
-    JOIN "ImportSourceClaim" identity
-      ON coalesce(identity."canonicalClaimId", identity."id") = coalesce(family."canonicalClaimId", family."id")
     WHERE accepted."purchaseId" = ${purchaseId}
+  ), accepted_identities AS MATERIALIZED (
+    -- The claims whose coalesce(canonicalClaimId, id) is a root, split so
+    -- each arm reads an index rather than every claim.
+    SELECT identity."ledgerPartyId", identity."kind", identity."externalKey"
+    FROM accepted_roots root
+    JOIN "ImportSourceClaim" identity ON identity."id" = root.id AND identity."canonicalClaimId" IS NULL
+    UNION
+    SELECT identity."ledgerPartyId", identity."kind", identity."externalKey"
+    FROM accepted_roots root
+    JOIN "ImportSourceClaim" identity ON identity."canonicalClaimId" = root.id
   ), candidate_ids AS (
     SELECT candidate."id"
     FROM accepted_identities identity
     JOIN "Email" candidate ON candidate."deletedAt" IS NULL
       AND candidate."ledgerPartyId" = identity."ledgerPartyId"
-      AND (
-        (identity."kind" = ${importSourceKind.enum.mail_message}
-          AND identity."externalKey" = candidate."provider" || ':' || candidate."mailboxId" || ':' || candidate."messageId")
-        OR (identity."kind" = ${importSourceKind.enum.mail_attachment}
-          AND starts_with(identity."externalKey", candidate."provider" || ':' || candidate."mailboxId" || ':' || candidate."messageId" || ':attachment:'))
-      )
+      -- Separate arms: the message key matches "Email_source_key_idx".
+      AND identity."kind" = ${importSourceKind.enum.mail_message}
+      AND identity."externalKey" = candidate."provider" || ':' || candidate."mailboxId" || ':' || candidate."messageId"
+    UNION
+    SELECT candidate."id"
+    FROM accepted_identities identity
+    JOIN "Email" candidate ON candidate."deletedAt" IS NULL
+      AND candidate."ledgerPartyId" = identity."ledgerPartyId"
+      AND identity."kind" = ${importSourceKind.enum.mail_attachment}
+      AND starts_with(identity."externalKey", candidate."provider" || ':' || candidate."mailboxId" || ':' || candidate."messageId" || ':attachment:')
     UNION
     SELECT candidate."id"
     FROM "AssessmentEmailLink" decision
