@@ -188,7 +188,12 @@ describe("manifestFilterConfig", () => {
     for (const entity of browserRoutedEntities) {
       const specs = getEntityFilters(entity);
       for (const field of manifestFilterFields(specs)) {
-        if (field.type === "text" || field.freeText || field.dateRange)
+        if (
+          field.type === "text" ||
+          field.freeText ||
+          field.dateRange ||
+          field.numberRange
+        )
           continue;
         const spec = specs.find(({ columnId }) => columnId === field.key);
         if (spec?.optionsKey || spec?.referenceEntity) continue;

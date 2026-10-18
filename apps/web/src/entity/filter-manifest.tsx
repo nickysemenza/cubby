@@ -184,7 +184,8 @@ const specFilterConfig = (
     matchAll: spec.match === undefined ? undefined : true,
     exclude: spec.exclude && { reason: spec.exclude.reason },
     subtree: subtreeControl(spec, specs),
-    dateRange: spec.range === undefined ? undefined : true,
+    dateRange: spec.range && !spec.range.number ? true : undefined,
+    numberRange: spec.range?.number,
     onActivate: deferred?.onActivate,
     onSearchChange: deferred?.onSearchChange,
     isLoading: deferred?.isLoading,
@@ -201,17 +202,6 @@ export function manifestFilterConfig(
   if (!spec) return undefined;
   return specFilterConfig(spec, specs, runtimeOptions);
 }
-
-/**
- * A range with no presets, no date bounds and no pass-through value has no
- * web encoding at all (image `uploadedAgeHours`, a number range that only
- * MCP and native send), so it has no menu field to offer.
- */
-const isExpressible = (spec: FilterSpec): boolean =>
-  spec.kind !== "range" ||
-  spec.range !== undefined ||
-  spec.expand !== undefined ||
-  !hasNoRoster(spec);
 
 /**
  * The specs a list's Filters menu offers beside its columns' own: every
@@ -262,7 +252,7 @@ export function manifestFilterFields(
   include: (spec: FilterSpec) => boolean = () => true,
 ): FilterBarField[] {
   return editableFilterSpecs(specs)
-    .filter((spec) => isExpressible(spec) && include(spec))
+    .filter(include)
     .map((spec) => {
       const field = barFieldFromConfig(
         spec.columnId,

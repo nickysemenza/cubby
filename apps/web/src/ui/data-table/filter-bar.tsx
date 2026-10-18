@@ -7,9 +7,12 @@ import {
   splitTypedList,
 } from "@cubby/schemas/filter-sentinel-fields";
 import {
+  describeNumberRangeBounds,
   describeRangeBounds,
   describeRelativeDate,
   formatRangeBounds,
+  type NumberRange,
+  parseNumberBound,
   parseRangeBounds,
   relativeDateOffset,
   RELATIVE_DATE_TODAY,
@@ -96,7 +99,9 @@ export function filterSummary(
   if (field.type === "text") return filter.values[0] ?? "any";
   const bounds = field.dateRange
     ? describeRangeBounds(filter.values[0] ?? "")
-    : undefined;
+    : field.numberRange
+      ? describeNumberRangeBounds(filter.values[0] ?? "", field.numberRange)
+      : undefined;
   if (bounds !== undefined) return bounds;
   const labels = new Map(
     visibleOptions(field, filter).map((option) => [option.value, option.label]),
@@ -433,6 +438,112 @@ function DateRangeBounds({
   );
 }
 
+const numberBoundError = ({ nonnegative, int }: NumberRange): string =>
+  `Enter a ${int ? "whole " : ""}number${nonnegative ? " 0 or more" : ""}.`;
+
+/** One side of a number range: typed as is, kept only once it is valid. */
+function NumberBound({
+  label,
+  description,
+  range,
+  text,
+  onChange,
+}: {
+  label: string;
+  description: string | undefined;
+  range: NumberRange;
+  text: string;
+  onChange: (text: string) => void;
+}) {
+  const invalid =
+    text.trim() !== "" && parseNumberBound(text, range) === undefined;
+  return (
+    <div className="flex flex-col gap-1">
+      <Input
+        type="number"
+        inputMode={range.int ? "numeric" : "decimal"}
+        step="any"
+        min={range.nonnegative ? 0 : undefined}
+        aria-label={label}
+        aria-invalid={invalid || undefined}
+        className="tabular-nums"
+        value={text}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <p
+        className={cn(
+          "px-1 text-xs",
+          invalid ? "text-destructive" : "text-muted-foreground",
+        )}
+      >
+        {invalid ? numberBoundError(range) : description}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Custom bounds for a number range filter, beside any presets. The value is
+ * `min..max`; an invalid side (negative under `nonnegative`) shows its error
+ * and leaves the filter as it was until it is fixed or emptied.
+ */
+function NumberRangeBounds({
+  label,
+  range,
+  value,
+  separated,
+  onChange,
+}: {
+  label: string;
+  range: NumberRange;
+  /** Presets sit above, so a rule sets the bounds apart. */
+  separated: boolean;
+  value: string | undefined;
+  onChange: (value: string | undefined) => void;
+}) {
+  const bounds = value === undefined ? undefined : parseRangeBounds(value);
+  const [min, setMin] = useState(bounds?.from ?? "");
+  const [max, setMax] = useState(bounds?.to ?? "");
+  const update = (nextMin: string, nextMax: string) => {
+    setMin(nextMin);
+    setMax(nextMax);
+    const parse = (text: string) =>
+      text.trim() === "" ? null : parseNumberBound(text, range);
+    const low = parse(nextMin);
+    const high = parse(nextMax);
+    if (low === undefined || high === undefined) return;
+    onChange(
+      formatRangeBounds(
+        low === null ? undefined : String(low),
+        high === null ? undefined : String(high),
+      ),
+    );
+  };
+  return (
+    <div
+      className={cn(
+        "flex flex-col gap-2",
+        separated && "border-t border-border pt-3",
+      )}
+    >
+      <NumberBound
+        label={`${label} minimum`}
+        description={range.describe?.lower}
+        range={range}
+        text={min}
+        onChange={(next) => update(next, max)}
+      />
+      <NumberBound
+        label={`${label} maximum`}
+        description={range.describe?.upper}
+        range={range}
+        text={max}
+        onChange={(next) => update(min, next)}
+      />
+    </div>
+  );
+}
+
 /** The editor body for one field's popover — shape depends on its declared type. */
 /**
  * A rosterless multiselect (an external id): values typed comma-separated.
@@ -528,9 +639,9 @@ function FilterValueEditor({
   }
   const value = filter?.values[0];
   const isBounds =
-    field.dateRange === true &&
+    (field.dateRange === true || field.numberRange !== undefined) &&
     value !== undefined &&
-    describeRangeBounds(value) !== undefined;
+    parseRangeBounds(value) !== undefined;
   const picker = (
     <Picker
       options={options}
@@ -549,6 +660,21 @@ function FilterValueEditor({
       isLoading={field.isLoading}
     />
   );
+  if (field.numberRange) {
+    return (
+      <>
+        {options.length > 0 && picker}
+        <NumberRangeBounds
+          key={isBounds || value === undefined ? "bounds" : value}
+          label={field.label ?? field.key}
+          range={field.numberRange}
+          value={isBounds ? value : undefined}
+          separated={options.length > 0}
+          onChange={(next) => setValues(next === undefined ? [] : [next])}
+        />
+      </>
+    );
+  }
   if (!field.dateRange) return picker;
   return (
     <>

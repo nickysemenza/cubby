@@ -57,6 +57,31 @@ const presetTable = (
   return presets.length === 0 ? null : Object.fromEntries(presets);
 };
 
+/**
+ * A number range's bound keys with its declared constraints, so the web
+ * editor and URL codec accept the bounds the list route does. Null for a
+ * date range or any other filter.
+ */
+const numberRangeBounds = (descriptor: FilterDescriptor) => {
+  if (
+    descriptor.kind !== "range" ||
+    descriptor.wire.kind !== "range" ||
+    dateRangeBounds(descriptor) !== null
+  )
+    return null;
+  const { from, to } = descriptor.wire;
+  const range = descriptor.range;
+  return {
+    from,
+    to,
+    number: {
+      ...(range?.nonnegative ? { nonnegative: true } : {}),
+      ...(range?.int ? { int: true } : {}),
+      ...(range?.describe ? { describe: range.describe } : {}),
+    },
+  };
+};
+
 export const renderFilterArtifacts = (
   entities: readonly CompiledEntity[],
 ): EntityArtifacts[] => {
@@ -125,6 +150,9 @@ export const renderFilterArtifacts = (
       ...(dateRangeBounds(descriptor) === null
         ? []
         : [`range:${compactLiteral(dateRangeBounds(descriptor))}`]),
+      ...(numberRangeBounds(descriptor) === null
+        ? []
+        : [`range:${compactLiteral(numberRangeBounds(descriptor))}`]),
       ...(descriptor.nullable === null
         ? []
         : [`nullable:${compactLiteral(descriptor.nullable)}`]),

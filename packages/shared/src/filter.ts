@@ -117,3 +117,59 @@ export const describeRangeBounds = (value: string): string | undefined => {
   if (from) return `on or after ${describeDateBound(from)}`;
   return to ? `on or before ${describeDateBound(to)}` : undefined;
 };
+
+/**
+ * A number range filter as its declaration constrains it; its value is the
+ * same `min..max` bounds a date range uses, each side a plain number.
+ */
+export type NumberRange = Readonly<{
+  nonnegative?: boolean;
+  int?: boolean;
+  describe?: Readonly<{ lower: string; upper: string }>;
+}>;
+
+const NUMBER_BOUND_PATTERN = /^-?(?:\d+\.?\d*|\.\d+)$/;
+
+/**
+ * One typed number bound, or undefined when it is not a plain decimal the
+ * declaration accepts (negative under `nonnegative`, fractional under `int`).
+ */
+export const parseNumberBound = (
+  text: string,
+  range: NumberRange,
+): number | undefined => {
+  const trimmed = text.trim();
+  if (!NUMBER_BOUND_PATTERN.test(trimmed)) return undefined;
+  const value = Number(trimmed);
+  if (range.nonnegative && value < 0) return undefined;
+  if (range.int && !Number.isInteger(value)) return undefined;
+  return value;
+};
+
+/** A number range's `min..max` value with each invalid side dropped. */
+export const parseNumberRangeBounds = (
+  value: string,
+  range: NumberRange,
+): { min: number | undefined; max: number | undefined } | undefined => {
+  const bounds = parseRangeBounds(value);
+  if (bounds === undefined) return undefined;
+  const min =
+    bounds.from === undefined
+      ? undefined
+      : parseNumberBound(bounds.from, range);
+  const max =
+    bounds.to === undefined ? undefined : parseNumberBound(bounds.to, range);
+  return min === undefined && max === undefined ? undefined : { min, max };
+};
+
+/** A number range's bounds as a chip reads them ("at least 2", "1 to 48"). */
+export const describeNumberRangeBounds = (
+  value: string,
+  range: NumberRange,
+): string | undefined => {
+  const bounds = parseNumberRangeBounds(value, range);
+  if (bounds === undefined) return undefined;
+  const { min, max } = bounds;
+  if (min !== undefined && max !== undefined) return `${min} to ${max}`;
+  return min === undefined ? `at most ${max}` : `at least ${min}`;
+};

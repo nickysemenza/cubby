@@ -267,3 +267,74 @@ test("editing Parent task after landing on its deep-link alias", async ({
   await expect(row(childA.name)).toHaveCount(0);
   expect(new URL(page.url()).searchParams.get("parentTask")).toBe(parentB.id);
 });
+
+// Failure modes: a declared number range with no presets (image upload age)
+// had no web encoding, so the menu hid it; a negative bound against a
+// nonnegative declaration reached the server and failed the list query; a
+// reload lost the bounds' chip; a hand-edited invalid deep link failed the
+// whole list instead of dropping the bound.
+test("a number range filter keeps its bounds through entry, reload and clear", async ({
+  page,
+}) => {
+  const param = () => new URL(page.url()).searchParams.get("uploadedAgeHours");
+  await gotoAuthenticatedPage(page, "/images");
+  await page.getByRole("button", { name: "Filters", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Upload age: any", exact: true })
+    .click();
+  const min = page.getByRole("spinbutton", { name: "Upload age minimum" });
+  const max = page.getByRole("spinbutton", { name: "Upload age maximum" });
+  await expect(
+    page.getByText("Only images uploaded at least this many hours ago."),
+  ).toBeVisible();
+
+  const bounded = succeedsWith(page, (body) =>
+    body.includes('"uploadedAgeHoursMin":1.5'),
+  );
+  await min.fill("1.5");
+  await bounded;
+  await expect.poll(param).toBe("1.5..");
+
+  await max.fill("-2");
+  await expect(max).toHaveAttribute("aria-invalid", "true");
+  await expect(page.getByText("Enter a number 0 or more.")).toBeVisible();
+  await expect.poll(param).toBe("1.5..");
+
+  const ranged = succeedsWith(page, (body) =>
+    body.includes('"uploadedAgeHoursMax":48'),
+  );
+  await max.fill("48");
+  await ranged;
+  await expect.poll(param).toBe("1.5..48");
+  await closePopovers(page);
+
+  const chip = page.getByRole("button", {
+    name: "Upload age: 1.5 to 48",
+    exact: true,
+  });
+  await reloadAuthenticatedPage(page);
+  await expect(chip).toBeVisible();
+  await chip.click();
+  await expect(min).toHaveValue("1.5");
+  await expect(max).toHaveValue("48");
+  await min.fill("");
+  await max.fill("");
+  await expect.poll(param).toBeNull();
+  await closePopovers(page);
+  await expect(chip).toHaveCount(0);
+
+  const dropped = page.waitForRequest((request) =>
+    dispatchOperations(request).some((item) => {
+      const body = inputText(item.input);
+      return (
+        body.includes('"uploadedAgeHoursMin":2') &&
+        !body.includes("uploadedAgeHoursMax")
+      );
+    }),
+  );
+  await gotoAuthenticatedPage(page, "/images?uploadedAgeHours=2..-3");
+  await dropped;
+  await expect(
+    page.getByRole("button", { name: "Upload age: at least 2", exact: true }),
+  ).toBeVisible();
+});
