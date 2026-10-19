@@ -37,6 +37,7 @@ describe("ChatGPT plan Responses transport", () => {
         tool_choice: { type: "function", name: "respond" },
       },
       "plan-model",
+      { breakpoints: false },
     );
     expect(request).toEqual({
       model: "plan-model",
@@ -71,7 +72,7 @@ describe("ChatGPT plan Responses transport", () => {
     });
   });
 
-  it("keeps the tool block in the cached prefix, or trailing on request", () => {
+  it("keeps the tool block in the cached prefix", () => {
     const body = {
       input: [
         { role: "system", content: "Frame" },
@@ -81,24 +82,65 @@ describe("ChatGPT plan Responses transport", () => {
       ],
       tools: [{ type: "function", name: "claim" }],
     };
-    const order = (placement?: "leading" | "trailing") =>
-      chatGptRequest(body, "plan-model", placement).input.map(
+    expect(
+      chatGptRequest(body, "plan-model").input.map(
         (entry) => entry.type ?? entry.role,
-      );
-    expect(order()).toEqual([
+      ),
+    ).toEqual([
       "developer",
       "developer",
       "additional_tools",
       "user",
       "developer",
     ]);
-    expect(order("trailing")).toEqual([
-      "developer",
-      "developer",
-      "user",
-      "developer",
-      "additional_tools",
-    ]);
+  });
+
+  // The plan's implicit cache rarely reused a Run's growing conversation:
+  // without a breakpoint on each tool result, every turn re-reads it uncached.
+  it("marks each tool result as a cache breakpoint unless told not to", () => {
+    const body = {
+      input: [
+        { role: "user", content: "Synthetic Email" },
+        {
+          type: "function_call",
+          call_id: "c1",
+          name: "claim",
+          arguments: "{}",
+        },
+        {
+          type: "function_call_output",
+          call_id: "c1",
+          output: '{"kind":"none"}',
+        },
+        {
+          type: "function_call_output",
+          call_id: "c2",
+          output: [
+            { type: "input_image", image_url: "https://example.test/a.png" },
+            { type: "input_text", text: "Synthetic caption" },
+          ],
+        },
+      ],
+    };
+    const [, , text, mixed] = chatGptRequest(body, "plan-model").input;
+    expect(text).toMatchObject({
+      output: [
+        {
+          type: "input_text",
+          text: '{"kind":"none"}',
+          prompt_cache_breakpoint: { mode: "explicit" },
+        },
+      ],
+    });
+    expect(mixed).toMatchObject({
+      output: [
+        { type: "input_image" },
+        { type: "input_text", prompt_cache_breakpoint: { mode: "explicit" } },
+      ],
+    });
+    expect(
+      chatGptRequest(body, "plan-model", { breakpoints: false }).input,
+    ).toEqual(body.input);
   });
 
   it("rejects hosted tools rather than pretending they are supported", () => {

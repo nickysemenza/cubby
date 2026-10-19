@@ -1,3 +1,4 @@
+import type { GatewayQuery } from "@cubby/shared/ai/gateway-request";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { describe, expect, it, vi } from "vitest";
 
@@ -209,11 +210,11 @@ describe("ChatGPT credential ownership", () => {
     }
   });
 
-  // The leading additional_tools position was never verified live. Failure
-  // modes: a refused position fails every plan call; a quota refusal retried
-  // as a placement error doubles the refused calls; a request whose tool block
-  // is already last is resent unchanged.
-  describe("leading tool placement guard", () => {
+  // Explicit cache breakpoints were never verified live. Failure modes: a
+  // refused breakpoint fails every plan call; a quota refusal retried as a
+  // breakpoint error doubles the refused calls; a request without tool
+  // results is resent unchanged.
+  describe("cache breakpoint guard", () => {
     const record = {
       connected: true,
       clientId: "oaiapp_example",
@@ -223,17 +224,24 @@ describe("ChatGPT credential ownership", () => {
       refreshToken: "refresh-example",
       expiresAt: Date.now() + 3_600_000,
     };
-    const body = {
+    const body: GatewayQuery = {
       input: [
         { role: "system", content: "Frame" },
         { role: "user", content: "Synthetic Email" },
+        {
+          type: "function_call",
+          call_id: "c1",
+          name: "claim",
+          arguments: "{}",
+        },
+        { type: "function_call_output", call_id: "c1", output: "Synthetic" },
       ],
       tools: [{ type: "function", name: "claim" }],
     };
     const refusal = (error: Record<string, string>, status = 400) =>
       new Response(JSON.stringify({ error }), { status });
     const harness = (answers: Response[]) => {
-      const sent: Array<Array<{ type?: string; role?: string }>> = [];
+      const sent: Array<Array<{ type?: string; output?: unknown }>> = [];
       const session = new ChatGptSession(
         { get: async () => record, put: vi.fn(), delete: vi.fn() },
         async (_url, init) => {
@@ -241,32 +249,31 @@ describe("ChatGPT credential ownership", () => {
           return answers.shift() ?? new Response("{}", { status: 200 });
         },
       );
-      const order = (index: number) =>
-        sent[index]?.map((entry) => entry.type ?? entry.role);
-      return { session, sent, order };
+      const marked = (index: number) =>
+        JSON.stringify(sent[index]).includes("prompt_cache_breakpoint");
+      return { session, sent, marked };
     };
 
-    it("retries a refused placement once with the trailing order and keeps it", async () => {
+    it("retries a refused breakpoint once without breakpoints and keeps that", async () => {
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
       try {
-        const { session, sent, order } = harness([
+        const { session, sent, marked } = harness([
           refusal({
             type: "invalid_request_error",
-            param: "input[1]",
-            code: "invalid_value",
-            message: "Synthetic: additional_tools must follow the conversation",
+            param: "input[3].output[0].prompt_cache_breakpoint",
+            code: "subscription_sharing_unsupported_capability",
+            message: "Synthetic: prompt_cache_breakpoint is not supported",
           }),
         ]);
         const response = await session.infer(body, "gpt-6-sol");
         expect(response.status).toBe(200);
-        expect(order(0)).toEqual(["developer", "additional_tools", "user"]);
-        expect(order(1)).toEqual(["developer", "user", "additional_tools"]);
+        expect([marked(0), marked(1)]).toEqual([true, false]);
         expect(JSON.stringify(warn.mock.calls)).toContain(
-          "additional_tools must follow",
+          "prompt_cache_breakpoint is not supported",
         );
         await session.infer(body, "gpt-6-sol");
         expect(sent).toHaveLength(3);
-        expect(order(2)).toEqual(["developer", "user", "additional_tools"]);
+        expect(marked(2)).toBe(false);
       } finally {
         warn.mockRestore();
       }
@@ -298,7 +305,7 @@ describe("ChatGPT credential ownership", () => {
           message: "Synthetic unsupported effort",
         }),
       ],
-    ])("returns a %s refusal without a placement retry", async (_, answer) => {
+    ])("returns a %s refusal without a breakpoint retry", async (_, answer) => {
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
       try {
         const { session, sent } = harness([answer]);

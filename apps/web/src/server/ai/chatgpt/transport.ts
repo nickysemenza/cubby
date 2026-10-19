@@ -32,18 +32,50 @@ const unsupported = [
   "previous_response_id",
 ];
 
-/**
- * Where the `additional_tools` item sits in `input`: `leading` right after the
- * leading developer instructions, so the plan's prefix cache covers the tool
- * block; `trailing` (the original, verified order) after the conversation.
- */
-export type ChatGptToolPlacement = "leading" | "trailing";
+const breakpoint = { mode: "explicit" } as const;
+const toolResult = z.looseObject({
+  type: z.literal("function_call_output"),
+  output: z.union([z.string(), z.array(z.looseObject({ type: z.string() }))]),
+});
 
-/** SIWC's direct route accepts client tools through additional_tools input. */
+/** Mark a tool result's last text block as a cache breakpoint. */
+function withBreakpoint(entry: z.infer<typeof item>): z.infer<typeof item> {
+  const result = toolResult.safeParse(entry);
+  if (!result.success) return entry;
+  const { output } = result.data;
+  if (typeof output === "string")
+    return {
+      ...result.data,
+      output: [
+        {
+          type: "input_text",
+          text: output,
+          prompt_cache_breakpoint: breakpoint,
+        },
+      ],
+    };
+  const last = output.at(-1);
+  if (last?.type !== "input_text") return entry;
+  return {
+    ...result.data,
+    output: [
+      ...output.slice(0, -1),
+      { ...last, prompt_cache_breakpoint: breakpoint },
+    ],
+  };
+}
+
+/**
+ * SIWC's direct route accepts client tools through additional_tools input.
+ * `breakpoints` marks each tool result as an explicit prompt-cache breakpoint:
+ * the plan's implicit caching rarely reused a Run's growing conversation (5.6%
+ * of Sol's plan input read from cache, against nearly all of an identical
+ * request on the paid API).
+ */
 export function chatGptRequest(
   body: unknown,
   model: string,
-  placement: ChatGptToolPlacement = "leading",
+  { breakpoints = true }: { breakpoints?: boolean } = {},
 ) {
   const parsed = requestSchema.parse(body);
   const { tools, ...rest } = parsed;
@@ -60,7 +92,9 @@ export function chatGptRequest(
       effort = update.data.reasoning.effort;
       return [];
     }
-    return [entry.role === "system" ? { ...entry, role: "developer" } : entry];
+    const item =
+      entry.role === "system" ? { ...entry, role: "developer" } : entry;
+    return [breakpoints ? withBreakpoint(item) : item];
   });
   if (effort) rest.reasoning = { ...parsed.reasoning, effort };
   const clientTools =
@@ -83,11 +117,11 @@ export function chatGptRequest(
       tools: clientTools,
     };
     // The prefix cache covers only the bytes before the first item that
-    // changes, and every coordinator turn appends conversation items: a
-    // trailing tool block (~20k tokens of Mail import schemas) is re-read
-    // uncached on every call.
+    // changes, and every coordinator turn appends conversation items: the tool
+    // block (~10k tokens of Mail import schemas) follows the leading developer
+    // instructions so it is read from cache, never re-read after each turn.
     const firstTurn = input.findIndex((entry) => entry.role !== "developer");
-    if (placement === "trailing" || firstTurn < 0) input.push(block);
+    if (firstTurn < 0) input.push(block);
     else input.splice(firstTurn, 0, block);
   }
   const result: z.infer<typeof requestSchema> = {
