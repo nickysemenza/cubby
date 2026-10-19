@@ -1,0 +1,51 @@
+apps/apple/CubbyKit/Tests/CubbyKitTests/Fixtures/product-get.json
+  s_9b829d577c7e4c::t_1bd1df6f2eb6fa 64
+apps/web/src/entity/table/desktop-data-row.tsx
+  s_1b54b6ab53ca85::t_427faaebfde708 333-336
+apps/web/src/entity/table/table-header-layout.tsx
+  s_9b829d577c7e4c::t_adcf8af445c804 288-296,589-590,596
+apps/web/src/ui/data-table/column-layout.ts
+  s_9b829d577c7e4c::t_fa3a7ad2aca85e 1,221-263,265-269,383-385,393
+apps/web/tests/e2e/attribute-explanations.spec.ts
+  s_9b829d577c7e4c::t_0deffed21ffc63 4,44
+apps/web/tests/e2e/expense-role.spec.ts
+  s_9b829d577c7e4c::t_6976ec2e474b52 7,10,45
+apps/web/tests/e2e/finance-category-display.spec.ts
+  s_9b829d577c7e4c::t_70175c3dad0616 6,146,161
+apps/web/tests/e2e/quality-explanations.spec.ts
+  s_9b829d577c7e4c::t_9f6408aaa8203e 9,72-73,75,77,150,164,188,373,608-609,688
+apps/web/tests/e2e/run-presentation.spec.ts
+  s_9b829d577c7e4c::t_eca95824a1b4b8 6-9,88-90,102
+apps/web/tests/e2e/spending-classification-review.spec.ts
+  s_9b829d577c7e4c::t_f83a02c0a5d151 6,304-308
+apps/web/tests/e2e/support/e2e-helpers.ts
+  s_9b829d577c7e4c::t_f34fe0584c0d4d 280-301,320
+apps/web/tests/e2e/table-workbench.spec.ts
+  s_9b829d577c7e4c::t_257d72d3353a51 60-64
+apps/web/tests/e2e/wardrobe-owner.spec.ts
+  s_9b829d577c7e4c::t_11d602765143a9 248,250-254
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f5ed44e5045bc4e912a4f6cd8dd453b39a16b881",
+  "prompts": {},
+  "sessions": {
+    "s_1b54b6ab53ca85": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "883b92de-9641-440c-9ecf-b2d00a0ded66",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
