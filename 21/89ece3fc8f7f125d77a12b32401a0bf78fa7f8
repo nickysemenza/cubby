@@ -1,0 +1,37 @@
+apps/apple/App/Shared/DesignSystem/FieldGuideTokens.swift
+  s_9b829d577c7e4c::t_86b62a2ed58ecd 34-38
+apps/apple/App/Shared/DesignSystem/StatusChip.swift
+  s_9b829d577c7e4c::t_40e1fb79ba2ed5 1,5-6,27-30,33,36-46,70-79,87-89
+apps/apple/App/Shared/Entity/Detail/DetailSectionViews.swift
+  s_9b829d577c7e4c::t_2525d4ba10378a 123-125,400-401,403
+apps/apple/App/Shared/Entity/Detail/EntityFieldValue.swift
+  s_9b829d577c7e4c::t_6df80b0d61d479 132-136,139
+apps/apple/App/Shared/Entity/List/EntityListView.swift
+  s_9b829d577c7e4c::t_22ee3210985a7c 1043-1044,1046,1294-1295,1297
+apps/apple/CubbyKit/Sources/CubbyKit/Detail/RelationSectionModel.swift
+  s_9b829d577c7e4c::t_0d10ea9b096e57 75-76
+apps/apple/DESIGN.md
+  s_9b829d577c7e4c::t_2688202688569b 7
+apps/web/DESIGN.md
+  s_9b829d577c7e4c::t_6318c36175fd6e 28-32,197-201,238-239
+apps/web/generator/entities/render/swift-catalog.ts
+  s_9b829d577c7e4c::t_3d3613ba93bc5e 405
+packages/schemas/src/manifest-wire.ts
+  s_9b829d577c7e4c::t_148e17603db587 184
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2189ece3fc8f7f125d77a12b32401a0bf78fa7f8",
+  "prompts": {},
+  "sessions": {
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
