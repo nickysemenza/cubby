@@ -88,7 +88,10 @@ import {
   readRun,
   storeAiEvaluationResult,
 } from "../repo/ai-work-state";
-import { connectionSourceFingerprint } from "../repo/connection-refresh";
+import {
+  connectionSourceFingerprint,
+  countConnectionSweepSources,
+} from "../repo/connection-refresh";
 import { systemActor } from "../repo/ensure-run";
 import {
   makeSweepSuggestion,
@@ -300,19 +303,19 @@ async function scheduleConnectionDiscovery(
   db: Database,
   cursor: Awaited<ReturnType<typeof readAiDiscoveryCursor>>,
 ) {
-  if (cursor.connectionDone) return { done: true, cursor: null };
+  if (cursor.connectionDone || !(await countConnectionSweepSources(db)))
+    return { done: true, cursor: null };
   try {
     const { startRoutineSweep } = await import("./sweep");
     await startRoutineSweep(db, "recommendation");
-    // Started now, or an unscoped connection Sweep already covers this pass.
-    return { done: true, cursor: null };
   } catch (error) {
-    // Left undone, so the next discovery pass tries again.
+    // Still done: a pending connection pass would hold the generation open
+    // and stall field and product rediscovery. The next generation retries.
     log.error("Connection discovery Sweep failed to start", {
       error: scrubErrorMessage(String(error)),
     });
-    return { done: false, cursor: null };
   }
+  return { done: true, cursor: null };
 }
 
 /** Preparation enumerates evidence using live renderers; no model calls happen here. */
