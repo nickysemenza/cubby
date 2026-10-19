@@ -152,6 +152,19 @@ export function QualitySectionChecks({ section }: { section: string }) {
   return <QualityCheckRows checks={checks} />;
 }
 
+/** Sections the record's evaluated checks place, in check order. */
+export function useQualityCheckSections() {
+  const context = useContext(QualityContext);
+  return [
+    ...new Set(
+      (context?.checks ?? EMPTY_CHECKS).flatMap((check) => {
+        const placement = placementOf(check);
+        return placement && "section" in placement ? [placement.section] : [];
+      }),
+    ),
+  ];
+}
+
 /** Enough rows to cover one record's pending Suggestions, impact first. */
 const IMPACT_READ_LIMIT = 100;
 
@@ -230,27 +243,25 @@ function AssessedRecordQuality({
     enabled: hydrated,
   });
   const breakdown = result.data?.qualityBreakdown;
-  const checks = (breakdown?.checks ?? EMPTY_CHECKS).filter((check) => {
+  // The score covers every check, so the counts and issue links do too; a
+  // check this surface does not place falls to the Record quality list.
+  const allChecks = breakdown?.checks ?? EMPTY_CHECKS;
+  const placed = (check: RecordQualityCheck) => {
     const placement = placementOf(check);
-    if (placement && "field" in placement && visibleFields)
-      return visibleFields.includes(placement.field);
-    if (placement && "section" in placement && visibleSections)
-      return visibleSections.includes(placement.section);
-    return true;
-  });
-  const orphaned = checks.filter((check) => {
-    const placement = placementOf(check);
+    if (!placement) return false;
+    if ("field" in placement)
+      return !visibleFields || visibleFields.includes(placement.field);
     return (
-      !placement ||
-      ("section" in placement &&
-        renderedSections &&
-        !renderedSections.includes(placement.section))
+      (!visibleSections || visibleSections.includes(placement.section)) &&
+      (!renderedSections || renderedSections.includes(placement.section))
     );
-  });
-  const attention = checks.filter((check) => check.state === "gap");
+  };
+  const checks = allChecks.filter(placed);
+  const orphaned = allChecks.filter((check) => !placed(check));
+  const attention = allChecks.filter((check) => check.state === "gap");
   const anchor = (check: RecordQualityCheck) => {
     const placement = placementOf(check);
-    return placement && "field" in placement
+    return placement && "field" in placement && placed(check)
       ? `${prefix}-field-${placement.field}`
       : `${prefix}-${check.check}`;
   };
@@ -282,9 +293,12 @@ function AssessedRecordQuality({
                   : `${breakdown.score}/100`}
               </strong>
               <span className="text-muted-foreground">
-                {checks.filter((check) => check.state === "satisfied").length}{" "}
+                {
+                  allChecks.filter((check) => check.state === "satisfied")
+                    .length
+                }{" "}
                 satisfied · {attention.length} unresolved ·{" "}
-                {checks.filter((check) => check.state === "excepted").length}{" "}
+                {allChecks.filter((check) => check.state === "excepted").length}{" "}
                 accepted exceptions
               </span>
             </div>

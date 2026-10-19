@@ -304,7 +304,7 @@ type TableWidthColumn = {
     meta?: {
       entityColumnRole?: EntityColumnRole;
       numeric?: boolean;
-      mono?: boolean;
+      code?: boolean;
       linksTo?: string;
       cellData?: { kind: string };
     };
@@ -350,7 +350,7 @@ function kindFitMax(meta: TableWidthColumn["columnDef"]["meta"]) {
   const kind = meta?.cellData?.kind;
   if (meta?.numeric || (kind !== undefined && FIXED_WIDTH_KINDS.has(kind)))
     return kind === "select" ? SELECT_FIT_MAX : Number.POSITIVE_INFINITY;
-  if (meta?.mono) return CODE_FIT_MAX;
+  if (meta?.code) return CODE_FIT_MAX;
   if (meta?.linksTo) return LINK_FIT_MAX;
   return TEXT_FIT_MAX;
 }

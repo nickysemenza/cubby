@@ -1,3 +1,4 @@
+import { dataCheckMessage } from "@cubby/schemas/data-quality";
 import { testUserId } from "@cubby/schemas/testing";
 import {
   workQueueHouseholdInput,
@@ -327,6 +328,19 @@ describe("Work queue gaps, typed columns, and record rows", () => {
     expect(product.items[0]?.reason).toBe(
       product.items[0]?.gaps.map((gap) => gap.message).join(" "),
     );
+    // Regression: search matched the projection's generic "Research queue"
+    // reason, not the gap text the row displays.
+    const byGapText = await read({
+      query: dataCheckMessage.product_category.slice(0, 24),
+    });
+    expect(byGapText.items.map((row) => row.name)).toContain(
+      `${prefix} widget`,
+    );
+    const byGenericReason = await read({
+      query: "Research queue",
+      check: ["product_category"],
+    });
+    expect(byGenericReason.meta.totalCount).toBe(0);
     // A scored source record's own score rides on its row, so the table can
     // show it; a row without a scored record carries none.
     expect(product.items[0]?.dataQuality).toMatchObject({

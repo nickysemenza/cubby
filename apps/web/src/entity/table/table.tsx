@@ -1121,9 +1121,8 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     // Keep loaded rows usable after a failed refresh; status lives below the table.
     if (!hydrated || (isLoading && rows.length === 0)) return null;
 
-    // Always use virtualized rendering for consistent behavior. A pinned
-    // section header scrolled out of range renders ahead of the top spacer,
-    // which gives up the header's height so the layout keeps its total size.
+    // A pinned section header scrolled out of range renders ahead of the top
+    // spacer, which gives up the header's height so the layout keeps its size.
     const [first, second] = virtualRows;
     const detachedSticky =
       first !== undefined &&
@@ -1214,8 +1213,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
           </TableRow>
         );
       }
-      // rowIndex is a valid position into the rows array (flat index when
-      // ungrouped, or the row's flat index when grouped).
+      // Grouped or not, a row item's `rowIndex` indexes `rows`.
       const row = rows[item.rowIndex]!;
       const treeStatus = serverTreeStatusOf(row.original);
       if (treeStatus)
@@ -1228,7 +1226,6 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
             <TableCell
               colSpan={colSpan}
               className="py-0"
-              // Indented as a child of its parent, like the name cell.
               style={{ paddingLeft: `${row.depth * 1.25 + 0.5}rem` }}
             >
               <TreeStatusRow status={treeStatus} />

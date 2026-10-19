@@ -1,8 +1,7 @@
 import type { HttpRouteHandlers } from "~/lib/http/route-handler";
 /**
- * The single route for every workflow stream. Replaces the 13 hand-written
- * `api/*-stream/*.ts` files, each of which paired a hardcoded operation id with
- * a hardcoded URL that only a runtime 404 could disagree with.
+ * The single route for every workflow stream: the operation id is the URL
+ * segment, so no per-stream route can pair an id with a disagreeing URL.
  */
 
 export const handlers: HttpRouteHandlers<{ operation: string }, "POST"> = {

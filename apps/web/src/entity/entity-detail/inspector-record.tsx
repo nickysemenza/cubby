@@ -1,8 +1,3 @@
-import {
-  dataCheckPresentation,
-  dataChecksByEntity,
-  scoredEntities,
-} from "@cubby/schemas/data-quality";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { useQuery } from "@tanstack/react-query";
@@ -33,7 +28,11 @@ import { Button } from "~/ui/primitives/button";
 import { detailEditOverrideFor } from "./detail-edit-overrides";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 import { EntityRecordFields } from "./entity-record-fields";
-import { RecordQualityProvider, QualitySectionChecks } from "./record-quality";
+import {
+  QualitySectionChecks,
+  RecordQualityProvider,
+  useQualityCheckSections,
+} from "./record-quality";
 
 function presentationEditable(
   entity: GenericDetailEntity,
@@ -44,6 +43,44 @@ function presentationEditable(
     actions.includes("edit") &&
     (hasOverride || isGeneratedBrowserCrudEntity(entity))
   );
+}
+
+/** Sections only the record's evaluated checks bring into the inspector. */
+function InspectorCheckSections({
+  entity,
+  id,
+  fieldSections,
+}: {
+  entity: GenericDetailEntity;
+  id: string;
+  fieldSections: readonly string[];
+}) {
+  const sections = entitySummary[entity].detail.sections;
+  return useQualityCheckSections()
+    .filter((section) => !fieldSections.includes(section))
+    .map((sectionId) => (
+      <section key={sectionId} className="min-w-0">
+        <SectionHeading
+          title={
+            sections.find((section) => section.id === sectionId)?.title ??
+            (sectionId === "images" ? "Images" : "Sources")
+          }
+          actions={
+            isBrowserRoutedEntity(entity) ? (
+              <Link
+                to={entities[entity].routes.detail}
+                params={entityDetailParams(id)}
+                hash={sectionId}
+                className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+              >
+                Open section
+              </Link>
+            ) : null
+          }
+        />
+        <QualitySectionChecks section={sectionId} />
+      </section>
+    ));
 }
 
 function ResolvedInspectorRecord<E extends GenericDetailEntity>({
@@ -80,19 +117,6 @@ function ResolvedInspectorRecord<E extends GenericDetailEntity>({
   const fieldSections = presentation.detail.sections.filter(
     (section) => section.kind === "fields",
   );
-  const parsed = z.enum(scoredEntities).safeParse(entity);
-  const checkSections = parsed.success
-    ? [
-        ...new Set(
-          dataChecksByEntity[parsed.data].options.flatMap((check) => {
-            const placement = dataCheckPresentation[check].placement;
-            return placement && "section" in placement
-              ? [placement.section]
-              : [];
-          }),
-        ),
-      ]
-    : [];
   const fields = entityFieldModels[entity].fields
     .filter((field) => field.display.detail)
     .map((field) => field.key);
@@ -102,7 +126,11 @@ function ResolvedInspectorRecord<E extends GenericDetailEntity>({
       records={[record]}
       fieldKeys={fields}
     >
-      <RecordQualityProvider entity={entity} id={record.id}>
+      <RecordQualityProvider
+        entity={entity}
+        id={record.id}
+        visibleFields={fields}
+      >
         <Stack gap="md">
           {editable ? (
             <div>
@@ -127,35 +155,11 @@ function ResolvedInspectorRecord<E extends GenericDetailEntity>({
               />
             </section>
           ))}
-          {checkSections
-            .filter((id) => !fieldSections.some((section) => section.id === id))
-            .map((id) => {
-              const section = presentation.detail.sections.find(
-                (section) => section.id === id,
-              );
-              return (
-                <section key={id} className="min-w-0">
-                  <SectionHeading
-                    title={
-                      section?.title ?? (id === "images" ? "Images" : "Sources")
-                    }
-                    actions={
-                      isBrowserRoutedEntity(entity) ? (
-                        <Link
-                          to={entities[entity].routes.detail}
-                          params={entityDetailParams(record.id)}
-                          hash={id}
-                          className="text-xs text-muted-foreground underline-offset-2 hover:underline"
-                        >
-                          Open section
-                        </Link>
-                      ) : null
-                    }
-                  />
-                  <QualitySectionChecks section={id} />
-                </section>
-              );
-            })}
+          <InspectorCheckSections
+            entity={entity}
+            id={record.id}
+            fieldSections={fieldSections.map((section) => section.id)}
+          />
         </Stack>
         {EditOverride && editing ? (
           <EditOverride

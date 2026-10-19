@@ -142,6 +142,12 @@ export interface CubbyColumnMeta<TData = CellData> {
   linksTo?: Entity;
   numeric?: boolean;
   mono?: boolean;
+  /**
+   * A code or identifier (barcode, shortcode): its fitted width stops at the
+   * code cap. `mono` alone also sets timestamps and model names, which keep
+   * the text cap.
+   */
+  code?: boolean;
   filterConfig?: FilterConfig;
   cellData?: ColumnCellData<TData>;
   /** Authoritative list inputs when a display column has another id. */
