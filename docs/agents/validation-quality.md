@@ -51,9 +51,11 @@ environment variable, a tool outside the workspace) must add it to its inputs,
 or a cached pass can hide a regression ([CI](../ci.md#cache-keys-and-the-remote-cache)).
 
 Oxlint's project rules protect unsafe identifier boundaries and soft-delete
-filters. The SQL vocabulary rule reads every schema enum: adding a value can
-expose literals in otherwise unchanged consumers. Run the lint gate after a
-vocabulary addition and shrink its baseline when replacing existing literals. Keep constraint-focused one-line local exceptions. Oxfmt owns
+filters. The SQL vocabulary rule reads every schema enum, including diagnostic
+fixture enums outside database declarations: adding a value can expose literals
+in otherwise unchanged consumers. Run the full lint gate after adding any schema
+enum value and shrink its baseline when replacing existing literals. Keep
+constraint-focused one-line local exceptions. Oxfmt owns
 maintained source, CSS, Markdown, MDX, YAML, and TOML; generated files,
 the pnpm lockfile, and vendored/build output remain excluded. Do not weaken a
 gate to accommodate a change.

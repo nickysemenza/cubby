@@ -659,7 +659,7 @@ async function runCase(
       const { fixture } = aiSmokeInputs.transferPairMovement.parse(raw);
       const descriptor = {
         transfer: "ONLINE TRANSFER TO SAVINGS",
-        check: "CHECK 4321 TO EXAMPLE SERVICES",
+        business_check: "CHECK 4321 TO EXAMPLE SERVICES",
         generic: "ACH PAYMENT",
       }[fixture];
       return {
@@ -671,7 +671,8 @@ async function runCase(
               amount: 180,
               date: "2026-05-04",
               descriptor,
-              merchant: fixture === "check" ? "Example Services" : null,
+              merchant:
+                fixture === "business_check" ? "Example Services" : null,
               providerCategory: "Transfer",
               recordedKind: null,
             }),
