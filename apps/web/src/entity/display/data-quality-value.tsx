@@ -64,8 +64,7 @@ export function DataQualityValue({
         <span className="sr-only">, {label}</span>
       </span>
     );
-  const tone =
-    quality.status === "defect" ? "bg-destructive" : "bg-warning";
+  const tone = quality.status === "defect" ? "bg-destructive" : "bg-warning";
   const filled = qualityMeterFill(score);
   return (
     <span

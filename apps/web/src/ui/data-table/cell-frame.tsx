@@ -67,13 +67,9 @@ export function CellFrame({
       valueElement.scrollWidth > valueElement.clientWidth + 1 ||
         railCovers(valueElement, rail),
     );
-  });
+  }, [floatingRailShown, children]);
   const value = (
-    <span
-      ref={valueRef}
-      data-cell-value=""
-      className="min-w-0 flex-1 truncate"
-    >
+    <span ref={valueRef} data-cell-value="" className="min-w-0 flex-1 truncate">
       {children}
     </span>
   );

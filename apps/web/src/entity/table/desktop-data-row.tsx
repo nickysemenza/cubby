@@ -230,19 +230,19 @@ function DesktopDataCell<TItem extends RowData>({
       <div className={ROW_DENSITY.cellContentClass}>
         <div className="min-w-0">
           <CellKeyProvider value={cellKey}>
-          <DenseCellContext
-            value={{ linksTo: cell.column.columnDef.meta?.linksTo ?? null }}
-          >
-            <ConnectionCell record={cell.row.original} field={cell.column.id}>
-              <RecordFieldSuggestion
-                record={cell.row.original}
-                field={cell.column.id}
-                surface="cell"
-              >
-                {explained}
-              </RecordFieldSuggestion>
-            </ConnectionCell>
-          </DenseCellContext>
+            <DenseCellContext
+              value={{ linksTo: cell.column.columnDef.meta?.linksTo ?? null }}
+            >
+              <ConnectionCell record={cell.row.original} field={cell.column.id}>
+                <RecordFieldSuggestion
+                  record={cell.row.original}
+                  field={cell.column.id}
+                  surface="cell"
+                >
+                  {explained}
+                </RecordFieldSuggestion>
+              </ConnectionCell>
+            </DenseCellContext>
           </CellKeyProvider>
         </div>
       </div>

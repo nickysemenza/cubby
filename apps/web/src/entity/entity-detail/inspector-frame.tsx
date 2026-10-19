@@ -11,16 +11,16 @@ import {
   isBrowserRoutedEntity,
 } from "~/entity/entities";
 import {
+  domainForEntity,
+  domainWayfinding,
+} from "~/ui/navigation/domain-wayfinding";
+import {
   SidePanel,
   SidePanelIconTile,
   SidePanelSection,
   stepCurrentTableRow,
 } from "~/ui/overlays/side-panel";
 import { Button } from "~/ui/primitives/button";
-import {
-  domainForEntity,
-  domainWayfinding,
-} from "~/ui/navigation/domain-wayfinding";
 
 export type InspectorTab = "overview" | "relations" | "activity";
 

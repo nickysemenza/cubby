@@ -2,6 +2,7 @@ import type { EnumIcon, EnumRole } from "@cubby/shared/enum-palette";
 import type { ReactNode } from "react";
 import { z } from "zod";
 
+import { formatCount } from "~/lib/number-format";
 import { DateDisplay } from "~/ui/common/date-display";
 import { MiddleTruncate } from "~/ui/common/middle-truncate";
 import { BooleanValue, EnumPill } from "~/ui/primitives/enum-pill";
@@ -38,15 +39,11 @@ export type ScalarDisplayValue =
   /** A structured value with no domain renderer; shown as readable JSON. */
   | { kind: "json"; raw: unknown };
 
-const groupedNumber = new Intl.NumberFormat(undefined, {
-  maximumFractionDigits: 20,
-});
-
 /** A plain number with locale grouping; a zero is a quiet fact, never a dash. */
 export function NumberValue({ value }: { value: number }) {
   return (
     <span className={value === 0 ? "text-muted-foreground" : undefined}>
-      {groupedNumber.format(value)}
+      {formatCount(value, 20)}
     </span>
   );
 }
@@ -135,7 +132,11 @@ export function renderScalarValue(
         <BooleanValue value={value.raw} />
       );
     case "number":
-      return surface === "plain" ? value.raw : <NumberValue value={value.raw} />;
+      return surface === "plain" ? (
+        value.raw
+      ) : (
+        <NumberValue value={value.raw} />
+      );
     case "list":
       return value.raw.length ? value.raw.join(", ") : <NoneValue />;
     case "json":
@@ -145,7 +146,7 @@ export function renderScalarValue(
       return (
         <EnumPill
           value={value.raw}
-          role={value.role}
+          optionRole={value.role}
           glyph={value.glyph}
           color={value.color}
           icon={value.icon}

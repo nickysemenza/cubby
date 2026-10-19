@@ -992,7 +992,7 @@ const settledRecord = z.looseObject({
  * Whether a date field is a deadline the record still owes: a `dueDate`-keyed
  * field on a record that is neither settled by status nor completed.
  */
-export function isOpenDeadline(key: string, record: object): boolean {
+export function isOpenDeadline(key: string, record: unknown): boolean {
   if (!/(^d|D)ue(End)?Date$/.test(key)) return false;
   const parsed = settledRecord.safeParse(record);
   if (!parsed.success) return true;
@@ -2112,8 +2112,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
             cell: ({ row }) => {
               const read = readScalarField(entity, row.original, field);
               const value =
-                read.kind === "date" &&
-                isOpenDeadline(field.key, row.original)
+                read.kind === "date" && isOpenDeadline(field.key, row.original)
                   ? { ...read, due: true }
                   : read;
               const domainValue = compactFieldRendererFor(

@@ -1,8 +1,8 @@
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { type Trade, TRADE_LABELS } from "@cubby/schemas/project";
 
-import { OptionGlyph } from "~/ui/primitives/option-glyph";
 import type { PickerOption } from "~/ui/combobox/picker-option";
+import { OptionGlyph } from "~/ui/common/option-glyph";
 
 /**
  * Trade presentation — glyphs, chips, and select options.
@@ -53,16 +53,14 @@ export function TradeIcon({
  * by tasks and expenses. The glyph mirrors `TradeBadge` so the select and the
  * chip match.
  */
-export const tradeOptions: PickerOption[] = tradeRoster.map(
-  (option) => ({
-    value: option.value,
-    label: option.label,
-    icon: (
-      <OptionGlyph
-        name={option.glyph?.phosphor ?? "Shapes"}
-        weight="regular"
-        className="size-3.5"
-      />
-    ),
-  }),
-);
+export const tradeOptions: PickerOption[] = tradeRoster.map((option) => ({
+  value: option.value,
+  label: option.label,
+  icon: (
+    <OptionGlyph
+      name={option.glyph?.phosphor ?? "Shapes"}
+      weight="regular"
+      className="size-3.5"
+    />
+  ),
+}));

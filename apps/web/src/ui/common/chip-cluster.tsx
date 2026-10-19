@@ -183,19 +183,18 @@ function OverflowCount({
 }) {
   const unnamed = count - hidden.length;
   const names = hidden.map((item) => item.label);
-  const content = [
-    ...names,
-    ...(unnamed > 0 ? [`${unnamed} more`] : []),
-  ].join(", ");
+  const content = [...names, ...(unnamed > 0 ? [`${unnamed} more`] : [])].join(
+    ", ",
+  );
   return (
     <Tooltip>
       <TooltipTrigger
         render={
-          <span
+          <button
+            type="button"
             data-chip-overflow=""
-            tabIndex={0}
             aria-label={`${count} more: ${content}`}
-            className="shrink-0 rounded-sm text-[0.6875rem] text-muted-foreground tabular-nums outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            className="shrink-0 cursor-default rounded-sm text-[0.6875rem] leading-3 text-muted-foreground tabular-nums outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
         }
       >

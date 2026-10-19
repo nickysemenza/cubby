@@ -138,7 +138,8 @@
         "apps/web/src/entity/entity-media/photo-viewer.tsx",
         "apps/web/src/entity/relationships/graph-explorer.tsx",
         "apps/web/src/entity/hooks/use-entity-preview.tsx",
-        "apps/web/src/features/developer/mcp-usage-dashboard.tsx"
+        "apps/web/src/features/developer/mcp-usage-dashboard.tsx",
+        "apps/web/src/ui/overlays/side-panel.tsx"
       ],
       "rules": { "cubby/no-ordinary-dialog-bypass": "off" }
     },

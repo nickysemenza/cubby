@@ -1,48 +1,62 @@
+import { isValidElement } from "react";
 import { describe, expect, it } from "vitest";
 
 import { presentEntitySelectOptions } from "./select-options";
 
 describe("presentEntitySelectOptions", () => {
-  it("merges rich options, preserves declared presentation, and assigns semantic colors", () => {
-    const icon = "rich-icon";
+  it("completes a status roster with tones, the status role and glyph icons", () => {
     const options = presentEntitySelectOptions("example", "state", [
       { value: "active", label: "Active" },
       { value: "pending_review", label: "Pending review" },
-      { value: "mismatched", label: "Mismatched" },
-      { value: "planned", label: "Planned" },
-      { value: "custom", label: "Custom", icon },
+      { value: "blocked", label: "Blocked" },
     ]);
 
-    expect(options).toEqual([
-      { value: "active", label: "Active", color: "var(--positive)" },
+    expect(
+      options.map(({ value, color, role, glyph }) => ({
+        value,
+        color,
+        role,
+        glyph: glyph?.phosphor,
+      })),
+    ).toEqual([
+      {
+        value: "active",
+        color: "var(--positive)",
+        role: "status",
+        glyph: "CheckCircle",
+      },
       {
         value: "pending_review",
-        label: "Pending review",
         color: "var(--warning)",
+        role: "status",
+        glyph: "Clock",
       },
-      { value: "mismatched", label: "Mismatched", color: "var(--destructive)" },
-      { value: "planned", label: "Planned", color: "var(--brand-domain-plan)" },
       {
-        value: "custom",
-        label: "Custom",
-        icon,
-        color: "var(--brand-domain-house)",
+        value: "blocked",
+        color: "var(--destructive)",
+        role: "status",
+        glyph: "Prohibit",
       },
     ]);
+    // A declared or inferred glyph becomes the picker's leading icon.
+    expect(options.every((option) => isValidElement(option.icon))).toBe(true);
   });
 
-  it("keeps explicit colors and icons authoritative while appending rich options", () => {
+  it("keeps a caller's icon and color authoritative and appends sentinels", () => {
     const options = presentEntitySelectOptions("expense", "lineKind", [
-      { value: "item_line", label: "Broken", color: "var(--custom)" },
+      {
+        value: "item_line",
+        label: "Broken",
+        color: "var(--custom)",
+        icon: "x",
+      },
     ]);
 
-    expect(options).toEqual([
-      { value: "item_line", label: "Broken", color: "var(--custom)" },
-      {
-        value: "auto",
-        label: "Decide from receipt evidence",
-        color: "var(--brand-domain-house)",
-      },
+    expect(
+      options.map(({ value, color, icon }) => ({ value, color, icon })),
+    ).toEqual([
+      { value: "item_line", color: "var(--custom)", icon: "x" },
+      { value: "auto", color: "var(--category-1)", icon: undefined },
     ]);
   });
 });

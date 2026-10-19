@@ -819,8 +819,8 @@ describe("boolean tones come from the roster, not the factory", () => {
     expect(inkFor("false")).toBe("var(--positive)");
 
     renderColumn<ProvisionalRow, string | null>(column, { provisional: true });
-    const pill = screen.getByText("Provisional").parentElement;
-    expect(pill).toHaveStyle("--enum-pill-color: var(--warning)");
+    const pill = screen.getByText("Provisional").closest("[data-enum-role]");
+    expect(pill).toHaveClass("bg-warning-surface");
   });
 });
 

@@ -1,7 +1,67 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { CurrencyValue } from "./currency-value";
 import { renderScalarValue } from "./scalar-value";
+
+describe("money and number tone", () => {
+  it("keeps spend in ink, mutes a zero, and greens only a signed credit", () => {
+    render(
+      <>
+        <span data-testid="spend">
+          <CurrencyValue value={52.99} />
+        </span>
+        <span data-testid="zero">
+          <CurrencyValue value={0} />
+        </span>
+        <span data-testid="credit">
+          <CurrencyValue value={-12.5} />
+        </span>
+      </>,
+    );
+    const toneOf = (id: string) => screen.getByTestId(id).firstElementChild;
+    expect(toneOf("spend")?.className ?? "").not.toMatch(/text-positive|muted/);
+    expect(toneOf("zero")).toHaveClass("text-muted-foreground");
+    expect(toneOf("credit")).toHaveClass("text-positive");
+    expect(toneOf("credit")?.textContent).toMatch(/^[-−]/);
+  });
+
+  it("groups numbers and mutes zero", () => {
+    render(
+      <>
+        {renderScalarValue({ kind: "number", raw: 12345 }, "list")}
+        {renderScalarValue({ kind: "number", raw: 0 }, "list")}
+      </>,
+    );
+    expect(screen.getByText("12,345")).toBeVisible();
+    expect(screen.getByText("0")).toHaveClass("text-muted-foreground");
+  });
+});
+
+describe("due dates", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("tints a passed deadline and says overdue, leaving other dates alone", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-19T19:00:00Z"));
+    render(
+      <>
+        {renderScalarValue({ kind: "date", raw: "2026-10-17", due: true })}
+        {renderScalarValue({ kind: "date", raw: "2026-10-12" })}
+        {renderScalarValue({ kind: "date", raw: "2026-10-21", due: true })}
+      </>,
+    );
+    const overdue = screen.getByTitle("Oct 17, 2026 · 2 days overdue");
+    expect(overdue).toHaveClass("text-destructive");
+    expect(overdue).toHaveAttribute("data-overdue");
+    expect(screen.getByTitle(/^Oct 12, 2026/)).not.toHaveClass(
+      "text-destructive",
+    );
+    expect(screen.getByTitle(/^Oct 21, 2026/)).not.toHaveAttribute(
+      "data-overdue",
+    );
+  });
+});
 
 describe("structured scalar presentation", () => {
   const data = [{ source: "fixture", externalId: "ABC-123" }];

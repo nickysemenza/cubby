@@ -61,10 +61,29 @@ function outerRail(cell: HTMLElement, source: HTMLElement) {
 /** Whether a floating rail paints over the value's text. */
 export function railCovers(value: HTMLElement, rail: HTMLElement) {
   const range = document.createRange();
-  range.selectNodeContents(value);
-  const text = range.getBoundingClientRect();
+  // Layout-free DOMs (jsdom) have no range geometry: nothing is covered.
+  if (typeof range.getBoundingClientRect !== "function") return false;
   const box = rail.getBoundingClientRect();
-  return text.width > 0 && text.left < box.right && text.right > box.left;
+  // Text glyphs only: a range over the whole value also spans the boxes of
+  // full-width wrappers (a nested frame) and reported a cover that wasn't.
+  const walker = document.createTreeWalker(value, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (!node.textContent?.trim() || rail.contains(node)) continue;
+    // An inline box sized to its value (a fixed-width figure) counts whole.
+    const parent = node.parentElement;
+    const inlineBox =
+      parent &&
+      parent !== value &&
+      !parent.matches("[data-cell-value], [data-cell-frame]") &&
+      getComputedStyle(parent).display.startsWith("inline");
+    range.selectNodeContents(node);
+    const text = inlineBox
+      ? parent.getBoundingClientRect()
+      : range.getBoundingClientRect();
+    if (text.width > 0 && text.left < box.right && text.right > box.left)
+      return true;
+  }
+  return false;
 }
 
 /**

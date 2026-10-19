@@ -52,7 +52,7 @@ function writeWidth(width: number | null) {
     if (currentWidth === null) sessionStorage.removeItem(SIDE_PANEL_WIDTH_KEY);
     else sessionStorage.setItem(SIDE_PANEL_WIDTH_KEY, String(currentWidth));
   } catch {
-    // Storage can be unavailable (private mode); the width still applies.
+    // SILENT: storage can be unavailable (private mode); the width still applies.
   }
   for (const listener of listeners) listener();
 }
@@ -65,6 +65,7 @@ function restoreWidth() {
   try {
     stored = sessionStorage.getItem(SIDE_PANEL_WIDTH_KEY);
   } catch {
+    // SILENT: unreadable storage means no saved width; the default applies.
     stored = null;
   }
   const parsed = stored === null ? Number.NaN : Number(stored);
@@ -139,8 +140,8 @@ function SidePanelResizeHandle() {
     setWidth(measuredWidth() + step);
   };
   return (
-    // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex, jsx-a11y/no-noninteractive-element-interactions -- A focusable separator is the ARIA pattern for a keyboard-resizable splitter.
     <div
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- A focusable separator is the ARIA pattern for a keyboard-resizable splitter; <hr> cannot hold focus or pointer capture.
       role="separator"
       aria-orientation="vertical"
       aria-label="Resize panel"
@@ -424,8 +425,14 @@ export function SidePanelSection({
       onToggle={(event) => onOpenChange?.(event.currentTarget.open)}
     >
       <summary className={cn(heading, "cursor-pointer")}>
-        <span className="min-w-0 flex-1">{title}</span>
-        {action}
+        {action ? (
+          <>
+            <span className="min-w-0 flex-1">{title}</span>
+            {action}
+          </>
+        ) : (
+          title
+        )}
       </summary>
       {children}
     </details>

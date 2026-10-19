@@ -6,7 +6,7 @@ import {
 import type { ReactElement, ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
-import { OptionGlyph } from "~/ui/primitives/option-glyph";
+import { OptionGlyph } from "~/ui/common/option-glyph";
 import { Pill } from "~/ui/primitives/pill";
 import {
   Tooltip,
@@ -163,11 +163,15 @@ export function enumRoleFor(role: EnumRole | null | undefined, color?: string) {
  * statuses, timeline kinds) get it from the color.
  */
 export function EnumPill({
-  role,
+  optionRole,
   value,
   ...props
-}: ValueProps & { role?: EnumRole | null; value?: string }) {
-  return enumRoleFor(role, props.color) === "status" ? (
+}: ValueProps & {
+  /** The roster's role; omitted, the color decides. */
+  optionRole?: EnumRole | null;
+  value?: string;
+}) {
+  return enumRoleFor(optionRole, props.color) === "status" ? (
     <StatusValue value={value} {...props} />
   ) : (
     <CategoryValue {...props} />
