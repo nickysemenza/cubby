@@ -31,6 +31,7 @@ import {
   email,
   product,
 } from "~/server/db/schema";
+import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
@@ -561,6 +562,58 @@ describe("targeted prompt refresh", () => {
           .where(eq(email.id, confident.id))
       )[0]?.classification,
     ).toBe("unrelated");
+  });
+
+  it("reopens a blocked Email target under its work key once Mail import allows it", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic reopen member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    await insertWithShortcode(ctx.db, "email", {
+      ledgerPartyId: party.id,
+      mailboxId: "synthetic-reopen-mailbox",
+      messageId: "synthetic-reopen-message",
+      checksum: "synthetic-reopen-checksum",
+      classification: "uncertain",
+      classificationStage: "decision",
+      classificationReason: "Synthetic ambiguity",
+      status: "pending",
+    });
+    await activateAiRefresh(ctx.db, "synthetic-mail-reopen", {
+      enabled: true,
+    });
+    await discoverAiRefresh(ctx.db);
+    const [blocked] = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(emailRefreshTarget);
+    expect(blocked?.state).toBe("blocked");
+    await setMailImport(ctx.db, {
+      mailboxId: "synthetic-reopen-mailbox",
+      enabled: true,
+    });
+    const discovered = await discoverAiRefresh(ctx.db);
+    const rows = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(emailRefreshTarget);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      id: blocked!.id,
+      workKey: blocked!.workKey,
+      state: "queued",
+      error: null,
+      receipt: null,
+    });
+    expect(discovered).toContain(rows[0]!.runId);
+    const [owner] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, rows[0]!.runId));
+    expect(owner?.status).toBe("running");
+    // Queued work is not re-enqueued by another pass.
+    expect(await discoverAiRefresh(ctx.db)).not.toContain(rows[0]!.runId);
   });
 
   it("keeps no-evidence completion terminal until the relevant input changes", async () => {
