@@ -5,13 +5,13 @@ import { generatedHeader } from "./artifacts.ts";
 import type { EntityArtifacts } from "./entities/declarations.ts";
 
 const sources = {
-  extraction: ".claude/skills/purchase-import/references/extraction.md",
+  extraction: ".agents/skills/purchase-import/references/extraction.md",
   extractionOutput:
-    ".claude/skills/purchase-import/references/extraction-output.md",
-  audit: ".claude/skills/purchase-import/references/audit.md",
+    ".agents/skills/purchase-import/references/extraction-output.md",
+  audit: ".agents/skills/purchase-import/references/audit.md",
   receiptExtraction:
-    ".claude/skills/purchase-import/references/receipt-extraction.md",
-  orderMail: ".claude/skills/purchase-import/references/order-mail.md",
+    ".agents/skills/purchase-import/references/receipt-extraction.md",
+  orderMail: ".agents/skills/purchase-import/references/order-mail.md",
 } as const;
 
 /** Playwright imports server modules directly; generated text keeps Markdown authoritative there. */

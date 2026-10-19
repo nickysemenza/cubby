@@ -78,8 +78,8 @@ checks and their limits; the [GitHub Issues](https://github.com/nickysemenza/cub
 and live acceptance. A deterministic import test does not verify live Gmail,
 retailer changes, model quality or physical-device background behavior.
 
-The [shared photo skill](../../.claude/skills/photo-inventory-import/SKILL.md)
-and [purchase skill](../../.claude/skills/purchase-import/SKILL.md) apply to
+The [shared photo skill](../../.agents/skills/photo-inventory-import/SKILL.md)
+and [purchase skill](../../.agents/skills/purchase-import/SKILL.md) apply to
 the import-run agent, Codex, and Claude. They encode source boundaries and review rules, not
 one model's private prompt.
 

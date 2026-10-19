@@ -5,7 +5,7 @@
  * existing), attaches the images with a `purpose`, optionally records one
  * inventory entry, and marks the run's `PhotoRunImage` rows. See
  * `packages/schemas/src/photo-import-run.ts` for the wire contract and
- * `.claude/skills/photo-inventory-import/SKILL.md` for the workflow this serves.
+ * `.agents/skills/photo-inventory-import/SKILL.md` for the workflow this serves.
  */
 import { type ActorContext, actorInRun } from "@cubby/schemas/context";
 import {

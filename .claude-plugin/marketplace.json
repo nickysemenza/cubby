@@ -1,0 +1,13 @@
+{
+  "name": "cubby",
+  "owner": {
+    "name": "Nicky Semenza"
+  },
+  "plugins": [
+    {
+      "name": "cubby",
+      "source": "./plugins/cubby",
+      "description": "Cubby household playbooks (purchase import, product enrichment, meal and maintenance logging, photo inventory, garden plans), served by the Cubby MCP connector."
+    }
+  ]
+}

@@ -66,7 +66,7 @@ unavailable, and null-attributed evidence remains an explicit gap.
 
 ## Import boundary
 
-Clients orchestrate provider reads from Splitwise, Gmail, Monarch, or local exports and send normalized reviewed changes through the standard mutations. The import recipe, including which record a repayment becomes, is the purchase-import [household-ledger guide](../.claude/skills/purchase-import/references/household-ledger.md). Cubby receives no provider credentials, raw emails, file paths, or whole exports. There is no global transaction across providers or independent records. Each record can be resumed from durable Source Claims and evidence, so a partial import does not require a global rollback or batch receipt.
+Clients orchestrate provider reads from Splitwise, Gmail, Monarch, or local exports and send normalized reviewed changes through the standard mutations. The import recipe, including which record a repayment becomes, is the purchase-import [household-ledger guide](../.agents/skills/purchase-import/references/household-ledger.md). Cubby receives no provider credentials, raw emails, file paths, or whole exports. There is no global transaction across providers or independent records. Each record can be resumed from durable Source Claims and evidence, so a partial import does not require a global rollback or batch receipt.
 
 The [local journey coverage map](agents/core-journey-e2e.md) distinguishes
 the tested Project/Task browser path from the still-missing full contribution

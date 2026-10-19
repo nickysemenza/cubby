@@ -674,7 +674,7 @@ revision change lets previously policy-skipped images be queued again without
 rewriting their retained history.
 
 Field decision prompts are measured from a Claude/Codex session over Cubby
-MCP, following `.claude/skills/decision-grading`: reviewed Suggestions
+MCP, following `.agents/skills/decision-grading`: reviewed Suggestions
 (`entity_read.suggestion_queue` with `status`) are the labels, and
 `entity_read.suggest_fields` with `decisionModel` replays a record through
 Jev or Clef server-side. Only aggregates leave the session.

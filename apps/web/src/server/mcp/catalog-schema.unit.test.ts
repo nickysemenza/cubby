@@ -872,6 +872,7 @@ describe("MCP catalog publication without services", () => {
       usda_food: readOnly(true),
       project_overview: readOnly(),
       tasks_overview: readOnly(),
+      playbook: readOnly(),
       recipe_insights: readOnly(true),
       nutrition: readOnly(),
       finance_read: readOnly(),

@@ -5,23 +5,13 @@ import {
   type SkillManifestEntry,
 } from "agents/skills";
 
-import photoWorkflow from "../../../../../../../.claude/skills/photo-inventory-import/references/run-workflow.md?raw";
-import photoInventorySkill from "../../../../../../../.claude/skills/photo-inventory-import/SKILL.md?raw";
-import productEnrichmentSkill from "../../../../../../../.claude/skills/product-enrichment/SKILL.md?raw";
-import extractionRules from "../../../../../../../.claude/skills/purchase-import/references/extraction.md?raw";
-import settlementRules from "../../../../../../../.claude/skills/purchase-import/references/financial-settlement.md?raw";
-import mailImportWorkflow from "../../../../../../../.claude/skills/purchase-import/references/mail-import.md?raw";
-
-const references = {
-  "photo-inventory-import": import.meta.glob<string>(
-    "../../../../../../.claude/skills/photo-inventory-import/references/*.md",
-    { query: "?raw", import: "default", eager: true },
-  ),
-  "product-enrichment": import.meta.glob<string>(
-    "../../../../../../.claude/skills/product-enrichment/references/*.md",
-    { query: "?raw", import: "default", eager: true },
-  ),
-};
+import photoWorkflow from "../../../../../../../.agents/skills/photo-inventory-import/references/run-workflow.md?raw";
+import photoInventorySkill from "../../../../../../../.agents/skills/photo-inventory-import/SKILL.md?raw";
+import productEnrichmentSkill from "../../../../../../../.agents/skills/product-enrichment/SKILL.md?raw";
+import extractionRules from "../../../../../../../.agents/skills/purchase-import/references/extraction.md?raw";
+import settlementRules from "../../../../../../../.agents/skills/purchase-import/references/financial-settlement.md?raw";
+import mailImportWorkflow from "../../../../../../../.agents/skills/purchase-import/references/mail-import.md?raw";
+import { skillReferences as references } from "./import-run-skill-references";
 
 /** One repository skill with its `references/*.md` as readable resources. */
 function skillEntry(

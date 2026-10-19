@@ -297,7 +297,7 @@ describe("web build freshness", () => {
     ]) {
       const { root, put } = fixture();
       writeWebBuildProvenance(root);
-      put(`.claude/skills/${skill}/references/run-workflow.md`);
+      put(`.agents/skills/${skill}/references/run-workflow.md`);
       expect(readWebBuildProvenance(root).details.reason).toBe(
         "source-changed",
       );

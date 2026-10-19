@@ -107,7 +107,7 @@ function stampPath(repoRoot: string): string {
 }
 
 const AGENT_SKILLS =
-  ".claude/skills/{purchase-import,photo-inventory-import,product-enrichment}/**/*.md";
+  ".agents/skills/{purchase-import,photo-inventory-import,product-enrichment}/**/*.md";
 
 const WEB_BUILD_SOURCE = {
   globs: [

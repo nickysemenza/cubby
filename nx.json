@@ -74,7 +74,7 @@
       // Workflows that deploy, publish, review, or run journeys run no check.
       "!{workspaceRoot}/.github/workflows/{deploy.yaml,deploy-nx-cache.yaml,apple-testflight.yaml,claude.yml,journeys.yaml}",
       {
-        "runtime": "git ls-files -z -co --exclude-standard -- docs .claude/skills/purchase-import .claude/skills/product-enrichment .claude/skills/photo-inventory-import | xargs -0 shasum -a 256"
+        "runtime": "git ls-files -z -co --exclude-standard -- docs .agents/skills/purchase-import .agents/skills/product-enrichment .agents/skills/photo-inventory-import | xargs -0 shasum -a 256"
       }
     ],
     // What Cargo reads for the recipebridge and cubby-ffi merge-gate lanes:

@@ -806,7 +806,7 @@ items and run only while Mail import is on for that mailbox. Reused Email
 stages require current source checksum and feature provenance. The
 [AI refresh runbook](runbooks/ai-refresh.md) owns activation, observation and
 recovery. Independent model grading and member labels follow the
-[decision-grading skill](../.claude/skills/decision-grading/SKILL.md).
+[decision-grading skill](../.agents/skills/decision-grading/SKILL.md).
 
 An omitted or null mode has no schema. Zod owns optionality, transformations,
 nullability, descriptions, refinements, and defaults. Put create-only defaults

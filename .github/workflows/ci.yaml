@@ -103,7 +103,7 @@ jobs:
               - 'apps/web/tooling/purchase-agent-*.ts'
               - 'apps/web/tests/e2e/harness-services/purchase-*.ts'
               - 'apps/web/src/server/mcp/purchase-agent-protocol.ts'
-              - '.claude/skills/purchase-import/**'
+              - '.agents/skills/purchase-import/**'
               - 'packages/schemas/src/purchase*'
 
   validation:

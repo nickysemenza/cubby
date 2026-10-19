@@ -153,6 +153,46 @@ describe("MCP protocol smoke", () => {
     }
   });
 
+  it("serves household playbooks as a read-only tool and skill:// resources", async () => {
+    const { client, connect } = httpClient({ mode: { pin: "2026-07-28" } });
+    try {
+      await connect();
+      const call = async (args: Record<string, string>) => {
+        const result = await client.callTool({
+          name: "playbook",
+          arguments: args,
+        });
+        expect(result.isError).not.toBe(true);
+        return result.structuredContent;
+      };
+      expect(await call({ action: "list" })).toMatchObject({
+        playbooks: expect.arrayContaining([
+          expect.objectContaining({ name: "purchase-import" }),
+        ]),
+      });
+      expect(
+        await call({ action: "get", name: "log-household-maintenance" }),
+      ).toMatchObject({
+        content: expect.stringMatching(
+          /^---\nname: log-household-maintenance/u,
+        ),
+      });
+      expect(
+        await call({ action: "read", path: "README.md", heading: "#tenets" }),
+      ).toMatchObject({ content: expect.stringMatching(/Tenets/u) });
+
+      const { contents } = await client.readResource({
+        uri: "skill://purchase-import/SKILL.md",
+      });
+      expect(contents[0]).toMatchObject({
+        uri: "skill://purchase-import/SKILL.md",
+        text: expect.stringMatching(/^---\nname: purchase-import/u),
+      });
+    } finally {
+      await client.close();
+    }
+  });
+
   it("rejects a 2025-era initialize handshake naming the supported revision", async () => {
     const { client, connect } = httpClient({ mode: "legacy" });
     try {
@@ -180,8 +220,12 @@ describe("MCP protocol smoke", () => {
       tools.find((tool) => tool.name === "entity_read")?.annotations
         ?.readOnlyHint,
     ).toBe(true);
-    expect(resources.map((resource) => resource.uri)).toContain(
-      "entities://catalog",
+    expect(resources.map((resource) => resource.uri)).toEqual(
+      expect.arrayContaining([
+        "entities://catalog",
+        "skill://purchase-import/SKILL.md",
+        "skill://purchase-import/references/audit.md",
+      ]),
     );
     expect(entityInput.properties?.action).toBeDefined();
     // The per-entity tools (`list_products`, `get_recipe`, ...) were folded

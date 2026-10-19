@@ -14,7 +14,7 @@ in the real member, closets, and taxonomy gaps for an actual run.
    closet", "Jordan's dresser") — inventory in step 5 needs a real location
    to receive into.
 3. Expand the Apparel taxonomy with one `entity.commands` call covering the gaps
-   in [the apparel reference](../../.claude/skills/photo-inventory-import/references/apparel.md)
+   in [the apparel reference](../../.agents/skills/photo-inventory-import/references/apparel.md)
    (Loafers, Dress shoes, Slippers, and the rest of the Clothes list), then
    re-file any root-level `Apparel` Products into their new types — a Product
    classified only at the root predates this taxonomy and should move down.

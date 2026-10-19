@@ -54,6 +54,7 @@ import {
 } from "~/contracts/mcp-projections";
 import { mealContract } from "~/contracts/meal.contract";
 import { photoImportContract } from "~/contracts/photo-import.contract";
+import { playbookContract } from "~/contracts/playbook.contract";
 import {
   problemReportWantsCounts,
   problemsContract,
@@ -392,6 +393,28 @@ export const MCP_TOOLS = defineMcpTools({
         strict: true,
         description:
           "Spend aggregates over the expense ledger under the same filters as entity_read.list(expense) (lineKind/costType/trade/projectId/includeSubProjects/future/search/notesSearch/urlSearch/dateFrom/dateTo/costMin/costMax/costPresenceFilter/projectPresenceFilter/vendorId/orderId). Returns summary, byCostType/byTrade/trade x costType, monthly, cumulative, byProject, and byVendor totals over all line kinds. Tax, shipping, and fee lines count under the trade and cost type of the items they were charged on (or their own typed trade); a share with no item to follow reports under trade null. Unfiltered, summary.net = sum(Expense.cost) = sum(byTrade.net) = sum(byCostType.net). A projectId, trade, or costType filter scopes totals to the matching allocation shares, so a split tax line contributes only its matching share here while the ledger lists the whole line. Credits are real (refunds and price adjustments) — net = actual + committed − credits, and cost bounds are signed, so costMax: 0 is the credits-only window. byProject and byVendor are INNER joins and deliberately do NOT sum to summary.net: byProject drops expenses with no project, byVendor rows with no purchase. Read each gap as the size of that unattributed tail, not as a bug.",
+      }),
+    },
+  },
+
+  playbook: {
+    description:
+      "Cubby's household playbooks: the step-by-step rules for purchase and receipt import, product enrichment, meal logging, household maintenance logging, photo inventory import, and garden plan import. Before starting one of those tasks, call playbook.list, then playbook.get the matching playbook and follow it.",
+    actions: {
+      list: mcpAction({
+        op: playbookContract.ops.list,
+        description:
+          "Every playbook's name, when to use it (description), entry path, and the files it bundles.",
+      }),
+      get: mcpAction({
+        op: playbookContract.ops.get,
+        description:
+          "One playbook's SKILL.md by name. Its relative links are repository paths: read them with playbook.read when a step needs them.",
+      }),
+      read: mcpAction({
+        op: playbookContract.ops.read,
+        description:
+          "A file a playbook links to, by repository path. Pass a link's #anchor (or the heading text) as heading to read just that section; a large file read without a heading returns its outline instead of its text.",
       }),
     },
   },

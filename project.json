@@ -18,8 +18,11 @@
         "{workspaceRoot}/packages/**/*",
         "{workspaceRoot}/apps/web/src/**/*",
         "{workspaceRoot}/apps/web/tooling/checks/apple-preview-fixtures.ts",
-        // Purchase-import prompt sources (apps/web/generator/agent-prompts.ts).
-        "{workspaceRoot}/.claude/skills/purchase-import/references/*.md",
+        // Purchase-import prompt sources (apps/web/generator/agent-prompts.ts)
+        // and the playbooks with the Markdown they link to (playbooks.ts).
+        "{workspaceRoot}/.agents/skills/**/*.md",
+        "{workspaceRoot}/docs/**/*.md",
+        "{workspaceRoot}/README.md",
         // The R2 public origin generated into `SharedConstants.swift`.
         "{workspaceRoot}/apps/web/cloudflare.config.ts",
         "{workspaceRoot}/apps/web/tooling/cloudflare-public-config.ts",
