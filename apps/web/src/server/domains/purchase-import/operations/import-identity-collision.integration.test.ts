@@ -77,6 +77,7 @@ describe("purchase import identifier collisions", () => {
         slug: "amazon",
         label: "Example registered catalog",
         vendorId: vendor.id,
+        issuer: true,
       });
       await tx.insert(entityExternalId).values({
         entityId: owner.entityId,

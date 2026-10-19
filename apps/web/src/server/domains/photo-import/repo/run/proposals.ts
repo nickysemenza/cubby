@@ -348,7 +348,7 @@ async function linkedCodes(db: Database, rows: readonly ProposalRow[]) {
   };
 }
 
-function proposedIdentityFields(
+function comparisonIdentityFields(
   row: ProposalRow,
   selected:
     | Pick<
@@ -359,17 +359,10 @@ function proposedIdentityFields(
   identifiers: string[],
 ) {
   const draft = row.productKind === "create" ? row.productCreate : null;
-  const changes = row.review?.productChanges;
   return {
-    name: draft?.name ?? changes?.name ?? selected?.name ?? "",
-    manufacturer: draft
-      ? draft.manufacturer
-      : (changes?.manufacturer ?? selected?.manufacturer),
-    model: draft
-      ? draft.model
-      : changes && "model" in changes
-        ? changes.model
-        : selected?.model,
+    name: draft?.name ?? selected?.name ?? "",
+    manufacturer: draft ? draft.manufacturer : selected?.manufacturer,
+    model: draft ? draft.model : selected?.model,
     identifiers,
   };
 }
@@ -471,7 +464,7 @@ async function toViews(
     return {
       groupKey: row.groupKey,
       crossCheck: photoFieldCrossCheck(
-        proposedIdentityFields(
+        comparisonIdentityFields(
           row,
           row.productId ? summaryById.get(row.productId) : undefined,
           identifiers

@@ -42,7 +42,10 @@ import {
   PhotoRunGroupingAction,
 } from "~/features/run/photo-run-detail";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import {
+  aiFunding,
+  run as runOperations,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { AiCost } from "~/ui/common/ai-cost";
 import {
@@ -57,7 +60,7 @@ import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { StatusText } from "~/ui/primitives/status-text";
 
-import { PaidRunButton } from "../email/ai-funding";
+import { PaidRunButton } from "../account/ai-funding";
 import {
   AgentContextPerCall,
   AgentTokenAccounting,
@@ -180,13 +183,13 @@ const waitsForFunding = (run: Pick<RunDetail, "status" | "failureCode">) =>
 
 /** The member's one-Run override: resume now with paid models allowed. */
 function PaidRunControl({ run }: { run: RunDetail }) {
-  const funding = useQuery(runOperations.mailImport.queryOptions({}));
+  const funding = useQuery(aiFunding.status.queryOptions({}));
   const control = useMutation(runOperations.control.mutationOptions());
   return (
     <Stack gap="sm" className="items-end">
       <PaidRunButton
         label="Run now, paid allowed"
-        budget={funding.data?.budget}
+        budget={funding.data}
         pending={control.isPending}
         onConfirm={(paidOverBudgetUsd) =>
           control.mutate({

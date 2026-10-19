@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { assessmentFamily } from "./assessment";
 import {
   assessmentReviewReference,
   assessmentSuppression,
@@ -143,6 +144,8 @@ export const connectionProposal = connectionCandidate.safeExtend({
   targetName: z.string().optional(),
   review: assessmentReviewReference.extend({
     suppression: assessmentSuppression.nullable(),
+    /** The stored Assessment family; entity-pair families flag list rows. */
+    family: assessmentFamily.optional(),
   }),
   fingerprint: z.string().min(1),
   integration: z.discriminatedUnion("kind", [

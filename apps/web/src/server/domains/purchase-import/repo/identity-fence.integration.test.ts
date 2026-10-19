@@ -600,6 +600,7 @@ describe("member prepare and commit identity fences", () => {
         slug: "synthetic-merchant",
         label: "Synthetic merchant catalog",
         vendorId: vendor.id,
+        issuer: true,
       });
       await tx.insert(entityExternalId).values({
         entityId: owner.id,

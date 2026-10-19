@@ -71,6 +71,10 @@ async function pointerDrag(
   target: Locator,
 ) {
   await handle.hover();
+  // Rest past the 250ms cell spill-over delay, as a user does before
+  // pressing: a header's spill once covered the grip and swallowed the press.
+  await page.waitForTimeout(400);
+  await expect(page.locator("[data-cell-spill-overlay]")).toHaveCount(0);
   const from = await center(handle);
   const body = await center(dragged);
   const targetCenter = await center(target);

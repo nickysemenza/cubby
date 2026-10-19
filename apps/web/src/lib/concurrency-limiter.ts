@@ -1,3 +1,6 @@
+export const abortError = () =>
+  new DOMException("Request cancelled", "AbortError");
+
 /** Run at most `limit` tasks at once, FIFO; a task whose signal aborts while
  * queued is dropped without ever starting. */
 export function createConcurrencyLimiter(limit: number) {
@@ -17,7 +20,7 @@ export function createConcurrencyLimiter(limit: number) {
         const abort = () => {
           const index = queued.indexOf(start);
           if (index !== -1) queued.splice(index, 1);
-          reject(new DOMException("Request cancelled", "AbortError"));
+          reject(abortError());
         };
         const start = () => {
           signal.removeEventListener("abort", abort);

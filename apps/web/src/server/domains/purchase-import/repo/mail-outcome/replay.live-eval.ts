@@ -1,5 +1,6 @@
 import { mailImportOutcome } from "@cubby/schemas/assessment";
 import { parseEntityId } from "@cubby/schemas/identifiers";
+import { mailAttributionHeaders } from "@cubby/schemas/mailbox-research";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import {
   CF_ACCOUNT_ID,
@@ -11,10 +12,12 @@ import { and, desc, eq } from "drizzle-orm";
 import { localSecret } from "tooling/local-secret";
 import { call, from, mcp } from "tooling/purchase-agent-script";
 import { withTestDb } from "tooling/test-setup";
+import { holdWorkerdHarness } from "tooling/workerd-harness";
 import { withWorkerdRuntime } from "tooling/workerd-runtime";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { user } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import { aiUsage, assessment, run as runTable } from "~/server/db/schema";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
@@ -44,6 +47,33 @@ const replayCases = z
       receivedAt: z.iso.datetime(),
       bodyText: z.string(),
       bodyHtml: z.string().nullable().default(null),
+      /**
+       * The original's addressing and forwarding headers. Attribution reads
+       * only `mailAttributionHeaders`' subset, so any other header is dropped.
+       */
+      headers: z
+        .record(z.string(), z.string())
+        .optional()
+        .transform((headers) =>
+          headers
+            ? mailAttributionHeaders(
+                Object.fromEntries(
+                  Object.entries(headers).map(([name, value]) => [
+                    name.toLowerCase(),
+                    value,
+                  ]),
+                ),
+              )
+            : undefined,
+        ),
+      /**
+       * The mailbox owner production judged against: the member's LedgerParty
+       * name and sign-in address. Absent, the synthetic member owns the
+       * mailbox and own-mail attribution cannot match a real recipient.
+       */
+      owner: z
+        .object({ name: z.string().min(1), address: z.email() })
+        .optional(),
       baseline: mailImportOutcome,
     }),
   )
@@ -55,15 +85,47 @@ if (process.env.CI && inputUrl)
   throw new Error("Private replay input is session-only");
 if (scripted && inputUrl)
   throw new Error("Scripted replay accepts synthetic fixtures only");
-const synthetic = [
-  {
-    subject: "Synthetic order inquiry",
-    sender: "orders@shop.example",
-    receivedAt: "2026-09-20T18:00:00Z",
-    bodyText: "Synthetic inquiry: no order id, itemization or amount.",
-    baseline: { kind: "unresolved", reason: "Synthetic missing itemization" },
+const syntheticInquiry = {
+  subject: "Synthetic order inquiry",
+  sender: "orders@shop.example",
+  receivedAt: "2026-09-20T18:00:00Z",
+  bodyText: "Synthetic inquiry: no order id, itemization or amount.",
+  baseline: { kind: "unresolved", reason: "Synthetic missing itemization" },
+};
+// Own mail: the To header names the seeded owner, so attribution defaults to
+// the recipient and an itemized order must import.
+const syntheticOwnOrder = {
+  subject: "Your Synthetic Shop order SYN-1001 is confirmed",
+  sender: "Synthetic Shop <orders@shop.example>",
+  receivedAt: "2026-09-20T18:00:00Z",
+  headers: {
+    From: "Synthetic Shop <orders@shop.example>",
+    To: "Sam Synthetic <sam.synthetic@example.com>",
   },
-];
+  owner: { name: "Sam Synthetic", address: "sam.synthetic@example.com" },
+  bodyText: [
+    "Hi Sam, thanks for your order!",
+    "Order SYN-1001, placed September 20, 2026.",
+    "1 x Synthetic ceramic mug: $12.00",
+    "2 x Synthetic tea towel at $4.50: $9.00",
+    "Subtotal: $21.00",
+    "Sales tax: $1.89",
+    "Order total: $22.89, charged to Visa ending 0000.",
+  ].join("\n"),
+  baseline: {
+    kind: "imported",
+    total: 22.89,
+    lines: [
+      { name: "Synthetic ceramic mug", cost: 12 },
+      { name: "Synthetic tea towel", cost: 9 },
+      { name: "Sales tax", cost: 1.89 },
+    ],
+  },
+};
+// The scripted coordinator resolves every Email unresolved.
+const synthetic = scripted
+  ? [syntheticInquiry]
+  : [syntheticInquiry, syntheticOwnOrder];
 async function readInput() {
   if (!inputUrl) return synthetic;
   const url = new URL(inputUrl);
@@ -86,21 +148,47 @@ const primary = supportedChatModelSchema.parse(
 const escalation = process.env.MAIL_REPLAY_ESCALATION_MODEL
   ? supportedChatModelSchema.parse(process.env.MAIL_REPLAY_ESCALATION_MODEL)
   : undefined;
-const reports: MailReplayCaseReport[] = [];
+const reports: (MailReplayCaseReport & {
+  /** Runtime start, and admission to settlement, in seconds. */
+  seconds?: { startup: number; settle: number };
+})[] = [];
+// One case's whole budget: workerd start (minutes on a loaded host), the
+// coordinator's settlement and observation. Settlement waits only until the
+// reserve, so a slow case still records its report before Vitest abandons it.
+const CASE_BUDGET_MS = (scripted ? 3 : 15) * 60_000;
+const REPORT_RESERVE_MS = 60_000;
+const DIAGNOSTIC_LOGS = 8;
+const DIAGNOSTIC_CHARS = 800;
+/** A case that never reached observation: its runtime or admission failed. */
+const unavailable = (caseNumber: number, failure: string) => ({
+  case: caseNumber,
+  fields: ["unavailable"],
+  status: "infrastructure_error",
+  actualModels: [],
+  failure,
+  failedAttempts: [],
+  diagnostics: [],
+  outcome: null,
+});
 
 // Failure modes: replay reaches production data or Gmail; two cases share
 // ledger writes; comparison publishes grades; a missing outcome counts as parity.
 describe("isolated Mail coordinator replay", () => {
   const ctx = withTestDb(); // A fresh throwaway database for each case.
+  // A stale Worker rebuild takes minutes; it must not spend a case's budget.
+  beforeAll(async () => {
+    const release = await holdWorkerdHarness();
+    await release();
+  }, 30 * 60_000);
   afterAll(() => {
     for (const [index] of cases.entries()) {
       if (!reports.some((report) => report.case === index + 1))
-        reports.push({
-          case: index + 1,
-          fields: ["unavailable"],
-          status: "infrastructure_error",
-          actualModels: [],
-        });
+        reports.push(
+          unavailable(
+            index + 1,
+            `Case exceeded its ${CASE_BUDGET_MS / 60_000}-minute budget before observation`,
+          ),
+        );
     }
     reports.sort((a, b) => a.case - b.case);
     const disagreements = reports.filter((report) => report.fields.length);
@@ -133,9 +221,22 @@ describe("isolated Mail coordinator replay", () => {
     it(
       `replays case ${index + 1}`,
       async () => {
+        const caseStartedAt = Date.now();
+        const settleBy = caseStartedAt + CASE_BUDGET_MS - REPORT_RESERVE_MS;
+        let admittedAt = caseStartedAt;
+        let diagnose = async (): Promise<string[]> => [];
         const queueCapture = captureBackgroundQueue();
         try {
-          const { party } = await memberImportWorld(ctx.db, ctx.actor);
+          const { party } = await memberImportWorld(ctx.db, ctx.actor, {
+            memberName: sample.owner?.name,
+          });
+          // Owner evidence is the member's sign-in address (the Gmail profile
+          // is unreachable), so it carries the original recipient's address.
+          if (sample.owner)
+            await getDb(ctx.db)
+              .update(user)
+              .set({ email: sample.owner.address })
+              .where(eq(user.id, ctx.actor.userId));
           const mailboxId = "synthetic-replay-mailbox";
           const mail = await retainedMailFixture(ctx.db, {
             ledgerPartyId: party.id,
@@ -148,12 +249,14 @@ describe("isolated Mail coordinator replay", () => {
               JSON.stringify({
                 bodyText: sample.bodyText,
                 bodyHtml: sample.bodyHtml,
+                headers: sample.headers,
               }),
             ),
             content: {
               snippet: null,
               bodyText: sample.bodyText,
               bodyHtml: sample.bodyHtml,
+              ...(sample.headers && { headers: sample.headers }),
             },
             classificationVersion: "isolated-replay-v1",
           });
@@ -181,6 +284,7 @@ describe("isolated Mail coordinator replay", () => {
           const runId = parseEntityId("run", started.runId);
           let status = "running";
           const waitForSettlement = async () => {
+            admittedAt = Date.now();
             await waitFor(
               async () => {
                 const [row] = await getDb(ctx.db)
@@ -190,8 +294,8 @@ describe("isolated Mail coordinator replay", () => {
                 status = row?.status ?? "missing";
                 return status !== "running";
               },
-              "Replay coordinator did not settle within its time budget",
-              scripted ? 30_000 : 8 * 60_000,
+              `Replay coordinator did not settle within the case budget (${Math.round((settleBy - caseStartedAt) / 1000)}s including runtime start)`,
+              Math.max(0, settleBy - Date.now()),
             );
           };
           const observe = (run: () => Promise<void>) =>
@@ -207,25 +311,59 @@ describe("isolated Mail coordinator replay", () => {
                   .orderBy(desc(assessment.createdAt), desc(assessment.id))
                   .limit(1);
                 const usage = await getDb(ctx.db)
-                  .select({ model: aiUsage.model })
+                  .select({
+                    model: aiUsage.model,
+                    status: aiUsage.status,
+                    transport: aiUsage.transport,
+                    failure: aiUsage.failure,
+                  })
                   .from(aiUsage)
                   .where(
                     and(
                       eq(aiUsage.runId, runId),
                       eq(aiUsage.feature, "purchase_import_agent"),
-                      eq(aiUsage.status, "succeeded"),
                     ),
-                  );
+                  )
+                  .orderBy(aiUsage.createdAt);
+                const [failed] = await getDb(ctx.db)
+                  .select({
+                    code: runTable.failureCode,
+                    detail: runTable.dispatchError,
+                  })
+                  .from(runTable)
+                  .where(eq(runTable.id, runId));
                 return {
                   status,
+                  failure:
+                    failed?.code || failed?.detail
+                      ? [failed.code, failed.detail].filter(Boolean).join(": ")
+                      : null,
                   outcome: outcome
                     ? mailImportOutcome.parse(outcome.judgment)
                     : null,
-                  actualModels: usage.map((row) => row.model),
+                  actualModels: usage
+                    .filter((row) => row.status === "succeeded")
+                    .map((row) => row.model),
+                  failedAttempts: usage
+                    .filter((row) => row.status !== "succeeded")
+                    .map((row) =>
+                      `${row.model} (${row.transport}): ${row.failure ?? row.status}`.slice(
+                        0,
+                        DIAGNOSTIC_CHARS,
+                      ),
+                    ),
+                  diagnostics: await diagnose(),
                 };
               },
               record: (report) => {
-                reports.push(report);
+                const now = Date.now();
+                reports.push({
+                  ...report,
+                  seconds: {
+                    startup: Math.round((admittedAt - caseStartedAt) / 1000),
+                    settle: Math.round((now - admittedAt) / 1000),
+                  },
+                });
               },
             });
           let observedOutcome: z.infer<typeof mailImportOutcome> | null = null;
@@ -270,6 +408,10 @@ describe("isolated Mail coordinator replay", () => {
               vars: {
                 ACCOUNT_ID: CF_ACCOUNT_ID,
                 GATEWAY_ENVIRONMENT: testAiGatewayEnvironment(process.env.CI),
+                // Paid replay: ChatGPT plan attempts bill to Unified Billing.
+                ...(process.env.MAIL_REPLAY_PLAN_AS_PAID === "1" && {
+                  PLAN_AS_PAID: "1",
+                }),
               },
               secrets: { GATEWAY_TOKEN: token },
             };
@@ -281,6 +423,26 @@ describe("isolated Mail coordinator replay", () => {
                 coordinatorModels: { primary, escalation },
               },
               async ({ harness }) => {
+                // The coordinator runs in the web Worker's Durable Object; its
+                // error logs carry a failure that never reached a usage row.
+                harness.clearLogs();
+                diagnose = async () => {
+                  const logs = harness
+                    .getLogs()
+                    .filter(
+                      (log) =>
+                        log.message.includes("[purchase-agent]") ||
+                        // Better Auth's startup seed retry is not the coordinator's.
+                        (log.level === "error" &&
+                          !log.message.includes("[Better Auth]")),
+                    )
+                    .slice(-DIAGNOSTIC_LOGS)
+                    .map((log) => log.message.slice(0, DIAGNOSTIC_CHARS));
+                  const peer = await harness
+                    .getWorker("cubby-test-model")
+                    .fetch("https://model.test/usage");
+                  return [...logs, `peer usage: ${await peer.text()}`];
+                };
                 observedOutcome = await observe(async () => {
                   const response = await harness
                     .getWorker("cubby-queue-producer")
@@ -299,10 +461,14 @@ describe("isolated Mail coordinator replay", () => {
             );
           }
           expect(observedOutcome).not.toBeNull();
+        } catch (error) {
+          if (!reports.some((report) => report.case === index + 1))
+            reports.push(unavailable(index + 1, String(error)));
+          throw error;
         } finally {
           queueCapture.restore();
         }
       },
-      10 * 60_000,
+      CASE_BUDGET_MS,
     );
 });

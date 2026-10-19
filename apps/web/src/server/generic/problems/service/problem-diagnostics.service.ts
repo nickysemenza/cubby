@@ -239,6 +239,20 @@ export const diagnosticAdapters = {
       return healthyCount(await countOpenRunFindings(db));
     },
   },
+  "product-identifiers-outside-issuer": {
+    sample: async (db, _options, limit) => {
+      const { findProductIdentifiersOutsideIssuer } =
+        await loadProductDetectors();
+      return healthySample(findProductIdentifiersOutsideIssuer(db), limit);
+    },
+    count: async (db) => {
+      const { findProductIdentifiersOutsideIssuer } =
+        await loadProductDetectors();
+      return healthyCount(
+        (await findProductIdentifiersOutsideIssuer(db)).length,
+      );
+    },
+  },
   "duplicate-product-identities": {
     sample: async (db, _options, limit) => {
       const { findDuplicateProductIdentities } = await loadProductDetectors();

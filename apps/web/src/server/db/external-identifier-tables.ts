@@ -36,6 +36,9 @@ export const externalSource = pgTable(
     vendorId: uuid("vendorId")
       .$type<VendorId>()
       .references(() => vendor.id),
+    // A Vendor may own export and settlement sources; exactly one of its
+    // sources issues its Product identifiers.
+    issuer: boolean("issuer").notNull().default(false),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
   },
   (table) => [
@@ -43,6 +46,9 @@ export const externalSource = pgTable(
       "ExternalSource_slug_check",
       sql`${table.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$'`,
     ),
+    uniqueIndex("ExternalSource_vendor_issuer_key")
+      .on(table.vendorId)
+      .where(sql`${table.issuer}`),
   ],
 );
 

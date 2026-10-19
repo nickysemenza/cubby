@@ -12,6 +12,8 @@ import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { aiUsage, appSettings } from "~/server/db/schema";
 
+import { aiBudgetWindow } from "./budget-window";
+
 /**
  * Household caps on frontier chat-model spend per fixed six-hour UTC window
  * (ADR 0017): the paid budget sums charged cost, and the Claude credit budget
@@ -22,7 +24,6 @@ import { aiUsage, appSettings } from "~/server/db/schema";
  */
 export const AI_BUDGET_LIMIT_USD = 1;
 export const DEFAULT_CREDIT_BUDGET_USD = 5;
-export const AI_BUDGET_WINDOW_MS = 6 * 60 * 60 * 1000;
 const SETTINGS_ID = "00000000-0000-4000-8000-000000000077";
 const FRONTIER_MODELS: readonly string[] = supportedChatModelSchema.options;
 export const aiBudgetCovers = (model: string) =>
@@ -51,12 +52,6 @@ export class AiFundingWaitError extends AiBudgetExhaustedError {
     super(status, message, resumeAt);
     this.name = "AiFundingWaitError";
   }
-}
-
-export function aiBudgetWindow(now = new Date()) {
-  const start =
-    Math.floor(now.getTime() / AI_BUDGET_WINDOW_MS) * AI_BUDGET_WINDOW_MS;
-  return { start: new Date(start), end: new Date(start + AI_BUDGET_WINDOW_MS) };
 }
 
 async function readAiBudgetSettings(db: Database): Promise<AiBudgetSettings> {

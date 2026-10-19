@@ -180,6 +180,17 @@ export function psql(
   ]);
 }
 
+/**
+ * The server preloads `pg_stat_statements` (`settings`); each database still
+ * needs the extension before its views answer.
+ */
+export async function enableStatementStatistics(
+  database: string,
+): Promise<void> {
+  await psql("CREATE EXTENSION IF NOT EXISTS pg_stat_statements", database);
+  await psql("SELECT 1 FROM pg_stat_statements LIMIT 1", database);
+}
+
 /** Verify the owned endpoint before any client-side database preparation. */
 export async function resolveOwnedDevProfile(
   root: string,

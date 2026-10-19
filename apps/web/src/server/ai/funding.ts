@@ -3,21 +3,23 @@ import type {
   AiFundingStatus,
   ChatGptPlanAvailability,
 } from "@cubby/schemas/mail-import-settings";
+import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
 import { and, desc, eq, gte, isNotNull, isNull, notIlike } from "drizzle-orm";
 
+import { getAiGatewayEgress } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { aiUsage, run } from "~/server/db/schema";
 import { readPaidGrant } from "~/server/domains/run/repo/paid-grant";
 
 import {
-  AI_BUDGET_WINDOW_MS,
   AiFundingWaitError,
-  aiBudgetWindow,
   budgetUsd,
   creditUsageRow,
   readAiBudget,
 } from "./budget";
+import { AI_BUDGET_WINDOW_MS, aiBudgetWindow } from "./budget-window";
+import type { CreditRefusal } from "./gateway-egress-contract";
 
 /*
  * What decides whether background work waits (ADR 0017): Run origin, the
@@ -57,6 +59,16 @@ export interface FundingStatusPorts {
     connected: boolean;
     needsReauthorization: boolean;
   } | null>;
+  /** The egress Durable Object's recorded credit refusal; null without one. */
+  creditRefusal?: () => Promise<CreditRefusal | null>;
+}
+
+/** The household's one egress object holds the credit refusal (ADR 0017). */
+const egress = () => getAiGatewayEgress(CUBBY_AI_GATEWAY_ID);
+
+/** "Retry Claude credit now", and every credit budget change. */
+export async function resetCreditRefusal() {
+  await egress()?.resetCreditRefusal();
 }
 
 export async function readChatGptPlanAvailability(
@@ -112,11 +124,28 @@ export async function readAiFundingStatus(
   db: Database,
   ports: FundingStatusPorts = {},
 ): Promise<AiFundingStatus> {
-  const [budget, plan] = await Promise.all([
+  const {
+    creditRefusal = async () => (await egress()?.creditRefusal()) ?? null,
+  } = ports;
+  const [budget, plan, refusal] = await Promise.all([
     readAiBudget(db, ports.now),
     readChatGptPlanAvailability(db, ports),
+    creditRefusal(),
   ]);
-  return { ...budget, plan };
+  return {
+    ...budget,
+    credit: {
+      ...budget.credit,
+      ...(refusal
+        ? {
+            state: "refused" as const,
+            until: new Date(refusal.until).toISOString(),
+            reason: refusal.reason,
+          }
+        : { state: "available" as const, until: null, reason: null }),
+    },
+    plan,
+  };
 }
 
 /**
@@ -162,7 +191,14 @@ export async function fundingWaitError(
   const creditWindowSpent = credit.spentUsd >= credit.limitUsd;
   const creditText = creditWindowSpent
     ? `Claude credit budget used: ${budgetUsd(credit.spentUsd)} of $${credit.limitUsd} this window (resets ${windowEnd})`
-    : `Claude credit refused by Anthropic${creditRefusal ? `: ${creditRefusal}` : ""}`;
+    : credit.state === "refused"
+      ? `Claude credit refused by Anthropic until ${credit.until}, skipped until then with one probe per window ("Retry Claude credit now" in Settings → AI funding, or ai_funding.reset_credit_refusal, clears it): ${credit.reason}`
+      : `Claude credit refused by Anthropic${creditRefusal ? `: ${creditRefusal}` : ""}`;
+  const creditReturns = creditWindowSpent
+    ? windowEnd
+    : credit.until !== null && credit.until <= windowEnd
+      ? credit.until
+      : null;
   const planReturns =
     plan.state === "paused"
       ? plan.until
@@ -175,7 +211,7 @@ export async function fundingWaitError(
       : plan.state === "available"
         ? `ChatGPT plan refused this request; assumed back by ${windowEnd}`
         : `ChatGPT plan unavailable (${plan.state}): ${plan.reason}`;
-  const returns = [creditWindowSpent ? windowEnd : null, planReturns]
+  const returns = [creditReturns, planReturns]
     .filter((at): at is string => at !== null)
     .sort();
   const resumeAt = returns[0] ?? windowEnd;
@@ -183,7 +219,7 @@ export async function fundingWaitError(
     status,
     returns.length
       ? `Waiting for free AI capacity; background work never pays. ${creditText}. ${planText}. Resumes at ${resumeAt}; "Run now, paid allowed" spends from the paid budget instead.`
-      : `No free AI capacity can return within six hours, and background work never pays. ${creditText}. ${planText}. Reconnect the ChatGPT plan or raise the Console limit, or use "Run now, paid allowed"; rechecks at ${windowEnd}.`,
+      : `No free AI capacity can return within six hours, and background work never pays. ${creditText}. ${planText}. Reconnect the ChatGPT plan, or raise the Console limit and choose "Retry Claude credit now", or use "Run now, paid allowed"; rechecks at ${windowEnd}.`,
     resumeAt,
   );
 }

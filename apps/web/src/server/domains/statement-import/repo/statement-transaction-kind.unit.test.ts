@@ -93,7 +93,11 @@ describe("statementTransactionKind", () => {
 });
 
 const noVotes = { rule: null, label: null, history: null } as const;
-const noCounterparty = { label: null, history: null } as const;
+const noCounterparty = {
+  label: null,
+  history: null,
+  storedValue: false,
+} as const;
 
 describe("decideStatementKind and kindAgreed", () => {
   // A provider category alone once made a friend's payment-app credit a clean
@@ -102,7 +106,7 @@ describe("decideStatementKind and kindAgreed", () => {
     const create = decideStatementKind({
       amount: -40,
       votes: { ...noVotes, rule: "income", label: "income" },
-      counterparty: { label: "person", history: null },
+      counterparty: { ...noCounterparty, label: "person" },
       transfer: null,
     });
     expect(create).toMatchObject({ kind: "income", kindSource: "model" });
@@ -113,7 +117,7 @@ describe("decideStatementKind and kindAgreed", () => {
     const create = decideStatementKind({
       amount: 25,
       votes: { rule: "purchase", label: "account_transfer", history: null },
-      counterparty: { label: "person", history: null },
+      counterparty: { ...noCounterparty, label: "person" },
       transfer: null,
     });
     expect(create).toMatchObject({ kind: "purchase", kindSource: "model" });
@@ -172,6 +176,29 @@ describe("decideStatementKind and kindAgreed", () => {
       kindSource: "model",
     });
     expect(kindAgreed(create, null)).toBe(true);
+  });
+
+  it("holds a stored-value payment back until history names a business", () => {
+    // Payment-app payees are people with merchant-like notes ("Burma",
+    // "bottega"), which the labeller reads as a business.
+    const create = decideStatementKind({
+      amount: 67.8,
+      votes: { rule: "purchase", label: "purchase", history: null },
+      counterparty: { ...noCounterparty, label: "business", storedValue: true },
+      transfer: null,
+    });
+    expect(kindAgreed(create, null)).toBe(false);
+    const known = decideStatementKind({
+      amount: 67.8,
+      votes: { rule: "purchase", label: "purchase", history: "purchase" },
+      counterparty: {
+        label: "business",
+        history: "business",
+        storedValue: true,
+      },
+      transfer: null,
+    });
+    expect(kindAgreed(known, null)).toBe(true);
   });
 
   it("holds an unlabelled counterparty back from bulk acceptance", () => {
@@ -279,7 +306,7 @@ describe("decideStatementKind sign rules", () => {
     const create = decideStatementKind({
       amount: -1.25,
       votes: { rule: null, label: "interest", history: "interest" },
-      counterparty: { label: "business", history: null },
+      counterparty: { ...noCounterparty, label: "business" },
       transfer: null,
     });
     expect(create).toMatchObject({ kind: "refund", kindSource: "sign" });

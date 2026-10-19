@@ -805,6 +805,42 @@ describe("statement Transaction suggestions", () => {
     });
   });
 
+  // Failure mode: a payment-app payee whose note reads like a merchant is
+  // labelled a business and bulk-accepted.
+  it("holds a payment-app payment back on the label alone", async () => {
+    await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic PayFriend",
+      identity: { kind: "stored_value", provider: "PayFriend" },
+      sourceAliases: [
+        {
+          source: "monarch",
+          alias: "Personal Profile",
+          externalAccountId: null,
+        },
+      ],
+    });
+    await record(ctx, [
+      rowInput({
+        accountDescriptor: "Personal Profile",
+        merchant: "Sample Friend",
+        rawDescription: 'Sample Friend "Noodles"',
+        sourceCategory: "Restaurants & Bars",
+        providerAmount: -42,
+      }),
+    ]);
+    await generate(ctx);
+    await label(ctx, answering({ kind: "purchase", counterparty: "business" }));
+    const [row] = await suggestions(ctx);
+    expect(row).toMatchObject({
+      clean: false,
+      create: {
+        kind: "purchase",
+        votes: { rule: "purchase", label: "purchase", history: null },
+        counterparty: { label: "business", history: null, storedValue: true },
+      },
+    });
+  });
+
   // Failure modes: a card benefit credit naming the same merchant as the
   // subscription it offsets reads that merchant's purchases as `mixed`
   // history, or is proposed as a refund.

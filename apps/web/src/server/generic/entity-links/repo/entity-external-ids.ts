@@ -89,9 +89,9 @@ export async function lockExternalIdentifierParents(
 }
 
 /**
- * Register source slugs, naming the Vendor a slug is when one live Vendor's
- * name matches it case-insensitively. Idempotent; an existing row is left as
- * it is.
+ * Register source slugs without an owner. A slug's spelling never establishes
+ * Vendor ownership: a name-matched owner once gave one Vendor two competing
+ * Product identifier issuers. Idempotent; an existing row is left as it is.
  */
 export async function ensureExternalSources(
   db: Db,
@@ -100,10 +100,8 @@ export async function ensureExternalSources(
   const wanted = uniq([...slugs]);
   if (wanted.length === 0) return;
   await repositoryQueries(db).execute(sql`
-    INSERT INTO "ExternalSource" ("slug", "label", "vendorId")
-    SELECT s.slug, s.slug,
-      (SELECT (array_agg(v."id" ORDER BY v."id"))[1] FROM "Vendor" v
-        WHERE lower(v."name") = s.slug AND v."deletedAt" IS NULL)
+    INSERT INTO "ExternalSource" ("slug", "label")
+    SELECT s.slug, s.slug
     FROM (VALUES ${sql.join(
       wanted.map((slug) => sql`(${slug}::text)`),
       sql`, `,

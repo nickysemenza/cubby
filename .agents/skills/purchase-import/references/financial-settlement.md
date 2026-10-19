@@ -247,7 +247,8 @@ filtering a group with `where {account: {in: [FAC-…]}, month: {in: [YYYY-MM]}}
    "statement_transaction", action: <recommended>}`; an attach also names
    `transactionId`, the first candidate. A create is clean only when at least
    two of `create.votes` (category `rule`, model `label`, merchant `history`)
-   name its kind and none disagrees, and `create.counterparty` is a business. A
+   name its kind and none disagrees, and `create.counterparty` is a business
+   (on a stored-value account such as a payment app, history must say so). A
    card benefit, statement credit or issuer promotion is an `adjustment`, not a
    `refund` (a merchant giving money back for returned goods), even when it
    names the merchant of the purchase it offsets; merchant history is kept per

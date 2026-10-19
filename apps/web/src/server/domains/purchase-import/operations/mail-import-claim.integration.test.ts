@@ -6,7 +6,9 @@
  * `unrelated` would; a refund notice is settled without the coordinator; the
  * claimed Email arrives without its compact read; a repeated claim duplicates
  * a rule outcome; a first-page order match hides a cancellation on a later
- * page and is incorrectly settled without the coordinator.
+ * page and is incorrectly settled without the coordinator; the claim omits
+ * the sender's proven Vendor or the recorded Purchases its printed order id
+ * names, so the coordinator spends a model call looking each up.
  */
 import type { ActorContext } from "@cubby/schemas/context";
 import type { PurchaseId, RunId } from "@cubby/schemas/identifiers";
@@ -225,8 +227,8 @@ describe("Mail import claim", () => {
   }
 
   it("claims an incomplete lifecycle read instead of settling its first-page match", async () => {
-    const { party, order, retain } = await world();
-    await order("SYN-3001");
+    const { party, seller, order, retain } = await world();
+    const target = await order("SYN-3001");
     const mail = await retain(
       "paged-cancellation",
       "Your order SYN-3001 has shipped",
@@ -238,6 +240,19 @@ describe("Mail import claim", () => {
       kind: "email",
       email: { messageId: mail.messageId },
       read: { content: { truncated: true, nextOffset: expect.any(Number) } },
+      // First-page lookups still spare the coordinator its Vendor and
+      // Purchase reads; only the deterministic settlement needs every page.
+      known: {
+        senderVendor: { id: seller.shortcode, name: seller.name },
+        purchases: [
+          {
+            id: target.shortcode,
+            orderId: "SYN-3001",
+            vendorId: seller.shortcode,
+            imported: false,
+          },
+        ],
+      },
     });
     expect((await linkRows(mail)).events).toEqual([]);
     const [email] = await getDb(ctx.db)
@@ -322,6 +337,19 @@ describe("Mail import claim", () => {
           checksum: refund.rawChecksum,
           boundToRun: true,
           content: { bodyText: expect.stringContaining("Refund issued") },
+        },
+        known: {
+          senderVendor: { id: seller.shortcode, name: seller.name },
+          orderIds: expect.arrayContaining(["SYN-2001"]),
+          purchases: [
+            {
+              id: ruleTarget.shortcode,
+              orderId: "SYN-2001",
+              vendorId: seller.shortcode,
+              date: null,
+              imported: true,
+            },
+          ],
         },
       });
       await resolveMail(

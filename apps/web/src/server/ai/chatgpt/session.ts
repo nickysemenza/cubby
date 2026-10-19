@@ -10,7 +10,7 @@ import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { z } from "zod";
 
-import { chatGptRequest } from "./transport";
+import { chatGptRequest, type ChatGptToolPlacement } from "./transport";
 
 const log = createLogger("chatgpt-plan");
 
@@ -79,9 +79,43 @@ function refreshFailureCode(body: string): string | null {
   }
 }
 
+const planError = z.object({
+  error: z.looseObject({
+    type: z.string().optional(),
+    code: z.string().nullish(),
+    param: z.string().nullish(),
+    message: z.string().nullish(),
+  }),
+});
+
+/**
+ * An HTTP 400 invalid request naming the `input` items (or `additional_tools`)
+ * as what it refuses: the shape a refused tool placement takes. Quota and rate
+ * refusals are funding outcomes, never placement errors.
+ */
+function isToolPlacementRefusal(status: number, body: string): boolean {
+  if (status !== 400) return false;
+  let parsed: z.infer<typeof planError>;
+  try {
+    parsed = planError.parse(JSON.parse(body));
+  } catch {
+    // SILENT: a non-JSON refusal is not a recognizable placement refusal; the
+    // caller still receives and logs its raw body.
+    return false;
+  }
+  const { type, code, param, message } = parsed.error;
+  if (type !== "invalid_request_error") return false;
+  if (code && /usage_limit|rate_limit|quota/u.test(code)) return false;
+  return (
+    /^input(?:$|[[.])/u.test(param ?? "") ||
+    (message ?? "").includes("additional_tools")
+  );
+}
+
 /** One deployment's shared plan. Only this owner ever reads renewable tokens. */
 export class ChatGptSession {
   private pending: Promise<unknown> = Promise.resolve();
+  private toolPlacement: ChatGptToolPlacement = "leading";
 
   constructor(
     private readonly store: CredentialStore,
@@ -302,19 +336,49 @@ export class ChatGptSession {
     signal?.throwIfAborted();
     const saved = await this.active();
     signal?.throwIfAborted();
-    const response = await this.upstream(`${API}/responses`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${saved.accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(chatGptRequest(body, model)),
-      signal,
-    });
+    const request = (placement: ChatGptToolPlacement) =>
+      JSON.stringify(chatGptRequest(body, model, placement));
+    const send = (payload: string) =>
+      this.upstream(`${API}/responses`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${saved.accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: payload,
+        signal,
+      });
+    const placement = this.toolPlacement;
+    const first = request(placement);
+    let response = await send(first);
     if (response.ok) return response;
     // Every plan caller passes through here; callers that fall back to paid
     // inference otherwise keep no copy of the plan's refusal.
-    const failure = await response.text();
+    let failure = await response.text();
+    // CONSTRAINT: the leading `additional_tools` position (`chatGptRequest`)
+    // was never verified against the live plan. A refusal of the input shape
+    // retries that request once in the original trailing order; when that
+    // succeeds, this session keeps the trailing order. Delete this guard once
+    // production plan calls show cache reads with the leading order.
+    const trailing = request("trailing");
+    if (
+      placement === "leading" &&
+      trailing !== first &&
+      isToolPlacementRefusal(response.status, failure)
+    ) {
+      log.warn("plan refused leading tool placement; retrying trailing", {
+        model,
+        status: response.status,
+        body: scrubErrorMessage(failure),
+      });
+      signal?.throwIfAborted();
+      response = await send(trailing);
+      if (response.ok) {
+        this.toolPlacement = "trailing";
+        return response;
+      }
+      failure = await response.text();
+    }
     log.warn("plan refused inference", {
       model,
       status: response.status,

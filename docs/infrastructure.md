@@ -114,9 +114,15 @@ checked-in configuration is part of `apps/web/cloudflare.config.ts`:
   Anthropic request marks a cache breakpoint at the end of that kept prefix,
   and each OpenAI request keys `prompt_cache_key` to the Run
   (`withWorkItemCaching`), so the prefix is read from cache on every Email;
-- the agent's `entity_read` schema narrowed to the purpose's `mcpEntityKinds`
-  (Mail import: purchase, vendor, product); other kinds are refused for the
-  Run, while members' `tools/list` keeps every kind.
+- the agent's `entity_read` schema narrowed to the purpose's `entityRead`
+  view (Mail import: purchase, vendor and product, each with only its curated
+  list filters, and no `groupBy`/`groupLevel`/`nesting`); other kinds are
+  refused for the Run, omitted filters still validate, and members'
+  `tools/list` keeps every kind and input. An agent tool advertises
+  `_runExecution` only when one of its mounted actions reads it (Mail import:
+  `purchase_import`, `finance`). The ChatGPT plan transport places the tool
+  block before the conversation so the plan's prefix cache covers it
+  ([runbook](runbooks/chatgpt-plan.md)).
 
 The Run page observes without resuming work. Opening a harness resumes its
 pending tasks, so `/stream` from an object whose agent is already constructed
@@ -522,6 +528,23 @@ event ("Run now, paid allowed" on the Run page, "Run discovery now, paid
 allowed" on the Mail import card, or MCP `run.lifecycle`/`run.discover_mail`)
 lets that Run and the imports its discovery starts pay within the paid budget,
 or past it by the confirmed `paidOverBudgetUsd` for the granting window.
+The credit preflight (`creditRunPreflight`) recognizes a chat call by endpoint
+path: pi-ai's Anthropic SDK posts `v1/messages?beta=true`.
+
+A provider credit refusal is held, not retried. When a credit response is a
+funding refusal `isInferenceFundingRefusal` recognizes (a Console spend limit,
+a spent balance; never Cubby's own `cubby_credit_budget_reached`), the
+`AI_GATEWAY_EGRESS` Durable Object records it with the raw body until the date
+Anthropic names ("You will regain access on …"), else the end of the current
+six-hour window. While it holds, credit admission answers at once with a
+`cubby_credit_refused` 400 carrying that raw reason and makes no upstream call,
+so every ladder moves straight to the ChatGPT plan; unified (paid) traffic is
+unaffected. One credit request per window passes as a probe: success clears
+the refusal, another refusal records it again. "Retry Claude credit now"
+(Settings → AI funding, MCP `ai_funding.reset_credit_refusal`) and any credit
+budget change clear it and resume funding-paused Runs. `ai_funding_read.status`
+and the AI funding card report it as `credit.state` `refused`, with `until` and
+`reason`. Refusals that arrive only inside a stream are not recorded.
 
 1. Link the eligible Claude plan to the intended Anthropic Console organization.
 2. Create a dedicated Cubby workspace with a monthly spend limit no larger than

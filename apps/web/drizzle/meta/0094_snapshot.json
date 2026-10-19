@@ -1,5 +1,5 @@
 {
-  "id": "7de00659-2822-4794-8afd-630ce5571923",
+  "id": "e30612db-4656-431d-8f21-9f1adddf8212",
   "prevId": "aef9ff79-1154-4de0-8b58-f3a4602b1456",
   "version": "7",
   "dialect": "postgresql",
@@ -2144,6 +2144,13 @@
           "primaryKey": false,
           "notNull": false
         },
+        "issuer": {
+          "name": "issuer",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
@@ -2152,7 +2159,24 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "ExternalSource_vendor_issuer_key": {
+          "name": "ExternalSource_vendor_issuer_key",
+          "columns": [
+            {
+              "expression": "vendorId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"ExternalSource\".\"issuer\"",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "ExternalSource_vendorId_Vendor_id_fk": {
           "name": "ExternalSource_vendorId_Vendor_id_fk",
@@ -9800,13 +9824,6 @@
         },
         "attempts": {
           "name": "attempts",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "failuresSinceRetry": {
-          "name": "failuresSinceRetry",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
@@ -17784,7 +17801,7 @@
             }
           ],
           "isUnique": true,
-          "where": "\"Run\".\"vendorAccountId\" IS NOT NULL AND \"Run\".\"status\" IN ('running', 'paused', 'paused_auth', 'paused_offline')",
+          "where": "\"Run\".\"vendorAccountId\" IS NOT NULL AND \"Run\".\"status\" IN ('running', 'paused', 'paused_auth', 'paused_offline', 'paused_approval')",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -17941,7 +17958,7 @@
         },
         "Run_status_check": {
           "name": "Run_status_check",
-          "value": "\"Run\".\"status\" IN ('running', 'paused', 'paused_auth', 'paused_offline', 'needs_review', 'completed', 'failed', 'dispatch_failed')"
+          "value": "\"Run\".\"status\" IN ('running', 'paused', 'paused_auth', 'paused_offline', 'paused_approval', 'needs_review', 'completed', 'failed', 'dispatch_failed')"
         },
         "Run_purpose_check": {
           "name": "Run_purpose_check",
@@ -18680,7 +18697,7 @@
       "checkConstraints": {
         "RunOperation_state_check": {
           "name": "RunOperation_state_check",
-          "value": "\"RunOperation\".\"state\" IN ('started', 'completed', 'failed')"
+          "value": "\"RunOperation\".\"state\" IN ('started', 'paused_approval', 'completed', 'failed')"
         }
       },
       "isRLSEnabled": false
