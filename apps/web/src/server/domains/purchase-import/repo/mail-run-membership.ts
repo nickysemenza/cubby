@@ -321,6 +321,9 @@ export async function releaseFailedMailRunSources(
     (source) => !failedBefore.has(source.orderMailId),
   );
   if (!released.length) return [];
+  // The admission replay key names this Run's source set; readmitting the same
+  // released Emails would otherwise replay this failed Run instead of starting one.
+  await tx.update(run).set({ clientKey: null }).where(eq(run.id, runId));
   return tx
     .update(emailTable)
     .set({ runId: null, status: "pending", updatedAt: new Date() })

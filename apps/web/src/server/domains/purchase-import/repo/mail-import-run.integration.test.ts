@@ -496,6 +496,29 @@ describe("mail research admission", () => {
     });
   });
 
+  it("readmits a released Email under a new Run when its failed Run admitted only it", async () => {
+    const { party, mail } = await source();
+    const admission = {
+      ledgerPartyId: party.id,
+      userId: ctx.actor.userId,
+      messageIds: [mail.id],
+    };
+    const queue = { send: async () => {} };
+    const [first] = await startMailImport(ctx.db, admission, queue);
+    if (!first) throw new Error("Synthetic Run missing");
+    await markRunFailed(ctx.db, {
+      runId: parseEntityId("run", first.runId),
+      failureCode: "agent_failed",
+    });
+    const [second] = await startMailImport(ctx.db, admission, queue);
+    expect(second?.runId).not.toBe(first.runId);
+    const [owned] = await getDb(ctx.db)
+      .select({ runId: emailTable.runId, status: emailTable.status })
+      .from(emailTable)
+      .where(eq(emailTable.orderMailId, mail.id));
+    expect(owned).toEqual({ runId: second?.runId, status: "researching" });
+  });
+
   it("preserves a migrated blocked receipt after its successor completes and the live Email changes", async () => {
     const { party, mail } = await source();
     const [admitted] = await startMailImport(
