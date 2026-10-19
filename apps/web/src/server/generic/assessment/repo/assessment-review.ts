@@ -368,14 +368,21 @@ export async function reviewAssessment(
     input.suppression
   )
     throw new Error("An Automatic rule only accepts an Assessment as is");
-  return withTransactionDatabase(db, (transactionDb) =>
-    settleReview(
+  const { assertAutomaticRuleOn } =
+    await import("~/server/generic/assessment/repo/automatic-rule-runtime");
+  return withTransactionDatabase(db, async (transactionDb) => {
+    await assertAutomaticRuleOn(
+      transactionDb,
+      automatic.rule.key,
+      automatic.rule.stamp,
+    );
+    return settleReview(
       transactionDb,
       { ...context, db: transactionDb },
       input,
       automatic,
-    ),
-  );
+    );
+  });
 }
 
 function assertReviewAction(

@@ -561,6 +561,48 @@ describe("Automatic rules", () => {
     expect(await feedbackFor(ctx, suggestion.id)).toHaveLength(2);
   });
 
+  // Failure mode (#2722 review): a rule turned off after the application
+  // snapshot still applied, because the transaction never rechecked it.
+  it("refuses an automatic application once the rule is off", async () => {
+    await createSystemUserFixture(ctx.db);
+    const { existing } = await soleCandidateCharge(ctx);
+    await eligibleFor(ctx, supportedDecisionModelSchema.options);
+    await label(ctx);
+    const suggestion = await chargeSuggestion(ctx);
+    expect((await stateOf(ctx, suggestion.id)).status).toBe("pending");
+    await expect(
+      reviewAssessment(
+        ctx.db,
+        { ...kernelCtx(ctx), actorContext: systemActor() },
+        {
+          assessmentId: suggestion.id,
+          operationId: `automatic:${ruleBase(ATTACH)}:${suggestion.id}`,
+          verdict: "correct",
+          correction: { present: false },
+          intent: "apply",
+          expectedFingerprint: suggestion.fingerprint,
+          application: {
+            kind: "statement_transaction",
+            action: "attach",
+            transactionId: existing.id,
+            fields: [],
+            rejectedCandidateIds: [],
+          },
+        },
+        {
+          authority: "automatic",
+          rule: {
+            key: ATTACH,
+            revision: ruleBase(ATTACH).slice(ATTACH.length + 1),
+            stamp: `${ruleBase(ATTACH)}@synthetic-model`,
+          },
+        },
+      ),
+    ).rejects.toThrow(/is off; review the suggestion/);
+    expect((await stateOf(ctx, suggestion.id)).status).toBe("pending");
+    expect(await feedbackFor(ctx, suggestion.id)).toEqual([]);
+  });
+
   // Failure modes: turning the rule on for one measured model authorizes
   // another; evidence that drifted after publication is applied anyway.
   it("applies nothing for an unmeasured model or drifted evidence", async () => {

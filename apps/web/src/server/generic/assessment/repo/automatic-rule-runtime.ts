@@ -139,6 +139,36 @@ type StoredRule = typeof automaticRule.$inferSelect;
 const isOn = (key: AutomaticRuleKey, row: StoredRule | undefined) =>
   Boolean(row?.enabled && row.revision === AUTOMATIC_RULES[key].revision());
 
+/**
+ * Inside the application's transaction: the rule is still on for this
+ * revision and, per model, still eligible. The share lock serializes the
+ * application with a member's switch and the drift disable, which update
+ * the row, so a rule turned off before the application commits applies
+ * nothing.
+ */
+export async function assertAutomaticRuleOn(
+  db: Database,
+  key: AutomaticRuleKey,
+  stamp: string,
+) {
+  const [row] = await getDb(db)
+    .select()
+    .from(automaticRule)
+    .where(eq(automaticRule.ruleKey, key))
+    .for("share");
+  if (!isOn(key, row))
+    throw new Error(`Automatic rule ${key} is off; review the suggestion`);
+  if (
+    AUTOMATIC_RULES[key].perModel &&
+    !(await ruleWindows(db, key)).some(
+      (window) => window.stamp === stamp && window.eligible,
+    )
+  )
+    throw new Error(
+      `Automatic rule ${key} is no longer eligible for ${stamp}; review the suggestion`,
+    );
+}
+
 async function ruleSummary(
   db: Database,
   key: AutomaticRuleKey,
