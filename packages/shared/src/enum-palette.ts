@@ -47,11 +47,23 @@ export interface EnumIcon {
 }
 
 const STATUS_ICONS = new Map<string, EnumIcon>([
-  ["var(--positive)", { phosphor: "CheckCircle", sfSymbol: "checkmark.circle.fill" }],
+  [
+    "var(--positive)",
+    { phosphor: "CheckCircle", sfSymbol: "checkmark.circle.fill" },
+  ],
   ["var(--warning)", { phosphor: "Clock", sfSymbol: "clock" }],
-  ["var(--destructive)", { phosphor: "XCircle", sfSymbol: "xmark.circle.fill" }],
-  ["var(--info)", { phosphor: "CircleHalf", sfSymbol: "circle.lefthalf.filled" }],
-  ["var(--neutral-status)", { phosphor: "CircleDashed", sfSymbol: "circle.dashed" }],
+  [
+    "var(--destructive)",
+    { phosphor: "XCircle", sfSymbol: "xmark.circle.fill" },
+  ],
+  [
+    "var(--info)",
+    { phosphor: "CircleHalf", sfSymbol: "circle.lefthalf.filled" },
+  ],
+  [
+    "var(--neutral-status)",
+    { phosphor: "CircleDashed", sfSymbol: "circle.dashed" },
+  ],
 ]);
 
 const VALUE_ICONS = new Map<string, EnumIcon>([
@@ -163,19 +175,23 @@ export function colorizeEnumOptions<T extends EnumOptionInput>(
   options: readonly T[],
   rosterRole?: EnumRole | null,
 ): Array<T & { color: string; role: EnumRole; glyph?: EnumIcon }> {
-  const resolved = options.map((option) => {
-    const explicit =
-      option.color === undefined
-        ? undefined
-        : (LEGACY_COLORS.get(option.color) ?? option.color);
-    return explicit === "var(--slate)" ? undefined : explicit;
-  });
-  const semantic = options.map(
-    (option, index) => resolved[index] ?? semanticColor(option.value),
+  const explicit = options.map((option) =>
+    option.color === undefined
+      ? undefined
+      : (LEGACY_COLORS.get(option.color) ?? option.color),
   );
+  const slate = explicit.map((color) => color === "var(--slate)");
+  const semantic = options.map((option, index) =>
+    slate[index] ? undefined : (explicit[index] ?? semanticColor(option.value)),
+  );
+  // Explicit slate is the neutral state inside a condition roster (a
+  // reconciliation's explained difference) and noise anywhere else.
   const inferredRole: EnumRole =
-    options.length > 0 &&
-    semantic.every((color) => color !== undefined && CONDITION_COLORS.has(color))
+    semantic.some((color) => color !== undefined) &&
+    semantic.every(
+      (color, index) =>
+        slate[index] || (color !== undefined && CONDITION_COLORS.has(color)),
+    )
       ? "status"
       : "category";
   const role = rosterRole ?? options[0]?.role ?? inferredRole;

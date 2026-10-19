@@ -22,7 +22,9 @@ describe("purchase reconciliation statuses", () => {
     );
 
     const label = screen.getByText("Refund-adjusted -$127.10");
-    expect(label.parentElement).toHaveStyle("--enum-pill-color: var(--slate)");
+    expect(label.parentElement).toHaveStyle(
+      "--enum-pill-color: var(--neutral-status)",
+    );
   });
 
   it("reserves the warning tone and Needs review label for unexplained gaps", () => {

@@ -50,6 +50,19 @@ describe("shared enum palette", () => {
     expect(colorizeEnumOptions(options.slice(2))).toEqual(options.slice(2));
   });
 
+  it("reads explicit slate in a condition roster as the neutral state", () => {
+    const options = colorizeEnumOptions([
+      { value: "match" },
+      { value: "explained", color: "var(--slate)" },
+      { value: "mismatch" },
+    ]);
+    expect(options.map((option) => [option.role, option.color])).toEqual([
+      ["status", "var(--positive)"],
+      ["status", "var(--neutral-status)"],
+      ["status", "var(--destructive)"],
+    ]);
+  });
+
   it("honors a declared role and icon over inference", () => {
     const [option] = colorizeEnumOptions(
       [
