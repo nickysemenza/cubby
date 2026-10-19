@@ -1,3 +1,4 @@
+import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -114,5 +115,23 @@ describe("acquisition Expense discovery gating", () => {
     expect(targets).toEqual(expect.arrayContaining([lexical, semantic]));
     expect(targets).not.toContain(otherBrand);
     expect(targets).not.toContain(weak);
+
+    // An unbranded Product has no brand to contradict a branded line.
+    const unbranded = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Trail Runner",
+        manufacturer: UNSPECIFIED_MANUFACTURER,
+      }),
+      ctx.actor,
+    );
+    expect(
+      (
+        await discoverAcquisitionCandidates(ctx.db, {
+          entityKind: "product",
+          entityId: unbranded.id,
+        })
+      ).map((candidate) => candidate.target.entityId),
+    ).toContain(lexical);
   });
 });

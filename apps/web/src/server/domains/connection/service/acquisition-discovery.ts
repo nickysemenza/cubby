@@ -6,8 +6,10 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import {
+  acquisitionBrandText,
   expenseConnectionEligible,
-  expenseNamesOtherBrand,
+  knownBrandSlugs,
+  otherBrandNamed,
   retrieveAcquisitionNotes,
   acquisitionPairEligible,
 } from "~/server/domains/connection/repo/connection-candidates";
@@ -61,6 +63,13 @@ export async function discoverAcquisitionCandidates(
     name: basisValueOf(record.name) ?? identity,
     notes: description,
   });
+  // Resolved once per call: the source's own brand text (Product manufacturer
+  // or Expense line) and, on first Expense pairing, the known-brand slugs.
+  const sourceBrandText =
+    source.entityKind === "product"
+      ? basisValueOf(record.manufacturer)
+      : basisValueOf(record.name);
+  let brands: Set<string> | undefined;
   for (const kind of kinds)
     for (const query of queries) {
       const [lexical, semantic] = await Promise.all([
@@ -85,12 +94,19 @@ export async function discoverAcquisitionCandidates(
       for (const other of otherRefs) {
         const from = source.entityKind === "product" ? source : other;
         const to = source.entityKind === "product" ? other : source;
-        if (
-          to.entityKind === "expense" &&
-          (!(await expenseConnectionEligible(db, to.entityId)) ||
-            (await expenseNamesOtherBrand(db, from.entityId, to.entityId)))
-        )
-          continue;
+        if (to.entityKind === "expense") {
+          if (!(await expenseConnectionEligible(db, to.entityId))) continue;
+          brands ??= await knownBrandSlugs(db);
+          const manufacturer =
+            source.entityKind === "product"
+              ? sourceBrandText
+              : await acquisitionBrandText(db, from);
+          const line =
+            source.entityKind === "expense"
+              ? sourceBrandText
+              : await acquisitionBrandText(db, to);
+          if (line && otherBrandNamed(line, manufacturer, brands)) continue;
+        }
         if (
           to.entityKind === "purchase" &&
           !(await acquisitionPairEligible(db, from.entityId, to.entityId))

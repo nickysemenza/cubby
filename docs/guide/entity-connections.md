@@ -113,7 +113,7 @@ excluded from connection fingerprints.
   Negative/exiting and `not_allowed` Expense evidence is excluded. A
   semantic-only hit must reach `SEMANTIC_MATCH_MIN_SIMILARITY`, and an Expense
   line naming a known brand (a live Product `manufacturer`) other than the
-  Product's own is never proposed (`expenseNamesOtherBrand`); an unknown brand
+  Product's own is never proposed (`otherBrandNamed`); an unspecified or unknown brand
   on either side does not reject.
 - Product identity and photo evidence use the existing identity detector,
   Product-pair Assessments and merge handler. Similarity is not merge authority.

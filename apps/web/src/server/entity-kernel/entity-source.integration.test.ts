@@ -222,6 +222,20 @@ describe("entity sources", () => {
         sources: [{ fieldPath: "dataQuality", url: "https://example.test/x" }],
       }),
     ).rejects.toThrow(/dataQuality/);
+    // Writable but write-only: the detail never returns it to fingerprint.
+    await expect(
+      executeEntity(context(), {
+        action: "update",
+        entity: "product",
+        id: parseShortcodeFor("product", product.code),
+        data: { model: "SW-999" },
+        sources: [
+          { fieldPath: "pendingImageIds", url: "https://example.test/x" },
+        ],
+      }),
+    ).rejects.toThrow(
+      "Source fieldPath pendingImageIds has no read key or display.readPath on the Product detail, so its value cannot be fingerprinted.",
+    );
     await expect(
       executeEntity(context(), {
         action: "update",
