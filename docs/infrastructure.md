@@ -78,6 +78,11 @@ observed-version marker. Durable Objects follow deployments
 the DO also creates successors through its current bindings. A rollback is a
 version change too. Version checks are durable steps: replay reuses each recorded
 decision instead of moving the handoff backwards over already-completed work.
+Persist that decision in its own step before creating the successor: a lost
+create reply followed by rollback must not let the predecessor resume the same
+checkpoint. Each RPC attempt acquires a fresh DO stub because an exception can
+leave the previous stub permanently broken
+([Cloudflare error handling](https://developers.cloudflare.com/durable-objects/best-practices/error-handling/)).
 
 Run-backed Workflows reuse `claimWorkflowRun` and the `launchWorkflowRun`
 `expectedAttempt` fence. The same Run retains its cursors, receipts and cancellation;

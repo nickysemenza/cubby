@@ -86,17 +86,17 @@ export class SearchIndexRepairWorkflow
           checkpoint?.phase === "orphans" ? checkpoint.cursor : null;
         let page = 0;
         let completedPages = 0;
-        const current =
+        const current = () =>
           this.env.AI_GATEWAY_EGRESS.getByName(CUBBY_AI_GATEWAY_ID);
         const nextInstanceId = await sha256Hex(`${event.instanceId}:continue`);
         const boundary = (phase: SearchRepairCheckpoint["phase"]) =>
           workflowDeploymentBoundary(step, {
             name: `${phase}:${page}`,
             version: this.env.CF_VERSION_METADATA.id,
-            currentVersion: () => current.currentDeploymentVersion(),
+            currentVersion: () => current().currentDeploymentVersion(),
             force: completedPages >= REPAIR_PAGES_PER_INSTANCE,
             continue: () =>
-              current.continueSearchIndexRepair({
+              current().continueSearchIndexRepair({
                 id: nextInstanceId,
                 params: {
                   requestedAt: event.payload.requestedAt,

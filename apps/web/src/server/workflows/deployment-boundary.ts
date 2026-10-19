@@ -1,9 +1,9 @@
 import { BOOKKEEPING_RETRIES, type DurableSteps } from "./runs/step";
 
 /**
- * Check only between committed pages. Retaining the decision alongside the
- * handoff makes replay follow the same branch; an earlier page cannot observe
- * a later deploy on replay and skip work whose result was already retained.
+ * Check only between committed pages. Retain the decision before creating a
+ * successor: a lost create reply followed by rollback must not reactivate the
+ * predecessor while that successor owns the checkpoint.
  */
 export async function workflowDeploymentBoundary(
   steps: Pick<DurableSteps, "do">,
@@ -15,10 +15,15 @@ export async function workflowDeploymentBoundary(
     force?: boolean;
   },
 ): Promise<boolean> {
-  return steps.do(`deployment:${input.name}`, BOOKKEEPING_RETRIES, async () => {
-    if (!input.force && (await input.currentVersion()) === input.version)
-      return false;
+  const handoff = await steps.do(
+    `deployment:${input.name}`,
+    BOOKKEEPING_RETRIES,
+    async () => input.force || (await input.currentVersion()) !== input.version,
+  );
+  if (!handoff) return false;
+  await steps.do(`handoff:${input.name}`, BOOKKEEPING_RETRIES, async () => {
     await input.continue();
-    return true;
+    return null;
   });
+  return true;
 }

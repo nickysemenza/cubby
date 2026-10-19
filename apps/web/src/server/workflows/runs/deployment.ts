@@ -10,13 +10,13 @@ export function runDeploymentBoundary(
   steps: Pick<DurableSteps, "do">,
   params: WorkflowRunParams,
 ) {
-  const current = env.AI_GATEWAY_EGRESS.getByName(CUBBY_AI_GATEWAY_ID);
+  const current = () => env.AI_GATEWAY_EGRESS.getByName(CUBBY_AI_GATEWAY_ID);
   return (name: string, force = false) =>
     workflowDeploymentBoundary(steps, {
       name,
       version: env.CF_VERSION_METADATA.id,
-      currentVersion: () => current.currentDeploymentVersion(),
-      continue: () => current.continueWorkflowRun(params),
+      currentVersion: () => current().currentDeploymentVersion(),
+      continue: () => current().continueWorkflowRun(params),
       force,
     });
 }
