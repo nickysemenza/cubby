@@ -2,7 +2,8 @@ import CubbyKit
 import SwiftUI
 
 /// One server-worded decision on a `records` block: its ranked suggestions, an option picker, and
-/// whatever the chosen option asks for (a record from the entity picker, a written reason). The
+/// whatever the chosen option asks for (a record from the entity picker, a written reason, a Source
+/// per Distinct-from record). The
 /// answers live with the block (`ReportChoiceAnswers`); nothing is preselected, even for a single
 /// exact suggestion, so the person's tap is what answers.
 struct ReportChoiceView: View {
@@ -96,28 +97,46 @@ struct ReportChoiceView: View {
                     .accessibilityIdentifier("report.choice.text.\(choice.id)")
             }
             ForEach(option?.distinctFrom ?? []) { record in
-                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                    Text("Show with a Source how this differs from \(record.name)")
-                        .font(.fieldGuideLabel).foregroundStyle(.secondary)
-                    TextField("Source URL for \(record.name)", text: sourceBinding(record, \.url))
-                        .textFieldStyle(.roundedBorder)
-                        .textContentType(.URL)
-                        #if os(iOS)
-                            .keyboardType(.URL)
-                            .textInputAutocapitalization(.never)
-                        #endif
-                        .autocorrectionDisabled()
-                        .disabled(disabled)
-                        .accessibilityIdentifier("report.choice.source.url.\(choice.id).\(record.id)")
-                    TextField(
-                        "Quoted difference from \(record.name)", text: sourceBinding(record, \.quote),
-                        axis: .vertical
-                    )
-                    .textFieldStyle(.roundedBorder)
-                    .disabled(disabled)
-                    .accessibilityIdentifier("report.choice.source.quote.\(choice.id).\(record.id)")
-                }
+                sourceFields(record)
             }
+        }
+    }
+
+    /// The Source for one Distinct-from record. Each field keeps a visible label, since a
+    /// placeholder disappears once typing starts.
+    private func sourceFields(_ record: ReportPresentation.Choice.Option.Record) -> some View {
+        let url = sourceBinding(record, \.url)
+        let quote = sourceBinding(record, \.quote)
+        let feedback = ReportChoiceAnswers.sourceFeedback(url: url.wrappedValue, quote: quote.wrappedValue)
+        return VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+            Text("Show with a Source how this differs from \(record.name)")
+                .font(.fieldGuideLabel).foregroundStyle(.secondary)
+            Text("Source URL for \(record.name)").font(.fieldGuideLabel)
+            TextField("Source URL for \(record.name)", text: url)
+                .labelsHidden()
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.URL)
+                #if os(iOS)
+                    .keyboardType(.URL)
+                    .textInputAutocapitalization(.never)
+                #endif
+                .autocorrectionDisabled()
+                .disabled(disabled)
+                .accessibilityIdentifier("report.choice.source.url.\(choice.id).\(record.id)")
+            if let error = feedback.url {
+                Text(error).font(.fieldGuideLabel).foregroundStyle(FieldGuideTokens.destructive)
+            }
+            Text("Quoted difference from \(record.name)").font(.fieldGuideLabel)
+            TextField("Quoted difference from \(record.name)", text: quote, axis: .vertical)
+                .labelsHidden()
+                .textFieldStyle(.roundedBorder)
+                // A quote is verbatim source text.
+                .autocorrectionDisabled()
+                .disabled(disabled)
+                .accessibilityIdentifier("report.choice.source.quote.\(choice.id).\(record.id)")
+            Text(feedback.quote ?? feedback.quoteLength)
+                .font(.fieldGuideLabel)
+                .foregroundStyle(feedback.quote == nil ? Color.secondary : FieldGuideTokens.destructive)
         }
     }
 
@@ -143,8 +162,8 @@ struct ReportChoiceView: View {
 }
 
 /// A block's own choices, its progress sentence and its one command. The command asks the
-/// server's confirmation first, is available only while every required choice is answered and the
-/// server allows it, and sends exactly the body the answers assemble.
+/// server's confirmation first, is available only while every required choice is answered, the
+/// answers assemble a body the commit accepts, and the server allows it; it sends exactly that body.
 struct ReportFormFooterView: View {
     let form: ReportPresentation.Form
     let rowChoices: [ReportPresentation.Choice]
@@ -164,6 +183,9 @@ struct ReportFormFooterView: View {
                 }
                 Text(answers.progressText(form: form, rowChoices: rowChoices))
                     .font(.footnote).foregroundStyle(.secondary)
+                if let unsendable = answers.unsendableText(form: form, rowChoices: rowChoices) {
+                    Text(unsendable).font(.footnote).foregroundStyle(FieldGuideTokens.destructive)
+                }
                 Button(busy ? "Importing…" : form.command.label) {
                     if form.command.confirm == nil {
                         Task { await model.approve(form, answers: answers, confirmed: false) }

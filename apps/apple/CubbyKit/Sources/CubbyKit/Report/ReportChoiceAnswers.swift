@@ -110,11 +110,61 @@ public struct ReportChoiceAnswers: Equatable, Sendable {
         choices.filter { $0.required && !isAnswered($0) }.count
     }
 
-    /// Every required choice, the rows' and the form's own, has a complete answer.
+    /// Every required choice, the rows' and the form's own, has a complete answer the commit
+    /// would accept.
     public func canSubmit(
         form: ReportPresentation.Form, rowChoices: [ReportPresentation.Choice]
     ) -> Bool {
         form.disabledReason == nil && remaining(in: rowChoices + form.choices) == 0
+            && commitInput(for: form) != nil
+    }
+
+    /// Web's sentence for answers that are all complete but cannot be sent as they stand.
+    public func unsendableText(
+        form: ReportPresentation.Form, rowChoices: [ReportPresentation.Choice]
+    ) -> String? {
+        guard remaining(in: rowChoices + form.choices) == 0, commitInput(for: form) == nil
+        else { return nil }
+        return
+            "An answer cannot be sent: a reason is at most \(Self.count(SharedConstants.productDecisionReasonMax)) characters, a Product must be chosen from the picker, and a Source needs a full URL."
+    }
+
+    /// Per-field feedback for one typed Source under the bounds the commit parses (web's
+    /// `distinctFromSourceFeedback`): an error per field, and the quote's length against its bound.
+    public struct SourceFeedback: Equatable, Sendable {
+        public let url: String?
+        public let quote: String?
+        public let quoteLength: String
+    }
+
+    public static func sourceFeedback(url: String, quote: String) -> SourceFeedback {
+        let url = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        let quote = quote.trimmingCharacters(in: .whitespacesAndNewlines)
+        return SourceFeedback(
+            url: url.isEmpty || validURL(url)
+                ? nil
+                : "Enter a full URL of at most \(count(SharedConstants.entitySourceURLMax)) characters.",
+            quote: quote.utf16.count > SharedConstants.entitySourceQuoteMax
+                ? "Shorten the quote to at most \(count(SharedConstants.entitySourceQuoteMax)) characters."
+                : nil,
+            quoteLength:
+                "\(count(quote.utf16.count)) of \(count(SharedConstants.entitySourceQuoteMax)) characters."
+        )
+    }
+
+    /// Zod's `z.url()` bound by `ENTITY_SOURCE_URL_MAX`: a scheme and a host, any scheme. Lengths
+    /// count UTF-16 units, as zod does.
+    private static func validURL(_ url: String) -> Bool {
+        guard url.utf16.count <= SharedConstants.entitySourceURLMax,
+            let components = URLComponents(string: url),
+            components.scheme?.isEmpty == false, components.host?.isEmpty == false
+        else { return false }
+        return true
+    }
+
+    /// A count as web's `toLocaleString("en-US")` writes it.
+    private static func count(_ value: Int) -> String {
+        value.formatted(.number.locale(Locale(identifier: "en_US")))
     }
 
     /// "2 Product decisions remaining." or the form's completion sentence, then what approving does.
@@ -130,7 +180,8 @@ public struct ReportChoiceAnswers: Equatable, Sendable {
     /// A line's complete decision, before it is spelled as the wire type.
     private enum Decision {
         case existing(String)
-        /// The trimmed Distinct-from Sources, empty when the line has no exact-name candidate.
+        /// The trimmed Distinct-from Sources, empty when the option lists no candidate (exact-name
+        /// or identity-review) to tell the new Product apart from.
         case new([Source])
         case unresolved(String)
         case expenseOnly
@@ -148,11 +199,16 @@ public struct ReportChoiceAnswers: Equatable, Sendable {
                     recordID: $0.recordID, url: $0.url.trimmingCharacters(in: .whitespacesAndNewlines),
                     quote: $0.quote.trimmingCharacters(in: .whitespacesAndNewlines))
             }
-            guard sources.allSatisfy({ !$0.url.isEmpty && !$0.quote.isEmpty }) else { return nil }
+            guard
+                sources.allSatisfy({
+                    Self.validURL($0.url) && !$0.quote.isEmpty
+                        && $0.quote.utf16.count <= SharedConstants.entitySourceQuoteMax
+                })
+            else { return nil }
             return .new(sources)
         case "unresolved":
             guard let reason = answer.text?.trimmingCharacters(in: .whitespacesAndNewlines),
-                !reason.isEmpty
+                !reason.isEmpty, reason.utf16.count <= SharedConstants.productDecisionReasonMax
             else { return nil }
             return .unresolved(reason)
         case "expense_only":
@@ -163,7 +219,7 @@ public struct ReportChoiceAnswers: Equatable, Sendable {
     }
 
     /// The exact `run.commitPrepared` body for these answers, or nil while any line's decision or
-    /// the batch's trade is missing.
+    /// the batch's trade is missing, or a reason or Source is outside the bounds the commit parses.
     public func commitInput(for form: ReportPresentation.Form) -> RunCommitPreparedInput? {
         let command = form.command
         var trade: Trade?

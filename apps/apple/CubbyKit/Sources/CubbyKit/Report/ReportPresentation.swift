@@ -165,8 +165,6 @@ public struct ReportPresentation: Hashable, Sendable {
             }
             /// A record the new one must be shown to differ from.
             public struct Record: Hashable, Sendable, Identifiable {
-                /// The record's entity, as the server's entity key.
-                public let entity: String
                 public let id: String
                 public let name: String
             }
@@ -506,7 +504,7 @@ public struct ReportPresentation: Hashable, Sendable {
                     pick: $0.pick.map { Choice.Option.Pick(entity: $0.entity, label: $0.label) },
                     text: $0.text?.label,
                     distinctFrom: ($0.distinctFrom ?? []).map {
-                        Choice.Option.Record(entity: $0.entity, id: $0.id, name: $0.name)
+                        Choice.Option.Record(id: $0.id, name: $0.name)
                     },
                     hint: $0.hint)
             },

@@ -222,6 +222,67 @@ struct ReportChoiceAnswersTests {
         #expect(!answers.isAnswered(choice))
     }
 
+    @Test("A Source or reason the commit would reject is answered but not sendable")
+    func commitBounds() throws {
+        let batch = try recordsBlock(try preparedReport(distinctFrom: ["PRD-7Q2W"]))
+        let form = try #require(batch.form)
+        let (choice, other) = (batch.rowChoices[0], batch.rowChoices[1])
+        var answers = ReportChoiceAnswers()
+        answers.choose(choice, optionID: "new")
+        answers.choose(other, optionID: "new")
+        answers.choose(form.choices[0], optionID: "other")
+        func sendable(_ url: String, _ quote: String) -> Bool {
+            var copy = answers
+            copy.writeSource(choice, recordID: "PRD-7Q2W", url: url, quote: quote)
+            #expect(copy.isAnswered(choice))
+            let sent = copy.commitInput(for: form) != nil
+            #expect(copy.canSubmit(form: form, rowChoices: batch.rowChoices) == sent)
+            #expect((copy.unsendableText(form: form, rowChoices: batch.rowChoices) == nil) == sent)
+            return sent
+        }
+        #expect(!sendable("https://", "Family size"))
+        #expect(!sendable("example.com/a", "Family size"))
+        #expect(!sendable("https://example.com/" + String(repeating: "a", count: 2048), "Family size"))
+        #expect(!sendable("https://example.com/a", String(repeating: "q", count: 2001)))
+        // Bounds count UTF-16 units, as zod does: 1,000 two-unit characters are 2,000.
+        #expect(sendable("https://example.com/a", String(repeating: "😀", count: 1000)))
+        #expect(!sendable("https://example.com/a", String(repeating: "😀", count: 1001)))
+        #expect(sendable(" https://example.com/a ", "Family size"))
+        #expect(sendable("ftp://example.com/a", "Family size"))
+
+        var unsent = answers
+        unsent.writeSource(choice, recordID: "PRD-7Q2W", url: "https://", quote: "Family size")
+        #expect(
+            unsent.unsendableText(form: form, rowChoices: batch.rowChoices)
+                == "An answer cannot be sent: a reason is at most 1,000 characters, a Product must be chosen from the picker, and a Source needs a full URL."
+        )
+
+        var reasoned = answers
+        reasoned.writeSource(
+            choice, recordID: "PRD-7Q2W", url: "https://example.com/a", quote: "Family size")
+        reasoned.choose(other, optionID: "unresolved")
+        reasoned.write(other, text: String(repeating: "r", count: 1001))
+        #expect(reasoned.isAnswered(other))
+        #expect(reasoned.commitInput(for: form) == nil)
+        reasoned.write(other, text: " " + String(repeating: "r", count: 1000) + " ")
+        #expect(reasoned.commitInput(for: form) != nil)
+    }
+
+    @Test("Source feedback words each field's problem the way web does")
+    func sourceFeedback() {
+        let fine = ReportChoiceAnswers.sourceFeedback(url: "https://example.com/a", quote: " Family size ")
+        #expect(fine.url == nil)
+        #expect(fine.quote == nil)
+        #expect(fine.quoteLength == "11 of 2,000 characters.")
+        // A blank url is only incomplete, not wrong.
+        #expect(ReportChoiceAnswers.sourceFeedback(url: "  ", quote: "").url == nil)
+        let bad = ReportChoiceAnswers.sourceFeedback(
+            url: "https://", quote: String(repeating: "q", count: 2001))
+        #expect(bad.url == "Enter a full URL of at most 2,048 characters.")
+        #expect(bad.quote == "Shorten the quote to at most 2,000 characters.")
+        #expect(bad.quoteLength == "2,001 of 2,000 characters.")
+    }
+
     @Test("Every answer change makes a new operation id; reading the same answers does not")
     func operationIDFollowsAnswers() throws {
         let batch = try recordsBlock(try preparedReport())
