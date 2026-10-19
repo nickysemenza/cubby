@@ -19,6 +19,7 @@ import {
   sql,
   getTableColumns,
 } from "drizzle-orm";
+import type { PgTransactionConfig } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import {
@@ -29,11 +30,15 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   databaseForTransaction,
   getDb,
+  isTransaction,
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import { assessment, assessmentState } from "~/server/db/schema";
 import { variantVerification } from "~/server/domains/product/repo/product-variant-evidence";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
+
+import { productIdentityEvidenceFence } from "./product-identity-fence";
+import { prepareProductIdentityPair } from "./product-identity-snapshot";
 
 const pairProjection = z.object({
   otherId: productId,
@@ -88,6 +93,63 @@ export async function publishProductPair(
     producer?: AssessmentProducer;
   },
 ): Promise<ProductMatchCandidateRow & { created: boolean }> {
+  return publishProductPairWithGuard(db, input, (transactionDb) => {
+    const suppliedSignals =
+      z.record(z.string(), z.json()).safeParse(input.signals).data ?? {};
+    return prepareProductIdentityPair(transactionDb, input.productIds, {
+      variantEvidence: suppliedSignals.variantEvidence,
+    });
+  });
+}
+
+/** Snapshot/variant work runs before the caller opens its publication transaction.
+ * Publication accepts a root handle or a caller-owned SERIALIZABLE transaction;
+ * savepoints inherit outer isolation and cannot upgrade it.
+ */
+export async function prepareProductPairPublication(
+  db: Database,
+  input: Parameters<typeof publishProductPair>[1],
+) {
+  if (isTransaction(getDb(db)))
+    throw new Error(
+      "Product pair preparation requires a database outside a transaction",
+    );
+  const fence = await productIdentityEvidenceFence(db, input.productIds);
+  const suppliedSignals =
+    z.record(z.string(), z.json()).safeParse(input.signals).data ?? {};
+  const guard = await prepareProductIdentityPair(db, input.productIds, {
+    variantEvidence: suppliedSignals.variantEvidence,
+  });
+  if (
+    !guard ||
+    (input.fingerprint && guard.fingerprint !== input.fingerprint) ||
+    (await productIdentityEvidenceFence(db, input.productIds)) !== fence
+  )
+    throw new Error("Product pair evidence changed during inference");
+  return (tx: Database) =>
+    publishProductPairWithGuard(
+      tx,
+      input,
+      async (transactionDb) => {
+        if (
+          (await productIdentityEvidenceFence(
+            transactionDb,
+            input.productIds,
+          )) !== fence
+        )
+          throw new Error("Product pair evidence changed during inference");
+        return guard;
+      },
+      { isolationLevel: "serializable" },
+    );
+}
+
+async function publishProductPairWithGuard(
+  db: Database,
+  input: Parameters<typeof publishProductPair>[1],
+  prepare: (tx: Database) => ReturnType<typeof prepareProductIdentityPair>,
+  config?: PgTransactionConfig,
+): Promise<ProductMatchCandidateRow & { created: boolean }> {
   const pair = canonicalProductPair(...input.productIds);
   if (pair.productAId === pair.productBId)
     throw new Error("Cannot assess a Product against itself");
@@ -95,20 +157,14 @@ export async function publishProductPair(
     otherId: pair.productBId,
     ...input,
   });
-  return withTransactionDatabase(db, async (transactionDb) => {
+  const publish = async (transactionDb: Database) => {
     const client = getDb(transactionDb);
     await client.execute(
       sql`SELECT pg_advisory_xact_lock(hashtextextended(${`product-pair-state:${pair.productAId}|${pair.productBId}`},0))`,
     );
-    const { prepareProductIdentityPair } =
-      await import("./product-identity-snapshot");
     const suppliedSignals =
       z.record(z.string(), z.json()).safeParse(proposedData.signals).data ?? {};
-    const guard = await prepareProductIdentityPair(
-      transactionDb,
-      [pair.productAId, pair.productBId],
-      { variantEvidence: suppliedSignals.variantEvidence },
-    );
+    const guard = await prepare(transactionDb);
     if (!guard) throw new Error("Product identity target no longer exists");
     let data = pairProjection.parse({
       ...proposedData,
@@ -274,7 +330,8 @@ export async function publishProductPair(
           .safeParse(data.signals).data?.verification ?? "unknown",
       created: !old,
     };
-  });
+  };
+  return withTransactionDatabase(db, publish, config);
 }
 /**
  * An agent proposal claims the two records are one item, not one snapshot of

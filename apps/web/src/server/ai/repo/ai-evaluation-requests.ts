@@ -160,34 +160,42 @@ export async function cancelAiEvaluationRequests(db: Database, runId: RunId) {
         )}))`,
       ),
     );
-  const items = await requestedAiEvaluations(db, runId);
-  for (const item of items) {
-    const [wanted] = await getDb(db)
-      .select({ id: run.id })
-      .from(run)
-      .where(
-        and(
-          liveAiRequestRun(item.id),
-          inArray(run.status, ["running", "paused", "paused_auth"]),
-          isNull(run.deletedAt),
-        ),
-      )
-      .limit(1);
-    if (!wanted)
-      await getDb(db)
-        .update(aiEvaluation)
-        .set({
-          state: "cancelled",
-          deadlineAt: null,
-          error: "Cancelled by a member",
-        })
-        .where(
-          and(
-            eq(aiEvaluation.id, item.id),
-            inArray(aiEvaluation.state, PENDING_AI_STATES),
-          ),
-        );
-  }
+  // Admission is held by the caller. Cancel the entire abandoned set with one
+  // predicate rather than keeping that global lock for two queries per item.
+  await getDb(db)
+    .update(aiEvaluation)
+    .set({
+      state: "cancelled",
+      deadlineAt: null,
+      error: "Cancelled by a member",
+    })
+    .where(
+      and(
+        inArray(aiEvaluation.state, PENDING_AI_STATES),
+        sql`EXISTS (SELECT 1 FROM "AiEvaluationRequest" own WHERE own."evaluationId" = ${aiEvaluation.id} AND own."runId" = ${runId})`,
+        sql`NOT EXISTS (
+      SELECT 1 FROM "AiEvaluationRequest" demand JOIN "Run" requester ON requester.id = demand."runId"
+      WHERE demand."evaluationId" = ${aiEvaluation.id} AND demand."cancelledAt" IS NULL
+        AND requester.status IN (${runStatus.enum.running}, ${runStatus.enum.paused}, ${runStatus.enum.paused_auth}) AND requester."deletedAt" IS NULL
+    )`,
+      ),
+    );
+  const [wanted] = await getDb(db)
+    .select({ id: run.id })
+    .from(run)
+    .where(
+      and(
+        eq(run.status, "running"),
+        isNull(run.deletedAt),
+        isNull(run.retiredAt),
+        sql`EXISTS (
+      SELECT 1 FROM "AiEvaluationRequest" own JOIN "AiEvaluationRequest" demand ON demand."evaluationId" = own."evaluationId"
+      WHERE own."runId" = ${runId} AND demand."runId" = ${run.id} AND demand."cancelledAt" IS NULL
+    )`,
+      ),
+    )
+    .limit(1);
+  return Boolean(wanted);
 }
 
 export async function aiExecutionOwner(

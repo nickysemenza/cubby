@@ -10,13 +10,15 @@ import {
   taxonomyId,
   taxonomyShortcode,
 } from "tooling/product-category-fixtures";
-import { withTestDb } from "tooling/test-setup";
+import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import type { DecisionPort } from "~/server/ai/decision-model";
 import { compiledRefreshManifest } from "~/server/ai/policy/refresh-manifest";
 import {
   claimAiEvaluation,
   guardAiEvaluation,
+  publishAiEvaluation,
 } from "~/server/ai/repo/ai-evaluation";
 import {
   activateAiRefresh,
@@ -31,6 +33,7 @@ import {
   run,
   email,
   product,
+  appSettings,
 } from "~/server/db/schema";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { writeRunningAttemptProgress } from "~/server/domains/run/repo/ai-work-state";
@@ -39,10 +42,15 @@ import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
+import {
+  createProductFixture,
+  makeProductInput,
+  createSystemUserFixture,
+} from "~/server/testing/repo.fixtures";
 import { controlWorkflowRun } from "~/server/workflows/runs/control";
 
 import { aiRefreshRelaunchCandidates } from "../repo/ai-refresh-state";
+import { scheduleConnectionRefresh } from "../repo/connection-refresh";
 import { discoverAiRefresh, executeAiRefreshTarget } from "./ai-refresh";
 import {
   categoryPorts,
@@ -372,6 +380,230 @@ describe("targeted prompt refresh", () => {
     expect((await getDb(ctx.db).select().from(suggestion))[0]?.status).toBe(
       "pending",
     );
+  });
+
+  it("publishes catalog pairs in bounded transactions with snapshot preparation outside them", async () => {
+    const source = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic catalog source" }),
+      ctx.actor,
+    );
+    for (let index = 0; index < 4; index++)
+      await createProductFixture(
+        ctx.db,
+        makeProductInput({
+          name: `Synthetic catalog candidate ${index}`,
+          aliases: ["Synthetic catalog source"],
+        }),
+        ctx.actor,
+      );
+    await activateAiRefresh(ctx.db, "synthetic-bounded-catalog", {
+      enabled: true,
+    });
+    await discoverAiRefresh(ctx.db, { context: kernelCtx(ctx) });
+    const productTarget = aiEvaluationTarget.options.find(
+      (target) => target.shape.kind.value === "product",
+    )!;
+    const [evaluation] = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(
+        and(
+          eq(aiEvaluation.executionKind, "ai_refresh"),
+          sql`${aiEvaluation.target}->>${productTarget.keyof().enum.kind} = ${productTarget.shape.kind.value}`,
+          sql`${aiEvaluation.target}->>'recordId' = ${source.entityId}`,
+        ),
+      );
+    expect(evaluation).toBeDefined();
+    const measured = await countTestDbQueries(() =>
+      executeAiRefreshTarget(ctx.db, evaluation!.id, {
+        context: kernelCtx(ctx),
+      }),
+    );
+    expect(measured.result).toBe(true);
+    let open = false,
+      statements = 0,
+      largest = 0;
+    for (const statement of measured.statements) {
+      if (/^begin\b/iu.test(statement)) {
+        open = true;
+        statements = 0;
+      } else if (/^(commit|rollback)$/iu.test(statement)) {
+        largest = Math.max(largest, statements);
+        open = false;
+      } else if (open) statements++;
+    }
+    // Pool pinning is a transaction budget, independent of catalog pair count.
+    expect(largest).toBeLessThanOrEqual(35);
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(aiEvaluation)
+          .where(eq(aiEvaluation.id, evaluation!.id))
+      )[0],
+    ).toMatchObject({
+      state: "completed",
+      receipt: { requestedPairs: 4, rulePairs: 0 },
+    });
+  });
+
+  it("bounds Product connection publication transactions independently of identity pairs", async () => {
+    const source = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic connection source" }),
+      ctx.actor,
+    );
+    for (let index = 0; index < 4; index++)
+      await createProductFixture(
+        ctx.db,
+        makeProductInput({
+          name: `Synthetic connection candidate ${index}`,
+          aliases: ["Synthetic connection source"],
+        }),
+        ctx.actor,
+      );
+    await activateAiRefresh(ctx.db, "synthetic-bounded-connections", {
+      enabled: true,
+    });
+    const runId = await scheduleConnectionRefresh(
+      ctx.db,
+      { entityKind: "product", entityId: source.id },
+      ctx.actor,
+    );
+    const [evaluation] = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.runId, runId!));
+    expect(evaluation).toBeDefined();
+    const chooseFirst: DecisionPort = async (input) => {
+      const choices = Object.keys(input.questions.selection.criteria),
+        choice = choices[0]!;
+      return {
+        answers: {
+          selection: {
+            type: "choice",
+            choice,
+            confidence: 0.7,
+            probabilities: Object.fromEntries(
+              choices.map((key) => [
+                key,
+                key === choice ? 0.7 : 0.3 / Math.max(1, choices.length - 1),
+              ]),
+            ),
+          },
+        },
+      };
+    };
+    const measured = await countTestDbQueries(() =>
+      executeAiRefreshTarget(ctx.db, evaluation!.id, {
+        context: kernelCtx(ctx),
+        productIdentityPorts: { decisionPort: chooseFirst },
+        suggestPorts: { decisionPort: chooseFirst },
+      }),
+    );
+    expect(measured.result).toBe(true);
+    let open = false,
+      statements = 0,
+      largest = 0;
+    for (const statement of measured.statements) {
+      if (/^begin\b/iu.test(statement)) {
+        open = true;
+        statements = 0;
+      } else if (/^(commit|rollback)$/iu.test(statement)) {
+        largest = Math.max(largest, statements);
+        open = false;
+      } else if (open) statements++;
+    }
+    expect(largest).toBeLessThanOrEqual(40);
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(aiEvaluation)
+          .where(eq(aiEvaluation.id, evaluation!.id))
+      )[0]?.state,
+    ).toBe("completed");
+  });
+
+  it("leaves activation unlocked during publication work and fences deactivation before commit", async () => {
+    const item = await productFixture(ctx, "Synthetic publication fence");
+    await startSuggestionSweep(
+      ctx.db,
+      {
+        entity: "product",
+        fields: ["categoryId"],
+        filters: { ids: [item.id] },
+      },
+      { context: kernelCtx(ctx), ...categoryPorts(0.6) },
+    );
+    await activateAiRefresh(ctx.db, "synthetic-publication-fence", {
+      enabled: true,
+    });
+    await discoverAiRefresh(ctx.db, {
+      context: kernelCtx(ctx),
+      suggestPorts: categoryPorts(0.6).suggestPorts,
+    });
+    const [evaluation] = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(fieldRefreshTarget);
+    const claimed = await claimAiEvaluation(ctx.db, evaluation!.id);
+    expect(claimed?.attemptToken).toBeTruthy();
+    let callbackRan = false;
+    const [stored] = await getDb(ctx.db)
+      .select({ id: product.id, name: product.name })
+      .from(product)
+      .where(eq(product.name, "Synthetic publication fence"));
+    expect(stored).toBeDefined();
+    let probeError: unknown;
+    await expect(
+      publishAiEvaluation(
+        ctx.db,
+        evaluation!.id,
+        claimed!.attemptToken!,
+        async (tx) => {
+          callbackRan = true;
+          await getDb(tx)
+            .update(product)
+            .set({ name: "Synthetic tentative publication" })
+            .where(eq(product.id, stored!.id));
+          // A second connection must acquire activation immediately while publication is paused.
+          try {
+            await withTransactionDatabase(ctx.db, async (probe) => {
+              await getDb(probe)
+                .select({ id: appSettings.id })
+                .from(appSettings)
+                .for("update", { noWait: true });
+              await activateAiRefresh(
+                probe,
+                "synthetic-disabled-during-publication",
+                { enabled: false },
+              );
+            });
+          } catch (error) {
+            probeError = error;
+            throw error;
+          }
+          return { synthetic: true };
+        },
+      ),
+    ).rejects.toMatchObject({ cause: { code: "40001" } });
+    expect(probeError).toBeUndefined();
+    expect(callbackRan).toBe(true);
+    expect(
+      (
+        await getDb(ctx.db)
+          .select({ name: product.name })
+          .from(product)
+          .where(eq(product.id, stored!.id))
+      )[0]?.name,
+    ).toBe("Synthetic publication fence");
+    expect(
+      (await getDb(ctx.db).select().from(appSettings)).some(
+        (row) => row.metadata?.enabled === false,
+      ),
+    ).toBe(true);
   });
 
   it("defers a busy admission claim without occupying a waiting connection or changing queued work", async () => {

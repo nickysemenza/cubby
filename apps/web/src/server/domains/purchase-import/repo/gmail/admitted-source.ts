@@ -3,7 +3,7 @@ import { parseEntityId, runEntityId } from "@cubby/schemas/identifiers";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { and, asc, eq, inArray } from "drizzle-orm";
 
-import type { Database } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   databaseForTransaction,
   getDb,
@@ -108,7 +108,7 @@ export async function publishGmailEvidence<T>(
     current: typeof emailTable.$inferSelect | null,
   ) => Promise<T>,
 ): Promise<T | null> {
-  return withTransaction(db, async (tx) => {
+  const commitEvidence = async (tx: DrizzleTransaction) => {
     const evaluation = input.evaluation;
     const guarded = evaluation
       ? await (
@@ -294,5 +294,14 @@ export async function publishGmailEvidence<T>(
             },
       );
     return result;
-  });
+  };
+  // Only refresh evaluations use the activation fence. Ordinary ingestion and
+  // member reclassification retain their existing isolation and retry contract.
+  return withTransaction(
+    db,
+    commitEvidence,
+    input.evaluation && !input.evaluation.reclassification
+      ? { isolationLevel: "serializable" }
+      : undefined,
+  );
 }

@@ -41,7 +41,7 @@ export async function claimAiEvaluation(
       .where(eq(aiEvaluation.id, id));
     if (!existing) return null;
     if (existing.executionKind === "ai_refresh") {
-      const activation = await readAiRefreshActivation(tx, "update");
+      const activation = await readAiRefreshActivation(tx, "share");
       if (!activation?.enabled) return null;
     }
     const owner = await aiExecutionOwner(tx, existing, requestingRunId);
@@ -179,7 +179,7 @@ export async function guardAiEvaluation(
   if (!read) throw new Error("AI evaluation attempt is obsolete");
   const activation =
     read.executionKind === "ai_refresh"
-      ? await readAiRefreshActivation(tx, "share")
+      ? await readAiRefreshActivation(tx)
       : null;
   // Match cancellation's Run-before-item lock order. A shared item's original
   // requester may stop while another live requester still wants publication.
@@ -228,6 +228,23 @@ export async function guardAiEvaluation(
   return { row, target: aiEvaluationTarget.parse(row.target) };
 }
 
+/** Held only for final writes/commit, never snapshot preparation or requester wakeup. */
+async function fenceAiEvaluationActivation(
+  tx: Database,
+  row: Pick<typeof aiEvaluation.$inferSelect, "executionKind" | "provenance">,
+) {
+  if (row.executionKind !== "ai_refresh") return;
+  const activation = await readAiRefreshActivation(tx, "share");
+  if (
+    !activation?.enabled ||
+    !dependenciesCurrent(
+      aiProvenance.parse(row.provenance),
+      activation.manifest,
+    )
+  )
+    throw new Error("AI evaluation generation or Run is obsolete");
+}
+
 export async function completeAiEvaluation(
   tx: Database,
   id: string,
@@ -235,7 +252,7 @@ export async function completeAiEvaluation(
   receipt: unknown,
   state: "completed" | "blocked" | "obsolete" = "completed",
 ) {
-  await getDb(tx)
+  const [row] = await getDb(tx)
     .update(aiEvaluation)
     .set({
       state,
@@ -244,7 +261,12 @@ export async function completeAiEvaluation(
       deadlineAt: null,
       updatedAt: new Date(),
     })
-    .where(and(eq(aiEvaluation.id, id), eq(aiEvaluation.attemptToken, token)));
+    .where(and(eq(aiEvaluation.id, id), eq(aiEvaluation.attemptToken, token)))
+    .returning({
+      executionKind: aiEvaluation.executionKind,
+      provenance: aiEvaluation.provenance,
+    });
+  if (!row) throw new Error("AI evaluation attempt is obsolete");
   await getDb(tx)
     .update(aiEvaluationRequest)
     .set({ receipt: z.json().parse(receipt) })
@@ -258,6 +280,7 @@ export async function completeAiEvaluation(
   await (
     await import("~/server/workflows/runs/wake")
   ).wakeAiEvaluationRequesters(tx, id);
+  await fenceAiEvaluationActivation(tx, row);
 }
 
 export async function publishAiEvaluation<T>(
@@ -265,13 +288,19 @@ export async function publishAiEvaluation<T>(
   id: string,
   token: string,
   work: (tx: Database) => Promise<T>,
+  settlement: "complete" | "continue" = "complete",
 ) {
   return withTransactionDatabase(
     db,
     async (tx) => {
-      await guardAiEvaluation(tx, id, token);
+      const { row } = await guardAiEvaluation(tx, id, token);
       const result = await work(tx);
-      await completeAiEvaluation(tx, id, token, result);
+      // Acquire the global fence only after business work. SERIALIZABLE rejects
+      // activation changed since this transaction's snapshot; the share lock
+      // prevents deactivation between this check and commit.
+      if (settlement === "complete")
+        await completeAiEvaluation(tx, id, token, result);
+      else await fenceAiEvaluationActivation(tx, row);
       return result;
     },
     { isolationLevel: "serializable" },

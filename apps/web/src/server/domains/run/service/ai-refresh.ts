@@ -40,7 +40,6 @@ import {
 } from "~/server/ai/policy/refresh-manifest";
 import {
   evaluateProductIdentity,
-  publishProductIdentity,
   prepareProductIdentityCatalog,
   evaluatePreparedProductIdentityPair,
 } from "~/server/ai/product-identity";
@@ -54,12 +53,14 @@ import {
   saveAiDiscoveryCursor,
 } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
+import { productIdentityEvidenceFence } from "~/server/domains/product/repo/match/product-identity-fence";
 import {
   productIdentitySnapshot,
   prepareProductIdentityPair,
-  enqueueProductIdentityPair,
+  prepareProductIdentityPairRequest,
   preparedProductIdentityPair,
 } from "~/server/domains/product/repo/match/product-identity-snapshot";
+import { prepareProductPairPublication } from "~/server/domains/product/repo/match/product-match-candidate";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
@@ -604,7 +605,7 @@ export async function executeAiRefreshTarget(
         );
       const { prepareEntityConnections } =
         await import("~/server/domains/connection/service/entity-connections");
-      const publish = await prepareEntityConnections(
+      const publications = await prepareEntityConnections(
         db,
         kernel(db, ports, claimed.runId),
         source,
@@ -613,7 +614,7 @@ export async function executeAiRefreshTarget(
           productIdentityPorts: ports.productIdentityPorts,
         },
       );
-      await publishAiEvaluation(db, id, token, async (transactionDb) => {
+      const checkSource = async (transactionDb: Database) => {
         if (
           (await connectionSourceFingerprint(transactionDb, source)) !==
           claimed.provenance.inputFingerprint
@@ -621,7 +622,21 @@ export async function executeAiRefreshTarget(
           throw new Error(
             "Connection discovery source changed during evaluation",
           );
-        await publish(transactionDb);
+      };
+      for (const publish of publications)
+        await publishAiEvaluation(
+          db,
+          id,
+          token,
+          async (transactionDb) => {
+            await checkSource(transactionDb);
+            await publish(transactionDb);
+            return null;
+          },
+          "continue",
+        );
+      await publishAiEvaluation(db, id, token, async (transactionDb) => {
+        await checkSource(transactionDb);
         return { source, discovered: true };
       });
       return true;
@@ -654,14 +669,9 @@ export async function executeAiRefreshTarget(
           provenance: claimed.provenance,
         },
       );
+      const publish = await prepareProductPairPublication(db, result);
       await publishAiEvaluation(db, id, token, async (transactionDb) => {
-        const latest = await prepareProductIdentityPair(
-          transactionDb,
-          prepared.productIds,
-        );
-        if (!latest || latest.fingerprint !== prepared.fingerprint)
-          throw new Error("Product pair evidence changed during inference");
-        await publishProductIdentity(transactionDb, { pairs: [result] });
+        await publish(transactionDb);
         return {
           pair: prepared.productIds,
           fingerprint: prepared.fingerprint,
@@ -694,37 +704,50 @@ export async function executeAiRefreshTarget(
             }),
           );
         }
-      await publishAiEvaluation(db, id, token, async (transactionDb) => {
-        const latest = await productIdentitySnapshot(transactionDb, productId);
-        if (!latest || latest.fingerprint !== source.fingerprint)
-          throw new Error("Product identity evidence changed during inference");
-        let rulePairs = 0,
-          requestedPairs = 0;
-        for (const pair of prepared.pairs) {
-          const current = await prepareProductIdentityPair(
-            transactionDb,
-            pair.productIds,
-          );
-          if (!current || current.fingerprint !== pair.fingerprint)
-            throw new Error("Product pair evidence changed during inference");
-          if (pair.exact) {
-            const result = exactResults.get(pair.fingerprint);
-            if (!result)
-              throw new Error(
-                "Prepared exact Product identity result is missing",
-              );
-            await publishProductIdentity(transactionDb, { pairs: [result] });
-            rulePairs++;
-          } else {
-            await enqueueProductIdentityPair(
-              transactionDb,
-              pair.productIds,
+      let rulePairs = 0,
+        requestedPairs = 0;
+      for (const pair of prepared.pairs) {
+        // Preparation never inherits a transaction or activation/Run/item locks.
+        // Every pair commits under its own attempt/Run/activation fence. Retrying
+        // a partial catalog uses the existing idempotent publication/work keys.
+        const result = exactResults.get(pair.fingerprint);
+        if (pair.exact && !result)
+          throw new Error("Prepared exact Product identity result is missing");
+        const publish = result
+          ? await prepareProductPairPublication(db, result)
+          : await prepareProductIdentityPairRequest(
+              db,
+              pair,
               claimed.runId,
               claimed.provenance,
             );
-            requestedPairs++;
-          }
-        }
+        await publishAiEvaluation(
+          db,
+          id,
+          token,
+          async (transactionDb) => {
+            await publish(transactionDb);
+            return null;
+          },
+          "continue",
+        );
+        if (result) rulePairs++;
+        else requestedPairs++;
+      }
+      const sourceFence = await productIdentityEvidenceFence(db, [productId]);
+      const latest = await productIdentitySnapshot(db, productId);
+      if (
+        !latest ||
+        latest.fingerprint !== source.fingerprint ||
+        (await productIdentityEvidenceFence(db, [productId])) !== sourceFence
+      )
+        throw new Error("Product identity evidence changed during inference");
+      await publishAiEvaluation(db, id, token, async (transactionDb) => {
+        if (
+          (await productIdentityEvidenceFence(transactionDb, [productId])) !==
+          sourceFence
+        )
+          throw new Error("Product identity evidence changed during inference");
         return {
           eligible: prepared.eligible,
           excluded: !prepared.eligible ? "misc_or_deleted" : null,

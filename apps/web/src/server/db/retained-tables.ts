@@ -713,6 +713,10 @@ type AppSettingValue =
   | AppSettingValue[]
   | { [key: string]: AppSettingValue };
 
+// Activation identity is shared by its writer and prepared-evidence read fences.
+export const AI_REFRESH_ACTIVATION_SETTINGS_ID =
+  "00000000-0000-4000-8000-000000000074";
+
 export const appSettings = pgTable("AppSettings", {
   id: pkUuid(),
   metadata: jsonb("metadata").$type<Record<string, AppSettingValue>>(),

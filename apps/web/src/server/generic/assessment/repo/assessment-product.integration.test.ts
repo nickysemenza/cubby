@@ -12,7 +12,6 @@ import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/policy/feature-identity";
 import { compiledRefreshManifest } from "~/server/ai/policy/refresh-manifest";
 import {
   evaluateProductIdentity,
-  publishProductIdentity,
   retrieveProductIdentityCandidates,
 } from "~/server/ai/product-identity";
 import {
@@ -41,7 +40,7 @@ import {
 } from "~/server/db/schema";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import {
-  enqueueProductIdentityPair,
+  prepareProductIdentityPairRequest,
   productIdentitySnapshot,
   prepareProductIdentityPair,
   preparedProductIdentityPair,
@@ -49,6 +48,7 @@ import {
 import {
   listProductMatchRows,
   publishProductPair,
+  prepareProductPairPublication,
 } from "~/server/domains/product/repo/match/product-match-candidate";
 import { getProductMatchQueue } from "~/server/domains/product/repo/match/product-match-review";
 import { mergeProducts } from "~/server/domains/product/repo/merge";
@@ -138,6 +138,29 @@ const variantPort =
 // an accepted raw style SKU is association evidence, not variant granularity.
 // Agent proposals must not erase verified conflicts; completed old policies
 // must not authorize an unchanged-fingerprint merge after rule activation.
+async function publishProductIdentity(
+  db: Parameters<typeof prepareProductPairPublication>[0],
+  result: Pick<Awaited<ReturnType<typeof evaluateProductIdentity>>, "pairs">,
+) {
+  for (const pair of result.pairs)
+    await (
+      await prepareProductPairPublication(db, pair)
+    )(db);
+}
+
+async function requestProductIdentityPair(
+  db: Parameters<typeof prepareProductIdentityPair>[0],
+  ids: Parameters<typeof prepareProductIdentityPair>[1],
+  runId: Parameters<typeof prepareProductIdentityPairRequest>[2],
+  provenance: Parameters<typeof prepareProductIdentityPairRequest>[3],
+) {
+  const pair = await prepareProductIdentityPair(db, ids);
+  if (!pair) throw new Error("Synthetic Product pair is missing");
+  return (await prepareProductIdentityPairRequest(db, pair, runId, provenance))(
+    db,
+  );
+}
+
 describe("stored Product identity pairs", () => {
   const ctx = withTestDb();
   // Suppression and weak recommendations cannot consume an actionable query's capacity.
@@ -1202,7 +1225,7 @@ describe("stored Product identity pairs", () => {
         [feature]: { ...manifest[feature]!, promptVersion: "2026-10-14.5" },
       },
     });
-    const evaluation = await enqueueProductIdentityPair(
+    const evaluation = await requestProductIdentityPair(
       ctx.db,
       [ids[0]!, ids[1]!],
       runId,
@@ -1502,13 +1525,13 @@ describe("stored Product identity pairs", () => {
       optionFingerprint: "synthetic-options",
       model: "typesafe/jev",
     };
-    const first = await enqueueProductIdentityPair(
+    const first = await requestProductIdentityPair(
       ctx.db,
       [ids[0]!, ids[1]!],
       runs[0]!,
       provenance,
     );
-    const other = await enqueueProductIdentityPair(
+    const other = await requestProductIdentityPair(
       ctx.db,
       [ids[1]!, ids[0]!],
       runs[1]!,
