@@ -118,6 +118,29 @@ export const assessmentSubject = z.discriminatedUnion("kind", [
   assessmentSubjects.statement_transaction,
 ]);
 
+/**
+ * Families whose subject names two live records of one entity
+ * (`recordId` < `otherId`): a pending one is a possible duplicate that list
+ * rows flag and the record's Suggestions panel reviews.
+ */
+export const entityPairAssessmentFamilies = [
+  "product_pair",
+] as const satisfies readonly (keyof {
+  [
+    F in keyof typeof assessmentSubjects as z.infer<
+      (typeof assessmentSubjects)[F]
+    > extends { entity: string; recordId: string; otherId: string }
+      ? F
+      : never
+  ]: true;
+})[];
+export type EntityPairAssessmentFamily =
+  (typeof entityPairAssessmentFamilies)[number];
+export const isEntityPairAssessmentFamily = (
+  family: string | undefined,
+): family is EntityPairAssessmentFamily =>
+  entityPairAssessmentFamilies.some((pair) => pair === family);
+
 /** Internal event authority is never a public entity, shortcode, or search target. */
 const publicAssessmentTarget = z.object({
   entity: z.enum(shortcodeEntities),

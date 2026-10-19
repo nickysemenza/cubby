@@ -60,6 +60,7 @@ export type LoadedMatchSide = ProductMatchSide & {
   entityId: ProductId;
   rootCategoryId: string | null;
   ownerPartyId: LedgerPartyId | null;
+  createdAt: Date;
 };
 
 const individual = (kind: string) => kind === "member" || kind === "guest";
@@ -145,6 +146,7 @@ export async function loadProductMatchSides(
         name: product.name,
         categoryId: product.categoryId,
         categoryName: productCategory.name,
+        createdAt: product.createdAt,
       })
       .from(product)
       .leftJoin(
@@ -336,6 +338,7 @@ export async function loadProductMatchSides(
           }
         : null,
       ownerPartyId: owner?.id ?? null,
+      createdAt: row.createdAt,
       purchase: latest
         ? {
             id: parseShortcodeFor("purchase", latest.shortcode),
