@@ -64,6 +64,18 @@ export const sourceRefsLabel = (
     ", ",
   );
 
+/** One row per confirmed allocation, opening its Purchase and preserving the allocated amount. */
+export const financialAllocationItems = (
+  allocations: readonly { purchaseId: string; amount: number }[],
+): DisplayItem[] =>
+  allocations.map((allocation) => ({
+    entity: "purchase",
+    id: allocation.purchaseId,
+    title: allocation.purchaseId,
+    subtitle: null,
+    trailing: formatCurrency(allocation.amount),
+  }));
+
 /** One line per card: digits, kind, the dates it was valid (an open end is "…"), and its note. */
 export const cardNumbersLabel = (
   cards: readonly FinancialAccountCardNumber[],

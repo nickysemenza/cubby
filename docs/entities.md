@@ -899,7 +899,9 @@ carries its text instead of a renderer: `display.labelPath` for a list cell,
 joined with `\n`, built in `server/entity-kernel/repo/detail-display-labels.ts` and carried
 as a `labelField`), `display.itemsPath` for a list of worded rows that each
 open their record (`displayItemsField`), and `display.readPath` plus `format`
-or `valueOptions` for a nested value. Structured histories naming other entities
+or `valueOptions` for a nested value. Enabling a structured editor on a field
+shown in details also requires one of these display projections. Allocation rows
+keep their Purchase link and server-formatted allocated amount. Structured histories naming other entities
 use `itemsPath` so each party remains navigable beside its server-worded dates;
 do not flatten references into `detailLabelPath` text. Clients print what the record carries;
 none restates the structure. A legacy field override and
