@@ -1,0 +1,31 @@
+apps/web/src/entity/entity-list/generic-entity-list.tsx
+  s_9b829d577c7e4c::t_b7f515c0db9f5e 490
+apps/web/src/entity/table/table.tsx
+  s_9b829d577c7e4c::t_dd8b58049a469e 835,894
+apps/web/src/features/developer/mcp-usage-dashboard.tsx
+  s_9b829d577c7e4c::t_f333aff4c0862e 857,898
+apps/web/src/features/ingredient/enrichment-workbench.tsx
+  s_9b829d577c7e4c::t_d9a2354c844ab3 867
+apps/web/src/features/tools/tool-gallery-page.tsx
+  s_9b829d577c7e4c::t_ad869b4738aa64 978
+apps/web/src/features/usda-food/usdafoodlist.tsx
+  s_9b829d577c7e4c::t_8bbdb01a0fce86 364
+apps/web/src/styles.css
+  s_9b829d577c7e4c::t_da6259a54adb94 146-147,643-644
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6ec5313c73e2a2afa39c109b3259719726a015e2",
+  "prompts": {},
+  "sessions": {
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
