@@ -35,10 +35,6 @@ import type { ReactNode } from "react";
 import { EntityIcon } from "~/entity/entities";
 import { FieldProvenance } from "~/entity/fields/field-provenance";
 import { cn } from "~/lib/utils";
-import {
-  hasColumnFilterEditor,
-  requestColumnFilterEdit,
-} from "~/ui/data-table/column-filter-requests";
 import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
@@ -64,9 +60,11 @@ import type {
   cubbyTableFeatures,
   CubbyTable as Table,
 } from "../../ui/data-table/table-features";
-import type {
-  ColumnValueKind,
-  CubbyColumnMeta,
+import {
+  type ColumnValueKind,
+  type CubbyColumnMeta,
+  hasColumnFilterEditor,
+  requestColumnFilterEdit,
 } from "../../ui/data-table/table-meta";
 
 type HeaderStyles = { header: string; sortIcon: string };

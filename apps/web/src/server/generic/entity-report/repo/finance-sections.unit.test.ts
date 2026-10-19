@@ -84,7 +84,7 @@ describe("composeReconciliationSection", () => {
       value: {
         type: "pill",
         text: "Refund-adjusted -$127.10",
-        color: "var(--slate)",
+        color: "var(--neutral-status)",
       },
     });
     expect(section.notes[0]).toMatch(/spend remains the expenses/);

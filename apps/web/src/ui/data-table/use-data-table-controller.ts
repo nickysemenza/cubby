@@ -8,9 +8,8 @@ import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
 
 import type { InfiniteScrollControls } from "../../entity/hooks/use-infinite-table-list";
-import { columnWidthVariables } from "./column-layout";
+import { columnWidthVariables, emptyColumnIds } from "./column-layout";
 import { ROW_DENSITY } from "./density";
-import { emptyColumnIds } from "./empty-columns";
 import { useTableVirtualizer } from "./hooks/use-table-virtualizer";
 import { useInfinitePrefetch } from "./infinite-prefetch";
 import type { CubbyTable as ITable, CubbyRow as Row } from "./table-features";
