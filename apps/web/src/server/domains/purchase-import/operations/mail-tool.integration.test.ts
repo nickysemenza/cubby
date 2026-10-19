@@ -399,6 +399,108 @@ describe("public mail tool", () => {
     ).toEqual([{ imageId: receipt.id }]);
   });
 
+  it("keeps reviewed refund associations explaining every refunded Purchase link, with or without a settlement", async () => {
+    const party = await member();
+    const seller = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic partial-credit seller",
+    });
+    const purchases = await Promise.all(
+      ["PARTIAL-1", "PARTIAL-2"].map((orderId) =>
+        insertWithShortcode(ctx.db, "purchase", {
+          vendorId: seller.id,
+          orderId,
+        }),
+      ),
+    );
+    const refundAccount = await insertWithShortcode(
+      ctx.db,
+      "financialAccount",
+      {
+        name: "Synthetic partial refund account",
+        identity: {
+          kind: "credit_card",
+          issuer: "Synthetic bank",
+          network: "visa",
+        },
+        ledgerPartyId: party.id,
+      },
+    );
+    const refund = await insertWithShortcode(ctx.db, "financialTransaction", {
+      accountId: refundAccount.id,
+      amount: -4,
+      kind: "refund",
+      status: "posted",
+      transactionDate: "2026-10-08",
+      postedDate: "2026-10-08",
+    });
+    await getDb(ctx.db).insert(financialTransactionAllocation).values({
+      transactionId: refund.id,
+      purchaseId: purchases[0]!.id,
+      amount: -4,
+    });
+    const settlement = {
+      refundAmount: -4,
+      associations: [
+        {
+          transactionId: refund.shortcode,
+          reviewedAccountId: refundAccount.shortcode,
+          sourceAccountLabel: "Account ending 11111",
+          reviewReason:
+            "Member confirmed the label and the posted refund leg for the first order.",
+        },
+      ],
+    };
+    const source = async (name: string) => {
+      const retained = await retainedMailFixture(ctx.db, {
+        ledgerPartyId: party.id,
+        mailboxId,
+        messageId: `synthetic-${name}`,
+        checksum: await sha256Hex(`Synthetic ${name}`),
+        content: {
+          snippet: `Synthetic ${name}`,
+          bodyText: `Synthetic ${name}`,
+          bodyHtml: null,
+        },
+      });
+      if (!retained) throw new Error("Synthetic source unavailable");
+      return retained;
+    };
+    const resolveRefund = (
+      retained: Awaited<ReturnType<typeof source>>,
+      purchaseIds: string[],
+      withSettlement: boolean,
+    ) =>
+      resolveMail(
+        ctx.db,
+        mailResolveInput.parse({
+          mailboxId,
+          messageId: retained.messageId,
+          checksum: retained.rawChecksum,
+          disposition: {
+            kind: "linked",
+            event: "refunded",
+            purchaseIds,
+            ...(withSettlement ? { settlement } : {}),
+          },
+        }),
+        ctx.actor,
+      );
+    const [first, second] = purchases.map((row) => row.shortcode);
+    if (!first || !second) throw new Error("Synthetic Purchases missing");
+
+    const reviewedFirst = await source("reviewed-then-extended");
+    await resolveRefund(reviewedFirst, [first], true);
+    await expect(resolveRefund(reviewedFirst, [second], false)).rejects.toThrow(
+      "explain exactly the reviewed Purchases",
+    );
+
+    const linkedBoth = await source("linked-then-reviewed");
+    await resolveRefund(linkedBoth, [first, second], false);
+    await expect(resolveRefund(linkedBoth, [first], true)).rejects.toThrow(
+      "explain exactly the reviewed Purchases",
+    );
+  });
+
   it("atomically links a combined lifecycle Email to every Purchase and replays without duplicate evidence", async () => {
     const party = await member();
     const source = await retainedMailFixture(ctx.db, {

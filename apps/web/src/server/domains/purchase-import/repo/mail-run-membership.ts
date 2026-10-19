@@ -22,6 +22,14 @@ export async function readMailRunSources(
   client: DrizzleClient | DrizzleTransaction,
   runId: RunId,
 ) {
+  return (await readMailRunRoster(client, runId)) ?? [];
+}
+
+/** A Mail import Run's admitted sources (empty once erased); null for any other Run. */
+export async function readMailRunRoster(
+  client: DrizzleClient | DrizzleTransaction,
+  runId: RunId,
+) {
   const [owner] = await client
     .select({
       input: run.input,
@@ -30,7 +38,7 @@ export async function readMailRunSources(
     })
     .from(run)
     .where(eq(run.id, runId));
-  if (owner?.purpose !== "mail_import") return [];
+  if (owner?.purpose !== "mail_import") return null;
   // An erased Run's roster is NULL and admits no sources. A live Run with a
   // missing roster still fails the parse below.
   if (runInputsErased(owner.retirementReason) && owner.input === null)

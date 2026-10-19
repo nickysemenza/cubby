@@ -28,7 +28,7 @@
     "test:file": "pnpm --filter @cubby/web test:file",
     "test:changed": "pnpm --filter @cubby/web test:changed",
     "knip:production": "knip --production --no-gitignore --include files,dependencies",
-    "test:scripts": "node --test 'scripts/**/*.test.ts' 'tools/oxlint/**/*.test.ts' 'apps/web/generator/**/*.test.ts' 'apps/apple/tooling/**/*.test.ts' 'apps/apple/scripts/*.test.ts' 'apps/web/tooling/**/!(*.unit|*.integration).test.ts'",
+    "test:scripts": "node --test 'scripts/**/*.test.ts' 'tools/oxlint/**/*.test.ts' 'apps/web/generator/**/!(*.unit).test.ts' 'apps/apple/tooling/**/*.test.ts' 'apps/apple/scripts/*.test.ts' 'apps/web/tooling/**/!(*.unit|*.integration).test.ts'",
     "test:e2e": "pnpm --filter @cubby/web test:e2e",
     "test:e2e:household": "pnpm --filter @cubby/web test:e2e:household",
     "test:e2e:local": "pnpm --dir apps/web exec tsx tooling/local-e2e.ts",

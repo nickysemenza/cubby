@@ -73,7 +73,6 @@ export async function refreshEmailEvaluation(
     refreshStage: reusable("mailbox-triage")
       ? "mailbox-relevance"
       : "mailbox-triage",
-    refreshSkipRelevance: reusable("mailbox-relevance"),
     refreshDependencies: observation?.provenance?.dependencies,
     evaluation: { id: evaluation.id, token: evaluation.attemptToken },
   });

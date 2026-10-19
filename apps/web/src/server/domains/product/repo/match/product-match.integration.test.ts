@@ -9,7 +9,13 @@ import { TEST_USER_ID, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { entityAttachment, feedback, inventoryEntry } from "~/server/db/schema";
+import {
+  assessmentState,
+  entityAttachment,
+  feedback,
+  inventoryEntry,
+  product as productTable,
+} from "~/server/db/schema";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
 import {
@@ -432,6 +438,91 @@ describe("product_enrichment.propose_match", () => {
       sourceUrls: ["https://vendor.example/hoodie"],
     });
     expect(await listProductMatchRows(ctx.db)).toHaveLength(1);
+  });
+
+  it("supersedes the earlier proposal when a pair is re-proposed", async () => {
+    const [photo, vendor] = await twoProducts();
+    await call({
+      productIds: [photo.id, vendor.id],
+      evidence: "Same drawstring colour",
+    });
+    await call({
+      productIds: [photo.id, vendor.id],
+      evidence: "Same drawstring colour and cuff logo",
+    });
+    const states = await getDb(ctx.db)
+      .select({
+        active: assessmentState.active,
+        status: assessmentState.status,
+      })
+      .from(assessmentState)
+      .where(eq(assessmentState.family, "product_pair"))
+      .orderBy(assessmentState.createdAt);
+    expect(states).toEqual([
+      { active: false, status: "superseded" },
+      { active: true, status: "pending" },
+    ]);
+  });
+
+  // An agent proposal is about the two records, not one snapshot of them: an
+  // enrichment write keeps it reviewable, and the merge pins what the member saw.
+  it("keeps an agent proposal mergeable through enrichment and a missing stored fingerprint", async () => {
+    const [photo, vendor] = await twoProducts();
+    const [photoId, vendorId] = await Promise.all(
+      [photo.id, vendor.id].map((id) => resolveOrThrow(ctx.db, "product", id)),
+    );
+    const pair = await upsertAgentProductMatch(ctx.db, {
+      productIds: [photoId!, vendorId!],
+      evidence: "Synthetic matching cuff logo",
+      sourceUrls: [],
+    });
+    await getDb(ctx.db)
+      .update(productTable)
+      .set({ aliases: ["Synthetic enriched alias"] })
+      .where(eq(productTable.id, vendorId!));
+    await getDb(ctx.db)
+      .update(assessmentState)
+      .set({ fingerprint: null })
+      .where(eq(assessmentState.id, pair.id));
+    const [row] = await listProductMatchRows(ctx.db, undefined, {
+      reviewableOnly: true,
+    });
+    expect(row).toMatchObject({ id: pair.id, source: "agent" });
+    expect(row?.fingerprint).toEqual(expect.any(String));
+    expect(row?.fingerprint).not.toBe(pair.fingerprint);
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      assessmentId: pair.id,
+      operationId: "synthetic-enriched-merge",
+      verdict: "correct",
+      intent: "apply",
+      expectedFingerprint: pair.fingerprint!,
+      application: {
+        kind: "product_merge",
+        keepId: vendor.id,
+        mergeId: photo.id,
+      },
+    }).then(
+      () => expect.fail("A stale fingerprint must not merge"),
+      (error: Error) => expect(error.message).toMatch(/fingerprint changed/),
+    );
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      assessmentId: pair.id,
+      operationId: "synthetic-enriched-merge-current",
+      verdict: "correct",
+      intent: "apply",
+      expectedFingerprint: row!.fingerprint!,
+      application: {
+        kind: "product_merge",
+        keepId: vendor.id,
+        mergeId: photo.id,
+      },
+    });
+    expect(
+      await getDb(ctx.db).query.product.findFirst({
+        where: eq(productTable.id, photoId!),
+        columns: { deletedAt: true },
+      }),
+    ).toMatchObject({ deletedAt: expect.any(Date) });
   });
 
   it("keeps a dismissed pair dismissed when re-proposed", async () => {

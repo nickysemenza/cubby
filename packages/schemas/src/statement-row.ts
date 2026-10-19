@@ -473,7 +473,11 @@ export const statementRowSummaryOut = z.object({
   ignored: z.number().int(),
   superseded: z.number().int(),
   amountTotal: money,
+  /** `amountTotal` split by match state; the four sum to it. */
+  matchedAmount: money,
   unmatchedAmount: money,
+  ignoredAmount: money,
+  supersededAmount: money,
   /** Distinct provider charges behind the unmatched observations. */
   unmatchedCharges: z.number().int(),
 });

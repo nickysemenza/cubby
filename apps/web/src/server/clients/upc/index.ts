@@ -17,7 +17,7 @@ import { createLogger } from "@cubby/worker-tracing";
 import type {
   SearchResponse,
   UPCLookupResponse,
-} from "~/contracts/upc.schemas";
+} from "~/contracts/upc.contract";
 import { env } from "~/env";
 import type { Database } from "~/server/db";
 import {

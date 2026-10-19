@@ -128,7 +128,8 @@ Every call has a wall-clock budget (`MCP_TOOL_DEADLINE_MS` in
 for reads that declare `modelBacked` (the decision model's 30 s retry budget plus database
 work), and 230 s for writes. An action that can wait on the decision model or another model
 declares `modelBacked: true` in `apps/web/src/contracts/mcp-tools.ts`; today
-those are `entity_read.preview` and `entity_read.suggest_fields`. Past its budget the call answers
+those are `entity_read.preview`, `entity_read.suggest_fields`,
+`entity.discover_connections` and `imports_read.mail_triage_preview`. Past its budget the call answers
 `MCP_TOOL_DEADLINE_EXCEEDED` with the elapsed time, request id, and Sentry event id, logs a
 warning, and reports to Sentry. The deadline aborts the call's `signal`, which
 stops AI and upstream fetches but not Postgres queries or kernel verbs. Work
@@ -188,7 +189,7 @@ The repository is also a Claude plugin marketplace
 (`.claude-plugin/marketplace.json` → `plugins/cubby`). Its skills are pointer
 stubs that call `playbook.get`, so they change only when a playbook's name or
 description does; rerun `pnpm --dir apps/web generate:claude-plugin` when
-`claude-plugin.unit.test.ts` reports drift. The plugin declares no MCP server:
+`claude-plugin.test.ts` reports drift. The plugin declares no MCP server:
 each member adds the Cubby connector once. A member adds the marketplace in
 claude.ai under Customize › Plugins › Add marketplace (`nickysemenza/cubby`)
 with Sync automatically on; claude.ai plugins sync into Claude Code.

@@ -81,6 +81,11 @@ type Handler = {
   target: z.ZodType;
   actions: readonly Review["verdict"][];
   transactionBound: boolean;
+  /** The fingerprint a review must match; defaults to the stored one. */
+  currentFingerprint?: (
+    db: Database,
+    state: typeof assessmentState.$inferSelect,
+  ) => Promise<string | null>;
   apply: (
     db: Database,
     context: EntityKernelContext,
@@ -275,6 +280,11 @@ const assessmentFamilies = {
     subject: assessmentSubjects.product_pair,
     target: assessmentProjectionTargets.product_pair,
     transactionBound: false,
+    currentFingerprint: async (db, state) => {
+      const { reviewedProductPairFingerprint } =
+        await import("~/server/domains/product/repo/match/product-match-candidate");
+      return reviewedProductPairFingerprint(db, state);
+    },
     actions: ["correct", "wrong", "uncertain", "dismissed"],
     apply: async (db, context, state, input) => {
       if (input.verdict !== "correct" || input.correction.present)
@@ -634,7 +644,10 @@ async function settleReview(
           );
         if (
           input.expectedFingerprint !== undefined &&
-          input.expectedFingerprint !== state.fingerprint
+          input.expectedFingerprint !==
+            ("currentFingerprint" in family && family.currentFingerprint
+              ? await family.currentFingerprint(transactionDb, state)
+              : state.fingerprint)
         )
           throw new Error("Assessment evidence fingerprint changed");
         family.target.parse(state);
