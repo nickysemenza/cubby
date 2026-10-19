@@ -11,7 +11,8 @@ export const productPricingOut = z.object({
   source: z.enum(["explicit", "derived", "none"]),
   knownExpenseCount: z.number().int().nonnegative(),
   unknownExpenseCount: z.number().int().nonnegative(),
-  knownUnitCount: z.number().int().nonnegative(),
+  // Sum of acquisition quantities, which are fractional for by-weight lines.
+  knownUnitCount: z.number().nonnegative(),
   partial: z.boolean(),
 });
 

@@ -81,6 +81,38 @@ describe("Product valuation price resolution on canonical reads", () => {
     expect(mixed.pricing.derivedPrice).toBe(5);
   });
 
+  // A by-weight line (0.41 lb) is a legitimate fractional acquisition; its
+  // unit count must survive detail and list reads without rounding.
+  it("reads a fractional acquisition quantity without rounding", async () => {
+    const product = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic by-weight cheese" }),
+      ctx.actor,
+    );
+    await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: "Synthetic cheese by weight",
+        cost: 10.25,
+        productId: product.id,
+        productQuantity: 0.41,
+      }),
+    );
+    const detail = await getProductByShortcode(ctx.db, product.id);
+    expect(detail?.pricing).toMatchObject({
+      knownUnitCount: 0.41,
+      derivedPrice: 25,
+    });
+    const list = await productList(
+      ctx.db,
+      { nameFilter: "Synthetic by-weight cheese" },
+      [],
+      { pageIndex: 0, pageSize: 50 },
+    );
+    expect(list.data.map((row) => row.pricing.knownUnitCount)).toEqual([0.41]);
+  });
+
   it("preserves stored overrides, expense-derived fallback and explicit reset without changing ledger cost", async () => {
     const product = await createProductFixture(
       ctx.db,
