@@ -7,13 +7,9 @@ import {
 
 import { getAiGatewayEgress, setCfEnv } from "../cf-env";
 import { withInvocationDb } from "../db";
-import { isStepRunPurpose, type WorkflowRunParams } from "./runs/contract";
-import {
-  claimWorkflowRun,
-  failWorkflowRun,
-  launchWorkflowRun,
-  runFailureText,
-} from "./runs/lifecycle";
+import type { WorkflowRunParams } from "./runs/contract";
+import { runDeploymentBoundary } from "./runs/deployment";
+import { failWorkflowRun, runFailureText } from "./runs/lifecycle";
 
 /**
  * One attempt of a step-ledger Run (maintenance, sweep). Every page and every
@@ -39,7 +35,10 @@ export class StepRunWorkflow extends WorkflowEntrypoint<
         work((await import("../db")).db),
       );
     try {
+      const boundary = runDeploymentBoundary(this.env, step, event.payload);
       for (let page = 0; page < STEP_RUN_PAGES_PER_INSTANCE; page++) {
+        if (await boundary(`page:${page}`))
+          return { runId: event.payload.runId };
         const advance = await step.do(
           `page:${page}`,
           {
@@ -61,17 +60,7 @@ export class StepRunWorkflow extends WorkflowEntrypoint<
             // falls through to the next page, which re-reads the child.
           }
       }
-      await step.do("continue", () =>
-        withDb(async (db) => {
-          const owner = await claimWorkflowRun(db, event.payload);
-          if (owner && isStepRunPurpose(owner.purpose))
-            await launchWorkflowRun(db, {
-              runId: owner.id,
-              purpose: owner.purpose,
-              expectedAttempt: event.payload.attempt,
-            });
-        }),
-      );
+      await boundary("continue", true);
     } catch (error) {
       await step.do(
         "fail",

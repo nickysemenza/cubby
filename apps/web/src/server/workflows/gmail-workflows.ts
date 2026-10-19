@@ -10,6 +10,7 @@ import { recordDatabaseWrite } from "~/server/db/freshness/client";
 import { withInvocationTrace } from "~/server/observability/tracing";
 import type { MailDiscoveryWorkflow as MailDiscoveryEntrypoint } from "~/server/worker-bindings";
 import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
+import { runDeploymentBoundary } from "~/server/workflows/runs/deployment";
 import type { DurableSteps } from "~/server/workflows/runs/step";
 
 /**
@@ -47,6 +48,7 @@ export class MailDiscoveryWorkflow
         setCfEnv(this.env);
         const params = event.payload;
         const withDb = stepDb(this.env, "mail-discovery");
+        const boundary = runDeploymentBoundary(this.env, step, params);
         const [
           { runMailDiscovery },
           {
@@ -63,6 +65,7 @@ export class MailDiscoveryWorkflow
         ]);
         await runMailDiscovery(durableSteps(step), {
           begin: () => withDb((db) => beginMailDiscovery(db, params)),
+          boundary: (index) => boundary(`page:${index}`),
           list: () => withDb((db) => listMailDiscovery(db, params)),
           batch: (index) =>
             withDb((db) => saveMailDiscoveryBatch(db, params, index)),

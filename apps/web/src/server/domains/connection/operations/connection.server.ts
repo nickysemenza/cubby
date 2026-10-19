@@ -29,11 +29,19 @@ export const connectionHandlers = implementOperationDomain(connectionContract, {
       throw new Error(
         "Connection discovery requires an active AI refresh generation",
       );
-    const runId = await scheduleConnectionRefresh(
+    const scheduled = await scheduleConnectionRefresh(
       context.db,
       source,
       context.actorContext,
     );
+    if (scheduled.kind === "deferred")
+      throw new Error(
+        scheduled.reason === "scheduling_busy"
+          ? "AI refresh scheduling is busy; retry connection discovery shortly."
+          : "AI refresh execution capacity is busy; retry connection discovery after active refresh work finishes.",
+      );
+    if (scheduled.kind === "stopped") throw new Error(scheduled.diagnostic);
+    const runId = scheduled.runId;
     // Nothing else starts a member's discovery Run promptly; a shared Run
     // already in flight makes this a no-op.
     if (runId)
@@ -41,6 +49,8 @@ export const connectionHandlers = implementOperationDomain(connectionContract, {
         runId,
         purpose: "ai_refresh",
         automatic: true,
+        reportAdmissionRefusal:
+          scheduled.kind === "recoverable" ? true : undefined,
       });
     const codes = runId
       ? await lookupShortcodes(context.db, [parseEntityRef("run", runId)])

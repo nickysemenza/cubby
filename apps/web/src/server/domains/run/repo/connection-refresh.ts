@@ -5,10 +5,12 @@ import {
 } from "@cubby/schemas/ai-evaluation";
 import { entitySchema, type EntityRef } from "@cubby/schemas/entity";
 import type { RunId } from "@cubby/schemas/identifiers";
+import { MAX_AUTOMATIC_WORKFLOW_FAILURES } from "@cubby/schemas/workflow-runs";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, asc, count, eq, gt, inArray, isNull, ne } from "drizzle-orm";
+import { and, asc, count, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 
 import { dependencyStamps } from "~/server/ai/policy/refresh-manifest";
+import { PENDING_AI_STATES } from "~/server/ai/repo/ai-evaluation-requests";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
@@ -43,15 +45,26 @@ const discoveryEntities = [
 ] as const;
 const discoveryEntitySet = new Set<string>(discoveryEntities);
 
+type ConnectionRefreshResult =
+  | { kind: "scheduled"; runId: RunId }
+  | { kind: "recoverable"; runId: RunId }
+  | { kind: "unchanged"; runId: RunId | null }
+  | (Extract<
+      Awaited<ReturnType<typeof scheduleEvaluationRun>>,
+      { kind: "deferred" }
+    > & { runId: null })
+  | { kind: "stopped"; runId: RunId; diagnostic: string };
+
 export async function scheduleConnectionRefresh(
   db: Database,
   source: EntityRef,
   actor: Parameters<typeof scheduleEvaluationRun>[1] = systemActor(),
-) {
-  if (!discoveryEntitySet.has(source.entityKind)) return null;
+): Promise<ConnectionRefreshResult> {
+  if (!discoveryEntitySet.has(source.entityKind))
+    return { kind: "unchanged", runId: null };
   const activation = await readAiRefreshActivation(db);
   if (!activation?.enabled || !activation.manifest["entity-connections"])
-    return null;
+    return { kind: "unchanged", runId: null };
   const record = await connectionRecord(db, source);
   // The initial cursor pass also carries the expanded notes projection into
   // existing rows; fallback retrieval remains useful until that pass reaches them.
@@ -85,21 +98,48 @@ export async function scheduleConnectionRefresh(
     },
     [{ target, provenance, snapshot: source }],
   );
-  if (scheduled) return scheduled;
+  if (scheduled.kind === "scheduled") return scheduled;
+  if (scheduled.kind === "deferred") return { ...scheduled, runId: null };
   const [existing] = await getDb(db)
-    .select({ id: run.id })
+    .select({
+      id: run.id,
+      shortcode: run.shortcode,
+      status: run.status,
+      failureCode: run.failureCode,
+      dispatchError: run.dispatchError,
+      state: aiEvaluation.state,
+      failures: sql<number>`coalesce((${run.progress}->>'automaticRecoveryFailures')::int, 0)`,
+    })
     .from(run)
     .innerJoin(aiEvaluation, eq(aiEvaluation.runId, run.id))
     .where(
       and(
-        eq(run.clientKey, `ai-refresh:connection:${key}`),
-        ne(run.status, "completed"),
-        ne(aiEvaluation.state, "completed"),
+        eq(aiEvaluation.target, target),
+        eq(aiEvaluation.provenance, provenance),
+        sql`${aiEvaluation.receipt}->>'retryEvaluationId' IS NULL`,
         notDeleted(run),
       ),
     )
     .limit(1);
-  return existing?.id ?? null;
+  if (!existing || existing.state === "completed")
+    return { kind: "unchanged", runId: null };
+  if (
+    existing.failureCode !== "user_cancelled" &&
+    PENDING_AI_STATES.includes(existing.state) &&
+    (existing.status === "running" ||
+      ((existing.status === "failed" ||
+        existing.status === "dispatch_failed") &&
+        existing.failures < MAX_AUTOMATIC_WORKFLOW_FAILURES))
+  )
+    return {
+      kind: existing.status === "running" ? "unchanged" : "recoverable",
+      runId: existing.id,
+    };
+  return {
+    kind: "stopped",
+    runId: existing.id,
+    diagnostic: `Connection refresh ${existing.shortcode}: status=${existing.status}, failureCode=${existing.failureCode ?? "none"}, evaluation=${existing.state}, automaticRecoveryFailures=${existing.failures}.\n${existing.dispatchError ?? ""}`,
+  };
 }
 
 /**

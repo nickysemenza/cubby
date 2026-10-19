@@ -2,6 +2,7 @@ import { z } from "zod";
 import { runShortcode } from "./identifier-fields";
 import { runStatus, runTrigger } from "./run-fields";
 import { runStepState } from "./run-step";
+import { searchableEntitySchema } from "./search";
 
 /** `maintenance.run`: the pass it started, or the one already active. */
 export const maintenanceRunOutSchema = z.object({
@@ -162,6 +163,20 @@ export type SearchIndexRepairCounters = z.infer<
 >;
 
 export const searchIndexRepairPhases = ["orphans", "sources"] as const;
+
+/** A committed page's resume point; selection, mutation and publication stay together. */
+export const searchRepairCheckpoint = z.object({
+  phase: z.enum(searchIndexRepairPhases),
+  cursor: z
+    .object({ entityKind: searchableEntitySchema, entityId: z.string() })
+    .nullable(),
+  counters: searchIndexRepairCountersSchema,
+});
+export type SearchRepairCheckpoint = z.infer<typeof searchRepairCheckpoint>;
+export const searchRepairContinuation = z.object({
+  nextInstanceId: z.string().min(1),
+});
+export type SearchRepairContinuation = z.infer<typeof searchRepairContinuation>;
 
 /**
  * Progress in the shared bulk-stream shape (`done`/`total`) so the existing

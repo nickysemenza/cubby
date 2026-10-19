@@ -16,6 +16,7 @@ import {
 const MAIL_DISCOVERY_PAGES_PER_PASS = 12;
 export interface MailDiscoveryWork {
   begin(): Promise<{ kind: "stopped" } | { kind: "page"; index: number }>;
+  boundary(index: number): Promise<boolean>;
   list(
     index: number,
   ): Promise<{ kind: "stopped" } | { kind: "listed"; more: boolean }>;
@@ -40,6 +41,7 @@ export async function runMailDiscovery(
       index += 1
     ) {
       const current = index;
+      if (await work.boundary(current)) return;
       const listed = await steps.do(
         `page.${current}.list`,
         PROVIDER_RETRIES,

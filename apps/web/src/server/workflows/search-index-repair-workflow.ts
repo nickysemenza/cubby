@@ -2,7 +2,12 @@ import {
   searchIndexRepairCountersSchema,
   type SearchIndexRepairCounters,
   type SearchIndexRepairEvent,
+  searchRepairCheckpoint,
+  type SearchRepairCheckpoint,
+  type SearchRepairContinuation,
 } from "@cubby/schemas/maintenance";
+import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
+import { sha256Hex } from "@cubby/shared/sha256";
 import {
   WorkflowEntrypoint,
   type WorkflowEvent,
@@ -18,6 +23,10 @@ import type {
   SearchIndexRepairWorkflow as SearchIndexRepairEntrypoint,
   SearchIndexRepairWorkflowParams,
 } from "~/server/worker-bindings";
+
+import { workflowDeploymentBoundary } from "./deployment-boundary";
+
+const REPAIR_PAGES_PER_INSTANCE = 128;
 
 const RETRIES = {
   retries: { limit: 3, delay: "1 second", backoff: "exponential" as const },
@@ -50,7 +59,7 @@ export class SearchIndexRepairWorkflow
   async run(
     event: Readonly<WorkflowEvent<SearchIndexRepairWorkflowParams>>,
     step: WorkflowStep,
-  ): Promise<SearchIndexRepairCounters> {
+  ): Promise<SearchIndexRepairCounters | SearchRepairContinuation> {
     return withInvocationTrace(
       "search-index-repair.run",
       async () => {
@@ -68,57 +77,86 @@ export class SearchIndexRepairWorkflow
           selectSearchIndexRepairSourcePage,
         } =
           await import("~/server/generic/search/service/search-index-repair.service");
-        let counters = createSearchIndexRepairCounters();
-        let cursor: SearchDocumentCursor | null = null;
+        const checkpoint = event.payload.checkpoint
+          ? searchRepairCheckpoint.parse(event.payload.checkpoint)
+          : undefined;
+        let counters =
+          checkpoint?.counters ?? createSearchIndexRepairCounters();
+        let cursor: SearchDocumentCursor | null =
+          checkpoint?.phase === "orphans" ? checkpoint.cursor : null;
         let page = 0;
-
-        while (true) {
-          const selection = await step.do(
-            `search-index-repair.orphans.select.${page}`,
-            RETRIES,
-            () =>
-              withFreshDb(this.env, (db) =>
-                selectSearchIndexRepairOrphanPage(db, cursor ?? undefined),
-              ),
-          );
-          const delta = await step.do(
-            `search-index-repair.orphans.apply.${page}`,
-            RETRIES,
-            () =>
-              withFreshDb(this.env, async (db) => {
-                const result = await applySearchIndexRepairOrphanPage(
-                  db,
-                  selection.refs,
-                );
-                await recordDatabaseWrite("search-index-repair.orphans");
-                return result;
+        let completedPages = 0;
+        const current = () =>
+          this.env.AI_GATEWAY_EGRESS.getByName(CUBBY_AI_GATEWAY_ID);
+        const nextInstanceId = await sha256Hex(`${event.instanceId}:continue`);
+        const boundary = (phase: SearchRepairCheckpoint["phase"]) =>
+          workflowDeploymentBoundary(step, {
+            name: `${phase}:${page}`,
+            version: this.env.CF_VERSION_METADATA.id,
+            currentVersion: () => current().currentDeploymentVersion(),
+            force: completedPages >= REPAIR_PAGES_PER_INSTANCE,
+            initial: completedPages === 0,
+            continue: () =>
+              current().continueSearchIndexRepair({
+                id: nextInstanceId,
+                params: {
+                  requestedAt: event.payload.requestedAt,
+                  checkpoint: { phase, cursor, counters },
+                },
               }),
-          );
-          counters = foldSearchIndexRepairCounters(
-            foldSearchIndexRepairCounters(counters, selection.delta),
-            delta,
-          );
-          await step.do(
-            `search-index-repair.orphans.progress.${page}`,
-            RETRIES,
-            () =>
-              Promise.resolve(
-                progress(
-                  "orphans",
-                  counters,
-                  selection.nextCursor !== null,
-                  SEARCH_INDEX_REPAIR_PAGE_SIZE,
-                ),
-              ),
-          );
-          cursor = selection.nextCursor;
-          page += 1;
-          if (cursor === null) break;
-        }
+          });
 
-        cursor = null;
+        if (checkpoint?.phase !== "sources") {
+          while (true) {
+            if (await boundary("orphans")) return { nextInstanceId };
+            const selection = await step.do(
+              `search-index-repair.orphans.select.${page}`,
+              RETRIES,
+              () =>
+                withFreshDb(this.env, (db) =>
+                  selectSearchIndexRepairOrphanPage(db, cursor ?? undefined),
+                ),
+            );
+            const delta = await step.do(
+              `search-index-repair.orphans.apply.${page}`,
+              RETRIES,
+              () =>
+                withFreshDb(this.env, async (db) => {
+                  const result = await applySearchIndexRepairOrphanPage(
+                    db,
+                    selection.refs,
+                  );
+                  await recordDatabaseWrite("search-index-repair.orphans");
+                  return result;
+                }),
+            );
+            counters = foldSearchIndexRepairCounters(
+              foldSearchIndexRepairCounters(counters, selection.delta),
+              delta,
+            );
+            await step.do(
+              `search-index-repair.orphans.progress.${page}`,
+              RETRIES,
+              () =>
+                Promise.resolve(
+                  progress(
+                    "orphans",
+                    counters,
+                    selection.nextCursor !== null,
+                    SEARCH_INDEX_REPAIR_PAGE_SIZE,
+                  ),
+                ),
+            );
+            cursor = selection.nextCursor;
+            page += 1;
+            completedPages += 1;
+            if (cursor === null) break;
+          }
+        }
+        cursor = checkpoint?.phase === "sources" ? checkpoint.cursor : null;
         page = 0;
         while (true) {
+          if (await boundary("sources")) return { nextInstanceId };
           const selection = await step.do(
             `search-index-repair.sources.select.${page}`,
             RETRIES,
@@ -176,6 +214,7 @@ export class SearchIndexRepairWorkflow
           );
           cursor = selection.nextCursor;
           page += 1;
+          completedPages += 1;
           if (cursor === null) break;
         }
 

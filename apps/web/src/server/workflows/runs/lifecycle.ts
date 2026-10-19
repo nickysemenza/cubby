@@ -1,3 +1,4 @@
+import { aiRefreshRunInput } from "@cubby/schemas/ai-evaluation";
 import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
 import { runStatus } from "@cubby/schemas/run-fields";
 import { MAX_AUTOMATIC_WORKFLOW_FAILURES } from "@cubby/schemas/workflow-runs";
@@ -10,8 +11,13 @@ import {
 } from "~/lib/error-diagnostics";
 import { getAiGatewayEgress } from "~/server/cf-env";
 import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers/core";
+import { getDb, withTransactionDatabase } from "~/server/db/helpers/core";
 import { run as runTable } from "~/server/db/schema";
+import {
+  hasAiRefreshRunCapacity,
+  tryLockAiRefreshScheduling,
+  AI_REFRESH_SCHEDULING_LOCK,
+} from "~/server/domains/run/repo/ai-refresh-admission";
 import { recordRunProgress as recordProgress } from "~/server/domains/run/repo/run-progress";
 
 import {
@@ -96,6 +102,10 @@ type LaunchWorkflowRunInput = {
    * already running, ended or cancelled resolves `null` instead of throwing.
    */
   automatic?: boolean;
+  /** Explicit rediscovery reports busy admission while retaining automatic recovery fences. */
+  reportAdmissionRefusal?: true;
+  /** Only the member's explicit retry control may clear a cancellation. */
+  retryCancelled?: true;
   /** A bounded instance hands off only while it still owns this attempt. */
   expectedAttempt?: number;
 };
@@ -116,44 +126,93 @@ export async function launchWorkflowRun(
   input: LaunchWorkflowRunInput,
   launcher: WorkflowLauncher = productionWorkflowLauncher,
 ): Promise<LaunchedWorkflowRun | null> {
-  const database = getDb(db);
-  const [reopened] = await database
-    .update(runTable)
-    .set({
-      status: "running",
-      endedAt: null,
-      failureCode: null,
-      dispatchError: null,
-      routine: false,
-      progress: sql`coalesce(${runTable.progress}, '{}'::jsonb) || jsonb_build_object('attempt', ${attemptOf} + 1, 'automaticRecoveryFailures', ${input.automatic || input.expectedAttempt !== undefined ? sql`CASE WHEN ${runTable.status} IN (${runStatus.enum.failed}, ${runStatus.enum.dispatch_failed}) THEN coalesce((${runTable.progress}->>'automaticRecoveryFailures')::int, 0) + 1 ELSE coalesce((${runTable.progress}->>'automaticRecoveryFailures')::int, 0) END` : 0}::int)`,
-    })
-    .where(
-      and(
-        eq(runTable.id, input.runId),
-        input.expectedAttempt === undefined
-          ? sql`(${runTable.status} <> 'running' OR ${attemptOf} = 0)`
-          : and(
-              eq(runTable.status, "running"),
-              attemptIs(input.expectedAttempt),
-            ),
-        input.automatic
-          ? and(
-              inArray(runTable.status, [
-                "running",
-                "failed",
-                "dispatch_failed",
-                "paused_auth",
-              ]),
-              sql`(${runTable.status} NOT IN (${runStatus.enum.failed}, ${runStatus.enum.dispatch_failed}) OR coalesce((${runTable.progress}->>'automaticRecoveryFailures')::int, 0) < ${MAX_AUTOMATIC_WORKFLOW_FAILURES})`,
-              sql`${runTable.failureCode} IS DISTINCT FROM 'user_cancelled'`,
-            )
-          : undefined,
-      ),
-    )
-    .returning({ shortcode: runTable.shortcode, attempt: attemptOf });
+  let refusal = "This Run is already running; wait for it or cancel it.";
+  let admissionRefused = false;
+  const reopened = await withTransactionDatabase(db, async (tx) => {
+    const database = getDb(tx);
+    if (input.purpose === "ai_refresh" && input.expectedAttempt === undefined) {
+      const [owner] = await database
+        .select({
+          status: runTable.status,
+          discovery: sql<boolean>`coalesce((${runTable.input}->>${aiRefreshRunInput.keyof().enum.discovery})::boolean, false)`,
+          parentRunId: runTable.parentRunId,
+        })
+        .from(runTable)
+        .where(eq(runTable.id, input.runId));
+      if (!owner) {
+        refusal = "The Run no longer exists.";
+        return null;
+      }
+      if (!owner.parentRunId && !owner.discovery) {
+        if (!(await tryLockAiRefreshScheduling(tx))) {
+          admissionRefused = true;
+          refusal = `AI refresh scheduling is busy (${AI_REFRESH_SCHEDULING_LOCK}); retry shortly.`;
+          return null;
+        }
+        if (!(await hasAiRefreshRunCapacity(tx, input.runId))) {
+          admissionRefused = true;
+          refusal =
+            "AI refresh execution has no free Run slots; wait for active or paused Runs to finish or cancel one.";
+          return null;
+        }
+      }
+    }
+    const [claimed] = await database
+      .update(runTable)
+      .set({
+        status: "running",
+        endedAt: null,
+        failureCode: null,
+        dispatchError: null,
+        routine: false,
+        progress: sql`coalesce(${runTable.progress}, '{}'::jsonb) || jsonb_build_object('attempt', ${attemptOf} + 1, 'automaticRecoveryFailures', ${input.automatic || input.expectedAttempt !== undefined ? sql`CASE WHEN ${runTable.status} IN (${runStatus.enum.failed}, ${runStatus.enum.dispatch_failed}) THEN coalesce((${runTable.progress}->>'automaticRecoveryFailures')::int, 0) + 1 ELSE coalesce((${runTable.progress}->>'automaticRecoveryFailures')::int, 0) END` : 0}::int)`,
+      })
+      .where(
+        and(
+          eq(runTable.id, input.runId),
+          input.retryCancelled && !input.automatic
+            ? undefined
+            : sql`${runTable.failureCode} IS DISTINCT FROM 'user_cancelled'`,
+          input.expectedAttempt === undefined
+            ? sql`(${runTable.status} <> 'running' OR ${attemptOf} = 0)`
+            : and(
+                eq(runTable.status, "running"),
+                attemptIs(input.expectedAttempt),
+              ),
+          input.automatic
+            ? and(
+                inArray(runTable.status, [
+                  "running",
+                  "failed",
+                  "dispatch_failed",
+                  "paused_auth",
+                ]),
+                sql`(${runTable.status} NOT IN (${runStatus.enum.failed}, ${runStatus.enum.dispatch_failed}) OR coalesce((${runTable.progress}->>'automaticRecoveryFailures')::int, 0) < ${MAX_AUTOMATIC_WORKFLOW_FAILURES})`,
+              )
+            : undefined,
+        ),
+      )
+      .returning({ shortcode: runTable.shortcode, attempt: attemptOf });
+    if (!claimed && !input.automatic) {
+      const [current] = await database
+        .select({
+          status: runTable.status,
+          failureCode: runTable.failureCode,
+          attempt: attemptOf,
+        })
+        .from(runTable)
+        .where(eq(runTable.id, input.runId));
+      refusal =
+        current?.failureCode === "user_cancelled"
+          ? "This Run was cancelled by a member; use explicit Run Retry to restart it."
+          : `This Run is already running or no longer matches the launch: status=${current?.status ?? "missing"}, failureCode=${current?.failureCode ?? "none"}, attempt=${current?.attempt ?? "missing"}, expectedAttempt=${input.expectedAttempt ?? "initial or stopped"}.`;
+    }
+    return claimed ?? null;
+  });
   if (!reopened) {
-    if (input.automatic) return null;
-    throw new Error("This Run is already running; wait for it or cancel it.");
+    if (input.automatic && !(input.reportAdmissionRefusal && admissionRefused))
+      return null;
+    throw new Error(refusal);
   }
   const instanceId = workflowInstanceId(reopened.shortcode, reopened.attempt);
   await recordRunProgress(

@@ -18,6 +18,7 @@ import { runMailDiscovery, type MailDiscoveryWork } from "./mail-workflows";
 const discoveryWork = (
   overrides: Partial<MailDiscoveryWork> = {},
 ): MailDiscoveryWork => ({
+  boundary: async () => false,
   begin: vi.fn(async () => ({ kind: "page" as const, index: 0 })),
   list: vi.fn(async (page: number) => ({
     kind: "listed" as const,
@@ -31,6 +32,30 @@ const discoveryWork = (
 });
 
 describe("mail discovery Workflow", () => {
+  // A deployment after save must stop before the next provider list, without
+  // marking this incomplete pass completed or allocating a different Run.
+  it("hands off only after a saved page and never lists its successor page", async () => {
+    const { steps } = memoryDurableSteps();
+    let saved = false;
+    const listed: number[] = [];
+    const work = discoveryWork({
+      boundary: async () => saved,
+      list: async (index) => {
+        listed.push(index);
+        return { kind: "listed", more: true };
+      },
+      batch: async () => {
+        saved = true;
+        return { kind: "done" };
+      },
+    });
+    await runMailDiscovery(steps, work);
+    expect(listed).toEqual([0]);
+    expect(work.finish).not.toHaveBeenCalled();
+    expect(work.continue).not.toHaveBeenCalled();
+    expect(work.fail).not.toHaveBeenCalled();
+  });
+
   it("checkpoints a bounded page before listing the next one, then finishes", async () => {
     const { steps, attempts } = memoryDurableSteps();
     const work = discoveryWork();

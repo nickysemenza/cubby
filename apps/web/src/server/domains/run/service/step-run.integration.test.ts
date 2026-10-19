@@ -272,8 +272,24 @@ describe("step-ledger Runs", () => {
     );
   });
 
-  // Failure mode: retrying an old pass's step while another maintenance pass
-  // is active hits the one-active index with a bare constraint error.
+  // An explicit member step retry may clear cancellation; recovery must not.
+  it("permits the member to retry a failed step on a cancelled Run", async () => {
+    const { id, params } = await startRun();
+    const broken = scripted("broken", []);
+    await drive(params, async () => [broken.driver]);
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "failed", failureCode: "user_cancelled" })
+      .where(eq(run.id, id));
+    await retryRunStep(ctx.db, id, "broken", launcher);
+    expect(await readRun(id)).toMatchObject({
+      status: "running",
+      failureCode: null,
+    });
+    expect((await readRunSteps(ctx.db, id))[0]?.state).toBe("queued");
+  });
+
+  // Retrying an old pass while another is active must not hit the unique index.
   it("refuses to retry a maintenance step while another pass is active", async () => {
     const { id, params } = await startRun();
     const broken = scripted("broken", []);

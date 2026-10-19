@@ -1279,7 +1279,7 @@ describe("stored Product identity pairs", () => {
         },
       },
     };
-    expect(await discoverAiRefresh(ctx.db, ports)).toEqual([]);
+    expect((await discoverAiRefresh(ctx.db, ports)).runs).toEqual([]);
     const active = await activateAiRefresh(
       ctx.db,
       "synthetic:activated-rule-pass",

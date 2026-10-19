@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
 import { createRepoEntity } from "tooling/factories/repo";
+import { buildKernelContext } from "tooling/scenarios/context";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -18,9 +19,11 @@ import {
   inventoryEntry,
   location,
   product,
+  run,
   searchDocument,
   user,
 } from "~/server/db/schema";
+import { connectionHandlers } from "~/server/domains/connection/operations/connection.server";
 import { acquisitionPairEligible } from "~/server/domains/connection/repo/connection-candidates";
 import { confirmPurchaseAcquisition } from "~/server/domains/purchase/repo/purchase-products";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
@@ -55,6 +58,63 @@ describe("connection discovery roster freshness", () => {
       updatedAt: new Date(),
     });
   });
+  it.each(["failed", "dispatch_failed", "cancelled"] as const)(
+    "returns the %s owner when explicit rediscovery finds its retained work",
+    async (outcome) => {
+      const source = await createRepoEntity(ctx, "task", {
+        name: "Synthetic recoverable discovery",
+        trade: "other",
+      });
+      const ref = { entityKind: "task" as const, entityId: source.output.id };
+      await activateAiRefresh(ctx.db, "synthetic-explicit-recovery", {
+        enabled: true,
+      });
+      const first = await scheduleConnectionRefresh(ctx.db, ref);
+      if (!first.runId)
+        throw new Error("Synthetic connection work was not scheduled");
+      await getDb(ctx.db)
+        .update(run)
+        .set({
+          status: outcome === "cancelled" ? "failed" : outcome,
+          failureCode:
+            outcome === "cancelled"
+              ? "user_cancelled"
+              : "ai_work_workflow_failed",
+          dispatchError: "Synthetic retained Workflow diagnostic",
+        })
+        .where(eq(run.id, first.runId));
+      await getDb(ctx.db)
+        .update(aiEvaluation)
+        .set({ state: outcome === "cancelled" ? "cancelled" : "queued" })
+        .where(eq(aiEvaluation.runId, first.runId));
+      const found = await scheduleConnectionRefresh(ctx.db, ref);
+      expect(found).toMatchObject({
+        kind: outcome === "cancelled" ? "stopped" : "recoverable",
+        runId: first.runId,
+      });
+      if (outcome !== "cancelled")
+        for (let index = 0; index < 2; index++)
+          await ensureRun(ctx.db, systemActor(), {
+            purpose: "ai_refresh",
+            trigger: "scheduled",
+            status: "running",
+            clientKey: `synthetic-discovery-capacity:${index}`,
+          });
+      await expect(
+        connectionHandlers.runs.discover!.run(
+          {
+            ...buildKernelContext(ctx.db, ctx.actor.userId),
+            signal: new AbortController().signal,
+          },
+          ref,
+        ),
+      ).rejects.toThrow(
+        outcome === "cancelled"
+          ? "Synthetic retained Workflow diagnostic"
+          : "no free Run slots",
+      );
+    },
+  );
   // A page must not scan the same broad target corpus for every source.
   it("shares broad rosters within a batch and refreshes them on the next call", async () => {
     const first = await createRepoEntity(ctx, "task", {
@@ -306,10 +366,10 @@ describe("connection discovery roster freshness", () => {
     await activateAiRefresh(ctx.db, "synthetic-connection-roster", {
       enabled: true,
     });
-    const firstRun = await scheduleConnectionRefresh(ctx.db, ref);
+    const { runId: firstRun } = await scheduleConnectionRefresh(ctx.db, ref);
     if (!firstRun)
       throw new Error("Synthetic connection discovery was not scheduled");
-    expect(await scheduleConnectionRefresh(ctx.db, ref)).toBe(firstRun);
+    expect((await scheduleConnectionRefresh(ctx.db, ref)).runId).toBe(firstRun);
     const [first] = await getDb(ctx.db)
       .select()
       .from(aiEvaluation)
@@ -325,7 +385,7 @@ describe("connection discovery roster freshness", () => {
       async () => ({ source: ref, discovered: true }),
     );
     const before = await connectionSourceFingerprint(ctx.db, ref);
-    expect(await scheduleConnectionRefresh(ctx.db, ref)).toBeNull();
+    expect((await scheduleConnectionRefresh(ctx.db, ref)).runId).toBeNull();
 
     await ensureRun(ctx.db, ctx.actor, {
       purpose: "ai_suggest",
@@ -341,7 +401,16 @@ describe("connection discovery roster freshness", () => {
     await refreshSearchDocument(ctx.db, "product", endpoint.entityId);
     const afterInsert = await connectionSourceFingerprint(ctx.db, ref);
     expect(afterInsert).not.toBe(before);
-    expect(await scheduleConnectionRefresh(ctx.db, ref)).not.toBe(firstRun);
+    expect((await scheduleConnectionRefresh(ctx.db, ref)).runId).toBe(firstRun);
+    const refreshed = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.runId, firstRun));
+    expect(refreshed).toHaveLength(2);
+    expect(refreshed.find((row) => row.id !== first.id)).toMatchObject({
+      state: "queued",
+      provenance: { inputFingerprint: afterInsert },
+    });
     await refreshSearchDocument(ctx.db, "product", endpoint.entityId);
     expect(await connectionSourceFingerprint(ctx.db, ref)).toBe(afterInsert);
 
