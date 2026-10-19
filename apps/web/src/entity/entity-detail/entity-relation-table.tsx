@@ -16,6 +16,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -97,6 +98,13 @@ export interface RelationSectionPlan {
   columns: readonly string[] | null;
   sort: { field: string; direction: "asc" | "desc" };
   limit: number | null;
+  /** The target's `model.grouping` field the section opens grouped by. */
+  groupBy: string | null;
+  /**
+   * The target's column that names the record this section belongs to (a
+   * Task's Project on a Project's Tasks) — always this record, so hidden.
+   */
+  backReferenceColumn: string | null;
   /** Inferred through the target's filter, with no edge path to show as evidence. */
   derived: boolean;
 }
@@ -147,7 +155,8 @@ export function planRelationSection(
   section: Pick<
     RelationSection,
     "relation" | "filter" | "prefill" | "columns" | "sort" | "limit"
-  >,
+  > &
+    Partial<Pick<RelationSection, "groupBy">>,
 ): RelationSectionPlan {
   const relation = entityManifest[entity].relationships.find(
     (candidate) => candidate.key === section.relation,
@@ -205,8 +214,23 @@ export function planRelationSection(
       direction: defaultSortDirectionFor(target),
     },
     limit: section.limit,
+    groupBy: section.groupBy ?? null,
+    backReferenceColumn: backReferenceColumnFor(entity, target, seedField),
     derived: relation.provenance.kind === "derived",
   };
+}
+
+/** The target's list column for the field that points back at `source`. */
+function backReferenceColumnFor(
+  source: BrowserRoutedEntity,
+  target: ListEntity,
+  fieldKey: string,
+): string | null {
+  const field = entityFieldModels[target].fields.find(
+    (candidate) =>
+      candidate.key === fieldKey && candidate.reference?.entity === source,
+  );
+  return field === undefined ? null : (field.display.columnId ?? field.key);
 }
 
 const DEFAULT_RELATION_PAGE_SIZE = 50;
@@ -543,7 +567,12 @@ function LiveEntityRelationTable({
           only: plan.columns ?? undefined,
           skipSpecialized: true,
           onSaveField,
-        }).visit(add);
+        })
+          .filter(
+            (column) =>
+              plan.columns !== null || column.id !== plan.backReferenceColumn,
+          )
+          .visit(add);
         if (movementSource !== null)
           add(
             helper.display({
@@ -571,7 +600,15 @@ function LiveEntityRelationTable({
             }),
           );
       }),
-    [helper, onSaveField, plan.columns, plan.derived, target, movementSource],
+    [
+      helper,
+      onSaveField,
+      plan.backReferenceColumn,
+      plan.columns,
+      plan.derived,
+      target,
+      movementSource,
+    ],
   );
   const tableStateOptions = useMemo(
     () => ({
@@ -592,6 +629,7 @@ function LiveEntityRelationTable({
     columns,
     tableStateOptions,
     hiddenFilterColumns: [plan.descriptorId],
+    groupBy: plan.groupBy ?? undefined,
     // H2: never `includeCatalogActions: false` here — that would empty the
     // row `…` menu too. This only drops the checkbox column and bulk bar.
     selectable: false,
@@ -612,6 +650,15 @@ function LiveEntityRelationTable({
   const evidence = new Map(
     evidenceQuery.data?.items.map((item) => [item.target.entityId, item]),
   );
+  // "Connected through" earns its column only when some row connects through
+  // an intermediate record; a direct reference would read "Direct" on every row.
+  const hasIndirectPath = evidenceQuery.data?.items.some((item) =>
+    item.paths.some((path) => path.length > 2),
+  );
+  const connectionColumn = list.workbench.table.getColumn("connection");
+  useEffect(() => {
+    connectionColumn?.toggleVisibility(hasIndirectPath === true);
+  }, [connectionColumn, hasIndirectPath]);
   useSectionCount(list.totalCount);
   // `list.totalCount` stays `undefined` until the first response lands (see
   // `useEntityList`), so this only fires once the read genuinely resolves

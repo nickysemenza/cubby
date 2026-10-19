@@ -91,6 +91,15 @@ export default defineEntity({
         { kind: "slot", id: "budget", title: "Budget" },
         { kind: "slot", id: "schedule", title: "Schedule", placement: "full" },
         {
+          kind: "relation",
+          id: "tasks",
+          title: "Tasks",
+          relation: "tasks",
+          filter: { descriptor: "projectId" },
+          groupBy: "status",
+          sort: { field: "dueDate", direction: "desc" },
+        },
+        {
           kind: "slot",
           id: "contribution",
           title: "Contribution",

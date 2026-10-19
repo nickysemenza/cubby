@@ -291,7 +291,7 @@ describe("EntityRelationTable", () => {
     expect(screen.getByText("Unknown movement")).toBeVisible();
   });
 
-  it("issues the scoped list read, sorted and filtered per the plan", async () => {
+  it("issues the scoped list read, sorted, grouped and filtered per the plan", async () => {
     const inputs: EntityListInputByEntity["task"][] = [];
     const list = entityList.list.withTransport(async ({ input }) => {
       inputs.push(input as EntityListInputByEntity["task"]);
@@ -313,7 +313,13 @@ describe("EntityRelationTable", () => {
     const [input] = inputs;
     expect(input?.entity).toBe("task");
     expect(input?.filters).toMatchObject({ projectId: "PRJ-TEST" });
-    expect(input?.sort).toEqual([{ orderBy: "name", direction: "asc" }]);
+    // Project → Tasks declares status grouping and newest-due-first order.
+    expect(input?.sort).toEqual([{ orderBy: "dueDate", direction: "desc" }]);
+    expect(input).toMatchObject({ groupBy: "status" });
+  });
+
+  it("hides the column that names the record the section belongs to", () => {
+    expect(planFor("project", "tasks").backReferenceColumn).toBe("projectId");
   });
 
   it("keeps the journal's own single-line empty copy instead of the generic sentence", async () => {

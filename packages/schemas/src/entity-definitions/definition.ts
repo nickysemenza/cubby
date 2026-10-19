@@ -1153,6 +1153,11 @@ const buildMetadataSchemas = () => {
           .optional()
           .default(null),
         limit: z.number().int().positive().nullable().optional().default(null),
+        /**
+         * The target's `model.grouping` field this section opens grouped by
+         * (a Project's Tasks by status). Omitted, the section is ungrouped.
+         */
+        groupBy: nonEmptyString().nullable().optional().default(null),
         /** Section-specific empty-state copy, replacing the generic
          * "No <plural> yet." sentence both platforms otherwise render — for
          * a section whose target's plural name reads awkwardly or
