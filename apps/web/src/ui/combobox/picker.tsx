@@ -363,10 +363,15 @@ const popupClass = cn(
   "flex max-h-[min(var(--available-height),calc(var(--app-viewport-height,100dvh)_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom)_-_1rem),28rem)] origin-(--transform-origin) flex-col overflow-hidden rounded-md border border-[var(--border)] bg-popover text-popover-foreground shadow-[var(--shadow-overlay)] outline-none",
 );
 
-const popupWidthClass = (records: boolean) =>
+const popupWidthClass = (records: boolean, layout: PickerRowLayout) =>
   records
     ? "w-[max(var(--anchor-width),36rem)] max-w-[min(var(--available-width),calc(100vw-16px))]"
-    : "w-max max-w-[min(max(var(--anchor-width),16rem),var(--available-width),calc(100vw-16px))] min-w-(--anchor-width)";
+    : // Each secondary/trailing column takes 7.5rem; under the 16rem cap a
+      // counted roster (a compact quick filter's accounts) wrapped its labels
+      // one word per line.
+      layout.secondary || layout.trailing > 0
+      ? "w-max max-w-[min(max(var(--anchor-width),28rem),var(--available-width),calc(100vw-16px))] min-w-(--anchor-width)"
+      : "w-max max-w-[min(max(var(--anchor-width),16rem),var(--available-width),calc(100vw-16px))] min-w-(--anchor-width)";
 
 function pickerRowLayout(items: ComboboxItem[]) {
   return {
@@ -687,7 +692,7 @@ function SearchPickerPopup<TId extends string>({
         className="isolate z-[200]"
       >
         <ComboboxPrimitive.Popup
-          className={cn(popupClass, popupWidthClass(records))}
+          className={cn(popupClass, popupWidthClass(records, layout))}
         >
           {header ? (
             <div className="flex shrink-0 flex-col gap-1.5 border-b border-[var(--border)] px-1.5 py-1.5">
@@ -1211,7 +1216,10 @@ function ChoosePicker<TId extends string>({
             className="isolate z-[200]"
           >
             <SelectPrimitive.Popup
-              className={cn(popupClass, popupWidthClass(records != null))}
+              className={cn(
+                popupClass,
+                popupWidthClass(records != null, layout),
+              )}
             >
               {header ? (
                 <div className="flex shrink-0 flex-col gap-1.5 border-b border-[var(--border)] px-1.5 py-1.5">

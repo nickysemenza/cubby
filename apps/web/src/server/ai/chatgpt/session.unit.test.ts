@@ -209,6 +209,108 @@ describe("ChatGPT credential ownership", () => {
     }
   });
 
+  // The leading additional_tools position was never verified live. Failure
+  // modes: a refused position fails every plan call; a quota refusal retried
+  // as a placement error doubles the refused calls; a request whose tool block
+  // is already last is resent unchanged.
+  describe("leading tool placement guard", () => {
+    const record = {
+      connected: true,
+      clientId: "oaiapp_example",
+      subject: "example-subject",
+      email: null,
+      accessToken: "access-example",
+      refreshToken: "refresh-example",
+      expiresAt: Date.now() + 3_600_000,
+    };
+    const body = {
+      input: [
+        { role: "system", content: "Frame" },
+        { role: "user", content: "Synthetic Email" },
+      ],
+      tools: [{ type: "function", name: "claim" }],
+    };
+    const refusal = (error: Record<string, string>, status = 400) =>
+      new Response(JSON.stringify({ error }), { status });
+    const harness = (answers: Response[]) => {
+      const sent: Array<Array<{ type?: string; role?: string }>> = [];
+      const session = new ChatGptSession(
+        { get: async () => record, put: vi.fn(), delete: vi.fn() },
+        async (_url, init) => {
+          sent.push(JSON.parse(String(init?.body)).input);
+          return answers.shift() ?? new Response("{}", { status: 200 });
+        },
+      );
+      const order = (index: number) =>
+        sent[index]?.map((entry) => entry.type ?? entry.role);
+      return { session, sent, order };
+    };
+
+    it("retries a refused placement once with the trailing order and keeps it", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        const { session, sent, order } = harness([
+          refusal({
+            type: "invalid_request_error",
+            param: "input[1]",
+            code: "invalid_value",
+            message: "Synthetic: additional_tools must follow the conversation",
+          }),
+        ]);
+        const response = await session.infer(body, "gpt-6-sol");
+        expect(response.status).toBe(200);
+        expect(order(0)).toEqual(["developer", "additional_tools", "user"]);
+        expect(order(1)).toEqual(["developer", "user", "additional_tools"]);
+        expect(JSON.stringify(warn.mock.calls)).toContain(
+          "additional_tools must follow",
+        );
+        await session.infer(body, "gpt-6-sol");
+        expect(sent).toHaveLength(3);
+        expect(order(2)).toEqual(["developer", "user", "additional_tools"]);
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it.each([
+      [
+        "quota",
+        refusal(
+          {
+            type: "invalid_request_error",
+            param: "input",
+            code: "subscription_sharing_usage_limit_exceeded",
+            message: "Synthetic usage limit",
+          },
+          400,
+        ),
+      ],
+      [
+        "rate limit",
+        refusal({ type: "rate_limit_error", code: "rate_limit_exceeded" }, 429),
+      ],
+      [
+        "unrelated field",
+        refusal({
+          type: "invalid_request_error",
+          param: "reasoning.effort",
+          code: "invalid_value",
+          message: "Synthetic unsupported effort",
+        }),
+      ],
+    ])("returns a %s refusal without a placement retry", async (_, answer) => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        const { session, sent } = harness([answer]);
+        const response = await session.infer(body, "gpt-6-sol");
+        expect(response.ok).toBe(false);
+        expect(sent).toHaveLength(1);
+      } finally {
+        warn.mockRestore();
+      }
+    });
+  });
+
   it("clears terminally unusable tokens and retains registration for reauthorization", async () => {
     let saved: ChatGptConnection | string | undefined = {
       connected: true,

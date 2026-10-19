@@ -390,6 +390,18 @@ function GroupPhotos({
   editable: boolean;
   busy: boolean;
 }) {
+  const labelPhotos = proposal.images
+    .filter((entry) => entry.purpose === "label")
+    .map((entry) => imagesById.get(entry.id));
+  const labelAnalysis = labelPhotos.some(
+    (photo) => photo?.describe === "failed",
+  )
+    ? "Text analysis failed"
+    : labelPhotos.some((photo) => photo?.describe === "skipped")
+      ? "Text analysis skipped"
+      : labelPhotos.some((photo) => photo?.describe !== "ready")
+        ? "Text analysis incomplete"
+        : "Unreadable";
   // A skipped photo keeps its reason on hover and stays dimmed.
   const entries = new Map<
     string,
@@ -451,7 +463,7 @@ function GroupPhotos({
           );
         }}
       />
-      {!proposal.images.some((entry) => entry.purpose === "label") ? (
+      {!labelPhotos.length ? (
         <div
           aria-label="Label photo missing"
           className="flex aspect-square flex-col items-center justify-center gap-1 rounded border border-dashed border-border text-xs text-muted-foreground"
@@ -459,20 +471,9 @@ function GroupPhotos({
           <span className="font-medium text-foreground">Label</span>
           <span>Missing</span>
         </div>
-      ) : !proposal.images.some(
-          (entry) =>
-            entry.purpose === "label" &&
-            imagesById.get(entry.id)?.recognizedText?.trim(),
-        ) ? (
+      ) : !labelPhotos.some((photo) => photo?.recognizedText?.trim()) ? (
         <p className="text-xs text-muted-foreground">
-          Label photo ·{" "}
-          {proposal.images.some(
-            (entry) =>
-              entry.purpose === "label" &&
-              imagesById.get(entry.id)?.describe !== "ready",
-          )
-            ? "Text analysis incomplete"
-            : "Unreadable"}
+          Label photo · {labelAnalysis}
         </p>
       ) : null}
       {proposal.skip.length > 0 ? (
@@ -906,32 +907,17 @@ function FieldCrossChecks({
   product,
   unavailable,
   identifiers,
-  changedFields,
 }: {
   checks: readonly PhotoFieldCrossCheck[];
   product?: Pick<PhotoProductEvidence, "name" | "manufacturer" | "model">;
   unavailable: boolean;
   identifiers?: ReactNode;
-  changedFields?: PhotoGroupDecision["productChanges"];
 }) {
-  // Keep missing evidence quiet unless the field has a pending edit to review.
   const evidenced = checks.filter(
     (check) =>
-      Boolean(check.labelValue) ||
-      check.mark === "disagree-or-missing" ||
-      Boolean(changedFields && Object.hasOwn(changedFields, check.field)),
+      Boolean(check.labelValue) || check.mark === "disagree-or-missing",
   );
   if (!evidenced.length) return null;
-  const pending = (check: PhotoFieldCrossCheck) =>
-    Boolean(
-      changedFields &&
-      Object.hasOwn(
-        changedFields,
-        check.field === "size" || check.field === "color"
-          ? "name"
-          : check.field,
-      ),
-    );
   const stored = (check: PhotoFieldCrossCheck) => {
     if (check.field === "identifiers") return identifiers;
     if (
@@ -944,7 +930,7 @@ function FieldCrossChecks({
         : unavailable
           ? "Current product unavailable"
           : "Loading current product…";
-    return pending(check) ? "See current product name" : check.productValue;
+    return check.productValue;
   };
   return (
     <div className="space-y-1 text-xs" aria-label="Field cross-checks">
@@ -981,19 +967,8 @@ function FieldCrossChecks({
                   From product name
                 </span>
               ) : null}
-              {pending(check) ? (
-                <span className="block text-muted-foreground">
-                  Proposed change below
-                </span>
-              ) : null}
             </span>
-            {pending(check) ? (
-              <span title="Comparison includes a proposed change; review it below">
-                ?
-              </span>
-            ) : (
-              <FieldMark check={check} />
-            )}
+            <FieldMark check={check} />
           </div>
         ))}
       </div>
@@ -1701,31 +1676,6 @@ function ProductPanel({
               <CommitInput
                 label="Model"
                 crossCheck={checks.find((check) => check.field === "model")}
-                actions={checks.flatMap((check) =>
-                  check.mark === "disagree-or-missing" &&
-                  check.suggestion?.kind === "set_model" &&
-                  check.suggestion.value !== product.create.model
-                    ? [
-                        <Button
-                          key={check.suggestion.value}
-                          size="sm"
-                          variant="outline"
-                          disabled={busy}
-                          onClick={() =>
-                            saveProduct({
-                              kind: "create",
-                              create: {
-                                ...product.create,
-                                model: check.suggestion?.value ?? null,
-                              },
-                            })
-                          }
-                        >
-                          Use {check.suggestion.value} as model
-                        </Button>,
-                      ]
-                    : [],
-                )}
                 className="flex-1"
                 value={product.create.model ?? ""}
                 disabled={busy}
@@ -1781,7 +1731,6 @@ function ProductPanel({
               currentProduct.isError ||
               (currentProduct.isSuccess && !currentProduct.data)
             }
-            changedFields={proposal.review?.productChanges}
             identifiers={
               currentProduct.data ? (
                 currentProduct.data.externalIds.length ? (

@@ -1,6 +1,6 @@
 import type { SuggestionReviewRow } from "@cubby/schemas/ai";
 import { suggestionReviewRowSchema } from "@cubby/schemas/ai";
-import { runShortcode } from "@cubby/schemas/identifiers";
+import { shortcode } from "@cubby/schemas/identifiers";
 import {
   productCategorySummary,
   type ProductCategorySummary,
@@ -46,7 +46,7 @@ const record = {
 const suggestion = (overrides: Partial<SuggestionReviewRow> = {}) =>
   ({
     id: rowId,
-    runId: runShortcode.parse("RUN-2222"),
+    runId: shortcode("RUN-2222"),
     entity: "product",
     recordId: record.id,
     field: "categoryId",

@@ -86,6 +86,7 @@ import {
 } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { semanticProductCandidates } from "~/server/generic/embedding/service/semantic-search.service";
 import { shouldUseSemanticComboboxFallback } from "~/server/generic/embedding/service/semantic/combobox-fallback";
+import { SEMANTIC_MATCH_MIN_SIMILARITY } from "~/server/generic/embedding/service/semantic/constants";
 import {
   bindShortcodeResolver,
   resolveLiveShortcode,
@@ -142,7 +143,9 @@ export async function searchProducts(
   }
   const semantic = await semanticProductCandidates(context.db, nameQuery, 5);
   const semanticIds = semantic
-    .filter((candidate) => candidate.similarity >= 0.75)
+    .filter(
+      (candidate) => candidate.similarity >= SEMANTIC_MATCH_MIN_SIMILARITY,
+    )
     .map((candidate) => parseEntityId("product", candidate.item.entityId));
   const semanticItems = (
     await getProductPickerItemsByIds(context.db, semanticIds)

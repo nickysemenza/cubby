@@ -731,6 +731,7 @@ export async function executeAiRefreshTarget(
           rulePairs,
           requestedPairs,
           catalogEnumeration: true,
+          coverage: prepared.coverage,
         };
       });
       return true;

@@ -486,8 +486,30 @@ export function isInferenceFundingRefusal(
         body,
       )
     );
-  return /credit balance is too low|reached your specified[^\n]*API usage limits|enforced_spend_limit_reached|cubby_credit_budget_reached/iu.test(
+  return /credit balance is too low|reached your specified[^\n]*API usage limits|enforced_spend_limit_reached|cubby_credit_budget_reached|cubby_credit_refused/iu.test(
     body,
+  );
+}
+
+/**
+ * The egress Durable Object's answer while a recorded Claude credit refusal
+ * holds: Anthropic's status and error envelope, so every credit caller
+ * advances exactly as it does on the provider's own refusal, carrying the
+ * provider's raw reason.
+ */
+export function creditRefusedResponse(refusal: {
+  until: number;
+  reason: string;
+}): Response {
+  return Response.json(
+    {
+      type: "error",
+      error: {
+        type: "cubby_credit_refused",
+        message: `Claude credit refused until ${new Date(refusal.until).toISOString()}; Cubby skips it until then, probing once per six-hour window. "Retry Claude credit now" (Settings → AI funding, or MCP ai_funding.reset_credit_refusal) clears it. Anthropic: ${refusal.reason}`,
+      },
+    },
+    { status: 400 },
   );
 }
 

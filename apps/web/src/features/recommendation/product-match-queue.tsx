@@ -1,15 +1,16 @@
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import { preferredImageUrl } from "@cubby/schemas/image-summary";
-import type {
-  ProductMatchCandidate,
-  ProductMatchSide,
+import {
+  PRODUCT_PAIR_NOT_ACTIONABLE,
+  type ProductMatchCandidate,
+  type ProductMatchSide,
 } from "@cubby/schemas/recommendations";
 import { GitMergeIcon } from "@phosphor-icons/react/dist/csr/GitMerge";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { EntityIcon } from "~/entity/entities";
@@ -93,7 +94,7 @@ export function ProductMatchQueue({
       <p className="text-sm text-muted-foreground">
         Review whether these products are the same real item. Merging keeps the
         purchase product by default, so its order and spend history stay
-        attached.
+        attached; otherwise it keeps the better-identified, then older, product.
         {queue.data && !queue.data.semanticRanking
           ? " The similarity index is unavailable, so pairs are ranked by name only."
           : null}
@@ -120,6 +121,21 @@ export function ProductMatchQueue({
   );
 }
 
+/** A disabled merge always states why, quoting the stored values. */
+function mergeBlockedReason(item: ProductMatchCandidate): string | null {
+  if (item.identityConflict)
+    return `Merge blocked by an identity conflict: ${
+      item.conflictReasons.length
+        ? item.conflictReasons.join("; ")
+        : (item.evidence ?? "no conflicting values were stored")
+    }`;
+  // A null fingerprint means one side has no identity snapshot (deleted,
+  // merged, or excluded), so no reviewed evidence can pin a merge.
+  if (!item.fingerprint)
+    return "Merge unavailable: one Product has no current identity snapshot to fingerprint";
+  return null;
+}
+
 function ProductMatchCard({
   item,
   operations,
@@ -128,6 +144,8 @@ function ProductMatchCard({
   operations: ProductMatchQueueOperations;
 }) {
   const [merging, setMerging] = useState(false);
+  const blockedId = useId();
+  const mergeBlocked = mergeBlockedReason(item);
   const navigate = useNavigate();
   const dismiss = useMutation(operations.reviewAssessment.mutationOptions());
   const merge = useActionMutation({
@@ -171,6 +189,11 @@ function ProductMatchCard({
         {item.evidence && (
           <p className="text-sm whitespace-pre-line">{item.evidence}</p>
         )}
+        {!item.actionable && (
+          <p className="text-xs text-muted-foreground">
+            {PRODUCT_PAIR_NOT_ACTIONABLE}
+          </p>
+        )}
         {item.sourceUrls.length > 0 && (
           <ul className="flex flex-col gap-1 text-xs">
             {item.sourceUrls.map((url) => (
@@ -198,10 +221,11 @@ function ProductMatchCard({
             <span>{warning}</span>
           </Row>
         ))}
-        <Row gap="sm">
+        <Row gap="sm" className="flex-wrap">
           <Button
             type="button"
-            disabled={item.identityConflict || !item.fingerprint}
+            disabled={mergeBlocked !== null}
+            aria-describedby={mergeBlocked ? blockedId : undefined}
             onClick={() => setMerging(true)}
           >
             <GitMergeIcon className="size-3.5" />
@@ -255,11 +279,16 @@ function ProductMatchCard({
             Hide pair
           </Button>
         </Row>
+        {mergeBlocked && (
+          <p id={blockedId} className="text-xs text-warning">
+            {mergeBlocked}
+          </p>
+        )}
       </Stack>
       {merging && (
         <EntityMergeDialog
           entity="product"
-          // Ranked mode starts with the first row as keeper: the purchase side.
+          // Ranked mode starts with the first row as keeper: the suggested one.
           rows={[item.keeper, item.other]}
           open
           onOpenChange={(open) => {

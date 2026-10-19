@@ -529,6 +529,10 @@ export const mailResolveDisposition = z.discriminatedUnion("kind", [
       settlement: mailSettlementReview.optional(),
       via: mailAdmissionPath.optional(),
     })
+    .refine((value) => !value.settlement || value.event === "refunded", {
+      message: "Settlement evidence requires a refunded lifecycle event.",
+      path: ["settlement"],
+    })
     .describe(
       "The Email records this lifecycle event of existing Purchases. Writes no Expenses.",
     ),

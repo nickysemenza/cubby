@@ -1,4 +1,4 @@
-import { runShortcode } from "@cubby/schemas/identifiers";
+import { shortcode } from "@cubby/schemas/identifiers";
 import { describe, expect, it } from "vitest";
 
 import { type FoldableAuditEntry, foldAuditEntries } from "./audit-log-fold";
@@ -41,7 +41,7 @@ describe("foldAuditEntries", () => {
           entry("b", 1, { userId: "user-b" }),
           entry("c", 2, {
             userId: "user-b",
-            runId: runShortcode.parse("RUN-4K7M"),
+            runId: shortcode("RUN-4K7M"),
           }),
           entry("d", 3, { userId: "user-b", entityId: "PRD-7K4M" }),
           entry("e", 4, {

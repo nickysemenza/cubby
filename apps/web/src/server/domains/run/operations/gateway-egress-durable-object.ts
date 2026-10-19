@@ -1,12 +1,16 @@
 import type { DurableObjectState } from "@cloudflare/workers-types";
 import { aiGatewayId, CF_ACCOUNT_ID } from "@cubby/shared/ai/gateway-metadata";
 import {
+  creditRefusedResponse,
+  isInferenceFundingRefusal,
   runUniversalGateway,
   runNativeGateway,
   workersAiModel,
 } from "@cubby/shared/ai/gateway-request";
+import { scrubCredentialValues } from "@cubby/worker-tracing/scrub-error-message";
 import { DurableObject } from "cloudflare:workers";
 
+import { aiBudgetWindow } from "~/server/ai/budget-window";
 import {
   gatewayEgressInput,
   type GatewayAdmission,
@@ -20,6 +24,30 @@ const REQUEST_DEADLINE_MS = 10 * 60_000;
 const FUNDING_RESUME = "fundingResumeAt";
 const FUNDING_IN_FLIGHT = "fundingResumeInFlight";
 type FundingResume = { at: number; generation: string };
+const CREDIT_BUCKET = "subscriber-credit:anthropic";
+
+const windowStart = (now: number) =>
+  aiBudgetWindow(new Date(now)).start.getTime();
+
+/**
+ * When a credit refusal lifts: the date Anthropic names ("You will regain
+ * access on 2026-11-01 at 00:00 UTC"), else the end of the current credit
+ * window.
+ */
+function creditRefusalUntil(reason: string, now: number) {
+  const named =
+    /regain access on (\d{4}-\d{2}-\d{2})(?: at (\d{1,2}):(\d{2}))?/u.exec(
+      reason,
+    );
+  const at = named
+    ? Date.parse(
+        `${named[1]}T${(named[2] ?? "0").padStart(2, "0")}:${named[3] ?? "00"}:00Z`,
+      )
+    : NaN;
+  return Number.isFinite(at) && at > now
+    ? at
+    : aiBudgetWindow(new Date(now)).end.getTime();
+}
 
 /** One identity per gateway; subscription requests never enter this object. */
 export class AiGatewayEgressDurableObject extends DurableObject<Env> {
@@ -36,6 +64,37 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
     );
     ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS cooldowns (bucket TEXT PRIMARY KEY, until_ms INTEGER NOT NULL)",
+    );
+    // A provider credit refusal (ADR 0017) refuses credit admission until
+    // `until_ms`, except one probe per six-hour window; `probe_window` is the
+    // start of the window whose probe is spent.
+    ctx.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS credit_refusals (bucket TEXT PRIMARY KEY, until_ms INTEGER NOT NULL, reason TEXT NOT NULL, probe_window INTEGER NOT NULL)",
+    );
+    // Bumped by every reset and every recorded refusal. A credit response is
+    // observed only under the epoch its request was admitted in, so a request
+    // in flight across a reset cannot re-record the refusal it cleared, and an
+    // older success cannot clear a newer refusal.
+    ctx.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS credit_epochs (bucket TEXT PRIMARY KEY, epoch INTEGER NOT NULL)",
+    );
+  }
+
+  private creditEpoch() {
+    return (
+      this.ctx.storage.sql
+        .exec<{ epoch: number }>(
+          "SELECT epoch FROM credit_epochs WHERE bucket = ?",
+          CREDIT_BUCKET,
+        )
+        .toArray()[0]?.epoch ?? 0
+    );
+  }
+
+  private bumpCreditEpoch() {
+    this.ctx.storage.sql.exec(
+      "INSERT INTO credit_epochs VALUES (?, 1) ON CONFLICT(bucket) DO UPDATE SET epoch = epoch + 1",
+      CREDIT_BUCKET,
     );
   }
 
@@ -249,10 +308,83 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
     });
   }
 
+  private activeCreditRefusal(now: number) {
+    const sql = this.ctx.storage.sql;
+    sql.exec("DELETE FROM credit_refusals WHERE until_ms <= ?", now);
+    return sql
+      .exec<{ until_ms: number; reason: string; probe_window: number }>(
+        "SELECT until_ms, reason, probe_window FROM credit_refusals WHERE bucket = ?",
+        CREDIT_BUCKET,
+      )
+      .toArray()[0];
+  }
+
+  /** The active Claude credit refusal, if any. */
+  async creditRefusal(now = Date.now()) {
+    const row = this.activeCreditRefusal(now);
+    return row ? { until: row.until_ms, reason: row.reason } : null;
+  }
+
+  /** The member's "Retry Claude credit now"; a credit budget change too. */
+  async resetCreditRefusal() {
+    this.clearCreditRefusal();
+    this.bumpCreditEpoch();
+  }
+
+  private clearCreditRefusal() {
+    this.ctx.storage.sql.exec(
+      "DELETE FROM credit_refusals WHERE bucket = ?",
+      CREDIT_BUCKET,
+    );
+  }
+
+  /**
+   * A credit response's effect on the refusal: success clears it; a
+   * recognized provider funding refusal records (or re-records) it with its
+   * raw body. Cubby's own window stop (`cubby_credit_budget_reached`) resets
+   * with its window and never records. `epoch` is the request's admission
+   * epoch; a response from before the latest reset or refusal is ignored.
+   */
+  async noteCreditResponse(
+    status: number,
+    body: string,
+    now = Date.now(),
+    epoch = this.creditEpoch(),
+  ) {
+    if (epoch !== this.creditEpoch()) return;
+    if (status >= 200 && status < 300) return this.clearCreditRefusal();
+    if (
+      !isInferenceFundingRefusal(status, body, "subscriber_credit") ||
+      body.includes("cubby_credit_budget_reached")
+    )
+      return;
+    // Raw diagnostics stay whole (AGENTS.md); only credentials are redacted.
+    const reason = scrubCredentialValues(body);
+    this.bumpCreditEpoch();
+    this.ctx.storage.sql.exec(
+      "INSERT INTO credit_refusals VALUES (?, ?, ?, ?) ON CONFLICT(bucket) DO UPDATE SET until_ms = excluded.until_ms, reason = excluded.reason, probe_window = excluded.probe_window",
+      CREDIT_BUCKET,
+      creditRefusalUntil(reason, now),
+      reason,
+      windowStart(now),
+    );
+  }
+
   async admit(bucket: string, now = Date.now()): Promise<GatewayAdmission> {
     const sql = this.ctx.storage.sql;
     sql.exec("DELETE FROM starts WHERE started <= ?", now - WINDOW_MS);
     sql.exec("DELETE FROM permits WHERE deadline <= ?", now);
+    const refusal =
+      bucket === CREDIT_BUCKET ? this.activeCreditRefusal(now) : undefined;
+    const probing =
+      refusal !== undefined && refusal.probe_window < windowStart(now);
+    // Refused credit answers at once so the ladder moves on without waiting.
+    if (refusal && !probing)
+      return {
+        kind: "refused",
+        until: refusal.until_ms,
+        reason: refusal.reason,
+      };
     const cooldown =
       sql
         .exec<{ until_ms: number }>(
@@ -279,6 +411,13 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
         return { kind: "wait", until: starts.earliest + WINDOW_MS };
     }
     const token = crypto.randomUUID();
+    // Spent only once admitted, so a capacity wait cannot use up the probe.
+    if (probing)
+      sql.exec(
+        "UPDATE credit_refusals SET probe_window = ? WHERE bucket = ?",
+        windowStart(now),
+        CREDIT_BUCKET,
+      );
     sql.exec("INSERT INTO starts VALUES (?, ?)", bucket, now);
     sql.exec(
       "INSERT INTO permits VALUES (?, ?, ?)",
@@ -286,7 +425,9 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
       bucket,
       now + REQUEST_DEADLINE_MS,
     );
-    return { kind: "admitted", token };
+    return bucket === CREDIT_BUCKET
+      ? { kind: "admitted", token, epoch: this.creditEpoch() }
+      : { kind: "admitted", token };
   }
 
   async finish(
@@ -329,9 +470,8 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
       input.provider === "anthropic" &&
       input.headers["cf-aig-byok-alias"] === "subscriber-credit" &&
       input.headers["cf-aig-no-wholesale"] === "true";
-    const admitted = await this.admit(
-      credit ? "subscriber-credit:anthropic" : "unified",
-    );
+    const admitted = await this.admit(credit ? CREDIT_BUCKET : "unified");
+    if (admitted.kind === "refused") return creditRefusedResponse(admitted);
     if (admitted.kind === "wait")
       return new Response(
         "AI Gateway admission is waiting for shared capacity",
@@ -345,7 +485,7 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
           },
         },
       );
-    const { token } = admitted;
+    const { token, epoch } = admitted;
     const controller = new AbortController();
     const abort = () => controller.abort(request.signal.reason);
     request.signal.addEventListener("abort", abort, { once: true });
@@ -416,6 +556,19 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
             );
       if (!(response instanceof Response))
         throw new Error("AI Gateway returned no raw Response");
+      if (credit && response.ok)
+        await this.noteCreditResponse(200, "", Date.now(), epoch);
+      if (credit && [400, 402, 429].includes(response.status)) {
+        // Refusal bodies are small JSON errors; read one to classify it.
+        const text = await response.text();
+        await this.noteCreditResponse(response.status, text, Date.now(), epoch);
+        await finish(response.status, response.headers.get("retry-after"));
+        return new Response(text, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers,
+        });
+      }
       if (response.status === 429 || !response.body) {
         await finish(response.status, response.headers.get("retry-after"));
         return response;

@@ -10,7 +10,6 @@ import {
 import {
   mailImportStatus,
   paidOverBudgetUsd,
-  setCreditBudgetInput,
   setMailImportInput,
 } from "@cubby/schemas/mail-import-settings";
 import {
@@ -257,8 +256,7 @@ const runControlOutput = z.object({
 
 export const runContract = defineContract("run", {
   mailImport: query({
-    native:
-      "Show automatic Mail import switches, both AI budgets and the ChatGPT plan",
+    native: "Show automatic Mail import switches and search progress",
     input: z.strictObject({}),
     output: mailImportStatus,
     // Search progress moves while discovery runs; Run writes refresh it.
@@ -267,11 +265,6 @@ export const runContract = defineContract("run", {
   setMailImport: mutation({
     native: "Turn automatic Mail import on or off for a connected mailbox",
     input: setMailImportInput,
-    output: mailImportStatus,
-    invalidates: ["runOnly"],
-  }),
-  setCreditBudget: mutation({
-    input: setCreditBudgetInput,
     output: mailImportStatus,
     invalidates: ["runOnly"],
   }),

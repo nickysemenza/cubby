@@ -356,6 +356,7 @@ const fieldJSON = (
     readKey: field.readKey,
     valueOptions: field.display.valueOptions ?? null,
     label: field.label,
+    columnLabel: field.display.columnLabel ?? null,
     kind: field.kind,
     nullable: field.nullable,
     reference: referenceJSON(field.reference, entityKey, where),
@@ -550,6 +551,9 @@ const presentationJSON = (
     heroChip: detail.hero.chip ?? null,
     heroStats: [...detail.hero.stats],
     heroBreadcrumb: detail.hero.breadcrumb ?? null,
+    heroWhen: detail.hero.when
+      ? { field: detail.hero.when.field, label: detail.hero.when.label ?? null }
+      : null,
     heroImages: detail.hero.images,
     heroActions: [...detail.hero.actions],
     detailSections: detail.sections.map((section) =>

@@ -1,3 +1,9 @@
+import {
+  type AssessmentProducer,
+  type EntityPairAssessmentFamily,
+  entityPairAssessmentFamilies,
+  isEntityPairAssessmentFamily,
+} from "@cubby/schemas/assessment";
 import type { EntityRef } from "@cubby/schemas/entity";
 import {
   connectionAssessmentEvidence,
@@ -5,6 +11,7 @@ import {
   type ConnectionProposal,
   type ConnectionRelation,
 } from "@cubby/schemas/entity-connections";
+import { PRODUCT_PAIR_NOT_ACTIONABLE } from "@cubby/schemas/recommendations";
 import { and, eq, inArray, notExists, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
@@ -18,6 +25,7 @@ import {
   feedback,
 } from "~/server/db/schema";
 import { currentProductPairPolicy } from "~/server/domains/product/repo/match/product-match-candidate";
+import { readStoredProductPair } from "~/server/domains/product/repo/match/product-pair-signals";
 import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
 
 import {
@@ -36,6 +44,43 @@ const fieldRelations = new Map<string, ConnectionRelation>(
     "expense.projectId": "expense-project",
     "inventory.locationId": "inventory-location",
   } satisfies Record<string, ConnectionRelation>),
+);
+/**
+ * Review presentation per entity-pair family. A pair that is not actionable or
+ * carries an identity conflict stays visible with its stored reason; the
+ * family's review surface owns whether it can merge.
+ */
+const pairFamilies = {
+  product_pair: {
+    relation: "product-identity",
+    integration: { kind: "product-pair-review" },
+    current: currentProductPairPolicy,
+    explain: (evidence: unknown) => {
+      const stored = readStoredProductPair(evidence);
+      return {
+        reason: stored.evidence,
+        conflicts: stored.conflictReasons,
+        notActionable: PRODUCT_PAIR_NOT_ACTIONABLE,
+      };
+    },
+  },
+} satisfies Record<
+  EntityPairAssessmentFamily,
+  {
+    relation: ConnectionRelation;
+    integration: ConnectionProposal["integration"];
+    current: (producer: AssessmentProducer | null) => boolean;
+    explain: (evidence: unknown) => {
+      reason: string | null;
+      conflicts: string[];
+      /** Unknown shown when the judgment is not actionable. */
+      notActionable: string;
+    };
+  }
+>;
+const pairFamilyList = sql.join(
+  entityPairAssessmentFamilies.map((family) => sql`${family}`),
+  sql`, `,
 );
 const key = (source: EntityRef) => `${source.entityKind}:${source.entityId}`;
 
@@ -84,8 +129,7 @@ export async function readExistingConnectionAssessments(
         sql`${to.mergedIntoId} IS NULL`,
         sql`CASE ${assessment.family}
       WHEN ${"field"} THEN ${to.shortcode}=(${assessmentState.suggestedValue} #>> '{}')
-      WHEN ${"product_pair"} THEN ${to.id}::text=${assessment.subject}->>'otherId'
-      ELSE false END`,
+      ELSE ${assessment.family} IN (${pairFamilyList}) AND ${to.id}::text=${assessment.subject}->>'otherId' END`,
       ),
     )
     .where(
@@ -93,13 +137,13 @@ export async function readExistingConnectionAssessments(
         eq(assessment.served, true),
         eq(assessmentState.active, true),
         eq(assessmentState.status, "pending"),
-        inArray(assessment.family, ["field", "product_pair"]),
+        inArray(assessment.family, ["field", ...entityPairAssessmentFamilies]),
         // Implied by the endpoint keys below, but sargable on the Assessment
         // side: without it every pending state joined Entity before the keys
         // could reject it.
         sql`(${assessmentState.recordId} IN (${sourceIds})
           OR (${assessment.family} = ${"field"} AND ${assessmentState.suggestedValue} #>> '{}' IN (${codes}))
-          OR (${assessment.family} = ${"product_pair"} AND ${assessment.subject}->>'otherId' IN (SELECT source_id::text FROM (${sourceIds}) source_ids(source_id))))`,
+          OR (${assessment.family} IN (${pairFamilyList}) AND ${assessment.subject}->>'otherId' IN (SELECT source_id::text FROM (${sourceIds}) source_ids(source_id))))`,
         sql`(${inArray(sql`${from.kind} || ':' || ${from.shortcode}`, keys)} OR ${inArray(sql`${to.kind} || ':' || ${to.shortcode}`, keys)})`,
         notExists(
           getDb(db)
@@ -113,7 +157,7 @@ export async function readExistingConnectionAssessments(
               ),
             ),
         ),
-        sql`NOT EXISTS (SELECT 1 FROM "AssessmentState" suppressed WHERE suppressed.active AND suppressed.entity=${assessmentState.entity} AND suppressed."recordId"=${assessmentState.recordId} AND suppressed.suppression IS NOT NULL AND suppressed.suppression->>'candidateKey'=CASE ${assessment.family} WHEN ${"product_pair"} THEN (${assessment.subject}->>'recordId') || '|' || (${assessment.subject}->>'otherId') ELSE '' END)`,
+        sql`NOT EXISTS (SELECT 1 FROM "AssessmentState" suppressed WHERE suppressed.active AND suppressed.entity=${assessmentState.entity} AND suppressed."recordId"=${assessmentState.recordId} AND suppressed.suppression IS NOT NULL AND suppressed.suppression->>'candidateKey'=CASE WHEN ${assessment.family} IN (${pairFamilyList}) THEN (${assessment.subject}->>'recordId') || '|' || (${assessment.subject}->>'otherId') ELSE '' END)`,
       ),
     )
     .orderBy(assessment.createdAt, assessment.id);
@@ -122,30 +166,41 @@ export async function readExistingConnectionAssessments(
     let relation: ConnectionRelation | undefined;
     let integration: ConnectionProposal["integration"];
     let suppression: ConnectionProposal["review"]["suppression"] = null;
+    let evidence: ConnectionProposal["evidence"] = {
+      reasons: ["Existing domain Assessment"],
+      contradictions: [],
+      unknowns: ["Review the original Assessment evidence before accepting"],
+    };
     if (prediction.family === "field") {
       relation = fieldRelations.get(`${state.entity}.${state.field}`);
       integration = { kind: "field-review", field: state.field };
-    } else if (prediction.family === "product_pair") {
+    } else if (isEntityPairAssessmentFamily(prediction.family)) {
+      const family = pairFamilies[prediction.family];
       const judgment = z
         .object({ actionable: z.boolean(), conflict: z.boolean() })
         .safeParse(prediction.judgment);
-      if (
-        !judgment.success ||
-        !judgment.data.actionable ||
-        judgment.data.conflict ||
-        !currentProductPairPolicy(prediction.producer)
-      )
-        return [];
-      relation = "product-identity";
-      integration = { kind: "product-pair-review" };
-
+      if (!judgment.success || !family.current(prediction.producer)) return [];
+      relation = family.relation;
+      integration = family.integration;
       const subject = z
         .object({ recordId: z.string(), otherId: z.string() })
         .parse(prediction.subject);
       suppression = {
-        scope: "product_pair",
+        scope: prediction.family,
         candidateKey: `${subject.recordId}|${subject.otherId}`,
         fingerprint: null,
+      };
+      const { reason, conflicts, notActionable } = family.explain(
+        prediction.evidence,
+      );
+      evidence = {
+        reasons: [reason ?? "Existing domain Assessment"],
+        contradictions: judgment.data.conflict
+          ? conflicts.length
+            ? conflicts
+            : [reason ?? "Identity conflict"]
+          : [],
+        unknowns: judgment.data.actionable ? [] : [notActionable],
       };
     } else {
       // email_link records are operational decisions, never pending suggestions.
@@ -163,13 +218,13 @@ export async function readExistingConnectionAssessments(
           ? { entityKind: row.sourceKind, entityId: row.sourceCode }
           : { entityKind: row.targetKind, entityId: row.targetCode },
       label: `Review ${relation.replaceAll("-", " ")}`,
-      evidence: {
-        reasons: ["Existing domain Assessment"],
-        contradictions: [],
-        unknowns: ["Review the original Assessment evidence before accepting"],
-      },
+      evidence,
       fingerprint: prediction.fingerprint,
-      review: { assessmentId: prediction.id, suppression },
+      review: {
+        assessmentId: prediction.id,
+        suppression,
+        family: prediction.family,
+      },
       integration,
     });
     return result.success ? [result.data] : [];

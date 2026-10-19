@@ -1,4 +1,4 @@
-import { financialTransactionShortcode } from "@cubby/schemas/identifiers";
+import { shortcode } from "@cubby/schemas/identifiers";
 import {
   statementSuggestionOut,
   type StatementSuggestionOut,
@@ -10,8 +10,8 @@ import {
   statementDismissItem as dismissItem,
 } from "./suggestion-review";
 
-const FTX_A = financialTransactionShortcode.parse("FTX-2A2A");
-const FTX_B = financialTransactionShortcode.parse("FTX-3B3B");
+const FTX_A = shortcode("FTX-2A2A");
+const FTX_B = shortcode("FTX-3B3B");
 
 const candidate = (transactionId: typeof FTX_A) => ({
   transactionId,

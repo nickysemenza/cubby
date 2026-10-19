@@ -1,6 +1,9 @@
 import type { BatchOut, BatchResult } from "@cubby/schemas/batch";
 
-import { createConcurrencyLimiter } from "~/lib/concurrency-limiter";
+import {
+  abortError,
+  createConcurrencyLimiter,
+} from "~/lib/concurrency-limiter";
 import type { UnparsedError } from "~/lib/error-utils";
 
 /**
@@ -20,8 +23,6 @@ type Pending<TInput, TOutput> = {
   resolve: (value: TOutput) => void;
   reject: (reason: UnparsedError) => void;
 };
-
-const abortError = () => new DOMException("Request cancelled", "AbortError");
 
 /**
  * Coalesce many single-item calls into batched requests. Callers keep their

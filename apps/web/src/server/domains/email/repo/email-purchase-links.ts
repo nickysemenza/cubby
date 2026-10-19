@@ -2,6 +2,7 @@ import {
   emailLinkEvidenceKind,
   emailLinkProposer,
   emailLinkState,
+  emailPurchaseLinkLabel,
   emailPurchaseLinkState,
   type EmailLinkState,
   type EmailPurchaseLink,
@@ -239,9 +240,14 @@ export function foldPurchaseLinks(
           .map((row) => row.purchaseShortcode),
       ),
     ].sort();
+    const purchaseCode = parseShortcodeFor(
+      "purchase",
+      pair[0]!.purchaseShortcode,
+    );
     links.push({
-      purchaseId: parseShortcodeFor("purchase", pair[0]!.purchaseShortcode),
+      purchaseId: purchaseCode,
       state,
+      label: emailPurchaseLinkLabel(purchaseCode, state),
       accepted: pair.some((row) => row.kind === "accepted"),
       changedSinceReview: deciding.some((row) => row.changed),
       replacesPurchaseIds: replaces.map((code) =>
