@@ -114,6 +114,7 @@ it("retains model usage and attempt errors before failed replay teardown", async
               "claude-opus-5-5 (gateway): Synthetic usage limit refusal",
             ],
             diagnostics: ["[purchase-agent] Synthetic operation failure"],
+            usd: { "claude-haiku-5-5": 0.01 },
           };
         },
         record: (report) => {
@@ -135,6 +136,7 @@ it("retains model usage and attempt errors before failed replay teardown", async
         "claude-opus-5-5 (gateway): Synthetic usage limit refusal",
       ],
       diagnostics: ["[purchase-agent] Synthetic operation failure"],
+      usd: { "claude-haiku-5-5": 0.01 },
     },
   ]);
 });

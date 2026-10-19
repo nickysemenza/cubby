@@ -101,6 +101,9 @@ function forward(
   headers.delete("host");
   headers.set("cf-aig-authorization", `Bearer ${env.GATEWAY_TOKEN}`);
   headers.set("cf-aig-skip-cache", "true");
+  // workerd failed to gunzip the gateway's Anthropic event stream ("Gzip
+  // decompression failed"), so every streamed Claude answer broke mid-read.
+  headers.set("accept-encoding", "identity");
   headers.set("cf-aig-metadata", JSON.stringify(metadata));
   return fetch(
     gatewayProviderUrl({
