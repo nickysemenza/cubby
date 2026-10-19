@@ -19,7 +19,7 @@ export const agentUrl = (publicId: string) =>
   `/api/import/runs/${encodeURIComponent(publicId)}/agent`;
 
 /** The client's connection phase, distinct from the conversation's own `status`. */
-export type AgentConversationObservationPhase =
+type AgentConversationObservationPhase =
   | "connecting"
   | "live"
   | "absent"
