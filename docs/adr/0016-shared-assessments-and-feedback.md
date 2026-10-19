@@ -233,7 +233,9 @@ and Correct Feedback, and is excluded. Mixed history disagrees. The judgment
 records every vote; a kind is clean when at least two name it and none names
 another, the label says the counterparty is a business (or the descriptor
 names one same-owner own account), and neither the label nor history says a
-person. A person counterparty is never clean: an outflow is the member's share
+person. On a stored-value account (a payment app) history, not the label,
+must say business: its payees are mostly people whose notes read like
+merchants. A person counterparty is never clean: an outflow is the member's share
 of a shared cost (`purchase`), an inflow a repayment (`income`, booked as a
 reimbursement). An own-account move between different owners also owes a
 LedgerTransfer and is never clean.
