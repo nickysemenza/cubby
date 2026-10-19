@@ -1010,11 +1010,6 @@ export async function resolveMail(
           "MAIL_REQUEST_REFUSED",
           "Email attachment purposes were not reviewed.",
         );
-      if (disposition.settlement && disposition.event !== "refunded")
-        throw createAppError(
-          "MAIL_REQUEST_REFUSED",
-          "Settlement evidence requires a refunded lifecycle event.",
-        );
       const ids = await Promise.all(
         disposition.purchaseIds.map((code) =>
           resolveOrThrow(tdb, "purchase", code),

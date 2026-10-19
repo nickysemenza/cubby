@@ -19,6 +19,7 @@ import {
   financialTransactionAllocation,
   ledgerParty,
 } from "~/server/db/schema";
+import { createAppError } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 function accountAvailable(
@@ -95,7 +96,8 @@ async function assertRefundAllocationsExplain(
           ) !== Math.round(row.amount * 100),
     )
   )
-    throw new Error(
+    throw createAppError(
+      "MAIL_REQUEST_REFUSED",
       "The refund allocations must explain exactly the reviewed Purchases.",
     );
 }
@@ -140,8 +142,8 @@ export async function reconcileMailRefundReview(
     )
     .orderBy(financialTransaction.id)
     .for("update");
-  if (transactions.length !== existing.length)
-    throw new Error("A reviewed refund transaction no longer exists.");
+  // A deleted refund leg no longer constrains the Email; only live reviewed legs do.
+  if (!transactions.length) return;
   await assertRefundAllocationsExplain(db, transactions, input.purchaseIds);
 }
 

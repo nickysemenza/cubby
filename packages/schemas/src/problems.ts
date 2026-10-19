@@ -498,6 +498,17 @@ export const duplicateFinancialAccountSourceAliasSchema = z.object({
   accountIds: z.array(financialAccountShortcode),
 });
 
+/** Product identifiers a Vendor owns under a source that is not its issuer:
+ * exact lookups and import fences read only the issuer, so they miss these. */
+export const productIdentifierOutsideIssuerSchema = z.object({
+  vendorId: vendorShortcode,
+  vendorName: z.string(),
+  source: z.string(),
+  issuer: z.string().nullable(),
+  identifierCount: z.number().int(),
+  kinds: z.array(z.string()),
+});
+
 export const provisionalFinancialAccountSchema = z.object({
   id: financialAccountShortcode,
   name: z.string(),
@@ -786,6 +797,13 @@ export const problemDetectors = {
     "fast",
     "defect",
     duplicateFinancialAccountSourceAliasSchema,
+  ),
+  // Converges to zero: moving the rows under the issuer (or making the source
+  // the issuer) clears it. No auto-fix: the move rewrites identity evidence.
+  productIdentifiersOutsideIssuer: detector(
+    "fast",
+    "defect",
+    productIdentifierOutsideIssuerSchema,
   ),
   // Coverage: receipts keep minting provisional accounts, so the list never
   // stays empty. The fix is a link to the real provider account.

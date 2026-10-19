@@ -37,6 +37,10 @@ import {
   usdaFoodSuggestionInput,
   usdaFoodSuggestionOut,
 } from "@cubby/schemas/ai";
+import {
+  aiFundingStatus,
+  setCreditBudgetInput,
+} from "@cubby/schemas/mail-import-settings";
 import { z as zod } from "zod";
 
 import {
@@ -237,5 +241,25 @@ export const aiStreamsContract = defineContract("ai", {
   precomputeEnrichmentProposals: subscription({
     input: enrichmentProposalPrecomputeInput,
     event: aiEnrichmentProposalEventSchema,
+  }),
+});
+
+/** Household-wide frontier AI funding (ADR 0017), shared by every feature. */
+export const aiFundingContract = defineContract("aiFunding", {
+  status: query({
+    input: zod.strictObject({}),
+    output: aiFundingStatus,
+    // Spend and refusals move with model calls; Run writes refresh it.
+    cache: { tags: [["run"]], profile: "live-status" },
+  }),
+  setCreditBudget: mutation({
+    input: setCreditBudgetInput,
+    output: aiFundingStatus,
+    invalidates: ["runOnly"],
+  }),
+  resetCreditRefusal: mutation({
+    input: zod.strictObject({}),
+    output: aiFundingStatus,
+    invalidates: ["runOnly"],
   }),
 });

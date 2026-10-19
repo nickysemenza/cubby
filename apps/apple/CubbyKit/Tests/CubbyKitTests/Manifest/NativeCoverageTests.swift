@@ -50,5 +50,18 @@ struct NativeCoverageTests {
             "recipes": [["recipe": ["name": "Soup"]], ["recipe": ["name": "Bread"]]]
         ]
         #expect(mealRow.pathText(try #require(recipes.labelPath)) == "Soup, Bread")
+
+        // Each Purchase pair keeps its own state; the row's strongest state cannot say which.
+        let email = try #require(EntityCatalog.all.first { $0.key == .email })
+        let links = try #require(email.fields.first { $0.key == "purchaseLinks" })
+        let emailRow: JSONValue = [
+            "purchaseLinks": [
+                ["purchaseId": "PUR-AAAA", "state": "linked", "label": "PUR-AAAA (Linked)"],
+                ["purchaseId": "PUR-BBBB", "state": "dismissed", "label": "PUR-BBBB (Dismissed)"],
+            ]
+        ]
+        #expect(
+            emailRow.pathText(try #require(links.labelPath))
+                == "PUR-AAAA (Linked), PUR-BBBB (Dismissed)")
     }
 }

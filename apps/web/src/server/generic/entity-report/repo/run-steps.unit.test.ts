@@ -1,4 +1,4 @@
-import { runShortcode } from "@cubby/schemas/identifiers";
+import { shortcode } from "@cubby/schemas/identifiers";
 import { describe, expect, it } from "vitest";
 
 import { runStepsBlocks, type RunStepsReport } from "./run";
@@ -31,7 +31,7 @@ const step = (fields: Partial<Step> & Pick<Step, "key" | "label">): Step => ({
 });
 
 const report = (status: string, steps: Step[]): RunStepsReport => ({
-  code: runShortcode.parse("RUN-4K7M"),
+  code: shortcode("RUN-4K7M"),
   status,
   steps,
 });

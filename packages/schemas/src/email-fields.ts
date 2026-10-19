@@ -88,6 +88,13 @@ export const emailPurchaseLink = z
     /** Purchases whose link on the same order events a Link here would replace. */
     replacesPurchaseIds: z.array(purchaseShortcode),
     proposedBy: emailLinkProposer.nullable(),
+    /** "PUR-… (Linked)": the pair's own state for the native generic list cell; agents read `state`. */
+    label: z.string(),
   })
   .strict();
 export type EmailPurchaseLink = z.infer<typeof emailPurchaseLink>;
+
+export const emailPurchaseLinkLabel = (
+  purchaseId: string,
+  state: EmailPurchaseLinkState,
+) => `${purchaseId} (${EMAIL_LINK_STATE_LABEL[state]})`;

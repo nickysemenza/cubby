@@ -1026,6 +1026,9 @@ Rules:
         },
         display: {
           detail: true,
+          // The detail row carries the linked Ingredient object, not the
+          // flat id; field-scoped Sources fingerprint the value read here.
+          readPath: "ingredient.id",
           renderer: { detail: "product-ingredient" },
         },
         validation: {

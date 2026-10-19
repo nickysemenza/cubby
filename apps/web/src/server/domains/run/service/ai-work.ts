@@ -11,11 +11,8 @@ import { createLogger } from "@cubby/worker-tracing";
 import { z } from "zod";
 
 import { findErrorCause } from "~/lib/error-diagnostics";
-import {
-  AiBudgetExhaustedError,
-  aiBudgetWindow,
-  readAiBudget,
-} from "~/server/ai/budget";
+import { AiBudgetExhaustedError, readAiBudget } from "~/server/ai/budget";
+import { aiBudgetWindow } from "~/server/ai/budget-window";
 import {
   aiEvaluationProgress,
   claimAiEvaluation,
@@ -122,20 +119,32 @@ export async function advanceAiWorkRun(
     pending.length === 0,
   );
   const failed = items.some((item) => item.state === "failed");
-  await writeRunningAttemptProgress(db, owner.id, params.attempt, {
-    progress,
-    ...(pending.length
-      ? {}
-      : {
-          status: failed ? "failed" : "completed",
-          endedAt: new Date(),
-          failureCode: failed ? "ai_work_failed" : null,
-          dispatchError:
-            items
-              .flatMap((item) => (item.error ? [item.error] : []))
-              .join("\n") || null,
-        }),
-  });
+  const written = await writeRunningAttemptProgress(
+    db,
+    owner.id,
+    params.attempt,
+    {
+      progress,
+      ...(pending.length
+        ? {}
+        : {
+            status: failed ? "failed" : "completed",
+            endedAt: new Date(),
+            failureCode: failed ? "ai_work_failed" : null,
+            dispatchError:
+              items
+                .flatMap((item) => (item.error ? [item.error] : []))
+                .join("\n") || null,
+          }),
+    },
+    {
+      requireNoOwnedPendingWork:
+        !pending.length && owner.purpose === "ai_refresh",
+    },
+  );
+  // Work joined this Run after its roster read: continue with it instead of settling.
+  if (!pending.length && !written && owner.purpose === "ai_refresh")
+    return advanceAiWorkRun(db, params, ports);
   if (!pending.length) await wakeStepRunParent(db, owner.id);
   return pending
     .sort(

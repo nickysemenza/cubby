@@ -32,8 +32,19 @@ const unsupported = [
   "previous_response_id",
 ];
 
+/**
+ * Where the `additional_tools` item sits in `input`: `leading` right after the
+ * leading developer instructions, so the plan's prefix cache covers the tool
+ * block; `trailing` (the original, verified order) after the conversation.
+ */
+export type ChatGptToolPlacement = "leading" | "trailing";
+
 /** SIWC's direct route accepts client tools through additional_tools input. */
-export function chatGptRequest(body: unknown, model: string) {
+export function chatGptRequest(
+  body: unknown,
+  model: string,
+  placement: ChatGptToolPlacement = "leading",
+) {
   const parsed = requestSchema.parse(body);
   const { tools, ...rest } = parsed;
   for (const key of unsupported) delete rest[key];
@@ -65,12 +76,20 @@ export function chatGptRequest(body: unknown, model: string) {
       throw new Error(`ChatGPT plan usage does not support ${tool.type}`);
     }
   }
-  if (clientTools.length)
-    input.push({
+  if (clientTools.length) {
+    const block = {
       type: "additional_tools",
       role: "developer",
       tools: clientTools,
-    });
+    };
+    // The prefix cache covers only the bytes before the first item that
+    // changes, and every coordinator turn appends conversation items: a
+    // trailing tool block (~20k tokens of Mail import schemas) is re-read
+    // uncached on every call.
+    const firstTurn = input.findIndex((entry) => entry.role !== "developer");
+    if (placement === "trailing" || firstTurn < 0) input.push(block);
+    else input.splice(firstTurn, 0, block);
+  }
   const result: z.infer<typeof requestSchema> = {
     ...rest,
     model,

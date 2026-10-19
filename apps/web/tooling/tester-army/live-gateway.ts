@@ -34,6 +34,13 @@ type Env = {
   PRICING_CATALOG?: string;
   RESPONSES_MODEL?: string;
   RESPONSES_EFFORT?: string;
+  /**
+   * "1" forwards a ChatGPT plan attempt to the paid OpenAI route, so a replay
+   * measures the requested OpenAI model instead of falling down the funding
+   * ladder. Anthropic has no Unified Billing route on this gateway (only the
+   * `subscriber-credit` key), so Claude attempts stay on credit.
+   */
+  PLAN_AS_PAID?: string;
 };
 
 type RouteUsage = {
@@ -123,7 +130,10 @@ export default {
     }
     // This Worker has only a Unified Billing token, never a ChatGPT session.
     // Preserve the funding ladder by letting its owner choose the paid stage.
-    if (request.headers.get("x-cubby-inference-funding") === "subscription")
+    if (
+      request.headers.get("x-cubby-inference-funding") === "subscription" &&
+      env.PLAN_AS_PAID !== "1"
+    )
       return Response.json(
         {
           error: {

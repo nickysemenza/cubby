@@ -300,6 +300,7 @@ function SortableHeader<TData extends RowData>({
             variant="ghost"
             size="icon-sm"
             aria-label={`Reorder ${header.column.id} column`}
+            data-cell-spill-off=""
             className="absolute inset-y-0 left-0 my-auto h-5 w-2 shrink-0 cursor-grab touch-none rounded-none px-0 text-muted-foreground opacity-0 transition-opacity group-focus-within/th:opacity-100 group-hover/th:opacity-100 active:cursor-grabbing pointer-coarse:opacity-100"
             {...attributes}
             {...listeners}

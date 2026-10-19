@@ -116,7 +116,11 @@ pending: nothing here starts Product research.
    an incomplete or paged compact read, and any refusal `mail.resolve`
    returns, goes to the coordinator. A rule
    link skips the `mail-attribution` judgment: on the owner's own account it
-   cannot change what the link writes.
+   cannot change what the link writes. An Email handed to the coordinator
+   carries the rule's evidence as `known` (the sender-proof Vendor, the
+   recognized order identifiers and up to five live Purchases holding one),
+   so the coordinator skips the Vendor and order-id lookups most Emails
+   otherwise start with.
 4. **Writes**: `imports_read.mail` reads a retained Email (`mail-tool.ts`
    `readMail`); `purchase_import.prepare/commit` (`import-orders.ts`) import an
    order through `writer.ts`, and a mail-sourced commit (message or

@@ -50,6 +50,12 @@ export const statementCounterparty = z.object({
   /** A high-confidence decision-model label. */
   label: counterpartyKind.nullable(),
   history: counterpartyKind.nullable(),
+  /**
+   * The charge's account holds stored value (a payment app). Its payees are
+   * mostly people whose notes read like merchants, so only history, never the
+   * label alone, establishes a business there.
+   */
+  storedValue: z.boolean().default(false),
 });
 export type StatementCounterparty = z.infer<typeof statementCounterparty>;
 
@@ -97,7 +103,11 @@ export const statementTransactionCreate = z.object({
   kind,
   kindSource: statementTransactionKindSource,
   votes: statementKindVotes.default({ rule: null, label: null, history: null }),
-  counterparty: statementCounterparty.default({ label: null, history: null }),
+  counterparty: statementCounterparty.default({
+    label: null,
+    history: null,
+    storedValue: false,
+  }),
   status: z.enum(["posted", "pending"]),
   amount: z.number(),
   transactionDate: plainDate.nullable(),

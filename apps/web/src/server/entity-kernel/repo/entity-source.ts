@@ -16,6 +16,7 @@ import { and, asc, eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
+import { readPathValue } from "~/entity/read-path";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
 import { device, entityIdentity, entitySource, run } from "~/server/db/schema";
@@ -48,6 +49,16 @@ const fieldsOf = (entity: Entity): EntityFieldModel =>
   entityFieldModels[entity];
 
 /**
+ * Where the detail row carries a field's value: its flat read key, else the
+ * declared `display.readPath` (a reference such as a Product's ingredient
+ * link reads back as `ingredient.id`). Null when the detail never returns it.
+ */
+function fieldReadPath(entity: Entity, fieldPath: string): string | null {
+  const field = fieldsOf(entity).fields.find((item) => item.key === fieldPath);
+  return field?.readKey ?? field?.display.readPath ?? null;
+}
+
+/**
  * A field-scoped source must name a field the caller can write and the detail
  * read returns, so its value can be fingerprinted now and compared later.
  */
@@ -59,11 +70,16 @@ export function assertEntitySourceFieldPaths(
   const writable = new Set<string>([...model.create, ...model.update]);
   for (const source of sources ?? []) {
     if (source.fieldPath === undefined) continue;
-    const field = model.fields.find((field) => field.key === source.fieldPath);
-    if (!writable.has(source.fieldPath) || !field?.readKey)
+    const singular = entityInspectorMetadata[entity].singular;
+    if (!writable.has(source.fieldPath))
       throw createAppError(
         "CONSTRAINT_VIOLATION",
-        `Source fieldPath ${source.fieldPath} is not a writable ${entityInspectorMetadata[entity].singular} field.`,
+        `Source fieldPath ${source.fieldPath} is not a writable ${singular} field.`,
+      );
+    if (fieldReadPath(entity, source.fieldPath) === null)
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        `Source fieldPath ${source.fieldPath} has no read key or display.readPath on the ${singular} detail, so its value cannot be fingerprinted.`,
       );
   }
 }
@@ -101,11 +117,13 @@ function entityFieldFingerprint(
   detail: JsonValue,
   fieldPath: string,
 ): Promise<string> {
-  const readKey =
-    fieldsOf(entity).fields.find((field) => field.key === fieldPath)?.readKey ??
-    fieldPath;
-  const fields = jsonObject.safeParse(detail);
-  const value = fields.success ? (fields.data[readKey] ?? null) : null;
+  const value = z
+    .json()
+    .catch(null)
+    .parse(
+      readPathValue(detail, fieldReadPath(entity, fieldPath) ?? fieldPath) ??
+        null,
+    );
   return sha256Hex(canonicalJson(value));
 }
 
