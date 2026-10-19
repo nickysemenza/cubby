@@ -5,6 +5,7 @@ import { humanize, type NumberRange, parseShortcode } from "@cubby/shared";
 import type { CellData, RowData } from "@tanstack/react-table";
 import { z } from "zod";
 
+import type { PickerRecordSource } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 
 import type { ColumnCellData } from "./cell-data";
@@ -39,6 +40,8 @@ export interface FilterConfig {
   onActivate?: (selectedIds?: readonly string[]) => void;
   onSearchChange?: (query: string) => void;
   isLoading?: boolean;
+  /** A roster of one entity's records: its pickers run in record mode. */
+  records?: PickerRecordSource;
 }
 
 export type MobileSlot =

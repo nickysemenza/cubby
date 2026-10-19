@@ -28,7 +28,7 @@ export type RecordPickerProps<TId extends string = string> = WithEntity<
 const sources = new Map<PickerEntity, PickerRecordSource>();
 
 /** An entity's record source: its noun, its shortcode prefix, and selected-code resolution. */
-function recordSource(entity: PickerEntity): PickerRecordSource {
+export function recordSource(entity: PickerEntity): PickerRecordSource {
   const known = sources.get(entity);
   if (known) return known;
   const source: PickerRecordSource = {

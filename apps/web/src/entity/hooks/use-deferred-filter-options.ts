@@ -3,12 +3,25 @@ import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useRef, useState } from "react";
 
+import { recordSource } from "~/entity/picker/picker";
 import { entityFilterOptions } from "~/integrations/tanstack-query/generated/catalog.gen";
+import type { PickerEntity } from "~/ui/combobox/combobox-types";
 import type { DeferredFilterOptionSource } from "~/ui/hooks/filter-option-types";
 
 const sameIds = (left: readonly string[], right: readonly string[]) =>
   left.length === right.length &&
   left.every((id, index) => id === right[index]);
+
+/** The entity whose shortcodes each roster kind lists. */
+const KIND_ENTITY = {
+  ingredientWithProduct: "ingredient",
+  locationIdentityProduct: "product",
+  locationWithInventory: "location",
+  product: "product",
+  project: "project",
+  task: "task",
+  vendor: "vendor",
+} satisfies Record<FilterOptionKind, PickerEntity>;
 
 /**
  * A dormant, server-searched filter roster. The first page is requested only
@@ -63,7 +76,8 @@ export function useDeferredFilterOptions(
       onActivate,
       onSearchChange: setSearchInput,
       isLoading: query.isFetching,
+      records: recordSource(KIND_ENTITY[kind]),
     }),
-    [onActivate, options, query.isFetching],
+    [kind, onActivate, options, query.isFetching],
   );
 }

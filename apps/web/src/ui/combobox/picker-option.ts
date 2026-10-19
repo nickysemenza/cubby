@@ -1,3 +1,4 @@
+import { parseShortcode } from "@cubby/shared";
 import type React from "react";
 import { createElement } from "react";
 
@@ -64,6 +65,8 @@ export function pickerOptionItem(option: PickerOption): ComboboxItem {
   return {
     id: option.value,
     name: option.label,
+    // A record roster's value is its shortcode: a pasted code matches it.
+    ...(parseShortcode(option.value) && { shortcode: option.value }),
     // An option's colour tints its glyph; only a glyph-less option shows the
     // colour as a swatch, so a row never carries both marks.
     ...(option.icon != null

@@ -7,7 +7,9 @@ import {
   getEntityFilters,
   referenceFilterOptionsKey,
 } from "~/entity/filter-manifest";
+import { recordSource } from "~/entity/picker/picker";
 import { entityFilterOptions } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
 import type { RuntimeFilterOptions } from "~/ui/hooks/filter-option-types";
 
 /**
@@ -99,7 +101,7 @@ export function useDeferredEntityRosters(
   return useMemo(
     () =>
       Object.fromEntries(
-        references.map(({ key }, index) => {
+        references.map(({ key, target }, index) => {
           const query = queries[index];
           return [
             key,
@@ -119,6 +121,9 @@ export function useDeferredEntityRosters(
                     : { ...current, [key]: value },
                 ),
               isLoading: query?.isFetching ?? false,
+              ...(isReferencePickerEntity(target)
+                ? { records: recordSource(target) }
+                : {}),
             },
           ];
         }),
