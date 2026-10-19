@@ -233,7 +233,7 @@ struct EntityRowPresentation: Sendable, Hashable {
                 $0.showInList && (!$0.listHidden || contextKeys.contains($0.key))
                     && $0.key != descriptor.titleField && $0.key != "id"
                     && ($0.kind != .json || $0.listRenderer != nil || $0.labelPath != nil
-                        || $0.format == "resolvedList")
+                        || $0.format == "resolvedList" || $0.mobileSlot != nil)
             }
             .sorted {
                 let left = ($0.listOrder ?? .max, $0.key)

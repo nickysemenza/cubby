@@ -740,7 +740,7 @@ struct EntityListView: View {
             .filter {
                 $0.showInList && $0.key != "id" && $0.key != descriptor.titleField
                     && ($0.kind != .json || $0.listRenderer != nil || $0.labelPath != nil
-                        || $0.format != nil || $0.reference != nil)
+                        || $0.format != nil || $0.reference != nil || $0.mobileSlot != nil)
             }
             .sorted {
                 let left = ($0.listOrder ?? .max, $0.key)

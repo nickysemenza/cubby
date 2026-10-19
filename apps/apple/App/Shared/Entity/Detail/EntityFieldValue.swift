@@ -45,18 +45,25 @@ nonisolated enum EntityFieldValue {
     }
 
     static func text(in raw: JSONValue, field: FieldDescriptor, surface: String) -> String? {
-        if surface == "detail" {
-            // A declared server-composed sentence is the whole answer: the structure behind it
-            // is never re-worded here, and with no sentence the row is empty.
-            if field.detailLabelPath != nil { return field.detailLabel(in: raw) }
-            // A nested value (`identity.kind`, `meta.url`) is read where the declaration says.
-            if field.readPath != nil { return text(field.detailValue(in: raw), field: field) }
-        }
-        return text(
-            FieldResolutionPresentation.readValue(in: raw, field: field, surface: surface), field: field)
+        // A declared server-composed sentence is the whole detail answer: the structure behind it
+        // is never re-worded here, and with no sentence the row is empty.
+        if surface == "detail", field.detailLabelPath != nil { return field.detailLabel(in: raw) }
+        return text(field.surfaceValue(in: raw, surface: surface), field: field)
     }
 
     static func text(_ value: JSONValue?, field: FieldDescriptor) -> String? {
+        // Presence answers "is there one", as web's `presence` format: absent is a clear "no".
+        if field.format == "presence" {
+            let present: Bool
+            switch value {
+            case .bool(let flag): present = flag
+            case .string(let string): present = !string.isEmpty
+            case .array(let items): present = !items.isEmpty
+            default: present = false
+            }
+            let code = present ? "yes" : "no"
+            return field.valueOptions?.first { $0.value == code }?.label ?? (present ? "Yes" : "No")
+        }
         guard let value, value != .null else { return nil }
         switch field.format {
         case "currency", "signedCurrency": return money(value)
@@ -117,21 +124,12 @@ nonisolated enum EntityFieldValue {
         return nil
     }
 
-    /// The trailing fact of a list row: the field the catalog places in the mobile `trailing` slot.
-    static func trailing(descriptor: EntityDescriptor, raw: JSONValue) -> String? {
-        guard let field = descriptor.fields.first(where: { $0.mobileSlot == "trailing" }) else { return nil }
-        return text(raw[field.key], field: field)
-    }
-
     static func enumLabel(_ raw: String, field: FieldDescriptor) -> String {
         (field.controlOptions ?? field.valueOptions)?.first { $0.value == raw }?.label ?? raw
     }
 
     static func optionColor(in raw: JSONValue, field: FieldDescriptor, surface: String) -> String? {
-        let value =
-            surface == "detail" && field.readPath != nil
-            ? field.detailValue(in: raw)
-            : FieldResolutionPresentation.readValue(in: raw, field: field, surface: surface)
+        let value = field.surfaceValue(in: raw, surface: surface)
         guard let code = value?.stringValue else { return nil }
         return (field.controlOptions ?? field.valueOptions)?.first { $0.value == code }?.color
     }
@@ -176,10 +174,7 @@ nonisolated enum EntityFieldValue {
             field.kind == .date || field.kind == .timestamp || field.format == "plainDate"
                 || field.format == "timestamp"
         else { return nil }
-        let value =
-            surface == "detail" && field.readPath != nil
-            ? field.detailValue(in: raw)
-            : FieldResolutionPresentation.readValue(in: raw, field: field, surface: surface)
+        let value = field.surfaceValue(in: raw, surface: surface)
         guard let string = value?.stringValue, DatePresentation.value(string) != nil else { return nil }
         return string
     }
