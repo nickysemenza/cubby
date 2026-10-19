@@ -74,7 +74,7 @@ export async function setCreditBudget(
   return metadata;
 }
 
-export const creditUsageRow = sql`${aiUsage.costEvidence}->>'billingReason' = 'subscriber_credit'`;
+const creditUsageRow = sql`${aiUsage.costEvidence}->>'billingReason' = 'subscriber_credit'`;
 const planUsageRow = sql`${aiUsage.costEvidence}->>'billingReason' = 'plan'`;
 
 /**
