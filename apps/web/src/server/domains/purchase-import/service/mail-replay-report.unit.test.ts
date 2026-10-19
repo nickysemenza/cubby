@@ -89,8 +89,9 @@ describe("Mail replay disagreement", () => {
 });
 
 // Teardown must follow observation even when the coordinator times out, and
-// unavailable outcomes must retain every successful model call already seen.
-it("retains successful model usage before failed replay teardown", async () => {
+// unavailable outcomes must retain every successful model call and every
+// refused attempt's raw error already seen.
+it("retains model usage and attempt errors before failed replay teardown", async () => {
   const reports: { actualModels: string[]; fields: string[] }[] = [];
   const order: string[] = [];
   try {
@@ -109,6 +110,10 @@ it("retains successful model usage before failed replay teardown", async () => {
             outcome: { kind: "unresolved", reason: "Synthetic missing total" },
             actualModels: ["claude-haiku-5-5", "claude-opus-5-5"],
             failure: "agent_failed: Coordinator unanswered: error",
+            failedAttempts: [
+              "claude-opus-5-5 (gateway): Synthetic usage limit refusal",
+            ],
+            diagnostics: ["[purchase-agent] Synthetic operation failure"],
           };
         },
         record: (report) => {
@@ -126,6 +131,10 @@ it("retains successful model usage before failed replay teardown", async () => {
       fields: ["unavailable"],
       failure:
         "agent_failed: Coordinator unanswered: error; Error: Synthetic coordinator timeout",
+      failedAttempts: [
+        "claude-opus-5-5 (gateway): Synthetic usage limit refusal",
+      ],
+      diagnostics: ["[purchase-agent] Synthetic operation failure"],
     },
   ]);
 });
