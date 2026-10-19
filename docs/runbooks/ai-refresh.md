@@ -80,11 +80,14 @@ consume deployment-policy waits or inference retries. Unchanged, already queued,
 failed or cancelled work creates no empty Run. An on-demand connection request
 that cannot obtain capacity reports the capacity diagnostic; scheduling-lock
 contention reports a separate short-retry diagnostic. Rediscovery returns an
-existing recoverable failed owner for relaunch. Cancelled, exhausted or paused
+existing recoverable failed or dispatch-failed owner for relaunch, reporting
+admission refusal while preserving its automatic recovery budget. Cancelled, exhausted or paused
 owners report their retained status and diagnostic instead of silently returning
 no work.
 Automatic connection side effects defer without failing the entity write; the
 next routine Sweep can rediscover those live sources.
+Scheduling requires an actor without an inherited Run: a Run-scoped actor cannot
+create an independent owner or advance its successor key through `ensureRun`.
 A new policy resets the scan cursor and its discovery Workflow checkpoints
 bounded pages until both independent streams finish. Cursor writes are fenced
 by activation revision, so an old page cannot overwrite a newer reset. During
@@ -141,7 +144,7 @@ and abandoned requests expire after the bounded deadline.
 Discovery isolates preparation and launch failures per target or Run, emits a
 scrubbed diagnostic, and advances its bounded cursor; the next cursor pass retries
 preparation. Recovery first launches unstarted Runs that already hold slots,
-then considers failed Runs oldest first, within its ten-Run budget;
+then considers failed and dispatch-failed Runs oldest first, within its ten-Run budget;
 exhausted automatic-recovery budgets and member cancellations are excluded before
 the limit, so they cannot starve relaunches. Recovery uses the same two ordinary
 execution slots as new discovery. Existing unfinished Runs launch

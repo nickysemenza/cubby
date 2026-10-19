@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
 import { createRepoEntity } from "tooling/factories/repo";
+import { buildKernelContext } from "tooling/scenarios/context";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -22,6 +23,7 @@ import {
   searchDocument,
   user,
 } from "~/server/db/schema";
+import { connectionHandlers } from "~/server/domains/connection/operations/connection.server";
 import { acquisitionPairEligible } from "~/server/domains/connection/repo/connection-candidates";
 import { confirmPurchaseAcquisition } from "~/server/domains/purchase/repo/purchase-products";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
@@ -56,7 +58,7 @@ describe("connection discovery roster freshness", () => {
       updatedAt: new Date(),
     });
   });
-  it.each(["failed", "cancelled"] as const)(
+  it.each(["failed", "dispatch_failed", "cancelled"] as const)(
     "returns the %s owner when explicit rediscovery finds its retained work",
     async (outcome) => {
       const source = await createRepoEntity(ctx, "task", {
@@ -73,7 +75,7 @@ describe("connection discovery roster freshness", () => {
       await getDb(ctx.db)
         .update(run)
         .set({
-          status: "failed",
+          status: outcome === "cancelled" ? "failed" : outcome,
           failureCode:
             outcome === "cancelled"
               ? "user_cancelled"
@@ -87,9 +89,30 @@ describe("connection discovery roster freshness", () => {
         .where(eq(aiEvaluation.runId, first.runId));
       const found = await scheduleConnectionRefresh(ctx.db, ref);
       expect(found).toMatchObject({
-        kind: outcome === "cancelled" ? "stopped" : "unchanged",
+        kind: outcome === "cancelled" ? "stopped" : "recoverable",
         runId: first.runId,
       });
+      if (outcome !== "cancelled")
+        for (let index = 0; index < 2; index++)
+          await ensureRun(ctx.db, systemActor(), {
+            purpose: "ai_refresh",
+            trigger: "scheduled",
+            status: "running",
+            clientKey: `synthetic-discovery-capacity:${index}`,
+          });
+      await expect(
+        connectionHandlers.runs.discover!.run(
+          {
+            ...buildKernelContext(ctx.db, ctx.actor.userId),
+            signal: new AbortController().signal,
+          },
+          ref,
+        ),
+      ).rejects.toThrow(
+        outcome === "cancelled"
+          ? "Synthetic retained Workflow diagnostic"
+          : "no free Run slots",
+      );
     },
   );
   // A page must not scan the same broad target corpus for every source.

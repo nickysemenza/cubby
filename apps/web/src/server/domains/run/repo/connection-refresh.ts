@@ -47,6 +47,7 @@ const discoveryEntitySet = new Set<string>(discoveryEntities);
 
 type ConnectionRefreshResult =
   | { kind: "scheduled"; runId: RunId }
+  | { kind: "recoverable"; runId: RunId }
   | { kind: "unchanged"; runId: RunId | null }
   | (Extract<
       Awaited<ReturnType<typeof scheduleEvaluationRun>>,
@@ -130,7 +131,10 @@ export async function scheduleConnectionRefresh(
         existing.status === "dispatch_failed") &&
         existing.failures < MAX_AUTOMATIC_WORKFLOW_FAILURES))
   )
-    return { kind: "unchanged", runId: existing.id };
+    return {
+      kind: existing.status === "running" ? "unchanged" : "recoverable",
+      runId: existing.id,
+    };
   return {
     kind: "stopped",
     runId: existing.id,

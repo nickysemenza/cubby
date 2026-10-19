@@ -74,6 +74,89 @@ describe("AI refresh scheduling admission", () => {
       .from(run)
       .where(and(eq(run.purpose, "ai_refresh"), eq(run.status, "running")));
 
+  // An inherited owner prevents ensureRun from advancing a successor key.
+  it("rejects Run-scoped scheduling before inheriting an owner", async () => {
+    const id = await ensureRun(ctx.db, systemActor(), input("scoped-owner"));
+    await expect(
+      scheduleEvaluationRun(
+        ctx.db,
+        { ...systemActor(), runId: id },
+        input("scoped-child"),
+        [target()],
+      ),
+    ).rejects.toThrow("Run-scoped");
+    expect(await getDb(ctx.db).select().from(aiEvaluation)).toHaveLength(0);
+  });
+
+  // Explicit rediscovery must report deferred readmission without resetting its recovery budget.
+  it("reports a failed owner's capacity refusal while retaining automatic recovery fences", async () => {
+    const id = await ensureRun(
+      ctx.db,
+      systemActor(),
+      input("explicit-readmission"),
+    );
+    await getDb(ctx.db)
+      .update(run)
+      .set({
+        status: "failed",
+        progress: aiRefreshProgress.parse({
+          attempt: 1,
+          automaticRecoveryFailures: 1,
+        }),
+      })
+      .where(eq(run.id, id));
+    const busy = await ensureRun(
+      ctx.db,
+      systemActor(),
+      input("explicit-busy-one"),
+    );
+    await ensureRun(ctx.db, systemActor(), input("explicit-busy-two"));
+    const request = {
+      runId: id,
+      purpose: "ai_refresh" as const,
+      automatic: true as const,
+      reportAdmissionRefusal: true as const,
+    };
+    await expect(launchWorkflowRun(ctx.db, request, launcher)).rejects.toThrow(
+      "no free Run slots",
+    );
+    expect(
+      (await getDb(ctx.db).select().from(run).where(eq(run.id, id)))[0],
+    ).toMatchObject({
+      status: "failed",
+      progress: { automaticRecoveryFailures: 1 },
+    });
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "completed" })
+      .where(eq(run.id, busy));
+    expect(await launchWorkflowRun(ctx.db, request, launcher)).toMatchObject({
+      attempt: 2,
+    });
+    expect(await launchWorkflowRun(ctx.db, request, launcher)).toBeNull();
+    expect(
+      (await getDb(ctx.db).select().from(run).where(eq(run.id, id)))[0]
+        ?.progress,
+    ).toMatchObject({ automaticRecoveryFailures: 2 });
+  });
+
+  it("includes dispatch failures with pending work in bounded recovery", async () => {
+    const id = await ensureRun(
+      ctx.db,
+      systemActor(),
+      input("dispatch-recovery"),
+    );
+    await insertEvaluationTargets(ctx.db, id, [target()]);
+    await getDb(ctx.db)
+      .update(run)
+      .set({
+        status: "dispatch_failed",
+        failureCode: "workflow_dispatch_failed",
+      })
+      .where(eq(run.id, id));
+    expect(await aiRefreshRelaunchCandidates(ctx.db)).toEqual([{ id }]);
+  });
+
   it("bounds concurrent frozen rosters and resumes deferred work after capacity is released", async () => {
     const requests = [target(), target(), target()];
     await Promise.all(

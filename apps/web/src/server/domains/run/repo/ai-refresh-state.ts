@@ -246,6 +246,10 @@ export async function scheduleEvaluationRun(
   },
   targets: EvaluationTargetInput[],
 ): Promise<ScheduleEvaluationResult> {
+  if (actor.runId)
+    throw new Error(
+      "Run-scoped actors cannot schedule independent AI refresh owners",
+    );
   if (!(await hasAdmissibleTarget(db, targets))) return { kind: "unchanged" };
   return withTransactionDatabase(db, async (tx) => {
     if (!(await tryLockAiRefreshScheduling(tx)))
@@ -497,7 +501,7 @@ export async function aiRefreshRelaunchCandidates(db: Database) {
         eq(run.purpose, "ai_refresh"),
         notDeleted(run),
         or(
-          eq(run.status, "failed"),
+          inArray(run.status, ["failed", "dispatch_failed"]),
           and(
             eq(run.status, "running"),
             sql`COALESCE((${run.progress}->>'attempt')::integer, 0) = 0`,

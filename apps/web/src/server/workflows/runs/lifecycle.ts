@@ -102,6 +102,8 @@ type LaunchWorkflowRunInput = {
    * already running, ended or cancelled resolves `null` instead of throwing.
    */
   automatic?: boolean;
+  /** Explicit rediscovery reports busy admission while retaining automatic recovery fences. */
+  reportAdmissionRefusal?: true;
   /** Only the member's explicit retry control may clear a cancellation. */
   retryCancelled?: true;
   /** A bounded instance hands off only while it still owns this attempt. */
@@ -125,6 +127,7 @@ export async function launchWorkflowRun(
   launcher: WorkflowLauncher = productionWorkflowLauncher,
 ): Promise<LaunchedWorkflowRun | null> {
   let refusal = "This Run is already running; wait for it or cancel it.";
+  let admissionRefused = false;
   const reopened = await withTransactionDatabase(db, async (tx) => {
     const database = getDb(tx);
     if (input.purpose === "ai_refresh" && input.expectedAttempt === undefined) {
@@ -142,10 +145,12 @@ export async function launchWorkflowRun(
       }
       if (!owner.parentRunId && !owner.discovery) {
         if (!(await tryLockAiRefreshScheduling(tx))) {
+          admissionRefused = true;
           refusal = `AI refresh scheduling is busy (${AI_REFRESH_SCHEDULING_LOCK}); retry shortly.`;
           return null;
         }
         if (!(await hasAiRefreshRunCapacity(tx, input.runId))) {
+          admissionRefused = true;
           refusal =
             "AI refresh execution has no free Run slots; wait for active or paused Runs to finish or cancel one.";
           return null;
@@ -205,7 +210,8 @@ export async function launchWorkflowRun(
     return claimed ?? null;
   });
   if (!reopened) {
-    if (input.automatic) return null;
+    if (input.automatic && !(input.reportAdmissionRefusal && admissionRefused))
+      return null;
     throw new Error(refusal);
   }
   const instanceId = workflowInstanceId(reopened.shortcode, reopened.attempt);
