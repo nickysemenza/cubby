@@ -7,6 +7,7 @@ import {
   createCubbyColumnHelper,
   useCubbyTable,
 } from "../../ui/data-table/table-features";
+import type { CubbyTableMeta } from "../../ui/data-table/table-meta";
 import TableHeaderLayout from "./table-header-layout";
 
 interface TestRow {
@@ -66,11 +67,12 @@ function nutrientResizeHandle() {
   return handle;
 }
 
-function Harness() {
+function Harness({ grouping }: { grouping?: CubbyTableMeta["grouping"] }) {
   const table = useCubbyTable({
     data: [{ id: "row-a", name: "Alpha" }],
     columns,
     getRowId: (row) => row.id,
+    meta: grouping ? { grouping } : {},
   });
   lastTable = table;
   return (
@@ -177,5 +179,40 @@ describe("TableHeaderLayout", () => {
 
     fireEvent.doubleClick(handle);
     expect(lastTable?.getColumn("nutrient-301")?.getSize()).toBe(180);
+  });
+
+  it("sorts and regroups from the column header menu", async () => {
+    const onChange = vi.fn();
+    render(
+      <Harness
+        grouping={{
+          choices: [
+            { key: "calcium", columnId: "nutrient-301", label: "Calcium" },
+          ],
+          active: null,
+          onChange,
+        }}
+      />,
+    );
+    const openMenu = () =>
+      fireEvent.click(
+        screen.getByRole("button", { name: "Calcium (mg) column menu" }),
+      );
+
+    openMenu();
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: /Sort descending/ }),
+    );
+    expect(lastTable?.state.sorting).toEqual([
+      { id: "nutrient-301", desc: true },
+    ]);
+
+    openMenu();
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Group by Calcium" }),
+    );
+    expect(onChange).toHaveBeenCalledWith("calcium");
+    // No filter bar subscribed, so the menu offers no editor it cannot open.
+    expect(screen.queryByRole("menuitem", { name: /Filter/ })).toBeNull();
   });
 });

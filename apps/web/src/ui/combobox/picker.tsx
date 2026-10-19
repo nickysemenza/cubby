@@ -5,6 +5,7 @@ import {
 import { parseShortcode } from "@cubby/shared";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import * as React from "react";
@@ -61,6 +62,12 @@ interface PickerCommonProps<TId extends string> {
    *   modes or formats where seeing all choices is the point. Single value.
    */
   mode?: "search" | "choose" | "segmented";
+  /**
+   * `inline` renders the list itself where the picker sits — the same rows,
+   * marks, check column and search — with no closed field and no popup: a
+   * filter editor already open inside a panel. Ignores `mode`.
+   */
+  presentation?: "field" | "inline";
   onSearchChange?: (query: string) => void;
   onOpenChange?: (open: boolean) => void;
   onCreateNew?: (name: string) => Promise<ComboboxItem<TId>>;
@@ -194,6 +201,7 @@ function RecordValuePicker<TId extends string>(
 }
 
 function PickerBody<TId extends string>(props: ResolvedPickerProps<TId>) {
+  if (props.presentation === "inline") return <InlinePicker {...props} />;
   if (props.mode === "segmented") return <SegmentedPicker {...props} />;
   if (props.mode === "choose" && !props.multiple)
     return <ChoosePicker {...props} />;
@@ -1094,6 +1102,193 @@ function SearchPicker<TId extends string>({
         >
           {field}
           {popup}
+        </ComboboxPrimitive.Root>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Inline presentation
+// ---------------------------------------------------------------------------
+
+/** A roster this short reads at a glance; longer ones get a search input. */
+const INLINE_SEARCH_THRESHOLD = 8;
+
+/**
+ * The search picker's list rendered in place: Base UI's inline combobox, so
+ * arrow keys, typeahead and selection behave as in the popup. Used where the
+ * editor is already open (a Filters panel row), so a closed field would only
+ * be a second step.
+ */
+function InlinePicker<TId extends string>({
+  inputId,
+  inputRef: fieldRef,
+  "aria-describedby": ariaDescribedBy,
+  records,
+  label,
+  multiple,
+  items,
+  values,
+  setValues,
+  onSearchChange,
+  isLoading,
+  error,
+  renderItem,
+  disabled,
+  className,
+  header,
+  footer,
+}: ResolvedPickerProps<TId>) {
+  const [query, setQuery] = React.useState("");
+  const [debouncedQuery] = useDebouncedValue(query, { wait: 150 });
+  const gate = useHydrationGate(disabled);
+  const { ariaLabel, noun } = pickerNaming(records, label);
+  const searchable =
+    onSearchChange != null ||
+    records != null ||
+    items.length > INLINE_SEARCH_THRESHOLD;
+  React.useEffect(() => {
+    onSearchChange?.(debouncedQuery);
+  }, [debouncedQuery, onSearchChange]);
+  const visibleItems = React.useMemo(() => {
+    const roster = onSearchChange
+      ? items
+      : items.filter((item) => matchesPickerItem(item, query));
+    if (query.trim() !== "") return roster;
+    // A picked record the roster has not loaded still shows, so it can be
+    // unchecked.
+    const missing = values.filter(
+      (value) => !value.pending && !roster.some((item) => item.id === value.id),
+    );
+    return missing.length > 0 ? [...missing, ...roster] : roster;
+  }, [items, onSearchChange, query, values]);
+  const orderedItems = React.useMemo(
+    () => sortByGroup(visibleItems),
+    [visibleItems],
+  );
+  const layout = pickerRowLayout(orderedItems);
+  const shared = {
+    inline: true,
+    open: true,
+    items: orderedItems,
+    filteredItems: orderedItems,
+    filter: null,
+    inputValue: query,
+    onInputValueChange: (next: string) => setQuery(next),
+    itemToStringLabel: pickerItemLabel,
+    itemToStringValue: pickerItemValue,
+    isItemEqualToValue: pickerItemsEqual,
+    autoHighlight: query.trim() !== "",
+    disabled: gate.disabled,
+  } as const;
+  const body = (
+    <>
+      {header ? (
+        <div className="flex flex-col gap-1.5 pb-1.5">{header}</div>
+      ) : null}
+      {searchable ? (
+        <div className="relative flex items-center pb-1">
+          <MagnifyingGlassIcon
+            aria-hidden
+            className="pointer-events-none absolute left-2 size-3.5 text-muted-foreground"
+          />
+          <ComboboxPrimitive.Input
+            id={inputId}
+            ref={fieldRef}
+            aria-label={ariaLabel}
+            aria-describedby={ariaDescribedBy}
+            placeholder={`Search ${noun}…`}
+            className={cn(
+              fieldFrameClass(true),
+              "h-7 pl-7 outline-none placeholder:text-muted-foreground",
+            )}
+          />
+        </div>
+      ) : (
+        // A short roster has no search field, but the input still owns
+        // keyboard focus and arrow-key navigation; without it no option is
+        // reachable from the keyboard.
+        <ComboboxPrimitive.Input
+          id={inputId}
+          ref={fieldRef}
+          aria-label={ariaLabel}
+          aria-describedby={ariaDescribedBy}
+          readOnly
+          className="sr-only"
+        />
+      )}
+      <ComboboxPrimitive.List className="max-h-64 overflow-y-auto overscroll-contain rounded-sm outline-none [input:focus-visible+&]:ring-2 [input:focus-visible+&]:ring-ring">
+        {orderedItems.map((item, index) => (
+          <React.Fragment key={item.id}>
+            <PickerRowPreamble item={item} previous={orderedItems[index - 1]} />
+            <ComboboxPrimitive.Item
+              value={item}
+              disabled={item.presentation?.disabledReason != null}
+              aria-label={rowAriaLabel(item)}
+              className={rowClass(
+                item.presentation?.meta === true,
+                renderItem != null,
+              )}
+              style={rowStyle(item)}
+            >
+              <span className="flex w-5 shrink-0 items-center justify-center">
+                <PickerVisual item={item} size={20} />
+              </span>
+              <PickerRowContent
+                item={item}
+                renderItem={renderItem}
+                layout={layout}
+              />
+              <span className="flex w-3.5 shrink-0 items-center justify-center">
+                <ComboboxPrimitive.ItemIndicator>
+                  <CheckIcon className="size-3.5" />
+                </ComboboxPrimitive.ItemIndicator>
+              </span>
+            </ComboboxPrimitive.Item>
+          </React.Fragment>
+        ))}
+      </ComboboxPrimitive.List>
+      {isLoading || error ? (
+        <div className="px-1.5 py-1.5 text-xs">
+          {isLoading ? (
+            <span className="flex items-center gap-2 text-muted-foreground">
+              <Spinner /> Searching…
+            </span>
+          ) : (
+            <span className="text-destructive">{error}</span>
+          )}
+        </div>
+      ) : orderedItems.length === 0 ? (
+        <div className="px-1.5 py-1.5 text-xs text-muted-foreground">
+          No {noun} found.
+        </div>
+      ) : null}
+      {footer ? (
+        <div className="flex items-center justify-between gap-2 pt-1">
+          {footer}
+        </div>
+      ) : null}
+    </>
+  );
+  return (
+    <div className={cn("flex w-full min-w-0 flex-col", className)}>
+      {multiple ? (
+        <ComboboxPrimitive.Root<ComboboxItem<TId>, true>
+          {...shared}
+          multiple
+          value={values}
+          onValueChange={(next) => setValues(next)}
+        >
+          {body}
+        </ComboboxPrimitive.Root>
+      ) : (
+        <ComboboxPrimitive.Root<ComboboxItem<TId>>
+          {...shared}
+          value={values[0] ?? null}
+          onValueChange={(next) => setValues(next ? [next] : [])}
+        >
+          {body}
         </ComboboxPrimitive.Root>
       )}
     </div>

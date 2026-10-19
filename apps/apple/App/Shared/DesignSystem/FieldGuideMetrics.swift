@@ -29,6 +29,20 @@ enum FieldGuideMetrics {
         case "var(--warning)", "var(--brand-warning)": Color("Warning")
         case "var(--destructive)", "var(--brand-destructive)": Color("Destructive")
         case "var(--slate)", "var(--brand-slate)": Color("Slate")
+        case "var(--positive-surface)", "var(--brand-positive-surface)": Color("PositiveSurface")
+        case "var(--warning-surface)", "var(--brand-warning-surface)": Color("WarningSurface")
+        case "var(--destructive-surface)", "var(--brand-destructive-surface)": Color("DestructiveSurface")
+        case "var(--info)", "var(--brand-info)": Color("Info")
+        case "var(--info-surface)", "var(--brand-info-surface)": Color("InfoSurface")
+        case "var(--neutral-status)", "var(--brand-neutral-status)": Color("NeutralStatus")
+        case "var(--category-1)", "var(--brand-category-1)": Color("Category1")
+        case "var(--category-2)", "var(--brand-category-2)": Color("Category2")
+        case "var(--category-3)", "var(--brand-category-3)": Color("Category3")
+        case "var(--category-4)", "var(--brand-category-4)": Color("Category4")
+        case "var(--category-5)", "var(--brand-category-5)": Color("Category5")
+        case "var(--category-6)", "var(--brand-category-6)": Color("Category6")
+        case "var(--category-7)", "var(--brand-category-7)": Color("Category7")
+        case "var(--category-8)", "var(--brand-category-8)": Color("Category8")
         default: nil
         }
     }

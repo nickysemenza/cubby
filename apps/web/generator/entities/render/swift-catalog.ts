@@ -202,14 +202,24 @@ type EntityKeyLookup = (raw: string, context: string) => string;
 // case as `{"case": {}}`. Nullable fields use `null`; optional members can be absent.
 
 const options = (
-  values: readonly { value: string; label: string; color?: string }[] | null,
+  values:
+    | readonly {
+        value: string;
+        label: string;
+        color?: string;
+        role?: "status" | "category";
+        glyph?: { phosphor: string; sfSymbol: string };
+      }[]
+    | null,
 ) =>
   values === null
     ? null
-    : values.map(({ value, label, color }) => ({
+    : values.map(({ value, label, color, role, glyph }) => ({
         value,
         label,
         color,
+        role,
+        glyph,
       }));
 
 const filterJSON = (
@@ -402,6 +412,7 @@ const detailSectionJSON = (entity: string, section: DetailSection) => {
                       field: section.sort.field,
                       direction: section.sort.direction,
                     },
+              groupBy: section.groupBy ?? null,
               limit: section.limit ?? null,
               empty: section.empty ?? null,
             },

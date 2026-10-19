@@ -31,6 +31,11 @@ enum FieldGuideTokens {
     static let positive = Color("Positive")
     static let warning = Color("Warning")
     static let destructive = Color("Destructive")
+    static let info = Color("Info")
+    static let neutralStatus = Color("NeutralStatus")
+
+    /// Kinds that are not states: cycled in declaration order (`colorizeEnumOptions`).
+    static let categoryRamp: [Color] = (1...8).map { Color("Category\($0)") }
 
     // Domain lines. Marks only — a dot, an icon tint, or a single hairline. Never a fill.
     static let cookSaffron = Color("Cook")

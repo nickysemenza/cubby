@@ -46,6 +46,7 @@ import { useTableConfig } from "~/ui/data-table/use-table-config";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import type { ListQueryOptionsFn } from "~/ui/hooks/use-paginated-table-core";
 import { Button } from "~/ui/primitives/button";
+import { Tabs, TabsList, TabsTrigger } from "~/ui/primitives/tabs";
 
 import { useAcceptClean, type CleanTarget } from "./accept-clean";
 import { AutomaticRulesSection } from "./automatic-rules";
@@ -113,8 +114,11 @@ const viewOf = (search: SuggestionsSearch): SuggestionView =>
 const countHint = (count: number | undefined) =>
   count === undefined ? "…" : formatCount(count);
 
-/** Pending Suggestions, or the changes Automatic rules applied without review. */
-function StatusChips({
+/**
+ * The page's three tabs: pending Suggestions, the changes Automatic rules
+ * applied without review, and the rules themselves with their switches.
+ */
+function StatusTabs({
   search,
   onSearch,
 }: {
@@ -140,28 +144,51 @@ function StatusChips({
     (sum, row) => sum + row.pending,
     0,
   );
-  const status = search.status;
+  const rules = useQuery(suggestions.rules.queryOptions({}));
+  const rulesOn = rules.data?.rules.filter((rule) => rule.enabled).length;
+  const tab = (label: string, hint: string | undefined) => (
+    <>
+      {label}
+      {hint === undefined ? null : (
+        <span className="text-xs font-normal text-muted-foreground tabular-nums">
+          {hint}
+        </span>
+      )}
+    </>
+  );
   return (
-    <Picker
-      mode="segmented"
-      label="Suggestion status"
-      options={[
-        { value: "pending", label: "Pending", hint: countHint(pending) },
-        {
-          value: "applied_automatically",
-          label: "Applied automatically",
-          hint: countHint(applied.data?.meta.totalCount),
-        },
-      ]}
-      value={status ?? "pending"}
+    <Tabs
+      value={search.status ?? "pending"}
       onValueChange={(value) =>
         onSearch(
-          value === "applied_automatically"
-            ? { status: "applied_automatically", group: undefined }
+          value === "applied_automatically" || value === "rules"
+            ? { status: value, group: undefined }
             : { status: undefined },
         )
       }
-    />
+    >
+      <TabsList
+        variant="line"
+        aria-label="Suggestion status"
+        className="h-auto max-w-full flex-wrap justify-start gap-2 [&>[data-slot=tabs-trigger]]:flex-none"
+      >
+        <TabsTrigger value="pending">
+          {tab("Pending", countHint(pending))}
+        </TabsTrigger>
+        <TabsTrigger value="applied_automatically">
+          {tab(
+            "Applied automatically",
+            countHint(applied.data?.meta.totalCount),
+          )}
+        </TabsTrigger>
+        <TabsTrigger value="rules">
+          {tab(
+            "Automatic rules",
+            rules.data ? `${rulesOn} of ${rules.data.rules.length} on` : "…",
+          )}
+        </TabsTrigger>
+      </TabsList>
+    </Tabs>
   );
 }
 
@@ -284,20 +311,26 @@ export function SuggestionsPage({
             onSettled={refreshSuggestions}
           />
         ) : null}
-        <AutomaticRulesSection />
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          <StatusChips search={search} onSearch={onSearch} />
-          <span aria-hidden className="h-4 w-px bg-border max-md:hidden" />
-          <FamilyChips search={search} onSearch={onSearch} />
-        </div>
-        <ScopeChips search={search} onSearch={onSearch} />
+        <StatusTabs search={search} onSearch={onSearch} />
+        {search.status === "rules" ? null : (
+          <>
+            <FamilyChips search={search} onSearch={onSearch} />
+            <ScopeChips search={search} onSearch={onSearch} />
+          </>
+        )}
       </div>
-      <SuggestionsTable
-        // Each view owns its own columns, filter URL keys and selection.
-        key={viewOf(search)}
-        search={search}
-        onSearch={onSearch}
-      />
+      {search.status === "rules" ? (
+        <div className="px-2 py-2 md:px-4">
+          <AutomaticRulesSection />
+        </div>
+      ) : (
+        <SuggestionsTable
+          // Each view owns its own columns, filter URL keys and selection.
+          key={viewOf(search)}
+          search={search}
+          onSearch={onSearch}
+        />
+      )}
     </Page>
   );
 }
@@ -790,7 +823,7 @@ function SuggestionsTableBody({
           <Picker
             mode="choose"
             compact
-            label="Order"
+            label="Sort"
             className="w-60"
             options={
               order

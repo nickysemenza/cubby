@@ -12,7 +12,11 @@ export function TradeBadge({ trade }: { trade: Trade }) {
     (option) => option.value === trade,
   );
   return (
-    <EnumPill color={option?.color} icon={<TradeIcon trade={trade} />}>
+    <EnumPill
+      optionRole={option?.role}
+      color={option?.color}
+      icon={<TradeIcon trade={trade} />}
+    >
       {option?.label ?? TRADE_LABELS[trade]}
     </EnumPill>
   );

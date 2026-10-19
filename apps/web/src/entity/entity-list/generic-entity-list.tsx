@@ -61,6 +61,7 @@ import {
 } from "~/entity/table/column-helpers";
 import { DataTableToolbar } from "~/entity/table/data-table-toolbar";
 import { TableEmptyState } from "~/entity/table/entity-empty-states";
+import { ListQueryProvider } from "~/entity/table/list-query-context";
 import { ListWorkbench } from "~/entity/table/list-workbench";
 import { getAppErrorDetails } from "~/lib/error-utils";
 import { DataTablePagination } from "~/ui/data-table/data-table-pagination";
@@ -319,6 +320,11 @@ function ServerListBody({
           },
     [entity, navigate, nested, parts.tree],
   );
+  const onGroupByChange = useCallback(
+    (key: string | null) =>
+      navigate({ groupBy: key ?? undefined, groupLevel: undefined }),
+    [navigate],
+  );
   const filterOptions = useFilterOptions({ ...parts.list?.filterOptions });
   // Cards and Compact keep the same query, filtering, ordering, and page as
   // List. A search changes the roster, never the chosen presentation.
@@ -376,8 +382,10 @@ function ServerListBody({
     // Timeline is already arranged by date, so it reads the list flat.
     groupBy: view === "timeline" ? undefined : listGroupBy(context.search),
     groupLevel: listGroupLevel(context.search),
+    onGroupByChange: view === "timeline" ? undefined : onGroupByChange,
   });
   usePageCount(list.totalCount);
+  const [chipsTarget, setChipsTarget] = useState<HTMLDivElement | null>(null);
   // The module's hook or a no-op: one call per render either way.
   const useWorkbenchProps = parts.useWorkbench ?? useNoWorkbenchProps;
   const workbenchProps = useWorkbenchProps(list);
@@ -414,20 +422,28 @@ function ServerListBody({
     <>
       {parts.above?.(list)}
       <div className="min-w-0">
+        {/* One strip directly above the records: the active-filter chips
+            (portaled in by the table's query tools), then totals and the
+            suggestion sweep/review status. */}
         <div
           data-list-status-strip=""
-          className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-border px-2 py-1 text-xs md:px-4"
+          className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 border-b border-border px-2 py-1 text-xs md:px-4"
         >
-          <ListTotalSummary
-            totals={entitySummary[entity].list.totals}
-            labels={list.totalLabels}
-            state={list.summaryState}
-            onRetry={list.retrySummary}
+          <div
+            ref={setChipsTarget}
+            data-workbench-filters=""
+            className="flex min-w-0 flex-1 empty:hidden"
           />
           <div
             data-list-status-group=""
-            className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1"
+            className="ml-auto flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1"
           >
+            <ListTotalSummary
+              totals={entitySummary[entity].list.totals}
+              labels={list.totalLabels}
+              state={list.summaryState}
+              onRetry={list.retrySummary}
+            />
             {sweepAction}
             <div data-workbench-status className="min-w-0" />
             {contextualStatus}
@@ -481,7 +497,7 @@ function ServerListBody({
               <div
                 className={
                   dockedInspector
-                    ? "grid min-w-0 grid-cols-[minmax(0,1fr)_25rem]"
+                    ? "grid min-w-0 grid-cols-[minmax(0,1fr)_var(--side-panel-width)]"
                     : "min-w-0"
                 }
               >
@@ -567,10 +583,23 @@ function ServerListBody({
       {parts.below?.(list)}
     </>
   );
+  const listQuery = isListEntity(entity)
+    ? {
+        entity,
+        filters: list.currentFilters,
+        matching: list.totalCount,
+        chipsTarget,
+      }
+    : null;
+  const provided = listQuery ? (
+    <ListQueryProvider value={listQuery}>{body}</ListQueryProvider>
+  ) : (
+    body
+  );
   return (
     <>
       {parts.wrap
-        ? parts.wrap(body, {
+        ? parts.wrap(provided, {
             data: list.data.filter((row) =>
               (parts.wrapReadFields ?? []).every((field) => {
                 const state = list.enrichmentState?.(row.id, field);
@@ -578,7 +607,7 @@ function ServerListBody({
               }),
             ),
           })
-        : body}
+        : provided}
     </>
   );
 }

@@ -202,6 +202,8 @@ export default defineEntity({
           columnLabel: "Products",
           list: true,
           detail: true,
+          // "Not allowed" is a state too; inferred, it read as a category.
+          optionRole: "status",
         },
         validation: {
           read: productExpectation,

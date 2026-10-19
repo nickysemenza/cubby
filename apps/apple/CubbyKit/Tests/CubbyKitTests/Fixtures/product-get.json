@@ -61,6 +61,7 @@
   "servingAsLocations": [],
   "componentCount": 0,
   "food": null,
+  "commodity": false,
   "recipeUsages": [],
   "cookbooks": [],
   "quantityLedger": {

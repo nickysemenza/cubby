@@ -26,22 +26,20 @@ test("declared expectation colors and spending category navigation counts", asyn
   const record = page
     .getByRole("row")
     .filter({ has: page.getByRole("link", { name, exact: true }) });
+  // Expectation rosters are states: a tone surface, full-strength ink and
+  // the tone's glyph.
   const unknown = record.locator(
-    '[data-cell-col="itemizationExpectation"] [style*="--enum-pill-color"]',
+    '[data-cell-col="itemizationExpectation"] [data-enum-role="status"]',
   );
   const expected = record.locator(
-    '[data-cell-col="productExpectation"] [style*="--enum-pill-color"]',
+    '[data-cell-col="productExpectation"] [data-enum-role="status"]',
   );
   await expect(unknown).toHaveText("Unclassified");
   await expect(expected).toHaveText("Expected");
-  await expect(unknown).toHaveAttribute(
-    "style",
-    /--enum-pill-color: var\(--warning\)/,
-  );
-  await expect(expected).toHaveAttribute(
-    "style",
-    /--enum-pill-color: var\(--brand-domain-house\)/,
-  );
+  await expect(unknown).toHaveClass(/bg-warning-surface/);
+  await expect(unknown).toHaveClass(/text-warning-ink/);
+  await expect(unknown.locator("[data-option-glyph]")).toHaveCount(1);
+  await expect(expected).toHaveClass(/bg-info-surface/);
   const counts = await page.request.get("/api/v1/dashboard/counts");
   expect(counts.ok()).toBe(true);
   const body = dashboardCountsOut.parse(await counts.json());
@@ -61,8 +59,15 @@ test("declared expectation colors and spending category navigation counts", asyn
   await expect(
     page.getByText("Unclassified", { exact: true }).first(),
   ).toBeVisible();
+  // Field suggestions wrap each suggestible value once they load, which
+  // remounts it; scroll the settled badge, not the one being replaced.
+  await expect(
+    page.getByRole("button", { name: /^Checking suggestions/ }),
+  ).toHaveCount(0);
   const mobileBadge = page
-    .locator('[style*="--enum-pill-color: var(--warning)"]')
+    .locator('[data-enum-role="status"].bg-warning-surface', {
+      hasText: "Unclassified",
+    })
     .first();
   await expect(mobileBadge).toBeVisible();
   await mobileBadge.scrollIntoViewIfNeeded();

@@ -1,4 +1,4 @@
-import { closestCenter } from "@dnd-kit/core";
+import { closestCenter, type KeyboardCoordinateGetter } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
 import type {
   CellData,
@@ -30,6 +30,7 @@ import {
   materializeCubbyColumns,
   type CubbyColumnCollection,
   type CubbyColumnDef,
+  type CubbyRow,
   type CubbyTable,
 } from "./table-features";
 import type { CubbyColumnMeta, EntityColumnRole } from "./table-meta";
@@ -217,8 +218,55 @@ export function moveColumn<TData extends RowData>(
  * `DndContext` props shared by the header and the customizer, which keep their
  * own drag strategies but announce and sense drags the same way.
  */
+/**
+ * Steps to the neighbouring column in painted order and centres the dragged
+ * header on it, so `closestCenter` resolves exactly that column. dnd-kit's
+ * sortable default aligns edges, and a wide header aligned with a narrower
+ * column (a collapsed empty one) centres past it onto the next.
+ * Vertical keys walk the customizer's list.
+ */
+const columnKeyboardCoordinates: KeyboardCoordinateGetter = (
+  event,
+  { context },
+) => {
+  const vertical = event.code === "ArrowDown" || event.code === "ArrowUp";
+  const step =
+    event.code === "ArrowRight" || event.code === "ArrowDown"
+      ? 1
+      : event.code === "ArrowLeft" || event.code === "ArrowUp"
+        ? -1
+        : 0;
+  const { active, over, collisionRect, droppableRects } = context;
+  if (step === 0 || !active || !collisionRect) return undefined;
+  event.preventDefault();
+  const edge = vertical ? "top" : "left";
+  const ordered = context.droppableContainers
+    .getEnabled()
+    .flatMap((container) => {
+      const rect = droppableRects.get(container.id);
+      return rect ? [{ id: container.id, rect }] : [];
+    })
+    .sort((a, b) => a.rect[edge] - b.rect[edge]);
+  const index = ordered.findIndex(
+    (entry) => entry.id === (over?.id ?? active.id),
+  );
+  const target = index === -1 ? undefined : ordered[index + step];
+  if (!target) return undefined;
+  // Sensor coordinates are the dragged rect's top-left in droppable-rect
+  // space, as dnd-kit's own getter returns them.
+  const { rect } = target;
+  return {
+    x: rect.left + (rect.width - collisionRect.width) / 2,
+    y: rect.top + (rect.height - collisionRect.height) / 2,
+  };
+};
+
 export function useColumnLayoutDndProps(targetNoun: string) {
-  const sensors = useCubbyDndSensors({ touchDelay: 150, touchTolerance: 5 });
+  const sensors = useCubbyDndSensors({
+    touchDelay: 150,
+    touchTolerance: 5,
+    keyboardCoordinates: columnKeyboardCoordinates,
+  });
   // dnd-kit's default `DndDescribedBy-<n>` id comes from a module-level counter
   // that advances differently on the server and the client, so every sortable
   // handle's `aria-describedby` hydration-mismatches. `useId` is tree-stable
@@ -399,6 +447,56 @@ function distributeSlack(
   return remaining;
 }
 
+function isEmptyValue(value: unknown) {
+  return (
+    value === null ||
+    value === undefined ||
+    value === "" ||
+    (Array.isArray(value) && value.length === 0)
+  );
+}
+
+/**
+ * Columns with no value in any loaded row. They collapse to a glyph strip so
+ * a sparse roster stops spending width on blank cells. A column the person
+ * sized, sorted, filtered or pinned stays as they set it, and one still
+ * loading its values stays open.
+ */
+export function emptyColumnIds<TData extends RowData>(
+  table: CubbyTable<TData>,
+  rows: readonly CubbyRow<TData>[],
+): ReadonlySet<string> {
+  const empty = new Set<string>();
+  if (rows.length === 0) return empty;
+  const sized = table.state.columnSizing ?? {};
+  for (const column of table.getVisibleLeafColumns()) {
+    if (
+      !column.accessorFn ||
+      isLockedColumn(column) ||
+      column.columnDef.meta?.entityColumnRole === "identity" ||
+      column.getIsPinned() ||
+      column.getIsSorted() ||
+      column.getIsFiltered() ||
+      sized[column.id] !== undefined
+    )
+      continue;
+    // A deferred value is unknown, not empty; its accessor may not even run.
+    const unavailable = column.columnDef.meta?.valueUnavailable;
+    if (unavailable && rows.some((row) => unavailable(row.original))) continue;
+    const blank = column.columnDef.meta?.rendersBlank;
+    if (
+      rows.every(
+        (row) => isEmptyValue(row.getValue(column.id)) || blank?.(row.original),
+      )
+    )
+      empty.add(column.id);
+  }
+  return empty;
+}
+
+/** An empty column's glyph strip (`emptyColumnIds`). */
+const COLLAPSED_COLUMN_WIDTH = 40;
+
 /**
  * Resolves the widths the browser should paint without mutating TanStack's own
  * column-sizing state. A user's deliberate resize remains the source of truth
@@ -418,12 +516,16 @@ export function resolvedTableColumnWidths(
   availableWidth: number,
   userSized: ReadonlySet<string> = new Set(),
   measured: Readonly<Record<string, number>> = {},
+  collapsed: ReadonlySet<string> = new Set(),
 ) {
   const widths: Record<string, number> = {};
   for (const column of columns) {
     const fit = measured[column.id];
-    widths[column.id] =
-      !isLockedColumn(column) && !userSized.has(column.id) && fit !== undefined
+    widths[column.id] = collapsed.has(column.id)
+      ? COLLAPSED_COLUMN_WIDTH
+      : !isLockedColumn(column) &&
+          !userSized.has(column.id) &&
+          fit !== undefined
         ? Math.min(fit, columnFitMax(column))
         : column.getSize();
   }
@@ -432,7 +534,10 @@ export function resolvedTableColumnWidths(
     0,
   );
   const flexible = columns.filter(
-    (column) => isFlexibleColumn(column) && !userSized.has(column.id),
+    (column) =>
+      isFlexibleColumn(column) &&
+      !userSized.has(column.id) &&
+      !collapsed.has(column.id),
   );
   const remaining = distributeSlack(
     widths,
@@ -447,12 +552,14 @@ export function columnWidthVariables(
   availableWidth = 0,
   userSized?: ReadonlySet<string>,
   measured?: Readonly<Record<string, number>>,
+  collapsed?: ReadonlySet<string>,
 ): CSSProperties {
   const { widths, spacer } = resolvedTableColumnWidths(
     columns,
     availableWidth,
     userSized,
     measured,
+    collapsed,
   );
   const variables: CSSProperties &
     Partial<Record<ColumnWidthVariable, string>> = {};

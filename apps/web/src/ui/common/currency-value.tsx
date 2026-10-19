@@ -1,6 +1,7 @@
 import { type ReactNode, useId, useState } from "react";
 
 import { formatCurrency, formatExactCurrency } from "~/lib/number-format";
+import { cn } from "~/lib/utils";
 import {
   Tooltip,
   TooltipContent,
@@ -41,19 +42,34 @@ export function CurrencyTooltip({
   );
 }
 
+/**
+ * Money reads in ink. Only a credit — a value whose sign is printed — takes
+ * the positive tone, so a refund never reads as spend and spend never reads
+ * as good news; a zero is a quiet fact.
+ */
+function moneyToneClass(value: number): string | undefined {
+  if (value < 0) return "text-positive";
+  if (value === 0) return "text-muted-foreground";
+  return undefined;
+}
+
 /** Rounded money shares the table's full-value spill and accessible tooltip. */
 export function CurrencyValue({
   value,
   decimals,
-  className,
+  className: callerClassName,
   interactive = true,
+  tone = true,
 }: {
   value: number;
   decimals?: number;
   className?: string;
   /** Editable values already have their own keyboard trigger. */
   interactive?: boolean;
+  /** Sign tone (credit positive, zero muted); off for totals and prose. */
+  tone?: boolean;
 }) {
+  const className = cn(tone && moneyToneClass(value), callerClassName);
   const displayed = formatCurrency(value, decimals);
   const exact = formatExactCurrency(value);
   if (displayed === exact)

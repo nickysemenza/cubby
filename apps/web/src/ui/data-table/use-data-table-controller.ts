@@ -8,7 +8,7 @@ import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
 
 import type { InfiniteScrollControls } from "../../entity/hooks/use-infinite-table-list";
-import { columnWidthVariables } from "./column-layout";
+import { columnWidthVariables, emptyColumnIds } from "./column-layout";
 import { ROW_DENSITY } from "./density";
 import { useTableVirtualizer } from "./hooks/use-table-virtualizer";
 import { useInfinitePrefetch } from "./infinite-prefetch";
@@ -185,6 +185,19 @@ export function useDataTableController<TItem extends RowData>({
     desktopLayout,
   );
   useCellSpill(tableContainerRef, desktopLayout);
+  const collapsedColumns = useMemo(
+    () => emptyColumnIds(table, rows),
+    // oxlint-disable-next-line react/exhaustive-deps -- fitScope and the content version stand in for the table and row state emptiness reads
+    [
+      table,
+      rows,
+      fitScope,
+      userSizedKey,
+      table.state.columnPinning,
+      table.options.meta?.rowContentVersion,
+    ],
+  );
+  const collapsedKey = [...collapsedColumns].join(",");
   const columnSizeVars = useMemo(
     () =>
       columnWidthVariables(
@@ -192,9 +205,16 @@ export function useDataTableController<TItem extends RowData>({
         tableContainerWidth,
         new Set(userSizedKey ? userSizedKey.split(",") : []),
         renderedWidths,
+        collapsedColumns,
       ),
-    // oxlint-disable-next-line react/exhaustive-deps -- scalar signature stands in for TanStack's fresh column array
-    [columnSizesKey, tableContainerWidth, userSizedKey, renderedWidths],
+    // oxlint-disable-next-line react/exhaustive-deps -- scalar signatures stand in for TanStack's fresh column array and the collapsed set
+    [
+      columnSizesKey,
+      tableContainerWidth,
+      userSizedKey,
+      renderedWidths,
+      collapsedKey,
+    ],
   );
 
   // Columns the table actually renders. Use VISIBLE leaves: getAllColumns()
@@ -209,7 +229,9 @@ export function useDataTableController<TItem extends RowData>({
   const rowContentVersion = table.options.meta?.rowContentVersion;
 
   return {
+    scrollToFlatRow,
     cellSelectionContainerProps,
+    collapsedColumns,
     colSpan,
     columnsKey,
     columnSizeVars,

@@ -8,10 +8,17 @@ import { Fragment } from "react";
 
 import type { ListSearch } from "~/entity/entity-list/list-slot-types";
 import {
+  type ListEntity,
+  listEntities,
+} from "~/entity/generated/entity-lists.gen";
+import {
   isViewActive,
   type ViewDefinition,
   viewsForEntity,
 } from "~/entity/model/view-manifest";
+import { useViewCounts } from "~/entity/table/list-query-context";
+import { formatCount } from "~/lib/number-format";
+import { cn } from "~/lib/utils";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import {
@@ -99,7 +106,7 @@ export function TableSavedViewsMenuItems<TData extends RowData>({
   table,
   entity,
 }: DataTableViewsProps<TData>) {
-  const navigate = useNavigate();
+  const appliers = useTableViewAppliers(table);
   const views = viewsForEntity(entity);
   if (views.length === 0) return null;
 
@@ -110,18 +117,141 @@ export function TableSavedViewsMenuItems<TData extends RowData>({
       entity={entity}
       columnFilters={columnFilters}
       sorting={sorting}
-      onApplyFilters={(filters) => table.setColumnFilters(filters)}
-      onApplySort={(sort) => table.setSorting(sort)}
-      onApplyLayout={(savedLayout) => applyTableLayout(table, savedLayout)}
-      onApplyListSearch={(patch) =>
-        // SAFETY: as in `useListSearch`, route-specific search keys are erased;
-        // every generated index route validates `view` and `groupBy`.
-        void navigate({
-          search: (previous: ListSearch) => ({ ...previous, ...patch }),
-        } as never)
-      }
-      onResetPage={() => table.setPageIndex(0)}
+      {...appliers}
     />
+  );
+}
+
+type ViewAppliers = Pick<
+  SavedViewsMenuProps,
+  | "onApplyFilters"
+  | "onApplySort"
+  | "onApplyLayout"
+  | "onApplyListSearch"
+  | "onResetPage"
+>;
+
+/** How a table applies a declared view: its live state and the list URL. */
+function useTableViewAppliers<TData extends RowData>(
+  table: Table<TData>,
+): ViewAppliers {
+  const navigate = useNavigate();
+  return {
+    onApplyFilters: (filters) => table.setColumnFilters(filters),
+    onApplySort: (sort) => table.setSorting(sort),
+    onApplyLayout: (savedLayout) => applyTableLayout(table, savedLayout),
+    onApplyListSearch: (patch) =>
+      // SAFETY: as in `useListSearch`, route-specific search keys are erased;
+      // every generated index route validates `view` and `groupBy`.
+      void navigate({
+        search: (previous: ListSearch) => ({ ...previous, ...patch }),
+      } as never),
+    onResetPage: () => table.setPageIndex(0),
+  };
+}
+
+/** Sets a declared view's filters, sort, layout, list view and grouping. */
+function applyView(
+  view: ViewDefinition,
+  {
+    onApplyFilters,
+    onApplySort,
+    onApplyLayout,
+    onApplyListSearch,
+    onResetPage,
+  }: ViewAppliers,
+) {
+  onApplyFilters(view.filters);
+  if (view.sort) onApplySort(view.sort);
+  // Layout does not participate in active-state matching: manual column
+  // adjustments keep the view checked while its filter/sort contract holds.
+  if (view.layout) onApplyLayout?.(view.layout);
+  // Like layout, the list view and grouping stay out of active-state
+  // matching; a view that declares neither leaves them as they are.
+  const listSearch = {
+    ...(view.view ? { view: view.view } : {}),
+    ...(view.groupBy
+      ? { groupBy: view.groupBy, groupLevel: view.groupLevel }
+      : {}),
+  };
+  if (Object.keys(listSearch).length > 0) onApplyListSearch?.(listSearch);
+  onResetPage?.();
+}
+
+const isListEntity = (entity: Entity | undefined): entity is ListEntity =>
+  listEntities.some((candidate) => candidate === entity);
+
+/**
+ * The entity's declared saved views as tabs under the list title, each with
+ * its count, "All" first. The active tab is the view whose filters the list
+ * holds; any other filter state leaves no tab selected. Absent when the
+ * entity declares no views.
+ */
+export function SavedViewTabs<TData extends RowData>({
+  table,
+  entity,
+}: DataTableViewsProps<TData>) {
+  const appliers = useTableViewAppliers(table);
+  const views = viewsForEntity(entity);
+  const { total, counts } = useViewCounts(
+    isListEntity(entity) ? entity : undefined,
+  );
+  if (views.length === 0) return null;
+  const { columnFilters, sorting } = table.state;
+  // Filters alone select a tab: a re-sorted view is still that view.
+  const activeView = views.find((view) =>
+    isViewActive(view, columnFilters, view.sort ?? sorting),
+  );
+  const allActive = activeView === undefined && columnFilters.length === 0;
+  const tab = (
+    key: string,
+    label: string,
+    count: number | undefined,
+    active: boolean,
+    onSelect: () => void,
+    description?: string,
+  ) => (
+    <button
+      key={key}
+      type="button"
+      aria-pressed={active}
+      title={description}
+      onClick={onSelect}
+      className={cn(
+        "-mb-px flex h-8 shrink-0 items-center gap-1.5 border-b-2 px-0.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        active
+          ? "border-foreground font-medium text-foreground"
+          : "border-transparent text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {label}
+      {count !== undefined && (
+        <span className="text-muted-foreground tabular-nums">
+          {formatCount(count)}
+        </span>
+      )}
+    </button>
+  );
+  return (
+    <nav
+      aria-label="Saved views"
+      className="flex min-w-0 [scrollbar-width:none] items-end gap-4 overflow-x-auto overscroll-x-contain"
+    >
+      {tab("all", "All", total, allActive, () => {
+        appliers.onApplyFilters([]);
+        appliers.onResetPage?.();
+      })}
+      {views.map((view) =>
+        tab(
+          view.id,
+          view.label,
+          counts.get(view.id),
+          view === activeView,
+          () => applyView(view, appliers),
+          view.description,
+        ),
+      )}
+    </nav>
   );
 }
 
@@ -154,23 +284,12 @@ function SavedViewsMenuItems({
 }: SavedViewsMenuProps) {
   const views = viewsForEntity(entity);
   if (views.length === 0) return null;
-
-  const applyView = (view: ViewDefinition) => {
-    onApplyFilters(view.filters);
-    if (view.sort) onApplySort(view.sort);
-    // Layout does not participate in active-state matching: manual column
-    // adjustments keep the view checked while its filter/sort contract holds.
-    if (view.layout) onApplyLayout?.(view.layout);
-    // Like layout, the list view and grouping stay out of active-state
-    // matching; a view that declares neither leaves them as they are.
-    const listSearch = {
-      ...(view.view ? { view: view.view } : {}),
-      ...(view.groupBy
-        ? { groupBy: view.groupBy, groupLevel: view.groupLevel }
-        : {}),
-    };
-    if (Object.keys(listSearch).length > 0) onApplyListSearch?.(listSearch);
-    onResetPage?.();
+  const appliers = {
+    onApplyFilters,
+    onApplySort,
+    onApplyLayout,
+    onApplyListSearch,
+    onResetPage,
   };
 
   return (
@@ -180,7 +299,7 @@ function SavedViewsMenuItems({
         const active = isViewActive(view, columnFilters, sorting);
         return (
           <Fragment key={view.id}>
-            <DropdownMenuItem onClick={() => applyView(view)}>
+            <DropdownMenuItem onClick={() => applyView(view, appliers)}>
               <CheckIcon
                 className={active ? "size-3.5" : "size-3.5 text-transparent"}
               />

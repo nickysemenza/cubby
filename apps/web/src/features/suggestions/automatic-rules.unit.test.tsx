@@ -89,7 +89,6 @@ describe("AutomaticRulesSection", () => {
   it("offers On only to an eligible rule and shows its measured numbers", async () => {
     render(
       <AutomaticRulesSection
-        defaultOpen
         operations={operations([FIELD_ON, ATTACH_OFF], async () => FIELD_ON)}
       />,
       { wrapper: harness.wrapper },
@@ -126,7 +125,6 @@ describe("AutomaticRulesSection", () => {
     const calls: unknown[] = [];
     render(
       <AutomaticRulesSection
-        defaultOpen
         operations={operations(
           [{ ...ATTACH_OFF, eligible: true }],
           async (input) => {
@@ -153,7 +151,6 @@ describe("AutomaticRulesSection", () => {
     const calls: unknown[] = [];
     render(
       <AutomaticRulesSection
-        defaultOpen
         operations={operations([FIELD_ON], async (input) => {
           calls.push(input);
           return { ...FIELD_ON, enabled: false };

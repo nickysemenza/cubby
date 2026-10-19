@@ -12,6 +12,7 @@ import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { GridFourIcon } from "@phosphor-icons/react/dist/csr/GridFour";
 import { GridNineIcon } from "@phosphor-icons/react/dist/csr/GridNine";
+import { RowsIcon } from "@phosphor-icons/react/dist/csr/Rows";
 import { TableIcon } from "@phosphor-icons/react/dist/csr/Table";
 import type { Icon } from "@phosphor-icons/react/lib";
 import { Link } from "@tanstack/react-router";
@@ -101,16 +102,14 @@ const groupLevelLabel = (level: number) =>
   level === 1 ? "Top level" : `Level ${level}`;
 
 /**
- * One view menu, with choices derived from the manifest at every width: the
- * presentations, then Group by over the declared `model.grouping` choices.
- * A choice that cannot group stays listed, disabled, with its reason.
+ * The presentation menu: the manifest's list views (Table, Cards, Compact,
+ * Timeline). Group by is its own menu beside it ({@link ListGroupMenu}).
  */
 function ListViewMenu({ entity }: { entity: BrowserRoutedEntity }) {
   const { search, navigate } = useListSearch();
   const { density, setDensity } = useEntityListCardDensity();
   const { views, view } = resolveListView(entity, search);
-  const grouping = generatedEntityListFields[entity].grouping;
-  if (views.length < 2 && grouping.length === 0) return null;
+  if (views.length < 2) return null;
   const options = views.flatMap((candidate) => {
     const id = listViewId(candidate);
     const choice = {
@@ -144,6 +143,53 @@ function ListViewMenu({ entity }: { entity: BrowserRoutedEntity }) {
     setDensity("cards");
     navigate({ view: next === defaultView ? undefined : next });
   };
+  const SelectedIcon = selectedOption?.icon;
+  const viewLabel = selectedOption?.label ?? selected;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label={`${entities[entity].pluralLabel} view: ${viewLabel}`}
+          />
+        }
+      >
+        {SelectedIcon && <SelectedIcon className="size-3.5" />}
+        {viewLabel}
+        <CaretDownIcon className="size-3.5" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-52">
+        {options.map((option) => (
+          <DropdownMenuItem
+            key={option.value}
+            aria-label={`${option.label} view`}
+            aria-current={option.value === selected ? "true" : undefined}
+            onClick={() => onValueChange(option.value)}
+          >
+            {option.icon && <option.icon className="size-3.5" />}
+            {option.label}
+            {option.value === selected && (
+              <CheckIcon className="ml-auto size-3.5" />
+            )}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/**
+ * Group by over the declared `model.grouping` choices, with hierarchy levels
+ * where a choice nests. A choice that cannot group stays listed, disabled,
+ * with its reason. Absent when the entity declares no grouping.
+ */
+function ListGroupMenu({ entity }: { entity: BrowserRoutedEntity }) {
+  const { search, navigate } = useListSearch();
+  const { view } = resolveListView(entity, search);
+  const grouping = generatedEntityListFields[entity].grouping;
+  if (grouping.length === 0) return null;
   const timeline = view === "timeline";
   const groupBy = timeline ? undefined : listGroupBy(search);
   const activeGroup = grouping.find(
@@ -185,9 +231,6 @@ function ListViewMenu({ entity }: { entity: BrowserRoutedEntity }) {
   const groupSummary = activeGroup
     ? `${activeGroup.label}${activeLevel ? `, ${groupLevelLabel(activeLevel).toLowerCase()}` : ""}`
     : undefined;
-  const SelectedIcon = selectedOption?.icon;
-  const viewLabel =
-    options.length > 1 ? (selectedOption?.label ?? selected) : "View";
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -195,65 +238,44 @@ function ListViewMenu({ entity }: { entity: BrowserRoutedEntity }) {
           <Button
             variant="ghost"
             size="sm"
-            aria-label={`${entities[entity].pluralLabel} view: ${viewLabel}${groupSummary ? `, grouped by ${groupSummary}` : ""}`}
+            aria-label={
+              groupSummary ? `Grouped by ${groupSummary}` : "Group by"
+            }
           />
         }
       >
-        {options.length > 1 && SelectedIcon && (
-          <SelectedIcon className="size-3.5" />
-        )}
-        {viewLabel}
-        {groupSummary && (
-          <span className="text-muted-foreground">· {groupSummary}</span>
-        )}
+        <RowsIcon className="size-3.5" />
+        {groupSummary ?? "Group"}
         <CaretDownIcon className="size-3.5" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-52">
-        {options.length > 1 &&
-          options.map((option) => (
-            <DropdownMenuItem
-              key={option.value}
-              aria-label={`${option.label} view`}
-              aria-current={option.value === selected ? "true" : undefined}
-              onClick={() => onValueChange(option.value)}
-            >
-              {option.icon && <option.icon className="size-3.5" />}
-              {option.label}
-              {option.value === selected && (
-                <CheckIcon className="ml-auto size-3.5" />
-              )}
-            </DropdownMenuItem>
-          ))}
-        {options.length > 1 && grouping.length > 0 && <DropdownMenuSeparator />}
-        {grouping.length > 0 && (
-          <DropdownMenuGroup aria-label="Group by">
-            <DropdownMenuLabel>Group by</DropdownMenuLabel>
-            {groupChoices.map((choice) => {
-              const current = choice.key === activeGroup?.key;
-              return (
-                <DropdownMenuItem
-                  key={choice.key ?? "none"}
-                  disabled={choice.reason !== null}
-                  aria-label={`Group by ${choice.label}`}
-                  aria-current={current ? "true" : undefined}
-                  onClick={() =>
-                    navigate({ groupBy: choice.key, groupLevel: undefined })
-                  }
-                >
-                  <span className="flex min-w-0 flex-col">
-                    <span>{choice.label}</span>
-                    {choice.reason && (
-                      <span className="max-w-64 text-xs whitespace-normal text-muted-foreground">
-                        {choice.reason}
-                      </span>
-                    )}
-                  </span>
-                  {current && <CheckIcon className="ml-auto size-3.5" />}
-                </DropdownMenuItem>
-              );
-            })}
-          </DropdownMenuGroup>
-        )}
+        <DropdownMenuGroup aria-label="Group by">
+          <DropdownMenuLabel>Group by</DropdownMenuLabel>
+          {groupChoices.map((choice) => {
+            const current = choice.key === activeGroup?.key;
+            return (
+              <DropdownMenuItem
+                key={choice.key ?? "none"}
+                disabled={choice.reason !== null}
+                aria-label={`Group by ${choice.label}`}
+                aria-current={current ? "true" : undefined}
+                onClick={() =>
+                  navigate({ groupBy: choice.key, groupLevel: undefined })
+                }
+              >
+                <span className="flex min-w-0 flex-col">
+                  <span>{choice.label}</span>
+                  {choice.reason && (
+                    <span className="max-w-64 text-xs whitespace-normal text-muted-foreground">
+                      {choice.reason}
+                    </span>
+                  )}
+                </span>
+                {current && <CheckIcon className="ml-auto size-3.5" />}
+              </DropdownMenuItem>
+            );
+          })}
+        </DropdownMenuGroup>
         {leveled && <DropdownMenuSeparator />}
         {leveled && (
           <DropdownMenuGroup aria-label="Group level">
@@ -290,6 +312,16 @@ function ListViewMenu({ entity }: { entity: BrowserRoutedEntity }) {
   );
 }
 
+/** The list's Group by and view menus, in the workbench band's controls slot. */
+function ListWorkbenchMenus({ entity }: { entity: BrowserRoutedEntity }) {
+  return (
+    <div className="flex items-center gap-1">
+      <ListGroupMenu entity={entity} />
+      <ListViewMenu entity={entity} />
+    </div>
+  );
+}
+
 /** A table sits flush to the viewport edge; every other renderer wants the gutter. */
 function useListBodyGutter(entity: BrowserRoutedEntity): "none" | "standard" {
   const { search } = useListSearch();
@@ -318,7 +350,7 @@ export function listPage({
         override={override}
       />
     ),
-    workbenchControls: () => <ListViewMenu entity={entity} />,
+    workbenchControls: () => <ListWorkbenchMenus entity={entity} />,
     bodyGutter: function useBodyGutter() {
       return useListBodyGutter(entity);
     },
@@ -391,7 +423,9 @@ export function listChromePage({
       entity !== undefined && isBrowserRoutedEntity(entity) ? entity : null;
     const resolvedWorkbenchControls =
       workbenchControls ??
-      (routedEntity ? () => <ListViewMenu entity={routedEntity} /> : undefined);
+      (routedEntity
+        ? () => <ListWorkbenchMenus entity={routedEntity} />
+        : undefined);
     return (
       <EntityListCardDensityProvider>
         <Page

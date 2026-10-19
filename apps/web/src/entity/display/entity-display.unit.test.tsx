@@ -388,10 +388,10 @@ describe("declared entity displays", () => {
         .getByRole("link", { name: "Synthetic drill" })
         .querySelector("img"),
     ).toHaveAttribute("src", "https://images.example/product.jpg");
-    // No cover: the entity icon holds the mark's box instead of an image.
+    // A person leads with their initials disc instead of an image or icon.
     const party = screen.getByRole("link", { name: "Synthetic member" });
     expect(party.querySelector("img")).toBeNull();
-    expect(party.querySelector("[aria-hidden] svg")).not.toBeNull();
+    expect(party.querySelector("[data-person-avatar]")).toHaveTextContent("SM");
     harness.dispose();
   });
 

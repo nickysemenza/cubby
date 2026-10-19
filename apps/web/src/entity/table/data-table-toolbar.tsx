@@ -1,8 +1,12 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { ArrowsDownUpIcon } from "@phosphor-icons/react/dist/csr/ArrowsDownUp";
 import { BookmarkIcon } from "@phosphor-icons/react/dist/csr/Bookmark";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { GearSixIcon } from "@phosphor-icons/react/dist/csr/GearSix";
+import { SortAscendingIcon } from "@phosphor-icons/react/dist/csr/SortAscending";
+import { SortDescendingIcon } from "@phosphor-icons/react/dist/csr/SortDescending";
 import type { RowData } from "@tanstack/react-table";
 import { type ReactNode, useState } from "react";
 import { createPortal } from "react-dom";
@@ -16,7 +20,9 @@ import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuSubmenu,
   DropdownMenuSubmenuContent,
@@ -28,9 +34,11 @@ import { Spinner } from "~/ui/primitives/spinner";
 import { isTableLayoutCustomized } from "../../ui/data-table/column-layout";
 import { DataTableViewOptions } from "../../ui/data-table/data-table-view-options";
 import type { FilterSheetSwitch } from "../../ui/data-table/filter-bar";
+import { sortableColumns } from "../../ui/data-table/mobile-sort-sheet";
 import type { CubbyTable as Table } from "../../ui/data-table/table-features";
 import TableLayoutCustomizer from "../../ui/data-table/table-layout-customizer";
-import { TableSavedViewsMenuItems } from "./data-table-views";
+import { mobileColumnLabel } from "../../ui/data-table/table-meta";
+import { SavedViewTabs, TableSavedViewsMenuItems } from "./data-table-views";
 import { LedgerFilters } from "./ledger-filters";
 import { ProblemWorklistStatus } from "./problem-worklist";
 
@@ -169,6 +177,102 @@ function ActionsMenu<TData extends RowData>({
 }
 
 /**
+ * The list's sort as one menu: "Sort by" over the sortable columns, then
+ * "Order". Writes the same `sorting` state the column headers do; a cleared
+ * sort falls back to the entity's declared default order.
+ */
+function SortMenu<TData extends RowData>({ table }: { table: Table<TData> }) {
+  const columns = sortableColumns(table);
+  if (columns.length === 0) return null;
+  const [active] = table.state.sorting;
+  const activeColumn = columns.find((column) => column.id === active?.id);
+  const label = activeColumn ? mobileColumnLabel(activeColumn) : "Default";
+  const OrderIcon = active?.desc ? SortDescendingIcon : SortAscendingIcon;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label={`Sort: ${label}${active ? (active.desc ? ", descending" : ", ascending") : ""}`}
+            className="shrink-0"
+          />
+        }
+      >
+        {active ? (
+          <OrderIcon className="size-3.5" />
+        ) : (
+          <ArrowsDownUpIcon className="size-3.5" />
+        )}
+        {label}
+        <CaretDownIcon className="size-3.5" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-48">
+        <DropdownMenuGroup aria-label="Sort by">
+          <DropdownMenuLabel>Sort by</DropdownMenuLabel>
+          <DropdownMenuItem
+            aria-current={active ? undefined : "true"}
+            onClick={() => table.setSorting([])}
+          >
+            Default
+            {!active && <CheckIcon className="ml-auto size-3.5" />}
+          </DropdownMenuItem>
+          {columns.map((column) => {
+            const current = column.id === active?.id;
+            return (
+              <DropdownMenuItem
+                key={column.id}
+                aria-current={current ? "true" : undefined}
+                onClick={() =>
+                  table.setSorting([
+                    {
+                      id: column.id,
+                      desc: current
+                        ? active.desc
+                        : column.getFirstSortDir() === "desc",
+                    },
+                  ])
+                }
+              >
+                {mobileColumnLabel(column)}
+                {current && <CheckIcon className="ml-auto size-3.5" />}
+              </DropdownMenuItem>
+            );
+          })}
+        </DropdownMenuGroup>
+        {active && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup aria-label="Order">
+              <DropdownMenuLabel>Order</DropdownMenuLabel>
+              {(
+                [
+                  [false, "Ascending", SortAscendingIcon],
+                  [true, "Descending", SortDescendingIcon],
+                ] as const
+              ).map(([desc, text, Icon]) => (
+                <DropdownMenuItem
+                  key={text}
+                  aria-current={active.desc === desc ? "true" : undefined}
+                  onClick={() => table.setSorting([{ id: active.id, desc }])}
+                >
+                  <Icon className="size-3.5" />
+                  {text}
+                  {active.desc === desc && (
+                    <CheckIcon className="ml-auto size-3.5" />
+                  )}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/**
  * The query tier: bulk slot plus the rest (problem status, spinner, filters,
  * `Actions ▾`, page actions) as ONE node — so `styles.css`'s
  * `:has([data-bulk-action-bar])` rule keeps swapping the whole tier for the
@@ -208,6 +312,7 @@ function QueryTierFieldset<TData extends RowData>({
   switches?: readonly FilterSheetSwitch[] | undefined;
 }) {
   const actionsTarget = usePageWorkbenchTarget("actions");
+  const tabsTarget = usePageWorkbenchTarget("tabs", isPage);
   const menu =
     isPage && !isMobileFilterTier ? (
       <fieldset
@@ -246,12 +351,19 @@ function QueryTierFieldset<TData extends RowData>({
           <LedgerFilters
             table={table}
             entity={entity}
-            collapsed={isPage}
+            workbench={isPage}
             optionHints={filterOptionHints}
             variant={isMobileFilterTier ? "mobile" : "desktop"}
             switches={isMobileFilterTier ? switches : undefined}
           />
         </div>
+        {isPage && !isMobileFilterTier && <SortMenu table={table} />}
+        {isPage && !isMobileFilterTier && tabsTarget
+          ? createPortal(
+              <SavedViewTabs table={table} entity={entity} />,
+              tabsTarget,
+            )
+          : null}
         {actionsTarget ? createPortal(menu, actionsTarget) : menu}
         {actions}
       </Row>

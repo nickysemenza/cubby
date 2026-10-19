@@ -1,6 +1,7 @@
 import { FILTER_NOT_PREFIX } from "@cubby/schemas/filter-sentinel-fields";
 import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { fireEvent, render, screen } from "@testing-library/react";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -56,41 +57,36 @@ function renderBar(
   return { onChange, ...result };
 }
 
+/** Holds filters like a real owner, so live edits re-render the bar. */
+function StatefulBar({
+  initial = [],
+  onChange,
+  ...props
+}: Omit<Parameters<typeof FilterBar>[0], "filters" | "onChange"> & {
+  initial?: Filter[];
+  onChange: (filters: Filter[]) => void;
+}) {
+  const [filters, setFilters] = useState(initial);
+  return (
+    <FilterBar
+      {...props}
+      filters={filters}
+      onChange={(next) => {
+        onChange(next);
+        setFilters(next);
+      }}
+    />
+  );
+}
+
+const openPanel = () =>
+  fireEvent.click(screen.getByRole("button", { name: "Filters" }));
+
 describe("FilterBar", () => {
-  it("keeps active filters visible while inactive filters remain reachable through Filters", async () => {
-    const onChange = vi.fn();
-    render(
-      <FilterBar
-        collapsed
-        fields={fields}
-        filters={[
-          {
-            id: "filter-status",
-            field: "status",
-            operator: "is",
-            values: ["open"],
-          },
-        ]}
-        onChange={onChange}
-      />,
-    );
-    expect(screen.getByRole("button", { name: "Status: Open" })).toBeVisible();
-    expect(screen.queryByRole("button", { name: "Name: any" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Filters" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Name: any" }));
-    fireEvent.change(
-      await screen.findByRole("textbox", { name: "Filter Name" }),
-      { target: { value: "brush" } },
-    );
-    expect(onChange).toHaveBeenLastCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({ field: "status", values: ["open"] }),
-        expect.objectContaining({ field: "name", values: ["brush"] }),
-      ]),
-    );
-  });
-  it("renders one chip per declared field, inactive ones reading 'any'", () => {
-    renderBar([
+  // Failure modes: an inactive filter rendered as a chip ("any" noise); an
+  // edit that waits for Apply; the panel losing the active filters' place.
+  it("shows only active filters as chips and reaches the rest through the panel", async () => {
+    const { onChange } = renderBar([
       {
         id: "filter-status",
         field: "status",
@@ -98,16 +94,51 @@ describe("FilterBar", () => {
         values: ["open"],
       },
     ]);
+    expect(screen.getByRole("button", { name: "Status: Open" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: /^Name/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Filters" })).toHaveTextContent(
+      "Filter1",
+    );
 
-    // "Name" has no active filter — its chip still exists, showing "any".
+    openPanel();
+    expect(await screen.findByText("Active · 1")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Name" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Filter Name" }), {
+      target: { value: "brush" },
+    });
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ field: "status", values: ["open"] }),
+        expect.objectContaining({ field: "name", values: ["brush"] }),
+      ]),
+    );
+  });
+
+  it("finds a filter by label", async () => {
+    renderBar([]);
+    openPanel();
+    fireEvent.change(
+      await screen.findByRole("textbox", { name: "Find a filter" }),
+      {
+        target: { value: "tag" },
+      },
+    );
+    expect(screen.getByRole("button", { name: "Tags" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Name" })).toBeNull();
+  });
+
+  it("keeps the open row in place while its first edit activates it", async () => {
+    const onChange = vi.fn();
+    render(<StatefulBar fields={fields} onChange={onChange} />);
+    openPanel();
+    fireEvent.click(await screen.findByRole("button", { name: "Name" }));
+    const input = screen.getByRole("textbox", { name: "Filter Name" });
+    fireEvent.change(input, { target: { value: "s" } });
+    // Same element: the row did not jump into Active and remount its editor.
+    expect(screen.getByRole("textbox", { name: "Filter Name" })).toBe(input);
+    // The panel row, still expanded (the strip's new chip shares the name).
     expect(
-      screen.getByRole("button", { name: "Name: any" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Status: Open" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Tags: any" }),
+      screen.getByRole("button", { name: "Name: s", expanded: true }),
     ).toBeInTheDocument();
   });
 
@@ -138,25 +169,7 @@ describe("FilterBar", () => {
     expect(onActivate).toHaveBeenCalledWith(["ING-C2YH"]);
   });
 
-  it("edits a text field's chip directly, with no separate add-filter step", () => {
-    const { onChange } = renderBar([]);
-
-    fireEvent.click(screen.getByRole("button", { name: "Name: any" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Filter Name" }), {
-      target: { value: "sink" },
-    });
-
-    expect(onChange).toHaveBeenLastCalledWith([
-      {
-        id: "filter-name",
-        field: "name",
-        operator: "contains",
-        values: ["sink"],
-      },
-    ]);
-  });
-
-  it("edits a single-select field's chip through a combobox", async () => {
+  it("edits a single-select chip through its own popover", async () => {
     const { onChange } = renderBar([
       {
         id: "filter-status",
@@ -167,9 +180,6 @@ describe("FilterBar", () => {
     ]);
 
     fireEvent.click(screen.getByRole("button", { name: "Status: Open" }));
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Show filter status options" }),
-    );
     fireEvent.click(await screen.findByRole("option", { name: /done/i }));
 
     expect(onChange).toHaveBeenLastCalledWith([
@@ -182,13 +192,39 @@ describe("FilterBar", () => {
     ]);
   });
 
-  it("edits a multiselect field's chip through a multiple picker with a Clear/Apply footer", async () => {
+  it("keeps a chip's editor open after unpicking its last value", async () => {
+    const onChange = vi.fn();
+    render(
+      <StatefulBar
+        fields={fields}
+        onChange={onChange}
+        initial={[
+          {
+            id: "filter-tags",
+            field: "tags",
+            operator: "is_any_of",
+            values: ["home"],
+          },
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Tags: Home" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Home" }));
+    fireEvent.click(screen.getByRole("option", { name: "Urgent" }));
+
+    expect(onChange).toHaveBeenLastCalledWith([
+      expect.objectContaining({ field: "tags", values: ["urgent"] }),
+    ]);
+  });
+
+  it("applies each checklist pick as it is made", async () => {
     const { onChange } = renderBar([]);
 
-    fireEvent.click(screen.getByRole("button", { name: "Tags: any" }));
+    openPanel();
+    fireEvent.click(await screen.findByRole("button", { name: "Tags" }));
     fireEvent.click(await screen.findByRole("option", { name: "Home" }));
-    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 
+    expect(screen.queryByRole("button", { name: "Apply" })).toBeNull();
     expect(onChange).toHaveBeenLastCalledWith([
       {
         id: "filter-tags",
@@ -196,6 +232,29 @@ describe("FilterBar", () => {
         operator: "is_any_of",
         values: ["home"],
       },
+    ]);
+  });
+
+  it("offers Any, Yes and No for a boolean filter", async () => {
+    const { onChange } = renderBar([], {
+      fields: [
+        {
+          key: "archived",
+          label: "Archived",
+          type: "select",
+          valueType: "boolean",
+          options: [
+            { value: "true", label: "Yes" },
+            { value: "false", label: "No" },
+          ],
+        },
+      ],
+    });
+    openPanel();
+    fireEvent.click(await screen.findByRole("button", { name: "Archived" }));
+    fireEvent.click(screen.getByRole("button", { name: "No" }));
+    expect(onChange).toHaveBeenLastCalledWith([
+      expect.objectContaining({ field: "archived", values: ["false"] }),
     ]);
   });
 
@@ -231,14 +290,14 @@ describe("FilterBar", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Category: any" }));
+    openPanel();
+    fireEvent.click(await screen.findByRole("button", { name: "Category" }));
     expect(await screen.findByText("Food")).toBeInTheDocument();
     const citrus = screen.getByRole("option", { name: "Produce / Citrus" });
     // Depth indents the tree row; the row reads its own label.
     expect(citrus).toHaveStyle({ paddingLeft: "18px" });
     expect(citrus).toHaveTextContent("Citrus");
     fireEvent.click(citrus);
-    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     expect(onChange).toHaveBeenLastCalledWith([
       {
         id: "filter-category",
@@ -249,7 +308,7 @@ describe("FilterBar", () => {
     ]);
   });
 
-  it("clears a single field from its own editor's Clear action", async () => {
+  it("clears one filter from its chip's ×", () => {
     const { onChange } = renderBar([
       {
         id: "filter-tags",
@@ -259,69 +318,60 @@ describe("FilterBar", () => {
       },
     ]);
 
-    fireEvent.click(screen.getByRole("button", { name: /^Tags:/ }));
-    fireEvent.click(await screen.findByRole("button", { name: "Clear" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear Tags filter" }));
 
     expect(onChange).toHaveBeenLastCalledWith([]);
   });
 
-  it("counts every active filter in 'Clear N' and clears them all", () => {
-    const { onChange } = renderBar([
-      {
-        id: "filter-name",
-        field: "name",
-        operator: "contains",
-        values: ["sink"],
-      },
-      {
-        id: "filter-status",
-        field: "status",
-        operator: "is",
-        values: ["open"],
-      },
-    ]);
+  it("clears every filter, the search text included", () => {
+    const { onChange } = renderBar(
+      [
+        {
+          id: "filter-name",
+          field: "name",
+          operator: "contains",
+          values: ["sink"],
+        },
+        {
+          id: "filter-status",
+          field: "status",
+          operator: "is",
+          values: ["open"],
+        },
+        {
+          id: "filter-tags",
+          field: "tags",
+          operator: "is_any_of",
+          values: ["home"],
+        },
+      ],
+      { searchKey: "name" },
+    );
 
-    expect(screen.getByRole("button", { name: "Clear 2" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Clear 2" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
     expect(onChange).toHaveBeenLastCalledWith([]);
   });
 
-  it("omits the Clear link entirely when nothing is active", () => {
+  it("omits Clear entirely when nothing is active", () => {
     renderBar([]);
-    expect(screen.queryByText(/^Clear/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Clear" })).toBeNull();
   });
 
-  it("caps visible chips at 3 and reveals the rest behind a ghost More", async () => {
-    const manyFields: FilterBarField[] = [
-      { key: "a", label: "A", type: "text" },
-      { key: "b", label: "B", type: "text" },
-      { key: "c", label: "C", type: "text" },
-      { key: "d", label: "D", type: "text" },
-      { key: "e", label: "E", type: "text" },
-    ];
-    const onChange = vi.fn();
-    render(<FilterBar filters={[]} fields={manyFields} onChange={onChange} />);
-
-    for (const key of ["A", "B", "C"]) {
-      expect(
-        screen.getByRole("button", { name: `${key}: any` }),
-      ).toBeInTheDocument();
-    }
-    for (const key of ["D", "E"]) {
-      expect(
-        screen.queryByRole("button", { name: `${key}: any` }),
-      ).not.toBeInTheDocument();
-    }
-
-    fireEvent.click(screen.getByRole("button", { name: "More" }));
-    fireEvent.click(await screen.findByRole("button", { name: "E: any" }));
-    fireEvent.change(await screen.findByRole("textbox", { name: "Filter E" }), {
-      target: { value: "value" },
-    });
-
-    expect(onChange).toHaveBeenLastCalledWith([
-      { id: "filter-e", field: "e", operator: "contains", values: ["value"] },
-    ]);
+  it("opens the panel on a requested field's editor", async () => {
+    const { rerender, onChange } = renderBar([]);
+    rerender(
+      <FilterBar
+        filters={[]}
+        fields={fields}
+        onChange={onChange}
+        editRequest={{ key: "tags" }}
+      />,
+    );
+    expect(await screen.findByRole("button", { name: "Tags" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(screen.getByRole("option", { name: "Home" })).toBeInTheDocument();
   });
 
   it("surfaces an invalid entity filter as readable chip text", () => {
@@ -339,31 +389,36 @@ describe("FilterBar", () => {
     ).toBeVisible();
   });
 
-  it("renders the declared search field as an input instead of a chip", () => {
+  it("renders the declared search field as an input instead of a filter", async () => {
     renderBar([], { searchKey: "name", searchPlaceholder: "Search products" });
 
     expect(
       screen.getByRole("textbox", { name: "Search products" }),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /^Name:/ }),
-    ).not.toBeInTheDocument();
+    openPanel();
+    await screen.findByRole("button", { name: "Tags" });
+    expect(screen.queryByRole("button", { name: /^Name/ })).toBeNull();
   });
 
   it("offers Match all only on a multi-valued field and applies it", async () => {
     const single = renderBar([]);
-    fireEvent.click(screen.getByRole("button", { name: "Tags: any" }));
+    openPanel();
+    fireEvent.click(await screen.findByRole("button", { name: "Tags" }));
     await screen.findByRole("option", { name: "Home" });
     expect(screen.queryByRole("button", { name: "Match all" })).toBeNull();
     single.unmount();
 
-    const { onChange } = renderBar([], {
-      fields: [{ ...fields[2]!, matchAll: true }],
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Tags: any" }));
+    const onChange = vi.fn();
+    render(
+      <StatefulBar
+        fields={[{ ...fields[2]!, matchAll: true }]}
+        onChange={onChange}
+      />,
+    );
+    openPanel();
+    fireEvent.click(await screen.findByRole("button", { name: "Tags" }));
     fireEvent.click(await screen.findByRole("option", { name: "Home" }));
     fireEvent.click(screen.getByRole("button", { name: "Match all" }));
-    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 
     expect(onChange).toHaveBeenLastCalledWith([
       expect.objectContaining({ field: "tags", values: ["home", FILTER_ALL] }),
@@ -388,7 +443,7 @@ describe("filterSummary", () => {
 
   it("reads Any value as has a value only while active", () => {
     expect(chip([FILTER_ANY])).toBe("has a value");
-    expect(filterSummary(tags, undefined)).toBe("any");
+    expect(filterSummary(tags, undefined)).toBe("");
   });
 
   it("names No value beside picked values", () => {
@@ -397,8 +452,8 @@ describe("filterSummary", () => {
   });
 
   it("treats a lone mode token as inactive", () => {
-    expect(chip([FILTER_ALL])).toBe("any");
-    expect(chip([FILTER_EXACT])).toBe("any");
+    expect(chip([FILTER_ALL])).toBe("");
+    expect(chip([FILTER_EXACT])).toBe("");
   });
 });
 

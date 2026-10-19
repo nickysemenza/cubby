@@ -3,7 +3,10 @@ import { eq } from "drizzle-orm";
 import { imageProcessingJob } from "~/server/db/image-processing-schema";
 import { getDb } from "~/server/db/helpers";
 
-import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import {
+  openCellExplanation,
+  gotoAuthenticatedPage,
+} from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 import { fixtureUserId, getFixtureDb } from "./fixtures/core";
 import { seedActivityHistory } from "./fixtures/photos";
@@ -82,11 +85,9 @@ test("related Runs show account labels and shared quality", async ({
       exact: true,
     }),
   ).toHaveAttribute("href", `/vendor-accounts/${account.shortcode}`);
-  await expect(row.getByText("100", { exact: true })).toBeVisible();
-  await row.hover();
-  await row
-    .getByRole("button", { name: "How quality is determined", exact: true })
-    .click();
+  // Complete quality paints nothing; its status stays spoken.
+  await expect(row.getByText("Complete", { exact: true })).toBeAttached();
+  await openCellExplanation(row, "How quality is determined");
   await expect(
     page.getByText("Actor attributed", { exact: true }),
   ).toBeVisible();
@@ -98,5 +99,5 @@ test("related Runs show account labels and shared quality", async ({
   const listRow = page
     .getByRole("row")
     .filter({ hasText: "Synthetic reference vendor" });
-  await expect(listRow.getByText("100", { exact: true })).toBeVisible();
+  await expect(listRow.getByText("Complete", { exact: true })).toBeAttached();
 });

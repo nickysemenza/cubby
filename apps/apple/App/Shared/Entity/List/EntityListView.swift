@@ -1040,10 +1040,10 @@ struct EntityListView: View {
                         .accessibilityIdentifier(
                             "browse.\(key.rawValue).table.reference.\(row.id).\(field.key)")
                     if fact.inherited { InheritedMarker() }
-                } else if let color = FieldGuideMetrics.optionColor(
-                    EntityFieldValue.optionColor(in: row.raw, field: field, surface: "list"))
+                } else if let option = EntityFieldValue.option(in: row.raw, field: field, surface: "list"),
+                    let chip = StatusChip(text: fact.value, option: option)
                 {
-                    StatusChip(text: fact.value, color: color)
+                    chip
                 } else {
                     Group {
                         if let date = fact.dateValue {
@@ -1291,11 +1291,10 @@ struct EntityRowView: View {
                     .monospacedDigit()
                     .accessibilityLabel("\(fact.label ?? field?.label ?? fact.id): \(fact.spokenValue)")
             } else if let field,
-                let color = FieldGuideMetrics.optionColor(
-                    EntityFieldValue.optionColor(in: row.raw, field: field, surface: "list"))
+                let option = EntityFieldValue.option(in: row.raw, field: field, surface: "list"),
+                let chip = StatusChip(text: "\(fact.label ?? field.label): \(fact.value)", option: option)
             {
-                StatusChip(
-                    text: "\(fact.label ?? field.label): \(fact.value)", color: color)
+                chip
             } else {
                 Text("\(fact.label ?? field?.label ?? fact.id): \(InheritedMarker.text(fact.segments))")
                     .font(.caption)

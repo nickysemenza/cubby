@@ -6,6 +6,8 @@ import {
   entitySummaryFields,
   projectEntityResult,
 } from "~/contracts/mcp-projections";
+import { getEntityFilters } from "~/entity/filter-manifest";
+import { buildFiltersFromManifest } from "~/entity/filters";
 import {
   entityListBaseOutputSchema,
   listEntities,
@@ -18,6 +20,7 @@ import {
   listReadFields,
   selectListReadFields,
 } from "~/entity/model/list-read-schema";
+import { viewsForEntity } from "~/entity/model/view-manifest";
 import { getDb } from "~/server/db/helpers";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { executeEntity } from "~/server/entity-kernel";
@@ -116,6 +119,32 @@ describe("standard progressive list composition", () => {
     } finally {
       await getDb(ctx.db).execute(
         sql`ALTER TABLE "UnavailableImageSighting" RENAME TO "ImageSighting"`,
+      );
+    }
+  });
+  // Regression: view counts compiled filters through the Problem registry,
+  // which throws for a saved view that is not Problem-backed (Completed).
+  it("counts every declared saved view as its applied list reads it", async () => {
+    await seedReferenceUniverse(ctx.db);
+    const context = buildKernelContext(ctx.db);
+    const operation = ENTITY_LIST_READ_OPERATIONS.task;
+    const specs = getEntityFilters("task");
+    const views = viewsForEntity("task").map((view) => {
+      const values = new Map(view.filters.map(({ id, value }) => [id, value]));
+      return {
+        id: view.id,
+        filters: buildFiltersFromManifest(specs, (id) => values.get(id)),
+      };
+    });
+    expect(views.length).toBeGreaterThan(1);
+    const counts = await operation.viewCounts(context, { views });
+    for (const view of views) {
+      const base = await operation.base(context, {
+        filters: view.filters,
+        pagination: { pageIndex: 0, pageSize: 1 },
+      });
+      expect(counts.views.find((count) => count.id === view.id)?.count).toBe(
+        base.meta.totalCount,
       );
     }
   });

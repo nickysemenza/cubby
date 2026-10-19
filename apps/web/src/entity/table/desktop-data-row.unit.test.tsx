@@ -158,6 +158,11 @@ describe("DesktopDataRow", () => {
 
     expect(screen.getByText("Vendor count")).toBeVisible();
     fireEvent.pointerEnter(screen.getByRole("row"), { pointerType: "mouse" });
+    // The rail belongs to the hovered cell, not every cell of the active row.
+    expect(
+      screen.queryByRole("button", { name: "Inspect related records" }),
+    ).not.toBeInTheDocument();
+    fireEvent.pointerEnter(screen.getByRole("cell"), { pointerType: "mouse" });
     expect(
       screen.getByRole("button", { name: "Inspect related records" }),
     ).toBeVisible();
@@ -442,6 +447,11 @@ describe("DesktopDataRow", () => {
     ];
     const renderedRow = screen.getByRole("row");
     fireEvent.pointerEnter(renderedRow, { pointerType: "mouse" });
+    const vendorCell = screen
+      .getByRole("link", { name: "Vendor count" })
+      .closest("td");
+    if (!vendorCell) throw new Error("Expected the vendor cell");
+    fireEvent.pointerEnter(vendorCell, { pointerType: "mouse" });
     expect(
       screen.getByRole("button", { name: "Inspect related records" }),
     ).toBeVisible();

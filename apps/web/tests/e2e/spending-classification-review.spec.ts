@@ -3,6 +3,7 @@ import { spendingClassificationReviewPreview } from "@cubby/schemas/spending-cla
 import { z } from "zod";
 import {
   chooseOption,
+  openCellExplanation,
   gotoAuthenticatedPage,
   inlineExplanation,
   selectComboboxItem,
@@ -299,17 +300,12 @@ test("reviews historical item classification and preserves explicit purpose", as
     .locator("#expenses")
     .getByRole("row")
     .filter({ has: principalLink });
-  // A row's explanation appears once the row is hovered or focused.
-  await expenseRow.hover();
-  const tableExplanation = expenseRow
-    .getByRole("button", {
-      name: "How spending category is determined",
-      exact: true,
-    })
-    .first();
-  await expect(tableExplanation).toBeVisible();
   await expect(async () => {
-    if (!(await openPopover.isVisible())) await tableExplanation.click();
+    if (!(await openPopover.isVisible()))
+      await openCellExplanation(
+        expenseRow,
+        "How spending category is determined",
+      );
     // Short attempts: an early click can miss hydration, and the default
     // expect timeout would spend the whole budget before the retry click.
     await expect(

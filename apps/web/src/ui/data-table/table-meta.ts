@@ -3,6 +3,7 @@ import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { humanize, type NumberRange, parseShortcode } from "@cubby/shared";
 import type { CellData, RowData } from "@tanstack/react-table";
+import { type ReactNode, useEffect } from "react";
 import { z } from "zod";
 
 import type { PickerRecordSource } from "~/ui/combobox/picker";
@@ -10,8 +11,8 @@ import type { PickerOption } from "~/ui/combobox/picker-option";
 
 import type { ColumnCellData } from "./cell-data";
 import type { CubbyDefaultTableLayout } from "./column-layout";
-import type { FilterBarField } from "./filter-bar-core";
-import type { CubbyColumn } from "./table-features";
+import type { FilterBarField, FilterValueType } from "./filter-bar-core";
+import type { CubbyColumn, CubbyTable } from "./table-features";
 
 /** Configuration for an inline column-header filter. */
 export interface FilterConfig {
@@ -19,6 +20,16 @@ export interface FilterConfig {
   /** The filter's declared name; it wins over the hosting column's header. */
   label?: string;
   filterType?: "text" | "select" | "multiselect";
+  /** The declared filter kind (`multiselect`, `idMulti`, `range`, …). */
+  kind?: string;
+  /** What the values are; drives the panel's type glyph and editor. */
+  valueType?: FilterValueType;
+  /** The entity an `entity` filter's values are records of. */
+  referenceEntity?: string;
+  /** The Filters panel section (the field's edit section, else by type). */
+  group?: string;
+  /** The type glyph override (an entity filter's entity icon). */
+  icon?: ReactNode;
   /** A multiselect with no roster: its values are typed, comma-separated. */
   freeText?: boolean;
   /** Filters sharing a group hold one value between them: picking replaces. */
@@ -144,6 +155,11 @@ export interface CubbyColumnMeta<TData = CellData> {
    */
   linksTo?: Entity;
   numeric?: boolean;
+  /**
+   * What the column holds, for its header glyph. Omitted, the header derives
+   * it from `linksTo`, `numeric` and the filter config.
+   */
+  valueKind?: ColumnValueKind;
   mono?: boolean;
   /**
    * A code or identifier (barcode, shortcode): its fitted width stops at the
@@ -157,6 +173,8 @@ export interface CubbyColumnMeta<TData = CellData> {
   readFields?: readonly string[];
   /** Deferred values must render their state without invoking data accessors. */
   valueUnavailable?: (row: TData) => boolean;
+  /** A present value the cell deliberately paints as nothing (complete quality). */
+  rendersBlank?: (row: TData) => boolean;
   /** Public refs rendered by this column, collected once at the table owner. */
   entityRefs?: (row: TData) => readonly EntityRef[];
 }
@@ -172,6 +190,24 @@ export function attachCubbyColumnMeta<TData extends RowData>(
   // same column factory. TanStack carries meta without invoking it; every reader
   // supplies row.original from that same table's TData before a callback runs.
   return meta as CubbyColumnMeta;
+}
+
+/** A column's value kind, shown as a muted glyph before its header label. */
+export type ColumnValueKind =
+  | "text"
+  | "enum"
+  | "date"
+  | "money"
+  | "number"
+  | "person"
+  | "boolean";
+
+/** A Group by choice the table's header menu can offer for its column. */
+interface TableGroupChoice {
+  key: string;
+  /** The column the choice groups by; its header offers "Group by". */
+  columnId: string;
+  label: string;
 }
 
 export interface ServerTotals {
@@ -198,6 +234,12 @@ export interface CubbyTableMeta {
    * without threading a new argument.
    */
   scrollRestorationId?: string;
+  /** Group by choices headers may offer, the active one, and its setter. */
+  grouping?: {
+    choices: readonly TableGroupChoice[];
+    active: string | null;
+    onChange: (key: string | null) => void;
+  };
 }
 
 /** A column's label on a phone: its mobile label, its header text, or its humanized id. */
@@ -215,4 +257,44 @@ function isNonEmptyHeaderLabel<TItem extends RowData>(
   header: CubbyColumn<TItem, unknown>["columnDef"]["header"],
 ): header is string {
   return typeof header === "string" && header.trim().length > 0;
+}
+
+/**
+ * A column header asks the table's filter bar to open one column's editor.
+ *
+ * The header and the filter bar render in different subtrees and the bar is
+ * the only editor owner; filter values stay in the table's URL-backed state.
+ * Keyed by the table instance so two tables on a page never cross wires.
+ */
+type Listener = (columnId: string) => void;
+
+const listeners = new WeakMap<WeakKey, Set<Listener>>();
+
+export function requestColumnFilterEdit<TData extends RowData>(
+  table: CubbyTable<TData>,
+  columnId: string,
+) {
+  for (const listener of listeners.get(table) ?? []) listener(columnId);
+}
+
+/** Whether some filter bar is listening, so a header offers "Filter…" only when it can open. */
+export function hasColumnFilterEditor<TData extends RowData>(
+  table: CubbyTable<TData>,
+): boolean {
+  return (listeners.get(table)?.size ?? 0) > 0;
+}
+
+/** The filter bar's subscription to header requests for `table`. */
+export function useColumnFilterEditRequests<TData extends RowData>(
+  table: CubbyTable<TData>,
+  onRequest: Listener,
+) {
+  useEffect(() => {
+    const set = listeners.get(table) ?? new Set<Listener>();
+    listeners.set(table, set);
+    set.add(onRequest);
+    return () => {
+      set.delete(onRequest);
+    };
+  }, [table, onRequest]);
 }

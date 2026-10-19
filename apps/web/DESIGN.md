@@ -25,7 +25,11 @@ Ink identifies primary controls and current navigation, with light labels. Citro
 
 ### Secondary
 
-Cook, Pantry, Plan, House, and Finance retain declaration-driven domain marks on navigation and record identity. Positive, warning, and destructive colors communicate condition with text or icons.
+Cook, Pantry, Plan, House, and Finance retain declaration-driven domain marks on navigation and record identity. Positive, warning, destructive, info (in progress, running) and neutral-status (not started, none) communicate condition with text or icons, each with a matching quiet `*-surface` tint.
+
+### Option roles
+
+Every enum roster is either a state or a kind, fixed by the compiler for web and native (`colorizeEnumOptions`; a declaration may set `optionRole` and per-option `glyph`). A **status** roster, where every option carries a condition color, paints filled tinted chips led by the state's glyph (check, clock, half circle, dashed circle, prohibit). A **category** roster paints neutral chips with a dot from the eight-hue category ramp (`--category-1…8`), cycled in declaration order; kinds never borrow a domain or condition hue. Color is never the only signal: the label always reads.
 
 ### Action
 
@@ -99,7 +103,9 @@ styling. Share lower-level behavior and tokens where the contracts agree:
   stays available to ordinary callers. Exact-path lint exceptions cover only
   Overlay itself, the Dialog/Sheet implementations, cmdk's command presentation,
   the full photo viewer, the relationship graph inspector, the modeless entity
-  preview and the modeless MCP tool-detail inspector. New exceptions require a
+  preview, and the shared `SidePanel`'s
+  below-xl sheet (the docked record panel keeps its J/K row stepping and resize
+  handle when it becomes a sheet). New exceptions require a
   specialized interaction reason here, not a directory-wide exemption.
   Long phone action labels wrap within their share of the header; it grows
   beyond its 52px minimum rather than clipping controls. Raw overlay diagnostics
@@ -111,8 +117,15 @@ styling. Share lower-level behavior and tokens where the contracts agree:
   pages, dashboards and forms. Its disclosure defers children until open;
   `keepMounted` is explicit when a caller accepts eager work. Drafts that must
   survive closing belong in the form state owner, not a disclosure child.
-- Badge owns named semantic tones, EnumPill owns declaration-driven category
-  color/description, and Pill owns shared geometry, compact icon spacing and suggestion treatment.
+- Badge owns named semantic tones. EnumPill picks the declared role's renderer:
+  `StatusValue` (glyph, tone surface, tone ink) for states and `CategoryValue`
+  (neutral chip, glyph or dot in the option color) for kinds; booleans without
+  a roster use `BooleanValue`. Pill owns shared geometry, compact icon spacing
+  and suggestion treatment.
+- `SidePanel` (`ui/overlays/side-panel.tsx`) is the one docked record panel —
+  the entity inspector and specialist detail panels such as AI Decisions: a
+  sticky header with eyebrow, title and code, banded sections, a J/K/Esc
+  footer, and a resize handle that sets `--side-panel-width` for the session.
 - Apple keeps native SwiftUI controls and platform geometry; shared semantic
   tokens and declarations do not require a shared rendering implementation.
 
@@ -150,7 +163,7 @@ Default desktop buttons and inputs are compact (32px); small buttons and menu it
 
 Every value choice is one `Picker`, dense like a menu, never like a form card. Record popups grow to 36rem or the field's width, bounded by the available viewport; fixed choices retain the field width (growing to at most 16rem for narrow fields). Lists have 4px padding and no row gap. Rows have a minimum height of 28px desktop and 44px on phones: one fixed 20px leading mark (the record's picture, else the option's tinted glyph, else a swatch — never two), a flexible wrapping name, aligned secondary/status and right-aligned mono data columns, and a reserved checkmark column. Missing metadata leaves its column empty. Enum subtitles retain the declared label and semantic color through `EnumPill`; figures are tinted only for a real condition. On phones metadata wraps beneath the name. Search-match and disabled reasons remain beneath identity; trees use quiet uppercase group headings and indent. Opening a populated search picker reveals the selected row without reordering the roster, scrolling the page, moving input focus, or repeatedly resetting manual scrolling. Typing searches the full candidate scope. The closed field repeats the selected row's mark and, when it has room, its first chip. Segmented mode is the same picker inline for a handful of view modes or formats.
 
-Status, enum, category, and suggestion values share `Pill` geometry. Saved values retain semantic tint; suggestions have a quiet dashed boundary. Applying a suggestion shows cell-local pending feedback. Stored and live suggestions share the same surface contract. On detail pages and inspectors, a field suggestion shows the proposed value and Accept inline, on desktop and phone alike. Its field label and explanation control align with the proposal line in both collapsed and expanded Review states. Review expands beneath its owning row to expose confidence, runner-up, basis fields, evidence, Reject, and “Use a different value…”. Decision details contains provenance (model, time, Run, AI usage) and explains how a different value is recorded as a Miss. Table marks retain anchored popovers to preserve row geometry. Meaning never depends on a title attribute. `AiProposalCard` remains for prose proposals and uses the same confidence and Accept wording.
+Status, enum, category, and suggestion values share `Pill` geometry. Saved status values retain their tone surface and category values stay neutral; suggestions have a quiet dashed boundary. Applying a suggestion shows cell-local pending feedback. Stored and live suggestions share the same surface contract. On detail pages and inspectors, a field suggestion shows the proposed value and Accept inline, on desktop and phone alike. Its field label and explanation control align with the proposal line in both collapsed and expanded Review states. Review expands beneath its owning row to expose confidence, runner-up, basis fields, evidence, Reject, and “Use a different value…”. Decision details contains provenance (model, time, Run, AI usage) and explains how a different value is recorded as a Miss. Table marks retain anchored popovers to preserve row geometry. Meaning never depends on a title attribute. `AiProposalCard` remains for prose proposals and uses the same confidence and Accept wording.
 
 ### Records, forms, and tables
 
@@ -190,6 +203,11 @@ link to the passive Problems overview until Run detail reads stop recovering
 execution. Problems and Research saved views link into this projection without
 creating assignments.
 
+The Suggestions page has three line tabs with quiet counts: Pending,
+Applied automatically, and Automatic rules (each rule's precision and switch).
+The family choice and scope chips sit under the first two. Impact chips lead
+with cautions and count past two lines as "+N".
+
 The Problems overview is one `IndexedSections` page grouped Needs you,
 Fixes automatically, Coverage & cues and Upkeep. Its headline reads inline
 "N need you · M fix automatically · K coverage gaps", each figure the sum of
@@ -225,6 +243,8 @@ insertions, red struck-through deletions, and explicit before/after text for
 assistive technology. Full review diffs wrap; compact incidental diffs truncate.
 
 RTable owns interactive record work: virtualization, pinned and resizable columns, in-session layouts, filters, selection, clipboard, grouping, inline editing, and aggregate footers. Desktop data rows retain 32px (`ROW_DENSITY`) so two-line values have readable separation. Every cell value gets the same 4px start padding; decorated cells render through `CellFrame`. A column is as narrow as its values: info, relation and resolution controls appear only on the hovered or focused row, over the cell's free edge, and reserve no width; a derived value reads muted, and suggestion marks stay visible. Quiet full-height column rules are fainter than the header boundary. Quality scores remain numerically sortable but their pills start at the same padding as other categorical values. Table thumbnail frames match the 32px row height and the image column reserves exactly that frame. The structural selection column is fixed at 32px; info controls use a 16px desktop footprint with a 10px glyph and preserve the coarse-pointer touch floor. Hover, inspected-current, and batch-selected states stay distinct, including pinned cells. The totals strip meets the table directly; a portaled empty toolbar must not leave a separator or spacer behind. The shared table fits columns to rendered headers, aggregate footers, and a bounded sample of current values, within their declared limits. Fits remain stable while inspecting or editing, manual resizing wins, and no column grows past its kind's cap to fit one long value, and spare width goes only to the record's identity, up to 240px ([column widths](docs/web-ui-reference.md#column-widths)). Header labels use their short form and wrap to two lines inside the 32px header rather than widening their column; a count of one entity's records is headed by that entity's icon and "#", and a column of links to one entity carries that entity's icon in its header rather than on every row. A header's sort arrow takes width only while the column is sorted, and its source icon appears on hover or focus. A clipped single-line value spills over its neighbours at the same row height on hover or focus; codes (barcodes, order ids) keep their first and last four characters, and other long labels keep their tail. Entity links stack their compact name over muted context, or wrap a long name to two lines, and quality scores drop "/100". Dates and timestamps use one `DateDisplay`: full date/year and timestamp clock time followed by muted relative text outside tables; in tables, the day stacks over a compact distance ("Oct 13" / "3 min ago"; months use "3 mo ago", and another year leads that line, "’25 · 1y ago"), and chip lists wrap to two lines, then count the rest as "+N"; secondary context is type hierarchy, never parentheses. A table view never becomes a stack of decorative cards on desktop. Phone rows use a semantic projection with a 44px minimum target.
+
+Each header leads with a quiet kind glyph (date, money, number, choice, person, toggle; text, the default, carries none) and opens a column menu from a caret on hover or focus (the caret holds its own slot, leading on numeric columns, so it never covers the label or sort target): sort ascending or descending, Filter… (which opens that column's editor in the filter bar, the only editor owner), Group by when the entity declares that grouping, pin, and hide. A filtered column shows an info-toned funnel beside its label. A column empty in every loaded row (including one that deliberately paints nothing, such as complete Quality) collapses to a 40px strip showing its glyph, label in the tooltip, with no menu, unless the person sized, sorted, filtered or pinned it. Embedded relation tables take their declared section grouping and sort (Project Tasks group by Status, latest due first), omit the column that points back at the record they sit on, and may regroup from a header for the visit.
 
 ### Data visualization
 

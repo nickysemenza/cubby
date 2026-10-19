@@ -41,14 +41,18 @@ export function DataTablePagination<TData extends RowData>({
           : "flex flex-col space-y-1 px-2 sm:flex-row sm:items-center sm:justify-between sm:space-y-0"
       }
     >
-      <div className="hidden items-center gap-2 font-mono text-2xs text-muted-foreground uppercase sm:flex">
+      <div className="hidden items-center gap-2 text-xs text-muted-foreground tabular-nums sm:flex">
         <table.Subscribe source={table.atoms.rowSelection!}>
           {() => (
             <>
-              <span>
-                {table.getFilteredSelectedRowModel().rows.length} of{" "}
-                {table.getFilteredRowModel().rows.length} selected
-              </span>
+              {/* A count only where rows can be selected and some are. */}
+              {table.options.enableRowSelection !== false &&
+                table.getFilteredSelectedRowModel().rows.length > 0 && (
+                  <span>
+                    {table.getFilteredSelectedRowModel().rows.length} of{" "}
+                    {table.getFilteredRowModel().rows.length} selected
+                  </span>
+                )}
               {showCellSelectionStats && (
                 <table.Subscribe source={table.atoms.cellSelection!}>
                   {() => {

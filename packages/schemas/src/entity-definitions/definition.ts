@@ -1,3 +1,4 @@
+import { enumRoles } from "@cubby/shared/enum-palette";
 import { z } from "zod";
 import {
   dataQualityCheckKind,
@@ -275,6 +276,11 @@ const buildMetadataSchemas = () => {
     })
     .strict();
 
+  /** One glyph for web (Phosphor component name) and Apple (SF Symbol). */
+  const enumOptionIconSchema = z
+    .object({ phosphor: nonEmptyString(), sfSymbol: nonEmptyString() })
+    .strict();
+
   const entityFieldControlMetadataSchema = z
     .object({
       kind: z.enum(entityFieldControlKinds),
@@ -289,6 +295,10 @@ const buildMetadataSchemas = () => {
               description: nonEmptyString().optional(),
               /** Web swatch (a CSS custom property) the value's pill uses. */
               color: nonEmptyString().optional(),
+              /** The value's glyph on both clients; status rosters infer one. */
+              glyph: enumOptionIconSchema.optional(),
+              /** Compiler-filled from the roster (`display.optionRole` or inferred). */
+              role: z.enum(enumRoles).optional(),
             })
             .strict(),
         )
@@ -517,12 +527,21 @@ const buildMetadataSchemas = () => {
               value: nonEmptyString(),
               label: nonEmptyString(),
               color: nonEmptyString().optional(),
+              glyph: enumOptionIconSchema.optional(),
+              /** Compiler-filled from the roster (`display.optionRole` or inferred). */
+              role: z.enum(enumRoles).optional(),
             })
             .strict(),
         )
         .nullable()
         .optional()
         .default(null),
+      /**
+       * Whether this field's roster reads as states (`status`: tinted fill and
+       * a glyph) or kinds (`category`: neutral chip). Omitted, the shared enum
+       * palette infers it: every option carrying a condition color is status.
+       */
+      optionRole: z.enum(enumRoles).nullable().optional().default(null),
       /**
        * A fact on the entity's hover preview card. An entity that declares
        * any shows exactly those, in model order; one that declares none falls
@@ -554,6 +573,7 @@ const buildMetadataSchemas = () => {
         columnLabel,
         referencePreviewLimit,
         valueOptions,
+        optionRole,
         preview,
       }) => ({
         list,
@@ -574,6 +594,7 @@ const buildMetadataSchemas = () => {
         columnLabel,
         referencePreviewLimit,
         valueOptions,
+        optionRole,
         preview,
       }),
     );
@@ -1129,6 +1150,11 @@ const buildMetadataSchemas = () => {
           .optional()
           .default(null),
         limit: z.number().int().positive().nullable().optional().default(null),
+        /**
+         * The target's `model.grouping` field this section opens grouped by
+         * (a Project's Tasks by status). Omitted, the section is ungrouped.
+         */
+        groupBy: nonEmptyString().nullable().optional().default(null),
         /** Section-specific empty-state copy, replacing the generic
          * "No <plural> yet." sentence both platforms otherwise render — for
          * a section whose target's plural name reads awkwardly or

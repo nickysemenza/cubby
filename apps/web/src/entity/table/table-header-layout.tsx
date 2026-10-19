@@ -11,7 +11,23 @@ import { CSS } from "@dnd-kit/utilities";
 import { ArrowDownIcon } from "@phosphor-icons/react/dist/csr/ArrowDown";
 import { ArrowsDownUpIcon } from "@phosphor-icons/react/dist/csr/ArrowsDownUp";
 import { ArrowUpIcon } from "@phosphor-icons/react/dist/csr/ArrowUp";
+import { CalendarBlankIcon } from "@phosphor-icons/react/dist/csr/CalendarBlank";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
+import { CurrencyDollarIcon } from "@phosphor-icons/react/dist/csr/CurrencyDollar";
 import { DotsSixVerticalIcon } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
+import { EyeSlashIcon } from "@phosphor-icons/react/dist/csr/EyeSlash";
+import { FunnelSimpleIcon } from "@phosphor-icons/react/dist/csr/FunnelSimple";
+import { HashIcon } from "@phosphor-icons/react/dist/csr/Hash";
+import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
+import { PushPinIcon } from "@phosphor-icons/react/dist/csr/PushPin";
+import { PushPinSlashIcon } from "@phosphor-icons/react/dist/csr/PushPinSlash";
+import { RowsIcon } from "@phosphor-icons/react/dist/csr/Rows";
+import { SortAscendingIcon } from "@phosphor-icons/react/dist/csr/SortAscending";
+import { SortDescendingIcon } from "@phosphor-icons/react/dist/csr/SortDescending";
+import { ToggleLeftIcon } from "@phosphor-icons/react/dist/csr/ToggleLeft";
+import { UserIcon } from "@phosphor-icons/react/dist/csr/User";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import type { Header, RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
 import type { ReactNode } from "react";
@@ -20,6 +36,15 @@ import { EntityIcon } from "~/entity/entities";
 import { FieldProvenance } from "~/entity/fields/field-provenance";
 import { cn } from "~/lib/utils";
 import { Button } from "~/ui/primitives/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "~/ui/primitives/dropdown-menu";
 import { TableHead, TableRow } from "~/ui/primitives/table";
 
 import {
@@ -35,6 +60,12 @@ import type {
   cubbyTableFeatures,
   CubbyTable as Table,
 } from "../../ui/data-table/table-features";
+import {
+  type ColumnValueKind,
+  type CubbyColumnMeta,
+  hasColumnFilterEditor,
+  requestColumnFilterEdit,
+} from "../../ui/data-table/table-meta";
 
 type HeaderStyles = { header: string; sortIcon: string };
 
@@ -115,7 +146,21 @@ function headerContent<TData extends RowData>(
   const label =
     meta?.shortHeader ??
     flexRender(header.column.columnDef.header, header.getContext());
-  if (!meta?.linksTo) return label;
+  if (!meta?.linksTo) {
+    const Glyph = valueKindGlyph(columnValueKind(meta));
+    if (Glyph === null) return label;
+    return (
+      <>
+        <span
+          data-header-kind=""
+          className="mr-1 inline-flex align-[-2px] text-muted-foreground/70"
+        >
+          <Glyph aria-hidden="true" className="size-3" />
+        </span>
+        {label}
+      </>
+    );
+  }
   return (
     <>
       <span data-header-entity="" className="mr-1 inline-flex align-[-2px]">
@@ -127,6 +172,237 @@ function headerContent<TData extends RowData>(
       </span>
       {label}
     </>
+  );
+}
+
+/**
+ * An empty column's header: its kind glyph, else its initial, with the full
+ * label kept for assistive tech and the tooltip.
+ */
+function CollapsedHeaderLabel<TData extends RowData>({
+  header,
+  label,
+}: {
+  header: Header<typeof cubbyTableFeatures, TData, unknown>;
+  label: string;
+}) {
+  const meta = header.column.columnDef.meta;
+  const Glyph = valueKindGlyph(columnValueKind(meta));
+  return (
+    <span
+      data-header-label=""
+      className="inline-flex min-w-0 items-center text-muted-foreground/70"
+      title={`${label} · empty in these rows`}
+    >
+      {meta?.linksTo ? (
+        <EntityIcon
+          entity={meta.linksTo}
+          aria-hidden="true"
+          className="size-3.5"
+        />
+      ) : Glyph ? (
+        <Glyph aria-hidden="true" className="size-3" />
+      ) : (
+        <span aria-hidden="true">{label.charAt(0)}</span>
+      )}
+      <span className="sr-only">{label}</span>
+    </span>
+  );
+}
+
+type ColumnMeta = CubbyColumnMeta | undefined;
+
+/** A declared kind, else one derived from the column's numeric and filter metadata. */
+function columnValueKind(meta: ColumnMeta): ColumnValueKind | null {
+  if (meta?.valueKind) return meta.valueKind;
+  const filter = meta?.filterConfig;
+  if (filter?.dateRange) return "date";
+  if (meta?.numeric) return "number";
+  if (filter?.filterType === "multiselect" || filter?.filterType === "select")
+    return "enum";
+  return null;
+}
+
+/** Text carries no glyph: it is the default a reader assumes. */
+function valueKindGlyph(kind: ColumnValueKind | null) {
+  switch (kind) {
+    case "date":
+      return CalendarBlankIcon;
+    case "money":
+      return CurrencyDollarIcon;
+    case "number":
+      return HashIcon;
+    case "enum":
+      return ListChecksIcon;
+    case "person":
+      return UserIcon;
+    case "boolean":
+      return ToggleLeftIcon;
+    default:
+      return null;
+  }
+}
+
+/**
+ * The column's own menu: sort, filter, group, pin and hide in one place. The
+ * caret appears on hover or focus over the header's free edge, so it takes no
+ * width at rest. "Filter…" asks the filter bar (the one editor owner) to open
+ * this column's editor; the URL-backed filter state stays single-owner.
+ */
+function HeaderMenu<TData extends RowData>({
+  header,
+  table,
+  label,
+  numeric,
+}: {
+  header: Header<typeof cubbyTableFeatures, TData, unknown>;
+  table: Table<TData>;
+  label: string;
+  numeric: boolean;
+}) {
+  const column = header.column;
+  const meta = table.options.meta;
+  const canSort = column.getCanSort();
+  const sorted = column.getIsSorted();
+  const canFilter = column.columnDef.meta?.filterConfig !== undefined;
+  const groupChoice = meta?.grouping?.choices.find(
+    (choice) => choice.columnId === column.id,
+  );
+  const grouped =
+    groupChoice !== undefined && meta?.grouping?.active === groupChoice.key;
+  const canPin = column.getCanPin() && !isLockedColumn(column);
+  const pinned = column.getIsPinned();
+  const canHide = column.getCanHide() && !isLockedColumn(column);
+  if (!canSort && !canFilter && !groupChoice && !canPin && !canHide)
+    return null;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label={`${label} column menu`}
+            data-cell-spill-off=""
+            className={cn(
+              // In flow once shown, not overlaid: an overlay covered a narrow
+              // column's sort target and its label. Until then a 1px
+              // absolute box, so the fitted width reserves nothing and the
+              // menu stays in the accessibility tree.
+              "pointer-events-none absolute size-px shrink-0 overflow-hidden rounded-sm text-muted-foreground opacity-0 hover:text-foreground",
+              "group-focus-within/th:pointer-events-auto group-focus-within/th:static group-focus-within/th:size-5 group-focus-within/th:opacity-100",
+              "group-hover/th:pointer-events-auto group-hover/th:static group-hover/th:size-5 group-hover/th:opacity-100",
+              "data-[popup-open]:pointer-events-auto data-[popup-open]:static data-[popup-open]:size-5 data-[popup-open]:opacity-100",
+              "pointer-coarse:pointer-events-auto pointer-coarse:static pointer-coarse:size-5 pointer-coarse:opacity-100",
+              numeric && "order-first",
+            )}
+          />
+        }
+      >
+        <CaretDownIcon className="size-3" aria-hidden="true" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align={numeric ? "start" : "end"} className="w-52">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>{label}</DropdownMenuLabel>
+          {canSort && (
+            <>
+              <DropdownMenuItem
+                onClick={() => column.toggleSorting(false, false)}
+              >
+                <SortAscendingIcon aria-hidden="true" />
+                Sort ascending
+                {sorted === "asc" && <HeaderMenuCheck />}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => column.toggleSorting(true, false)}
+              >
+                <SortDescendingIcon aria-hidden="true" />
+                Sort descending
+                {sorted === "desc" && <HeaderMenuCheck />}
+              </DropdownMenuItem>
+              {sorted && (
+                <DropdownMenuItem onClick={() => column.clearSorting()}>
+                  <XIcon aria-hidden="true" />
+                  Clear sort
+                </DropdownMenuItem>
+              )}
+            </>
+          )}
+        </DropdownMenuGroup>
+        {canFilter && <ColumnFilterMenuItems table={table} column={column} />}
+        {groupChoice && <DropdownMenuSeparator />}
+        {groupChoice && (
+          <DropdownMenuItem
+            onClick={() =>
+              meta?.grouping?.onChange(grouped ? null : groupChoice.key)
+            }
+          >
+            <RowsIcon aria-hidden="true" />
+            {grouped ? "Ungroup" : `Group by ${groupChoice.label}`}
+          </DropdownMenuItem>
+        )}
+        {(canPin || canHide) && <DropdownMenuSeparator />}
+        {canPin && (
+          <DropdownMenuItem
+            onClick={() => column.pin(pinned ? false : "start")}
+          >
+            {pinned ? (
+              <PushPinSlashIcon aria-hidden="true" />
+            ) : (
+              <PushPinIcon aria-hidden="true" />
+            )}
+            {pinned ? "Unpin" : "Pin to start"}
+          </DropdownMenuItem>
+        )}
+        {canHide && (
+          <DropdownMenuItem onClick={() => column.toggleVisibility(false)}>
+            <EyeSlashIcon aria-hidden="true" />
+            Hide column
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/**
+ * Rendered when the menu opens, after the filter bar has subscribed, so a
+ * table without a bar never offers an editor it cannot open.
+ */
+function ColumnFilterMenuItems<TData extends RowData>({
+  table,
+  column,
+}: {
+  table: Table<TData>;
+  column: Header<typeof cubbyTableFeatures, TData, unknown>["column"];
+}) {
+  if (!hasColumnFilterEditor(table)) return null;
+  const filtered = column.getIsFiltered();
+  return (
+    <>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem
+        onClick={() => requestColumnFilterEdit(table, column.id)}
+      >
+        <FunnelSimpleIcon aria-hidden="true" />
+        {filtered ? "Edit filter…" : "Filter…"}
+      </DropdownMenuItem>
+      {filtered && (
+        <DropdownMenuItem onClick={() => column.setFilterValue(undefined)}>
+          <XIcon aria-hidden="true" />
+          Clear filter
+        </DropdownMenuItem>
+      )}
+    </>
+  );
+}
+
+function HeaderMenuCheck() {
+  return (
+    <CheckIcon
+      className="ml-auto size-3.5 text-muted-foreground"
+      aria-label="Active"
+    />
   );
 }
 
@@ -172,9 +448,10 @@ function HeaderHoverChrome({
         // Pointer-transparent so a click still sorts; the source icon keeps
         // its own pointer for its phrase.
         "pointer-events-none invisible absolute inset-y-0 my-auto flex h-5 items-center gap-1 rounded-sm bg-card px-0.5 group-focus-within/th:visible group-hover/th:visible [&_[data-field-provenance]]:pointer-events-auto",
+        // Clear of the column menu caret at the same edge.
         numeric
-          ? "left-1 shadow-[6px_0_6px_var(--card)]"
-          : "right-1.5 shadow-[-6px_0_6px_var(--card)]",
+          ? "left-6 shadow-[6px_0_6px_var(--card)]"
+          : "right-6 shadow-[-6px_0_6px_var(--card)]",
       )}
     >
       <FieldProvenance compact provenance={provenance} />
@@ -191,10 +468,12 @@ function HeaderHoverChrome({
 function SortableHeader<TData extends RowData>({
   header,
   table,
+  collapsed,
   styles,
 }: {
   header: Header<typeof cubbyTableFeatures, TData, unknown>;
   table: Table<TData>;
+  collapsed: boolean;
   styles: HeaderStyles;
 }) {
   const locked = isLockedColumn(header.column);
@@ -228,7 +507,18 @@ function SortableHeader<TData extends RowData>({
         numeric && "flex-row-reverse",
       )}
     >
-      <HeaderLabel label={headerLabel}>{headerContent(header)}</HeaderLabel>
+      {collapsed ? (
+        <CollapsedHeaderLabel header={header} label={headerLabel} />
+      ) : (
+        <HeaderLabel label={headerLabel}>{headerContent(header)}</HeaderLabel>
+      )}
+      {header.column.getIsFiltered() && (
+        <FunnelSimpleIcon
+          data-header-filtered=""
+          className="size-3 shrink-0 text-info"
+          aria-label="Filtered"
+        />
+      )}
       {sortIcon(sortDirection, styles)}
       {sortDirection && table.state.sorting.length > 1 && (
         <span className="text-3xs text-muted-foreground tabular-nums">
@@ -251,6 +541,7 @@ function SortableHeader<TData extends RowData>({
       ref={setNodeRef}
       key={header.id}
       data-column-id={header.column.id}
+      data-column-collapsed={collapsed ? "" : undefined}
       colSpan={header.colSpan}
       aria-sort={ariaSort(sortDirection)}
       className={cn(
@@ -295,13 +586,14 @@ function SortableHeader<TData extends RowData>({
       <div className="flex min-w-0 items-center">
         {!locked && (
           // Overlays the leading padding instead of taking layout width, so
-          // header labels start on the same x as their cells' values.
+          // header labels start on the same x as their cells' values. Above
+          // a numeric header's leading menu caret, which shares that edge.
           <Button
             variant="ghost"
             size="icon-sm"
             aria-label={`Reorder ${header.column.id} column`}
             data-cell-spill-off=""
-            className="absolute inset-y-0 left-0 my-auto h-5 w-2 shrink-0 cursor-grab touch-none rounded-none px-0 text-muted-foreground opacity-0 transition-opacity group-focus-within/th:opacity-100 group-hover/th:opacity-100 active:cursor-grabbing pointer-coarse:opacity-100"
+            className="absolute inset-y-0 left-0 z-10 my-auto h-5 w-2 shrink-0 cursor-grab touch-none rounded-none px-0 text-muted-foreground opacity-0 transition-opacity group-focus-within/th:opacity-100 group-hover/th:opacity-100 active:cursor-grabbing pointer-coarse:opacity-100"
             {...attributes}
             {...listeners}
           >
@@ -327,6 +619,14 @@ function SortableHeader<TData extends RowData>({
           </span>
         )}
         {hoverChrome}
+        {!collapsed && (
+          <HeaderMenu
+            header={header}
+            table={table}
+            label={headerLabel}
+            numeric={numeric}
+          />
+        )}
       </div>
       {header.column.getCanResize() && (
         <ColumnResizeHandle
@@ -355,10 +655,13 @@ function SortableHeader<TData extends RowData>({
 
 export default function TableHeaderLayout<TData extends RowData>({
   table,
+  collapsedColumns,
   styles,
   isDebugEnabled,
 }: {
   table: Table<TData>;
+  /** Empty columns painted as a glyph strip; see `emptyColumnIds`. */
+  collapsedColumns?: ReadonlySet<string>;
   styles: HeaderStyles;
   isDebugEnabled: boolean;
 }) {
@@ -400,6 +703,7 @@ export default function TableHeaderLayout<TData extends RowData>({
               key={header.id}
               header={header}
               table={table}
+              collapsed={collapsedColumns?.has(header.column.id) ?? false}
               styles={styles}
             />
           );

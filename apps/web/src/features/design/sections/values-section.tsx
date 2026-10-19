@@ -110,7 +110,7 @@ export function ValuesSection() {
         </Demo>
         <Demo
           name="<FilterBar fields filters />"
-          note="The manifest filter bar: a search field, one chip per declared filter, and Clear N."
+          note="The manifest filter bar: search, Filter · N opening the grouped panel, and one chip per active filter. Edits apply as they are made."
           className="md:col-span-2"
         >
           <FilterBar

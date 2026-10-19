@@ -167,15 +167,17 @@ describe("listPage", () => {
       within(switcher)
         .getAllByRole("menuitem")
         .map((option) => option.getAttribute("aria-label")),
-    ).toEqual([
-      "List view",
-      "Cards view",
-      "Compact view",
-      "Group by None",
-      "Group by Cookbook",
-      "Group by Tags",
-    ]);
-    const tags = within(switcher).getByRole("menuitem", {
+    ).toEqual(["List view", "Cards view", "Compact view"]);
+    fireEvent.keyDown(switcher, { key: "Escape" });
+    // Group by is its own menu beside the view menu.
+    fireEvent.click(screen.getByRole("button", { name: "Group by" }));
+    const grouping = await screen.findByRole("menu");
+    expect(
+      within(grouping)
+        .getAllByRole("menuitem")
+        .map((option) => option.getAttribute("aria-label")),
+    ).toEqual(["Group by None", "Group by Cookbook", "Group by Tags"]);
+    const tags = within(grouping).getByRole("menuitem", {
       name: "Group by Tags",
     });
     expect(tags).toHaveAttribute("aria-disabled", "true");
@@ -191,29 +193,30 @@ describe("listPage", () => {
     const switcher = await screen.findByRole("menu");
     const options = within(switcher).getAllByRole("menuitem");
     expect(options.map((option) => option.getAttribute("aria-label"))).toEqual(
-      entitySummary.task.list.views
-        .flatMap((view) => {
-          const label = isSlotListView(view)
-            ? view.label
-            : view === "table"
-              ? "List"
-              : view === "shelf"
-                ? "Cards"
-                : "Timeline";
-          return view === "shelf"
-            ? [`${label} view`, "Compact view"]
-            : [`${label} view`];
-        })
-        .concat(["Group by None", "Group by Status"]),
+      entitySummary.task.list.views.flatMap((view) => {
+        const label = isSlotListView(view)
+          ? view.label
+          : view === "table"
+            ? "List"
+            : view === "shelf"
+              ? "Cards"
+              : "Timeline";
+        return view === "shelf"
+          ? [`${label} view`, "Compact view"]
+          : [`${label} view`];
+      }),
     );
-    const status = within(switcher).getByRole("menuitem", {
-      name: "Group by Status",
-    });
-    expect(status).toHaveAttribute("aria-disabled", "true");
-    expect(status).toHaveTextContent("Timeline is already arranged by date.");
     expect(
       within(switcher).getByRole("menuitem", { name: "Timeline view" }),
     ).toHaveAttribute("aria-current", "true");
+    fireEvent.keyDown(switcher, { key: "Escape" });
+    fireEvent.click(screen.getByRole("button", { name: "Group by" }));
+    const status = within(await screen.findByRole("menu")).getByRole(
+      "menuitem",
+      { name: "Group by Status" },
+    );
+    expect(status).toHaveAttribute("aria-disabled", "true");
+    expect(status).toHaveTextContent("Timeline is already arranged by date.");
   });
 
   it("clears table selection and bulk actions after browsing Cards and returning to List", async () => {

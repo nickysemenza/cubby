@@ -17,7 +17,7 @@ import {
   cubbyStructuralTableStateSelector,
   useCubbyTable,
 } from "./table-features";
-import type { ServerTotals } from "./table-meta";
+import type { CubbyTableMeta, ServerTotals } from "./table-meta";
 
 interface UseTableConfigOptions<TData extends RowData> {
   data: TData[];
@@ -66,6 +66,8 @@ interface UseTableConfigOptions<TData extends RowData> {
    * RTable forwards it to its memoized desktop and mobile row renderers.
    */
   rowContentVersion?: unknown;
+  /** Group by choices the column header menus offer; see `CubbyTableMeta`. */
+  grouping?: CubbyTableMeta["grouping"];
   /**
    * Opt-in expandable tree support. Return a row's children to render nested
    * sub-rows. The shared v9 feature bundle includes the expanded row model;
@@ -108,6 +110,7 @@ export function useTableConfig<TData extends RowData>({
   serverTotals,
   filterFields,
   rowContentVersion,
+  grouping,
   getSubRows,
   filterFromLeafRows,
   paginateExpandedRows,
@@ -161,6 +164,9 @@ export function useTableConfig<TData extends RowData>({
     }
     if (rowContentVersion !== undefined) {
       Object.assign(meta, { rowContentVersion });
+    }
+    if (grouping) {
+      Object.assign(meta, { grouping });
     }
 
     const state = {
@@ -263,6 +269,7 @@ export function useTableConfig<TData extends RowData>({
     serverTotals,
     filterFields,
     rowContentVersion,
+    grouping,
     getRowId,
     enableRowSelection,
     rowSelection,

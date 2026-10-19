@@ -715,6 +715,13 @@ const validateRelationPresentation = (
         `${context} sort field ${section.sort.field} is not in ${target.key}'s sort roster.`,
       );
   }
+  if (
+    section.groupBy != null &&
+    !target.fieldModel.grouping.includes(section.groupBy)
+  )
+    throw new EntityDeclarationError(
+      `${context} groupBy ${section.groupBy} is not one of ${target.key}'s model.grouping choices.`,
+    );
 };
 
 /**

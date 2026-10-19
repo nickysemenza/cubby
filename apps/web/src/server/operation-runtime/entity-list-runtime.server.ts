@@ -27,6 +27,10 @@ export const entityListHandlers = implementOperationDomain(entityListContract, {
     entityListSummaryOutputSchema.parse(
       await ENTITY_LIST_READ_OPERATIONS[input.entity].summary(context, input),
     ),
+  facetCounts: (context, input) =>
+    ENTITY_LIST_READ_OPERATIONS[input.entity].facets(context, input),
+  viewCounts: (context, input) =>
+    ENTITY_LIST_READ_OPERATIONS[input.entity].viewCounts(context, input),
   list: {
     input: entityListInputSchema,
     output: (input) => getEntityListOutputSchema(input.entity),

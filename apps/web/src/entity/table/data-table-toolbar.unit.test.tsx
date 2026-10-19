@@ -1,30 +1,43 @@
-import { act, render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-import { useCubbyTable } from "../../ui/data-table/table-features";
+import {
+  createCubbyColumnHelper,
+  useCubbyTable,
+} from "../../ui/data-table/table-features";
 import { DataTableToolbar } from "./data-table-toolbar";
+
+type ToolbarRow = { id: string; name: string };
+const helper = createCubbyColumnHelper<ToolbarRow>();
+const sortableColumns = helper.columns([
+  helper.accessor("name", { header: "Name", enableSorting: true }),
+]);
 
 function ToolbarHarness({
   entity,
   variant = "page",
   portalWorkbenchUtilities = false,
+  sortable = false,
 }: {
   entity?: "product";
   variant?: "page" | "embedded";
   portalWorkbenchUtilities?: boolean;
+  sortable?: boolean;
 }) {
   const table = useCubbyTable({
     data: [],
-    columns: [],
-    getRowId: (row: { id: string }) => row.id,
+    columns: sortable ? sortableColumns : [],
+    getRowId: (row: ToolbarRow) => row.id,
   });
   return (
     <DataTableToolbar
       table={table}
       entity={entity}
-      isTransitioning
+      isTransitioning={!sortable}
       variant={variant}
       portalWorkbenchUtilities={portalWorkbenchUtilities}
       actions={<button type="button">Create</button>}
@@ -37,6 +50,13 @@ function ToolbarHarness({
   );
 }
 
+// The filter bar's facet and view-count hooks need a client even when idle.
+const queryWrapper = ({ children }: { children: ReactNode }) => (
+  <QueryClientProvider client={new QueryClient()}>
+    {children}
+  </QueryClientProvider>
+);
+
 const browserHarnesses: Array<ReturnType<typeof createBrowserTestHarness>> = [];
 
 afterEach(() => {
@@ -46,7 +66,7 @@ afterEach(() => {
 
 describe("DataTableToolbar query tier", () => {
   it("keeps rest and bulk tiers mounted while disabling both during updates", () => {
-    render(<ToolbarHarness />);
+    render(<ToolbarHarness />, { wrapper: queryWrapper });
 
     expect(screen.getByText("Updating…")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Create" })).toBeDisabled();
@@ -92,6 +112,7 @@ describe("DataTableToolbar query tier", () => {
         <div data-workbench-utilities />
         <ToolbarHarness portalWorkbenchUtilities />
       </>,
+      { wrapper: queryWrapper },
     );
     // `usePageWorkbenchTarget` locates the band in an effect, so the portal
     // lands one tick after mount.
@@ -102,6 +123,24 @@ describe("DataTableToolbar query tier", () => {
       container
         .querySelector("[data-workbench-utilities]")
         ?.querySelector("[data-query-rest]"),
+    ).toBeInTheDocument();
+  });
+
+  it("sorts by a column, then flips its order, from the Sort menu", async () => {
+    render(<ToolbarHarness sortable />, { wrapper: queryWrapper });
+
+    fireEvent.click(screen.getByRole("button", { name: "Sort: Default" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Name" }));
+    const trigger = await screen.findByRole("button", {
+      name: /^Sort: Name, /,
+    });
+    fireEvent.click(trigger);
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Descending" }),
+    );
+
+    expect(
+      await screen.findByRole("button", { name: "Sort: Name, descending" }),
     ).toBeInTheDocument();
   });
 });

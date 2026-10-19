@@ -160,6 +160,12 @@ describe("manifestFilterConfig", () => {
         ...vendors,
       ],
       records: recordSource("vendor"),
+      // The panel groups, glyphs and labels the filter from these.
+      kind: "idMulti",
+      valueType: "entity",
+      referenceEntity: "vendor",
+      group: "Relations",
+      icon: expect.anything(),
     });
   });
 
@@ -169,7 +175,7 @@ describe("manifestFilterConfig", () => {
       manifestFilterConfig("product", "related:product.projects", {
         project: projects,
       }),
-    ).toEqual({
+    ).toMatchObject({
       placeholder: "Filter by project...",
       filterType: "multiselect",
       options: [

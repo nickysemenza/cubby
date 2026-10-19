@@ -84,7 +84,9 @@ describe("ListWorkbench", () => {
     expect(await screen.findByText("Hammer")).toBeVisible();
     expect(screen.getByText("Net cost: $42")).toBeVisible();
     expect(screen.getByText("Delete Product")).toBeVisible();
-    expect(screen.getByText("Rows per page")).toBeVisible();
+    // An unpaged in-memory table has no pages; its pager once read
+    // 9007199254740991 rows per page.
+    expect(screen.queryByText("Rows per page")).not.toBeInTheDocument();
 
     // Page mode folds Columns/Saved views into `Actions ▾` (L3) instead of
     // standalone Display/Saved views triggers.

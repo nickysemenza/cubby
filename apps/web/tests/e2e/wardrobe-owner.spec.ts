@@ -235,25 +235,23 @@ test("wardrobe cards exclude a clothing type, keep uncategorized items, and a he
 
   // Category is not Outerwear, through the picker's is / is not toggle.
   await page.getByRole("button", { name: "Filters", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Category: any", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Category", exact: true }).click();
   const picker = page.getByRole("combobox", { name: "Filter Category" });
-  await picker.click();
   await page.getByRole("button", { name: "is not", exact: true }).click();
   await picker.fill(`${name} Outerwear`);
+  // The pick applies at once; there is no Apply step.
   await page
     .getByRole("option", { name: new RegExp(`${name} Outerwear`) })
     .click();
-  // Picking closes the popup; Apply sits in its footer.
-  await picker.click();
-  await page.getByRole("button", { name: "Apply", exact: true }).click();
   await page.keyboard.press("Escape");
 
+  // The open Filters panel repeats the strip's chip in its Active section.
   await expect(
-    page.getByRole("button", {
-      name: new RegExp(`^Category: is not .*${name} Outerwear`),
-    }),
+    page
+      .getByRole("button", {
+        name: new RegExp(`^Category: is not .*${name} Outerwear`),
+      })
+      .first(),
   ).toBeVisible();
   // No Outerwear section; the uncategorized item is not Outerwear, so it
   // stays, under the no-value section, which is always last.

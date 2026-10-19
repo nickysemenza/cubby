@@ -143,6 +143,8 @@
   Cubby Theme - Field Guide
 */
 :root {
+  /* The docked side panel's width; the panel's resize handle overrides it. */
+  --side-panel-width: 25rem;
   --action-create: var(--brand-action-create);
   --action-create-surface: var(--brand-action-create-surface);
   --action-change: var(--brand-action-change);
@@ -267,7 +269,7 @@
   /* Semantic chart tones (ratings stay off the blue axis) */
   --chart-positive: var(--positive);
   --chart-negative: var(--destructive);
-  --chart-neutral: oklch(0.66 0.006 80);
+  --chart-neutral: var(--neutral-status);
 
   /* Trade *phase* families — a specialist categorical exception,
      scoped to task trade marks where grouping 20 trades into six build phases
@@ -370,6 +372,20 @@
   --color-plum: var(--plum);
   --color-slate: var(--slate);
   --color-positive: var(--positive);
+  --color-positive-surface: var(--positive-surface);
+  --color-warning-surface: var(--warning-surface);
+  --color-destructive-surface: var(--destructive-surface);
+  --color-info: var(--info);
+  --color-info-surface: var(--info-surface);
+  --color-neutral-status: var(--neutral-status);
+  --color-category-1: var(--category-1);
+  --color-category-2: var(--category-2);
+  --color-category-3: var(--category-3);
+  --color-category-4: var(--category-4);
+  --color-category-5: var(--category-5);
+  --color-category-6: var(--category-6);
+  --color-category-7: var(--category-7);
+  --color-category-8: var(--category-8);
   --color-phase-structure: var(--phase-structure);
   --color-phase-mep: var(--phase-mep);
   --color-phase-surfaces: var(--phase-surfaces);
@@ -593,13 +609,14 @@
   display: none;
 }
 
-/* A list's totals, Sweep, contextual status and portaled suggestion status
+/* A list's filter chips, totals, Sweep, contextual and suggestion status
    may each render nothing (Recipes declares no totals or decision fields);
    an empty status strip must not leave a bordered blank band. Unlayered so
    it overrides the strip's `flex` utility. */
 [data-list-status-strip]:not(
   :has(
-    > :not([data-list-status-group]),
+    > :not([data-list-status-group], [data-workbench-filters]),
+    [data-workbench-filters] > *,
     [data-list-status-group] > :not([data-workbench-status]),
     [data-workbench-status] > *
   )
@@ -624,6 +641,8 @@
   /* Compact chrome is sized for fine pointers; touch gets room for 44px
      targets so rail and command-band controls never overflow their frame. */
   :root {
+    /* The docked side panel's width; the panel's resize handle overrides it. */
+    --side-panel-width: 25rem;
     --app-sidebar-collapsed-width: 3.5rem;
     --app-sidebar-header-height: 3rem;
   }

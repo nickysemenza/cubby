@@ -13,7 +13,7 @@ import { entityDetailFor } from "~/entity/entity-detail";
 import { Picker } from "~/entity/picker/picker";
 
 import type { ComboboxItem } from "./combobox-types";
-import { matchesPickerItem } from "./picker";
+import { matchesPickerItem, Picker as OptionPicker } from "./picker";
 import { pickerOptionItem } from "./picker-option";
 
 // Record pickers read stored codes' records through React Query.
@@ -772,5 +772,31 @@ describe("Picker stored codes", () => {
     expect(input).toHaveValue("");
     expect(input).toHaveAttribute("placeholder", "Loading…");
     expect(container).not.toHaveTextContent(CODE);
+  });
+});
+
+// Regression: a short inline roster rendered no input, and its options are
+// not tab stops, so no keyboard path reached a status choice.
+describe("inline option picker", () => {
+  it("reaches and picks a short roster's option from the keyboard", async () => {
+    const onValueChange = vi.fn();
+    render(
+      <OptionPicker
+        presentation="inline"
+        label="Status"
+        options={[
+          { value: "open", label: "Open" },
+          { value: "done", label: "Done" },
+        ]}
+        value={null}
+        onValueChange={onValueChange}
+      />,
+    );
+    const input = screen.getByRole("combobox", { name: "Status" });
+    input.focus();
+    expect(input).toHaveFocus();
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(onValueChange).toHaveBeenCalledWith("open"));
   });
 });

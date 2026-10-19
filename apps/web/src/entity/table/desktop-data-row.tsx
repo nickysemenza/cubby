@@ -8,6 +8,7 @@ import {
   memo,
   type PointerEvent,
   type ReactNode,
+  useContext,
 } from "react";
 import { z } from "zod";
 
@@ -36,7 +37,10 @@ import {
 import { DebugDialog } from "../../ui/data-table/debug-dialog";
 import { ROW_DENSITY } from "../../ui/data-table/density";
 import {
+  CellKeyProvider,
   RowActiveProvider,
+  RowActivityStoreContext,
+  tableCellKey,
   useCoarsePointer,
   useRowActivity,
 } from "../../ui/data-table/row-activity";
@@ -191,6 +195,8 @@ function DesktopDataCell<TItem extends RowData>({
     cell.column.columnDef.meta,
   );
   const explained = explainedCellContent(cell, content);
+  const activity = useContext(RowActivityStoreContext);
+  const cellKey = tableCellKey(cell.row.id, cell.column.id);
   return (
     <TableCell
       key={cell.id}
@@ -201,6 +207,12 @@ function DesktopDataCell<TItem extends RowData>({
       tabIndex={selectable ? cell.getTabIndex() : undefined}
       onMouseDown={selectable ? cell.getSelectionStartHandler() : undefined}
       onMouseEnter={selectable ? cell.getSelectionExtendHandler() : undefined}
+      // The explanation rail belongs to the cell being worked in, not the
+      // whole row: 20 ⓘ marks across a hovered row read as noise.
+      onPointerEnter={(event: PointerEvent<HTMLTableCellElement>) => {
+        if (event.pointerType !== "touch") activity.activateCell(cellKey);
+      }}
+      onFocus={() => activity.activateCell(cellKey)}
       className={cn(
         cellClassName,
         cell.column.columnDef.meta?.numeric && NUMERIC_CELL,
@@ -217,19 +229,21 @@ function DesktopDataCell<TItem extends RowData>({
     >
       <div className={ROW_DENSITY.cellContentClass}>
         <div className="min-w-0">
-          <DenseCellContext
-            value={{ linksTo: cell.column.columnDef.meta?.linksTo ?? null }}
-          >
-            <ConnectionCell record={cell.row.original} field={cell.column.id}>
-              <RecordFieldSuggestion
-                record={cell.row.original}
-                field={cell.column.id}
-                surface="cell"
-              >
-                {explained}
-              </RecordFieldSuggestion>
-            </ConnectionCell>
-          </DenseCellContext>
+          <CellKeyProvider value={cellKey}>
+            <DenseCellContext
+              value={{ linksTo: cell.column.columnDef.meta?.linksTo ?? null }}
+            >
+              <ConnectionCell record={cell.row.original} field={cell.column.id}>
+                <RecordFieldSuggestion
+                  record={cell.row.original}
+                  field={cell.column.id}
+                  surface="cell"
+                >
+                  {explained}
+                </RecordFieldSuggestion>
+              </ConnectionCell>
+            </DenseCellContext>
+          </CellKeyProvider>
         </div>
       </div>
     </TableCell>
@@ -316,6 +330,10 @@ function DesktopDataRowInner<TItem extends RowData>({
   const handleRowClick = onRowClick
     ? (e: MouseEvent<HTMLTableRowElement>) => {
         if (isInteractiveEventTarget(e.target)) return;
+        // React bubbles a portaled popover's clicks (an explanation's
+        // disclosure) through the row that opened it; they are not row clicks.
+        if (!(e.target instanceof Node) || !e.currentTarget.contains(e.target))
+          return;
 
         // In cell-selection mode a click on an editable cell selects it (via the
         // container's mousedown delegation); don't also navigate/open the row.

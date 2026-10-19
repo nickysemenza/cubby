@@ -531,6 +531,7 @@ export const deriveRelationSections = (
         prefill: filterOverride?.prefill ?? null,
         sort: null,
         limit: null,
+        groupBy: null,
         empty: relation.empty ?? null,
         derived: true,
       });

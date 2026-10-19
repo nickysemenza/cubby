@@ -6,6 +6,7 @@ import superjson from "superjson";
 import { z } from "zod";
 import {
   chooseOption,
+  openCellExplanation,
   expectViewportBounded,
   gotoAuthenticatedPage,
   inlineExplanation,
@@ -68,15 +69,12 @@ test("quality leads entity tables, explains its calculation, and restores tempor
     labels.findIndex((text) => text.includes("Product")) + 1,
   );
   const row = table.getByRole("row").filter({ hasText: name }).first();
-  // A table cell drops the "/100" its header already implies.
+  // A table cell drops the "/100" its header already implies; the status
+  // stays spoken.
   await expect(row.locator('[data-cell-col="dataQuality"]')).toHaveText(
-    /^\d+$/,
+    /^\d+, Needs data$/,
   );
-  // A row's explanation appears once the row is hovered or focused.
-  await row.hover();
-  await row
-    .getByRole("button", { name: /How (data )?quality is determined/ })
-    .click();
+  await openCellExplanation(row, /How (data )?quality is determined/);
   const popover = page.locator('[data-slot="popover-content"]:visible');
   await expect(
     popover.getByRole("heading", { name: "Score calculation" }),
@@ -149,7 +147,7 @@ test("quality leads entity tables, explains its calculation, and restores tempor
       .filter({ hasText: name })
       .first()
       .locator('[data-cell-col="dataQuality"]'),
-  ).toHaveText(/^\d+$/);
+  ).toHaveText(/^\d+, Needs data$/);
 
   const categoryName = `${name} category`;
   await createEntityFixture(page, "spendingCategory", { name: categoryName });
@@ -163,7 +161,7 @@ test("quality leads entity tables, explains its calculation, and restores tempor
     .first();
   await expect(
     categoryRow.locator('[data-cell-col="dataQuality"] [data-cell-value]'),
-  ).toHaveText("0");
+  ).toHaveText("0, Needs data");
 
   const plannedName = `${name} planned`;
   await createEntityFixture(page, "expense", {
@@ -187,10 +185,7 @@ test("quality leads entity tables, explains its calculation, and restores tempor
   ).toHaveText("Not assessed");
   await page.getByRole("columnheader", { name: /Quality/ }).click();
   await expect(page).toHaveURL(/sort=.*dataQuality/);
-  await unassessedRow.hover();
-  await unassessedRow
-    .getByRole("button", { name: /How (data )?quality is determined/ })
-    .click();
+  await openCellExplanation(unassessedRow, /How (data )?quality is determined/);
   await expect(popover).toContainText("Not assessed");
   await expect(popover).toContainText("No weighted checks apply");
   await page.keyboard.press("Escape");
@@ -375,10 +370,7 @@ test("quality explanations reconcile exceptions, defects, and related gaps", asy
     `/purchases?view=table&q=${encodeURIComponent(name)}`,
   );
   const row = page.getByRole("row").filter({ hasText: name }).first();
-  await row.hover();
-  await row
-    .getByRole("button", { name: /How (data )?quality is determined/ })
-    .click();
+  await openCellExplanation(row, /How (data )?quality is determined/);
   await expect(
     page.locator('[data-slot="popover-content"]:visible'),
   ).toContainText("Paperwork mismatch");
@@ -613,7 +605,8 @@ test("specialist board cards and gallery sections retain the shared quality expl
   const card = page
     .locator(".group.relative")
     .filter({ has: page.getByRole("button", { name, exact: true }) });
-  await expect(card).toContainText("/100");
+  // Complete quality paints nothing; its status stays spoken.
+  await expect(card).toContainText("Complete");
   await card
     .getByRole("button", { name: /How (data )?quality is determined/ })
     .click();
@@ -692,11 +685,7 @@ test("explanation evidence formats links and dates without exposing internal ent
   await expect(row.locator('[data-cell-col="purchaseDate"]')).toContainText(
     /^Mar 11’22 · \d+y ago$/,
   );
-  await row.locator('[data-cell-col="primaryGtin"]').hover();
-  await row
-    .locator('[data-cell-col="primaryGtin"]')
-    .getByRole("button", { name: /How primary gtin is determined/ })
-    .click();
+  await openCellExplanation(row, /How primary gtin is determined/);
   const popover = page.locator('[data-slot="popover-content"]:visible');
   await expect(
     popover.getByRole("link", { name: `${host}/catalog/` }),

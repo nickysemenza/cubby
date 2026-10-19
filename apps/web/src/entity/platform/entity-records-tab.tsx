@@ -208,6 +208,7 @@ const filterFields: FilterBarField[] = [
     key: "image",
     label: "Image",
     type: "select",
+    valueType: "presence",
     options: [
       { value: "has", label: "Has image" },
       { value: "none", label: "No image" },

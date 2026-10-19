@@ -7,6 +7,8 @@ type TableProps = React.ComponentProps<"table"> & {
   containerClassName?: string;
 };
 
+// Header and cell geometry match RTable's 32px rows, so a read-only table
+// reads as the same family as the interactive ones.
 // `table-fixed` makes columns share the available width and truncate, so the
 // table always fits its container instead of growing and forcing horizontal
 // scroll. Pair with `min-w-0` cells (the default below) for clean truncation.
@@ -29,7 +31,7 @@ function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
   return (
     <thead
       data-slot="table-header"
-      className={cn("bg-muted/60 [&_tr]:border-b", className)}
+      className={cn("bg-card [&_tr]:border-b", className)}
       {...props}
     />
   );
@@ -85,7 +87,7 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
       // `scope={undefined}` rather than claiming to head a column.
       scope="col"
       className={cn(
-        "h-10 px-2 text-left align-middle text-xs font-medium whitespace-nowrap text-muted-foreground [&:has([role=checkbox])]:pr-0",
+        "h-8 px-2 text-left align-middle text-xs font-medium whitespace-nowrap text-muted-foreground [&:has([role=checkbox])]:pr-0",
         className,
       )}
       {...props}
@@ -98,7 +100,7 @@ function TableCell({ className, ...props }: React.ComponentProps<"td">) {
     <td
       data-slot="table-cell"
       className={cn(
-        "min-w-0 p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0",
+        "min-w-0 px-2 py-1.5 align-middle whitespace-nowrap tabular-nums [&:has([role=checkbox])]:pr-0",
         className,
       )}
       {...props}

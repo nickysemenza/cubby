@@ -460,6 +460,8 @@ export default defineEntity({
           columnLabel: "Attribution",
           list: true,
           detail: true,
+          // Every value is a state of the attribution, "derived" included.
+          optionRole: "status",
         },
         validation: {
           read: imageCaptureAttribution,

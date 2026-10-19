@@ -4,11 +4,12 @@ import { buildEntity } from "tooling/factories/build";
 
 import { entityApi } from "./support/entity-api";
 import {
+  openCellExplanation,
   gotoAuthenticatedPage,
   readExpense,
+  selectComboboxItem,
   uniqueName,
   waitForFormHydration,
-  selectComboboxItem,
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
@@ -41,10 +42,7 @@ test("unclassified Expense explains its role gap and resolution preserves money"
   await gotoAuthenticatedPage(page, `/expenses?q=${encodeURIComponent(name)}`);
   const row = page.getByRole("row").filter({ hasText: name });
   await expect(row).toContainText("$2.13");
-  await row.hover();
-  await row
-    .getByRole("button", { name: /How (data )?quality is determined/ })
-    .click();
+  await openCellExplanation(row, /How (data )?quality is determined/);
   const explanation = page.locator('[data-slot="popover-content"]:visible');
   await expect(explanation).toContainText("Receipt role");
   await expect(
