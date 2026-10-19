@@ -58,12 +58,15 @@ export function CellFrame({
   const floatingRailShown = floating && !nested && active && cellActive;
   const valueRef = useRef<HTMLSpanElement>(null);
   const railRef = useRef<HTMLSpanElement>(null);
-  const [covers, setCovers] = useState(false);
+  // Written to the DOM, not state. Regression: a `covers` state set here
+  // re-rendered the cell inside commit and, after a viewport resize, hit
+  // React's update-depth limit (#185) and crashed the page.
   useLayoutEffect(() => {
     const valueElement = valueRef.current;
     const rail = railRef.current;
     if (!floatingRailShown || !valueElement || !rail) return;
-    setCovers(
+    rail.toggleAttribute(
+      "data-rail-covers",
       valueElement.scrollWidth > valueElement.clientWidth + 1 ||
         railCovers(valueElement, rail),
     );
@@ -92,14 +95,12 @@ export function CellFrame({
             <span
               ref={railRef}
               data-cell-rail=""
-              data-rail-covers={floating && covers ? "" : undefined}
               className={cn(
                 "flex shrink-0 items-center",
                 floating &&
                   "absolute inset-y-0 end-0 my-auto h-fit rounded-sm bg-(--table-row-surface) shadow-[-6px_0_6px_var(--table-row-surface)] [td.text-right_&]:start-0 [td.text-right_&]:end-auto [td.text-right_&]:shadow-[6px_0_6px_var(--table-row-surface)]",
                 floating &&
-                  covers &&
-                  "pointer-events-none opacity-0 focus-within:pointer-events-auto focus-within:opacity-100",
+                  "data-rail-covers:pointer-events-none data-rail-covers:opacity-0 data-rail-covers:focus-within:pointer-events-auto data-rail-covers:focus-within:opacity-100",
               )}
             >
               {floating && <span ref={setSlot} className="contents" />}
