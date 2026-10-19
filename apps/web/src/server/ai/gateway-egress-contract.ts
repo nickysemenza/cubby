@@ -16,7 +16,12 @@ export const gatewayEgressInput = z.object({
   }),
 });
 const gatewayAdmission = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("admitted"), token: z.uuid() }),
+  z.object({
+    kind: z.literal("admitted"),
+    token: z.uuid(),
+    // Credit admissions: the refusal epoch their response is observed under.
+    epoch: z.number().optional(),
+  }),
   z.object({ kind: z.literal("wait"), until: z.number() }),
   // A recorded provider credit refusal: refused now, with no upstream call.
   z.object({

@@ -3,11 +3,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
-import { AiFundingLine, PaidRunButton } from "~/features/account/ai-funding";
 import {
-  aiFunding,
-  run,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+  AiFundingLine,
+  aiFundingStatusQuery,
+  PaidRunButton,
+} from "~/features/account/ai-funding";
+import { run } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Stack } from "~/ui/layout";
 import { StatusText } from "~/ui/primitives/status-text";
@@ -78,7 +79,7 @@ export function MailImportSettings() {
       queryClient.setQueryData(run.mailImport.queryOptions({}).queryKey, data);
     },
   });
-  const funding = useQuery(aiFunding.status.queryOptions({}));
+  const funding = useQuery(aiFundingStatusQuery());
   const discover = useActionMutation({
     mutationFn: () => run.discoverMail.mutationOptions(),
     success: (data) =>

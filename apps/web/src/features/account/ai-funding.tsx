@@ -68,6 +68,17 @@ export function AiFundingLine({ budget }: { budget: AiFundingStatus }) {
   );
 }
 
+/**
+ * Background work spends credit and records refusals without touching this
+ * query, so it refreshes on mount and focus and every minute while visible.
+ */
+export const aiFundingStatusQuery = () => ({
+  ...aiFunding.status.queryOptions({}),
+  refetchOnMount: true,
+  refetchOnWindowFocus: true,
+  refetchInterval: 60_000,
+});
+
 type FundingRow = {
   id: string;
   source: string;
@@ -81,7 +92,7 @@ type FundingRow = {
  */
 export function AiFundingSettings() {
   const queryClient = useQueryClient();
-  const status = useQuery(aiFunding.status.queryOptions({}));
+  const status = useQuery(aiFundingStatusQuery());
   const replace = (data: AiFundingStatus) => {
     queryClient.setQueryData(aiFunding.status.queryOptions({}).queryKey, data);
   };

@@ -157,6 +157,42 @@ describe("Claude credit refusal", () => {
   });
 });
 
+// Regression: a credit request in flight across "Retry Claude credit now"
+// re-recorded the refusal it had cleared; an older success cleared a newer
+// refusal; and long refusal bodies lost their tail.
+describe("credit refusal observations", () => {
+  it("ignores a response admitted before the latest reset", async () => {
+    const stub = env.AI_GATEWAY_EGRESS.getByName(crypto.randomUUID());
+    const now = Date.now();
+    const inFlight = await stub.admit(CREDIT, now);
+    if (inFlight.kind !== "admitted") throw new Error("Expected admission");
+    await stub.resetCreditRefusal();
+    await stub.noteCreditResponse(400, CONSOLE_LIMIT, now + 1, inFlight.epoch);
+    expect(await stub.creditRefusal(now + 1)).toBeNull();
+  });
+
+  it("keeps a refusal recorded after an older request was admitted", async () => {
+    const stub = env.AI_GATEWAY_EGRESS.getByName(crypto.randomUUID());
+    const now = Date.now();
+    const older = await stub.admit(CREDIT, now);
+    const newer = await stub.admit(CREDIT, now);
+    if (older.kind !== "admitted" || newer.kind !== "admitted")
+      throw new Error("Expected admissions");
+    await stub.noteCreditResponse(400, CONSOLE_LIMIT, now + 1, newer.epoch);
+    await stub.noteCreditResponse(200, "", now + 2, older.epoch);
+    expect(await stub.creditRefusal(now + 2)).not.toBeNull();
+  });
+
+  it("retains the whole refusal body and reads its date past 4 KB", async () => {
+    const stub = env.AI_GATEWAY_EGRESS.getByName(crypto.randomUUID());
+    const now = Date.parse("2099-10-01T02:00:00Z");
+    const body = `${"x".repeat(5_000)} ${CONSOLE_LIMIT}`;
+    await stub.noteCreditResponse(400, body, now);
+    const refusal = await stub.creditRefusal(now);
+    expect(refusal).toEqual({ until: NAMED_UNTIL, reason: body });
+  });
+});
+
 // A shared gateway window must survive different stubs and release capacity on cancellation.
 describe("shared Gateway admission", () => {
   it("keeps subscriber-credit cooldown from delaying unified fallback", async () => {
