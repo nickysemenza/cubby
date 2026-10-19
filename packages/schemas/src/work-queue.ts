@@ -158,7 +158,12 @@ export const workQueueRowSchema = problemRowSchema
     /** One row per Suggestion family with pending Suggestions; it opens
      * the Suggestions page on that family rather than a record. */
     suggestionFamily: z
-      .enum(["statement_transaction", "recommendation", "field"])
+      .enum([
+        "statement_transaction",
+        "recommendation",
+        "field",
+        "transfer_pair",
+      ])
       .optional(),
     key: z.string().min(1),
     source: workQueueSourceSchema,

@@ -137,6 +137,13 @@ export function acceptItem(
   if (!offers(row, "accept")) return null;
   if (row.family === "statement_transaction")
     return statementApplyItem(row.evidence, statementChoice);
+  if (row.family === "transfer_pair")
+    return {
+      ...base(row),
+      verdict: "correct",
+      intent: "apply",
+      application: { kind: "transfer_pair" },
+    };
   return { ...base(row), verdict: "correct", intent: "apply" };
 }
 

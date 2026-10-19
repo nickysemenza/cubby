@@ -137,6 +137,21 @@ export async function applyStatementTransactionSuggestion(
       "The statement or transaction evidence changed since this suggestion was made. Refresh suggestions and review again.",
     );
   const judgment = current.judgment;
+  if (
+    application.action === "create" &&
+    judgment.transferPair?.clean &&
+    !application.kindOverride &&
+    (judgment.create?.kind === "account_transfer" ||
+      judgment.create?.kind === "credit_card_payment")
+  ) {
+    const { applyTransferPair } =
+      await import("~/server/domains/financial-transaction/repo/transfer-pair-suggestions");
+    await applyTransferPair(db, context, {
+      key: judgment.transferPair.key,
+      expectedFingerprint: judgment.transferPair.fingerprint,
+    });
+    return;
+  }
   const actor = context.actorContext;
   const accounts = await shortcodes(db, "FinancialAccount", [
     judgment.accountId,

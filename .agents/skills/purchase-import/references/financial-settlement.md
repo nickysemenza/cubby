@@ -245,7 +245,8 @@ filtering a group with `where {account: {in: [FAC-…]}, month: {in: [YYYY-MM]}}
    `entity.review_assessments`: verdict `correct`, intent `apply`,
    `expectedFingerprint` (the row's `fingerprint`), and `application {kind:
    "statement_transaction", action: <recommended>}`; an attach also names
-   `transactionId`, the first candidate. A create is clean only when at least
+   `transactionId`, the first candidate. For transfer/card-payment creates use
+   the opposite-leg rule in step 5. Other creates are clean only when at least
    two of `create.votes` (category `rule`, model `label`, merchant `history`)
    name its kind and none disagrees, and `create.counterparty` is a business
    (on a stored-value account such as a payment app, history must say so). A
@@ -269,20 +270,27 @@ filtering a group with `where {account: {in: [FAC-…]}, month: {in: [YYYY-MM]}}
    `finance.book_transaction` as `economicRole: "reimbursement"`.
 5. A `transfer` names the member's own balance account a cash-out or funding
    descriptor points at (Venmo-style and payout balances are `stored_value`;
-   PayPal is read like a card). Create it as `account_transfer`; once the
-   other leg exists, pair it through `finance_read.transfer_pairs`. With
-   `ledgerTransfer: true` the accounts have different owners: accept the pair
-   with `finance.accept_transfer_pair` so the LedgerTransfer is recorded.
+   PayPal is read like a card). Review the `transfer_pair` family on the global
+   Suggestions page or through `entity_read.suggestion_queue`; find pairs with
+   `run.sweep {families: [{family: "transfer_pair"}]}`. Accept using verdict
+   `correct`, intent `apply`, `expectedFingerprint` and `application {kind:
+   "transfer_pair"}`. It creates missing statement-backed legs and accepts the
+   pair atomically. The family and statement creates share the
+   [opposite-leg clean policy](../../../../docs/adr/0016-shared-assessments-and-feedback.md#transfer-pair-suggestions-2026-10-19).
+   Cross-owner pairs always need review and record a LedgerTransfer.
    An ATM withdrawal moves money into the `cash` account of the bank
    account's owner (a household checking's cash is the household's), so it is
-   an internal move. Cash has no statement: create the cash leg by hand for the
-   full amount, accept the pair, record the ATM fee as a `fee` on the cash
-   account, and settle cash spending from that account against its Purchase.
+   an internal move. Cash has no statement: review the proposal to create its
+   full-amount leg on the owner's unique cash account, or enter the leg by hand.
+   A proposed cash leg is never clean. Record the known ATM fee separately as a
+   `fee` on cash; never infer a fee amount. Settle cash spending from that
+   account against its Purchase.
    A cash account never reconciles: cash spent and not remembered stays as an
    unexplained balance on purpose. Never invent spending to close it, and never
    settle a Purchase from cash without evidence that the cash paid it.
-   A transfer or card payment is never clean until its opposite leg is matched,
-   so review each one: confirm the other leg and its owner before accepting.
+   Review unresolved overlapping exports before creating a leg; confirmed
+   observations must share one FinancialTransaction. Amount and nearby dates
+   alone cannot establish charge identity.
 6. Dismiss charges that should never become transactions with verdict
    `dismissed` and suppression `{scope: "statement_transaction", candidateKey:
    "<source>:<chargeKey>", fingerprint}`; prefer `disposition: "ignored"` with a

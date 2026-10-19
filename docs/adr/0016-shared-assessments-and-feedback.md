@@ -242,6 +242,52 @@ a few days); until then votes and a descriptor naming an own account cannot
 tell an internal move from money leaving to another owner. A move between
 different owners also owes a LedgerTransfer and is never clean.
 
+### Transfer-pair Suggestions (2026-10-19)
+
+The `transfer_pair` family discovers unmatched money movements across accounts:
+transfer/card-payment statement charges and eligible FinancialTransactions with
+no LedgerTransfer. Candidates have equal amounts, opposite signs, different
+accounts and dates within five days. Evidence shows both legs, their accounts
+and owners, the date gap and every competitor, including weaker descriptor
+matches. Pair identity follows the charge, not its export observation.
+
+Kinds and provider categories retrieve candidates; they do not establish
+movement-shaped descriptors. A declared Decision labels each descriptor as an
+account move, a payment or insufficient evidence. Both high-confidence account
+move labels are necessary for clean acceptance, alongside the independent
+structural checks below. Generation publishes weak pairs first, then the label
+pass republishes them. Labels survive a later rule pass only while the base
+evidence fingerprint is unchanged.
+
+A pair is clean only when both legs have exactly one candidate, their date gap
+is at most three days, both accounts have the same known owner, and both legs
+carry explicit movement evidence (transfer, card payment, cash-out/funding or
+ATM withdrawal). Generic payment/deposit, ACH, checks and repayments require
+review unless stronger context identifies an account move. Model confidence
+never supplies apply authority. Different owners always require member review.
+
+Confirmed observations from overlapping exports converge on one
+FinancialTransaction per leg. Same account, amount and nearby dates flag
+possible overlap but do not prove identity: unresolved overlap prevents clean
+acceptance and creating duplicate legs. Review the observations through the
+statement reconciliation path before pairing them.
+
+Member apply creates missing statement-backed transactions with their source
+refs, then calls `finance.accept_transfer_pair` atomically. A same-owner pair
+records an internal move; a cross-owner pair records money between those owners.
+Apply rechecks current evidence, eligibility, ownership and competing candidates;
+retries cannot pair a charge twice. Bulk Accept uses the same path for clean
+pairs. Statement transfer/card-payment creates use this same opposite-leg clean
+test and pair writer, replacing the blanket unclean stopgap from #2823. A found
+statement row qualifies even before its FinancialTransaction exists. Everyday
+spend booking remains the separate #2738 path.
+
+Cash is a valid destination without a statement. An ATM withdrawal with no
+recorded cash leg may propose creating the full-amount leg on the owner's unique
+cash account, but this proposal is review-only: an invented leg is not found
+opposite-leg evidence. The bank amount includes the ATM fee; record that fee
+separately on cash, with its supplied amount, and never infer it.
+
 ## Amendment: Sweeps, the Suggestions page and Automatic rules (2026-10)
 
 Every Suggestion family now reports to one Suggestions page and one Sweep. A

@@ -170,6 +170,7 @@
     "./filter-sentinel-fields": "./src/filter-sentinel-fields.ts",
     "./statement-row": "./src/statement-row.ts",
     "./statement-suggestion": "./src/statement-suggestion.ts",
+    "./transfer-pair-suggestion": "./src/transfer-pair-suggestion.ts",
     "./suggestion-list": "./src/suggestion-list.ts",
     "./automatic-rule": "./src/automatic-rule.ts",
     "./wish": "./src/wish.ts",

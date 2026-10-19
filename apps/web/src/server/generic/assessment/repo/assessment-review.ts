@@ -329,6 +329,26 @@ const assessmentFamilies = {
       });
     },
   },
+  transfer_pair: {
+    subject: assessmentSubjects.transfer_pair,
+    target: assessmentProjectionTargets.transfer_pair,
+    transactionBound: true,
+    actions: ["correct", "wrong", "uncertain", "dismissed"],
+    apply: async (db, context, state, input, automatic) => {
+      if (
+        automatic ||
+        input.verdict !== "correct" ||
+        input.correction.present ||
+        input.application?.kind !== "transfer_pair"
+      )
+        throw new Error(
+          "Transfer pairing requires member acceptance of the current pair.",
+        );
+      const { applyTransferPairSuggestion } =
+        await import("~/server/domains/financial-transaction/repo/transfer-pair-suggestions");
+      await applyTransferPairSuggestion(db, context, state, input);
+    },
+  },
   recommendation: {
     subject: assessmentSubjects.recommendation,
     target: assessmentProjectionTargets.recommendation,
@@ -404,6 +424,38 @@ function assertReviewAction(
     throw new Error(`${name} Assessments have no Automatic rule; review them`);
   if (!assessmentFamilies[name].actions.some((action) => action === verdict))
     throw new Error(`Unsupported ${name} review action ${verdict}`);
+}
+
+const APPLICATION_FAMILIES = {
+  saved_field: {
+    family: "field",
+    message: "Saved-field receipts require a field Assessment",
+  },
+  product_merge: {
+    family: "product_pair",
+    message: "Product merge application requires a Product pair Assessment",
+  },
+  statement_transaction: {
+    family: "statement_transaction",
+    message:
+      "Statement application requires a Transaction suggestion Assessment",
+  },
+  transfer_pair: {
+    family: "transfer_pair",
+    message: "Transfer-pair application requires a transfer-pair Assessment.",
+  },
+} satisfies Record<
+  NonNullable<Review["application"]>["kind"],
+  { family: AssessmentFamily; message: string }
+>;
+
+function assertApplicationFamily(
+  family: AssessmentFamily,
+  application: Review["application"],
+) {
+  if (!application) return;
+  const expected = APPLICATION_FAMILIES[application.kind];
+  if (expected.family !== family) throw new Error(expected.message);
 }
 
 async function settleReview(
@@ -502,25 +554,7 @@ async function settleReview(
     throw new Error("Mail import outcome grades are history only");
   if (input.intent === "draft" && prediction.family !== "field")
     throw new Error("Only field Assessments support draft acceptance");
-  if (
-    input.application?.kind === "saved_field" &&
-    prediction.family !== "field"
-  )
-    throw new Error("Saved-field receipts require a field Assessment");
-  if (
-    input.application?.kind === "product_merge" &&
-    prediction.family !== "product_pair"
-  )
-    throw new Error(
-      "Product merge application requires a Product pair Assessment",
-    );
-  if (
-    input.application?.kind === "statement_transaction" &&
-    prediction.family !== "statement_transaction"
-  )
-    throw new Error(
-      "Statement application requires a Transaction suggestion Assessment",
-    );
+  assertApplicationFamily(prediction.family, input.application);
   if (input.intent === "apply" && prediction.family === "email_relevance") {
     const subject = assessmentSubjects.email_relevance.parse(
       prediction.subject,

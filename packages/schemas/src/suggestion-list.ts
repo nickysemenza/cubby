@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { transferPairJudgment } from "./transfer-pair-suggestion";
 
 import { suggestionReviewRowSchema, suggestionStatus } from "./ai";
 import { assessmentChildHandle } from "./assessment-reference";
@@ -23,6 +24,7 @@ export const suggestionListFamily = z.enum([
   "field",
   "statement_transaction",
   "recommendation",
+  "transfer_pair",
 ]);
 export type SuggestionListFamily = z.infer<typeof suggestionListFamily>;
 
@@ -166,6 +168,14 @@ export const suggestionColumns = {
     source: { type: "text" },
     target: { type: "text" },
   },
+  transfer_pair: {
+    date: { type: "date" },
+    amount: { type: "number" },
+    dateGapDays: { type: "number" },
+    account: { type: "ref", entity: "financialAccount", facet: true },
+    owner: { type: "ref", entity: "ledgerParty", facet: true },
+    merchant: { type: "text" },
+  },
 } as const satisfies Record<
   "common" | SuggestionListFamily,
   Record<string, ColumnType & { facet?: true }>
@@ -212,11 +222,17 @@ export const recommendationSuggestionRow = z.object({
   family: z.literal("recommendation"),
   evidence: connectionProposal,
 });
+export const transferPairSuggestionRow = z.object({
+  ...rowBase,
+  family: z.literal("transfer_pair"),
+  evidence: transferPairJudgment,
+});
 /** One Suggestion of any family; `evidence` is the family's own payload. */
 export const suggestionListRow = z.discriminatedUnion("family", [
   fieldSuggestionRow,
   statementSuggestionRow,
   recommendationSuggestionRow,
+  transferPairSuggestionRow,
 ]);
 export type SuggestionListRow = z.infer<typeof suggestionListRow>;
 

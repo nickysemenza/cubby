@@ -16,6 +16,11 @@ import { z } from "zod";
 import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import type { Database } from "~/server/db";
 import {
+  countTransferPairsNeedingLabels,
+  discoverTransferPairs,
+  generateTransferPairSuggestions,
+} from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
+import {
   countSuggestionsNeedingLabels,
   countUnmatchedCharges,
   generateStatementSuggestionPage,
@@ -95,6 +100,17 @@ export async function estimateSweep(
   return Promise.all(
     families.map(async (entry) => {
       switch (entry.family) {
+        case "transfer_pair": {
+          const pairs = await discoverTransferPairs(db, entry.scope);
+          return {
+            family: entry.family,
+            records: pairs.length,
+            decisions:
+              pairs.filter((pair) =>
+                pair.blockers.every((blocker) => blocker === "weak_movement"),
+              ).length * 2,
+          };
+        }
         case "statement_transaction": {
           const charges = await countUnmatchedCharges(db, entry.scope);
           return {
@@ -127,31 +143,109 @@ export async function estimateSweep(
 }
 
 export const sweepDrivers: StepRunDrivers = async (_db, owner) =>
-  sweepRunInput.parse(owner.input).families.map((entry): StepDriver => {
-    const definition = {
-      key: entry.family,
-      label: SWEEP_FAMILY_LABEL[entry.family],
-    };
-    switch (entry.family) {
-      case "statement_transaction":
-        return {
-          ...definition,
-          page: (context) => statementPage(context, entry.scope),
-        };
-      case "recommendation":
-        return {
-          ...definition,
-          page: (context) => connectionPage(context, entry.scope),
-        };
-      case "field":
-        return {
-          ...definition,
-          page: (context) => fieldPage(context, entry.scope),
-        };
-    }
-  });
+  // Statement clean evidence consumes the transfer family's descriptor labels.
+  sweepRunInput
+    .parse(owner.input)
+    .families.toSorted(
+      (a, b) =>
+        Number(b.family === "transfer_pair") -
+        Number(a.family === "transfer_pair"),
+    )
+    .map((entry): StepDriver => {
+      const definition = {
+        key: entry.family,
+        label: SWEEP_FAMILY_LABEL[entry.family],
+      };
+      switch (entry.family) {
+        case "transfer_pair":
+          return {
+            ...definition,
+            page: (context) => transferPairPage(context, entry.scope),
+          };
+        case "statement_transaction":
+          return {
+            ...definition,
+            page: (context) => statementPage(context, entry.scope),
+          };
+        case "recommendation":
+          return {
+            ...definition,
+            page: (context) => connectionPage(context, entry.scope),
+          };
+        case "field":
+          return {
+            ...definition,
+            page: (context) => fieldPage(context, entry.scope),
+          };
+      }
+    });
 
 type PageContext = Parameters<StepDriver["page"]>[0];
+
+const transferPairCursor = z.discriminatedUnion("phase", [
+  z.object({
+    phase: z.literal("label"),
+    after: z.object({ createdAt: z.string(), id: z.string() }).nullable(),
+  }),
+  z.object({ phase: z.literal("finished") }),
+]);
+
+async function transferPairPage(
+  { db, run, step, retrying }: PageContext,
+  scope: Extract<SweepFamilyScope, { family: "transfer_pair" }>["scope"],
+): Promise<StepPage> {
+  const parsed = transferPairCursor.safeParse(step.cursor);
+  if (!parsed.success) {
+    const pairs = await discoverTransferPairs(db, scope);
+    await generateTransferPairSuggestions(db, { runId: run.id, scope });
+    return {
+      kind: "progress",
+      found: pairs.length,
+      delta: { done: pairs.length },
+      cursor: { phase: "label", after: null },
+      done: false,
+    };
+  }
+  if (parsed.data.phase === "finished" && !retrying)
+    return { kind: "progress", done: true };
+  const after = parsed.data.phase === "finished" ? null : parsed.data.after;
+  const labelsAhead =
+    after === null
+      ? await countTransferPairsNeedingLabels(db, { runId: run.id })
+      : 0;
+  const { labelTransferPairSuggestions } =
+    await import("~/server/domains/financial-transaction/service/transfer-pair-labels");
+  let outcome: Awaited<ReturnType<typeof labelTransferPairSuggestions>>;
+  try {
+    outcome = await labelTransferPairSuggestions(db, { runId: run.id, after });
+  } catch (error) {
+    if (error instanceof AiBudgetExhaustedError)
+      return {
+        kind: "paused",
+        reason: error.message,
+        until: new Date(error.resumeAt),
+      };
+    throw error;
+  }
+  return {
+    kind: "progress",
+    ...(after === null &&
+      outcome.active && { found: step.found + labelsAhead }),
+    delta: {
+      done: outcome.labelled,
+      skipped: outcome.stale,
+      failed: outcome.failed.length,
+    },
+    errors: outcome.failed,
+    ...(!outcome.active && {
+      meta: { detail: { labels: "off: automatic AI work is disabled" } },
+    }),
+    cursor: outcome.next
+      ? { phase: "label", after: outcome.next }
+      : { phase: "finished" },
+    done: outcome.next === null,
+  };
+}
 
 // ---- Statements: rule generation over unmatched charges, then labels. ----
 

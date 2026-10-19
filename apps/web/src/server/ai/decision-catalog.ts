@@ -28,6 +28,7 @@ import {
   PRODUCT_VARIANT_RELATION_FEATURE,
   SETTLEMENT_CANDIDATE_RANK_FEATURE,
   USDA_FOOD_SUGGEST_FEATURE,
+  TRANSFER_PAIR_MOVEMENT_FEATURE,
 } from "~/server/ai/policy/features";
 import {
   type CatalogRow,
@@ -106,6 +107,25 @@ function featureRows(): CatalogRow[] {
       ),
   );
   return [
+    featureRow(
+      TRANSFER_PAIR_MOVEMENT_FEATURE.feature,
+      "Transfer-pair movement",
+      "Read explicit account-movement evidence in one candidate leg",
+      TRANSFER_PAIR_MOVEMENT_FEATURE,
+      TRANSFER_PAIR_MOVEMENT_FEATURE.prompt(
+        JSON.stringify({
+          account: { kind: "bank_account", name: "Synthetic checking" },
+          oppositeAccountKind: "bank_account",
+          amount: 180,
+          date: "2026-05-04",
+          descriptor: "ONLINE TRANSFER TO SAVINGS",
+          merchant: null,
+          providerCategory: "Transfer",
+          recordedKind: null,
+        }),
+      ),
+      { options: plainOptions(TRANSFER_PAIR_MOVEMENT_FEATURE.choices) },
+    ),
     featureRow(
       UPC_OFFER_COMPARABILITY_FEATURE.feature,
       "UPC offer comparability",

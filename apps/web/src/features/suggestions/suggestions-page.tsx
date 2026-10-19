@@ -449,6 +449,7 @@ const QUICK_FILTERS = {
   field: ["entity", "field", "kind"],
   statement_transaction: ["clean", "action", "kind", "account", "owner"],
   recommendation: ["relation", "entityKind"],
+  transfer_pair: ["clean", "strength"],
   applied: [],
 } satisfies Record<SuggestionView, readonly string[]>;
 

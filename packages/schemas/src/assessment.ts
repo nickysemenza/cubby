@@ -20,6 +20,7 @@ import {
 } from "./statement-suggestion";
 import { z } from "zod";
 import { entityGraphRootSchema } from "./entity-graph";
+import { transferPairJudgment } from "./transfer-pair-suggestion";
 
 /** Unknown historical values stay nullable; corrections explicitly distinguish absent from JSON null. */
 export const assessmentCorrection = z.discriminatedUnion("present", [
@@ -35,6 +36,7 @@ export const assessmentFamily = z.enum([
   "product_pair",
   "recommendation",
   "statement_transaction",
+  "transfer_pair",
 ]);
 export const feedbackVerdict = z.enum([
   "correct",
@@ -106,6 +108,12 @@ export const assessmentSubjects = {
     source: z.string().min(1),
     chargeKey: z.string().min(1),
   }),
+  transfer_pair: z.object({
+    kind: z.literal("transfer_pair"),
+    entity: z.literal("financialAccount"),
+    recordId: z.uuid(),
+    pairKey: z.string().min(1),
+  }),
 };
 export const assessmentSubject = z.discriminatedUnion("kind", [
   assessmentSubjects.field,
@@ -116,6 +124,7 @@ export const assessmentSubject = z.discriminatedUnion("kind", [
   assessmentSubjects.product_pair,
   assessmentSubjects.recommendation,
   assessmentSubjects.statement_transaction,
+  assessmentSubjects.transfer_pair,
 ]);
 
 /**
@@ -179,6 +188,10 @@ export const assessmentProjectionTargets = {
     entity: z.literal("statementRow"),
     recordId: z.uuid(),
   }),
+  transfer_pair: z.object({
+    entity: z.literal("financialAccount"),
+    recordId: z.uuid(),
+  }),
 };
 
 /** Frozen result of the real writer; totals remain SUM(Expense.cost). */
@@ -224,6 +237,7 @@ export const assessmentJudgments = {
   product_pair: z.object({ actionable: z.boolean(), conflict: z.boolean() }),
   recommendation: z.object({ candidateKey: z.string() }),
   statement_transaction: statementTransactionJudgment,
+  transfer_pair: transferPairJudgment,
 };
 
 export const assessmentProducer = z.object({
@@ -313,6 +327,7 @@ export const assessmentReviewInput = feedbackEvent
           recordId: anyShortcodeSchema(nonEmptyTuple(shortcodeEntities)),
         }),
         statementTransactionApplication,
+        z.object({ kind: z.literal("transfer_pair") }),
       ])
       .optional(),
   });

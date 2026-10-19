@@ -425,6 +425,8 @@ const acceptAsIs = (row: SuggestionListRow) => {
       return suggestionFamilies.statement_transaction.acceptAsIs(row);
     case "recommendation":
       return suggestionFamilies.recommendation.acceptAsIs(row);
+    case "transfer_pair":
+      return suggestionFamilies.transfer_pair.acceptAsIs(row);
   }
 };
 

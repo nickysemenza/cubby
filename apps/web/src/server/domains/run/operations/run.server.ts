@@ -69,6 +69,7 @@ async function sweepScopes(
   return Promise.all(
     input.families.map(async (entry): Promise<SweepFamilyScope> => {
       switch (entry.family) {
+        case "transfer_pair":
         case "statement_transaction":
           return {
             family: entry.family,

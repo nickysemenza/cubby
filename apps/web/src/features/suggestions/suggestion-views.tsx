@@ -118,6 +118,13 @@ const VIEW_FILTERS = {
     multiselect("entityKind"),
     multiselect("strength"),
   ],
+  transfer_pair: [
+    range("date"),
+    range("amount"),
+    range("dateGapDays"),
+    multiselect("strength"),
+    { columnId: "clean", kind: "multiselect", value: "boolean" },
+  ],
   applied: [],
 } satisfies Record<SuggestionView, readonly ColumnFilterSpec[]>;
 
@@ -362,6 +369,59 @@ function allColumns() {
         cell: ({ row }) => FAMILY_LABEL[row.original.family],
       }),
     );
+    add(cleanColumn);
+    add(impactColumn);
+    add(ageColumn);
+    actionsColumn(add);
+  });
+}
+
+function transferPairColumns() {
+  return createCubbyColumnCollection<Row>((add) => {
+    leadingColumns(add);
+    add(recordColumn);
+    add(
+      helper.display({
+        id: "whatChanges",
+        header: "Opposite account",
+        size: 240,
+        cell: ({ row }) => <WhatChanges row={row.original} />,
+      }),
+    );
+    add(
+      helper.accessor((row) => columnText(row, "date"), {
+        id: "date",
+        header: "Date",
+        size: 108,
+        cell: ({ row }) => (
+          <DateDisplay start={columnText(row.original, "date")} />
+        ),
+      }),
+    );
+    add(
+      helper.accessor((row) => column(row, "amount"), {
+        id: "amount",
+        header: "Amount",
+        size: 112,
+        cell: ({ row }) => {
+          const amount = column(row.original, "amount");
+          return typeof amount === "number" ? (
+            formatCurrency(amount)
+          ) : (
+            <NoneValue />
+          );
+        },
+      }),
+    );
+    add(
+      helper.accessor((row) => column(row, "dateGapDays"), {
+        id: "dateGapDays",
+        header: "Days apart",
+        size: 100,
+        cell: ({ row }) => column(row.original, "dateGapDays"),
+      }),
+    );
+    add(strengthColumn);
     add(cleanColumn);
     add(impactColumn);
     add(ageColumn);
@@ -917,6 +977,8 @@ export function viewColumns(
       return statementColumns(rosters, providerCategoryLabel);
     case "recommendation":
       return recommendationColumns();
+    case "transfer_pair":
+      return transferPairColumns();
     case "applied":
       return appliedColumns();
   }
@@ -934,5 +996,6 @@ export const VIEW_HIDDEN_COLUMNS = {
     impact: false,
   },
   recommendation: { entityKind: false },
+  transfer_pair: {},
   applied: {},
 } satisfies Record<SuggestionView, Record<string, false>>;

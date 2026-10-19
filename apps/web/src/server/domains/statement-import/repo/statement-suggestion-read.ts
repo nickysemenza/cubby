@@ -221,6 +221,7 @@ export async function readStatementSuggestions(
       providerStatus: judgment.providerStatus,
       recommended: judgment.recommended,
       clean: judgment.clean,
+      transferPair: judgment.transferPair,
       create: judgment.create ? create : null,
       candidates: candidates.map((candidate) => ({
         ...candidate,
