@@ -265,6 +265,7 @@ describe("stored Product identity pairs", () => {
       slug: "synthetic-variant",
       label: "Synthetic variant issuer",
       vendorId: vendor.id,
+      issuer: true,
     });
     const purchase = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
@@ -387,6 +388,7 @@ describe("stored Product identity pairs", () => {
       slug: "synthetic-second-issuer",
       label: "Synthetic second issuer",
       vendorId: other.id,
+      issuer: true,
     });
     const [order] = await getDb(ctx.db).select().from(importSourceOrder);
     const original = acceptedSourceOrder.parse(order!.originalOrder);
@@ -430,6 +432,46 @@ describe("stored Product identity pairs", () => {
     expect(await loadProductIdentifierClaims(ctx.db)).toEqual([]);
   });
 
+  // Regression: one unresolvable issuer threw inside the catalog-wide claim
+  // load and failed the duplicate detector for every Product.
+  it("drops only the claim whose issuer cannot resolve and reports it raw", async () => {
+    const { ids } = await boundVariantPair(
+      ["Synthetic dropped claim alpha", "Synthetic dropped claim beta"],
+      "SYNTHETIC-DROPPED-SKU",
+    );
+    for (const name of ["Synthetic host claimant", "Synthetic host rival"])
+      await insertWithShortcode(ctx.db, "vendor", {
+        name,
+        website: "https://contested.example.test",
+      });
+    const [order] = await getDb(ctx.db).select().from(importSourceOrder);
+    const original = acceptedSourceOrder.parse(order!.originalOrder);
+    if (original.extraction.status !== "ready")
+      throw new Error("Synthetic accepted order is not ready");
+    original.extraction.candidate.lines[1]!.productUrl =
+      "https://contested.example.test/p/1";
+    await getDb(ctx.db)
+      .update(importSourceOrder)
+      .set({ originalOrder: original })
+      .where(eq(importSourceOrder.id, order!.id));
+    const dropped: unknown[] = [];
+    const claims = await loadProductIdentifierClaims(ctx.db, undefined, {
+      onDropped: (claim) => dropped.push(claim),
+    });
+    expect(claims.map((claim) => claim.productId)).toEqual([ids[0]]);
+    expect(dropped).toEqual([
+      expect.objectContaining({
+        productId: ids[1],
+        productUrl: "https://contested.example.test/p/1",
+        error: expect.stringContaining("ambiguous"),
+      }),
+    ]);
+    const retrieval = await retrieveProductIdentityCandidates(ctx.db, ids[0]!);
+    expect(retrieval.coverage.droppedClaims).toHaveLength(1);
+    expect(retrieval.coverage.semanticNeighbours).toEqual({
+      status: "unconfigured",
+    });
+  });
   it("keeps an agent propose_match conflict through the queue and actual merge", async () => {
     const { products, ids, decisionPort } = await boundVariantPair(
       [
@@ -1244,6 +1286,7 @@ describe("stored Product identity pairs", () => {
       slug: "synthetic",
       label: "Synthetic exact issuer",
       vendorId: vendor.id,
+      issuer: true,
     });
     await getDb(ctx.db).insert(entityExternalId).values({
       entityKind: "product",
@@ -1488,7 +1531,7 @@ describe("stored Product identity pairs", () => {
           })),
         );
       expect(
-        await retrieveProductIdentityCandidates(ctx.db, ids[0]!),
+        (await retrieveProductIdentityCandidates(ctx.db, ids[0]!)).candidates,
       ).toContain(ids[1]);
       expect(
         await prepareProductIdentityPair(ctx.db, [ids[0]!, ids[1]!]),

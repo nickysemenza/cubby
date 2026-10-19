@@ -27,7 +27,10 @@ import {
   productIdentitySnapshot,
 } from "~/server/domains/product/repo/match/product-identity-snapshot";
 import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
-import { loadProductIdentifierClaims } from "~/server/domains/product/repo/product-identity-claims";
+import {
+  loadProductIdentifierClaims,
+  type DroppedProductIdentifierClaim,
+} from "~/server/domains/product/repo/product-identity-claims";
 import { variantSourceSide } from "~/server/domains/product/repo/product-variant-evidence";
 import { findSimilarEntities } from "~/server/generic/embedding/repo/entity-embedding";
 import { semanticEmbeddingsConfigured } from "~/server/generic/embedding/service/semantic/embeddings";
@@ -45,17 +48,33 @@ export const productIdentityPrompt = (subject: string) => ({
   ],
   allowNone: false,
 });
+/** What catalog retrieval could not see, recorded on the evaluation result
+ * rather than silently narrowing the candidate set. */
+export type ProductIdentityRetrievalCoverage = {
+  droppedClaims: DroppedProductIdentifierClaim[];
+  semanticNeighbours:
+    | { status: "queried"; count: number }
+    | { status: "unconfigured" }
+    | { status: "failed"; error: string };
+};
 export async function retrieveProductIdentityCandidates(
   db: Database,
   id: ProductId,
-) {
+): Promise<{
+  candidates: ProductId[];
+  coverage: ProductIdentityRetrievalCoverage;
+}> {
+  const coverage: ProductIdentityRetrievalCoverage = {
+    droppedClaims: [],
+    semanticNeighbours: { status: "unconfigured" },
+  };
   const client = getDb(db);
   const [seed] = await client
     .select()
     .from(product)
     .where(and(eq(product.id, id), notDeleted(product)))
     .limit(1);
-  if (!seed || isMiscProduct(seed.name)) return [];
+  if (!seed || isMiscProduct(seed.name)) return { candidates: [], coverage };
   const exact = sql`EXISTS (SELECT 1 FROM "EntityExternalId" own JOIN "EntityExternalId" other ON other.source=own.source AND other.kind=own.kind AND other."externalId"=own."externalId" WHERE own."entityKind"=${entitySchema.enum.product} AND own."entityId"=${id} AND own."deletedAt" IS NULL AND other."entityKind"=${entitySchema.enum.product} AND other."entityId"="Product".id AND other."deletedAt" IS NULL)`;
   const candidates = await client
     .select({ id: product.id })
@@ -78,7 +97,9 @@ export async function retrieveProductIdentityCandidates(
     )
     .orderBy(product.id);
   const ids = new Set(candidates.map((row) => row.id));
-  const claims = await loadProductIdentifierClaims(db);
+  const claims = await loadProductIdentifierClaims(db, undefined, {
+    onDropped: (dropped) => coverage.droppedClaims.push(dropped),
+  });
   const ownClaims = claims.filter((claim) => claim.productId === id);
   const ownSnapshot = await productIdentitySnapshot(db, id);
   const ownRegistered = z
@@ -118,26 +139,46 @@ export async function retrieveProductIdentityCandidates(
     for (const owner of owners) ids.add(parseEntityId("product", owner.id));
   }
   if (semanticEmbeddingsConfigured())
-    for (const neighbour of await findSimilarEntities(
-      productionVectorStore,
-      { entityKind: "product", entityId: id },
-      { targetType: "product", limit: 20 },
-    ))
-      ids.add(parseEntityId("product", neighbour.entityId));
-  return [...ids].filter((other) => other !== id).sort();
+    try {
+      const neighbours = await findSimilarEntities(
+        productionVectorStore,
+        { entityKind: "product", entityId: id },
+        { targetType: "product", limit: 20 },
+      );
+      coverage.semanticNeighbours = {
+        status: "queried",
+        count: neighbours.length,
+      };
+      for (const neighbour of neighbours)
+        ids.add(parseEntityId("product", neighbour.entityId));
+    } catch (error) {
+      // Exact and lexical retrieval still stand; the outage is on the result.
+      coverage.semanticNeighbours = {
+        status: "failed",
+        error: getErrorMessage(error),
+      };
+    }
+  return {
+    candidates: [...ids].filter((other) => other !== id).sort(),
+    coverage,
+  };
 }
 export async function prepareProductIdentityCatalog(
   db: Database,
   id: ProductId,
 ) {
   const source = await productIdentitySnapshot(db, id);
-  if (!source?.eligible) return { eligible: false, pairs: [] };
+  if (!source?.eligible) return { eligible: false, pairs: [], coverage: null };
   const pairs = [];
-  for (const other of await retrieveProductIdentityCandidates(db, id)) {
+  const { candidates, coverage } = await retrieveProductIdentityCandidates(
+    db,
+    id,
+  );
+  for (const other of candidates) {
     const pair = await prepareProductIdentityPair(db, [id, other]);
     if (pair) pairs.push(pair);
   }
-  return { eligible: true, pairs };
+  return { eligible: true, pairs, coverage };
 }
 export async function evaluatePreparedProductIdentityPair(
   db: Database,
