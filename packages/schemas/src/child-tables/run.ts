@@ -218,10 +218,10 @@ export const runChildren = [
         reference: { table: "importSourceClaim", column: "id" },
       },
       { key: "orderKey", kind: "text", notNull: true },
+      /** Null once its Purchase is deleted: the row stays as the Email's history. */
       {
         key: "purchaseId",
         kind: "uuid",
-        notNull: true,
         type: "PurchaseId",
         reference: { table: "purchase", column: "id" },
       },
@@ -256,9 +256,12 @@ export const runChildren = [
     ],
     indexes: [
       {
+        // Only a live association fences its order: a deleted Purchase's
+        // detached row stays beside the order's next import.
         name: "ImportSourceOrder_source_order_key",
         unique: true,
         on: ["sourceClaimId", "orderKey"],
+        where: "{purchaseId} IS NOT NULL",
       },
       { name: "ImportSourceOrder_purchase_idx", on: ["purchaseId"] },
       {

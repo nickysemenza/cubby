@@ -12,13 +12,12 @@ import { databaseForTransaction, notDeleted } from "~/server/db/helpers";
 import {
   importPreparedOrder,
   importSourceClaim,
-  importSourceOrder,
   purchase,
 } from "~/server/db/schema";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { assertReviewedPreparationOriginal } from "~/server/domains/purchase-import/repo/import-scope";
-import { assertMailSourceIdentityReady } from "~/server/domains/purchase-import/repo/mail-source-identity";
 import {
+  type LiveSourceOrder,
   lockImportSourceClaimFamily,
   readImportSourceClaimFamily,
   readSourceFamilyOrder,
@@ -53,10 +52,13 @@ async function readReviewedPreparation(tx: DrizzleTransaction, review: Review) {
 }
 
 /** A historical per-order key can join a current mailbox identity only from
- * identical owned retained bodies and headers, never from today's ledger. */
+ * identical owned retained bodies and headers, never from today's ledger.
+ * That exact-copy proof is what resolves a legacy original's
+ * `legacy-source-identity-unresolved` marker, so this path must not apply the
+ * pre-review source-identity gate to the historical copy. */
 export async function canonicalizeReviewedLegacyOriginal(
   tx: DrizzleTransaction,
-  association: typeof importSourceOrder.$inferSelect,
+  association: LiveSourceOrder,
   family: Family,
   review: Review,
   actor: ActorContext,
@@ -131,7 +133,6 @@ export async function canonicalizeReviewedLegacyOriginal(
     throw new Error(
       "Current and legacy retained originals must match exactly and unambiguously.",
     );
-  await assertMailSourceIdentityReady(tx, historical);
   const extraction = importExtractionOutcome.parse(order.extraction);
   if (
     extraction.status !== "ready" ||
@@ -180,7 +181,7 @@ export async function canonicalizeReviewedLegacyOriginal(
  * originalOrder is never filled from today's Expenses or this preparation. */
 export async function recordReviewedOriginal(
   tx: DrizzleTransaction,
-  association: typeof importSourceOrder.$inferSelect,
+  association: LiveSourceOrder,
   family: NonNullable<Awaited<ReturnType<typeof readImportSourceClaimFamily>>>,
   review: NonNullable<
     CommitAcceptedSourceOrderReconciliationInput["reviewedPreparation"]

@@ -195,10 +195,10 @@ export const PURCHASE_DELETE_EDGE_POLICY = {
       "An import preparation retains its reviewed target tombstone and must be prepared again before commit.",
   },
   "ImportSourceOrder.purchaseId": {
-    code: "clear-import-order",
-    effect: "hard-delete",
+    code: "detach-import-order",
+    effect: "detach",
     description:
-      "The source remains retained while this order association is removed, so only this order can be imported again.",
+      "The order association stays as the Email's accepted history with its Purchase link cleared, and its original-line Product bindings are removed; importing the same order again adds a new association beside it.",
   },
   "PurchasePaymentEvidence.purchaseId": {
     code: "delete-payment-evidence",
@@ -2484,11 +2484,14 @@ export const deletePurchases = (
             .select({ id: importSourceOrder.id })
             .from(importSourceOrder)
             .where(inArray(importSourceOrder.purchaseId, ids));
+          // Bindings name the deleted Purchase's lines and would otherwise
+          // keep their Products from being deleted.
           await inner
             .delete(importSourceProduct)
             .where(inArray(importSourceProduct.sourceOrderId, orders));
           await inner
-            .delete(importSourceOrder)
+            .update(importSourceOrder)
+            .set({ purchaseId: null, updatedAt: new Date() })
             .where(inArray(importSourceOrder.purchaseId, ids));
         },
         // Drop ALL slices of every affected transaction, not just this
