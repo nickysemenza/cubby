@@ -153,6 +153,9 @@ const MONEY_MOVES = new Set<KindDecision["kind"]>([
   "credit_card_payment",
 ]);
 
+export const isMoneyMoveKind = (kind: KindDecision["kind"]) =>
+  MONEY_MOVES.has(kind);
+
 /**
  * Whether a create's kind is bulk-acceptable: at least two sources name it and
  * none disagrees, nobody says the counterparty is a person, and the model has
@@ -173,7 +176,8 @@ export function kindAgreed(
   > | null = null,
 ): boolean {
   const { votes, counterparty } = create;
-  if (transfer || MONEY_MOVES.has(create.kind)) return pair?.clean === true;
+  if (isMoneyMoveKind(create.kind)) return pair?.clean === true;
+  if (transfer) return false;
   const cast = [votes.rule, votes.label, votes.history].filter(
     (vote) => vote !== null,
   );

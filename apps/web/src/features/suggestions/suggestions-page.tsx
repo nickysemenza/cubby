@@ -59,7 +59,7 @@ import {
 } from "./suggestion-review-context";
 import { FAMILY_CHIPS, RecordLink } from "./suggestion-values";
 import {
-  STATEMENT_ROSTERS,
+  REFERENCE_ROSTERS,
   VIEW_HIDDEN_COLUMNS,
   buildWhere,
   viewColumns,
@@ -449,7 +449,7 @@ const QUICK_FILTERS = {
   field: ["entity", "field", "kind"],
   statement_transaction: ["clean", "action", "kind", "account", "owner"],
   recommendation: ["relation", "entityKind"],
-  transfer_pair: ["clean", "strength"],
+  transfer_pair: ["clean", "strength", "owner"],
   applied: [],
 } satisfies Record<SuggestionView, readonly string[]>;
 
@@ -585,7 +585,7 @@ function SuggestionsTableBody({
     [list.data],
   );
   const accept = useAcceptClean((id) => rowsById.get(id));
-  const rosters = useDeferredEntityRosters(STATEMENT_ROSTERS);
+  const rosters = useDeferredEntityRosters(REFERENCE_ROSTERS);
   const firstPage = list.pages?.[0];
   const sources = useMemo(
     () =>

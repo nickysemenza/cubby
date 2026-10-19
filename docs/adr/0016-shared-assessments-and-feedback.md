@@ -257,7 +257,9 @@ account move, a payment or insufficient evidence. Both high-confidence account
 move labels are necessary for clean acceptance, alongside the independent
 structural checks below. Generation publishes weak pairs first, then the label
 pass republishes them. Labels survive a later rule pass only while the base
-evidence fingerprint is unchanged.
+evidence fingerprint is unchanged. A label publication refreshes the statement
+projections for its legs, including when only Transfer pairs was swept.
+Dismissal suppresses that pair key on later Sweeps.
 
 A pair is clean only when both legs have exactly one candidate, their date gap
 is at most three days, both accounts have the same known owner, and both legs
@@ -273,11 +275,13 @@ acceptance and creating duplicate legs. Review the observations through the
 statement reconciliation path before pairing them.
 
 Member apply creates missing statement-backed transactions with their source
-refs, then calls `finance.accept_transfer_pair` atomically. A same-owner pair
+refs and assigned statement accounts, then calls `finance.accept_transfer_pair` atomically. A same-owner pair
 records an internal move; a cross-owner pair records money between those owners.
 Apply rechecks current evidence, eligibility, ownership and competing candidates;
 retries cannot pair a charge twice. Bulk Accept uses the same path for clean
-pairs. Statement transfer/card-payment creates use this same opposite-leg clean
+pairs. In a mixed-family batch, overlapping statement and pair suggestions
+settled by an earlier pair return `settled_by_pair`, without another apply or
+Feedback event. Statement transfer/card-payment creates use this same opposite-leg clean
 test and pair writer, replacing the blanket unclean stopgap from #2823. A found
 statement row qualifies even before its FinancialTransaction exists. Everyday
 spend booking remains the separate #2738 path.

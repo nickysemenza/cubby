@@ -65,6 +65,11 @@ const FAMILY_ROWS = [
     hint: "create, attach, settle and void holds",
   },
   {
+    family: "transfer_pair",
+    label: SWEEP_FAMILY_LABEL.transfer_pair,
+    hint: "opposite money movements across accounts",
+  },
+  {
     family: "recommendation",
     label: SWEEP_FAMILY_LABEL.recommendation,
     hint: "acquisitions, settlements, Emails, placements",
@@ -74,18 +79,13 @@ const FAMILY_ROWS = [
     label: SWEEP_FAMILY_LABEL.field,
     hint: "categories and other decision fields",
   },
-  {
-    family: "transfer_pair",
-    label: SWEEP_FAMILY_LABEL.transfer_pair,
-    hint: "opposite money movements across accounts",
-  },
 ] as const satisfies readonly { family: Family; label: string; hint: string }[];
 
 const FAMILY_NOUN = {
   statement_transaction: "charge",
+  transfer_pair: "pair",
   recommendation: "record",
   field: "field",
-  transfer_pair: "pair",
 } satisfies Record<Family, string>;
 
 /** The dialog's starting scope; an entity list presets its own fields. */
@@ -335,6 +335,36 @@ export function FindSuggestionsDialog({
           </FamilyRow>
           <FamilyRow
             {...FAMILY_ROWS[1]}
+            checked={families.has("transfer_pair")}
+            onChecked={(checked) => toggle("transfer_pair", checked)}
+          >
+            <Picker
+              multiple
+              label="Transfer accounts"
+              placeholder="All accounts"
+              className="w-64"
+              entity="financialAccount"
+              items={accountSource.items}
+              isLoading={accountSource.isLoading}
+              onSearchChange={accountSource.onSearchChange}
+              onOpenChange={accountSource.onOpenChange}
+              values={transferAccounts}
+              setValues={setTransferAccounts}
+            />
+            {/* oxlint-disable-next-line jsx-a11y/label-has-associated-control -- the Input inside is the control */}
+            <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+              Since
+              <Input
+                type="month"
+                aria-label="Transfers since month"
+                className="w-36"
+                value={transferSince}
+                onChange={(event) => setTransferSince(event.target.value)}
+              />
+            </label>
+          </FamilyRow>
+          <FamilyRow
+            {...FAMILY_ROWS[2]}
             checked={families.has("recommendation")}
             onChecked={(checked) => toggle("recommendation", checked)}
           >
@@ -349,7 +379,7 @@ export function FindSuggestionsDialog({
             />
           </FamilyRow>
           <FamilyRow
-            {...FAMILY_ROWS[2]}
+            {...FAMILY_ROWS[3]}
             checked={families.has("field")}
             onChecked={(checked) => toggle("field", checked)}
           >
@@ -384,36 +414,6 @@ export function FindSuggestionsDialog({
                 Limited to the list's current filters
               </span>
             ) : null}
-          </FamilyRow>
-          <FamilyRow
-            {...FAMILY_ROWS[3]}
-            checked={families.has("transfer_pair")}
-            onChecked={(checked) => toggle("transfer_pair", checked)}
-          >
-            <Picker
-              multiple
-              label="Transfer accounts"
-              placeholder="All accounts"
-              className="w-64"
-              entity="financialAccount"
-              items={accountSource.items}
-              isLoading={accountSource.isLoading}
-              onSearchChange={accountSource.onSearchChange}
-              onOpenChange={accountSource.onOpenChange}
-              values={transferAccounts}
-              setValues={setTransferAccounts}
-            />
-            {/* oxlint-disable-next-line jsx-a11y/label-has-associated-control -- the Input inside is the control */}
-            <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-              Since
-              <Input
-                type="month"
-                aria-label="Transfers since month"
-                className="w-36"
-                value={transferSince}
-                onChange={(event) => setTransferSince(event.target.value)}
-              />
-            </label>
           </FamilyRow>
         </div>
         <div className="mt-3 rounded-md bg-muted px-3 py-2 text-xs">

@@ -10,6 +10,7 @@ import type {
   SuggestionRecordRef,
   SuggestionStrength,
 } from "@cubby/schemas/suggestion-list";
+import type { TransferPairJudgment } from "@cubby/schemas/transfer-pair-suggestion";
 import { humanize } from "@cubby/shared";
 import { match } from "ts-pattern";
 
@@ -193,6 +194,21 @@ export function FieldValue({
   );
 }
 
+/** What accepting a pair writes: the legs it creates, then the pairing. */
+function transferPairChange({ outflow, inflow }: TransferPairJudgment) {
+  const missing = [outflow, inflow].filter((leg) => !leg.transactionId);
+  const cash = missing.some((leg) => leg.origin === "cash");
+  if (missing.length === 2)
+    return cash
+      ? "Create 2 legs (full-amount cash) and pair with"
+      : "Create 2 legs and pair with";
+  if (missing.length === 1)
+    return cash
+      ? "Create full-amount cash leg and pair with"
+      : "Create missing leg and pair with";
+  return "Pair with";
+}
+
 /** The change one Suggestion makes, in its family's own words. */
 export function WhatChanges({ row }: { row: SuggestionListRow }) {
   return match(row)
@@ -248,9 +264,7 @@ export function WhatChanges({ row }: { row: SuggestionListRow }) {
       <span className="inline-flex min-w-0 items-center gap-1.5">
         <span className="tabular-nums">{formatCurrency(evidence.amount)}</span>
         <span className="text-muted-foreground">
-          {evidence.inflow.origin === "cash"
-            ? "Create cash leg on"
-            : "Pair with"}
+          {transferPairChange(evidence)}
         </span>
         {row.other ? <RecordLink record={row.other} /> : null}
       </span>

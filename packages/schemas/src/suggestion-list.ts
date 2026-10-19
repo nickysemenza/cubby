@@ -3,6 +3,7 @@ import { transferPairJudgment } from "./transfer-pair-suggestion";
 
 import { suggestionReviewRowSchema, suggestionStatus } from "./ai";
 import { assessmentChildHandle } from "./assessment-reference";
+import { assessmentReviewBatchOut } from "./assessment";
 import { dataCheck } from "./data-quality";
 import { connectionProposal, connectionRelation } from "./entity-connections";
 import { shortcodeEntities } from "./entity-manifest";
@@ -381,3 +382,17 @@ export const acceptCleanSuggestionsInput = z.object({
     .max(SUGGESTION_ACCEPT_SKIP_MAX)
     .default([]),
 });
+
+/** An overlapping suggestion is settled by the pair accepted in this batch, without a second review. */
+export const acceptCleanSuggestionsOut = z.array(
+  z.union([
+    assessmentReviewBatchOut.element,
+    z.object({
+      assessmentId: assessmentChildHandle,
+      ok: z.literal(true),
+      applied: z.literal(false),
+      status: z.literal("settled_by_pair"),
+      reason: z.string(),
+    }),
+  ]),
+);

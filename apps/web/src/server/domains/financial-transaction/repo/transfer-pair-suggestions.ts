@@ -51,6 +51,7 @@ import {
   chargeStateOf,
 } from "~/server/domains/statement-import/repo/statement-charge";
 import { statementImportMembers } from "~/server/domains/statement-import/repo/statement-import-membership";
+import { updateStatementRows } from "~/server/domains/statement-import/repo/statement-row";
 import { statementTransactionKind } from "~/server/domains/statement-import/repo/statement-transaction-kind";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
@@ -513,17 +514,16 @@ async function loadStatementLegs(
           ],
           (ref) => `${ref.source}\0${ref.externalId}`,
         ).sort((a, b) => a.externalId.localeCompare(b.externalId)),
-        transactionOverlaps: row.existingTransactions
-          .filter((existing) => cents(existing.amount) === cents(entry.amount))
-          .map((existing) => ({
-            transactionId: existing.id,
-            charge: null,
-            date:
-              existing.postedDate ??
-              existing.transactionDate ??
-              canonical.statementDate,
-            description: existing.rawDescription ?? existing.merchant,
-          })),
+        // Identity and amount-correction candidates also block a duplicate create.
+        transactionOverlaps: row.existingTransactions.map((existing) => ({
+          transactionId: existing.id,
+          charge: null,
+          date:
+            existing.postedDate ??
+            existing.transactionDate ??
+            canonical.statementDate,
+          description: existing.rawDescription ?? existing.merchant,
+        })),
         seed: entry.seed,
       });
     }
@@ -918,12 +918,8 @@ async function discover(db: Database, seeds: Seeds): Promise<Pair[]> {
     ];
   } else {
     const parsed = seeds.keys.map(parseLegKey);
-    const codes = parsed.flatMap((leg) =>
-      leg && "code" in leg ? [leg.code] : [],
-    );
-    const charges = parsed.flatMap((leg) =>
-      leg && "charge" in leg ? [leg.charge] : [],
-    );
+    const codes = parsed.flatMap((leg) => (leg?.code ? [leg.code] : []));
+    const charges = parsed.flatMap((leg) => (leg?.charge ? [leg.charge] : []));
     seedLegs = [
       ...(codes.length
         ? await loadTransactionLegs(db, accounts, { codes })
@@ -1043,7 +1039,7 @@ export type TransferPairStateData = z.infer<typeof transferPairStateData>;
  * and an apply that could proceed. A cross-owner, distant or competing pair
  * is labelled too, as review evidence; its other blockers remain.
  */
-const needsLabel = (judgment: TransferPairJudgment) =>
+export const transferPairNeedsLabels = (judgment: TransferPairJudgment) =>
   judgment.apply.available &&
   judgment.inflow.origin !== "cash" &&
   (judgment.outflow.movementLabel === null ||
@@ -1053,6 +1049,14 @@ const isRule = (producer: AssessmentProducer) => producer.kind === "rule";
 
 const pairLock = (key: string) =>
   sql`SELECT pg_advisory_xact_lock(hashtextextended(${`transfer-pair:${key}`}, 0))`;
+
+/** Acquire shared leg locks before any review-state or settlement-ref locks. */
+export async function lockTransferPairLegs(db: Database, pairKey: string) {
+  for (const key of [...new Set(pairKey.split("~"))].sort())
+    await getDb(db).execute(
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(${`transfer-pair-leg:${key}`}, 0))`,
+    );
+}
 
 export type TransferPairPublishOutcome =
   | "published"
@@ -1139,7 +1143,7 @@ export async function publishTransferPair(
           : judgment.inflow.date,
       amount: judgment.amount,
       evidenceFingerprint,
-      needsLabel: isRule(producer) && needsLabel(judgment),
+      needsLabel: isRule(producer) && transferPairNeedsLabels(judgment),
     };
     await publishAssessment(
       tx,
@@ -1183,7 +1187,12 @@ const ruleProducer = (runId: string | null): AssessmentProducer => ({
 export async function generateTransferPairSuggestions(
   db: Database,
   input: { runId: string | null; scope?: TransferPairScope },
-): Promise<{ published: number; unchanged: number; retired: number }> {
+): Promise<{
+  found: number;
+  published: number;
+  unchanged: number;
+  retired: number;
+}> {
   const scope = input.scope ?? {};
   const pairs = await discoverPairs(db, scope);
   let published = 0;
@@ -1224,7 +1233,7 @@ export async function generateTransferPairSuggestions(
       }
       ${accountScope} ${sinceScope}
   `);
-  return { published, unchanged, retired: rowCount ?? 0 };
+  return { found: pairs.length, published, unchanged, retired: rowCount ?? 0 };
 }
 
 const runScope = (runId: string | null | undefined) =>
@@ -1405,10 +1414,7 @@ export async function applyTransferPair(
     const legKeys = input.key.split("~");
     // Leg locks serialize every apply naming a leg, so a racing or replayed
     // accept rereads after the winner commits and finds the leg taken.
-    for (const key of [...legKeys].sort())
-      await unwrapDb(tx).execute(
-        sql`SELECT pg_advisory_xact_lock(hashtextextended(${`transfer-pair-leg:${key}`}, 0))`,
-      );
+    await lockTransferPairLegs(txDb, input.key);
     const current = await buildTransferPair(txDb, input.key);
     if (!current)
       throw refused(
@@ -1448,6 +1454,20 @@ export async function applyTransferPair(
 
     const create = async (leg: TransferPairLeg) => {
       if (leg.transactionId) return leg.transactionId;
+      if (leg.charge)
+        await updateStatementRows(
+          txDb,
+          {
+            selector: {
+              source: leg.charge.source,
+              externalIds: leg.refs
+                .filter((ref) => ref.source === leg.charge!.source)
+                .map((ref) => ref.externalId),
+            },
+            data: { accountId: leg.accountId },
+          },
+          actor,
+        );
       const { output } = await createFinancialTransaction(
         txDb,
         financialTransactionCreateInput.parse({

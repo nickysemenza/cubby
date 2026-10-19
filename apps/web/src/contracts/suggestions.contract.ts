@@ -1,4 +1,3 @@
-import { assessmentReviewBatchOut } from "@cubby/schemas/assessment";
 import {
   automaticRuleOut,
   automaticRulesOut,
@@ -6,6 +5,7 @@ import {
 } from "@cubby/schemas/automatic-rule";
 import {
   acceptCleanSuggestionsInput,
+  acceptCleanSuggestionsOut,
   suggestionCountsInput,
   suggestionCountsOut,
   suggestionListInput,
@@ -48,7 +48,7 @@ export const suggestionsContract = defineContract("suggestions", {
       note: "Agents accept each clean row through entity.review_assessments",
     },
     input: acceptCleanSuggestionsInput,
-    output: assessmentReviewBatchOut,
+    output: acceptCleanSuggestionsOut,
     invalidates: [
       "suggestions",
       "product",

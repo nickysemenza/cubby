@@ -700,6 +700,14 @@ rule, the decision label and merchant history agree on its kind, none
 disagrees, and the counterparty is not a person.
 _Avoid_: statement proposal, auto-match
 
+**Transfer pair suggestion**:
+A Suggestion, with the `transfer_pair` Assessment family, that two opposite
+money movements on different accounts are one Ledger Transfer or Internal move.
+Accepting it creates any missing leg and pairs both; dismissing it suppresses
+that pair. Clean, cash-leg and overlap policy lives in
+[ADR 0016](../adr/0016-shared-assessments-and-feedback.md#transfer-pair-suggestions-2026-10-19).
+_Avoid_: transfer match, auto-pair
+
 **Decision model**:
 The closed-set classifier behind every Suggestion and Mail triage: Jev or
 Clef, chosen by the trial split (unpinned field decisions hash their input, so a

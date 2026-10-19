@@ -37,6 +37,7 @@ import {
   type ChargeProposal,
   regenerateCharges,
 } from "~/server/domains/statement-import/repo/statement-suggestions";
+import { isMoneyMoveKind } from "~/server/domains/statement-import/repo/statement-transaction-kind";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
@@ -106,6 +107,16 @@ export async function applyStatementTransactionSuggestion(
   if (!input.corrected && application.kindOverride)
     throw refused("Changing the kind is a correction to the suggestion.");
 
+  if (
+    published.transferPair &&
+    application.action === "create" &&
+    published.create &&
+    isMoneyMoveKind(published.create.kind)
+  ) {
+    const { lockTransferPairLegs } =
+      await import("~/server/domains/financial-transaction/repo/transfer-pair-suggestions");
+    await lockTransferPairLegs(db, published.transferPair.key);
+  }
   await withTransaction(db, async (tx) => {
     // Evidence keys before the transaction writers below take their rows. The
     // keys name unmatched charges, which no other transaction's refs hold.
@@ -139,10 +150,11 @@ export async function applyStatementTransactionSuggestion(
   const judgment = current.judgment;
   if (
     application.action === "create" &&
+    published.transferPair?.clean &&
     judgment.transferPair?.clean &&
     !application.kindOverride &&
-    (judgment.create?.kind === "account_transfer" ||
-      judgment.create?.kind === "credit_card_payment")
+    published.create &&
+    isMoneyMoveKind(published.create.kind)
   ) {
     const { applyTransferPair } =
       await import("~/server/domains/financial-transaction/repo/transfer-pair-suggestions");

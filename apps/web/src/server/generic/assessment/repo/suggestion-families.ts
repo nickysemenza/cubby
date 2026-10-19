@@ -693,7 +693,11 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
   acceptAsIs: () => null,
 };
 
-async function transferPairRows(db: Database, query: SuggestionFamilyQuery) {
+async function transferPairRows(
+  db: Database,
+  query: SuggestionFamilyQuery,
+  ids?: readonly string[],
+) {
   const entities: readonly ShortcodeEntity[] = [
     "financialAccount",
     "financialTransaction",
@@ -716,12 +720,20 @@ async function transferPairRows(db: Database, query: SuggestionFamilyQuery) {
     SELECT s.id, s.fingerprint, a."createdAt", a.judgment, s.data
     FROM "AssessmentState" s JOIN "Assessment" a ON a.id = s.id
     WHERE s.family = ${assessmentFamily.enum.transfer_pair} AND s.status = ${query.filters.status}
+      ${
+        ids
+          ? sql`AND s.id IN (${sql.join(
+              ids.map((id) => sql`${id}::uuid`),
+              sql`, `,
+            )})`
+          : sql``
+      }
       ${query.filters.status === "pending" ? sql`AND s.active` : sql``}
       ${runCode(query) ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${runCode(query)})` : sql``}
   `);
   if (!rows.length) return [];
   const current =
-    query.filters.status === "pending"
+    query.filters.status === "pending" && !ids
       ? new Map(
           await Promise.all(
             (await discoverTransferPairs(db)).map(
@@ -799,6 +811,8 @@ const transferPair: SuggestionFamilyPresentation<"transfer_pair"> = {
           "weak_movement",
           "competing_candidates",
           "unresolved_overlap",
+          "cash_leg_missing",
+          "owner_missing",
         ].includes(reason),
       )
         ? "weak"
@@ -821,13 +835,23 @@ const transferPair: SuggestionFamilyPresentation<"transfer_pair"> = {
           row.evidence.outflow.owner?.id ?? null,
           row.evidence.inflow.owner?.id ?? null,
         ],
-        merchant: `${row.evidence.outflow.description} ${row.evidence.inflow.description}`,
+        merchant: [
+          row.evidence.outflow.description,
+          row.evidence.inflow.description,
+        ]
+          .filter(Boolean)
+          .join(" "),
       },
     })),
   rows: async (db, keys) => {
-    const rows = await transferPairRows(db, {
-      filters: { status: keys[0]?.status ?? "pending", where: {} },
-    });
+    if (!keys.length) return new Map();
+    const rows = await transferPairRows(
+      db,
+      {
+        filters: { status: keys[0]?.status ?? "pending", where: {} },
+      },
+      keys.map((key) => key.assessmentId),
+    );
     const byId = new Map(keys.map((key) => [key.assessmentId, key]));
     return new Map(
       rows.flatMap((row) => {

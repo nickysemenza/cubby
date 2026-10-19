@@ -154,7 +154,15 @@ export async function labelTransferPairSuggestions(
             evaluationId: null,
           },
         );
-        if (outcome === "published") labelled++;
+        if (outcome === "published") {
+          labelled++;
+          const charges = [outflow, inflow].flatMap((leg) =>
+            leg.charge ? [leg.charge] : [],
+          );
+          const { regenerateCharges } =
+            await import("~/server/domains/statement-import/repo/statement-suggestions");
+          await regenerateCharges(db, charges);
+        }
       } catch (error) {
         // The budget pauses the whole pass; any other failure is this pair's.
         if (error instanceof AiBudgetExhaustedError) pauses.push(error);

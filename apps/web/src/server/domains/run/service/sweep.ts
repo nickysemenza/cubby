@@ -18,6 +18,7 @@ import type { Database } from "~/server/db";
 import {
   countTransferPairsNeedingLabels,
   discoverTransferPairs,
+  transferPairNeedsLabels,
   generateTransferPairSuggestions,
 } from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
 import {
@@ -105,10 +106,7 @@ export async function estimateSweep(
           return {
             family: entry.family,
             records: pairs.length,
-            decisions:
-              pairs.filter((pair) =>
-                pair.blockers.every((blocker) => blocker === "weak_movement"),
-              ).length * 2,
+            decisions: pairs.filter(transferPairNeedsLabels).length * 2,
           };
         }
         case "statement_transaction": {
@@ -146,7 +144,8 @@ export const sweepDrivers: StepRunDrivers = async (_db, owner) =>
   // Statement clean evidence consumes the transfer family's descriptor labels.
   sweepRunInput
     .parse(owner.input)
-    .families.toSorted(
+    .families.slice()
+    .sort(
       (a, b) =>
         Number(b.family === "transfer_pair") -
         Number(a.family === "transfer_pair"),
@@ -196,12 +195,14 @@ async function transferPairPage(
 ): Promise<StepPage> {
   const parsed = transferPairCursor.safeParse(step.cursor);
   if (!parsed.success) {
-    const pairs = await discoverTransferPairs(db, scope);
-    await generateTransferPairSuggestions(db, { runId: run.id, scope });
+    const { found } = await generateTransferPairSuggestions(db, {
+      runId: run.id,
+      scope,
+    });
     return {
       kind: "progress",
-      found: pairs.length,
-      delta: { done: pairs.length },
+      found,
+      delta: { done: found },
       cursor: { phase: "label", after: null },
       done: false,
     };

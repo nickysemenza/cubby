@@ -237,8 +237,8 @@ The pre-commit entrypoint invokes installed lint-staged directly; `pnpm
 check:staged` runs the same entrypoint. Partial staging is preserved. Target
 1–2 seconds for ordinary commits; large staged changes can take longer. Hooks
 run no package managers, dependency installation, generation, WASM, builds,
-typechecks, tests, or network work. Never run Oxfmt by hand; commit and let the
-hook format.
+typechecks, tests, or network work. Oxfmt runs only through the staged commit
+hook, including delegated lanes; a narrow file scope is not an exception.
 `pnpm agent:setup` points Git's shared `core.hooksPath` at the relative
 `.husky`, so every linked worktree runs the hooks from its own checkout. A missing lint-staged installation fails immediately with the local
 install command. Exported source archives without `.git` skip hook setup.

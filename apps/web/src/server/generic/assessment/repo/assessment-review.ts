@@ -81,6 +81,11 @@ type Handler = {
   target: z.ZodType;
   actions: readonly Review["verdict"][];
   transactionBound: boolean;
+  /** Domain parent locks must precede the suggestion's projection row lock. */
+  lockForApply?: (
+    db: Database,
+    prediction: typeof assessment.$inferSelect,
+  ) => Promise<void>;
   /** The fingerprint a review must match; defaults to the stored one. */
   currentFingerprint?: (
     db: Database,
@@ -315,6 +320,16 @@ const assessmentFamilies = {
     // The domain write appends settlement refs, which supersede pending
     // suggestions by trigger; the handler marks its own state applied first.
     transactionBound: true,
+    lockForApply: async (db, prediction) => {
+      const judgment = assessmentJudgments.statement_transaction.parse(
+        prediction.judgment,
+      );
+      if (judgment.transferPair) {
+        const { lockTransferPairLegs } =
+          await import("~/server/domains/financial-transaction/repo/transfer-pair-suggestions");
+        await lockTransferPairLegs(db, judgment.transferPair.key);
+      }
+    },
     actions: ["correct", "wrong", "uncertain", "dismissed"],
     apply: async (db, context, state, input) => {
       if (input.application?.kind !== "statement_transaction")
@@ -333,6 +348,14 @@ const assessmentFamilies = {
     subject: assessmentSubjects.transfer_pair,
     target: assessmentProjectionTargets.transfer_pair,
     transactionBound: true,
+    lockForApply: async (db, prediction) => {
+      const subject = assessmentSubjects.transfer_pair.parse(
+        prediction.subject,
+      );
+      const { lockTransferPairLegs } =
+        await import("~/server/domains/financial-transaction/repo/transfer-pair-suggestions");
+      await lockTransferPairLegs(db, subject.pairKey);
+    },
     actions: ["correct", "wrong", "uncertain", "dismissed"],
     apply: async (db, context, state, input, automatic) => {
       if (
@@ -530,6 +553,12 @@ async function settleReview(
           `${prediction.subject.source}:${prediction.subject.chargeKey}`
       )
         throw new Error("Suppression differs from the statement charge");
+    } else if (prediction.subject.kind === "transfer_pair") {
+      if (
+        input.suppression.scope !== "transfer_pair" ||
+        input.suppression.candidateKey !== prediction.subject.pairKey
+      )
+        throw new Error("Suppression differs from the transfer pair");
     } else if (prediction.subject.kind === "product_pair") {
       if (
         input.suppression.scope !== "product_pair" ||
@@ -657,6 +686,8 @@ async function settleReview(
             await import("~/server/domains/connection/repo/field-connections");
           await assertConnectionFieldFresh(transactionDb, prediction.id);
         }
+        if ("lockForApply" in family && family.lockForApply)
+          await family.lockForApply(transactionDb, prediction);
         const query = getDb(transactionDb)
           .select()
           .from(assessmentState)

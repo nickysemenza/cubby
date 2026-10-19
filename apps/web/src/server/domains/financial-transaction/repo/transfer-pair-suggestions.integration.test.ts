@@ -14,7 +14,7 @@ import {
 import { eq, isNull, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
@@ -30,7 +30,10 @@ import { labelTransferPairSuggestions } from "~/server/domains/financial-transac
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
+import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
+import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
 
 import {
   applyTransferPair,
@@ -63,6 +66,9 @@ import {
  */
 describe("transfer-pair suggestions", () => {
   const ctx = withTestDb();
+  beforeEach(async () => {
+    await createSystemUserFixture(ctx.db);
+  });
 
   type Choice = TransferPairMovementLabel["choice"];
   /** Model stand-in: answers each leg's movement question by its descriptor. */
@@ -142,6 +148,7 @@ describe("transfer-pair suggestions", () => {
     description: string;
     category?: string | null;
     status?: "posted" | "pending";
+    providerTransactionId?: string;
   };
   const statement = (
     rows: Row[],
@@ -168,6 +175,7 @@ describe("transfer-pair suggestions", () => {
             row.category === undefined ? "Transfer" : row.category,
           providerStatus: row.status ?? "posted",
           providerNotes: null,
+          providerTransactionId: row.providerTransactionId ?? null,
           rowPosition: ++position,
         })),
       }),
@@ -748,6 +756,64 @@ describe("transfer-pair suggestions", () => {
     });
   });
 
+  // A changed amount with the same provider identity must reconcile with the
+  // recorded leg before a pair can create another transaction for it.
+  it("holds amount corrections with existing provider identity for reconciliation", async () => {
+    const member = await owner("Synthetic member");
+    const bank = await account("Synthetic checking", member);
+    await account("Synthetic savings", member, savings);
+    await statement([
+      {
+        account: "Synthetic checking",
+        date: "2026-08-03",
+        amount: 175,
+        description: "ONLINE TRANSFER TO SAVINGS",
+        providerTransactionId: "synthetic-provider-move",
+      },
+    ]);
+    const [observed] = await unwrapDb(ctx.db)
+      .select({
+        source: statementRow.source,
+        externalId: statementRow.externalId,
+      })
+      .from(statementRow);
+    const recorded = await transaction(bank, 175, "2026-08-03", {
+      sourceRefs: [observed!],
+      rawDescription: "ONLINE TRANSFER TO SAVINGS",
+    });
+    await statement([
+      {
+        account: "Synthetic checking",
+        date: "2026-08-04",
+        amount: 180,
+        description: "ONLINE TRANSFER TO SAVINGS",
+        providerTransactionId: "synthetic-provider-move",
+      },
+      {
+        account: "Synthetic savings",
+        date: "2026-08-04",
+        amount: -180,
+        description: "ONLINE TRANSFER FROM CHECKING",
+      },
+    ]);
+    const [pair] = await discoverTransferPairs(ctx.db);
+    expect(
+      pair?.outflow.overlaps.some(
+        (overlap) => overlap.transactionId === recorded.id,
+      ),
+    ).toBe(true);
+    expect(pair?.apply.available).toBe(false);
+    await expect(
+      applyTransferPair(ctx.db, kernelCtx(ctx), {
+        key: pair!.key,
+        expectedFingerprint: await fingerprintTransferPair(pair!),
+        reviewed: true,
+      }),
+    ).rejects.toThrow(/overlap|statement/i);
+    expect(await liveTransactions()).toHaveLength(1);
+    expect(await transfers()).toEqual([]);
+  });
+
   it("refuses a stale accept and leaves no created leg behind", async () => {
     const member = await owner("Synthetic member");
     await account("Synthetic checking", member);
@@ -806,12 +872,27 @@ describe("transfer-pair suggestions", () => {
     await refresh();
     const pairs = await pendingOn(bank);
     expect(pairs).toHaveLength(2);
+    const rows = (await listSuggestionPage(ctx.db, { family: "transfer_pair" }))
+      .items;
     const results = await Promise.allSettled(
-      pairs.map((pair) => apply(pair, true)),
+      rows.map((row) =>
+        reviewAssessment(ctx.db, kernelCtx(ctx), {
+          assessmentId: row.assessmentId,
+          operationId: crypto.randomUUID(),
+          expectedFingerprint: row.fingerprint!,
+          verdict: "correct",
+          intent: "apply",
+          application: { kind: "transfer_pair" },
+        }),
+      ),
     );
     expect(
       results.filter((result) => result.status === "fulfilled"),
     ).toHaveLength(1);
+    const loser = results.find((result) => result.status === "rejected");
+    expect(loser?.status === "rejected" ? String(loser.reason) : "").toMatch(
+      /stale|no longer|candidate|changed/i,
+    );
     expect(await transfers()).toHaveLength(1);
     // The checking leg plus exactly one created inflow; the loser rolled back.
     expect(await liveTransactions()).toHaveLength(2);
@@ -824,7 +905,12 @@ describe("transfer-pair suggestions", () => {
     const gone = await owner("Synthetic departed member");
     const orphaned = await account("Synthetic orphaned checking", gone);
     const closed = await account("Synthetic closed checking", member);
-    const purchase = await createRepoEntity(ctx, "purchase", {});
+    const vendor = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic vendor",
+    });
+    const purchase = await createRepoEntity(ctx, "purchase", {
+      vendorId: vendor.output!.id,
+    });
     const paired = await transaction(bank, 11, "2026-05-01");
     await transaction(reserve, -11, "2026-05-01");
     await transaction(bank, 12, "2026-05-02", {
@@ -908,7 +994,7 @@ describe("transfer-pair suggestions", () => {
 
   it("creates a statement leg with every observation's settlement ref", async () => {
     const member = await owner("Synthetic member");
-    await account("Synthetic checking", member);
+    const checking = await account("Synthetic checking", member);
     await account("Synthetic savings", member, savings);
     const rows: Row[] = [
       {
@@ -961,6 +1047,18 @@ describe("transfer-pair suggestions", () => {
       (await settlementRefsFor(ctx.db, [outflowId])).get(outflowId) ?? [];
     expect(refs.map((ref) => ref.externalId).sort()).toEqual(
       pair!.outflow.refs.map((ref) => ref.externalId).sort(),
+    );
+    // Settlement must also claim every observation's account, as a statement create does.
+    const claimed = await unwrapDb(ctx.db)
+      .select({ account: financialAccount.shortcode })
+      .from(statementRow)
+      .leftJoin(
+        financialAccount,
+        eq(financialAccount.id, statementRow.accountId),
+      )
+      .where(eq(statementRow.accountDescriptor, "Synthetic checking"));
+    expect(claimed.map((row) => row.account)).toEqual(
+      observed.map(() => checking),
     );
     expect(
       parseShortcodeFor("financialTransaction", result.inflowTransactionId),

@@ -15,6 +15,7 @@ import { renderOptionCell } from "~/entity/table/column-helpers";
 import { formatCurrency } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import { DateDisplay } from "~/ui/common/date-display";
+import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
 
@@ -519,6 +520,19 @@ function TransferPairEvidence({
                 ],
                 ["Movement evidence", humanize(leg.movement)],
                 [
+                  "Decision",
+                  leg.movementLabel
+                    ? humanize(leg.movementLabel.choice)
+                    : "Not labeled",
+                ],
+                [
+                  "Confidence",
+                  leg.movementLabel
+                    ? humanize(leg.movementLabel.confidence)
+                    : null,
+                ],
+                ["Decision model", leg.movementLabel?.model ?? null],
+                [
                   "Statement refs",
                   leg.refs.length ? (
                     <span key="refs" className="break-all">
@@ -540,14 +554,20 @@ function TransferPairEvidence({
         ))}
       </div>
       <EvidenceBox title="Pair evidence">
-        <p className="text-xs">
-          {countLabel(pair.dateGapDays, "day")} apart ·{" "}
-          {pair.move === "internal"
-            ? "Same owner: internal move"
-            : pair.move === "between_owners"
-              ? "Different owners: reviewed money move"
-              : "Set both account owners before applying"}
-        </p>
+        <Facts
+          rows={[
+            ["Transfer date", <DateDisplay key="date" start={pair.date} />],
+            ["Date gap", `${countLabel(pair.dateGapDays, "day")} apart`],
+            [
+              "Move",
+              pair.move === "internal"
+                ? "Same owner: internal move"
+                : pair.move === "between_owners"
+                  ? "Different owners: reviewed money move"
+                  : "Set both account owners before applying",
+            ],
+          ]}
+        />
         {pair.reasons.length ? (
           <ul className="mt-1 flex flex-col gap-0.5 text-xs text-muted-foreground">
             {pair.reasons.map((reason) => (
@@ -560,35 +580,50 @@ function TransferPairEvidence({
         ) : null}
         {pair.inflow.origin === "cash" ? (
           <p className="mt-1 text-xs">
-            The cash leg uses the full withdrawal amount. Enter any known ATM
-            fee separately on cash.
+            The cash leg records the full withdrawal amount; no ATM fee is
+            inferred. Record a known fee as its own cash transaction.
           </p>
         ) : null}
       </EvidenceBox>
       {pair.competitors.length ? (
         <EvidenceBox title="Competing candidates">
-          <ul className="flex flex-col gap-1 text-xs">
+          <RecordList>
             {pair.competitors.map((candidate) => (
-              <li
+              <RecordRow
                 key={`${candidate.against}:${candidate.leg.key}`}
-                className="flex flex-wrap items-center gap-1.5"
-              >
-                <RecordLink
-                  record={{
-                    entity: "financialAccount",
-                    id: candidate.leg.accountId,
-                  }}
-                />
-                <span>
-                  {formatCurrency(candidate.leg.amount)} · {candidate.leg.date}{" "}
-                  · {countLabel(candidate.dateGapDays, "day")} apart
-                </span>
-                <span className="text-muted-foreground">
-                  {candidate.leg.description}
-                </span>
-              </li>
+                primary={
+                  <RecordLink
+                    record={{
+                      entity: "financialAccount",
+                      id: candidate.leg.accountId,
+                    }}
+                  />
+                }
+                secondary={candidate.leg.description}
+                facts={[
+                  {
+                    label: "Competes with",
+                    value:
+                      candidate.against === "outflow"
+                        ? "Money out"
+                        : "Money in",
+                  },
+                  {
+                    label: "Amount",
+                    value: formatCurrency(candidate.leg.amount),
+                  },
+                  {
+                    label: "Date",
+                    value: <DateDisplay start={candidate.leg.date} />,
+                  },
+                  {
+                    label: "Date gap",
+                    value: `${countLabel(candidate.dateGapDays, "day")} apart`,
+                  },
+                ]}
+              />
             ))}
-          </ul>
+          </RecordList>
         </EvidenceBox>
       ) : null}
     </div>
