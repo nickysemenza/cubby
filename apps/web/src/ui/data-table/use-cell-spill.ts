@@ -275,8 +275,11 @@ export function useCellSpill(
       }, SPILL_DELAY_MS);
     };
 
+    // Regression: a header's spill (its start-edge source ⓘ copy) covered the
+    // column's reorder grip, so pressing after resting on the grip hit the
+    // overlay and never started the drag.
     const cellOf = (target: EventTarget | null) =>
-      target instanceof Element
+      target instanceof Element && !target.closest("[data-cell-spill-off]")
         ? target.closest<HTMLElement>("td[data-column-id], th[data-column-id]")
         : null;
 
@@ -289,6 +292,7 @@ export function useCellSpill(
     const onFocusIn = (event: FocusEvent) => {
       const cell = cellOf(event.target);
       if (cell) schedule(cell);
+      else hide();
     };
 
     // The rail copy sits outside the pane; reaching it keeps the overlay.
