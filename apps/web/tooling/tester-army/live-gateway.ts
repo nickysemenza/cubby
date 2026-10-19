@@ -35,12 +35,12 @@ type Env = {
   RESPONSES_MODEL?: string;
   RESPONSES_EFFORT?: string;
   /**
-   * "1" bills every request to Unified Billing: a stored-key credit attempt
-   * (`cf-aig-byok-alias`) is forwarded without its alias and a ChatGPT plan
-   * attempt goes to the paid route, so a replay measures the requested model
-   * instead of falling down the funding ladder.
+   * "1" forwards a ChatGPT plan attempt to the paid OpenAI route, so a replay
+   * measures the requested OpenAI model instead of falling down the funding
+   * ladder. Anthropic has no Unified Billing route on this gateway (only the
+   * `subscriber-credit` key), so Claude attempts stay on credit.
    */
-  UNIFIED_BILLING_ONLY?: string;
+  PLAN_AS_PAID?: string;
 };
 
 type RouteUsage = {
@@ -97,10 +97,6 @@ function forward(
   }
   const headers = strippedHeaders({ headers: request.headers });
   headers.delete("x-cubby-inference-funding");
-  if (env.UNIFIED_BILLING_ONLY === "1") {
-    headers.delete("cf-aig-byok-alias");
-    headers.delete("cf-aig-no-wholesale");
-  }
   // The placeholder host must not follow the request to the gateway.
   headers.delete("host");
   headers.set("cf-aig-authorization", `Bearer ${env.GATEWAY_TOKEN}`);
@@ -136,7 +132,7 @@ export default {
     // Preserve the funding ladder by letting its owner choose the paid stage.
     if (
       request.headers.get("x-cubby-inference-funding") === "subscription" &&
-      env.UNIFIED_BILLING_ONLY !== "1"
+      env.PLAN_AS_PAID !== "1"
     )
       return Response.json(
         {

@@ -100,6 +100,8 @@ describe("isolated Mail coordinator replay", () => {
           fields: ["unavailable"],
           status: "infrastructure_error",
           actualModels: [],
+          failure: null,
+          outcome: null,
         });
     }
     reports.sort((a, b) => a.case - b.case);
@@ -216,8 +218,19 @@ describe("isolated Mail coordinator replay", () => {
                       eq(aiUsage.status, "succeeded"),
                     ),
                   );
+                const [failed] = await getDb(ctx.db)
+                  .select({
+                    code: runTable.failureCode,
+                    detail: runTable.dispatchError,
+                  })
+                  .from(runTable)
+                  .where(eq(runTable.id, runId));
                 return {
                   status,
+                  failure:
+                    failed?.code || failed?.detail
+                      ? [failed.code, failed.detail].filter(Boolean).join(": ")
+                      : null,
                   outcome: outcome
                     ? mailImportOutcome.parse(outcome.judgment)
                     : null,
@@ -270,9 +283,9 @@ describe("isolated Mail coordinator replay", () => {
               vars: {
                 ACCOUNT_ID: CF_ACCOUNT_ID,
                 GATEWAY_ENVIRONMENT: testAiGatewayEnvironment(process.env.CI),
-                // Paid replay: credit attempts bill to Unified Billing.
-                ...(process.env.MAIL_REPLAY_UNIFIED_BILLING === "1" && {
-                  UNIFIED_BILLING_ONLY: "1",
+                // Paid replay: ChatGPT plan attempts bill to Unified Billing.
+                ...(process.env.MAIL_REPLAY_PLAN_AS_PAID === "1" && {
+                  PLAN_AS_PAID: "1",
                 }),
               },
               secrets: { GATEWAY_TOKEN: token },

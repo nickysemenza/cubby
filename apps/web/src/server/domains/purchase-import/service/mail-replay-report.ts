@@ -51,6 +51,10 @@ export type MailReplayCaseReport = {
   fields: string[];
   status: string;
   actualModels: string[];
+  /** The Run's raw failure text and code when it did not complete. */
+  failure: string | null;
+  /** The replayed outcome, for grading the disagreement in this session. */
+  outcome: Outcome | null;
 };
 
 /** Observe a failed attempt while its Worker and database still exist. */
@@ -62,6 +66,7 @@ export async function observeMailReplayAttempt(input: {
     outcome: Outcome | null;
     status: string;
     actualModels: string[];
+    failure: string | null;
   }>;
   record: (report: MailReplayCaseReport) => void;
 }) {
@@ -83,6 +88,13 @@ export async function observeMailReplayAttempt(input: {
         completion.kind === "completed" ? observation.outcome : null,
       ),
       actualModels: [...new Set(observation.actualModels)],
+      failure:
+        completion.kind === "failed"
+          ? [observation.failure, String(completion.error)]
+              .filter(Boolean)
+              .join("; ")
+          : observation.failure,
+      outcome: observation.outcome,
     });
   } catch (error) {
     if (completion.kind === "failed")

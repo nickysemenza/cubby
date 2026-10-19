@@ -108,6 +108,7 @@ it("retains successful model usage before failed replay teardown", async () => {
             status: "running",
             outcome: { kind: "unresolved", reason: "Synthetic missing total" },
             actualModels: ["claude-haiku-5-5", "claude-opus-5-5"],
+            failure: "agent_failed: Coordinator unanswered: error",
           };
         },
         record: (report) => {
@@ -123,6 +124,8 @@ it("retains successful model usage before failed replay teardown", async () => {
     {
       actualModels: ["claude-haiku-5-5", "claude-opus-5-5"],
       fields: ["unavailable"],
+      failure:
+        "agent_failed: Coordinator unanswered: error; Error: Synthetic coordinator timeout",
     },
   ]);
 });
