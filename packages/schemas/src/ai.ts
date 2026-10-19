@@ -411,6 +411,18 @@ export const aiRunUsageOut = z.object({
       costEvidence: true,
     }),
   ),
+  /** Token totals over every call in the run, per feature and model. */
+  tokensByModel: z.array(
+    z.object({
+      feature: z.string(),
+      provider: z.string(),
+      model: z.string(),
+      inputTokens: z.number().int().nonnegative(),
+      outputTokens: z.number().int().nonnegative(),
+      cacheReadTokens: z.number().int().nonnegative(),
+      cacheWriteTokens: z.number().int().nonnegative(),
+    }),
+  ),
   nextCursor: z.string().nullable(),
 });
 export type AiRunUsage = z.infer<typeof aiRunUsageOut>;

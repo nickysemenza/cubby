@@ -233,6 +233,10 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "metadata",
     reason: "records the Run a model call belonged to",
   },
+  "McpToolCall.runId": {
+    classification: "metadata",
+    reason: "records the Run an agent tool call belonged to",
+  },
   "RunPushRegistration.runId": {
     classification: "ownership",
     reason: "a push registration owned by its Run",

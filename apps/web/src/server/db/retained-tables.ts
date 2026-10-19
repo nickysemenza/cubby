@@ -622,6 +622,10 @@ export const mcpToolCall = pgTable(
     // Deliberately not an FK: revoking a dynamically registered OAuth client
     // deletes it, while historical usage must retain the caller identity.
     clientId: text("clientId"),
+    // The in-app agent's Run; null for external clients.
+    runId: uuid("runId")
+      .$type<RunId>()
+      .references(() => run.id, { onDelete: "set null" }),
   },
   (table) => [
     index("McpToolCall_tool_occurredAt_idx").on(
@@ -642,6 +646,9 @@ export const mcpToolCall = pgTable(
       table.entityKind,
       table.occurredAt.desc(),
     ),
+    index("McpToolCall_runId_idx")
+      .on(table.runId)
+      .where(sql`${table.runId} IS NOT NULL`),
   ],
 );
 

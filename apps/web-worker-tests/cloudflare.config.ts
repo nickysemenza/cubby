@@ -31,6 +31,13 @@ export const testWorker = defineWorker({
       exportName: "UsdaReleaseDurableObject",
     }),
     USDA_RELEASES: bindings.r2({ name: "cubby-usda-releases-test" }),
+    // The agent host's import graph reaches the app's process-env schema,
+    // whose R2 and auth secrets this hermetic worker never uses.
+    SKIP_ENV_VALIDATION: bindings.text("1"),
+    PURCHASE_IMPORT_RUN: bindings.durableObject({
+      worker: "cubby-calendar-test",
+      exportName: "PurchaseImportRunAgent",
+    }),
     PURCHASE_AGENT_QUEUE: bindings.queue({ name: "cubby-purchase-agent-test" }),
   },
   exports: {
@@ -43,6 +50,7 @@ export const testWorker = defineWorker({
     AiResponseCacheDurableObject: { type: "durable-object", storage: "sqlite" },
     ChatGptPlanDurableObject: { type: "durable-object", storage: "sqlite" },
     UsdaReleaseDurableObject: { type: "durable-object", storage: "sqlite" },
+    PurchaseImportRunAgent: { type: "durable-object", storage: "sqlite" },
   },
 });
 

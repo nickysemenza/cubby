@@ -35,6 +35,9 @@ export const mcpToolCallTelemetrySchema = z.strictObject({
   // on replay — this schema validates messages that can be up to a queue's
   // retry window old, not just ones from the version deploying right now.
   entity: entitySchema.optional(),
+  // The in-app agent's Run. Optional so messages queued by the preceding
+  // deployment, and every external client's call, still validate.
+  runId: z.uuid().optional(),
 });
 export type McpToolCallTelemetry = z.infer<typeof mcpToolCallTelemetrySchema>;
 
@@ -151,6 +154,7 @@ export const mcpTelemetryIdentitySchema = z.strictObject({
   userId: z.string().min(1),
   clientId: z.string().min(1).nullable(),
   surface: mcpToolCallSurfaceSchema,
+  runId: z.uuid().optional(),
 });
 export type McpTelemetryIdentity = z.infer<typeof mcpTelemetryIdentitySchema>;
 

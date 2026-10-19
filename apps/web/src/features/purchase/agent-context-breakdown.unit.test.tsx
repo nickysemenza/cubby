@@ -3,7 +3,10 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
-import { AgentContextPerCall } from "./agent-context-breakdown";
+import {
+  AgentContextPerCall,
+  AgentTokenAccounting,
+} from "./agent-context-breakdown";
 
 const call = (
   inputTokens: number,
@@ -170,5 +173,44 @@ describe("AgentContextPerCall", () => {
       <AgentContextPerCall messages={[message("m1", {})]} />,
     );
     expect(container.textContent).toBe("");
+  });
+});
+
+describe("AgentTokenAccounting", () => {
+  const tokens = (inputTokens: number) => ({
+    inputTokens,
+    outputTokens: 5,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+  });
+
+  it("opens on a counter only pi saw and ignores other features' calls", () => {
+    render(
+      <AgentTokenAccounting
+        piUsage={[{ model: "synthetic/turn-model", ...tokens(120) }]}
+        recorded={[
+          {
+            feature: "purchase_import_agent",
+            provider: "synthetic",
+            model: "turn-model",
+            ...tokens(100),
+          },
+          {
+            feature: "mail_triage",
+            provider: "synthetic",
+            model: "turn-model",
+            ...tokens(900),
+          },
+        ]}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "1 counter differs between Cubby's usage records and pi's ledger.",
+      ),
+    ).toBeVisible();
+    const input = screen.getByRole("row", { name: /Input/u });
+    expect(within(input).getByText("+20")).toBeVisible();
   });
 });

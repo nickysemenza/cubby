@@ -87,6 +87,7 @@ import type { AnyColumn } from "drizzle-orm";
 import {
   vendor,
   aiUsage,
+  mcpToolCall,
   imageProcessingAttempt,
   imageProcessingEvent,
   imageProcessingSubmissionJob,
@@ -1541,6 +1542,18 @@ export const ENTITY_EDGES = {
         kind: "allow-target-deleted",
         reason:
           "Append-only provenance: a usage row keeps naming the run it was billed to.",
+      },
+    },
+    "McpToolCall.runId": {
+      column: mcpToolCall.runId,
+      role: "history",
+      label: "agent MCP calls",
+      description:
+        "One Cubby MCP tool call the in-app agent made for this run.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Append-only telemetry: a call keeps naming its run until a hard delete nulls it.",
       },
     },
     "ImageProcessingJob.runId": {

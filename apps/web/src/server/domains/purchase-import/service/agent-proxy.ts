@@ -103,9 +103,14 @@ export async function proxyPurchaseAgentRequest(input: {
     });
   }
   const redacted = await redactJsonAgentResponse(response);
-  // Observations read retained storage only. A finite SSE snapshot lets the
-  // existing observer reconnect without constructing or recovering a harness.
-  if (input.request.method === "GET" && suffix === "stream" && redacted.ok)
+  // A Run whose agent is not loaded answers with retained storage as JSON. A
+  // finite SSE snapshot lets the observer reconnect until the agent streams.
+  if (
+    input.request.method === "GET" &&
+    suffix === "stream" &&
+    redacted.ok &&
+    (redacted.headers.get("content-type") ?? "").includes("application/json")
+  )
     return new Response(`data: ${JSON.stringify(await redacted.json())}\n\n`, {
       headers: {
         "content-type": "text/event-stream",
@@ -122,7 +127,7 @@ export function createPurchaseAgentRequest(
 ): Request {
   const read = request.method === "GET" || request.method === "HEAD";
   const internal = new URL(
-    read ? "/transcript" : `/${suffix}`,
+    read && suffix !== "stream" ? "/transcript" : `/${suffix}`,
     "https://purchase-agent.internal",
   );
   internal.search = new URL(request.url).search;

@@ -8,7 +8,7 @@ import { imageProcessingAttemptState } from "@cubby/schemas/image-processing";
 import { photoRunProcessor } from "@cubby/schemas/photo-run-input";
 import type { AiCostEvidence } from "@cubby/shared/ai/pricing";
 import { encodeBase64Url, decodeBase64UrlText } from "@cubby/shared/base64";
-import { and, desc, eq, ilike, lt, or, sql } from "drizzle-orm";
+import { type AnyColumn, and, desc, eq, ilike, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -266,7 +266,9 @@ export async function listAiUsageForRun(
           (u."jobKind" = 'image_processing_attempt' AND u."jobId" = a.id::text)
           OR (u."jobKind" = j.kind AND u."jobId" = j.id::text AND u.attempt = a.number)))))
   )`;
-  const [totals, rows, coverage] = await Promise.all([
+  const tokenSum = (column: AnyColumn) =>
+    sql<number>`coalesce(sum(${column}), 0)::int`;
+  const [totals, rows, coverage, tokensByModel] = await Promise.all([
     database
       .select({
         ...aiCostSummarySql(),
@@ -320,6 +322,20 @@ export async function listAiUsageForRun(
     }>(sql`SELECT
       (${externalCoverage} OR ${missingImageCoverage(true)}) AS "chargedIncomplete",
       (${externalCoverage} OR ${missingImageCoverage(false)}) AS "standardIncomplete"`),
+    database
+      .select({
+        feature: aiUsage.feature,
+        provider: aiUsage.provider,
+        model: aiUsage.model,
+        inputTokens: tokenSum(aiUsage.inputTokens),
+        outputTokens: tokenSum(aiUsage.outputTokens),
+        cacheReadTokens: tokenSum(aiUsage.cacheReadTokens),
+        cacheWriteTokens: tokenSum(aiUsage.cacheWriteTokens),
+      })
+      .from(aiUsage)
+      .where(and(attributed, notDeleted(aiUsage)))
+      .groupBy(aiUsage.feature, aiUsage.provider, aiUsage.model)
+      .orderBy(aiUsage.feature, aiUsage.provider, aiUsage.model),
   ]);
   const records = rows.slice(0, limit);
   const last = records.at(-1);
@@ -342,6 +358,7 @@ export async function listAiUsageForRun(
       !coverage.rows[0]?.standardIncomplete &&
       (totals[0]?.standardUnpricedCount ?? 0) === 0,
     records,
+    tokensByModel,
     nextCursor:
       rows.length > limit && last
         ? encodeRunUsageCursor({

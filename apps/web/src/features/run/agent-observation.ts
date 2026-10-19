@@ -338,8 +338,9 @@ function retainReviewWatch(publicId: string, queryClient: QueryClient) {
 }
 
 /**
- * While `observing`, keeps a photo run's review query fresh from the shared
- * agent stream and reports whether that stream is live. `false` when the run
+ * While `observing`, keeps a run's run-tagged reads (the photo review, the
+ * run's work) fresh from the shared agent stream and reports whether that
+ * stream is live. `false` when the run
  * has no agent, is no longer live, or the stream has not connected.
  */
 export function useAgentReviewSync(publicId: string, observing: boolean) {

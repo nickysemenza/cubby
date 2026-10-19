@@ -21,7 +21,7 @@ describe("purchase-agent proxy mutation fence", () => {
       "stream",
     );
     expect(internal.url).toBe(
-      "https://purchase-agent.internal/transcript?cursor=synthetic",
+      "https://purchase-agent.internal/stream?cursor=synthetic",
     );
     expect(internal.headers.has("authorization")).toBe(false);
     expect(internal.headers.has("cookie")).toBe(false);
@@ -30,13 +30,16 @@ describe("purchase-agent proxy mutation fence", () => {
     expect(internal.signal.aborted).toBe(true);
   });
 
-  it("reads retained evidence for both terminal and active observations without loading execution", () => {
-    for (const suffix of ["", "stream"]) {
+  it("sends snapshots to retained storage and lets the host decide whether a stream is live", () => {
+    for (const [suffix, pathname] of [
+      ["", "/transcript"],
+      ["stream", "/stream"],
+    ] as const) {
       const request = createPurchaseAgentRequest(
         new Request("https://example.invalid/agent"),
         suffix,
       );
-      expect(new URL(request.url).pathname).toBe("/transcript");
+      expect(new URL(request.url).pathname).toBe(pathname);
     }
     expect(
       new URL(

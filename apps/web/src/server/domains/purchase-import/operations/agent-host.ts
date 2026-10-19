@@ -207,9 +207,20 @@ class PurchaseImportRunAgentHost
     if (isMaintenanceMode(this.env)) return maintenanceResponse(request);
     const retired = () =>
       new Response("Import Run coordinator retired.", { status: 410 });
+    const { pathname } = new URL(request.url);
+    // Only an agent this isolate already constructed for Run work streams
+    // live; opening a cold harness resumes its pending tasks, so every other
+    // observation stays a snapshot of retained storage.
+    if (request.method === "GET" && pathname === "/stream" && this.agent) {
+      const agent = this.agent;
+      return this.admit(async () => {
+        if (await this.fenced()) return retired();
+        return (await agent).fetch(request);
+      }, retired());
+    }
     if (
       request.method === "GET" &&
-      new URL(request.url).pathname === "/transcript"
+      (pathname === "/transcript" || pathname === "/stream")
     ) {
       return this.admit(
         async () => {

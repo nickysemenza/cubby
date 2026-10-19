@@ -268,7 +268,9 @@ async function serveAuthenticatedMcp(
         identity: {
           userId: actor.userId,
           clientId: actor.clientId,
-          surface: "external_mcp",
+          ...(actor.purchaseAgentRunId
+            ? { surface: "in_app_agent", runId: actor.purchaseAgentRunId }
+            : { surface: "external_mcp" }),
         },
         emit: (event: Parameters<typeof emitTelemetry>[1]) =>
           emitTelemetry(ctx.db, event),
