@@ -63,7 +63,7 @@ import {
 } from "~/server/generic/assessment/repo/automatic-rules";
 
 /** Rule revision stamped on every published suggestion; bump with any policy change. */
-export const STATEMENT_SUGGESTION_REVISION = "2026-10-19.1";
+export const STATEMENT_SUGGESTION_REVISION = "2026-10-18.3";
 const STATEMENT_SUGGESTION_PAGE = FINANCIAL_STATEMENT_IMPORT_MAX_ROWS;
 /** A hold's posted twin lands within this window, and a vanished hold is judged after it. */
 const PENDING_POST_WINDOW_DAYS = 7;
