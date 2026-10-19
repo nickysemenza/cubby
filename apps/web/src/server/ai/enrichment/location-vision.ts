@@ -47,8 +47,8 @@ import { recordFeatureUsage } from "~/server/ai/run-feature";
 import { getAiClient } from "~/server/clients/ai";
 import type { Database } from "~/server/db";
 import {
-  createInventoryEntry,
   getInventoryByLocationIds,
+  insertInventoryEntry,
 } from "~/server/domains/inventory/repo/crud";
 import { readLocationAiDescription } from "~/server/domains/location/repo/ai-description";
 import {
@@ -64,7 +64,6 @@ import { runMutationSideEffects } from "~/server/entity-kernel/repo/mutation-sid
 import { createAppError } from "~/server/errors/app-error";
 import { semanticProductCandidates } from "~/server/generic/embedding/service/semantic-search.service";
 import {
-  resolveCreatedOrInvariant,
   resolveLiveShortcode,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -633,7 +632,7 @@ export async function approveDetectedInventoryItem(
     );
   }
 
-  const createdInventory = await createInventoryEntry(
+  const createdInventory = await insertInventoryEntry(
     db,
     {
       productId,
@@ -645,19 +644,14 @@ export async function approveDetectedInventoryItem(
     },
     actor,
   );
-  const inventoryEntityId = await resolveCreatedOrInvariant(
-    db,
-    "inventory",
-    createdInventory.id,
-  );
   await runMutationSideEffects(db, {
     action: "created",
-    entity: { entity: "inventory", id: inventoryEntityId },
+    entity: { entity: "inventory", id: createdInventory.id },
     source: "location-ai.inventory.approve",
   });
 
   return {
-    inventoryId: createdInventory.id,
+    inventoryId: createdInventory.shortcode,
     productId: productShortcode!,
     productName: productNameForToast,
     createdProduct,

@@ -5,6 +5,7 @@ import {
 import { sql } from "drizzle-orm";
 
 import { expenseAcquisitionSql } from "~/server/db/computed/expense-aggregate-sql";
+import { actualExpenseSql } from "~/server/db/helpers/predicates";
 import { product } from "~/server/db/schema";
 import { productHasDisplayableImageSql } from "~/server/domains/image/repo/image-displayability";
 import { orphanedProductCondition } from "~/server/domains/product/repo/orphan-condition";
@@ -15,6 +16,7 @@ import {
 } from "~/server/domains/product/repo/pricing";
 import {
   defineEntityChecks,
+  qualityReadColumn,
   type QualityReadContext,
 } from "~/server/generic/data-quality/repo/registry";
 
@@ -68,7 +70,7 @@ const hasAmazonId = (t: Product) => sql`EXISTS (
 const hasAcquiringExpense = (t: Product) => sql`EXISTS (
   SELECT 1 FROM "Expense" dq_acq
   WHERE dq_acq."productId" = ${t.id} AND dq_acq."deletedAt" IS NULL
-    AND dq_acq."future" = false
+    AND ${sql.raw(actualExpenseSql("dq_acq"))}
     AND ${sql.raw(expenseAcquisitionSql("dq_acq"))}
 )`;
 
@@ -97,9 +99,7 @@ const hasIdentifier = (t: Product) =>
   sql`((${t.model} IS NOT NULL AND trim(${t.model}) <> '') OR ${hasExternalId(t)})`;
 
 const derivedPrice = (t: Product, context?: QualityReadContext) =>
-  context?.derivedAlias
-    ? sql`${sql.identifier(context.derivedAlias)}."derivedPrice"`
-    : derivedPriceFilterSql(t.id);
+  qualityReadColumn(context, "derivedPrice") ?? derivedPriceFilterSql(t.id);
 const hasDerivedPrice = (t: Product, context?: QualityReadContext) =>
   hasDerivedProductPriceSql(t.id, context);
 

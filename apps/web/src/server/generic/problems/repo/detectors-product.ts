@@ -37,6 +37,7 @@ import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { toolTimelineConflict, UNKNOWN_OWNERSHIP } from "~/lib/tool-timeline";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import type { Database } from "~/server/db";
+import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
 import { categorySummarySql } from "~/server/db/computed/product-category-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
@@ -145,7 +146,7 @@ export const loadSoldButStockedPresenterTotals = async (
           notDeleted(expense),
           notDeleted(product),
           inArray(product.shortcode, [...shortcodes]),
-          eq(expense.future, false),
+          actualExpense(),
           ownershipExitExpensePredicate(),
         ),
       )

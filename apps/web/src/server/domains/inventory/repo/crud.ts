@@ -603,7 +603,11 @@ const isOwnershipOnlyUpdate = (data: UpdateInventoryEntryData) =>
   ) &&
   (data.ownershipMode !== undefined || data.ownerLedgerPartyId !== undefined);
 
-const hydrateUpdatedInventoryEntry = async (db: Database, id: InventoryId) => {
+const hydrateInventoryEntry = async (
+  db: Database,
+  id: InventoryId,
+  after: "creation" | "update",
+) => {
   const result = await getDb(db).query.inventoryEntry.findFirst({
     where: eq(inventoryEntry.id, id),
     ...relations.inventory.full,
@@ -612,7 +616,7 @@ const hydrateUpdatedInventoryEntry = async (db: Database, id: InventoryId) => {
   if (!result) {
     throw createAppError(
       "INVENTORY_NOT_FOUND",
-      `Inventory entry ${id} not found after update`,
+      `Inventory entry ${id} not found after ${after}`,
     );
   }
 
@@ -678,7 +682,7 @@ export const updateInventoryEntry = async (
         "INVENTORY_NOT_FOUND",
         `Inventory entry ${id} not found after update`,
       );
-    return await hydrateUpdatedInventoryEntry(db, survivor);
+    return await hydrateInventoryEntry(db, survivor, "update");
   }
 
   // Pre-check the slot rather than letting the partial unique index raise a
@@ -736,10 +740,11 @@ export const updateInventoryEntry = async (
     }
   }
 
-  return await hydrateUpdatedInventoryEntry(db, updated.id);
+  return await hydrateInventoryEntry(db, updated.id, "update");
 };
 
-export const createInventoryEntry = async (
+/** Validate, insert and audit one entry, returning its stored identity. */
+export const insertInventoryEntry = async (
   db: Database,
   data: CreateInventoryEntryData,
   actor: ActorContext,
@@ -810,36 +815,20 @@ export const createInventoryEntry = async (
     action: "create",
   });
 
-  const result = await getDb(db).query.inventoryEntry.findFirst({
-    where: eq(inventoryEntry.id, created.id),
-    ...relations.inventory.full,
-  });
-
-  if (!result) {
-    throw createAppError(
-      "INVENTORY_NOT_FOUND",
-      `Inventory entry not found after creation`,
-    );
-  }
-
-  const [pricing, ownership, dataQualities, locationQualities, valuations] =
-    await Promise.all([
-      loadProductPricing(db, [result.product]),
-      loadInventoryOwnershipTraces(db, [result]),
-      loadDataQualities(db, "inventory", [result.id]),
-      loadDataQualities(db, "location", [result.location.id]),
-      loadInventoryValuations(db, [result]),
-    ]);
-  // SAFETY: `result` was just fetched live by id, so its quality was evaluated.
-  return dbInventoryEntryToAPI(
-    result,
-    valuations.get(result.id) ?? null,
-    requireLoadedProductPricing(pricing, result.product.id),
-    dataQualities.get(result.id)!,
-    locationQualities.get(result.location.id)!,
-    ownership.get(result.id),
-  );
+  return { id: created.id, shortcode: created.shortcode };
 };
+
+/** Create and return the API entry; identity-only callers use `insertInventoryEntry`. */
+export const createInventoryEntry = async (
+  db: Database,
+  data: CreateInventoryEntryData,
+  actor: ActorContext,
+) =>
+  hydrateInventoryEntry(
+    db,
+    (await insertInventoryEntry(db, data, actor)).id,
+    "creation",
+  );
 
 /**
  * Get inventory entries for multiple locations (batch query to avoid N+1).

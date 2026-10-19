@@ -1,4 +1,3 @@
-/** Canonical read-time quantity ledger: known balance is acquired minus exited; unknown quantities stay explicit. */
 import { type ProductId, productId } from "@cubby/schemas/identifiers";
 import type {
   ProductPickerOnHandOut,
@@ -11,6 +10,8 @@ import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
+/** Canonical read-time quantity ledger: known balance is acquired minus exited; unknown quantities stay explicit. */
+import { actualExpenseSql } from "~/server/db/helpers/predicates";
 import { inventoryEntry, location } from "~/server/db/schema";
 import { inventoryAmountSql } from "~/server/domains/inventory/repo/helpers";
 import {
@@ -62,7 +63,7 @@ const QUANTITY_OWN_MEASURES = `COALESCE(sum(GREATEST(${expenseSignedUnitsSql("kq
          count(*) FILTER (WHERE kqe."productQuantity" IS NULL AND (kqe."cost" IS NULL OR kqe."cost" >= 0)) AS "unknownAcquisitionLines",
          count(*) FILTER (WHERE kqe."productQuantity" IS NULL AND kqe."cost" < 0) AS "unknownExitLines",
          count(*) AS "ledgerLines"`;
-const QUANTITY_OWN_PREDICATES = `kqe."deletedAt" IS NULL AND kqe."future" = false`;
+const QUANTITY_OWN_PREDICATES = `kqe."deletedAt" IS NULL AND ${actualExpenseSql("kqe")}`;
 const QUANTITY_OWN_AGGREGATE = `SELECT ${QUANTITY_OWN_MEASURES}
     FROM "Expense" kqe
    WHERE kqe."productId" = ka."productId" AND ${QUANTITY_OWN_PREDICATES}`;
@@ -119,36 +120,38 @@ const onHandUnitsProjection = (
              ELSE COALESCE(ohu_inv.qty, 0) + ${locationCount}
            END::double precision`;
 
-/** On-hand filters are null wherever the UI shows an unavailable value; include shelf and installed placements consistently. */
-export const onHandUnitsSql = (productAlias = '"product"') =>
-  `(SELECT ${onHandUnitsProjection()}
-      FROM (SELECT count(*) AS n,
+/** Stock evidence stated once for the correlated (`onHandUnitsSql`,
+ * `onHandUnitsFilterSql`) and grouped (`onHandUnitsReadSql`) forms; each
+ * appends its own product condition. */
+const ON_HAND_INVENTORY = `count(*) AS n,
                    bool_or(ohu_i."amountUnit" <> 'each') AS noncount,
                    sum(ohu_i."amountValue"::numeric) AS qty
               FROM "InventoryEntry" ohu_i
               JOIN "Location" ohu_l
                 ON ohu_l."id" = ohu_i."locationId" AND ohu_l."deletedAt" IS NULL
-             WHERE ohu_i."productId" = ${productAlias}."id"
-               AND ohu_i."deletedAt" IS NULL) ohu_inv,
-           (SELECT count(*) AS n
+             WHERE ohu_i."deletedAt" IS NULL`;
+const ON_HAND_LOCATIONS = `count(*) AS n
               FROM "Location" ohu_ol
-             WHERE ohu_ol."productId" = ${productAlias}."id"
-               AND ohu_ol."deletedAt" IS NULL) ohu_loc)`;
+             WHERE ohu_ol."deletedAt" IS NULL`;
+
+/** On-hand filters are null wherever the UI shows an unavailable value; include shelf and installed placements consistently. */
+export const onHandUnitsSql = (productAlias = '"product"') =>
+  `(SELECT ${onHandUnitsProjection()}
+      FROM (SELECT ${ON_HAND_INVENTORY}
+               AND ohu_i."productId" = ${productAlias}."id") ohu_inv,
+           (SELECT ${ON_HAND_LOCATIONS}
+               AND ohu_ol."productId" = ${productAlias}."id") ohu_loc)`;
 
 /** Broad callers opt into one stock relation; missing rows retain unavailable stock. */
 export const onHandUnitsReadSql = () => sql`
   SELECT COALESCE(ohu_inv."productId", ohu_loc."productId") AS "productId",
     ${sql.raw(onHandUnitsProjection("COALESCE(ohu_inv.n, 0)", "COALESCE(ohu_loc.n, 0)"))} AS "onHandUnits"
   FROM (
-    SELECT ohu_i."productId", count(*) AS n,
-      bool_or(ohu_i."amountUnit" <> 'each') AS noncount,
-      sum(ohu_i."amountValue"::numeric) AS qty
-    FROM "InventoryEntry" ohu_i JOIN "Location" ohu_l
-      ON ohu_l.id = ohu_i."locationId" AND ohu_l."deletedAt" IS NULL
-    WHERE ohu_i."deletedAt" IS NULL GROUP BY ohu_i."productId"
+    SELECT ohu_i."productId", ${sql.raw(ON_HAND_INVENTORY)}
+    GROUP BY ohu_i."productId"
   ) ohu_inv FULL JOIN (
-    SELECT "productId", count(*) AS n FROM "Location"
-    WHERE "deletedAt" IS NULL AND "productId" IS NOT NULL GROUP BY "productId"
+    SELECT ohu_ol."productId", ${sql.raw(ON_HAND_LOCATIONS)}
+      AND ohu_ol."productId" IS NOT NULL GROUP BY ohu_ol."productId"
   ) ohu_loc ON ohu_inv."productId" = ohu_loc."productId"`;
 
 /**
@@ -176,18 +179,10 @@ export const onHandUnitsFilterSql = (
 ) =>
   context?.derivedValue?.("onHandUnits", productId) ??
   sql`(SELECT ${sql.raw(onHandUnitsProjection())}
-         FROM (SELECT count(*) AS n,
-                      bool_or(ohu_i."amountUnit" <> 'each') AS noncount,
-                      sum(ohu_i."amountValue"::numeric) AS qty
-                 FROM "InventoryEntry" ohu_i
-                 JOIN "Location" ohu_l
-                   ON ohu_l."id" = ohu_i."locationId" AND ohu_l."deletedAt" IS NULL
-                WHERE ohu_i."productId" = ${productId}
-                  AND ohu_i."deletedAt" IS NULL) ohu_inv,
-              (SELECT count(*) AS n
-                 FROM "Location" ohu_ol
-                WHERE ohu_ol."productId" = ${productId}
-                  AND ohu_ol."deletedAt" IS NULL) ohu_loc)`;
+         FROM (SELECT ${sql.raw(ON_HAND_INVENTORY)}
+                  AND ohu_i."productId" = ${productId}) ohu_inv,
+              (SELECT ${sql.raw(ON_HAND_LOCATIONS)}
+                  AND ohu_ol."productId" = ${productId}) ohu_loc)`;
 
 /** Quantity gaps include inherited kit lines, matching the displayed ledger. */
 export const hasUnknownQuantityLinesSql = (productId: AnyColumn) =>

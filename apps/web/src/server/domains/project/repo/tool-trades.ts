@@ -3,6 +3,7 @@ import type { Trade } from "@cubby/schemas/project";
 import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
 
 import type { DrizzleClient } from "~/server/db";
+import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
 import { notDeleted } from "~/server/db/helpers";
 import { expense, product } from "~/server/db/schema";
 import { effectiveExpenseTradeSql } from "~/server/domains/expense/repo/expense-inheritance";
@@ -42,7 +43,7 @@ export async function deriveToolTrades(
       and(
         productIds ? inArray(expense.productId, productIds) : undefined,
         eq(expense.lineKind, "principal"),
-        eq(expense.future, false),
+        actualExpense(),
         gt(expense.cost, 0),
         notDeleted(expense),
       ),

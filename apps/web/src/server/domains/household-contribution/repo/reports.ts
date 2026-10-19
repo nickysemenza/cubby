@@ -12,6 +12,7 @@ import { and, lte, sql } from "drizzle-orm";
 
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import {
   expense,
@@ -89,7 +90,7 @@ async function loadExpenseFacts(
     WHERE ${and(
       notDeleted(expense),
       scope.asOf ? lte(expense.date, scope.asOf) : undefined,
-      scope.includeFuture ? undefined : sql`${expense.future} = false`,
+      scope.includeFuture ? undefined : actualExpense(),
     )}
   `);
   return result.rows;

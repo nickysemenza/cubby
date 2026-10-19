@@ -48,6 +48,7 @@ import {
 } from "~/lib/tool-timeline";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
+import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import {
   entityLink,
@@ -174,7 +175,7 @@ export async function loadResourceMetrics(
         and(
           inArray(expense.productId, productIds),
           eq(expense.lineKind, "principal"),
-          eq(expense.future, false),
+          actualExpense(),
           notDeleted(expense),
         ),
       )
@@ -307,7 +308,7 @@ async function loadProjectSoftwareWindowCosts(
       and(
         inArray(expense.productId, productIds),
         eq(expense.lineKind, "principal"),
-        eq(expense.future, false),
+        actualExpense(),
         isNotNull(expense.cost),
         gte(expense.date, context.sharedWindow.startDate),
         lte(expense.date, context.sharedWindow.endDate),
@@ -345,7 +346,7 @@ export async function loadProjectToolPurchaseCosts(
       and(
         inArray(effectiveExpenseProject, projectIds),
         inArray(expense.productId, productIds),
-        eq(expense.future, false),
+        actualExpense(),
         eq(expense.lineKind, "principal"),
         eq(expense.costType, "tools"),
         gt(expense.cost, 0),
@@ -392,7 +393,7 @@ async function loadProductPurchaseCostsByProject(
       and(
         eq(expense.productId, productId),
         inArray(effectiveExpenseProject, projectIds),
-        eq(expense.future, false),
+        actualExpense(),
         eq(expense.lineKind, "principal"),
         eq(expense.costType, "tools"),
         gt(expense.cost, 0),
@@ -1334,7 +1335,7 @@ export async function suggestProjectTools(
         and(
           eq(effectiveExpenseProject, projectId),
           eq(expense.lineKind, "principal"),
-          eq(expense.future, false),
+          actualExpense(),
           gt(expense.cost, 0),
           ne(effectiveExpenseTrade, "planning"),
           ne(effectiveExpenseTrade, "other"),
@@ -1360,7 +1361,7 @@ export async function suggestProjectTools(
         and(
           eq(effectiveExpenseProject, projectId),
           eq(expense.lineKind, "principal"),
-          eq(expense.future, false),
+          actualExpense(),
           eq(expense.costType, "tools"),
           gt(expense.cost, 0),
           categoryFeatureSql(sql`${product.categoryId}`, "tools"),
@@ -1457,7 +1458,7 @@ export async function suggestProjectTools(
                 effectiveExpenseTrade,
                 trades.map((signal) => signal.trade),
               ),
-              eq(expense.future, false),
+              actualExpense(),
               eq(expense.lineKind, "principal"),
               eq(expense.costType, "tools"),
               gt(expense.cost, 0),
@@ -1612,7 +1613,7 @@ export async function suggestProjectTools(
         eq(effectiveExpenseProject, projectId),
         isNull(expense.productId),
         eq(expense.lineKind, "principal"),
-        eq(expense.future, false),
+        actualExpense(),
         eq(expense.costType, "tools"),
         sql`${expense.cost} >= ${EXPENSIVE_TOOL_THRESHOLD}`,
         notDeleted(expense),
@@ -1673,7 +1674,7 @@ async function loadSoftwareExpenseRows(
       and(
         eq(expense.productId, productId),
         eq(expense.lineKind, "principal"),
-        eq(expense.future, false),
+        actualExpense(),
         isNotNull(expense.cost),
         gte(expense.date, startDate),
         lte(expense.date, endDate),

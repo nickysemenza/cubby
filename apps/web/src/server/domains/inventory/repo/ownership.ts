@@ -18,7 +18,10 @@ import { and, eq, inArray, lte, sql } from "drizzle-orm";
 
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
-import { expenseAcquisitionSql } from "~/server/db/computed/expense-aggregate-sql";
+import {
+  expenseAcquisitionSql,
+  actualExpense,
+} from "~/server/db/computed/expense-aggregate-sql";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import {
   entityLink,
@@ -159,7 +162,7 @@ const loadAcquisitionExpenseRows = async (
       and(
         inArray(expense.productId, productIds),
         notDeleted(expense),
-        eq(expense.future, false),
+        actualExpense(),
         lte(expense.date, today()),
         sql.raw(expenseAcquisitionSql('"Expense"')),
       ),
@@ -244,7 +247,7 @@ const loadPurchaseExpenseRows = async (
       and(
         inArray(expense.purchaseId, purchaseIds),
         notDeleted(expense),
-        eq(expense.future, false),
+        actualExpense(),
         lte(expense.date, today()),
       ),
     );

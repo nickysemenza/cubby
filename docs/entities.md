@@ -1948,6 +1948,8 @@ selects apply the scaffold's quality join from the page clauses. A Work queue
 statement shares each relation as one MATERIALIZED CTE; a record-scoped read
 keeps the record-level predicates, since a whole-entity relation cannot be
 narrowed to the one requested record.
+Checks read a bound relation's column through `qualityReadColumn`
+(`data-quality/repo/registry.ts`) and fall back to their record-level SQL.
 `filter-read-parity.integration.test.ts` pins every bulk relation's checks,
 statuses and read-aware verdicts to the record-level SQL.
 

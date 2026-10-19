@@ -54,6 +54,7 @@ import { problemQueryDeclarations } from "~/entity/problems/problem-registry";
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { getDb, ilikeContains } from "~/server/db/helpers";
+import { actualExpenseSql } from "~/server/db/helpers/predicates";
 import {
   expense,
   financialAccount,
@@ -860,7 +861,7 @@ async function queryWorkQueue(
     SELECT 1 FROM "Purchase" planned WHERE planned.shortcode = routed.id AND planned."deletedAt" IS NULL
       AND (planned.date > ${householdLocalDate(new Date())}::date OR (
         EXISTS (SELECT 1 FROM "Expense" line WHERE line."purchaseId" = planned.id AND line."deletedAt" IS NULL)
-        AND NOT EXISTS (SELECT 1 FROM "Expense" line WHERE line."purchaseId" = planned.id AND line."deletedAt" IS NULL AND line.future = false)
+        AND NOT EXISTS (SELECT 1 FROM "Expense" line WHERE line."purchaseId" = planned.id AND line."deletedAt" IS NULL AND ${sql.raw(actualExpenseSql("line"))})
       ))
   ))`,
   ];
