@@ -595,7 +595,8 @@
 
 /* A list's totals, Sweep, contextual status and portaled suggestion status
    may each render nothing (Recipes declares no totals or decision fields);
-   an empty status strip must not leave a bordered blank band. */
+   an empty status strip must not leave a bordered blank band. Unlayered so
+   it overrides the strip's `flex` utility. */
 [data-list-status-strip]:not(
   :has(
     > :not([data-list-status-group]),

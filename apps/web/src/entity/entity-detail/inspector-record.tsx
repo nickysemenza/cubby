@@ -126,7 +126,11 @@ function ResolvedInspectorRecord<E extends GenericDetailEntity>({
       records={[record]}
       fieldKeys={fields}
     >
-      <RecordQualityProvider entity={entity} id={record.id}>
+      <RecordQualityProvider
+        entity={entity}
+        id={record.id}
+        visibleFields={fields}
+      >
         <Stack gap="md">
           {editable ? (
             <div>

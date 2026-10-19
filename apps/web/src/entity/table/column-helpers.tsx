@@ -806,6 +806,8 @@ function createEditableAccessorColumn<
     cellData: ColumnCellData<T, TSaved>;
     enableSorting?: boolean;
     mono?: boolean;
+    /** A code or identifier column: see `CubbyColumnMeta.code`. */
+    code?: boolean;
     numeric?: boolean;
     renderValue: (value: TValue, row: T) => ReactNode;
     renderEditable?: (
@@ -824,6 +826,7 @@ function createEditableAccessorColumn<
       mobile: options.mobile,
       filterConfig: options.filterConfig,
       mono: options.mono,
+      code: options.code,
       numeric: options.numeric,
       cellData: options.cellData,
     }),
@@ -851,6 +854,8 @@ export function createTextColumn<
     header?: string;
     placeholder?: string;
     className?: string;
+    /** A code or identifier column: see `CubbyColumnMeta.code`. */
+    code?: boolean;
     mobile?: MobileColumnMeta;
     filterConfig?: FilterConfig;
     /**
@@ -887,6 +892,7 @@ export function createTextColumn<
     id: String(accessor),
     header: options?.header,
     className: options?.className,
+    code: options?.code,
     mobile: options?.mobile,
     filterConfig: options?.filterConfig,
     cellData,

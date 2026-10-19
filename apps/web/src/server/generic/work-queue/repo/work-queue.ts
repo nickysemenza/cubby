@@ -92,6 +92,7 @@ import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import {
   gapCondition,
+  relatedGapCondition,
   statementQualityRelations,
   type StatementQualityRelations,
 } from "~/server/generic/data-quality/repo/sql";
@@ -126,10 +127,9 @@ const members = workWaitingForSchema.options[1].shape.kind.value;
 const unresolved = workWaitingForSchema.options[2].shape.kind.value;
 
 type QueueInput = z.infer<typeof workQueueHouseholdInput>;
-type Candidate = Pick<
-  WorkQueueRow,
-  "source" | "kind" | "reason" | "nextAction"
->;
+type Candidate = Pick<WorkQueueRow, "source" | "kind" | "nextAction"> & {
+  reason: string | SQL;
+};
 
 const viewFilters = (entity: Entity, id: string) => {
   const view = entitySummary[entity].list.savedViews.find(
@@ -158,7 +158,8 @@ const gapViewFilters = (
 };
 
 /** A gap row's reason as `stateRowQuality` displays it, for search: its live
- * gap messages, deduplicated in check order, else the branch's fallback. */
+ * own gap messages in check order, then its related records' (a view may list
+ * a related entity's check), deduplicated, else the branch's fallback. */
 const gapReasonSql = (
   entity: (typeof workQueueGapViews)[number]["entity"],
   fallback: string,
@@ -166,19 +167,26 @@ const gapReasonSql = (
 ): SQL => {
   const gapView = workQueueGapViews.find((view) => view.entity === entity);
   if (!gapView) throw new Error(`Work queue has no gap view for ${entity}`);
-  const relevant = new Set(workQueueGapChecks(gapView));
-  const byMessage = new Map<string, DataCheck[]>();
-  for (const check of dataChecksByEntity[entity].options) {
-    if (!relevant.has(check)) continue;
+  const viewChecks = workQueueGapChecks(gapView);
+  const own = new Set<DataCheck>(dataChecksByEntity[entity].options);
+  const byMessage = new Map<string, SQL[]>();
+  for (const check of [
+    ...dataChecksByEntity[entity].options.filter((check) =>
+      viewChecks.includes(check),
+    ),
+    ...viewChecks.filter((check) => !own.has(check)),
+  ]) {
     const message = dataCheckMessage[check];
-    byMessage.set(message, [...(byMessage.get(message) ?? []), check]);
+    byMessage.set(message, [
+      ...(byMessage.get(message) ?? []),
+      own.has(check)
+        ? gapCondition(entity, check, undefined, context)
+        : relatedGapCondition(entity, check),
+    ]);
   }
   const parts = [...byMessage].map(
-    ([message, checks]) =>
-      sql`CASE WHEN ${sql.join(
-        checks.map((check) => gapCondition(entity, check, undefined, context)),
-        sql` OR `,
-      )} THEN ${message}::text END`,
+    ([message, conditions]) =>
+      sql`CASE WHEN ${sql.join(conditions, sql` OR `)} THEN ${message}::text END`,
   );
   return parts.length
     ? sql`coalesce(nullif(concat_ws(' ', ${sql.join(parts, sql`, `)}), ''), ${fallback}::text)`
@@ -295,7 +303,7 @@ async function workQueueProjection(
       kind: "research",
       reason: gapReason(entity, "Research queue", context),
       nextAction: "Review missing facts and add verified evidence.",
-    }) satisfies Omit<Candidate, "reason"> & { reason: string | SQL };
+    }) satisfies Candidate;
   const productGaps = gapViewFilters(scope, "product");
   if (productGaps && admits("product", true))
     selections.push(
