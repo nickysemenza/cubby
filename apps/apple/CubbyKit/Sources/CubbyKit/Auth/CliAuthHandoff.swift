@@ -30,13 +30,16 @@ public struct CliAuthRequest: Sendable, Hashable, Equatable {
 }
 
 /// Canonical `scheme://host[:port]` server identity. The handoff carries the app's origin so the
-/// CLI never files the token under a different `--base-url` host.
+/// CLI never files the token under a different `--base-url` host. A scheme's default port is
+/// dropped, so `https://host:443` and `https://host` compare equal.
 public enum CliAuthOrigin {
+    private static let defaultPorts = ["http": 80, "https": 443]
+
     public static func of(_ url: URL) -> String? {
         guard let scheme = url.scheme?.lowercased(), !scheme.isEmpty,
             let host = url.host()?.lowercased(), !host.isEmpty
         else { return nil }
-        if let port = url.port { return "\(scheme)://\(host):\(port)" }
+        if let port = url.port, port != defaultPorts[scheme] { return "\(scheme)://\(host):\(port)" }
         return "\(scheme)://\(host)"
     }
 }
