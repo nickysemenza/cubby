@@ -18,6 +18,7 @@ import {
   inventoryEntry,
   location,
   product,
+  run,
   searchDocument,
   user,
 } from "~/server/db/schema";
@@ -55,6 +56,42 @@ describe("connection discovery roster freshness", () => {
       updatedAt: new Date(),
     });
   });
+  it.each(["failed", "cancelled"] as const)(
+    "returns the %s owner when explicit rediscovery finds its retained work",
+    async (outcome) => {
+      const source = await createRepoEntity(ctx, "task", {
+        name: "Synthetic recoverable discovery",
+        trade: "other",
+      });
+      const ref = { entityKind: "task" as const, entityId: source.output.id };
+      await activateAiRefresh(ctx.db, "synthetic-explicit-recovery", {
+        enabled: true,
+      });
+      const first = await scheduleConnectionRefresh(ctx.db, ref);
+      if (!first.runId)
+        throw new Error("Synthetic connection work was not scheduled");
+      await getDb(ctx.db)
+        .update(run)
+        .set({
+          status: "failed",
+          failureCode:
+            outcome === "cancelled"
+              ? "user_cancelled"
+              : "ai_work_workflow_failed",
+          dispatchError: "Synthetic retained Workflow diagnostic",
+        })
+        .where(eq(run.id, first.runId));
+      await getDb(ctx.db)
+        .update(aiEvaluation)
+        .set({ state: outcome === "cancelled" ? "cancelled" : "queued" })
+        .where(eq(aiEvaluation.runId, first.runId));
+      const found = await scheduleConnectionRefresh(ctx.db, ref);
+      expect(found).toMatchObject({
+        kind: outcome === "cancelled" ? "stopped" : "unchanged",
+        runId: first.runId,
+      });
+    },
+  );
   // A page must not scan the same broad target corpus for every source.
   it("shares broad rosters within a batch and refreshes them on the next call", async () => {
     const first = await createRepoEntity(ctx, "task", {

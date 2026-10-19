@@ -263,7 +263,9 @@ describe("Email prompt refresh publication", () => {
         (row) => row.evaluationId === evaluation!.id,
       ),
     ).toBe(true);
-    expect(await discoverAiRefresh(ctx.db)).not.toContain(evaluation!.runId);
+    expect((await discoverAiRefresh(ctx.db)).runs).not.toContain(
+      evaluation!.runId,
+    );
     expect(
       await getDb(ctx.db)
         .select({ id: aiEvaluation.id })

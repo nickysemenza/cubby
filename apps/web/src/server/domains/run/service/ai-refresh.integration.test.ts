@@ -84,7 +84,7 @@ describe("targeted prompt refresh", () => {
   async function discoverFieldRefresh(
     ports: Parameters<typeof discoverAiRefresh>[1],
   ) {
-    const discovered = await discoverAiRefresh(ctx.db, ports);
+    const { runs: discovered } = await discoverAiRefresh(ctx.db, ports);
     const targets = await getDb(ctx.db)
       .select({ runId: aiEvaluation.runId })
       .from(aiEvaluation)
@@ -831,7 +831,7 @@ describe("targeted prompt refresh", () => {
     await activateAiRefresh(ctx.db, "synthetic-mail-refresh", {
       enabled: true,
     });
-    const discovered = await discoverAiRefresh(ctx.db);
+    const { runs: discovered } = await discoverAiRefresh(ctx.db);
     const emailRunIds = await getDb(ctx.db)
       .select({ runId: aiEvaluation.runId })
       .from(aiEvaluation)
@@ -907,7 +907,7 @@ describe("targeted prompt refresh", () => {
       mailboxId: "synthetic-reopen-mailbox",
       enabled: true,
     });
-    const discovered = await discoverAiRefresh(ctx.db);
+    const { runs: discovered } = await discoverAiRefresh(ctx.db);
     const rows = await getDb(ctx.db)
       .select()
       .from(aiEvaluation)
@@ -937,7 +937,9 @@ describe("targeted prompt refresh", () => {
       .where(eq(run.id, replacement.runId));
     expect(owner?.status).toBe("running");
     // Queued work is not re-enqueued by another pass.
-    expect(await discoverAiRefresh(ctx.db)).not.toContain(replacement.runId);
+    expect((await discoverAiRefresh(ctx.db)).runs).not.toContain(
+      replacement.runId,
+    );
     expect(
       await getDb(ctx.db).select().from(aiEvaluation).where(emailRefreshTarget),
     ).toHaveLength(2);

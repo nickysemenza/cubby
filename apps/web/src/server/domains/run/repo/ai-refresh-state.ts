@@ -17,14 +17,12 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import {
   and,
   asc,
-  count,
   desc,
   eq,
   gt,
   inArray,
   isNull,
   notInArray,
-  ne,
   or,
   sql,
 } from "drizzle-orm";
@@ -48,6 +46,10 @@ import {
 } from "~/server/db/schema";
 import { emailMemberClassificationSql } from "~/server/domains/email/repo/email-sql";
 
+import {
+  hasAiRefreshRunCapacity,
+  tryLockAiRefreshScheduling,
+} from "./ai-refresh-admission";
 import { ensureRun } from "./ensure-run";
 
 export type AssessmentStateRow = typeof suggestion.$inferSelect;
@@ -85,6 +87,7 @@ const targetWorkKey = ({ target, provenance }: EvaluationTargetInput) =>
 const MAX_REOPENS = 3;
 const REOPEN_SEPARATOR = ":reopen:";
 const retryReceipt = z.object({ retryEvaluationId: z.uuid() });
+const refreshRunRevision = sql<number>`coalesce((${run.input}->${aiRefreshRunInput.keyof().enum.activation}->>${aiRefreshActivation.keyof().enum.revision})::int, 0)`;
 
 /** The row a work key's retries and reopens currently end at, with its reopen count. */
 async function workKeyTip(
@@ -229,37 +232,10 @@ export async function insertEvaluationTargets(
   return inserted;
 }
 
-/** Nonblocking admission: scheduling contention must not pin another origin connection. */
-export async function tryLockAiRefreshScheduling(db: Database) {
-  const rows = await getDb(db).execute<{ locked: boolean }>(
-    sql`SELECT pg_try_advisory_xact_lock(hashtext('cubby-ai-refresh-scheduling')) AS locked`,
-  );
-  return rows.rows[0]?.locked === true;
-}
-
-// Discovery is one activation owner; Sweep children are bounded by their explicit parents.
-// Ordinary scheduled executions share two slots, independently of the two-target inference cap.
-export async function hasAiRefreshRunCapacity(db: Database, excludeId?: RunId) {
-  const [row] = await getDb(db)
-    .select({ count: count() })
-    .from(run)
-    .where(
-      and(
-        eq(run.purpose, "ai_refresh"),
-        inArray(run.status, ["running", "paused", "paused_auth"]),
-        isNull(run.parentRunId),
-        sql`coalesce((${run.input}->>${aiRefreshRunInput.keyof().enum.discovery})::boolean, false) = false`,
-        excludeId ? ne(run.id, excludeId) : undefined,
-        notDeleted(run),
-      ),
-    );
-  return (row?.count ?? 0) < 2;
-}
-
 type ScheduleEvaluationResult =
   | { kind: "scheduled"; runId: RunId }
   | { kind: "unchanged" }
-  | { kind: "deferred" };
+  | { kind: "deferred"; reason: "scheduling_busy" | "capacity" };
 
 /** Work and its owner commit together. A deferred discovery keeps its cursor. */
 export async function scheduleEvaluationRun(
@@ -270,14 +246,20 @@ export async function scheduleEvaluationRun(
   },
   targets: EvaluationTargetInput[],
 ): Promise<ScheduleEvaluationResult> {
+  if (!(await hasAdmissibleTarget(db, targets))) return { kind: "unchanged" };
   return withTransactionDatabase(db, async (tx) => {
-    if (!(await tryLockAiRefreshScheduling(tx))) return { kind: "deferred" };
+    if (!(await tryLockAiRefreshScheduling(tx)))
+      return { kind: "deferred", reason: "scheduling_busy" };
     // Do not create empty Runs for terminal, cancelled or already queued work.
     if (!(await hasAdmissibleTarget(tx, targets))) return { kind: "unchanged" };
     const lockRun = async (id: string) =>
       (
         await getDb(tx)
-          .select({ status: run.status, failureCode: run.failureCode })
+          .select({
+            status: run.status,
+            failureCode: run.failureCode,
+            revision: refreshRunRevision,
+          })
           .from(run)
           .where(eq(run.id, runEntityId.parse(id)))
           .for("no key update")
@@ -296,7 +278,7 @@ export async function scheduleEvaluationRun(
                 isNull(run.parentRunId),
                 sql`coalesce((${run.input}->>${aiRefreshRunInput.keyof().enum.discovery})::boolean, false) = false`,
                 sql`${run.input}->>${aiRefreshRunInput.keyof().enum.mailboxId} IS NULL`,
-                sql`coalesce((${run.input}->${aiRefreshRunInput.keyof().enum.activation}->>${aiRefreshActivation.keyof().enum.revision})::int, 0) = ${input.input.activation.revision}`,
+                sql`${refreshRunRevision} = ${input.input.activation.revision}`,
                 notDeleted(run),
               ),
             )
@@ -309,7 +291,7 @@ export async function scheduleEvaluationRun(
       input.status !== "completed" &&
       !(await hasAiRefreshRunCapacity(tx))
     )
-      return { kind: "deferred" };
+      return { kind: "deferred", reason: "capacity" };
     let runId = shared?.id ?? (await ensureRun(tx, actor, input));
     // Work and its owner become visible together, before recovery can launch a Workflow.
     let owner = await lockRun(runId);
@@ -319,7 +301,9 @@ export async function scheduleEvaluationRun(
         let generation = 1;
         (owner?.status === "completed" ||
           owner?.status === "failed" ||
-          owner?.status === "dispatch_failed") &&
+          owner?.status === "dispatch_failed" ||
+          (owner !== undefined &&
+            owner.revision !== input.input.activation.revision)) &&
         (await hasAdmissibleTarget(tx, targets));
         generation++
       ) {

@@ -332,7 +332,10 @@ async function scheduleConnectionDiscovery(
 
 /** Preparation enumerates evidence using live renderers; no model calls happen here. */
 // oxlint-disable-next-line complexity -- Independent discovery streams checkpoint their capacity deferrals together.
-async function discoverAiRefreshPage(db: Database, ports: AiRefreshPorts = {}) {
+export async function discoverAiRefresh(
+  db: Database,
+  ports: AiRefreshPorts = {},
+) {
   const activation = await readAiRefreshActivation(db);
   if (!activation?.enabled) return { runs: [], deferred: false };
   const runs = new Set<string>();
@@ -589,13 +592,6 @@ async function discoverAiRefreshPage(db: Database, ports: AiRefreshPorts = {}) {
     runs: [...runs],
     deferred: fieldDeferred || emailDeferred || productDiscovery.deferred,
   };
-}
-
-export async function discoverAiRefresh(
-  db: Database,
-  ports: AiRefreshPorts = {},
-) {
-  return (await discoverAiRefreshPage(db, ports)).runs;
 }
 
 export async function executeAiRefreshTarget(
@@ -976,7 +972,7 @@ export async function recoverAiRefresh(db: Database) {
     }
   };
   await launch(unfinished.map((row) => row.id));
-  const discovered = await discoverAiRefreshPage(db);
+  const discovered = await discoverAiRefresh(db);
   await launch(discovered.runs);
   return discovered.deferred ? "deferred" : true;
 }

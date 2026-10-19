@@ -366,4 +366,46 @@ describe("AI refresh scheduling admission", () => {
     if (prior.kind !== "scheduled" || current.kind !== "scheduled") return;
     expect(current.runId).not.toBe(prior.runId);
   });
+
+  it("checks the policy revision when an obsolete target reuses the same client key", async () => {
+    const request = (revision: number) => ({
+      ...input("same-policy-key"),
+      input: aiRefreshRunInput.parse({
+        ...input("policy").input,
+        mailboxId: undefined,
+        activation: { ...input("policy").input.activation, revision },
+      }),
+    });
+    const item = {
+      ...target(),
+      target: aiEvaluationTarget.parse({
+        kind: "product",
+        entity: "product",
+        recordId: crypto.randomUUID(),
+        field: null,
+        assessmentIds: [],
+      }),
+    };
+    const prior = await scheduleEvaluationRun(
+      ctx.db,
+      systemActor(),
+      request(1),
+      [item],
+    );
+    expect(prior.kind).toBe("scheduled");
+    if (prior.kind !== "scheduled") return;
+    await getDb(ctx.db)
+      .update(aiEvaluation)
+      .set({ state: "obsolete" })
+      .where(eq(aiEvaluation.runId, prior.runId));
+    const current = await scheduleEvaluationRun(
+      ctx.db,
+      systemActor(),
+      request(2),
+      [item],
+    );
+    expect(current.kind).toBe("scheduled");
+    if (current.kind !== "scheduled") return;
+    expect(current.runId).not.toBe(prior.runId);
+  });
 });

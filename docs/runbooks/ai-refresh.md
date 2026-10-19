@@ -70,12 +70,19 @@ The two-target inference cap remains independent of these Run slots.
 Cancelling a shared Run stops every Product, field and connection target joined
 to that owner. Inspect its roster before cancelling; same-fingerprint work stays
 stopped until explicit member retry.
+If both slots are paused for authentication, ordinary refresh work waits until
+the member resolves authentication, resumes or cancels an owner. Cancelling a
+Sweep child also stops its parent roster step rather than reviving that child.
 
 When slots are full, discovery retains the affected stream's cursor and waits
 30 seconds in its existing Workflow before trying again. Capacity waits do not
 consume deployment-policy waits or inference retries. Unchanged, already queued,
 failed or cancelled work creates no empty Run. An on-demand connection request
-that cannot obtain capacity reports the busy diagnostic so the member can retry.
+that cannot obtain capacity reports the capacity diagnostic; scheduling-lock
+contention reports a separate short-retry diagnostic. Rediscovery returns an
+existing recoverable failed owner for relaunch. Cancelled, exhausted or paused
+owners report their retained status and diagnostic instead of silently returning
+no work.
 Automatic connection side effects defer without failing the entity write; the
 next routine Sweep can rediscover those live sources.
 A new policy resets the scan cursor and its discovery Workflow checkpoints

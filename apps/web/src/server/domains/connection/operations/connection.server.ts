@@ -36,8 +36,11 @@ export const connectionHandlers = implementOperationDomain(connectionContract, {
     );
     if (scheduled.kind === "deferred")
       throw new Error(
-        "AI refresh execution capacity is busy; retry connection discovery after active refresh work finishes.",
+        scheduled.reason === "scheduling_busy"
+          ? "AI refresh scheduling is busy; retry connection discovery shortly."
+          : "AI refresh execution capacity is busy; retry connection discovery after active refresh work finishes.",
       );
+    if (scheduled.kind === "stopped") throw new Error(scheduled.diagnostic);
     const runId = scheduled.runId;
     // Nothing else starts a member's discovery Run promptly; a shared Run
     // already in flight makes this a no-op.

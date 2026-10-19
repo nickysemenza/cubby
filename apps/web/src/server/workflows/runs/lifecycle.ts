@@ -11,12 +11,13 @@ import {
 } from "~/lib/error-diagnostics";
 import { getAiGatewayEgress } from "~/server/cf-env";
 import type { Database } from "~/server/db";
-import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import { getDb, withTransactionDatabase } from "~/server/db/helpers/core";
 import { run as runTable } from "~/server/db/schema";
 import {
   hasAiRefreshRunCapacity,
   tryLockAiRefreshScheduling,
-} from "~/server/domains/run/repo/ai-refresh-state";
+  AI_REFRESH_SCHEDULING_LOCK,
+} from "~/server/domains/run/repo/ai-refresh-admission";
 import { recordRunProgress as recordProgress } from "~/server/domains/run/repo/run-progress";
 
 import {
@@ -141,8 +142,7 @@ export async function launchWorkflowRun(
       }
       if (!owner.parentRunId && !owner.discovery) {
         if (!(await tryLockAiRefreshScheduling(tx))) {
-          refusal =
-            "AI refresh scheduling is busy (cubby-ai-refresh-scheduling); retry shortly.";
+          refusal = `AI refresh scheduling is busy (${AI_REFRESH_SCHEDULING_LOCK}); retry shortly.`;
           return null;
         }
         if (!(await hasAiRefreshRunCapacity(tx, input.runId))) {
