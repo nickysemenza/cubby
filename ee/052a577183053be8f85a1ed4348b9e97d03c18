@@ -1,0 +1,39 @@
+apps/web/src/entity/platform/entity-records-tab.tsx
+  s_9b829d577c7e4c::t_3d31fdcdf63c96 211
+apps/web/src/entity/table/data-table-toolbar.unit.test.tsx
+  s_9b829d577c7e4c::t_c5cdde45c20e1d 1-3,8-11,14-19,24,29,33-34,40,53-59,69,115,128-145
+apps/web/src/entity/table/ledger-filters.unit.test.tsx
+  s_9b829d577c7e4c::t_083967e91da428 1,10,13,49-53,59,94-101,103-104,106-107,112-128,131-132,138-140,145
+apps/web/src/server/generic/list/repo/list-facets.integration.test.ts
+  s_9b829d577c7e4c::t_dd07387dc3b316 1-76
+apps/web/src/ui/data-table/filter-bar.tsx
+  s_9b829d577c7e4c::t_471b5957dc46b9 155,158,846-850,854,859-863,978-983,991,1001,1035,1083-1084,1095,1097,1109-1110,1175-1177,1182-1192,1204,1206-1209,1262
+apps/web/src/ui/data-table/filter-bar.unit.test.tsx
+  s_9b829d577c7e4c::t_32769610a68935 4,60-84,86-96,98-100,102-108,116-121,123,125-128,130-139,141,172,195-220,223-224,227,238-260,293-294,311,321,326-349,351,355,357,360-374,392,398-400,405-406,411-419,446,455-456
+apps/web/tests/e2e/declared-record-lists.spec.ts
+  s_9b829d577c7e4c::t_56189614fa83e1 71-75,89,97-99,101,103,115,119
+apps/web/tests/e2e/filters-menu.spec.ts
+  s_9b829d577c7e4c::t_39dd9c7aca303b 6,17-31,54,102-103,177,179-180,203,207,254-256,274,347-348
+apps/web/tests/e2e/vendor-account-filters.spec.ts
+  s_9b829d577c7e4c::t_2d549fab0845b0 45,48,65,73,76-80
+apps/web/tests/e2e/wardrobe-owner.spec.ts
+  s_9b829d577c7e4c::t_39394d76f1a266 238,242
+apps/web/tests/e2e/work-queue.spec.ts
+  s_9b829d577c7e4c::t_68d6af9e13641d 90,104
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ee052a577183053be8f85a1ed4348b9e97d03c18",
+  "prompts": {},
+  "sessions": {
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
