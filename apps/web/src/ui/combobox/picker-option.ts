@@ -3,6 +3,7 @@ import type React from "react";
 import { createElement } from "react";
 
 import type { ComboboxItem } from "./combobox-types";
+import { optionGlyphIcon } from "./option-glyph";
 
 /**
  * A string-valued choice: an enum, a filter value, a fixed setting. The filter
@@ -16,6 +17,12 @@ export interface PickerOption {
   /** Leading glyph — a trade icon, a category mark, a vendor's brand logo. */
   icon?: React.ReactNode;
   color?: string;
+  /**
+   * The option's state glyph (Phosphor name for web, SF Symbol for Apple).
+   * `colorizeEnumOptions` sets it only on status rosters (or where declared),
+   * so a category option keeps its tone dot.
+   */
+  glyph?: { phosphor: string; sfSymbol: string };
   /**
    * Trailing micro-annotation ABOUT the option — today, how many rows carry it
    * ("254"). Deliberately its own field rather than baked into `label`: the
@@ -52,6 +59,16 @@ export interface PickerOption {
 
 /** The one `PickerOption` → picker row mapping. */
 export function pickerOptionItem(option: PickerOption): ComboboxItem {
+  // A status option leads with its state glyph; a category keeps its dot.
+  const glyph =
+    option.icon == null && option.glyph
+      ? optionGlyphIcon(option.glyph.phosphor)
+      : undefined;
+  if (glyph)
+    return pickerOptionItem({
+      ...option,
+      icon: createElement(glyph, { weight: "fill" }),
+    });
   const presentation: NonNullable<ComboboxItem["presentation"]> = {
     ...(option.group && { group: option.group }),
     ...(option.depth != null && { depth: option.depth }),

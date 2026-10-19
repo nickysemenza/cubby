@@ -607,13 +607,14 @@
   display: none;
 }
 
-/* A list's totals, Sweep, contextual status and portaled suggestion status
+/* A list's filter chips, totals, Sweep, contextual and suggestion status
    may each render nothing (Recipes declares no totals or decision fields);
    an empty status strip must not leave a bordered blank band. Unlayered so
    it overrides the strip's `flex` utility. */
 [data-list-status-strip]:not(
   :has(
-    > :not([data-list-status-group]),
+    > :not([data-list-status-group], [data-workbench-filters]),
+    [data-workbench-filters] > *,
     [data-list-status-group] > :not([data-workbench-status]),
     [data-workbench-status] > *
   )

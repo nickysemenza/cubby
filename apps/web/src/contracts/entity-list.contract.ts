@@ -1,6 +1,12 @@
 import { z } from "zod";
 
 import { defineContract, query } from "~/contracts/define";
+import {
+  entityFacetCountsInputSchema,
+  entityFacetCountsOutputSchema,
+  entityViewCountsInputSchema,
+  entityViewCountsOutputSchema,
+} from "~/contracts/entity-facets.schema";
 import { kernelRecordWire } from "~/contracts/entity-kernel-wire";
 import {
   type EntityListInputByEntity,
@@ -47,6 +53,18 @@ export const entityListContract = defineContract("entity", {
     input: entityListInputSchema,
     output: entityListSummaryOutputSchema,
     native: "Full-filter list totals",
+    observability: { entities: listEntities },
+  }),
+  facetCounts: query({
+    mcp: { omit: "client_view" },
+    input: entityFacetCountsInputSchema,
+    output: entityFacetCountsOutputSchema,
+    observability: { entities: listEntities },
+  }),
+  viewCounts: query({
+    mcp: { omit: "client_view" },
+    input: entityViewCountsInputSchema,
+    output: entityViewCountsOutputSchema,
     observability: { entities: listEntities },
   }),
   list: query({

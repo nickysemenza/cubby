@@ -18,7 +18,9 @@ interface UseFilterBarDraftArgs {
 }
 
 /**
- * The chip bar's draft state: local edits, a debounce for typing, and the
+ * Live apply for the filter panel and chips: there is no Apply. A pick commits
+ * on the interaction; typing commits after a 250ms debounce. Local edits, the
+ * debounce, and the
  * reconciliation that keeps an external change (a saved view, a reset, a URL
  * restore) from being clobbered by an in-flight debounce.
  *
@@ -42,7 +44,7 @@ export function useFilterBarDraft({
   }));
   const { draftFilters, pendingKeys } = state;
   const [debouncedDraftFilters] = useDebouncedValue(draftFilters, {
-    wait: 500,
+    wait: 250,
   });
 
   const draftKey = filterStateKey(draftFilters);
