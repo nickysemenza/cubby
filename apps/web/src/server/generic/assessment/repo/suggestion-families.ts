@@ -49,6 +49,7 @@ import {
   statementSuggestionKeys,
   statementSuggestionStatusCounts,
 } from "~/server/domains/statement-import/repo/statement-suggestion-read";
+import { kindAgreed } from "~/server/domains/statement-import/repo/statement-transaction-kind";
 import {
   fieldSuggestionKeys,
   readFieldSuggestions,
@@ -445,6 +446,12 @@ const statementTransaction: SuggestionFamilyPresentation<"statement_transaction"
       };
     },
     acceptAsIs: (row) => {
+      // Labels ride on top of the evidence fingerprint, so a create labelled
+      // clean under an earlier rule still passes the apply-time check.
+      // Accept clean re-reads today's rule instead of the stored flag.
+      const { recommended, create, transfer } = row.evidence;
+      if (recommended === "create" && create && !kindAgreed(create, transfer))
+        return null;
       const application = statementAcceptApplication(row.evidence);
       return application
         ? {

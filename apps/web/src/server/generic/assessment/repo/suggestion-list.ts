@@ -458,5 +458,21 @@ export async function acceptCleanSuggestions(
     const item = acceptAsIs(row);
     return item ? [item] : [];
   });
-  return items.length ? reviewAssessmentBatch(db, context, { items }) : [];
+  // A listed row today's rules no longer accept as is returns as a failure,
+  // so the caller skips it rather than stopping on an empty page.
+  const refused = rows
+    .filter(
+      (row) => !items.some((item) => item.assessmentId === row.assessmentId),
+    )
+    .map((row) => ({
+      assessmentId: row.assessmentId,
+      ok: false as const,
+      error: "No longer clean under the current rules; review it on its own.",
+    }));
+  return [
+    ...refused,
+    ...(items.length
+      ? await reviewAssessmentBatch(db, context, { items })
+      : []),
+  ];
 }

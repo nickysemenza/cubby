@@ -278,6 +278,8 @@ filtering a group with `where {account: {in: [FAC-…]}, month: {in: [YYYY-MM]}}
    an internal move. Cash has no statement: create the cash leg by hand for the
    full amount, accept the pair, record the ATM fee as a `fee` on the cash
    account, and settle cash spending from that account against its Purchase.
+   A transfer or card payment is never clean until its opposite leg is matched,
+   so review each one: confirm the other leg and its owner before accepting.
 6. Dismiss charges that should never become transactions with verdict
    `dismissed` and suppression `{scope: "statement_transaction", candidateKey:
    "<source>:<chargeKey>", fingerprint}`; prefer `disposition: "ignored"` with a
