@@ -1,0 +1,59 @@
+apps/apple/App/Shared/DesignSystem/StatusChip.swift
+  s_9b829d577c7e4c::t_1228a28d660cd0 47-66
+apps/web/src/contracts/entity-list.contract.ts
+  s_9b829d577c7e4c::t_7f9e4ad6eaace7 24,41,48,53,59
+apps/web/src/entity/hooks/use-entity-list.tsx
+  s_9b829d577c7e4c::t_96d13b6068272c 418-427
+apps/web/src/entity/table/table-header-layout.unit.test.tsx
+  s_9b829d577c7e4c::t_a245581123dd10 203-208
+apps/web/src/features/ingredient/enrichment-workbench.tsx
+  s_9b829d577c7e4c::t_60e5d5c091e4a6 867-868
+apps/web/src/features/tools/tool-gallery-page.tsx
+  s_9b829d577c7e4c::t_a57bd93a356c09 978-979
+apps/web/src/lib/data-quality-options.ts
+  s_9b829d577c7e4c::t_3380211d522c07 1
+apps/web/src/server/generic/list/repo/list-facets.integration.test.ts
+  s_9b829d577c7e4c::t_d77e857b52ed23 26-28
+apps/web/src/styles.css
+  s_9b829d577c7e4c::t_113df93bb3c1b4 644-645
+apps/web/src/ui/common/chip-cluster.tsx
+  s_9b829d577c7e4c::t_afea99773e5c2d 23
+apps/web/src/ui/common/currency-value.tsx
+  s_9b829d577c7e4c::t_7a6e90b79f83d8 50
+apps/web/src/ui/common/date-display.tsx
+  s_9b829d577c7e4c::t_4a53e076240add 40
+apps/web/src/ui/common/option-glyph.tsx
+  s_9b829d577c7e4c::t_8a591633792116 167
+apps/web/src/ui/data-table/column-layout.ts
+  s_9b829d577c7e4c::t_e4b3d3b152db3d 452
+apps/web/src/ui/data-table/filter-bar.tsx
+  s_9b829d577c7e4c::t_cd4eda72f35999 956,1152,1312
+apps/web/src/ui/data-table/table-meta.ts
+  s_9b829d577c7e4c::t_5f7abc492f7892 206
+apps/web/src/ui/overlays/side-panel.tsx
+  s_9b829d577c7e4c::t_ca717faa388a41 95,450
+apps/web/src/ui/overlays/side-panel.unit.test.tsx
+  s_9b829d577c7e4c::t_15bb8911de262c 85-87
+apps/web/src/ui/primitives/enum-pill.tsx
+  s_9b829d577c7e4c::t_ebddbf22091a96 96,135,156
+packages/schemas/src/entity-definitions/definition.ts
+  s_9b829d577c7e4c::t_1a083e8149fd3e 1,301,532,544
+packages/shared/src/enum-palette.ts
+  s_9b829d577c7e4c::t_5703ec4313f02a 41-42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "42ad52a1562812ab7e302b3cdf50b4aab1fbccf5",
+  "prompts": {},
+  "sessions": {
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
