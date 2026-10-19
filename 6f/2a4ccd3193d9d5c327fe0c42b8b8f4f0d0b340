@@ -1,0 +1,21 @@
+apps/web/src/features/run/agent-transcript.tsx
+  s_1b54b6ab53ca85::t_f145550fb588bc 24-25,30,40
+apps/web/src/ui/text/code-block.tsx
+  s_1b54b6ab53ca85::t_5340ad1fbecbe4 91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6f2a4ccd3193d9d5c327fe0c42b8b8f4f0d0b340",
+  "prompts": {},
+  "sessions": {
+    "s_1b54b6ab53ca85": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "883b92de-9641-440c-9ecf-b2d00a0ded66",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
