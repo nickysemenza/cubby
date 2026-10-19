@@ -75,7 +75,10 @@ import {
   enrichFinancialTransactionsWithVendorInference,
   enrichFinancialTransactionVendorRead,
 } from "~/server/domains/vendor/repo/merchant-vendor-inference";
-import { sourceRefsLabel } from "~/server/entity-kernel/repo/detail-display-labels";
+import {
+  financialAllocationItems,
+  sourceRefsLabel,
+} from "~/server/entity-kernel/repo/detail-display-labels";
 import {
   asActor,
   defineRepository,
@@ -235,6 +238,7 @@ const toOut = (
     sourceRefsLabel: sourceRefsLabel(sourceRefs),
     notes: row.notes,
     allocations,
+    allocationItems: financialAllocationItems(allocations),
     ledgerTransferId: row.ledgerTransferShortcode
       ? parseShortcodeFor("ledgerTransfer", row.ledgerTransferShortcode)
       : null,

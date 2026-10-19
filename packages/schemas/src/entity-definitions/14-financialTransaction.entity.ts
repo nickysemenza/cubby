@@ -4,7 +4,7 @@ import { financialTransactionCoverage } from "../purchase-evidence-policy";
 import { optionalFieldResolutionsSchema } from "../field-resolution";
 import { spendingCategoryShortcode } from "../identifier-fields";
 import { defineEntity } from "./definition.js";
-import { labelField } from "./label-field.js";
+import { displayItemsField, labelField } from "./label-field.js";
 import { plainDate } from "@cubby/schemas/base-entity";
 import {
   financialTransactionAllocations,
@@ -691,6 +691,7 @@ export default defineEntity({
         display: {
           detail: true,
           renderer: { detail: "financial-transaction-allocations" },
+          itemsPath: "allocationItems",
         },
         provenance: {
           kind: "relation",
@@ -875,6 +876,7 @@ export default defineEntity({
       },
       // Server-composed text for the structured detail field above (`display.detailLabelPath`).
       labelField("sourceRefsLabel", "Settlement references"),
+      displayItemsField("allocationItems", "Confirmed allocation display rows"),
       labelField("possibleVendorLabel", "Merchant vendor inference"),
     ],
     storage: [
@@ -1067,6 +1069,7 @@ export default defineEntity({
       "sourceCategory",
       "sourceRefs",
       "sourceRefsLabel",
+      "allocationItems",
       "possibleVendorLabel",
       "notes",
       "allocations",
