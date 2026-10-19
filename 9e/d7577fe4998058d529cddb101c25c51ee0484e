@@ -1,0 +1,89 @@
+apps/web/DESIGN.md
+  s_9b829d577c7e4c::t_edbe4e2dbde841 274
+apps/web/src/features/calendar/calendar-item-row.tsx
+  s_9b829d577c7e4c::t_16d1a3d93305d4 18,86
+apps/web/src/features/calendar/calendar-week-summary.tsx
+  s_9b829d577c7e4c::t_d2b242977791d7 82,86
+apps/web/src/features/collection/collections-index-page.tsx
+  s_9b829d577c7e4c::t_0b48b4a1e26e88 16,179-183,237-243
+apps/web/src/features/expense/charts/money-flow-sankey.tsx
+  s_9b829d577c7e4c::t_38774b25e86331 85,106,152,169,180
+apps/web/src/features/expense/charts/monthly-spend.tsx
+  s_9b829d577c7e4c::t_d9052ae7d2199f 117
+apps/web/src/features/expense/charts/spending-category-breakdown.tsx
+  s_9b829d577c7e4c::t_cf1cddc3758e69 77
+apps/web/src/features/expense/charts/trade-cost-aggregate.tsx
+  s_9b829d577c7e4c::t_593f02ae088bc9 133,218,220,241,276,279
+apps/web/src/features/expense/expense-summary-strip.tsx
+  s_9b829d577c7e4c::t_cdf15bbfab4b19 27
+apps/web/src/features/finance/cash-flow-chart.tsx
+  s_9b829d577c7e4c::t_667a646d927e62 226,230
+apps/web/src/features/finance/cash-flow-view.tsx
+  s_9b829d577c7e4c::t_34d10e1f66c2c8 73
+apps/web/src/features/finance/financial-booking-review.tsx
+  s_9b829d577c7e4c::t_decea5c16ded5e 1-5,12-13,20,34-37,66-67,88-92,150-175,232-233
+apps/web/src/features/home/problems-banner.tsx
+  s_9b829d577c7e4c::t_806509acc1b9e9 1,67-71,78-93
+apps/web/src/features/home/problems-banner.unit.test.tsx
+  s_9b829d577c7e4c::t_57eea964e82289 49-64
+apps/web/src/features/inventory/pantry-view/isometric-pantry.tsx
+  s_9b829d577c7e4c::t_ed2903f1593798 16,61,70,93,99-107
+apps/web/src/features/inventory/pantry-view/use-isometric-pantry.ts
+  s_9b829d577c7e4c::t_48be4d6e01838d 364-368,373,382
+apps/web/src/features/meal/shopping-list-page.tsx
+  s_9b829d577c7e4c::t_a528c7ccb61831 7,118,124
+apps/web/src/features/problems/components/problem-sections.tsx
+  s_9b829d577c7e4c::t_a18270376d9542 626-627
+apps/web/src/features/project/attention-presentation.ts
+  s_9b829d577c7e4c::t_43c9b1511dc4ac 46,54,59
+apps/web/src/features/project/charts/cost-vs-estimate.tsx
+  s_9b829d577c7e4c::t_45b64395eae346 165-166
+apps/web/src/features/project/charts/planned-actual-bar.tsx
+  s_9b829d577c7e4c::t_c237cb5ee17e12 64
+apps/web/src/features/project/charts/trade-activity.tsx
+  s_9b829d577c7e4c::t_99b030452dd172 53,115
+apps/web/src/features/project/needs-attention.tsx
+  s_9b829d577c7e4c::t_5d0949f71d9e64 166
+apps/web/src/features/project/projects-dashboard.tsx
+  s_9b829d577c7e4c::t_d4e0c6ea6fc16d 335,338,352,366,369,650,664
+apps/web/src/features/project/tool-matrix-page.tsx
+  s_9b829d577c7e4c::t_462e5e2c4c6295 237,242,247,916,928
+apps/web/src/features/recipe/cookbook-import/index.tsx
+  s_9b829d577c7e4c::t_04f49a4a994647 40,161-163,1322,1324,1337,1340
+apps/web/src/features/recipe/recipe-detail.tsx
+  s_9b829d577c7e4c::t_b9a9cfec8529f8 219,269,276,283-314
+apps/web/src/features/recipe/recipe-form/index.tsx
+  s_9b829d577c7e4c::t_a71f9cc9b2b8d0 65,76-78,371,404-408
+apps/web/src/features/recipe/recipe-form/unsaved-edits-guard.tsx
+  s_9b829d577c7e4c::t_235c6d6bcd4b05 1-62
+apps/web/src/features/recipe/recipeingredientlist.tsx
+  s_9b829d577c7e4c::t_b6b655ff43f863 644-646
+apps/web/src/routes/_authenticated/labels.tsx
+  s_9b829d577c7e4c::t_61a25e0b8c95e8 125-127
+apps/web/src/server/generic/entity-report/repo/project.ts
+  s_9b829d577c7e4c::t_67646ba769309a 100
+apps/web/src/ui/charts/kit.tsx
+  s_9b829d577c7e4c::t_5be59a590ff9e3 117,305,324,399
+apps/web/tests/e2e/create-recipe-full-flow.spec.ts
+  s_9b829d577c7e4c::t_cf78bc3f38b92b 93-113
+apps/web/tests/e2e/financial-booking-review.spec.ts
+  s_9b829d577c7e4c::t_8ca5b6b1f0b05f 87-92,135-136
+apps/web/src/ui/hooks/use-navigation-guard.ts
+  s_9b829d577c7e4c::t_d54e8018794e95 1-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "9ed7577fe4998058d529cddb101c25c51ee0484e",
+  "prompts": {},
+  "sessions": {
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
