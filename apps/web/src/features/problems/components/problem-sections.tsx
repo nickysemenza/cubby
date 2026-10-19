@@ -523,11 +523,14 @@ function UpcApplyAction({
 
 function MissingEmbeddingsBackfillAction() {
   const backfill = useActionMutation({
-    mutationFn: maintenance.settleAwaitingWork.mutationOptions,
-    success: (data) =>
-      data.publishedEmbeddingTasks > 0
-        ? `Published ${countLabel(data.publishedEmbeddingTasks, "embedding refresh")}.`
-        : "No embeddings needed publishing.",
+    mutationFn: maintenance.run.mutationOptions,
+    success: (data) => (
+      <a className="underline" href={`/runs/${encodeURIComponent(data.runId)}`}>
+        {data.existing
+          ? "Maintenance is already running. View run"
+          : "Maintenance started. View run"}
+      </a>
+    ),
   });
   return (
     <Button
@@ -535,7 +538,7 @@ function MissingEmbeddingsBackfillAction() {
       onClick={() => backfill.mutate(undefined)}
       disabled={backfill.isPending}
     >
-      {backfill.isPending ? "Publishing…" : "Backfill all"}
+      {backfill.isPending ? "Starting…" : "Run maintenance"}
     </Button>
   );
 }
@@ -1454,6 +1457,26 @@ const DECLARED_SECTIONS = [
       // than leaving a card that is a title and a button.
       fields: facts(fact("Sub-recipe", "Deleted", "destructive")),
       route: entityDetailLink("recipe", recipe.id),
+    }),
+  }),
+  section({
+    id: "image-metadata-outcomes",
+    label: "EXIF/GPS extraction",
+    select: (p) => p.imageMetadataOutcomes,
+    problemKeys: ["imageMetadataOutcomes"],
+    entity: "image",
+    renderItem: (item) => ({
+      title: item.name,
+      subtitle:
+        item.outcome === "original_missing"
+          ? "Original missing in storage"
+          : "Extraction kept failing",
+      details: [
+        <div key="error" className="font-mono text-xs text-muted-foreground">
+          {item.error}
+        </div>,
+      ],
+      route: entityDetailLink("image", item.id),
     }),
   }),
   section({

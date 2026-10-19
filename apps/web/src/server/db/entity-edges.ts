@@ -139,6 +139,7 @@ import {
   photoGroupProposal,
   photoRunImage,
   runPushRegistration,
+  runStep,
   product,
   productCategory,
   spendingCategory,
@@ -1594,6 +1595,26 @@ export const ENTITY_EDGES = {
       label: "child runs",
       description: "Work caused by this Run, distinct from its retry attempts.",
       liveness: { kind: "must-target-live" },
+    },
+    "RunStep.runId": {
+      column: runStep.runId,
+      role: "owned-child",
+      label: "steps",
+      description:
+        "One ordered step of this step-ledger Run (a backlog or a Suggestion family); deleting the Run removes it.",
+      liveness: { kind: "must-target-live" },
+    },
+    "RunStep.childRunId": {
+      column: runStep.childRunId,
+      role: "history",
+      label: "step child runs",
+      description:
+        "The child Run a step-ledger step delegated its work to; the parent step keeps its counts if the child is removed.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "A step's recorded counts outlive its child Run, which may be pruned.",
+      },
     },
     "RunOperation.runId": {
       column: runOperation.runId,

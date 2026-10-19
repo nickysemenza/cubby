@@ -19,6 +19,7 @@ const runReport =
   );
 
 export const runReportSlots = {
+  steps: runReport("run.steps"),
   "live-progress": runReport("run.live-progress"),
   "import-stats": runReport("run.import-stats"),
   "import-progress-live": runReport("run.import-progress-live"),
@@ -42,8 +43,8 @@ export function RunSuggestions({ record }: { record: RunOut }) {
         status={record.status}
       />
       <Link
-        to="/ai"
-        search={{ tab: "review", runId: record.id }}
+        to="/suggestions"
+        search={{ runId: record.id }}
         className="text-sm font-medium text-primary underline-offset-2 hover:underline"
       >
         Review this sweep's Suggestions

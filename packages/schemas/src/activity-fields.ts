@@ -17,8 +17,22 @@ export const runPurpose = z.enum([
   "mail_search",
   "mail_discovery",
   "mail_reclassify",
+  // Step-ledger purposes: one ordered RunStep per backlog or Suggestion family.
+  "maintenance",
+  "sweep",
 ]);
 export type RunPurpose = z.infer<typeof runPurpose>;
+
+/** Run purposes whose progress is an ordered RunStep ledger. */
+export const STEP_RUN_PURPOSES = [
+  "maintenance",
+  "sweep",
+] as const satisfies readonly RunPurpose[];
+export type StepRunPurpose = (typeof STEP_RUN_PURPOSES)[number];
+export const isStepRunPurpose = (
+  purpose: RunPurpose | string,
+): purpose is StepRunPurpose =>
+  STEP_RUN_PURPOSES.some((candidate) => candidate === purpose);
 
 /** Report presentation only; agent execution and discovery purposes are separate capabilities. */
 export const IMPORT_REPORT_RUN_PURPOSES = [
@@ -72,6 +86,8 @@ export const RUN_PURPOSE_LABEL = {
   mail_search: "Mail search",
   mail_discovery: "Mail discovery",
   mail_reclassify: "Email reclassification",
+  maintenance: "Maintenance",
+  sweep: "Sweep",
 } as const satisfies Record<RunPurpose, string>;
 
 /** The Runs list's name for each kind of work, for rows and the kind filter. */

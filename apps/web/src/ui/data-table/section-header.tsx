@@ -1,5 +1,6 @@
 import { EyeSlashIcon } from "@phosphor-icons/react/dist/csr/EyeSlash";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
+import type { ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
 
@@ -16,6 +17,10 @@ interface SectionHeaderProps {
   onFilter?: () => void;
   /** "Hide": excludes the section's value, keeping the grouping. */
   onHide?: () => void;
+  /** Beside the label and count: a record link the plain label cannot carry. */
+  aside?: ReactNode;
+  /** The section's own commands, always visible at the trailing edge. */
+  actions?: ReactNode;
   className?: string;
 }
 
@@ -32,6 +37,8 @@ export function SectionHeader({
   count,
   onFilter,
   onHide,
+  aside,
+  actions,
   className,
 }: SectionHeaderProps) {
   return (
@@ -48,7 +55,10 @@ export function SectionHeader({
       <span className="text-xs text-muted-foreground tabular-nums">
         {count}
       </span>
-      {onFilter || onHide ? (
+      {aside ? (
+        <div className="flex min-w-0 items-center gap-2 text-xs">{aside}</div>
+      ) : null}
+      {onFilter || onHide || actions ? (
         <div className="ml-auto flex items-center gap-0.5">
           {onFilter ? (
             <button type="button" onClick={onFilter} className={ACTION_CLASS}>
@@ -64,6 +74,7 @@ export function SectionHeader({
               <span className="sr-only">: {title}</span>
             </button>
           ) : null}
+          {actions}
         </div>
       ) : null}
     </div>

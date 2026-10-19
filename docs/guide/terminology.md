@@ -659,8 +659,8 @@ household fact.
 
 **Connection candidate**:
 A proposed, specifically named relationship between existing records, with
-evidence and an explicit effect of acceptance. It is an Assessment, not a
-generic similarity link. [Connection discovery](entity-connections.md) owns
+evidence and an explicit effect of acceptance. It is a Suggestion backed by an
+Assessment, not a generic similarity link. [Connection discovery](entity-connections.md) owns
 discovery and review behavior.
 
 **Acquisition candidate**:
@@ -721,8 +721,37 @@ classification choices, not a standing instruction to hide the result.
 _Avoid_: dismissal (a presentation preference, not a correctness verdict)
 
 **Sweep**:
-A bulk pass that computes Suggestions across a filtered set of records.
-_Avoid_: backfill (when the work produces Suggestions rather than derived data)
+A bulk pass that computes Suggestions across a filtered set of records. A
+member's "Find suggestions" starts one Sweep across every Suggestion family in
+scope, with one part per family; automatic passes are Sweeps too.
+_Avoid_: backfill (when the work produces Suggestions rather than derived data),
+discovery (outside the connection code path)
+
+**Suggestions page**:
+The one place to review pending Suggestions of every family without opening
+each record, with each family's evidence beside its review actions.
+_Avoid_: inbox, review queue
+
+**Strength**:
+How well a Suggestion's evidence supports it: strong, medium or weak, judged by
+its family from that family's own evidence. Model confidence alone never makes a
+Suggestion strong.
+_Avoid_: quality (a record's completeness), score
+
+**Impact**:
+The record Quality a Suggestion would restore if accepted, from the
+data-quality checks its family says acceptance resolves.
+
+**Automatic rule**:
+A named, versioned family rule that applies matching Suggestions without
+review. A member turns it on only after reviewed matches show it is precise
+enough. It turns itself off when audit reviews show its precision dropping.
+Every change it makes stays visible as applied automatically.
+_Avoid_: auto-apply threshold, confidence cutoff
+
+**Audit sample**:
+The share of an Automatic rule's matches held for review instead of applied,
+so the rule's precision stays measured.
 
 ## Purchase research
 

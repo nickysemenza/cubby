@@ -177,7 +177,9 @@ For native relationships, use `gh issue create --parent <number>` or
 --parent <parent-number>` or `--add-blocked-by <blocker-number>`; remove obsolete
 relationships explicitly. A dependency does not automatically change Readiness.
 Relates to currently requires the UI or the [related-issue API](https://docs.github.com/en/rest/issues/issues#add-a-related-issue);
-the API's target `issue_id` is an internal numeric ID, not the issue number.
+use `gh api -X POST repos/nickysemenza/cubby/issues/<number>/relates_to -F issue_id=<id>`
+(the path is `relates_to`, not `related`). Its `issue_id` is the target's internal
+numeric `id` from `gh api repos/nickysemenza/cubby/issues/<n> --jq .id`, not its number.
 Keep updates on the existing issue rather than creating a parallel task.
 
 Before opening the PR, compare the implemented outcome and validation against

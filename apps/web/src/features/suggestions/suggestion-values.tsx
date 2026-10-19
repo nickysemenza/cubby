@@ -1,0 +1,250 @@
+import { entityFieldByKey } from "@cubby/schemas/entity-fields";
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { entitySummary } from "@cubby/schemas/entity-summary";
+import { SWEEP_FAMILY_LABEL } from "@cubby/schemas/run-fields";
+import type { StatementTransactionAction } from "@cubby/schemas/statement-suggestion";
+import type {
+  SuggestionImpact,
+  SuggestionListFamily,
+  SuggestionListRow,
+  SuggestionRecordRef,
+  SuggestionStrength,
+} from "@cubby/schemas/suggestion-list";
+import { humanize } from "@cubby/shared";
+import { match } from "ts-pattern";
+
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { renderSuggestedListFieldValue } from "~/entity/display/entity-display";
+import { formatCurrency } from "~/lib/number-format";
+import { cn } from "~/lib/utils";
+import { StackedValue } from "~/ui/common/stacked-value";
+import { Badge } from "~/ui/primitives/badge";
+import { NoneValue } from "~/ui/primitives/none-value";
+
+export const FAMILY_LABEL = {
+  statement_transaction: "Statement",
+  recommendation: "Connection",
+  field: "Field",
+} satisfies Record<SuggestionListFamily, string>;
+
+/** Chip order on the page: the family most often bulk-reviewed first. */
+export const FAMILY_CHIPS = (
+  ["statement_transaction", "recommendation", "field"] as const
+).map((family) => ({ family, label: SWEEP_FAMILY_LABEL[family] }));
+
+const STRENGTH_BARS = { strong: 3, medium: 2, weak: 1 } as const;
+
+/** Strength as three bars with its word for assistive tech and hover. */
+export function StrengthMark({ strength }: { strength: SuggestionStrength }) {
+  const filled = STRENGTH_BARS[strength];
+  return (
+    <span
+      className="inline-flex items-center gap-1.5"
+      title={`${humanize(strength)} evidence`}
+    >
+      <span aria-hidden className="inline-flex gap-0.5">
+        {[1, 2, 3].map((bar) => (
+          <i
+            key={bar}
+            className={cn(
+              "block h-2.5 w-1 rounded-[1px]",
+              bar <= filled ? "bg-foreground" : "bg-border",
+            )}
+          />
+        ))}
+      </span>
+      <span className="text-xs text-muted-foreground">
+        {humanize(strength)}
+      </span>
+    </span>
+  );
+}
+
+export function CleanBadge({ clean }: { clean: boolean }) {
+  return clean ? (
+    <Badge variant="positive">Clean</Badge>
+  ) : (
+    <span className="text-xs text-muted-foreground">Needs review</span>
+  );
+}
+
+/** DESIGN.md action channel: create blue, attach graphite inset, change ochre, remove destructive. */
+const ACTION_PRESENTATION = {
+  create: {
+    label: "Create",
+    className: "bg-action-create-surface text-action-create",
+  },
+  attach: {
+    label: "Attach",
+    className: "bg-action-link-surface text-action-link",
+  },
+  supersede: {
+    label: "Settle hold",
+    className: "bg-action-change-surface text-action-change",
+  },
+  void: {
+    label: "Void hold",
+    className: "bg-destructive/10 text-action-remove",
+  },
+} satisfies Record<
+  StatementTransactionAction,
+  { label: string; className: string }
+>;
+
+export function ActionBadge({
+  action,
+}: {
+  action: StatementTransactionAction;
+}) {
+  const presentation = ACTION_PRESENTATION[action];
+  return (
+    <Badge variant="secondary" className={presentation.className}>
+      {presentation.label}
+    </Badge>
+  );
+}
+
+/** What accepting restores or risks, each as its server-worded label. */
+export function ImpactLabels({ impact }: { impact: SuggestionImpact[] }) {
+  if (!impact.length) return <NoneValue />;
+  return (
+    <span className="inline-flex min-w-0 flex-wrap gap-1">
+      {impact.map((item) => (
+        <Badge
+          key={`${item.kind}:${item.label}`}
+          variant={item.kind === "caution" ? "warning" : "outline"}
+        >
+          {item.label}
+        </Badge>
+      ))}
+    </span>
+  );
+}
+
+/** A record by shortcode, always as its named link with the entity's mark. */
+export function RecordLink({
+  record,
+  wrap,
+}: {
+  record: SuggestionRecordRef;
+  wrap?: boolean;
+}) {
+  return (
+    <EntityRefLink
+      variant="byId"
+      entityKind={record.entity}
+      entityId={record.id}
+      compact={!wrap}
+      wrap={wrap}
+    />
+  );
+}
+
+export const fieldLabel = (entity: ShortcodeEntity, field: string) =>
+  entityFieldByKey(entity, field)?.label ?? field;
+
+/**
+ * A stored or proposed field value as its list cell renders it: a category
+ * as its full-path pill, a reference as its record link, an enum by label.
+ * `suggested` gives the value the quiet dashed suggestion boundary.
+ */
+export function FieldValue({
+  entity,
+  recordId,
+  field,
+  value,
+  suggested = false,
+}: {
+  entity: ShortcodeEntity;
+  recordId: string;
+  field: string;
+  value: unknown;
+  suggested?: boolean;
+}) {
+  if (value === null || value === undefined || value === "")
+    return <NoneValue />;
+  return (
+    <span
+      className={cn(
+        "inline-flex min-w-0",
+        suggested && "[&_.border]:border-dashed",
+      )}
+    >
+      {renderSuggestedListFieldValue(
+        entity,
+        { id: recordId },
+        field,
+        // SAFETY: a stored field value is JSON by the evidence schema.
+        value as Parameters<typeof renderSuggestedListFieldValue>[3],
+      )}
+    </span>
+  );
+}
+
+/** The change one Suggestion makes, in its family's own words. */
+export function WhatChanges({ row }: { row: SuggestionListRow }) {
+  return match(row)
+    .with({ family: "field" }, ({ evidence }) => (
+      <span className="inline-flex min-w-0 items-center gap-1.5">
+        <span className="shrink-0 text-muted-foreground">
+          {entitySummary[evidence.entity].singular} ·{" "}
+          {fieldLabel(evidence.entity, evidence.field)}
+        </span>
+        {evidence.kind === "correction" ? (
+          <>
+            <FieldValue
+              entity={evidence.entity}
+              recordId={evidence.recordId}
+              field={evidence.field}
+              value={evidence.currentValue}
+            />
+            <span aria-label="becomes" className="text-muted-foreground">
+              →
+            </span>
+          </>
+        ) : null}
+        <FieldValue
+          entity={evidence.entity}
+          recordId={evidence.recordId}
+          field={evidence.field}
+          value={evidence.suggestedValue}
+          suggested
+        />
+      </span>
+    ))
+    .with({ family: "statement_transaction" }, ({ evidence }) => (
+      <span className="inline-flex min-w-0 items-center gap-1.5">
+        <ActionBadge action={evidence.recommended} />
+        <span className="tabular-nums">{formatCurrency(evidence.amount)}</span>
+        {row.other ? (
+          <>
+            <span className="text-muted-foreground">
+              {evidence.recommended === "attach" ? "to" : "·"}
+            </span>
+            <RecordLink record={row.other} />
+          </>
+        ) : null}
+      </span>
+    ))
+    .with({ family: "recommendation" }, ({ evidence }) => (
+      <span className="inline-flex min-w-0 items-center gap-1.5">
+        <span className="shrink-0 text-muted-foreground">{evidence.label}</span>
+        {row.other ? <RecordLink record={row.other} /> : null}
+      </span>
+    ))
+    .exhaustive();
+}
+
+/** Statement rows name the charge; other families name their record. */
+export function SuggestionRecord({ row }: { row: SuggestionListRow }) {
+  if (row.family === "statement_transaction") {
+    const charge = row.evidence;
+    return (
+      <StackedValue
+        primary={charge.merchant ?? charge.rawDescription}
+        secondary={<RecordLink record={row.record} />}
+      />
+    );
+  }
+  return <RecordLink record={row.record} />;
+}

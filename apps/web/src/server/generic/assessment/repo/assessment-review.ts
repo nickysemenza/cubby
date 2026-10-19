@@ -7,6 +7,10 @@ import {
   assessmentReviewOut,
   type AssessmentFamily,
 } from "@cubby/schemas/assessment";
+import {
+  AUTOMATIC_RULE_FAMILIES,
+  type AutomaticRuleKey,
+} from "@cubby/schemas/automatic-rule";
 import { correctEmailRelevanceInput } from "@cubby/schemas/email-actions";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { statementTransactionApplication } from "@cubby/schemas/statement-suggestion";
@@ -45,6 +49,18 @@ import {
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 type Review = z.infer<typeof assessmentReviewInput>;
+
+/**
+ * Internal only, set by `applyAutomaticRules` with the system actor: no
+ * public schema carries it. It records `automatic` Feedback naming the rule.
+ */
+export type AutomaticReview = {
+  authority: "automatic";
+  rule: { key: AutomaticRuleKey; revision: string; stamp: string };
+};
+const automaticReviewInput = assessmentReviewInput.extend({
+  operationId: z.string().regex(/^automatic:/),
+});
 function emailRelevanceApplication(
   subject: z.infer<typeof assessmentSubjects.email_relevance>,
   input: Review,
@@ -70,6 +86,7 @@ type Handler = {
     context: EntityKernelContext,
     state: typeof assessmentState.$inferSelect,
     input: Review,
+    automatic: AutomaticReview | null,
   ) => Promise<z.infer<typeof assessmentReviewOut>["applicationResult"] | void>;
 };
 /** Each family validates its own subject and uses its transaction-bound domain mutation. */
@@ -79,9 +96,17 @@ const assessmentFamilies = {
     target: assessmentProjectionTargets.field,
     transactionBound: true,
     actions: ["correct", "wrong", "uncertain", "dismissed"],
-    apply: async (db, context, state, input) => {
+    apply: async (db, context, state, input, automatic) => {
+      // The automatic mode keeps acceptSuggestion's requiresSuggestionReview refusal.
       if (input.verdict === "correct" && !input.correction.present)
-        await acceptSuggestion(db, context, { id: state.id });
+        await acceptSuggestion(
+          db,
+          context,
+          { id: state.id },
+          automatic
+            ? { mode: "automatic", confidence: state.confidence }
+            : undefined,
+        );
       else if (input.correction.present)
         await applyFieldCorrection(db, context, {
           id: state.id,
@@ -307,13 +332,77 @@ const assessmentFamilies = {
   },
 } satisfies Record<AssessmentFamily, Handler>;
 
-/** History settles first. A stale or refused application cannot erase the review. */
+/**
+ * History settles first. A stale or refused application cannot erase the
+ * review. An automatic application is the exception: nobody reviewed it, so
+ * a refusal leaves no Feedback at all.
+ */
 export async function reviewAssessment(
   db: Database,
   context: EntityKernelContext,
   raw: z.input<typeof assessmentReviewInput>,
+  automatic?: AutomaticReview,
 ) {
-  const input = assessmentReviewInput.parse(raw);
+  if (!automatic) {
+    const input = assessmentReviewInput.parse(raw);
+    const { recheckAutomaticRules } =
+      await import("~/server/generic/assessment/repo/automatic-rule-runtime");
+    try {
+      const outcome = await settleReview(db, context, input, null);
+      await recheckAutomaticRules(db, outcome.assessmentId);
+      return outcome;
+    } catch (error) {
+      // The member's Feedback committed before a refused application; its Miss
+      // still counts toward the rule, so drift is checked before the raw error.
+      if (input.assessmentId)
+        await recheckAutomaticRules(db, input.assessmentId);
+      throw error;
+    }
+  }
+  const input = automaticReviewInput.parse(raw);
+  if (
+    !input.assessmentId ||
+    input.verdict !== "correct" ||
+    input.intent !== "apply" ||
+    input.correction.present ||
+    input.suppression
+  )
+    throw new Error("An Automatic rule only accepts an Assessment as is");
+  const { assertAutomaticRuleOn } =
+    await import("~/server/generic/assessment/repo/automatic-rule-runtime");
+  return withTransactionDatabase(db, async (transactionDb) => {
+    await assertAutomaticRuleOn(
+      transactionDb,
+      automatic.rule.key,
+      automatic.rule.stamp,
+    );
+    return settleReview(
+      transactionDb,
+      { ...context, db: transactionDb },
+      input,
+      automatic,
+    );
+  });
+}
+
+function assertReviewAction(
+  name: AssessmentFamily,
+  verdict: Review["verdict"],
+  automatic: AutomaticReview | null,
+) {
+  if (automatic && !AUTOMATIC_RULE_FAMILIES.some((rule) => rule === name))
+    throw new Error(`${name} Assessments have no Automatic rule; review them`);
+  if (!assessmentFamilies[name].actions.some((action) => action === verdict))
+    throw new Error(`Unsupported ${name} review action ${verdict}`);
+}
+
+async function settleReview(
+  db: Database,
+  context: EntityKernelContext,
+  input: Review,
+  automatic: AutomaticReview | null,
+) {
+  const authority = automatic ? "automatic" : "member";
   let prediction: typeof assessment.$inferSelect | undefined;
   if (input.assessmentId)
     [prediction] = await getDb(db)
@@ -355,10 +444,7 @@ export async function reviewAssessment(
   if (!prediction) throw new Error("Assessment not found");
   const family = assessmentFamilies[prediction.family];
   family.subject.parse(prediction.subject);
-  if (!family.actions.some((action) => action === input.verdict))
-    throw new Error(
-      `Unsupported ${prediction.family} review action ${input.verdict}`,
-    );
+  assertReviewAction(prediction.family, input.verdict, automatic);
   if (input.suppression) {
     if (
       !["dismissed", "wrong"].includes(input.verdict) ||
@@ -457,12 +543,13 @@ export async function reviewAssessment(
   const event = await recordFeedback(db, {
     ...input,
     assessmentId: prediction.id,
-    authority: "member",
+    authority,
     actorUserId: context.actorContext.userId,
     metadata: {
       kind: "assessment_review",
       application: input.application ?? null,
       expectedFingerprint: input.expectedFingerprint ?? null,
+      ...(automatic && { rule: automatic.rule }),
     },
   });
   if (input.intent === "draft") {
@@ -556,6 +643,7 @@ export async function reviewAssessment(
           { ...context, db: transactionDb },
           state,
           input,
+          automatic,
         );
         if (applicationResult) outcome.applicationResult = applicationResult;
         if (!family.transactionBound)
@@ -574,12 +662,13 @@ export async function reviewAssessment(
         operationId: `command-application:${input.operationId}`,
         verdict: "ungraded",
         intent: "apply",
-        authority: "member",
+        authority,
         actorUserId: context.actorContext.userId,
         receipt: outcome,
         metadata: {
           kind: "assessment_application",
           commandFeedbackId: event.id,
+          ...(automatic && { rule: automatic.rule }),
         },
       });
       return outcome;

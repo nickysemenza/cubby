@@ -61,7 +61,8 @@ export const reportSlots = [
   "purchase.project-allocation",
   "purchase.financial-settlement",
   "expense.settlement",
-  // A Run's detail: progress, findings, transcript, log, AI usage and changes.
+  // A Run's detail: steps, progress, findings, transcript, log, AI usage and changes.
+  "run.steps",
   "run.live-progress",
   "run.import-stats",
   "run.import-progress-live",
@@ -257,6 +258,12 @@ export const reportCommandRequest = z.discriminatedUnion("kind", [
     kind: z.literal("run-control"),
     runId: runShortcode,
     action: runControlAction,
+  }),
+  /** Re-admit one step's failures and relaunch its step-ledger Run (`run.retryStep`). */
+  z.object({
+    kind: z.literal("retry-run-step"),
+    runId: runShortcode,
+    stepKey: z.string().min(1),
   }),
   z.object({
     kind: z.literal("resolve-finding"),

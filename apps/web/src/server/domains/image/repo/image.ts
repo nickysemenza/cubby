@@ -33,6 +33,7 @@ import {
 import {
   imageProvenanceEvidence,
   imageSourceEvidence,
+  type ImageMetadataOutcome,
   type ImageProvenanceEvidence,
 } from "@cubby/schemas/image-capture-fields";
 import type { ImageSightingOut } from "@cubby/schemas/image-sighting";
@@ -389,7 +390,7 @@ export const attachExistingImageToEntity = async (
  * Project a just-inserted Image (and its direct owners) and queue the
  * embedding. Image repository writes opt out of kernel side effects
  * (`sideEffects: false`), so without this an upload is invisible to
- * `settleAwaitingWork`, which only repairs already-projected documents.
+ * the maintenance embeddings step, which only repairs already-projected documents.
  */
 const projectNewImage = async (db: Database, imageId: string) => {
   await refreshCapturedImageSearchOwnerRefs(
@@ -2601,12 +2602,15 @@ export const countImagesMissingDimensions = async (
 /** `Image.metadataRevision IS DISTINCT FROM IMAGE_METADATA_REVISION` is the
  * `image-metadata.extract` stale marker: `NULL` (never extracted) and any
  * older revision number are both candidates, and `IS DISTINCT FROM` (not
- * `<>`) is what makes `NULL` compare as distinct rather than unknown. */
+ * `<>`) is what makes `NULL` compare as distinct rather than unknown. A row
+ * with a terminal `metadataOutcome` has left the backlog until a retry clears
+ * it, so it can never pin the head of the selection order. */
 const metadataExtractionCandidateWhere = and(
   eq(image.status, "UPLOADED"),
   notDeleted(image),
   like(image.contentType, "image/%"),
   sql`${image.metadataRevision} IS DISTINCT FROM ${IMAGE_METADATA_REVISION}`,
+  isNull(image.metadataOutcome),
 );
 
 export interface ImageMetadataExtractionRow {
@@ -2615,17 +2619,39 @@ export interface ImageMetadataExtractionRow {
   contentType: string;
 }
 
+export type ImageMetadataCursor = { createdAt: string; id: string };
+
+/** One keyset page of the EXIF/GPS backlog, oldest first. */
 export async function selectImagesForMetadataExtraction(
   db: Database,
   limit: number,
-): Promise<ImageMetadataExtractionRow[]> {
+  after?: ImageMetadataCursor | null,
+): Promise<
+  Array<ImageMetadataExtractionRow & { cursor: ImageMetadataCursor }>
+> {
   const rows = await getDb(db)
-    .select({ id: image.id, key: image.key, contentType: image.contentType })
+    .select({
+      id: image.id,
+      key: image.key,
+      contentType: image.contentType,
+      createdAt: sql<string>`${image.createdAt}::text`,
+    })
     .from(image)
-    .where(metadataExtractionCandidateWhere)
+    .where(
+      and(
+        metadataExtractionCandidateWhere,
+        after
+          ? sql`(${image.createdAt}, ${image.id}) > (${after.createdAt}::timestamp, ${after.id}::uuid)`
+          : undefined,
+      ),
+    )
     .orderBy(asc(image.createdAt), asc(image.id))
     .limit(limit);
-  return rows.map((row) => ({ ...row, id: parseEntityId("image", row.id) }));
+  return rows.map(({ createdAt, ...row }) => ({
+    ...row,
+    id: parseEntityId("image", row.id),
+    cursor: { createdAt, id: row.id },
+  }));
 }
 
 export async function countImagesStaleMetadata(db: Database): Promise<number> {
@@ -2634,6 +2660,82 @@ export async function countImagesStaleMetadata(db: Database): Promise<number> {
     .from(image)
     .where(metadataExtractionCandidateWhere);
   return row?.count ?? 0;
+}
+
+/** Takes a still-stale row out of the backlog, keeping its raw error. */
+export async function markImageMetadataOutcome(
+  db: Database,
+  imageId: ImageId,
+  outcome: ImageMetadataOutcome,
+  error: string,
+): Promise<boolean> {
+  const [marked] = await getDb(db)
+    .update(image)
+    .set({ metadataOutcome: outcome, metadataError: error })
+    .where(and(eq(image.id, imageId), metadataExtractionCandidateWhere))
+    .returning({ id: image.id });
+  return Boolean(marked);
+}
+
+/** Re-admits terminal rows to the backlog; returns the ids re-admitted. */
+export async function clearImageMetadataOutcomes(
+  db: Database,
+  imageIds: readonly ImageId[],
+): Promise<ImageId[]> {
+  if (!imageIds.length) return [];
+  const rows = await getDb(db)
+    .update(image)
+    .set({ metadataOutcome: null, metadataError: null })
+    .where(
+      and(inArray(image.id, [...imageIds]), isNotNull(image.metadataOutcome)),
+    )
+    .returning({ id: image.id });
+  return rows.map((row) => parseEntityId("image", row.id));
+}
+
+const metadataOutcomeWhere = and(
+  eq(image.status, "UPLOADED"),
+  notDeleted(image),
+  isNotNull(image.metadataOutcome),
+);
+
+export async function countImageMetadataOutcomes(
+  db: Database,
+): Promise<Record<ImageMetadataOutcome, number>> {
+  const rows = await getDb(db)
+    .select({ outcome: image.metadataOutcome, count: count() })
+    .from(image)
+    .where(metadataOutcomeWhere)
+    .groupBy(image.metadataOutcome);
+  const counts = { original_missing: 0, extraction_failed: 0 };
+  for (const row of rows) if (row.outcome) counts[row.outcome] = row.count;
+  return counts;
+}
+
+/** Live images whose EXIF/GPS extraction ended without metadata. */
+export async function listImageMetadataOutcomes(db: Database) {
+  const rows = await getDb(db)
+    .select({
+      id: image.shortcode,
+      filename: image.filename,
+      outcome: image.metadataOutcome,
+      error: image.metadataError,
+    })
+    .from(image)
+    .where(metadataOutcomeWhere)
+    .orderBy(asc(image.createdAt), asc(image.id));
+  return rows.flatMap(({ id, outcome, error, filename }) =>
+    outcome
+      ? [
+          {
+            id: parseShortcodeFor("image", id),
+            name: filename ?? "(unnamed image)",
+            outcome,
+            error: error ?? "",
+          },
+        ]
+      : [],
+  );
 }
 
 // Hand-qualified `"Image"."id"`: an interpolated column renders unqualified on
@@ -2647,7 +2749,7 @@ const missingSearchDocumentWhere = and(
   )`,
 );
 
-/** Live images with no live SearchDocument, which `settleAwaitingWork` cannot see. */
+/** Live images with no live SearchDocument, which the maintenance embeddings step cannot see. */
 export async function selectImageIdsMissingSearchDocument(
   db: Database,
   options: { afterId?: string; limit: number },

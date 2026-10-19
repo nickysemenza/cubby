@@ -64,6 +64,7 @@ import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
+import type { AuditSampler } from "~/server/generic/assessment/repo/automatic-rules";
 import { fieldReviewIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/audit-log";
 import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -88,9 +89,8 @@ import {
   storeAiEvaluationResult,
 } from "../repo/ai-work-state";
 import {
-  connectionDiscoveryRecords,
   connectionSourceFingerprint,
-  scheduleConnectionRefresh,
+  countConnectionSweepSources,
 } from "../repo/connection-refresh";
 import { systemActor } from "../repo/ensure-run";
 import {
@@ -108,6 +108,8 @@ export type AiRefreshPorts = {
     >[2],
     "triage" | "relevance" | "storage"
   >;
+  /** Test seam: the Automatic rule audit sample, so outcomes never ride on random ids. */
+  auditSample?: AuditSampler;
 };
 const log = createLogger("ai-refresh");
 const jsonSnapshot = (value: unknown) =>
@@ -292,33 +294,28 @@ const fieldCursorFor = (pending: readonly FieldRefreshCursor[]) =>
 const emailCursorFor = (rows: readonly { item: { id: string } }[]) =>
   rows.length === EMAIL_RECLASSIFY_LIMIT * 2 ? rows.at(-1)!.item.id : null;
 
+/**
+ * Connection coverage is one routine Sweep per discovery generation: a
+ * visible Run with its own step, instead of one Run per record. Sources
+ * already evaluated under their current fingerprint are skipped by it.
+ */
 async function scheduleConnectionDiscovery(
   db: Database,
   cursor: Awaited<ReturnType<typeof readAiDiscoveryCursor>>,
-  ports: AiRefreshPorts,
 ) {
-  const rows = cursor.connectionDone
-    ? []
-    : await connectionDiscoveryRecords(
-        db,
-        cursor.connection,
-        EMAIL_RECLASSIFY_LIMIT,
-      );
-  const runs: string[] = [];
-  for (const row of rows) {
-    const run = await scheduleConnectionRefresh(
-      db,
-      row.source,
-      ports.context?.actorContext,
-    );
-    if (run) runs.push(run);
+  if (cursor.connectionDone || !(await countConnectionSweepSources(db)))
+    return { done: true, cursor: null };
+  try {
+    const { startRoutineSweep } = await import("./sweep");
+    await startRoutineSweep(db, "recommendation");
+  } catch (error) {
+    // Still done: a pending connection pass would hold the generation open
+    // and stall field and product rediscovery. The next generation retries.
+    log.error("Connection discovery Sweep failed to start", {
+      error: scrubErrorMessage(String(error)),
+    });
   }
-  return {
-    runs,
-    done: cursor.connectionDone || rows.length < EMAIL_RECLASSIFY_LIMIT,
-    cursor:
-      rows.length === EMAIL_RECLASSIFY_LIMIT ? (rows.at(-1)?.id ?? null) : null,
-  };
+  return { done: true, cursor: null };
 }
 
 /** Preparation enumerates evidence using live renderers; no model calls happen here. */
@@ -552,12 +549,7 @@ export async function discoverAiRefresh(
     ports,
   );
   for (const productRun of productDiscovery.runs) runs.add(productRun);
-  const connectionDiscovery = await scheduleConnectionDiscovery(
-    db,
-    cursor,
-    ports,
-  );
-  for (const connectionRun of connectionDiscovery.runs) runs.add(connectionRun);
+  const connectionDiscovery = await scheduleConnectionDiscovery(db, cursor);
   await saveAiDiscoveryCursor(db, {
     revision: activation.revision,
     productDone: productDiscovery.productDone,
@@ -811,15 +803,12 @@ export async function executeAiRefreshTarget(
       const model = snapshot.decisionModel;
       const entry = decision
         ? makeSweepSuggestion({
-            entity: snapshot.entity,
-            field: snapshot.field,
             currentValue: snapshot.currentValue,
             decision: {
               value: decision.value,
               confidence: decision.probability ?? 0,
             },
             model,
-            pinnedModel: model,
           })
         : null;
       const applicationFailures: string[] = [];
@@ -835,6 +824,7 @@ export async function executeAiRefreshTarget(
           predecessorIds: target.assessmentIds,
           evaluationId: id,
           provenance: saved.provenance,
+          rules: { pinnedModel: model, auditSample: ports.auditSample },
         },
         entry
           ? [
@@ -842,11 +832,6 @@ export async function executeAiRefreshTarget(
                 ...entry,
                 reviewKey: saved.reviewKey,
                 model: saved.provenance.model ?? entry.model,
-                status:
-                  saved.provenance.model &&
-                  saved.provenance.model !== snapshot.decisionModel
-                    ? "pending"
-                    : entry.status,
               },
             ]
           : [],

@@ -75,6 +75,7 @@ const STATIC_TRACE_ROUTES = new Set([
   "/settings",
   "/statement-rows",
   "/statement-rows/import",
+  "/suggestions",
   "/terms",
   "/tools",
   "/work-queue",

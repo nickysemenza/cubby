@@ -303,7 +303,8 @@ export async function commitStatementCsv(
     selected,
   );
   // Rows left unmatched by this commit become Transaction suggestions.
-  if (evidence && importId) await scheduleStatementSuggestions(db, importId);
+  if (evidence && importId)
+    await scheduleStatementSuggestions(db, importId, actor);
   return {
     transactions,
     attached,

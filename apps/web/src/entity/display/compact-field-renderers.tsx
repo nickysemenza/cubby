@@ -1,23 +1,36 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { productCategoryShortcode } from "@cubby/schemas/identifiers";
 import type { ProductListItem } from "@cubby/schemas/product";
 import { productCategorySummary } from "@cubby/schemas/product-category-fields";
 import type { ReactNode } from "react";
 import { z } from "zod";
 
-import { CategoryLabel } from "~/entity/presentation/category-label";
+import {
+  CategoryLabel,
+  CategoryLabelById,
+} from "~/entity/presentation/category-label";
 import { NoneValue } from "~/ui/primitives/none-value";
 
+/** `label`: a value's known display name, shown while its record resolves. */
+type CompactFieldContext = { label?: string };
 type CompactFieldRenderer = <TRecord extends object>(
   record: TRecord,
+  context?: CompactFieldContext,
 ) => ReactNode | undefined;
 
 function checkedRenderer<TSchema extends z.ZodType>(
   schema: TSchema,
-  render: (record: z.output<TSchema>) => ReactNode,
+  render: (
+    record: z.output<TSchema>,
+    context: CompactFieldContext,
+  ) => ReactNode,
 ): CompactFieldRenderer {
-  return <TRecord extends object>(record: TRecord) => {
+  return <TRecord extends object>(
+    record: TRecord,
+    context: CompactFieldContext = {},
+  ) => {
     const parsed = schema.safeParse(record);
-    return parsed.success ? render(parsed.data) : undefined;
+    return parsed.success ? render(parsed.data, context) : undefined;
   };
 }
 
@@ -26,9 +39,16 @@ const externalIdsRow = z.object({
   externalIds: z.array(z.object({ source: z.string() })),
 });
 
-const productCategory = checkedRenderer(categoryRow, (record) => (
+const resolvedCategory = checkedRenderer(categoryRow, (record) => (
   <CategoryLabel category={record.category} />
 ));
+// A proposed value carries only the stored code, never the resolved path.
+const categoryCodeRow = z.object({ categoryId: productCategoryShortcode });
+const categoryById = checkedRenderer(categoryCodeRow, (record, context) => (
+  <CategoryLabelById id={record.categoryId} name={context.label} />
+));
+const productCategory: CompactFieldRenderer = (record, context) =>
+  resolvedCategory(record, context) ?? categoryById(record, context);
 
 const productExternalIds = checkedRenderer(externalIdsRow, (record) => {
   const ids = record.externalIds;

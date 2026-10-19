@@ -87,18 +87,35 @@ export const recordRunProgress = (
  * running is refused. When Cloudflare refuses the instance, the Run fails
  * with that reason so it never sits `running` with nothing behind it.
  */
+type LaunchWorkflowRunInput = {
+  runId: RunId;
+  purpose: WorkflowRunPurpose;
+  /**
+   * Recovery cannot undo cancellation or reopen a completed Run. Concurrent
+   * recoveries race for one attempt, so an automatic launch that finds the Run
+   * already running, ended or cancelled resolves `null` instead of throwing.
+   */
+  automatic?: boolean;
+  /** A bounded instance hands off only while it still owns this attempt. */
+  expectedAttempt?: number;
+};
+type LaunchedWorkflowRun = { attempt: number; instanceId: string };
+
 export async function launchWorkflowRun(
   db: Database,
-  input: {
-    runId: RunId;
-    purpose: WorkflowRunPurpose;
-    /** Recovery cannot undo cancellation or reopen a completed Run. */
-    automatic?: boolean;
-    /** A bounded instance hands off only while it still owns this attempt. */
-    expectedAttempt?: number;
-  },
+  input: LaunchWorkflowRunInput & { automatic: true },
+  launcher?: WorkflowLauncher,
+): Promise<LaunchedWorkflowRun | null>;
+export async function launchWorkflowRun(
+  db: Database,
+  input: LaunchWorkflowRunInput & { automatic?: false },
+  launcher?: WorkflowLauncher,
+): Promise<LaunchedWorkflowRun>;
+export async function launchWorkflowRun(
+  db: Database,
+  input: LaunchWorkflowRunInput,
   launcher: WorkflowLauncher = productionWorkflowLauncher,
-): Promise<{ attempt: number; instanceId: string }> {
+): Promise<LaunchedWorkflowRun | null> {
   const database = getDb(db);
   const [reopened] = await database
     .update(runTable)
@@ -134,12 +151,10 @@ export async function launchWorkflowRun(
       ),
     )
     .returning({ shortcode: runTable.shortcode, attempt: attemptOf });
-  if (!reopened)
-    throw new Error(
-      input.automatic
-        ? "Automatic dispatch cannot restart a running, completed or cancelled Run."
-        : "This Run is already running; wait for it or cancel it.",
-    );
+  if (!reopened) {
+    if (input.automatic) return null;
+    throw new Error("This Run is already running; wait for it or cancel it.");
+  }
   const instanceId = workflowInstanceId(reopened.shortcode, reopened.attempt);
   await recordRunProgress(
     db,
@@ -241,6 +256,7 @@ export async function failWorkflowRun(
     input.message.split("\n", 1)[0] ?? "",
     { attempt: params.attempt, sequence: Number.MAX_SAFE_INTEGER },
   );
+  await (await import("./wake")).wakeStepRunParent(db, runId);
   return true;
 }
 

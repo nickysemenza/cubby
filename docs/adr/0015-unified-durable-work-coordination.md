@@ -85,3 +85,15 @@ workload deletes its replaced execution path in the same change. Broad runtime
 replacement would add replay, device-availability and observability migration
 risks without evidence that it improves the requested behavior; follow-on scope
 is selected from concrete failures and duplication.
+
+## Amendment: maintenance passes are Runs (2026-10)
+
+Nightly maintenance and its "Run now" pass are one `maintenance` Run, backed by
+a Workflow that drains each backlog page by page, with one active pass at a
+time. This reverses the earlier rule that maintenance kept no history and its
+counts were the only record. Counts alone could not show a stalled or failing
+drain: items that could never succeed sat at the head of a queue, retried for
+ever. Each step records found, done, failed, skipped and left. An item that can
+never succeed gets a terminal outcome and leaves its backlog, keeping its raw
+error. A pass that found nothing is routine and is pruned like other routine
+Runs.

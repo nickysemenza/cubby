@@ -24,11 +24,11 @@ import {
   reviewAssessment,
   reviewAssessmentBatch,
 } from "~/server/generic/assessment/repo/assessment-review";
+import { suggestionCountsByFamily } from "~/server/generic/assessment/repo/suggestion-list";
 import {
   acceptSuggestion,
   listSuggestions,
   applyFieldCorrection,
-  suggestionCounts,
 } from "~/server/generic/assessment/repo/suggestion-review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
@@ -629,13 +629,25 @@ describe("Suggestion review", () => {
     expect(await productCategoryId(ctx.db, rejected.id)).toBe(
       taxonomyId("tools"),
     );
-    expect(await suggestionCounts(ctx.db, { runId: code })).toEqual([
+    const { families } = await suggestionCountsByFamily(ctx.db, {
+      family: "field",
+      runId: code,
+    });
+    expect(families).toEqual([
       expect.objectContaining({
-        entity: "product",
-        field: "categoryId",
+        family: "field",
         pending: 0,
         applied: 1,
         rejected: 1,
+        fields: [
+          expect.objectContaining({
+            entity: "product",
+            field: "categoryId",
+            pending: 0,
+            applied: 1,
+            rejected: 1,
+          }),
+        ],
       }),
     ]);
   });

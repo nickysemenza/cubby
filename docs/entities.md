@@ -2598,12 +2598,22 @@ behind the cell's mark. Percentages describe model confidence, not a
 guarantee of correctness. Accept shows local saving feedback; completed row
 enrichment stays visible throughout same-query refreshes. A changed target, declared basis or backing field supersedes its older pending Suggestions, and a later sweep supersedes prior pending rows
 for the same record and field. Suggestions remain available to evaluation after
-review. The `/ai` page's Review tab lists stored Suggestions on the shared
-table, filtered by entity, field, status, kind, minimum confidence and Run,
-with bulk Accept and Reject; its Decisions tab catalogs every decision's basis,
-options, rules and rendered request (`ai.decisionCatalog`) with a Jev/Clef Try
-panel. The Work queue shows one row per (entity, field) with pending
-Suggestions, and a sweep Run's detail links to its pending review.
+review. The `/suggestions` page lists every family's pending Suggestions
+(fields, statement transactions, connections) on one server-filtered table
+(`suggestions.list` over the family registry in
+`server/generic/assessment/repo/suggestion-families.ts`): family chips with counts, each family's own columns,
+inline evidence, keyboard review (↑/↓, →, A, D), a confirmed "Accept N clean"
+that re-lists before each chunk, bulk Dismiss and Never suggest (no bulk
+Wrong), and Find suggestions, which estimates and starts a Sweep. A
+collapsible Automatic rules section lists each rule's state, measured
+precision and member switch (`suggestions.rules`/`setRule`; On only when
+eligible, Off after a confirm), and `status=applied_automatically` lists what
+rules applied with the authorizing rule and a Wrong… that records a Miss (not
+an undo). Its `family`, `record` (`<kind>:<CODE>`) and `runId` params scope it. The `/ai`
+page's Decisions tab catalogs every decision's basis, options, rules and
+rendered request (`ai.decisionCatalog`) with a Jev/Clef Try panel. The
+household's Work has one row per Suggestion family linking into the page,
+and a Sweep Run's detail links to its own.
 Automatic semantic classification uses the same declared Decision features:
 receipt roles, UPC offer comparability, weak image provenance, and Product
 title variants. Authoritative assignments bypass inference. Valid uncertainty

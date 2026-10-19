@@ -1,26 +1,21 @@
 import { maintenanceContract } from "~/contracts/maintenance.contract";
-import { imageProcessingMaintenanceSummary } from "~/server/domains/image-processing/repo/image-processing-maintenance";
-import { backfillImageProcessing } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import { repairImageDimensions } from "~/server/domains/image/service/image-dimension-repair.service";
 import { classifyImageProvenance } from "~/server/domains/image/service/image-provenance-classify.service";
 import { backfillImageSearchDocuments } from "~/server/domains/image/service/image-search-backfill.service";
 import {
-  countAwaitingWork,
-  settleAwaitingWork,
-} from "~/server/generic/work-queue/service/awaiting-work.service";
+  launchMaintenanceRun,
+  readMaintenanceStatus,
+} from "~/server/domains/maintenance/service/maintenance.service";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import { requestCatchUp } from "~/server/workflows/catch-up";
 
-/** Counts read the authoritative handle: this is the truth the badge and the cron agree on. */
 export const maintenanceHandlers = implementOperationDomain(
   maintenanceContract,
   {
     requestCatchUp: (context) => requestCatchUp(context.db),
-    backfillImageProcessing: (context, input) =>
-      backfillImageProcessing(context.db, input),
-    imageProcessing: (context) => imageProcessingMaintenanceSummary(context.db),
-    awaitingWork: (context) => countAwaitingWork(context.db),
-    settleAwaitingWork: (context) => settleAwaitingWork(context.db),
+    run: (context) =>
+      launchMaintenanceRun(context.db, context.actorContext, "manual"),
+    status: (context) => readMaintenanceStatus(context.db),
     repairImageDimensions: (context, input) =>
       repairImageDimensions(context.db, input),
     classifyImageProvenance: (context, input) =>

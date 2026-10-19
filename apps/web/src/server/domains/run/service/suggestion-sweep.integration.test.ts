@@ -13,10 +13,12 @@ import {
   aiEvaluationRequest,
   auditLog,
   expense as expenseTable,
+  feedback,
   run as runTable,
   vendor as vendorTable,
 } from "~/server/db/schema";
 import { loadFinanceSuggestionContext } from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
+import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import { listSuggestions } from "~/server/generic/assessment/repo/suggestion-review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
@@ -31,6 +33,7 @@ import {
   noProposal,
   productCategoryId,
   productFixture,
+  recordId,
   runCode,
   resumeSuggestionSweep,
   runSuggestions,
@@ -50,10 +53,11 @@ const savedRun = async (
   return row;
 };
 
-// Regression modes: an Addition above threshold applies through the entity
-// kernel; Corrections and low confidence remain pending; paired decisions
-// share provenance and never apply; pause/resume checkpoints by unprocessed
-// record and field.
+// Regression modes: an Addition above threshold publishes pending and then
+// applies only through the field.addition Automatic rule, as automatic
+// Feedback naming it, except its audit sample; Corrections and low confidence
+// remain pending; paired decisions share provenance and never apply;
+// pause/resume checkpoints by unprocessed record and field.
 describe("persisted Suggestion sweeps", () => {
   const ctx = withTestDb();
 
@@ -85,6 +89,86 @@ describe("persisted Suggestion sweeps", () => {
     );
     expect(row?.acceptanceReceipt?.auditIds).toEqual(
       audits.map((audit) => audit.id),
+    );
+    expect(audits.map((audit) => audit.userId)).toEqual(
+      audits.map(() => systemActor().userId),
+    );
+    const events = await getDb(ctx.db)
+      .select()
+      .from(feedback)
+      .where(eq(feedback.assessmentId, row!.id));
+    const rule = {
+      key: "field.addition",
+      revision: expect.any(String),
+      stamp: expect.stringMatching(/^field\.addition@/),
+    };
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          verdict: "correct",
+          authority: "automatic",
+          actorUserId: systemActor().userId,
+          metadata: expect.objectContaining({
+            kind: "assessment_review",
+            rule,
+          }),
+        }),
+        expect.objectContaining({
+          verdict: "ungraded",
+          authority: "automatic",
+          metadata: expect.objectContaining({
+            kind: "assessment_application",
+            rule,
+          }),
+        }),
+      ]),
+    );
+    expect(events.some((event) => event.authority === "member")).toBe(false);
+  });
+
+  it("holds the audit sample pending and applies the other matches", async () => {
+    const [held, applied] = await Promise.all(
+      ["Synthetic audited", "Synthetic unaudited"].map((name) =>
+        productFixture(ctx, name),
+      ),
+    );
+    const heldId = await recordId(ctx.db, held!.id, "product");
+    const started = await startSuggestionSweep(
+      ctx.db,
+      {
+        entity: "product",
+        fields: ["categoryId"],
+        filters: { ids: [held!.id, applied!.id] },
+      },
+      {
+        context: kernelCtx(ctx),
+        ...categoryPorts(),
+        auditSample: (_family, subjectKey) => subjectKey.includes(heldId),
+      },
+    );
+    const rows = await runSuggestions(ctx.db, started.id);
+    expect(rows).toHaveLength(2);
+    const audit = rows.find((row) => row.recordId === heldId)!;
+    expect(audit).toMatchObject({
+      status: "pending",
+      data: expect.objectContaining({
+        auditSample: true,
+        matchedRules: [expect.stringMatching(/^field\.addition@/)],
+      }),
+    });
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(feedback)
+        .where(eq(feedback.assessmentId, audit.id)),
+    ).toEqual([]);
+    expect(rows.find((row) => row.recordId !== heldId)).toMatchObject({
+      status: "applied",
+      data: expect.objectContaining({ auditSample: false }),
+    });
+    expect(await productCategoryId(ctx.db, held!.id)).toBeNull();
+    expect(await productCategoryId(ctx.db, applied!.id)).toBe(
+      taxonomyId(SUGGESTED_CATEGORY),
     );
   });
 
@@ -436,9 +520,15 @@ describe("persisted Suggestion sweeps", () => {
       },
       { context, suggest },
     );
-    expect(await runSuggestions(ctx.db, started.id)).toEqual([
-      expect.objectContaining({ kind: "addition", status: "pending" }),
-    ]);
+    const [pending] = await runSuggestions(ctx.db, started.id);
+    expect(pending).toMatchObject({ kind: "addition", status: "pending" });
+    // A refused automatic application leaves no Feedback: nobody reviewed it.
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(feedback)
+        .where(eq(feedback.assessmentId, pending!.id)),
+    ).toEqual([]);
     expect(await productCategoryId(ctx.db, product.id)).toBeNull();
     const finished = await savedRun(ctx.db, started.id);
     expect(finished.progress).toMatchObject({

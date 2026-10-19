@@ -377,8 +377,12 @@ function DecisionDetail({ row }: { row: DecisionCatalogRow }) {
             <>
               {" · "}
               <Link
-                to="/ai"
-                search={{ tab: "review", entity: row.entity, field: row.field }}
+                to="/suggestions"
+                search={{
+                  family: "field",
+                  entity: row.entity,
+                  field: row.field,
+                }}
                 className="font-medium text-primary underline-offset-2 hover:underline"
               >
                 Review {formatCount(row.counts.pending)} pending

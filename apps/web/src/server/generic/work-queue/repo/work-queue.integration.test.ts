@@ -555,8 +555,12 @@ describe("Work queue gaps, typed columns, and record rows", () => {
         kind: "addition",
         status: "pending",
       });
+    // The household's Work has one row for the family; the record's own Work
+    // counts the record's own Suggestions, never the family aggregate.
     const queue = await read({});
-    expect(queue.items.some((row) => row.source === "suggestion")).toBe(true);
+    expect(queue.items).toContainEqual(
+      expect.objectContaining({ suggestionFamily: "field", entity: null }),
+    );
     const productStrip = await readRecordWorkQueue(
       ctx.db,
       null,
@@ -565,9 +569,15 @@ describe("Work queue gaps, typed columns, and record rows", () => {
     );
     expect(productStrip.items.length).toBeGreaterThan(0);
     for (const row of productStrip.items) {
-      expect(row.source).not.toBe("suggestion");
+      expect(row.suggestionFamily).toBeUndefined();
       expect(row).toMatchObject({ entity: "product", id: product.id });
     }
+    expect(productStrip.items).toContainEqual(
+      expect.objectContaining({
+        source: "suggestion",
+        reason: "1 pending field suggestion",
+      }),
+    );
 
     // Member-only reads fence another member's source work identically.
     const otherUserId = testUserId("synthetic-record-strip-other-user");

@@ -200,3 +200,6 @@ export const getAiGatewayEgress = (gatewayId: string) =>
   cfEnv?.AI_GATEWAY_EGRESS?.getByName(gatewayId);
 
 export const getAiRefreshWorkflow = () => cfEnv?.AI_REFRESH;
+export const getStepRunWorkflow = () => cfEnv?.STEP_RUN;
+export const getAppOrigin = () => cfEnv?.APP_ORIGIN;
+export const isE2eAuthTestMode = () => cfEnv?.E2E_AUTH_TEST_MODE === "true";

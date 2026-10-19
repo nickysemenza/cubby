@@ -14,8 +14,16 @@ export const WORKFLOW_RUN_PURPOSES = [
   "ai_refresh",
   "mail_reclassify",
   "suggestion_sweep",
+  "maintenance",
+  "sweep",
 ] as const;
 export type WorkflowRunPurpose = (typeof WORKFLOW_RUN_PURPOSES)[number];
+
+export {
+  isStepRunPurpose,
+  STEP_RUN_PURPOSES,
+  type StepRunPurpose,
+} from "@cubby/schemas/run-fields";
 
 export const isWorkflowRunPurpose = (
   purpose: RunPurpose | string,

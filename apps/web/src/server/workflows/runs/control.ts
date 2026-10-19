@@ -1,5 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import { runShortcode } from "@cubby/schemas/identifiers";
+import { runShortcode, type RunId } from "@cubby/schemas/identifiers";
 import type { RunControlAction } from "@cubby/schemas/run-fields";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
@@ -10,7 +10,12 @@ import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import { recordPaidGrant } from "~/server/domains/run/repo/paid-grant";
 import { createAppError } from "~/server/errors/app-error";
 
-import { workflowInstanceId, type WorkflowRunPurpose } from "./contract";
+import {
+  isStepRunPurpose,
+  isWorkflowRunPurpose,
+  workflowInstanceId,
+  type WorkflowRunPurpose,
+} from "./contract";
 import { productionWorkflowLauncher, type WorkflowLauncher } from "./launcher";
 import { launchWorkflowRun, recordRunProgress } from "./lifecycle";
 
@@ -48,7 +53,9 @@ export async function controlWorkflowRun(
     .limit(1);
   if (!row) throw createAppError("RUN_NOT_FOUND", "Run was not found");
   if (
-    !(purpose === "ai_refresh" && row.actorUserId === systemActor().userId) &&
+    // Unattended work (AI refresh, nightly maintenance, routine Sweeps and
+    // their children) belongs to the household, so any member may control it.
+    row.actorUserId !== systemActor().userId &&
     row.actorUserId !== actor.userId &&
     row.memberUserId !== actor.userId
   )
@@ -264,4 +271,29 @@ export async function controlWorkflowRun(
       purpose,
       workflowInstanceId(row.shortcode, row.attempt),
     );
+  if (isStepRunPurpose(purpose))
+    await cancelStepChildren(db, actor, row.id, launcher);
+}
+
+/**
+ * A step-ledger Run's children are its own work: cancelling a Sweep stops
+ * the field or connection Runs it started, keeping what committed.
+ */
+export async function cancelStepChildren(
+  db: Database,
+  actor: ActorContext,
+  runId: RunId,
+  launcher: WorkflowLauncher,
+) {
+  const { unfinishedStepChildren } =
+    await import("~/server/domains/run/repo/run-step");
+  for (const child of await unfinishedStepChildren(db, runId))
+    if (isWorkflowRunPurpose(child.purpose))
+      await controlWorkflowRun(
+        db,
+        actor,
+        { runPublicId: child.shortcode, action: "cancel" },
+        child.purpose,
+        launcher,
+      );
 }

@@ -1,4 +1,11 @@
+import {
+  AUTOMATIC_RULE_FAMILIES,
+  AUTOMATIC_RULE_KEYS,
+} from "../automatic-rule.js";
 import { defineChildTable } from "../entity-definitions/child-definition.js";
+
+const sqlList = (values: readonly string[]) =>
+  values.map((value) => `'${value}'`).join(", ");
 
 /** Histories have no live entity/Run ownership: current edges belong to the projection. */
 export const assessmentChildren = [
@@ -256,6 +263,78 @@ export const assessmentChildren = [
       {
         name: "AssessmentState_confidence_check",
         sql: "{confidence} BETWEEN 0 AND 1",
+      },
+    ],
+  }),
+  /**
+   * The member-owned switch of each Automatic rule. The rule itself is a code
+   * declaration; its precision is computed from Feedback on read.
+   */
+  defineChildTable({
+    name: "AutomaticRule",
+    exportName: "automaticRule",
+    columns: [
+      {
+        key: "id",
+        kind: "uuid",
+        primaryKey: true,
+        default: { sql: "gen_random_uuid()" },
+      },
+      {
+        key: "family",
+        kind: "text",
+        notNull: true,
+        values: [...AUTOMATIC_RULE_FAMILIES],
+      },
+      {
+        key: "ruleKey",
+        kind: "text",
+        notNull: true,
+        values: [...AUTOMATIC_RULE_KEYS],
+      },
+      /** The revision `enabled` was last set for. */
+      { key: "revision", kind: "text", notNull: true },
+      { key: "enabled", kind: "boolean", notNull: true, default: false },
+      { key: "enabledAt", kind: "timestamp" },
+      {
+        key: "enabledByUserId",
+        kind: "text",
+        type: "UserId",
+        reference: { table: "user", column: "id" },
+      },
+      { key: "enabledReason", kind: "text" },
+      { key: "disabledAt", kind: "timestamp" },
+      { key: "disabledReason", kind: "text" },
+      {
+        key: "createdAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+      },
+      {
+        key: "updatedAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+        onUpdateNow: true,
+      },
+    ],
+    types: [{ module: "@cubby/schemas/identifiers", exports: ["UserId"] }],
+    indexes: [
+      {
+        name: "AutomaticRule_family_key",
+        unique: true,
+        on: ["family", "ruleKey"],
+      },
+    ],
+    checks: [
+      {
+        name: "AutomaticRule_family_check",
+        sql: `{family} IN (${sqlList(AUTOMATIC_RULE_FAMILIES)})`,
+      },
+      {
+        name: "AutomaticRule_key_check",
+        sql: `{ruleKey} IN (${sqlList(AUTOMATIC_RULE_KEYS)}) AND starts_with({ruleKey}, {family} || '.')`,
       },
     ],
   }),

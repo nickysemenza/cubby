@@ -50,7 +50,6 @@ import {
   withErrorReporting,
 } from "./server/errors/report-error";
 import { withUnhandledErrorBody } from "./server/errors/unhandled-error-body";
-import type { SearchDocumentCursor } from "./server/generic/search/repo/search-document";
 import { IMAGE_PROCESSING_SOCKET_PATH } from "./server/http/direct-socket-paths";
 import {
   isMaintenanceMode,
@@ -167,7 +166,6 @@ console.error = (...args: unknown[]) => {
 
 const log = createLogger("cf-server");
 const cronLog = createLogger("cron");
-const scheduledLog = createLogger("scheduled");
 
 let fetchInvocationOrdinal = 0;
 
@@ -651,185 +649,50 @@ const handler = {
         }
         if (controller.cron !== "0 12 * * *")
           throw new Error(`Unexpected cron trigger: ${controller.cron}`);
-        try {
-          if (
-            !import.meta.env.CUBBY_LOCAL_RUNTIME &&
-            env.E2E_AUTH_TEST_MODE !== "true"
-          )
-            await env.AI_GATEWAY_EGRESS.getByName(
-              CUBBY_AI_GATEWAY_ID,
-            ).observeAiRefresh();
-        } catch (error) {
-          Sentry.captureException(error);
-        }
         await Sentry.withMonitor(
           "daily-maintenance",
           async () => {
-            try {
-              await withInvocationDb(
-                env.HYPERDRIVE.connectionString,
-                async () => {
-                  const [
-                    { db },
-                    { claimCatchUp, discoverPurchases, recoverMissedWork },
-                  ] = await Promise.all([
-                    import("./server/db"),
-                    import("./server/workflows/catch-up"),
-                  ]);
-                  const claimedAt = new Date();
-                  if (await claimCatchUp(db, claimedAt)) {
-                    const jobs = await Promise.allSettled([
-                      withTrace(
-                        "cf.scheduled.job",
-                        () => recoverMissedWork(db),
-                        {
-                          "cubby.scheduled.job": "recover-missed-work",
-                        },
-                      ),
-                      withTrace(
-                        "cf.scheduled.job",
-                        () => discoverPurchases(db),
-                        {
-                          "cubby.scheduled.job": "purchase-discovery",
-                        },
-                      ),
-                    ]);
-                    for (const job of jobs)
-                      if (job.status === "rejected")
-                        Sentry.captureException(job.reason);
-                  }
-                },
-              );
-            } catch (error) {
-              Sentry.captureException(error);
-            }
-            try {
-              await withTrace(
-                "cf.scheduled.job",
-                async () =>
-                  await (
-                    await (
-                      await import("./server/domains/calendar/repo/client")
-                    ).calendarFeedStateFor(env.APP_ORIGIN)
-                  ).refreshNow("cron.daily"),
-                { "cubby.scheduled.job": "calendar-feed" },
-              );
-            } catch (error) {
-              // Calendar keeps serving its previous atomic snapshot. Keep the
-              // independent assertion below running while surfacing the failure
-              // through both the errored child span and Sentry.
-              Sentry.captureException(error);
-            }
-            // Recovery above republishes missed work; queue completion is asynchronous.
-            // Keep the remaining source-row backlog visible in diagnostics.
-            try {
-              await withInvocationDb(
-                env.HYPERDRIVE.connectionString,
-                async () => {
-                  const [{ db }, { countAwaitingWork }] = await Promise.all([
-                    import("./server/db"),
-                    import("./server/generic/work-queue/service/awaiting-work.service"),
-                  ]);
-                  await withTrace(
+            // The cron only launches the pass; its steps drain each backlog
+            // page by page in StepRunWorkflow, one active pass at a time.
+            await withInvocationDb(
+              env.HYPERDRIVE.connectionString,
+              async () => {
+                const [
+                  { db },
+                  { launchMaintenanceRun },
+                  { systemActor },
+                  { recoverMissedWork },
+                ] = await Promise.all([
+                  import("./server/db"),
+                  import("./server/domains/maintenance/service/maintenance.service"),
+                  import("./server/domains/run/repo/ensure-run"),
+                  import("./server/workflows/catch-up"),
+                ]);
+                const jobs = await Promise.allSettled([
+                  withTrace(
                     "cf.scheduled.job",
                     async (span) => {
-                      try {
-                        const awaiting = await countAwaitingWork(db);
-                        span.setAttributes({
-                          "cubby.awaiting.stale_recipe_totals":
-                            awaiting.staleRecipeTotals,
-                          "cubby.awaiting.unembedded_entities":
-                            awaiting.unembeddedEntities,
-                          "cubby.awaiting.pending_uploads":
-                            awaiting.pendingUploads,
-                          "cubby.awaiting.stale_image_metadata":
-                            awaiting.staleImageMetadata,
-                        });
-                        scheduledLog.info("awaiting work", awaiting);
-                        if (
-                          awaiting.staleRecipeTotals > 0 ||
-                          awaiting.unembeddedEntities > 0 ||
-                          awaiting.pendingUploads > 0 ||
-                          awaiting.staleImageMetadata > 0
-                        ) {
-                          Sentry.captureMessage(
-                            `Derived work is waiting: ${awaiting.staleRecipeTotals} stale recipe totals, ${awaiting.unembeddedEntities} unembedded entities, ${awaiting.pendingUploads} pending uploads, ${awaiting.staleImageMetadata} stale image metadata records`,
-                            "warning",
-                          );
-                        }
-                      } catch (error) {
-                        span.setError("Awaiting-work assertion failed");
-                        Sentry.captureException(error);
-                      }
-                    },
-                    { "cubby.scheduled.job": "awaiting-work-assertion" },
-                  );
-                },
-              );
-            } catch (error) {
-              Sentry.captureException(error);
-            }
-            // This job IS a repair, unlike the assert-only sibling above:
-            // Vectorize cannot join the Postgres transaction that soft-deletes
-            // `SearchDocument`/`EntityEmbedding` (`softDeleteEntitySearchArtifactsTx`),
-            // so a removed entity's vector otherwise lingers in Vectorize forever.
-            // `deleteByIds` is idempotent, so re-running or overlapping passes
-            // over the same refs are safe.
-            try {
-              await withTrace(
-                "cf.scheduled.job",
-                async (span) => {
-                  const { semanticEmbeddingsConfigured } =
-                    await import("./server/generic/embedding/service/semantic/embeddings");
-                  if (!semanticEmbeddingsConfigured()) {
-                    span.setAttribute("cubby.vectorReconcile.skipped", true);
-                    return;
-                  }
-                  await withInvocationDb(
-                    env.HYPERDRIVE.connectionString,
-                    async () => {
-                      const [
-                        { db },
-                        { selectRecentlySoftDeletedSearchRefs },
-                        { productionVectorStore },
-                      ] = await Promise.all([
-                        import("./server/db"),
-                        import("./server/generic/embedding/repo/entity-embedding-cleanup"),
-                        import("./server/generic/embedding/service/semantic/vector-store"),
-                      ]);
-                      const since = new Date(
-                        Date.now() - 7 * 24 * 60 * 60 * 1000,
+                      const launched = await launchMaintenanceRun(
+                        db,
+                        systemActor(),
+                        "scheduled",
                       );
-                      let cursor: SearchDocumentCursor | undefined;
-                      let deletedCount = 0;
-                      do {
-                        const page = await selectRecentlySoftDeletedSearchRefs(
-                          db,
-                          {
-                            since,
-                            cursor,
-                          },
-                        );
-                        if (page.refs.length > 0) {
-                          await productionVectorStore.deleteByIds(page.refs);
-                          deletedCount += page.refs.length;
-                        }
-                        cursor = page.nextCursor ?? undefined;
-                      } while (cursor);
-                      span.setAttribute(
-                        "cubby.vectorReconcile.deletedCount",
-                        deletedCount,
-                      );
+                      span.setAttributes({
+                        "cubby.maintenance.run": launched.runId,
+                        "cubby.maintenance.existing": launched.existing,
+                      });
                     },
-                  );
-                },
-                { "cubby.scheduled.job": "vector-reconcile" },
-              );
-            } catch (error) {
-              // Mirror the calendar job above: report and move on rather than
-              // failing the whole scheduled invocation over one job.
-              Sentry.captureException(error);
-            }
+                    { "cubby.scheduled.job": "maintenance-run" },
+                  ),
+                  withTrace("cf.scheduled.job", () => recoverMissedWork(db), {
+                    "cubby.scheduled.job": "recover-missed-work",
+                  }),
+                ]);
+                for (const job of jobs)
+                  if (job.status === "rejected")
+                    Sentry.captureException(job.reason);
+              },
+            );
           },
           {
             schedule: { type: "crontab", value: "0 12 * * *" },
@@ -868,3 +731,4 @@ export default Sentry.withSentry(workerSentryOptions, handler);
 export { AiGatewayEgressDurableObject } from "./server/domains/run/operations/gateway-egress-durable-object";
 
 export { AiRefreshWorkflow } from "./server/workflows/ai-refresh-workflow";
+export { StepRunWorkflow } from "./server/workflows/step-run-workflow";

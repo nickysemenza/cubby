@@ -51,6 +51,7 @@ export type DiagnosticKey =
   | "tools-used-outside-ownership"
   | "entities-missing-embeddings"
   | "stale-parent-recipes"
+  | "image-metadata-outcomes"
   | "manufacturer-spelling-variants"
   | "weight-sold-products"
   | "duplicate-vendors"

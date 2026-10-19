@@ -123,16 +123,14 @@ const AUTO_FIX_TASKS = [
     label: "Backfill search embeddings",
     problemKey: "entitiesMissingEmbeddings",
     invalidateTags: ripple.search,
-    // Republishes every derived-data kind whose freshness marker is stale, not
-    // just embeddings — there is no per-kind "just the embeddings" enqueue any
-    // more (see `maintenance.settleAwaitingWork`), only this settle-everything
-    // action, so the task's own count only reports the embedding slice of it.
+    // Embeddings drain as a step of the maintenance pass, so this starts (or
+    // joins) that pass rather than a per-kind enqueue.
     run: async () => {
-      const r = await maintenance.settleAwaitingWork.call();
+      const r = await maintenance.run.call();
       return {
-        summary: r.publishedEmbeddingTasks
-          ? `published ${countLabel(r.publishedEmbeddingTasks, "embedding refresh")}`
-          : null,
+        summary: r.existing
+          ? `maintenance ${r.runId} already running`
+          : `started maintenance ${r.runId}`,
       };
     },
   },

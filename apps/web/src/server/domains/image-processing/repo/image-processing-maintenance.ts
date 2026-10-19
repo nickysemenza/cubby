@@ -66,14 +66,13 @@ export async function imageProcessingMaintenanceSummary(db: Database) {
   return { description, cutout };
 }
 
-/** Shortcodes of uploaded images missing a current job of one of `kinds`. */
-export async function imagesMissingCurrentProcessing(
-  db: Database,
+export type ImageProcessingBacklogCursor = { createdAt: string; id: string };
+
+// Only images missing a current job of a requested kind. Existing
+// failed/skipped work is not silently reclassified or retried.
+const missingCurrentProcessingWhere = (
   kinds: readonly ImageProcessingJobKind[],
-  batchSize: number,
-): Promise<string[]> {
-  // A batch contains only images missing a current job of a requested kind.
-  // Existing failed/skipped work is not silently reclassified or retried.
+) => {
   const missing = kinds.map(
     (
       kind,
@@ -85,17 +84,49 @@ export async function imagesMissingCurrentProcessing(
     SELECT 1 FROM "ImageProcessingJob" j WHERE j."imageId" = i.id AND j."deletedAt" IS NULL
       AND j.kind = ${imageProcessingJobKind.enum.describe_image} AND j."sourceContentHash" = i.sha256
       AND j."processorRevision" = ${IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION})`);
-  const result = await getDb(db).execute(sql`
-    SELECT i.shortcode FROM "Image" i
-    WHERE i."deletedAt" IS NULL AND i.status = ${ImageStatus.enum.UPLOADED}
+  return sql`i."deletedAt" IS NULL AND i.status = ${ImageStatus.enum.UPLOADED}
       AND i.sha256 IS NOT NULL AND i."contentType" LIKE 'image/%'
-      AND (${sql.join(missing, sql` OR `)})
+      AND (${sql.join(missing, sql` OR `)})`;
+};
+
+/** One keyset page of uploaded images missing a current job of one of `kinds`. */
+export async function imagesMissingCurrentProcessing(
+  db: Database,
+  kinds: readonly ImageProcessingJobKind[],
+  batchSize: number,
+  after?: ImageProcessingBacklogCursor | null,
+) {
+  const result = await getDb(db).execute(sql`
+    SELECT i.id, i.shortcode, i."createdAt"::text AS "createdAt" FROM "Image" i
+    WHERE ${missingCurrentProcessingWhere(kinds)}
+      ${after ? sql`AND (i."createdAt", i.id) > (${after.createdAt}::timestamp, ${after.id}::uuid)` : sql``}
     ORDER BY i."createdAt", i.id LIMIT ${batchSize}
   `);
   return z
-    .array(z.object({ shortcode: z.string() }))
+    .array(
+      z.object({
+        id: z.string(),
+        shortcode: z.string(),
+        createdAt: z.string(),
+      }),
+    )
     .parse(result.rows)
-    .map((row) => row.shortcode);
+    .map(({ id, shortcode, createdAt }) => ({
+      id,
+      shortcode,
+      cursor: { createdAt, id },
+    }));
+}
+
+export async function countImagesMissingCurrentProcessing(
+  db: Database,
+  kinds: readonly ImageProcessingJobKind[],
+) {
+  const result = await getDb(db).execute(sql`
+    SELECT count(*)::int AS count FROM "Image" i
+    WHERE ${missingCurrentProcessingWhere(kinds)}
+  `);
+  return z.array(z.object({ count: z.number() })).parse(result.rows)[0]!.count;
 }
 
 /**

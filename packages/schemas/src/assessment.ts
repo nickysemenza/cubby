@@ -262,7 +262,7 @@ export const assessmentReviewInput = feedbackEvent
       .string()
       .min(1)
       .regex(
-        /^(?!(?:command-application|receipt|application|merge|email-accuracy):)(?!(?:decision|resolution|saved-application|saved-correction)$)/,
+        /^(?!(?:command-application|receipt|application|merge|email-accuracy|automatic):)(?!(?:decision|resolution|saved-application|saved-correction)$)/,
         "Operation ID uses a reserved internal receipt namespace",
       ),
     assessmentId: assessmentChildHandle.optional(),

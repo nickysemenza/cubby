@@ -174,6 +174,11 @@ export const productionWorker = defineWorker({
       worker: "cubby",
       exportName: "MailDiscoveryWorkflow",
     }),
+    STEP_RUN: bindings.workflow({
+      name: "cubby-step-run",
+      worker: "cubby",
+      exportName: "StepRunWorkflow",
+    }),
     AI: bindings.ai({}),
     CF_VERSION_METADATA: bindings.versionMetadata(),
   },
@@ -210,6 +215,9 @@ export const productionWorker = defineWorker({
     }),
     MailDiscoveryWorkflow: exports.workflow({
       name: "cubby-mail-discovery",
+    }),
+    StepRunWorkflow: exports.workflow({
+      name: "cubby-step-run",
     }),
   },
 });

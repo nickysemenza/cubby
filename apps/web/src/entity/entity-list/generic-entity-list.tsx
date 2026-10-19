@@ -28,7 +28,6 @@ import type { StandardEntity } from "~/entity/entity-contracts";
 import { entityListBaseFor } from "~/entity/entity-list";
 import { identityListConfig } from "~/entity/entity-list/identity-list-config";
 import { ListTotalSummary } from "~/entity/entity-list/list-total-summary";
-import { SuggestionSweepAction } from "~/entity/entity-list/suggestion-sweep-action";
 import {
   type ListEntity,
   listEntities,
@@ -54,6 +53,7 @@ import {
   type ListOverrideWorkbenchProps,
 } from "~/entity/list-columns/types";
 import { usePageCount } from "~/entity/page/page";
+import { FindSuggestionsAction } from "~/entity/suggestions/find-suggestions-dialog";
 import {
   createImageColumn,
   isImageColumnId,
@@ -403,7 +403,7 @@ function ServerListBody({
   }, [list.workbench.table, renderedView]);
   const sweepEntity = z.enum(shortcodeEntities).safeParse(entity);
   const sweepAction = sweepEntity.success ? (
-    <SuggestionSweepAction
+    <FindSuggestionsAction
       entity={sweepEntity.data}
       filters={list.currentFilters}
     />

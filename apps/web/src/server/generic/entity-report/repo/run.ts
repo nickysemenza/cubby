@@ -11,6 +11,7 @@ import {
   runTargetState,
 } from "@cubby/schemas/purchase-import";
 import { hasImportRunReports } from "@cubby/schemas/run-fields";
+import type { SuggestionCountsOut } from "@cubby/schemas/suggestion-list";
 import { TRADE_LABELS, tradeValues } from "@cubby/schemas/task-fields";
 import { AI_USAGE_TRANSPORT_LABELS } from "@cubby/schemas/telemetry";
 import { CF_ACCOUNT_ID } from "@cubby/shared/ai/gateway-metadata";
@@ -21,11 +22,15 @@ import type { RunDetail, RunLogEntry } from "~/contracts/run.contract";
 import { formatInstant } from "~/lib/date-format";
 import { formatDuration } from "~/lib/format-duration";
 import { formatAiCost, formatAiCostSubtotal } from "~/lib/number-format";
-import { formatCurrency, formatPercent } from "~/lib/number-format";
+import {
+  formatCount,
+  formatCurrency,
+  formatPercent,
+} from "~/lib/number-format";
 import { runHasCapability } from "~/server/domains/purchase-import/repo/capabilities";
 import { findingHasExpired } from "~/server/domains/purchase-import/repo/finding-expiry";
 import type { getRunLiveProgress } from "~/server/domains/run/repo/run-progress";
-import type { suggestionCounts } from "~/server/generic/assessment/repo/suggestion-review";
+import type { RunStepRead } from "~/server/domains/run/repo/run-step";
 import {
   phaseLabel,
   runRowState,
@@ -879,6 +884,117 @@ function discoveryCountsBlock(
 }
 
 /** The selected orders and charges a targeted mail or charge-search run works through. */
+
+/** A step-ledger Run's steps as read for its Steps section. */
+export type RunStepsReport = {
+  code: RunDetail["publicId"];
+  status: string;
+  steps: (RunStepRead & { childShortcode: string | null })[];
+};
+
+const STEP_STATE = {
+  queued: { kind: "not_reached", label: "Queued" },
+  running: { kind: "running", label: "Running" },
+  waiting: { kind: "running", label: "Waiting" },
+  paused: { kind: "warning", label: "Paused" },
+  done: { kind: "done", label: "Done" },
+  failed: { kind: "failed", label: "Failures" },
+} as const satisfies Record<RunStepRead["state"], NonNullable<Row["state"]>>;
+
+/**
+ * The Steps ledger: one row per step with its found, done, failed, skipped
+ * and left counts and raw errors; finished steps with nothing to do collapse
+ * into one muted row. "Retry failed" re-admits a stopped step's failures.
+ */
+export function runStepsBlocks(report: RunStepsReport): ReportBlock[] {
+  if (!report.steps.length) return [];
+  const idle = report.steps.filter(
+    (step) =>
+      (step.state === "done" || step.state === "queued") &&
+      step.found === 0 &&
+      step.failed === 0,
+  );
+  const shown = report.steps.filter((step) => !idle.includes(step));
+  const running = ACTIVE_RUN_STATUSES.some(
+    (status) => status === report.status,
+  );
+  const rows = shown.map((step) => {
+    const elapsed =
+      step.startedAt &&
+      formatDuration(
+        (step.endedAt ?? new Date()).getTime() - step.startedAt.getTime(),
+      );
+    const counts = [
+      `${formatCount(step.done)} done`,
+      `${formatCount(step.failed)} failed`,
+      `${formatCount(step.skipped)} skipped`,
+      `${formatCount(step.left)} left`,
+      ...(elapsed ? [elapsed] : []),
+      ...(step.meta?.timing && step.pages > 0
+        ? [
+            `${formatDuration(step.meta.timing.totalMs / step.pages)} per page over ${formatCount(step.pages)} pages`,
+          ]
+        : []),
+    ].join(" · ");
+    // Refs are internal retry keys (`image:<uuid>`); the raw message is the
+    // diagnostic a member reads.
+    const errors = step.errors.map((error) => error.message);
+    return row(step.key, {
+      title: step.label,
+      trailing: `${formatCount(step.done)} of ${formatCount(step.found)}`,
+      state: STEP_STATE[step.state],
+      ...(step.childShortcode && {
+        ref: { entity: "run", id: step.childShortcode },
+      }),
+      lines: [
+        line(counts),
+        ...(step.pausedReason
+          ? [
+              line(
+                step.pausedUntil
+                  ? `${step.pausedReason} · resumes after ${formatInstant(step.pausedUntil, "dateShortTime")}`
+                  : step.pausedReason,
+                "warning",
+              ),
+            ]
+          : []),
+        ...errors.slice(0, 3).map((text) => line(text, "destructive")),
+      ],
+      ...(errors.length > 3 && {
+        detail: {
+          label: `${errors.length} recent errors`,
+          text: errors.join("\n"),
+        },
+      }),
+      actions:
+        !running && (step.failed > 0 || step.state === "failed")
+          ? [
+              {
+                id: `retry:${step.key}`,
+                label: "Retry failed",
+                prominent: true,
+                confirm: null,
+                request: {
+                  kind: "retry-run-step",
+                  runId: report.code,
+                  stepKey: step.key,
+                },
+              },
+            ]
+          : [],
+    });
+  });
+  if (idle.length)
+    rows.push(
+      row("idle", {
+        title: `${idle.length} ${idle.length === 1 ? "step" : "steps"} with nothing to do`,
+        state: { kind: "skipped", label: "Nothing to do" },
+        lines: [line(idle.map((step) => step.label).join(", "), "muted")],
+      }),
+    );
+  return [records(rows, { title: "Steps" })];
+}
+
 /** Durable progress for every Run, including work done outside the page that opened it. */
 export function liveProgressBlocks(
   runId: RunDetail["publicId"],
@@ -940,12 +1056,10 @@ export function runLogBlocks(log: {
   ];
 }
 
-/** A sweep Run's stored Suggestion outcomes; review happens on web `/ai` or over MCP. */
-export function suggestionBlocks(
-  counts: Awaited<ReturnType<typeof suggestionCounts>>,
-): ReportBlock[] {
+/** A sweep Run's stored Suggestion outcomes across families; review happens on web or over MCP. */
+export function suggestionBlocks(counts: SuggestionCountsOut): ReportBlock[] {
   const total = (key: "pending" | "applied" | "rejected" | "superseded") =>
-    counts.reduce((sum, row) => sum + row[key], 0);
+    counts.families.reduce((sum, row) => sum + row[key], 0);
   const figure = (label: string, value: number) => ({
     label,
     value,
@@ -1148,6 +1262,7 @@ export function changesBlocks(list: AuditLogListOut): ReportBlock[] {
 /** The run report slots (`run.*` in `reportSlots`). */
 export type RunReportSlot =
   | ImportReportSlot
+  | "run.steps"
   | "run.live-progress"
   | "run.import-debug-log"
   | "run.ai-usage"

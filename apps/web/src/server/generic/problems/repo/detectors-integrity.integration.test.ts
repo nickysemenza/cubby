@@ -51,6 +51,7 @@ import {
   runControlEvent,
   runFinding,
   runOperation,
+  runStep,
   statementImport,
   statementRow,
   user,
@@ -1613,6 +1614,14 @@ const SOURCE_FACTORIES = {
       operationId: uniq("operation"),
       kind: "liveness-fixture",
       inputFingerprint: uniq("input-fingerprint"),
+    }),
+
+  "RunStep.runId": (db, targetId) =>
+    insertAndReturn(db, runStep, {
+      runId: parseEntityId("run", targetId),
+      key: uniq("step"),
+      label: "Synthetic step",
+      position: 0,
     }),
 
   "Email.runId": (db, targetId) =>

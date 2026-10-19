@@ -1,5 +1,4 @@
 import type { FieldSuggestionsInput } from "@cubby/schemas/ai";
-import { requiresSuggestionReview } from "@cubby/schemas/field-suggestion";
 import type { RunId } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseEntityRef } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
@@ -16,7 +15,13 @@ import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
-import { acceptSuggestion } from "~/server/generic/assessment/repo/suggestion-review";
+import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
+import {
+  type AuditSampler,
+  automaticRuleStamp,
+  fieldSubjectKey,
+  matchFieldRules,
+} from "~/server/generic/assessment/repo/automatic-rules";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/audit-log";
 
 export type SuggestionValue =
@@ -42,7 +47,6 @@ export const jsonValue = (value: unknown): SuggestionValue =>
 export const sweepSuggestionSchema = z.object({
   reviewKey: z.string().nullable().optional(),
   kind: z.enum(["addition", "correction"]),
-  status: z.enum(["applied", "pending"]),
   currentValue: suggestionValueSchema,
   suggestedValue: suggestionValueSchema,
   confidence: z.number(),
@@ -96,6 +100,11 @@ export async function saveSweepSuggestions(
     provenance?: import("@cubby/schemas/ai-evaluation").AiProvenance;
     /** The field's decision policy prunes an unordered set. */
     unordered: boolean;
+    /**
+     * A Sweep's pinned decision model: its proposals are matched against
+     * Automatic rules. Other publishers (connections) never match one.
+     */
+    rules?: { pinnedModel: string; auditSample?: AuditSampler };
   },
   entries: readonly SweepSuggestion[],
   financeReviewFingerprint: string | null,
@@ -267,12 +276,27 @@ export async function saveSweepSuggestions(
             ),
           );
       }
-      let outcome: "applied" | "queued" = "queued";
-      const created: {
-        row: typeof suggestionTable.$inferSelect;
-        entry: SweepSuggestion;
-      }[] = [];
+      const created: string[] = [];
       for (const entry of admissible) {
+        const stamp = input.rules
+          ? await automaticRuleStamp(
+              "field",
+              matchFieldRules({
+                entity: input.entity,
+                field: input.field,
+                kind: entry.kind,
+                confidence: entry.confidence,
+                model: entry.model,
+                pinnedModel: input.rules.pinnedModel,
+              }),
+              fieldSubjectKey({
+                entity: input.entity,
+                recordId: typedRecordId,
+                field: input.field,
+              }),
+              input.rules.auditSample,
+            )
+          : {};
         const [row] = await getDb(tx)
           .insert(suggestionTable)
           .values({
@@ -293,36 +317,26 @@ export async function saveSweepSuggestions(
             model: entry.model,
             pairKey: entry.pairKey,
             kind: entry.kind,
-            data: { reviewKey: entry.reviewKey ?? null },
+            data: {
+              reviewKey: entry.reviewKey ?? null,
+              ...stamp,
+              // Applying re-evaluates the rule against these same facts.
+              ...(stamp.matchedRules && {
+                pinnedModel: input.rules?.pinnedModel,
+              }),
+            },
             status: "pending",
           })
           .returning();
-        if (row) created.push({ row, entry });
+        if (row) created.push(row.id);
       }
-      for (const { row, entry } of created) {
-        if (
-          entry.status === "applied" &&
-          !requiresSuggestionReview(input.entity, input.field)
-        ) {
-          try {
-            await acceptSuggestion(
-              tx,
-              txContext,
-              { id: row.id },
-              { mode: "automatic", confidence: entry.confidence },
-            );
-            outcome = "applied";
-          } catch (error) {
-            onApplyFailure?.(error);
-            // The nested acceptance transaction rolled back; its pending proposal remains reviewable.
-            await getDb(tx)
-              .update(suggestionTable)
-              .set({ status: "pending" })
-              .where(eq(suggestionTable.id, row.id));
-          }
-        }
-      }
-      return outcome;
+      // Proposals publish pending; a confident Addition then applies only
+      // through its Automatic rule, as automatic Feedback naming the rule.
+      const { applied } = await applyAutomaticRules(tx, created, {
+        context: txContext,
+        onFailure: (_id, error) => onApplyFailure?.(error),
+      });
+      return applied.length ? ("applied" as const) : ("queued" as const);
     },
     { isolationLevel: "serializable" },
   );

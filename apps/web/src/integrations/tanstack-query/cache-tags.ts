@@ -179,7 +179,7 @@ export const ripple = {
   ]),
   none: EMPTY_INVALIDATION_TAG_SET,
   search: exactRippleTags([["search"]]),
-  /** Settle now / repair: the awaiting counts, problems, and search all move. */
+  /** A Maintenance Run or repair: the backlog counts, problems, and search all move. */
   maintenance: exactRippleTags([["maintenance"], ["problems"], ["search"]]),
   problemsSearch: exactRippleTags([["problems"], ["search"]]),
   recommendations: exactRippleTags([["recommendations"]]),
@@ -195,6 +195,8 @@ export const ripple = {
   ),
   /** A member review can reopen a remembered decline. */
   settledSuggestions: exactRippleTags([["ai", "settledSuggestionQuestion"]]),
+  /** The cross-family Suggestion list and its counts. */
+  suggestions: exactRippleTags([["suggestions"]]),
   collection: exactRippleTags([["collection"]]),
   connectedApps: exactRippleTags([["oauth", "connectedApps"]]),
   orphanedOAuth: exactRippleTags([["oauth", "orphaned"]]),

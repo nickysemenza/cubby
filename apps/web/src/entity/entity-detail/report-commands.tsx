@@ -89,6 +89,11 @@ export function useReportCommands() {
       if (successor) window.location.assign(runHref(successor.publicId));
     },
   });
+  const retryStep = useActionMutation({
+    mutationFn: run.retryStep.mutationOptions,
+    error: "Could not retry the step",
+    success: "Retrying the step's failures",
+  });
   const finding = useActionMutation({
     mutationFn: problems.resolveRunFinding.mutationOptions,
     error: "Could not resolve the finding",
@@ -220,6 +225,9 @@ export function useReportCommands() {
             purchaseId: r.purchaseId,
             decision: r.decision,
           }),
+        )
+        .with({ kind: "retry-run-step" }, (r) =>
+          retryStep.mutate({ runId: r.runId, stepKey: r.stepKey }),
         )
         .with({ kind: "run-control" }, (r) => {
           const input: Parameters<typeof run.control.call>[0] = {

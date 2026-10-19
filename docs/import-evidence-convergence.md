@@ -124,11 +124,18 @@ propose, one per unmatched charge, creating a transaction, attaching to an
 existing one (same account, same cents, within three days, whatever the
 descriptor), superseding a recorded hold with its posted row (posted at or up
 to the larger of 25% or $20 above the hold, within seven days), or voiding a
-vanished hold. Nothing applies until reviewed; a create is refused while any
-candidate the member has not rejected remains. A same-amount charge from
-another export is a possible firmed-up twin and is never bulk-acceptable.
-Decision-model labels rank candidates and choose a fallback kind; they never
-authorize an attach or suppress a create. The vanished-hold void is the one
+vanished hold. Nothing applies until reviewed, except through the
+`statement_transaction.attach` Automatic rule ([ADR 0016
+amendment](adr/0016-shared-assessments-and-feedback.md#amendment-sweeps-the-suggestions-page-and-automatic-rules-2026-10)):
+once a member turns it on, an attach to the sole candidate, with no possible
+twin, at the same cents and labelled the same charge with high confidence by a
+decision model whose own reviewed matches are eligible, applies without review
+outside its audit sample, and never copies statement fields onto the
+transaction. A create is refused while any candidate the member has not
+rejected remains. A same-amount charge from another export is a possible
+firmed-up twin and is never bulk-acceptable. Decision-model labels rank
+candidates and choose a fallback kind; on their own they never authorize an
+attach or suppress a create. The vanished-hold void is the one
 bounded absence judgment: it applies only to a transaction recorded from rows
 the provider itself marked pending, with no posted twin, after a later export
 of that account covers dates seven days past the hold without containing it,

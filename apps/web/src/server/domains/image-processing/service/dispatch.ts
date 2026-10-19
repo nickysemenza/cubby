@@ -7,6 +7,7 @@ import {
 import type { ImageProcessingCommand } from "@cubby/schemas/image-processing";
 import { providerFor } from "@cubby/shared/ai/models";
 
+import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/policy/features";
 import { getImageProcessingNamespace } from "~/server/cf-env";
 import {
@@ -22,7 +23,10 @@ import {
   markImageProcessingWaitingForDevice,
   reclaimExpiredImageProcessingLeases,
 } from "~/server/domains/image-processing/repo/image-processing";
-import { assignImageProcessingExecutor } from "~/server/domains/image-processing/repo/image-processing-history";
+import {
+  assignImageProcessingExecutor,
+  deferImageProcessingJob,
+} from "~/server/domains/image-processing/repo/image-processing-history";
 import { getVerifiedImageRenditionKey } from "~/server/domains/image/repo/image-identification";
 import { reserveImageAnalysisInput } from "~/server/generic/activity/repo/activity-input";
 
@@ -54,7 +58,7 @@ export async function dispatchImageProcessingWakeup(
   db: Database,
   jobId: string,
   options: CloudImageDispatchOptions = {},
-): Promise<"dispatched" | "completed" | "waiting" | "skipped"> {
+): Promise<"dispatched" | "completed" | "waiting" | "deferred" | "skipped"> {
   await reclaimExpiredImageProcessingLeases(db);
   const claimed = await claimImageProcessingJob(db, {
     jobId,
@@ -151,6 +155,15 @@ export async function dispatchImageProcessingWakeup(
     }
     return "dispatched";
   } catch (error) {
+    if (error instanceof AiBudgetExhaustedError) {
+      await deferImageProcessingJob(db, {
+        jobId: claimed.id,
+        attemptId: claimed.attemptId,
+        until: new Date(error.resumeAt),
+        reason: error.message,
+      });
+      return "deferred";
+    }
     const detail = safeImageProcessingError(error);
     await completeImageProcessingJob(db, {
       result: {

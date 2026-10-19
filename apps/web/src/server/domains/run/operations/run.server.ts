@@ -1,6 +1,8 @@
 import { runShortcode } from "@cubby/schemas/identifiers";
 import type { MailImportStatus } from "@cubby/schemas/mail-import-settings";
 import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
+import type { SweepFamilyScope } from "@cubby/schemas/run-fields";
+import type { SweepStartInput } from "@cubby/schemas/sweep";
 import { and, eq, isNull } from "drizzle-orm";
 import type { z } from "zod";
 
@@ -60,6 +62,45 @@ async function memberParty(context: AuthenticatedRequestContext) {
   if (!party)
     throw new Error("This login is not linked to a member ledger party yet.");
   return party;
+}
+
+/** The stored Sweep scope of a request: account shortcodes become ids. */
+async function sweepScopes(
+  db: AuthenticatedRequestContext["db"],
+  input: SweepStartInput,
+): Promise<SweepFamilyScope[]> {
+  return Promise.all(
+    input.families.map(async (entry): Promise<SweepFamilyScope> => {
+      switch (entry.family) {
+        case "statement_transaction":
+          return {
+            family: entry.family,
+            scope: {
+              ...(entry.accountIds?.length && {
+                accountIds: await Promise.all(
+                  entry.accountIds.map((code) =>
+                    resolveOrThrow(db, "financialAccount", code),
+                  ),
+                ),
+              }),
+              ...(entry.since && { since: entry.since }),
+            },
+          };
+        case "recommendation":
+          return {
+            family: entry.family,
+            scope: entry.entityKinds?.length
+              ? { entityKinds: entry.entityKinds }
+              : {},
+          };
+        case "field":
+          return {
+            family: entry.family,
+            scope: entry.targets?.length ? { targets: entry.targets } : {},
+          };
+      }
+    }),
+  );
 }
 
 async function controlRunOperation(
@@ -312,6 +353,41 @@ export const runHandlers = implementOperationDomain(runContract, {
     );
   },
   control: controlRunOperation,
+  sweep: async (context, input) => {
+    await memberParty(context);
+    const { startSweep } = await import("../service/sweep");
+    const runId = await startSweep(context.db, context.actorContext, {
+      trigger: "manual",
+      families: await sweepScopes(context.db, input),
+    });
+    const [row] = await getDb(context.db)
+      .select({ shortcode: runTable.shortcode })
+      .from(runTable)
+      .where(eq(runTable.id, runId));
+    return { runId: runShortcode.parse(row?.shortcode) };
+  },
+  sweepEstimate: async (context, input) => {
+    await memberParty(context);
+    const { estimateSweep } = await import("../service/sweep");
+    return {
+      families: await estimateSweep(
+        context.db,
+        await sweepScopes(context.db, input),
+      ),
+    };
+  },
+  retryStep: async (context, { runId, stepKey }) => {
+    await memberParty(context);
+    const [target] = await getDb(context.db)
+      .select({ id: runTable.id })
+      .from(runTable)
+      .where(eq(runTable.shortcode, runShortcode.parse(runId)))
+      .limit(1);
+    if (!target) throw new Error(`Run ${runId} was not found`);
+    const { retryRunStep } = await import("../service/step-run");
+    await retryRunStep(context.db, target.id, stepKey);
+    return { run: await loadRunDetail(context.db, runId) };
+  },
   lifecycle: (context, { controlAction, ...input }) =>
     controlRunOperation(context, { ...input, action: controlAction }),
   logs: async (context, input) => {

@@ -4,15 +4,21 @@ import {
   scoredEntities,
 } from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
+import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
+import { countLabel } from "@cubby/shared/pluralize";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { MinusCircleIcon } from "@phosphor-icons/react/dist/csr/MinusCircle";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { createContext, useContext, useId, type ReactNode } from "react";
 
 import { ExceptionControls } from "~/entity/fields/field-explanation-exception";
-import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalog.gen";
+import {
+  fieldExplanation,
+  suggestions,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
@@ -146,6 +152,55 @@ export function QualitySectionChecks({ section }: { section: string }) {
   return <QualityCheckRows checks={checks} />;
 }
 
+/** Enough rows to cover one record's pending Suggestions, impact first. */
+const IMPACT_READ_LIMIT = 100;
+
+/**
+ * "N Suggestions would fix this": pending Suggestions on the record that
+ * declare an impact on one of its unresolved checks, linked to the
+ * Suggestions page scoped to the record.
+ */
+function SuggestionsImpactLink({
+  entity,
+  id,
+  failing,
+}: {
+  entity: Entity;
+  id: string;
+  failing: readonly RecordQualityCheck[];
+}) {
+  const kind = shortcodeEntities.find((candidate) => candidate === entity);
+  const checks = new Set(failing.map((check) => check.check));
+  const list = useQuery({
+    ...suggestions.list.queryOptions({
+      entity: kind,
+      recordIds: [id],
+      order: [{ by: "impact", direction: "desc" }],
+      limit: IMPACT_READ_LIMIT,
+    }),
+    enabled: kind !== undefined && checks.size > 0,
+  });
+  const fixing =
+    list.data?.items.filter((row) =>
+      row.impact.some(
+        (impact) =>
+          impact.kind === "quality_check" &&
+          impact.qualityCheck !== undefined &&
+          checks.has(impact.qualityCheck),
+      ),
+    ).length ?? 0;
+  if (!kind || fixing === 0) return null;
+  return (
+    <Link
+      to="/suggestions"
+      search={{ record: `${kind}:${id}` }}
+      className="text-primary underline-offset-2 hover:underline"
+    >
+      {countLabel(fixing, "Suggestion")} would fix this
+    </Link>
+  );
+}
+
 type RecordQualityProps = {
   entity: Entity;
   id: string;
@@ -257,6 +312,15 @@ function AssessedRecordQuality({
                   </a>
                 ))}
               </nav>
+            ) : null}
+            {attention.length > 0 ? (
+              <div className="mt-1">
+                <SuggestionsImpactLink
+                  entity={entity}
+                  id={id}
+                  failing={attention}
+                />
+              </div>
             ) : null}
             <details className="mt-1">
               <summary className="cursor-pointer text-muted-foreground">

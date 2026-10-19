@@ -1,8 +1,6 @@
 import {
   fieldSuggestionsInput,
   financeCategoryApplyInput,
-  suggestionCountsInput,
-  suggestionCountsOut,
   suggestionReviewListInput,
   suggestionStatus,
 } from "@cubby/schemas/ai";
@@ -13,7 +11,8 @@ import { entityRefKey } from "@cubby/schemas/entity";
 import { requiresSuggestionReview } from "@cubby/schemas/field-suggestion";
 import { parseEntityRef } from "@cubby/schemas/identifiers";
 import { suggestionSweepRunInput } from "@cubby/schemas/run-fields";
-import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { suggestionFieldCount } from "@cubby/schemas/suggestion-list";
+import { type SQL, and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -28,7 +27,11 @@ import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
-import { recordFeedback } from "~/server/generic/assessment/repo/assessment";
+import {
+  automaticApplicationRule,
+  matchedRulesOf,
+  recordFeedback,
+} from "~/server/generic/assessment/repo/assessment";
 import { withAuditReceipts } from "~/server/generic/audit-log/repo/audit-receipts";
 import {
   lookupShortcodes,
@@ -137,6 +140,16 @@ export async function listSuggestions(
       suggestionTable.id,
     )
     .limit(input.limit);
+  return presentFieldRows(db, rows);
+}
+
+type StoredFieldRow = {
+  suggestion: typeof suggestionTable.$inferSelect;
+  runCode: string | null;
+};
+
+/** Public queue rows: records and receipt Runs named by shortcode. */
+async function presentFieldRows(db: Database, rows: StoredFieldRow[]) {
   const reviewable = rows.flatMap(({ suggestion, runCode }) =>
     reviewableRow(suggestion, runCode),
   );
@@ -186,13 +199,74 @@ export async function listSuggestions(
   });
 }
 
+/** Reviewable field suggestions by Assessment id, in no particular order. */
+export async function readFieldSuggestions(
+  db: Database,
+  ids: readonly string[],
+) {
+  if (!ids.length) return [];
+  const rows = await getDb(db)
+    .select({ suggestion: suggestionTable, runCode: runTable.shortcode })
+    .from(suggestionTable)
+    .leftJoin(runTable, eq(runTable.id, suggestionTable.runId))
+    .where(
+      and(
+        eq(suggestionTable.family, "field"),
+        inArray(suggestionTable.id, [...ids]),
+        reviewableSuggestionSql,
+      ),
+    );
+  return presentFieldRows(db, rows);
+}
+
+/** The list facts of every reviewable field suggestion for a roster, entity or Run. */
+export async function fieldSuggestionKeys(
+  db: Database,
+  scope: {
+    status: z.infer<typeof suggestionStatus>;
+    entities?: readonly string[];
+    recordUuids?: readonly string[];
+    runId?: string;
+  },
+) {
+  const conditions: (SQL | undefined)[] = [
+    eq(suggestionTable.family, "field"),
+    eq(suggestionTable.active, true),
+    eq(suggestionTable.status, scope.status),
+    scope.entities
+      ? inArray(suggestionTable.entity, [...scope.entities])
+      : undefined,
+    scope.recordUuids
+      ? inArray(suggestionTable.recordId, [...scope.recordUuids])
+      : undefined,
+    scope.runId ? requestedSuggestionRun(scope.runId) : undefined,
+    reviewableSuggestionSql,
+  ];
+  if (scope.entities?.length === 0 || scope.recordUuids?.length === 0)
+    return [];
+  return getDb(db)
+    .select({
+      id: suggestionTable.id,
+      fingerprint: suggestionTable.fingerprint,
+      entity: suggestionTable.entity,
+      field: suggestionTable.field,
+      kind: suggestionTable.kind,
+      confidence: suggestionTable.confidence,
+      createdAt: suggestionTable.createdAt,
+      matchedRules: matchedRulesOf(sql`${suggestionTable.data}`),
+      automaticRule: automaticApplicationRule(sql`${suggestionTable.id}`),
+    })
+    .from(suggestionTable)
+    .leftJoin(runTable, eq(runTable.id, suggestionTable.runId))
+    .where(and(...conditions));
+}
+
 /** Outcome counts per (entity, field), optionally for one Run. */
 export async function suggestionCounts(
   db: Database,
-  input: z.input<typeof suggestionCountsInput> = {},
+  { runId, entity }: { runId?: string; entity?: string } = {},
 ) {
-  const { runId } = suggestionCountsInput.parse(input);
-  const count = (status: z.infer<typeof suggestionStatus>) =>
+  const count = (status: z.infer<typeof suggestionStatus> | "resolved") =>
     sql<number>`count(*) FILTER (WHERE ${suggestionTable.status} = ${status})::int`;
   const rows = await getDb(db)
     .select({
@@ -202,6 +276,7 @@ export async function suggestionCounts(
       applied: count(suggestionStatus.enum.applied),
       rejected: count(suggestionStatus.enum.rejected),
       superseded: count(suggestionStatus.enum.superseded),
+      resolved: count("resolved"),
     })
     .from(suggestionTable)
     .leftJoin(runTable, eq(runTable.id, suggestionTable.runId))
@@ -210,11 +285,12 @@ export async function suggestionCounts(
         reviewableSuggestionSql,
         eq(suggestionTable.family, "field"),
         runId ? requestedSuggestionRun(runId) : undefined,
+        entity ? eq(suggestionTable.entity, entity) : undefined,
       ),
     )
     .groupBy(suggestionTable.entity, suggestionTable.field)
     .orderBy(suggestionTable.entity, suggestionTable.field);
-  return suggestionCountsOut.parse(rows);
+  return z.array(suggestionFieldCount).parse(rows);
 }
 
 async function writeSuggestionValue(

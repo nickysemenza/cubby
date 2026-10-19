@@ -76,7 +76,7 @@ it("retires label review without losing Product evidence, stock or identity exce
         table,
         (
           await client.query(
-            `SELECT to_jsonb(record) - 'sourceEvidence' AS data FROM "${table}" record ORDER BY id`,
+            `SELECT to_jsonb(record) - 'sourceEvidence' - 'metadataOutcome' - 'metadataError' AS data FROM "${table}" record ORDER BY id`,
           )
         ).rows,
       );
@@ -99,7 +99,7 @@ it("retires label review without losing Product evidence, stock or identity exce
       expect(
         (
           await client.query(
-            `SELECT to_jsonb(record) - 'sourceEvidence' AS data FROM "${table}" record ORDER BY id`,
+            `SELECT to_jsonb(record) - 'sourceEvidence' - 'metadataOutcome' - 'metadataError' AS data FROM "${table}" record ORDER BY id`,
           )
         ).rows,
       ).toEqual(snapshots.get(table));

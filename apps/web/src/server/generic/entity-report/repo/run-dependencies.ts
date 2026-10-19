@@ -17,9 +17,11 @@ import {
   loadRunTimeline,
 } from "~/server/domains/purchase-import/repo/run-service";
 import { getRunLiveProgress } from "~/server/domains/run/repo/run-progress";
+import { readRunStepsReport } from "~/server/domains/run/repo/run-step";
 import { createEntityReader } from "~/server/entity-kernel/repo/repository";
-import { suggestionCounts } from "~/server/generic/assessment/repo/suggestion-review";
+import { suggestionCountsByFamily } from "~/server/generic/assessment/repo/suggestion-list";
 import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log";
+import { isStepRunPurpose } from "~/server/workflows/runs/contract";
 
 import { reportDependency, type ReportExecution } from "./dependency";
 import { runId } from "./record-dependencies";
@@ -31,6 +33,7 @@ import {
   isLiveRunStatus,
   liveProgressBlocks,
   runLogBlocks,
+  runStepsBlocks,
   runTimelineBlocks,
   suggestionBlocks,
   type RunReportSlot,
@@ -118,7 +121,7 @@ const runSuggestions = reportDependency(async (execution) => {
   const { code, purpose } = await execution.read(runBase);
   return purpose === "suggestion_sweep"
     ? suggestionBlocks(
-        await suggestionCounts(execution.request.db, { runId: code }),
+        await suggestionCountsByFamily(execution.request.db, { runId: code }),
       )
     : [];
 });
@@ -147,6 +150,20 @@ const importSlot = (slot: Parameters<typeof importReportBlocks>[0]) =>
   });
 
 export const RUN_REPORTS = {
+  "run.steps": runSlot(async (execution) => {
+    const { code, status, purpose } = await execution.read(runBase);
+    if (!isStepRunPurpose(purpose)) return { blocks: [] };
+    return {
+      blocks: runStepsBlocks({
+        code,
+        status,
+        steps: await readRunStepsReport(
+          execution.request.db,
+          await execution.read(runId),
+        ),
+      }),
+    };
+  }),
   "run.live-progress": runSlot(async (execution) => {
     const { code } = await execution.read(runBase);
     const progress = await execution.read(runProgress);

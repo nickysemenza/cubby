@@ -1,9 +1,6 @@
 import {
-  imageProcessingMaintenanceOutput,
-  imageProcessingBatchInput,
-  imageProcessingBatchOutput,
-  awaitingWorkSchema,
-  settleAwaitingWorkOutSchema,
+  maintenanceRunOutSchema,
+  maintenanceStatusSchema,
   repairImageDimensionsInputSchema,
   repairImageDimensionsOutSchema,
   classifyImageProvenanceInputSchema,
@@ -16,9 +13,10 @@ import { z } from "zod";
 import { defineContract, mutation, query } from "~/contracts/define";
 
 /**
- * Derived work waiting on a queue wakeup, read from the source rows' own
- * staleness markers, and the one action that republishes it. There is no
- * run history: the counts are the truth, and they shrink as the queue lands.
+ * Maintenance passes are `maintenance` Runs: the nightly cron and "Run now"
+ * launch one (one active at a time), and its steps keep the history of what
+ * each backlog found, did and failed. The backlog counts are read from the
+ * source rows' own staleness markers.
  */
 export const maintenanceContract = defineContract("maintenance", {
   requestCatchUp: mutation({
@@ -27,30 +25,18 @@ export const maintenanceContract = defineContract("maintenance", {
     output: z.object({ status: z.enum(["queued", "recent"]) }),
     native: "Request background maintenance when the Apple app opens",
   }),
-  backfillImageProcessing: mutation({
-    mcp: { omit: "operator_maintenance" },
-    input: imageProcessingBatchInput,
-    output: imageProcessingBatchOutput,
-    invalidates: ["maintenance"],
-  }),
-  imageProcessing: query({
+  run: mutation({
     mcp: { omit: "operator_maintenance" },
     input: z.undefined(),
-    output: imageProcessingMaintenanceOutput,
-    cache: { tags: [["maintenance"], ["image"]] },
+    output: maintenanceRunOutSchema,
+    invalidates: ["maintenance", "runOnly"],
   }),
   // Live operational state.
-  awaitingWork: query({
+  status: query({
     mcp: { omit: "operator_maintenance" },
     readPolicy: "strong",
     input: z.undefined(),
-    output: awaitingWorkSchema,
-  }),
-  settleAwaitingWork: mutation({
-    mcp: { omit: "operator_maintenance" },
-    input: z.undefined(),
-    output: settleAwaitingWorkOutSchema,
-    invalidates: ["maintenance"],
+    output: maintenanceStatusSchema,
   }),
   repairImageDimensions: mutation({
     mcp: { omit: "operator_maintenance" },

@@ -65,6 +65,8 @@ const capabilityMatrix = {
   mail_search: new Set(),
   mail_discovery: new Set(),
   mail_reclassify: new Set(),
+  maintenance: new Set(),
+  sweep: new Set(),
 } satisfies Record<RunPurpose, ReadonlySet<Capability>>;
 
 /**
@@ -92,9 +94,9 @@ const actionCapability = {
   "entity.approve_detected_item": "member_decision",
   "entity.review_assessment": "member_decision",
   "entity.review_assessments": "member_decision",
+  "entity.set_suggestion_rule": "member_decision",
   "statement_rows.record": "generic_mutation",
   "statement_rows.update": "generic_mutation",
-  "statement_rows.refresh_suggestions": "generic_mutation",
   "statement_rows.delete": "generic_mutation",
   "mail.search": "prepare",
   "mail.correct_relevance": "generic_mutation",
@@ -135,6 +137,7 @@ const actionCapability = {
   "run.set_mail_import": "member_decision",
   "run.discover_mail": "member_decision",
   "run.set_credit_budget": "member_decision",
+  "run.sweep": "member_decision",
   "run.commit_prepared": "member_decision",
   "run.resolve_finding": "member_decision",
   "meal_recipe.add": "generic_mutation",

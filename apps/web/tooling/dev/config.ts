@@ -101,6 +101,11 @@ export function localWorker(production: WorkerConfig, profile: DevProfile) {
         worker: name,
         exportName: "MailDiscoveryWorkflow",
       }),
+      STEP_RUN: bindings.workflow({
+        name: `${name}-step-run`,
+        worker: name,
+        exportName: "StepRunWorkflow",
+      }),
       ...(profile.integration && {
         AI: bindings.ai({ dev: { remote: true } }),
         VECTORIZE: bindings.vectorize({

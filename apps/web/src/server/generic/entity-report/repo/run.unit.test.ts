@@ -1097,18 +1097,29 @@ describe("changesBlocks", () => {
 });
 
 // Native draws a sweep's outcomes from this report, so the counts must sum
-// across every (entity, field) row rather than show the first.
+// across every Suggestion family rather than show the first.
 describe("suggestionBlocks", () => {
-  it("totals each outcome across fields", () => {
-    const row = (pending: number, applied: number) => ({
-      entity: "product" as const,
-      field: "trade",
+  it("totals each outcome across families", () => {
+    const row = (
+      family: "field" | "statement_transaction",
+      pending: number,
+      applied: number,
+    ) => ({
+      family,
       pending,
+      clean: 0,
+      strong: 0,
+      medium: 0,
+      weak: pending,
       applied,
       rejected: 1,
       superseded: 0,
+      resolved: 0,
+      fields: [],
     });
-    const [stats] = suggestionBlocks([row(2, 3), row(4, 0)]);
+    const [stats] = suggestionBlocks({
+      families: [row("field", 2, 3), row("statement_transaction", 4, 0)],
+    });
     expect(stats).toMatchObject({
       kind: "stats",
       figures: [

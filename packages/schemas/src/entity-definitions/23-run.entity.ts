@@ -68,6 +68,9 @@ export default defineEntity({
         breadcrumb: "vendorAccountId",
       },
       additionalSections: [
+        // A step-ledger Run (maintenance, sweep) leads with its steps; the
+        // slot is empty for every other purpose.
+        { kind: "slot", id: "steps", title: "Steps" },
         { kind: "slot", id: "live-progress", title: "Progress" },
         // What the run counted and the records it worked, before its
         // controls and agent: the first questions about any run.
@@ -820,6 +823,15 @@ export default defineEntity({
         on: ["ledgerPartyId", { sql: "COALESCE({input}->>'mailboxId', '')" }],
         unique: true,
         where: "{purpose} = 'mail_discovery' AND {status} = 'running'",
+      },
+      {
+        // One maintenance pass at a time: a cron and a "Run now" racing each
+        // other lose the insert and return the active pass instead.
+        name: "Run_one_active_maintenance",
+        on: ["purpose"],
+        unique: true,
+        where:
+          "{purpose} = 'maintenance' AND {status} IN ('running', 'paused_auth')",
       },
     ],
     checks: [

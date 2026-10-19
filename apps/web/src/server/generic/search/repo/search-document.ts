@@ -825,8 +825,9 @@ const embeddableEntityKindsSql = sql.join(
  * computed from different text. Restricted to `embeddableEntities`: the
  * three financial entities are searchable but never get an `EntityEmbedding`
  * row (see `entity-manifest.ts`), so without this filter they would show up
- * here forever. This predicate is shared by the awaiting-work count, the
- * "Settle now" selection, and the cron assertion so they cannot disagree.
+ * here forever. This predicate is shared by the Maintenance backlog count,
+ * the Maintenance Run's embedding step, and the cron assertion so they
+ * cannot disagree.
  */
 const unembeddedDocumentsSql = (config: SemanticEmbeddingConfig): SQL => sql`
   FROM "SearchDocument" sd

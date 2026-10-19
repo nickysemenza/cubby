@@ -1,14 +1,14 @@
 import type { SuggestionReviewRow } from "@cubby/schemas/ai";
-import {
-  suggestionReviewListInput,
-  suggestionReviewListOut,
-  SUGGESTION_LIST_LIMIT_MAX,
-} from "@cubby/schemas/ai";
+import { suggestionReviewRowSchema } from "@cubby/schemas/ai";
 import { runShortcode } from "@cubby/schemas/identifiers";
 import {
   productCategorySummary,
   type ProductCategorySummary,
 } from "@cubby/schemas/product-category-fields";
+import {
+  SUGGESTION_LIST_PAGE_MAX,
+  suggestionListInput,
+} from "@cubby/schemas/suggestion-list";
 import { testShortcode } from "@cubby/schemas/testing";
 import {
   fireEvent,
@@ -68,12 +68,28 @@ function shortcodeSuggestion(recordId: string) {
   return suggestion({ recordId });
 }
 
+/** The cross-family list input the production read sends for a list page. */
+const fieldListInput = (
+  input: Parameters<StoredSuggestionOperations["list"]>[0] & {
+    cursor?: string;
+    limit?: number;
+  },
+) =>
+  suggestionListInput.parse({
+    family: "field",
+    entity: input.entity,
+    recordIds: input.recordIds,
+    where: { field: { in: input.fields } },
+    ...(input.limit ? { limit: input.limit } : {}),
+    ...(input.cursor ? { cursor: input.cursor } : {}),
+  });
+
 function validatedStoredOperations(stored: SuggestionReviewRow[]) {
   return {
     list: vi.fn(
       async (input: Parameters<StoredSuggestionOperations["list"]>[0]) => {
-        suggestionReviewListInput.parse(input);
-        return suggestionReviewListOut.parse(stored);
+        fieldListInput(input);
+        return suggestionReviewRowSchema.array().parse(stored);
       },
     ),
     review: vi.fn(
@@ -634,9 +650,16 @@ describe("stored suggestions in generic list cells", () => {
       testShortcode("product", `grouped-${index}`),
     );
     const read = vi.fn(
-      async (input: Parameters<StoredSuggestionOperations["list"]>[0]) => {
-        suggestionReviewListInput.parse(input);
-        return input.recordIds.map((recordId) => suggestion({ recordId }));
+      async (
+        input: Parameters<StoredSuggestionOperations["list"]>[0] & {
+          limit: number;
+        },
+      ) => {
+        fieldListInput(input);
+        return {
+          items: input.recordIds.map((recordId) => suggestion({ recordId })),
+          next: null,
+        };
       },
     );
     const rows = await everyPendingSuggestion(read)({
@@ -649,19 +672,23 @@ describe("stored suggestions in generic list cells", () => {
 
   // Seven suggestible Expense fields on a 250-row page exceed one read's
   // limit; a truncated read used to pass for the whole page.
-  it("splits a list page's read by record until no read is truncated", async () => {
+  it("pages a list page's read to its last cursor so no read is truncated", async () => {
     const recordIds = Array.from({ length: 250 }, (_, index) =>
       testShortcode("expense", `page-${index}`),
     );
-    const read = vi.fn(async (input: { recordIds: string[]; limit: number }) =>
-      input.recordIds
-        .flatMap((recordId) =>
-          Array.from({ length: 7 }, (_, field) =>
-            suggestion({ recordId, field: `field${field}` }),
-          ),
-        )
-        .slice(0, input.limit),
+    const all = recordIds.flatMap((recordId) =>
+      Array.from({ length: 7 }, (_, field) =>
+        suggestion({ recordId, field: `field${field}` }),
+      ),
     );
+    const read = vi.fn(async (input: { cursor?: string; limit: number }) => {
+      const offset = Number(input.cursor ?? 0);
+      const end = offset + input.limit;
+      return {
+        items: all.slice(offset, end),
+        next: end < all.length ? String(end) : null,
+      };
+    });
     const rows = await everyPendingSuggestion(read)({
       entity: "expense",
       recordIds,
@@ -670,7 +697,7 @@ describe("stored suggestions in generic list cells", () => {
     expect(rows).toHaveLength(1_750);
     expect(
       read.mock.calls.every(
-        ([input]) => input.limit === SUGGESTION_LIST_LIMIT_MAX,
+        ([input]) => input.limit === SUGGESTION_LIST_PAGE_MAX,
       ),
     ).toBe(true);
   });

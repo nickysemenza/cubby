@@ -288,6 +288,7 @@ export const nativeCoverage = {
       "run.import-targets",
       "run.import-timeline",
       "run.live-progress",
+      "run.steps",
     ]),
     // The agent conversation is web-only on purpose: it streams from the import-run agent route (SSE
     // plus prompt and abort over its own protocol), not a Cubby operation, and CubbyKit has no

@@ -5,7 +5,10 @@ import {
 } from "@cubby/schemas/statement-suggestion";
 import { describe, expect, it } from "vitest";
 
-import { applyItem, dismissItem } from "./statement-suggestions-review";
+import {
+  statementApplyItem as applyItem,
+  statementDismissItem as dismissItem,
+} from "./suggestion-review";
 
 const FTX_A = financialTransactionShortcode.parse("FTX-2A2A");
 const FTX_B = financialTransactionShortcode.parse("FTX-3B3B");
@@ -31,7 +34,7 @@ const suggestion = (
     source: "monarch",
     chargeKey: "charge-1",
     accountId: "FAC-4C4C",
-    accountName: "Synthetic Card",
+    ownerId: null,
     statementDate: "2026-05-04",
     amount: 42.5,
     merchant: "Example Grocer",
@@ -75,6 +78,12 @@ describe("statement suggestion review items", () => {
         rejectedCandidateIds: [],
       },
     });
+  });
+
+  it("an attach names its target even with a single candidate", () => {
+    const item = applyItem(suggestion({ candidates: [candidate(FTX_A)] }));
+    expect(item.verdict).toBe("correct");
+    expect(item.application).toMatchObject({ transactionId: FTX_A });
   });
 
   it("reviews another candidate or ticked fields as Wrong with the same application", () => {

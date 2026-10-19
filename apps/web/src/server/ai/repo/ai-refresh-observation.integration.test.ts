@@ -254,7 +254,7 @@ describe("application-owned AI feature observation", () => {
           create: async () => {},
         },
       ),
-    ).rejects.toThrow(/cancelled Run/);
+    ).resolves.toBeNull();
     expect(
       (await getDb(ctx.db).select().from(run).where(eq(run.id, id)))[0]
         ?.failureCode,

@@ -237,3 +237,34 @@ person. A person counterparty is never clean: an outflow is the member's share
 of a shared cost (`purchase`), an inflow a repayment (`income`, booked as a
 reimbursement). An own-account move between different owners also owes a
 LedgerTransfer and is never clean.
+
+## Amendment: Sweeps, the Suggestions page and Automatic rules (2026-10)
+
+Every Suggestion family now reports to one Suggestions page and one Sweep. A
+member's Sweep is a parent Run with one child Run per family; automatic passes
+are routine Sweeps. Family registry entries still own candidate matching,
+stale-evidence rechecks, apply authority and identity or financial safeguards.
+The shared layer adds listing, Strength, Impact, the clean flag and bulk
+actions. It never adds a generic confirmation: connections keep their
+per-integration review paths and stay individually reviewed.
+
+An Automatic rule is the only way a Suggestion applies without review. It is a
+named, versioned family declaration matched by deterministic evidence; model
+confidence can be part of a rule's definition but never authorizes one alone.
+A rule becomes eligible only after member-reviewed matches show at least 98%
+precision across at least 50 items in a rolling window of the latest 200. A
+member then turns it on. While on, a 5% audit sample of matches stays pending,
+and the rule turns itself off when audited precision falls below the bar.
+Every automatic application records `automatic` Feedback that names the rule
+and revision, and stays listed as applied automatically. Wrong on an automatic
+application records a Miss and opens the normal correction; it is not an undo,
+since the household has no restore or undo. The field family's existing
+Addition auto-apply becomes its first rule and keeps running under audit.
+Statement attach becomes a rule that starts off, which amends the advisory-only
+sole-candidate rule in `docs/import-evidence-convergence.md` for that one rule.
+
+The alternatives were keeping every apply reviewed, which leaves the
+statement backlog manual indefinitely, and confidence thresholds per family,
+which let a model's self-report authorize writes. Measured precision on the
+household's own reviews, a member-owned switch and a standing audit sample keep
+authority with the household while it scales.

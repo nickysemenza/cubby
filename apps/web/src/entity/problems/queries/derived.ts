@@ -217,6 +217,27 @@ export const derivedProblemQueries = [
     },
   }),
   defineProblem({
+    key: "imageMetadataOutcomes",
+    problemClass: PROBLEM_CLASS.imageMetadataOutcomes,
+    executionLane: "fast",
+    continuation: {
+      kind: "none",
+      reason: "Terminal EXIF/GPS outcomes are not an image list filter.",
+    },
+    freshness: { kind: "live" },
+    title: "Images whose EXIF/GPS extraction ended without metadata",
+    description:
+      "The original is missing from storage, or extraction kept failing. These left the maintenance backlog with their raw error; retry the maintenance step once the cause is fixed.",
+    emptyMessage: "Every image's EXIF/GPS extraction finished or is waiting.",
+    source: {
+      kind: "derived",
+      diagnostic: "image-metadata-outcomes",
+      grain: "row",
+      inputs: [{ entity: "image", filters: [] }],
+      operations: [{ label: "Keep live images with a terminal EXIF outcome" }],
+    },
+  }),
+  defineProblem({
     key: "weightSoldProducts",
     problemClass: PROBLEM_CLASS.weightSoldProducts,
     executionLane: "fast",

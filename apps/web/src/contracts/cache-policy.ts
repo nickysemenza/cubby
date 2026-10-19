@@ -35,6 +35,7 @@ export type RippleKey =
   | "recommendations"
   | "connections"
   | "settledSuggestions"
+  | "suggestions"
   | "collection"
   | "connectedApps"
   | "orphanedOAuth"

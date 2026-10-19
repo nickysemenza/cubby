@@ -10,6 +10,8 @@ public protocol ReportServing: Sendable {
     func reports(slots: [ReportSlot], id: String) async throws -> [(ReportSlot, EntityReportOut)]
     /// `run.control`; the successor run's shortcode when the action started one.
     func controlRun(_ input: RunControlInput) async throws -> String?
+    /// `run.retryStep`: re-admit one step's failures and relaunch its Run.
+    func retryRunStep(_ input: RunRetryStepInput) async throws
     /// `problems.resolveRunFinding`; true when the fix was applied rather than dismissed.
     func resolveFinding(_ input: ResolveRunFindingInput) async throws -> Bool
     /// `recipe.reparseLine`: the server re-parses one stored line and writes what drifted.
@@ -143,6 +145,10 @@ extension CubbyClient: ReportServing {
     public func controlRun(_ input: RunControlInput) async throws -> String? {
         let out: RunControlOutput = try await controlRun(input)
         return out.successor?.publicId
+    }
+
+    public func retryRunStep(_ input: RunRetryStepInput) async throws {
+        let _: RunRetryStepOutput = try await retryRunStep(input)
     }
 
     public func resolveFinding(_ input: ResolveRunFindingInput) async throws -> Bool {
@@ -524,6 +530,9 @@ public final class ReportSlotModel {
                     reviewedChecksum: correction.reviewedChecksum,
                     classification: try Self.option(classification), reason: reason))
             return .done("Relevance corrected: \(result.classification.rawValue)")
+        case .retryRunStep(let retry):
+            try await service.retryRunStep(.init(runId: retry.runId, stepKey: retry.stepKey))
+            return .done("Retrying the step's failures")
         case .runControl(let control):
             let successor = try await service.controlRun(
                 .init(

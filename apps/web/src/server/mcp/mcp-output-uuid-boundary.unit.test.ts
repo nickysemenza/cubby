@@ -72,8 +72,12 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "imports_read.items[].predictionId",
   "mail.evaluationId",
   "mail.predictionId",
-  // The producing read: entity_read.suggestion_queue row ids.
+  // The producing read: entity_read.suggestion_queue's row ids (Assessment
+  // handles) and its field evidence row ids.
   "entity_read.items[].id",
+  "entity_read.items[].evidence.id",
+  "entity_read.items[].evidence.assessmentId",
+  "entity_read.items[].evidence.review.assessmentId",
   // Assessments and Feedback are child-row review/receipt handles without
   // shortcodes; review and batch review return those exact handles.
   "entity_read.items[].assessmentId",
@@ -92,7 +96,7 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "activity.items[].review.assessmentId",
   "activity.items[].assessmentId",
   // Audit rows are opaque receipts, not entity links; these identify the exact acceptance writes.
-  "entity_read.items[].acceptanceReceipt.auditIds[]",
+  "entity_read.items[].evidence.acceptanceReceipt.auditIds[]",
   "run.id",
 ]);
 

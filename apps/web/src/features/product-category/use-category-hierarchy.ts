@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import { compileEntityListInput } from "~/entity/entity-list";
 import { useServerTree } from "~/entity/hooks/use-server-tree";
+import { CATEGORY_TREE_INPUT } from "~/entity/presentation/category-label";
 import { getFeatureColor } from "~/entity/presentation/category-theme";
 import { product } from "~/integrations/tanstack-query/generated/catalog.gen";
 
@@ -10,13 +10,6 @@ import {
   buildCategoryHierarchy,
   type CategoryHierarchyNode,
 } from "./category-tree";
-
-// The list's own sibling order; the server nests every level.
-const CATEGORY_TREE_INPUT = compileEntityListInput(
-  "productCategory",
-  {},
-  { defaultSort: { orderBy: "sortOrder", direction: "asc" } },
-);
 
 /** The server-nested category tree, joined with each category's own products. */
 export function useCategoryHierarchy() {

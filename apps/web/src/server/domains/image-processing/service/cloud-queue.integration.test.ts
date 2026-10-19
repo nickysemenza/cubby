@@ -1,10 +1,11 @@
 import { parseEntityId, type RunId } from "@cubby/schemas/identifiers";
 import { backgroundTaskMessageSchema } from "@cubby/schemas/queue-messages";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, expect, it } from "vitest";
 
+import { AiFundingWaitError } from "~/server/ai/budget";
 import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
 import { image, imageProcessingJob } from "~/server/db/schema";
@@ -311,4 +312,46 @@ it("retries rejected cloud publication without claiming and ignores a replaced s
       },
     }),
   ).toBe("skipped");
+});
+
+// Failure mode (#2722 review): a background funding wait was recorded as a
+// failed retryable attempt, so three waits left the image terminally failed.
+it("defers a funding-waiting job to its resume time without spending an attempt", async () => {
+  const row = await source();
+  const resumeAt = "2026-10-18T18:00:00.000Z";
+  const status = {
+    windowStart: "2026-10-18T12:00:00.000Z",
+    windowEnd: resumeAt,
+    credit: { limitUsd: 5, spentUsd: 5 },
+    paid: { limitUsd: 1, spentUsd: 0 },
+  };
+  for (let wait = 0; wait < 4; wait++) {
+    await getDb(ctx.db)
+      .update(imageProcessingJob)
+      // Database time: the host clock can run ahead of the container's.
+      .set({ nextAttemptAt: sql`now() - interval '1 second'` })
+      .where(eq(imageProcessingJob.id, row.jobId));
+    expect(
+      await handleCloudImageTask(ctx.db, message(row.jobId).body.task, {
+        async describe() {
+          throw new AiFundingWaitError(
+            status,
+            "Waiting for free AI capacity; background work never pays.",
+            resumeAt,
+          );
+        },
+      }),
+    ).toBe("succeeded");
+  }
+  expect(
+    await getDb(ctx.db).query.imageProcessingJob.findFirst({
+      where: eq(imageProcessingJob.id, row.jobId),
+    }),
+  ).toMatchObject({
+    state: "pending",
+    attemptId: null,
+    attempts: 0,
+    nextAttemptAt: new Date(resumeAt),
+    lastError: "Waiting for free AI capacity; background work never pays.",
+  });
 });

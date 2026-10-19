@@ -26,12 +26,15 @@ export function useDataTableController<TItem extends RowData>({
   table,
   infiniteScroll,
   groupConfig,
+  detailRowIds,
   verticalAlign,
   onRowClick,
 }: {
   table: ITable<TItem>;
   infiniteScroll?: InfiniteScrollControls;
   groupConfig?: GroupConfig;
+  /** Rows whose full-width detail is open beneath them. */
+  detailRowIds?: ReadonlySet<string>;
   verticalAlign: "top" | "middle";
   /** Row-open handler — used by cell selection's Cmd/Ctrl+Enter. */
   onRowClick?: (row: Row<TItem>) => void;
@@ -60,7 +63,7 @@ export function useDataTableController<TItem extends RowData>({
   const rowKeys = useMemo(() => rows.map((row) => row.id), [rows]);
 
   // Desktop group detection (server trusts ordering)
-  const groupedItems = useDesktopGroupedRows(rows, groupConfig);
+  const groupedItems = useDesktopGroupedRows(rows, groupConfig, detailRowIds);
 
   // Pane scroll restoration. The pane carries `data-scroll-restoration-id`
   // (see Table.tsx) so the router snapshots its offset against a stable
@@ -88,6 +91,7 @@ export function useDataTableController<TItem extends RowData>({
     flatRowToVirtualIndex,
     stickyIndex,
     scrollToIndex,
+    measureElement,
   } = useTableVirtualizer({
     rowCount: rows.length,
     rowKeys,
@@ -215,6 +219,7 @@ export function useDataTableController<TItem extends RowData>({
     isFetchingNextPage,
     isTransitioning,
     isMobile,
+    measureElement,
     resolveIndex,
     rows,
     rowContentVersion,
@@ -222,6 +227,7 @@ export function useDataTableController<TItem extends RowData>({
     stickyIndex,
     styles,
     tableContainerRef,
+    tableContainerWidth,
     paneWrapperRef,
     paneMaxHeight,
     totalSize,

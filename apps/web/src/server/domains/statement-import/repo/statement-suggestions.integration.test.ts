@@ -18,8 +18,10 @@ import type { DecisionPort } from "~/server/ai/decision-model";
 import { getDb } from "~/server/db/helpers";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import { answering } from "~/server/domains/statement-import/repo/statement-decision-port.fixtures";
 import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
 
 import {
@@ -28,7 +30,6 @@ import {
   recordStatementRows,
   updateStatementRows,
 } from "./statement-row";
-import { listStatementSuggestions } from "./statement-suggestion-read";
 import {
   generateStatementSuggestionPage,
   pendingPostedMatch,
@@ -107,14 +108,22 @@ const generate = async (ctx: Ctx) => {
   }
 };
 
+/** Pending statement rows of the cross-family list, newest charge first. */
 const suggestions = async (ctx: Ctx) =>
   (
-    await listStatementSuggestions(ctx.db, {
-      filters: {},
-      limit: 50,
-      offset: 0,
+    await listSuggestionPage(ctx.db, {
+      family: "statement_transaction",
+      limit: 200,
     })
-  ).data;
+  ).items
+    .flatMap((row) =>
+      row.family === "statement_transaction" ? [row.evidence] : [],
+    )
+    .sort(
+      (a, b) =>
+        b.statementDate.localeCompare(a.statementDate) ||
+        a.assessmentId.localeCompare(b.assessmentId),
+    );
 
 const accept = (
   ctx: Ctx,
@@ -148,47 +157,6 @@ const stateOf = async (ctx: Ctx, assessmentId: string) =>
       sql`SELECT status, active FROM "AssessmentState" WHERE id = ${assessmentId}::uuid`,
     )
   ).rows[0];
-
-/** Answers each statement decision by its choice label, at a stated confidence. */
-const answering =
-  (answers: {
-    kind?: string | ((subject: string) => string);
-    counterparty?: string;
-    kindConfidence?: number;
-  }): DecisionPort =>
-  async (input) => {
-    const criteria = input.questions.selection.criteria;
-    const labels = Object.values(criteria);
-    const [wanted, confidence] = labels.includes("same_charge")
-      ? ["same_charge", 0.97]
-      : labels.includes("person")
-        ? [answers.counterparty ?? "insufficient_evidence", 0.97]
-        : [
-            typeof answers.kind === "function"
-              ? answers.kind(input.state)
-              : (answers.kind ?? "other"),
-            answers.kindConfidence ?? 0.97,
-          ];
-    const keys = Object.keys(criteria);
-    const choice = keys.find((key) => criteria[key] === wanted)!;
-    return {
-      answers: {
-        selection: {
-          type: "choice",
-          choice,
-          confidence,
-          probabilities: Object.fromEntries(
-            keys.map((key) => [
-              key,
-              key === choice
-                ? confidence
-                : (1 - confidence) / (keys.length - 1),
-            ]),
-          ),
-        },
-      },
-    };
-  };
 
 const label = async (ctx: Ctx, port: DecisionPort) =>
   labelStatementSuggestions(ctx.db, {
@@ -233,11 +201,16 @@ describe("statement Transaction suggestions", () => {
       workQueueHouseholdInput.parse({ pageSize: 100 }),
       false,
     );
+    // The household's Work has one row for the family, opening the
+    // Suggestions page; the account's own Work counts its own.
     expect(
-      queue.items.filter((row) => row.source === "statement_suggestion"),
+      queue.items.filter(
+        (row) => row.suggestionFamily === "statement_transaction",
+      ),
     ).toEqual([
       expect.objectContaining({
-        entity: "financialAccount",
+        entity: null,
+        id: null,
         // A category rule is one vote: nothing is clean before a label.
         reason: "2 transaction suggestions (0 ready to accept)",
       }),
@@ -595,7 +568,7 @@ describe("statement Transaction suggestions", () => {
     const page = await generateStatementSuggestionPage(ctx.db, {
       after: null,
       runId: null,
-      importId: later.batchId,
+      scope: { importId: later.batchId },
     });
     expect(page).toMatchObject({ published: 1, next: null });
     expect((await suggestions(ctx)).map((row) => row.rawDescription)).toEqual([

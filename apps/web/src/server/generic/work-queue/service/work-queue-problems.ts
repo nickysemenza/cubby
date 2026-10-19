@@ -135,6 +135,7 @@ const excludedDiagnostics = new Set([
   "entities-missing-embeddings",
   "products-with-better-upc-data",
   "stale-parent-recipes",
+  "image-metadata-outcomes", // Re-admitted by the maintenance step's retry.
   "referential-liveness-violations",
   "incomplete-statement-imports", // Reviewed through current accounts below.
 ]);

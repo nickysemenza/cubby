@@ -60,6 +60,7 @@ import {
   failWorkflowRun,
   runFailureText,
 } from "~/server/workflows/runs/lifecycle";
+import { wakeStepRunParent } from "~/server/workflows/runs/wake";
 
 import { executeAiRefreshTarget } from "./ai-refresh";
 import {
@@ -135,6 +136,7 @@ export async function advanceAiWorkRun(
               .join("\n") || null,
         }),
   });
+  if (!pending.length) await wakeStepRunParent(db, owner.id);
   return pending
     .sort(
       (a, b) =>
@@ -398,7 +400,12 @@ export async function resumeFundingPausedRuns(
       log.warn("funding-paused discovery did not resume", { runId, error });
     }
   }
-  return imports + discoveries;
+  // Budget-paused Sweeps and maintenance passes resume at their pause's
+  // resume time, or at once when a raised limit (anyWindow) asks.
+  const steps = await (
+    await import("./step-run")
+  ).recoverStepRuns(db, launcher, undefined, now, anyWindow);
+  return imports + discoveries + steps;
 }
 
 export async function recoverManualAiWork(
@@ -410,6 +417,8 @@ export async function recoverManualAiWork(
     await (
       await import("./reclassification-recovery")
     ).recoverHistoricalReclassification(db);
+  // Paused (budget window over) or lost step-ledger Runs: maintenance, Sweeps.
+  await (await import("./step-run")).recoverStepRuns(db, launcher, runIds);
   const candidates = await recoverableManualAiWorkRuns(db, runIds);
   for (const owner of candidates) {
     if (owner.status === "running") {

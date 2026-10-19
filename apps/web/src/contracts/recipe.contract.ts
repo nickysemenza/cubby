@@ -418,7 +418,7 @@ export const recipeContract = defineContract("recipe", {
   }),
 });
 
-export const suggestionsContract = defineContract("suggestions", {
+export const recipeAvailabilityContract = defineContract("recipeAvailability", {
   getRecipeAvailability: query({
     mcp: {
       omit: "client_view",

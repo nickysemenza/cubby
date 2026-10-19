@@ -37,6 +37,7 @@ import {
   runRetirementReason,
   runStatus,
 } from "@cubby/schemas/run-fields";
+import { sweepEstimateOut, sweepStartInput } from "@cubby/schemas/sweep";
 import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
@@ -237,6 +238,12 @@ const runControlInput = z.object({
    */
   paidOverBudgetUsd: paidOverBudgetUsd.optional(),
 });
+const runRetryStepInput = z.object({
+  runId: runShortcode,
+  /** The RunStep key (`exif`, `statement_transaction`) whose failures run again. */
+  stepKey: z.string().min(1),
+});
+
 const runControlOutput = z.object({
   run: runDetail,
   successor: z
@@ -267,6 +274,18 @@ export const runContract = defineContract("run", {
     input: setCreditBudgetInput,
     output: mailImportStatus,
     invalidates: ["runOnly"],
+  }),
+  sweep: mutation({
+    native: "Find suggestions across Cubby or a chosen scope",
+    input: sweepStartInput,
+    output: z.object({ runId: runShortcode }),
+    invalidates: ["runOnly"],
+  }),
+  sweepEstimate: query({
+    mcp: { omit: "client_view" },
+    native: "Show what a Sweep would look at before it starts",
+    input: sweepStartInput,
+    output: sweepEstimateOut,
   }),
   discoverMail: mutation({
     native: "Start Mail discovery now for one mailbox with Mail import on",
@@ -414,6 +433,13 @@ export const runContract = defineContract("run", {
     native: "Stop, resume or retry a Run from its detail sections",
     input: runControlInput,
     output: runControlOutput,
+    invalidates: ["runOnly"],
+  }),
+  retryStep: mutation({
+    mcp: { omit: "operator_maintenance" },
+    native: "Retry one step's failures from a Run's Steps section",
+    input: runRetryStepInput,
+    output: z.object({ run: runDetail }),
     invalidates: ["runOnly"],
   }),
   lifecycle: mutation({

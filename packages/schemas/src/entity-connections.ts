@@ -105,6 +105,11 @@ const connectionEndpoints = {
   "inventory-location": ["inventory", "location"],
 } satisfies Record<ConnectionRelation, readonly [string, string]>;
 
+/** Every record kind some connection relation can start or end at. */
+export const connectionEndpointKinds = [
+  ...new Set(Object.values(connectionEndpoints).flat()),
+];
+
 export const connectionEvidence = z.object({
   reasons: z.array(z.string()).max(30),
   contradictions: z.array(z.string()).max(30),

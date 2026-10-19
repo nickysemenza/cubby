@@ -861,6 +861,7 @@ export function MobileCardView<TItem extends RowData>({
               count={gItem.section.count}
               onFilter={gItem.section.onFilter}
               onHide={gItem.section.onHide}
+              actions={gItem.section.actions}
             />
           </VirtualRow>
         );

@@ -1,6 +1,16 @@
 import { runShortcode } from "./identifier-fields";
 import { z } from "zod";
 
+/**
+ * Why an image left the EXIF/GPS backlog without metadata: its original is
+ * gone from storage, or extraction kept failing. Selection skips both.
+ */
+export const imageMetadataOutcome = z.enum([
+  "original_missing",
+  "extraction_failed",
+]);
+export type ImageMetadataOutcome = z.infer<typeof imageMetadataOutcome>;
+
 /** How confidently `Image.capturedByPartyId` reflects reality. */
 export const imageCaptureAttribution = z.enum([
   "none",

@@ -5,6 +5,7 @@ import { getS3ObjectRange } from "~/server/clients/s3";
 import type { Database } from "~/server/db";
 import {
   getImageMetadataExtractionRow,
+  markImageMetadataOutcome,
   type ImageMetadataExtractionRow,
 } from "~/server/domains/image/repo/image";
 import { applyImageMetadataExtraction } from "~/server/domains/image/repo/image-metadata";
@@ -17,9 +18,9 @@ import {
  * fetching more than a few MiB even for a multi-hundred-megabyte original. */
 const MAX_METADATA_FETCH_BYTES = 4 * 1024 * 1024;
 
-/** `null` on a 404 (object missing — leave the stale marker as-is for a
- * later retry rather than mask a lost object as "no metadata"); throws on any
- * other failed fetch, same as `image-verification.service.ts`'s port. */
+/** `null` on a 404 (object missing — recorded as `original_missing` rather
+ * than masked as "no metadata"); throws on any other failed fetch, same as
+ * `image-verification.service.ts`'s port. */
 const fetchLeadingBytes = async (
   key: string,
   maxBytes: number,
@@ -70,14 +71,17 @@ export async function extractAndStoreImageMetadata(
   db: Database,
   imageId: ImageId,
   ports: ExtractImageMetadataPorts = productionExtractImageMetadataPorts,
-): Promise<"succeeded" | "skipped"> {
+): Promise<"succeeded" | "skipped" | { missing: string }> {
   const row = await ports.getRow(db, imageId);
   if (!row) return "skipped";
   const bytes = await ports.getBytes(row.key, MAX_METADATA_FETCH_BYTES);
-  // The object is missing — a storage-integrity problem for a different
-  // repair path to find; leaving the stale marker means this row is retried
-  // rather than silently recorded as "no metadata found".
-  if (bytes === null) return "skipped";
+  // No retry can recover a missing original: the row leaves the backlog as
+  // `original_missing` instead of being re-selected forever.
+  if (bytes === null) {
+    const missing = `R2 object not found: ${row.key} (404)`;
+    await markImageMetadataOutcome(db, imageId, "original_missing", missing);
+    return { missing };
+  }
   const parsed = ports.extract(bytes, row.contentType);
   await ports.apply(db, imageId, toStoredMetadata(parsed));
   return "succeeded";

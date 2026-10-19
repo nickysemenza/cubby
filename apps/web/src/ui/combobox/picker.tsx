@@ -1322,6 +1322,16 @@ function SegmentedPicker<TId extends string>({
           >
             {item.presentation?.rowLabel ?? item.name}
           </span>
+          {/* An option's `hint` (a count) trails its segment, as in the lists. */}
+          {item.presentation?.trailing?.map((chip) => (
+            <span
+              key={chip.text}
+              aria-hidden
+              className="text-muted-foreground tabular-nums"
+            >
+              {chip.text}
+            </span>
+          ))}
         </ToggleGroupItem>
       ))}
     </ToggleGroup>

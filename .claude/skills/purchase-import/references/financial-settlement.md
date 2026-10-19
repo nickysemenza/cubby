@@ -233,18 +233,21 @@ Three reconciliation traps:
 
 ### Working the backlog through Transaction suggestions
 
-Recording rows queues a pass that turns each unmatched charge into one
-Transaction suggestion (`finance_read.statement_suggestions`,
-`finance_read.statement_suggestion_groups`); `statement_rows.refresh_suggestions`
-reruns it after hand edits to transactions or accounts. Burn the backlog group
-by group (account × month):
+Recording rows starts a routine Sweep that turns each unmatched charge into
+one Transaction suggestion (`entity_read.suggestion_queue` with `family:
+"statement_transaction"`; `groups: "account_month"` adds per account × month
+sections with clean counts); `run.sweep {families: [{family:
+"statement_transaction"}]}` reruns it after hand edits to transactions or
+accounts, and `imports_read.run_status` follows its Steps. Burn the backlog group by group,
+filtering a group with `where {account: {in: [FAC-…]}, month: {in: [YYYY-MM]}}`:
 
 1. Accept `clean: true` suggestions in batches of up to 100 with
    `entity.review_assessments`: verdict `correct`, intent `apply`,
-   `expectedFingerprint`, and `application {kind: "statement_transaction",
-   action: <recommended>}`. A create is clean only when at least two of
-   `create.votes` (category `rule`, model `label`, merchant `history`) name
-   its kind and none disagrees, and `create.counterparty` is a business. A
+   `expectedFingerprint` (the row's `fingerprint`), and `application {kind:
+   "statement_transaction", action: <recommended>}`; an attach also names
+   `transactionId`, the first candidate. A create is clean only when at least
+   two of `create.votes` (category `rule`, model `label`, merchant `history`)
+   name its kind and none disagrees, and `create.counterparty` is a business. A
    card benefit, statement credit or issuer promotion is an `adjustment`, not a
    `refund` (a merchant giving money back for returned goods), even when it
    names the merchant of the purchase it offsets; merchant history is kept per

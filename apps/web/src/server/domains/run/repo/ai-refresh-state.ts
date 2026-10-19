@@ -95,6 +95,32 @@ async function insertTarget(
   return inserted.length;
 }
 
+/**
+ * Adds evaluation rows to an existing Run. A target whose work key (record,
+ * field and input fingerprint) was already evaluated or is in flight under
+ * any Run is not inserted again; the count is what is new.
+ */
+export async function insertEvaluationTargets(
+  db: Database,
+  runId: string,
+  targets: readonly {
+    target: AiEvaluationTarget;
+    provenance: AiProvenance;
+    snapshot: unknown;
+  }[],
+) {
+  let inserted = 0;
+  for (const item of targets)
+    inserted += await insertTarget(
+      db,
+      runId,
+      item.target,
+      item.provenance,
+      item.snapshot,
+    );
+  return inserted;
+}
+
 /** Creates (or rejoins) a refresh Run and its evaluation rows in one transaction; null when nothing new needs a Workflow. */
 export async function scheduleEvaluationRun(
   db: Database,

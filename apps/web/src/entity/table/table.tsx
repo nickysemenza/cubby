@@ -188,6 +188,15 @@ export interface RTableProps<TItem extends RowData> {
   };
   /** The active Group by choice and its server sections (mobile + desktop). */
   groupConfig?: GroupConfig;
+  /**
+   * Full-width content beneath each row in `openIds` (desktop), measured
+   * rather than held to the row height: inline evidence a person compares
+   * across several open rows.
+   */
+  rowDetail?: {
+    openIds: ReadonlySet<string>;
+    render: (row: Row<TItem>) => ReactNode;
+  };
   /** A server tree's nested/flat switch. */
   nestToggle?: NestToggle;
   /**
@@ -973,6 +982,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     infiniteScroll,
     refreshControls,
     groupConfig,
+    rowDetail,
     nestToggle,
     getRowClassName,
     verticalAlign = "middle",
@@ -988,6 +998,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     table,
     infiniteScroll,
     groupConfig,
+    detailRowIds: rowDetail?.openIds,
     verticalAlign,
     onRowClick,
   });
@@ -1003,12 +1014,14 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     isFetchingNextPage,
     isTransitioning,
     isMobile,
+    measureElement,
     resolveIndex,
     rows,
     rowContentVersion,
     stickyIndex,
     styles,
     tableContainerRef,
+    tableContainerWidth,
     totalSize,
     virtualRows,
   } = controller;
@@ -1168,7 +1181,35 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
                 count={item.count}
                 onFilter={item.onFilter}
                 onHide={item.onHide}
+                aside={item.aside}
+                actions={item.actions}
               />
+            </TableCell>
+          </TableRow>
+        );
+      }
+      if (item.kind === "detail") {
+        const detailRow = rows[item.rowIndex]!;
+        return (
+          <TableRow
+            key={`detail-${detailRow.id}`}
+            ref={measureElement}
+            data-index={virtualRow.index}
+            className="border-b border-border bg-muted/40 hover:bg-muted/40"
+          >
+            <TableCell colSpan={colSpan} className="p-0">
+              {/* Pinned to the pane's left edge so a wide table's detail
+                  stays readable without scrolling sideways. */}
+              <div
+                className="sticky left-0"
+                style={
+                  tableContainerWidth
+                    ? { width: `${tableContainerWidth}px` }
+                    : undefined
+                }
+              >
+                {rowDetail?.render(detailRow)}
+              </div>
             </TableCell>
           </TableRow>
         );

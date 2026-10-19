@@ -64,13 +64,14 @@ import { purchaseImportContract } from "~/contracts/purchase-import.contract";
 import { purchaseContract } from "~/contracts/purchase.contract";
 import {
   recipeContract,
-  suggestionsContract,
+  recipeAvailabilityContract,
 } from "~/contracts/recipe.contract";
 import { recommendationsContract } from "~/contracts/recommendations.contract";
 import { runContract } from "~/contracts/run.contract";
 import { searchContract } from "~/contracts/search.contract";
 import { spendingClassificationContract } from "~/contracts/spending-classification.contract";
 import { statementRowContract } from "~/contracts/statement-row.contract";
+import { suggestionsContract } from "~/contracts/suggestions.contract";
 import { taskContract } from "~/contracts/task.contract";
 import {
   usdaFoodContract,
@@ -110,13 +111,14 @@ export const MCP_TOOLS = defineMcpTools({
           "Decision-model field suggestions for a record or draft (`targets`, `basis`); a spending field also returns financeReview, whose fingerprint spending_classification_write.apply_category_suggestion takes. Mint one runKey uuid per session and reuse it for entity.record_suggestion_miss. decisionModel pins Jev (typesafe/jev) or Clef (@cf/cloudflare/clef) to replay one record through each trial model.",
       }),
       suggestion_queue: mcpAction({
-        op: aiContract.ops.listSuggestionReviewQueue,
-        project: (items) => ({ items }),
-        output: z.object({
-          items: aiContract.ops.listSuggestionReviewQueue.output,
-        }),
+        op: suggestionsContract.ops.list,
         description:
-          "Stored field suggestions; every filter composes: entity, field or fields, kind, minConfidence, runId, and recordIds (with entity). status defaults to pending (the review queue; each Assessment id feeds entity.review_assessment); applied, rejected and superseded read reviewed history with correctValue — the decision-eval label set. Paired trial rows never appear.",
+          "Pending Suggestions of every family (field; statement_transaction = Transaction suggestions from unmatched statement charges; recommendation = typed connections) as uniform rows: record/other refs, structured summary, strength (strong/medium/weak from the family's own evidence), clean (bulk-acceptable as is), impact (data-quality checks or outcomes acceptance restores), allowed actions and the family's evidence. Filters compose: family, entity, recordIds (any shortcodes; a connection lists under both endpoints), runId, and where {<column>: {in, min, max, search}} over the columns each row returns (common: family, strength, clean, createdAt, impact; field: entity, field, kind, confidence; statement_transaction: date, month, account, owner, merchant, amount, action, kind, kindSource, providerCategory, providerStatus, candidate, modelLabel; recommendation: relation, entityKind, source, target). order is a stack of {by: ready | impact | <column>, direction}; facets count chip values; pass next back as cursor. groups account_month returns statement sections per account and month with clean counts. status defaults to pending; other statuses read field history with correctValue (the decision-eval label set) and applied statement rows. appliedAutomatically: true lists only what an Automatic rule applied, each row naming it in automaticRule (<ruleKey>@<revision>); matchedRules lists the rule stamps a row matched when published (see entity_read.suggestion_rules). Review through entity.review_assessment(s) with assessmentId and fingerprint as expectedFingerprint. Field accept = verdict correct, intent apply; a corrected value = verdict wrong with correction. Statement accept as is = verdict correct, intent apply, application {kind: statement_transaction, action: recommended, transactionId: first candidate for an attach}; another choice = verdict wrong with correction {present: true, value: <that application>}; dismiss = verdict dismissed with suppression {scope: statement_transaction, candidateKey: `<source>:<chargeKey>`, fingerprint}, permanent. Connections are never clean; an ownerOnly accept is the Email owner's (agents use mail.resolve) and product-pair rows open the Workbench. Labels and confidence alone never authorize anything.",
+      }),
+      suggestion_rules: mcpAction({
+        op: suggestionsContract.ops.rules,
+        description:
+          "Automatic rules: named, versioned family rules that apply matching Suggestions without review (field.addition; statement_transaction.attach, measured per decision model). Each returns enabled, eligible and precision windows (stamp, model, n, hits, precision, correctedAutomatic) over the latest 200 member-reviewed matches that were served for review; eligible needs n >= 50 at >= 98%. Automatic applications later marked Wrong count as correctedAutomatic, outside the ratio.",
       }),
       connection_candidates: mcpAction({
         op: connectionContract.ops.read,
@@ -265,6 +267,11 @@ export const MCP_TOOLS = defineMcpTools({
         modelBacked: true,
         description:
           "Discover proposed relationships for an existing record using bounded typed matchers. Publishes Assessments, without accepting new links. Repeated purchases remain eligible. Review the exact proposed effect before acceptance.",
+      }),
+      set_suggestion_rule: mcpAction({
+        op: suggestionsContract.ops.setRule,
+        description:
+          "Turn one Automatic rule on or off ({ruleKey, enabled}) on the member's instruction. On requires eligibility (read entity_read.suggestion_rules) and refuses with the raw numbers otherwise; off is always allowed.",
       }),
       review_assessments: mcpAction({
         op: assessmentContract.ops.reviewBatch,
@@ -420,7 +427,7 @@ export const MCP_TOOLS = defineMcpTools({
           'A recipe\'s cost/calorie totals with per-ingredient diagnostics. `detail: "lines"` (default) drops the two full nutrient-totals blocks and the drift record and returns only the per-line diagnostics plus a cost/kcal coverage headline — use it when hunting the uncovered line, not the number.',
       }),
       cookable: mcpAction({
-        op: suggestionsContract.ops.getMakeable,
+        op: recipeAvailabilityContract.ops.getMakeable,
         project: (output) => ({ recipes: output.recipes }),
         output: recipeAvailabilityMcpOut,
         description:
@@ -583,16 +590,6 @@ export const MCP_TOOLS = defineMcpTools({
         readPolicy: "strong",
         description:
           "Preview client-parsed Monarch statement rows before recording settlement evidence. Normalized rows only — never a CSV path, upload, or file contents; at most 200 rows. Monarch charges are negative in the export and are normalized to positive Cubby outflows; credits become negative. The preview derives a stable source reference from account/date/amount/original statement, resolves an existing Financial Account only when unambiguous, and returns already_recorded, ready_to_create, possible_existing, unresolved_account, or indistinguishable_duplicate per row. Eligible rows may include advisory vendorInference from prior settled transactions with the same Merchant label; it neither matches nor links anything. Unresolved rows include a non-persisted provisional Account suggestion. It never creates Accounts, Financial Transactions, Purchases, or links: create only user-approved ready_to_create rows afterwards with entity.create(financialTransaction), then review every result.",
-      }),
-      statement_suggestions: mcpAction({
-        op: statementRowContract.ops.suggestions,
-        description:
-          "Pending Transaction suggestions computed from unmatched statement charges: one per charge, recommending create, attach (to an existing transaction that may already record it), supersede (a recorded hold now posted) or void (a recorded hold a later export no longer contains). Filter by account (FAC-), month (YYYY-MM), recommended action, or clean. `clean` suggestions are the bulk-acceptable ones: a create with no candidate or sibling whose kind at least two of `create.votes` (provider-category `rule`, decision-model `label`, merchant `history`) name while none disagrees and whose `create.counterparty` is a business (or whose `transfer` names one same-owner own account), or a single exact-amount supersede, or a single attach a decision model labelled the same charge with high confidence; everything else needs reading. A person counterparty is never clean: outgoing is a shared-cost `purchase`, incoming a repayment to book with finance.book_transaction as a reimbursement. `transfer` names the member's own balance account a cash-out or funding descriptor points at; pair it through finance_read.transfer_pairs, and when `ledgerTransfer` is true accept that pair with finance.accept_transfer_pair. Candidates carry the fields that differ (`diff`) and an advisory model `label` that never authorizes anything. Accept, correct or dismiss through entity.review_assessments with each assessmentId and fingerprint: accept as is = verdict correct, intent apply, application {kind: statement_transaction, action: the recommended action}; a different choice (another candidate, create anyway with rejectedCandidateIds, a kindOverride, ticked fields) = verdict wrong with correction {present: true, value: <the same application>}; dismiss = verdict dismissed with suppression {scope: statement_transaction, candidateKey: `<source>:<chargeKey>`, fingerprint}. Nothing is created or attached until reviewed.",
-      }),
-      statement_suggestion_groups: mcpAction({
-        op: statementRowContract.ops.suggestionGroups,
-        description:
-          "Pending Transaction suggestions counted per account and month, with how many are clean and how many recommend each action — the worklist for burning down the unmatched backlog group by group.",
       }),
       transfer_pairs: mcpAction({
         op: householdContributionContract.ops.transferPairs,
@@ -777,11 +774,6 @@ export const MCP_TOOLS = defineMcpTools({
         op: statementRowContract.ops.update,
         description:
           "Write judgments onto statement rows; the provider's own columns are immutable after ingest. Address rows by {source, externalIds} for a handful, or by {filter} for a bulk pass (an empty filter is refused). Set disposition 'ignored' with both a reason and a note to take rows off the worklist permanently — the intended move for the large tail of consumer spend Cubby does not model. `accountId` records which account a row belongs to, and `supersededByExternalId` links a pending row to the posted row that replaced it (superseding requires the explicit id selector).",
-      }),
-      refresh_suggestions: mcpAction({
-        op: statementRowContract.ops.refreshSuggestions,
-        description:
-          "Recompute Transaction suggestions from the statement ledger. Runs the first page of charges now and continues the rest in the background (`queued`); when no background queue is available it returns `next`, which you pass back as `after` to page on. Safe to repeat: unchanged evidence publishes nothing, and a dismissed charge stays dismissed. Recording rows already starts a pass, so call this only after changing transactions or accounts by hand.",
       }),
       delete: mcpAction({
         op: statementRowContract.ops.delete,
@@ -1013,7 +1005,7 @@ export const MCP_TOOLS = defineMcpTools({
 
   run: {
     description:
-      "Control Runs (Mail import, photo inventory, or a member's import); read one with imports_read.run_status. set_mail_import, discover_mail, commit_prepared and resolve_finding spend money or settle evidence: call them only on the member's explicit instruction.",
+      "Control Runs (Mail import, photo inventory, or a member's import); read one with imports_read.run_status. set_mail_import, discover_mail, commit_prepared, resolve_finding and approve/reject spend money or settle evidence: call them only on the member's explicit instruction.",
     actions: {
       lifecycle: mcpAction({
         op: runContract.ops.lifecycle,
@@ -1032,6 +1024,12 @@ export const MCP_TOOLS = defineMcpTools({
         op: runContract.ops.setCreditBudget,
         description:
           "Set the household Claude subscriber-credit budget per six-hour window (creditLimitUsd, standard API cost; default $5). Background work past it moves to the ChatGPT plan, then waits; work paused under the old limit retries now. Returns imports_read.mail_import.",
+      }),
+      sweep: mcpAction({
+        op: runContract.ops.sweep,
+        openWorld: true,
+        description:
+          "Find suggestions: start one Sweep over the chosen Suggestion families (statement_transaction scoped by accountIds/since, recommendation by entityKinds, field by entity and fields; omitted scope covers everything). Returns the Sweep Run; follow it with imports_read.run_status and review results with entity_read.suggestion_queue. Model calls spend within the household AI budget and pause at it.",
       }),
       discover_mail: mcpAction({
         op: runContract.ops.discoverMail,

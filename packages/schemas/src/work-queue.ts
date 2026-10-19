@@ -53,7 +53,6 @@ export const workQueueSourceSchema = z.enum([
   "problem",
   "suggestion",
   /** Pending statement Transaction suggestions, one row per account. */
-  "statement_suggestion",
 ]);
 
 const workRecordRef = z.object({
@@ -156,9 +155,11 @@ export const workQueueRowSchema = problemRowSchema
     entity: problemRowSchema.shape.entity.nullable(),
     id: problemRowSchema.shape.id.nullable(),
     problemKey: z.string().min(1).optional(),
-    /** One row per (entity, field) with pending Suggestions; it opens the
-     * filtered AI Review list rather than a record. */
-    suggestionField: z.string().min(1).optional(),
+    /** One row per Suggestion family with pending Suggestions; it opens
+     * the Suggestions page on that family rather than a record. */
+    suggestionFamily: z
+      .enum(["statement_transaction", "recommendation", "field"])
+      .optional(),
     key: z.string().min(1),
     source: workQueueSourceSchema,
     kind: workQueueKindSchema,
@@ -190,18 +191,18 @@ export const workQueueRowSchema = problemRowSchema
       (row.entity !== null &&
         row.id !== null &&
         row.problemKey === undefined &&
-        row.suggestionField === undefined) ||
+        row.suggestionFamily === undefined) ||
       (row.entity === null &&
         row.id === null &&
         row.problemKey !== undefined &&
-        row.suggestionField === undefined) ||
-      (row.entity !== null &&
+        row.suggestionFamily === undefined) ||
+      (row.entity === null &&
         row.id === null &&
         row.problemKey === undefined &&
-        row.suggestionField !== undefined),
+        row.suggestionFamily !== undefined),
     {
       message:
-        "Work must name a source record, a Problems diagnostic, or a suggested field.",
+        "Work must name a source record, a Problems diagnostic, or a Suggestion family.",
     },
   );
 

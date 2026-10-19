@@ -11,6 +11,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 
 import { SECTION_HEADER_HEIGHT } from "../section-header";
@@ -28,8 +29,15 @@ export type GroupedItem =
       count: number;
       onFilter?: () => void;
       onHide?: () => void;
+      aside?: ReactNode;
+      actions?: ReactNode;
     }
-  | { kind: "row"; rowIndex: number; groupRowIndex: number };
+  | { kind: "row"; rowIndex: number; groupRowIndex: number }
+  /** An expanded row's full-width detail, directly after its row. */
+  | { kind: "detail"; rowIndex: number };
+
+/** First estimate for a row detail; the rendered element is then measured. */
+const ROW_DETAIL_ESTIMATE = 160;
 
 /**
  * What `virtualRow.index` points at, given the grouped/flat index space.
@@ -49,9 +57,12 @@ type ResolvedVirtualIndex =
       count: number;
       onFilter?: () => void;
       onHide?: () => void;
+      aside?: ReactNode;
+      actions?: ReactNode;
     }
   /** groupRowIndex present only in grouped mode (position within the group). */
   | { kind: "row"; rowIndex: number; groupRowIndex?: number }
+  | { kind: "detail"; rowIndex: number }
   | { kind: "sentinel" };
 
 /**
@@ -128,6 +139,8 @@ export function tableVirtualItemKey(
     const item = groupedItems[index];
     if (!item) return `missing:${index}`;
     if (item.kind === "header") return `group:${item.key ?? item.title}`;
+    if (item.kind === "detail")
+      return `detail:${rowKeys[item.rowIndex] ?? item.rowIndex}`;
     return `row:${rowKeys[item.rowIndex] ?? item.rowIndex}`;
   }
   return `row:${rowKeys[index] ?? index}`;
@@ -183,6 +196,8 @@ interface UseTableVirtualizerResult {
   stickyIndex: number | null;
   /** Scroll a virtualizer index into view. */
   scrollToIndex: (index: number, options?: { align?: "auto" }) => void;
+  /** Ref for a variable-height item (a row detail); needs `data-index`. */
+  measureElement: (element: Element | null) => void;
 }
 
 /**
@@ -292,9 +307,9 @@ export function useTableVirtualizer({
       if (trailingSentinel && index === baseCount) {
         return rowHeight;
       }
-      if (groupedItems && groupedItems[index]!.kind === "header") {
-        return SECTION_HEADER_HEIGHT;
-      }
+      const kind = groupedItems?.[index]?.kind;
+      if (kind === "header") return SECTION_HEADER_HEIGHT;
+      if (kind === "detail") return ROW_DETAIL_ESTIMATE;
       return rowHeight;
     },
     overscan,
@@ -348,5 +363,6 @@ export function useTableVirtualizer({
       : null,
     scrollToIndex: (index, options) =>
       rowVirtualizer.scrollToIndex(index, options),
+    measureElement: rowVirtualizer.measureElement,
   };
 }

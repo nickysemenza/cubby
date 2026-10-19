@@ -1,7 +1,7 @@
 import type { GeneratedGroupChoice } from "@cubby/schemas/entity-list-fields";
 import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
 import type { ListGroupSummary } from "@cubby/schemas/pagination";
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 
 /**
  * A list grouped by a declared `model.grouping` choice. `groups` are the
@@ -15,6 +15,14 @@ export interface GroupConfig {
   groups: readonly ListGroupSummary[];
   onFilter?: (group: ListGroupSummary) => void;
   hide?: (group: ListGroupSummary) => (() => void) | undefined;
+  /**
+   * A section's own header content: `aside` beside its label and count (a
+   * record link the label cannot carry), `actions` at its trailing edge.
+   */
+  header?: (group: ListGroupSummary) => {
+    aside?: ReactNode;
+    actions?: ReactNode;
+  };
 }
 
 export interface GroupSection<T> {
@@ -27,6 +35,8 @@ export interface GroupSection<T> {
   onFilter?: () => void;
   /** Hides the section, keeping the grouping; absent when it cannot. */
   onHide?: () => void;
+  aside?: ReactNode;
+  actions?: ReactNode;
 }
 
 /**
@@ -56,6 +66,7 @@ export function groupSections<T>(
           ? () => config.onFilter?.(group)
           : undefined,
       onHide: config.hide?.(group),
+      ...config.header?.(group),
     };
     let taken = 0;
     while (index < items.length) {

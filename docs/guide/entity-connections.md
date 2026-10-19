@@ -72,13 +72,17 @@ fences continue to use a fresh `connectionSourceFingerprint(db, source)`; a page
 estimate does not authorize publishing against old evidence.
 
 The public Find connections mutation schedules a durable evaluation in the
-active AI refresh generation and returns its Run handle alongside stored
-results. It requires that generation to be enabled. Member-initiated discovery
-retains the initiating actor; unattended discovery uses the reserved system actor.
-Background cursor passes
-cover all eligible records and revisit them when endpoint roster content changes.
-Relations on both endpoints, Work, and RTable review affordances read stored
-proposals. RTable uses the owning field or the endpoint's declared title column.
+active AI refresh generation, launches its Workflow, and returns its Run handle
+alongside stored results. It requires that generation to be enabled.
+Member-initiated discovery retains the initiating actor; unattended discovery
+uses the reserved system actor. Coverage across every eligible record is a
+[Sweep](terminology.md): one connection step whose child `ai_refresh` Run
+evaluates each source not already evaluated under its current fingerprint.
+Each AI-refresh discovery generation starts one routine Sweep unless one is
+unfinished; a member's Find suggestions starts one with a chosen scope.
+The Suggestions page, Relations on both endpoints, Work on both endpoints, and
+RTable review affordances read stored proposals. RTable uses the owning field
+or the endpoint's declared title column.
 
 A proposal carries canonical endpoints, a relation, reasons, contradictions,
 unknowns, its Assessment review handle and evidence fingerprint. New connections

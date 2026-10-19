@@ -58,7 +58,7 @@ const SERVER_TOP_LEVEL = new Set([
 const ROLE_ENTRY = /^(repo|service|operations)(\.[a-z0-9.-]+)?$/;
 const MAX_DIRECT_SOURCE_FILES = 40;
 const CROWDED_FOLDERS = {
-  "apps/web/src/contracts": 60,
+  "apps/web/src/contracts": 61,
   "apps/web/src/features/recipe": 51,
   "apps/web/src/lib": 89,
   "apps/web/src/server/domains/product/repo": 43,

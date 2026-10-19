@@ -12,6 +12,7 @@ import {
   expenseShortcode,
   financialAccountShortcode,
   financialTransactionShortcode,
+  imageShortcode,
   ingredientShortcode,
   locationShortcode,
   mealShortcode,
@@ -30,6 +31,7 @@ import {
 } from "./project";
 import { searchableEntityRefFields } from "./search";
 import { proposedImportFix } from "./purchase-import";
+import { imageMetadataOutcome } from "./image-capture-fields";
 
 const publicEntityIdSchema = anyShortcodeSchema(
   nonEmptyTuple<ShortcodeEntity>(shortcodeEntities),
@@ -316,6 +318,17 @@ export const entityMissingEmbeddingSchema = z.object({
 export const staleParentRecipeSchema = z.object({
   id: recipeShortcode,
   name: z.string(),
+});
+
+// A live image whose EXIF/GPS extraction ended without metadata: its original
+// is missing from storage, or extraction kept failing. Terminal so it leaves
+// the maintenance backlog; the raw error stays for diagnosis, and the
+// maintenance step's "Retry failed" is its re-admit.
+export const imageMetadataOutcomeProblemSchema = z.object({
+  id: imageShortcode,
+  name: z.string(),
+  outcome: imageMetadataOutcome,
+  error: z.string(),
 });
 
 // A planned meal whose cost rollup is knowingly incomplete: at least one of
@@ -696,6 +709,11 @@ export const problemDetectors = {
     entityMissingEmbeddingSchema,
   ),
   staleParentRecipes: detector("fast", "defect", staleParentRecipeSchema),
+  imageMetadataOutcomes: detector(
+    "fast",
+    "defect",
+    imageMetadataOutcomeProblemSchema,
+  ),
   // A cooked meal with nothing planned is unfinished, and it converges to zero
   // two ways: plan a recipe, or re-kind it to what it actually was. Not
   // `coverage` — there is no denominator and no backlog being worked through,

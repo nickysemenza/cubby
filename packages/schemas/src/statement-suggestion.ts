@@ -7,6 +7,7 @@ import {
 import { financialTransactionSourceRef } from "./financial-transaction-fields";
 import {
   financialAccountShortcode,
+  ledgerPartyShortcode,
   financialTransactionShortcode,
 } from "./identifiers";
 import { plainDate } from "./project";
@@ -150,8 +151,6 @@ export type StatementTransactionApplication = z.infer<
   typeof statementTransactionApplication
 >;
 
-export const STATEMENT_SUGGESTION_PAGE_MAX = 500;
-
 export const statementSuggestionFilters = z.object({
   accountId: financialAccountShortcode.optional(),
   month: z
@@ -165,14 +164,6 @@ export type StatementSuggestionFilters = z.infer<
   typeof statementSuggestionFilters
 >;
 
-export const listStatementSuggestionGroupsInput = z.object({});
-
-export const listStatementSuggestionsInput = z.object({
-  filters: statementSuggestionFilters.default({}),
-  limit: z.number().int().min(1).max(STATEMENT_SUGGESTION_PAGE_MAX).default(50),
-  offset: z.number().int().min(0).default(0),
-});
-
 const publicCandidate = statementTransactionCandidate
   .omit({ transactionId: true })
   .extend({ transactionId: financialTransactionShortcode });
@@ -183,7 +174,8 @@ export const statementSuggestionOut = z.object({
   source: z.string(),
   chargeKey: z.string(),
   accountId: financialAccountShortcode,
-  accountName: z.string(),
+  /** The account's owner. */
+  ownerId: ledgerPartyShortcode.nullable(),
   statementDate: plainDate,
   amount: z.number(),
   merchant: z.string().nullable(),
@@ -206,43 +198,3 @@ export const statementSuggestionOut = z.object({
   createdAt: z.iso.datetime(),
 });
 export type StatementSuggestionOut = z.infer<typeof statementSuggestionOut>;
-
-export const statementSuggestionListOut = z.object({
-  data: z.array(statementSuggestionOut),
-  count: z.number().int(),
-});
-
-export const statementSuggestionGroupOut = z.object({
-  accountId: financialAccountShortcode,
-  accountName: z.string(),
-  month: z.string(),
-  total: z.number().int(),
-  clean: z.number().int(),
-  create: z.number().int(),
-  attach: z.number().int(),
-  supersede: z.number().int(),
-  void: z.number().int(),
-  amount: z.number(),
-});
-export const statementSuggestionGroupsOut = z.object({
-  data: z.array(statementSuggestionGroupOut),
-});
-
-const chargeCursor = z.object({
-  source: z.string().min(1),
-  chargeKey: z.string().min(1),
-});
-
-export const refreshStatementSuggestionsInput = z.object({
-  /** Resume after this charge; omit to start a full pass. */
-  after: chargeCursor.nullable().default(null),
-});
-
-export const refreshStatementSuggestionsOut = z.object({
-  published: z.number().int(),
-  unchanged: z.number().int(),
-  /** Set when no queue continues the pass: call again with it to page on. */
-  next: chargeCursor.nullable(),
-  /** The remaining pages continue in the background. */
-  queued: z.boolean(),
-});

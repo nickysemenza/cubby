@@ -13,7 +13,7 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 
 import { controlWorkflowRun } from "./control";
 import type { WorkflowLauncher } from "./launcher";
-import { claimWorkflowRun } from "./lifecycle";
+import { claimWorkflowRun, launchWorkflowRun } from "./lifecycle";
 
 // A boolean admission guard must not transfer retained Run payloads. Narrow
 // and full reads must keep the same running-status and current-attempt fence.
@@ -138,4 +138,51 @@ describe("Workflow paid funding controls", () => {
       expect(launches).toEqual([purpose]);
     },
   );
+});
+
+// CUBBY-1E8: recovery paths race to relaunch the same Run. The loser must see
+// "already running or ended" as a no-op, not throw on an unrelated request.
+describe("Automatic Workflow relaunch", () => {
+  const ctx = withTestDb();
+  const created: string[] = [];
+  const launcher: WorkflowLauncher = {
+    create: async (_purpose, id) => {
+      created.push(id);
+    },
+    terminate: async () => {},
+    status: async () => ({ state: "running", error: null }),
+  };
+
+  it("launches once when two automatic recoveries race, and never reopens an ended Run", async () => {
+    created.length = 0;
+    const id = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_refresh",
+      trigger: "scheduled",
+      status: "running",
+    });
+    const recover = () =>
+      launchWorkflowRun(
+        ctx.db,
+        { runId: id, purpose: "ai_refresh", automatic: true },
+        launcher,
+      );
+    const outcomes = await Promise.all([recover(), recover()]);
+    expect(outcomes.filter((outcome) => outcome === null)).toHaveLength(1);
+    expect(created).toHaveLength(1);
+    // A later recovery while the first attempt still runs is also a no-op.
+    expect(await recover()).toBeNull();
+    for (const status of ["completed", "paused"] as const) {
+      await getDb(ctx.db).update(run).set({ status }).where(eq(run.id, id));
+      expect(await recover()).toBeNull();
+    }
+    expect(created).toHaveLength(1);
+    // A member's explicit launch of a running Run still refuses loudly.
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "running" })
+      .where(eq(run.id, id));
+    await expect(
+      launchWorkflowRun(ctx.db, { runId: id, purpose: "ai_refresh" }, launcher),
+    ).rejects.toThrow("This Run is already running");
+  });
 });

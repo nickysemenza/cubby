@@ -56,9 +56,14 @@ import {
 } from "~/server/domains/statement-import/repo/statement-transaction-kind";
 import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
+import {
+  automaticRuleStamp,
+  matchStatementRules,
+  statementSubjectKey,
+} from "~/server/generic/assessment/repo/automatic-rules";
 
 /** Rule revision stamped on every published suggestion; bump with any policy change. */
-const STATEMENT_SUGGESTION_REVISION = "2026-10-18.3";
+export const STATEMENT_SUGGESTION_REVISION = "2026-10-18.3";
 const STATEMENT_SUGGESTION_PAGE = FINANCIAL_STATEMENT_IMPORT_MAX_ROWS;
 /** A hold's posted twin lands within this window, and a vanished hold is judged after it. */
 const PENDING_POST_WINDOW_DAYS = 7;
@@ -113,20 +118,47 @@ const tuples = (charges: readonly ChargeRef[]) =>
     sql`, `,
   );
 
+/** Which unmatched charges a generation pass covers; empty covers the ledger. */
+export type StatementSuggestionScope = {
+  /** Only the charges one import observed. */
+  importId?: string | null;
+  /**
+   * Only charges that resolve to these FinancialAccounts. Resolution is the
+   * preview's (an alias, then a card's last four), so this filters resolved
+   * proposals rather than the rows a page reads.
+   */
+  accountIds?: readonly string[];
+  /** Only charges dated on or after this day (`YYYY-MM-DD`). */
+  since?: string | null;
+};
+
 /** Unmatched charges in `(source, chargeKey)` order after the cursor. */
 async function nextUnmatchedCharges(
   db: Database,
-  input: { after: ChargeRef | null; limit: number; importId: string | null },
+  input: {
+    after: ChargeRef | null;
+    limit: number;
+    scope: StatementSuggestionScope;
+  },
 ): Promise<ChargeRef[]> {
   const after = input.after
     ? sql`AND (cs.source, cs."chargeKey") > (${input.after.source}, ${input.after.chargeKey})`
     : sql``;
-  // An import's pass covers only the charges it observed.
-  const state = input.importId
+  const { importId, since } = input.scope;
+  // A scope selects whole charges, so the charge's state still reads every
+  // live observation of it.
+  const filters = [
+    ...(importId
+      ? [
+          sql`seen.id IN (SELECT m."statementRowId" FROM ${statementImportMembers} m WHERE m."importId" = ${importId}::uuid)`,
+        ]
+      : []),
+    ...(since ? [sql`seen."statementDate" >= ${since}::date`] : []),
+  ];
+  const state = filters.length
     ? chargeStateOf(sql`(r.source, ${chargeKeyOf("r")}) IN (
-        SELECT seen.source, ${chargeKeyOf("seen")} FROM ${statementImportMembers} m
-        JOIN "StatementRow" seen ON seen.id = m."statementRowId" AND seen."deletedAt" IS NULL
-        WHERE m."importId" = ${input.importId}::uuid
+        SELECT seen.source, ${chargeKeyOf("seen")} FROM "StatementRow" seen
+        WHERE seen."deletedAt" IS NULL AND ${sql.join(filters, sql` AND `)}
       )`)
     : CHARGE_STATE;
   const { rows } = await unwrapDb(db).execute<ChargeRef>(sql`
@@ -136,6 +168,24 @@ async function nextUnmatchedCharges(
     LIMIT ${input.limit}
   `);
   return rows.map((row) => ({ source: row.source, chargeKey: row.chargeKey }));
+}
+
+/**
+ * How many unmatched charges a scope's import and date bounds cover, for a
+ * Sweep's estimate; an account scope narrows that further at generation.
+ */
+export async function countUnmatchedCharges(
+  db: Database,
+  scope: StatementSuggestionScope,
+) {
+  let total = 0;
+  let after: ChargeRef | null = null;
+  for (;;) {
+    const page = await nextUnmatchedCharges(db, { after, limit: 5_000, scope });
+    total += page.length;
+    if (page.length < 5_000) return total;
+    after = page.at(-1)!;
+  }
 }
 
 async function loadObservations(
@@ -1107,6 +1157,11 @@ export async function publishChargeProposal(
           // Rule output awaits the decision model's labels: candidate
           // identity, and the kind and counterparty of every create.
           needsLabel: producer.kind === "rule" && judgment.create !== null,
+          ...(await automaticRuleStamp(
+            "statement_transaction",
+            matchStatementRules(judgment),
+            statementSubjectKey(charge),
+          )),
         },
       },
     );
@@ -1156,23 +1211,31 @@ export async function generateStatementSuggestionPage(
     after: ChargeRef | null;
     runId: string | null;
     limit?: number;
-    /** Restrict the pass to one import's charges; omit for the whole ledger. */
-    importId?: string | null;
+    scope?: StatementSuggestionScope;
   },
 ): Promise<{
   published: number;
   unchanged: number;
+  /** Charges read but resolved to an account outside the scope. */
+  outOfScope: number;
   next: ChargeRef | null;
 }> {
   const limit = input.limit ?? STATEMENT_SUGGESTION_PAGE;
   const charges = await nextUnmatchedCharges(db, {
     after: input.after,
     limit,
-    importId: input.importId ?? null,
+    scope: input.scope ?? {},
   });
   let published = 0;
   let unchanged = 0;
-  const proposals = await buildChargeProposals(db, charges);
+  const accountIds = input.scope?.accountIds;
+  const built = await buildChargeProposals(db, charges);
+  const proposals = accountIds?.length
+    ? built.filter((proposal) =>
+        accountIds.includes(proposal.judgment.accountId),
+      )
+    : built;
+  const outOfScope = built.length - proposals.length;
   // The final page also judges vanished holds, whose charges are matched.
   if (charges.length < limit)
     proposals.push(...(await buildHoldVoidProposals(db)));
@@ -1188,21 +1251,64 @@ export async function generateStatementSuggestionPage(
   return {
     published,
     unchanged,
+    outOfScope,
     next: charges.length === limit ? charges.at(-1)! : null,
   };
 }
 
-/** Oldest pending rule suggestions awaiting decision-model labels. */
-export async function suggestionsNeedingLabels(db: Database, limit: number) {
+/** A label pass's position in `(createdAt, id)` order. */
+export type LabelCursor = { createdAt: string; id: string };
+
+/**
+ * Pending rule suggestions awaiting decision-model labels after the cursor.
+ * A stale row is paged past rather than ending the pass; regeneration
+ * republishes it under a later position.
+ */
+export async function suggestionsNeedingLabels(
+  db: Database,
+  limit: number,
+  after: LabelCursor | null = null,
+  importId: string | null = null,
+) {
   const { rows } = await unwrapDb(db).execute<{
+    id: string;
+    createdAt: string;
     subject: unknown;
     evidenceFingerprint: string;
   }>(sql`
-    SELECT a.subject, ${suggestionField("evidenceFingerprint")} AS "evidenceFingerprint"
+    SELECT s.id, to_char(s."createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt",
+      a.subject, ${suggestionField("evidenceFingerprint")} AS "evidenceFingerprint"
     FROM "AssessmentState" s JOIN "Assessment" a ON a.id = s.id
     WHERE ${pendingSuggestion()} AND (${suggestionField("needsLabel")})::boolean
+      ${importScope(importId)}
+      ${after ? sql`AND (s."createdAt", s.id) > (${after.createdAt}::timestamp, ${after.id}::uuid)` : sql``}
     ORDER BY s."createdAt", s.id
     LIMIT ${limit}
   `);
   return rows;
+}
+
+/**
+ * An import-scoped pass labels only the charges that import observed, so
+ * concurrent import Sweeps never ask the model about the same suggestions.
+ */
+const importScope = (importId: string | null) =>
+  importId
+    ? sql`AND (${suggestionField("source")}, ${suggestionField("chargeKey")}) IN (
+        SELECT seen.source, ${chargeKeyOf("seen")} FROM "StatementRow" seen
+        WHERE seen."deletedAt" IS NULL AND seen.id IN (
+          SELECT m."statementRowId" FROM ${statementImportMembers} m WHERE m."importId" = ${importId}::uuid))`
+    : sql``;
+
+/** How many pending suggestions still need labels, for a Sweep's count. */
+export async function countSuggestionsNeedingLabels(
+  db: Database,
+  importId: string | null = null,
+) {
+  const { rows } = await unwrapDb(db).execute<{ count: number }>(sql`
+    SELECT count(*)::int AS count FROM "AssessmentState" s
+    WHERE ${pendingSuggestion()} AND (${suggestionField("needsLabel")})::boolean
+      ${importScope(importId)}
+  `);
+  return rows[0]?.count ?? 0;
 }
