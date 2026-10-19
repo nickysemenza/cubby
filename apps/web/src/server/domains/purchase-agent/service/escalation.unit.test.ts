@@ -3,8 +3,10 @@
  * escalation model ever trying it; two refused prepares keep looping on the
  * primary; one refusal on each of two Emails escalates the second; an
  * escalation leaks into the next Email; a recovered (replayed) tool call
- * decides differently from its first run; and a primary equal to its
- * escalation model changes anything at all.
+ * decides differently from its first run; a primary equal to its
+ * escalation model changes anything at all; re-claiming the same unsettled
+ * Email resets it to the primary, which escalates it again in a loop; and an
+ * escalation whose model cannot be funded falls through to another model.
  */
 import type { SupportedChatModel } from "@cubby/shared/ai/models";
 import type { ToolExecutionResult } from "@earendil-works/pi-durable";
@@ -18,6 +20,7 @@ function harness(
     escalation: "claude-opus-5-5",
   },
   configure?: (model: SupportedChatModel) => Promise<void>,
+  unavailable?: () => Promise<string | null>,
 ) {
   const state = new Map<string, string>();
   const configured: SupportedChatModel[] = [];
@@ -33,6 +36,7 @@ function harness(
       configured.push(model);
       await configure?.(model);
     },
+    unavailable,
   });
   const ok: ToolExecutionResult = {
     output: [{ type: "text", text: "{}" }],
@@ -42,10 +46,23 @@ function harness(
     output: [{ type: "text", text: "Order lines do not sum to the total." }],
     isError: true,
   };
-  const claim = (id: string) =>
+  const claim = (id: string, messageId?: string) =>
     escalation.afterTool(
       { id, name: "claim_next_import_work", arguments: {} },
-      ok,
+      messageId
+        ? {
+            output: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  kind: "email",
+                  email: { mailboxId: "synthetic-mailbox", messageId },
+                }),
+              },
+            ],
+            isError: false,
+          }
+        : ok,
     );
   const prepare = (id: string, result = refused) =>
     escalation.afterTool(
@@ -202,6 +219,54 @@ describe("coordinator escalation", () => {
     // The escalation model's own unresolved resolution is recorded.
     expect(await resolve("resolve-2", "unresolved")).toBeUndefined();
     expect(escalation.model()).toBe("claude-opus-5-5");
+  });
+
+  // Regression (2026-10-19): the escalation model re-claimed its unsettled
+  // Email, the claim reset it to the primary, and the primary escalated again.
+  it("keeps an Email escalated when a claim returns it again", async () => {
+    const { escalation, configured, claim, resolve } = harness();
+    await claim("claim-1", "synthetic-a");
+    await escalation.escalate({ reason: "requested", detail: "Unclear" });
+    await claim("claim-2", "synthetic-a");
+    expect(escalation.model()).toBe("claude-opus-5-5");
+    expect(await resolve("resolve-1", "unresolved")).toBeUndefined();
+    await claim("claim-3", "synthetic-b");
+    expect(escalation.model()).toBe("claude-haiku-5-5");
+    expect(configured).toEqual(["claude-opus-5-5", "claude-haiku-5-5"]);
+  });
+
+  it("lets the primary settle an Email whose escalation model cannot be funded", async () => {
+    let reason: string | null = "Synthetic credit refusal";
+    let asked = 0;
+    const { escalation, configured, claim, prepare, resolve } = harness(
+      undefined,
+      undefined,
+      async () => {
+        asked += 1;
+        return reason;
+      },
+    );
+    await claim("claim-1", "synthetic-a");
+    expect(
+      await escalation.escalate({ reason: "requested", detail: "Unclear" }),
+    ).toEqual({
+      escalated: false,
+      model: "claude-haiku-5-5",
+      unavailable: "Synthetic credit refusal",
+    });
+    await prepare("prepare-1");
+    expect(await prepare("prepare-2")).toBeUndefined();
+    expect(await resolve("resolve-1", "unresolved")).toBeUndefined();
+    // Decided once per Email: a recovered call decides as it first did.
+    reason = null;
+    expect(await resolve("resolve-1", "unresolved")).toBeUndefined();
+    expect(asked).toBe(1);
+    expect(configured).toEqual([]);
+    // The next Email asks again.
+    await claim("claim-2", "synthetic-b");
+    expect((await resolve("resolve-2", "unresolved"))?.block).toContain(
+      "claude-opus-5-5",
+    );
   });
 
   it.each([

@@ -84,7 +84,10 @@ was not measurable in replay. Candidate settings remain harness-only overrides
 (`MAIL_REPLAY_MODEL`) until real replay and member grading justify a change.
 With distinct primary and escalation models, one Email escalates on an
 explicit request, two refused prepares, or before the primary records unresolved;
-the next claim returns to the primary. Coordinator model transitions retain a pending/applied configuration receipt.
+a claim that returns another Email returns to the primary (re-claiming the same
+unsettled Email keeps it escalated). While the escalation model's funding refuses
+(a recorded Claude credit refusal, a spent background window budget), the
+primary settles the Email itself; the decision is recorded once per Email. Coordinator model transitions retain a pending/applied configuration receipt.
 Recovery reconciles the desired model before accepting a replayed escalation,
 held resolution, refused prepare or next-Email reset. A failed configuration may
 already have taken effect, so pending transitions always reapply idempotently. A

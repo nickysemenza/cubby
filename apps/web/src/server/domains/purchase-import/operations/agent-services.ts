@@ -53,6 +53,43 @@ function withHostDatabase<T>(
   });
 }
 
+const ADMISSION_ATTEMPTS = 3;
+
+/**
+ * Frontier admission runs before every coordinator model call, so a transient
+ * pool-slot timeout there failed whole Runs (2026-10-19). Retry those; a final
+ * failure keeps its Postgres cause in the message, the only part Workers RPC
+ * carries back to the coordinator.
+ */
+export async function admissionRead<T>(
+  read: () => Promise<T>,
+  wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)),
+): Promise<T> {
+  const { findPgError, isTransientConnectionError } =
+    await import("~/server/errors/db-errors");
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await read();
+    } catch (error: unknown) {
+      if (attempt < ADMISSION_ATTEMPTS && isTransientConnectionError(error)) {
+        await wait(250 * attempt * attempt);
+        continue;
+      }
+      const pg = findPgError(error);
+      // A bare Postgres error already carries its own message.
+      if (
+        pg?.message &&
+        error instanceof Error &&
+        !error.message.includes(pg.message)
+      )
+        throw new Error(`${error.message}\ncause: ${pg.code} ${pg.message}`, {
+          cause: error,
+        });
+      throw error;
+    }
+  }
+}
+
 /** Retirement of a legacy coordinator, named by its stored session id. */
 export function authorizeLegacyRetirement(
   env: Env,
@@ -97,21 +134,39 @@ export function runServicesFor(
     });
   return {
     admitPaidInference: (request) =>
-      withDatabase(async (db) => {
-        const [{ paidRunPreflight }, { runEntityId }] = await Promise.all([
-          import("~/server/domains/run/service/execution-transport"),
-          import("@cubby/schemas/identifiers"),
-        ]);
-        await paidRunPreflight(db, runEntityId.parse(runId))(request);
-      }),
+      admissionRead(() =>
+        withDatabase(async (db) => {
+          const [{ paidRunPreflight }, { runEntityId }] = await Promise.all([
+            import("~/server/domains/run/service/execution-transport"),
+            import("@cubby/schemas/identifiers"),
+          ]);
+          await paidRunPreflight(db, runEntityId.parse(runId))(request);
+        }),
+      ),
     admitFreeInference: (request, funding) =>
-      withDatabase(async (db) => {
-        const [{ freeRunPreflight }, { runEntityId }] = await Promise.all([
-          import("~/server/domains/run/service/execution-transport"),
-          import("@cubby/schemas/identifiers"),
-        ]);
-        return freeRunPreflight(db, runEntityId.parse(runId))(request, funding);
-      }),
+      admissionRead(() =>
+        withDatabase(async (db) => {
+          const [{ freeRunPreflight }, { runEntityId }] = await Promise.all([
+            import("~/server/domains/run/service/execution-transport"),
+            import("@cubby/schemas/identifiers"),
+          ]);
+          return freeRunPreflight(db, runEntityId.parse(runId))(
+            request,
+            funding,
+          );
+        }),
+      ),
+    escalationUnavailable: (model) =>
+      admissionRead(() =>
+        withDatabase(async (db) => {
+          const [{ escalationFundingRefusal }, { runEntityId }] =
+            await Promise.all([
+              import("~/server/ai/funding"),
+              import("@cubby/schemas/identifiers"),
+            ]);
+          return escalationFundingRefusal(db, runEntityId.parse(runId), model);
+        }),
+      ),
     coordinatorRetired: () =>
       withDatabase(async (db) => {
         const { coordinatorRetired } = await import("../repo/run-retirement");

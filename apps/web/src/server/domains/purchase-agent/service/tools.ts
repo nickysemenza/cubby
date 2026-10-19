@@ -178,7 +178,7 @@ export function runAgentTools(
   return [
     tool("escalate_import_work", {
       description:
-        "Hand the current Email to the stronger escalation model when its evidence is beyond what you can settle confidently. That model continues this Email; the next claim returns to you. Returns escalated: false when this Email is already escalated: settle it yourself.",
+        "Hand the current Email to the stronger escalation model when its evidence is beyond what you can settle confidently. That model continues this Email; claiming another Email returns to you. Returns escalated: false when this Email is already escalated, or with `unavailable` (the reason) when the escalation model cannot be funded now: settle it yourself.",
       execute: async (args, api, context) => {
         if (!escalate) throw new Error("This Run has no escalation model");
         return result(
