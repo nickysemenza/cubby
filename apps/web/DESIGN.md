@@ -211,9 +211,10 @@ Photo review keeps a Label media slot even without a label photo: show Missing,
 or Unreadable when analysis completed without readable text. Pending/failed
 analysis stays explicit. Do not repeat absence beside every form field; use
 Not shown on label only where a field comparison needs it. Evidence compares
-the current saved Product, separately from selected Product changes. Show
-loading and failed saved-record reads explicitly; never substitute pending
-proposal values when saved evidence is unavailable. Label
+the current saved Product: comparison marks and name-derived values use saved
+fields too, independently of pending Product changes. New-product comparisons
+use the creation draft. Show loading and failed saved-record reads explicitly;
+never substitute pending proposal values when saved evidence is unavailable. Label
 identifier types and issuers; an unclassified printed code is evidence, never
 an inferred model or external identifier based on which field is empty. Size
 and colour comparisons derived from the Product name say so. Show selected
