@@ -88,7 +88,7 @@ export const emailPurchaseLink = z
     /** Purchases whose link on the same order events a Link here would replace. */
     replacesPurchaseIds: z.array(purchaseShortcode),
     proposedBy: emailLinkProposer.nullable(),
-    /** "PUR-… (Linked)": the pair's own state, for clients that print a list cell as text. */
+    /** "PUR-… (Linked)": the pair's own state for the native generic list cell; agents read `state`. */
     label: z.string(),
   })
   .strict();
