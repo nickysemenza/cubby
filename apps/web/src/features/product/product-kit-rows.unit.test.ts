@@ -53,6 +53,7 @@ const productAt = (shortcode: string, componentCount = 0) =>
     usdaUnavailable: null,
     stockTracked: null,
     kind: null,
+    commodity: false,
     dataQuality: testCompleteDataQuality(),
     unitMappings: [],
     ingredient: null,
