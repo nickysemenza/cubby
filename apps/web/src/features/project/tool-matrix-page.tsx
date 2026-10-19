@@ -234,18 +234,17 @@ function MatrixCell({
       conflictReason
         ? `${title} · recorded, but ${conflictReason}`
         : purchaseCost > 0
-          ? `${title} · ${formatCurrency(purchaseCost, 0)} bought here`
+          ? `${title} · ${formatCurrency(purchaseCost)} bought here`
           : title,
     )
     .with(
       "purchased",
-      () =>
-        `${title} · suggested, ${formatCurrency(purchaseCost, 0)} bought here`,
+      () => `${title} · suggested, ${formatCurrency(purchaseCost)} bought here`,
     )
     .with("trade", () => `${title} · suggested by trade`)
     .with(
       "evidence",
-      () => `${title} · ${formatCurrency(purchaseCost, 0)} bought here`,
+      () => `${title} · ${formatCurrency(purchaseCost)} bought here`,
     )
     .with("conflict", () => `${title} · ${conflictReason ?? "not owned then"}`)
     .with("empty", () => title)
@@ -914,7 +913,7 @@ function MatrixTable({
                   "border-b border-[var(--border)] group-hover/row:bg-muted",
                 )}
               >
-                {formatCurrency(row.netLifetimeCost, 0)}
+                {formatCurrency(row.netLifetimeCost)}
               </td>
               <td
                 className={cn(
@@ -926,7 +925,7 @@ function MatrixTable({
                 {row.costPerProjectUse === null ? (
                   <span className="text-muted-foreground">—</span>
                 ) : (
-                  formatCurrency(row.costPerProjectUse, 0)
+                  formatCurrency(row.costPerProjectUse)
                 )}
               </td>
             </tr>

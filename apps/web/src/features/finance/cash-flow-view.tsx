@@ -70,7 +70,7 @@ function Choice<T extends string>({
   );
 }
 
-const money = (value: number) => formatCurrency(value, 0);
+const money = (value: number) => formatCurrency(value);
 const numeric = "text-right tabular-nums";
 
 function chartSummary(data: CashFlowProjectionOut): string {

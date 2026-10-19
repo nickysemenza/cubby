@@ -1,15 +1,23 @@
+import {
+  COST_TYPE_LABELS,
+  type CostType,
+  costTypeValues,
+} from "@cubby/schemas/expense-fields";
 import type {
   FinancialBookingPreview,
   FinancialBookingInput,
 } from "@cubby/schemas/financial-booking";
 import type { FinancialTransactionOut } from "@cubby/schemas/financial-transaction";
 import type { ShortcodeFor } from "@cubby/schemas/identifiers";
+import { TRADE_LABELS } from "@cubby/schemas/project";
+import { type Trade, tradeSchema } from "@cubby/schemas/task-fields";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
 import { Picker } from "~/entity/picker/picker";
 import { WithVendorShortcodeSearch } from "~/entity/picker/with-vendor-search";
+import { tradeOptions } from "~/entity/presentation/trade-options";
 import { financialTransaction } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/number-format";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
@@ -22,6 +30,10 @@ const CREDIT_PURPOSE_OPTIONS: readonly PickerOption[] = [
   { value: "vendor", label: "Vendor refund or proceeds" },
   { value: "reimbursement", label: "Friend reimbursement" },
 ];
+
+const COST_TYPE_OPTIONS: readonly PickerOption[] = costTypeValues.map(
+  (value) => ({ value, label: COST_TYPE_LABELS[value] }),
+);
 
 function expectsBookingReview(transaction: FinancialTransactionOut) {
   return (
@@ -51,7 +63,8 @@ function BookingPreviewDetails({
       <p className="text-xs text-muted-foreground">
         {review.accountName} ·{" "}
         {review.funderName ?? "No account owner recorded"} · Cost type:{" "}
-        {review.costType} · Trade: {review.trade} · Already booked:{" "}
+        {COST_TYPE_LABELS[review.costType]} · Trade:{" "}
+        {TRADE_LABELS[review.trade]} · Already booked:{" "}
         {formatCurrency(review.existingBookedAmount)}
       </p>
     </>
@@ -72,6 +85,11 @@ export function FinancialBookingReview({
     ShortcodeFor<"purchase">
   > | null>(null);
   const [role, setRole] = useState<"vendor" | "reimbursement">("vendor");
+  // Regression: the request hard-coded Trade "other" and Cost type
+  // "materials", so every booked Expense landed with those regardless of what
+  // it was.
+  const [trade, setTrade] = useState<Trade>("other");
+  const [costType, setCostType] = useState<CostType>("materials");
   const [review, setReview] = useState<FinancialBookingPreview | null>(null);
   const preview = useMutation({
     mutationFn: (input: FinancialBookingInput) =>
@@ -129,6 +147,32 @@ export function FinancialBookingReview({
           )}
         </WithVendorShortcodeSearch>
       ) : null}
+      <Row gap="sm" className="flex-wrap">
+        <Picker
+          mode="choose"
+          label="Trade"
+          options={tradeOptions}
+          value={trade}
+          onValueChange={(next) => {
+            const parsed = tradeSchema.safeParse(next);
+            if (parsed.success) setTrade(parsed.data);
+            setReview(null);
+          }}
+          disabled={busy}
+        />
+        <Picker
+          mode="choose"
+          label="Cost type"
+          options={COST_TYPE_OPTIONS}
+          value={costType}
+          onValueChange={(next) => {
+            const match = costTypeValues.find((value) => value === next);
+            if (match) setCostType(match);
+            setReview(null);
+          }}
+          disabled={busy}
+        />
+      </Row>
       {transaction.amount < 0 ? (
         <Picker
           mode="choose"
@@ -185,8 +229,8 @@ export function FinancialBookingReview({
                   vendorId: vendor?.id ?? null,
                   spendingCategoryId: categoryId ?? null,
                   economicRole: role,
-                  trade: "other",
-                  costType: "materials",
+                  trade,
+                  costType,
                 },
                 { onSuccess: setReview },
               );

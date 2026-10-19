@@ -84,6 +84,12 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
     page.getByRole("combobox", { name: "Spending category", exact: true }),
     "Synthetic reviewed dining",
   );
+  // The booked Expense takes the chosen Trade and Cost type, not fixed
+  // defaults.
+  await page.getByRole("combobox", { name: "Trade", exact: true }).click();
+  await page.getByRole("option", { name: "Flooring", exact: true }).click();
+  await page.getByRole("combobox", { name: "Cost type", exact: true }).click();
+  await page.getByRole("option", { name: "Services", exact: true }).click();
   await page
     .getByRole("button", { name: "Review Expense", exact: true })
     .click();
@@ -126,6 +132,8 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
     })
     .parse(await (await previewResponse).json()).json.data;
   expect(review.amount).toBe(125);
+  expect(review.trade).toBe("flooring");
+  expect(review.costType).toBe("services");
   const committedResponse = waitForOperation("commitBooking");
   await page
     .getByRole("button", { name: "Record Expense", exact: true })

@@ -1,3 +1,4 @@
+import { getErrorMessage } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useRouteContext } from "@tanstack/react-router";
 
@@ -63,12 +64,32 @@ function ProblemsBannerContent({
   isAuthed: boolean;
   operations: ProblemsBannerOperations;
 }) {
-  const { data: counts, isLoading } = useQuery({
+  const {
+    data: counts,
+    isLoading,
+    error,
+  } = useQuery({
     ...operations.getCounts.queryOptions(),
     enabled: isAuthed,
   });
   const defects = counts?.total ?? 0;
   const coverageTotal = counts?.coverageTotal ?? 0;
+
+  // Regression: a failed count read hid the banner, which reads as "no
+  // problems". Say the count is unknown instead.
+  if (error && !counts) {
+    return (
+      <Link
+        to="/problems"
+        className="flex min-h-11 min-w-0 items-center gap-2 border border-destructive/60 bg-destructive/10 px-2 py-1 text-xs text-foreground transition-colors hover:bg-destructive/20 sm:min-h-0"
+      >
+        <span className="shrink-0 font-medium">
+          Couldn't load problem counts:
+        </span>
+        <span className="truncate">{getErrorMessage(error)}</span>
+      </Link>
+    );
+  }
 
   if (!counts || isLoading || (defects === 0 && coverageTotal === 0)) {
     return null;

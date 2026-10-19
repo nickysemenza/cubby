@@ -130,7 +130,7 @@ export function TradeBarsAggregate({
         tooltip={({ id, value, indexValue, color }) => (
           <ChartTooltip>
             <strong>{tradeLabel(String(indexValue))}</strong> — {id}:{" "}
-            <span style={{ color }}>{formatCurrency(value, 0)}</span>
+            <span style={{ color }}>{formatCurrency(value)}</span>
           </ChartTooltip>
         )}
         legends={[
@@ -215,9 +215,9 @@ export function TradeCostMatrixAggregate({
           cellClassName: "font-semibold text-primary",
           cell: (key) => {
             const costType = costTypeForKey(key);
-            return formatCurrency(costType ? columnTotals[costType] : 0, 0);
+            return formatCurrency(costType ? columnTotals[costType] : 0);
           },
-          pinnedCell: () => formatCurrency(grandTotal, 0),
+          pinnedCell: () => formatCurrency(grandTotal),
         },
       ]}
       renderColumnHeader={({ key }) => capitalize(key)}
@@ -238,7 +238,7 @@ export function TradeCostMatrixAggregate({
         const trade = row.trade;
         const costType = costTypeForKey(key);
         const value = costType ? row.cells[costType] : 0;
-        const label = value !== 0 ? formatCurrency(value, 0) : EMPTY_MARK;
+        const label = value !== 0 ? formatCurrency(value) : EMPTY_MARK;
         if (!onCellClick || trade === null) return label;
         const heat =
           value === 0 ? emptyCell : HEAT_CLASSES[heatBucket(value, maxCell)];
@@ -273,10 +273,10 @@ export function TradeCostMatrixAggregate({
               isActive(trade, null) && activeCellRing,
             )}
           >
-            {formatCurrency(row.total, 0)}
+            {formatCurrency(row.total)}
           </button>
         ) : (
-          formatCurrency(row.total, 0)
+          formatCurrency(row.total)
         );
       }}
     />

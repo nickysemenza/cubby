@@ -332,10 +332,10 @@ function OverviewView({
       {
         label: "Spend",
         value: data.summary.actualSpend,
-        formatter: (v) => formatCurrency(Number(v), 0),
+        formatter: (v) => formatCurrency(Number(v)),
         caption:
           data.summary.committedSpend > 0
-            ? `+${formatCurrency(data.summary.committedSpend, 0)} committed`
+            ? `+${formatCurrency(data.summary.committedSpend)} committed`
             : undefined,
       },
       {
@@ -349,7 +349,7 @@ function OverviewView({
         label: "Estimate",
         value:
           data.summary.estimateTotal != null
-            ? formatCurrency(data.summary.estimateTotal, 0)
+            ? formatCurrency(data.summary.estimateTotal)
             : "—",
         caption:
           data.summary.estimateCoverage.projectsWithEstimate <
@@ -363,10 +363,10 @@ function OverviewView({
         // the widest — the sub-line breaks out how much of it lands sooner).
         label: "Committed (90d)",
         value: data.summary.forwardCommittedSpend.in90Days,
-        formatter: (v) => formatCurrency(Number(v), 0),
+        formatter: (v) => formatCurrency(Number(v)),
         subValue:
           data.summary.forwardCommittedSpend.in90Days > 0
-            ? `${formatCurrency(data.summary.forwardCommittedSpend.in30Days, 0)} in 30d · ${formatCurrency(data.summary.forwardCommittedSpend.in60Days, 0)} in 60d`
+            ? `${formatCurrency(data.summary.forwardCommittedSpend.in30Days)} in 30d · ${formatCurrency(data.summary.forwardCommittedSpend.in60Days)} in 60d`
             : undefined,
       },
     ],
@@ -647,7 +647,7 @@ export function ProjectCard({
             {hasEstimate && (
               <Badge variant="outline">
                 <CurrencyDollarIcon className="size-3" />
-                {formatCurrency(estimate ?? 0, 0)}
+                {formatCurrency(estimate ?? 0)}
               </Badge>
             )}
             {spent !== 0 && (
@@ -661,7 +661,7 @@ export function ProjectCard({
                 }
               >
                 <WalletIcon className="size-3" />
-                {formatCurrency(spent, 0)} spent
+                {formatCurrency(spent)} spent
               </Badge>
             )}
             {(project.dates.effectiveStart || project.dates.effectiveEnd) && (

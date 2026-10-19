@@ -162,8 +162,8 @@ export function CostVsEstimate({
           </strong>{" "}
           — {Math.round(Number(d.percent))}% of estimate
           <div className="mt-1 text-xs text-muted-foreground">
-            {formatCurrency(Number(d.actual), 0)} actual /{" "}
-            {formatCurrency(Number(d.estimate), 0)} estimate
+            {formatCurrency(Number(d.actual))} actual /{" "}
+            {formatCurrency(Number(d.estimate))} estimate
           </div>
         </ChartTooltip>
       )}

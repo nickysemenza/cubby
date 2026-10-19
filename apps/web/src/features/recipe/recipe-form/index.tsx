@@ -62,6 +62,7 @@ import {
   type RecipeFormProps,
   type RecipeFormValues,
 } from "./types";
+import { UnsavedEditsGuard } from "./unsaved-edits-guard";
 
 export const RecipeForm: FC<RecipeFormProps> = (props) => {
   const { mode, isPending, error, onCancel } = props;
@@ -72,6 +73,9 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
     getImageData,
     hasImageChanges,
   } = useImageState();
+  // Set once a save is submitted so its navigation isn't blocked; a failed
+  // save (an error) re-arms the unsaved-edits guard.
+  const [saving, setSaving] = useState(false);
 
   // Which import tool panel is open. They're plumbing, not recipe data, so
   // they collapse behind a toolbar; scraping starts open when creating fresh.
@@ -364,6 +368,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
   };
 
   const handleSubmit = (values: RecipeFormValues) => {
+    setSaving(true);
     if (mode === "create") {
       props.onCreate(recipeFormValuesToCreateInput(values, getImageData(true)));
     } else if (mode === "edit" && recipe) {
@@ -396,6 +401,11 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
       stickyFooter
       footerStart={<EditorTally control={form.control} />}
     >
+      <UnsavedEditsGuard
+        control={form.control}
+        imagesChanged={hasImageChanges()}
+        released={saving && !error}
+      />
       <div className="gap-6 xl:grid xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
         <Stack>
           <ImportToolsPanel

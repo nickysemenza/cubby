@@ -114,7 +114,7 @@ export function RankedBarBreakdown<T extends BarDatum>({
   color,
   showValueLabel = false,
   labelSkipWidth = 40,
-  formatValue = (v) => formatCurrency(v, 0),
+  formatValue = (v) => formatCurrency(v),
   formatLabel,
   axisBottomFormat,
   renderTick,
@@ -302,7 +302,7 @@ export function CategoryDonut({
         tooltip={({ datum }) => (
           <ChartTooltip>
             <span style={{ color: datum.color }}>{datum.label}</span>:{" "}
-            <strong>{formatCurrency(datum.value, 0)}</strong> (
+            <strong>{formatCurrency(datum.value)}</strong> (
             {((datum.value / total) * 100).toFixed(1)}%)
             {renderTooltipExtra?.(String(datum.id))}
           </ChartTooltip>
@@ -321,7 +321,7 @@ export function CategoryDonut({
               style={{ fill: "var(--foreground)" }}
             >
               <tspan x={centerX} dy="-0.5em" className="text-xl font-bold">
-                {formatCurrency(shownCenterValue, 0)}
+                {formatCurrency(shownCenterValue)}
               </tspan>
               <tspan
                 x={centerX}
@@ -396,7 +396,7 @@ export function SpendTrend({
                   />
                   <span className={seriesLabelClassName}>{point.seriesId}</span>
                   <strong className="ml-auto">
-                    {formatCurrency(Number(point.data.y), 0)}
+                    {formatCurrency(Number(point.data.y))}
                   </strong>
                 </div>
               ))}

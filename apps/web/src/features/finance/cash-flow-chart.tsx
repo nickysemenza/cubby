@@ -223,11 +223,11 @@ export function CashFlowChart({
                 />
                 <span>{segment?.label ?? id}</span>
                 <strong className="ml-auto tabular-nums">
-                  {formatCurrency(Math.abs(value ?? 0), 0)}
+                  {formatCurrency(Math.abs(value ?? 0))}
                 </strong>
               </div>
               <div className="mt-1 text-xs text-muted-foreground tabular-nums">
-                Net {formatCurrency(row.net, 0)}
+                Net {formatCurrency(row.net)}
                 {segment?.target ? " · Click to open" : ""}
               </div>
             </ChartTooltip>

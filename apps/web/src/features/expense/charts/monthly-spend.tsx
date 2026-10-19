@@ -114,7 +114,7 @@ export function MonthlySpend({
                 color: d.net < 0 ? "var(--chart-negative)" : "var(--chart-1)",
               }}
             >
-              {formatCurrency(d.net, 0)}
+              {formatCurrency(d.net)}
             </span>
           </ChartTooltip>
         )}

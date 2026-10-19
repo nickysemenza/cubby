@@ -163,7 +163,7 @@ export function NeedsAttention({ items }: { items: ProjectAttentionItem[] }) {
                 )}
                 {item.amount != null && (
                   <span className="shrink-0 text-muted-foreground">
-                    {formatCurrency(item.amount, 0)}
+                    {formatCurrency(item.amount)}
                   </span>
                 )}
               </Row>

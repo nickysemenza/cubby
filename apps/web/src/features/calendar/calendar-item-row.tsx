@@ -15,7 +15,7 @@ type CalendarItemPresentationVariant = "month" | "detail" | "rich";
 
 function calendarItemCost(item: CalendarItem) {
   if (item.kind === "expense" && item.cost != null)
-    return formatCurrency(item.cost, 0);
+    return formatCurrency(item.cost);
   if (
     item.kind === "meal" &&
     !(
@@ -83,7 +83,7 @@ function CalendarItemCompact({ item }: { item: CalendarItem }) {
       )}
       {item.kind === "expense" && item.cost != null && (
         <span className="shrink-0 tabular-nums">
-          {formatCurrency(item.cost, 0)}
+          {formatCurrency(item.cost)}
         </span>
       )}
     </>

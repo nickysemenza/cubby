@@ -122,7 +122,9 @@ function LabelsPage() {
   }
 
   function handleDownloadCsv() {
-    const csv = generateLabelCsv(exportItems);
+    // The visible sheet, not the lookup: Copies and hidden labels apply to the
+    // P-Touch export too. Regression: the CSV ignored both.
+    const csv = generateLabelCsv(visibleLabelItems);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");

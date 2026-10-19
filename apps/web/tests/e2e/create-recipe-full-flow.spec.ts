@@ -90,5 +90,26 @@ test.describe("Create Recipe - Full Flow", () => {
     await expect(
       summary.getByText("Weight: 333 g", { exact: true }),
     ).toBeVisible();
+
+    // Leaving the editor with unsaved edits asks first; there is no undo.
+    await page.goto(`${new URL(page.url()).pathname}?edit=true`);
+    await waitForFormHydration(page);
+    await page.getByLabel("Name", { exact: true }).fill(`${recipeName} draft`);
+    const discard = page.getByRole("alertdialog", {
+      name: "Discard unsaved edits?",
+    });
+    await page.getByRole("button", { name: "Cancel" }).first().click();
+    await expect(discard).toBeVisible();
+    await discard.getByRole("button", { name: "Keep editing" }).click();
+    await expect(page).toHaveURL(/edit=true/);
+    await expect(page.getByLabel("Name", { exact: true })).toHaveValue(
+      `${recipeName} draft`,
+    );
+    await page.getByRole("button", { name: "Cancel" }).first().click();
+    await discard.getByRole("button", { name: "Discard edits" }).click();
+    await expect(page).not.toHaveURL(/edit=true/);
+    await expect(
+      page.getByRole("heading", { name: recipeName, level: 1 }),
+    ).toBeVisible();
   });
 });

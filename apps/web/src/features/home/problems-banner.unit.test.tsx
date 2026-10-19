@@ -46,4 +46,20 @@ describe("ProblemsBanner", () => {
     expect(screen.getByText("3 coverage gaps")).toBeVisible();
     expect(screen.getByRole("link")).toHaveAttribute("href", "/problems");
   });
+
+  it("says the count is unknown when the read fails instead of hiding", async () => {
+    const failing: ProblemsBannerOperations = {
+      getCounts: problems.getCounts.withTransport(async () => {
+        throw new Error("synthetic count failure");
+      }),
+    };
+    render(<ProblemsBanner isAuthed operations={failing} />, {
+      wrapper: harness.wrapper,
+    });
+
+    expect(
+      await screen.findByText("Couldn't load problem counts:"),
+    ).toBeVisible();
+    expect(screen.getByText("synthetic count failure")).toBeVisible();
+  });
 });

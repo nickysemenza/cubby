@@ -2,10 +2,9 @@ import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowC
 import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 import { Link } from "@tanstack/react-router";
 import { useId } from "react";
-import { toast } from "sonner";
 import { match } from "ts-pattern";
 
-import { copyText } from "~/lib/clipboard";
+import { copyTextWithToast } from "~/lib/clipboard";
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
@@ -116,14 +115,14 @@ export function ShoppingListPage({
               isFetching || (rows.length === 0 && unexpanded.length === 0)
             }
             onClick={() => {
-              void copyText(
+              void copyTextWithToast(
                 shoppingRowsToText(
                   rows,
                   range,
                   unexpanded.map((gap) => `${gap.name}: ${gap.reason}`),
                 ),
+                "Shopping list copied",
               );
-              toast.success("Shopping list copied");
             }}
           >
             <CopyIcon />

@@ -16,7 +16,6 @@ import { getErrorMessage } from "@cubby/shared";
 import { encodeBase64 } from "@cubby/shared/base64";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { useMutation, useQueries } from "@tanstack/react-query";
-import { useBlocker } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -38,6 +37,7 @@ import {
 } from "~/lib/presigned-upload";
 import { wasm } from "~/lib/wasm";
 import { showErrorToast } from "~/ui/feedback/error-details";
+import { useNavigationGuard } from "~/ui/hooks/use-navigation-guard";
 import { Row } from "~/ui/layout/row";
 import { Stack } from "~/ui/layout/stack";
 import {
@@ -158,15 +158,9 @@ export function CookbookImport({
   );
   // `beforeunload` alone only catches a tab close or reload — an in-app click on
   // the nav rail is a router navigation, which never fires it, and used to drop
-  // the run silently. useBlocker covers both: it registers the beforeunload
-  // handler itself via `enableBeforeUnload`, and `withResolver` hands back
-  // proceed/reset so in-app navigation gets a real dialog instead of the
-  // browser's unstyled prompt.
-  const blocker = useBlocker({
-    shouldBlockFn: () => busy,
-    enableBeforeUnload: () => busy,
-    withResolver: true,
-  });
+  // the run silently. The guard covers both and gives in-app navigation a real
+  // dialog instead of the browser's unstyled prompt.
+  const guard = useNavigationGuard(busy);
 
   // Mutate one book in place by source key; always produces a new array so React
   // re-renders, and a new Set/Map where those change (no in-place mutation).
@@ -1325,9 +1319,9 @@ export function CookbookImport({
       ))}
 
       <AlertDialog
-        open={blocker.status === "blocked"}
+        open={guard.held}
         onOpenChange={(open) => {
-          if (!open) blocker.reset?.();
+          if (!open) guard.stay();
         }}
       >
         <AlertDialogContent>
@@ -1340,10 +1334,10 @@ export function CookbookImport({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => blocker.reset?.()}>
+            <AlertDialogCancel onClick={guard.stay}>
               Stay on this page
             </AlertDialogCancel>
-            <AlertDialogAction onClick={() => blocker.proceed?.()}>
+            <AlertDialogAction onClick={guard.leave}>
               Leave and discard
             </AlertDialogAction>
           </AlertDialogFooter>

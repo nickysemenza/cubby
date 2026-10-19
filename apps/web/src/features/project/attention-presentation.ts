@@ -43,9 +43,7 @@ export function attentionEvidence(item: ProjectAttentionItem): string {
       [
         `Planned for ${d(facts.plannedFor)}`,
         `${days(facts.daysPastDue)} past due`,
-        facts.cost != null
-          ? `${formatCurrency(facts.cost, 0)} not logged`
-          : null,
+        facts.cost != null ? `${formatCurrency(facts.cost)} not logged` : null,
       ]
         .filter(Boolean)
         .join(" · "),
@@ -53,12 +51,12 @@ export function attentionEvidence(item: ProjectAttentionItem): string {
     .with(
       { type: "missing_budget" },
       ({ facts }) =>
-        `${formatCurrency(facts.spend, 0)} in spend · no cost estimate`,
+        `${formatCurrency(facts.spend)} in spend · no cost estimate`,
     )
     .with(
       { type: "spend_below_estimate" },
       ({ facts }) =>
-        `${formatCurrency(facts.actualSpend, 0)} recorded · ${formatCurrency(
+        `${formatCurrency(facts.actualSpend)} recorded · ${formatCurrency(
           facts.costEstimate,
           0,
         )} estimate · spend recorded elsewhere or estimate wrong`,

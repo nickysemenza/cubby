@@ -97,7 +97,7 @@ export async function projectBudgetReport(
     mark: "stack",
     format: "money",
     series,
-    caption: `${formatCurrency(spend.actual, 0)} spent of ${estimate != null ? formatCurrency(estimate, 0) : "no estimate"}${spend.committed > 0 ? `, ${formatCurrency(spend.committed, 0)} committed` : ""}`,
+    caption: `${formatCurrency(spend.actual)} spent of ${estimate != null ? formatCurrency(estimate) : "no estimate"}${spend.committed > 0 ? `, ${formatCurrency(spend.committed)} committed` : ""}`,
   };
   if (estimate != null && estimate > 0) chart.marker = estimate;
   const blocks: ReportBlock[] = [{ kind: "stats", figures }, chart];

@@ -24,7 +24,7 @@ export function ExpenseSummaryStrip({
   const label = (value: string) =>
     basis === "allocation" ? `Allocated ${value.toLowerCase()}` : value;
   const money = (value: number | undefined) =>
-    value === undefined ? "Unavailable" : formatCurrency(value, 0);
+    value === undefined ? "Unavailable" : formatCurrency(value);
   const metrics = [
     [label("Actual"), money(summary?.actual)],
     [label("Committed"), money(summary?.committed)],

@@ -641,7 +641,9 @@ export const RecipeIngredientList: React.FC<{
       </section>
       <RTable
         table={table}
-        isLoading={displayData.length === 0}
+        // Costing is null until it loads; a recipe with no ingredients has
+        // costed zero rows and shows the empty table, not a spinner.
+        isLoading={costing === null}
         error={undefined}
         ariaLabel="Recipe Ingredients Table"
         verticalAlign="top"
