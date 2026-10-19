@@ -6,7 +6,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { dismissItem } from "~/features/suggestions/suggestion-review";
-import { getDb, withTransaction } from "~/server/db/helpers";
+import {
+  databaseForTransaction,
+  getDb,
+  withTransaction,
+} from "~/server/db/helpers";
 import {
   financialAccount,
   financialTransaction,
@@ -15,8 +19,10 @@ import {
   statementRow,
 } from "~/server/db/schema";
 import { updateFinancialAccount } from "~/server/domains/financial-account/repo";
-import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
-import { generateTransferPairSuggestions } from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
+import {
+  generateTransferPairSuggestions,
+  lockTransferPairLegs,
+} from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
 import { labelTransferPairSuggestions } from "~/server/domains/financial-transaction/service/transfer-pair-labels";
 import { readRunSteps } from "~/server/domains/run/repo/run-step";
 import { advanceStepRun } from "~/server/domains/run/service/step-run";
@@ -263,13 +269,16 @@ describe("transfer pairs in the global queue", () => {
     expect(rows.every((row) => row.clean)).toBe(true);
   });
 
-  // Rebuilding rule evidence must not discard the accepted statement kind label
+  // A pre-pair statement must wait on its charge leg before holding its projection.
   it("serializes a pre-pair statement review with a later pair review", async () => {
     await seed();
     await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
-    const [statement] = (
+    const statement = (
       await listSuggestionPage(ctx.db, { family: "statement_transaction" })
-    ).items;
+    ).items.find(
+      (row) =>
+        row.family === "statement_transaction" && row.evidence.amount > 0,
+    );
     if (statement?.family !== "statement_transaction")
       throw new Error("Expected a statement suggestion");
     expect(statement.evidence.transferPair).toBeNull();
@@ -279,29 +288,16 @@ describe("transfer pairs in the global queue", () => {
     ).items;
     if (pair?.family !== "transfer_pair")
       throw new Error("Expected a transfer pair suggestion");
-    const leg = [pair.evidence.outflow, pair.evidence.inflow].find(
-      (candidate) =>
-        candidate.charge?.chargeKey === statement.evidence.chargeKey,
-    )!;
-    let reviews:
-      | Promise<
-          PromiseSettledResult<Awaited<ReturnType<typeof reviewAssessment>>>[]
-        >
-      | undefined;
-    let projectionUnlocked = false;
-    // Hold ref locks until both callers are actually waiting. Before the fix,
-    // the statement held its projection while the pair waited to retire it.
-    await withTransaction(ctx.db, async (tx) => {
-      await lockFinancialEvidenceKeys(
-        tx,
-        "transaction-ref",
-        leg.refs.map((ref) => `${ref.source}\0${ref.externalId}`),
-      );
-      reviews = Promise.allSettled([
+
+    // Hold the shared parent legs until both public reviews are waiting. Neither
+    // may hold its projection before those locks, regardless of who later wins.
+    const barrier = await withTransaction(ctx.db, async (tx) => {
+      await lockTransferPairLegs(databaseForTransaction(tx), pair.evidence.key);
+      const pending = Promise.allSettled([
         reviewAssessment(ctx.db, kernelCtx(ctx), {
-          assessmentId: pair!.assessmentId,
+          assessmentId: pair.assessmentId,
           operationId: crypto.randomUUID(),
-          expectedFingerprint: pair!.fingerprint!,
+          expectedFingerprint: pair.fingerprint!,
           verdict: "correct",
           intent: "apply",
           application: { kind: "transfer_pair" },
@@ -324,19 +320,17 @@ describe("transfer pairs in the global queue", () => {
         },
         { timeout: 5000, interval: 20 },
       );
-      try {
-        await withTransaction(ctx.db, async (probe) => {
+      const [projection] = await Promise.allSettled([
+        withTransaction(ctx.db, async (probe) => {
           await probe.execute(
             sql`SELECT id FROM "AssessmentState" WHERE id=${statement.assessmentId}::uuid FOR UPDATE NOWAIT`,
           );
-        });
-        projectionUnlocked = true;
-      } catch {
-        // The assertion below runs after releasing the barrier and draining both reviews.
-      }
+        }),
+      ]);
+      return { pending, projection };
     });
-    const results = await reviews!;
-    expect(projectionUnlocked).toBe(true);
+    const results = await barrier.pending;
+    expect(barrier.projection).toMatchObject({ status: "fulfilled" });
     expect(
       results.filter((result) => result.status === "fulfilled"),
     ).toHaveLength(1);
