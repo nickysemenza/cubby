@@ -134,7 +134,7 @@ describe("connection application through generic Feedback", () => {
       ctx.actor,
     );
     expect(work.items).not.toContainEqual(
-      expect.objectContaining({ key: `connection:${productId}` }),
+      expect.objectContaining({ key: `connection:${item.id}` }),
     );
   });
 
@@ -244,7 +244,7 @@ describe("connection application through generic Feedback", () => {
       );
     expect((await work()).items).toContainEqual(
       expect.objectContaining({
-        key: `connection:${productId}`,
+        key: `connection:${item.id}`,
         source: "suggestion",
       }),
     );
@@ -270,7 +270,7 @@ describe("connection application through generic Feedback", () => {
     ).toBe(productId);
     expect(await readEntityConnections(ctx.db, target)).toEqual([]);
     expect((await work()).items).not.toContainEqual(
-      expect.objectContaining({ key: `connection:${productId}` }),
+      expect.objectContaining({ key: `connection:${item.id}` }),
     );
     const events = await getDb(ctx.db)
       .select()

@@ -34,7 +34,7 @@ it("preserves existing Expenses while admitting an unresolved receipt role", asy
     expect(
       (
         await client.query(
-          `SELECT to_jsonb(i) - 'sourceEvidence' AS data FROM "Image" i ORDER BY id`,
+          `SELECT to_jsonb(i) - 'sourceEvidence' - 'metadataOutcome' - 'metadataError' AS data FROM "Image" i ORDER BY id`,
         )
       ).rows,
     ).toEqual(imageBefore);
