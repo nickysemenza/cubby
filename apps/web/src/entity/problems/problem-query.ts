@@ -61,6 +61,7 @@ export type DiagnosticKey =
   | "duplicate-spend-candidates"
   | "duplicate-financial-transaction-source-refs"
   | "duplicate-financial-account-source-aliases"
+  | "product-identifiers-outside-issuer"
   | "provisional-financial-accounts"
   | "invalid-financial-json"
   | "incomplete-statement-imports"

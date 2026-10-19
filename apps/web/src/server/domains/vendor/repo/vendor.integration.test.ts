@@ -14,6 +14,7 @@ import {
   auditLog,
   entityAttachment,
   expense,
+  externalSource,
   purchase,
   vendor,
 } from "~/server/db/schema";
@@ -463,6 +464,71 @@ describe("vendor repository — mergeVendors", () => {
     // The folded charge's money moved to the survivor, it did not disappear
     // with the charge.
     expect(await liveExpenseTotal()).toBe(moneyBefore);
+  });
+
+  // Failure mode: repointing two issuers onto one survivor gives it two
+  // namespaces for one catalog, which once failed every identity scan.
+  it("refuses to merge two Vendors that each issue Product identifiers", async () => {
+    const keeper = await findOrCreateVendor(ctx.db, "Synthetic issuer keeper");
+    const loser = await findOrCreateVendor(ctx.db, "Synthetic issuer loser");
+    await getDb(ctx.db)
+      .insert(externalSource)
+      .values([
+        {
+          slug: "synthetic-keeper-catalog",
+          label: "Keeper",
+          vendorId: keeper,
+          issuer: true,
+        },
+        {
+          slug: "synthetic-loser-catalog",
+          label: "Loser",
+          vendorId: loser,
+          issuer: true,
+        },
+      ]);
+    const loserCode = await vendorCode(loser);
+    await expect(
+      mergeVendors(
+        ctx.db,
+        { keepId: await vendorCode(keeper), mergeIds: [loserCode] },
+        ctx.actor,
+      ),
+    ).rejects.toThrow(`${loserCode}: synthetic-loser-catalog`);
+  });
+
+  it("carries a merged Vendor's export source to the survivor beside its issuer", async () => {
+    const keeper = await findOrCreateVendor(ctx.db, "Synthetic export keeper");
+    const loser = await findOrCreateVendor(ctx.db, "Synthetic export loser");
+    await getDb(ctx.db)
+      .insert(externalSource)
+      .values([
+        {
+          slug: "synthetic-export-catalog",
+          label: "Keeper",
+          vendorId: keeper,
+          issuer: true,
+        },
+        { slug: "synthetic-export-orders", label: "Loser", vendorId: loser },
+      ]);
+    await mergeVendors(
+      ctx.db,
+      { keepId: await vendorCode(keeper), mergeIds: [await vendorCode(loser)] },
+      ctx.actor,
+    );
+    expect(
+      await getDb(ctx.db)
+        .select({
+          slug: externalSource.slug,
+          vendorId: externalSource.vendorId,
+          issuer: externalSource.issuer,
+        })
+        .from(externalSource)
+        .orderBy(externalSource.slug),
+    ).toEqual([
+      { slug: "synthetic-export-catalog", vendorId: keeper, issuer: true },
+      { slug: "synthetic-export-orders", vendorId: keeper, issuer: false },
+    ]);
   });
 
   it("writes the full audit trail for a merge that folds a charge", async () => {

@@ -457,6 +457,30 @@ export const derivedProblemQueries = [
     },
   }),
   defineProblem({
+    key: "productIdentifiersOutsideIssuer",
+    problemClass: PROBLEM_CLASS.productIdentifiersOutsideIssuer,
+    executionLane: "fast",
+    continuation: {
+      kind: "none",
+      reason: "Each result is one Vendor source holding Product identifiers.",
+    },
+    freshness: { kind: "live" },
+    title: "Product identifiers outside the issuer",
+    description:
+      "A Vendor's Product identifiers stored under a source that is not its issuer, so exact matching and import duplicate checks cannot see them.",
+    emptyMessage: "Every Vendor's Product identifiers sit under its issuer.",
+    source: {
+      kind: "derived",
+      diagnostic: "product-identifiers-outside-issuer",
+      grain: "group",
+      inputs: [{ entity: "vendor", filters: [] }],
+      operations: [
+        { label: "Join Product identifiers to owned sources" },
+        { label: "Group identifiers outside each Vendor's issuer" },
+      ],
+    },
+  }),
+  defineProblem({
     key: "provisionalFinancialAccounts",
     quality: {
       rowChecks: [
