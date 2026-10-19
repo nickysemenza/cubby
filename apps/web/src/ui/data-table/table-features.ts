@@ -16,6 +16,13 @@ import {
   createSortedRowModel,
   createTableHook,
   type FilterFn,
+  filterFn_arrIncludes,
+  filterFn_arrIncludesSome,
+  filterFn_equals,
+  filterFn_inDateRange,
+  filterFn_includesString,
+  filterFn_inNumberRange,
+  filterFn_weakEquals,
   metaHelper,
   type ReactTable,
   type Row,
@@ -24,6 +31,10 @@ import {
   rowPaginationFeature,
   rowSelectionFeature,
   rowSortingFeature,
+  sortFn_alphanumeric,
+  sortFn_basic,
+  sortFn_datetime,
+  sortFn_text,
   type TableState,
   tableFeatures,
 } from "@tanstack/react-table";
@@ -35,11 +46,14 @@ import type { CubbyColumnMeta, CubbyTableMeta } from "./table-meta";
  *
  * A single superset keeps table chrome and column factories interoperable while
  * still excluding features Cubby does not use (grouping, aggregation, global
- * filtering, row pinning, faceting, and native cell spanning).
+ * filtering, row pinning, faceting, and native cell spanning). Grouping and
+ * totals are server-ordered (`GroupConfig`, `meta.serverTotals`); facet counts
+ * come from the server too, because a client facet would count only the
+ * loaded page and read as the full set.
  *
- * Faceting is excluded because tables default to manualFiltering/manualPagination:
- * a client facet would count only the loaded page and read as the full set.
- * Real facet counts come from the server (see expense.facetCounts).
+ * v9 resolves `filterFn: "auto"` / `sortFn: "auto"` only against these
+ * registries — an unregistered name skips the filter (every row passes) and
+ * sorts with `basic`. Keys are TanStack's conventional auto names.
  */
 export const cubbyTableFeatures = tableFeatures({
   cellSelectionFeature,
@@ -53,6 +67,21 @@ export const cubbyTableFeatures = tableFeatures({
   rowPaginationFeature,
   rowSelectionFeature,
   rowExpandingFeature,
+  filterFns: {
+    includesString: filterFn_includesString,
+    inNumberRange: filterFn_inNumberRange,
+    inDateRange: filterFn_inDateRange,
+    equals: filterFn_equals,
+    weakEquals: filterFn_weakEquals,
+    arrIncludes: filterFn_arrIncludes,
+    arrIncludesSome: filterFn_arrIncludesSome,
+  },
+  sortFns: {
+    alphanumeric: sortFn_alphanumeric,
+    text: sortFn_text,
+    datetime: sortFn_datetime,
+    basic: sortFn_basic,
+  },
   filteredRowModel: createFilteredRowModel(),
   sortedRowModel: createSortedRowModel(),
   paginatedRowModel: createPaginatedRowModel(),
@@ -70,8 +99,39 @@ const cubbyTableHook = createTableHook({
   autoResetCellSelection: false,
 });
 
+/**
+ * In-memory tables that never mention pagination render every row. TanStack's
+ * paginated row model otherwise defaults to 10 per page, silently paging
+ * tables that set no pagination at all.
+ */
+const UNPAGED = { pageIndex: 0, pageSize: Number.MAX_SAFE_INTEGER } as const;
+
+type PaginationOptions = {
+  manualPagination?: boolean;
+  initialState?: { pagination?: unknown };
+  state?: { pagination?: unknown };
+};
+
+function withUnpagedDefault<TOptions extends PaginationOptions>(
+  options: TOptions,
+): TOptions {
+  if (
+    options.manualPagination ||
+    options.state?.pagination !== undefined ||
+    options.initialState?.pagination !== undefined
+  )
+    return options;
+  return {
+    ...options,
+    initialState: { ...options.initialState, pagination: UNPAGED },
+  };
+}
+
 /** App-bound constructor: callers supply domain data/state, never feature plumbing. */
-export const useCubbyTable = cubbyTableHook.useAppTable;
+export const useCubbyTable: typeof cubbyTableHook.useAppTable = (
+  options,
+  selector,
+) => cubbyTableHook.useAppTable(withUnpagedDefault(options), selector);
 
 /**
  * State the server-driven table owner actually renders from. Selection has

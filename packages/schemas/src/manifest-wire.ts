@@ -43,9 +43,16 @@ const tagged = <
 export const manifestWire = {
   CollectionActionScope: raw({ section: "section", row: "row" }, codable),
   LabeledOption: record(
-    { value: "string", label: "string", color: "string?" },
-    { defaults: { color: "nil" } },
+    {
+      value: "string",
+      label: "string",
+      color: "string?",
+      role: "string?",
+      glyph: "EnumOptionIcon?",
+    },
+    { defaults: { color: "nil", role: "nil", glyph: "nil" } },
   ),
+  EnumOptionIcon: record({ phosphor: "string", sfSymbol: "string" }),
   FieldReference: record({
     entity: "EntityKey",
     multiple: "boolean",

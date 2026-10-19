@@ -24,6 +24,20 @@ const assetRoles = {
   Warning: "warning",
   Destructive: "destructive",
   Slate: "slate",
+  PositiveSurface: "positive-surface",
+  WarningSurface: "warning-surface",
+  DestructiveSurface: "destructive-surface",
+  Info: "info",
+  InfoSurface: "info-surface",
+  NeutralStatus: "neutral-status",
+  Category1: "category-1",
+  Category2: "category-2",
+  Category3: "category-3",
+  Category4: "category-4",
+  Category5: "category-5",
+  Category6: "category-6",
+  Category7: "category-7",
+  Category8: "category-8",
 } as const;
 
 type ColorRole = typeof tokens.colors.signal;
@@ -53,6 +67,17 @@ export function renderBrandCss(
     "  --warning-ink: var(--brand-warning-ink);",
     "  --destructive: var(--brand-destructive);",
     "  --slate: var(--brand-slate);",
+    "  --positive-surface: var(--brand-positive-surface);",
+    "  --warning-surface: var(--brand-warning-surface);",
+    "  --destructive-surface: var(--brand-destructive-surface);",
+    "  --info: var(--brand-info);",
+    "  --info-surface: var(--brand-info-surface);",
+    "  --neutral-status: var(--brand-neutral-status);",
+    ...Array.from(
+      { length: 8 },
+      (_, index) =>
+        `  --category-${index + 1}: var(--brand-category-${index + 1});`,
+    ),
     "  --brand-elevation-popover: 0 12px 32px rgb(27 33 27 / 0.14);",
     "  --brand-focus-ring:\n    0 0 0 2px var(--brand-surface), 0 0 0 4px var(--brand-interaction);",
     "  --rule-ink: 1px solid var(--brand-hairline);",

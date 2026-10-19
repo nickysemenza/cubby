@@ -306,6 +306,8 @@ export type EntityField = Readonly<{
           value: string;
           label: string;
           color?: string;
+          role?: "status" | "category";
+          glyph?: Readonly<{ phosphor: string; sfSymbol: string }>;
         }>[]
       | null;
     referencePreviewLimit: number | null;

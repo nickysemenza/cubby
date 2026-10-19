@@ -468,6 +468,7 @@ const inferredEnumOptions = (
           const raw = z.string().parse(value);
           return { value: raw, label: humanize(raw) };
         }),
+        field.display.optionRole,
       )
     : null;
 };
@@ -595,7 +596,10 @@ const compileFieldModel = (
           : {
               ...field.control,
               options: field.control.options
-                ? colorizeEnumOptions(field.control.options)
+                ? colorizeEnumOptions(
+                    field.control.options,
+                    field.display.optionRole,
+                  )
                 : field.control.options,
             },
       display: {
@@ -620,7 +624,10 @@ const compileFieldModel = (
         referencePreviewLimit: field.display.referencePreviewLimit ?? null,
         columnLabel: field.display.columnLabel ?? null,
         valueOptions: field.display.valueOptions
-          ? colorizeEnumOptions(field.display.valueOptions)
+          ? colorizeEnumOptions(
+              field.display.valueOptions,
+              field.display.optionRole,
+            )
           : field.kind === "enum" && field.control?.options == null
             ? inferredEnumOptions(field)
             : null,

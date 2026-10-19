@@ -275,6 +275,11 @@ const buildMetadataSchemas = () => {
     })
     .strict();
 
+  /** One glyph for web (Phosphor component name) and Apple (SF Symbol). */
+  const enumOptionIconSchema = z
+    .object({ phosphor: nonEmptyString(), sfSymbol: nonEmptyString() })
+    .strict();
+
   const entityFieldControlMetadataSchema = z
     .object({
       kind: z.enum(entityFieldControlKinds),
@@ -289,6 +294,10 @@ const buildMetadataSchemas = () => {
               description: nonEmptyString().optional(),
               /** Web swatch (a CSS custom property) the value's pill uses. */
               color: nonEmptyString().optional(),
+              /** The value's glyph on both clients; status rosters infer one. */
+              glyph: enumOptionIconSchema.optional(),
+              /** Compiler-filled from the roster (`display.optionRole` or inferred). */
+              role: z.enum(["status", "category"]).optional(),
             })
             .strict(),
         )
@@ -517,9 +526,22 @@ const buildMetadataSchemas = () => {
               value: nonEmptyString(),
               label: nonEmptyString(),
               color: nonEmptyString().optional(),
+              glyph: enumOptionIconSchema.optional(),
+              /** Compiler-filled from the roster (`display.optionRole` or inferred). */
+              role: z.enum(["status", "category"]).optional(),
             })
             .strict(),
         )
+        .nullable()
+        .optional()
+        .default(null),
+      /**
+       * Whether this field's roster reads as states (`status`: tinted fill and
+       * a glyph) or kinds (`category`: neutral chip). Omitted, the shared enum
+       * palette infers it: every option carrying a condition color is status.
+       */
+      optionRole: z
+        .enum(["status", "category"])
         .nullable()
         .optional()
         .default(null),
@@ -554,6 +576,7 @@ const buildMetadataSchemas = () => {
         columnLabel,
         referencePreviewLimit,
         valueOptions,
+        optionRole,
         preview,
       }) => ({
         list,
@@ -574,6 +597,7 @@ const buildMetadataSchemas = () => {
         columnLabel,
         referencePreviewLimit,
         valueOptions,
+        optionRole,
         preview,
       }),
     );
