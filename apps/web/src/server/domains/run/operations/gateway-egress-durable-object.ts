@@ -16,6 +16,8 @@ import {
   type GatewayAdmission,
 } from "~/server/ai/gateway-egress-contract";
 import { isMaintenanceMode } from "~/server/http/maintenance";
+import type { SearchIndexRepairWorkflowParams } from "~/server/worker-bindings";
+import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
 
 const WINDOW_MS = 60_000;
 const REQUESTS_PER_WINDOW = 180;
@@ -51,6 +53,43 @@ function creditRefusalUntil(reason: string, now: number) {
 
 /** One identity per gateway; subscription requests never enter this object. */
 export class AiGatewayEgressDurableObject extends DurableObject<Env> {
+  /** Read the running DO code, never a caller's or a retained observation's version. */
+  async currentDeploymentVersion(): Promise<string> {
+    return this.env.CF_VERSION_METADATA.id;
+  }
+
+  /** Launch through the current deployment's bindings, including after rollback. */
+  async continueWorkflowRun(params: WorkflowRunParams): Promise<void> {
+    const { setCfEnv } = await import("~/server/cf-env");
+    const { withInvocationDb, db } = await import("~/server/db");
+    const { continueWorkflowRun } =
+      await import("~/server/workflows/runs/continuation");
+    setCfEnv(this.env);
+    await withInvocationDb(this.env.HYPERDRIVE.connectionString, () =>
+      continueWorkflowRun(db, params),
+    );
+  }
+
+  async continueSearchIndexRepair(input: {
+    id: string;
+    params: SearchIndexRepairWorkflowParams;
+  }): Promise<void> {
+    try {
+      await this.env.SEARCH_INDEX_REPAIR.create({
+        ...input,
+        retention: { successRetention: "1 day", errorRetention: "7 days" },
+      });
+    } catch (error) {
+      // The deterministic successor can already exist when create's reply was
+      // lost. Only that provider refusal means the handoff already succeeded.
+      if (
+        !(error instanceof Error) ||
+        !/10405|instance.*already exists/iu.test(error.message)
+      )
+        throw error;
+    }
+  }
+
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     ctx.storage.sql.exec(

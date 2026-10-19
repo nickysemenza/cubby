@@ -63,6 +63,39 @@ Catch-up reconciles attempts that ended without finishing their Run. Discovery
 readiness and usage reads remain storage-only; current cursor coverage is not a
 snapshot of one historical Run and a read never grants execution.
 
+Workflow instances keep their creation version across deploys. Cloudflare's
+[instance API](https://developers.cloudflare.com/api/resources/workflows/subresources/instances/methods/get/)
+reports each instance's `versionId`; it does not document a hot migration of
+in-flight steps. Read-only provider inspection confirmed an older Workflow
+version still starting steps after newer versions were deployed.
+
+Every Workflow checks deployment at a committed page or target-cycle boundary.
+The active page finishes first, including its publication and cursor checkpoint.
+The Workflow compares its own `CF_VERSION_METADATA.id` with the Gateway Durable
+Object's running version, not the stored AI-refresh activation `release` or
+observed-version marker. Durable Objects follow deployments
+([Cloudflare version guarantees](https://developers.cloudflare.com/workers/versions-and-deployments/gradual-deployments/with-durable-objects/));
+the DO also creates successors through its current bindings. A rollback is a
+version change too. Version checks are durable steps: replay reuses each recorded
+decision instead of moving the handoff backwards over already-completed work.
+
+Run-backed Workflows reuse `claimWorkflowRun` and the `launchWorkflowRun`
+`expectedAttempt` fence. The same Run retains its cursors, receipts and cancellation;
+only the attempt changes. Cancelled, finished or superseded owners cannot relaunch.
+The existing stuck-Run reconcile still repairs interrupted dispatches. Search
+repair has no Run: its deterministic successor carries the committed phase,
+cursor, counters and original request timestamp, and its progress subscription
+follows that successor without reporting a premature completion. Instance page
+bounds remain a fallback even without a deploy; idle AI waits recheck within a
+minute. An active page and its retries can delay cutover until its checkpoint.
+
+This rule first applies to instances created with the boundary check installed.
+Instances already executing older code cannot acquire that check from a deploy;
+their existing bounded continuation or an explicitly authorized operator action
+must create the first updated instance. Production deploys send all traffic to
+one version; this does not select a globally newest version during a gradual
+deployment with multiple active versions.
+
 One-time creation commands that cannot be inferred or safely rerun by deploy:
 
 ```bash

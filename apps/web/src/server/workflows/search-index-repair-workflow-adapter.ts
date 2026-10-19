@@ -2,6 +2,7 @@ import {
   searchIndexRepairCountersSchema,
   searchIndexRepairEventSchema,
   type SearchIndexRepairEvent,
+  searchRepairContinuation,
 } from "@cubby/schemas/maintenance";
 
 // Workflows retain repeated step names with an execution suffix (`-1` for the
@@ -79,59 +80,75 @@ const progressFromStep = (
 export async function* streamSearchIndexRepairWorkflow(
   instance: SearchIndexRepairWorkflowInstance,
   signal: AbortSignal,
+  resolveInstance?: (id: string) => Promise<SearchIndexRepairWorkflowInstance>,
 ): AsyncGenerator<SearchIndexRepairEvent, void> {
-  let subscription: SearchIndexRepairWorkflowSubscription | undefined;
-  const subscriptionPromise = instance.subscribe({
-    filter: [...SEARCH_INDEX_REPAIR_EVENT_FILTER],
-  });
-  try {
+  let current = instance;
+  while (true) {
+    let nextInstanceId: string | undefined;
+    let subscription: SearchIndexRepairWorkflowSubscription | undefined;
+    const subscriptionPromise = current.subscribe({
+      filter: [...SEARCH_INDEX_REPAIR_EVENT_FILTER],
+    });
     try {
-      subscription = await raceAbort(subscriptionPromise, signal);
-    } catch (error) {
-      // If abort wins the subscribe race, the RPC can still resolve later. It
-      // owns a resource then, so dispose it as soon as it becomes available.
-      void subscriptionPromise.then(disposeSubscription, () => undefined);
-      throw error;
-    }
+      try {
+        subscription = await raceAbort(subscriptionPromise, signal);
+      } catch (error) {
+        // If abort wins the subscribe race, the RPC can still resolve later. It
+        // owns a resource then, so dispose it as soon as it becomes available.
+        void subscriptionPromise.then(disposeSubscription, () => undefined);
+        throw error;
+      }
 
-    let completed = false;
-    while (true) {
-      const result = await raceAbort(subscription.next(), signal);
-      if (result.done) {
-        if (!completed)
-          throw new Error("Search index repair ended unexpectedly");
-        return;
-      }
-      const event = result.value;
-      const progress = progressFromStep(event);
-      if (progress) {
-        yield progress;
-        continue;
-      }
-      if (event.type === "workflow_completed") {
-        if (completed) throw new Error("Search index repair completed twice");
-        const result = searchIndexRepairCountersSchema.safeParse(event.output);
-        if (!result.success) {
-          throw new Error("Malformed search index repair completion output");
+      let completed = false;
+      while (true) {
+        const result = await raceAbort(subscription.next(), signal);
+        if (result.done) {
+          if (!completed)
+            throw new Error("Search index repair ended unexpectedly");
+          return;
         }
-        completed = true;
-        yield { type: "done", result: result.data };
-        continue;
+        const event = result.value;
+        const progress = progressFromStep(event);
+        if (progress) {
+          yield progress;
+          continue;
+        }
+        if (event.type === "workflow_completed") {
+          if (completed) throw new Error("Search index repair completed twice");
+          const continuation = searchRepairContinuation.safeParse(event.output);
+          if (continuation.success) {
+            nextInstanceId = continuation.data.nextInstanceId;
+            break;
+          }
+          const result = searchIndexRepairCountersSchema.safeParse(
+            event.output,
+          );
+          if (!result.success) {
+            throw new Error("Malformed search index repair completion output");
+          }
+          completed = true;
+          yield { type: "done", result: result.data };
+          continue;
+        }
+        if (event.type === "workflow_errored") {
+          throw new Error(
+            `Search index repair workflow failed: ${event.error?.message ?? "unknown error"}`,
+          );
+        }
+        if (event.type === "workflow_terminated") {
+          throw new Error("Search index repair workflow was terminated");
+        }
+        // Selection, mutation, and publication step outputs are intentionally
+        // retained by the Workflow but are not UI progress frames.
+        if (event.type === "step_completed") continue;
+        throw new Error(`Unexpected search index repair event: ${event.type}`);
       }
-      if (event.type === "workflow_errored") {
-        throw new Error(
-          `Search index repair workflow failed: ${event.error?.message ?? "unknown error"}`,
-        );
-      }
-      if (event.type === "workflow_terminated") {
-        throw new Error("Search index repair workflow was terminated");
-      }
-      // Selection, mutation, and publication step outputs are intentionally
-      // retained by the Workflow but are not UI progress frames.
-      if (event.type === "step_completed") continue;
-      throw new Error(`Unexpected search index repair event: ${event.type}`);
+    } finally {
+      if (subscription) disposeSubscription(subscription);
     }
-  } finally {
-    if (subscription) disposeSubscription(subscription);
+    if (!nextInstanceId || !resolveInstance)
+      throw new Error("Search index repair continuation cannot be resolved");
+    if (signal.aborted) throw abortError();
+    current = await resolveInstance(nextInstanceId);
   }
 }

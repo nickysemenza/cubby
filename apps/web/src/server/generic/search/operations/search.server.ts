@@ -129,7 +129,9 @@ export const searchStreamHandlers = implementSubscriptionDomain(
         instanceId: instance.id,
         requestId: getRequestId(context.headers),
       });
-      yield* streamSearchIndexRepairWorkflow(instance, signal);
+      yield* streamSearchIndexRepairWorkflow(instance, signal, (id) =>
+        workflow.get(id),
+      );
     },
   },
 );

@@ -1,7 +1,11 @@
 // Type-only RPC contracts keep global Worker environment inference isolated from
 // runtime implementations. worker-environment.d.ts checks this map against exports.
 import type { Rpc } from "@cloudflare/workers-types";
-import type { SearchIndexRepairCounters } from "@cubby/schemas/maintenance";
+import type {
+  SearchIndexRepairCounters,
+  SearchRepairCheckpoint,
+  SearchRepairContinuation,
+} from "@cubby/schemas/maintenance";
 import type { WorkflowEvent, WorkflowStep } from "cloudflare:workers";
 
 import type { ChatGptPlanRpc } from "./ai/chatgpt/rpc";
@@ -31,6 +35,7 @@ export type UsdaReleaseDurableObject = UsdaReleaseRpc &
 
 export interface SearchIndexRepairWorkflowParams {
   readonly requestedAt: string;
+  readonly checkpoint?: SearchRepairCheckpoint;
 }
 
 /** The entrypoint shape the `SEARCH_INDEX_REPAIR` binding's params come from. */
@@ -38,7 +43,7 @@ export interface SearchIndexRepairWorkflow {
   run(
     event: Readonly<WorkflowEvent<SearchIndexRepairWorkflowParams>>,
     step: WorkflowStep,
-  ): Promise<SearchIndexRepairCounters>;
+  ): Promise<SearchIndexRepairCounters | SearchRepairContinuation>;
 }
 
 /** The `MAIL_DISCOVERY` binding: one scheduled `mail_discovery` Run attempt. */
