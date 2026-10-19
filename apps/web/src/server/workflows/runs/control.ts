@@ -185,7 +185,11 @@ export async function controlWorkflowRun(
           );
       }
     }
-    await launchWorkflowRun(db, { runId: row.id, purpose }, launcher);
+    await launchWorkflowRun(
+      db,
+      { runId: row.id, purpose, retryCancelled: true },
+      launcher,
+    );
     return;
   }
   if (input.action !== "cancel")

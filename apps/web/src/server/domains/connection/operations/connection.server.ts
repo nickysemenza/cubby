@@ -29,11 +29,16 @@ export const connectionHandlers = implementOperationDomain(connectionContract, {
       throw new Error(
         "Connection discovery requires an active AI refresh generation",
       );
-    const runId = await scheduleConnectionRefresh(
+    const scheduled = await scheduleConnectionRefresh(
       context.db,
       source,
       context.actorContext,
     );
+    if (scheduled.kind === "deferred")
+      throw new Error(
+        "AI refresh execution capacity is busy; retry connection discovery after active refresh work finishes.",
+      );
+    const runId = scheduled.runId;
     // Nothing else starts a member's discovery Run promptly; a shared Run
     // already in flight makes this a no-op.
     if (runId)

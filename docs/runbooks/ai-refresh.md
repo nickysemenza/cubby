@@ -57,6 +57,27 @@ retain inference and actual business-write provenance.
 
 Discovery advances durable cursors through at most 200 field targets and 400
 eligible Emails per invocation; Email execution rosters still cap at 200.
+Ordinary refresh execution has two active Run slots across the household,
+including funding/auth pauses. Discovery is a separate activation Run; a Sweep's
+connection child remains owned by its explicit parent rather than taking an
+ordinary slot. Product, field and on-demand connection targets share a running
+non-Email Run for their actor and activation revision. New policy work waits
+for capacity rather than joining an older policy owner. Frozen Email rosters retain their mailbox and
+200-item boundary. A short scheduling transaction uses a nonblocking advisory
+lock to serialize slot checks, new Run creation and failed-Run readmission;
+contention defers rather than holding another origin connection in a lock wait.
+The two-target inference cap remains independent of these Run slots.
+Cancelling a shared Run stops every Product, field and connection target joined
+to that owner. Inspect its roster before cancelling; same-fingerprint work stays
+stopped until explicit member retry.
+
+When slots are full, discovery retains the affected stream's cursor and waits
+30 seconds in its existing Workflow before trying again. Capacity waits do not
+consume deployment-policy waits or inference retries. Unchanged, already queued,
+failed or cancelled work creates no empty Run. An on-demand connection request
+that cannot obtain capacity reports the busy diagnostic so the member can retry.
+Automatic connection side effects defer without failing the entity write; the
+next routine Sweep can rediscover those live sources.
 A new policy resets the scan cursor and its discovery Workflow checkpoints
 bounded pages until both independent streams finish. Cursor writes are fenced
 by activation revision, so an old page cannot overwrite a newer reset. During
@@ -89,7 +110,10 @@ blocked or obsolete target at most three times: a replacement row
 (`<workKey>:reopen:<n>`) joins a running Run, while the settled row keeps its
 Run, receipt and error and links the replacement through `retryEvaluationId`.
 Switching Mail import on therefore resumes the blocked Emails. Admission waits defer without consuming inference retries.
-Cancelled Runs remain stopped. Exhausted failures require Run retry; replacement
+Cancelled Runs remain stopped, including their blocked/obsolete evaluations:
+rediscovery cannot replay the same fingerprint in a successor Run. A changed
+fingerprint is new work; an explicit member Run retry is still supported.
+Exhausted failures require Run retry; replacement
 evaluations retain the earlier failed rows and link their receipts.
 
 Already applied values and immutable history survive rollback. Do not delete
@@ -109,10 +133,54 @@ and abandoned requests expire after the bounded deadline.
 
 Discovery isolates preparation and launch failures per target or Run, emits a
 scrubbed diagnostic, and advances its bounded cursor; the next cursor pass retries
-preparation. Recovery spends its ten-Run budget on failed or unstarted Runs, oldest first;
-healthy active instances cannot starve relaunches. Existing unfinished Runs launch
+preparation. Recovery first launches unstarted Runs that already hold slots,
+then considers failed Runs oldest first, within its ten-Run budget;
+exhausted automatic-recovery budgets and member cancellations are excluded before
+the limit, so they cannot starve relaunches. Recovery uses the same two ordinary
+execution slots as new discovery. Existing unfinished Runs launch
 before new discovery. Workflow target
 steps retry infrastructure failures twice with exponential backoff; an exhausted
 instance records a failed Run for recovery. Nightly and app-open recovery also
 reconcile instances quiet for 30 minutes. Imported or historical Email sources
 retain the existing classification-refresh deferral and report a blocked outcome.
+
+## Recover an existing Run pileup
+
+Deploy the scheduling fix before clearing an accumulated backlog. The new slot
+limit prevents additional ordinary owners; it does not merge or cancel existing
+Runs, move evaluations, or rewrite retained receipts. Existing active owners
+above the limit can finish; failed owners wait for capacity.
+Previously failed owners are recovered before new discovery as slots become
+available. A retained legacy failed backlog can therefore delay new work until
+it drains or the member approves including it in the stop set.
+
+A data correction requires the member's explicit approval and a transactional
+script outside the repository. First inspect aggregate Run purpose/status,
+activation revision, attempts and evaluation states in `BEGIN READ ONLY`.
+Distinguish previously failed work from member-cancelled work; an old start time
+alone does not establish that a cancellation was reversed. Database timestamps
+are UTC wall-clock `timestamp without time zone`; select them as text or bind
+UTC ISO text cast to `timestamp` so the driver's local timezone cannot shift a
+cutoff.
+
+Proposed cleanup: choose an explicit UTC cutoff and the ordinary refresh owners
+to stop, excluding the current discovery Run, explicit Sweep children and member
+work outside this scope. Under the AI-admission lock, mark selected active Runs
+`failed` / `user_cancelled`, set `endedAt` and the cancellation diagnostic, and
+cancel their pending evaluations in a batch, mirroring Run control. Preserve
+settled rows, saved results, receipts and links. Include previously failed
+ordinary Runs with pending work in the approved stop set if they must not be
+readmitted; cancelling only currently running Runs leaves those recovery
+candidates eligible. Recheck the exact selected statuses/attempts and pending
+counts before committing, then read back cancellation invariants.
+
+After the database commit, terminate the exact selected Workflow instances,
+including still-live previously cancelled instances, as Run control does. This
+retires pinned older code instead of relying on it to adopt the new launch
+fence. Guarded instances also stop at their next cancellation check; in-flight
+publication remains fenced. Include termination in the explicit approval and
+verify instance states without deleting Workflow history or evaluation ledgers. After cancellation,
+new fingerprints can join the bounded owners. Retrying the same cancelled
+fingerprints is a separate deliberate member action; retry only the chosen Run
+after capacity is available. Verify post-deploy creation, cancellation stability,
+recovery budgets and pool occupancy before starting another large Sweep.

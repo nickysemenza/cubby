@@ -306,10 +306,10 @@ describe("connection discovery roster freshness", () => {
     await activateAiRefresh(ctx.db, "synthetic-connection-roster", {
       enabled: true,
     });
-    const firstRun = await scheduleConnectionRefresh(ctx.db, ref);
+    const { runId: firstRun } = await scheduleConnectionRefresh(ctx.db, ref);
     if (!firstRun)
       throw new Error("Synthetic connection discovery was not scheduled");
-    expect(await scheduleConnectionRefresh(ctx.db, ref)).toBe(firstRun);
+    expect((await scheduleConnectionRefresh(ctx.db, ref)).runId).toBe(firstRun);
     const [first] = await getDb(ctx.db)
       .select()
       .from(aiEvaluation)
@@ -325,7 +325,7 @@ describe("connection discovery roster freshness", () => {
       async () => ({ source: ref, discovered: true }),
     );
     const before = await connectionSourceFingerprint(ctx.db, ref);
-    expect(await scheduleConnectionRefresh(ctx.db, ref)).toBeNull();
+    expect((await scheduleConnectionRefresh(ctx.db, ref)).runId).toBeNull();
 
     await ensureRun(ctx.db, ctx.actor, {
       purpose: "ai_suggest",
@@ -341,7 +341,16 @@ describe("connection discovery roster freshness", () => {
     await refreshSearchDocument(ctx.db, "product", endpoint.entityId);
     const afterInsert = await connectionSourceFingerprint(ctx.db, ref);
     expect(afterInsert).not.toBe(before);
-    expect(await scheduleConnectionRefresh(ctx.db, ref)).not.toBe(firstRun);
+    expect((await scheduleConnectionRefresh(ctx.db, ref)).runId).toBe(firstRun);
+    const refreshed = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.runId, firstRun));
+    expect(refreshed).toHaveLength(2);
+    expect(refreshed.find((row) => row.id !== first.id)).toMatchObject({
+      state: "queued",
+      provenance: { inputFingerprint: afterInsert },
+    });
     await refreshSearchDocument(ctx.db, "product", endpoint.entityId);
     expect(await connectionSourceFingerprint(ctx.db, ref)).toBe(afterInsert);
 

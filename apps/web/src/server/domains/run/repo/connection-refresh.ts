@@ -6,7 +6,7 @@ import {
 import { entitySchema, type EntityRef } from "@cubby/schemas/entity";
 import type { RunId } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, asc, count, eq, gt, inArray, isNull, ne } from "drizzle-orm";
+import { and, asc, count, eq, gt, inArray, isNull } from "drizzle-orm";
 
 import { dependencyStamps } from "~/server/ai/policy/refresh-manifest";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
@@ -43,15 +43,21 @@ const discoveryEntities = [
 ] as const;
 const discoveryEntitySet = new Set<string>(discoveryEntities);
 
+type ConnectionRefreshResult =
+  | { kind: "scheduled"; runId: RunId }
+  | { kind: "unchanged"; runId: RunId | null }
+  | { kind: "deferred"; runId: null };
+
 export async function scheduleConnectionRefresh(
   db: Database,
   source: EntityRef,
   actor: Parameters<typeof scheduleEvaluationRun>[1] = systemActor(),
-) {
-  if (!discoveryEntitySet.has(source.entityKind)) return null;
+): Promise<ConnectionRefreshResult> {
+  if (!discoveryEntitySet.has(source.entityKind))
+    return { kind: "unchanged", runId: null };
   const activation = await readAiRefreshActivation(db);
   if (!activation?.enabled || !activation.manifest["entity-connections"])
-    return null;
+    return { kind: "unchanged", runId: null };
   const record = await connectionRecord(db, source);
   // The initial cursor pass also carries the expanded notes projection into
   // existing rows; fallback retrieval remains useful until that pass reaches them.
@@ -85,21 +91,28 @@ export async function scheduleConnectionRefresh(
     },
     [{ target, provenance, snapshot: source }],
   );
-  if (scheduled) return scheduled;
+  if (scheduled.kind === "scheduled") return scheduled;
+  if (scheduled.kind === "deferred") return { kind: "deferred", runId: null };
   const [existing] = await getDb(db)
     .select({ id: run.id })
     .from(run)
     .innerJoin(aiEvaluation, eq(aiEvaluation.runId, run.id))
     .where(
       and(
-        eq(run.clientKey, `ai-refresh:connection:${key}`),
-        ne(run.status, "completed"),
-        ne(aiEvaluation.state, "completed"),
+        eq(aiEvaluation.target, target),
+        eq(aiEvaluation.provenance, provenance),
+        eq(run.status, "running"),
+        inArray(aiEvaluation.state, [
+          "queued",
+          "running",
+          "result_ready",
+          "retry_wait",
+        ]),
         notDeleted(run),
       ),
     )
     .limit(1);
-  return existing?.id ?? null;
+  return { kind: "unchanged", runId: existing?.id ?? null };
 }
 
 /**

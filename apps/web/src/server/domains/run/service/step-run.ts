@@ -420,7 +420,11 @@ export async function retryRunStep(
     );
   const reopened = await reopenRunStep(db, runId, key);
   if (!reopened) throw new Error("This step has no failures to retry");
-  await launchWorkflowRun(db, { runId, purpose: owner.purpose }, launcher);
+  await launchWorkflowRun(
+    db,
+    { runId, purpose: owner.purpose, retryCancelled: true },
+    launcher,
+  );
   return reopened;
 }
 
