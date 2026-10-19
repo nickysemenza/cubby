@@ -1,5 +1,6 @@
 import { mailImportOutcome } from "@cubby/schemas/assessment";
 import { parseEntityId } from "@cubby/schemas/identifiers";
+import { mailAttributionHeaders } from "@cubby/schemas/mailbox-research";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import {
   CF_ACCOUNT_ID,
@@ -16,6 +17,7 @@ import { withWorkerdRuntime } from "tooling/workerd-runtime";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { user } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import { aiUsage, assessment, run as runTable } from "~/server/db/schema";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
@@ -45,6 +47,33 @@ const replayCases = z
       receivedAt: z.iso.datetime(),
       bodyText: z.string(),
       bodyHtml: z.string().nullable().default(null),
+      /**
+       * The original's addressing and forwarding headers. Attribution reads
+       * only `mailAttributionHeaders`' subset, so any other header is dropped.
+       */
+      headers: z
+        .record(z.string(), z.string())
+        .optional()
+        .transform((headers) =>
+          headers
+            ? mailAttributionHeaders(
+                Object.fromEntries(
+                  Object.entries(headers).map(([name, value]) => [
+                    name.toLowerCase(),
+                    value,
+                  ]),
+                ),
+              )
+            : undefined,
+        ),
+      /**
+       * The mailbox owner production judged against: the member's LedgerParty
+       * name and sign-in address. Absent, the synthetic member owns the
+       * mailbox and own-mail attribution cannot match a real recipient.
+       */
+      owner: z
+        .object({ name: z.string().min(1), address: z.email() })
+        .optional(),
       baseline: mailImportOutcome,
     }),
   )
@@ -56,15 +85,47 @@ if (process.env.CI && inputUrl)
   throw new Error("Private replay input is session-only");
 if (scripted && inputUrl)
   throw new Error("Scripted replay accepts synthetic fixtures only");
-const synthetic = [
-  {
-    subject: "Synthetic order inquiry",
-    sender: "orders@shop.example",
-    receivedAt: "2026-09-20T18:00:00Z",
-    bodyText: "Synthetic inquiry: no order id, itemization or amount.",
-    baseline: { kind: "unresolved", reason: "Synthetic missing itemization" },
+const syntheticInquiry = {
+  subject: "Synthetic order inquiry",
+  sender: "orders@shop.example",
+  receivedAt: "2026-09-20T18:00:00Z",
+  bodyText: "Synthetic inquiry: no order id, itemization or amount.",
+  baseline: { kind: "unresolved", reason: "Synthetic missing itemization" },
+};
+// Own mail: the To header names the seeded owner, so attribution defaults to
+// the recipient and an itemized order must import.
+const syntheticOwnOrder = {
+  subject: "Your Synthetic Shop order SYN-1001 is confirmed",
+  sender: "Synthetic Shop <orders@shop.example>",
+  receivedAt: "2026-09-20T18:00:00Z",
+  headers: {
+    From: "Synthetic Shop <orders@shop.example>",
+    To: "Sam Synthetic <sam.synthetic@example.com>",
   },
-];
+  owner: { name: "Sam Synthetic", address: "sam.synthetic@example.com" },
+  bodyText: [
+    "Hi Sam, thanks for your order!",
+    "Order SYN-1001, placed September 20, 2026.",
+    "1 x Synthetic ceramic mug: $12.00",
+    "2 x Synthetic tea towel at $4.50: $9.00",
+    "Subtotal: $21.00",
+    "Sales tax: $1.89",
+    "Order total: $22.89, charged to Visa ending 0000.",
+  ].join("\n"),
+  baseline: {
+    kind: "imported",
+    total: 22.89,
+    lines: [
+      { name: "Synthetic ceramic mug", cost: 12 },
+      { name: "Synthetic tea towel", cost: 9 },
+      { name: "Sales tax", cost: 1.89 },
+    ],
+  },
+};
+// The scripted coordinator resolves every Email unresolved.
+const synthetic = scripted
+  ? [syntheticInquiry]
+  : [syntheticInquiry, syntheticOwnOrder];
 async function readInput() {
   if (!inputUrl) return synthetic;
   const url = new URL(inputUrl);
@@ -166,7 +227,16 @@ describe("isolated Mail coordinator replay", () => {
         let diagnose = async (): Promise<string[]> => [];
         const queueCapture = captureBackgroundQueue();
         try {
-          const { party } = await memberImportWorld(ctx.db, ctx.actor);
+          const { party } = await memberImportWorld(ctx.db, ctx.actor, {
+            memberName: sample.owner?.name,
+          });
+          // Owner evidence is the member's sign-in address (the Gmail profile
+          // is unreachable), so it carries the original recipient's address.
+          if (sample.owner)
+            await getDb(ctx.db)
+              .update(user)
+              .set({ email: sample.owner.address })
+              .where(eq(user.id, ctx.actor.userId));
           const mailboxId = "synthetic-replay-mailbox";
           const mail = await retainedMailFixture(ctx.db, {
             ledgerPartyId: party.id,
@@ -179,12 +249,14 @@ describe("isolated Mail coordinator replay", () => {
               JSON.stringify({
                 bodyText: sample.bodyText,
                 bodyHtml: sample.bodyHtml,
+                headers: sample.headers,
               }),
             ),
             content: {
               snippet: null,
               bodyText: sample.bodyText,
               bodyHtml: sample.bodyHtml,
+              ...(sample.headers && { headers: sample.headers }),
             },
             classificationVersion: "isolated-replay-v1",
           });

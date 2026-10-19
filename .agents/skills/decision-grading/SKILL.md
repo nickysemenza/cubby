@@ -110,8 +110,15 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
    Worker rebuild runs once before the first case). With the member's authorization,
    pass originals and frozen outcomes through `eval:mail-replay:stdin`, using
    `MAIL_REPLAY_MODEL` and optional `MAIL_REPLAY_ESCALATION_MODEL`. Supply an array
-   of `{subject, sender, receivedAt, bodyText, bodyHtml?, baseline}`; `baseline`
-   follows `mailImportOutcome` in `packages/schemas/src/assessment.ts`. The socket
+   of `{subject, sender, receivedAt, bodyText, bodyHtml?, headers?, owner?,
+   baseline}`; `baseline` follows `mailImportOutcome` in
+   `packages/schemas/src/assessment.ts`. Attribution needs the original's
+   recipient evidence: `headers` is the original's header record (only the
+   `mailAttributionHeaders` subset — To, Cc, From, Delivered-To, Reply-To,
+   Sender and forwarding headers — is kept), and `owner` is `{name, address}`
+   of the Email's member (LedgerParty name and sign-in address), seeded into
+   the throwaway world. Without them own mail cannot match its recipient, so an
+   `imported` baseline replays as attribution-uncertain `unresolved`. The socket
    keeps private input in memory. Each case gets a fresh throwaway database and
    the real coordinator/public writers; Gmail is unreachable. No production
    writes occur. Existing Purchases, catalog, attachments and supporting Emails
