@@ -1,0 +1,19 @@
+apps/web/src/features/ai/decisions-catalog.tsx
+  s_9b829d577c7e4c::t_855e726187025c 4,11,17,25,28,32,52-113,140-152,164-170,208-221,253-257,559-607,626-634,637-663,683,686-690
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f452b53728d0ee3e2b8330b30397cc97596f79fd",
+  "prompts": {},
+  "sessions": {
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
