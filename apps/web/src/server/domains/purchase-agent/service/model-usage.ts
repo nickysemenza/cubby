@@ -26,6 +26,15 @@ export function readPiModelUsage(sql: SqlStorage): AgentModelUsage[] {
     throw new Error(
       `Installed pi SQLite schema ${CURRENT_SQLITE_SCHEMA_VERSION}; model usage reader supports ${SUPPORTED_PI_SQLITE_SCHEMA_VERSION}`,
     );
+  // A store pi never wrote a document to has nothing to total.
+  if (
+    !sql
+      .exec(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'pi_documents'",
+      )
+      .toArray().length
+  )
+    return [];
   // `pi.usage` checkpoints every write, so a live document's newest revision
   // is a whole base value.
   const rows = sql

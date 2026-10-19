@@ -246,9 +246,12 @@ const TOKEN_COUNTERS = [
 export function AgentTokenAccounting({
   piUsage,
   recorded,
+  settled,
 }: {
   piUsage: readonly AgentModelUsage[] | undefined;
   recorded: AiRunUsage["tokensByModel"] | undefined;
+  /** Whether usage was read after the Run ended, so a difference is real. */
+  settled: boolean;
 }) {
   const headingId = useId();
   const rows = useMemo(() => {
@@ -280,13 +283,14 @@ export function AgentTokenAccounting({
   }, [piUsage, recorded]);
   if (!rows.length) return null;
   const mismatched = rows.filter((row) => row.recorded !== row.pi);
+  const flagged = settled && mismatched.length > 0;
 
   return (
     <section
       className="mt-3 border-t border-border pt-2"
       aria-labelledby={headingId}
     >
-      <details open={mismatched.length > 0}>
+      <details open={flagged}>
         <summary
           id={headingId}
           className="min-h-11 cursor-pointer text-xs font-semibold md:min-h-0"
@@ -294,11 +298,13 @@ export function AgentTokenAccounting({
           Token accounting
         </summary>
         <p
-          className={`mt-1 text-xs ${mismatched.length ? "text-destructive" : "text-muted-foreground"}`}
+          className={`mt-1 text-xs ${flagged ? "text-destructive" : "text-muted-foreground"}`}
         >
-          {mismatched.length
-            ? `${mismatched.length} ${mismatched.length === 1 ? "counter differs" : "counters differ"} between Cubby's usage records and pi's ledger.`
-            : "Cubby's usage records match pi's ledger."}
+          {!mismatched.length
+            ? "Cubby's usage records match pi's ledger."
+            : flagged
+              ? `${mismatched.length} ${mismatched.length === 1 ? "counter differs" : "counters differ"} between Cubby's usage records and pi's ledger.`
+              : "Usage records may trail pi's ledger until the Run settles."}
         </p>
         <Table
           aria-label="Token accounting table"
@@ -337,7 +343,7 @@ export function AgentTokenAccounting({
                     {formatCount(row.pi)}
                   </TableCell>
                   <TableCell
-                    className={`px-2 py-1 text-right ${difference ? "font-semibold text-destructive" : "text-muted-foreground"}`}
+                    className={`px-2 py-1 text-right ${difference && settled ? "font-semibold text-destructive" : "text-muted-foreground"}`}
                   >
                     {difference > 0 ? "+" : null}
                     {formatCount(difference)}

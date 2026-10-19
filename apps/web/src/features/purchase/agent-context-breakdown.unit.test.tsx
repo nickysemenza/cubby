@@ -202,6 +202,7 @@ describe("AgentTokenAccounting", () => {
             ...tokens(900),
           },
         ]}
+        settled
       />,
     );
 
@@ -212,5 +213,28 @@ describe("AgentTokenAccounting", () => {
     ).toBeVisible();
     const input = screen.getByRole("row", { name: /Input/u });
     expect(within(input).getByText("+20")).toBeVisible();
+  });
+
+  it("does not flag a difference before the Run's usage has settled", () => {
+    render(
+      <AgentTokenAccounting
+        piUsage={[{ model: "synthetic/turn-model", ...tokens(120) }]}
+        recorded={[
+          {
+            feature: "purchase_import_agent",
+            provider: "synthetic",
+            model: "turn-model",
+            ...tokens(100),
+          },
+        ]}
+        settled={false}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "Usage records may trail pi's ledger until the Run settles.",
+      ),
+    ).toBeInTheDocument();
   });
 });

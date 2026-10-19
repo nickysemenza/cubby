@@ -324,6 +324,8 @@ function agentWorkDetail(run: RunDetail, settledGroups?: number) {
   return `${run.ordersSeen} ${run.ordersSeen === 1 ? "order" : "orders"} seen · ${run.imported} imported · ${run.updated} updated`;
 }
 
+const USAGE_SETTLE_MS = 60_000;
+
 function AgentWorkOverview({
   run,
   messages,
@@ -339,13 +341,23 @@ function AgentWorkOverview({
   settledGroups?: number;
   additionalWork?: AgentWorkItem[];
 }) {
+  // The last model call can land after the final poll, so usage keeps
+  // refreshing until the Run has settled; only then can a token difference
+  // mean a call the usage hook missed rather than a stale read.
+  const settledAt = run.endedAt
+    ? Date.parse(run.endedAt) + USAGE_SETTLE_MS
+    : Number.POSITIVE_INFINITY;
   const usage = useQuery({
     ...runOperations.aiUsage.queryOptions({ runId: run.publicId, limit: 1 }),
-    refetchInterval:
-      run.status === "running" || run.status.startsWith("paused")
+    refetchInterval: () =>
+      run.status === "running" ||
+      run.status.startsWith("paused") ||
+      Date.now() < settledAt
         ? 5_000
         : false,
   });
+  const usageSettled =
+    usage.dataUpdatedAt > settledAt && Date.now() > settledAt;
   const work = [
     ...summarizeAgentWork(messages, run.operations),
     ...additionalWork,
@@ -398,6 +410,7 @@ function AgentWorkOverview({
       <AgentTokenAccounting
         piUsage={modelUsage}
         recorded={usage.data?.tokensByModel}
+        settled={usageSettled}
       />
       <div className="mt-3 border-t border-border pt-2">
         <RecordList
