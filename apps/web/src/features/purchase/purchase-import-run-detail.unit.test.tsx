@@ -512,7 +512,7 @@ it("shows durable progress and diagnostics alongside photo group review", async 
   expect(screen.getByText("Photo review complete")).toBeInTheDocument();
   expect(screen.queryByText("Extracted order details")).not.toBeInTheDocument();
   expect(
-    screen.getByText("Agent messages and tool calls · 0 messages"),
+    await screen.findByText("No agent messages have been recorded yet."),
   ).toBeInTheDocument();
 });
 
