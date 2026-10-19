@@ -326,6 +326,7 @@ describe("shared Assessment history", () => {
       "application:synthetic-command",
       "merge:synthetic-command",
       "email-accuracy:synthetic-command",
+      "automatic:synthetic-command",
       "decision",
       "resolution",
       "saved-application",
