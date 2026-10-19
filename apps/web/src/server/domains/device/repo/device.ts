@@ -31,6 +31,10 @@ import {
 import { device, imageSighting, runPushRegistration } from "~/server/db/schema";
 import { deriveAndStoreImageCapture } from "~/server/domains/image/repo/image-capture-derivation";
 import {
+  type MutationReceipt,
+  defineMutationWriter,
+} from "~/server/entity-kernel/repo/repository";
+import {
   asActor,
   defineRepository,
   listOn,
@@ -187,84 +191,115 @@ const deviceCrud = createEntityCrud({
 export const getDeviceByID = deviceCrud.getByID;
 const getDeviceByShortcode = deviceCrud.getByShortcode;
 
-export async function createDevice(
-  db: Database,
-  data: DeviceCreateInput,
-  actor: ActorContext,
-): Promise<{ output: DeviceOut; entityId: DeviceId }> {
-  const id = await withTransaction(db, async (tx) => {
-    // When the caller doesn't name an owner, resolve one from the acting
-    // login through the member-login mapping — `null` when unlinked, never a
-    // hard failure: a device is useful even with no recorded owner.
-    const ledgerPartyId =
-      data.ledgerPartyId === undefined
-        ? ((await currentMemberLedgerParty(tx, actor))?.id ?? null)
-        : data.ledgerPartyId === null
-          ? null
-          : await resolveOrThrow(tx, "ledgerParty", data.ledgerPartyId);
-    const productId =
-      data.productId === undefined || data.productId === null
-        ? null
-        : await resolveOrThrow(tx, "product", data.productId);
-    const row = await insertWithShortcode(tx, "device", {
-      installationId: data.installationId.trim(),
-      name: data.name.trim(),
-      platform: data.platform,
-      appVersion: data.appVersion ?? null,
-      osVersion: data.osVersion ?? null,
-      automaticWork: data.automaticWork,
-      remotePaused: data.remotePaused,
-      ledgerPartyId,
-      productId,
-    });
-    await logAuditEntry(tx, actor, {
-      entityKind: "device",
-      entityId: row.id,
-      action: "create",
-    });
-    return parseEntityId("device", row.id);
-  });
-  return { output: await deviceCrud.getByID(db, id), entityId: id };
-}
-
-export async function updateDevice(
-  db: Database,
-  shortcode: DeviceShortcode,
-  data: DeviceUpdateData,
-  actor: ActorContext,
-): Promise<{ output: DeviceOut; entityId: DeviceId }> {
-  const id = await resolveOrThrow(db, "device", shortcode);
-  return withTransaction(db, async (tx) => {
-    const ledgerPartyId =
-      data.ledgerPartyId === undefined
-        ? undefined
-        : data.ledgerPartyId === null
-          ? null
-          : await resolveOrThrow(tx, "ledgerParty", data.ledgerPartyId);
-    const productId =
-      data.productId === undefined
-        ? undefined
-        : data.productId === null
+export const createDevice = defineMutationWriter({
+  entity: "device",
+  read: async (
+    receipt: MutationReceipt<"device">,
+    db: Database,
+    _data: DeviceCreateInput,
+    _actor: ActorContext,
+  ) => ({
+    output: await deviceCrud.getByID(db, receipt.entityId),
+    entityId: receipt.entityId,
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    data: DeviceCreateInput,
+    actor: ActorContext,
+  ) => {
+    const id = await withTransaction(db, async (tx) => {
+      // When the caller doesn't name an owner, resolve one from the acting
+      // login through the member-login mapping — `null` when unlinked, never a
+      // hard failure: a device is useful even with no recorded owner.
+      const ledgerPartyId =
+        data.ledgerPartyId === undefined
+          ? ((await currentMemberLedgerParty(tx, actor))?.id ?? null)
+          : data.ledgerPartyId === null
+            ? null
+            : await resolveOrThrow(tx, "ledgerParty", data.ledgerPartyId);
+      const productId =
+        data.productId === undefined || data.productId === null
           ? null
           : await resolveOrThrow(tx, "product", data.productId);
-    const output = await deviceCrud.update(
-      tx,
-      id,
-      {
-        name: data.name,
-        appVersion: data.appVersion,
-        osVersion: data.osVersion,
-        lastSeenAt: data.lastSeenAt,
+      const row = await insertWithShortcode(tx, "device", {
+        installationId: data.installationId.trim(),
+        name: data.name.trim(),
+        platform: data.platform,
+        appVersion: data.appVersion ?? null,
+        osVersion: data.osVersion ?? null,
         automaticWork: data.automaticWork,
         remotePaused: data.remotePaused,
         ledgerPartyId,
         productId,
-      },
-      actor,
-    );
-    return { output, entityId: id };
-  });
-}
+      });
+      await logAuditEntry(tx, actor, {
+        entityKind: "device",
+        entityId: row.id,
+        action: "create",
+      });
+      return parseEntityId("device", row.id);
+    });
+    return readOutput({ entityId: id });
+  },
+});
+
+export const updateDevice = defineMutationWriter({
+  entity: "device",
+  read: async (
+    receipt: MutationReceipt<"device">,
+    db: Database,
+    _shortcode: DeviceShortcode,
+    _data: DeviceUpdateData,
+    _actor: ActorContext,
+  ) => ({
+    output: await deviceCrud.getByID(db, receipt.entityId),
+    entityId: receipt.entityId,
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    shortcode: DeviceShortcode,
+    data: DeviceUpdateData,
+    actor: ActorContext,
+  ) => {
+    const id = await resolveOrThrow(db, "device", shortcode);
+    return withTransaction(db, async (tx) => {
+      const ledgerPartyId =
+        data.ledgerPartyId === undefined
+          ? undefined
+          : data.ledgerPartyId === null
+            ? null
+            : await resolveOrThrow(tx, "ledgerParty", data.ledgerPartyId);
+      const productId =
+        data.productId === undefined
+          ? undefined
+          : data.productId === null
+            ? null
+            : await resolveOrThrow(tx, "product", data.productId);
+      const receipt = await deviceCrud.update(
+        tx,
+        id,
+        {
+          name: data.name,
+          appVersion: data.appVersion,
+          osVersion: data.osVersion,
+          lastSeenAt: data.lastSeenAt,
+          automaticWork: data.automaticWork,
+          remotePaused: data.remotePaused,
+          ledgerPartyId,
+          productId,
+        },
+        actor,
+        async (_db, receipt) => receipt,
+      );
+      return readOutput(receipt, async () => ({
+        output: await deviceCrud.getByID(tx, id),
+        entityId: id,
+      }));
+    });
+  },
+});
 
 /**
  * A device's reported sightings go with it, and every affected image is

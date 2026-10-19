@@ -17,6 +17,10 @@ import { auditLog } from "~/server/db/schema";
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import { selectStaleRecipeIds } from "~/server/domains/recipe/repo/totals";
 import {
+  seedPending,
+  suggestionStatus,
+} from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import {
   entityKernelContextSchema,
   executeEntityAs,
 } from "~/server/entity-kernel";
@@ -47,7 +51,7 @@ describe("generic bulk updates", () => {
     entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
-  const bulk = (entity: string, ids: string[], data: unknown) =>
+  const bulk = async (entity: string, ids: string[], data: unknown) =>
     executeEntityAs(
       context(),
       "bulkUpdate",
@@ -61,6 +65,222 @@ describe("generic bulk updates", () => {
   const read = async (entity: EntityKernelEntity, id: string) =>
     (await executeEntityAs(context(), "get", { entity, id, missing: "error" }))
       .item;
+
+  it("preserves existing Wish candidates while adding and removing shared candidates", async () => {
+    const products = await Promise.all(
+      ["A", "B", "C"].map((name) =>
+        createProductFixture(
+          ctx.db,
+          makeProductInput({ name: `Synthetic candidate ${name}` }),
+          ctx.actor,
+        ),
+      ),
+    );
+    const wish = (
+      await executeEntityAs(context(), "create", {
+        entity: "wish",
+        data: {
+          name: "Synthetic candidate selection",
+          notes: null,
+          candidateProductIds: [products[0]!.id, products[1]!.id],
+        },
+      })
+    ).item;
+    await bulk("wish", [wish.id], {
+      candidateProductIds: [{ op: "add", key: products[2]!.id }],
+    });
+    expect(await read("wish", wish.id)).toMatchObject({
+      candidates: expect.arrayContaining(
+        products.map((product) => expect.objectContaining({ id: product.id })),
+      ),
+    });
+    await bulk("wish", [wish.id], {
+      candidateProductIds: [{ op: "remove", key: products[1]!.id }],
+    });
+    expect(await read("wish", wish.id)).toMatchObject({
+      candidates: expect.arrayContaining(
+        [products[0], products[2]].map((product) =>
+          expect.objectContaining({ id: product!.id }),
+        ),
+      ),
+    });
+    expect(await read("wish", wish.id)).toMatchObject({
+      candidates: expect.not.arrayContaining([
+        expect.objectContaining({ id: products[1]!.id }),
+      ]),
+    });
+  });
+
+  it("supersedes pending targets and basis suggestions on an explicit unchanged scalar write", async () => {
+    const product = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic suggestion target",
+        manufacturer: "Synthetic original maker",
+      }),
+      ctx.actor,
+    );
+    const { id } = await seedPending(ctx, {
+      entity: "product",
+      recordId: product.entityId,
+      field: "manufacturer",
+      currentValue: "Synthetic original maker",
+      suggestedValue: "Synthetic suggested maker",
+      kind: "correction",
+    });
+    const basis = await seedPending(ctx, {
+      entity: "product",
+      recordId: product.entityId,
+      field: "ingredientId",
+      currentValue: null,
+      suggestedValue: "ING-ABCD",
+      kind: "addition",
+    });
+    await bulk("product", [product.id], {
+      manufacturer: "Synthetic original maker",
+    });
+    expect(await suggestionStatus(ctx.db, id)).toBe("superseded");
+    expect(await suggestionStatus(ctx.db, basis.id)).toBe("superseded");
+  });
+
+  it("patches structured allocations without replacing each transaction's other purchase", async () => {
+    const vendor = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic allocation vendor",
+    });
+    const purchases = await Promise.all(
+      ["A", "B", "C", "D"].map((orderId) =>
+        createRepoEntity(ctx, "purchase", {
+          vendorId: vendor.output.id,
+          date: "2026-04-01",
+          orderId: `synthetic-${orderId}`,
+        }),
+      ),
+    );
+    const account = await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic allocation account",
+      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      cardNumbers: [],
+    });
+    const transactions = await Promise.all(
+      [0, 1].map((index) =>
+        createRepoEntity(ctx, "financialTransaction", {
+          accountId: account.output.id,
+          kind: "purchase",
+          status: "posted",
+          postedDate: "2026-04-01",
+          amount: 4,
+          allocations: [{ purchaseId: purchases[index]!.output.id, amount: 4 }],
+        }),
+      ),
+    );
+    await bulk(
+      "financialTransaction",
+      transactions.map((item) => item.output.id),
+      {
+        amount: 10,
+        allocations: [
+          {
+            op: "add",
+            key: { purchaseId: purchases[2]!.output.id },
+            value: { amount: 6 },
+          },
+        ],
+      },
+    );
+    for (const [index, transaction] of transactions.entries()) {
+      expect(
+        await read("financialTransaction", transaction.output.id),
+      ).toMatchObject({
+        allocations: expect.arrayContaining([
+          { purchaseId: purchases[index]!.output.id, amount: 4 },
+          { purchaseId: purchases[2]!.output.id, amount: 6 },
+        ]),
+      });
+    }
+    await bulk(
+      "financialTransaction",
+      transactions.map((item) => item.output.id),
+      {
+        allocations: [
+          { op: "remove", key: { purchaseId: purchases[2]!.output.id } },
+          {
+            op: "add",
+            key: { purchaseId: purchases[3]!.output.id },
+            value: { amount: 6 },
+          },
+        ],
+      },
+    );
+    for (const [index, transaction] of transactions.entries())
+      expect(
+        await read("financialTransaction", transaction.output.id),
+      ).toMatchObject({
+        allocations: expect.arrayContaining([
+          expect.objectContaining({
+            purchaseId: purchases[index]!.output.id,
+            amount: 4,
+          }),
+          expect.objectContaining({
+            purchaseId: purchases[3]!.output.id,
+            amount: 6,
+          }),
+        ]),
+      });
+  });
+
+  it("adds and removes shared recipe sections without duplicating or losing each recipe's composition", async () => {
+    const ingredient = await findOrCreateIngredient(
+      ctx.db,
+      "Synthetic section ingredient",
+    );
+    const recipes = await Promise.all(
+      ["A", "B"].map((suffix) =>
+        createRecipeFixture(
+          ctx.db,
+          makeRecipeInput({
+            name: `Synthetic section recipe ${suffix}`,
+            sections: [
+              {
+                name: `Synthetic original ${suffix}`,
+                ingredients: [ingredientRef(ingredient.shortcode)],
+                instructions: [
+                  { instruction: `Synthetic original step ${suffix}` },
+                ],
+              },
+            ],
+          }),
+          ctx.actor,
+        ),
+      ),
+    );
+    const section = {
+      name: "Synthetic shared section",
+      instructions: [{ instruction: "Synthetic shared step" }],
+    };
+    const ids = recipes.map((recipe) => recipe.id);
+    for (let attempt = 0; attempt < 2; attempt++)
+      await bulk("recipe", ids, { sections: [{ op: "add", key: section }] });
+    for (const [index, recipe] of recipes.entries()) {
+      const item = await read("recipe", recipe.id);
+      expect(item).toMatchObject({
+        sections: [
+          expect.objectContaining({
+            name: `Synthetic original ${index === 0 ? "A" : "B"}`,
+          }),
+          expect.objectContaining(section),
+        ],
+      });
+    }
+    await bulk("recipe", ids, { sections: [{ op: "remove", key: section }] });
+    for (const [index, recipe] of recipes.entries())
+      expect(await read("recipe", recipe.id)).toMatchObject({
+        sections: [
+          expect.objectContaining({
+            name: `Synthetic original ${index === 0 ? "A" : "B"}`,
+          }),
+        ],
+      });
+  });
 
   it("fingerprints sourced summary writes from their snapshot without hydrating food", async () => {
     const product = await createProductFixture(

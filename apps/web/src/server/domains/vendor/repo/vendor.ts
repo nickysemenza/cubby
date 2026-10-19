@@ -1,6 +1,5 @@
-/** Vendor spend is derived only from `SUM(Expense.cost)` through live purchases. */
-
 import type { ActorContext } from "@cubby/schemas/context";
+/** Vendor spend is derived only from `SUM(Expense.cost)` through live purchases. */
 import type { DataQuality } from "@cubby/schemas/data-quality";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
@@ -78,6 +77,10 @@ import { assertReviewedSpendingClassification } from "~/server/domains/spending-
 import { foldVendorAccountsInto } from "~/server/domains/vendor-account/repo/vendor-account";
 import { agentHintsLabel } from "~/server/entity-kernel/repo/detail-display-labels";
 import { patchEntityRows } from "~/server/entity-kernel/repo/entity-patch";
+import {
+  type MutationReceipt,
+  defineMutationWriter,
+} from "~/server/entity-kernel/repo/repository";
 import {
   replaceSingularAttachment,
   singularAttachmentImageIds,
@@ -817,109 +820,136 @@ export const findOrCreateVendor = async (
   return row.id;
 };
 
-export const createVendor = async (
-  db: Database,
-  data: VendorCreateInput,
-  actor: ActorContext,
-): Promise<{ output: VendorOut; entityId: VendorId }> => {
-  const id = await withTransaction(db, async (tx) => {
-    const created = await insertWithShortcode(tx, "vendor", {
-      name: data.name.trim(),
-      website: data.website,
-      orderUrlTemplate: data.orderUrlTemplate,
-      spendingProfile: data.spendingProfile,
-      defaultSpendingCategoryId: data.defaultSpendingCategoryId
-        ? await resolveOrThrow(
-            tx,
-            "spendingCategory",
-            data.defaultSpendingCategoryId,
-          )
-        : null,
-      itemizationExpectation: data.itemizationExpectation,
-      orderEvidence: data.orderEvidence,
-      aliases: data.aliases,
-      orderEmailSenders: data.orderEmailSenders,
-      browserDomains: data.browserDomains,
-      returnWindowDays: data.returnWindowDays,
-      agentHints: data.agentHints,
-      notes: data.notes,
+export const createVendor = defineMutationWriter({
+  entity: "vendor",
+  read: async (
+    receipt: MutationReceipt<"vendor">,
+    db: Database,
+    _data: VendorCreateInput,
+    _actor: ActorContext,
+  ) => ({
+    output: await getVendorByID(db, receipt.entityId),
+    entityId: receipt.entityId,
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    data: VendorCreateInput,
+    actor: ActorContext,
+  ) => {
+    const id = await withTransaction(db, async (tx) => {
+      const created = await insertWithShortcode(tx, "vendor", {
+        name: data.name.trim(),
+        website: data.website,
+        orderUrlTemplate: data.orderUrlTemplate,
+        spendingProfile: data.spendingProfile,
+        defaultSpendingCategoryId: data.defaultSpendingCategoryId
+          ? await resolveOrThrow(
+              tx,
+              "spendingCategory",
+              data.defaultSpendingCategoryId,
+            )
+          : null,
+        itemizationExpectation: data.itemizationExpectation,
+        orderEvidence: data.orderEvidence,
+        aliases: data.aliases,
+        orderEmailSenders: data.orderEmailSenders,
+        browserDomains: data.browserDomains,
+        returnWindowDays: data.returnWindowDays,
+        agentHints: data.agentHints,
+        notes: data.notes,
+      });
+      await logAuditEntry(tx, actor, {
+        entityKind: "vendor",
+        entityId: created.id,
+        action: "create",
+      });
+      return created.id;
     });
-    await logAuditEntry(tx, actor, {
-      entityKind: "vendor",
-      entityId: created.id,
-      action: "create",
-    });
-    return created.id;
-  });
-  return { output: await getVendorByID(db, id), entityId: id };
-};
+    return readOutput({ entityId: id });
+  },
+});
 
-export const updateVendor = async (
-  db: Database,
-  shortcode: VendorShortcode,
-  data: VendorUpdateData,
-  actor: ActorContext,
-): Promise<{ output: VendorOut; entityId: VendorId }> => {
-  const id = await resolveOrThrow(db, "vendor", shortcode);
+export const updateVendor = defineMutationWriter({
+  entity: "vendor",
+  read: async (
+    receipt: MutationReceipt<"vendor">,
+    db: Database,
+    _shortcode: VendorShortcode,
+    _data: VendorUpdateData,
+    _actor: ActorContext,
+  ) => ({
+    output: await getVendorByID(db, receipt.entityId),
+    entityId: receipt.entityId,
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    shortcode: VendorShortcode,
+    data: VendorUpdateData,
+    actor: ActorContext,
+  ) => {
+    const id = await resolveOrThrow(db, "vendor", shortcode);
 
-  const defaultSpendingCategoryId =
-    data.defaultSpendingCategoryId === undefined
-      ? undefined
-      : data.defaultSpendingCategoryId === null
-        ? null
-        : await resolveOrThrow(
-            db,
-            "spendingCategory",
-            data.defaultSpendingCategoryId,
-          );
-  let reclassifies = false;
-  if (
-    data.spendingProfile !== undefined ||
-    defaultSpendingCategoryId !== undefined
-  ) {
-    const [current] = await getDb(db)
-      .select({
-        profile: vendor.spendingProfile,
-        target: vendor.defaultSpendingCategoryId,
-      })
-      .from(vendor)
-      .where(and(eq(vendor.id, id), notDeleted(vendor)))
-      .limit(1);
-    if (!current) throw new Error("Vendor not found");
+    const defaultSpendingCategoryId =
+      data.defaultSpendingCategoryId === undefined
+        ? undefined
+        : data.defaultSpendingCategoryId === null
+          ? null
+          : await resolveOrThrow(
+              db,
+              "spendingCategory",
+              data.defaultSpendingCategoryId,
+            );
+    let reclassifies = false;
     if (
-      (data.spendingProfile ?? current.profile) !== current.profile ||
-      (defaultSpendingCategoryId === undefined
-        ? current.target
-        : defaultSpendingCategoryId) !== current.target
+      data.spendingProfile !== undefined ||
+      defaultSpendingCategoryId !== undefined
     ) {
-      const affected = await getDb(db).execute(
-        sql`SELECT 1 FROM "Expense" e JOIN "Purchase" p ON p.id=e."purchaseId" WHERE e."deletedAt" IS NULL AND p."deletedAt" IS NULL AND p."vendorId"=${id}::uuid LIMIT 1`,
-      );
-      if (affected.rows.length) {
-        assertReviewedSpendingClassification(db);
-        reclassifies = true;
+      const [current] = await getDb(db)
+        .select({
+          profile: vendor.spendingProfile,
+          target: vendor.defaultSpendingCategoryId,
+        })
+        .from(vendor)
+        .where(and(eq(vendor.id, id), notDeleted(vendor)))
+        .limit(1);
+      if (!current) throw new Error("Vendor not found");
+      if (
+        (data.spendingProfile ?? current.profile) !== current.profile ||
+        (defaultSpendingCategoryId === undefined
+          ? current.target
+          : defaultSpendingCategoryId) !== current.target
+      ) {
+        const affected = await getDb(db).execute(
+          sql`SELECT 1 FROM "Expense" e JOIN "Purchase" p ON p.id=e."purchaseId" WHERE e."deletedAt" IS NULL AND p."deletedAt" IS NULL AND p."vendorId"=${id}::uuid LIMIT 1`,
+        );
+        if (affected.rows.length) {
+          assertReviewedSpendingClassification(db);
+          reclassifies = true;
+        }
       }
     }
-  }
-  await withTransaction(db, async (tx) => {
-    await patchEntityRows(
-      tx,
-      actor,
-      {
-        entity: "vendor",
-        table: vendor,
-        fields: entityFieldModels.vendor.audit,
-      },
-      [id],
-      { ...data, defaultSpendingCategoryId, name: data.name?.trim() },
-    );
-    // A new profile or default reclassifies this Vendor's lines, so it can
-    // put a linked Product in a category that forbids one.
-    if (reclassifies) await validateProductPolicy(tx, { vendorId: id });
-  });
+    await withTransaction(db, async (tx) => {
+      await patchEntityRows(
+        tx,
+        actor,
+        {
+          entity: "vendor",
+          table: vendor,
+          fields: entityFieldModels.vendor.audit,
+        },
+        [id],
+        { ...data, defaultSpendingCategoryId, name: data.name?.trim() },
+      );
+      // A new profile or default reclassifies this Vendor's lines, so it can
+      // put a linked Product in a category that forbids one.
+      if (reclassifies) await validateProductPolicy(tx, { vendorId: id });
+    });
 
-  return { output: await getVendorByID(db, id), entityId: id };
-};
+    return readOutput({ entityId: id });
+  },
+});
 
 /** Row locking serializes logo replacement; shared old images are preserved. */
 export const replaceVendorLogo = async (

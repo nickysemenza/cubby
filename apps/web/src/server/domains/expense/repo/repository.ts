@@ -46,6 +46,38 @@ export const expenseRepository = defineRepository("expense", {
     );
     return result;
   },
+  createRead: async (ctx, data, fields) => {
+    const result = await createExpense.read(
+      fields,
+      ctx.db,
+      data,
+      ctx.actorContext,
+      ctx.services.expenseLineRole,
+    );
+    await recomputeRecipesForPriceAffectedProducts(
+      ctx.db,
+      ctx.services.recipeCosting,
+      result.priceAffectedProductIds,
+      "expense.create",
+    );
+    return result;
+  },
+  updateRead: async (ctx, id, data, fields) => {
+    const result = await updateExpense.read(
+      fields,
+      ctx.db,
+      id,
+      data,
+      ctx.actorContext,
+    );
+    await recomputeRecipesForPriceAffectedProducts(
+      ctx.db,
+      ctx.services.recipeCosting,
+      result.priceAffectedProductIds,
+      "expense.update",
+    );
+    return result;
+  },
   delete: async (ctx, ids) => {
     const { priceAffectedProductIds, result } =
       await deleteExpensesWithPurchaseEffects(ctx.db, ids, ctx.actorContext);

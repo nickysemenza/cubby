@@ -86,6 +86,7 @@ export default defineEntity({
       },
       {
         key: "appVersion",
+        control: { kind: "text" },
         kind: "text",
         nullable: true,
         display: { detail: true },
@@ -97,6 +98,7 @@ export default defineEntity({
       },
       {
         key: "osVersion",
+        control: { kind: "text" },
         kind: "text",
         nullable: true,
         display: { detail: true },
@@ -108,6 +110,7 @@ export default defineEntity({
       },
       {
         key: "lastSeenAt",
+        control: { kind: "text", placeholder: "ISO date and time" },
         kind: "timestamp",
         nullable: true,
         display: { list: true, detail: true, format: "timestamp" },

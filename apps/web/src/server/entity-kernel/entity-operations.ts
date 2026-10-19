@@ -81,7 +81,7 @@ import type {
   EntityKernelContext,
   EntityKernelCoreBinding,
 } from "./adapter";
-import { resolveValueCollectionPatches } from "./collection-patch";
+import { resolveCollectionPatches } from "./collection-patch";
 import {
   type EntityKernelEntity,
   entityBrowserMutationResultSchema,
@@ -283,6 +283,61 @@ const mutationReadFields = (entity: EntityKernelEntity, fields: unknown) => {
   return requested;
 };
 
+/** Target and basis changes supersede pending suggestions in the mutation transaction. */
+const supersedeWriteSuggestions = async (
+  context: EntityKernelContext,
+  entity: EntityKernelEntity,
+  ids: readonly string[],
+  changedFields: readonly string[],
+): Promise<void> => {
+  const dependentFields = entityFieldModels[entity].fields
+    .filter((field) =>
+      field.control?.suggest?.basis?.some((input) =>
+        changedFields.includes(input),
+      ),
+    )
+    .map((field) => field.key);
+  if (dependentFields.length)
+    await getDb(context.db)
+      .update(suggestionTable)
+      .set({
+        status: "superseded",
+        supersessionReceipt: {
+          reason: "input_changed",
+          evaluationId: null,
+          at: new Date().toISOString(),
+        },
+      })
+      .where(
+        and(
+          eq(suggestionTable.entity, entity),
+          inArray(suggestionTable.recordId, ids),
+          inArray(suggestionTable.field, dependentFields),
+          eq(suggestionTable.status, "pending"),
+        ),
+      );
+  if (changedFields.length) {
+    await getDb(context.db)
+      .update(suggestionTable)
+      .set({
+        status: "superseded",
+        supersessionReceipt: {
+          reason: "target_changed",
+          evaluationId: null,
+          at: new Date().toISOString(),
+        },
+      })
+      .where(
+        and(
+          eq(suggestionTable.entity, entity),
+          inArray(suggestionTable.recordId, ids),
+          inArray(suggestionTable.field, changedFields),
+          eq(suggestionTable.status, "pending"),
+        ),
+      );
+  }
+};
+
 const buildUpdateOperation = <
   const E extends EntityKernelEntity,
   const S extends EntityBindingSchemas,
@@ -353,7 +408,7 @@ const buildUpdateOperation = <
               {},
               validated.data,
               Object.fromEntries(
-                await resolveValueCollectionPatches(
+                await resolveCollectionPatches(
                   writeContext,
                   binding,
                   validated.id,
@@ -372,52 +427,12 @@ const buildUpdateOperation = <
             const changedFields = Object.keys(
               z.record(z.string(), z.unknown()).parse(validated.data),
             );
-            const dependentFields = entityFieldModels[binding.entity].fields
-              .filter((field) =>
-                field.control?.suggest?.basis?.some((input) =>
-                  changedFields.includes(input),
-                ),
-              )
-              .map((field) => field.key);
-            if (dependentFields.length)
-              await getDb(writeContext.db)
-                .update(suggestionTable)
-                .set({
-                  status: "superseded",
-                  supersessionReceipt: {
-                    reason: "input_changed",
-                    evaluationId: null,
-                    at: new Date().toISOString(),
-                  },
-                })
-                .where(
-                  and(
-                    eq(suggestionTable.entity, binding.entity),
-                    eq(suggestionTable.recordId, updated.entityId),
-                    inArray(suggestionTable.field, dependentFields),
-                    eq(suggestionTable.status, "pending"),
-                  ),
-                );
-            if (changedFields.length) {
-              await getDb(writeContext.db)
-                .update(suggestionTable)
-                .set({
-                  status: "superseded",
-                  supersessionReceipt: {
-                    reason: "target_changed",
-                    evaluationId: null,
-                    at: new Date().toISOString(),
-                  },
-                })
-                .where(
-                  and(
-                    eq(suggestionTable.entity, binding.entity),
-                    eq(suggestionTable.recordId, updated.entityId),
-                    inArray(suggestionTable.field, changedFields),
-                    eq(suggestionTable.status, "pending"),
-                  ),
-                );
-            }
+            await supersedeWriteSuggestions(
+              writeContext,
+              binding.entity,
+              [updated.entityId],
+              changedFields,
+            );
             await writeRecordEmoji(
               writeContext.db,
               binding.entity,
@@ -857,6 +872,14 @@ const buildEntityOperations = <
                     validated.ids,
                     validated.data,
                   );
+                  await supersedeWriteSuggestions(
+                    writeContext,
+                    binding.entity,
+                    result.updatedIds,
+                    Object.keys(
+                      z.record(z.string(), z.unknown()).parse(validated.data),
+                    ),
+                  );
                   const events = result.updatedIds.flatMap(
                     (id): MutationSideEffectEvent[] => {
                       const ref = parseEntityRef<ShortcodeEntity>(
@@ -886,7 +909,7 @@ const buildEntityOperations = <
                       {},
                       validated.data,
                       Object.fromEntries(
-                        await resolveValueCollectionPatches(
+                        await resolveCollectionPatches(
                           writeContext,
                           binding,
                           parsedId,

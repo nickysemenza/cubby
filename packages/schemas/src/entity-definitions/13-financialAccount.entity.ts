@@ -312,6 +312,7 @@ export default defineEntity({
       },
       {
         key: "authorizedUsers",
+        collection: { key: ["ledgerPartyId", "validFrom"] },
         kind: "json",
         description:
           "Members authorized to use this credit card, with inclusive membership dates.",
@@ -325,6 +326,7 @@ export default defineEntity({
       },
       {
         key: "fundingPeriods",
+        collection: { key: ["ledgerPartyId", "validFrom"] },
         kind: "json",
         description:
           "Dated funding parties. Empty uses the account Ledger Party; gaps in a nonempty history are unknown. Does not change inventory ownership.",

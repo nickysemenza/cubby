@@ -35,6 +35,10 @@ import { notDeleted, unwrapDb, withTransaction } from "~/server/db/helpers";
 import { ledgerParty, purchase, run, vendorAccount } from "~/server/db/schema";
 import { patchEntityRows } from "~/server/entity-kernel/repo/entity-patch";
 import {
+  type MutationReceipt,
+  defineMutationWriter,
+} from "~/server/entity-kernel/repo/repository";
+import {
   asActor,
   defineRepository,
   listOn,
@@ -449,60 +453,87 @@ async function resolveMemberParty(
   return ledgerPartyId;
 }
 
-export async function createVendorAccount(
-  db: Database,
-  data: VendorAccountCreateInput,
-  actor: ActorContext,
-): Promise<{ output: VendorAccountOut; entityId: VendorAccountId }> {
-  const id = await withTransaction(db, async (tx) => {
-    const refs = await resolveReferences(tx, data);
-    const row = await insertWithShortcode(tx, "vendorAccount", {
-      ...refs,
-      inventoryOwnerDefaultEnabled: data.inventoryOwnerDefaultEnabled,
+export const createVendorAccount = defineMutationWriter({
+  entity: "vendorAccount",
+  read: async (
+    receipt: MutationReceipt<"vendorAccount">,
+    db: Database,
+    _data: VendorAccountCreateInput,
+    _actor: ActorContext,
+  ) => ({
+    output: await reader.getByID(db, receipt.entityId),
+    entityId: receipt.entityId,
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    data: VendorAccountCreateInput,
+    actor: ActorContext,
+  ) => {
+    const id = await withTransaction(db, async (tx) => {
+      const refs = await resolveReferences(tx, data);
+      const row = await insertWithShortcode(tx, "vendorAccount", {
+        ...refs,
+        inventoryOwnerDefaultEnabled: data.inventoryOwnerDefaultEnabled,
+      });
+      await logAuditEntry(tx, actor, {
+        entityKind: "vendorAccount",
+        entityId: row.id,
+        action: "create",
+      });
+      return parseEntityId("vendorAccount", row.id);
     });
-    await logAuditEntry(tx, actor, {
-      entityKind: "vendorAccount",
-      entityId: row.id,
-      action: "create",
-    });
-    return parseEntityId("vendorAccount", row.id);
-  });
-  return { output: await reader.getByID(db, id), entityId: id };
-}
+    return readOutput({ entityId: id });
+  },
+});
 
-async function updateVendorAccount(
-  db: Database,
-  shortcode: VendorAccountShortcode,
-  data: VendorAccountUpdateData,
-  actor: ActorContext,
-): Promise<{ output: VendorAccountOut; entityId: VendorAccountId }> {
-  const id = await resolveOrThrow(db, "vendorAccount", shortcode);
-  const refs: VendorAccountReferencePatch = {};
-  if (data.vendorId) {
-    refs.vendorId = await resolveOrThrow(db, "vendor", data.vendorId);
-  }
-  if (data.ledgerPartyId) {
-    refs.ledgerPartyId = await resolveMemberParty(db, data.ledgerPartyId);
-  }
-  const patch = {
-    inventoryOwnerDefaultEnabled: data.inventoryOwnerDefaultEnabled,
-    ...refs,
-  };
-  await withTransaction(db, async (tx) => {
-    await patchEntityRows(
-      tx,
-      actor,
-      {
-        entity: "vendorAccount",
-        table: vendorAccount,
-        fields: entityFieldModels.vendorAccount.audit,
-      },
-      [id],
-      patch,
-    );
-  });
-  return { output: await reader.getByID(db, id), entityId: id };
-}
+const updateVendorAccount = defineMutationWriter({
+  entity: "vendorAccount",
+  read: async (
+    receipt: MutationReceipt<"vendorAccount">,
+    db: Database,
+    _shortcode: VendorAccountShortcode,
+    _data: VendorAccountUpdateData,
+    _actor: ActorContext,
+  ) => ({
+    output: await reader.getByID(db, receipt.entityId),
+    entityId: receipt.entityId,
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    shortcode: VendorAccountShortcode,
+    data: VendorAccountUpdateData,
+    actor: ActorContext,
+  ) => {
+    const id = await resolveOrThrow(db, "vendorAccount", shortcode);
+    const refs: VendorAccountReferencePatch = {};
+    if (data.vendorId) {
+      refs.vendorId = await resolveOrThrow(db, "vendor", data.vendorId);
+    }
+    if (data.ledgerPartyId) {
+      refs.ledgerPartyId = await resolveMemberParty(db, data.ledgerPartyId);
+    }
+    const patch = {
+      inventoryOwnerDefaultEnabled: data.inventoryOwnerDefaultEnabled,
+      ...refs,
+    };
+    await withTransaction(db, async (tx) => {
+      await patchEntityRows(
+        tx,
+        actor,
+        {
+          entity: "vendorAccount",
+          table: vendorAccount,
+          fields: entityFieldModels.vendorAccount.audit,
+        },
+        [id],
+        patch,
+      );
+    });
+    return readOutput({ entityId: id });
+  },
+});
 
 export const vendorAccountRepository = defineRepository("vendorAccount", {
   lifecycle: { delete: VENDOR_ACCOUNT_DELETE_EDGE_POLICY },

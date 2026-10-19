@@ -32,6 +32,7 @@ import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
 
+import type { SearchProviderFor } from "./entity-primitive-fields";
 import { blank, blankCase, isDrawn } from "./structured-value";
 
 /**
@@ -61,6 +62,9 @@ const singular = (label: string) =>
 
 /** Whether a record is being created; a `createOnly` value is locked once it exists. */
 const CreatingContext = createContext(true);
+const ReferenceSearchContext = createContext<SearchProviderFor>(
+  requireReferenceEntitySearch,
+);
 
 export function StructuredValueField({
   form,
@@ -68,22 +72,26 @@ export function StructuredValueField({
   label,
   schema,
   creating = true,
+  searchProviderFor = requireReferenceEntitySearch,
 }: {
   form: Form;
   name: string;
   label: string;
   schema: StructuredValueSchema;
   creating?: boolean;
+  searchProviderFor?: SearchProviderFor;
 }) {
   return (
     <CreatingContext.Provider value={creating}>
-      <NodeEditor
-        form={form}
-        path={name}
-        label={label}
-        schema={schema}
-        required
-      />
+      <ReferenceSearchContext.Provider value={searchProviderFor}>
+        <NodeEditor
+          form={form}
+          path={name}
+          label={label}
+          schema={schema}
+          required
+        />
+      </ReferenceSearchContext.Provider>
     </CreatingContext.Provider>
   );
 }
@@ -264,6 +272,7 @@ function ReferenceEditor({
   required,
   entity,
 }: NodeProps & { entity: string }) {
+  const searchProviderFor = useContext(ReferenceSearchContext);
   if (!isReferencePickerEntity(entity))
     return (
       <UnifiedTextField
@@ -282,7 +291,7 @@ function ReferenceEditor({
       entity={entity}
       label={label}
       clearable={schema.nullable || !required}
-      SearchProvider={requireReferenceEntitySearch(entity)}
+      SearchProvider={searchProviderFor(entity)}
     />
   );
 }

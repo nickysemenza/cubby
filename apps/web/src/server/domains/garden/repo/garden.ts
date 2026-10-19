@@ -55,6 +55,10 @@ import {
   resolveGardenGuideKey,
 } from "~/server/domains/plant/repo/windows";
 import { getCategoryFeature } from "~/server/domains/product-category/repo/product-category";
+import {
+  type MutationReceipt,
+  defineMutationWriter,
+} from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import {
   computeChanges,
@@ -506,168 +510,222 @@ const replaceGardenEntryPlantings = async (
   );
 };
 
-export const createPlanting = async (
-  db: Database,
-  data: PlantingCreateInput,
-  actor: ActorContext,
-) =>
-  withTransaction(db, async (tx) => {
-    const plantId = await required(tx, data.plantId, "plant");
-    const sourceProductId = data.sourceProductId
-      ? await required(tx, data.sourceProductId, "product")
-      : null;
-    await validatePlantingSource(tx, plantId, sourceProductId);
-    const locationId = data.locationId
-      ? await required(tx, data.locationId, "location")
-      : null;
-    const taskId = data.taskId ? await required(tx, data.taskId, "task") : null;
-    const row = await insertWithShortcode(tx, "planting", {
-      plantId,
-      sourceProductId,
-      locationId,
-      taskId,
-      status: data.status ?? "planned",
-      outcome: data.outcome ?? null,
-      quantity: data.quantity ?? null,
-      notes: data.notes ?? null,
-      plannedWindow: data.plannedWindow ?? null,
-      sowedOn: data.sowedOn ?? null,
-      transplantedOn: data.transplantedOn ?? null,
-      finishedOn: data.finishedOn ?? null,
-    });
-    await logAuditEntry(tx, actor, {
-      entityKind: "planting",
-      entityId: row.id,
-      action: "create",
-    });
-    return getPlanting(tx, parseEntityId("planting", row.id));
-  });
+export const createPlanting = defineMutationWriter({
+  entity: "planting",
+  read: (
+    receipt: MutationReceipt<"planting">,
+    db: Database,
+    _data: PlantingCreateInput,
+    _actor: ActorContext,
+  ) => getPlanting(db, receipt.entityId),
+  write: async (
+    readOutput,
+    db: Database,
+    data: PlantingCreateInput,
+    actor: ActorContext,
+  ) =>
+    withTransaction(db, async (tx) => {
+      const plantId = await required(tx, data.plantId, "plant");
+      const sourceProductId = data.sourceProductId
+        ? await required(tx, data.sourceProductId, "product")
+        : null;
+      await validatePlantingSource(tx, plantId, sourceProductId);
+      const locationId = data.locationId
+        ? await required(tx, data.locationId, "location")
+        : null;
+      const taskId = data.taskId
+        ? await required(tx, data.taskId, "task")
+        : null;
+      const row = await insertWithShortcode(tx, "planting", {
+        plantId,
+        sourceProductId,
+        locationId,
+        taskId,
+        status: data.status ?? "planned",
+        outcome: data.outcome ?? null,
+        quantity: data.quantity ?? null,
+        notes: data.notes ?? null,
+        plannedWindow: data.plannedWindow ?? null,
+        sowedOn: data.sowedOn ?? null,
+        transplantedOn: data.transplantedOn ?? null,
+        finishedOn: data.finishedOn ?? null,
+      });
+      await logAuditEntry(tx, actor, {
+        entityKind: "planting",
+        entityId: row.id,
+        action: "create",
+      });
+      return readOutput(
+        {
+          entityId: parseEntityId("planting", row.id),
+          shortcode: row.shortcode,
+        },
+        () => getPlanting(tx, parseEntityId("planting", row.id)),
+      );
+    }),
+});
 
-export const createGardenEntry = async (
-  db: Database,
-  data: GardenEntryCreateInput,
-  actor: ActorContext,
-) =>
-  withTransaction(db, async (tx) => {
-    const locationId = await required(tx, data.locationId, "location");
-    const row = await insertWithShortcode(tx, "gardenEntry", {
-      locationId,
-      kind: data.kind ?? "note",
-      observedOn: data.observedOn,
-      notes: data.notes ?? null,
-      harvestAmount: data.harvestAmount ?? null,
-    });
-    if (data.plantingIds !== undefined) {
-      await replaceGardenEntryPlantings(
-        tx,
-        parseEntityId("gardenEntry", row.id),
-        data.plantingIds,
+export const createGardenEntry = defineMutationWriter({
+  entity: "gardenEntry",
+  read: (
+    receipt: MutationReceipt<"gardenEntry">,
+    db: Database,
+    _data: GardenEntryCreateInput,
+    _actor: ActorContext,
+  ) => getGardenEntry(db, receipt.entityId),
+  write: async (
+    readOutput,
+    db: Database,
+    data: GardenEntryCreateInput,
+    actor: ActorContext,
+  ) =>
+    withTransaction(db, async (tx) => {
+      const locationId = await required(tx, data.locationId, "location");
+      const row = await insertWithShortcode(tx, "gardenEntry", {
+        locationId,
+        kind: data.kind ?? "note",
+        observedOn: data.observedOn,
+        notes: data.notes ?? null,
+        harvestAmount: data.harvestAmount ?? null,
+      });
+      if (data.plantingIds !== undefined) {
+        await replaceGardenEntryPlantings(
+          tx,
+          parseEntityId("gardenEntry", row.id),
+          data.plantingIds,
+        );
+      }
+      if (data.pendingImageIds && data.pendingImageIds.length > 0) {
+        // `resolveAllOrThrow`, not `resolveAllPresent`: unlike product/location/
+        // recipe/purchase, a caller-supplied `IMG-` code that doesn't resolve
+        // here is bad input, not a silent drop.
+        const imageIds = await resolveAllOrThrow(
+          tx,
+          "image",
+          data.pendingImageIds,
+        );
+        await associatePendingImages(
+          tx,
+          imageJoinBindings.gardenEntry,
+          row.id,
+          imageIds,
+        );
+      }
+      await logAuditEntry(tx, actor, {
+        entityKind: "gardenEntry",
+        entityId: row.id,
+        action: "create",
+      });
+      return readOutput(
+        {
+          entityId: parseEntityId("gardenEntry", row.id),
+          shortcode: row.shortcode,
+        },
+        () => getGardenEntry(tx, parseEntityId("gardenEntry", row.id)),
       );
-    }
-    if (data.pendingImageIds && data.pendingImageIds.length > 0) {
-      // `resolveAllOrThrow`, not `resolveAllPresent`: unlike product/location/
-      // recipe/purchase, a caller-supplied `IMG-` code that doesn't resolve
-      // here is bad input, not a silent drop.
-      const imageIds = await resolveAllOrThrow(
-        tx,
-        "image",
-        data.pendingImageIds,
-      );
-      await associatePendingImages(
-        tx,
-        imageJoinBindings.gardenEntry,
-        row.id,
-        imageIds,
-      );
-    }
-    await logAuditEntry(tx, actor, {
-      entityKind: "gardenEntry",
-      entityId: row.id,
-      action: "create",
-    });
-    return getGardenEntry(tx, parseEntityId("gardenEntry", row.id));
-  });
+    }),
+});
 
 /** Every field in the update roster is an ordinary patchable field — no
  * lifecycle guard. `status`/`locationId`/`finishedOn` change like any other
  * column, and the diff on the `model.audit` fields becomes the audit entry
  * `changes`, so the timeline shows what actually moved (not a bare "updated"). */
-export const updatePlanting = async (
-  db: Database,
-  id: PlantingId,
-  data: PlantingUpdateData,
-  actor: ActorContext,
-) => {
-  const result = await withTransaction(db, async (tx) => {
-    const before = await unwrapDb(tx).query.planting.findFirst({
-      where: and(eq(planting.id, id), notDeleted(planting)),
-    });
-    if (!before) {
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "The planting no longer exists.",
-      );
-    }
-    const plantId =
-      data.plantId !== undefined
-        ? await required(tx, data.plantId, "plant")
-        : undefined;
-    const sourceProductId =
-      data.sourceProductId !== undefined
-        ? data.sourceProductId
-          ? await required(tx, data.sourceProductId, "product")
-          : null
-        : undefined;
-    const locationId =
-      data.locationId !== undefined
-        ? data.locationId
-          ? await required(tx, data.locationId, "location")
-          : null
-        : undefined;
-    const taskId =
-      data.taskId !== undefined
-        ? data.taskId
-          ? await required(tx, data.taskId, "task")
-          : null
-        : undefined;
-    await validatePlantingSource(
-      tx,
-      plantId === undefined ? before.plantId : plantId,
-      sourceProductId === undefined ? before.sourceProductId : sourceProductId,
-    );
-    const values = buildPartialUpdateValues({
-      plantId,
-      sourceProductId,
-      locationId,
-      taskId,
-      status: data.status,
-      outcome: data.outcome,
-      quantity: data.quantity,
-      notes: data.notes,
-      plannedWindow: data.plannedWindow,
-      sowedOn: data.sowedOn,
-      transplantedOn: data.transplantedOn,
-      finishedOn: data.finishedOn,
-    });
-    const updated = await updateLiveAndReturn(tx, planting, values, id);
-    const changes = computeChanges(before, updated, [
-      ...entityFieldModels.planting.audit,
-    ]);
-    if (changes) {
-      await logAuditEntry(tx, actor, {
-        entityKind: "planting",
-        entityId: id,
-        action: "update",
-        changes,
+export const updatePlanting = defineMutationWriter({
+  entity: "planting",
+  read: async (
+    receipt: MutationReceipt<"planting">,
+    db: Database,
+    _id: PlantingId,
+    _data: PlantingUpdateData,
+    _actor: ActorContext,
+  ) => ({
+    planting: await getPlanting(db, receipt.entityId),
+    detachedImageKeys: receipt.detachedImageKeys ?? [],
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    id: PlantingId,
+    data: PlantingUpdateData,
+    actor: ActorContext,
+  ) => {
+    const result = await withTransaction(db, async (tx) => {
+      const before = await unwrapDb(tx).query.planting.findFirst({
+        where: and(eq(planting.id, id), notDeleted(planting)),
       });
-    }
-    return getPlanting(tx, id);
-  });
-  // No own images to sync (journal entries carry the photos); the entity
-  // kernel's update shape still expects `detachedImageKeys`.
-  const detachedImageKeys: string[] = [];
-  return { planting: result, detachedImageKeys };
-};
+      if (!before) {
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "The planting no longer exists.",
+        );
+      }
+      const plantId =
+        data.plantId !== undefined
+          ? await required(tx, data.plantId, "plant")
+          : undefined;
+      const sourceProductId =
+        data.sourceProductId !== undefined
+          ? data.sourceProductId
+            ? await required(tx, data.sourceProductId, "product")
+            : null
+          : undefined;
+      const locationId =
+        data.locationId !== undefined
+          ? data.locationId
+            ? await required(tx, data.locationId, "location")
+            : null
+          : undefined;
+      const taskId =
+        data.taskId !== undefined
+          ? data.taskId
+            ? await required(tx, data.taskId, "task")
+            : null
+          : undefined;
+      await validatePlantingSource(
+        tx,
+        plantId === undefined ? before.plantId : plantId,
+        sourceProductId === undefined
+          ? before.sourceProductId
+          : sourceProductId,
+      );
+      const values = buildPartialUpdateValues({
+        plantId,
+        sourceProductId,
+        locationId,
+        taskId,
+        status: data.status,
+        outcome: data.outcome,
+        quantity: data.quantity,
+        notes: data.notes,
+        plannedWindow: data.plannedWindow,
+        sowedOn: data.sowedOn,
+        transplantedOn: data.transplantedOn,
+        finishedOn: data.finishedOn,
+      });
+      const updated = await updateLiveAndReturn(tx, planting, values, id);
+      const changes = computeChanges(before, updated, [
+        ...entityFieldModels.planting.audit,
+      ]);
+      if (changes) {
+        await logAuditEntry(tx, actor, {
+          entityKind: "planting",
+          entityId: id,
+          action: "update",
+          changes,
+        });
+      }
+      return readOutput(
+        { entityId: id, shortcode: before.shortcode, detachedImageKeys: [] },
+        async () => ({
+          planting: await getPlanting(tx, id),
+          detachedImageKeys: [],
+        }),
+      );
+    });
+    return result;
+  },
+  item: (full) => full.planting,
+});
 
 type GardenEntryUpdateInput = GardenEntryUpdateData & {
   pendingImageIds?: readonly string[];
@@ -676,115 +734,128 @@ type GardenEntryUpdateInput = GardenEntryUpdateData & {
 };
 
 /** Every field in the update roster is an ordinary patchable field. */
-export const updateGardenEntry = async (
-  db: Database,
-  id: GardenEntryId,
-  data: GardenEntryUpdateInput,
-  actor: ActorContext,
-) =>
-  withTransaction(db, async (tx) => {
-    const before = await unwrapDb(tx).query.gardenEntry.findFirst({
-      where: and(eq(gardenEntry.id, id), notDeleted(gardenEntry)),
-    });
-    if (!before) {
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "The garden entry no longer exists.",
-      );
-    }
-    const locationId =
-      data.locationId !== undefined
-        ? await required(tx, data.locationId, "location")
-        : undefined;
-    let beforePlantingIds: string[] | undefined;
-    let plantingIdsChanged = false;
-    if (data.plantingIds !== undefined) {
-      const beforeRows = await unwrapDb(tx)
-        .select({ shortcode: planting.shortcode })
-        .from(entityLink)
-        .innerJoin(planting, eq(planting.id, entityLink.toEntityId))
-        .where(
-          and(
-            eq(entityLink.fromEntityId, id),
-            liveLinks("gardenEntryPlanting"),
-            notDeleted(planting),
-          ),
-        )
-        .orderBy(planting.shortcode);
-      beforePlantingIds = beforeRows.map((row) =>
-        parseShortcodeFor("planting", row.shortcode),
-      );
-      const resolved = await resolveAllOrThrow(
-        tx,
-        "planting",
-        data.plantingIds,
-      );
-      const nextRows = await unwrapDb(tx)
-        .select({ shortcode: planting.shortcode })
-        .from(planting)
-        .where(inArray(planting.id, [...new Set(resolved)]))
-        .orderBy(planting.shortcode);
-      const nextPlantingIds = nextRows.map((row) =>
-        parseShortcodeFor("planting", row.shortcode),
-      );
-      plantingIdsChanged =
-        diffUnorderedIdSet(beforePlantingIds, nextPlantingIds) !== undefined;
-    }
-    const values = buildPartialUpdateValues({
-      locationId,
-      kind: data.kind,
-      observedOn: data.observedOn,
-      notes: data.notes,
-      harvestAmount: data.harvestAmount,
-      // Association-only edits are still edits to the GardenEntry resource;
-      // keep its optimistic/concurrency timestamp monotonic even when all
-      // scalar fields were omitted.
-      updatedAt: plantingIdsChanged ? new Date() : undefined,
-    });
-    const updated = await updateLiveAndReturn(tx, gardenEntry, values, id);
-    let afterPlantingIds: string[] | undefined;
-    if (data.plantingIds !== undefined) {
-      afterPlantingIds = await replaceGardenEntryPlantings(
-        tx,
-        id,
-        data.plantingIds,
-      );
-    }
-    // `unresolved: "throw"` — a caller-supplied `IMG-` code that doesn't
-    // resolve is bad input here, unlike product/location/recipe/purchase's
-    // silent-drop convention.
-    await syncEntityImages(
-      tx,
-      "gardenEntry",
-      imageJoinBindings.gardenEntry,
-      id,
-      data,
-      { unresolved: "throw" },
-    );
-    const changes = computeChanges(
-      before,
-      updated,
-      entityFieldModels.gardenEntry.audit.filter(
-        (field) => field !== "plantingIds",
-      ),
-    );
-    const plantingChanges =
-      beforePlantingIds && afterPlantingIds
-        ? diffUnorderedIdSet(beforePlantingIds, afterPlantingIds)
-        : undefined;
-    const allChanges = plantingChanges
-      ? { ...changes, plantingIds: plantingChanges }
-      : changes;
-    if (allChanges) {
-      await logAuditEntry(tx, actor, {
-        entityKind: "gardenEntry",
-        entityId: id,
-        action: "update",
-        changes: allChanges,
+export const updateGardenEntry = defineMutationWriter({
+  entity: "gardenEntry",
+  read: (
+    receipt: MutationReceipt<"gardenEntry">,
+    db: Database,
+    _id: GardenEntryId,
+    _data: GardenEntryUpdateInput,
+    _actor: ActorContext,
+  ) => getGardenEntry(db, receipt.entityId),
+  write: async (
+    readOutput,
+    db: Database,
+    id: GardenEntryId,
+    data: GardenEntryUpdateInput,
+    actor: ActorContext,
+  ) =>
+    withTransaction(db, async (tx) => {
+      const before = await unwrapDb(tx).query.gardenEntry.findFirst({
+        where: and(eq(gardenEntry.id, id), notDeleted(gardenEntry)),
       });
-    }
-    return getGardenEntry(tx, id);
-  });
+      if (!before) {
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "The garden entry no longer exists.",
+        );
+      }
+      const locationId =
+        data.locationId !== undefined
+          ? await required(tx, data.locationId, "location")
+          : undefined;
+      let beforePlantingIds: string[] | undefined;
+      let plantingIdsChanged = false;
+      if (data.plantingIds !== undefined) {
+        const beforeRows = await unwrapDb(tx)
+          .select({ shortcode: planting.shortcode })
+          .from(entityLink)
+          .innerJoin(planting, eq(planting.id, entityLink.toEntityId))
+          .where(
+            and(
+              eq(entityLink.fromEntityId, id),
+              liveLinks("gardenEntryPlanting"),
+              notDeleted(planting),
+            ),
+          )
+          .orderBy(planting.shortcode);
+        beforePlantingIds = beforeRows.map((row) =>
+          parseShortcodeFor("planting", row.shortcode),
+        );
+        const resolved = await resolveAllOrThrow(
+          tx,
+          "planting",
+          data.plantingIds,
+        );
+        const nextRows = await unwrapDb(tx)
+          .select({ shortcode: planting.shortcode })
+          .from(planting)
+          .where(inArray(planting.id, [...new Set(resolved)]))
+          .orderBy(planting.shortcode);
+        const nextPlantingIds = nextRows.map((row) =>
+          parseShortcodeFor("planting", row.shortcode),
+        );
+        plantingIdsChanged =
+          diffUnorderedIdSet(beforePlantingIds, nextPlantingIds) !== undefined;
+      }
+      const values = buildPartialUpdateValues({
+        locationId,
+        kind: data.kind,
+        observedOn: data.observedOn,
+        notes: data.notes,
+        harvestAmount: data.harvestAmount,
+        // Association-only edits are still edits to the GardenEntry resource;
+        // keep its optimistic/concurrency timestamp monotonic even when all
+        // scalar fields were omitted.
+        updatedAt: plantingIdsChanged ? new Date() : undefined,
+      });
+      const updated = await updateLiveAndReturn(tx, gardenEntry, values, id);
+      let afterPlantingIds: string[] | undefined;
+      if (data.plantingIds !== undefined) {
+        afterPlantingIds = await replaceGardenEntryPlantings(
+          tx,
+          id,
+          data.plantingIds,
+        );
+      }
+      // `unresolved: "throw"` — a caller-supplied `IMG-` code that doesn't
+      // resolve is bad input here, unlike product/location/recipe/purchase's
+      // silent-drop convention.
+      await syncEntityImages(
+        tx,
+        "gardenEntry",
+        imageJoinBindings.gardenEntry,
+        id,
+        data,
+        { unresolved: "throw" },
+      );
+      const changes = computeChanges(
+        before,
+        updated,
+        entityFieldModels.gardenEntry.audit.filter(
+          (field) => field !== "plantingIds",
+        ),
+      );
+      const plantingChanges =
+        beforePlantingIds && afterPlantingIds
+          ? diffUnorderedIdSet(beforePlantingIds, afterPlantingIds)
+          : undefined;
+      const allChanges = plantingChanges
+        ? { ...changes, plantingIds: plantingChanges }
+        : changes;
+      if (allChanges) {
+        await logAuditEntry(tx, actor, {
+          entityKind: "gardenEntry",
+          entityId: id,
+          action: "update",
+          changes: allChanges,
+        });
+      }
+      return readOutput({ entityId: id, shortcode: before.shortcode }, () =>
+        getGardenEntry(tx, id),
+      );
+    }),
+});
 
 const plantingScaffold = listScaffold("planting", planting, {
   derived: {

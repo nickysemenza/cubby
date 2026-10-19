@@ -37,6 +37,10 @@ import {
   plantRoutesFor,
   resolveGardenGuideKey,
 } from "~/server/domains/plant/repo/windows";
+import {
+  type MutationReceipt,
+  defineMutationWriter,
+} from "~/server/entity-kernel/repo/repository";
 import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
 import { resolveNames } from "~/server/entity-kernel/resolve";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
@@ -215,39 +219,73 @@ const insertPlant = async (
   return parseEntityId("plant", row.id);
 };
 
-export async function createPlant(
-  db: Database,
-  data: PlantCreateInput,
-  actor: ActorContext,
-): Promise<{ output: PlantOut; entityId: PlantId }> {
-  const id = await withTransaction(db, async (tx) =>
-    insertPlant(
-      tx,
-      data,
-      (await resolveIngredient(tx, data.ingredientId)) ?? null,
-      actor,
-    ),
-  );
-  return { output: await plantCrud.getByID(db, id), entityId: id };
-}
-
-export async function updatePlant(
-  db: Database,
-  shortcode: PlantShortcode,
-  data: PlantUpdateData,
-  actor: ActorContext,
-): Promise<{ output: PlantOut; entityId: PlantId }> {
-  const id = await resolveOrThrow(db, "plant", shortcode);
-  return withTransaction(db, async (tx) => {
-    const output = await plantCrud.update(
-      tx,
-      id,
-      { ...data, ingredientId: await resolveIngredient(tx, data.ingredientId) },
-      actor,
+export const createPlant = defineMutationWriter({
+  entity: "plant",
+  read: async (
+    receipt: MutationReceipt<"plant">,
+    db: Database,
+    _data: PlantCreateInput,
+    _actor: ActorContext,
+  ) => ({
+    output: await plantCrud.getByID(db, receipt.entityId),
+    entityId: receipt.entityId,
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    data: PlantCreateInput,
+    actor: ActorContext,
+  ) => {
+    const id = await withTransaction(db, async (tx) =>
+      insertPlant(
+        tx,
+        data,
+        (await resolveIngredient(tx, data.ingredientId)) ?? null,
+        actor,
+      ),
     );
-    return { output, entityId: id };
-  });
-}
+    return readOutput({ entityId: id });
+  },
+});
+
+export const updatePlant = defineMutationWriter({
+  entity: "plant",
+  read: async (
+    receipt: MutationReceipt<"plant">,
+    db: Database,
+    _shortcode: PlantShortcode,
+    _data: PlantUpdateData,
+    _actor: ActorContext,
+  ) => ({
+    output: await plantCrud.getByID(db, receipt.entityId),
+    entityId: receipt.entityId,
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    shortcode: PlantShortcode,
+    data: PlantUpdateData,
+    actor: ActorContext,
+  ) => {
+    const id = await resolveOrThrow(db, "plant", shortcode);
+    return withTransaction(db, async (tx) => {
+      const receipt = await plantCrud.update(
+        tx,
+        id,
+        {
+          ...data,
+          ingredientId: await resolveIngredient(tx, data.ingredientId),
+        },
+        actor,
+        async (_db, receipt) => receipt,
+      );
+      return readOutput(receipt, async () => ({
+        output: await plantCrud.getByID(tx, id),
+        entityId: id,
+      }));
+    });
+  },
+});
 
 export async function mergePlants(
   db: Database,

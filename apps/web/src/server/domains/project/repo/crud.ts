@@ -28,6 +28,10 @@ import {
   setProjectExternalUrls,
   withProjectExternalUrls,
 } from "~/server/domains/project/repo/external-links";
+import {
+  type MutationReceipt,
+  defineMutationWriter,
+} from "~/server/entity-kernel/repo/repository";
 import { createEntityReader } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -190,59 +194,73 @@ async function wouldCreateProjectCycle(
   return false;
 }
 
-export const createProject = async (
-  db: Database,
-  data: ProjectCreateInput,
-  actor: ActorContext,
-): Promise<{ output: ProjectOut; entityId: ProjectId }> => {
-  const id = await withTransaction(db, async (tx) => {
-    // Resolving THROUGH a LIVE-only lookup is the "exists and is live" check
-    // itself — an FK proves the parent row exists, not that it's live.
-    let parentProjectId: ProjectId | null = null;
-    if (data.parentProjectId) {
-      parentProjectId = await resolveOrThrow(
-        tx,
-        "project",
-        data.parentProjectId,
-      );
-    }
+export const createProject = defineMutationWriter({
+  entity: "project",
+  read: async (
+    receipt: MutationReceipt<"project">,
+    db: Database,
+    _data: ProjectCreateInput,
+    _actor: ActorContext,
+  ) => ({
+    output: await getProjectByID(db, receipt.entityId),
+    entityId: receipt.entityId,
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    data: ProjectCreateInput,
+    actor: ActorContext,
+  ) => {
+    const id = await withTransaction(db, async (tx) => {
+      // Resolving THROUGH a LIVE-only lookup is the "exists and is live" check
+      // itself — an FK proves the parent row exists, not that it's live.
+      let parentProjectId: ProjectId | null = null;
+      if (data.parentProjectId) {
+        parentProjectId = await resolveOrThrow(
+          tx,
+          "project",
+          data.parentProjectId,
+        );
+      }
 
-    const created = await insertWithShortcode(tx, "project", {
-      name: data.name,
-      assigneeId:
-        data.assigneeMode === "inherit"
-          ? null
-          : ((await resolveMemberAssignee(tx, data.assigneeId)) ?? null),
-      assigneeMode:
-        data.assigneeMode ??
-        (data.assigneeId === undefined ? "inherit" : "explicit"),
-      status: data.status,
-      kind: data.kind,
-      locations: data.locations,
-      locationsMode:
-        data.locationsMode ?? (data.locations.length ? "explicit" : "inherit"),
-      defaultTrade: data.defaultTrade,
-      costEstimate: data.costEstimate,
-      parentProjectId,
-      startDate: data.startDate,
-      endDate: data.endDate,
-      emoji: data.emoji,
-      notes: data.notes,
+      const created = await insertWithShortcode(tx, "project", {
+        name: data.name,
+        assigneeId:
+          data.assigneeMode === "inherit"
+            ? null
+            : ((await resolveMemberAssignee(tx, data.assigneeId)) ?? null),
+        assigneeMode:
+          data.assigneeMode ??
+          (data.assigneeId === undefined ? "inherit" : "explicit"),
+        status: data.status,
+        kind: data.kind,
+        locations: data.locations,
+        locationsMode:
+          data.locationsMode ??
+          (data.locations.length ? "explicit" : "inherit"),
+        defaultTrade: data.defaultTrade,
+        costEstimate: data.costEstimate,
+        parentProjectId,
+        startDate: data.startDate,
+        endDate: data.endDate,
+        emoji: data.emoji,
+        notes: data.notes,
+      });
+      await setProjectExternalUrls(tx, created.id, {
+        googleDriveFolderUrl: data.googleDriveFolderUrl,
+        notionPageUrl: data.notionPageUrl,
+      });
+      await validateLiveEffectiveTrades(tx);
+      await logAuditEntry(tx, actor, {
+        entityKind: "project",
+        entityId: created.id,
+        action: "create",
+      });
+      return created.id;
     });
-    await setProjectExternalUrls(tx, created.id, {
-      googleDriveFolderUrl: data.googleDriveFolderUrl,
-      notionPageUrl: data.notionPageUrl,
-    });
-    await validateLiveEffectiveTrades(tx);
-    await logAuditEntry(tx, actor, {
-      entityKind: "project",
-      entityId: created.id,
-      action: "create",
-    });
-    return created.id;
-  });
-  return { output: await getProjectByID(db, id), entityId: id };
-};
+    return readOutput({ entityId: id });
+  },
+});
 
 async function projectSettingsAfterParentChange(
   tx: DrizzleTransaction,
@@ -305,124 +323,143 @@ async function projectSettingsAfterParentChange(
   };
 }
 
-export const updateProject = async (
-  db: Database,
-  shortcode: ProjectShortcode,
-  data: ProjectUpdateData,
-  actor: ActorContext,
-): Promise<{ output: ProjectOut; entityId: ProjectId }> => {
-  const id = await resolveOrThrow(db, "project", shortcode);
+export const updateProject = defineMutationWriter({
+  entity: "project",
+  read: async (
+    receipt: MutationReceipt<"project">,
+    db: Database,
+    _shortcode: ProjectShortcode,
+    _data: ProjectUpdateData,
+    _actor: ActorContext,
+  ) => ({
+    output: await getProjectByID(db, receipt.entityId),
+    entityId: receipt.entityId,
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    shortcode: ProjectShortcode,
+    data: ProjectUpdateData,
+    actor: ActorContext,
+  ) => {
+    const id = await resolveOrThrow(db, "project", shortcode);
 
-  const before = await fetchProjectById(db, id);
-  if (!before) {
-    throw createAppError("PROJECT_NOT_FOUND", `Project ${id} not found`);
-  }
-  const beforeBlockedBy =
-    data.blockedByIds !== undefined
-      ? ((await projectDependencyIds(db, [id])).blockedBy.get(id) ?? [])
-      : undefined;
+    const before = await fetchProjectById(db, id);
+    if (!before) {
+      throw createAppError("PROJECT_NOT_FOUND", `Project ${id} not found`);
+    }
+    const beforeBlockedBy =
+      data.blockedByIds !== undefined
+        ? ((await projectDependencyIds(db, [id])).blockedBy.get(id) ?? [])
+        : undefined;
 
-  await withTransaction(db, async (tx) => {
-    let parentProjectId: ProjectId | null | undefined;
-    if (data.parentProjectId !== undefined && data.parentProjectId !== null) {
-      parentProjectId = await resolveOrThrow(
-        tx,
-        "project",
-        data.parentProjectId,
-      );
-      if (parentProjectId === id) {
-        throw createAppError(
-          "SELF_DEPENDENCY",
-          "A project cannot be its own parent.",
+    await withTransaction(db, async (tx) => {
+      let parentProjectId: ProjectId | null | undefined;
+      if (data.parentProjectId !== undefined && data.parentProjectId !== null) {
+        parentProjectId = await resolveOrThrow(
+          tx,
+          "project",
+          data.parentProjectId,
+        );
+        if (parentProjectId === id) {
+          throw createAppError(
+            "SELF_DEPENDENCY",
+            "A project cannot be its own parent.",
+          );
+        }
+        if (await wouldCreateProjectCycle(tx, id, parentProjectId)) {
+          throw createAppError(
+            "PROJECT_CYCLE",
+            "Cannot set parent: would create a circular reference.",
+          );
+        }
+      } else if (data.parentProjectId === null) {
+        parentProjectId = null;
+      }
+
+      // Full-replacement set: resolve every requested shortcode to a live uuid
+      // up front — `replaceDependencyEdges`'s own not-found check operates on
+      // the FK column, so it can't be handed a shortcode.
+      let resolvedBlockedByIds: ProjectId[] | undefined;
+      if (data.blockedByIds !== undefined) {
+        resolvedBlockedByIds = await resolveAllOrThrow(
+          tx,
+          "project",
+          data.blockedByIds,
         );
       }
-      if (await wouldCreateProjectCycle(tx, id, parentProjectId)) {
-        throw createAppError(
-          "PROJECT_CYCLE",
-          "Cannot set parent: would create a circular reference.",
-        );
-      }
-    } else if (data.parentProjectId === null) {
-      parentProjectId = null;
-    }
 
-    // Full-replacement set: resolve every requested shortcode to a live uuid
-    // up front — `replaceDependencyEdges`'s own not-found check operates on
-    // the FK column, so it can't be handed a shortcode.
-    let resolvedBlockedByIds: ProjectId[] | undefined;
-    if (data.blockedByIds !== undefined) {
-      resolvedBlockedByIds = await resolveAllOrThrow(
+      const settings = await projectSettingsAfterParentChange(
         tx,
-        "project",
-        data.blockedByIds,
-      );
-    }
-
-    const settings = await projectSettingsAfterParentChange(
-      tx,
-      id,
-      before,
-      data,
-      parentProjectId,
-    );
-    const updateValues = buildPartialUpdateValues({
-      name: data.name,
-      status: data.status,
-      kind: data.kind,
-      ...settings,
-      costEstimate: data.costEstimate,
-      parentProjectId,
-      startDate: data.startDate,
-      endDate: data.endDate,
-      emoji: data.emoji,
-      notes: data.notes,
-    });
-    const [beforeWithUrls] = await withProjectExternalUrls(tx, [before]);
-    const updatedRow = await updateLiveAndReturn(tx, project, updateValues, id);
-    await setProjectExternalUrls(tx, id, {
-      googleDriveFolderUrl: data.googleDriveFolderUrl,
-      notionPageUrl: data.notionPageUrl,
-    });
-    const [updated] = await withProjectExternalUrls(tx, [updatedRow]);
-    await validateLiveEffectiveTrades(tx);
-
-    // Full-replacement set: clear this project's blocked-by edges and insert
-    // the new ones, all inside the same transaction as the column update.
-    if (resolvedBlockedByIds !== undefined) {
-      await replaceDependencyEdges(
-        tx,
-        { entityTable: project, entity: "project" },
         id,
-        resolvedBlockedByIds,
+        before,
+        data,
+        parentProjectId,
       );
-    }
-
-    const changes: AuditChangeMap = {
-      ...computeChanges(beforeWithUrls!, updated!, [
-        ...entityFieldModels.project.audit,
-      ]),
-    };
-    if (resolvedBlockedByIds !== undefined) {
-      const blockedByChange = diffUnorderedIdSet(
-        beforeBlockedBy ?? [],
-        resolvedBlockedByIds,
-      );
-      if (blockedByChange) {
-        changes.blockedByIds = blockedByChange;
-      }
-    }
-    if (Object.keys(changes).length > 0) {
-      await logAuditEntry(tx, actor, {
-        entityKind: "project",
-        entityId: id,
-        action: "update",
-        changes,
+      const updateValues = buildPartialUpdateValues({
+        name: data.name,
+        status: data.status,
+        kind: data.kind,
+        ...settings,
+        costEstimate: data.costEstimate,
+        parentProjectId,
+        startDate: data.startDate,
+        endDate: data.endDate,
+        emoji: data.emoji,
+        notes: data.notes,
       });
-    }
-  });
+      const [beforeWithUrls] = await withProjectExternalUrls(tx, [before]);
+      const updatedRow = await updateLiveAndReturn(
+        tx,
+        project,
+        updateValues,
+        id,
+      );
+      await setProjectExternalUrls(tx, id, {
+        googleDriveFolderUrl: data.googleDriveFolderUrl,
+        notionPageUrl: data.notionPageUrl,
+      });
+      const [updated] = await withProjectExternalUrls(tx, [updatedRow]);
+      await validateLiveEffectiveTrades(tx);
 
-  return { output: await getProjectByID(db, id), entityId: id };
-};
+      // Full-replacement set: clear this project's blocked-by edges and insert
+      // the new ones, all inside the same transaction as the column update.
+      if (resolvedBlockedByIds !== undefined) {
+        await replaceDependencyEdges(
+          tx,
+          { entityTable: project, entity: "project" },
+          id,
+          resolvedBlockedByIds,
+        );
+      }
+
+      const changes: AuditChangeMap = {
+        ...computeChanges(beforeWithUrls!, updated!, [
+          ...entityFieldModels.project.audit,
+        ]),
+      };
+      if (resolvedBlockedByIds !== undefined) {
+        const blockedByChange = diffUnorderedIdSet(
+          beforeBlockedBy ?? [],
+          resolvedBlockedByIds,
+        );
+        if (blockedByChange) {
+          changes.blockedByIds = blockedByChange;
+        }
+      }
+      if (Object.keys(changes).length > 0) {
+        await logAuditEntry(tx, actor, {
+          entityKind: "project",
+          entityId: id,
+          action: "update",
+          changes,
+        });
+      }
+    });
+
+    return readOutput({ entityId: id });
+  },
+});
 
 /** Either a checked-out transaction or a plain client — reads work the same on both. */
 type ProjectQueryClient = DrizzleClient | DrizzleTransaction;

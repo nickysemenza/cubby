@@ -62,6 +62,21 @@ export const ingredientRepository = defineRepository("ingredient", {
     });
     return { output, entityId };
   },
+  updateRead: async (ctx, shortcode, data, fields) => {
+    const entityId = await ingredientShortcodes.one(ctx.db, shortcode);
+    const result = await updateIngredient.read(
+      fields,
+      ctx.db,
+      entityId,
+      data,
+      ctx.actorContext,
+    );
+    await ctx.services.recipeCosting.recomputeForIngredient(entityId, {
+      source: "ingredient.update",
+      entity: { entityKind: "ingredient", entityId },
+    });
+    return result;
+  },
   delete: async (ctx, shortcodes) => {
     const ids = await ingredientShortcodes.all(ctx.db, shortcodes);
     await deleteIngredients(ctx.db, ids, ctx.actorContext);

@@ -64,6 +64,10 @@ import {
 import { recipeHasImages } from "~/server/domains/image/repo/image";
 import { displayableImageWhere } from "~/server/domains/image/repo/image-displayability";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
+import {
+  type MutationReceipt,
+  defineMutationWriter,
+} from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import { runWithConflictRecovery } from "~/server/errors/db-errors";
 import {
@@ -643,27 +647,39 @@ const createRecipeReturningId = async (
   });
 };
 
-export const createRecipe = async (
-  db: Database,
-  recipeInput: RecipeCreateInput,
-  actor: ActorContext,
-  provenance?: RecipeProvenance,
-): Promise<RecipeOut> => {
-  const { id } = await createRecipeReturningId(
-    db,
-    recipeInput,
-    actor,
-    provenance,
-  );
-  const fullRecipe = await getRecipeByID(db, id);
-  if (!fullRecipe) {
-    throw createAppError(
-      "RECIPE_NOT_FOUND",
-      "Failed to retrieve created recipe",
+export const createRecipe = defineMutationWriter({
+  entity: "recipe",
+  read: async (
+    receipt: MutationReceipt<"recipe">,
+    db: Database,
+    _recipeInput: RecipeCreateInput,
+    _actor: ActorContext,
+    _provenance?: RecipeProvenance,
+  ) => {
+    const output = await getRecipeByID(db, receipt.entityId);
+    if (!output)
+      throw createAppError(
+        "RECIPE_NOT_FOUND",
+        "Failed to retrieve created recipe",
+      );
+    return output;
+  },
+  write: async (
+    readOutput,
+    db: Database,
+    recipeInput: RecipeCreateInput,
+    actor: ActorContext,
+    provenance?: RecipeProvenance,
+  ) => {
+    const { id, shortcode } = await createRecipeReturningId(
+      db,
+      recipeInput,
+      actor,
+      provenance,
     );
-  }
-  return fullRecipe;
-};
+    return readOutput({ entityId: id, shortcode });
+  },
+});
 
 /**
  * Provenance for a recipe duplicate, derived from the source's strong
@@ -948,79 +964,109 @@ export const upsertNotionRecipe = (
     "EntityExternalId_source_kind_externalId_key",
   );
 
-export const updateRecipe = async (
-  db: Database,
-  id: RecipeId,
-  updates: RecipeUpdateInput["data"],
-  actor: ActorContext,
-): Promise<{ recipe: RecipeOut; detachedImageKeys: string[] }> => {
-  let detachedImageKeys: string[] = [];
-  const existingRecipe = await getDb(db).query.recipe.findFirst({
-    where: eq(recipe.id, id),
-    with: {
-      sections: {
-        with: {
-          ingredients: true,
-        },
-      },
-    },
-  });
-
-  if (!existingRecipe) {
-    throw createAppError("RECIPE_NOT_FOUND", `Recipe with ID ${id} not found`);
-  }
-
-  // `forkedFromRecipeId` is diffed as a raw uuid, like every other FK in an
-  // audit roster (e.g. Task.parentTaskId) — not resolved to a shortcode.
-  const beforeState = {
-    name: existingRecipe.name,
-    forkedFromRecipeId: existingRecipe.forkedFromRecipeId,
-  };
-
-  const updatedRecipe = await withTransaction(db, async (tx) => {
-    const propertyUpdates = await updateRecipeBasicProperties(
-      tx,
-      id,
-      updates,
-      existingRecipe,
-    );
-    detachedImageKeys = await updateRecipeImages(tx, id, updates);
-
-    if (updates.sections) {
-      await handleSectionUpdates(tx, id, updates.sections, existingRecipe);
-    }
-
-    const fullRecipe = await getRecipeByID(tx, id);
-    if (!fullRecipe) {
+export const updateRecipe = defineMutationWriter({
+  entity: "recipe",
+  read: async (
+    receipt: MutationReceipt<"recipe">,
+    db: Database,
+    _id: RecipeId,
+    _updates: RecipeUpdateInput["data"],
+    _actor: ActorContext,
+  ) => {
+    const recipe = await getRecipeByID(db, receipt.entityId);
+    if (!recipe)
       throw createAppError(
         "RECIPE_NOT_FOUND",
         "Failed to retrieve updated recipe",
       );
+    return { recipe, detachedImageKeys: receipt.detachedImageKeys ?? [] };
+  },
+  write: async (
+    readOutput,
+    db: Database,
+    id: RecipeId,
+    updates: RecipeUpdateInput["data"],
+    actor: ActorContext,
+  ) => {
+    let detachedImageKeys: string[] = [];
+    const existingRecipe = await getDb(db).query.recipe.findFirst({
+      where: eq(recipe.id, id),
+      with: {
+        sections: {
+          with: {
+            ingredients: true,
+          },
+        },
+      },
+    });
+
+    if (!existingRecipe) {
+      throw createAppError(
+        "RECIPE_NOT_FOUND",
+        `Recipe with ID ${id} not found`,
+      );
     }
 
-    const afterState = {
-      name: fullRecipe.name,
-      forkedFromRecipeId:
-        propertyUpdates.forkedFromRecipeId !== undefined
-          ? propertyUpdates.forkedFromRecipeId
-          : existingRecipe.forkedFromRecipeId,
+    // `forkedFromRecipeId` is diffed as a raw uuid, like every other FK in an
+    // audit roster (e.g. Task.parentTaskId) — not resolved to a shortcode.
+    const beforeState = {
+      name: existingRecipe.name,
+      forkedFromRecipeId: existingRecipe.forkedFromRecipeId,
     };
-    const changes = computeChanges(beforeState, afterState, [
-      ...entityFieldModels.recipe.audit,
-    ]);
-    if (changes) {
-      await logAuditEntry(tx, actor, {
-        entityKind: "recipe",
-        entityId: id,
-        action: "update",
-        changes,
-      });
-    }
 
-    return fullRecipe;
-  });
-  return { recipe: updatedRecipe, detachedImageKeys };
-};
+    const updatedRecipe = await withTransaction(db, async (tx) => {
+      const propertyUpdates = await updateRecipeBasicProperties(
+        tx,
+        id,
+        updates,
+        existingRecipe,
+      );
+      detachedImageKeys = await updateRecipeImages(tx, id, updates);
+
+      if (updates.sections) {
+        await handleSectionUpdates(tx, id, updates.sections, existingRecipe);
+      }
+
+      const afterState = {
+        name: updates.name ?? existingRecipe.name,
+        forkedFromRecipeId:
+          propertyUpdates.forkedFromRecipeId !== undefined
+            ? propertyUpdates.forkedFromRecipeId
+            : existingRecipe.forkedFromRecipeId,
+      };
+      const changes = computeChanges(beforeState, afterState, [
+        ...entityFieldModels.recipe.audit,
+      ]);
+      if (changes) {
+        await logAuditEntry(tx, actor, {
+          entityKind: "recipe",
+          entityId: id,
+          action: "update",
+          changes,
+        });
+      }
+
+      return readOutput(
+        {
+          entityId: id,
+          shortcode: existingRecipe.shortcode,
+          detachedImageKeys,
+        },
+        async () => {
+          const recipe = await getRecipeByID(tx, id);
+          if (!recipe)
+            throw createAppError(
+              "RECIPE_NOT_FOUND",
+              "Failed to retrieve updated recipe",
+            );
+          return { recipe, detachedImageKeys };
+        },
+      );
+    });
+    return updatedRecipe;
+  },
+  item: (full) => full.recipe,
+});
 
 /**
  * The graph's second hop, which no recipe edge names: the lines under its

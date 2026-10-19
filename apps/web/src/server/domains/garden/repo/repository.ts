@@ -143,6 +143,14 @@ export const plantingRepository = defineRepository("planting", {
     );
     return { output, entityId: id, detachedImageKeys };
   },
+  updateRead: async (ctx, shortcode, data, fields) =>
+    updatePlanting.read(
+      fields,
+      ctx.db,
+      await plantings.one(ctx.db, shortcode),
+      data,
+      ctx.actorContext,
+    ),
   // The detached entries are read before the delete removes their links.
   delete: async (ctx, shortcodes) => {
     const ids = await plantings.all(ctx.db, shortcodes);
@@ -185,4 +193,12 @@ export const gardenEntryRepository = defineRepository("gardenEntry", {
       entityId: id,
     };
   },
+  updateRead: async (ctx, shortcode, data, fields) =>
+    updateGardenEntry.read(
+      fields,
+      ctx.db,
+      await entries.one(ctx.db, shortcode),
+      data,
+      ctx.actorContext,
+    ),
 });

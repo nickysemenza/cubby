@@ -48,6 +48,10 @@ import {
   sourceAliasesLabel,
 } from "~/server/entity-kernel/repo/detail-display-labels";
 import {
+  type MutationReceipt,
+  defineMutationWriter,
+} from "~/server/entity-kernel/repo/repository";
+import {
   asActor,
   defineRepository,
   listOn,
@@ -474,126 +478,28 @@ function withCardIdentityFields(
   };
 }
 
-export async function createFinancialAccount(
-  db: Database,
-  data: FinancialAccountCreateInput,
-  actor: ActorContext,
-) {
-  const identity =
-    data.identity.kind === "credit_card"
-      ? withCardIdentityFields(data.identity, data)
-      : data.identity;
-  const id = await withTransaction(db, async (tx) => {
-    await lockFinancialEvidenceKeys(
-      tx,
-      "account-alias",
-      data.sourceAliases.flatMap((alias) =>
-        alias.externalAccountId
-          ? [`${alias.source}\0${alias.externalAccountId}`]
-          : [],
-      ),
-    );
-    await assertAliasesAvailable(tx, data.sourceAliases);
-    await validateAccountHistory(tx, { ...data, identity });
-    const {
-      ledgerPartyId,
-      providerVendorId,
-      primaryCardholderId,
-      issuer: _issuer,
-      network: _network,
-      ...columns
-    } = data;
-    const resolvedCardholderId = await resolveMemberAssignee(
-      tx,
-      primaryCardholderId,
-    );
-    const resolvedLedgerPartyId = await resolveLedgerPartyForAccount(
-      tx,
-      ledgerPartyId,
-    );
-    const resolvedProviderVendorId = await resolveProviderVendorForAccount(
-      tx,
-      providerVendorId,
-    );
-    assertProviderMatchesKind(identity, resolvedProviderVendorId);
-    if (data.inventoryOwnerDefaultEnabled) {
-      if (!resolvedLedgerPartyId) {
-        throw createAppError(
-          "CONSTRAINT_VIOLATION",
-          "An inventory owner default requires an individual account owner.",
-        );
-      }
-      const party = await tx.query.ledgerParty.findFirst({
-        where: eq(ledgerParty.id, resolvedLedgerPartyId),
-        columns: { kind: true },
-      });
-      if (party?.kind !== "member") {
-        throw createAppError(
-          "CONSTRAINT_VIOLATION",
-          "An inventory owner default requires an individual account owner.",
-        );
-      }
-    }
-    const created = await insertWithShortcode(tx, "financialAccount", {
-      ...columns,
-      identity,
-      primaryCardholderId: resolvedCardholderId,
-      ledgerPartyId: resolvedLedgerPartyId,
-      providerVendorId: resolvedProviderVendorId,
-    });
-    await logAuditEntry(tx, actor, {
-      entityKind: "financialAccount",
-      entityId: created.id,
-      action: "create",
-    });
-    return created.id;
-  });
-  return { output: await getFinancialAccountByID(db, id), entityId: id };
-}
-
-export async function updateFinancialAccount(
-  db: Database,
-  id: FinancialAccountShortcode,
-  data: FinancialAccountUpdateData,
-  actor: ActorContext,
-) {
-  const accountId = await resolveOrThrow(db, "financialAccount", id);
-  const output = await withTransaction(db, async (tx) => {
-    const [before] = await tx
-      .select()
-      .from(financialAccount)
-      .where(
-        and(eq(financialAccount.id, accountId), notDeleted(financialAccount)),
-      )
-      .for("update")
-      .limit(1);
-    if (!before)
-      throw createAppError(
-        "FINANCIAL_ACCOUNT_NOT_FOUND",
-        `Financial account not found: ${id}`,
-      );
-    const primaryCardholderId = await resolveMemberAssignee(
-      tx,
-      data.primaryCardholderId,
-    );
-    const [currentCardholder] = before.primaryCardholderId
-      ? await tx
-          .select({ shortcode: ledgerParty.shortcode })
-          .from(ledgerParty)
-          .where(eq(ledgerParty.id, before.primaryCardholderId))
-      : [];
-    await validateAccountHistory(tx, {
-      identity: financialAccountIdentity.parse(before.identity),
-      primaryCardholderId:
-        data.primaryCardholderId === undefined
-          ? currentCardholder
-            ? parseShortcodeFor("ledgerParty", currentCardholder.shortcode)
-            : null
-          : data.primaryCardholderId,
-      authorizedUsers: data.authorizedUsers ?? before.authorizedUsers,
-      fundingPeriods: data.fundingPeriods ?? before.fundingPeriods,
-    });
-    if (data.sourceAliases !== undefined) {
+export const createFinancialAccount = defineMutationWriter({
+  entity: "financialAccount",
+  read: async (
+    receipt: MutationReceipt<"financialAccount">,
+    db: Database,
+    _data: FinancialAccountCreateInput,
+    _actor: ActorContext,
+  ) => ({
+    output: await getFinancialAccountByID(db, receipt.entityId),
+    entityId: receipt.entityId,
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    data: FinancialAccountCreateInput,
+    actor: ActorContext,
+  ) => {
+    const identity =
+      data.identity.kind === "credit_card"
+        ? withCardIdentityFields(data.identity, data)
+        : data.identity;
+    const id = await withTransaction(db, async (tx) => {
       await lockFinancialEvidenceKeys(
         tx,
         "account-alias",
@@ -603,101 +509,240 @@ export async function updateFinancialAccount(
             : [],
         ),
       );
-      await assertAliasesAvailable(tx, data.sourceAliases, accountId);
-    }
-    const ledgerPartyId =
-      data.ledgerPartyId === undefined
-        ? undefined
-        : await resolveLedgerPartyForAccount(tx, data.ledgerPartyId);
-    const providerVendorId =
-      data.providerVendorId === undefined
-        ? undefined
-        : await resolveProviderVendorForAccount(tx, data.providerVendorId);
-    // The identity kind is the discriminator statement routing depends on, so it is chosen
-    // at creation; the other identity fields and the card numbers stay editable.
-    const beforeIdentity = financialAccountIdentity.parse(before.identity);
-    if (
-      data.identity !== undefined &&
-      data.identity.kind !== beforeIdentity.kind
-    )
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        `An account's identity kind is fixed at creation (this account is ${beforeIdentity.kind}); create a new account for a ${data.identity.kind}.`,
+      await assertAliasesAvailable(tx, data.sourceAliases);
+      await validateAccountHistory(tx, { ...data, identity });
+      const {
+        ledgerPartyId,
+        providerVendorId,
+        primaryCardholderId,
+        issuer: _issuer,
+        network: _network,
+        ...columns
+      } = data;
+      const resolvedCardholderId = await resolveMemberAssignee(
+        tx,
+        primaryCardholderId,
       );
-    const identity = withCardIdentityFields(
-      data.identity ?? beforeIdentity,
-      data,
-    );
-    assertProviderMatchesKind(
-      identity,
-      providerVendorId === undefined
-        ? before.providerVendorId
-        : providerVendorId,
-    );
-    const inventoryOwnerDefaultEnabled =
-      data.inventoryOwnerDefaultEnabled ?? before.inventoryOwnerDefaultEnabled;
-    if (inventoryOwnerDefaultEnabled) {
-      const effectivePartyId =
-        ledgerPartyId === undefined ? before.ledgerPartyId : ledgerPartyId;
-      const party = effectivePartyId
-        ? await tx.query.ledgerParty.findFirst({
-            where: and(
-              eq(ledgerParty.id, effectivePartyId),
-              notDeleted(ledgerParty),
-            ),
-            columns: { kind: true },
-          })
-        : null;
-      if (party?.kind !== "member") {
-        throw createAppError(
-          "CONSTRAINT_VIOLATION",
-          "An inventory owner default requires an individual account owner.",
-        );
+      const resolvedLedgerPartyId = await resolveLedgerPartyForAccount(
+        tx,
+        ledgerPartyId,
+      );
+      const resolvedProviderVendorId = await resolveProviderVendorForAccount(
+        tx,
+        providerVendorId,
+      );
+      assertProviderMatchesKind(identity, resolvedProviderVendorId);
+      if (data.inventoryOwnerDefaultEnabled) {
+        if (!resolvedLedgerPartyId) {
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            "An inventory owner default requires an individual account owner.",
+          );
+        }
+        const party = await tx.query.ledgerParty.findFirst({
+          where: eq(ledgerParty.id, resolvedLedgerPartyId),
+          columns: { kind: true },
+        });
+        if (party?.kind !== "member") {
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            "An inventory owner default requires an individual account owner.",
+          );
+        }
       }
-    }
-    if (ledgerPartyId !== undefined && ledgerPartyId !== before.ledgerPartyId) {
-      const [linkedEvidence] = await tx
-        .select({ id: financialTransaction.id })
-        .from(financialTransaction)
+      const created = await insertWithShortcode(tx, "financialAccount", {
+        ...columns,
+        identity,
+        primaryCardholderId: resolvedCardholderId,
+        ledgerPartyId: resolvedLedgerPartyId,
+        providerVendorId: resolvedProviderVendorId,
+      });
+      await logAuditEntry(tx, actor, {
+        entityKind: "financialAccount",
+        entityId: created.id,
+        action: "create",
+      });
+      return created.id;
+    });
+    return readOutput({ entityId: id });
+  },
+});
+
+export const updateFinancialAccount = defineMutationWriter({
+  entity: "financialAccount",
+  read: async (
+    receipt: MutationReceipt<"financialAccount">,
+    db: Database,
+    _id: FinancialAccountShortcode,
+    _data: FinancialAccountUpdateData,
+    _actor: ActorContext,
+  ) => ({
+    output: await getFinancialAccountByID(db, receipt.entityId),
+    entityId: receipt.entityId,
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    id: FinancialAccountShortcode,
+    data: FinancialAccountUpdateData,
+    actor: ActorContext,
+  ) => {
+    const accountId = await resolveOrThrow(db, "financialAccount", id);
+    const output = await withTransaction(db, async (tx) => {
+      const [before] = await tx
+        .select()
+        .from(financialAccount)
         .where(
-          and(
-            eq(financialTransaction.accountId, accountId),
-            sql`${financialTransaction.ledgerTransferId} IS NOT NULL`,
-            notDeleted(financialTransaction),
-          ),
+          and(eq(financialAccount.id, accountId), notDeleted(financialAccount)),
         )
+        .for("update")
         .limit(1);
-      if (linkedEvidence)
+      if (!before)
+        throw createAppError(
+          "FINANCIAL_ACCOUNT_NOT_FOUND",
+          `Financial account not found: ${id}`,
+        );
+      const primaryCardholderId = await resolveMemberAssignee(
+        tx,
+        data.primaryCardholderId,
+      );
+      const [currentCardholder] = before.primaryCardholderId
+        ? await tx
+            .select({ shortcode: ledgerParty.shortcode })
+            .from(ledgerParty)
+            .where(eq(ledgerParty.id, before.primaryCardholderId))
+        : [];
+      await validateAccountHistory(tx, {
+        identity: financialAccountIdentity.parse(before.identity),
+        primaryCardholderId:
+          data.primaryCardholderId === undefined
+            ? currentCardholder
+              ? parseShortcodeFor("ledgerParty", currentCardholder.shortcode)
+              : null
+            : data.primaryCardholderId,
+        authorizedUsers: data.authorizedUsers ?? before.authorizedUsers,
+        fundingPeriods: data.fundingPeriods ?? before.fundingPeriods,
+      });
+      if (data.sourceAliases !== undefined) {
+        await lockFinancialEvidenceKeys(
+          tx,
+          "account-alias",
+          data.sourceAliases.flatMap((alias) =>
+            alias.externalAccountId
+              ? [`${alias.source}\0${alias.externalAccountId}`]
+              : [],
+          ),
+        );
+        await assertAliasesAvailable(tx, data.sourceAliases, accountId);
+      }
+      const ledgerPartyId =
+        data.ledgerPartyId === undefined
+          ? undefined
+          : await resolveLedgerPartyForAccount(tx, data.ledgerPartyId);
+      const providerVendorId =
+        data.providerVendorId === undefined
+          ? undefined
+          : await resolveProviderVendorForAccount(tx, data.providerVendorId);
+      // The identity kind is the discriminator statement routing depends on, so it is chosen
+      // at creation; the other identity fields and the card numbers stay editable.
+      const beforeIdentity = financialAccountIdentity.parse(before.identity);
+      if (
+        data.identity !== undefined &&
+        data.identity.kind !== beforeIdentity.kind
+      )
         throw createAppError(
           "CONSTRAINT_VIOLATION",
-          "Cannot change an account's ledger party while it evidences a ledger transfer.",
+          `An account's identity kind is fixed at creation (this account is ${beforeIdentity.kind}); create a new account for a ${data.identity.kind}.`,
         );
-    }
-    const {
-      ledgerPartyId: _ledgerPartyId,
-      providerVendorId: _providerVendorId,
-      primaryCardholderId: _primaryCardholderId,
-      issuer: _issuer,
-      network: _network,
-      ...accountData
-    } = data;
-    const updateData: Partial<typeof financialAccount.$inferInsert> = {
-      ...accountData,
-      ...(data.identity !== undefined ||
-      data.issuer !== undefined ||
-      data.network !== undefined
-        ? { identity }
-        : {}),
-    };
-    if (primaryCardholderId !== undefined)
-      updateData.primaryCardholderId = primaryCardholderId;
-    if (ledgerPartyId !== undefined) updateData.ledgerPartyId = ledgerPartyId;
-    if (providerVendorId !== undefined)
-      updateData.providerVendorId = providerVendorId;
-    return financialAccountCrud.update(tx, accountId, updateData, actor);
-  });
-  return { output, entityId: accountId };
-}
+      const identity = withCardIdentityFields(
+        data.identity ?? beforeIdentity,
+        data,
+      );
+      assertProviderMatchesKind(
+        identity,
+        providerVendorId === undefined
+          ? before.providerVendorId
+          : providerVendorId,
+      );
+      const inventoryOwnerDefaultEnabled =
+        data.inventoryOwnerDefaultEnabled ??
+        before.inventoryOwnerDefaultEnabled;
+      if (inventoryOwnerDefaultEnabled) {
+        const effectivePartyId =
+          ledgerPartyId === undefined ? before.ledgerPartyId : ledgerPartyId;
+        const party = effectivePartyId
+          ? await tx.query.ledgerParty.findFirst({
+              where: and(
+                eq(ledgerParty.id, effectivePartyId),
+                notDeleted(ledgerParty),
+              ),
+              columns: { kind: true },
+            })
+          : null;
+        if (party?.kind !== "member") {
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            "An inventory owner default requires an individual account owner.",
+          );
+        }
+      }
+      if (
+        ledgerPartyId !== undefined &&
+        ledgerPartyId !== before.ledgerPartyId
+      ) {
+        const [linkedEvidence] = await tx
+          .select({ id: financialTransaction.id })
+          .from(financialTransaction)
+          .where(
+            and(
+              eq(financialTransaction.accountId, accountId),
+              sql`${financialTransaction.ledgerTransferId} IS NOT NULL`,
+              notDeleted(financialTransaction),
+            ),
+          )
+          .limit(1);
+        if (linkedEvidence)
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            "Cannot change an account's ledger party while it evidences a ledger transfer.",
+          );
+      }
+      const {
+        ledgerPartyId: _ledgerPartyId,
+        providerVendorId: _providerVendorId,
+        primaryCardholderId: _primaryCardholderId,
+        issuer: _issuer,
+        network: _network,
+        ...accountData
+      } = data;
+      const updateData: Partial<typeof financialAccount.$inferInsert> = {
+        ...accountData,
+        ...(data.identity !== undefined ||
+        data.issuer !== undefined ||
+        data.network !== undefined
+          ? { identity }
+          : {}),
+      };
+      if (primaryCardholderId !== undefined)
+        updateData.primaryCardholderId = primaryCardholderId;
+      if (ledgerPartyId !== undefined) updateData.ledgerPartyId = ledgerPartyId;
+      if (providerVendorId !== undefined)
+        updateData.providerVendorId = providerVendorId;
+      return financialAccountCrud.update(
+        tx,
+        accountId,
+        updateData,
+        actor,
+        async (_db, receipt) =>
+          readOutput(receipt, async () => ({
+            output: await financialAccountCrud.getByID(tx, accountId),
+            entityId: accountId,
+          })),
+      );
+    });
+    return output;
+  },
+});
 
 export const financialAccountRepository = defineRepository("financialAccount", {
   lifecycle: { delete: FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY },

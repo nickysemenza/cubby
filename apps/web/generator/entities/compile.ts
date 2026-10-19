@@ -1,4 +1,5 @@
 import { deriveBulkUpdateFields } from "./bulk.ts";
+import { collectionArraySchema } from "../../../../packages/schemas/src/entity-collection.ts";
 import type { ChildTableDeclaration } from "../../../../packages/schemas/src/entity-definitions/child-definition.ts";
 import { servesKernelGet } from "./list-capabilities.ts";
 import { humanize } from "../../../../packages/shared/src/text-case.ts";
@@ -575,7 +576,11 @@ const compileFieldModel = (
       reference: field.reference,
       provenance,
       // Left undefined (so not emitted) unless declared, like detailLabelPath.
-      collection: field.collection ?? undefined,
+      collection:
+        field.collection ??
+        (collectionArraySchema(field.validation.update)
+          ? { key: "value" }
+          : undefined),
       explanation:
         field.explanation ??
         (provenance?.kind === "derived"

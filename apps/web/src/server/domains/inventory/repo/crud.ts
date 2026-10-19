@@ -44,6 +44,10 @@ import {
   effectiveProductPriceSql,
   loadProductPricing,
 } from "~/server/domains/product/repo/pricing";
+import {
+  type MutationReceipt,
+  defineMutationWriter,
+} from "~/server/entity-kernel/repo/repository";
 import { createEntityReader } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -639,109 +643,120 @@ const hydrateInventoryEntry = async (
   );
 };
 
-export const updateInventoryEntry = async (
-  db: Database,
-  id: InventoryId,
-  data: UpdateInventoryEntryData,
-  actor: ActorContext,
-) => {
-  // Guard against re-pointing the entry at a soft-deleted product/location.
-  await assertLiveTargets(db, {
-    productId: data.productId,
-    locationId: data.locationId,
-  });
+export const updateInventoryEntry = defineMutationWriter({
+  entity: "inventory",
+  read: (
+    receipt: MutationReceipt<"inventory">,
+    db: Database,
+    _id: InventoryId,
+    _data: UpdateInventoryEntryData,
+    _actor: ActorContext,
+  ) => hydrateInventoryEntry(db, receipt.entityId, "update"),
+  write: async (
+    readOutput,
+    db: Database,
+    id: InventoryId,
+    data: UpdateInventoryEntryData,
+    actor: ActorContext,
+  ) => {
+    // Guard against re-pointing the entry at a soft-deleted product/location.
+    await assertLiveTargets(db, {
+      productId: data.productId,
+      locationId: data.locationId,
+    });
 
-  const before = await getDb(db).query.inventoryEntry.findFirst({
-    where: and(eq(inventoryEntry.id, id), notDeleted(inventoryEntry)),
-  });
+    const before = await getDb(db).query.inventoryEntry.findFirst({
+      where: and(eq(inventoryEntry.id, id), notDeleted(inventoryEntry)),
+    });
 
-  if (!before) {
-    throw createAppError(
-      "INVENTORY_NOT_FOUND",
-      `Inventory entry ${id} not found`,
-    );
-  }
-  const rawOwnership = resolveUpdatedOwnership(before, data);
-  await validateUpdatedOwnership(db, rawOwnership);
-
-  // An ownership-only patch (the shared Confirm / Use inherited / None
-  // actions) folds into an existing entry with that ownership instead of
-  // refusing the occupied slot, exactly as `setOwnership` does.
-  if (isOwnershipOnlyUpdate(data)) {
-    const [survivor] = await withTransaction(db, (tx) =>
-      applyInventoryOwnershipInTransaction(
-        tx,
-        id,
-        rawOwnership,
-        undefined,
-        actor,
-      ),
-    );
-    if (!survivor)
+    if (!before) {
       throw createAppError(
         "INVENTORY_NOT_FOUND",
-        `Inventory entry ${id} not found after update`,
+        `Inventory entry ${id} not found`,
       );
-    return await hydrateInventoryEntry(db, survivor, "update");
-  }
-
-  // Pre-check the slot rather than letting the partial unique index raise a
-  // raw 23505 — nothing maps that to an AppError, so it would surface as an
-  // untranslated Postgres error. Same reasoning as the charge pre-check in
-  // `purchase.ts`.
-  //
-  // The slot is `(productId, locationId, placement)`, so ANY of the three can
-  // collide: re-pointing an entry at a product/location that already has one,
-  // or — newly reachable since placement joined the key — marking a stock row
-  // installed when an installed row of that product already sits in that room.
-  // That pair is legitimate, which is exactly why the key allows it, so this is
-  // reachable by design rather than a corrupt state.
-  await assertUpdatedSlotAvailable(db, id, before, data, rawOwnership);
-
-  const amountColumns =
-    data.amount === undefined ? undefined : amountToColumns(data.amount);
-  const updateValues = buildPartialUpdateValues({
-    amountValue: amountColumns?.amountValue,
-    amountUnit: amountColumns?.amountUnit,
-    productId: data.productId,
-    locationId: data.locationId,
-    // Flipping placement is how something becomes (or stops being) a fixture.
-    // It does NOT move the row — the dimmer stays in the kitchen, it just stops
-    // being counted, audited, and browsed.
-    placement: data.placement,
-    // Either ownership field writes both, so an owner picked alongside other
-    // edits still implies explicit (and a cleared one, inherit).
-    ...(data.ownershipMode !== undefined ||
-    data.ownerLedgerPartyId !== undefined
-      ? rawOwnership
-      : {}),
-  });
-
-  const updated = await updateLiveAndReturn(
-    db,
-    inventoryEntry,
-    updateValues,
-    id,
-  );
-
-  if (before) {
-    const changes = computeChanges(
-      inventoryAuditRow(before),
-      inventoryAuditRow(updated),
-      [...entityFieldModels.inventory.audit],
-    );
-    if (changes) {
-      await logAuditEntry(db, actor, {
-        entityKind: "inventory",
-        entityId: id,
-        action: "update",
-        changes,
-      });
     }
-  }
+    const rawOwnership = resolveUpdatedOwnership(before, data);
+    await validateUpdatedOwnership(db, rawOwnership);
 
-  return await hydrateInventoryEntry(db, updated.id, "update");
-};
+    // An ownership-only patch (the shared Confirm / Use inherited / None
+    // actions) folds into an existing entry with that ownership instead of
+    // refusing the occupied slot, exactly as `setOwnership` does.
+    if (isOwnershipOnlyUpdate(data)) {
+      const [survivor] = await withTransaction(db, (tx) =>
+        applyInventoryOwnershipInTransaction(
+          tx,
+          id,
+          rawOwnership,
+          undefined,
+          actor,
+        ),
+      );
+      if (!survivor)
+        throw createAppError(
+          "INVENTORY_NOT_FOUND",
+          `Inventory entry ${id} not found after update`,
+        );
+      return readOutput({ entityId: survivor });
+    }
+
+    // Pre-check the slot rather than letting the partial unique index raise a
+    // raw 23505 — nothing maps that to an AppError, so it would surface as an
+    // untranslated Postgres error. Same reasoning as the charge pre-check in
+    // `purchase.ts`.
+    //
+    // The slot is `(productId, locationId, placement)`, so ANY of the three can
+    // collide: re-pointing an entry at a product/location that already has one,
+    // or — newly reachable since placement joined the key — marking a stock row
+    // installed when an installed row of that product already sits in that room.
+    // That pair is legitimate, which is exactly why the key allows it, so this is
+    // reachable by design rather than a corrupt state.
+    await assertUpdatedSlotAvailable(db, id, before, data, rawOwnership);
+
+    const amountColumns =
+      data.amount === undefined ? undefined : amountToColumns(data.amount);
+    const updateValues = buildPartialUpdateValues({
+      amountValue: amountColumns?.amountValue,
+      amountUnit: amountColumns?.amountUnit,
+      productId: data.productId,
+      locationId: data.locationId,
+      // Flipping placement is how something becomes (or stops being) a fixture.
+      // It does NOT move the row — the dimmer stays in the kitchen, it just stops
+      // being counted, audited, and browsed.
+      placement: data.placement,
+      // Either ownership field writes both, so an owner picked alongside other
+      // edits still implies explicit (and a cleared one, inherit).
+      ...(data.ownershipMode !== undefined ||
+      data.ownerLedgerPartyId !== undefined
+        ? rawOwnership
+        : {}),
+    });
+
+    const updated = await updateLiveAndReturn(
+      db,
+      inventoryEntry,
+      updateValues,
+      id,
+    );
+
+    if (before) {
+      const changes = computeChanges(
+        inventoryAuditRow(before),
+        inventoryAuditRow(updated),
+        [...entityFieldModels.inventory.audit],
+      );
+      if (changes) {
+        await logAuditEntry(db, actor, {
+          entityKind: "inventory",
+          entityId: id,
+          action: "update",
+          changes,
+        });
+      }
+    }
+
+    return readOutput({ entityId: updated.id, shortcode: updated.shortcode });
+  },
+});
 
 /** Validate, insert and audit one entry, returning its stored identity. */
 export const insertInventoryEntry = async (
@@ -819,16 +834,24 @@ export const insertInventoryEntry = async (
 };
 
 /** Create and return the API entry; identity-only callers use `insertInventoryEntry`. */
-export const createInventoryEntry = async (
-  db: Database,
-  data: CreateInventoryEntryData,
-  actor: ActorContext,
-) =>
-  hydrateInventoryEntry(
-    db,
-    (await insertInventoryEntry(db, data, actor)).id,
-    "creation",
-  );
+export const createInventoryEntry = defineMutationWriter({
+  entity: "inventory",
+  read: (
+    receipt: MutationReceipt<"inventory">,
+    db: Database,
+    _data: CreateInventoryEntryData,
+    _actor: ActorContext,
+  ) => hydrateInventoryEntry(db, receipt.entityId, "creation"),
+  write: async (
+    readOutput,
+    db: Database,
+    data: CreateInventoryEntryData,
+    actor: ActorContext,
+  ) => {
+    const created = await insertInventoryEntry(db, data, actor);
+    return readOutput({ entityId: created.id, shortcode: created.shortcode });
+  },
+});
 
 /**
  * Get inventory entries for multiple locations (batch query to avoid N+1).

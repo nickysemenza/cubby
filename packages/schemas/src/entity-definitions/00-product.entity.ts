@@ -1117,6 +1117,7 @@ Rules:
       },
       {
         key: "unitMappings",
+        collection: { key: ["a"] },
         kind: "json",
         control: { kind: "specialized", renderer: "unit-mappings" },
         provenance: {

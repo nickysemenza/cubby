@@ -100,6 +100,7 @@ export default defineEntity({
         kind: "identifier",
         reference: { entity: "product", multiple: true },
         control: { kind: "specialized", renderer: "entity-multi-select" },
+        collection: { key: "value", readPath: "candidates[].id" },
         validation: {
           read: null,
           create: z.array(productShortcode).default([]),

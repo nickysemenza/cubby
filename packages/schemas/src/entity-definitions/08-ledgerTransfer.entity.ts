@@ -172,6 +172,7 @@ export default defineEntity({
       },
       {
         key: "sourceClaims",
+        semanticRole: "externalIdentifier",
         kind: "json",
         control: {
           kind: "specialized",

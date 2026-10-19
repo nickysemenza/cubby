@@ -46,6 +46,10 @@ import {
   task,
 } from "~/server/db/schema";
 import { applyInventoryOwnershipInTransaction } from "~/server/domains/inventory/repo/ownership-mutations";
+import {
+  type MutationReceipt,
+  defineMutationWriter,
+} from "~/server/entity-kernel/repo/repository";
 import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
@@ -510,44 +514,78 @@ export const listLedgerParties = completeListReader(
   listLedgerPartiesRead,
 );
 
-export async function createLedgerParty(
-  db: Database,
-  data: LedgerPartyCreateInput,
-  actor: ActorContext,
-) {
-  const id = await withTransaction(db, async (tx) => {
-    if (data.kind === "household") {
-      const [existing] = await tx
-        .select({ id: ledgerParty.id })
-        .from(ledgerParty)
-        .where(and(eq(ledgerParty.kind, "household"), notDeleted(ledgerParty)))
-        .limit(1);
-      if (existing)
-        throw createAppError(
-          "CONSTRAINT_VIOLATION",
-          "Only one household ledger party may exist.",
-        );
-    }
-    const created = await insertWithShortcode(tx, "ledgerParty", data);
-    await logAuditEntry(tx, actor, {
-      entityKind: "ledgerParty",
-      entityId: created.id,
-      action: "create",
+export const createLedgerParty = defineMutationWriter({
+  entity: "ledgerParty",
+  read: async (
+    receipt: MutationReceipt<"ledgerParty">,
+    db: Database,
+    _data: LedgerPartyCreateInput,
+    _actor: ActorContext,
+  ) => ({
+    output: await reader.getByID(db, receipt.entityId),
+    entityId: receipt.entityId,
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    data: LedgerPartyCreateInput,
+    actor: ActorContext,
+  ) => {
+    const id = await withTransaction(db, async (tx) => {
+      if (data.kind === "household") {
+        const [existing] = await tx
+          .select({ id: ledgerParty.id })
+          .from(ledgerParty)
+          .where(
+            and(eq(ledgerParty.kind, "household"), notDeleted(ledgerParty)),
+          )
+          .limit(1);
+        if (existing)
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            "Only one household ledger party may exist.",
+          );
+      }
+      const created = await insertWithShortcode(tx, "ledgerParty", data);
+      await logAuditEntry(tx, actor, {
+        entityKind: "ledgerParty",
+        entityId: created.id,
+        action: "create",
+      });
+      return created.id;
     });
-    return created.id;
-  });
-  return { output: await reader.getByID(db, id), entityId: id };
-}
+    return readOutput({ entityId: id });
+  },
+});
 
-export async function updateLedgerParty(
-  db: Database,
-  shortcode: LedgerPartyShortcode,
-  data: LedgerPartyUpdateData,
-  actor: ActorContext,
-) {
-  const id = await resolveOrThrow(db, "ledgerParty", shortcode);
-  return { output: await reader.update(db, id, data, actor), entityId: id };
-}
+export const updateLedgerParty = defineMutationWriter({
+  entity: "ledgerParty",
+  read: async (
+    receipt: MutationReceipt<"ledgerParty">,
+    db: Database,
+    _shortcode: LedgerPartyShortcode,
+    _data: LedgerPartyUpdateData,
+    _actor: ActorContext,
+  ) => ({
+    output: await reader.getByID(db, receipt.entityId),
+    entityId: receipt.entityId,
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    shortcode: LedgerPartyShortcode,
+    data: LedgerPartyUpdateData,
+    actor: ActorContext,
+  ) => {
+    const id = await resolveOrThrow(db, "ledgerParty", shortcode);
+    return reader.update(db, id, data, actor, async (readDb, receipt) =>
+      readOutput(receipt, async () => ({
+        output: await reader.getByID(readDb, id),
+        entityId: id,
+      })),
+    );
+  },
+});
 
 const refuseHouseholdParty = async (
   tx: DrizzleTransaction,

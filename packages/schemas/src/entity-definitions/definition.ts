@@ -640,13 +640,16 @@ const buildMetadataSchemas = () => {
       /**
        * A collection field `entity.update` can patch item by item
        * (`@cubby/schemas/entity-collection`). `key` names the item identity:
-       * `"value"` for a text array (the kernel applies the patch), or the
+       * `"value"` for whole-item equality, or the
        * identity fields of a record collection (the entity repository
-       * applies it, keeping its slot and uniqueness rules).
+       * applies normal patches, keeping its slot and uniqueness rules). Bulk
+       * list patches are resolved generically. `readPath` supplies their
+       * authoritative value when detail and input use different shapes.
        */
       collection: z
         .strictObject({
           key: z.union([z.literal("value"), z.array(nonEmptyString()).min(1)]),
+          readPath: nonEmptyString().optional(),
         })
         .nullable()
         .optional()

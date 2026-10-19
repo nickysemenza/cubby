@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 import { z } from "zod";
 import {
   bulkUpdateInputSchema,
-  bulkValueCollectionPatch,
+  bulkCollectionPatchSchema,
 } from "./entity-collection";
 
 it("bulk collection patches preserve scalar validation and ordinary object refinements without widening normal arrays", () => {
@@ -22,7 +22,14 @@ it("bulk collection patches preserve scalar validation and ordinary object refin
     );
   const schema = bulkUpdateInputSchema(
     normal,
-    { ...normal.shape, tokens: bulkValueCollectionPatch.optional() },
+    {
+      ...normal.shape,
+      tokens: bulkCollectionPatchSchema(
+        normal.shape.tokens,
+        "value",
+        "SyntheticTokensBulkPatch",
+      ).optional(),
+    },
     ["tokens"],
   );
   expect(schema.safeParse({ tokens: ["shared"] }).success).toBe(false);
@@ -49,4 +56,7 @@ it("bulk collection patches preserve scalar validation and ordinary object refin
     normal.safeParse({ tokens: [{ op: "add", key: "shared" }] }).success,
   ).toBe(false);
   expect(normal.safeParse({ tokens: ["x"] }).success).toBe(false);
+  expect(schema.safeParse({ tokens: [{ op: "add", key: "x" }] }).success).toBe(
+    false,
+  );
 });

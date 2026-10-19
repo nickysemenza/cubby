@@ -37,6 +37,10 @@ import {
 } from "~/server/domains/product/repo/pricing";
 import { wishCandidateItems } from "~/server/entity-kernel/repo/detail-display-labels";
 import {
+  type MutationReceipt,
+  defineMutationWriter,
+} from "~/server/entity-kernel/repo/repository";
+import {
   asActor,
   createEntityCrud,
   defineRepository,
@@ -388,44 +392,76 @@ async function resolveCandidateProductIds(
   return codes.map((code) => resolved.get(code)!);
 }
 
-export const createWish = async (
-  db: Database,
-  data: WishCreateInput,
-  actor: ActorContext,
-): Promise<{ output: WishOut; entityId: WishId }> => {
-  const id = await withTransaction(db, async (tx) => {
-    const productIds = await resolveCandidateProductIds(
-      tx,
-      data.candidateProductIds,
-    );
-    const created = await insertWithShortcode(tx, "wish", {
-      name: data.name,
-      notes: data.notes,
+export const createWish = defineMutationWriter({
+  entity: "wish",
+  read: async (
+    receipt: MutationReceipt<"wish">,
+    db: Database,
+    _data: WishCreateInput,
+    _actor: ActorContext,
+  ) => ({
+    output: await getWishByID(db, receipt.entityId),
+    entityId: receipt.entityId,
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    data: WishCreateInput,
+    actor: ActorContext,
+  ) => {
+    const id = await withTransaction(db, async (tx) => {
+      const productIds = await resolveCandidateProductIds(
+        tx,
+        data.candidateProductIds,
+      );
+      const created = await insertWithShortcode(tx, "wish", {
+        name: data.name,
+        notes: data.notes,
+      });
+      await attachLinks(
+        tx,
+        "wishCandidate",
+        productIds.map((productId) => ({ from: created.id, to: productId })),
+      );
+      await logAuditEntry(tx, actor, {
+        entityKind: "wish",
+        entityId: created.id,
+        action: "create",
+      });
+      return created.id;
     });
-    await attachLinks(
-      tx,
-      "wishCandidate",
-      productIds.map((productId) => ({ from: created.id, to: productId })),
-    );
-    await logAuditEntry(tx, actor, {
-      entityKind: "wish",
-      entityId: created.id,
-      action: "create",
-    });
-    return created.id;
-  });
-  return { output: await getWishByID(db, id), entityId: id };
-};
+    return readOutput({ entityId: id });
+  },
+});
 
-export const updateWish = async (
-  db: Database,
-  shortcode: WishShortcode,
-  data: WishUpdateData,
-  actor: ActorContext,
-): Promise<{ output: WishOut; entityId: WishId }> => {
-  const id = await resolveOrThrow(db, "wish", shortcode);
-  return { output: await wishCrud.update(db, id, data, actor), entityId: id };
-};
+export const updateWish = defineMutationWriter({
+  entity: "wish",
+  read: async (
+    receipt: MutationReceipt<"wish">,
+    db: Database,
+    _shortcode: WishShortcode,
+    _data: WishUpdateData,
+    _actor: ActorContext,
+  ) => ({
+    output: await getWishByID(db, receipt.entityId),
+    entityId: receipt.entityId,
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    shortcode: WishShortcode,
+    data: WishUpdateData,
+    actor: ActorContext,
+  ) => {
+    const id = await resolveOrThrow(db, "wish", shortcode);
+    return wishCrud.update(db, id, data, actor, async (readDb, receipt) =>
+      readOutput(receipt, async () => ({
+        output: await wishCrud.getByID(readDb, id),
+        entityId: id,
+      })),
+    );
+  },
+});
 
 export const wishRepository = defineRepository("wish", {
   lifecycle: { delete: WISH_DELETE_EDGE_POLICY },

@@ -688,7 +688,8 @@ export default defineEntity({
       {
         key: "allocations",
         kind: "text-array",
-        control: { kind: "specialized", renderer: "tag-list" },
+        collection: { key: ["purchaseId"] },
+        control: { kind: "specialized", renderer: "structured-field" },
         display: {
           detail: true,
           renderer: { detail: "financial-transaction-allocations" },

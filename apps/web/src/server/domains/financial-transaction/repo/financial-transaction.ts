@@ -80,6 +80,10 @@ import {
   sourceRefsLabel,
 } from "~/server/entity-kernel/repo/detail-display-labels";
 import {
+  type MutationReceipt,
+  defineMutationWriter,
+} from "~/server/entity-kernel/repo/repository";
+import {
   asActor,
   defineRepository,
   listOn,
@@ -483,69 +487,82 @@ async function resolveForeignKeys(
   };
 }
 
-export async function createFinancialTransaction(
-  db: Database,
-  data: FinancialTransactionCreateInput,
-  actor: ActorContext,
-) {
-  const id = await withTransaction(db, async (tx) => {
-    const foreign = await resolveForeignKeys(tx, data);
-    await lockFinancialEvidenceKeys(
-      tx,
-      "transaction-ref",
-      data.sourceRefs.map((ref) => `${ref.source}\0${ref.externalId}`),
-    );
-    // The global uniqueness guarantee that lets statement matching join on
-    // (source, externalId) without a DISTINCT; the live unique backstops it.
-    await assertSettlementRefsAvailable(tx, data.sourceRefs);
-    const { allocations, sourceRefs, ...columns } = data;
-    const created = await insertWithShortcode(tx, "financialTransaction", {
-      ...columns,
-      ...foreign,
-    });
-    await replaceSettlementRefs(tx, created.id, sourceRefs);
-    await logAuditEntry(tx, actor, {
-      entityKind: "financialTransaction",
-      entityId: created.id,
-      action: "create",
-    });
-
-    // `purchaseId` is sugar for one allocation of the full amount; the zod
-    // refinement has already rejected a purchaseId/allocations pair that
-    // disagrees, so either source can be taken verbatim here.
-    const requested: AllocationInput[] =
-      allocations.length > 0
-        ? await resolveAllocationInputs(tx, allocations)
-        : data.purchaseId
-          ? await resolveAllocationInputs(tx, [
-              { purchaseId: data.purchaseId, amount: data.amount },
-            ])
-          : [];
-    if (requested.length > 0) {
-      await assertPurchasesLive(
+export const createFinancialTransaction = defineMutationWriter({
+  entity: "financialTransaction",
+  read: async (
+    receipt: MutationReceipt<"financialTransaction">,
+    db: Database,
+    _data: FinancialTransactionCreateInput,
+    _actor: ActorContext,
+  ) => ({
+    output: await getFinancialTransactionByID(db, receipt.entityId),
+    entityId: receipt.entityId,
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    data: FinancialTransactionCreateInput,
+    actor: ActorContext,
+  ) => {
+    const id = await withTransaction(db, async (tx) => {
+      const foreign = await resolveForeignKeys(tx, data);
+      await lockFinancialEvidenceKeys(
         tx,
-        requested.map((row) => row.purchaseId),
+        "transaction-ref",
+        data.sourceRefs.map((ref) => `${ref.source}\0${ref.externalId}`),
       );
-      assertAllocationSetValid({
-        transactionAmount: data.amount,
-        kind: data.kind,
-        next: requested,
+      // The global uniqueness guarantee that lets statement matching join on
+      // (source, externalId) without a DISTINCT; the live unique backstops it.
+      await assertSettlementRefsAvailable(tx, data.sourceRefs);
+      const { allocations, sourceRefs, ...columns } = data;
+      const created = await insertWithShortcode(tx, "financialTransaction", {
+        ...columns,
+        ...foreign,
       });
-      await refuseSettlementConflicts(tx, {
-        transactionId: created.id,
-        purchaseIds: requested.map((row) => row.purchaseId),
+      await replaceSettlementRefs(tx, created.id, sourceRefs);
+      await logAuditEntry(tx, actor, {
+        entityKind: "financialTransaction",
+        entityId: created.id,
+        action: "create",
       });
-      await writeAllocationSet(tx, created.id, requested, new Map());
-      await applyAllocationChanges(tx, {
-        transactionIds: [created.id],
-        before: new Map(),
-        actor,
-      });
-    }
-    return created.id;
-  });
-  return { output: await getFinancialTransactionByID(db, id), entityId: id };
-}
+
+      // `purchaseId` is sugar for one allocation of the full amount; the zod
+      // refinement has already rejected a purchaseId/allocations pair that
+      // disagrees, so either source can be taken verbatim here.
+      const requested: AllocationInput[] =
+        allocations.length > 0
+          ? await resolveAllocationInputs(tx, allocations)
+          : data.purchaseId
+            ? await resolveAllocationInputs(tx, [
+                { purchaseId: data.purchaseId, amount: data.amount },
+              ])
+            : [];
+      if (requested.length > 0) {
+        await assertPurchasesLive(
+          tx,
+          requested.map((row) => row.purchaseId),
+        );
+        assertAllocationSetValid({
+          transactionAmount: data.amount,
+          kind: data.kind,
+          next: requested,
+        });
+        await refuseSettlementConflicts(tx, {
+          transactionId: created.id,
+          purchaseIds: requested.map((row) => row.purchaseId),
+        });
+        await writeAllocationSet(tx, created.id, requested, new Map());
+        await applyAllocationChanges(tx, {
+          transactionIds: [created.id],
+          before: new Map(),
+          actor,
+        });
+      }
+      return created.id;
+    });
+    return readOutput({ entityId: id });
+  },
+});
 
 type FinancialTransactionDbRow = typeof financialTransaction.$inferSelect;
 
@@ -726,154 +743,184 @@ export type FinancialTransactionUpdateOptions = {
   acknowledgeSettlementConflicts?: boolean;
 };
 
-export async function updateFinancialTransaction(
-  db: Database,
-  shortcode: FinancialTransactionShortcode,
-  data: FinancialTransactionUpdateData,
-  actor: ActorContext,
-  options: FinancialTransactionUpdateOptions = {},
-) {
-  const id = await resolveOrThrow(db, "financialTransaction", shortcode);
-  await withTransaction(db, async (tx) => {
-    // Funding-evidence advisory keys precede both entity rows and account keys.
-    // Evidence creation uses the same order, so it cannot validate an old row
-    // while this mutation commits a new amount/status/account.
-    // LOCK ORDER: Purchase rows first, THEN the transaction row. Every purchase
-    // operation locks purchases first (lockAndValidateForDelete, the merge) and
-    // reaches FinancialTransaction afterwards via syncSettlementMirror, so
-    // taking the transaction first here would form an ABBA cycle — updating a
-    // transaction while one of its purchases is being deleted would deadlock and
-    // postgres would abort one of them. Keep this order.
-    //
-    // The set locked here must cover every purchase this update could touch —
-    // the ones it already allocates to AND the ones it is about to. Locking only
-    // the current ones would leave a newly named purchase to be locked after the
-    // transaction, reopening the cycle for exactly the interesting case.
-    //
-    // The pre-lock read is unlocked on purpose and is not a race: nothing adds
-    // an allocation to this transaction without holding its FOR UPDATE lock,
-    // which is taken below, and the set is re-read under that lock before
-    // anything is written.
-    await lockUpdatePurchases(tx, id, data);
-    await tx
-      .select({ id: financialTransaction.id })
-      .from(financialTransaction)
-      .where(
-        and(eq(financialTransaction.id, id), notDeleted(financialTransaction)),
-      )
-      .for("update");
-    const before = await tx.query.financialTransaction.findFirst({
-      where: and(
-        eq(financialTransaction.id, id),
-        notDeleted(financialTransaction),
-      ),
-    });
-    if (!before)
-      throw createAppError(
-        "FINANCIAL_TRANSACTION_NOT_FOUND",
-        `Financial transaction not found: ${shortcode}`,
-      );
-    assertLedgerTransferUpdateAllowed(before, data);
-    if (
-      data.kind !== undefined &&
-      ![
-        "purchase",
-        "refund",
-        "adjustment",
-        "fee",
-        "interest",
-        "income",
-      ].includes(data.kind)
-    ) {
-      const liveBooking = await tx.query.expense.findFirst({
-        where: (expense, { eq }) =>
+export const updateFinancialTransaction = defineMutationWriter({
+  entity: "financialTransaction",
+  read: async (
+    receipt: MutationReceipt<"financialTransaction">,
+    db: Database,
+    _shortcode: FinancialTransactionShortcode,
+    _data: FinancialTransactionUpdateData,
+    _actor: ActorContext,
+    _options: FinancialTransactionUpdateOptions = {},
+  ) => ({
+    output: await getFinancialTransactionByID(db, receipt.entityId),
+    entityId: receipt.entityId,
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    shortcode: FinancialTransactionShortcode,
+    data: FinancialTransactionUpdateData,
+    actor: ActorContext,
+    options: FinancialTransactionUpdateOptions = {},
+  ) => {
+    const id = await resolveOrThrow(db, "financialTransaction", shortcode);
+    await withTransaction(db, async (tx) => {
+      // Funding-evidence advisory keys precede both entity rows and account keys.
+      // Evidence creation uses the same order, so it cannot validate an old row
+      // while this mutation commits a new amount/status/account.
+      // LOCK ORDER: Purchase rows first, THEN the transaction row. Every purchase
+      // operation locks purchases first (lockAndValidateForDelete, the merge) and
+      // reaches FinancialTransaction afterwards via syncSettlementMirror, so
+      // taking the transaction first here would form an ABBA cycle — updating a
+      // transaction while one of its purchases is being deleted would deadlock and
+      // postgres would abort one of them. Keep this order.
+      //
+      // The set locked here must cover every purchase this update could touch —
+      // the ones it already allocates to AND the ones it is about to. Locking only
+      // the current ones would leave a newly named purchase to be locked after the
+      // transaction, reopening the cycle for exactly the interesting case.
+      //
+      // The pre-lock read is unlocked on purpose and is not a race: nothing adds
+      // an allocation to this transaction without holding its FOR UPDATE lock,
+      // which is taken below, and the set is re-read under that lock before
+      // anything is written.
+      await lockUpdatePurchases(tx, id, data);
+      await tx
+        .select({ id: financialTransaction.id })
+        .from(financialTransaction)
+        .where(
           and(
-            eq(expense.bookingTransactionCode, shortcode),
-            notDeleted(expense),
+            eq(financialTransaction.id, id),
+            notDeleted(financialTransaction),
           ),
+        )
+        .for("update");
+      const before = await tx.query.financialTransaction.findFirst({
+        where: and(
+          eq(financialTransaction.id, id),
+          notDeleted(financialTransaction),
+        ),
       });
-      if (liveBooking)
+      if (!before)
         throw createAppError(
-          "CONSTRAINT_VIOLATION",
-          "This transaction has booked Expenses. Review its spending correction before changing it to a non-spending kind.",
+          "FINANCIAL_TRANSACTION_NOT_FOUND",
+          `Financial transaction not found: ${shortcode}`,
         );
-    }
-    const accountId =
-      data.accountId === undefined
-        ? before.accountId
-        : await resolveOrThrow(tx, "financialAccount", data.accountId);
-    const beforeSourceRefs = (await settlementRefsFor(tx, [id])).get(id) ?? [];
-    const sourceRefs = data.sourceRefs ?? beforeSourceRefs;
-    await lockFinancialEvidenceKeys(
-      tx,
-      "transaction-ref",
-      sourceRefs.map((ref) => `${ref.source}\0${ref.externalId}`),
-    );
-    await assertSettlementRefsAvailable(tx, sourceRefs, id);
-
-    // `purchaseId` is input sugar only — there is no such column any more, so it
-    // never reaches the physical update. `sourceRefs` lives in EntityExternalId.
-    const {
-      purchaseId: _sugarOnly,
-      sourceRefs: _references,
-      ...writableData
-    } = data;
-    const values = buildPartialUpdateValues({
-      ...writableData,
-      accountId,
-    });
-
-    // The create input rejects a purchaseId/allocations pair that disagrees;
-    // deriveUpdateData drops that refinement, so the same check belongs here
-    // rather than silently letting one field win.
-    assertAllocationShorthandAgrees(data);
-    const state = await deriveUpdatedTransactionState(tx, id, before, data);
-    await tx
-      .update(financialTransaction)
-      .set(values)
-      .where(
-        and(eq(financialTransaction.id, id), notDeleted(financialTransaction)),
+      assertLedgerTransferUpdateAllowed(before, data);
+      if (
+        data.kind !== undefined &&
+        ![
+          "purchase",
+          "refund",
+          "adjustment",
+          "fee",
+          "interest",
+          "income",
+        ].includes(data.kind)
+      ) {
+        const liveBooking = await tx.query.expense.findFirst({
+          where: (expense, { eq }) =>
+            and(
+              eq(expense.bookingTransactionCode, shortcode),
+              notDeleted(expense),
+            ),
+        });
+        if (liveBooking)
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            "This transaction has booked Expenses. Review its spending correction before changing it to a non-spending kind.",
+          );
+      }
+      const accountId =
+        data.accountId === undefined
+          ? before.accountId
+          : await resolveOrThrow(tx, "financialAccount", data.accountId);
+      const beforeSourceRefs =
+        (await settlementRefsFor(tx, [id])).get(id) ?? [];
+      const sourceRefs = data.sourceRefs ?? beforeSourceRefs;
+      await lockFinancialEvidenceKeys(
+        tx,
+        "transaction-ref",
+        sourceRefs.map((ref) => `${ref.source}\0${ref.externalId}`),
       );
-    if (data.sourceRefs !== undefined)
-      await replaceSettlementRefs(tx, id, data.sourceRefs);
-    const beforeState = { ...before, sourceRefs: beforeSourceRefs };
-    // Stored references have no order; compare in the canonical order
-    // `settlementRefsFor` reads them in, so a reordered resubmission is no diff.
-    const canonicalRefs = sortBy(sourceRefs, [
-      (ref) => ref.source,
-      (ref) => ref.externalId,
-    ]);
-    const changes = computeChanges(
-      beforeState,
-      { ...beforeState, ...values, sourceRefs: canonicalRefs },
-      [...entityFieldModels.financialTransaction.audit],
-    );
-    if (changes)
-      await logAuditEntry(tx, actor, {
-        entityKind: "financialTransaction",
-        entityId: id,
-        action: "update",
-        changes,
+      await assertSettlementRefsAvailable(tx, sourceRefs, id);
+
+      // `purchaseId` is input sugar only — there is no such column any more, so it
+      // never reaches the physical update. `sourceRefs` lives in EntityExternalId.
+      const {
+        purchaseId: _sugarOnly,
+        sourceRefs: _references,
+        ...writableData
+      } = data;
+      const values = buildPartialUpdateValues({
+        ...writableData,
+        accountId,
       });
 
-    // Keep the allocations in step with what just changed, then let the shared
-    // core own the follow-ups. This is the only door for setting a split — there
-    // is deliberately no separate allocations endpoint, because `allocations` is
-    // already part of this input and a second entry point would be a second
-    // place to forget the lock and the invariant. Three triggers, in precedence
-    // order:
-    //   • an explicit `allocations` array — the general case;
-    //   • an explicit `purchaseId` — the single-Purchase sugar, meaning "one
-    //     slice for the whole amount", or clear it;
-    //   • an amount change on a singly-allocated transaction, where the sole
-    //     legal allocation value is the new amount.
-    await applyUpdatedAllocations(tx, id, data, state, actor, options, before);
+      // The create input rejects a purchaseId/allocations pair that disagrees;
+      // deriveUpdateData drops that refinement, so the same check belongs here
+      // rather than silently letting one field win.
+      assertAllocationShorthandAgrees(data);
+      const state = await deriveUpdatedTransactionState(tx, id, before, data);
+      await tx
+        .update(financialTransaction)
+        .set(values)
+        .where(
+          and(
+            eq(financialTransaction.id, id),
+            notDeleted(financialTransaction),
+          ),
+        );
+      if (data.sourceRefs !== undefined)
+        await replaceSettlementRefs(tx, id, data.sourceRefs);
+      const beforeState = { ...before, sourceRefs: beforeSourceRefs };
+      // Stored references have no order; compare in the canonical order
+      // `settlementRefsFor` reads them in, so a reordered resubmission is no diff.
+      const canonicalRefs = sortBy(sourceRefs, [
+        (ref) => ref.source,
+        (ref) => ref.externalId,
+      ]);
+      const changes = computeChanges(
+        beforeState,
+        { ...beforeState, ...values, sourceRefs: canonicalRefs },
+        [...entityFieldModels.financialTransaction.audit],
+      );
+      if (changes)
+        await logAuditEntry(tx, actor, {
+          entityKind: "financialTransaction",
+          entityId: id,
+          action: "update",
+          changes,
+        });
 
-    // Data-quality targets come from applyAllocationChanges, which knows the
-    // union of before/after purchases; nothing else here can name one.
-  });
-  return { output: await getFinancialTransactionByID(db, id), entityId: id };
-}
+      // Keep the allocations in step with what just changed, then let the shared
+      // core own the follow-ups. This is the only door for setting a split — there
+      // is deliberately no separate allocations endpoint, because `allocations` is
+      // already part of this input and a second entry point would be a second
+      // place to forget the lock and the invariant. Three triggers, in precedence
+      // order:
+      //   • an explicit `allocations` array — the general case;
+      //   • an explicit `purchaseId` — the single-Purchase sugar, meaning "one
+      //     slice for the whole amount", or clear it;
+      //   • an amount change on a singly-allocated transaction, where the sole
+      //     legal allocation value is the new amount.
+      await applyUpdatedAllocations(
+        tx,
+        id,
+        data,
+        state,
+        actor,
+        options,
+        before,
+      );
+
+      // Data-quality targets come from applyAllocationChanges, which knows the
+      // union of before/after purchases; nothing else here can name one.
+    });
+    return readOutput({ entityId: id });
+  },
+});
 
 const FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY = {
   "EmailFinancialAssociation.transactionId": {
@@ -981,9 +1028,22 @@ export const financialTransactionRepository = defineRepository(
         projection,
       ),
     create: asActor(createFinancialTransaction),
-    update: asActor((db, shortcode, data, actor) =>
-      updateFinancialTransaction(db, shortcode, data, actor),
+    update: asActor(
+      (
+        db: Database,
+        shortcode: FinancialTransactionShortcode,
+        data: FinancialTransactionUpdateData,
+        actor: ActorContext,
+      ) => updateFinancialTransaction(db, shortcode, data, actor),
     ),
+    updateRead: (ctx, shortcode, data, fields) =>
+      updateFinancialTransaction.read(
+        fields,
+        ctx.db,
+        shortcode,
+        data,
+        ctx.actorContext,
+      ),
     deleteHooks: {
       beforeDelete: refuseTransferEvidence,
       afterDelete: touchAllocatedPurchases,

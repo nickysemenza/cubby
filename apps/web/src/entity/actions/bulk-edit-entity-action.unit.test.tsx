@@ -39,6 +39,19 @@ function stubSearchProviderFor() {
   };
 }
 
+function purchaseSearchProviderFor() {
+  return function SyntheticPurchaseSearch({
+    children,
+  }: SearchProviderProps<string>) {
+    return children({
+      items: [{ id: "PUR-ABCD", name: "Synthetic purchase" }],
+      onSearchChange: vi.fn(),
+      isLoading: false,
+      onOpenChange: vi.fn(),
+    });
+  };
+}
+
 let harness: ReturnType<typeof createBrowserTestHarness>;
 
 beforeEach(() => {
@@ -51,6 +64,61 @@ afterEach(() => {
 });
 
 describe("BulkEditDialogBody", () => {
+  it("renders editable references without an explicit normal control", () => {
+    render(
+      <BulkEditDialogBody
+        entity="recipe"
+        items={[{ id: "RCP-ABCD", name: "Synthetic recipe" }]}
+        fieldKeys={["cookbookId"]}
+        onOpenChange={vi.fn()}
+        onSubmit={vi.fn()}
+        isPending={false}
+        searchProviderFor={stubSearchProviderFor}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    expect(screen.getByRole("combobox", { name: "Cookbook" })).toBeVisible();
+  });
+
+  it("submits structured additions for financial allocations", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <BulkEditDialogBody
+        entity="financialTransaction"
+        items={[{ id: "FTX-ABCD", name: "Synthetic charge" }]}
+        fieldKeys={["allocations"]}
+        onOpenChange={vi.fn()}
+        onSubmit={onSubmit}
+        isPending={false}
+        searchProviderFor={purchaseSearchProviderFor}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    const additions = screen.getByRole("group", { name: "Allocations to add" });
+    fireEvent.click(
+      within(additions).getByRole("button", { name: /Add allocation/ }),
+    );
+    const purchase = within(additions).getByRole("combobox", {
+      name: "Purchase id",
+    });
+    purchase.focus();
+    fireEvent.keyDown(purchase, { key: "ArrowDown" });
+    fireEvent.change(purchase, { target: { value: "Synthetic" } });
+    fireEvent.click(
+      await screen.findByRole("option", { name: "Synthetic purchase" }),
+    );
+    fireEvent.change(within(additions).getByLabelText("Amount"), {
+      target: { value: "6" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Update" }));
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith({
+        allocations: [
+          { op: "add", key: { purchaseId: "PUR-ABCD" }, value: { amount: 6 } },
+        ],
+      }),
+    );
+  });
   it("submits list additions and removals as patches", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     render(

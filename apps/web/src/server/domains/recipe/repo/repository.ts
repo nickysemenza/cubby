@@ -60,6 +60,19 @@ export const recipeRepository = defineRepository("recipe", {
     });
     return { output, entityId };
   },
+  createRead: async (ctx, data, fields) => {
+    const result = await createRecipe.read(
+      fields,
+      ctx.db,
+      data,
+      ctx.actorContext,
+    );
+    await ctx.services.recipeCosting.dispatchRecompute([result.entityId], {
+      source: "recipe.create",
+      entity: { entityKind: "recipe", entityId: result.entityId },
+    });
+    return result;
+  },
   update: async (ctx, shortcode, data) => {
     const entityId = await recipeShortcodes.one(ctx.db, shortcode);
     const { recipe: output, detachedImageKeys } = await updateRecipe(
@@ -73,6 +86,21 @@ export const recipeRepository = defineRepository("recipe", {
       entity: { entityKind: "recipe", entityId },
     });
     return { output, entityId, detachedImageKeys };
+  },
+  updateRead: async (ctx, shortcode, data, fields) => {
+    const entityId = await recipeShortcodes.one(ctx.db, shortcode);
+    const result = await updateRecipe.read(
+      fields,
+      ctx.db,
+      entityId,
+      data,
+      ctx.actorContext,
+    );
+    await ctx.services.recipeCosting.dispatchRecompute([entityId], {
+      source: "recipe.update",
+      entity: { entityKind: "recipe", entityId },
+    });
+    return result;
   },
   delete: async (ctx, shortcodes) => {
     const ids = await recipeShortcodes.all(ctx.db, shortcodes);

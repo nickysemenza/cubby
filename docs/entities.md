@@ -621,6 +621,22 @@ replacement arrays and rename operations are refused. Each row retains its
 unrelated values, additions deduplicate, and removing an absent value is a no-op.
 Resolved values pass the normal update schema, including object refinements.
 
+Every top-level list receives this patch contract from its normal input schema,
+including structured arrays. A declared `collection.key` identifies record items:
+`{ op: "add", key: { purchaseId: "PUR-ABCD" }, value: { amount: 6 } }` adds one
+allocation; remove supplies only that key. Adding a held identity with different
+attributes is refused; remove then add expresses that change. Without a named
+record identity, the complete item value identifies it; generated UUIDs and
+opaque read identities are excluded from that comparison. Structured reads project
+through the normal input description, including nested `readFrom` references.
+`collection.readPath` declares an authoritative projection when the detail uses a
+different shape, such as Wish candidates. An unavailable collection read refuses
+the batch instead of treating it as empty.
+
+Every exposed field has a usable normal editor control. Only assignment mode
+companions are folded into their owning value controls; bulk rendering never
+silently omits a genuine update field.
+
 Execution is atomic across the selection (1–500 unique public IDs). Ordinary
 stored scalar columns use one set-based UPDATE when the normal writer's
 `updatePolicy.recordFields` dependencies permit it; reference resolution,
@@ -1245,7 +1261,12 @@ Extensions delegate to those services instead of branching inside the kernel.
 Summary `entity.commands` writes request reference-only mutation projections,
 without hydrating unreturned detail or coverage. Trusted operation receipts keep
 that summary; a later full replay reads the existing record without repeating
-the write. Field-scoped Sources reuse the mutation's authoritative snapshot,
+the write. Normal write bodies expose one final-output reader through
+`defineMutationWriter`; `asActor` preserves it and `defineRepository` derives
+projected create/update readers. A declared writer without that capability is
+refused when bindings load. Mandatory mutation snapshots and domain work run
+before the final reader; requesting a reference skips only response hydration.
+Field-scoped Sources reuse the mutation's authoritative snapshot,
 with the same JSON normalization, read paths and fingerprint algorithm as detail
 reads. Projected writes retain authoritative evidence separately from their
 response fields; the owning reader supplies a cited field absent from that snapshot.

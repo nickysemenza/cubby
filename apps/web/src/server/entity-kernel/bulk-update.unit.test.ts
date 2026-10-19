@@ -10,6 +10,16 @@ const parseCommand = <TInput>(command: TInput) =>
   entityCommandSchema.safeParse(command);
 
 describe("entity kernel bulkUpdate", () => {
+  it("rejects wholesale structured list replacement", () => {
+    expect(
+      parseCommand({
+        action: "bulkUpdate",
+        entity: "financialTransaction",
+        ids: [idFor("financialTransaction")],
+        data: { allocations: [] },
+      }).success,
+    ).toBe(false);
+  });
   it("accepts ordinary update fields on the derived bulk roster", () => {
     expect(
       parseCommand({

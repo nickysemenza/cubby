@@ -604,6 +604,7 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "cookbook" },
+        control: { kind: "specialized", renderer: "entity-select" },
         validation: {
           read: null,
           create: null,

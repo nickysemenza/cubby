@@ -849,6 +849,7 @@ Rules:
       },
       {
         key: "beneficiaries",
+        collection: { key: ["partyId"] },
         kind: "json",
         control: { kind: "specialized", renderer: "ledger-attributions" },
         provenance: {
@@ -873,6 +874,7 @@ Rules:
       },
       {
         key: "funders",
+        collection: { key: ["partyId"] },
         kind: "json",
         control: { kind: "specialized", renderer: "ledger-attributions" },
         provenance: {
@@ -897,6 +899,7 @@ Rules:
       },
       {
         key: "sourceClaims",
+        semanticRole: "externalIdentifier",
         kind: "json",
         control: {
           kind: "specialized",

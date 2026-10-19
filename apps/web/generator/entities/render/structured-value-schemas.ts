@@ -1,4 +1,5 @@
 import { drawsFromValueSchema } from "../../../../../packages/schemas/src/native-coverage.ts";
+import { collectionArraySchema } from "../../../../../packages/schemas/src/entity-collection.ts";
 import { generatedHeader } from "../../artifacts.ts";
 import type { CompiledEntity } from "../declarations.ts";
 import { renderRecord } from "./record.ts";
@@ -61,12 +62,20 @@ export const renderStructuredValueSchemas = (
     entities.flatMap((entity) =>
       entity.fieldModel.fields.flatMap((field) => {
         const id = `${entity.key}.${field.key}`;
-        const schema = valueSchemaForField(
+        const normalSchema = valueSchemaForField(
           entity.key,
           field,
           id,
           entityForPrefix,
         );
+        const collection = entity.bulkUpdateFields?.includes(field.key)
+          ? collectionArraySchema(
+              field.validation.create ?? field.validation.update,
+            )
+          : null;
+        const schema =
+          normalSchema ??
+          (collection ? valueSchemaOf(collection, id, entityForPrefix) : null);
         return schema === null ? [] : [[id, schema] as const];
       }),
     ),

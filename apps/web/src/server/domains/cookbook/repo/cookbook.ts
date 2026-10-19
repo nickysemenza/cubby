@@ -1,3 +1,4 @@
+import type { ActorContext } from "@cubby/schemas/context";
 /**
  * Cookbook repository.
  *
@@ -12,8 +13,6 @@
  * they are flagged `needsReextract` and cannot be imported from until the
  * EPUB is extracted again.
  */
-
-import type { ActorContext } from "@cubby/schemas/context";
 import {
   type CookbookExtraction,
   type CookbookRecipe,
@@ -76,6 +75,10 @@ import {
   upsertCookbookRecipeFromCookbook,
 } from "~/server/domains/recipe/repo/import-recipe-convert";
 import { withDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
+import {
+  type MutationReceipt,
+  defineMutationWriter,
+} from "~/server/entity-kernel/repo/repository";
 import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
 import {
   replaceSingularAttachment,
@@ -550,16 +553,30 @@ export const setCookbookProduct = async (
  * Rename a cookbook or edit its author/subject lists (`cookbook.update`);
  * the caller's transaction (the kernel's) rolls back on a refused title.
  */
-export const updateCookbook = async (
-  db: Database,
-  actor: ActorContext,
-  shortcode: CookbookShortcode,
-  data: CookbookUpdateInput,
-): Promise<{ output: CookbookSummary; entityId: CookbookId }> => {
-  const id = await resolveOrThrow(db, "cookbook", shortcode);
-  await cookbookCrud.update(db, id, data, actor);
-  return { output: await cookbookSummaryOrThrow(db, shortcode), entityId: id };
-};
+export const updateCookbook = defineMutationWriter({
+  entity: "cookbook",
+  read: async (
+    receipt: MutationReceipt<"cookbook">,
+    db: Database,
+    _actor: ActorContext,
+    shortcode: CookbookShortcode,
+    _data: CookbookUpdateInput,
+  ) => ({
+    output: await cookbookSummaryOrThrow(db, shortcode),
+    entityId: receipt.entityId,
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    actor: ActorContext,
+    shortcode: CookbookShortcode,
+    data: CookbookUpdateInput,
+  ) => {
+    const id = await resolveOrThrow(db, "cookbook", shortcode);
+    await cookbookCrud.update(db, id, data, actor, async () => undefined);
+    return readOutput({ entityId: id, shortcode });
+  },
+});
 
 /**
  * The stored book tree, parsed. A legacy flat array (pre-tree rows) is a

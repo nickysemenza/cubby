@@ -21,7 +21,6 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   DeleteExpensesWithPurchaseEffectsOut,
   ExpenseCreateInput,
-  ExpenseOut,
   ExpenseUpdateInput,
 } from "@cubby/schemas/project";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -62,7 +61,11 @@ import {
   classificationFieldsToClear,
 } from "~/server/domains/spending-category/repo/classification-field-policy";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
-import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
+import {
+  createEntityCrud,
+  defineMutationWriter,
+  type MutationReceipt,
+} from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import {
   computeChanges,
@@ -86,6 +89,7 @@ import { loadExpenseSpendingAllocations } from "./expense-spending-allocation";
 import {
   assertQuantitySignMatchesCost,
   dbExpenseToAPI,
+  expenseAuditChildren,
   type ExpenseRow,
 } from "./helpers";
 
@@ -409,559 +413,646 @@ const assertExpenseProductLink = (input: {
  * guard's TOCTOU window: a purchase soft-deleted between `assertPurchaseLive`
  * and the UPDATE can no longer be adopted.
  */
-export const updateExpense = async (
-  db: Database,
-  shortcode: ExpenseShortcode,
-  data: ExpenseUpdateData,
-  actor: ActorContext,
-): Promise<{
-  output: ExpenseOut;
-  entityId: ExpenseId;
-  priceAffectedProductIds: ProductId[];
-}> => {
-  const {
-    vendor: _vendor,
-    orderId: _orderId,
-    projectId,
-    productId,
-    purchaseId,
-    beneficiaries,
-    funders,
-    sourceClaims,
-    ...restColumns
-  } = data;
-
-  const needsResolve =
-    data.purchaseId === undefined &&
-    (data.vendor !== undefined || data.orderId !== undefined);
-
-  const priceCanChange = [
-    data.cost,
-    data.future,
-    data.productId,
-    data.productQuantity,
-    data.lineKind,
-    data.lineBasis,
-  ].some((value) => value !== undefined);
-  const qualityCanChange = [
-    data.cost,
-    data.future,
-    data.productId,
-    data.purchaseId,
-    data.lineKind,
-    data.lineBasis,
-  ].some((value) => value !== undefined);
-
-  const loadUpdateState = async (tx: DrizzleTransaction) => {
-    const id = await resolveOrThrow(tx, "expense", shortcode);
-    const [locked] = await tx
-      .select({ id: expense.id })
-      .from(expense)
-      .where(and(eq(expense.id, id), notDeleted(expense)))
-      .for("update")
-      .limit(1);
-    if (!locked) {
-      throw createAppError(
-        "EXPENSE_NOT_FOUND",
-        `Expense not found: ${shortcode}`,
-      );
-    }
-    const nestedChanged =
-      beneficiaries !== undefined ||
-      funders !== undefined ||
-      sourceClaims !== undefined;
-    const nestedBefore = nestedChanged
-      ? await getExpenseByID(tx, id)
-      : undefined;
-    const qualityBefore = await tx.query.expense.findFirst({
-      where: and(eq(expense.id, id), notDeleted(expense)),
-      extras: expenseInheritanceReadExtras(),
-      columns: {
-        cost: true,
-        date: true,
-        productId: true,
-        productQuantity: true,
-        purchaseId: true,
-        lineKind: true,
-        lineBasis: true,
-        projectId: true,
-        spendingCategoryId: true,
-        trade: true,
-      },
-    });
-    const nextCost =
-      data.cost === undefined ? (qualityBefore?.cost ?? null) : data.cost;
-    assertExpenseDate(
-      nextCost,
-      data.date === undefined ? (qualityBefore?.date ?? null) : data.date,
-    );
-    await assertExplicitSourceClaimsForAmountChange(
-      tx,
-      { expenseId: id },
-      qualityBefore?.cost ?? null,
-      nextCost,
-      sourceClaims,
-    );
-    return { id, nestedBefore, qualityBefore, nextCost };
-  };
-
-  type UpdateState = Awaited<ReturnType<typeof loadUpdateState>>;
-
-  const clearReclassifiedFields = (
-    previous: UpdateState["qualityBefore"],
-    update: ResolvedExpenseUpdate,
-  ) => {
-    for (const field of classificationFieldsToClear(
-      "expense",
-      previous ?? {},
-      update,
-    )) {
-      Object.assign(update, { [field]: null });
-    }
-  };
-
-  const normalizeAndAssertUpdateProductLink = (
-    state: UpdateState,
-    update: ResolvedExpenseUpdate,
-  ) => {
-    const previous = state.qualityBefore;
-    clearReclassifiedFields(previous, update);
-    if (update.productId === null && update.productQuantity === undefined) {
-      update.productQuantity = null;
-    }
-    const resultingProductId =
-      update.productId === undefined
-        ? (previous?.productId ?? null)
-        : update.productId;
-    assertExpenseProductLink({
-      productId: resultingProductId,
-      lineKind: update.lineKind ?? previous?.lineKind ?? "principal",
-      lineBasis: update.lineBasis ?? previous?.lineBasis ?? "item_line",
-      productQuantity:
-        update.productQuantity === undefined
-          ? (previous?.productQuantity ?? null)
-          : update.productQuantity,
-      cost: state.nextCost,
-    });
-  };
-
-  const validateUpdateState = async (
-    tx: DrizzleTransaction,
-    state: UpdateState,
-    update: ResolvedExpenseUpdate,
-    resultingPurchaseId: PurchaseId | null,
-  ) => {
-    const previous = state.qualityBefore;
-    normalizeAndAssertUpdateProductLink(state, update);
-    // Detaching a source preserves its effective attribution unless the same
-    // edit explicitly replaces or resets that assignment.
-    if (
-      previous?.purchaseId &&
-      resultingPurchaseId === null &&
-      (update.lineKind ?? previous.lineKind) === "principal"
-    ) {
-      if (update.projectId === undefined)
-        update.projectId = previous.effectiveProjectId;
-      if (update.trade === undefined) update.trade = previous.effectiveTrade;
-    }
-    return validateExpenseInheritance(tx, {
-      lineKind: update.lineKind ?? state.qualityBefore?.lineKind ?? "principal",
-      projectId:
-        update.projectId === undefined
-          ? (state.qualityBefore?.projectId ?? null)
-          : update.projectId,
-      productId:
-        update.productId === undefined
-          ? (state.qualityBefore?.productId ?? null)
-          : update.productId,
-      purchaseId: resultingPurchaseId,
-      trade:
-        update.trade === undefined
-          ? (state.qualityBefore?.trade ?? null)
-          : update.trade,
-    });
-  };
-
-  const resolveUpdateColumns = async (
-    tx: DrizzleTransaction,
-    state: UpdateState,
-  ) => {
-    const resolvedProjectId = await resolveOptionalProjectId(tx, projectId);
-    const resolvedProductId = await resolveOptionalProductId(tx, productId);
-    const explicitPurchaseId = await resolveOptionalPurchaseId(tx, purchaseId);
-    const update: ResolvedExpenseUpdate = {
-      ...restColumns,
-      spendingCategoryId:
-        data.spendingCategoryId === undefined
-          ? undefined
-          : data.spendingCategoryId === null
-            ? null
-            : await resolveOrThrow(
-                tx,
-                "spendingCategory",
-                data.spendingCategoryId,
-              ),
-    };
-    if (resolvedProductId === null && data.productQuantity === undefined) {
-      update.productQuantity = null;
-    }
-    if (resolvedProjectId !== undefined) update.projectId = resolvedProjectId;
-    if (resolvedProductId !== undefined) update.productId = resolvedProductId;
-    normalizeAndAssertUpdateProductLink(state, update);
-    const resultingProductId =
-      update.productId === undefined
-        ? (state.qualityBefore?.productId ?? null)
-        : update.productId;
-    return {
-      explicitPurchaseId,
-      resolvedProductId,
-      resultingProductId,
-      update,
-    };
-  };
-
-  const applyNestedChanges = async (
-    tx: DrizzleTransaction,
-    state: UpdateState,
-  ) => {
-    if (beneficiaries !== undefined) {
-      await replaceExpenseAttributionRole(
-        tx,
-        state.id,
-        "beneficiary",
-        beneficiaries ?? [],
-      );
-    }
-    if (funders !== undefined) {
-      await replaceExpenseAttributionRole(
-        tx,
-        state.id,
-        "funder",
-        funders ?? [],
-      );
-    }
-    if (sourceClaims !== undefined) {
-      await replaceLedgerSourceClaims(
-        tx,
-        { expenseId: state.id, targetAmount: state.nextCost },
-        sourceClaims ?? [],
-      );
-    }
-  };
-
-  const auditNestedChanges = async (
-    tx: DrizzleTransaction,
-    state: UpdateState,
-    output: ExpenseOut,
-  ) => {
-    if (!state.nestedBefore) return;
-    const changes = computeChanges(state.nestedBefore, output, [
-      "beneficiaries",
-      "funders",
-      "sourceClaims",
-    ]);
-    if (changes) {
-      await logAuditEntry(tx, actor, {
-        entityKind: "expense",
-        entityId: state.id,
-        action: "update",
-        changes,
-      });
-    }
-  };
-
-  const currentCharge = async (tx: DrizzleTransaction, state: UpdateState) => {
-    const existing = await tx.query.expense.findFirst({
-      where: and(eq(expense.id, state.id), notDeleted(expense)),
-      columns: { purchaseId: true, date: true },
-      with: {
-        purchase: {
-          columns: { id: true, orderId: true, deletedAt: true },
-          with: { vendor: { columns: { name: true, deletedAt: true } } },
+const readNestedExpenseAudit = async (
+  db: Database | DrizzleTransaction,
+  id: ExpenseId,
+) => {
+  const row = await unwrapDb(db).query.expense.findFirst({
+    where: and(eq(expense.id, id), notDeleted(expense)),
+    columns: { id: true },
+    with: {
+      attributions: {
+        with: {
+          ledgerParty: { columns: { shortcode: true, deletedAt: true } },
         },
       },
-    });
-    const live =
-      existing?.purchase?.deletedAt === null ? existing.purchase : undefined;
-    const lineCount = live
-      ? ((
-          await tx
-            .select({ n: sql<number>`count(*)::int` })
-            .from(expense)
-            .where(and(eq(expense.purchaseId, live.id), notDeleted(expense)))
-        )[0]?.n ?? 0)
-      : 0;
-    return {
-      existing,
-      current: {
-        purchaseId: live ? (existing?.purchaseId ?? null) : null,
-        vendorName:
-          live?.vendor && live.vendor.deletedAt === null
-            ? live.vendor.name
-            : null,
-        orderId: live?.orderId ?? null,
-        lineCount,
-      },
-    };
-  };
+      sourceClaims: true,
+    },
+  });
+  if (!row)
+    throw createAppError("EXPENSE_NOT_FOUND", "Expense no longer exists");
+  return expenseAuditChildren(row);
+};
 
-  return withTransaction(db, async (tx) => {
-    const state = await loadUpdateState(tx);
+export const updateExpense = defineMutationWriter({
+  entity: "expense",
+  read: async (
+    receipt: MutationReceipt<"expense"> & {
+      priceAffectedProductIds: ProductId[];
+    },
+    db: Database,
+    _shortcode: ExpenseShortcode,
+    _data: ExpenseUpdateData,
+    _actor: ActorContext,
+  ) => ({
+    output: await getExpenseByID(db, receipt.entityId),
+    entityId: receipt.entityId,
+    priceAffectedProductIds: receipt.priceAffectedProductIds,
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    shortcode: ExpenseShortcode,
+    data: ExpenseUpdateData,
+    actor: ActorContext,
+  ) => {
     const {
-      explicitPurchaseId,
-      resolvedProductId,
-      resultingProductId,
-      update: rest,
-    } = await resolveUpdateColumns(tx, state);
+      vendor: _vendor,
+      orderId: _orderId,
+      projectId,
+      productId,
+      purchaseId,
+      beneficiaries,
+      funders,
+      sourceClaims,
+      ...restColumns
+    } = data;
 
-    const priceCandidates = priceCanChange
-      ? pricingProductIds([state.qualityBefore?.productId, resultingProductId])
-      : [];
-    const pricesBefore = await loadEffectiveProductPricesById(
-      tx,
-      priceCandidates,
-    );
+    const needsResolve =
+      data.purchaseId === undefined &&
+      (data.vendor !== undefined || data.orderId !== undefined);
 
-    if (!needsResolve) {
-      await applyNestedChanges(tx, state);
-      const update = { ...rest };
-      if (explicitPurchaseId !== undefined) {
-        update.purchaseId = explicitPurchaseId;
+    const priceCanChange = [
+      data.cost,
+      data.future,
+      data.productId,
+      data.productQuantity,
+      data.lineKind,
+      data.lineBasis,
+    ].some((value) => value !== undefined);
+    const qualityCanChange = [
+      data.cost,
+      data.future,
+      data.productId,
+      data.purchaseId,
+      data.lineKind,
+      data.lineBasis,
+    ].some((value) => value !== undefined);
+
+    const loadUpdateState = async (tx: DrizzleTransaction) => {
+      const id = await resolveOrThrow(tx, "expense", shortcode);
+      const [locked] = await tx
+        .select({ id: expense.id })
+        .from(expense)
+        .where(and(eq(expense.id, id), notDeleted(expense)))
+        .for("update")
+        .limit(1);
+      if (!locked) {
+        throw createAppError(
+          "EXPENSE_NOT_FOUND",
+          `Expense not found: ${shortcode}`,
+        );
       }
+      const nestedChanged =
+        beneficiaries !== undefined ||
+        funders !== undefined ||
+        sourceClaims !== undefined;
+      const nestedBefore = nestedChanged
+        ? await readNestedExpenseAudit(tx, id)
+        : undefined;
+      const qualityBefore = await tx.query.expense.findFirst({
+        where: and(eq(expense.id, id), notDeleted(expense)),
+        extras: expenseInheritanceReadExtras(),
+        columns: {
+          cost: true,
+          date: true,
+          productId: true,
+          productQuantity: true,
+          purchaseId: true,
+          lineKind: true,
+          lineBasis: true,
+          projectId: true,
+          spendingCategoryId: true,
+          trade: true,
+        },
+      });
+      const nextCost =
+        data.cost === undefined ? (qualityBefore?.cost ?? null) : data.cost;
+      assertExpenseDate(
+        nextCost,
+        data.date === undefined ? (qualityBefore?.date ?? null) : data.date,
+      );
+      await assertExplicitSourceClaimsForAmountChange(
+        tx,
+        { expenseId: id },
+        qualityBefore?.cost ?? null,
+        nextCost,
+        sourceClaims,
+      );
+      return { id, nestedBefore, qualityBefore, nextCost };
+    };
+
+    type UpdateState = Awaited<ReturnType<typeof loadUpdateState>>;
+
+    const clearReclassifiedFields = (
+      previous: UpdateState["qualityBefore"],
+      update: ResolvedExpenseUpdate,
+    ) => {
+      for (const field of classificationFieldsToClear(
+        "expense",
+        previous ?? {},
+        update,
+      )) {
+        Object.assign(update, { [field]: null });
+      }
+    };
+
+    const normalizeAndAssertUpdateProductLink = (
+      state: UpdateState,
+      update: ResolvedExpenseUpdate,
+    ) => {
+      const previous = state.qualityBefore;
+      clearReclassifiedFields(previous, update);
+      if (update.productId === null && update.productQuantity === undefined) {
+        update.productQuantity = null;
+      }
+      const resultingProductId =
+        update.productId === undefined
+          ? (previous?.productId ?? null)
+          : update.productId;
+      assertExpenseProductLink({
+        productId: resultingProductId,
+        lineKind: update.lineKind ?? previous?.lineKind ?? "principal",
+        lineBasis: update.lineBasis ?? previous?.lineBasis ?? "item_line",
+        productQuantity:
+          update.productQuantity === undefined
+            ? (previous?.productQuantity ?? null)
+            : update.productQuantity,
+        cost: state.nextCost,
+      });
+    };
+
+    const validateUpdateState = async (
+      tx: DrizzleTransaction,
+      state: UpdateState,
+      update: ResolvedExpenseUpdate,
+      resultingPurchaseId: PurchaseId | null,
+    ) => {
+      const previous = state.qualityBefore;
+      normalizeAndAssertUpdateProductLink(state, update);
+      // Detaching a source preserves its effective attribution unless the same
+      // edit explicitly replaces or resets that assignment.
+      if (
+        previous?.purchaseId &&
+        resultingPurchaseId === null &&
+        (update.lineKind ?? previous.lineKind) === "principal"
+      ) {
+        if (update.projectId === undefined)
+          update.projectId = previous.effectiveProjectId;
+        if (update.trade === undefined) update.trade = previous.effectiveTrade;
+      }
+      return validateExpenseInheritance(tx, {
+        lineKind:
+          update.lineKind ?? state.qualityBefore?.lineKind ?? "principal",
+        projectId:
+          update.projectId === undefined
+            ? (state.qualityBefore?.projectId ?? null)
+            : update.projectId,
+        productId:
+          update.productId === undefined
+            ? (state.qualityBefore?.productId ?? null)
+            : update.productId,
+        purchaseId: resultingPurchaseId,
+        trade:
+          update.trade === undefined
+            ? (state.qualityBefore?.trade ?? null)
+            : update.trade,
+      });
+    };
+
+    const resolveUpdateColumns = async (
+      tx: DrizzleTransaction,
+      state: UpdateState,
+    ) => {
+      const resolvedProjectId = await resolveOptionalProjectId(tx, projectId);
+      const resolvedProductId = await resolveOptionalProductId(tx, productId);
+      const explicitPurchaseId = await resolveOptionalPurchaseId(
+        tx,
+        purchaseId,
+      );
+      const update: ResolvedExpenseUpdate = {
+        ...restColumns,
+        spendingCategoryId:
+          data.spendingCategoryId === undefined
+            ? undefined
+            : data.spendingCategoryId === null
+              ? null
+              : await resolveOrThrow(
+                  tx,
+                  "spendingCategory",
+                  data.spendingCategoryId,
+                ),
+      };
+      if (resolvedProductId === null && data.productQuantity === undefined) {
+        update.productQuantity = null;
+      }
+      if (resolvedProjectId !== undefined) update.projectId = resolvedProjectId;
+      if (resolvedProductId !== undefined) update.productId = resolvedProductId;
+      normalizeAndAssertUpdateProductLink(state, update);
+      const resultingProductId =
+        update.productId === undefined
+          ? (state.qualityBefore?.productId ?? null)
+          : update.productId;
+      return {
+        explicitPurchaseId,
+        resolvedProductId,
+        resultingProductId,
+        update,
+      };
+    };
+
+    const applyNestedChanges = async (
+      tx: DrizzleTransaction,
+      state: UpdateState,
+    ) => {
+      if (beneficiaries !== undefined) {
+        await replaceExpenseAttributionRole(
+          tx,
+          state.id,
+          "beneficiary",
+          beneficiaries ?? [],
+        );
+      }
+      if (funders !== undefined) {
+        await replaceExpenseAttributionRole(
+          tx,
+          state.id,
+          "funder",
+          funders ?? [],
+        );
+      }
+      if (sourceClaims !== undefined) {
+        await replaceLedgerSourceClaims(
+          tx,
+          { expenseId: state.id, targetAmount: state.nextCost },
+          sourceClaims ?? [],
+        );
+      }
+    };
+
+    const auditNestedChanges = async (
+      tx: DrizzleTransaction,
+      state: UpdateState,
+      output: ReturnType<typeof expenseAuditChildren>,
+    ) => {
+      if (!state.nestedBefore) return;
+      const changes = computeChanges(state.nestedBefore, output, [
+        "beneficiaries",
+        "funders",
+        "sourceClaims",
+      ]);
+      if (changes) {
+        await logAuditEntry(tx, actor, {
+          entityKind: "expense",
+          entityId: state.id,
+          action: "update",
+          changes,
+        });
+      }
+    };
+
+    const currentCharge = async (
+      tx: DrizzleTransaction,
+      state: UpdateState,
+    ) => {
+      const existing = await tx.query.expense.findFirst({
+        where: and(eq(expense.id, state.id), notDeleted(expense)),
+        columns: { purchaseId: true, date: true },
+        with: {
+          purchase: {
+            columns: { id: true, orderId: true, deletedAt: true },
+            with: { vendor: { columns: { name: true, deletedAt: true } } },
+          },
+        },
+      });
+      const live =
+        existing?.purchase?.deletedAt === null ? existing.purchase : undefined;
+      const lineCount = live
+        ? ((
+            await tx
+              .select({ n: sql<number>`count(*)::int` })
+              .from(expense)
+              .where(and(eq(expense.purchaseId, live.id), notDeleted(expense)))
+          )[0]?.n ?? 0)
+        : 0;
+      return {
+        existing,
+        current: {
+          purchaseId: live ? (existing?.purchaseId ?? null) : null,
+          vendorName:
+            live?.vendor && live.vendor.deletedAt === null
+              ? live.vendor.name
+              : null,
+          orderId: live?.orderId ?? null,
+          lineCount,
+        },
+      };
+    };
+
+    return withTransaction(db, async (tx) => {
+      const state = await loadUpdateState(tx);
+      const {
+        explicitPurchaseId,
+        resolvedProductId,
+        resultingProductId,
+        update: rest,
+      } = await resolveUpdateColumns(tx, state);
+
+      const priceCandidates = priceCanChange
+        ? pricingProductIds([
+            state.qualityBefore?.productId,
+            resultingProductId,
+          ])
+        : [];
+      const pricesBefore = await loadEffectiveProductPricesById(
+        tx,
+        priceCandidates,
+      );
+
+      if (!needsResolve) {
+        await applyNestedChanges(tx, state);
+        const update = { ...rest };
+        if (explicitPurchaseId !== undefined) {
+          update.purchaseId = explicitPurchaseId;
+        }
+        await validateUpdateState(
+          tx,
+          state,
+          update,
+          explicitPurchaseId === undefined
+            ? (state.qualityBefore?.purchaseId ?? null)
+            : explicitPurchaseId,
+        );
+        const receipt = await expenseCrud.update(
+          tx,
+          state.id,
+          update,
+          actor,
+          async (_db, receipt) => receipt,
+        );
+        // A Product or category change can put a Product where its spending
+        // category forbids one.
+        await validateProductPolicy(tx, { expenseIds: [state.id] });
+        if (state.nestedBefore)
+          await auditNestedChanges(
+            tx,
+            state,
+            await readNestedExpenseAudit(tx, state.id),
+          );
+        if (qualityCanChange) {
+          await touchUpdatedAt(
+            tx,
+            product,
+            [state.qualityBefore?.productId, resolvedProductId].filter(
+              (value) => value != null,
+            ),
+          );
+          await touchUpdatedAt(
+            tx,
+            purchase,
+            [state.qualityBefore?.purchaseId, explicitPurchaseId].filter(
+              (value) => value != null,
+            ),
+          );
+        }
+        const priceAffectedProductIds = await syncChangedEffectivePrices(
+          tx,
+          pricesBefore,
+        );
+        return readOutput(
+          { ...receipt, priceAffectedProductIds },
+          async () => ({
+            output: await getExpenseByID(tx, state.id),
+            entityId: state.id,
+            priceAffectedProductIds,
+          }),
+        );
+      }
+
+      // Count and charge metadata are read on `tx`; using the outer handle would
+      // miss this transaction's writes and race the reassignment decision.
+      const { existing, current } = await currentCharge(tx, state);
+      const resolved = await resolveCharge(
+        tx,
+        actor,
+        {
+          ...data,
+          date: data.date === undefined ? existing?.date : data.date,
+        },
+        current,
+      );
+
+      await applyNestedChanges(tx, state);
+
+      const update = { ...rest };
+      if (resolved !== undefined) update.purchaseId = resolved;
       await validateUpdateState(
         tx,
         state,
         update,
-        explicitPurchaseId === undefined
+        resolved === undefined
           ? (state.qualityBefore?.purchaseId ?? null)
-          : explicitPurchaseId,
+          : resolved,
       );
-      const output = await expenseCrud.update(tx, state.id, update, actor);
+      const receipt = await expenseCrud.update(
+        tx,
+        state.id,
+        update,
+        actor,
+        async (_db, receipt) => receipt,
+      );
       // A Product or category change can put a Product where its spending
-      // category forbids one.
-      await validateProductPolicy(tx, { expenseIds: [state.id] });
-      await auditNestedChanges(tx, state, output);
-      if (qualityCanChange) {
-        await touchUpdatedAt(
+      // category forbids one; a folded superseded charge can reclassify the
+      // target Purchase's other lines, so check it whole once this line lands.
+      await validateProductPolicy(
+        tx,
+        resolved ? { purchaseId: resolved } : { expenseIds: [state.id] },
+      );
+      if (state.nestedBefore)
+        await auditNestedChanges(
           tx,
-          product,
-          [state.qualityBefore?.productId, resolvedProductId].filter(
-            (value) => value != null,
-          ),
+          state,
+          await readNestedExpenseAudit(tx, state.id),
         );
-        await touchUpdatedAt(
-          tx,
-          purchase,
-          [state.qualityBefore?.purchaseId, explicitPurchaseId].filter(
-            (value) => value != null,
-          ),
+      await touchUpdatedAt(
+        tx,
+        product,
+        [state.qualityBefore?.productId, resolvedProductId].filter(
+          (value) => value != null,
+        ),
+      );
+      await touchUpdatedAt(
+        tx,
+        purchase,
+        [state.qualityBefore?.purchaseId, resolved].filter(
+          (value) => value != null,
+        ),
+      );
+      const priceAffectedProductIds = await syncChangedEffectivePrices(
+        tx,
+        pricesBefore,
+      );
+      return readOutput({ ...receipt, priceAffectedProductIds }, async () => ({
+        output: await getExpenseByID(tx, state.id),
+        entityId: state.id,
+        priceAffectedProductIds,
+      }));
+    });
+  },
+});
+
+export const createExpense = defineMutationWriter({
+  entity: "expense",
+  read: async (
+    receipt: MutationReceipt<"expense"> & {
+      priceAffectedProductIds: ProductId[];
+    },
+    db: Database,
+    _data: ExpenseCreateInput,
+    _actor: ActorContext,
+    _classifyLineRole?: ExpenseLineRoleClassifier,
+  ) => ({
+    output: await getExpenseByID(db, receipt.entityId),
+    entityId: receipt.entityId,
+    priceAffectedProductIds: receipt.priceAffectedProductIds,
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    data: ExpenseCreateInput,
+    actor: ActorContext,
+    classifyLineRole?: ExpenseLineRoleClassifier,
+  ) => {
+    const preflightProductId = data.productId
+      ? await resolveOrThrow(db, "product", data.productId)
+      : null;
+    const lineKind =
+      data.lineKind !== undefined || preflightProductId
+        ? resolveExpenseLineKind({
+            lineKind: data.lineKind,
+            productId: preflightProductId,
+          })
+        : await requireLineRoleClassifier(classifyLineRole)(db, actor, data);
+    const result = await withTransaction(db, async (tx) => {
+      // Same transaction as the insert: a vendor or charge created here must not
+      // outlive a failed expense write.
+      // A caller-supplied `purchaseId` skips `resolveCharge` entirely, so this is
+      // the only place it gets checked for liveness — resolving THROUGH
+      // `resolveLivePurchaseId` (live-only) folds in what `assertPurchaseLive`
+      // used to check separately (an FK proves the row exists, not that it
+      // isn't tombstoned).
+      const explicitPurchaseId = data.purchaseId
+        ? await resolveLivePurchaseId(tx, data.purchaseId)
+        : null;
+      const purchaseId =
+        explicitPurchaseId ?? (await resolveCharge(tx, actor, data)) ?? null;
+
+      const explicitProjectId = data.projectId
+        ? await resolveLiveProjectId(tx, data.projectId)
+        : null;
+      const productId = data.productId
+        ? await resolveLiveProductId(tx, data.productId)
+        : null;
+      const projectId = explicitProjectId;
+      if (productId !== preflightProductId) {
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "Expense Product changed while its receipt role was being resolved.",
         );
       }
+      assertClassificationPolicies("expense", {
+        lineKind,
+        lineBasis: data.lineBasis ?? "item_line",
+        productId,
+        spendingCategoryId: data.spendingCategoryId ?? null,
+        projectId,
+      });
+      if (data.productQuantity !== null && productId === null) {
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "Product quantity requires a linked product.",
+        );
+      }
+      assertExpenseDate(data.cost, data.date);
+      assertQuantitySignMatchesCost(data.cost, data.productQuantity);
+      await validateExpenseInheritance(tx, {
+        lineKind,
+        projectId,
+        productId,
+        purchaseId,
+        trade: data.trade,
+      });
+      const pricesBefore = await loadEffectiveProductPricesById(
+        tx,
+        pricingProductIds([productId]),
+      );
+
+      const created = await insertWithShortcode(tx, "expense", {
+        spendingCategoryId: data.spendingCategoryId
+          ? await resolveOrThrow(
+              tx,
+              "spendingCategory",
+              data.spendingCategoryId,
+            )
+          : null,
+        economicRole: data.economicRole,
+        name: data.name,
+        cost: data.cost,
+        date: data.date,
+        lineKind,
+        lineBasis: data.lineBasis,
+        costType: data.costType,
+        trade: data.trade,
+        url: data.url,
+        notes: data.notes,
+        future: data.future,
+        projectId,
+        productId,
+        productQuantity: data.productQuantity,
+        purchaseId,
+      });
+      await replaceExpenseAttributionRole(
+        tx,
+        created.id,
+        "beneficiary",
+        data.beneficiaries ?? [],
+      );
+      await replaceExpenseAttributionRole(
+        tx,
+        created.id,
+        "funder",
+        data.funders ?? [],
+      );
+      await replaceLedgerSourceClaims(
+        tx,
+        {
+          expenseId: created.id,
+          targetAmount: data.cost,
+        },
+        data.sourceClaims ?? [],
+      );
+      await logAuditEntry(tx, actor, {
+        entityKind: "expense",
+        entityId: created.id,
+        action: "create",
+      });
+      await validateProductPolicy(tx, { expenseIds: [created.id] });
+      await touchUpdatedAt(tx, product, productId ? [productId] : []);
+      await touchUpdatedAt(tx, purchase, purchaseId ? [purchaseId] : []);
       return {
-        output,
-        entityId: state.id,
+        id: created.id,
         priceAffectedProductIds: await syncChangedEffectivePrices(
           tx,
           pricesBefore,
         ),
       };
-    }
-
-    // Count and charge metadata are read on `tx`; using the outer handle would
-    // miss this transaction's writes and race the reassignment decision.
-    const { existing, current } = await currentCharge(tx, state);
-    const resolved = await resolveCharge(
-      tx,
-      actor,
-      {
-        ...data,
-        date: data.date === undefined ? existing?.date : data.date,
-      },
-      current,
-    );
-
-    await applyNestedChanges(tx, state);
-
-    const update = { ...rest };
-    if (resolved !== undefined) update.purchaseId = resolved;
-    await validateUpdateState(
-      tx,
-      state,
-      update,
-      resolved === undefined
-        ? (state.qualityBefore?.purchaseId ?? null)
-        : resolved,
-    );
-    const output = await expenseCrud.update(tx, state.id, update, actor);
-    // A Product or category change can put a Product where its spending
-    // category forbids one; a folded superseded charge can reclassify the
-    // target Purchase's other lines, so check it whole once this line lands.
-    await validateProductPolicy(
-      tx,
-      resolved ? { purchaseId: resolved } : { expenseIds: [state.id] },
-    );
-    await auditNestedChanges(tx, state, output);
-    await touchUpdatedAt(
-      tx,
-      product,
-      [state.qualityBefore?.productId, resolvedProductId].filter(
-        (value) => value != null,
-      ),
-    );
-    await touchUpdatedAt(
-      tx,
-      purchase,
-      [state.qualityBefore?.purchaseId, resolved].filter(
-        (value) => value != null,
-      ),
-    );
-    return {
-      output,
-      entityId: state.id,
-      priceAffectedProductIds: await syncChangedEffectivePrices(
-        tx,
-        pricesBefore,
-      ),
-    };
-  });
-};
-
-export const createExpense = async (
-  db: Database,
-  data: ExpenseCreateInput,
-  actor: ActorContext,
-  classifyLineRole?: ExpenseLineRoleClassifier,
-): Promise<{
-  output: ExpenseOut;
-  entityId: ExpenseId;
-  priceAffectedProductIds: ProductId[];
-}> => {
-  const preflightProductId = data.productId
-    ? await resolveOrThrow(db, "product", data.productId)
-    : null;
-  const lineKind =
-    data.lineKind !== undefined || preflightProductId
-      ? resolveExpenseLineKind({
-          lineKind: data.lineKind,
-          productId: preflightProductId,
-        })
-      : await requireLineRoleClassifier(classifyLineRole)(db, actor, data);
-  const result = await withTransaction(db, async (tx) => {
-    // Same transaction as the insert: a vendor or charge created here must not
-    // outlive a failed expense write.
-    // A caller-supplied `purchaseId` skips `resolveCharge` entirely, so this is
-    // the only place it gets checked for liveness — resolving THROUGH
-    // `resolveLivePurchaseId` (live-only) folds in what `assertPurchaseLive`
-    // used to check separately (an FK proves the row exists, not that it
-    // isn't tombstoned).
-    const explicitPurchaseId = data.purchaseId
-      ? await resolveLivePurchaseId(tx, data.purchaseId)
-      : null;
-    const purchaseId =
-      explicitPurchaseId ?? (await resolveCharge(tx, actor, data)) ?? null;
-
-    const explicitProjectId = data.projectId
-      ? await resolveLiveProjectId(tx, data.projectId)
-      : null;
-    const productId = data.productId
-      ? await resolveLiveProductId(tx, data.productId)
-      : null;
-    const projectId = explicitProjectId;
-    if (productId !== preflightProductId) {
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "Expense Product changed while its receipt role was being resolved.",
-      );
-    }
-    assertClassificationPolicies("expense", {
-      lineKind,
-      lineBasis: data.lineBasis ?? "item_line",
-      productId,
-      spendingCategoryId: data.spendingCategoryId ?? null,
-      projectId,
     });
-    if (data.productQuantity !== null && productId === null) {
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "Product quantity requires a linked product.",
-      );
-    }
-    assertExpenseDate(data.cost, data.date);
-    assertQuantitySignMatchesCost(data.cost, data.productQuantity);
-    await validateExpenseInheritance(tx, {
-      lineKind,
-      projectId,
-      productId,
-      purchaseId,
-      trade: data.trade,
+    return readOutput({
+      entityId: result.id,
+      priceAffectedProductIds: result.priceAffectedProductIds,
     });
-    const pricesBefore = await loadEffectiveProductPricesById(
-      tx,
-      pricingProductIds([productId]),
-    );
-
-    const created = await insertWithShortcode(tx, "expense", {
-      spendingCategoryId: data.spendingCategoryId
-        ? await resolveOrThrow(tx, "spendingCategory", data.spendingCategoryId)
-        : null,
-      economicRole: data.economicRole,
-      name: data.name,
-      cost: data.cost,
-      date: data.date,
-      lineKind,
-      lineBasis: data.lineBasis,
-      costType: data.costType,
-      trade: data.trade,
-      url: data.url,
-      notes: data.notes,
-      future: data.future,
-      projectId,
-      productId,
-      productQuantity: data.productQuantity,
-      purchaseId,
-    });
-    await replaceExpenseAttributionRole(
-      tx,
-      created.id,
-      "beneficiary",
-      data.beneficiaries ?? [],
-    );
-    await replaceExpenseAttributionRole(
-      tx,
-      created.id,
-      "funder",
-      data.funders ?? [],
-    );
-    await replaceLedgerSourceClaims(
-      tx,
-      {
-        expenseId: created.id,
-        targetAmount: data.cost,
-      },
-      data.sourceClaims ?? [],
-    );
-    await logAuditEntry(tx, actor, {
-      entityKind: "expense",
-      entityId: created.id,
-      action: "create",
-    });
-    await validateProductPolicy(tx, { expenseIds: [created.id] });
-    await touchUpdatedAt(tx, product, productId ? [productId] : []);
-    await touchUpdatedAt(tx, purchase, purchaseId ? [purchaseId] : []);
-    return {
-      id: created.id,
-      priceAffectedProductIds: await syncChangedEffectivePrices(
-        tx,
-        pricesBefore,
-      ),
-    };
-  });
-  return {
-    output: await getExpenseByID(db, result.id),
-    entityId: result.id,
-    priceAffectedProductIds: result.priceAffectedProductIds,
-  };
-};
+  },
+});
 
 export const deleteExpensesWithPurchaseEffects = async (
   db: Database,

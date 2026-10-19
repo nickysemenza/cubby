@@ -59,18 +59,20 @@ const caseOf = <
 const projectFields = (
   object: JsonObject,
   fields: readonly StructuredField[],
+  includeHidden: boolean,
 ) =>
   Object.fromEntries(
     fields.flatMap((field) => {
+      if (!includeHidden && !isDrawn(field.schema)) return [];
       const child = object[field.key];
       if (child !== undefined)
-        return [[field.key, project(child, field.schema)]];
+        return [[field.key, project(child, field.schema, { includeHidden })]];
       const found =
         field.readPath === undefined
           ? undefined
           : valueAt(field.readPath.split("."), object);
       if (found !== undefined && found !== null)
-        return [[field.key, project(found, field.schema)]];
+        return [[field.key, project(found, field.schema, { includeHidden })]];
       return field.required && "constant" in field.schema.node
         ? [[field.key, field.schema.node.constant.value]]
         : [];
@@ -83,7 +85,12 @@ const projectFields = (
  * an untouched row look edited. Hidden keys the schema declares (`id`, a claim's `sourceKey`) stay,
  * so an untouched row keeps its identity.
  */
-export function project(value: Json, schema: StructuredValueSchema): Json {
+export function project(
+  value: Json,
+  schema: StructuredValueSchema,
+  options: { includeHidden?: boolean } = {},
+): Json {
+  const includeHidden = options.includeHidden ?? true;
   const { node } = schema;
   if ("amount" in node) {
     const keys = node.amount.upper ? RANGE_AMOUNT_KEYS : AMOUNT_KEYS;
@@ -94,10 +101,12 @@ export function project(value: Json, schema: StructuredValueSchema): Json {
       : value;
   }
   if ("object" in node)
-    return isObject(value) ? projectFields(value, node.object.fields) : value;
+    return isObject(value)
+      ? projectFields(value, node.object.fields, includeHidden)
+      : value;
   if ("array" in node)
     return isList(value)
-      ? value.map((item) => project(item, node.array.item))
+      ? value.map((item) => project(item, node.array.item, options))
       : value;
   if ("map" in node) {
     if (!isObject(value)) return value;
@@ -105,7 +114,7 @@ export function project(value: Json, schema: StructuredValueSchema): Json {
     return Object.fromEntries(
       Object.entries(value)
         .filter(([key]) => allowed.has(key))
-        .map(([key, item]) => [key, project(item, node.map.value)]),
+        .map(([key, item]) => [key, project(item, node.map.value, options)]),
     );
   }
   if ("variant" in node) {
@@ -118,7 +127,7 @@ export function project(value: Json, schema: StructuredValueSchema): Json {
     return chosen === null
       ? value
       : {
-          ...projectFields(value, chosen.match.fields),
+          ...projectFields(value, chosen.match.fields, includeHidden),
           [node.variant.discriminator]: chosen.tag,
         };
   }

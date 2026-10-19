@@ -6,6 +6,7 @@ import {
 } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { canClearExpenseDate } from "@cubby/schemas/expense-fields";
+import type { StructuredValueSchema } from "@cubby/schemas/structured-value-schema";
 import { countLabel } from "@cubby/shared/pluralize";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
@@ -23,6 +24,8 @@ import {
 } from "~/entity/editing/entity-primitive-fields";
 import { fieldClearing } from "~/entity/editing/field-clearing";
 import { presentEntitySelectOptions } from "~/entity/editing/select-options";
+import { structuredSchemaFor } from "~/entity/editing/structured-schema";
+import { StructuredValueField } from "~/entity/editing/structured-value-field";
 import { entityLabel } from "~/entity/entities";
 import { bulkUpdateMutationOptionsFactory } from "~/entity/entity-contracts";
 import { PickerField } from "~/entity/forms/picker-field";
@@ -58,10 +61,47 @@ export const bulkEditEntities: readonly ShortcodeEntity[] =
 type BulkEditFieldValue = z.infer<ReturnType<typeof z.json>>;
 type BulkFieldMode = "unchanged" | "set" | "clear";
 
+const collectionIdentity = (
+  field: PrimitiveFieldModel,
+): "value" | readonly string[] | undefined =>
+  "collection" in field ? field.collection?.key : undefined;
 const isBulkCollection = (field: PrimitiveFieldModel | undefined) =>
   field !== undefined &&
-  (("collection" in field && field.collection?.key === "value") ||
+  (collectionIdentity(field) !== undefined ||
     field.reference?.multiple === true);
+
+const collectionRemoveSchema = (
+  schema: StructuredValueSchema,
+  identity: "value" | readonly string[] | undefined,
+): StructuredValueSchema => {
+  if (
+    identity === undefined ||
+    identity === "value" ||
+    !("array" in schema.node) ||
+    !("object" in schema.node.array.item.node)
+  )
+    return schema;
+  const item = schema.node.array.item;
+  return {
+    ...schema,
+    node: {
+      array: {
+        ...schema.node.array,
+        item: {
+          ...item,
+          node: {
+            object: {
+              ...schema.node.array.item.node.object,
+              fields: schema.node.array.item.node.object.fields.filter(
+                (field) => identity.includes(field.key),
+              ),
+            },
+          },
+        },
+      },
+    },
+  };
+};
 
 /** The submit payload: the derived bulk field roster keys the dirty subset. */
 export type BulkEditDraft = Record<string, BulkEditFieldValue>;
@@ -118,8 +158,28 @@ function BulkEditFields({
             `Bulk-edit field ${entity}.${key} is not declared on the entity's field model.`,
           );
         }
-        // Companion assignment modes are written by the value field controls.
-        if (!field.control) return null;
+        // Resolution controls write their mode fields alongside the visible value.
+        if (!field.control) {
+          const companion = model.fields.some(
+            (owner) =>
+              owner.key !== field.key &&
+              [
+                ...Object.keys(owner.resolution?.reset ?? {}),
+                ...Object.keys(owner.resolution?.none ?? {}),
+              ].includes(field.key),
+          );
+          if (companion) return null;
+          throw new Error(
+            `Bulk-edit field ${entity}.${key} has no normal editor control.`,
+          );
+        }
+        const structured = structuredSchemaFor(entity, key);
+        const structuredList =
+          structured &&
+          "array" in structured.node &&
+          !("text" in structured.node.array.item.node)
+            ? structured
+            : undefined;
         const clearing = fieldClearing(
           entity,
           field.key,
@@ -187,6 +247,26 @@ function BulkEditFields({
                           field.reference.entity,
                         )}
                       />
+                    ) : structuredList ? (
+                      <fieldset
+                        key={operation}
+                        aria-label={`${field.label} to ${operation}`}
+                      >
+                        <StructuredValueField
+                          form={form}
+                          name={`${key}.${operation}`}
+                          label={field.label}
+                          schema={
+                            operation === "add"
+                              ? structuredList
+                              : collectionRemoveSchema(
+                                  structuredList,
+                                  collectionIdentity(field),
+                                )
+                          }
+                          searchProviderFor={searchProviderFor}
+                        />
+                      </fieldset>
                     ) : (
                       <AliasesField
                         key={operation}
@@ -302,14 +382,9 @@ export function BulkEditDialogBody({
     ]);
     if (mode === "unchanged") {
       for (const key of companions) {
-        // Companion modes are programmatic writes, with no registered input
-        // for resetField to reset. Unregister removes their pending patch.
-        if (isBulkCollection(field)) form.unregister(key);
-        else if (
-          model.fields.find((candidate) => candidate.key === key)?.control
-        )
-          form.resetField(key);
-        else form.unregister(key);
+        // Bulk fields have no record defaults. Discard the pending assignment
+        // instead of resetting a Controller to an undefined default.
+        form.unregister(key);
       }
       setModes((current) =>
         Object.fromEntries(
@@ -353,13 +428,37 @@ export function BulkEditDialogBody({
       if (field && isBulkCollection(field)) {
         const patch = z
           .object({
-            add: z.array(z.string()).default([]),
-            remove: z.array(z.string()).default([]),
+            add: z.array(z.json()).default([]),
+            remove: z.array(z.json()).default([]),
           })
           .parse(value ?? {});
+        const identity = collectionIdentity(field);
+        const itemKey = (item: BulkEditFieldValue) =>
+          identity === undefined || identity === "value"
+            ? item
+            : Object.fromEntries(
+                Object.entries(
+                  z.record(z.string(), z.json()).parse(item),
+                ).filter(([key]) => identity.includes(key)),
+              );
         const items = [
-          ...patch.add.map((key) => ({ op: "add" as const, key })),
-          ...patch.remove.map((key) => ({ op: "remove" as const, key })),
+          ...patch.add.map((item): BulkEditFieldValue =>
+            identity === undefined || identity === "value"
+              ? { op: "add", key: item }
+              : {
+                  op: "add",
+                  key: itemKey(item),
+                  value: Object.fromEntries(
+                    Object.entries(
+                      z.record(z.string(), z.json()).parse(item),
+                    ).filter(([key]) => !identity.includes(key)),
+                  ),
+                },
+          ),
+          ...patch.remove.map((item) => ({
+            op: "remove" as const,
+            key: itemKey(item),
+          })),
         ];
         if (items.length === 0) {
           form.setError(key, {

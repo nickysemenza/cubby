@@ -33,6 +33,13 @@ export const imageRepository = defineRepository("image", {
     const entityId = await imageShortcodes.one(ctx.db, shortcode);
     return { output: await updateImage(ctx.db, entityId, data), entityId };
   },
+  updateRead: async (ctx, shortcode, data, fields) =>
+    updateImage.read(
+      fields,
+      ctx.db,
+      await imageShortcodes.one(ctx.db, shortcode),
+      data,
+    ),
   delete: async (ctx, shortcodes) => {
     const { deletedShortcodes, deletedKeys } = await deleteImages(
       ctx.db,
