@@ -267,4 +267,13 @@ struct EntityRowTests {
         let neither: JSONValue = ["id": "PRD-2345", "name": "Sample"]
         #expect(product.row(from: neither)?.subtitle == nil)
     }
+
+    /// A subtitle column declared at a nested `readPath` (financial account `identity.kind`) reads
+    /// that path and its `valueOptions` label, as the web row does.
+    @Test func subtitleReadsTheDeclaredPathAndOptionLabel() {
+        let account: JSONValue = [
+            "id": "FAC-2345", "name": "Sample card", "identity": ["kind": "stored_value"],
+        ]
+        #expect(EntityCatalog[.financialAccount].row(from: account)?.subtitle == "Gift card or store credit")
+    }
 }

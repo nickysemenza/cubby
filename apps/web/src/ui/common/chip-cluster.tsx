@@ -43,8 +43,13 @@ export function ChipCluster({
 }) {
   const ref = useRef<HTMLSpanElement>(null);
   const [width, setWidth] = useState(0);
-  // A new item list or width starts over from every chip.
-  const layoutKey = `${width}\u0000${items.map((item) => item.key).join("\u0000")}`;
+  // Anything that changes a chip's or the "+N" badge's width starts over from
+  // every chip: a renamed label under the same key, or a new `more` count.
+  const layoutKey = [
+    width,
+    more,
+    ...items.flatMap((item) => [item.key, item.label]),
+  ].join("\u0000");
   const all = Math.min(items.length, limit ?? items.length);
   const [fit, setFit] = useState({ key: layoutKey, shown: all });
   const shown = Math.min(fit.key === layoutKey ? fit.shown : all, all);

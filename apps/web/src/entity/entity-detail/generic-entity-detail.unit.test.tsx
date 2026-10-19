@@ -20,7 +20,7 @@ import {
   getEntityDetailOutputSchema,
 } from "~/entity/generated/entity-details.gen";
 import { inventoryListItem } from "~/entity/generated/entity-lists.gen";
-import { installFeatures, preloadFeatureFills } from "~/features/registry";
+import { installFeatures } from "~/features/registry";
 import {
   fieldExplanation,
   entityList,
@@ -35,8 +35,18 @@ import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 import { GenericEntityDetail } from "./generic-entity-detail";
 
 installFeatures();
-// Every declared section renders here; load their lazy fills before the tests.
-await preloadFeatureFills();
+// Every declared section renders here, so its lazy fills load at module top
+// level (no hook timeout there): a fill still importing when the file ended
+// timed out its `dynamicImportSettled` wait under load.
+await Promise.all(
+  Object.values(
+    import.meta.glob([
+      "~/features/**/*.tsx",
+      "!**/*.test.tsx",
+      "!**/*.preview.tsx",
+    ]),
+  ).map((load) => load()),
+);
 
 const genericDetailEntities: readonly GenericDetailEntity[] = [
   ...detailEntities,

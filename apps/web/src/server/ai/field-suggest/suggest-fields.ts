@@ -862,32 +862,6 @@ async function savedSuggestionContext(
 type SavedSuggestionContext = Awaited<
   ReturnType<typeof savedSuggestionContext>
 >;
-/** A Purchase fallback equal to a category its Expense lines already resolve
- * to, where every line that would take the fallback already has it, changes
- * nothing; it is withheld as a policy decline. */
-function repeatsLineCategory(
-  input: FieldSuggestionsInput,
-  target: string,
-  context: SavedSuggestionContext,
-  suggestion: FieldSuggestion | null,
-): boolean {
-  if (
-    input.entity !== "purchase" ||
-    target !== "spendingCategoryId" ||
-    !suggestion ||
-    !context ||
-    !("lineCategories" in context)
-  )
-    return false;
-  const value = String(suggestion.value);
-  return (
-    context.lineCategories.some((line) => line.value === value) &&
-    context.lineCategories.every(
-      (line) => !line.takesFallback || line.value === value,
-    )
-  );
-}
-
 function reviewedSuggestion(
   input: FieldSuggestionsInput,
   target: string,
@@ -1117,14 +1091,19 @@ export async function suggestFields(
         ports?.decisionModel,
         ports?.onTokenUsage,
       );
-      if (repeatsLineCategory(input, target, linkedContext, suggestion)) {
+      if (
+        suggestion &&
+        linkedContext &&
+        "declinesSuggestion" in linkedContext &&
+        linkedContext.declinesSuggestion(target, String(suggestion.value))
+      ) {
         suggestions[target] = null;
         outcomes[target] = {
           kind: "evaluated",
           answer: "none",
           confidence: "low",
           probability: null,
-          alternatives: suggestion!.alternatives,
+          alternatives: suggestion.alternatives,
         };
         resolvedRawByTarget.set(target, null);
         return;

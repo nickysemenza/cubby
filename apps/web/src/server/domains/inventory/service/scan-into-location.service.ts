@@ -27,7 +27,7 @@ import type { UpcLookupPort } from "~/server/clients/upc";
 import type { UsdaFoodLookupPort } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import { moveInventoryEntries } from "~/server/domains/inventory/repo/bulk";
-import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
+import { insertInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import {
   getLiveStockRowsByIds,
   getProductStockRows,
@@ -141,7 +141,7 @@ export async function scanAtLocation(
   // exists either way, and confirming it is exactly what the second scan meant.
   return await runWithConflictRecovery<ScanAtLocationOut>(
     async () => {
-      const entry = await createInventoryEntry(
+      const entry = await insertInventoryEntry(
         db,
         {
           productId,
@@ -151,16 +151,9 @@ export async function scanAtLocation(
         },
         actor,
       );
-      // Not a ternary that degrades to `[]`: swallowing a miss here would drop
-      // the search/embedding refresh for a row that was just created, silently.
-      const entityId = await resolveCreatedOrInvariant(
-        db,
-        "inventory",
-        entry.id,
-      );
       await runMutationSideEffects(db, {
         action: "created",
-        entity: { entity: "inventory", id: entityId },
+        entity: { entity: "inventory", id: entry.id },
         source: "inventory.scanAtLocation",
       });
       return {

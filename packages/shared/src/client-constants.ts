@@ -37,7 +37,6 @@ export const ACTIVE_RUN_STATUSES = [
   "paused",
   "paused_auth",
   "paused_offline",
-  "paused_approval",
 ] as const;
 
 /**
@@ -46,3 +45,6 @@ export const ACTIVE_RUN_STATUSES = [
  * every photo picker caps a selection at it.
  */
 export const PHOTO_RUN_IMAGE_LIMIT = 500;
+
+/** The longest reason for leaving a prepared import line's Product unresolved. */
+export const PRODUCT_DECISION_REASON_MAX = 1_000;

@@ -237,10 +237,18 @@ export async function loadFinanceSuggestionContext(
         line.lineKind === "principal" && !outranksFallback.has(source),
     };
   });
+  /** A Purchase fallback equal to a category its Expense lines already
+   * resolve to, where every line that would take the fallback already has it,
+   * changes nothing; it is withheld as a policy decline. */
+  const declinesSuggestion = (target: string, value: string) =>
+    entity === "purchase" &&
+    target === "spendingCategoryId" &&
+    lineCategories.some((line) => line.value === value) &&
+    lineCategories.every((line) => !line.takesFallback || line.value === value);
   return {
     subject,
     fingerprint,
-    lineCategories,
+    declinesSuggestion,
     hasSignal:
       lines.length > 0 ||
       purchases.some((p) => p.vendor || p.displayLabel || p.notes),

@@ -7,12 +7,17 @@ import {
   HOUSEHOLD_TIMEZONE,
   IMAGE_WIDTHS,
   PHOTO_RUN_IMAGE_LIMIT,
+  PRODUCT_DECISION_REASON_MAX,
   TASK_BOARD_INBOX_LABEL,
   TASK_BOARD_UNTITLED_PROJECT_LABEL,
 } from "../../../../../packages/shared/src/client-constants.ts";
 import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "../../../../../packages/shared/src/apple-client-version.ts";
 import { APPLE_APP_IDENTITIES } from "../../../../../packages/shared/src/apple-app-identity.ts";
 import { IMPORT_REPORT_RUN_PURPOSES } from "../../../../../packages/schemas/src/activity-fields.ts";
+import {
+  ENTITY_SOURCE_QUOTE_MAX,
+  ENTITY_SOURCE_URL_MAX,
+} from "../../../../../packages/schemas/src/child-tables/modules.ts";
 import {
   WAYFINDING_DOMAINS,
   WAYFINDING_DOMAIN_PRESENTATION,
@@ -110,6 +115,12 @@ ${Object.entries(APPLE_APP_IDENTITIES)
         `    public static let activeRunStatuses: [String] = [${ACTIVE_RUN_STATUSES.map(swiftString).join(", ")}]\n` +
         "    /// The most photos one photo-inventory Run holds (`PHOTO_RUN_IMAGE_LIMIT`).\n" +
         `    public static let photoRunImageLimit = ${PHOTO_RUN_IMAGE_LIMIT}\n` +
+        "    /// The longest Source url any write path stores (`ENTITY_SOURCE_URL_MAX`).\n" +
+        `    public static let entitySourceURLMax = ${ENTITY_SOURCE_URL_MAX}\n` +
+        "    /// The longest Source quote (`ENTITY_SOURCE_QUOTE_MAX`).\n" +
+        `    public static let entitySourceQuoteMax = ${ENTITY_SOURCE_QUOTE_MAX}\n` +
+        "    /// The longest reason for an unresolved Product decision (`PRODUCT_DECISION_REASON_MAX`).\n" +
+        `    public static let productDecisionReasonMax = ${PRODUCT_DECISION_REASON_MAX}\n` +
         "}\n\n" +
         "extension WayfindingDomain {\n" +
         "    /// The line's name (`WAYFINDING_DOMAIN_PRESENTATION.label`).\n" +

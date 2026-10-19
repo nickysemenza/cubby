@@ -4,6 +4,8 @@ import {
   type ChoiceAnswer,
   type ChoiceAnswers,
   commitPreparedInput,
+  distinctFromForOption,
+  distinctFromSourceFeedback,
   remainingChoices,
   remainingSentence,
 } from "@cubby/schemas/report-choice";
@@ -19,6 +21,7 @@ import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities
 import { Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
+import { Input } from "~/ui/primitives/input";
 import { StatusText } from "~/ui/primitives/status-text";
 import { Textarea } from "~/ui/primitives/textarea";
 
@@ -79,7 +82,7 @@ export function ChoiceControl({
     <Stack gap="sm">
       {(choice.suggestions ?? []).map((suggestion) => (
         <Row wrap gap="sm" key={`${suggestion.optionId}:${suggestion.id}`}>
-          <SuggestionLink suggestion={suggestion} />
+          <ChoiceRecordLink record={suggestion} />
           {suggestion.badges.map((badge) => (
             <Badge key={badge} variant="outline">
               {badge}
@@ -118,6 +121,11 @@ export function ChoiceControl({
             const kept: ChoiceAnswer = { optionId: next.id };
             if (next.pick && answer?.pickId) kept.pickId = answer.pickId;
             if (next.text && answer?.text) kept.text = answer.text;
+            if (next.distinctFrom && answer?.distinctFrom)
+              kept.distinctFrom = distinctFromForOption(
+                next,
+                answer.distinctFrom,
+              );
             onAnswer(kept);
           }}
         />
@@ -157,18 +165,86 @@ export function ChoiceControl({
           />
         </label>
       ) : null}
+      {option?.distinctFrom?.map((record) => {
+        const source = answer?.distinctFrom?.[record.id] ?? {
+          url: "",
+          quote: "",
+        };
+        const setSource = (next: typeof source) =>
+          onAnswer({
+            optionId: option.id,
+            distinctFrom: distinctFromForOption(option, {
+              ...answer?.distinctFrom,
+              [record.id]: next,
+            }),
+          });
+        const errors = distinctFromSourceFeedback(source);
+        const fieldId = `${choice.id}:${record.id}`;
+        return (
+          <Stack gap="sm" key={record.id}>
+            <Row wrap gap="sm">
+              <StatusText>Show with a Source how this differs from</StatusText>
+              <ChoiceRecordLink record={record} />
+            </Row>
+            <label className="flex flex-col gap-1 text-xs">
+              <span>Source URL for {record.name}</span>
+              <Input
+                type="url"
+                inputMode="url"
+                autoComplete="url"
+                aria-label={`Source URL for ${record.name}`}
+                aria-invalid={errors.url ? true : undefined}
+                aria-describedby={errors.url ? `${fieldId}:url` : undefined}
+                value={source.url}
+                disabled={disabled}
+                onChange={(event) =>
+                  setSource({ ...source, url: event.target.value })
+                }
+              />
+              {errors.url ? (
+                <StatusText id={`${fieldId}:url`} tone="destructive">
+                  {errors.url}
+                </StatusText>
+              ) : null}
+            </label>
+            <label className="flex flex-col gap-1 text-xs">
+              <span>Quoted difference from {record.name}</span>
+              <Textarea
+                aria-label={`Quoted difference from ${record.name}`}
+                aria-invalid={errors.quote ? true : undefined}
+                aria-describedby={`${fieldId}:quote`}
+                value={source.quote}
+                disabled={disabled}
+                onChange={(event) =>
+                  setSource({ ...source, quote: event.target.value })
+                }
+              />
+              <StatusText
+                id={`${fieldId}:quote`}
+                tone={errors.quote ? "destructive" : "muted"}
+              >
+                {errors.quote ?? errors.quoteLength}
+              </StatusText>
+            </label>
+          </Stack>
+        );
+      })}
     </Stack>
   );
 }
 
-function SuggestionLink({
-  suggestion,
+/** A ranked suggestion or a Distinct-from record, linked when its entity has a page. */
+function ChoiceRecordLink({
+  record,
 }: {
-  suggestion: NonNullable<ReportChoice["suggestions"]>[number];
+  record: Pick<
+    NonNullable<ReportChoice["suggestions"]>[number],
+    "entity" | "id" | "name" | "subtitle"
+  >;
 }): ReactNode {
   // SAFETY: `entities` is keyed by exactly the browser-routed entities.
-  const routed = Object.hasOwn(entities, suggestion.entity)
-    ? (suggestion.entity as BrowserRoutedEntity)
+  const routed = Object.hasOwn(entities, record.entity)
+    ? (record.entity as BrowserRoutedEntity)
     : null;
   return (
     <>
@@ -176,17 +252,15 @@ function SuggestionLink({
         <EntityRefLink
           variant="chip"
           entity={routed}
-          id={suggestion.id}
-          name={suggestion.name}
+          id={record.id}
+          name={record.name}
           displayImage={null}
         />
       ) : (
-        <span className="text-sm">{suggestion.name}</span>
+        <span className="text-sm">{record.name}</span>
       )}
-      {suggestion.subtitle ? (
-        <span className="text-xs text-muted-foreground">
-          {suggestion.subtitle}
-        </span>
+      {record.subtitle ? (
+        <span className="text-xs text-muted-foreground">{record.subtitle}</span>
       ) : null}
     </>
   );
@@ -244,8 +318,8 @@ export function ChoiceFormFooter({
       </StatusText>
       {unanswered === 0 && !buildable ? (
         <StatusText tone="destructive">
-          An answer cannot be sent: a reason is at most 1,000 characters and a
-          Product must be chosen from the picker.
+          An answer cannot be sent: a reason is at most 1,000 characters, a
+          Product must be chosen from the picker, and a Source needs a full URL.
         </StatusText>
       ) : null}
       <Button

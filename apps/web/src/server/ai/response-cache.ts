@@ -140,6 +140,8 @@ const ignoreUsage = () => undefined;
 // Entries published before usage retention hold the bare answer. The marker
 // key cannot occur in an answer, so both shapes stay readable through the TTL
 // instead of recomputing every legacy entry.
+// TODO: remove the bare-entry fallback after 2026-11-18, once the 30-day TTL
+// has aged out entries published before #2719.
 const ENTRY_MARKER = "$cubbyResponseCacheEntry";
 const ENTRY_VERSION = 2;
 const versionedEntrySchema = z.object({

@@ -482,7 +482,7 @@ export function isInferenceFundingRefusal(
   if (funding === "subscription")
     return (
       [400, 429].includes(status) &&
-      /"(?:code|type)"\s*:\s*"(?:usage_limit_reached|rate_limit_exceeded|subscription_sharing_usage_limit_exceeded|subscription_sharing_unsupported_capability|subscription_unavailable)"/u.test(
+      /"(?:code|type)"\s*:\s*"(?:usage_limit_reached|rate_limit_exceeded|subscription_sharing_usage_limit_exceeded|subscription_sharing_unsupported_capability|subscription_unavailable|cubby_plan_budget_reached)"/u.test(
         body,
       )
     );
@@ -942,12 +942,15 @@ export interface GatewayFetchRoutes extends GatewayResponseObservers {
   /** Admission completes before each actual paid or synthetic-peer transmission. */
   beforePaidRequest?: (request: GatewayFetchRequest) => Promise<void>;
   /**
-   * Credit-rung admission: a returned reason refuses this subscriber-credit
-   * attempt as a funding refusal (`cubby_credit_budget_reached`), so the
-   * ladder moves to the ChatGPT plan. A thrown error is an admission failure.
+   * Free-rung admission, before a Claude credit or ChatGPT plan attempt: a
+   * returned reason refuses it as a funding refusal
+   * (`cubby_credit_budget_reached`, `cubby_plan_budget_reached`), so the
+   * ladder moves on; an unladdered call skips the plan for its paid or
+   * subscription-required path. A thrown error is an admission failure.
    */
-  beforeCreditRequest?: (
+  beforeFreeRequest?: (
     request: GatewayFetchRequest,
+    funding: "subscriber_credit" | "subscription",
   ) => Promise<string | null>;
   requestTimeoutMs?: number;
   /** Rewrites the provider body on every route that decodes it. */
@@ -1062,8 +1065,11 @@ export function gatewayFetchThrough(routes: GatewayFetchRoutes): typeof fetch {
     const observe = async (response: Response) =>
       observeGatewayResponse(response, routes, await streamRequested());
 
-    if (routes.funding === "subscriber_credit" && routes.beforeCreditRequest) {
-      const refusal = await routes.beforeCreditRequest(request);
+    if (routes.funding === "subscriber_credit" && routes.beforeFreeRequest) {
+      const refusal = await routes.beforeFreeRequest(
+        request,
+        "subscriber_credit",
+      );
       if (refusal) {
         routes.onTransport?.("gateway");
         return observe(
@@ -1091,12 +1097,25 @@ export function gatewayFetchThrough(routes: GatewayFetchRoutes): typeof fetch {
       routes.onTransport?.("gateway");
       return observe(await testPeer(request));
     }
-    if (
+    const planRefusal =
       routes.chatGpt &&
       routes.funding !== "paid" &&
       routes.provider === "openai" &&
       endpoint === "responses"
-    ) {
+        ? ((await routes.beforeFreeRequest?.(request, "subscription")) ?? null)
+        : undefined;
+    if (planRefusal && routes.funding === "subscription") {
+      routes.onTransport?.("chatgpt");
+      return observe(
+        Response.json(
+          {
+            error: { type: "cubby_plan_budget_reached", message: planRefusal },
+          },
+          { status: 429 },
+        ),
+      );
+    }
+    if (routes.chatGpt && planRefusal === null) {
       const subscription = await routes.chatGpt(await request.query(), {
         signal: request.signal,
         requestTimeoutMs: routes.requestTimeoutMs,

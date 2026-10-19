@@ -24,9 +24,9 @@ import { readGuardSession } from "~/server/http/guard-session.boundary";
  *
  * The root `beforeLoad` only invokes this on the SERVER (`import.meta.env.SSR`);
  * on client navigations it uses {@link getClientAuthed} instead, so an in-app
- * navigation no longer pays a `/_serverFn/` round-trip. The server fn delegates
- * to the server session reader; that import is stripped from the client bundle
- * by the server-fn split.
+ * navigation pays no `/_serverFn/` round-trip. The server fn delegates to the
+ * server session reader; the server-fn split strips that import from the
+ * client bundle.
  */
 export const getGuardSession = createServerFn({ method: "GET" }).handler(
   async () => readGuardSession(getRequest().headers),

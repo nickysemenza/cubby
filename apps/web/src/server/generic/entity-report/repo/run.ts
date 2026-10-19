@@ -27,6 +27,7 @@ import {
   formatCurrency,
   formatPercent,
 } from "~/lib/number-format";
+import { PRODUCT_IDENTITY_REVIEW_REASON } from "~/server/domains/product/repo/resolve-names";
 import { runHasCapability } from "~/server/domains/purchase-import/repo/capabilities";
 import { findingHasExpired } from "~/server/domains/purchase-import/repo/finding-expiry";
 import type { getRunLiveProgress } from "~/server/domains/run/repo/run-progress";
@@ -539,6 +540,20 @@ const lineChoiceId = (order: PreparedOrder, prepared: PreparedLine) =>
  * identifier match: identity is chosen by the person, and the candidates only rank the options.
  */
 function productChoice(id: string, prepared: PreparedLine): ReportChoice {
+  const newOption: ReportChoice["options"][number] = {
+    id: "new",
+    label: "Create a new Product",
+    hint: "A new Product will use this prepared line’s title and identifiers.",
+  };
+  // The commit guard refuses a new Product beside these without Distinct-from evidence.
+  const distinctFrom = prepared.candidates.flatMap((candidate) =>
+    !candidate.exactIdentifierMatch &&
+    (candidate.exactNameMatch ||
+      candidate.matchReason === PRODUCT_IDENTITY_REVIEW_REASON)
+      ? [{ entity: "product", id: candidate.productId, name: candidate.name }]
+      : [],
+  );
+  if (distinctFrom.length) newOption.distinctFrom = distinctFrom;
   return {
     id,
     label: `Product decision for ${prepared.title}`,
@@ -549,11 +564,7 @@ function productChoice(id: string, prepared: PreparedLine): ReportChoice {
         label: "Use an existing Product",
         pick: { entity: "product", label: `Product for ${prepared.title}` },
       },
-      {
-        id: "new",
-        label: "Create a new Product",
-        hint: "A new Product will use this prepared line’s title and identifiers.",
-      },
+      newOption,
       {
         id: "unresolved",
         label: "Leave Product unresolved",

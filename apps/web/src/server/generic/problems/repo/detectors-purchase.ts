@@ -27,6 +27,7 @@ import {
 import { type SQL, sql } from "drizzle-orm";
 
 import { type Database } from "~/server/db/database";
+import { actualExpenseSql } from "~/server/db/helpers/predicates";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import {
   expense,
@@ -133,7 +134,7 @@ export const findDuplicateSpendCandidates = async (
       FROM ${expense} e
       WHERE e."deletedAt" IS NULL
         AND e."purchaseId" IS NULL
-        AND e."future" IS NOT TRUE
+        AND ${sql.raw(actualExpenseSql("e"))}
         AND e."cost" IS NOT NULL
         AND e."cost" <> 0
     ),

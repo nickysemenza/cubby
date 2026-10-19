@@ -150,16 +150,7 @@ export async function loadWorkContexts(
                         record: null,
                       },
                     ]
-                  : execution.status === "paused_approval"
-                    ? [
-                        {
-                          code: "member_approval",
-                          state: "missing",
-                          reason: "Background work will resume automatically.",
-                          record: null,
-                        },
-                      ]
-                    : [],
+                  : [],
       });
     }
   }

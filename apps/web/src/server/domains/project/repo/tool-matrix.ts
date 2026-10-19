@@ -62,6 +62,7 @@ import { householdLocalDate } from "~/lib/household-date";
 import { toolTimelineConflict, UNKNOWN_OWNERSHIP } from "~/lib/tool-timeline";
 import type { Database } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
+import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
 import {
   buildSearchConditions,
   formatSearchTerm,
@@ -210,7 +211,7 @@ export async function projectToolMatrix(
         and(
           eq(expense.productId, product.id),
           eq(expense.lineKind, "principal"),
-          eq(expense.future, false),
+          actualExpense(),
           notDeleted(expense),
         ),
       )
@@ -267,7 +268,7 @@ export async function projectToolMatrix(
         and(
           eq(expense.costType, "tools"),
           eq(expense.lineKind, "principal"),
-          eq(expense.future, false),
+          actualExpense(),
           gt(expense.cost, 0),
           notDeleted(expense),
         ),
@@ -399,7 +400,7 @@ export async function projectToolMatrix(
               and(
                 inArray(effectiveExpenseProject, columnIds),
                 eq(expense.lineKind, "principal"),
-                eq(expense.future, false),
+                actualExpense(),
                 gt(expense.cost, 0),
                 ne(effectiveExpenseTrade, "planning"),
                 ne(effectiveExpenseTrade, "other"),
@@ -439,7 +440,7 @@ export async function projectToolMatrix(
               and(
                 inArray(expense.productId, rowIds),
                 eq(expense.lineKind, "principal"),
-                eq(expense.future, false),
+                actualExpense(),
                 eq(expense.costType, "tools"),
                 gt(expense.cost, 0),
                 notDeleted(expense),

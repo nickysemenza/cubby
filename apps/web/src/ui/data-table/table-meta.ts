@@ -5,6 +5,7 @@ import { humanize, type NumberRange, parseShortcode } from "@cubby/shared";
 import type { CellData, RowData } from "@tanstack/react-table";
 import { z } from "zod";
 
+import type { PickerRecordSource } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 
 import type { ColumnCellData } from "./cell-data";
@@ -39,6 +40,8 @@ export interface FilterConfig {
   onActivate?: (selectedIds?: readonly string[]) => void;
   onSearchChange?: (query: string) => void;
   isLoading?: boolean;
+  /** A roster of one entity's records: its pickers run in record mode. */
+  records?: PickerRecordSource;
 }
 
 export type MobileSlot =
@@ -142,6 +145,12 @@ export interface CubbyColumnMeta<TData = CellData> {
   linksTo?: Entity;
   numeric?: boolean;
   mono?: boolean;
+  /**
+   * A code or identifier (barcode, shortcode): its fitted width stops at the
+   * code cap. `mono` alone also sets timestamps and model names, which keep
+   * the text cap.
+   */
+  code?: boolean;
   filterConfig?: FilterConfig;
   cellData?: ColumnCellData<TData>;
   /** Authoritative list inputs when a display column has another id. */

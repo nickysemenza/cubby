@@ -6,6 +6,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import type { Database } from "~/server/db";
+import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
   entityLink,
@@ -82,7 +83,7 @@ export async function retrieveConnectionCandidates(
         and(
           notDeleted(expense),
           isNull(expense.productId),
-          eq(expense.future, false),
+          actualExpense(),
           eq(expense.lineKind, "principal"),
           expenseAcquisitionPairPredicate(sql`true`),
           sql`NOT ${classificationPolicySql("spendingCategory.productExpectation", "productId", "not_allowed", effectiveExpenseSpendingCategorySql('"Expense"'))}`,

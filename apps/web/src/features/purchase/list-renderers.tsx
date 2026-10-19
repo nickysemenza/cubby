@@ -46,6 +46,7 @@ const orderLink: ListRenderer<"purchase"> = (helper) =>
       createTextColumn(helper, "orderId", {
         header: "Order #",
         className: "w-40 font-mono",
+        code: true,
         mobile: { slot: "meta", priority: 20 },
         renderValue: (value, purchase) =>
           value ? (

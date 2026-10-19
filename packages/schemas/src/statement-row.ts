@@ -301,6 +301,11 @@ export const recordStatementRowsOut = z.object({
   rowsOmitted: z.number().int().nullable(),
   rowCountStored: z.number().int(),
   /**
+   * Stored pre-#1894 `(...last4)` descriptors a positioned replay upgrades (or,
+   * on a dry run, would upgrade) to the complete provider mask.
+   */
+  maskUpgrades: z.number().int(),
+  /**
    * Set when the batch looks un-normalized — the signature of a Copilot or
    * Apple Card export submitted verbatim.
    *

@@ -23,6 +23,7 @@ import { householdLocalDate } from "~/lib/household-date";
 import type { ProductOwnershipTimeline } from "~/lib/tool-timeline";
 import { UNKNOWN_OWNERSHIP } from "~/lib/tool-timeline";
 import type { DrizzleClient } from "~/server/db";
+import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
 import { notDeleted } from "~/server/db/helpers";
 import { expense, purchase } from "~/server/db/schema";
 import {
@@ -46,11 +47,7 @@ export const disposalPurchaseIds = () =>
     .select({ id: expense.purchaseId })
     .from(expense)
     .where(
-      and(
-        notDeleted(expense),
-        eq(expense.future, false),
-        isNotNull(expense.purchaseId),
-      ),
+      and(notDeleted(expense), actualExpense(), isNotNull(expense.purchaseId)),
     )
     .groupBy(expense.purchaseId)
     .having(sql`sum(${expense.cost}) < 0`);
@@ -111,7 +108,7 @@ export async function loadProductOwnershipTimelines(
     .where(
       and(
         inArray(expense.productId, productIds),
-        eq(expense.future, false),
+        actualExpense(),
         notDeleted(expense),
       ),
     );

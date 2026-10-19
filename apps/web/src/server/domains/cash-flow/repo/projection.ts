@@ -14,11 +14,12 @@ import {
   HOUSEHOLD_PROJECT_SHORTCODE,
   type ProjectStatus,
 } from "@cubby/schemas/project";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, inArray, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { householdLocalDate, shiftPlainDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
+import { plannedExpense } from "~/server/db/computed/expense-aggregate-sql";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { expense, project, spendingCategory } from "~/server/db/schema";
 import { prepareExpenseDerivedRead } from "~/server/domains/expense/repo/expense-derived-read";
@@ -156,7 +157,7 @@ const loadCommitted = (db: Database) =>
     .where(
       and(
         notDeleted(expense),
-        eq(expense.future, true),
+        plannedExpense(),
         sql`${expense.cost} IS NOT NULL`,
       ),
     )

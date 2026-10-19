@@ -124,6 +124,7 @@ const columns = createCubbyColumnCollection<EntityRecord>((add) => {
       meta: attachCubbyColumnMeta<EntityRecord>({
         className: "w-32",
         mono: true,
+        code: true,
         mobile: { slot: "meta" },
         cellData: textCellData<EntityRecord>("text", (row) => row.id),
       }),

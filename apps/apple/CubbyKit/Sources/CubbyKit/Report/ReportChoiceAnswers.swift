@@ -6,6 +6,13 @@ import Foundation
 /// `commitPreparedInput` (`packages/schemas/src/report-choice.ts`) has the same rules, and
 /// `ReportChoiceAnswersTests` mirrors its cases.
 public struct ReportChoiceAnswers: Equatable, Sendable {
+    /// The Source typed for one of an option's Distinct-from records.
+    public struct Source: Hashable, Sendable {
+        public let recordID: String
+        public var url = ""
+        public var quote = ""
+    }
+
     public struct Answer: Hashable, Sendable {
         /// One of the choice's option ids.
         public var optionID: String
@@ -14,6 +21,9 @@ public struct ReportChoiceAnswers: Equatable, Sendable {
         public var pickTitle: String?
         /// The reason written, for an option that asks for one.
         public var text: String?
+        /// One Source per Distinct-from record of the chosen option, in the option's order. Only
+        /// that option's records, so the body never carries evidence another option listed.
+        public var distinctFrom: [Source] = []
     }
 
     public private(set) var answers: [String: Answer] = [:]
@@ -25,8 +35,8 @@ public struct ReportChoiceAnswers: Equatable, Sendable {
 
     public func answer(for choiceID: String) -> Answer? { answers[choiceID] }
 
-    /// Chooses `optionID`, keeping a pick or reason already given when the new option still asks
-    /// for one. A nil option clears the answer.
+    /// Chooses `optionID`, keeping a pick, reason or Source already given when the new option still
+    /// asks for it. A nil option clears the answer.
     public mutating func choose(_ choice: ReportPresentation.Choice, optionID: String?) {
         guard let optionID, let option = choice.options.first(where: { $0.id == optionID }) else {
             answers[choice.id] = nil
@@ -37,15 +47,40 @@ public struct ReportChoiceAnswers: Equatable, Sendable {
         answers[choice.id] = Answer(
             optionID: option.id, pickID: option.pick == nil ? nil : previous?.pickID,
             pickTitle: option.pick == nil ? nil : previous?.pickTitle,
-            text: option.text == nil ? nil : previous?.text)
+            text: option.text == nil ? nil : previous?.text,
+            distinctFrom: Self.sources(for: option, keeping: previous?.distinctFrom ?? []))
         operationID = UUID().uuidString
     }
 
     public mutating func pick(
         _ choice: ReportPresentation.Choice, optionID: String, id: String, title: String
     ) {
-        answers[choice.id] = Answer(optionID: optionID, pickID: id, pickTitle: title, text: nil)
+        let option = choice.options.first { $0.id == optionID }
+        answers[choice.id] = Answer(
+            optionID: optionID, pickID: id, pickTitle: title, text: nil,
+            distinctFrom: option.map { Self.sources(for: $0, keeping: []) } ?? [])
         operationID = UUID().uuidString
+    }
+
+    /// Types the Source for one of the chosen option's Distinct-from records.
+    public mutating func writeSource(
+        _ choice: ReportPresentation.Choice, recordID: String, url: String, quote: String
+    ) {
+        guard var answer = answers[choice.id],
+            let index = answer.distinctFrom.firstIndex(where: { $0.recordID == recordID })
+        else { return }
+        answer.distinctFrom[index].url = url
+        answer.distinctFrom[index].quote = quote
+        answers[choice.id] = answer
+        operationID = UUID().uuidString
+    }
+
+    private static func sources(
+        for option: ReportPresentation.Choice.Option, keeping previous: [Source]
+    ) -> [Source] {
+        option.distinctFrom.map { record in
+            previous.first { $0.recordID == record.id } ?? Source(recordID: record.id)
+        }
     }
 
     public mutating func write(_ choice: ReportPresentation.Choice, text: String) {
@@ -62,6 +97,11 @@ public struct ReportChoiceAnswers: Equatable, Sendable {
         else { return false }
         if option.pick != nil, Self.blank(answer.pickID) { return false }
         if option.text != nil, Self.blank(answer.text) { return false }
+        for record in option.distinctFrom {
+            guard let source = answer.distinctFrom.first(where: { $0.recordID == record.id }),
+                !Self.blank(source.url), !Self.blank(source.quote)
+            else { return false }
+        }
         return true
     }
 
@@ -70,11 +110,61 @@ public struct ReportChoiceAnswers: Equatable, Sendable {
         choices.filter { $0.required && !isAnswered($0) }.count
     }
 
-    /// Every required choice, the rows' and the form's own, has a complete answer.
+    /// Every required choice, the rows' and the form's own, has a complete answer the commit
+    /// would accept.
     public func canSubmit(
         form: ReportPresentation.Form, rowChoices: [ReportPresentation.Choice]
     ) -> Bool {
         form.disabledReason == nil && remaining(in: rowChoices + form.choices) == 0
+            && commitInput(for: form) != nil
+    }
+
+    /// Web's sentence for answers that are all complete but cannot be sent as they stand.
+    public func unsendableText(
+        form: ReportPresentation.Form, rowChoices: [ReportPresentation.Choice]
+    ) -> String? {
+        guard remaining(in: rowChoices + form.choices) == 0, commitInput(for: form) == nil
+        else { return nil }
+        return
+            "An answer cannot be sent: a reason is at most \(Self.count(SharedConstants.productDecisionReasonMax)) characters, a Product must be chosen from the picker, and a Source needs a full URL."
+    }
+
+    /// Per-field feedback for one typed Source under the bounds the commit parses (web's
+    /// `distinctFromSourceFeedback`): an error per field, and the quote's length against its bound.
+    public struct SourceFeedback: Equatable, Sendable {
+        public let url: String?
+        public let quote: String?
+        public let quoteLength: String
+    }
+
+    public static func sourceFeedback(url: String, quote: String) -> SourceFeedback {
+        let url = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        let quote = quote.trimmingCharacters(in: .whitespacesAndNewlines)
+        return SourceFeedback(
+            url: url.isEmpty || validURL(url)
+                ? nil
+                : "Enter a full URL of at most \(count(SharedConstants.entitySourceURLMax)) characters.",
+            quote: quote.utf16.count > SharedConstants.entitySourceQuoteMax
+                ? "Shorten the quote to at most \(count(SharedConstants.entitySourceQuoteMax)) characters."
+                : nil,
+            quoteLength:
+                "\(count(quote.utf16.count)) of \(count(SharedConstants.entitySourceQuoteMax)) characters."
+        )
+    }
+
+    /// Zod's `z.url()` bound by `ENTITY_SOURCE_URL_MAX`: a scheme and a host, any scheme. Lengths
+    /// count UTF-16 units, as zod does.
+    private static func validURL(_ url: String) -> Bool {
+        guard url.utf16.count <= SharedConstants.entitySourceURLMax,
+            let components = URLComponents(string: url),
+            components.scheme?.isEmpty == false, components.host?.isEmpty == false
+        else { return false }
+        return true
+    }
+
+    /// A count as web's `toLocaleString("en-US")` writes it.
+    private static func count(_ value: Int) -> String {
+        value.formatted(.number.locale(Locale(identifier: "en_US")))
     }
 
     /// "2 Product decisions remaining." or the form's completion sentence, then what approving does.
@@ -90,7 +180,9 @@ public struct ReportChoiceAnswers: Equatable, Sendable {
     /// A line's complete decision, before it is spelled as the wire type.
     private enum Decision {
         case existing(String)
-        case new
+        /// The trimmed Distinct-from Sources, empty when the option lists no candidate (exact-name
+        /// or identity-review) to tell the new Product apart from.
+        case new([Source])
         case unresolved(String)
         case expenseOnly
     }
@@ -102,10 +194,21 @@ public struct ReportChoiceAnswers: Equatable, Sendable {
             guard let id = answer.pickID, !Self.blank(id) else { return nil }
             return .existing(id)
         case "new":
-            return .new
+            let sources = answer.distinctFrom.map {
+                Source(
+                    recordID: $0.recordID, url: $0.url.trimmingCharacters(in: .whitespacesAndNewlines),
+                    quote: $0.quote.trimmingCharacters(in: .whitespacesAndNewlines))
+            }
+            guard
+                sources.allSatisfy({
+                    Self.validURL($0.url) && !$0.quote.isEmpty
+                        && $0.quote.utf16.count <= SharedConstants.entitySourceQuoteMax
+                })
+            else { return nil }
+            return .new(sources)
         case "unresolved":
             guard let reason = answer.text?.trimmingCharacters(in: .whitespacesAndNewlines),
-                !reason.isEmpty
+                !reason.isEmpty, reason.utf16.count <= SharedConstants.productDecisionReasonMax
             else { return nil }
             return .unresolved(reason)
         case "expense_only":
@@ -116,7 +219,7 @@ public struct ReportChoiceAnswers: Equatable, Sendable {
     }
 
     /// The exact `run.commitPrepared` body for these answers, or nil while any line's decision or
-    /// the batch's trade is missing.
+    /// the batch's trade is missing, or a reason or Source is outside the bounds the commit parses.
     public func commitInput(for form: ReportPresentation.Form) -> RunCommitPreparedInput? {
         let command = form.command
         var trade: Trade?
@@ -135,10 +238,19 @@ public struct ReportChoiceAnswers: Equatable, Sendable {
                     .init(
                         stableOrderId: line.stableOrderID, stableLineId: line.stableLineID,
                         resolution: .existing(.init(kind: .existing, productId: ProductCode(id))))
-                case .new:
+                case .new(let sources):
                     .init(
                         stableOrderId: line.stableOrderID, stableLineId: line.stableLineID,
-                        resolution: .new(.init(kind: .new)))
+                        resolution: .new(
+                            .init(
+                                kind: .new,
+                                distinctFrom: sources.isEmpty
+                                    ? nil
+                                    : sources.map {
+                                        .init(
+                                            productId: ProductCode($0.recordID), url: $0.url,
+                                            quote: $0.quote)
+                                    })))
                 case .unresolved(let reason):
                     .init(
                         stableOrderId: line.stableOrderID, stableLineId: line.stableLineID,

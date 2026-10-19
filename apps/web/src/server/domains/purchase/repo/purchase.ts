@@ -128,7 +128,10 @@ import {
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
+import {
+  qualityReadColumn,
+  type QualityReadContext,
+} from "~/server/generic/data-quality/repo/registry";
 import {
   gapCondition,
   qualityFilterSource,
@@ -195,10 +198,10 @@ export const PURCHASE_DELETE_EDGE_POLICY = {
       "An import preparation retains its reviewed target tombstone and must be prepared again before commit.",
   },
   "ImportSourceOrder.purchaseId": {
-    code: "clear-import-order",
-    effect: "hard-delete",
+    code: "detach-import-order",
+    effect: "detach",
     description:
-      "The source remains retained while this order association is removed, so only this order can be imported again.",
+      "The order association stays as the Email's accepted history with its Purchase link cleared, and its original-line Product bindings are removed; importing the same order again adds a new association beside it.",
   },
   "PurchasePaymentEvidence.purchaseId": {
     code: "delete-payment-evidence",
@@ -593,13 +596,12 @@ const syncPurchaseImages = async (
 const reconciliationSql = (read?: QualityReadContext): SQL => {
   const tolerance = cents(RECONCILIATION_TOLERANCE);
   // A bulk read binds the precomputed vendor aggregate and refund total.
-  const bulk = read?.derivedAlias ? sql.identifier(read.derivedAlias) : null;
-  const aggregate = bulk
-    ? sql`SELECT ${bulk}."vendorTotal" AS total, ${bulk}."vendorCount" AS "expenseCount", ${bulk}."vendorUnpricedCount" AS "unpricedCount"`
+  const vendorTotal = qualityReadColumn(read, "vendorTotal");
+  const aggregate = vendorTotal
+    ? sql`SELECT ${vendorTotal} AS total, ${qualityReadColumn(read, "vendorCount")} AS "expenseCount", ${qualityReadColumn(read, "vendorUnpricedCount")} AS "unpricedCount"`
     : sql.raw(vendorExpenseAggregateSql('"Purchase"'));
-  const refund = bulk
-    ? sql`${bulk}."postedRefundTotal"`
-    : purchasePostedRefundTotal;
+  const refund =
+    qualityReadColumn(read, "postedRefundTotal") ?? purchasePostedRefundTotal;
   // One vendor-expense scan feeds every verdict; the delta and refund are
   // whole cents, as `reconcilePurchase` compares them. Mirrors its
   // zero-expense guard: once the totals fail to match, a purchase with no
@@ -2484,11 +2486,14 @@ export const deletePurchases = (
             .select({ id: importSourceOrder.id })
             .from(importSourceOrder)
             .where(inArray(importSourceOrder.purchaseId, ids));
+          // Bindings name the deleted Purchase's lines and would otherwise
+          // keep their Products from being deleted.
           await inner
             .delete(importSourceProduct)
             .where(inArray(importSourceProduct.sourceOrderId, orders));
           await inner
-            .delete(importSourceOrder)
+            .update(importSourceOrder)
+            .set({ purchaseId: null, updatedAt: new Date() })
             .where(inArray(importSourceOrder.purchaseId, ids));
         },
         // Drop ALL slices of every affected transaction, not just this

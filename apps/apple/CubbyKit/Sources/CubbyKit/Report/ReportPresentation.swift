@@ -163,12 +163,20 @@ public struct ReportPresentation: Hashable, Sendable {
                 public let entity: String
                 public let label: String
             }
+            /// A record the new one must be shown to differ from.
+            public struct Record: Hashable, Sendable, Identifiable {
+                public let id: String
+                public let name: String
+            }
             public let id: String
             public let label: String
             /// Choosing this option also picks one record of an entity.
             public let pick: Pick?
             /// Choosing this option also needs a written reason; this is the field's label.
             public let text: String?
+            /// Choosing this option also needs, per record, a Source (url and quote) showing the
+            /// new record differs from it: a Distinct-from decision.
+            public let distinctFrom: [Record]
             /// Said once the option is chosen.
             public let hint: String?
         }
@@ -494,7 +502,11 @@ public struct ReportPresentation: Hashable, Sendable {
                 Choice.Option(
                     id: $0.id, label: $0.label,
                     pick: $0.pick.map { Choice.Option.Pick(entity: $0.entity, label: $0.label) },
-                    text: $0.text?.label, hint: $0.hint)
+                    text: $0.text?.label,
+                    distinctFrom: ($0.distinctFrom ?? []).map {
+                        Choice.Option.Record(id: $0.id, name: $0.name)
+                    },
+                    hint: $0.hint)
             },
             suggestions: (choice.suggestions ?? []).map {
                 Choice.Suggestion(

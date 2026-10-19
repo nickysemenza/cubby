@@ -127,7 +127,7 @@ export async function seedNativeQa(
     name: "Synthetic Checking",
   });
   const split = await seedSplitSettlement(pool, userId);
-  const approvalRun = await seedPendingApprovalRun(pool, userId);
+  const pausedRun = await seedPausedRun(pool, userId);
   const researchMember = await pool.query<{
     id: string;
     shortcode: string;
@@ -174,7 +174,7 @@ export async function seedNativeQa(
   const garden = await seedScopedPlantingPicker(pool, context);
   return {
     ...split,
-    ...approvalRun,
+    ...pausedRun,
     ...photoRun,
     ...garden,
     LOCATION_ID: kitchen.id,
@@ -317,48 +317,26 @@ export async function startSyntheticRun(
   });
 }
 
-/** A running import Run holding one approval that awaits the household's decision. */
-export async function seedPendingApprovalRun(
+/** A member-paused import Run with one recorded operation in its transcript. */
+export async function seedPausedRun(
   pool: Pool,
   userId: string,
 ): Promise<Record<string, string>> {
   const db = buildScenarioDatabase(pool);
-  const run = await startSyntheticRun(pool, userId, "Approval");
-  const runRow = await pool.query<{ id: string }>(
-    'SELECT id FROM "Run" WHERE shortcode = $1',
-    [run.publicId],
-  );
-  const fingerprint = "a".repeat(64);
-  // The decision command reads the paused operation's proposal; the approval row is what the
-  // Run console lists while it waits.
+  const run = await startSyntheticRun(pool, userId, "Paused");
   await insertOperation(getDb(db), {
     runId: run.id,
-    operationId: "synthetic-approval-1",
+    operationId: "synthetic-operation-1",
     kind: "synthetic.apply",
-    inputFingerprint: fingerprint,
-    state: "paused_approval",
-    result: {
-      approvalProposal: {
-        operationKind: "synthetic.apply",
-        args: { note: "synthetic" },
-        targetFingerprint: fingerprint,
-        evidenceFingerprint: fingerprint,
-      },
-    },
+    inputFingerprint: "a".repeat(64),
+    state: "completed",
+    result: { note: "synthetic" },
   });
-  const approval = await pool.query<{ id: string }>(
-    `INSERT INTO "RunApproval" ("runId", "operationId", "operationKind", args, "argsFingerprint", "targetFingerprint", "evidenceFingerprint")
-     VALUES ($1, 'synthetic-approval-1', 'synthetic.apply', '{"note":"synthetic"}', $2, $2, $2) RETURNING id`,
-    [runRow.rows[0]?.id, fingerprint],
-  );
-  await pool.query('UPDATE "Run" SET status = $2 WHERE id = $1', [
-    runRow.rows[0]?.id,
-    "paused_approval",
+  await pool.query('UPDATE "Run" SET status = $2 WHERE shortcode = $1', [
+    run.publicId,
+    "paused",
   ]);
-  return {
-    APPROVAL_RUN_ID: run.publicId,
-    APPROVAL_ID: approval.rows[0]?.id ?? "",
-  };
+  return { PAUSED_RUN_ID: run.publicId };
 }
 
 /**

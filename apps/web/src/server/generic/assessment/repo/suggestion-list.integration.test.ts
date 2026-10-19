@@ -224,6 +224,10 @@ describe("cross-family Suggestion list", () => {
         { value: "recommendation", count: 1 },
       ]),
     );
+    // Failure mode: a one-family view drops the common facets, so the page
+    // hides its "Accept N clean" banner.
+    const fieldsOnly = await listSuggestionPage(ctx.db, { family: "field" });
+    expect(fieldsOnly.facets.clean).toEqual([{ value: false, count: 2 }]);
   });
 
   // Failure mode: a connection lists only under the endpoint that requested

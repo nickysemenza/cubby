@@ -10,6 +10,7 @@ import {
 import { cents } from "@cubby/shared";
 import { sql, type SQL } from "drizzle-orm";
 
+import { actualExpenseSql } from "~/server/db/helpers/predicates";
 import { purchaseListsItemsSql } from "~/server/domains/purchase/repo/purchase-evidence-policy";
 import type { PurchaseFinancialAggregate } from "~/server/domains/purchase/repo/purchase-financial-aggregates";
 
@@ -79,14 +80,14 @@ export const settleableExpenseTotalSql = (purchaseAlias: string) =>
   `(SELECT COALESCE(sum(se_e."cost"), 0)::double precision FROM "Expense" se_e
      WHERE se_e."purchaseId" = ${purchaseAlias}."id"
        AND se_e."deletedAt" IS NULL
-       AND se_e."future" = false)`;
+       AND ${actualExpenseSql("se_e")})`;
 
 export const settleableUnpricedExpenseCountSql = (purchaseAlias: string) =>
   `(SELECT count(*)::int FROM "Expense" se_e
      WHERE se_e."purchaseId" = ${purchaseAlias}."id"
        AND se_e."cost" IS NULL
        AND se_e."deletedAt" IS NULL
-       AND se_e."future" = false)`;
+       AND ${actualExpenseSql("se_e")})`;
 
 /** Vendor paperwork excludes household reimbursements; spend and settlement
  * continue to include every incurred Expense, including those credits. */
@@ -214,9 +215,9 @@ export const financialTransactionItemizationSql = (
   return sql<FinancialTransactionItemization>`(SELECT CASE
       WHEN count(*) = 0 THEN ${verdict.bare}
       WHEN bool_or(iz.shared) THEN ${verdict.shared}
-      WHEN bool_or(iz.itemized AND iz.mismatch) THEN ${verdict.itemized_mismatch}
-      WHEN bool_and(iz.itemized) THEN ${verdict.itemized_match}
-      ELSE ${verdict.lump}
+      WHEN NOT bool_and(iz.itemized) THEN ${verdict.lump}
+      WHEN bool_or(iz.mismatch) THEN ${verdict.itemized_mismatch}
+      ELSE ${verdict.itemized_match}
     END::text
     FROM (
       SELECT
@@ -359,8 +360,8 @@ export const purchaseQualityFilterReadSql = () =>
   LEFT JOIN (
     SELECT qe."purchaseId",
       count(*) AS "expenseCount",
-      count(*) FILTER (WHERE qe."cost" IS NULL AND qe."future" = false) AS "settleableUnpricedCount",
-      sum(qe."cost") FILTER (WHERE qe."future" = false) AS "settleableTotal",
+      count(*) FILTER (WHERE qe."cost" IS NULL AND ${actualExpenseSql("qe")}) AS "settleableUnpricedCount",
+      sum(qe."cost") FILTER (WHERE ${actualExpenseSql("qe")}) AS "settleableTotal",
       sum(qe."cost"::numeric) FILTER (WHERE qe."economicRole" = 'vendor') AS "vendorTotal",
       count(*) FILTER (WHERE qe."economicRole" = 'vendor') AS "vendorCount",
       count(*) FILTER (WHERE qe."economicRole" = 'vendor' AND qe."cost" IS NULL) AS "vendorUnpricedCount"

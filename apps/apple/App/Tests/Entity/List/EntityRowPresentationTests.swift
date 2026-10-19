@@ -220,4 +220,25 @@ struct EntityRowPresentationTests {
         #expect(presentation.factLine?.contains("Observed on:") == true)
     }
 
+    /// A json field placed in a phone-row slot (financial account `identity`) is a default fact,
+    /// read at its declared `readPath` and labelled from `valueOptions`.
+    @Test func slottedJSONFieldIsADefaultFact() throws {
+        let row = EntityRow(
+            id: "FAC-1001", title: "Synthetic card", subtitle: nil, imageURL: nil,
+            raw: ["id": "FAC-1001", "name": "Synthetic card", "identity": ["kind": "credit_card"]])
+        let fact = try #require(
+            EntityRowPresentation.resolve(descriptor: EntityCatalog[.financialAccount], row: row)
+                .facts.first { $0.id == "identity" })
+        #expect(fact.value == "Credit card")
+    }
+
+    /// A `presence` field reads its declared yes/no label, never the linked shortcode.
+    @Test func presenceFormatReadsItsLabel() {
+        let field = EntityCatalog[.financialTransaction].fields.first { $0.key == "purchasePresence" }!
+        let linked = EntityFieldValue.text(
+            in: ["id": "FTX-1001", "purchaseId": "PUR-1001"], field: field, surface: "list")
+        let unlinked = EntityFieldValue.text(in: ["id": "FTX-1001"], field: field, surface: "list")
+        #expect(linked == "Has purchase")
+        #expect(unlinked != nil && unlinked != linked)
+    }
 }

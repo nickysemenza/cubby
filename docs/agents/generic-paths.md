@@ -93,7 +93,8 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 - Unbounded reads: `listAll` (never a literal huge `pageSize`).
 - Money: `cents`, `dollars`, `round2` (`@cubby/shared`); expense
   rollups select `expenseAggregateFields` (`server/db/computed/expense-aggregate-sql.ts`);
-  all money is `SUM(Expense.cost)`.
+  all money is `SUM(Expense.cost)`. Actual versus planned (`future`) lines:
+  `actualExpense`/`plannedExpense` there, or `actualExpenseSql(alias)` in raw SQL.
 - Postgres errors: `findPgError`, `isUniqueViolation`, `isStatementTimeout`
   (`server/errors/db-errors.ts`) walk Drizzle's `cause` chain.
 - Logging and tracing: `createLogger`, `withSpan`/span core

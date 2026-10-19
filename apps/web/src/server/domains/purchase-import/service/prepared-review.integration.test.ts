@@ -1,4 +1,4 @@
-import { productShortcode } from "@cubby/schemas/identifiers";
+import { shortcode } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -89,7 +89,7 @@ describe("immutable prepared purchase review", () => {
           // Historical preparations predate the persisted name-match judgment.
           candidates: [
             {
-              productId: productShortcode.parse("PRD-4K7M"),
+              productId: shortcode("PRD-4K7M"),
               name: "Fixture product",
               manufacturer: "Fixture maker",
               model: null,

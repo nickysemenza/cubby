@@ -258,6 +258,7 @@ function MultiselectEditor({
       onValuesChange={(values) => setDraft(withSideValues(draft, side, values))}
       onSearchChange={field.onSearchChange}
       isLoading={field.isLoading}
+      records={field.records}
       header={header}
       footer={
         <>
@@ -717,6 +718,7 @@ function FilterValueEditor({
       }}
       onSearchChange={field.onSearchChange}
       isLoading={field.isLoading}
+      records={field.records}
     />
   );
   if (field.numberRange) {

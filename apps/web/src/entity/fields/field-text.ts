@@ -53,8 +53,10 @@ export function compactFieldText<TRecord extends object>(
   if (typeof value === "boolean") return value ? "Yes" : "No";
   if (typeof value === "number")
     return isMoneyField(field) ? formatCurrency(value) : formatCount(value, 2);
-  if (field.kind === "enum") return enumFieldLabel(entity, field.key, value);
   if (field.kind === "timestamp") return new Date(value).toLocaleDateString();
+  if (field.kind === "date") return value;
+  if (field.kind === "enum" || field.display.valueOptions)
+    return enumFieldLabel(entity, field.key, value);
   // A plain identifier field is a code; only its reference names display.
   if (field.kind === "identifier") return null;
   return value;

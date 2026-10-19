@@ -49,9 +49,11 @@ resume …) through the shared member-owned controls; cancel refuses a Run that
 already ended. Spending and review decisions (`run.set_mail_import`,
 `run.discover_mail`, `run.commit_prepared`, `run.resolve_finding`) are
 callable, but only on the member's explicit instruction; never infer one.
-Per-operation approvals no longer exist. A Run still `paused_approval` from
-before their removal continues with `lifecycle resume` once the member agrees
-to the paused operation; it re-runs that operation under the current rules. Respect an explicit member pause: do
+Per-operation approvals no longer exist. Runs that were approval-paused are now
+member `paused`, and their never-run operations are `failed` ("Approval pause
+retired before the operation ran"). Replaying a failed operation id is refused;
+after the member resumes the Run, re-issue that work under a new operation id.
+Respect an explicit member pause: do
 not retry or restart until imports are resumed. Follow the returned successor;
 the preceding attempt remains immutable.
 
@@ -129,8 +131,9 @@ same outcome without prescribing an agent runtime.
   Separate charges at one venue or event (each festival stand, each bar tab)
   are separate Purchases grouped by their Project, never one event Purchase:
   funders derive per Purchase, so grouping blends every card into every line.
-- Inventory never auto-increments. An `arrived` finding asks a human to receive,
-  and the writer files it only when a delivered line is unresolved or its
+- Inventory never auto-increments. An `arrived` finding asks a human to receive.
+  An import that first sees delivery, or a source reconciliation that first
+  marks the order delivered, files it only when a delivered line is unresolved or its
   Product is stock-tracked or undecided — the Product's own decision, else
   its Product Category's ([ADR 0013](../../../docs/adr/0013-stock-tracking-inherits-from-product-category.md)).
   Stock tracking decides; whether a Product is consumable does not.

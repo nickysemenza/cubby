@@ -29,7 +29,8 @@ import { upsertDeviceFromHello } from "~/server/domains/device/repo/device-parti
 import {
   claimImageProcessingJob,
   reclaimExpiredImageProcessingLeases,
-  markImageProcessingWaitingForDevice,
+  backOffImageProcessingLease,
+  SERVER_FAILURE_RETRYABLE,
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
@@ -263,7 +264,7 @@ async function completeNormalizedImageInput(
         outcome: {
           kind: "describe_image",
           status: "failed",
-          retryable: context.attempts < 3,
+          retryable: SERVER_FAILURE_RETRYABLE,
           reason: safeImageProcessingError(error),
         },
       },
@@ -489,49 +490,47 @@ export async function claimCompanionImageCommand(
     companionClaimCapabilities(device);
   if (!kinds.length) return null;
   await reclaimExpiredImageProcessingLeases(db);
-  for (let skipped = 0; skipped < 8; skipped++) {
-    const claimed = await claimImageProcessingJob(db, {
-      kinds,
-      processorRevisions: revisions,
-      allowAvifNormalization,
-      leaseMs: input.leaseMs,
+  const claimed = await claimImageProcessingJob(db, {
+    kinds,
+    processorRevisions: revisions,
+    allowAvifNormalization,
+    leaseMs: input.leaseMs,
+  });
+  if (!claimed) return null;
+  try {
+    const command = await prepareCompanionImageCommand(claimed);
+    const assigned = await assignImageProcessingExecutor(db, {
+      jobId: claimed.id,
+      attemptId: claimed.attemptId,
+      userId: input.userId,
+      connectionId: input.connectionId,
+      executor: {
+        kind: "device",
+        deviceId: device.deviceId,
+        name: device.deviceName ?? "Apple device",
+        platform: device.platform,
+        appVersion: device.appVersion,
+        osVersion: device.osVersion ?? null,
+      },
     });
-    if (!claimed) return null;
-    try {
-      const command = await prepareCompanionImageCommand(db, claimed);
-      if (!command) continue;
-      const assigned = await assignImageProcessingExecutor(db, {
+    if (!assigned) {
+      await backOffImageProcessingLease(db, {
         jobId: claimed.id,
         attemptId: claimed.attemptId,
-        userId: input.userId,
-        connectionId: input.connectionId,
-        executor: {
-          kind: "device",
-          deviceId: device.deviceId,
-          name: device.deviceName ?? "Apple device",
-          platform: device.platform,
-          appVersion: device.appVersion,
-          osVersion: device.osVersion ?? null,
-        },
+        reason: "Device assignment was refused",
       });
-      if (!assigned) {
-        await markImageProcessingWaitingForDevice(db, {
-          jobId: claimed.id,
-          attemptId: claimed.attemptId,
-        });
-        return null;
-      }
-      if (!(await reserveCompanionAnalysisOutput(db, command))) return null;
-      return command;
-    } catch (error) {
-      await markImageProcessingWaitingForDevice(db, {
-        jobId: claimed.id,
-        attemptId: claimed.attemptId,
-      });
-      throw error;
+      return null;
     }
+    if (!(await reserveCompanionAnalysisOutput(db, command))) return null;
+    return command;
+  } catch (error) {
+    await backOffImageProcessingLease(db, {
+      jobId: claimed.id,
+      attemptId: claimed.attemptId,
+      reason: safeImageProcessingError(error),
+    });
+    throw error;
   }
-  return null;
 }
 
 export async function completeAssignedCompanionImageProcessing(

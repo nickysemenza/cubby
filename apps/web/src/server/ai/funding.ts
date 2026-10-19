@@ -4,7 +4,7 @@ import type {
   ChatGptPlanAvailability,
 } from "@cubby/schemas/mail-import-settings";
 import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
-import { and, desc, eq, gte, isNotNull, isNull, notIlike } from "drizzle-orm";
+import { and, desc, eq, gte, isNull } from "drizzle-orm";
 
 import { getAiGatewayEgress } from "~/server/cf-env";
 import type { Database } from "~/server/db";
@@ -12,28 +12,28 @@ import { getDb } from "~/server/db/helpers";
 import { aiUsage, run } from "~/server/db/schema";
 import { readPaidGrant } from "~/server/domains/run/repo/paid-grant";
 
-import {
-  AiFundingWaitError,
-  budgetUsd,
-  creditUsageRow,
-  readAiBudget,
-} from "./budget";
+import { budgetUsd, readAiBudget } from "./budget";
 import { AI_BUDGET_WINDOW_MS, aiBudgetWindow } from "./budget-window";
 import type { CreditRefusal } from "./gateway-egress-contract";
 
 /*
- * What decides whether background work waits (ADR 0017): Run origin, the
- * credit window and the ChatGPT plan. Loaded on use by `budget.ts`
- * admissions, so the request-path bundle carries only the budget reads.
+ * What decides how background work is funded (ADR 0017): Run origin and the
+ * credit and plan windows. Loaded on use by `budget.ts` admissions, so the
+ * request-path bundle carries only the budget reads.
  */
 
-/** The refusal a background credit call receives once the credit window is spent. */
-export async function creditBudgetRefusal(
+/** The refusal a background free-rung call receives once its window budget is spent. */
+export async function freeBudgetRefusal(
   db: Database,
+  funding: "subscriber_credit" | "subscription",
 ): Promise<string | null> {
-  const { credit, windowStart, windowEnd } = await readAiBudget(db);
-  return credit.spentUsd >= credit.limitUsd
-    ? `Claude credit budget reached: ${budgetUsd(credit.spentUsd)} of $${credit.limitUsd} standard cost since ${windowStart}; credit resumes at ${windowEnd}.`
+  const status = await readAiBudget(db);
+  const [name, use] =
+    funding === "subscriber_credit"
+      ? ["Claude credit", status.credit]
+      : ["ChatGPT plan", status.plan];
+  return use.spentUsd >= use.limitUsd
+    ? `${name} budget reached: ${budgetUsd(use.spentUsd)} of $${use.limitUsd} standard cost since ${status.windowStart}; it resumes at ${status.windowEnd}.`
     : null;
 }
 
@@ -144,84 +144,8 @@ export async function readAiFundingStatus(
           }
         : { state: "available" as const, until: null, reason: null }),
     },
-    plan,
+    plan: { ...budget.plan, ...plan },
   };
-}
-
-/**
- * The provider's latest credit refusal. Cubby's own window-budget stop
- * (`cubby_credit_budget_reached`) is left out: `credit.spentUsd` reports the
- * current window, and an earlier window's stop no longer applies.
- */
-async function latestCreditRefusal(db: Database, now: Date) {
-  const [row] = await getDb(db)
-    .select({ failure: aiUsage.failure })
-    .from(aiUsage)
-    .where(
-      and(
-        creditUsageRow,
-        isNotNull(aiUsage.failure),
-        notIlike(aiUsage.failure, "%cubby_credit_budget_reached%"),
-        gte(aiUsage.createdAt, new Date(now.getTime() - RECENT_MS)),
-        isNull(aiUsage.deletedAt),
-      ),
-    )
-    .orderBy(desc(aiUsage.createdAt))
-    .limit(1);
-  return row?.failure ?? null;
-}
-
-/**
- * Background work at the paid rung: both free rungs refused. It waits while a
- * free rung can return within six hours (the credit window resets by
- * construction; a plan quota resets at its hint or is assumed to by the next
- * window). Without one — the Console refused the credit and the plan is
- * disconnected — it still never pays automatically; the reason says so.
- */
-export async function fundingWaitError(
-  db: Database,
-  ports: FundingStatusPorts = {},
-): Promise<AiFundingWaitError> {
-  const now = ports.now ?? new Date();
-  const [status, creditRefusal] = await Promise.all([
-    readAiFundingStatus(db, { ...ports, now }),
-    latestCreditRefusal(db, now),
-  ]);
-  const { credit, plan, windowEnd } = status;
-  const creditWindowSpent = credit.spentUsd >= credit.limitUsd;
-  const creditText = creditWindowSpent
-    ? `Claude credit budget used: ${budgetUsd(credit.spentUsd)} of $${credit.limitUsd} this window (resets ${windowEnd})`
-    : credit.state === "refused"
-      ? `Claude credit refused by Anthropic until ${credit.until}, skipped until then with one probe per window ("Retry Claude credit now" in Settings → AI funding, or ai_funding.reset_credit_refusal, clears it): ${credit.reason}`
-      : `Claude credit refused by Anthropic${creditRefusal ? `: ${creditRefusal}` : ""}`;
-  const creditReturns = creditWindowSpent
-    ? windowEnd
-    : credit.until !== null && credit.until <= windowEnd
-      ? credit.until
-      : null;
-  const planReturns =
-    plan.state === "paused"
-      ? plan.until
-      : plan.state === "available"
-        ? windowEnd
-        : null;
-  const planText =
-    plan.state === "paused"
-      ? `ChatGPT plan quota refused until ${plan.until}: ${plan.reason}`
-      : plan.state === "available"
-        ? `ChatGPT plan refused this request; assumed back by ${windowEnd}`
-        : `ChatGPT plan unavailable (${plan.state}): ${plan.reason}`;
-  const returns = [creditReturns, planReturns]
-    .filter((at): at is string => at !== null)
-    .sort();
-  const resumeAt = returns[0] ?? windowEnd;
-  return new AiFundingWaitError(
-    status,
-    returns.length
-      ? `Waiting for free AI capacity; background work never pays. ${creditText}. ${planText}. Resumes at ${resumeAt}; "Run now, paid allowed" spends from the paid budget instead.`
-      : `No free AI capacity can return within six hours, and background work never pays. ${creditText}. ${planText}. Reconnect the ChatGPT plan, or raise the Console limit and choose "Retry Claude credit now", or use "Run now, paid allowed"; rechecks at ${windowEnd}.`,
-    resumeAt,
-  );
 }
 
 const BACKGROUND_TRIGGERS: readonly string[] = [

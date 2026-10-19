@@ -28,6 +28,7 @@ import { sql, and, asc, eq, inArray, isNotNull } from "drizzle-orm";
 
 import { comparePlainDatesDescending } from "~/lib/household-date";
 import type { Database } from "~/server/db";
+import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
 import { categorySummarySql } from "~/server/db/computed/product-category-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
@@ -171,7 +172,7 @@ const loadPurchasesByProductId = async (
       .where(
         and(
           notDeleted(expense),
-          eq(expense.future, false),
+          actualExpense(),
           inArray(expense.productId, productIds),
         ),
       ),
@@ -205,7 +206,7 @@ const loadPurchasesByProductId = async (
           .where(
             and(
               notDeleted(expense),
-              eq(expense.future, false),
+              actualExpense(),
               inArray(expense.purchaseId, purchaseIds),
             ),
           );
@@ -336,7 +337,7 @@ async function loadSmartCollections(
           .where(
             and(
               notDeleted(expense),
-              eq(expense.future, false),
+              actualExpense(),
               isNotNull(expense.productId),
               inArray(effectiveExpenseTradeSql(), trades),
             ),

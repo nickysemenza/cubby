@@ -164,7 +164,7 @@ interface AgentFetchOptions extends Pick<
   | "subscriptionRequired"
   | "subscriptionFallback"
   | "beforePaidRequest"
-  | "beforeCreditRequest"
+  | "beforeFreeRequest"
 > {
   funding?: InferenceFunding;
   fundingFallback?: boolean;
@@ -176,7 +176,7 @@ interface AgentFetchOptions extends Pick<
     | "subscriptionRequired"
     | "subscriptionFallback"
     | "beforePaidRequest"
-    | "beforeCreditRequest"
+    | "beforeFreeRequest"
   >;
   gateway: () => AgentGateway;
   testModel?: TestModel;
@@ -209,7 +209,7 @@ export function createCubbyGatewayFetch(
       | "subscriptionRequired"
       | "subscriptionFallback"
       | "beforePaidRequest"
-      | "beforeCreditRequest"
+      | "beforeFreeRequest"
     >,
   ) =>
     gatewayFetchThrough({
@@ -262,11 +262,11 @@ export function createCubbyGatewayFetch(
       subscriptionRequired: options.subscriptionRequired,
       subscriptionFallback: options.subscriptionFallback,
       beforePaidRequest: options.beforePaidRequest,
-      beforeCreditRequest: options.beforeCreditRequest,
+      beforeFreeRequest: options.beforeFreeRequest,
       ...options.transportPolicy?.(),
     };
     const admit = policy.beforePaidRequest;
-    const admitCredit = policy.beforeCreditRequest;
+    const admitFree = policy.beforeFreeRequest;
     let refusal: { error: unknown } | undefined;
     try {
       return await routedFetch({
@@ -281,11 +281,11 @@ export function createCubbyGatewayFetch(
               throw error;
             }
           }),
-        beforeCreditRequest:
-          admitCredit &&
-          (async (request) => {
+        beforeFreeRequest:
+          admitFree &&
+          (async (request, funding) => {
             try {
-              return await admitCredit(request);
+              return await admitFree(request, funding);
             } catch (error: unknown) {
               refusal = { error };
               throw error;

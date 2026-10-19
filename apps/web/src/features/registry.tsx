@@ -6,7 +6,7 @@ import {
   type RunPurpose,
 } from "@cubby/schemas/run-fields";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
-import { type FunctionComponent, lazy as reactLazy } from "react";
+import { type FunctionComponent, lazy } from "react";
 
 import type {
   CollectionActionProps,
@@ -78,24 +78,6 @@ import { createUnitMappingsColumn } from "~/features/units/unit-mappings-column"
  * route chunk carries only what its own entity declares. Code-split entry
  * points call `installFeatures()` (see `entity/feature-registry.ts`).
  */
-
-const fillLoaders: Parameters<typeof reactLazy>[0][] = [];
-
-/** React `lazy`, recording each loader for {@link preloadFeatureFills}. */
-const lazy: typeof reactLazy = (load) => {
-  fillLoaders.push(load);
-  return reactLazy(load);
-};
-
-/**
- * Load every lazy fill now. A ui test that renders lazy sections awaits this
- * at module top level (no hook timeout there); otherwise the fills are still
- * importing when the file ends and its `dynamicImportSettled` wait timed out
- * under load.
- */
-export async function preloadFeatureFills(): Promise<void> {
-  await Promise.all(fillLoaders.map((load) => load()));
-}
 
 /** `lazy` wants a default export; expose one named export as it. */
 const named = <M, K extends keyof M>(

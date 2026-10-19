@@ -646,7 +646,8 @@ export const mailReadOut = mailMessageRef.extend({
     .array(
       z.object({
         sourceOrderId: z.uuid(),
-        purchaseId: purchaseShortcode,
+        /** Null when a deleted Purchase was accepted before observations named it. */
+        purchaseId: purchaseShortcode.nullable(),
         purchaseDeleted: z.boolean(),
         source: importSourceIdentity,
       }),

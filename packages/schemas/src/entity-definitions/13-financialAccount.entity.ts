@@ -96,6 +96,7 @@ export default defineEntity({
           detail: true,
           readPath: "identity.kind",
           renderer: { detail: "financial-account-identity" },
+          mobile: { slot: "subtitle", priority: 10 },
           // Labels for `identity.kind`; a bare `replaceAll("_", " ")` would
           // read `stored_value` as "stored value".
           valueOptions: [
@@ -142,7 +143,11 @@ export default defineEntity({
             reviewRequired: true,
           },
         },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          mobile: { slot: "meta", priority: 20 },
+        },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().optional(),
@@ -199,7 +204,11 @@ export default defineEntity({
             ],
           },
         },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          mobile: { slot: "trailing", priority: 10 },
+        },
         validation: {
           read: financialAccountNetwork.nullable(),
           create: financialAccountNetwork.nullable().optional(),

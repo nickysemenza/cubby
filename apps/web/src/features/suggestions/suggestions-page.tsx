@@ -457,6 +457,7 @@ function QuickFilters({
             options={options}
             isLoading={config.isLoading}
             onSearchChange={config.onSearchChange}
+            records={config.records}
             onOpenChange={(open) => {
               if (open)
                 config.onActivate?.(tableState.getColumnFilterValues(columnId));

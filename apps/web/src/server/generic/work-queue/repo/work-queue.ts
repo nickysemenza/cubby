@@ -7,7 +7,10 @@ import {
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   dataCheck,
+  dataCheckMessage,
+  dataChecksByEntity,
   scoredEntities,
+  type DataCheck,
   type ScoredEntity,
 } from "@cubby/schemas/data-quality";
 import { entityRefKey, entitySchema, type Entity } from "@cubby/schemas/entity";
@@ -51,6 +54,7 @@ import { problemQueryDeclarations } from "~/entity/problems/problem-registry";
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { getDb, ilikeContains } from "~/server/db/helpers";
+import { actualExpenseSql } from "~/server/db/helpers/predicates";
 import {
   expense,
   financialAccount,
@@ -89,6 +93,7 @@ import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import {
   gapCondition,
+  relatedGapCondition,
   statementQualityRelations,
   type StatementQualityRelations,
 } from "~/server/generic/data-quality/repo/sql";
@@ -123,10 +128,9 @@ const members = workWaitingForSchema.options[1].shape.kind.value;
 const unresolved = workWaitingForSchema.options[2].shape.kind.value;
 
 type QueueInput = z.infer<typeof workQueueHouseholdInput>;
-type Candidate = Pick<
-  WorkQueueRow,
-  "source" | "kind" | "reason" | "nextAction"
->;
+type Candidate = Pick<WorkQueueRow, "source" | "kind" | "nextAction"> & {
+  reason: string | SQL;
+};
 
 const viewFilters = (entity: Entity, id: string) => {
   const view = entitySummary[entity].list.savedViews.find(
@@ -154,6 +158,42 @@ const gapViewFilters = (
   return checks.length > 0 ? { ...filters, dataGap: checks } : null;
 };
 
+/** A gap row's reason as `stateRowQuality` displays it, for search: its live
+ * own gap messages in check order, then its related records' (a view may list
+ * a related entity's check), deduplicated, else the branch's fallback. */
+const gapReasonSql = (
+  entity: (typeof workQueueGapViews)[number]["entity"],
+  fallback: string,
+  context?: QualityReadContext,
+): SQL => {
+  const gapView = workQueueGapViews.find((view) => view.entity === entity);
+  if (!gapView) throw new Error(`Work queue has no gap view for ${entity}`);
+  const viewChecks = workQueueGapChecks(gapView);
+  const own = new Set<DataCheck>(dataChecksByEntity[entity].options);
+  const byMessage = new Map<string, SQL[]>();
+  for (const check of [
+    ...dataChecksByEntity[entity].options.filter((check) =>
+      viewChecks.includes(check),
+    ),
+    ...viewChecks.filter((check) => !own.has(check)),
+  ]) {
+    const message = dataCheckMessage[check];
+    byMessage.set(message, [
+      ...(byMessage.get(message) ?? []),
+      own.has(check)
+        ? gapCondition(entity, check, undefined, context)
+        : relatedGapCondition(entity, check),
+    ]);
+  }
+  const parts = [...byMessage].map(
+    ([message, conditions]) =>
+      sql`CASE WHEN ${sql.join(conditions, sql` OR `)} THEN ${message}::text END`,
+  );
+  return parts.length
+    ? sql`coalesce(nullif(concat_ws(' ', ${sql.join(parts, sql`, `)}), ''), ${fallback}::text)`
+    : sql`${fallback}::text`;
+};
+
 /** One read-only relation, shared by household routing and member eligibility. */
 /** Diagnostic-backed queue branches; supplied by `service/work-queue-read`. */
 export type WorkProblemSelections = (
@@ -168,6 +208,7 @@ async function workQueueProjection(
   problemSelections: WorkProblemSelections,
   readContexts: Partial<Record<Entity, QualityReadContext>>,
   quality: StatementQualityRelations,
+  searched: boolean,
 ): Promise<SQL> {
   const selections: SQL[] = [];
   if (!scope.check) {
@@ -247,12 +288,23 @@ async function workQueueProjection(
   const admits = (entity: Entity, carriesGaps = false) =>
     (!scope.check || carriesGaps) &&
     (!scope.record || scope.record.entity === entity);
-  const research = {
-    source: "research",
-    kind: "research",
-    reason: "Research queue",
-    nextAction: "Review missing facts and add verified evidence.",
-  } satisfies Candidate;
+  // Search runs before paging, so a searched gap row states its displayed
+  // reason here; otherwise `stateRowQuality` fills it for the page alone.
+  const gapReason = (
+    entity: (typeof workQueueGapViews)[number]["entity"],
+    fallback: string,
+    context?: QualityReadContext,
+  ) => (searched ? gapReasonSql(entity, fallback, context) : fallback);
+  const research = (
+    entity: (typeof workQueueGapViews)[number]["entity"],
+    context?: QualityReadContext,
+  ) =>
+    ({
+      source: "research",
+      kind: "research",
+      reason: gapReason(entity, "Research queue", context),
+      nextAction: "Review missing facts and add verified evidence.",
+    }) satisfies Candidate;
   const productGaps = gapViewFilters(scope, "product");
   if (productGaps && admits("product", true))
     selections.push(
@@ -267,7 +319,7 @@ async function workQueueProjection(
           productFiltersSchema.parse(productGaps),
           readContexts.product,
         ),
-        details: research,
+        details: research("product", readContexts.product),
         key: "research:product",
         shared: true,
         carriesGaps: true,
@@ -283,7 +335,7 @@ async function workQueueProjection(
         name: sql`"Vendor".name`,
         owners: sql`ARRAY[]::uuid[]`,
         where: buildVendorWhereClause(vendorFiltersSchema.parse(vendorGaps)),
-        details: research,
+        details: research("vendor"),
         key: "research:vendor",
         shared: true,
         carriesGaps: true,
@@ -302,7 +354,7 @@ async function workQueueProjection(
           purchaseFiltersSchema.parse(purchaseGaps),
           quality.context("purchase"),
         ),
-        details: research,
+        details: research("purchase", quality.context("purchase")),
         key: "research:purchase",
         carriesGaps: true,
       }),
@@ -320,7 +372,7 @@ async function workQueueProjection(
           db,
           expenseFiltersSchema.parse(expenseGaps),
         ),
-        details: research,
+        details: research("expense"),
         key: "research:expense",
         carriesGaps: true,
       }),
@@ -338,8 +390,11 @@ async function workQueueProjection(
         details: {
           source: "email",
           kind: "review",
-          // Replaced by the row's own pipeline gaps after paging.
-          reason: "Email pipeline gap",
+          reason: gapReason(
+            "email",
+            "Email pipeline gap",
+            quality.context("email"),
+          ),
           nextAction: "Review relevance, retained original and import status.",
         },
         key: "email",
@@ -797,6 +852,7 @@ async function queryWorkQueue(
     problemSelections,
     { product: productReadContext },
     quality,
+    Boolean(input.query),
   );
   // All sources, including findings, defer planned purchases before counts
   // and paging. An empty purchase is unknown, not implicitly planned.
@@ -805,7 +861,7 @@ async function queryWorkQueue(
     SELECT 1 FROM "Purchase" planned WHERE planned.shortcode = routed.id AND planned."deletedAt" IS NULL
       AND (planned.date > ${householdLocalDate(new Date())}::date OR (
         EXISTS (SELECT 1 FROM "Expense" line WHERE line."purchaseId" = planned.id AND line."deletedAt" IS NULL)
-        AND NOT EXISTS (SELECT 1 FROM "Expense" line WHERE line."purchaseId" = planned.id AND line."deletedAt" IS NULL AND line.future = false)
+        AND NOT EXISTS (SELECT 1 FROM "Expense" line WHERE line."purchaseId" = planned.id AND line."deletedAt" IS NULL AND ${sql.raw(actualExpenseSql("line"))})
       ))
   ))`,
   ];
@@ -832,7 +888,7 @@ async function queryWorkQueue(
       OR (routed.entity = ${entitySchema.enum.run} AND EXISTS (
         SELECT 1 FROM "Run" waiting
         WHERE waiting.shortcode = routed.id AND waiting."deletedAt" IS NULL
-          AND (waiting.status IN (${runStatus.enum.paused}, ${runStatus.enum.paused_auth}, ${runStatus.enum.paused_offline}, ${runStatus.enum.paused_approval})
+          AND (waiting.status IN (${runStatus.enum.paused}, ${runStatus.enum.paused_auth}, ${runStatus.enum.paused_offline})
             OR waiting."failureCode" IN ('execution_limit'))
       ))
     )`);

@@ -209,9 +209,13 @@ test("declared record lists retain identities, relationships and amounts on desk
     `/locations?name=${encodeURIComponent(`${name} shelf`)}`,
   );
   await chooseListView(page, "List");
+  await page
+    .getByRole("button", { name: "Locations view: List", exact: true })
+    .click();
   await expect(
-    page.getByRole("button", { name: "Locations view: List", exact: true }),
-  ).toBeVisible();
+    page.getByRole("menuitem", { name: "List view", exact: true }),
+  ).toHaveAttribute("aria-current", "true");
+  await page.keyboard.press("Escape");
   await expect(
     page.getByRole("columnheader").filter({
       has: page.getByRole("button", {
@@ -384,6 +388,20 @@ test("the Run list hides ephemeral runs by default and shows them once cleared",
 
   await page.reload();
   await expect(table).toContainText(fixture.hiddenName);
+});
+
+// Regression: a list with no totals, Sweep or status kept a bordered blank
+// band above its records.
+test("a list status strip with nothing to show takes no space", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const strip = page.locator("[data-list-status-strip]");
+  await gotoAuthenticatedPage(page, "/recipes");
+  await expect(strip).toBeAttached();
+  await expect(strip).toBeHidden();
+  await gotoAuthenticatedPage(page, "/purchases");
+  await expect(strip).toBeVisible();
 });
 
 test("record dates retain their calendar label with present and future context", async ({

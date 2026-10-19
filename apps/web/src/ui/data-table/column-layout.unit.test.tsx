@@ -58,7 +58,7 @@ describe("desktop surplus allocation", () => {
     maxSize: 272,
     meta: { cellData: { kind: "select" } },
   });
-  const code = column("orderId", 160, { maxSize: 320, meta: { mono: true } });
+  const code = column("orderId", 160, { maxSize: 320, meta: { code: true } });
   const actions = column("actions", 40, {
     pinned: "end",
     meta: { entityColumnRole: "action" },

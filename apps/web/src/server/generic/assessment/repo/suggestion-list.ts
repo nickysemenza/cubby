@@ -61,11 +61,13 @@ const facetsOf = (
   Object.entries(columns).flatMap(([column, spec]) =>
     "facet" in spec ? [column] : [],
   );
-/** One family's chips, or the common chips for the All view. */
-const facetColumns = (families: readonly SuggestionListFamily[]) =>
-  families.length === 1 && families[0]
+/** Common facets (the clean banner reads `clean`), plus one family's chips. */
+const facetColumns = (families: readonly SuggestionListFamily[]) => [
+  ...facetsOf(suggestionColumns.common),
+  ...(families.length === 1 && families[0]
     ? facetsOf(suggestionColumns[families[0]])
-    : facetsOf(suggestionColumns.common);
+    : []),
+];
 
 const values = (value: Value | undefined) =>
   value === undefined ? [] : Array.isArray(value) ? value : [value];

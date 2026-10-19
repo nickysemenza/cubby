@@ -380,14 +380,14 @@ describe("Mail import switch and discovery through MCP", () => {
       (await call("ai_funding_read", { action: "status" })).structuredContent,
     ).toMatchObject({
       credit: {
-        limitUsd: 5,
+        limitUsd: 1.5,
         spentUsd: 0,
         state: "refused",
         until: "2099-11-01T00:00:00.000Z",
         reason: CONSOLE_LIMIT,
       },
       paid: { limitUsd: 1, spentUsd: 0 },
-      plan: { state: "disconnected", until: null },
+      plan: { limitUsd: 2, spentUsd: 0, state: "disconnected", until: null },
     });
     expect(
       (await call("imports_read", { action: "mail_import" })).structuredContent,
