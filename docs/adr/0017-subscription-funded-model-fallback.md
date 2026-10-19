@@ -147,10 +147,15 @@ relevance fallback and the Mail import Runs it starts:
 
 A member's "Run now, paid allowed" override, available in the Run header's
 More actions menu and on the Mail import card, authorizes paid funding for one
-Run (and the imports its discovery starts) within the paid budget; spending past a
-spent paid budget requires a second confirmation naming the amount, valid for
-the window it was granted in. The paid budget counts charged cost only, so
-credit usage never consumes it.
+Run (its retries and the imports its discovery starts) within the paid budget
+for that Run's whole life: a granted Run paused on a spent paid budget resumes
+and pays again in the next window without another click, because the member
+asked for that batch to finish. Spending past a spent paid budget requires a
+second confirmation naming the amount, valid only for the window it was
+granted in. The paid budget counts charged cost only, so credit usage never
+consumes it. "Run discovery now" without the override is background work like
+scheduled discovery: it waits for free capacity, and the override is how a
+member chooses to pay.
 The header exposes this funding action for discovery and suggestion Runs too,
 without giving them import-agent commands. Every frontier admission path reads
 the same Run grant and window-scoped allowance.

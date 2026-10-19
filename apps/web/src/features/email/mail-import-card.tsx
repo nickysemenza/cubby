@@ -90,7 +90,10 @@ export function MailImportSettings() {
   });
   const discover = useActionMutation({
     mutationFn: () => run.discoverMail.mutationOptions(),
-    success: "Discovery started with paid models allowed",
+    success: (data) =>
+      data.started > 0
+        ? "Discovery started with paid models allowed"
+        : "Discovery is already running; paid models are now allowed for it",
     error: "Couldn't start discovery",
   });
   const mailboxes = status.data?.mailboxes ?? [];

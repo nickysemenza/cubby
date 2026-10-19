@@ -136,8 +136,8 @@ export async function assertAiBudget(db: Database, allowanceUsd = 0) {
 /**
  * Paid admission for a frontier call that has no Run-bound preflight.
  * Background work waits instead of paying; other work spends within the paid
- * budget. A supplied preflight owns the check itself (`paidRunPreflight`), so
- * it can pause its Run.
+ * budget. A stop pauses the call's Run, if any. A supplied preflight owns the
+ * check itself (`paidRunPreflight`).
  */
 export function withAiBudget<R>(
   db: Database | undefined,
@@ -145,16 +145,27 @@ export function withAiBudget<R>(
   preflight: ((request: R) => Promise<void>) | undefined,
 ): ((request: R) => Promise<void>) | undefined {
   if (preflight || !db || !aiBudgetCovers(call.model)) return preflight;
+  const { runId } = call;
   return async () => {
-    let allowanceUsd = 0;
-    if (call.runId) {
-      const funding = await import("./funding");
-      const allowance = await funding.readPaidAllowance(db, call.runId);
-      if (allowance === null && (await funding.isBackgroundRun(db, call.runId)))
-        throw await funding.fundingWaitError(db);
-      allowanceUsd = allowance ?? 0;
+    try {
+      let allowanceUsd = 0;
+      if (runId) {
+        const funding = await import("./funding");
+        const allowance = await funding.readPaidAllowance(db, runId);
+        if (allowance === null && (await funding.isBackgroundRun(db, runId)))
+          throw await funding.fundingWaitError(db);
+        allowanceUsd = allowance ?? 0;
+      }
+      await assertAiBudget(db, allowanceUsd);
+    } catch (error) {
+      // A Run-bound stop pauses the Run for the next window, as the agent's
+      // `paidRunPreflight` does, instead of failing it.
+      if (runId && error instanceof AiBudgetExhaustedError)
+        await (
+          await import("~/server/domains/run/repo/execution-context")
+        ).pauseForFunding(db, runId, error);
+      throw error;
     }
-    await assertAiBudget(db, allowanceUsd);
   };
 }
 

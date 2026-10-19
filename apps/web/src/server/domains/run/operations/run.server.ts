@@ -48,6 +48,7 @@ import {
 import { loadMailReclassificationRead } from "~/server/domains/run/repo/run-reclassification-read";
 import { resumeFundingPausedRuns } from "~/server/domains/run/service/ai-work";
 import { assertPaidOverride } from "~/server/domains/run/service/paid-override";
+import { createAppError } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import type { AuthenticatedRequestContext } from "~/server/http/request-context";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
@@ -69,7 +70,10 @@ async function controlRunOperation(
   if (input.action === "run_now_paid")
     await assertPaidOverride(context.db, input.paidOverBudgetUsd);
   else if (input.paidOverBudgetUsd !== undefined)
-    throw new Error("paidOverBudgetUsd applies only to run_now_paid.");
+    throw createAppError(
+      "RUN_CONTROL_UNSUPPORTED",
+      "paidOverBudgetUsd applies only to run_now_paid.",
+    );
   const [target] = await getDb(context.db)
     .select({ purpose: runTable.purpose })
     .from(runTable)
@@ -175,7 +179,10 @@ export const runHandlers = implementOperationDomain(runContract, {
     if (input.paidAllowed)
       await assertPaidOverride(context.db, input.paidOverBudgetUsd);
     else if (input.paidOverBudgetUsd !== undefined)
-      throw new Error("paidOverBudgetUsd applies only with paidAllowed.");
+      throw createAppError(
+        "RUN_CONTROL_UNSUPPORTED",
+        "paidOverBudgetUsd applies only with paidAllowed.",
+      );
     return startMailDiscovery(context.db, {
       target: {
         ledgerPartyId: party.id,

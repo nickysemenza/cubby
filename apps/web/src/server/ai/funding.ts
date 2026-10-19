@@ -3,7 +3,7 @@ import type {
   AiFundingStatus,
   ChatGptPlanAvailability,
 } from "@cubby/schemas/mail-import-settings";
-import { and, desc, eq, gte, isNotNull, isNull } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, isNull, notIlike } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
@@ -119,6 +119,11 @@ export async function readAiFundingStatus(
   return { ...budget, plan };
 }
 
+/**
+ * The provider's latest credit refusal. Cubby's own window-budget stop
+ * (`cubby_credit_budget_reached`) is left out: `credit.spentUsd` reports the
+ * current window, and an earlier window's stop no longer applies.
+ */
 async function latestCreditRefusal(db: Database, now: Date) {
   const [row] = await getDb(db)
     .select({ failure: aiUsage.failure })
@@ -127,6 +132,7 @@ async function latestCreditRefusal(db: Database, now: Date) {
       and(
         creditUsageRow,
         isNotNull(aiUsage.failure),
+        notIlike(aiUsage.failure, "%cubby_credit_budget_reached%"),
         gte(aiUsage.createdAt, new Date(now.getTime() - RECENT_MS)),
         isNull(aiUsage.deletedAt),
       ),

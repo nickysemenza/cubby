@@ -3,7 +3,8 @@
  * Purchase that is not the one same-Vendor order its identifier names (two
  * matches, no match, another Vendor's order, an unknown sender); a refund,
  * cancellation or return reads as shipped or delivered; a confirmation links
- * a Purchase no import itemized; a match on another member's account or an
+ * a Purchase no import itemized (any lifecycle notice does); a known
+ * Vendor's Email is closed unrelated; a match on another member's account or an
  * Email with retained attachment bytes skips the judgment `mail.resolve`
  * would ask a model for; an abstaining (`uncertain`), member-resolved or
  * member-selected Email is disposed of as unrelated.
@@ -34,6 +35,7 @@ const newsletter = {
   subject: "Synthetic garden newsletter",
   text: "Seasonal planting tips.",
   candidates: [],
+  senderVendorId: null,
 } satisfies Partial<MailRuleEvidence>;
 
 const evidence = (
@@ -189,6 +191,37 @@ describe("mail import rule", () => {
   ])("hands the coordinator %s", (_case, overrides) => {
     expect(decideMailByRule(evidence(overrides)).kind).toBe("coordinator");
   });
+
+  // Review findings: a known Vendor's misclassified receipt (image-only or
+  // oddly formatted) was closed unrelated with no model review, and a
+  // shipment for a Purchase no import itemized was linked and closed although
+  // the coordinator could itemize it from the notice's line table.
+  it("leaves a known Vendor's unrelated-classified Email to the coordinator", () => {
+    expect(
+      decideMailByRule(
+        evidence({
+          ...newsletter,
+          senderVendorId: vendorId,
+          classification: "unrelated",
+          classificationStage: "model",
+        }),
+      ),
+    ).toMatchObject({ kind: "coordinator" });
+  });
+
+  it.each(["Your order SYN-1001 has shipped", "Delivered: order SYN-1001"])(
+    "leaves %s for an unitemized Purchase to the coordinator",
+    (subject) => {
+      expect(
+        decideMailByRule(
+          evidence({
+            subject,
+            candidates: [{ ...candidate, importedSource: false }],
+          }),
+        ),
+      ).toMatchObject({ kind: "coordinator" });
+    },
+  );
 
   it("settles a duplicate confirmation of an imported order", () => {
     expect(
