@@ -9,26 +9,31 @@ import Testing
 // with a blank reason, counted as answered; the exact suggestion preselected for the person; a
 // decision sent under another line's order or line ids; the trade left out; a commit sent without
 // the confirmation the server declared, twice, or while incomplete; an answer change that keeps the
-// old operation id (the server rejects a replayed id carrying other input).
+// old operation id (the server rejects a replayed id carrying other input); a new Product beside an
+// exact-name candidate sent without its Distinct-from Sources, which the commit guard refuses.
 
 private func decode<T: Decodable>(_ json: String) throws -> T {
     try JSONDecoder.cubby().decode(T.self, from: Data(json.utf8))
 }
 
-private func choiceJSON(_ id: String, title: String) -> String {
-    #"""
-    {"id": "\#(id)", "label": "Product decision for \#(title)", "required": true,
-     "options": [
-       {"id": "existing", "label": "Use an existing Product",
-        "pick": {"entity": "product", "label": "Product for \#(title)"}},
-       {"id": "new", "label": "Create a new Product", "hint": "A new Product will use this line."},
-       {"id": "unresolved", "label": "Leave Product unresolved",
-        "text": {"label": "Reason for leaving \#(title) unresolved"}},
-       {"id": "expense_only", "label": "Record as an expense only"}],
-     "suggestions": [
-       {"optionId": "existing", "entity": "product", "id": "PRD-4K7M", "name": "Exact thing",
-        "label": "Use Exact thing", "subtitle": "Fixture maker", "badges": ["Exact identifier"]}]}
-    """#
+private func choiceJSON(_ id: String, title: String, distinctFrom: [String] = []) -> String {
+    let records = distinctFrom.map {
+        #"{"entity": "product", "id": "\#($0)", "name": "Same-named \#($0)"}"#
+    }
+    let evidence = records.isEmpty ? "" : #", "distinctFrom": [\#(records.joined(separator: ", "))]"#
+    return #"""
+        {"id": "\#(id)", "label": "Product decision for \#(title)", "required": true,
+         "options": [
+           {"id": "existing", "label": "Use an existing Product",
+            "pick": {"entity": "product", "label": "Product for \#(title)"}},
+           {"id": "new", "label": "Create a new Product", "hint": "A new Product will use this line."\#(evidence)},
+           {"id": "unresolved", "label": "Leave Product unresolved",
+            "text": {"label": "Reason for leaving \#(title) unresolved"}},
+           {"id": "expense_only", "label": "Record as an expense only"}],
+         "suggestions": [
+           {"optionId": "existing", "entity": "product", "id": "PRD-4K7M", "name": "Exact thing",
+            "label": "Use Exact thing", "subtitle": "Fixture maker", "badges": ["Exact identifier"]}]}
+        """#
 }
 
 private func lineRow(_ title: String, choice: String? = nil) -> String {
@@ -38,9 +43,9 @@ private func lineRow(_ title: String, choice: String? = nil) -> String {
 }
 
 /// A prepared batch: two Product lines (same stable line id in two orders), one adjustment.
-private func preparedReport(disabledReason: String? = nil, committedTrade: Bool = true) throws
-    -> EntityReportOut
-{
+private func preparedReport(
+    disabledReason: String? = nil, committedTrade: Bool = true, distinctFrom: [String] = []
+) throws -> EntityReportOut {
     let reason = disabledReason.map { #""\#($0)""# } ?? "null"
     let trade =
         committedTrade
@@ -51,7 +56,7 @@ private func preparedReport(disabledReason: String? = nil, committedTrade: Bool 
     return try decode(
         #"""
         {"blocks": [{"kind": "records", "empty": "", "rows": [
-           \#(lineRow("Item A", choice: choiceJSON("o1/l1", title: "Item A"))),
+           \#(lineRow("Item A", choice: choiceJSON("o1/l1", title: "Item A", distinctFrom: distinctFrom))),
            \#(lineRow("Item B", choice: choiceJSON("o2/l1", title: "Item B"))),
            \#(lineRow("Adjustment"))],
          "form": {"choices": [\#(trade)],
@@ -172,6 +177,49 @@ struct ReportChoiceAnswersTests {
         let lines = try JSONDecoder().decode([[String: AnyDecodable]].self, from: sent)
         #expect(lines[0]["resolution"]?.object?.keys.sorted() == ["kind"])
         #expect(lines[0]["resolution"]?.object?["kind"]?.string == "expense_only")
+    }
+
+    @Test("Creating a new Product beside an exact-name candidate needs a Source for each one")
+    func distinctFromRequired() throws {
+        let batch = try recordsBlock(try preparedReport(distinctFrom: ["PRD-7Q2W", "PRD-9X3Z"]))
+        let form = try #require(batch.form)
+        let choice = batch.rowChoices[0]
+        var answers = ReportChoiceAnswers()
+        answers.choose(choice, optionID: "new")
+        answers.choose(batch.rowChoices[1], optionID: "new")
+        answers.choose(form.choices[0], optionID: "other")
+        // A bare `{kind: "new"}` is refused by the commit guard, so it must not be sendable.
+        #expect(!answers.isAnswered(choice))
+        #expect(answers.commitInput(for: form) == nil)
+        #expect(choice.options[1].distinctFrom.map(\.id) == ["PRD-7Q2W", "PRD-9X3Z"])
+
+        answers.writeSource(
+            choice, recordID: "PRD-9X3Z", url: " https://example.com/b ", quote: "  Unscented  ")
+        #expect(!answers.isAnswered(choice))
+        answers.writeSource(choice, recordID: "PRD-7Q2W", url: "https://example.com/a", quote: "   ")
+        #expect(!answers.isAnswered(choice))
+        answers.writeSource(
+            choice, recordID: "PRD-7Q2W", url: "https://example.com/a", quote: "Family size")
+        #expect(answers.isAnswered(choice))
+
+        let input = try #require(answers.commitInput(for: form))
+        let sent = try JSONEncoder.cubby().encode(input.resolutions)
+        let lines = try JSONDecoder().decode([[String: AnyDecodable]].self, from: sent)
+        let resolution = try #require(lines[0]["resolution"]?.object)
+        #expect(resolution["kind"]?.string == "new")
+        let evidence = try #require(resolution["distinctFrom"]?.array)
+        #expect(evidence.map { $0.object?["productId"]?.string } == ["PRD-7Q2W", "PRD-9X3Z"])
+        #expect(
+            evidence.map { $0.object?["url"]?.string } == ["https://example.com/a", "https://example.com/b"])
+        #expect(evidence.map { $0.object?["quote"]?.string } == ["Family size", "Unscented"])
+        // A line with no exact-name candidate still sends a bare new decision.
+        #expect(lines[1]["resolution"]?.object?.keys.sorted() == ["kind"])
+
+        // Another option drops the Sources, as web does, so returning to "new" asks again.
+        answers.choose(choice, optionID: "unresolved")
+        #expect(answers.answer(for: choice.id)?.distinctFrom.isEmpty == true)
+        answers.choose(choice, optionID: "new")
+        #expect(!answers.isAnswered(choice))
     }
 
     @Test("Every answer change makes a new operation id; reading the same answers does not")
@@ -295,6 +343,7 @@ struct ApprovePreparedOrdersTests {
 private enum AnyDecodable: Decodable {
     case string(String)
     case object([String: AnyDecodable])
+    case array([AnyDecodable])
     case other
 
     init(from decoder: any Decoder) throws {
@@ -303,6 +352,8 @@ private enum AnyDecodable: Decodable {
             self = .string(value)
         } else if let value = try? container.decode([String: AnyDecodable].self) {
             self = .object(value)
+        } else if let value = try? container.decode([AnyDecodable].self) {
+            self = .array(value)
         } else {
             self = .other
         }
@@ -310,4 +361,5 @@ private enum AnyDecodable: Decodable {
 
     var string: String? { if case .string(let value) = self { value } else { nil } }
     var object: [String: AnyDecodable]? { if case .object(let value) = self { value } else { nil } }
+    var array: [AnyDecodable]? { if case .array(let value) = self { value } else { nil } }
 }

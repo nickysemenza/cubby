@@ -95,7 +95,50 @@ struct ReportChoiceView: View {
                     .disabled(disabled)
                     .accessibilityIdentifier("report.choice.text.\(choice.id)")
             }
+            ForEach(option?.distinctFrom ?? []) { record in
+                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+                    Text("Show with a Source how this differs from \(record.name)")
+                        .font(.fieldGuideLabel).foregroundStyle(.secondary)
+                    TextField("Source URL for \(record.name)", text: sourceBinding(record, \.url))
+                        .textFieldStyle(.roundedBorder)
+                        .textContentType(.URL)
+                        #if os(iOS)
+                            .keyboardType(.URL)
+                            .textInputAutocapitalization(.never)
+                        #endif
+                        .autocorrectionDisabled()
+                        .disabled(disabled)
+                        .accessibilityIdentifier("report.choice.source.url.\(choice.id).\(record.id)")
+                    TextField(
+                        "Quoted difference from \(record.name)", text: sourceBinding(record, \.quote),
+                        axis: .vertical
+                    )
+                    .textFieldStyle(.roundedBorder)
+                    .disabled(disabled)
+                    .accessibilityIdentifier("report.choice.source.quote.\(choice.id).\(record.id)")
+                }
+            }
         }
+    }
+
+    private func sourceBinding(
+        _ record: ReportPresentation.Choice.Option.Record,
+        _ field: WritableKeyPath<ReportChoiceAnswers.Source, String>
+    ) -> Binding<String> {
+        Binding(
+            get: {
+                answers.answer(for: choice.id)?.distinctFrom.first { $0.recordID == record.id }?[
+                    keyPath: field] ?? ""
+            },
+            set: { value in
+                guard
+                    var source = answers.answer(for: choice.id)?.distinctFrom.first(where: {
+                        $0.recordID == record.id
+                    })
+                else { return }
+                source[keyPath: field] = value
+                answers.writeSource(choice, recordID: record.id, url: source.url, quote: source.quote)
+            })
     }
 }
 
@@ -157,7 +200,8 @@ struct ReportFormFooterView: View {
                  "options": [
                    {"id": "existing", "label": "Use an existing Product",
                     "pick": {"entity": "product", "label": "Product for Sample item"}},
-                   {"id": "new", "label": "Create a new Product"},
+                   {"id": "new", "label": "Create a new Product",
+                    "distinctFrom": [{"entity": "product", "id": "PRD-7Q2W", "name": "Sample item"}]},
                    {"id": "unresolved", "label": "Leave Product unresolved",
                     "text": {"label": "Reason for leaving Sample item unresolved"}}],
                  "suggestions": [{"optionId": "existing", "entity": "product", "id": "PRD-4K7M",
