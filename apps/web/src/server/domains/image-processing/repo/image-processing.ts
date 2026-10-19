@@ -733,6 +733,7 @@ export async function readImageProcessingJobStates(
       id: imageProcessingJob.id,
       state: imageProcessingJob.state,
       lastError: imageProcessingJob.lastError,
+      nextAttemptAt: imageProcessingJob.nextAttemptAt,
     })
     .from(imageProcessingJob)
     .where(inArray(imageProcessingJob.id, [...jobIds]));

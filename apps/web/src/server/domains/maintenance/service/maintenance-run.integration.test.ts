@@ -1,12 +1,11 @@
 import { imageId, type RunId } from "@cubby/schemas/identifiers";
-import { FAST_MODEL } from "@cubby/shared/ai/models";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { getDb } from "~/server/db/helpers";
-import { aiUsage, image, run } from "~/server/db/schema";
+import { image, imageProcessingJob, run } from "~/server/db/schema";
 import {
   countImagesStaleMetadata,
   createUploadedImageRecord,
@@ -186,55 +185,56 @@ describe("maintenance Run", () => {
     expect(passes).toHaveLength(1);
   });
 
-  it("pauses the image backfill on an exhausted budget and resumes from its cursor", async () => {
+  // Failure mode (#2722 review): a funding wait counted its images done and
+  // advanced; the pass must pause at the resume time instead.
+  it("pauses the image backfill on a funding wait and resumes past it", async () => {
     const images = [];
     for (const [index, name] of ["one", "two", "three"].entries())
       images.push(await seedImage(name, String(index + 1).repeat(64)));
     const dispatched: string[] = [];
+    const until = new Date(Date.now() + 60 * 60_000);
+    let fundingOpen = true;
     const ports: MaintenancePorts = {
-      dispatchImageJob: async (_db, jobId) => {
+      // Stands in for dispatch's deferral: the job returns to pending.
+      dispatchImageJob: async (db, jobId) => {
         dispatched.push(jobId);
+        if (fundingOpen) return "completed";
+        await getDb(db)
+          .update(imageProcessingJob)
+          .set({
+            state: "pending",
+            nextAttemptAt: until,
+            lastError:
+              "Waiting for free AI capacity; background work never pays.",
+          })
+          .where(eq(imageProcessingJob.id, jobId));
+        return "deferred";
       },
       pageSize: { imageBackfill: 2 },
     };
     const id = await startPass();
     const drivers = only("image-backfill", ports);
 
-    // The first page runs, then the window's spend crosses the budget.
     const params = { runId: id, attempt: await attemptOf(id) };
     expect(await advanceStepRun(ctx.db, params, drivers)).toEqual({
       kind: "continue",
     });
-    const firstPage = new Set(dispatched);
-    const [usage] = await getDb(ctx.db)
-      .insert(aiUsage)
-      .values({
-        runId: id,
-        feature: "image-description",
-        provider: "synthetic",
-        model: FAST_MODEL,
-        operation: "describe",
-        durationMs: 1,
-        chargedCost: 5,
-      })
-      .returning({ id: aiUsage.id });
+    fundingOpen = false;
     expect(await advanceStepRun(ctx.db, params, drivers)).toEqual({
       kind: "paused",
     });
     const [paused] = await readRunSteps(ctx.db, id);
-    expect(paused).toMatchObject({ state: "paused", done: 2, left: 1 });
-    expect(paused?.pausedReason).toContain("AI budget");
+    expect(paused).toMatchObject({ state: "paused", done: 2 });
+    expect(paused?.pausedReason).toContain("free AI capacity");
+    expect(paused?.pausedUntil).toEqual(until);
     expect(await readRun(id)).toMatchObject({
       status: "paused_auth",
       failureCode: "execution_limit",
     });
 
-    // The next window: the spend no longer counts and recovery relaunches.
-    await getDb(ctx.db)
-      .update(aiUsage)
-      .set({ deletedAt: new Date() })
-      .where(eq(aiUsage.id, usage!.id));
-    const until = paused!.pausedUntil!;
+    // Not before the resume time; then the pass finishes past the waiting
+    // image, whose pending job the image queue runs.
+    expect(await recoverStepRuns(ctx.db, launcher, [id])).toBe(0);
     expect(
       await recoverStepRuns(
         ctx.db,
@@ -244,13 +244,12 @@ describe("maintenance Run", () => {
       ),
     ).toBe(1);
     expect(await drive(id, drivers)).toEqual(["continue", "finished"]);
-    const [finished] = await readRunSteps(ctx.db, id);
-    expect(finished).toMatchObject({ state: "done", done: 3, left: 0 });
-    // Each image's jobs were dispatched once: the resume did not redo page one.
+    expect((await readRunSteps(ctx.db, id))[0]).toMatchObject({
+      state: "done",
+      done: 2,
+      left: 0,
+    });
     expect(dispatched.length).toBe(new Set(dispatched).size);
-    expect(dispatched.filter((job) => firstPage.has(job))).toHaveLength(
-      firstPage.size,
-    );
   });
 
   it("retries only the failed EXIF refs a step recorded", async () => {

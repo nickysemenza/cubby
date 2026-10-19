@@ -4,9 +4,9 @@ import type {
   RunStepError,
   RunStepMeta,
 } from "@cubby/schemas/run-step";
+import { createLogger } from "@cubby/worker-tracing";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
-import { readAiBudget } from "~/server/ai/budget";
 import type { Database } from "~/server/db";
 import {
   isStepRunPurpose,
@@ -43,6 +43,8 @@ import {
 
 type RunRow = StepRunOwner;
 
+const log = createLogger("step-run");
+
 /** What one page of a step reported. */
 export type StepPage =
   | {
@@ -71,7 +73,15 @@ export type StepPage =
       /** Page again now instead of waiting (the driver just moved to its next child). */
       again?: boolean;
     }
-  | { kind: "paused"; reason: string; until: Date | null };
+  | {
+      kind: "paused";
+      reason: string;
+      until: Date | null;
+      /** What the page finished before the pause, kept on the step. */
+      delta?: Partial<RunStepCounts>;
+      errors?: readonly RunStepError[];
+      cursor?: unknown;
+    };
 
 export type StepContext = {
   db: Database;
@@ -202,6 +212,13 @@ export async function advanceStepRun(
     },
   };
   if (page.kind === "paused") {
+    if (page.delta || page.errors || page.cursor !== undefined)
+      await recordRunStepPage(db, owner.id, current.key, {
+        ...(page.delta && { delta: page.delta }),
+        ...(page.errors && { errors: page.errors }),
+        ...(page.cursor !== undefined && { cursor: page.cursor }),
+        meta: timing,
+      });
     await pauseStep(
       db,
       owner,
@@ -378,8 +395,10 @@ export async function retryRunStep(
 
 /**
  * Relaunches step-ledger Runs a paused window or a lost handoff left behind:
- * a budget pause whose window ended, or a `running` Run whose first attempt
- * never started. Concurrent recoveries are harmless (`automatic` launches).
+ * a funding pause whose resume time passed (or any, once the credit limit is
+ * raised), or a Run whose attempt was lost. No budget gate here: the funding
+ * ladder decides at each call, and a Run still without capacity pauses again
+ * before spending. One Run's failed relaunch never stops the rest.
  */
 export async function recoverStepRuns(
   db: Database,
@@ -388,8 +407,6 @@ export async function recoverStepRuns(
   now = new Date(),
   budgetRaised = false,
 ) {
-  const { paid } = await readAiBudget(db, now);
-  const budgetOpen = paid.spentUsd < paid.limitUsd;
   const candidates = await stepRunsToRecover(
     db,
     STEP_RUN_PURPOSES,
@@ -400,15 +417,23 @@ export async function recoverStepRuns(
   let launched = 0;
   for (const candidate of candidates) {
     if (!isStepRunPurpose(candidate.purpose)) continue;
-    if (candidate.status === "paused_auth" && !budgetOpen) continue;
-    if (
-      await launchWorkflowRun(
-        db,
-        { runId: candidate.id, purpose: candidate.purpose, automatic: true },
-        launcher,
+    try {
+      if (
+        await launchWorkflowRun(
+          db,
+          { runId: candidate.id, purpose: candidate.purpose, automatic: true },
+          launcher,
+        )
       )
-    )
-      launched += 1;
+        launched += 1;
+    } catch (error) {
+      // SILENT: a concurrent pass took the one-active slot, or the launch
+      // failed the Run with its reason; the next catch-up retries the rest.
+      log.warn("step-ledger Run did not relaunch", {
+        runId: candidate.id,
+        error: scrubErrorMessage(String(error)),
+      });
+    }
   }
   return launched;
 }

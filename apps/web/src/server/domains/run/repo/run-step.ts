@@ -25,6 +25,9 @@ import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { run, runStep } from "~/server/db/schema";
 
+const MAINTENANCE = "maintenance";
+const ACTIVE_STATUSES = ["running", "paused_auth"] as const;
+
 export type RunStepRow = typeof runStep.$inferSelect;
 export type StepRunOwner = typeof run.$inferSelect;
 export type RunStepDefinition = { key: string; label: string };
@@ -292,12 +295,22 @@ export async function stepRunsToRecover(
     eq(run.status, "paused_auth"),
     eq(run.failureCode, "execution_limit"),
   );
+  // One maintenance pass at a time (Run_one_active_maintenance): an older
+  // pass is superseded once a newer one exists, and relaunching any pass
+  // while another is active would violate the index.
+  const maintenanceBlocked = sql`${run.purpose} = ${MAINTENANCE} AND EXISTS (
+    SELECT 1 FROM "Run" other WHERE other."deletedAt" IS NULL AND other.purpose = ${MAINTENANCE} AND other.id <> ${run.id}
+      AND (other.status IN (${sql.join(
+        ACTIVE_STATUSES.map((status) => sql`${status}`),
+        sql`, `,
+      )}) OR other."createdAt" > ${run.createdAt}))`;
   return getDb(db)
     .select({ id: run.id, purpose: run.purpose, status: run.status })
     .from(run)
     .where(
       and(
         inArray(run.purpose, [...purposes]),
+        sql`NOT (${maintenanceBlocked})`,
         runIds
           ? inArray(
               run.id,

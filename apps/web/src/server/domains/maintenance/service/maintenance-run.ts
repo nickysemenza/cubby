@@ -10,8 +10,6 @@ import { searchableEntitySchema } from "@cubby/schemas/search";
 import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
 import { z } from "zod";
 
-import { roundTo } from "~/lib/round-to";
-import { readAiBudget } from "~/server/ai/budget";
 import {
   getAiGatewayEgress,
   getAppOrigin,
@@ -72,7 +70,8 @@ const RETIRE_COORDINATORS_AFTER_MS = 24 * 60 * 60_000;
 export type MaintenancePorts = {
   metadata?: ExtractImageMetadataPorts;
   /** Runs one image-processing job now (cloud model or companion handoff). */
-  dispatchImageJob?: (db: Database, jobId: string) => Promise<void>;
+  /** `"deferred"`: a funding wait returned the job to pending (see dispatch). */
+  dispatchImageJob?: (db: Database, jobId: string) => Promise<string | void>;
   embedding?: EmbeddingRefreshPort;
   pageSize?: { exif?: number; imageBackfill?: number };
 };
@@ -375,22 +374,16 @@ function imageBackfillStep(ports: MaintenancePorts): StepDriver {
     (async (db: Database, jobId: string) => {
       const { dispatchImageProcessingWakeup } =
         await import("~/server/domains/image-processing/service/dispatch");
-      await dispatchImageProcessingWakeup(db, jobId);
+      return dispatchImageProcessingWakeup(db, jobId);
     });
   return {
     key: "image-backfill",
     label: "Image processing backfill",
     page: async (context) => {
+      // No budget pre-check: the funding ladder decides at each describe or
+      // identify call (credit, plan, then a member's paid allowance), and a
+      // funding wait pauses the Run at its resume time (`dispatchImages`).
       const { db, step, run } = context;
-      // Paid describe/identify calls stop at the frontier-model budget; the
-      // Run pauses until the window ends and resumes from this cursor.
-      const { paid, windowEnd } = await readAiBudget(db);
-      if (paid.spentUsd >= paid.limitUsd)
-        return {
-          kind: "paused",
-          reason: `Paid AI budget used for this window ($${roundTo(paid.spentUsd, 2)} of $${paid.limitUsd})`,
-          until: new Date(windowEnd),
-        };
       const retried = retryRefs(context, "image:").map((id) =>
         imageId.parse(id),
       );
@@ -406,6 +399,7 @@ function imageBackfillStep(ports: MaintenancePorts): StepDriver {
             }),
           });
         const counts = await dispatchImages(db, images, dispatch);
+        if (counts.deferred) return { ...counts.deferred, delta: counts.delta };
         return {
           kind: "progress",
           delta: counts.delta,
@@ -425,6 +419,15 @@ function imageBackfillStep(ports: MaintenancePorts): StepDriver {
         publish: false,
       });
       const counts = await dispatchImages(db, scheduled.images, dispatch);
+      // The deferred images keep their pending jobs; the image queue runs
+      // them at the resume time, so the cursor moves past this page.
+      if (counts.deferred)
+        return {
+          ...counts.deferred,
+          delta: counts.delta,
+          errors: counts.errors,
+          cursor: scheduled.images.at(-1)?.cursor ?? cursor,
+        };
       const processed =
         step.done + step.failed + step.skipped + scheduled.images.length;
       return {
@@ -452,23 +455,36 @@ function imageBackfillStep(ports: MaintenancePorts): StepDriver {
   };
 }
 
-/** Runs each image's jobs now; an image fails when any of its jobs failed. */
+/**
+ * Runs each image's jobs now; an image fails when any of its jobs failed.
+ * A funding wait stops the page: the waiting and undispatched images stay
+ * pending, are not counted done, and the step pauses until free capacity.
+ */
 async function dispatchImages(
   db: Database,
   images: ReadonlyArray<{ id: string; jobIds: readonly string[] }>,
-  dispatch: (db: Database, jobId: string) => Promise<void>,
+  dispatch: (db: Database, jobId: string) => Promise<string | void>,
 ) {
   const delta = { done: 0, failed: 0, skipped: 0 };
   const errors: RunStepError[] = [];
   const jobIds = images.flatMap((candidate) => candidate.jobIds);
-  for (const jobId of jobIds) await dispatch(db, jobId);
+  let deferredJob: string | null = null;
+  for (const jobId of jobIds)
+    if ((await dispatch(db, jobId)) === "deferred") {
+      deferredJob = jobId;
+      break;
+    }
   const states = await readImageProcessingJobStates(db, jobIds);
   const byId = new Map(states.map((row) => [row.id, row]));
+  const deferredAt = deferredJob ? jobIds.indexOf(deferredJob) : -1;
+  const reached = (jobId: string) =>
+    deferredAt < 0 || jobIds.indexOf(jobId) < deferredAt;
   for (const candidate of images) {
     if (!candidate.jobIds.length) {
       delta.skipped += 1;
       continue;
     }
+    if (!candidate.jobIds.every(reached)) continue;
     const failed = candidate.jobIds
       .map((jobId) => byId.get(jobId))
       .filter((row) => row?.state === "failed");
@@ -484,7 +500,18 @@ async function dispatchImages(
       ),
     );
   }
-  return { delta, errors };
+  const waiting = deferredJob ? byId.get(deferredJob) : undefined;
+  return {
+    delta,
+    errors,
+    deferred: deferredJob
+      ? {
+          kind: "paused" as const,
+          reason: waiting?.lastError ?? "Waiting for free AI capacity",
+          until: waiting?.nextAttemptAt ?? null,
+        }
+      : null,
+  };
 }
 
 /**

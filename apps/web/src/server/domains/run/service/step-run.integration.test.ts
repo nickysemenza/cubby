@@ -337,4 +337,17 @@ describe("step-ledger Runs", () => {
       .where(eq(run.id, id));
     expect(await recoverStepRuns(ctx.db, launcher, [id])).toBe(0);
   });
+
+  // Failure mode (#2722 review): recovering yesterday's failed pass while
+  // tonight's runs hit Run_one_active_maintenance and aborted catch-up.
+  it("leaves a superseded maintenance pass alone and keeps recovering the rest", async () => {
+    const { id: old } = await startRun("scheduled");
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "failed", failureCode: "workflow_dispatch_failed" })
+      .where(eq(run.id, old));
+    await startRun("scheduled");
+    expect(await recoverStepRuns(ctx.db, launcher, [old])).toBe(0);
+    expect(await readRun(old)).toMatchObject({ status: "failed" });
+  });
 });

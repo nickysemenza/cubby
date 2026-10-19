@@ -235,3 +235,55 @@ export async function lockImageProcessingSubmissionSource(
       .where(eq(imageProcessingJob.imageId, imageId))
   ).map((row) => row.id);
 }
+
+/**
+ * A funding wait is not an attempt: the job returns to `pending` at the
+ * funding resume time and its assigned attempt is refunded, so waiting for
+ * free AI capacity never exhausts the three-attempt retry budget.
+ */
+export async function deferImageProcessingJob(
+  db: Database,
+  input: { jobId: string; attemptId: string; until: Date; reason: string },
+): Promise<boolean> {
+  return withTransaction(db, async (tx) => {
+    const [assigned] = await tx
+      .update(imageProcessingAttempt)
+      .set({ state: "failed", completedAt: sql`now()`, error: input.reason })
+      .where(
+        and(
+          eq(imageProcessingAttempt.id, input.attemptId),
+          eq(imageProcessingAttempt.jobId, input.jobId),
+        ),
+      )
+      .returning({ id: imageProcessingAttempt.id });
+    const rows = await tx
+      .update(imageProcessingJob)
+      .set({
+        state: "pending",
+        attemptId: null,
+        leaseExpiresAt: null,
+        nextAttemptAt: input.until,
+        lastError: input.reason,
+        ...(assigned && {
+          attempts: sql`greatest(${imageProcessingJob.attempts} - 1, 0)`,
+        }),
+      })
+      .where(
+        and(
+          eq(imageProcessingJob.id, input.jobId),
+          eq(imageProcessingJob.attemptId, input.attemptId),
+          eq(imageProcessingJob.state, "leased"),
+        ),
+      )
+      .returning({ id: imageProcessingJob.id });
+    if (!rows.length) return false;
+    await recordImageProcessingEvent(tx, {
+      jobId: input.jobId,
+      eventKey: `${input.attemptId}:deferred`,
+      event: "dispatch.deferred",
+      level: "info",
+      source: "server",
+    });
+    return true;
+  });
+}
