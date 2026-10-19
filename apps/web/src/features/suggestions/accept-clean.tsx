@@ -1,5 +1,6 @@
 import {
   SUGGESTION_ACCEPT_CLEAN_MAX,
+  SUGGESTION_ACCEPT_SKIP_MAX,
   type acceptCleanSuggestionsInput,
   type SuggestionRecordRef,
 } from "@cubby/schemas/suggestion-list";
@@ -54,8 +55,9 @@ type Failure = {
  * Accept every clean Suggestion a target covers, behind a confirm. The
  * server re-lists the clean set before each chunk: labels republish a
  * charge's suggestion under a new id while this runs and accepting shrinks
- * the set, so one up-front read goes stale. Attempted ids are never retried;
- * failures stay pending for review and show their raw errors.
+ * the set, so one up-front read goes stale. Accepted ids leave the clean
+ * set on their own; only failures are skipped (bounded by the server's skip
+ * limit), stay pending for review and show their raw errors.
  */
 export function useAcceptClean(
   /** The loaded row's record for an Assessment id, to name a failure. */
@@ -67,7 +69,8 @@ export function useAcceptClean(
 
   const accept = async (target: CleanTarget) => {
     const failures: Progressing["failures"] = [];
-    const attempted = new Set<string>();
+    const failed = new Set<string>();
+    const accepted = new Set<string>();
     let done = 0;
     let total = target.count;
     setProgress({
@@ -79,14 +82,33 @@ export function useAcceptClean(
     });
     try {
       for (;;) {
+        if (
+          failed.size >
+          SUGGESTION_ACCEPT_SKIP_MAX - SUGGESTION_ACCEPT_CLEAN_MAX
+        ) {
+          failures.push({
+            record: null,
+            label: target.label,
+            error: `Stopped after ${formatCount(failed.size)} failures; review them, then accept the rest.`,
+          });
+          break;
+        }
         const results = await suggestions.acceptClean.call({
           filters: target.filters,
           limit: SUGGESTION_ACCEPT_CLEAN_MAX,
-          skip: [...attempted],
+          skip: [...failed],
         });
         if (!results.length) break;
+        // A chunk with no unseen id moved nothing; report it once, then stop.
+        const progressed = results.some(
+          (result) =>
+            result.assessmentId &&
+            !accepted.has(result.assessmentId) &&
+            !failed.has(result.assessmentId),
+        );
         for (const result of results) {
-          if (result.assessmentId) attempted.add(result.assessmentId);
+          if (result.assessmentId)
+            (result.ok ? accepted : failed).add(result.assessmentId);
           if (!result.ok)
             failures.push({
               record:
@@ -106,6 +128,7 @@ export function useAcceptClean(
           running: true,
           failures: [...failures],
         });
+        if (!progressed) break;
       }
     } catch (error) {
       failures.push({

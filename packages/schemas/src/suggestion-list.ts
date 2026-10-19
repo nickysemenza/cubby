@@ -352,11 +352,16 @@ export const suggestionCountsOut = z.object({
 export type SuggestionCountsOut = z.infer<typeof suggestionCountsOut>;
 
 export const SUGGESTION_ACCEPT_CLEAN_MAX = 100;
+/** Failed ids one bulk accept may carry forward as `skip`. */
+export const SUGGESTION_ACCEPT_SKIP_MAX = 5000;
 export const acceptCleanSuggestionsInput = z.object({
   filters: suggestionListFilters
     .omit({ status: true, appliedAutomatically: true })
     .default({ where: {} }),
   limit: z.number().int().min(1).max(SUGGESTION_ACCEPT_CLEAN_MAX).default(100),
   /** Already attempted ids; a failed accept stays pending and clean. */
-  skip: z.array(assessmentChildHandle).max(5000).default([]),
+  skip: z
+    .array(assessmentChildHandle)
+    .max(SUGGESTION_ACCEPT_SKIP_MAX)
+    .default([]),
 });
