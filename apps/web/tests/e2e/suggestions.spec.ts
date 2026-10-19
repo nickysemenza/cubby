@@ -394,7 +394,8 @@ test("Automatic rules lists each seeded rule with its state and switch", async (
   page,
 }) => {
   await gotoAuthenticatedPage(page, "/suggestions");
-  await page.getByRole("button", { name: "Automatic rules" }).click();
+  await page.getByRole("tab", { name: /^Automatic rules/ }).click();
+  await expect(page).toHaveURL(/status=rules/);
   const rules = page.getByRole("list", { name: "Automatic rules" });
   const field = rules.getByRole("listitem", { name: "Field Addition" });
   await expect(field.getByText("On", { exact: true })).toBeVisible();
@@ -407,7 +408,7 @@ test("Automatic rules lists each seeded rule with its state and switch", async (
   await expect(
     attach.getByRole("switch", { name: "Statement attach automatic rule" }),
   ).toHaveAttribute("aria-disabled", "true");
-  await page.getByRole("button", { name: /^Applied automatically/ }).click();
+  await page.getByRole("tab", { name: /^Applied automatically/ }).click();
   await expect(page).toHaveURL(/status=applied_automatically/);
 });
 

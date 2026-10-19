@@ -82,10 +82,8 @@ const CATALOG_OPERATIONS: AutomaticRuleOperations = {
  */
 export function AutomaticRulesSection({
   operations = CATALOG_OPERATIONS,
-  defaultOpen = false,
 }: {
   operations?: AutomaticRuleOperations;
-  defaultOpen?: boolean;
 }) {
   const rules = useQuery(operations.rules.queryOptions({}));
   const list = rules.data?.rules ?? [];
@@ -95,7 +93,6 @@ export function AutomaticRulesSection({
       title="Automatic rules"
       headingAs="h2"
       meta={rules.data ? `${on} of ${list.length} on` : null}
-      disclosure={{ defaultOpen }}
     >
       {rules.error ? (
         <p
