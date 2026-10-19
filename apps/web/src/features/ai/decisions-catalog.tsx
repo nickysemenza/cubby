@@ -1,17 +1,20 @@
 import { formatConfidence, type DecisionCatalogRow } from "@cubby/schemas/ai";
 import { aiSmokeRunOut } from "@cubby/schemas/ai-smoke";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import type { ListGroupSummary } from "@cubby/schemas/pagination";
 import { getErrorMessage, humanize } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { z } from "zod";
 
+import { EntityIcon } from "~/entity/entities";
 import type { StandardEntity } from "~/entity/entity-contracts";
 import { entityDetailFor } from "~/entity/entity-detail";
 import RTable from "~/entity/table/table";
 import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCount } from "~/lib/number-format";
+import { Picker } from "~/ui/combobox/picker";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";
 import {
   createCubbyColumnCollection,
@@ -19,11 +22,14 @@ import {
   useCubbyTable,
 } from "~/ui/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
+import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
+import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 import { Input } from "~/ui/primitives/input";
+import { NoneValue } from "~/ui/primitives/none-value";
 
 import {
   fieldSuggestionBasisFromRecord,
@@ -42,6 +48,68 @@ const fieldSuggestionsResultSchema = z
 
 const decisionScope = (row: DecisionCatalogRow) =>
   row.entity ? entitySummary[row.entity].singular : "Feature";
+
+const ENTITY_CHOICE: GroupConfig["choice"] = {
+  key: "entity",
+  label: "Entity",
+  noValueLabel: "Feature",
+  reason: null,
+  value: { kind: "derived", options: null },
+  filter: null,
+  levels: 0,
+  levelReason: "Entity is a catalog section, not a hierarchy.",
+};
+
+/** Accepted over reviewed (accepted + Misses); null before any review. */
+function acceptRate(row: DecisionCatalogRow) {
+  const counts = row.counts;
+  if (!counts) return null;
+  const reviewed = counts.applied + counts.rejected;
+  return reviewed === 0 ? null : counts.applied / reviewed;
+}
+
+/** Pending outcomes, linked to their review queue when a field owns them. */
+function PendingLink({ row }: { row: DecisionCatalogRow }) {
+  if (!row.counts) return <NoneValue />;
+  const pending = row.counts.pending;
+  if (pending === 0 || !row.entity || !row.field)
+    return (
+      <span className="text-muted-foreground">{formatCount(pending)}</span>
+    );
+  return (
+    <Link
+      to="/suggestions"
+      search={{ family: "field", entity: row.entity, field: row.field }}
+      onClick={(event) => event.stopPropagation()}
+      className="font-medium text-info underline-offset-2 hover:underline"
+    >
+      {formatCount(pending)}
+    </Link>
+  );
+}
+
+/** The accept rate as a number and a bar; Misses tint the remainder. */
+function AcceptRateBar({ row }: { row: DecisionCatalogRow }) {
+  const rate = acceptRate(row);
+  if (rate === null) return <NoneValue />;
+  const reviewed = (row.counts?.applied ?? 0) + (row.counts?.rejected ?? 0);
+  return (
+    <span
+      className="inline-flex w-full items-center justify-end gap-1.5"
+      title={`${formatCount(row.counts?.applied ?? 0)} of ${formatCount(reviewed)} reviewed accepted`}
+    >
+      <span className="h-1.5 w-12 overflow-hidden rounded-full bg-destructive-surface">
+        <span
+          className="block h-full rounded-full bg-positive"
+          style={{ width: `${Math.round(rate * 100)}%` }}
+        />
+      </span>
+      <span className="w-9 text-right tabular-nums">
+        {Math.round(rate * 100)}%
+      </span>
+    </span>
+  );
+}
 
 function catalogColumns() {
   return createCubbyColumnCollection<DecisionCatalogRow>((add) => {
@@ -69,6 +137,19 @@ function catalogColumns() {
         meta: attachCubbyColumnMeta<DecisionCatalogRow>({
           mobile: { slot: "meta", priority: 0, label: "Entity" },
         }),
+        cell: ({ row }) => (
+          <span className="inline-flex min-w-0 items-center gap-1.5">
+            {row.original.entity ? (
+              <EntityIcon
+                entity={row.original.entity}
+                colored
+                aria-hidden="true"
+                className="size-3.5 shrink-0"
+              />
+            ) : null}
+            <span className="truncate">{decisionScope(row.original)}</span>
+          </span>
+        ),
       }),
     );
     add(
@@ -80,10 +161,13 @@ function catalogColumns() {
         meta: attachCubbyColumnMeta<DecisionCatalogRow>({
           mobile: { slot: "meta", priority: 2, label: "Mode" },
         }),
-        cell: ({ row }) =>
-          row.original.roster
-            ? `${row.original.choiceKind} · roster`
-            : row.original.choiceKind,
+        cell: ({ row }) => (
+          <Badge variant="outline" className="font-normal">
+            {row.original.roster
+              ? `${row.original.choiceKind} · roster`
+              : row.original.choiceKind}
+          </Badge>
+        ),
       }),
     );
     add(
@@ -121,8 +205,20 @@ function catalogColumns() {
         meta: attachCubbyColumnMeta<DecisionCatalogRow>({
           mobile: { slot: "meta", priority: 1, label: "Pending" },
         }),
-        cell: ({ row }) =>
-          row.original.counts ? formatCount(row.original.counts.pending) : "—",
+        cell: ({ row }) => <PendingLink row={row.original} />,
+      }),
+    );
+    add(
+      helper.accessor(acceptRate, {
+        id: "acceptRate",
+        header: "Accept rate",
+        size: 120,
+        enableSorting: false,
+        meta: attachCubbyColumnMeta<DecisionCatalogRow>({
+          numeric: true,
+          mobile: { slot: "meta", priority: 2, label: "Accept rate" },
+        }),
+        cell: ({ row }) => <AcceptRateBar row={row.original} />,
       }),
     );
     add(
@@ -154,7 +250,11 @@ function catalogColumns() {
         meta: attachCubbyColumnMeta<DecisionCatalogRow>({
           mobile: { slot: "meta", priority: 4, label: "Model" },
         }),
-        cell: ({ row }) => row.original.model,
+        cell: ({ row }) => (
+          <span className="truncate font-mono text-xs text-muted-foreground">
+            {row.original.model}
+          </span>
+        ),
       }),
     );
   });
@@ -456,7 +556,55 @@ export function DecisionsCatalog({
   onSelect: (key: string | undefined) => void;
 }) {
   const catalog = useQuery(ai.decisionCatalog.queryOptions(undefined));
-  const rows = useMemo(() => catalog.data ?? [], [catalog.data]);
+  const [query, setQuery] = useState("");
+  const [grouped, setGrouped] = useState(true);
+  const rows = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    const matching = (catalog.data ?? []).filter(
+      (row) =>
+        !needle ||
+        [row.label, row.key, decisionScope(row), row.model, row.feature].some(
+          (text) => text.toLowerCase().includes(needle),
+        ),
+    );
+    // Sections take consecutive rows, so grouping orders by entity first.
+    return grouped
+      ? [...matching].sort((a, b) =>
+          decisionScope(a).localeCompare(decisionScope(b)),
+        )
+      : matching;
+  }, [catalog.data, query, grouped]);
+  const groupConfig = useMemo<GroupConfig | undefined>(() => {
+    if (!grouped) return undefined;
+    const groups: ListGroupSummary[] = [];
+    for (const row of rows) {
+      const label = decisionScope(row);
+      const last = groups.at(-1);
+      if (last?.label === label) last.count += 1;
+      else groups.push({ key: row.entity ?? "feature", label, count: 1 });
+    }
+    return {
+      choice: ENTITY_CHOICE,
+      groups,
+      header: (group) => {
+        const entity = rows.find(
+          (row) => (row.entity ?? "feature") === group.key,
+        )?.entity;
+        return entity
+          ? {
+              aside: (
+                <EntityIcon
+                  entity={entity}
+                  colored
+                  aria-hidden="true"
+                  className="size-3.5"
+                />
+              ),
+            }
+          : {};
+      },
+    };
+  }, [grouped, rows]);
   const columns = useMemo(() => catalogColumns(), []);
   const { columns: tableColumns, defaultLayout } = useTableColumnLayout({
     columns,
@@ -475,8 +623,44 @@ export function DecisionsCatalog({
     },
   });
   const current = rows.find((row) => row.key === selected);
+  const totals = (catalog.data ?? []).reduce(
+    (sum, row) => ({
+      pending: sum.pending + (row.counts?.pending ?? 0),
+      applied: sum.applied + (row.counts?.applied ?? 0),
+      rejected: sum.rejected + (row.counts?.rejected ?? 0),
+    }),
+    { pending: 0, applied: 0, rejected: 0 },
+  );
+  const reviewed = totals.applied + totals.rejected;
   return (
     <Stack gap="sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          type="search"
+          aria-label="Search decisions"
+          placeholder="Search decisions, entities, models"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          className="h-7 w-64 text-xs"
+        />
+        <Picker
+          mode="segmented"
+          label="Group"
+          options={[
+            { value: "entity", label: "By entity" },
+            { value: "none", label: "No groups" },
+          ]}
+          value={grouped ? "entity" : "none"}
+          onValueChange={(value) => setGrouped(value === "entity")}
+        />
+        <span className="ml-auto text-xs text-muted-foreground tabular-nums">
+          {formatCount(rows.length)} decisions · {formatCount(totals.pending)}{" "}
+          pending
+          {reviewed > 0
+            ? ` · ${Math.round((totals.applied / reviewed) * 100)}% accepted`
+            : ""}
+        </span>
+      </div>
       <Description size="xs" className="text-muted-foreground">
         Jev and Clef return no reasoning, so each decision shows what the model
         reads and how its suggestions were reviewed. Email relevance is measured
@@ -496,9 +680,14 @@ export function DecisionsCatalog({
         isLoading={catalog.isLoading}
         error={catalog.error}
         embedded
+        groupConfig={groupConfig}
         onRowClick={(row) => onSelect(row.original.key)}
         currentRowId={selected}
-        emptyState="No decisions are declared."
+        emptyState={
+          query
+            ? "No decision matches that search."
+            : "No decisions are declared."
+        }
       />
       <Overlay
         placement="panel"
