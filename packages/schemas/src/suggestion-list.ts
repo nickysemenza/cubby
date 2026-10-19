@@ -1,7 +1,9 @@
 import { z } from "zod";
+import { transferPairJudgment } from "./transfer-pair-suggestion";
 
 import { suggestionReviewRowSchema, suggestionStatus } from "./ai";
 import { assessmentChildHandle } from "./assessment-reference";
+import { assessmentReviewBatchOut } from "./assessment";
 import { dataCheck } from "./data-quality";
 import { connectionProposal, connectionRelation } from "./entity-connections";
 import { shortcodeEntities } from "./entity-manifest";
@@ -23,6 +25,7 @@ export const suggestionListFamily = z.enum([
   "field",
   "statement_transaction",
   "recommendation",
+  "transfer_pair",
 ]);
 export type SuggestionListFamily = z.infer<typeof suggestionListFamily>;
 
@@ -166,6 +169,14 @@ export const suggestionColumns = {
     source: { type: "text" },
     target: { type: "text" },
   },
+  transfer_pair: {
+    date: { type: "date" },
+    amount: { type: "number" },
+    dateGapDays: { type: "number" },
+    account: { type: "ref", entity: "financialAccount", facet: true },
+    owner: { type: "ref", entity: "ledgerParty", facet: true },
+    merchant: { type: "text" },
+  },
 } as const satisfies Record<
   "common" | SuggestionListFamily,
   Record<string, ColumnType & { facet?: true }>
@@ -212,11 +223,17 @@ export const recommendationSuggestionRow = z.object({
   family: z.literal("recommendation"),
   evidence: connectionProposal,
 });
+export const transferPairSuggestionRow = z.object({
+  ...rowBase,
+  family: z.literal("transfer_pair"),
+  evidence: transferPairJudgment,
+});
 /** One Suggestion of any family; `evidence` is the family's own payload. */
 export const suggestionListRow = z.discriminatedUnion("family", [
   fieldSuggestionRow,
   statementSuggestionRow,
   recommendationSuggestionRow,
+  transferPairSuggestionRow,
 ]);
 export type SuggestionListRow = z.infer<typeof suggestionListRow>;
 
@@ -365,3 +382,17 @@ export const acceptCleanSuggestionsInput = z.object({
     .max(SUGGESTION_ACCEPT_SKIP_MAX)
     .default([]),
 });
+
+/** An overlapping suggestion is settled by the pair accepted in this batch, without a second review. */
+export const acceptCleanSuggestionsOut = z.array(
+  z.union([
+    assessmentReviewBatchOut.element,
+    z.object({
+      assessmentId: assessmentChildHandle,
+      ok: z.literal(true),
+      applied: z.literal(false),
+      status: z.literal("settled_by_pair"),
+      reason: z.string(),
+    }),
+  ]),
+);

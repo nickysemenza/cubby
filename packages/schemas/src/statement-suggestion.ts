@@ -11,6 +11,7 @@ import {
   financialTransactionShortcode,
 } from "./identifiers";
 import { plainDate } from "./project";
+import { statementTransferPairRef } from "./transfer-pair-suggestion";
 
 const kind = z.enum(generatedFinancialTransactionKindValues);
 const status = z.enum(generatedFinancialTransactionStatusValues);
@@ -139,6 +140,7 @@ export const statementTransactionJudgment = z.object({
   /** Other unmatched charges that could be the same money under a firmed-up descriptor. */
   siblings: z.array(z.string()),
   transfer: statementOwnAccountMove.nullable().default(null),
+  transferPair: statementTransferPairRef.nullable().default(null),
   clean: z.boolean(),
 });
 export type StatementTransactionJudgment = z.infer<
@@ -198,11 +200,12 @@ export const statementSuggestionOut = z.object({
   candidates: z.array(publicCandidate),
   supersedeTransactionId: financialTransactionShortcode.nullable(),
   voidTransactionId: financialTransactionShortcode.nullable(),
-  /** Pair through finance_read.transfer_pairs once the other leg is recorded. */
+  /** A descriptor's account hint; the transfer pair supplies opposite-leg evidence. */
   transfer: statementOwnAccountMove
     .extend({ accountId: financialAccountShortcode.nullable() })
     .nullable()
     .default(null),
+  transferPair: statementTransferPairRef.nullable().default(null),
   siblings: z.number().int(),
   model: z.string().nullable(),
   createdAt: z.iso.datetime(),

@@ -28,6 +28,7 @@ import {
   fieldSuggestionRow,
   recommendationSuggestionRow,
   statementSuggestionRow,
+  transferPairSuggestionRow,
   type SuggestionColumnValue,
   type SuggestionImpact,
   type SuggestionListFamily,
@@ -38,12 +39,18 @@ import {
   type SuggestionSummaryPart,
   type suggestionAction,
 } from "@cubby/schemas/suggestion-list";
+import { transferPairJudgment } from "@cubby/schemas/transfer-pair-suggestion";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
 import { readEntityConnectionsBatch } from "~/server/domains/connection/repo/entity-connections";
+import {
+  currentTransferPairs,
+  transferPairEvidenceFingerprint,
+  transferPairStateData,
+} from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
 import {
   readStatementSuggestions,
   statementSuggestionKeys,
@@ -449,8 +456,12 @@ const statementTransaction: SuggestionFamilyPresentation<"statement_transaction"
       // Labels ride on top of the evidence fingerprint, so a create labelled
       // clean under an earlier rule still passes the apply-time check.
       // Accept clean re-reads today's rule instead of the stored flag.
-      const { recommended, create, transfer } = row.evidence;
-      if (recommended === "create" && create && !kindAgreed(create, transfer))
+      const { recommended, create, transfer, transferPair } = row.evidence;
+      if (
+        recommended === "create" &&
+        create &&
+        !kindAgreed(create, transfer, transferPair)
+      )
         return null;
       const application = statementAcceptApplication(row.evidence);
       return application
@@ -682,11 +693,255 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
   acceptAsIs: () => null,
 };
 
+async function transferPairRows(
+  db: Database,
+  query: SuggestionFamilyQuery,
+  ids?: readonly string[],
+) {
+  const entities: readonly ShortcodeEntity[] = [
+    "financialAccount",
+    "financialTransaction",
+    "ledgerParty",
+  ];
+  if (query.filters.entity && !entities.includes(query.filters.entity))
+    return [];
+  if (
+    query.records &&
+    !query.records.some((record) => entities.includes(record.entity))
+  )
+    return [];
+  const { rows } = await unwrapDb(db).execute<{
+    id: string;
+    fingerprint: string | null;
+    createdAt: Date | string;
+    judgment: unknown;
+    data: unknown;
+  }>(sql`
+    SELECT s.id, s.fingerprint, a."createdAt", a.judgment, s.data
+    FROM "AssessmentState" s JOIN "Assessment" a ON a.id = s.id
+    WHERE s.family = ${assessmentFamily.enum.transfer_pair} AND s.status = ${query.filters.status}
+      ${
+        ids
+          ? sql`AND s.id IN (${sql.join(
+              ids.map((id) => sql`${id}::uuid`),
+              sql`, `,
+            )})`
+          : sql``
+      }
+      ${query.filters.status === "pending" ? sql`AND s.active` : sql``}
+      ${runCode(query) ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${runCode(query)})` : sql``}
+  `);
+  if (!rows.length) return [];
+  const current =
+    query.filters.status === "pending" && !ids
+      ? new Map(
+          await Promise.all(
+            (
+              await currentTransferPairs(
+                db,
+                rows.map(
+                  (row) => transferPairStateData.parse(row.data).pairKey,
+                ),
+              )
+            ).map(
+              async (pair) =>
+                [
+                  pair.key,
+                  await transferPairEvidenceFingerprint(pair),
+                ] as const,
+            ),
+          ),
+        )
+      : null;
+  return rows.flatMap((row) => {
+    const evidence = transferPairJudgment.parse(row.judgment);
+    if (
+      current &&
+      current.get(evidence.key) !==
+        transferPairStateData.parse(row.data).evidenceFingerprint
+    )
+      return [];
+    const records = [
+      { entity: "financialAccount", id: evidence.outflow.accountId },
+      { entity: "financialAccount", id: evidence.inflow.accountId },
+      ...(evidence.outflow.transactionId
+        ? [
+            {
+              entity: "financialTransaction",
+              id: evidence.outflow.transactionId,
+            },
+          ]
+        : []),
+      ...(evidence.inflow.transactionId
+        ? [
+            {
+              entity: "financialTransaction",
+              id: evidence.inflow.transactionId,
+            },
+          ]
+        : []),
+      ...(evidence.outflow.owner
+        ? [{ entity: "ledgerParty", id: evidence.outflow.owner.id }]
+        : []),
+      ...(evidence.inflow.owner
+        ? [{ entity: "ledgerParty", id: evidence.inflow.owner.id }]
+        : []),
+    ];
+    if (
+      query.filters.entity &&
+      !records.some((record) => record.entity === query.filters.entity)
+    )
+      return [];
+    if (
+      query.records &&
+      !query.records.some((record) =>
+        records.some(
+          (ref) => ref.entity === record.entity && ref.id === record.code,
+        ),
+      )
+    )
+      return [];
+    return [{ ...row, evidence, createdAt: new Date(row.createdAt) }];
+  });
+}
+
+const transferPair: SuggestionFamilyPresentation<"transfer_pair"> = {
+  keys: async (db, query) =>
+    (await transferPairRows(db, query)).map((row) => ({
+      family: "transfer_pair",
+      assessmentId: row.id,
+      status: query.filters.status,
+      fingerprint: row.fingerprint,
+      clean: row.evidence.clean,
+      strength: row.evidence.blockers.some((reason) =>
+        [
+          "weak_movement",
+          "competing_candidates",
+          "unresolved_overlap",
+          "cash_leg_missing",
+          "owner_missing",
+        ].includes(reason),
+      )
+        ? "weak"
+        : row.evidence.blockers.includes("date_gap")
+          ? "medium"
+          : "strong",
+      impact: [outcome("Transfer paired")],
+      createdAt: row.createdAt,
+      matchedRules: [],
+      automaticRule: null,
+      columns: {
+        date: row.evidence.date,
+        amount: row.evidence.amount,
+        dateGapDays: row.evidence.dateGapDays,
+        account: [
+          row.evidence.outflow.accountId,
+          row.evidence.inflow.accountId,
+        ],
+        owner: [
+          row.evidence.outflow.owner?.id ?? null,
+          row.evidence.inflow.owner?.id ?? null,
+        ],
+        merchant: [
+          row.evidence.outflow.merchant,
+          row.evidence.inflow.merchant,
+          row.evidence.outflow.description,
+          row.evidence.inflow.description,
+        ]
+          .filter(Boolean)
+          .join(" "),
+      },
+    })),
+  rows: async (db, keys) => {
+    if (!keys.length) return new Map();
+    const rows = await transferPairRows(
+      db,
+      {
+        filters: { status: keys[0]?.status ?? "pending", where: {} },
+      },
+      keys.map((key) => key.assessmentId),
+    );
+    const byId = new Map(keys.map((key) => [key.assessmentId, key]));
+    return new Map(
+      rows.flatMap((row) => {
+        const key = byId.get(row.id);
+        if (!key) return [];
+        return [
+          [
+            row.id,
+            transferPairSuggestionRow.parse({
+              ...keyBase(key),
+              family: "transfer_pair",
+              record: {
+                entity: "financialAccount",
+                id: row.evidence.outflow.accountId,
+              },
+              other: {
+                entity: "financialAccount",
+                id: row.evidence.inflow.accountId,
+              },
+              summary: [
+                { kind: "amount", amount: row.evidence.outflow.amount },
+                { kind: "date", date: row.evidence.date },
+                {
+                  kind: "text",
+                  text:
+                    row.evidence.outflow.description ??
+                    row.evidence.outflow.accountName,
+                },
+              ],
+              actions: row.evidence.apply.available
+                ? verbs("accept", "reject", "dismiss")
+                : verbs("reject", "dismiss"),
+              evidence: row.evidence,
+            }),
+          ],
+        ];
+      }),
+    );
+  },
+  outcomes: async (db, filters) => {
+    const { rows } = await unwrapDb(db).execute<{
+      status: string;
+      count: number;
+    }>(sql`
+      SELECT status, count(*)::int AS count FROM "AssessmentState"
+      WHERE family = ${assessmentFamily.enum.transfer_pair}
+        ${filters.runId ? sql`AND "runId" = (SELECT id FROM "Run" WHERE shortcode = ${filters.runId})` : sql``}
+      GROUP BY status
+    `);
+    const count = (status: string) =>
+      rows.find((row) => row.status === status)?.count ?? 0;
+    return {
+      applied: count("applied"),
+      rejected: count("rejected"),
+      superseded: count("superseded"),
+      resolved: count("resolved"),
+      fields: [],
+    };
+  },
+  acceptAsIs: (row) =>
+    row.evidence.clean
+      ? {
+          assessmentId: row.assessmentId,
+          operationId: crypto.randomUUID(),
+          verdict: "correct",
+          correction: { present: false },
+          intent: "apply",
+          expectedFingerprint: row.fingerprint,
+          reason: null,
+          evidence: null,
+          application: { kind: "transfer_pair" },
+        }
+      : null,
+};
+
 /** The Suggestion family registry, keyed by Assessment family. */
 export const suggestionFamilies = {
   field,
   statement_transaction: statementTransaction,
   recommendation,
+  transfer_pair: transferPair,
 } satisfies {
   [F in SuggestionListFamily]: SuggestionFamilyPresentation<F>;
 };

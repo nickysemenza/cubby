@@ -58,6 +58,9 @@ export const aiSmokeInputs = {
   statementCounterparty: z.object({
     fixture: z.enum(["friend_repayment", "merchant"]),
   }),
+  transferPairMovement: z.object({
+    fixture: z.enum(["transfer", "business_check", "generic"]),
+  }),
   purchaseProductIdentity: z.object({
     fixture,
     productId: sourceId.optional(),

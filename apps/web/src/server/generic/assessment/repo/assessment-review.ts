@@ -81,6 +81,11 @@ type Handler = {
   target: z.ZodType;
   actions: readonly Review["verdict"][];
   transactionBound: boolean;
+  /** Domain parent locks must precede the suggestion's projection row lock. */
+  lockForApply?: (
+    db: Database,
+    prediction: typeof assessment.$inferSelect,
+  ) => Promise<void>;
   /** The fingerprint a review must match; defaults to the stored one. */
   currentFingerprint?: (
     db: Database,
@@ -315,6 +320,23 @@ const assessmentFamilies = {
     // The domain write appends settlement refs, which supersede pending
     // suggestions by trigger; the handler marks its own state applied first.
     transactionBound: true,
+    lockForApply: async (db, prediction) => {
+      const judgment = assessmentJudgments.statement_transaction.parse(
+        prediction.judgment,
+      );
+      const subject = assessmentSubjects.statement_transaction.parse(
+        prediction.subject,
+      );
+      const { lockTransferPairLegs } =
+        await import("~/server/domains/financial-transaction/repo/transfer-pair-suggestions");
+      // Even a prediction made before pair discovery shares its charge's leg
+      // lock with a later pair apply, before either can hold its projection.
+      await lockTransferPairLegs(
+        db,
+        judgment.transferPair?.key ??
+          `stmt:${subject.source}:${subject.chargeKey}`,
+      );
+    },
     actions: ["correct", "wrong", "uncertain", "dismissed"],
     apply: async (db, context, state, input) => {
       if (input.application?.kind !== "statement_transaction")
@@ -327,6 +349,34 @@ const assessmentFamilies = {
         application: input.application,
         corrected: input.correction.present,
       });
+    },
+  },
+  transfer_pair: {
+    subject: assessmentSubjects.transfer_pair,
+    target: assessmentProjectionTargets.transfer_pair,
+    transactionBound: true,
+    lockForApply: async (db, prediction) => {
+      const subject = assessmentSubjects.transfer_pair.parse(
+        prediction.subject,
+      );
+      const { lockTransferPairLegs } =
+        await import("~/server/domains/financial-transaction/repo/transfer-pair-suggestions");
+      await lockTransferPairLegs(db, subject.pairKey);
+    },
+    actions: ["correct", "wrong", "uncertain", "dismissed"],
+    apply: async (db, context, state, input, automatic) => {
+      if (
+        automatic ||
+        input.verdict !== "correct" ||
+        input.correction.present ||
+        input.application?.kind !== "transfer_pair"
+      )
+        throw new Error(
+          "Transfer pairing requires member acceptance of the current pair.",
+        );
+      const { applyTransferPairSuggestion } =
+        await import("~/server/domains/financial-transaction/repo/transfer-pair-suggestions");
+      await applyTransferPairSuggestion(db, context, state, input);
     },
   },
   recommendation: {
@@ -406,6 +456,38 @@ function assertReviewAction(
     throw new Error(`Unsupported ${name} review action ${verdict}`);
 }
 
+const APPLICATION_FAMILIES = {
+  saved_field: {
+    family: "field",
+    message: "Saved-field receipts require a field Assessment",
+  },
+  product_merge: {
+    family: "product_pair",
+    message: "Product merge application requires a Product pair Assessment",
+  },
+  statement_transaction: {
+    family: "statement_transaction",
+    message:
+      "Statement application requires a Transaction suggestion Assessment",
+  },
+  transfer_pair: {
+    family: "transfer_pair",
+    message: "Transfer-pair application requires a transfer-pair Assessment.",
+  },
+} satisfies Record<
+  NonNullable<Review["application"]>["kind"],
+  { family: AssessmentFamily; message: string }
+>;
+
+function assertApplicationFamily(
+  family: AssessmentFamily,
+  application: Review["application"],
+) {
+  if (!application) return;
+  const expected = APPLICATION_FAMILIES[application.kind];
+  if (expected.family !== family) throw new Error(expected.message);
+}
+
 async function settleReview(
   db: Database,
   context: EntityKernelContext,
@@ -478,6 +560,12 @@ async function settleReview(
           `${prediction.subject.source}:${prediction.subject.chargeKey}`
       )
         throw new Error("Suppression differs from the statement charge");
+    } else if (prediction.subject.kind === "transfer_pair") {
+      if (
+        input.suppression.scope !== "transfer_pair" ||
+        input.suppression.candidateKey !== prediction.subject.pairKey
+      )
+        throw new Error("Suppression differs from the transfer pair");
     } else if (prediction.subject.kind === "product_pair") {
       if (
         input.suppression.scope !== "product_pair" ||
@@ -502,25 +590,7 @@ async function settleReview(
     throw new Error("Mail import outcome grades are history only");
   if (input.intent === "draft" && prediction.family !== "field")
     throw new Error("Only field Assessments support draft acceptance");
-  if (
-    input.application?.kind === "saved_field" &&
-    prediction.family !== "field"
-  )
-    throw new Error("Saved-field receipts require a field Assessment");
-  if (
-    input.application?.kind === "product_merge" &&
-    prediction.family !== "product_pair"
-  )
-    throw new Error(
-      "Product merge application requires a Product pair Assessment",
-    );
-  if (
-    input.application?.kind === "statement_transaction" &&
-    prediction.family !== "statement_transaction"
-  )
-    throw new Error(
-      "Statement application requires a Transaction suggestion Assessment",
-    );
+  assertApplicationFamily(prediction.family, input.application);
   if (input.intent === "apply" && prediction.family === "email_relevance") {
     const subject = assessmentSubjects.email_relevance.parse(
       prediction.subject,
@@ -623,6 +693,8 @@ async function settleReview(
             await import("~/server/domains/connection/repo/field-connections");
           await assertConnectionFieldFresh(transactionDb, prediction.id);
         }
+        if ("lockForApply" in family && family.lockForApply)
+          await family.lockForApply(transactionDb, prediction);
         const query = getDb(transactionDb)
           .select()
           .from(assessmentState)

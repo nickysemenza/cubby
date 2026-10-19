@@ -33,6 +33,7 @@ import {
   STATEMENT_CHARGE_IDENTITY_FEATURE,
   STATEMENT_COUNTERPARTY_FEATURE,
   STATEMENT_TRANSACTION_KIND_FEATURE,
+  TRANSFER_PAIR_MOVEMENT_FEATURE,
   PURCHASE_IMPORT_EXTRACTION_FEATURE,
   PURCHASE_IMPORT_MAIL_FEATURE,
   PURCHASE_IMPORT_PRODUCT_IDENTITY_FEATURE,
@@ -651,6 +652,33 @@ async function runCase(
           ),
           feature: STATEMENT_COUNTERPARTY_FEATURE,
           usage: { db, runId, operation: "smoke.statementCounterparty" },
+        }),
+      };
+    }
+    case "transferPairMovement": {
+      const { fixture } = aiSmokeInputs.transferPairMovement.parse(raw);
+      const descriptor = {
+        transfer: "ONLINE TRANSFER TO SAVINGS",
+        business_check: "CHECK 4321 TO EXAMPLE SERVICES",
+        generic: "ACH PAYMENT",
+      }[fixture];
+      return {
+        result: await runDecisionChoice({
+          ...TRANSFER_PAIR_MOVEMENT_FEATURE.prompt(
+            JSON.stringify({
+              account: { kind: "bank_account", name: "Synthetic checking" },
+              oppositeAccountKind: "bank_account",
+              amount: 180,
+              date: "2026-05-04",
+              descriptor,
+              merchant:
+                fixture === "business_check" ? "Example Services" : null,
+              providerCategory: "Transfer",
+              recordedKind: null,
+            }),
+          ),
+          feature: TRANSFER_PAIR_MOVEMENT_FEATURE,
+          usage: { db, runId, operation: "smoke.transferPairMovement" },
         }),
       };
     }

@@ -1,5 +1,6 @@
 import {
   acceptCleanSuggestionsInput,
+  type acceptCleanSuggestionsOut,
   suggestionColumns,
   suggestionCountsInput,
   suggestionCountsOut,
@@ -425,6 +426,8 @@ const acceptAsIs = (row: SuggestionListRow) => {
       return suggestionFamilies.statement_transaction.acceptAsIs(row);
     case "recommendation":
       return suggestionFamilies.recommendation.acceptAsIs(row);
+    case "transfer_pair":
+      return suggestionFamilies.transfer_pair.acceptAsIs(row);
   }
 };
 
@@ -454,25 +457,42 @@ export async function acceptCleanSuggestions(
     entries.map((entry) => entry.key),
     input.limit,
   );
-  const items = rows.flatMap((row) => {
+  const results: z.infer<typeof acceptCleanSuggestionsOut> = [];
+  const settledPairs = new Set<string>();
+  for (const row of rows) {
+    const pairKey =
+      row.family === "transfer_pair"
+        ? row.evidence.key
+        : row.family === "statement_transaction" &&
+            row.evidence.transferPair?.clean
+          ? row.evidence.transferPair.key
+          : null;
+    if (pairKey && settledPairs.has(pairKey)) {
+      results.push({
+        assessmentId: row.assessmentId,
+        ok: true,
+        applied: false,
+        status: "settled_by_pair",
+        reason: "The same transfer pair was accepted earlier in this batch.",
+      });
+      continue;
+    }
     const item = acceptAsIs(row);
-    return item ? [item] : [];
-  });
-  // A listed row today's rules no longer accept as is returns as a failure,
-  // so the caller skips it rather than stopping on an empty page.
-  const refused = rows
-    .filter(
-      (row) => !items.some((item) => item.assessmentId === row.assessmentId),
-    )
-    .map((row) => ({
-      assessmentId: row.assessmentId,
-      ok: false as const,
-      error: "No longer clean under the current rules; review it on its own.",
-    }));
-  return [
-    ...refused,
-    ...(items.length
-      ? await reviewAssessmentBatch(db, context, { items })
-      : []),
-  ];
+    if (!item) {
+      results.push({
+        assessmentId: row.assessmentId,
+        ok: false,
+        error: "No longer clean under the current rules; review it on its own.",
+      });
+      continue;
+    }
+    const [result] = await reviewAssessmentBatch(db, context, {
+      items: [item],
+    });
+    if (result) {
+      results.push(result);
+      if (result.ok && result.applied && pairKey) settledPairs.add(pairKey);
+    }
+  }
+  return results;
 }

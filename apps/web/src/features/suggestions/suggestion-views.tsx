@@ -11,6 +11,7 @@ import {
   type SuggestionListRow,
 } from "@cubby/schemas/suggestion-list";
 import { humanize } from "@cubby/shared";
+import type { ReactNode } from "react";
 
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
 import { EntityIcon } from "~/entity/entities";
@@ -117,6 +118,16 @@ const VIEW_FILTERS = {
     multiselect("relation"),
     multiselect("entityKind"),
     multiselect("strength"),
+  ],
+  transfer_pair: [
+    range("date"),
+    multiselect("account"),
+    multiselect("owner"),
+    text("merchant"),
+    range("amount"),
+    range("dateGapDays"),
+    multiselect("strength"),
+    { columnId: "clean", kind: "multiselect", value: "boolean" },
   ],
   applied: [],
 } satisfies Record<SuggestionView, readonly ColumnFilterSpec[]>;
@@ -369,6 +380,162 @@ function allColumns() {
   });
 }
 
+/** Money-out and money-in values of one pair, in leg order. */
+function TransferPairLegs({
+  outflow,
+  inflow,
+}: {
+  outflow: ReactNode;
+  inflow: ReactNode;
+}) {
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1.5">
+      {outflow}
+      <span aria-hidden="true" className="text-muted-foreground">
+        →
+      </span>
+      <span className="sr-only">to</span>
+      {inflow}
+    </span>
+  );
+}
+
+function transferPairColumns(rosters: RuntimeFilterOptions) {
+  const evidence = (row: Row) =>
+    row.family === "transfer_pair" ? row.evidence : null;
+  return createCubbyColumnCollection<Row>((add) => {
+    leadingColumns(add);
+    add(recordColumn);
+    add(
+      helper.display({
+        id: "whatChanges",
+        header: "What changes",
+        size: 320,
+        cell: ({ row }) => <WhatChanges row={row.original} />,
+      }),
+    );
+    add(
+      helper.accessor((row) => columnText(row, "date"), {
+        id: "date",
+        header: "Date",
+        size: 108,
+        cell: ({ row }) => (
+          <DateDisplay start={columnText(row.original, "date")} />
+        ),
+      }),
+    );
+    add(
+      helper.accessor((row) => columnText(row, "account"), {
+        id: "account",
+        header: "Accounts",
+        size: 220,
+        meta: attachCubbyColumnMeta<Row>({
+          filterConfig: rosterFilterConfig(
+            rosters,
+            "account",
+            "Filter account",
+          ),
+        }),
+        cell: ({ row }) => {
+          const value = evidence(row.original);
+          return value ? (
+            <TransferPairLegs
+              outflow={
+                <RecordLink
+                  record={{
+                    entity: "financialAccount",
+                    id: value.outflow.accountId,
+                  }}
+                />
+              }
+              inflow={
+                <RecordLink
+                  record={{
+                    entity: "financialAccount",
+                    id: value.inflow.accountId,
+                  }}
+                />
+              }
+            />
+          ) : null;
+        },
+      }),
+    );
+    add(
+      helper.accessor((row) => columnText(row, "owner"), {
+        id: "owner",
+        header: "Owners",
+        size: 200,
+        meta: attachCubbyColumnMeta<Row>({
+          mobile: { slot: "meta", priority: 1, label: "Owners" },
+          filterConfig: rosterFilterConfig(rosters, "owner", "Filter owner"),
+        }),
+        cell: ({ row }) => {
+          const value = evidence(row.original);
+          if (!value) return null;
+          const owner = (leg: typeof value.outflow) =>
+            leg.owner ? (
+              <RecordLink
+                record={{ entity: "ledgerParty", id: leg.owner.id }}
+              />
+            ) : (
+              <NoneValue />
+            );
+          return (
+            <TransferPairLegs
+              outflow={owner(value.outflow)}
+              inflow={owner(value.inflow)}
+            />
+          );
+        },
+      }),
+    );
+    add(
+      helper.accessor((row) => columnText(row, "merchant"), {
+        id: "merchant",
+        header: "Merchant",
+        size: 200,
+        meta: attachCubbyColumnMeta<Row>({
+          filterConfig: textFilter("Search merchant or description"),
+        }),
+        cell: ({ row }) => {
+          const value = evidence(row.original);
+          const merchant = value?.outflow.merchant ?? value?.inflow.merchant;
+          return merchant ?? <NoneValue />;
+        },
+      }),
+    );
+    add(
+      helper.accessor((row) => column(row, "amount"), {
+        id: "amount",
+        header: "Amount",
+        size: 112,
+        cell: ({ row }) => {
+          const amount = column(row.original, "amount");
+          return typeof amount === "number" ? (
+            formatCurrency(amount)
+          ) : (
+            <NoneValue />
+          );
+        },
+      }),
+    );
+    add(
+      helper.accessor((row) => column(row, "dateGapDays"), {
+        id: "dateGapDays",
+        header: "Days apart",
+        size: 100,
+        cell: ({ row }) => column(row.original, "dateGapDays"),
+      }),
+    );
+    add(strengthColumn);
+    add(cleanColumn);
+    add(impactColumn);
+    add(ageColumn);
+    actionsColumn(add);
+  });
+}
+
 function fieldColumns() {
   const evidence = (row: Row) => (row.family === "field" ? row.evidence : null);
   return createCubbyColumnCollection<Row>((add) => {
@@ -526,21 +693,31 @@ function fieldColumns() {
   });
 }
 
+/** A multiselect over one of `REFERENCE_ROSTERS`, read only when opened. */
+function rosterFilterConfig(
+  rosters: RuntimeFilterOptions,
+  key: (typeof REFERENCE_ROSTERS)[number]["key"],
+  placeholder: string,
+): FilterConfig {
+  const source = deferredFilterOptionSource(rosters[key]);
+  return {
+    placeholder,
+    filterType: "multiselect",
+    options: source?.options ?? [],
+    ...deferredRosterControls(source),
+  };
+}
+
 function statementColumns(
   rosters: RuntimeFilterOptions,
   providerCategoryLabel: string,
 ) {
   const evidence = (row: Row) =>
     row.family === "statement_transaction" ? row.evidence : null;
-  const rosterFilter = (key: string, placeholder: string): FilterConfig => {
-    const source = deferredFilterOptionSource(rosters[key]);
-    return {
-      placeholder,
-      filterType: "multiselect",
-      options: source?.options ?? [],
-      ...deferredRosterControls(source),
-    };
-  };
+  const rosterFilter = (
+    key: (typeof REFERENCE_ROSTERS)[number]["key"],
+    placeholder: string,
+  ) => rosterFilterConfig(rosters, key, placeholder);
   return createCubbyColumnCollection<Row>((add) => {
     leadingColumns(add);
     add(
@@ -896,8 +1073,8 @@ function appliedColumns() {
   });
 }
 
-/** Rosters for the statement reference filters, read only when opened. */
-export const STATEMENT_ROSTERS = [
+/** Rosters for the statement and transfer-pair reference filters, read only when opened. */
+export const REFERENCE_ROSTERS = [
   { key: "account", target: "financialAccount" },
   { key: "owner", target: "ledgerParty" },
   { key: "candidate", target: "financialTransaction" },
@@ -917,6 +1094,8 @@ export function viewColumns(
       return statementColumns(rosters, providerCategoryLabel);
     case "recommendation":
       return recommendationColumns();
+    case "transfer_pair":
+      return transferPairColumns(rosters);
     case "applied":
       return appliedColumns();
   }
@@ -934,5 +1113,6 @@ export const VIEW_HIDDEN_COLUMNS = {
     impact: false,
   },
   recommendation: { entityKind: false },
+  transfer_pair: { account: false, merchant: false },
   applied: {},
 } satisfies Record<SuggestionView, Record<string, false>>;

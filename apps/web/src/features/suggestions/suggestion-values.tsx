@@ -10,6 +10,7 @@ import type {
   SuggestionRecordRef,
   SuggestionStrength,
 } from "@cubby/schemas/suggestion-list";
+import type { TransferPairJudgment } from "@cubby/schemas/transfer-pair-suggestion";
 import { humanize } from "@cubby/shared";
 import { match } from "ts-pattern";
 
@@ -26,11 +27,12 @@ export const FAMILY_LABEL = {
   statement_transaction: "Statement",
   recommendation: "Connection",
   field: "Field",
+  transfer_pair: "Transfer pair",
 } satisfies Record<SuggestionListFamily, string>;
 
 /** Chip order on the page: the family most often bulk-reviewed first. */
 export const FAMILY_CHIPS = (
-  ["statement_transaction", "recommendation", "field"] as const
+  ["statement_transaction", "transfer_pair", "recommendation", "field"] as const
 ).map((family) => ({ family, label: SWEEP_FAMILY_LABEL[family] }));
 
 const STRENGTH_BARS = { strong: 3, medium: 2, weak: 1 } as const;
@@ -192,6 +194,21 @@ export function FieldValue({
   );
 }
 
+/** What accepting a pair writes: the legs it creates, then the pairing. */
+function transferPairChange({ outflow, inflow }: TransferPairJudgment) {
+  const missing = [outflow, inflow].filter((leg) => !leg.transactionId);
+  const cash = missing.some((leg) => leg.origin === "cash");
+  if (missing.length === 2)
+    return cash
+      ? "Create 2 legs (full-amount cash) and pair with"
+      : "Create 2 legs and pair with";
+  if (missing.length === 1)
+    return cash
+      ? "Create full-amount cash leg and pair with"
+      : "Create missing leg and pair with";
+  return "Pair with";
+}
+
 /** The change one Suggestion makes, in its family's own words. */
 export function WhatChanges({ row }: { row: SuggestionListRow }) {
   return match(row)
@@ -243,11 +260,29 @@ export function WhatChanges({ row }: { row: SuggestionListRow }) {
         {row.other ? <RecordLink record={row.other} /> : null}
       </span>
     ))
+    .with({ family: "transfer_pair" }, ({ evidence }) => (
+      <span className="inline-flex min-w-0 items-center gap-1.5">
+        <span className="tabular-nums">{formatCurrency(evidence.amount)}</span>
+        <span className="text-muted-foreground">
+          {transferPairChange(evidence)}
+        </span>
+        {row.other ? <RecordLink record={row.other} /> : null}
+      </span>
+    ))
     .exhaustive();
 }
 
 /** Statement rows name the charge; other families name their record. */
 export function SuggestionRecord({ row }: { row: SuggestionListRow }) {
+  if (row.family === "transfer_pair")
+    return (
+      <StackedValue
+        primary={
+          row.evidence.outflow.description ?? row.evidence.outflow.accountName
+        }
+        secondary={<RecordLink record={row.record} />}
+      />
+    );
   if (row.family === "statement_transaction") {
     const charge = row.evidence;
     return (

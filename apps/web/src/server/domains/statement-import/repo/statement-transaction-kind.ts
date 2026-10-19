@@ -153,13 +153,15 @@ const MONEY_MOVES = new Set<KindDecision["kind"]>([
   "credit_card_payment",
 ]);
 
+export const isMoneyMoveKind = (kind: KindDecision["kind"]) =>
+  MONEY_MOVES.has(kind);
+
 /**
  * Whether a create's kind is bulk-acceptable: at least two sources name it and
  * none disagrees, nobody says the counterparty is a person, and the model has
  * said it is a business (history must, on a stored-value account). A transfer
- * or card payment is never bulk-acceptable until its opposite leg is matched:
- * votes and a descriptor naming an own account cannot tell an internal move
- * from money leaving to another owner, which owes a LedgerTransfer.
+ * or card payment uses the transfer family's unique, same-owner opposite-leg
+ * evidence instead of votes. A descriptor's account hint is insufficient.
  */
 export function kindAgreed(
   create: KindDecision,
@@ -168,9 +170,14 @@ export function kindAgreed(
     NonNullable<StatementTransactionJudgment["transfer"]>,
     "ledgerTransfer"
   > | null,
+  pair: Pick<
+    NonNullable<StatementTransactionJudgment["transferPair"]>,
+    "clean"
+  > | null = null,
 ): boolean {
   const { votes, counterparty } = create;
-  if (transfer || MONEY_MOVES.has(create.kind)) return false;
+  if (isMoneyMoveKind(create.kind)) return pair?.clean === true;
+  if (transfer) return false;
   const cast = [votes.rule, votes.label, votes.history].filter(
     (vote) => vote !== null,
   );

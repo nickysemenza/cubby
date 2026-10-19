@@ -412,6 +412,18 @@ async function workQueueProjection(
     ARRAY[]::uuid[] AS owners, true AS shared, NULL::text AS "problemKey", ${NO_FACT_COLUMNS}
     FROM "AssessmentState" s WHERE ${pendingSuggestion()}
     HAVING count(*) > 0`);
+  if (scopeAdmitsUnrecorded(scope))
+    selections.push(sql`SELECT NULL::text AS entity, NULL::text AS id,
+    'Transfer-pair suggestions'::text AS name,
+    'suggestions:' || ${assessmentFamily.enum.transfer_pair}::text AS key,
+    ${workQueueSourceSchema.enum.suggestion}::text AS source, ${workQueueKindSchema.enum.review}::text AS kind,
+    count(*)::text || CASE WHEN count(*) = 1 THEN ' transfer pair' ELSE ' transfer pairs' END
+      || ' (' || count(*) FILTER (WHERE (s.data->>'clean')::boolean) || ' ready to accept)' AS reason,
+    'Review both legs and owners on the Suggestions page.'::text AS "nextAction",
+    ARRAY[]::uuid[] AS owners, true AS shared, NULL::text AS "problemKey", ${NO_FACT_COLUMNS}
+    FROM "AssessmentState" s WHERE s.family = ${assessmentFamily.enum.transfer_pair}
+      AND s.active AND s.status = ${suggestionStatus.enum.pending}
+    HAVING count(*) > 0`);
   // One row for the whole family, never one per Suggestion: the Suggestions
   // page is where each is reviewed. A record's own Work counts its own.
   if (scopeAdmitsUnrecorded(scope) || (scope.record && !scope.check)) {

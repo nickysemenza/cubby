@@ -377,6 +377,15 @@ export const sweepFieldTargets = z
 /** The Suggestion families a Sweep can cover, each with its own scope. */
 export const sweepFamilyScope = z.discriminatedUnion("family", [
   z.strictObject({
+    family: z.literal("transfer_pair"),
+    scope: z
+      .strictObject({
+        accountIds: z.array(z.uuid()).max(100).optional(),
+        since: plainDate.optional(),
+      })
+      .default({}),
+  }),
+  z.strictObject({
     family: z.literal("statement_transaction"),
     scope: z
       .strictObject({
@@ -412,10 +421,11 @@ export const SWEEP_FAMILY_LABEL = {
   statement_transaction: "Statements",
   recommendation: "Connections",
   field: "Fields",
+  transfer_pair: "Transfer pairs",
 } as const satisfies Record<SweepFamily, string>;
 export const sweepRunInput = z.strictObject({
   kind: z.literal("sweep"),
-  families: z.array(sweepFamilyScope).min(1).max(3),
+  families: z.array(sweepFamilyScope).min(1).max(4),
 });
 export type SweepRunInput = z.infer<typeof sweepRunInput>;
 export const maintenanceRunInput = z.strictObject({

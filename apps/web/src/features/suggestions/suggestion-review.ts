@@ -137,6 +137,13 @@ export function acceptItem(
   if (!offers(row, "accept")) return null;
   if (row.family === "statement_transaction")
     return statementApplyItem(row.evidence, statementChoice);
+  if (row.family === "transfer_pair")
+    return {
+      ...base(row),
+      verdict: "correct",
+      intent: "apply",
+      application: { kind: "transfer_pair" },
+    };
   return { ...base(row), verdict: "correct", intent: "apply" };
 }
 
@@ -155,20 +162,39 @@ export function automaticMissItem(row: SuggestionListRow): ReviewItem | null {
   return { ...base(row), verdict: "wrong", intent: "history" };
 }
 
-/** Dismiss without judging; a statement charge stays suppressed after. */
+/** Dismiss: settle without applying; this pair of legs stays suppressed on every later pass. */
+function transferPairDismissItem(
+  row: Extract<SuggestionListRow, { family: "transfer_pair" }>,
+): ReviewItem {
+  return {
+    ...base(row),
+    verdict: "dismissed",
+    intent: "history",
+    suppression: {
+      scope: "transfer_pair",
+      candidateKey: row.evidence.key,
+      fingerprint: row.fingerprint,
+    },
+  };
+}
+
+/** Dismiss without judging; a statement charge or transfer pair stays suppressed after. */
 export function dismissItem(row: SuggestionListRow): ReviewItem {
   if (row.family === "statement_transaction")
     return statementDismissItem(row.evidence);
+  if (row.family === "transfer_pair") return transferPairDismissItem(row);
   return { ...base(row), verdict: "dismissed", intent: "history" };
 }
 
 /**
  * Dismiss and never suggest it again, or null when the family has no lasting
- * suppression for this row. A statement Dismiss already suppresses its charge.
+ * suppression for this row. A statement or transfer-pair Dismiss already
+ * suppresses its charge or pair.
  */
 export function neverSuggestItem(row: SuggestionListRow): ReviewItem | null {
   if (row.family === "statement_transaction")
     return statementDismissItem(row.evidence);
+  if (row.family === "transfer_pair") return transferPairDismissItem(row);
   if (row.family !== "recommendation" || !offers(row, "never_suggest"))
     return null;
   const suppression = row.evidence.review.suppression;

@@ -15,6 +15,7 @@ import { renderOptionCell } from "~/entity/table/column-helpers";
 import { formatCurrency } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import { DateDisplay } from "~/ui/common/date-display";
+import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
 
@@ -464,6 +465,171 @@ function ConnectionEvidence({ row }: { row: ConnectionRow }) {
   );
 }
 
+function TransferPairEvidence({
+  row,
+}: {
+  row: Extract<SuggestionListRow, { family: "transfer_pair" }>;
+}) {
+  const pair = row.evidence;
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+        {[
+          { title: "Money out", leg: pair.outflow },
+          { title: "Money in", leg: pair.inflow },
+        ].map(({ title, leg }) => (
+          <EvidenceBox key={title} title={title}>
+            <Facts
+              rows={[
+                [
+                  "Account",
+                  <RecordLink
+                    key="account"
+                    record={{ entity: "financialAccount", id: leg.accountId }}
+                  />,
+                ],
+                [
+                  "Owner",
+                  leg.owner ? (
+                    <RecordLink
+                      key="owner"
+                      record={{ entity: "ledgerParty", id: leg.owner.id }}
+                    />
+                  ) : (
+                    "Owner missing"
+                  ),
+                ],
+                ["Amount", formatCurrency(leg.amount)],
+                ["Date", <DateDisplay key="date" start={leg.date} />],
+                ["Description", leg.description],
+                [
+                  "Transaction",
+                  leg.transactionId ? (
+                    <RecordLink
+                      key="transaction"
+                      record={{
+                        entity: "financialTransaction",
+                        id: leg.transactionId,
+                      }}
+                    />
+                  ) : leg.origin === "cash" ? (
+                    "Create cash leg after review"
+                  ) : (
+                    "Create from statement"
+                  ),
+                ],
+                ["Movement evidence", humanize(leg.movement)],
+                [
+                  "Decision",
+                  leg.movementLabel
+                    ? humanize(leg.movementLabel.choice)
+                    : "Not labeled",
+                ],
+                [
+                  "Confidence",
+                  leg.movementLabel
+                    ? humanize(leg.movementLabel.confidence)
+                    : null,
+                ],
+                ["Decision model", leg.movementLabel?.model ?? null],
+                [
+                  "Statement refs",
+                  leg.refs.length ? (
+                    <span key="refs" className="break-all">
+                      {leg.refs
+                        .map((ref) => `${ref.source}: ${ref.externalId}`)
+                        .join("; ")}
+                    </span>
+                  ) : null,
+                ],
+              ]}
+            />
+            {leg.overlaps.length ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {countLabel(leg.overlaps.length, "unresolved overlap")};
+                reconcile these observations before creating a leg.
+              </p>
+            ) : null}
+          </EvidenceBox>
+        ))}
+      </div>
+      <EvidenceBox title="Pair evidence">
+        <Facts
+          rows={[
+            ["Transfer date", <DateDisplay key="date" start={pair.date} />],
+            ["Date gap", `${countLabel(pair.dateGapDays, "day")} apart`],
+            [
+              "Move",
+              pair.move === "internal"
+                ? "Same owner: internal move"
+                : pair.move === "between_owners"
+                  ? "Different owners: reviewed money move"
+                  : "Set both account owners before applying",
+            ],
+          ]}
+        />
+        {pair.reasons.length ? (
+          <ul className="mt-1 flex flex-col gap-0.5 text-xs text-muted-foreground">
+            {pair.reasons.map((reason) => (
+              <li key={reason}>{reason}</li>
+            ))}
+          </ul>
+        ) : null}
+        {!pair.apply.available && pair.apply.reason ? (
+          <p className="mt-1 text-xs">{pair.apply.reason}</p>
+        ) : null}
+        {pair.inflow.origin === "cash" ? (
+          <p className="mt-1 text-xs">
+            The cash leg records the full withdrawal amount; no ATM fee is
+            inferred. Record a known fee as its own cash transaction.
+          </p>
+        ) : null}
+      </EvidenceBox>
+      {pair.competitors.length ? (
+        <EvidenceBox title="Competing candidates">
+          <RecordList>
+            {pair.competitors.map((candidate) => (
+              <RecordRow
+                key={`${candidate.against}:${candidate.leg.key}`}
+                primary={
+                  <RecordLink
+                    record={{
+                      entity: "financialAccount",
+                      id: candidate.leg.accountId,
+                    }}
+                  />
+                }
+                secondary={candidate.leg.description}
+                facts={[
+                  {
+                    label: "Competes with",
+                    value:
+                      candidate.against === "outflow"
+                        ? "Money in"
+                        : "Money out",
+                  },
+                  {
+                    label: "Amount",
+                    value: formatCurrency(candidate.leg.amount),
+                  },
+                  {
+                    label: "Date",
+                    value: <DateDisplay start={candidate.leg.date} />,
+                  },
+                  {
+                    label: "Date gap",
+                    value: `${countLabel(candidate.dateGapDays, "day")} apart`,
+                  },
+                ]}
+              />
+            ))}
+          </RecordList>
+        </EvidenceBox>
+      ) : null}
+    </div>
+  );
+}
+
 /** A row's own evidence, opened beneath it. */
 export function SuggestionEvidence({ row }: { row: SuggestionListRow }) {
   return (
@@ -481,6 +647,9 @@ export function SuggestionEvidence({ row }: { row: SuggestionListRow }) {
         )
         .with({ family: "recommendation" }, (connection) => (
           <ConnectionEvidence row={connection} />
+        ))
+        .with({ family: "transfer_pair" }, (pair) => (
+          <TransferPairEvidence row={pair} />
         ))
         .exhaustive()}
     </div>

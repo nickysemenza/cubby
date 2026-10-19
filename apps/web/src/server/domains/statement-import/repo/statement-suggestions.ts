@@ -39,6 +39,7 @@ import {
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import { previewFinancialStatementImport } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
+import { findTransferPairsForCharges } from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
 import {
   CHARGE_STATE,
   chargeKeyOf,
@@ -63,7 +64,7 @@ import {
   statementSubjectKey,
 } from "~/server/generic/assessment/repo/automatic-rules";
 
-/** Rule revision stamped on every published suggestion; bump with any policy change. */
+/** Matching revision and Automatic attach precision window; clean-only changes use the policy below. */
 export const STATEMENT_SUGGESTION_REVISION = "2026-10-18.3";
 /**
  * Bump when only bulk-acceptability changes. Labels ride on top of the
@@ -72,7 +73,7 @@ export const STATEMENT_SUGGESTION_REVISION = "2026-10-18.3";
  * renaming the revision, which the automatic attach rule's measured windows
  * are keyed by.
  */
-const STATEMENT_CLEAN_POLICY = "2026-10-19.1";
+const STATEMENT_CLEAN_POLICY = "2026-10-19.2";
 const STATEMENT_SUGGESTION_PAGE = FINANCIAL_STATEMENT_IMPORT_MAX_ROWS;
 /** A hold's posted twin lands within this window, and a vanished hold is judged after it. */
 const PENDING_POST_WINDOW_DAYS = 7;
@@ -671,6 +672,7 @@ export async function buildChargeProposals(
     ),
   ]);
   const accountById = new Map(accounts.map((account) => [account.id, account]));
+  const pairsByCharge = await findTransferPairsForCharges(db, charges);
 
   const proposals: ChargeProposal[] = [];
   for (const { charge, observations: rows, canonical } of grouped) {
@@ -826,6 +828,7 @@ export async function buildChargeProposals(
       void: null,
       siblings: chargeSiblings,
       transfer,
+      transferPair: pairsByCharge.get(chargeId(charge)) ?? null,
       clean: false,
     };
     judgment.clean = isClean(judgment, statementAmount);
@@ -844,7 +847,7 @@ export function isClean(
     return (
       judgment.candidates.length === 0 &&
       judgment.create !== null &&
-      kindAgreed(judgment.create, judgment.transfer)
+      kindAgreed(judgment.create, judgment.transfer, judgment.transferPair)
     );
   if (judgment.candidates.length !== 1) return false;
   const [only] = judgment.candidates;
@@ -978,6 +981,7 @@ export async function buildHoldVoidProposals(
         void: { transactionId: hold.id, coverageImportId: coverage },
         siblings: [],
         transfer: null,
+        transferPair: null,
         clean: false,
       }),
     );
