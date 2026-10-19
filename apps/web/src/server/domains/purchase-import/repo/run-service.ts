@@ -1153,6 +1153,8 @@ export async function markRunFailed(
     .set({
       status: "failed",
       failureCode: input.failureCode,
+      // The Run page's raw failure text, as `failWorkflowRun` records it.
+      ...(input.detail !== undefined && { dispatchError: input.detail }),
       endedAt: new Date(),
       updatedAt: new Date(),
     })

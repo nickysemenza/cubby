@@ -270,6 +270,10 @@ describe("isolated Mail coordinator replay", () => {
               vars: {
                 ACCOUNT_ID: CF_ACCOUNT_ID,
                 GATEWAY_ENVIRONMENT: testAiGatewayEnvironment(process.env.CI),
+                // Paid replay: credit attempts bill to Unified Billing.
+                ...(process.env.MAIL_REPLAY_UNIFIED_BILLING === "1" && {
+                  UNIFIED_BILLING_ONLY: "1",
+                }),
               },
               secrets: { GATEWAY_TOKEN: token },
             };

@@ -34,6 +34,13 @@ type Env = {
   PRICING_CATALOG?: string;
   RESPONSES_MODEL?: string;
   RESPONSES_EFFORT?: string;
+  /**
+   * "1" bills every request to Unified Billing: a stored-key credit attempt
+   * (`cf-aig-byok-alias`) is forwarded without its alias and a ChatGPT plan
+   * attempt goes to the paid route, so a replay measures the requested model
+   * instead of falling down the funding ladder.
+   */
+  UNIFIED_BILLING_ONLY?: string;
 };
 
 type RouteUsage = {
@@ -90,6 +97,10 @@ function forward(
   }
   const headers = strippedHeaders({ headers: request.headers });
   headers.delete("x-cubby-inference-funding");
+  if (env.UNIFIED_BILLING_ONLY === "1") {
+    headers.delete("cf-aig-byok-alias");
+    headers.delete("cf-aig-no-wholesale");
+  }
   // The placeholder host must not follow the request to the gateway.
   headers.delete("host");
   headers.set("cf-aig-authorization", `Bearer ${env.GATEWAY_TOKEN}`);
@@ -123,7 +134,10 @@ export default {
     }
     // This Worker has only a Unified Billing token, never a ChatGPT session.
     // Preserve the funding ladder by letting its owner choose the paid stage.
-    if (request.headers.get("x-cubby-inference-funding") === "subscription")
+    if (
+      request.headers.get("x-cubby-inference-funding") === "subscription" &&
+      env.UNIFIED_BILLING_ONLY !== "1"
+    )
       return Response.json(
         {
           error: {
