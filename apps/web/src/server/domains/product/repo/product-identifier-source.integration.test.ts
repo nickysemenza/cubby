@@ -267,4 +267,31 @@ describe("Product identifier issuer registry", () => {
       },
     ]);
   });
+  it("refuses a new issuer beside owned sources that already hold Product identifiers", async () => {
+    const issuer = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Example unflagged retailer",
+      website: "https://example.test",
+    });
+    await getDb(ctx.db)
+      .insert(externalSource)
+      .values({ slug: "example-legacy", label: "Legacy", vendorId: issuer.id });
+    const owner = await insertWithShortcode(ctx.db, "product", {
+      name: "Synthetic legacy-sourced product",
+      manufacturer: "Synthetic maker",
+    });
+    await getDb(ctx.db).insert(entityExternalId).values({
+      entityKind: "product",
+      entityId: owner.id,
+      source: "example-legacy",
+      kind: "retailer_sku",
+      externalId: "445566",
+      isPrimary: true,
+    });
+    await expect(
+      resolveProductIdentifierSource(ctx.db, { vendorId: issuer.id }),
+    ).rejects.toThrow(
+      `Identifier issuer is unset for ${issuer.shortcode}, whose sources example-legacy already hold Product identifiers.`,
+    );
+    expect(await getDb(ctx.db).select().from(externalSource)).toHaveLength(1);
+  });
 });

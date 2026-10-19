@@ -1,13 +1,17 @@
 import { externalIdSource } from "@cubby/schemas/external-id";
 import type { VendorId } from "@cubby/schemas/identifiers";
 import { getErrorMessage } from "@cubby/shared";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 
 import { type Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
-import { externalSource, vendor } from "~/server/db/retained-tables";
+import {
+  entityExternalId,
+  externalSource,
+  vendor,
+} from "~/server/db/retained-tables";
 import { createBlockedError } from "~/server/errors/app-error";
 
 const canonicalHost = (url: string) => {
@@ -120,6 +124,36 @@ async function productIdentifierSource(
   const slug = issuerHost
     ? hostSource(issuerHost)
     : externalIdSource.parse(`vendor-${owner!.id}`);
+  if (owner && register) {
+    // A new issuer beside owned sources that already hold Product identifiers
+    // would hide them from exact lookup and let an import fork a duplicate.
+    const holding = await database
+      .selectDistinct({ slug: externalSource.slug })
+      .from(externalSource)
+      .innerJoin(
+        entityExternalId,
+        and(
+          eq(entityExternalId.source, externalSource.slug),
+          eq(entityExternalId.entityKind, "product"),
+          notDeleted(entityExternalId),
+        ),
+      )
+      .where(
+        and(
+          eq(externalSource.vendorId, owner.id),
+          ne(externalSource.slug, slug),
+        ),
+      )
+      .orderBy(externalSource.slug);
+    if (holding.length)
+      throw new Error(
+        `Identifier issuer is unset for ${owner.shortcode}, whose sources ${holding
+          .map((row) => row.slug)
+          .join(
+            ", ",
+          )} already hold Product identifiers. Flag one as its issuer before importing.`,
+      );
+  }
   // Register with explicit ownership; ensureExternalSources' name matching is
   // not authority for a retained page. An existing row keeps its owner.
   if (register) {
@@ -251,4 +285,17 @@ export async function repointVendorIdentifierSources(
       .update(externalSource)
       .set({ vendorId: input.keepId })
       .where(inArray(externalSource.vendorId, [...input.loserIds]));
+}
+
+/** A deleted Vendor's sources stay registered unowned; an unowned row issues
+ * nothing, so its flag clears with its owner. */
+export async function detachVendorIdentifierSources(
+  tx: DrizzleTransaction,
+  vendorIds: readonly VendorId[],
+) {
+  if (vendorIds.length)
+    await unwrapDb(tx)
+      .update(externalSource)
+      .set({ vendorId: null, issuer: false })
+      .where(inArray(externalSource.vendorId, [...vendorIds]));
 }

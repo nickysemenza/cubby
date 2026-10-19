@@ -497,6 +497,26 @@ describe("vendor repository — mergeVendors", () => {
     ).rejects.toThrow(`${loserCode}: synthetic-loser-catalog`);
   });
 
+  it("clears a deleted Vendor's issuer with its ownership", async () => {
+    const doomed = await findOrCreateVendor(ctx.db, "Synthetic deleted issuer");
+    await getDb(ctx.db).insert(externalSource).values({
+      slug: "synthetic-deleted-catalog",
+      label: "Deleted",
+      vendorId: doomed,
+      issuer: true,
+    });
+    await deleteVendors(ctx.db, [await vendorCode(doomed)], ctx.actor);
+    expect(
+      await getDb(ctx.db)
+        .select({
+          vendorId: externalSource.vendorId,
+          issuer: externalSource.issuer,
+        })
+        .from(externalSource)
+        .where(eq(externalSource.slug, "synthetic-deleted-catalog")),
+    ).toEqual([{ vendorId: null, issuer: false }]);
+  });
+
   it("carries a merged Vendor's export source to the survivor beside its issuer", async () => {
     const keeper = await findOrCreateVendor(ctx.db, "Synthetic export keeper");
     const loser = await findOrCreateVendor(ctx.db, "Synthetic export loser");

@@ -64,7 +64,10 @@ import {
   displayableImageSql,
   displayableImageWhere,
 } from "~/server/domains/image/repo/image-displayability";
-import { repointVendorIdentifierSources } from "~/server/domains/product/repo/product-identifier-source";
+import {
+  detachVendorIdentifierSources,
+  repointVendorIdentifierSources,
+} from "~/server/domains/product/repo/product-identifier-source";
 import { loadGmailCursor } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import { listMemberMailboxes } from "~/server/domains/purchase-import/repo/gmail/targets";
 import { vendorSearchTerms } from "~/server/domains/purchase-import/repo/gmail/vendor-identity";
@@ -171,7 +174,7 @@ export const VENDOR_DELETE_EDGE_POLICY = {
     code: "clear-source-vendor",
     effect: "detach",
     description:
-      "Identifier sources that named this vendor stay registered and simply stop naming it.",
+      "Identifier sources that named this vendor stay registered and simply stop naming it; an unowned source issues no Product identifiers.",
   },
 } as const satisfies IncomingEdgePolicy<"vendor", OperationDisposition>;
 
@@ -1288,4 +1291,6 @@ export const mergeVendors = async (
  * A vendor delete is its declared policy: live purchases, accounts and import
  * provenance block it; its logo attachment goes with it (ADR 0006).
  */
-export const deleteVendors = policyDelete("vendor", VENDOR_DELETE_EDGE_POLICY);
+export const deleteVendors = policyDelete("vendor", VENDOR_DELETE_EDGE_POLICY, {
+  overrides: { "ExternalSource.vendorId": detachVendorIdentifierSources },
+});
