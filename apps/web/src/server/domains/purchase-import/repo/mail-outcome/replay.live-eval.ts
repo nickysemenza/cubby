@@ -172,6 +172,7 @@ const unavailable = (caseNumber: number, failure: string) => ({
   failedAttempts: [],
   diagnostics: [],
   outcome: null,
+  usd: {},
 });
 
 // Failure modes: replay reaches production data or Gmail; two cases share
@@ -211,6 +212,12 @@ describe("isolated Mail coordinator replay", () => {
           report.actualModels.includes(primary),
         ).length,
         disagreements,
+        /** Standard (list-price) coordinator cost per case, every case. */
+        usd: reports.map((report) => ({
+          case: report.case,
+          total: Object.values(report.usd).reduce((sum, usd) => sum + usd, 0),
+          byModel: report.usd,
+        })),
         limitations: [
           "Mechanical parity is not a human quality grade; review disagreements through authenticated MCP.",
           "Only supplied originals are copied. Existing Purchases, catalog, attachments and other Emails are absent.",
@@ -319,6 +326,7 @@ describe("isolated Mail coordinator replay", () => {
                     status: aiUsage.status,
                     transport: aiUsage.transport,
                     failure: aiUsage.failure,
+                    standardCost: aiUsage.standardCost,
                   })
                   .from(aiUsage)
                   .where(
@@ -356,6 +364,14 @@ describe("isolated Mail coordinator replay", () => {
                       ),
                     ),
                   diagnostics: await diagnose(),
+                  usd: usage.reduce<Record<string, number>>(
+                    (byModel, row) => ({
+                      ...byModel,
+                      [row.model]:
+                        (byModel[row.model] ?? 0) + (row.standardCost ?? 0),
+                    }),
+                    {},
+                  ),
                 };
               },
               record: (report) => {
