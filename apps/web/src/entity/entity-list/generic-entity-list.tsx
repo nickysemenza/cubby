@@ -414,14 +414,20 @@ function ServerListBody({
     <>
       {parts.above?.(list)}
       <div className="min-w-0">
-        <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-border px-2 py-1 text-xs md:px-4">
+        <div
+          data-list-status-strip=""
+          className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-border px-2 py-1 text-xs md:px-4"
+        >
           <ListTotalSummary
             totals={entitySummary[entity].list.totals}
             labels={list.totalLabels}
             state={list.summaryState}
             onRetry={list.retrySummary}
           />
-          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+          <div
+            data-list-status-group=""
+            className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1"
+          >
             {sweepAction}
             <div data-workbench-status className="min-w-0" />
             {contextualStatus}

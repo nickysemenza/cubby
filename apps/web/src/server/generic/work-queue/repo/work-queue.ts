@@ -7,7 +7,10 @@ import {
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   dataCheck,
+  dataCheckMessage,
+  dataChecksByEntity,
   scoredEntities,
+  type DataCheck,
   type ScoredEntity,
 } from "@cubby/schemas/data-quality";
 import { entityRefKey, entitySchema, type Entity } from "@cubby/schemas/entity";
@@ -154,6 +157,34 @@ const gapViewFilters = (
   return checks.length > 0 ? { ...filters, dataGap: checks } : null;
 };
 
+/** A gap row's reason as `stateRowQuality` displays it, for search: its live
+ * gap messages, deduplicated in check order, else the branch's fallback. */
+const gapReasonSql = (
+  entity: (typeof workQueueGapViews)[number]["entity"],
+  fallback: string,
+  context?: QualityReadContext,
+): SQL => {
+  const gapView = workQueueGapViews.find((view) => view.entity === entity);
+  if (!gapView) throw new Error(`Work queue has no gap view for ${entity}`);
+  const relevant = new Set(workQueueGapChecks(gapView));
+  const byMessage = new Map<string, DataCheck[]>();
+  for (const check of dataChecksByEntity[entity].options) {
+    if (!relevant.has(check)) continue;
+    const message = dataCheckMessage[check];
+    byMessage.set(message, [...(byMessage.get(message) ?? []), check]);
+  }
+  const parts = [...byMessage].map(
+    ([message, checks]) =>
+      sql`CASE WHEN ${sql.join(
+        checks.map((check) => gapCondition(entity, check, undefined, context)),
+        sql` OR `,
+      )} THEN ${message}::text END`,
+  );
+  return parts.length
+    ? sql`coalesce(nullif(concat_ws(' ', ${sql.join(parts, sql`, `)}), ''), ${fallback}::text)`
+    : sql`${fallback}::text`;
+};
+
 /** One read-only relation, shared by household routing and member eligibility. */
 /** Diagnostic-backed queue branches; supplied by `service/work-queue-read`. */
 export type WorkProblemSelections = (
@@ -168,6 +199,7 @@ async function workQueueProjection(
   problemSelections: WorkProblemSelections,
   readContexts: Partial<Record<Entity, QualityReadContext>>,
   quality: StatementQualityRelations,
+  searched: boolean,
 ): Promise<SQL> {
   const selections: SQL[] = [];
   if (!scope.check) {
@@ -247,12 +279,23 @@ async function workQueueProjection(
   const admits = (entity: Entity, carriesGaps = false) =>
     (!scope.check || carriesGaps) &&
     (!scope.record || scope.record.entity === entity);
-  const research = {
-    source: "research",
-    kind: "research",
-    reason: "Research queue",
-    nextAction: "Review missing facts and add verified evidence.",
-  } satisfies Candidate;
+  // Search runs before paging, so a searched gap row states its displayed
+  // reason here; otherwise `stateRowQuality` fills it for the page alone.
+  const gapReason = (
+    entity: (typeof workQueueGapViews)[number]["entity"],
+    fallback: string,
+    context?: QualityReadContext,
+  ) => (searched ? gapReasonSql(entity, fallback, context) : fallback);
+  const research = (
+    entity: (typeof workQueueGapViews)[number]["entity"],
+    context?: QualityReadContext,
+  ) =>
+    ({
+      source: "research",
+      kind: "research",
+      reason: gapReason(entity, "Research queue", context),
+      nextAction: "Review missing facts and add verified evidence.",
+    }) satisfies Omit<Candidate, "reason"> & { reason: string | SQL };
   const productGaps = gapViewFilters(scope, "product");
   if (productGaps && admits("product", true))
     selections.push(
@@ -267,7 +310,7 @@ async function workQueueProjection(
           productFiltersSchema.parse(productGaps),
           readContexts.product,
         ),
-        details: research,
+        details: research("product", readContexts.product),
         key: "research:product",
         shared: true,
         carriesGaps: true,
@@ -283,7 +326,7 @@ async function workQueueProjection(
         name: sql`"Vendor".name`,
         owners: sql`ARRAY[]::uuid[]`,
         where: buildVendorWhereClause(vendorFiltersSchema.parse(vendorGaps)),
-        details: research,
+        details: research("vendor"),
         key: "research:vendor",
         shared: true,
         carriesGaps: true,
@@ -302,7 +345,7 @@ async function workQueueProjection(
           purchaseFiltersSchema.parse(purchaseGaps),
           quality.context("purchase"),
         ),
-        details: research,
+        details: research("purchase", quality.context("purchase")),
         key: "research:purchase",
         carriesGaps: true,
       }),
@@ -320,7 +363,7 @@ async function workQueueProjection(
           db,
           expenseFiltersSchema.parse(expenseGaps),
         ),
-        details: research,
+        details: research("expense"),
         key: "research:expense",
         carriesGaps: true,
       }),
@@ -338,8 +381,11 @@ async function workQueueProjection(
         details: {
           source: "email",
           kind: "review",
-          // Replaced by the row's own pipeline gaps after paging.
-          reason: "Email pipeline gap",
+          reason: gapReason(
+            "email",
+            "Email pipeline gap",
+            quality.context("email"),
+          ),
           nextAction: "Review relevance, retained original and import status.",
         },
         key: "email",
@@ -797,6 +843,7 @@ async function queryWorkQueue(
     problemSelections,
     { product: productReadContext },
     quality,
+    Boolean(input.query),
   );
   // All sources, including findings, defer planned purchases before counts
   // and paging. An empty purchase is unknown, not implicitly planned.

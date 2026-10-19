@@ -209,9 +209,13 @@ test("declared record lists retain identities, relationships and amounts on desk
     `/locations?name=${encodeURIComponent(`${name} shelf`)}`,
   );
   await chooseListView(page, "List");
+  await page
+    .getByRole("button", { name: "Locations view: List", exact: true })
+    .click();
   await expect(
-    page.getByRole("button", { name: "Locations view: List", exact: true }),
-  ).toBeVisible();
+    page.getByRole("menuitem", { name: "List view", exact: true }),
+  ).toHaveAttribute("aria-current", "true");
+  await page.keyboard.press("Escape");
   await expect(
     page.getByRole("columnheader").filter({
       has: page.getByRole("button", {

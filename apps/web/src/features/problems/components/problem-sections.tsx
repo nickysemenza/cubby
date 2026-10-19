@@ -991,7 +991,10 @@ const DECLARED_SECTIONS = [
           Review in Recommendations Workbench
         </Link>,
       ],
+      // The title is a shared part number; the route opens one of the pair.
+      shortcode: null,
       route: entityDetailLink("product", dupe.products[0]?.id ?? ""),
+      editLabel: "Open product",
       inlineFix:
         dupe.identityConflict || !dupe.fingerprint
           ? undefined

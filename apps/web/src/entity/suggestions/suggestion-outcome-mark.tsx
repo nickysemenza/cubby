@@ -283,8 +283,8 @@ function OutcomePopoverBody({
 function glyphTriggerClass(surface: SuggestionOutcomeSurface) {
   return cn(
     "inline-flex shrink-0 items-center justify-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring",
-    // Reserve phone hit areas in flow. An expanded invisible target used to
-    // intercept the adjacent relationship edit button in narrow ledgers.
+    // Phone hit areas stay in flow: an expanded invisible target intercepts
+    // the adjacent edit button in narrow ledgers.
     surface === "cell" ? "size-5" : "size-11 md:size-auto",
   );
 }

@@ -1722,6 +1722,7 @@ export function createExternalLinkColumn<
     meta: attachCubbyColumnMeta({
       className: options?.className,
       mono: variant === "mono",
+      code: variant === "mono",
       mobile: options?.mobile,
       filterConfig: options?.filterConfig,
       cellData,

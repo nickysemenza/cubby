@@ -224,6 +224,7 @@ export const productListOverride = defineListOverride<
               meta: {
                 className: "w-24",
                 mono: true,
+                code: true,
                 mobile: { interactive: true },
               },
               cell: (info) => {

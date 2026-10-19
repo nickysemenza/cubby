@@ -52,12 +52,12 @@
   font-size: 0.75rem;
 }
 
-/* A state mark sits on its row's first line (where a timeline rail's endpoints
-   assume it); a row that wraps grows below its mark instead of centering it. */
+/* A state mark, title, time and commands share the row's first line (where a
+   timeline rail's endpoints assume the mark). A wide list's evidence shares
+   grid row 1, so centering would drop the title beside a wrapped failure. */
 .ledger[data-record-list]
-  > .ledger-row
-  > [data-ledger-slot="leading"]:has(> [data-record-dot]) {
-  align-self: start;
+  > .ledger-row:has(> [data-ledger-slot="leading"] > [data-record-dot]) {
+  align-items: start;
 }
 
 /* Timeline: a continuous rail through each mark, drawn on the row so it spans
