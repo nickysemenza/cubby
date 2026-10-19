@@ -81,13 +81,17 @@ test("AI Decisions lists every decision by entity and opens the shared panel", a
   await gotoAuthenticatedPage(page, "/ai");
   const decisions = page.getByRole("table", { name: "Decisions" });
   await expect(
-    decisions.getByRole("heading", { name: "Product", exact: true }),
+    decisions.getByRole("heading", { name: /^Cookbook\b/ }).first(),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Go to next page" }),
   ).toHaveCount(0);
 
-  await decisions.getByRole("row").filter({ hasText: /\S/ }).nth(1).click();
+  await decisions
+    .getByRole("row")
+    .filter({ has: page.getByRole("cell", { name: "Cookbook", exact: true }) })
+    .first()
+    .click();
   const panel = page.getByRole("complementary", { name: "Decision detail" });
   await expect(panel.getByRole("heading", { name: "Rules" })).toBeVisible();
 });

@@ -56,7 +56,7 @@ test("combined records retain server sorting, pagination, and filters after relo
   await expect(zulu).toHaveAttribute("href", `/products/${product.id}`);
   await expect(alpha).toHaveCount(0);
   const qualityCell = () => page.locator('[data-cell-col="quality"]').first();
-  await expect(qualityCell()).toHaveText(/^\d+$/);
+  await expect(qualityCell()).toHaveText(/^\d+, /);
   expect((await qualityCell().boundingBox())?.width).toBeLessThanOrEqual(104);
   await page
     .getByRole("button", { name: "Sort by Quality", exact: true })
@@ -186,7 +186,7 @@ test("declared record lists retain identities, relationships and amounts on desk
   const expenseRecord = page.getByRole("row").filter({ has: expense });
   await expect(
     expenseRecord.locator('[data-cell-col="dataQuality"] [data-cell-value]'),
-  ).toHaveText(/^\d+$/);
+  ).toHaveText(/^\d+, /);
   await expect(
     expenseRecord.getByText("$12.34", { exact: true }),
   ).toBeVisible();

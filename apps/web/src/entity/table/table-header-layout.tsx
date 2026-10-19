@@ -285,8 +285,10 @@ function HeaderMenu<TData extends RowData>({
             aria-label={`${label} column menu`}
             data-cell-spill-off=""
             className={cn(
-              "absolute inset-y-0 my-auto size-5 rounded-sm bg-card text-muted-foreground opacity-0 transition-opacity group-focus-within/th:opacity-100 group-hover/th:opacity-100 hover:text-foreground focus-visible:opacity-100 data-[popup-open]:opacity-100 pointer-coarse:opacity-100",
-              numeric ? "left-0.5" : "right-0.5",
+              // In flow, not overlaid: an overlay covered a narrow column's
+              // sort target and its label.
+              "size-5 shrink-0 rounded-sm text-muted-foreground opacity-0 transition-opacity group-focus-within/th:opacity-100 group-hover/th:opacity-100 hover:text-foreground focus-visible:opacity-100 data-[popup-open]:opacity-100 pointer-coarse:opacity-100",
+              numeric && "order-first",
             )}
           />
         }
@@ -610,12 +612,14 @@ function SortableHeader<TData extends RowData>({
           </span>
         )}
         {hoverChrome}
-        <HeaderMenu
-          header={header}
-          table={table}
-          label={headerLabel}
-          numeric={numeric}
-        />
+        {!collapsed && (
+          <HeaderMenu
+            header={header}
+            table={table}
+            label={headerLabel}
+            numeric={numeric}
+          />
+        )}
       </div>
       {header.column.getCanResize() && (
         <ColumnResizeHandle

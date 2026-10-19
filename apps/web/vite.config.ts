@@ -94,8 +94,9 @@ const clientCodeSplittingGroups = [
   {
     name: "tanstack-query",
     test: /[\\/]@tanstack[\\/]react-query[\\/]|[\\/]@tanstack[\\/]query-core[\\/]/,
-    entriesAware: true,
-    entriesAwareMergeThreshold: 65536,
+    // One chunk: an entry-aware split put InfiniteQueryObserver and the
+    // QueryObserver it extends in mutually importing chunks, so the subclass
+    // evaluated first and every authenticated route failed to hydrate.
   },
   {
     name: "floating-ui",
