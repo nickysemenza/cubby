@@ -70,12 +70,18 @@ the OAuth access token. They set `store: false` and `stream: true`, resend the
 conversation input, convert system messages to developer messages, and supply
 function/custom tools as one developer `additional_tools` input item placed
 right after the leading developer instructions, so the plan's prefix cache
-covers the tool schemas instead of re-reading them after every new turn. That
-position was not verified live: an HTTP 400 `invalid_request_error` naming
-`input` (or `additional_tools`) retries the request once with the item last,
-logs the refusal, and the plan Durable Object keeps the trailing order while
-it lives; quota and rate refusals never trigger it. Remove the guard once
-production plan calls show cache reads with the leading order. Unsupported preview
+covers the tool schemas instead of re-reading them after every new turn
+(production cache reads confirmed the plan accepts that position). Each tool
+result also carries an explicit `prompt_cache_breakpoint`: the plan's implicit
+caching rarely reused a Run's growing conversation (5.6% of Sol's plan input
+read from cache in October 2026, while an identical request on the paid API read
+nearly all of it). The preview documents neither support nor refusal of
+breakpoints, so an HTTP 400 `invalid_request_error` naming `input` (or
+`prompt_cache_breakpoint`) retries the request once without them, logs the
+refusal, and the plan Durable Object keeps sending none while it lives; quota
+and rate refusals never trigger it. Compare `AiUsage.cacheReadTokens` on
+`transport = 'chatgpt'` rows before and after a deploy to judge the effect, and
+remove the guard once plan calls succeed with breakpoints. Unsupported preview
 parameters are removed. Unsupported hosted tools fail before inference.
 pi-ai carries reasoning effort for gpt-6 models as `configuration_update` input
 items unless it sees the direct OpenAI base URL, which Cubby's gateway
