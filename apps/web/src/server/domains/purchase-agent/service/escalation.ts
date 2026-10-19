@@ -229,7 +229,8 @@ export function coordinatorEscalation(input: {
       if (
         call.name !== PREPARE_TOOL ||
         toolArguments.safeParse(call.arguments).data?.action !== "prepare" ||
-        result.isError !== true
+        result.isError !== true ||
+        heldByAnotherRun(result)
       )
         return undefined;
       const current = escalated();
@@ -257,6 +258,17 @@ export function coordinatorEscalation(input: {
       return outcome.escalated ? withNote() : undefined;
     },
   };
+}
+
+/**
+ * Another Run holding a supporting original is not a hard Email: the stronger
+ * model meets the same refusal, so it never counts toward escalation.
+ */
+function heldByAnotherRun(result: ToolExecutionResult) {
+  return (result.output ?? []).some(
+    (part) =>
+      part.type === "text" && part.text.includes("MAIL_SOURCE_HELD_BY_RUN"),
+  );
 }
 
 export type CoordinatorEscalation = ReturnType<typeof coordinatorEscalation>;

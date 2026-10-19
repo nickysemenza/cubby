@@ -59,6 +59,13 @@ Claude or Codex session researches it later through the Research queue.
      A supported link to an existing Purchase does not require another
      extraction preview. Unlinked related originals still need extraction;
      linking never manufactures itemization or resolves unknown Product facts.
+     When that Purchase is not itemized yet (`known.purchases[].imported` is
+     false), still link the notice; itemizing is the order confirmation's
+     work. Import from the confirmation in this Run only when it is already
+     yours (`boundToRun`) or a `mail` `search` shows it `pending` or
+     `blocked`. When another Run holds it, `prepare` refuses with
+     `MAIL_SOURCE_HELD_BY_RUN`: link the notice and claim the next Email;
+     neither retrying nor escalating changes that refusal.
    - **A payment, refund, transfer, card repayment or reimbursement Email
      without an order** (a payment app or bank notice): find the posted
      Financial Transaction with `search` (`entityKinds:

@@ -6,7 +6,9 @@
  * decides differently from its first run; a primary equal to its
  * escalation model changes anything at all; re-claiming the same unsettled
  * Email resets it to the primary, which escalates it again in a loop; and an
- * escalation whose model cannot be funded falls through to another model.
+ * escalation whose model cannot be funded falls through to another model;
+ * and a prepare refused because another Run holds its supporting original
+ * escalates, though the stronger model meets the same refusal.
  */
 import type { SupportedChatModel } from "@cubby/shared/ai/models";
 import type { ToolExecutionResult } from "@earendil-works/pi-durable";
@@ -205,6 +207,24 @@ describe("coordinator escalation", () => {
     expect(await prepare("prepare-4", { output: [], isError: false })).toBe(
       undefined,
     );
+  });
+
+  it("does not escalate prepares refused because another Run holds the source", async () => {
+    const { configured, claim, prepare } = harness();
+    const held: ToolExecutionResult = {
+      output: [
+        {
+          type: "text",
+          text: "CONFLICT: Another Mail import Run holds EML-2222 (RUN-2222, paused_auth). (MAIL_SOURCE_HELD_BY_RUN)",
+        },
+      ],
+      isError: true,
+    };
+    await claim("claim-1");
+    expect(await prepare("prepare-1", held)).toBeUndefined();
+    expect(await prepare("prepare-2", held)).toBeUndefined();
+    expect(await prepare("prepare-3")).toBeUndefined();
+    expect(configured).toEqual([]);
   });
 
   it("gives the escalation model one try before an Email is resolved unresolved", async () => {
