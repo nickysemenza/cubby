@@ -100,7 +100,7 @@ import {
 } from "../repo/mail-financial-event";
 import {
   recordMailFinancialEvidence,
-  recordMailFinancialReview,
+  reconcileMailRefundReview,
 } from "../repo/mail-financial-review";
 import {
   importedMailJudgment,
@@ -1096,19 +1096,37 @@ export async function resolveMail(
             ),
           }),
         );
-      if (disposition.settlement) {
+      if (disposition.event === "refunded") {
         const message = await mailboxRow(tdb, mail);
         if (!message)
           throw createAppError(
             "EMAIL_NOT_FOUND",
             "The reviewed Email no longer exists.",
           );
-        await recordMailFinancialReview(
+        // The reviewed refund set explains every refunded Purchase this
+        // Email/checksum links, including links from earlier resolutions.
+        const refunded = await getDb(tdb)
+          .selectDistinct({ purchaseId: assessmentEmailLink.purchaseId })
+          .from(assessmentEmailLink)
+          .innerJoin(
+            orderMailEvent,
+            eq(orderMailEvent.id, assessmentEmailLink.eventId),
+          )
+          .where(
+            and(
+              eq(orderMailEvent.orderMailId, mail.id),
+              eq(orderMailEvent.event, "refunded"),
+              isNull(orderMailEvent.supersededAt),
+              eq(assessmentEmailLink.decision, "linked"),
+              eq(assessmentEmailLink.evidenceChecksum, input.checksum),
+            ),
+          );
+        await reconcileMailRefundReview(
           tdb,
           {
             emailId: parseEntityId("email", message.id),
             checksum: input.checksum,
-            purchaseIds: ids,
+            purchaseIds: refunded.map((row) => row.purchaseId),
             review: disposition.settlement,
           },
           actor,
