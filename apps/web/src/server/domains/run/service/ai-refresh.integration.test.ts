@@ -1,6 +1,7 @@
 import {
   aiRefreshRunInput,
   aiEvaluationTarget,
+  aiProvenance,
 } from "@cubby/schemas/ai-evaluation";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { generateShortcode } from "@cubby/shared";
@@ -32,6 +33,8 @@ import {
   product,
 } from "~/server/db/schema";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
+import { writeRunningAttemptProgress } from "~/server/domains/run/repo/ai-work-state";
+import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
 import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
@@ -627,6 +630,66 @@ describe("targeted prompt refresh", () => {
     expect(
       await getDb(ctx.db).select().from(aiEvaluation).where(emailRefreshTarget),
     ).toHaveLength(2);
+  });
+
+  it("keeps a running refresh Run open when work joins while its completion waits on the Run lock", async () => {
+    const runId = await ensureRun(ctx.db, systemActor(), {
+      purpose: "ai_refresh",
+      trigger: "scheduled",
+      status: "running",
+      clientKey: "synthetic-completion-race",
+      progress: {
+        attempt: 1,
+        selected: 0,
+        blocked: 0,
+        completed: 0,
+        failed: 0,
+      },
+    });
+    let completion: Promise<boolean> | undefined;
+    await withTransactionDatabase(ctx.db, async (discovery) => {
+      // Discovery's lock and insert, held open while the Workflow tries to settle.
+      await getDb(discovery)
+        .select({ id: run.id })
+        .from(run)
+        .where(eq(run.id, runId))
+        .for("no key update");
+      await getDb(discovery)
+        .insert(aiEvaluation)
+        .values({
+          runId,
+          feature: "mailbox-triage",
+          workKey: "synthetic-completion-race",
+          target: aiEvaluationTarget.parse({
+            kind: "email",
+            entity: "email",
+            recordId: crypto.randomUUID(),
+            field: null,
+            assessmentIds: [],
+          }),
+          provenance: aiProvenance.parse({
+            dependencies: [],
+            inputFingerprint: "synthetic",
+            optionFingerprint: "",
+            model: null,
+          }),
+          snapshot: {},
+        });
+      completion = writeRunningAttemptProgress(
+        ctx.db,
+        runId,
+        1,
+        { status: "completed", endedAt: new Date() },
+        { requireNoOwnedPendingWork: true },
+      );
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+    expect(await completion).toBe(false);
+    const [owner] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, runId));
+    expect(owner?.status).toBe("running");
   });
 
   it("keeps no-evidence completion terminal until the relevant input changes", async () => {

@@ -78,11 +78,11 @@ const REOPEN_SEPARATOR = ":reopen:";
 const retryReceipt = z.object({ retryEvaluationId: z.uuid() });
 
 /** The row a work key's retries and reopens currently end at, with its reopen count. */
-async function workKeyTip(db: Database, workKey: string) {
-  const [base] = await getDb(db)
-    .select()
-    .from(aiEvaluation)
-    .where(eq(aiEvaluation.workKey, workKey));
+async function workKeyTip(
+  db: Database,
+  workKey: string,
+  base: typeof aiEvaluation.$inferSelect | undefined,
+) {
   let tip = base;
   let reopens = 0;
   for (let hop = 0; tip && hop <= MAX_REOPENS * 4; hop++) {
@@ -94,6 +94,8 @@ async function workKeyTip(db: Database, workKey: string) {
       .where(eq(aiEvaluation.id, next));
     if (!row) break;
     tip = row;
+    // An operator retry of a reopen (`<workKey>:reopen:<n>:operator-retry:<k>`)
+    // also counts toward the cap.
     if (row.workKey.startsWith(`${workKey}${REOPEN_SEPARATOR}`)) reopens++;
   }
   return {
@@ -111,9 +113,19 @@ async function hasAdmissibleTarget(
   db: Database,
   targets: readonly EvaluationTargetInput[],
 ) {
-  for (const item of targets) {
-    const chain = await workKeyTip(db, await targetWorkKey(item));
-    if (!chain.tip || (chain.reopenable && !item.blockedReason)) return true;
+  const keys = await Promise.all(targets.map(targetWorkKey));
+  const bases = keys.length
+    ? await getDb(db)
+        .select()
+        .from(aiEvaluation)
+        .where(inArray(aiEvaluation.workKey, keys))
+    : [];
+  for (const [index, item] of targets.entries()) {
+    const base = bases.find((row) => row.workKey === keys[index]);
+    if (!base) return true;
+    if (item.blockedReason) continue;
+    const chain = await workKeyTip(db, keys[index]!, base);
+    if (chain.reopenable) return true;
   }
   return false;
 }
@@ -125,8 +137,8 @@ async function insertTarget(
 ) {
   const { target, provenance, blockedReason } = item;
   const workKey = await targetWorkKey(item);
-  const insert = (key: string) =>
-    getDb(db)
+  const insert = (key: string, client: Database) =>
+    getDb(client)
       .insert(aiEvaluation)
       .values({
         runId: runEntityId.parse(runId),
@@ -152,25 +164,36 @@ async function insertTarget(
       })
       .onConflictDoNothing()
       .returning({ id: aiEvaluation.id });
-  if ((await insert(workKey)).length) return 1;
+  if ((await insert(workKey, db)).length) return 1;
   if (blockedReason) return 0;
-  const chain = await workKeyTip(db, workKey);
-  if (!chain.reopenable || !chain.tip) return 0;
-  const [replacement] = await insert(
-    `${workKey}${REOPEN_SEPARATOR}${chain.reopens + 1}`,
-  );
-  if (!replacement) return 0;
-  await getDb(db)
-    .update(aiEvaluation)
-    .set({
-      receipt: {
-        ...z.record(z.string(), z.unknown()).catch({}).parse(chain.tip.receipt),
-        retryEvaluationId: replacement.id,
-      },
-      updatedAt: new Date(),
-    })
-    .where(eq(aiEvaluation.id, chain.tip.id));
-  return 1;
+  // The replacement and its link commit together (connection sweeps pass a plain pool).
+  return withTransactionDatabase(db, async (tx) => {
+    const [base] = await getDb(tx)
+      .select()
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.workKey, workKey));
+    const chain = await workKeyTip(tx, workKey, base);
+    if (!chain.reopenable || !chain.tip) return 0;
+    const [replacement] = await insert(
+      `${workKey}${REOPEN_SEPARATOR}${chain.reopens + 1}`,
+      tx,
+    );
+    if (!replacement) return 0;
+    await getDb(tx)
+      .update(aiEvaluation)
+      .set({
+        receipt: {
+          ...z
+            .record(z.string(), z.unknown())
+            .catch({})
+            .parse(chain.tip.receipt),
+          retryEvaluationId: replacement.id,
+        },
+        updatedAt: new Date(),
+      })
+      .where(eq(aiEvaluation.id, chain.tip.id));
+    return 1;
+  });
 }
 
 /**

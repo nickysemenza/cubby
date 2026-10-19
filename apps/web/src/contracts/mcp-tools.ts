@@ -851,7 +851,7 @@ export const MCP_TOOLS = defineMcpTools({
       resolve: mcpAction({
         op: purchaseImportContract.ops.mailResolve,
         description:
-          "Resolve one retained Email at its checksum: `linked` names every supported Purchase in purchaseIds for a lifecycle event; optional settlement records a member-reviewed mapping to existing posted refunds and their accounts. Writes no money or stock. `unresolved` names the gap; `unrelated` clears unaccepted content while preserving metadata and provenance. Matching reviews replay while evidence remains current; conflicting reviews refuse.",
+          "Resolve one retained Email at its checksum: `linked` names every supported Purchase in purchaseIds for a lifecycle event; optional settlement (only with event `refunded`) records a member-reviewed mapping to existing posted refunds and their accounts, which must explain every Purchase this Email links as refunded. Writes no money or stock. `unresolved` names the gap; `unrelated` clears unaccepted content while preserving metadata and provenance. Matching reviews replay while evidence remains current; conflicting reviews refuse.",
       }),
       decide_purchase: mcpAction({
         op: purchaseImportContract.ops.emailPurchaseDecide,

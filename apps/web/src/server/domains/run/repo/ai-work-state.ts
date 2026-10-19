@@ -45,33 +45,47 @@ export async function writeRunningAttemptProgress(
   set: RunUpdate,
   options: { requireNoOwnedPendingWork?: boolean } = {},
 ) {
-  const written = await getDb(db)
-    .update(run)
-    .set(set)
-    .where(
-      and(
-        eq(run.id, runId),
-        eq(run.status, "running"),
-        sql`COALESCE((${run.progress}->>'attempt')::integer, 0) = ${attempt}`,
-        // Discovery may add or reopen work after the attempt read its roster.
-        options.requireNoOwnedPendingWork
-          ? notExists(
-              getDb(db)
-                .select({ id: aiEvaluation.id })
-                .from(aiEvaluation)
-                .where(
-                  and(
-                    eq(aiEvaluation.runId, run.id),
-                    inArray(aiEvaluation.state, [...PENDING_AI_STATES]),
-                    sql`${aiEvaluation.receipt}->>'retryEvaluationId' IS NULL`,
+  const write = async (target: Database) => {
+    const written = await getDb(target)
+      .update(run)
+      .set(set)
+      .where(
+        and(
+          eq(run.id, runId),
+          eq(run.status, "running"),
+          sql`COALESCE((${run.progress}->>'attempt')::integer, 0) = ${attempt}`,
+          // Discovery may add or reopen work after the attempt read its roster.
+          options.requireNoOwnedPendingWork
+            ? notExists(
+                getDb(target)
+                  .select({ id: aiEvaluation.id })
+                  .from(aiEvaluation)
+                  .where(
+                    and(
+                      eq(aiEvaluation.runId, run.id),
+                      inArray(aiEvaluation.state, [...PENDING_AI_STATES]),
+                      sql`${aiEvaluation.receipt}->>'retryEvaluationId' IS NULL`,
+                    ),
                   ),
-                ),
-            )
-          : undefined,
-      ),
-    )
-    .returning({ id: run.id });
-  return written.length > 0;
+              )
+            : undefined,
+        ),
+      )
+      .returning({ id: run.id });
+    return written.length > 0;
+  };
+  if (!options.requireNoOwnedPendingWork) return write(db);
+  return withTransactionDatabase(db, async (tx) => {
+    // Under READ COMMITTED an UPDATE that waits on the Run row rechecks only that
+    // row, not its NOT EXISTS subquery. Taking the lock first gives the guarded
+    // UPDATE a fresh snapshot that sees work discovery committed under the lock.
+    await getDb(tx)
+      .select({ id: run.id })
+      .from(run)
+      .where(eq(run.id, runId))
+      .for("no key update");
+    return write(tx);
+  });
 }
 
 export async function aiEvaluationsForRun(db: Database, runId: RunRow["id"]) {
