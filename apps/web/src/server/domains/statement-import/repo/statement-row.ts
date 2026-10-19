@@ -649,6 +649,7 @@ export async function recordStatementRows(
         rowCountStored: existingBatch
           ? await storedRowCount(tx, existingBatch.id)
           : 0,
+        maskUpgrades: maskUpgrades.length,
         signWarning,
       };
     }
@@ -679,16 +680,24 @@ export async function recordStatementRows(
 
     // `legacyExternalId` stays hashed over the truncated descriptor: it is the
     // charge key settlement refs and other observations already join on.
-    for (const upgrade of maskUpgrades)
-      await unwrapDb(tx)
+    for (const upgrade of maskUpgrades) {
+      const updated = await unwrapDb(tx)
         .update(statementRow)
         .set({ accountDescriptor: upgrade.to, updatedAt: new Date() })
         .where(
           and(
             eq(statementRow.id, upgrade.id),
             eq(statementRow.accountDescriptor, upgrade.from),
+            notDeleted(statementRow),
           ),
+        )
+        .returning({ id: statementRow.id });
+      if (updated.length !== 1)
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          `Statement row ${upgrade.id} changed during its account mask upgrade from ${upgrade.from} to ${upgrade.to}; ${updated.length} rows matched.`,
         );
+    }
 
     const insertable = rows.filter(
       (row) => row.reviewedLegacyAccountDescriptor === undefined,
@@ -737,6 +746,7 @@ export async function recordStatementRows(
       indistinguishableDuplicates,
       rowsOmitted,
       rowCountStored: await storedRowCount(tx, batchId),
+      maskUpgrades: maskUpgrades.length,
       signWarning,
     };
   });

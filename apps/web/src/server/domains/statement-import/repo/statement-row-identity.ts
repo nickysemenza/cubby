@@ -15,6 +15,10 @@ import { sha256Hex } from "@cubby/shared/sha256";
  * Changing `canonical`, `cents`, or the payload composition silently orphans
  * every ref already stored. Treat the shape below as frozen and version through
  * the `v1:` prefix instead.
+ *
+ * A stored `legacyExternalId` is authoritative for rows recorded before #1894
+ * (whose descriptor may since have been upgraded to the complete mask); never
+ * re-derive it from the current `accountDescriptor`.
  */
 
 /**

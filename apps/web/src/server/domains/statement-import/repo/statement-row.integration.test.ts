@@ -170,12 +170,17 @@ describe("statement row ledger", () => {
 
     expect(
       await record(ctx.db, ctx.actor, positioned(full), replay, true),
-    ).toMatchObject({ inserted: 0, alreadyInThisBatch: 1 });
+    ).toMatchObject({ inserted: 0, alreadyInThisBatch: 1, maskUpgrades: 1 });
     expect((await listStatementRows(ctx.db, {})).data).toEqual([before]);
 
     expect(
       await record(ctx.db, ctx.actor, positioned(full), replay),
-    ).toMatchObject({ inserted: 0, unchanged: 1, rowCountStored: 1 });
+    ).toMatchObject({
+      inserted: 0,
+      unchanged: 1,
+      rowCountStored: 1,
+      maskUpgrades: 1,
+    });
     const upgraded = (await listStatementRows(ctx.db, {})).data;
     expect(upgraded).toEqual([
       {
@@ -188,7 +193,12 @@ describe("statement row ledger", () => {
 
     expect(
       await record(ctx.db, ctx.actor, positioned(full), replay),
-    ).toMatchObject({ inserted: 0, unchanged: 1, rowCountStored: 1 });
+    ).toMatchObject({
+      inserted: 0,
+      unchanged: 1,
+      rowCountStored: 1,
+      maskUpgrades: 0,
+    });
     expect((await listStatementRows(ctx.db, {})).data).toEqual(upgraded);
     await expect(
       record(ctx.db, ctx.actor, positioned(truncated), replay),
@@ -211,7 +221,7 @@ describe("statement row ledger", () => {
     expect(
       (await listStatementRows(ctx.db, {})).data
         .map((row) => row.accountDescriptor)
-        .toSorted(),
+        .sort((a, b) => a.localeCompare(b)),
     ).toEqual(["Joint Savings (...617310)", "Joint Savings (...7310)", full]);
   });
 
