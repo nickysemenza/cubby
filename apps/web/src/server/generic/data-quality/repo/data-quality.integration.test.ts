@@ -1,5 +1,6 @@
 import { scoredEntities } from "@cubby/schemas/data-quality";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { testShortcode } from "@cubby/schemas/testing";
 import { eq, type SQL, sql } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
@@ -14,6 +15,7 @@ import {
   entityExternalId,
   product,
   productCategory,
+  purchase,
 } from "~/server/db/schema";
 import { createExpense } from "~/server/domains/expense/repo/crud";
 import { createProductCategory } from "~/server/domains/product-category/repo/product-category";
@@ -23,6 +25,7 @@ import {
 } from "~/server/domains/product/repo/crud";
 import { attachProductComponents } from "~/server/domains/product/repo/product-components";
 import { purchaseList } from "~/server/domains/purchase/repo/purchase";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { readRecordWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
 import {
@@ -647,6 +650,71 @@ describe("data quality: list filters, sort and hydration agree", () => {
     expect(
       reopened.get(modelOnly.entityId)?.gaps.map((gap) => gap.check),
     ).toContain("product_external_id");
+  });
+
+  it("product: a commodity is not expected to carry a brand, identifier or ASIN", async () => {
+    const make = (name: string, commodity: boolean) =>
+      createProductFixture(
+        ctx.db,
+        makeProductInput({
+          name: `DQ commodity ${name}`,
+          manufacturer: "(unspecified)",
+          categoryId: taxonomyShortcode("food"),
+          model: null,
+          commodity,
+        }),
+        TEST_ACTOR,
+      );
+    const flagged = await make("flagged", true);
+    const twin = await make("twin", false);
+    const vendorId = await findOrCreateVendor(ctx.db, "Amazon.com");
+    const [order] = await unwrapDb(ctx.db)
+      .insert(purchase)
+      .values({
+        shortcode: testShortcode("purchase", "PUR-DQ-COMMODITY"),
+        vendorId,
+        date: "2026-01-15",
+        displayLabel: "DQ commodity order",
+      })
+      .returning({ id: purchase.shortcode });
+    for (const row of [flagged, twin]) {
+      await createExpense(
+        ctx.db,
+        makeExpenseInput({
+          name: `DQ commodity line ${row.id}`,
+          productId: row.id,
+          purchaseId: order ? parseShortcodeFor("purchase", order.id) : null,
+          cost: 2,
+          productQuantity: 1,
+        }),
+        TEST_ACTOR,
+      );
+    }
+    const identityChecks = [
+      "amazon_asin",
+      "product_manufacturer",
+      "product_external_id",
+    ];
+    const gapsOf = async (row: typeof flagged) =>
+      (await loadDataQualities(ctx.db, "product", [row.entityId]))
+        .get(row.entityId)
+        ?.gaps.map((gap) => gap.check)
+        .filter((check) => identityChecks.includes(check))
+        .sort();
+    expect(await gapsOf(flagged)).toEqual([]);
+    expect(await gapsOf(twin)).toEqual([...identityChecks].sort());
+    const filtered = await productList(
+      ctx.db,
+      { nameFilter: "DQ commodity", dataGap: ["amazon_asin"] },
+      [],
+      page,
+    );
+    expect(filtered.data.map((row) => row.id)).toEqual([twin.id]);
+    await unwrapDb(ctx.db)
+      .update(product)
+      .set({ commodity: false })
+      .where(eq(product.id, flagged.entityId));
+    expect(await gapsOf(flagged)).toEqual([...identityChecks].sort());
   });
 
   // Retired checks can remain stored until the post-deploy contract migration.

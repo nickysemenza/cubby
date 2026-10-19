@@ -40,6 +40,14 @@ researched. The `product_external_id` check is the combined Identifier gap;
 a model or any live nonblank external ID satisfies it, so do not research a
 second identifier solely because the other field is empty.
 
+A Product with `commodity: true` is interchangeable goods bought from any seller
+with no single listing (loose produce, bulk meat or fish, herb bunches); the
+brand, Identifier and `amazon_asin` checks do not apply to it. Set it only when
+that holds for every purchase on the Product: an unbranded good with a real
+listing (a cable, a mop pad) is not a commodity. Never write `generic` or a
+similar placeholder as `manufacturer`; leave it `(unspecified)` so the brand gap
+stays visible until the maker is researched.
+
 Read a candidate immediately before every write. `imageCount` is the complete
 attachment count used by upload preconditions; `itemImageCount` and
 `labelImageCount` describe the split. A label-only Product still needs an item

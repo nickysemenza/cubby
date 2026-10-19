@@ -214,7 +214,10 @@ same outcome without prescribing an agent runtime.
    Reuse a supported same-variant match; leave ambiguity `unresolved`; choose
    `new` only after distinguishing the reviewed candidates. Preserve the
    original order-line evidence and save only supported facts when catalog
-   research remains incomplete.
+   research remains incomplete. A new Product's unknown maker stays
+   `(unspecified)`, never `generic`; mark loose produce and other goods with no
+   single listing `commodity: true` per
+   [product enrichment](../product-enrichment/SKILL.md).
    Every order is household spending, but not every line is a stocked item:
    choose `expense_only` for prepared food and drinks from a restaurant or
    delivery order, event or travel tickets, rides, donations, and paid labor
