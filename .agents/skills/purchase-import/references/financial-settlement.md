@@ -278,6 +278,9 @@ filtering a group with `where {account: {in: [FAC-…]}, month: {in: [YYYY-MM]}}
    an internal move. Cash has no statement: create the cash leg by hand for the
    full amount, accept the pair, record the ATM fee as a `fee` on the cash
    account, and settle cash spending from that account against its Purchase.
+   A cash account never reconciles: cash spent and not remembered stays as an
+   unexplained balance on purpose. Never invent spending to close it, and never
+   settle a Purchase from cash without evidence that the cash paid it.
    A transfer or card payment is never clean until its opposite leg is matched,
    so review each one: confirm the other leg and its owner before accepting.
 6. Dismiss charges that should never become transactions with verdict
