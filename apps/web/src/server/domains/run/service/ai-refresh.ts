@@ -248,6 +248,7 @@ async function scheduleProductIdentityDiscovery(
   ports: AiRefreshPorts,
 ) {
   const scheduledRuns = new Set<string>();
+  let deferred = false;
   const products = cursor.productDone
     ? []
     : await liveProductIdsAfter(db, cursor.product, EMAIL_RECLASSIFY_LIMIT);
@@ -280,13 +281,23 @@ async function scheduleProductIdentityDiscovery(
       },
       [{ target, provenance, snapshot: prepared.snapshot }],
     );
-    if (productRun) scheduledRuns.add(productRun);
+    if (productRun.kind === "scheduled") scheduledRuns.add(productRun.runId);
+    if (productRun.kind === "deferred") {
+      deferred = true;
+      break;
+    }
   }
   return {
     runs: [...scheduledRuns],
-    productDone: cursor.productDone || products.length < EMAIL_RECLASSIFY_LIMIT,
-    product:
-      products.length === EMAIL_RECLASSIFY_LIMIT ? products.at(-1)!.id : null,
+    deferred,
+    productDone:
+      !deferred &&
+      (cursor.productDone || products.length < EMAIL_RECLASSIFY_LIMIT),
+    product: deferred
+      ? cursor.product
+      : products.length === EMAIL_RECLASSIFY_LIMIT
+        ? products.at(-1)!.id
+        : null,
   };
 }
 
@@ -320,12 +331,13 @@ async function scheduleConnectionDiscovery(
 }
 
 /** Preparation enumerates evidence using live renderers; no model calls happen here. */
+// oxlint-disable-next-line complexity -- Independent discovery streams checkpoint their capacity deferrals together.
 export async function discoverAiRefresh(
   db: Database,
   ports: AiRefreshPorts = {},
 ) {
   const activation = await readAiRefreshActivation(db);
-  if (!activation?.enabled) return [];
+  if (!activation?.enabled) return { runs: [], deferred: false };
   const runs = new Set<string>();
   let cursor = await readAiDiscoveryCursor(db);
   if (
@@ -350,6 +362,8 @@ export async function discoverAiRefresh(
     ? []
     : await pendingFieldRefreshes(db, cursor.field, EMAIL_RECLASSIFY_LIMIT);
   const grouped = new Map<string, typeof pending>();
+  let fieldDeferred = false;
+  let emailDeferred = false;
   for (const row of pending) {
     const history = await fieldRefreshHistory(db, row);
     grouped.set(`${row.entity}:${row.recordId}:${row.field}`, history);
@@ -411,7 +425,11 @@ export async function discoverAiRefresh(
           },
         ],
       );
-      if (runId) runs.add(runId);
+      if (runId.kind === "scheduled") runs.add(runId.runId);
+      if (runId.kind === "deferred") {
+        fieldDeferred = true;
+        break;
+      }
     } catch (error) {
       log.error("Field refresh discovery failed", {
         error: scrubErrorMessage(String(error)),
@@ -454,7 +472,7 @@ export async function discoverAiRefresh(
       candidate,
     ]);
   }
-  for (const group of mailboxes.values())
+  emailGroups: for (const group of mailboxes.values())
     for (let start = 0; start < group.length; start += EMAIL_RECLASSIFY_LIMIT) {
       try {
         const batch = group.slice(start, start + EMAIL_RECLASSIFY_LIMIT);
@@ -536,7 +554,11 @@ export async function discoverAiRefresh(
           },
           targets,
         );
-        if (runId) runs.add(runId);
+        if (runId.kind === "scheduled") runs.add(runId.runId);
+        if (runId.kind === "deferred") {
+          emailDeferred = true;
+          break emailGroups;
+        }
       } catch (error) {
         log.error("Email refresh discovery failed", {
           error: scrubErrorMessage(String(error)),
@@ -555,15 +577,21 @@ export async function discoverAiRefresh(
     revision: activation.revision,
     productDone: productDiscovery.productDone,
     product: productDiscovery.product,
-    fieldDone: cursor.fieldDone || pending.length < EMAIL_RECLASSIFY_LIMIT,
+    fieldDone:
+      !fieldDeferred &&
+      (cursor.fieldDone || pending.length < EMAIL_RECLASSIFY_LIMIT),
     emailDone:
-      cursor.emailDone || candidates.length < EMAIL_RECLASSIFY_LIMIT * 2,
-    field: fieldCursorFor(pending),
-    email: emailCursorFor(candidates),
+      !emailDeferred &&
+      (cursor.emailDone || candidates.length < EMAIL_RECLASSIFY_LIMIT * 2),
+    field: fieldDeferred ? cursor.field : fieldCursorFor(pending),
+    email: emailDeferred ? cursor.email : emailCursorFor(candidates),
     connectionDone: connectionDiscovery.done,
     connection: connectionDiscovery.cursor,
   });
-  return [...runs];
+  return {
+    runs: [...runs],
+    deferred: fieldDeferred || emailDeferred || productDiscovery.deferred,
+  };
 }
 
 export async function executeAiRefreshTarget(
@@ -944,6 +972,7 @@ export async function recoverAiRefresh(db: Database) {
     }
   };
   await launch(unfinished.map((row) => row.id));
-  await launch(await discoverAiRefresh(db));
-  return true;
+  const discovered = await discoverAiRefresh(db);
+  await launch(discovered.runs);
+  return discovered.deferred ? "deferred" : true;
 }

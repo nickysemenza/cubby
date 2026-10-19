@@ -243,9 +243,11 @@ loads the consumer when a `cubby-purchase-agent` batch arrives
 (`apps/web/tooling/checks/check-server-closure.ts` budgets the static entry, browser
 API bootstrap, combined page path, and total output). The API bootstrap includes
 the dispatch adapter's static imports; individual operation loaders remain
-separate. Startup lifecycle/progress modules import the
+separate. Startup lifecycle/progress/admission modules import the
 database helpers' `core` and `query` modules directly: the barrel also
-initializes relation loaders and CRUD dependencies. These belong behind their
+initializes relation loaders and CRUD dependencies. Refresh admission keeps its
+slot query and lock in a lightweight module without AI policy, discovery or the
+generated entity catalog. These belong behind their
 consuming handler; the entry budget does not measure the additional imports
 an API operation or page needs.
 

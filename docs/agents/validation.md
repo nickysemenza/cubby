@@ -65,7 +65,9 @@ Construct synthetic domain fixtures through the supported `createRepoEntity`
 writer roster. For other entities, use the owning `create…Fixture` and
 `make…Input` helpers so required defaults survive. Create Runs with `ensureRun`
 and an actor; `ensureRun` creates running/completed Runs, so seed paused or
-failed fixture states by updating the created row. Tests of system scheduling
+failed fixture states by updating the created row. Build fixture progress with
+its owning progress schema so required counters and defaults remain valid in
+the full test program. Tests of system scheduling
 must seed `systemActor().userId`.
 
 Test subprocesses invoke Node/the installed tool directly and inherit the

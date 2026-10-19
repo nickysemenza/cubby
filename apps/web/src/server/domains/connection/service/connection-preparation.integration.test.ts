@@ -114,7 +114,7 @@ describe("connection preparation and publication authority", () => {
         "synthetic-connection-fence",
         { enabled: true },
       );
-      const runId = await scheduleConnectionRefresh(ctx.db, source);
+      const { runId } = await scheduleConnectionRefresh(ctx.db, source);
       if (!runId)
         throw new Error("Synthetic connection evaluation was not scheduled");
       const [evaluation] = await getDb(ctx.db)

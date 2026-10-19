@@ -49,14 +49,14 @@ export class AiRefreshWorkflow extends WorkflowEntrypoint<
         for (let page = 0; page < 128; page++) {
           if (await boundary(`discover:${page}`))
             return { runId: event.payload.runId };
-          // true: more pages; false: done; null: this isolate's policy differs from the activation.
+          // Capacity waits preserve cursors and do not consume deploy-overlap policy waits.
           const more = await step.do(
             `discover:${page}`,
             {
               retries: { limit: 2, delay: "5 seconds", backoff: "exponential" },
               timeout: "15 minutes",
             },
-            (): Promise<boolean | null> =>
+            (): Promise<boolean | null | "deferred"> =>
               withDb(async (db) => {
                 const { readAiRefreshActivation, readAiDiscoveryCursor } =
                   await import("../ai/repo/ai-refresh");
@@ -69,12 +69,11 @@ export class AiRefreshWorkflow extends WorkflowEntrypoint<
                     aiRefreshRunInput.parse(owner.input).activation.revision
                 )
                   return false;
-                if (
-                  !(await (
-                    await import("../domains/run/service/ai-refresh")
-                  ).recoverAiRefresh(db))
-                )
-                  return null;
+                const recovered = await (
+                  await import("../domains/run/service/ai-refresh")
+                ).recoverAiRefresh(db);
+                if (recovered === false) return null;
+                if (recovered === "deferred") return "deferred";
                 const cursor = await readAiDiscoveryCursor(db);
                 return (
                   cursor.revision === current.revision &&
@@ -88,6 +87,8 @@ export class AiRefreshWorkflow extends WorkflowEntrypoint<
               }),
           );
           if (more === false) break;
+          if (more === "deferred")
+            await step.sleep(`await-capacity:${page}`, "30 seconds");
           if (more === null) {
             // Deploy overlap: the activation row matches this isolate once the
             // Gateway observation commits, or its revision bump ends this discovery.
