@@ -1,7 +1,10 @@
 import { sleep } from "@cubby/shared/retry";
 import { describe, expect, it, vi } from "vitest";
 
-import { createConcurrencyLimiter } from "./concurrency-limiter";
+import {
+  createConcurrencyLimiter,
+  forEachConcurrently,
+} from "./concurrency-limiter";
 
 describe("page suggestion scheduler", () => {
   it("starts four rows concurrently, fills released slots, and removes obsolete queued work", async () => {
@@ -48,5 +51,23 @@ describe("page suggestion scheduler", () => {
     const second = scheduler.run(async () => "next", signal);
     await expect(first).rejects.toThrow("unavailable");
     await expect(second).resolves.toBe("next");
+  });
+});
+
+describe("forEachConcurrently", () => {
+  // Failure mode: one failed item rejects at once while its siblings keep
+  // dequeuing, so work runs after the caller's database scope has closed.
+  it("stops starting items after a failure and settles started ones first", async () => {
+    const started: number[] = [];
+    const finished: number[] = [];
+    const run = forEachConcurrently([0, 1, 2, 3, 4, 5], 2, async (item) => {
+      started.push(item);
+      if (item === 0) throw new Error("synthetic failure");
+      await sleep(10);
+      finished.push(item);
+    });
+    await expect(run).rejects.toThrow("synthetic failure");
+    expect(started).toEqual([0, 1]);
+    expect(finished).toEqual([1]);
   });
 });

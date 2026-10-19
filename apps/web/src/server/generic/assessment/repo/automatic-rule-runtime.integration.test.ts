@@ -1,3 +1,5 @@
+import { suggestionStatus } from "@cubby/schemas/ai";
+import { assessmentFamily } from "@cubby/schemas/assessment";
 import type { AutomaticRuleKey } from "@cubby/schemas/automatic-rule";
 import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
 import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
@@ -7,6 +9,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import { getDb } from "~/server/db/helpers";
 import { assessment, assessmentState, feedback } from "~/server/db/schema";
 import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
@@ -16,7 +19,10 @@ import {
   listStatementRows,
   recordStatementRows,
 } from "~/server/domains/statement-import/repo/statement-row";
-import { generateStatementSuggestionPage } from "~/server/domains/statement-import/repo/statement-suggestions";
+import {
+  buildChargeProposals,
+  generateStatementSuggestionPage,
+} from "~/server/domains/statement-import/repo/statement-suggestions";
 import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import {
@@ -234,6 +240,69 @@ async function soleCandidateCharge(ctx: Ctx) {
   await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
   return { account, existing };
 }
+
+/** A second charge of the same money, a day after the sole candidate's. */
+const competingCharge = (ctx: Ctx) =>
+  recordStatementRows(
+    ctx.db,
+    recordStatementRowsInput.parse({
+      import: {
+        source: "monarch",
+        label: "synthetic-export.csv",
+        fingerprint: "fp-automatic-rule-1",
+        dateKind: "posted",
+        rowCountDeclared: null,
+        notes: null,
+      },
+      rows: [
+        {
+          accountDescriptor: "Synthetic Card (...4242)",
+          statementDate: "2026-05-06",
+          providerAmount: -42.5,
+          merchant: "Example Grocer",
+          rawDescription: "EXAMPLE GROCER 0002",
+          sourceCategory: "Groceries",
+          providerStatus: "posted",
+          providerNotes: null,
+          rowPosition: 2,
+        },
+      ],
+    }),
+    ctx.actor,
+  );
+
+/** Every pending statement suggestion still matches its charge's evidence. */
+async function expectCurrentPending(ctx: Ctx, count: number) {
+  const { rows: pending } = await getDb(ctx.db).execute<{
+    source: string;
+    chargeKey: string;
+    evidenceFingerprint: string;
+  }>(
+    sql`SELECT data->>${"source"} AS source, data->>${"chargeKey"} AS "chargeKey",
+        data->>${"evidenceFingerprint"} AS "evidenceFingerprint"
+      FROM "AssessmentState"
+      WHERE family = ${assessmentFamily.enum.statement_transaction} AND active
+        AND status = ${suggestionStatus.enum.pending} AND data ? ${"chargeKey"}`,
+  );
+  expect(pending).toHaveLength(count);
+  // Every pending suggestion still matches its charge's current evidence.
+  for (const row of pending) {
+    const [current] = await buildChargeProposals(ctx.db, [row]);
+    expect(current?.evidenceFingerprint).toBe(row.evidenceFingerprint);
+  }
+}
+
+const exhausted = () =>
+  new AiBudgetExhaustedError(
+    {
+      windowStart: "2026-05-10T00:00:00.000Z",
+      windowEnd: "2026-05-10T06:00:00.000Z",
+      credit: { limitUsd: 1, spentUsd: 0 },
+      plan: { limitUsd: 1, spentUsd: 0 },
+      paid: { limitUsd: 1, spentUsd: 1 },
+    },
+    "AI budget reached: synthetic",
+  );
 
 // The candidate is the same charge; a create, if any, is a business purchase.
 const sameCharge = answering({ kind: "purchase", counterparty: "business" });
@@ -467,6 +536,108 @@ describe("Automatic rules", () => {
         /Turned itself off.*n=50, hits=48, precision=0\.96,/,
       ),
     });
+  });
+
+  // Failure mode: a label page built up front publishes a charge with
+  // evidence an automatic rule earlier in the page already changed, so its
+  // suggestion fails as stale on accept.
+  // Failure mode: a budget pause after an automatic attach left a competing
+  // charge's suggestion on evidence the attach changed, so the resumed label
+  // pass skipped it as stale.
+  it("republishes evidence an automatic attach moved before a budget pause", async () => {
+    await createSystemUserFixture(ctx.db);
+    await soleCandidateCharge(ctx);
+    await competingCharge(ctx);
+    await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
+    await eligibleFor(ctx, supportedDecisionModelSchema.options);
+    await setAutomaticRule(ctx.db, ctx.actor, {
+      ruleKey: ATTACH,
+      enabled: true,
+    });
+    await expect(
+      labelStatementSuggestions(ctx.db, {
+        port: async (request) => {
+          if (request.state.includes("EXAMPLE GROCER 0002")) throw exhausted();
+          return sameCharge(request);
+        },
+        runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
+      }),
+    ).rejects.toThrow("AI budget reached: synthetic");
+    await expectCurrentPending(ctx, 1);
+  });
+
+  it("leaves no stale suggestion after an automatic attach mid-page", async () => {
+    await createSystemUserFixture(ctx.db);
+    const { existing } = await soleCandidateCharge(ctx);
+    await competingCharge(ctx);
+    await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
+    await eligibleFor(ctx, supportedDecisionModelSchema.options);
+    await setAutomaticRule(ctx.db, ctx.actor, {
+      ruleKey: ATTACH,
+      enabled: true,
+    });
+    await label(ctx);
+    const rows = (await listStatementRows(ctx.db, {})).data;
+    expect(rows.filter((row) => row.matchState === "matched")).toEqual([
+      expect.objectContaining({ transactionId: existing.id }),
+    ]);
+    await expectCurrentPending(ctx, 1);
+  });
+
+  // Failure mode: a budget pause on one charge skipped the automatic rules
+  // of a charge already published on the same page; published labels leave
+  // the label queue, so that attach stayed pending for good.
+  it("applies automatic rules to published charges before a budget pause", async () => {
+    await createSystemUserFixture(ctx.db);
+    const { existing } = await soleCandidateCharge(ctx);
+    await recordStatementRows(
+      ctx.db,
+      recordStatementRowsInput.parse({
+        import: {
+          source: "monarch",
+          label: "synthetic-export.csv",
+          fingerprint: "fp-automatic-rule-1",
+          dateKind: "posted",
+          rowCountDeclared: null,
+          notes: null,
+        },
+        rows: [
+          {
+            accountDescriptor: "Synthetic Card (...4242)",
+            statementDate: "2026-05-10",
+            providerAmount: -17.25,
+            merchant: "Example Hardware",
+            rawDescription: "EXAMPLE HARDWARE 0003",
+            sourceCategory: "Shopping",
+            providerStatus: "posted",
+            providerNotes: null,
+            rowPosition: 3,
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
+    await eligibleFor(ctx, supportedDecisionModelSchema.options);
+    await setAutomaticRule(ctx.db, ctx.actor, {
+      ruleKey: ATTACH,
+      enabled: true,
+    });
+    await expect(
+      labelStatementSuggestions(ctx.db, {
+        port: async (request) => {
+          if (request.state.includes("EXAMPLE HARDWARE")) throw exhausted();
+          return sameCharge(request);
+        },
+        runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
+      }),
+    ).rejects.toThrow("AI budget reached: synthetic");
+    const matched = (await listStatementRows(ctx.db, {})).data.filter(
+      (row) => row.matchState === "matched",
+    );
+    expect(matched).toEqual([
+      expect.objectContaining({ transactionId: existing.id }),
+    ]);
   });
 
   // Failure modes: an automatic attach ticks diff fields, bypasses the
