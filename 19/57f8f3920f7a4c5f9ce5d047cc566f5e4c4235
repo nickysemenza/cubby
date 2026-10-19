@@ -1,0 +1,21 @@
+apps/web/src/ui/data-table/column-filter-requests.ts
+  s_9b829d577c7e4c::t_f5aea68ff51f9c 1,4-5,15,17-20,25-27,32-33
+packages/shared/src/enum-palette.ts
+  s_9b829d577c7e4c::t_52dd3599c75da0 49-55,57-63,192-194
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1957f8f3920f7a4c5f9ce5d047cc566f5e4c4235",
+  "prompts": {},
+  "sessions": {
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
