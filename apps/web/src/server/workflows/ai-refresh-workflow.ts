@@ -9,11 +9,11 @@ import { z } from "zod";
 
 import { getAiGatewayEgress, setCfEnv } from "../cf-env";
 import { withInvocationDb } from "../db";
-import { isWorkflowRunPurpose, type WorkflowRunParams } from "./runs/contract";
+import type { WorkflowRunParams } from "./runs/contract";
+import { runDeploymentBoundary } from "./runs/deployment";
 import {
   claimWorkflowRun,
   failWorkflowRun,
-  launchWorkflowRun,
   runFailureText,
 } from "./runs/lifecycle";
 
@@ -37,6 +37,7 @@ export class AiRefreshWorkflow extends WorkflowEntrypoint<
         work((await import("../db")).db),
       );
     try {
+      const boundary = runDeploymentBoundary(this.env, step, event.payload);
       const discovery = await withDb(async (db) => {
         const owner = await claimWorkflowRun(db, event.payload);
         return owner?.purpose === "ai_refresh"
@@ -46,6 +47,8 @@ export class AiRefreshWorkflow extends WorkflowEntrypoint<
       if (discovery) {
         let policyWaits = 0;
         for (let page = 0; page < 128; page++) {
+          if (await boundary(`discover:${page}`))
+            return { runId: event.payload.runId };
           // true: more pages; false: done; null: this isolate's policy differs from the activation.
           const more = await step.do(
             `discover:${page}`,
@@ -95,22 +98,14 @@ export class AiRefreshWorkflow extends WorkflowEntrypoint<
             await step.sleep(`await-policy:${page}`, "1 minute");
           }
           if (page === 127) {
-            await step.do("continue-discovery", () =>
-              withDb(async (db) => {
-                const owner = await claimWorkflowRun(db, event.payload);
-                if (owner && isWorkflowRunPurpose(owner.purpose))
-                  await launchWorkflowRun(db, {
-                    runId: owner.id,
-                    purpose: owner.purpose,
-                    expectedAttempt: event.payload.attempt,
-                  });
-              }),
-            );
+            await boundary("continue-discovery", true);
             return { runId: event.payload.runId };
           }
         }
       }
       for (let cycle = 0; cycle < 128; cycle++) {
+        if (await boundary(`cycle:${cycle}`))
+          return { runId: event.payload.runId };
         const pending = await withDb((db) =>
           advanceAiWorkRun(db, event.payload),
         );
@@ -169,7 +164,7 @@ export class AiRefreshWorkflow extends WorkflowEntrypoint<
         );
         const seconds =
           next > Date.now()
-            ? Math.max(1, Math.ceil((next - Date.now()) / 1_000))
+            ? Math.min(60, Math.max(1, Math.ceil((next - Date.now()) / 1_000)))
             : 30;
         try {
           await step.waitForEvent(`wake:${cycle}`, {
@@ -185,17 +180,7 @@ export class AiRefreshWorkflow extends WorkflowEntrypoint<
           // SILENT: the expected due-time timeout rechecks durable state; event delivery is only a hint.
         }
       }
-      await step.do("continue", () =>
-        withDb(async (db) => {
-          const owner = await claimWorkflowRun(db, event.payload);
-          if (owner && isWorkflowRunPurpose(owner.purpose))
-            await launchWorkflowRun(db, {
-              runId: owner.id,
-              purpose: owner.purpose,
-              expectedAttempt: event.payload.attempt,
-            });
-        }),
-      );
+      await boundary("continue", true);
     } catch (error) {
       await step.do(
         "fail",

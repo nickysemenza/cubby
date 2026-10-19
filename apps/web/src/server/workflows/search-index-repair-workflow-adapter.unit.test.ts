@@ -49,6 +49,39 @@ const instanceFor = (
 });
 
 describe("search index repair Workflow event adapter", () => {
+  // A deployment continuation is transport progress, not a finished repair;
+  // release the old subscription before following the checkpoint's successor.
+  it("follows a deployment successor and emits only the final completion", async () => {
+    const previous = subscriptionFor([
+      {
+        type: "workflow_completed",
+        output: { nextInstanceId: "synthetic-repair-next" },
+      },
+    ]);
+    const next = subscriptionFor([
+      {
+        type: "workflow_completed",
+        output: { ...counters, scanned: 4, published: 2 },
+      },
+    ]);
+    const resolve = vi.fn(async (_id: string) => {
+      expect(previous.dispose).toHaveBeenCalledOnce();
+      return instanceFor(next);
+    });
+    const received = [];
+    for await (const event of streamSearchIndexRepairWorkflow(
+      instanceFor(previous),
+      new AbortController().signal,
+      resolve,
+    ))
+      received.push(event);
+    expect(resolve).toHaveBeenCalledExactlyOnceWith("synthetic-repair-next");
+    expect(received).toEqual([
+      { type: "done", result: { ...counters, scanned: 4, published: 2 } },
+    ]);
+    expect(next.dispose).toHaveBeenCalledOnce();
+  });
+
   it("translates known progress steps and emits one validated completion", async () => {
     const subscription = subscriptionFor([
       {
