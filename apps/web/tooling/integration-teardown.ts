@@ -53,36 +53,59 @@ afterEach(() => {
  * workerd harness points E2E_DATABASE_URL at this file's database, so
  * in-process code that loads `db.ts` afterwards connects there (Better Auth
  * seeds its OAuth resource on import); a plain module pool would leave an idle
- * session the reset refuses to evict. Connects lazily, where `db.ts` would.
+ * session the reset refuses to evict (#2529). Connects lazily, where `db.ts`
+ * would.
+ *
+ * `isolate: false` reruns this file per test file but evaluates `db.ts` once
+ * per fork, and `db.ts` keeps the first runtime it reads. So the runtime is one
+ * object per fork, and each file's `afterAll` ends and clears its pool: the
+ * next file reconnects to its own database rather than using an ended pool or
+ * keeping one open past its lease.
  */
-let modulePool: Pool | undefined;
-let moduleClient: DatabaseRuntime["client"] | undefined;
-const connectModulePool = () => {
-  if (modulePool) return modulePool;
-  modulePool = createPostgresPool({
+interface ModuleDatabase {
+  runtime: DatabaseRuntime;
+  pool?: Pool;
+  client?: DatabaseRuntime["client"];
+}
+const MODULE_DATABASE = Symbol.for("cubby.integration.module-database");
+const forkGlobals: typeof globalThis & {
+  [MODULE_DATABASE]?: ModuleDatabase;
+} = globalThis;
+const connectModulePool = (state: ModuleDatabase) => {
+  if (state.pool) return state.pool;
+  state.pool = createPostgresPool({
     connectionString: process.env.E2E_DATABASE_URL || process.env.DATABASE_URL,
     max: 25,
   });
   // The reset's termination surfaces on the idle client; the pool reconnects.
-  modulePool.on("error", () => {});
-  return modulePool;
+  state.pool.on("error", () => {});
+  return state.pool;
 };
-const moduleRuntime: DatabaseRuntime = {
-  get client() {
-    return (moduleClient ??= drizzle({ client: connectModulePool(), schema }));
-  },
-  withConnection: async (fn) => {
-    const connection = await connectModulePool().connect();
-    try {
-      return await fn(drizzle({ client: connection, schema }));
-    } finally {
-      connection.release();
-    }
-  },
+const createModuleDatabase = (): ModuleDatabase => {
+  const state: ModuleDatabase = {
+    runtime: {
+      get client() {
+        return (state.client ??= drizzle({
+          client: connectModulePool(state),
+          schema,
+        }));
+      },
+      withConnection: async (fn) => {
+        const connection = await connectModulePool(state).connect();
+        try {
+          return await fn(drizzle({ client: connection, schema }));
+        } finally {
+          connection.release();
+        }
+      },
+    },
+  };
+  return state;
 };
-// Replaced per file: `db.ts` reads this global when each file's graph loads.
+const moduleDatabase = (forkGlobals[MODULE_DATABASE] ??=
+  createModuleDatabase());
 Object.assign(globalThis, {
-  [Symbol.for("cubby.database.runtime")]: moduleRuntime,
+  [Symbol.for("cubby.database.runtime")]: moduleDatabase.runtime,
 });
 
 /**
@@ -94,7 +117,10 @@ Object.assign(globalThis, {
  * is what makes it file-scoped — see `closeTestDb`.
  */
 afterAll(async () => {
-  await modulePool?.end();
+  const pool = moduleDatabase.pool;
+  moduleDatabase.pool = undefined;
+  moduleDatabase.client = undefined;
+  await pool?.end();
   await closeTestDb();
 });
 
