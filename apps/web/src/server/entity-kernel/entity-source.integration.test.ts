@@ -13,6 +13,7 @@ import { z } from "zod";
 
 import { unwrapDb } from "~/server/db/helpers";
 import { createOrReuseAttachedImage } from "~/server/domains/image/repo/image";
+import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import {
   entityKernelContextSchema,
   executeEntity,
@@ -172,6 +173,42 @@ describe("entity sources", () => {
       supportsCurrentValue: null,
       recorder: { channel: "mcp", oauthClientId: "synthetic-client" },
     });
+  });
+
+  // Regression: a writable reference field with no flat read key (the
+  // Product's ingredient link reads back as `ingredient.id`) was refused as
+  // "not a writable Product field".
+  it("sources a Product's ingredient link through its declared read path", async () => {
+    const product = await createProduct("Sourced oat bag");
+    const oats = await findOrCreateIngredient(ctx.db, "synthetic rolled oats");
+    const barley = await findOrCreateIngredient(ctx.db, "synthetic barley");
+    const link = (ingredient: NonNullable<typeof oats>) =>
+      executeEntity(context(), {
+        action: "update",
+        entity: "product",
+        id: parseShortcodeFor("product", product.code),
+        data: {
+          ingredientId: parseShortcodeFor("ingredient", ingredient.shortcode),
+        },
+        sources: [
+          {
+            fieldPath: "ingredientId",
+            url: `https://example.test/${ingredient.shortcode}`,
+          },
+        ],
+      });
+    await link(oats!);
+    expect(await detailSources(product.code)).toMatchObject([
+      { fieldPath: "ingredientId", supportsCurrentValue: true },
+    ]);
+    await link(barley!);
+    const sources = await detailSources(product.code);
+    expect(
+      sources.find((source) => source.url?.endsWith(oats!.shortcode)),
+    ).toMatchObject({ supportsCurrentValue: false });
+    expect(
+      sources.find((source) => source.url?.endsWith(barley!.shortcode)),
+    ).toMatchObject({ supportsCurrentValue: true });
   });
 
   it("refuses an unwritable fieldPath or an empty source without applying the write", async () => {

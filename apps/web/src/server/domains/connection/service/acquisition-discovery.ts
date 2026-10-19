@@ -7,11 +7,13 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import {
   expenseConnectionEligible,
+  expenseNamesOtherBrand,
   retrieveAcquisitionNotes,
   acquisitionPairEligible,
 } from "~/server/domains/connection/repo/connection-candidates";
 import { connectionRecord } from "~/server/domains/connection/repo/connection-evidence";
 import { semanticEntityCandidates } from "~/server/generic/embedding/service/semantic-search.service";
+import { SEMANTIC_MATCH_MIN_SIMILARITY } from "~/server/generic/embedding/service/semantic/constants";
 import { findLexicalSearchCandidates } from "~/server/generic/search/service/search.service";
 
 /** Bounded indexed retrieval, including unitemized orders with evidence in notes. */
@@ -71,10 +73,13 @@ export async function discoverAcquisitionCandidates(
       ]);
       const otherRefs: EntityRef[] = [
         ...lexical.map((hit) => ({ entityKind: kind, entityId: hit.id })),
-        ...semantic.map(({ item }) => ({
-          entityKind: kind,
-          entityId: item.id,
-        })),
+        // Meaning alone must clear the floor; a record also hit lexically or
+        // by notes still enters through those lists.
+        ...semantic
+          .filter(
+            ({ similarity }) => similarity >= SEMANTIC_MATCH_MIN_SIMILARITY,
+          )
+          .map(({ item }) => ({ entityKind: kind, entityId: item.id })),
         ...notes.filter((ref) => ref.entityKind === kind),
       ];
       for (const other of otherRefs) {
@@ -82,7 +87,8 @@ export async function discoverAcquisitionCandidates(
         const to = source.entityKind === "product" ? other : source;
         if (
           to.entityKind === "expense" &&
-          !(await expenseConnectionEligible(db, to.entityId))
+          (!(await expenseConnectionEligible(db, to.entityId)) ||
+            (await expenseNamesOtherBrand(db, from.entityId, to.entityId)))
         )
           continue;
         if (

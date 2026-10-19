@@ -2428,7 +2428,9 @@ table each (ADR 0007):
   selectedVariant, valueFingerprint, recorder)` records where a fact about an
   entity was seen ([terminology](guide/terminology.md#purchase-research) "Source";
   `entity-kernel/repo/entity-source.ts`). Every create/update command and image attach
-  accepts `sources[]`; the kernel validates `fieldPath` against the manifest,
+  accepts `sources[]`; the kernel validates `fieldPath` against the manifest
+  (a writable field the detail returns at its read key or, for a reference
+  read as an object such as Product `ingredientId`, its `display.readPath`),
   writes the rows in the mutation's transaction, takes the recorder from the
   actor (never input) and fingerprints the post-write field value. Detail
   reads return `sources` with `supportsCurrentValue`, so a Source for an

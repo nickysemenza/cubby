@@ -1,5 +1,6 @@
 import type { EntityRef } from "@cubby/schemas/entity";
 import type { ConnectionCandidate } from "@cubby/schemas/entity-connections";
+import { manufacturerSource } from "@cubby/schemas/external-id";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
@@ -289,6 +290,47 @@ export async function expenseConnectionEligible(db: Database, code: string) {
     )
     .limit(1);
   return row !== undefined;
+}
+
+/** Shorter manufacturer values match too many ordinary line words. */
+const MIN_KNOWN_BRAND_LENGTH = 3;
+
+/**
+ * Whether an Expense line names a known brand other than the Product's own,
+ * so it cannot be that Product's acquisition however similar its text embeds.
+ * Known brands are live Products' `manufacturer` values compared as
+ * `manufacturerSource` slugs on word boundaries; an unknown brand on either
+ * side, or a line that also names the Product's own brand, never rejects.
+ */
+export async function expenseNamesOtherBrand(
+  db: Database,
+  productCode: string,
+  expenseCode: string,
+): Promise<boolean> {
+  const [row] = await getDb(db)
+    .select({ manufacturer: product.manufacturer, line: expense.name })
+    .from(product)
+    .innerJoin(expense, eq(expense.shortcode, expenseCode))
+    .where(eq(product.shortcode, productCode))
+    .limit(1);
+  const own = row?.manufacturer ? manufacturerSource(row.manufacturer) : null;
+  if (!row || !own) return false;
+  const line = `-${manufacturerSource(row.line) ?? ""}-`;
+  if (line.includes(`-${own}-`)) return false;
+  const brands = await getDb(db)
+    .selectDistinct({ manufacturer: product.manufacturer })
+    .from(product)
+    .where(
+      and(
+        notDeleted(product),
+        sql`length(trim(${product.manufacturer})) >= ${MIN_KNOWN_BRAND_LENGTH}`,
+        sql`position(lower(trim(${product.manufacturer})) in lower(${row.line})) > 0`,
+      ),
+    );
+  return brands.some(({ manufacturer }) => {
+    const brand = manufacturerSource(manufacturer);
+    return brand !== null && brand !== own && line.includes(`-${brand}-`);
+  });
 }
 
 /** Notes are currently absent from SearchDocument; bridge only one concrete source. */
