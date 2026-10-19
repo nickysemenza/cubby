@@ -1,6 +1,5 @@
 import type { RunId } from "@cubby/schemas/identifiers";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
-import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
 import {
   type GatewayFetchRoutes,
   type GatewayFetchRequest,
@@ -19,7 +18,6 @@ import {
   readPaidAllowance,
   type FundingStatusPorts,
 } from "~/server/ai/funding";
-import { getAiGatewayEgress } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import {
   assertSelectedMailSources,
@@ -29,7 +27,7 @@ import {
 
 import {
   assertRunExecutable,
-  pauseExecutionRun,
+  pauseForFunding,
 } from "../repo/execution-context";
 
 function runningOwnerMatches(
@@ -107,8 +105,6 @@ async function selectedCoordinatorExecution(
   return false;
 }
 
-const RESUME_MARGIN_MS = 60_000;
-
 /** The frontier chat model a request names; other endpoints are never budgeted. */
 async function budgetedModel(request: GatewayFetchRequest) {
   if (request.endpoint !== "responses" && request.endpoint !== "v1/messages")
@@ -141,13 +137,8 @@ export function paidRunPreflight(
         throw await fundingWaitError(db, ports);
       await assertAiBudget(db, allowance ?? 0);
     } catch (error) {
-      if (error instanceof AiBudgetExhaustedError) {
-        await pauseExecutionRun(db, runId, error.message);
-        await getAiGatewayEgress(CUBBY_AI_GATEWAY_ID)?.scheduleFundingResume(
-          // Just past the boundary, so the resume reads the new window.
-          Date.parse(error.status.windowEnd) + RESUME_MARGIN_MS,
-        );
-      }
+      if (error instanceof AiBudgetExhaustedError)
+        await pauseForFunding(db, runId, error);
       throw error;
     }
     // The final admission read is the cancellation boundary.

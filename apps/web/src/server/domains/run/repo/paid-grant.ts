@@ -53,16 +53,32 @@ export async function recordPaidGrant(
     });
 }
 
+// Retry chains are short; the bound only stops a corrupted cycle.
+const MAX_LINEAGE = 50;
+
 /**
- * A member's latest "Run now, paid allowed" for this Run or the discovery
- * Run that started it, with the confirmed spend past the paid budget.
+ * A member's latest "Run now, paid allowed" for this Run, the retries it
+ * succeeds, or the discovery Run that started any of them, with the
+ * confirmed spend past the paid budget. A retry inherits its predecessor's
+ * background status (`isBackgroundRun`), so it inherits the grant too.
  */
 export async function readPaidGrant(db: Database, runId: RunId) {
-  const [self] = await getDb(db)
-    .select({ parentRunId: run.parentRunId })
-    .from(run)
-    .where(eq(run.id, runId))
-    .limit(1);
+  const scope = new Set<RunId>();
+  let current: RunId | null = runId;
+  for (let depth = 0; current && depth < MAX_LINEAGE; depth++) {
+    if (scope.has(current)) break;
+    scope.add(current);
+    const [row] = await getDb(db)
+      .select({
+        parentRunId: run.parentRunId,
+        predecessorRunId: run.predecessorRunId,
+      })
+      .from(run)
+      .where(eq(run.id, current))
+      .limit(1);
+    if (row?.parentRunId) scope.add(row.parentRunId);
+    current = row?.predecessorRunId ?? null;
+  }
   const [grant] = await getDb(db)
     .select({
       createdAt: runControlEvent.createdAt,
@@ -72,10 +88,7 @@ export async function readPaidGrant(db: Database, runId: RunId) {
     .where(
       and(
         eq(runControlEvent.action, "run_now_paid"),
-        inArray(runControlEvent.runId, [
-          runId,
-          ...(self?.parentRunId ? [self.parentRunId] : []),
-        ]),
+        inArray(runControlEvent.runId, [...scope]),
       ),
     )
     .orderBy(desc(runControlEvent.createdAt))

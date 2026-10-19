@@ -18,7 +18,7 @@ import { wasm } from "~/lib/wasm";
 
 import type { MailRuleCandidate } from "../repo/mail-rule-evidence";
 
-export const MAIL_IMPORT_RULE_REVISION = "mail-import-rule-2026-10-18.1";
+export const MAIL_IMPORT_RULE_REVISION = "mail-import-rule-2026-10-19.1";
 
 type RuleLifecycleEvent = Extract<
   MailEvent,
@@ -136,6 +136,13 @@ export function decideMailByRule(evidence: MailRuleEvidence): MailRuleDecision {
         kind: "coordinator",
         reason: "An unrelated classification names a recorded order.",
       };
+    // A known order sender's receipt can be image-only or oddly formatted,
+    // which the classifier may misread; only the coordinator closes it.
+    if (evidence.senderVendorId)
+      return {
+        kind: "coordinator",
+        reason: "An unrelated classification of a known Vendor's Email.",
+      };
     return {
       kind: "unrelated",
       reason: `The ${evidence.classificationStage} classifier confidently classified this Email unrelated.`,
@@ -159,7 +166,9 @@ export function decideMailByRule(evidence: MailRuleEvidence): MailRuleDecision {
       kind: "coordinator",
       reason: "The Purchase is not on this member's account at the Vendor.",
     };
-  if (event === "confirmation" && !match.importedSource)
+  // Any lifecycle notice can carry the line table the coordinator would
+  // itemize an unitemized (for example statement-born) Purchase from.
+  if (!match.importedSource)
     return {
       kind: "coordinator",
       reason: "No import itemized this order yet.",

@@ -9,7 +9,7 @@
  * page and is incorrectly settled without the coordinator.
  */
 import type { ActorContext } from "@cubby/schemas/context";
-import type { RunId } from "@cubby/schemas/identifiers";
+import type { PurchaseId, RunId } from "@cubby/schemas/identifiers";
 import { runTargetOutcomeReceipt } from "@cubby/schemas/run-fields";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -24,6 +24,8 @@ import {
   assessmentEmailLink,
   emailClassificationObservation,
   email as emailTable,
+  importSourceClaim,
+  importSourceOrder,
   orderMail,
   orderMailEvent,
   runOperation,
@@ -78,17 +80,53 @@ describe("Mail import claim", () => {
       messageId: string,
       subject: string,
       bodyText: string,
+      from = sender,
     ) =>
       retainedMailFixture(ctx.db, {
         ledgerPartyId: party.id,
         mailboxId,
         messageId,
-        sender,
+        sender: from,
         subject,
         checksum: await sha256Hex(`${subject}\n${bodyText}`),
         content: { snippet: null, bodyText, bodyHtml: null },
       });
-    return { party, seller, order, retain };
+    // An accepted import source: what makes a Purchase itemized for the rule.
+    const itemize = async (purchaseId: PurchaseId, orderKey: string) => {
+      const imported = await insertWithShortcode(ctx.db, "run", {
+        purpose: "file_import",
+        status: "completed",
+        trigger: "manual",
+        ledgerPartyId: party.id,
+        actorUserId: ctx.actor.userId,
+        actorName: party.name,
+        actorEmail: "synthetic@example.test",
+        actorLedgerPartyShortcode: party.shortcode,
+        actorLedgerPartyName: party.name,
+        actorLedgerPartyKind: "member",
+      });
+      const [claim] = await getDb(ctx.db)
+        .insert(importSourceClaim)
+        .values({
+          ledgerPartyId: party.id,
+          kind: "vendor_export",
+          externalKey: orderKey,
+          checksum: orderKey,
+          firstRunId: imported.id,
+          lastRunId: imported.id,
+        })
+        .returning({ id: importSourceClaim.id });
+      if (!claim) throw new Error("Expected a source claim fixture");
+      await getDb(ctx.db).insert(importSourceOrder).values({
+        id: claim.id,
+        sourceClaimId: claim.id,
+        purchaseId,
+        orderKey,
+        checksum: orderKey,
+        outputFingerprint: orderKey,
+      });
+    };
+    return { party, seller, order, retain, itemize };
   }
 
   async function admit(
@@ -210,8 +248,9 @@ describe("Mail import claim", () => {
   });
 
   it("settles same-Vendor lifecycle and confident unrelated Emails without the coordinator, as mail.resolve does", async () => {
-    const { party, seller, order, retain } = await world();
+    const { party, seller, order, retain, itemize } = await world();
     const ruleTarget = await order("SYN-2001");
+    await itemize(ruleTarget.id, "rule-order-SYN-2001");
     const controlTarget = await order("SYN-2002");
     const ruleShipped = await retain(
       "rule-shipped",
@@ -223,10 +262,13 @@ describe("Mail import claim", () => {
       "Your order SYN-2002 has shipped",
       "Order #SYN-2002 is on its way. Track your package.",
     );
+    // From a sender that proves no Vendor: a known Vendor's Email classified
+    // unrelated still goes to the coordinator.
     const newsletter = await retain(
       "rule-newsletter",
       "Synthetic garden newsletter",
       "Seasonal planting tips from the synthetic garden club.",
+      "Garden Club <club@garden-club.example.test>",
     );
     await getDb(ctx.db)
       .update(emailTable)

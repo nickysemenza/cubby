@@ -105,10 +105,12 @@ pending: nothing here starts Product research.
    the body) whose complete compact read's printed order identifier
    (`purchase_cues`) names exactly one live Purchase of the sender-proof
    Vendor (`senderProofVendor`) on the Email owner's own account there, with
-   no retained attachment bytes and, for a confirmation, an accepted import
-   source, links as that event (proposer `heuristic`, Assessment producer
-   `rule`); an Email the classifier confidently called unrelated (stage
-   `rule`, `decision` or `model`, in a Run the member did not select) resolves
+   no retained attachment bytes and an accepted import source (an unitemized
+   Purchase goes to the coordinator, which can itemize it from the notice),
+   links as that event (proposer `heuristic`, Assessment producer `rule`); an
+   Email the classifier confidently called unrelated (stage `rule`,
+   `decision` or `model`, in a Run the member did not select, from a sender
+   that proves no Vendor) resolves
    `unrelated` (its resolution observation carries the revision, so its
    `email_relevance` Assessment's producer is that rule). Everything else,
    an incomplete or paged compact read, and any refusal `mail.resolve`

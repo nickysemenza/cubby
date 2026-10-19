@@ -407,6 +407,73 @@ describe("household AI funding at the paid transport boundary", () => {
     ).rejects.toBeInstanceOf(AiBudgetExhaustedError);
   });
 
+  // Review finding: a retry successor inherited background status through
+  // its predecessor but not the member's paid grant, so it waited again.
+  it("carries a paid grant to a retry successor", async () => {
+    const original = await setup("mail_import");
+    await grant(original);
+    // A retry follows a stopped Run and carries its frozen sources.
+    const [stopped] = await getDb(ctx.db)
+      .update(run)
+      .set({ status: "failed", failureCode: "execution_limit" })
+      .where(eq(run.id, original))
+      .returning({ input: run.input });
+    const retry = await setup("mail_import");
+    expect(retry).not.toBe(original);
+    await expect(
+      paidRunPreflight(ctx.db, retry)(chatRequest()),
+    ).rejects.toBeInstanceOf(AiFundingWaitError);
+    await getDb(ctx.db)
+      .update(run)
+      // The ungranted attempt paused it; resume it as the retry of `original`.
+      .set({
+        predecessorRunId: original,
+        input: stopped?.input,
+        status: "running",
+        failureCode: null,
+        dispatchError: null,
+      })
+      .where(eq(run.id, retry));
+    await paidRunPreflight(ctx.db, retry)(chatRequest());
+  });
+
+  // Review finding: a Run-bound call without the agent preflight (gateway
+  // forward, purchase audit) threw the wait but left its Run running, so the
+  // Run failed instead of resuming in the next window.
+  it("pauses a background Run when generic paid admission makes it wait", async () => {
+    const runId = await setup("mail_import");
+    const admit = withAiBudget<GatewayFetchRequest>(
+      ctx.db,
+      { model: "gpt-6-sol", runId },
+      undefined,
+    );
+    await expect(admit?.(chatRequest())).rejects.toBeInstanceOf(
+      AiFundingWaitError,
+    );
+    expect(await status(runId)).toMatchObject({
+      status: "paused_auth",
+      failureCode: "execution_limit",
+    });
+  });
+
+  // Review finding: Cubby's own synthetic credit-budget refusal from the last
+  // window was quoted as "refused by Anthropic" after spend had reset.
+  it("quotes only the provider's credit refusal, never Cubby's own budget stop", async () => {
+    const runId = await setup("mail_import");
+    await spend(runId, 0, {
+      credit: true,
+      createdAt: previousWindow(),
+      failure:
+        '429 {"error":{"type":"cubby_credit_budget_reached","message":"Claude credit budget reached"}}',
+    });
+    const wait = await paidRunPreflight(
+      ctx.db,
+      runId,
+    )(chatRequest()).catch((error: unknown) => error);
+    expect(wait).toBeInstanceOf(AiFundingWaitError);
+    expect(String(wait)).not.toContain("cubby_credit_budget_reached");
+  });
+
   it("resumes paused imports and discovery in the next window", async () => {
     const runId = await setup("mail_import");
     await spend(runId, DEFAULT_CREDIT_BUDGET_USD, { credit: true });

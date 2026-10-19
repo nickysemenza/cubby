@@ -2,8 +2,11 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 import type { RunId } from "@cubby/schemas/identifiers";
 import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
+import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
 import { and, eq, sql } from "drizzle-orm";
 
+import type { AiBudgetExhaustedError } from "~/server/ai/budget";
+import { getAiGatewayEgress } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { unwrapDb, notDeleted } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
@@ -64,4 +67,22 @@ export async function pauseExecutionRun(
       dispatchError: message,
     })
     .where(and(eq(run.id, runId), eq(run.status, "running"), notDeleted(run)));
+}
+
+const RESUME_MARGIN_MS = 60_000;
+
+/**
+ * A budget or funding stop pauses its Run and schedules the resume just past
+ * the window boundary, so the Run waits instead of failing.
+ */
+export async function pauseForFunding(
+  db: Database,
+  runId: RunId,
+  error: AiBudgetExhaustedError,
+) {
+  await pauseExecutionRun(db, runId, error.message);
+  await getAiGatewayEgress(CUBBY_AI_GATEWAY_ID)?.scheduleFundingResume(
+    // Just past the boundary, so the resume reads the new window.
+    Date.parse(error.status.windowEnd) + RESUME_MARGIN_MS,
+  );
 }

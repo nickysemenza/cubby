@@ -4,7 +4,7 @@ import type {
   DistinctFromVendor,
   PreparedVendorCandidate,
 } from "@cubby/schemas/purchase-import";
-import { arrayContains, and, eq } from "drizzle-orm";
+import { arrayContains, and, eq, ilike } from "drizzle-orm";
 
 import {
   distinctSenderDomain,
@@ -203,11 +203,19 @@ export async function senderProofVendor(db: Db, sender: string | null) {
   if (proven[0]) return { vendor: proven[0], address };
   const domain = distinctSenderDomain(address);
   if (!domain) return null;
+  // SQL narrows to websites naming the domain; the registrable-domain match
+  // stays in `vendorWebsiteDomain`, which SQL cannot reproduce. URL parsing
+  // punycodes an internationalized website, so such a domain scans them all.
+  const plainDomain = /^[a-z0-9.-]+$/u.test(domain) && !domain.includes("xn--");
   const sameDomain = (
     await unwrapDb(db)
       .select({ ...columns, website: vendor.website })
       .from(vendor)
-      .where(notDeleted(vendor))
+      .where(
+        plainDomain
+          ? and(notDeleted(vendor), ilike(vendor.website, `%${domain}%`))
+          : notDeleted(vendor),
+      )
   ).filter((row) => vendorWebsiteDomain(row.website) === domain);
   const [only, ...others] = sameDomain;
   return only && !others.length
