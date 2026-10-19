@@ -10,7 +10,9 @@ import { withMigrationDatabase } from "./test-database-lease";
 it("moves approval-paused Runs and operations to their replacements", async () => {
   return withMigrationDatabase(async (client) => {
     const tags = migrationTags();
-    const index = tags.indexOf("0094_retire_paused_approval");
+    const index = tags.findIndex((tag) =>
+      tag.endsWith("_retire_paused_approval"),
+    );
     if (index < 1)
       throw new Error("Paused-approval retirement has no predecessor");
     await migrateDatabase(drizzle(client), { through: tags[index - 1]! });
@@ -98,7 +100,9 @@ it("moves approval-paused Runs and operations to their replacements", async () =
 it("seeds each live image job's failures since its latest retry", async () => {
   return withMigrationDatabase(async (client) => {
     const tags = migrationTags();
-    const index = tags.indexOf("0094_retire_paused_approval");
+    const index = tags.findIndex((tag) =>
+      tag.endsWith("_retire_paused_approval"),
+    );
     await migrateDatabase(drizzle(client), { through: tags[index - 1]! });
     await client.query(
       `INSERT INTO "Image" (shortcode, key, filename, size, "contentType", status, sha256) VALUES ('IMG-4K7M', 'synthetic/original.png', 'synthetic.png', 10, 'image/png', 'UPLOADED', 'synthetic-hash')`,
