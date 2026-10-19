@@ -92,3 +92,44 @@ it("moves approval-paused Runs and operations to their replacements", async () =
     ).rejects.toMatchObject({ code: "23514", constraint: "Run_status_check" });
   });
 });
+
+// The image retry budget starts from failures since the latest operator retry,
+// so a long-failing pending job does not regain a full budget on deploy.
+it("seeds each live image job's failures since its latest retry", async () => {
+  return withMigrationDatabase(async (client) => {
+    const tags = migrationTags();
+    const index = tags.indexOf("0094_retire_paused_approval");
+    await migrateDatabase(drizzle(client), { through: tags[index - 1]! });
+    await client.query(
+      `INSERT INTO "Image" (shortcode, key, filename, size, "contentType", status, sha256) VALUES ('IMG-4K7M', 'synthetic/original.png', 'synthetic.png', 10, 'image/png', 'UPLOADED', 'synthetic-hash')`,
+    );
+    await client.query(
+      `INSERT INTO "ImageProcessingJob" (shortcode, "imageId", kind, state, "sourceContentHash", "processorRevision", attempts, "completedAt")
+       SELECT v.shortcode, i.id, v.kind, v.state, 'synthetic-hash', 1, v.attempts, CASE WHEN v.state = 'failed' THEN now() END
+       FROM "Image" i CROSS JOIN (VALUES
+         ('IPR-4K7M', 'describe_image', 'pending', 5),
+         ('IPR-7M4K', 'subject_lift', 'failed', 4)
+       ) AS v(shortcode, kind, state, attempts)`,
+    );
+    await client.query(
+      `INSERT INTO "ImageProcessingSubmission" (id) VALUES (gen_random_uuid())`,
+    );
+    await client.query(
+      `INSERT INTO "ImageProcessingSubmissionJob" ("submissionId", "jobId", disposition, "baselineAttempts")
+       SELECT s.id, j.id, 'retry', 3 FROM "ImageProcessingSubmission" s, "ImageProcessingJob" j WHERE j.shortcode = 'IPR-4K7M'`,
+    );
+
+    await migrateDatabase(drizzle(client), { through: tags[index]! });
+
+    expect(
+      (
+        await client.query(
+          `SELECT shortcode, attempts, "failuresSinceRetry" FROM "ImageProcessingJob" ORDER BY shortcode`,
+        )
+      ).rows,
+    ).toEqual([
+      { shortcode: "IPR-4K7M", attempts: 5, failuresSinceRetry: 2 },
+      { shortcode: "IPR-7M4K", attempts: 4, failuresSinceRetry: 0 },
+    ]);
+  });
+});

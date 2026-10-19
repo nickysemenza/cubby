@@ -33,9 +33,9 @@ retains the token usage of every call that produced its answer (a batched
 decision question keeps its even share of the shared call); a hit prices that
 avoided usage at the current catalog rate when it is recorded and keeps it in
 `costEvidence.avoidedUsage`, while the hit's own token columns stay zero.
-An entry without the versioned usage envelope is invalid and is recomputed;
-caller caches without token evidence keep the comparison unknown. A device
-executor establishes zero incremental charge for local image work; lack of usage rows alone does not
+Entries published before usage retention, and caller caches without token
+evidence, keep the comparison unknown. A device executor establishes
+zero incremental charge for local image work; lack of usage rows alone does not
 establish that work was free. Image jobs without an executor or usage retain
 incomplete price coverage, including while waiting for Apple. Unknown prices remain unknown.
 

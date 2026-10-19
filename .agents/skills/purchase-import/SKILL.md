@@ -49,9 +49,11 @@ resume …) through the shared member-owned controls; cancel refuses a Run that
 already ended. Spending and review decisions (`run.set_mail_import`,
 `run.discover_mail`, `run.commit_prepared`, `run.resolve_finding`) are
 callable, but only on the member's explicit instruction; never infer one.
-Per-operation approvals no longer exist. A Run still `paused_approval` from
-before their removal continues with `lifecycle resume` once the member agrees
-to the paused operation; it re-runs that operation under the current rules. Respect an explicit member pause: do
+Per-operation approvals no longer exist. Runs that were approval-paused are now
+member `paused`, and their never-run operations are `failed` ("Approval pause
+retired before the operation ran"). Replaying a failed operation id is refused;
+after the member resumes the Run, re-issue that work under a new operation id.
+Respect an explicit member pause: do
 not retry or restart until imports are resumed. Follow the returned successor;
 the preceding attempt remains immutable.
 

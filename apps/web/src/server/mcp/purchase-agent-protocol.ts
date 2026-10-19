@@ -161,7 +161,9 @@ export async function executePurchaseAgentMutation<T>(input: {
         return operation.result as T;
       }
       throw new Error(
-        "Mutation outcome is uncertain; inspect operation status",
+        operation.state === "failed"
+          ? `Operation ${operationKey.operationId} failed and cannot be replayed; re-issue it under a new operation id: ${operation.error ?? "no error recorded"}`
+          : "Mutation outcome is uncertain; inspect operation status",
       );
     }
     // Completed operations are read-only replays even after the Run stops.

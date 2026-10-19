@@ -1,5 +1,5 @@
 {
-  "id": "ef10253b-9d5c-4a61-ba08-e02cda6e78b4",
+  "id": "7de00659-2822-4794-8afd-630ce5571923",
   "prevId": "aef9ff79-1154-4de0-8b58-f3a4602b1456",
   "version": "7",
   "dialect": "postgresql",
@@ -9800,6 +9800,13 @@
         },
         "attempts": {
           "name": "attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "failuresSinceRetry": {
+          "name": "failuresSinceRetry",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,

@@ -144,6 +144,13 @@ export default defineEntity({
         validation: readOnly(z.int().nonnegative()),
       },
       {
+        // Failures since the last operator retry; the retry budget compares
+        // this, never the lifetime `attempts`.
+        key: "failuresSinceRetry",
+        kind: "number",
+        validation: readOnly(z.int().nonnegative()),
+      },
+      {
         key: "lastExecutor",
         kind: "text",
         nullable: true,
@@ -264,6 +271,7 @@ export default defineEntity({
       { key: "state", specialized: "enum:state" },
       { key: "runId", reference: "run" },
       { key: "attempts", defaultValue: 0 },
+      { key: "failuresSinceRetry", defaultValue: 0 },
       "lastError",
       "processorRevision",
       "dispatchedAt",

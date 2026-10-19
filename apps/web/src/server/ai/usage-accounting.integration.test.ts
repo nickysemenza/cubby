@@ -440,8 +440,7 @@ describe("AiUsage accounting", () => {
 
   // Savings from the response cache: the replay sends nothing, so its token
   // columns stay zero, but its standard comparison prices the inference the
-  // cached answer originally consumed. An entry with no retained usage stays
-  // unknown.
+  // cached answer originally consumed. A legacy entry stays unknown.
   it("prices a response-cache hit from the usage its entry retained", async () => {
     const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
     const usageCtx = {
@@ -463,7 +462,7 @@ describe("AiUsage accounting", () => {
 
     const rows = await usageRows();
     expect(rows).toHaveLength(2);
-    const [priced, unpriced] = [
+    const [priced, legacy] = [
       rows.find((row) => row.standardCost !== null),
       rows.find((row) => row.standardCost === null),
     ];
@@ -478,8 +477,8 @@ describe("AiUsage accounting", () => {
         standard: { source: "estimate", pricingSource: "models.dev" },
       },
     });
-    expect(unpriced).toMatchObject({ chargedCost: 0, standardCost: null });
-    expect(unpriced?.costEvidence).not.toHaveProperty("avoidedUsage");
+    expect(legacy).toMatchObject({ chargedCost: 0, standardCost: null });
+    expect(legacy?.costEvidence).not.toHaveProperty("avoidedUsage");
   });
 
   // A connected ChatGPT plan owns the call once selected: a failure before any

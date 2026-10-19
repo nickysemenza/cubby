@@ -65,11 +65,7 @@ describe("AI response cache", () => {
         expect(requests.length).toBeLessThanOrEqual(128);
         return requests.map(() => ({
           kind: "hit" as const,
-          value: JSON.stringify({
-            $cubbyResponseCacheEntry: 2,
-            value: { choice: "one" },
-            usage: null,
-          }),
+          value: JSON.stringify({ choice: "one" }),
         }));
       },
     );
@@ -198,29 +194,22 @@ describe("AI response cache", () => {
     });
   });
 
-  // A bare answer without the versioned envelope is an invalid entry: it is
-  // invalidated and rebuilt rather than replayed with unknown usage.
-  it("rebuilds an entry stored without the versioned envelope", async () => {
-    const bare = '{"choice":"bare"}';
-    const claims = [
-      { kind: "hit" as const, value: bare },
-      { kind: "claimed" as const, token: "synthetic-token" },
-    ];
-    const invalidate = vi.fn();
+  // Entries published before usage retention stay valid answers until expiry.
+  it("replays a bare legacy entry with unknown avoided usage", async () => {
     const namespace = fromPartial<
       NonNullable<ReturnType<typeof cfEnv.getAiResponseCacheNamespace>>
     >({
       getByName: () =>
         fromPartial({
-          readOrClaim: () => claims.shift()!,
-          invalidate,
-          publish: () => true,
-          renew: () => true,
+          readOrClaim: () => ({
+            kind: "hit" as const,
+            value: '{"choice":"legacy"}',
+          }),
         }),
     });
     vi.spyOn(cfEnv, "getAiResponseCacheNamespace").mockReturnValue(namespace);
     const onHit = vi.fn(async () => undefined);
-    const compute = vi.fn(async () => ({ choice: "fresh" }));
+    const compute = vi.fn();
     expect(
       await withAiResponseCache({
         enabled: true,
@@ -229,10 +218,9 @@ describe("AI response cache", () => {
         compute,
         onHit,
       }),
-    ).toEqual({ choice: "fresh" });
-    expect(invalidate).toHaveBeenCalledWith(expect.any(String), bare);
-    expect(compute).toHaveBeenCalledWith("miss", expect.any(Function));
-    expect(onHit).not.toHaveBeenCalled();
+    ).toEqual({ choice: "legacy" });
+    expect(compute).not.toHaveBeenCalled();
+    expect(onHit).toHaveBeenCalledWith(expect.any(Number), null);
     vi.restoreAllMocks();
   });
 

@@ -30,6 +30,7 @@ import {
   claimImageProcessingJob,
   reclaimExpiredImageProcessingLeases,
   backOffImageProcessingLease,
+  SERVER_FAILURE_RETRYABLE,
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
@@ -263,7 +264,7 @@ async function completeNormalizedImageInput(
         outcome: {
           kind: "describe_image",
           status: "failed",
-          retryable: true,
+          retryable: SERVER_FAILURE_RETRYABLE,
           reason: safeImageProcessingError(error),
         },
       },

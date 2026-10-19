@@ -21,6 +21,7 @@ import {
   claimImageProcessingJob,
   completeImageProcessingJob,
   markImageProcessingWaitingForDevice,
+  SERVER_FAILURE_RETRYABLE,
   reclaimExpiredImageProcessingLeases,
 } from "~/server/domains/image-processing/repo/image-processing";
 import {
@@ -172,7 +173,7 @@ export async function dispatchImageProcessingWakeup(
         outcome: {
           kind: claimed.kind,
           status: "failed",
-          retryable: true,
+          retryable: SERVER_FAILURE_RETRYABLE,
           reason: detail,
         },
       },
