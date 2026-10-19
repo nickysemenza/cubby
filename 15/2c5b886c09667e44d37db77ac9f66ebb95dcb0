@@ -1,0 +1,19 @@
+apps/web/tests/e2e/enum-colors-and-counts.spec.ts
+  s_9b829d577c7e4c::t_e805e9a1c8deba 62-66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "152c5b886c09667e44d37db77ac9f66ebb95dcb0",
+  "prompts": {},
+  "sessions": {
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
