@@ -763,7 +763,11 @@ export async function buildChargeProposals(
         label: null,
         history: past?.kind ?? null,
       },
-      counterparty: { label: null, history: past?.counterparty ?? null },
+      counterparty: {
+        label: null,
+        history: past?.counterparty ?? null,
+        storedValue: account?.kind === "stored_value",
+      },
       transfer,
     });
     const chargeSiblings = siblings.get(chargeId(charge)) ?? [];
