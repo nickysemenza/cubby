@@ -825,7 +825,8 @@ describe("statement Transaction suggestions", () => {
 
   // Failure modes: a cash-out from the member's own balance account is read
   // as income from its provider category; a move between two owners is bulk
-  // accepted without its LedgerTransfer.
+  // accepted without its LedgerTransfer; a named own account makes a move
+  // clean before its opposite leg is seen.
   it("reads a cash-out naming an own balance account as a transfer", async () => {
     const member = await createRepoEntity(ctx, "ledgerParty", {
       name: "Avery Example",
@@ -884,7 +885,7 @@ describe("statement Transaction suggestions", () => {
     );
     const rows = await suggestions(ctx);
     expect(rows.find((row) => row.merchant === "PayFriend")).toMatchObject({
-      clean: true,
+      clean: false,
       create: {
         kind: "account_transfer",
         votes: { rule: "account_transfer", label: "account_transfer" },

@@ -175,7 +175,9 @@ describe("decideStatementKind and kindAgreed", () => {
       kind: "credit_card_payment",
       kindSource: "model",
     });
-    expect(kindAgreed(create, null)).toBe(true);
+    // Failure mode: a card payment from another owner's account was clean
+    // with no LedgerTransfer. Money moves wait for their opposite leg.
+    expect(kindAgreed(create, null)).toBe(false);
   });
 
   it("holds a stored-value payment back until history names a business", () => {
@@ -223,12 +225,14 @@ describe("decideStatementKind and kindAgreed", () => {
       transfer: { accountId: crypto.randomUUID(), ledgerTransfer: false },
     });
     expect(create).toMatchObject({ kind: "account_transfer" });
+    // Failure mode: a descriptor naming an own account made a transfer clean
+    // although no opposite leg was ever seen arriving.
     expect(
       kindAgreed(create, {
         accountId: crypto.randomUUID(),
         ledgerTransfer: false,
       }),
-    ).toBe(true);
+    ).toBe(false);
     // Between two owners the move is also a LedgerTransfer, a reviewed write.
     expect(
       kindAgreed(create, {
