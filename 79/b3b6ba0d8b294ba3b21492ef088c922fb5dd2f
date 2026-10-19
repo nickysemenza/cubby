@@ -1,0 +1,111 @@
+.oxlintrc.json
+  s_9b829d577c7e4c::t_dda5d08183a668 141-142
+apps/web/docs/web-ui.md
+  s_9b829d577c7e4c::t_ccea2b5f87a915 37-40,46-49,102-106
+apps/web/src/entity/components/ref-link/leaf.tsx
+  s_9b829d577c7e4c::t_f1b05f92427e17 29,244-246,288-326,368,391
+apps/web/src/entity/display/data-quality-value.tsx
+  s_9b829d577c7e4c::t_7f7950d1d67105 7-8,13-23,42-52,54-68,70-73,75-91
+apps/web/src/entity/display/data-quality-value.unit.test.tsx
+  s_9b829d577c7e4c::t_b5743c8d82caf8 1-38
+apps/web/src/entity/display/entity-display.tsx
+  s_9b829d577c7e4c::t_87a7718f09a202 49,258-260,288-289,293,302,975-1003,1014-1019,1418-1420,1441,2113-2117
+apps/web/src/entity/display/entity-display.unit.test.tsx
+  s_9b829d577c7e4c::t_a3d267a03f4d74 391,394
+apps/web/src/entity/display/enum-field-display.tsx
+  s_9b829d577c7e4c::t_c51af3e908058f 95-96
+apps/web/src/entity/display/enum-field-display.unit.test.tsx
+  s_9b829d577c7e4c::t_ec344736325ad7 13,28-31,40-41,53-55
+apps/web/src/entity/editing/select-options.ts
+  s_9b829d577c7e4c::t_55c1de93ecb793 1-2,5,15-18,22-25,48-58,62-65
+apps/web/src/entity/editing/select-options.unit.test.ts
+  s_9b829d577c7e4c::t_ab255401a61da3 1,7,11,14-27,31-32,35-38,41-42,45,48-51,54-60
+apps/web/src/entity/entity-detail/entity-workbench-inspector.tsx
+  s_9b829d577c7e4c::t_b60edd8567c6e7 96
+apps/web/src/entity/entity-detail/inspector-frame.tsx
+  s_9b829d577c7e4c::t_bae0e6082752ff 13-22,48,53-57,68-69,82-84,105-112,115,117-120,122-124,129-131,135,139,142,146,148
+apps/web/src/entity/presentation/trade-options.tsx
+  s_9b829d577c7e4c::t_73f69efdba7eb2 1-2,5,19-21,23-28,41-48,56-66
+apps/web/src/entity/table/column-helpers.tsx
+  s_9b829d577c7e4c::t_ae95e3292dd384 91,1029-1030,1032,1541-1543,1895,1898-1902,1923,1952
+apps/web/src/entity/table/column-helpers.unit.test.tsx
+  s_9b829d577c7e4c::t_cfd387e0cbdf02 822-823
+apps/web/src/entity/table/desktop-data-row.tsx
+  s_9b829d577c7e4c::t_fef3cd15ce81b4 11,40,42-43,198-199,210-215,232-246
+apps/web/src/entity/table/desktop-data-row.unit.test.tsx
+  s_9b829d577c7e4c::t_b77508d3ae5ac8 161-165,450-454
+apps/web/src/features/ai/decisions-catalog.tsx
+  s_9b829d577c7e4c::t_527c5747339f08 27,635-639,682,684-701,703-718
+apps/web/src/features/project/trade-badge.tsx
+  s_9b829d577c7e4c::t_6d275a1e365ada 15-19
+apps/web/src/features/purchase/purchase-reconciliation.unit.test.tsx
+  s_9b829d577c7e4c::t_454e39b18ea055 25-27,43,62-63
+apps/web/src/features/suggestions/suggestion-values.tsx
+  s_9b829d577c7e4c::t_8af81073857596 109,116-117,120,180-181
+apps/web/src/lib/select-options.ts
+  s_9b829d577c7e4c::t_c824edfe13cb35 8
+apps/web/src/ui/common/chip-cluster.tsx
+  s_9b829d577c7e4c::t_225d36bce58adc 4-8,14-30,37-39,50,64-65,103,106-116,121,124,129-133,136,149,158,161,164,172-208
+apps/web/src/ui/common/currency-value.tsx
+  s_9b829d577c7e4c::t_c2136b6469b004 4,45-55,60,62,69-70,72
+apps/web/src/ui/common/date-display.tsx
+  s_9b829d577c7e4c::t_d34afe4e86e446 29-33,39-45,50,55,62,70-73,92,95-104,107-109,111
+apps/web/src/ui/common/option-glyph.tsx
+  s_9b829d577c7e4c::t_9c60bf21acc0f7 1-235
+apps/web/src/ui/common/person-avatar.tsx
+  s_9b829d577c7e4c::t_bbaaadd531d106 1-63
+apps/web/src/ui/common/person-avatar.unit.test.tsx
+  s_9b829d577c7e4c::t_6a2c5594ebc8f1 1-40
+apps/web/src/ui/common/scalar-value.tsx
+  s_9b829d577c7e4c::t_e3b25c1741dbdf 1,5,8,28-30,35-36,42-50,123,125-133,135-139,148-150
+apps/web/src/ui/common/scalar-value.unit.test.tsx
+  s_9b829d577c7e4c::t_c6e39ef5a5a670 4,7-65
+apps/web/src/ui/common/stacked-value.tsx
+  s_9b829d577c7e4c::t_146b4c2cd054d3 42,52-53,70
+apps/web/src/ui/data-table/cell-frame.tsx
+  s_9b829d577c7e4c::t_916f3f27c875d3 1-8,13-14,27-33,52,58-70,72,91,93,95,100-102
+apps/web/src/ui/data-table/column-layout.ts
+  s_9b829d577c7e4c::t_5e7bcef552d3c5 335-338,346
+apps/web/src/ui/data-table/empty-columns.ts
+  s_9b829d577c7e4c::t_aa2faaf71c3966 18-19,39-41
+apps/web/src/ui/data-table/enum-pill-presentations.unit.test.tsx
+  s_9b829d577c7e4c::t_99d8b39935df1c 1-2,5,9-10,18-19,23-28,30-38,40-49,52-58,60-66,69-74,76-78,80-87,89-120
+apps/web/src/ui/data-table/row-activity.tsx
+  s_9b829d577c7e4c::t_896fee808edeae 11,13-15,20,23-29,55-77
+apps/web/src/ui/data-table/table-density.preview.test.tsx
+  s_9b829d577c7e4c::t_3fab558f196ffc 414-456,505-583
+apps/web/src/ui/data-table/use-cell-spill.ts
+  s_9b829d577c7e4c::t_f7f5e81a573fa0 62,64-65,67-86,181-183
+apps/web/src/ui/data-table/use-data-table-controller.ts
+  s_9b829d577c7e4c::t_eadb7739e2555d 191-198
+apps/web/src/ui/overlays/side-panel.tsx
+  s_9b829d577c7e4c::t_8ec22504c3fb86 1-508
+apps/web/src/ui/overlays/side-panel.unit.test.tsx
+  s_9b829d577c7e4c::t_ab86d6297b26e0 2-5,8-92
+apps/web/src/ui/primitives/enum-pill.tsx
+  s_9b829d577c7e4c::t_d1a03a806c20db 1-6,8-10,17-26,30-31,33-49,51-53,55,59-106,108-129,131-142,145-146,148,152-203
+apps/web/tests/e2e/enum-colors-and-counts.spec.ts
+  s_9b829d577c7e4c::t_ce3f0461ff7f3b 29-30,32,35,39-42,63
+packages/schemas/src/entity-definitions/18-image.entity.ts
+  s_9b829d577c7e4c::t_3508d3f7f773ba 463-464
+packages/schemas/src/entity-definitions/22-productCategory.entity.ts
+  s_9b829d577c7e4c::t_185c9b89609f10 15,291,298,304,310,317,323,330,336,342,348,355,362
+packages/schemas/src/entity-definitions/select-control-options.ts
+  s_9b829d577c7e4c::t_7d3ef5378a5602 1-4,138-206,224-245,296-299
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "79b3b6ba0d8b294ba3b21492ef088c922fb5dd2f",
+  "prompts": {},
+  "sessions": {
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
