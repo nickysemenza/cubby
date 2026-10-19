@@ -11,6 +11,7 @@ import {
   email,
   emailClassificationObservation,
 } from "~/server/db/schema";
+import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import {
   discoverAiRefresh,
   executeAiRefreshTarget,
@@ -93,6 +94,57 @@ describe("Email prompt refresh publication", () => {
       (await getDb(ctx.db).select().from(email).where(eq(email.id, item.id)))[0]
         ?.classificationReason,
     ).toBe("Synthetic original");
+  });
+
+  it("allows independent ordinary Gmail publications to commit after overlapping predicate reads", async () => {
+    const parties = await Promise.all(
+      ["Synthetic first mail owner", "Synthetic second mail owner"].map(
+        (name, index) =>
+          insertWithShortcode(ctx.db, "ledgerParty", {
+            name,
+            kind: "member",
+            userId: index === 0 ? ctx.actor.userId : systemActor().userId,
+          }),
+      ),
+    );
+    let entered = 0;
+    const ready = Promise.withResolvers<void>();
+    const results = await Promise.allSettled(
+      parties.map((party, index) =>
+        publishGmailEvidence(
+          ctx.db,
+          {
+            ledgerPartyId: party.id,
+            mailboxId: `synthetic-independent-${index}`,
+            messageId: "synthetic-independent-message",
+            executionPolicy: "classification_only",
+            expected: null,
+            recordHandlingReceipt: false,
+          },
+          async (tx) => {
+            await getDb(tx).select({ id: email.id }).from(email);
+            if (++entered === 2) ready.resolve();
+            await ready.promise;
+            return insertWithShortcode(tx, "email", {
+              ledgerPartyId: party.id,
+              mailboxId: `synthetic-independent-${index}`,
+              messageId: "synthetic-independent-message",
+              checksum: "synthetic-independent-checksum",
+              classification: "uncertain",
+              status: "pending",
+              executionPolicy: "classification_only",
+            });
+          },
+        ),
+      ),
+    );
+    expect(results.map((result) => result.status)).toEqual([
+      "fulfilled",
+      "fulfilled",
+    ]);
+    expect(
+      await getDb(ctx.db).select({ id: email.id }).from(email),
+    ).toHaveLength(2);
   });
 
   it("reuses current triage, evaluates stale relevance and commits its receipt without transferring the source Run", async () => {

@@ -102,7 +102,10 @@ export async function publishProductPair(
   });
 }
 
-/** Snapshot/variant work runs before the caller opens its publication transaction. */
+/** Snapshot/variant work runs before the caller opens its publication transaction.
+ * Publication accepts a root handle or a caller-owned SERIALIZABLE transaction;
+ * savepoints inherit outer isolation and cannot upgrade it.
+ */
 export async function prepareProductPairPublication(
   db: Database,
   input: Parameters<typeof publishProductPair>[1],

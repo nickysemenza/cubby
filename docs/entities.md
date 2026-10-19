@@ -813,7 +813,7 @@ connection or identity pair per guarded transaction. Interrupted catalogs may re
 pairs; retries reuse their publication/work identities. Pair publication checks
 a transient MVCC row-set fence in one statement instead of repeating snapshots:
 preparation brackets the complete Product, identifier, source, photo/description,
-import-claim, issuer-registry and variant-history dependencies, and the write
+import-claim, issuer-registry, active producing manifest and variant-history dependencies, and the write
 transaction rechecks them after taking the pair lock. New/deleted rows and edits
 invalidate preparation; issuer-registry edits conservatively retry it. No
 read-set fence is stored as durable provenance. Email Runs freeze at most 200

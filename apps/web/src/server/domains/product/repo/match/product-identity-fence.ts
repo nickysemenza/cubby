@@ -6,12 +6,14 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
+import { AI_REFRESH_ACTIVATION_SETTINGS_ID } from "~/server/db/retained-tables";
 
 /** Transient MVCC read-set fence, including absent rows through set membership.
  * Bracket preparation outside a transaction, then compare in the SERIALIZABLE
  * write transaction. Inserts, updates and deletes all invalidate the fence.
  * Keep this read set aligned with productIdentitySnapshot, identifier claims,
- * selected image descriptions and variant verification.
+ * selected image descriptions and variant verification (including its active
+ * producing manifest). Activation is read without a row lock here.
  * includes-deleted: tombstones/absent-row membership must also invalidate prep.
  * Issuer registries are deliberately conservative: any registry edit retries
  * preparation rather than allowing an unseen host owner to change a claim.
@@ -62,6 +64,7 @@ export async function productIdentityEvidenceFence(
       UNION ALL SELECT 'identity-purchase', id::text, xmin::text FROM "Purchase" WHERE id IN (SELECT "purchaseId" FROM orders)
       UNION ALL SELECT 'identity-vendor', id::text, xmin::text FROM "Vendor"
       UNION ALL SELECT 'issuer', slug, xmin::text FROM "ExternalSource"
+      UNION ALL SELECT 'activation', id::text, xmin::text FROM "AppSettings" WHERE id = ${AI_REFRESH_ACTIVATION_SETTINGS_ID}
     )
     SELECT md5(coalesce(jsonb_agg(jsonb_build_array(kind, id, version) ORDER BY kind, id)::text, '[]')) AS fence FROM versions
   `);

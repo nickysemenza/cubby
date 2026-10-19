@@ -295,7 +295,13 @@ export async function publishGmailEvidence<T>(
       );
     return result;
   };
-  return withTransaction(db, commitEvidence, {
-    isolationLevel: "serializable",
-  });
+  // Only refresh evaluations use the activation fence. Ordinary ingestion and
+  // member reclassification retain their existing isolation and retry contract.
+  return withTransaction(
+    db,
+    commitEvidence,
+    input.evaluation && !input.evaluation.reclassification
+      ? { isolationLevel: "serializable" }
+      : undefined,
+  );
 }

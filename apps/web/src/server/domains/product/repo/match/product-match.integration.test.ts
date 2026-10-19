@@ -9,6 +9,7 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { TEST_USER_ID, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
 import {
   assessmentState,
@@ -107,6 +108,36 @@ describe("product match queue", () => {
     expect(
       (await getProductMatchQueue(ctx.db, { productId: first.id })).items,
     ).toHaveLength(1);
+  });
+
+  it("refuses prepared pair publication when identity policy changes before its transaction", async () => {
+    const first = await product("Synthetic policy fence first"),
+      second = await product("Synthetic policy fence second");
+    const active = await activateAiRefresh(
+      ctx.db,
+      "synthetic-prepared-policy",
+      { enabled: true },
+    );
+    const publish = await prepareProductPairPublication(ctx.db, {
+      productIds: [first.entityId, second.entityId],
+      source: "agent",
+      evidence: "Synthetic policy-bound proposal",
+      sourceUrls: [],
+    });
+    await activateAiRefresh(ctx.db, "synthetic-revised-policy", {
+      enabled: true,
+      manifest: {
+        ...active.manifest,
+        "product-identity": {
+          ...active.manifest["product-identity"]!,
+          promptVersion: "synthetic-next",
+        },
+      },
+    });
+    await expect(publish(ctx.db)).rejects.toThrow("evidence changed");
+    expect(
+      (await getProductMatchQueue(ctx.db, { productId: first.id })).items,
+    ).toEqual([]);
   });
 
   it("requires stored pair evidence for a directed photo-review comparison", async () => {

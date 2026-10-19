@@ -253,17 +253,6 @@ export async function prepareProductIdentityPair(
   });
 }
 /** Canonical work identity shares actual producer lineage and frozen pair input. */
-export async function enqueueProductIdentityPair(
-  db: Database,
-  ids: readonly [ProductId, ProductId],
-  runId: RunId,
-  provenance: AiProvenance,
-) {
-  const pair = await prepareProductIdentityPair(db, ids);
-  if (!pair) throw new Error("Product identity target no longer exists");
-  return enqueuePreparedProductIdentityPair(db, pair, runId, provenance);
-}
-
 async function enqueuePreparedProductIdentityPair(
   db: Database,
   pair: z.infer<typeof preparedProductIdentityPair>,
@@ -295,7 +284,10 @@ async function enqueuePreparedProductIdentityPair(
   });
 }
 
-/** A queued pair carries the same frozen evidence checked in its short write transaction. */
+/** A queued pair carries the same frozen evidence checked in its short write transaction.
+ * Publication accepts a root handle or a caller-owned SERIALIZABLE transaction;
+ * savepoints inherit outer isolation and cannot upgrade it.
+ */
 export async function prepareProductIdentityPairRequest(
   db: Database,
   expected: z.infer<typeof preparedProductIdentityPair>,

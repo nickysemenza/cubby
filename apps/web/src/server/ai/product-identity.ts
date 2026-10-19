@@ -26,7 +26,6 @@ import {
   preparedProductIdentityPair,
   productIdentitySnapshot,
 } from "~/server/domains/product/repo/match/product-identity-snapshot";
-import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
 import {
   loadProductIdentifierClaims,
   type DroppedProductIdentifierClaim,
@@ -294,10 +293,4 @@ export async function evaluateProductIdentity(
     }
   }
   return { eligible: prepared.eligible, pairs, failure };
-}
-export async function publishProductIdentity(
-  db: Database,
-  result: Pick<Awaited<ReturnType<typeof evaluateProductIdentity>>, "pairs">,
-) {
-  for (const pair of result.pairs) await publishProductPair(db, pair);
 }
