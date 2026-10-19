@@ -452,7 +452,7 @@ const buildUpdateOperation = <
                 writeContext,
                 binding,
                 updated.entityId,
-                z.string().parse(validated.id),
+                writtenCode.parse(updated.output).id,
                 validated.sources,
                 updated.sourceSnapshot ?? updated.output,
               );

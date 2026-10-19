@@ -1,3 +1,4 @@
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -6,7 +7,13 @@ import { z } from "zod";
 import { getDb, unwrapDb } from "~/server/db/helpers";
 import { ingredient } from "~/server/db/schema";
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
-import { entityKernelContextSchema } from "~/server/entity-kernel";
+import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
+import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
+import {
+  entityKernelContextSchema,
+  executeEntityAs,
+} from "~/server/entity-kernel";
+import { executeEntityMutationRead } from "~/server/entity-kernel/execute";
 import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
 import { createMcpServer } from "~/server/mcp/server";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
@@ -14,7 +21,13 @@ import {
   callMcpTool,
   kernelRequestContext,
 } from "~/server/testing/mcp-test-utils";
-import { makeRecipeInput } from "~/server/testing/repo.fixtures";
+import {
+  createLocationFixture,
+  createProductFixture,
+  makeLocationInput,
+  makeProductInput,
+  makeRecipeInput,
+} from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 // An output read must not become a prerequisite for the mutation or its audit.
@@ -122,5 +135,81 @@ describe("summary mutation output demand", () => {
         item: { name: `Synthetic renamed summary ${entities[index]}` },
       });
     }
+  });
+  it("keeps owner Sources current on the survivor of a summary Inventory ownership merge", async () => {
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const owner = await createLedgerParty(
+      ctx.db,
+      { name: "Synthetic summary owner", kind: "member", notes: null },
+      ctx.actor,
+    );
+    const product = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic summary ownership product" }),
+      ctx.actor,
+    );
+    const location = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Synthetic summary ownership shelf" }),
+      ctx.actor,
+    );
+    const original = await createInventoryEntry(
+      ctx.db,
+      {
+        productId: product.entityId,
+        locationId: location.entityId,
+        amount: { value: 1, unit: "each" },
+        ownershipMode: "inherit",
+      },
+      ctx.actor,
+    );
+    const survivor = await createInventoryEntry(
+      ctx.db,
+      {
+        productId: product.entityId,
+        locationId: location.entityId,
+        amount: { value: 2, unit: "each" },
+        ownershipMode: "explicit",
+        ownerLedgerPartyId: owner.entityId,
+      },
+      ctx.actor,
+    );
+
+    const result = await executeEntityMutationRead(
+      context,
+      {
+        action: "update",
+        entity: "inventory",
+        id: parseShortcodeFor("inventory", original.id),
+        data: {
+          ownershipMode: "explicit",
+          ownerLedgerPartyId: owner.output.id,
+        },
+        sources: [
+          {
+            fieldPath: "ownerLedgerPartyId",
+            quote: "Synthetic ownership label",
+          },
+        ],
+      },
+      ["id"],
+    );
+    expect(result.item).toMatchObject({ id: survivor.id });
+    const read = await executeEntityAs(context, "get", {
+      entity: "inventory",
+      id: survivor.id,
+      missing: "error",
+    });
+    expect(read.item).toMatchObject({
+      sources: [
+        expect.objectContaining({
+          fieldPath: "ownerLedgerPartyId",
+          quote: "Synthetic ownership label",
+          supportsCurrentValue: true,
+        }),
+      ],
+    });
   });
 });

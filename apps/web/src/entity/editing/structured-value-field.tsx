@@ -51,6 +51,7 @@ type NodeProps = {
   schema: StructuredValueSchema;
   /** The input schema rejects this key absent; an optional one may be cleared. */
   required: boolean;
+  arrayLabels?: { title?: string; add?: string; remove?: string };
 };
 
 // SAFETY: a nested structured path (`rows.0.unit`) is a runtime string, and the form's
@@ -73,6 +74,7 @@ export function StructuredValueField({
   schema,
   creating = true,
   searchProviderFor = requireReferenceEntitySearch,
+  arrayLabels,
 }: {
   form: Form;
   name: string;
@@ -80,6 +82,7 @@ export function StructuredValueField({
   schema: StructuredValueSchema;
   creating?: boolean;
   searchProviderFor?: SearchProviderFor;
+  arrayLabels?: NodeProps["arrayLabels"];
 }) {
   return (
     <CreatingContext.Provider value={creating}>
@@ -90,6 +93,7 @@ export function StructuredValueField({
           label={label}
           schema={schema}
           required
+          arrayLabels={arrayLabels}
         />
       </ReferenceSearchContext.Provider>
     </CreatingContext.Provider>
@@ -385,6 +389,7 @@ function ArrayEditor({
   path,
   label,
   item,
+  arrayLabels,
 }: NodeProps & { item: StructuredValueSchema }) {
   const rowLabel = singular(label);
   const scalar = !("object" in item.node) && !("variant" in item.node);
@@ -392,8 +397,9 @@ function ArrayEditor({
     <ArrayFieldManager
       form={form}
       name={path}
-      title={label || "Items"}
-      addButtonText={`Add ${rowLabel.toLowerCase()}`}
+      title={arrayLabels?.title ?? (label || "Items")}
+      addButtonText={arrayLabels?.add ?? `Add ${rowLabel.toLowerCase()}`}
+      removeButtonLabel={arrayLabels?.remove}
       emptyValue={blank(item, true)}
     >
       {(_row, index) => (

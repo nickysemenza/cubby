@@ -25,6 +25,7 @@ import {
 import { fieldClearing } from "~/entity/editing/field-clearing";
 import { presentEntitySelectOptions } from "~/entity/editing/select-options";
 import { structuredSchemaFor } from "~/entity/editing/structured-schema";
+import { wireValue } from "~/entity/editing/structured-value";
 import { StructuredValueField } from "~/entity/editing/structured-value-field";
 import { entityLabel } from "~/entity/entities";
 import { bulkUpdateMutationOptionsFactory } from "~/entity/entity-contracts";
@@ -264,6 +265,15 @@ function BulkEditFields({
                                   collectionIdentity(field),
                                 )
                           }
+                          arrayLabels={{
+                            title: `${field.label} to ${operation}`,
+                            ...(operation === "remove"
+                              ? {
+                                  add: "Choose item to remove",
+                                  remove: "Cancel removal",
+                                }
+                              : {}),
+                          }}
                           searchProviderFor={searchProviderFor}
                         />
                       </fieldset>
@@ -350,7 +360,21 @@ export function BulkEditDialogBody({
    * `requireReferenceEntitySearch` lookup — see {@link SearchProviderFor}. */
   searchProviderFor?: SearchProviderFor;
 }) {
-  const form = useForm<FieldValues>();
+  const model = entityFieldModels[entity];
+  // Match nullable controls' empty value so another field's dirty-state
+  // recalculation never turns their initial null into a pending clear.
+  const form = useForm<FieldValues>({
+    defaultValues: Object.fromEntries(
+      model.fields
+        .filter(
+          (field) =>
+            fieldKeys.includes(field.key) &&
+            field.nullable &&
+            !isBulkCollection(field),
+        )
+        .map((field) => [field.key, null]),
+    ),
+  });
   const receiptHandler = useRef<((recordId: string) => Promise<void>) | null>(
     null,
   );
@@ -359,13 +383,20 @@ export function BulkEditDialogBody({
   // preview below and the submit payload both follow the live selection of
   // touched fields.
   const { dirtyFields } = form.formState;
-  const model = entityFieldModels[entity];
   const [modes, setModes] = useState<Record<string, BulkFieldMode>>({});
   const dirtyKeys = fieldKeys.filter(
     (key) =>
       modes[key] === "clear" ||
       modes[key] === "set" ||
-      Boolean(dirtyFields[key]),
+      Boolean(dirtyFields[key]) ||
+      model.fields.some(
+        (field) =>
+          field.key === key &&
+          [
+            ...Object.keys(field.resolution?.reset ?? {}),
+            ...Object.keys(field.resolution?.none ?? {}),
+          ].some((companion) => companion !== key && dirtyFields[companion]),
+      ),
   );
   // The shared date rule per selected row. When any row still needs a date
   // (a known non-zero cost), stand in a non-zero cost so clearing stays off;
@@ -382,9 +413,14 @@ export function BulkEditDialogBody({
     ]);
     if (mode === "unchanged") {
       for (const key of companions) {
-        // Bulk fields have no record defaults. Discard the pending assignment
-        // instead of resetting a Controller to an undefined default.
-        form.unregister(key);
+        // Resolution companions and nested collections have no registered
+        // root control; scalar controls return to the bulk form's empty baseline.
+        if (
+          isBulkCollection(field) ||
+          !model.fields.find((candidate) => candidate.key === key)?.control
+        )
+          form.unregister(key);
+        else form.resetField(key);
       }
       setModes((current) =>
         Object.fromEntries(
@@ -428,11 +464,29 @@ export function BulkEditDialogBody({
       if (field && isBulkCollection(field)) {
         const patch = z
           .object({
-            add: z.array(z.json()).default([]),
-            remove: z.array(z.json()).default([]),
+            add: z.array(z.unknown()).default([]),
+            remove: z.array(z.unknown()).default([]),
           })
           .parse(value ?? {});
         const identity = collectionIdentity(field);
+        const structured = structuredSchemaFor(entity, key);
+        const normalized = (operation: "add" | "remove") => {
+          const items = z
+            .json()
+            .parse(JSON.parse(JSON.stringify(patch[operation])));
+          return z
+            .array(z.json())
+            .parse(
+              structured
+                ? wireValue(
+                    items,
+                    operation === "remove"
+                      ? collectionRemoveSchema(structured, identity)
+                      : structured,
+                  )
+                : items,
+            );
+        };
         const itemKey = (item: BulkEditFieldValue) =>
           identity === undefined || identity === "value"
             ? item
@@ -442,7 +496,11 @@ export function BulkEditDialogBody({
                 ).filter(([key]) => identity.includes(key)),
               );
         const items = [
-          ...patch.add.map((item): BulkEditFieldValue =>
+          ...normalized("remove").map((item) => ({
+            op: "remove" as const,
+            key: itemKey(item),
+          })),
+          ...normalized("add").map((item): BulkEditFieldValue =>
             identity === undefined || identity === "value"
               ? { op: "add", key: item }
               : {
@@ -455,10 +513,6 @@ export function BulkEditDialogBody({
                   ),
                 },
           ),
-          ...patch.remove.map((item) => ({
-            op: "remove" as const,
-            key: itemKey(item),
-          })),
         ];
         if (items.length === 0) {
           form.setError(key, {

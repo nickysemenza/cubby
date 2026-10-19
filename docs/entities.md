@@ -614,7 +614,9 @@ Shareable references remain editable.
 
 The web `bulkEdit` action and MCP expose that same roster. The web dialog uses
 normal intent controls, unchanged/set/clear assignment modes, and submits only
-touched fields. Explicit `false` and nullable clears survive. Value collections
+touched fields. Nullable scalar controls share the form's empty `null` baseline;
+initialization or resetting another field must never stage a clear. Explicit
+`false` and nullable clears survive. Value collections
 such as tags and aliases, and multi-reference lists such as Task blockers,
 accept only `[{ op: "add" | "remove", key: "…" }]`;
 replacement arrays and rename operations are refused. Each row retains its
@@ -636,6 +638,9 @@ the batch instead of treating it as empty.
 Every exposed field has a usable normal editor control. Only assignment mode
 companions are folded into their owning value controls; bulk rendering never
 silently omits a genuine update field.
+Structured additions and removals use the normal editor's wire normalization;
+empty optional lists are omitted. The dialog sends removals before additions so
+a held keyed item can change atomically, and labels removal controls visibly.
 
 Execution is atomic across the selection (1–500 unique public IDs). Ordinary
 stored scalar columns use one set-based UPDATE when the normal writer's
@@ -1269,7 +1274,8 @@ before the final reader; requesting a reference skips only response hydration.
 Field-scoped Sources reuse the mutation's authoritative snapshot,
 with the same JSON normalization, read paths and fingerprint algorithm as detail
 reads. Projected writes retain authoritative evidence separately from their
-response fields; the owning reader supplies a cited field absent from that snapshot.
+response fields; the owning reader supplies a cited field absent from that snapshot,
+using the mutation's returned identity when an update folds into a surviving row.
 
 Partial updates preserve omitted fields. Scalar patching rejects undeclared
 keys, skips unchanged rows, and audits changes in the same transaction;
