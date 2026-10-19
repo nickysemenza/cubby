@@ -1,0 +1,33 @@
+apps/apple/CubbyKit/Tests/CubbyKitTests/Manifest/EntityManifestTests.swift
+  s_9b829d577c7e4c::t_8cd17e491569a1 20,40-55
+apps/web/generator/entities/render/swift-catalog.ts
+  s_9b829d577c7e4c::t_6b6a45cfd55bc5 205-213,217,221-222
+packages/shared/src/enum-palette.ts
+  s_5fd8583213475f::t_375b30de288816 184-196
+packages/shared/src/enum-palette.unit.test.ts
+  s_9b829d577c7e4c::t_df06799d2d7f90 91-102
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "89b21b0545903bfd697b31c6b2f8a118f2f298b3",
+  "prompts": {},
+  "sessions": {
+    "s_5fd8583213475f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d07b44d3-f14f-4339-b876-9f2da617c45d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
