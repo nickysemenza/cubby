@@ -341,4 +341,4 @@ export async function releaseFailedMailRunSources(
 }
 
 /** Failures the Run reached on its own; a member's cancel keeps its Emails. */
-export const SELF_FAILURE_CODES = ["agent_failed", "agent_aborted"] as const;
+const SELF_FAILURE_CODES = ["agent_failed", "agent_aborted"] as const;
