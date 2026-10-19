@@ -622,6 +622,9 @@ function LiveEntityRelationTable({
     }),
     [plan.limit, plan.sort.direction, plan.sort.field],
   );
+  // Header menus regroup an embedded table for the visit; the declared
+  // section grouping is the default on every mount.
+  const [groupBy, setGroupBy] = useState(plan.groupBy);
   const list = useEntityList<RelationRow, RelationFilters>({
     entity: target,
     queryOptions: listQueryOptions,
@@ -629,7 +632,8 @@ function LiveEntityRelationTable({
     columns,
     tableStateOptions,
     hiddenFilterColumns: [plan.descriptorId],
-    groupBy: plan.groupBy ?? undefined,
+    groupBy: groupBy ?? undefined,
+    onGroupByChange: setGroupBy,
     // H2: never `includeCatalogActions: false` here — that would empty the
     // row `…` menu too. This only drops the checkbox column and bulk bar.
     selectable: false,

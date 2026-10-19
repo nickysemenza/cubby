@@ -144,6 +144,11 @@ export interface CubbyColumnMeta<TData = CellData> {
    */
   linksTo?: Entity;
   numeric?: boolean;
+  /**
+   * What the column holds, for its header glyph. Omitted, the header derives
+   * it from `linksTo`, `numeric` and the filter config.
+   */
+  valueKind?: ColumnValueKind;
   mono?: boolean;
   /**
    * A code or identifier (barcode, shortcode): its fitted width stops at the
@@ -174,6 +179,24 @@ export function attachCubbyColumnMeta<TData extends RowData>(
   return meta as CubbyColumnMeta;
 }
 
+/** A column's value kind, shown as a muted glyph before its header label. */
+export type ColumnValueKind =
+  | "text"
+  | "enum"
+  | "date"
+  | "money"
+  | "number"
+  | "person"
+  | "boolean";
+
+/** A Group by choice the table's header menu can offer for its column. */
+export interface TableGroupChoice {
+  key: string;
+  /** The column the choice groups by; its header offers "Group by". */
+  columnId: string;
+  label: string;
+}
+
 export interface ServerTotals {
   totalCount: number;
   sums?: Record<string, number>;
@@ -198,6 +221,12 @@ export interface CubbyTableMeta {
    * without threading a new argument.
    */
   scrollRestorationId?: string;
+  /** Group by choices headers may offer, the active one, and its setter. */
+  grouping?: {
+    choices: readonly TableGroupChoice[];
+    active: string | null;
+    onChange: (key: string | null) => void;
+  };
 }
 
 /** A column's label on a phone: its mobile label, its header text, or its humanized id. */

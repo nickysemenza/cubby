@@ -319,6 +319,11 @@ function ServerListBody({
           },
     [entity, navigate, nested, parts.tree],
   );
+  const onGroupByChange = useCallback(
+    (key: string | null) =>
+      navigate({ groupBy: key ?? undefined, groupLevel: undefined }),
+    [navigate],
+  );
   const filterOptions = useFilterOptions({ ...parts.list?.filterOptions });
   // Cards and Compact keep the same query, filtering, ordering, and page as
   // List. A search changes the roster, never the chosen presentation.
@@ -376,6 +381,7 @@ function ServerListBody({
     // Timeline is already arranged by date, so it reads the list flat.
     groupBy: view === "timeline" ? undefined : listGroupBy(context.search),
     groupLevel: listGroupLevel(context.search),
+    onGroupByChange: view === "timeline" ? undefined : onGroupByChange,
   });
   usePageCount(list.totalCount);
   // The module's hook or a no-op: one call per render either way.

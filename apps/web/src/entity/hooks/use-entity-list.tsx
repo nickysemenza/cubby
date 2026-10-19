@@ -219,6 +219,11 @@ export interface UseEntityListOptions<
    * does not offer groups by the exact value.
    */
   groupLevel?: number;
+  /**
+   * Lets column header menus switch `groupBy` (null ungroups). Omit to keep
+   * grouping fixed by the caller.
+   */
+  onGroupByChange?: (key: string | null) => void;
   tree?: EntityListTreeConfig<TData, TRow>;
   /**
    * Nest under the entity's declared `list.tree` on the server: page the
@@ -391,6 +396,7 @@ export function useEntityList<
   hiddenFilterColumns,
   groupBy,
   groupLevel,
+  onGroupByChange,
   tree,
   serverTree = false,
   nestToggle,
@@ -406,6 +412,26 @@ export function useEntityList<
         (choice) => choice.key === groupBy && choice.reason === null,
       )
     : undefined;
+  const tableGrouping = useMemo(
+    () =>
+      onGroupByChange && {
+        choices: generatedEntityListFields[entity].grouping.flatMap(
+          (choice) =>
+            choice.reason === null && choice.filter
+              ? [
+                  {
+                    key: choice.key,
+                    columnId: choice.filter.columnId,
+                    label: choice.label,
+                  },
+                ]
+              : [],
+        ),
+        active: groupChoice?.key ?? null,
+        onChange: onGroupByChange,
+      },
+    [entity, groupChoice?.key, onGroupByChange],
+  );
   const level =
     groupChoice && groupLevel && groupLevel <= groupChoice.levels
       ? groupLevel
@@ -866,6 +892,7 @@ export function useEntityList<
     serverTotals,
     filterFields,
     rowContentVersion: progressiveContentVersion,
+    grouping: tableGrouping || undefined,
   });
 
   // "Select all N matching": pull every remaining page into memory (bulk
