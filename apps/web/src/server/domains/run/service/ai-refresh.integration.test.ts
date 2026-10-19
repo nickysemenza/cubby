@@ -289,6 +289,8 @@ describe("targeted prompt refresh", () => {
     const ports = {
       context: kernelCtx(ctx),
       suggestPorts: categoryPorts(0.95).suggestPorts,
+      // The default sampler holds a deterministic 5% of random record ids for review.
+      auditSample: () => false,
     };
     await discoverAiRefresh(ctx.db, ports);
     const [evaluation] = await getDb(ctx.db)
