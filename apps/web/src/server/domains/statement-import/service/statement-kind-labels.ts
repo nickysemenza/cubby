@@ -5,6 +5,7 @@ import {
 } from "@cubby/schemas/statement-suggestion";
 import type { SupportedDecisionModel } from "@cubby/shared/ai/models";
 
+import { settleDecisions } from "~/server/ai/budget";
 import {
   decisionChoiceFitsContext,
   type DecisionPort,
@@ -53,7 +54,7 @@ export async function labelStatementKind(
       feature.choices[result.selectedIndex ?? -1];
     return choice && result.confidence === "high" ? choice : null;
   };
-  const [kindChoice, counterpartyChoice] = await Promise.all([
+  const [kindChoice, counterpartyChoice] = await settleDecisions([
     ask(STATEMENT_TRANSACTION_KIND_FEATURE),
     ask(STATEMENT_COUNTERPARTY_FEATURE),
   ]);

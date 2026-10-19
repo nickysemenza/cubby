@@ -9,6 +9,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import { getDb } from "~/server/db/helpers";
 import { assessment, assessmentState, feedback } from "~/server/db/schema";
 import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
@@ -535,6 +536,72 @@ describe("Automatic rules", () => {
       const [current] = await buildChargeProposals(ctx.db, [row]);
       expect(current?.evidenceFingerprint).toBe(row.evidenceFingerprint);
     }
+  });
+
+  // Failure mode: a budget pause on one charge skipped the automatic rules
+  // of a charge already published on the same page; published labels leave
+  // the label queue, so that attach stayed pending for good.
+  it("applies automatic rules to published charges before a budget pause", async () => {
+    await createSystemUserFixture(ctx.db);
+    const { existing } = await soleCandidateCharge(ctx);
+    await recordStatementRows(
+      ctx.db,
+      recordStatementRowsInput.parse({
+        import: {
+          source: "monarch",
+          label: "synthetic-export.csv",
+          fingerprint: "fp-automatic-rule-1",
+          dateKind: "posted",
+          rowCountDeclared: null,
+          notes: null,
+        },
+        rows: [
+          {
+            accountDescriptor: "Synthetic Card (...4242)",
+            statementDate: "2026-05-10",
+            providerAmount: -17.25,
+            merchant: "Example Hardware",
+            rawDescription: "EXAMPLE HARDWARE 0003",
+            sourceCategory: "Shopping",
+            providerStatus: "posted",
+            providerNotes: null,
+            rowPosition: 3,
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
+    await eligibleFor(ctx, supportedDecisionModelSchema.options);
+    await setAutomaticRule(ctx.db, ctx.actor, {
+      ruleKey: ATTACH,
+      enabled: true,
+    });
+    const exhausted = new AiBudgetExhaustedError(
+      {
+        windowStart: "2026-05-10T00:00:00.000Z",
+        windowEnd: "2026-05-10T06:00:00.000Z",
+        credit: { limitUsd: 1, spentUsd: 0 },
+        plan: { limitUsd: 1, spentUsd: 0 },
+        paid: { limitUsd: 1, spentUsd: 1 },
+      },
+      "AI budget reached: synthetic",
+    );
+    await expect(
+      labelStatementSuggestions(ctx.db, {
+        port: async (request) => {
+          if (request.state.includes("EXAMPLE HARDWARE")) throw exhausted;
+          return sameCharge(request);
+        },
+        runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
+      }),
+    ).rejects.toThrow("AI budget reached: synthetic");
+    const matched = (await listStatementRows(ctx.db, {})).data.filter(
+      (row) => row.matchState === "matched",
+    );
+    expect(matched).toEqual([
+      expect.objectContaining({ transactionId: existing.id }),
+    ]);
   });
 
   // Failure modes: an automatic attach ticks diff fields, bypasses the

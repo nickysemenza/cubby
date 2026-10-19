@@ -49,16 +49,28 @@ export function createConcurrencyLimiter(limit: number) {
   };
 }
 
-/** Run `work` over `items`, at most `limit` at once, until every item is done. */
+/**
+ * Run `work` over `items`, at most `limit` at once. After a failure no new
+ * item starts; the started ones settle before the first failure is thrown,
+ * so no work outlives the caller (or its database scope).
+ */
 export async function forEachConcurrently<T>(
   items: readonly T[],
   limit: number,
   work: (item: T) => Promise<void>,
 ) {
   let next = 0;
+  const failures: unknown[] = [];
   await Promise.all(
     Array.from({ length: Math.min(limit, items.length) }, async () => {
-      while (next < items.length) await work(items[next++]!);
+      while (next < items.length && !failures.length) {
+        try {
+          await work(items[next++]!);
+        } catch (error) {
+          failures.push(error);
+        }
+      }
     }),
   );
+  if (failures.length) throw failures[0];
 }

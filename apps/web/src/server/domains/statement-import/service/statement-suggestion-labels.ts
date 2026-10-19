@@ -11,7 +11,7 @@ import {
 } from "@cubby/shared/ai/models";
 
 import { forEachConcurrently } from "~/lib/concurrency-limiter";
-import { AiBudgetExhaustedError } from "~/server/ai/budget";
+import { AiBudgetExhaustedError, settleDecisions } from "~/server/ai/budget";
 import {
   decisionChoiceFitsContext,
   type DecisionPort,
@@ -101,7 +101,7 @@ async function labelledJudgment(
     status: judgment.providerStatus,
   };
   const create = judgment.create;
-  await Promise.all([
+  await settleDecisions([
     ...judgment.candidates.map(async (candidate) => {
       const prompt = STATEMENT_CHARGE_IDENTITY_FEATURE.prompt(
         JSON.stringify({
@@ -131,16 +131,19 @@ async function labelledJudgment(
         model,
       };
     }),
-    create &&
-      labelStatementKind(create, {
-        subject: JSON.stringify(statement),
-        transfer: judgment.transfer,
-        model,
-        port: input.port,
-        usage: input.usage,
-      }).then((labelled) => {
-        judgment.create = labelled;
-      }),
+    ...(create
+      ? [
+          labelStatementKind(create, {
+            subject: JSON.stringify(statement),
+            transfer: judgment.transfer,
+            model,
+            port: input.port,
+            usage: input.usage,
+          }).then((labelled) => {
+            judgment.create = labelled;
+          }),
+        ]
+      : []),
   ]);
   judgment.clean = isClean(judgment, current.canonical.amount);
   return { judgment: statementTransactionJudgment.parse(judgment), model };
@@ -273,7 +276,8 @@ export async function labelStatementSuggestions(
         }
       },
     );
-    if (pauses[0]) throw pauses[0];
+    // Rules run even when a pause ends the page: a published charge has left
+    // the label queue, so a skipped rule would never be applied.
     const applied = new Set<string>();
     for (const { current } of ready) {
       const key = chargeId(current.charge);
@@ -285,6 +289,7 @@ export async function labelStatementSuggestions(
         fail(current.charge, error);
       }
     }
+    if (pauses[0]) throw pauses[0];
     if (!applied.size) break;
     targets = targets.flatMap((target) => {
       const key = chargeId(target.charge);
