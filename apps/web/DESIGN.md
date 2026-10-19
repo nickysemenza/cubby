@@ -103,7 +103,7 @@ styling. Share lower-level behavior and tokens where the contracts agree:
   stays available to ordinary callers. Exact-path lint exceptions cover only
   Overlay itself, the Dialog/Sheet implementations, cmdk's command presentation,
   the full photo viewer, the relationship graph inspector, the modeless entity
-  preview, the modeless MCP tool-detail inspector, and the shared `SidePanel`'s
+  preview, and the shared `SidePanel`'s
   below-xl sheet (the docked record panel keeps its J/K row stepping and resize
   handle when it becomes a sheet). New exceptions require a
   specialized interaction reason here, not a directory-wide exemption.

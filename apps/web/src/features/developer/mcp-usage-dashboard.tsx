@@ -8,13 +8,7 @@ import type {
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
-import {
-  type ReactNode,
-  useCallback,
-  useMemo,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { type ReactNode, useCallback, useMemo, useState } from "react";
 
 import type { InfiniteScrollControls } from "~/entity/hooks/use-infinite-table-list";
 import RTable from "~/entity/table/table";
@@ -33,13 +27,13 @@ import {
   createCubbyColumnHelper,
   useCubbyTable,
 } from "~/ui/data-table/table-features";
+import { SidePanel, SidePanelLayout } from "~/ui/overlays/side-panel";
 import { Alert, AlertDescription, AlertTitle } from "~/ui/primitives/alert";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/ui/primitives/card";
 import { Description } from "~/ui/primitives/description";
 import { Input } from "~/ui/primitives/input";
-import { Sheet, SheetContent, SheetTitle } from "~/ui/primitives/sheet";
 import { Spinner } from "~/ui/primitives/spinner";
 
 const windows: Array<{ label: string; value: McpUsageWindow }> = [
@@ -49,14 +43,6 @@ const windows: Array<{ label: string; value: McpUsageWindow }> = [
   { label: "180d", value: 180 },
   { label: "Lifetime", value: "lifetime" },
 ];
-const toolInspectorWidth = "(min-width: 1280px)";
-const isToolInspectorDocked = () =>
-  globalThis.window.matchMedia(toolInspectorWidth).matches;
-const subscribeToolInspectorWidth = (callback: () => void) => {
-  const media = globalThis.window.matchMedia(toolInspectorWidth);
-  media.addEventListener("change", callback);
-  return () => media.removeEventListener("change", callback);
-};
 
 const isNumber = (value: unknown): value is number => typeof value === "number";
 
@@ -709,12 +695,11 @@ export function McpUsageDashboard() {
     return filterAndSortMcpTools(data.tools, { search, status }, sort);
   }, [data, search, sort, status]);
   const selected = data?.tools.find((tool) => tool.toolName === selectedTool);
-
-  const wide = useSyncExternalStore(
-    subscribeToolInspectorWidth,
-    isToolInspectorDocked,
-    () => false,
-  );
+  const step = (direction: -1 | 1) => {
+    const index = tools.findIndex((tool) => tool.toolName === selectedTool);
+    const next = tools[index + direction];
+    if (index >= 0 && next) setSelectedTool(next.toolName);
+  };
 
   if (query.isLoading) return <Spinner />;
   if (query.error) {
@@ -732,15 +717,12 @@ export function McpUsageDashboard() {
       : `${((data.totals.errors / data.totals.calls) * 100).toFixed(1)}%`;
 
   const selectedDetail = selected ? (
-    <div className="space-y-4 p-4">
+    <div className="space-y-4 p-3">
+      {selected.description ? (
+        <Description>{selected.description}</Description>
+      ) : null}
       <Card>
-        <CardHeader>
-          <CardTitle className="font-mono">{selected.toolName}</CardTitle>
-          {selected.description ? (
-            <Description>{selected.description}</Description>
-          ) : null}
-        </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 pt-4">
           <ToolAnnotations tool={selected} />
           <div className="grid gap-4 md:grid-cols-4">
             <Metric label="Status" value={selected.status} />
@@ -854,7 +836,25 @@ export function McpUsageDashboard() {
 
       <UsageCharts data={data} />
 
-      <div className={selected ? "relative xl:pr-(--side-panel-width)" : "relative"}>
+      <SidePanelLayout
+        title="Selected tool detail"
+        onClose={() => setSelectedTool(null)}
+        panel={
+          selected ? (
+            <SidePanel
+              label="Selected tool detail"
+              eyebrow="MCP tool"
+              title={<span className="font-mono">{selected.toolName}</span>}
+              code={selected.toolName}
+              onClose={() => setSelectedTool(null)}
+              onPrev={() => step(-1)}
+              onNext={() => step(1)}
+            >
+              {selectedDetail}
+            </SidePanel>
+          ) : null
+        }
+      >
         <Card>
           <CardHeader>
             <CardTitle>Tool pruning worklist</CardTitle>
@@ -891,49 +891,7 @@ export function McpUsageDashboard() {
             />
           </CardContent>
         </Card>
-
-        {selected && wide ? (
-          <aside
-            aria-label="Selected tool detail"
-            className="absolute inset-y-0 right-0 w-(--side-panel-width) overflow-y-auto border-l border-border bg-background"
-          >
-            <Button
-              variant="ghost"
-              size="sm"
-              className="m-3"
-              onClick={() => setSelectedTool(null)}
-            >
-              Close
-            </Button>
-            {selectedDetail}
-          </aside>
-        ) : null}
-        {selected && !wide ? (
-          <Sheet
-            open
-            onOpenChange={(open) => {
-              if (!open) setSelectedTool(null);
-            }}
-          >
-            <SheetContent
-              side="right"
-              showCloseButton={false}
-              className="!w-[25rem] !max-w-[calc(100vw-2rem)] overflow-y-auto p-0"
-            >
-              <SheetTitle className="sr-only">Selected tool detail</SheetTitle>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="m-3"
-                onClick={() => setSelectedTool(null)}
-              >
-                Close
-              </Button>
-              {selectedDetail}
-            </SheetContent>
-          </Sheet>
-        ) : null}
-      </div>
+      </SidePanelLayout>
 
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-mono text-xs tracking-wide text-muted-foreground uppercase">
