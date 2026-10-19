@@ -42,8 +42,111 @@ function sameReviewSet(
   );
 }
 
+const reviewedRefundAssociations = (
+  db: Database,
+  input: { emailId: EmailId; checksum: string },
+) =>
+  getDb(db)
+    .select()
+    .from(emailFinancialAssociation)
+    .where(
+      and(
+        eq(emailFinancialAssociation.emailId, input.emailId),
+        eq(emailFinancialAssociation.evidenceChecksum, input.checksum),
+      ),
+    );
+
+async function assertRefundAllocationsExplain(
+  db: Database,
+  transactions: Pick<
+    typeof financialTransaction.$inferSelect,
+    "id" | "amount"
+  >[],
+  purchaseIds: PurchaseId[],
+) {
+  const allocations = await getDb(db)
+    .select()
+    .from(financialTransactionAllocation)
+    .where(
+      and(
+        inArray(
+          financialTransactionAllocation.transactionId,
+          transactions.map((row) => row.id),
+        ),
+        notDeleted(financialTransactionAllocation),
+      ),
+    )
+    .orderBy(
+      financialTransactionAllocation.transactionId,
+      financialTransactionAllocation.purchaseId,
+    )
+    .for("update");
+  const allocatedPurchases = new Set(allocations.map((row) => row.purchaseId));
+  if (
+    allocatedPurchases.size !== purchaseIds.length ||
+    purchaseIds.some((id) => !allocatedPurchases.has(id)) ||
+    transactions.some(
+      (row) =>
+        allocations
+          .filter((allocation) => allocation.transactionId === row.id)
+          .reduce(
+            (sum, allocation) => sum + Math.round(allocation.amount * 100),
+            0,
+          ) !== Math.round(row.amount * 100),
+    )
+  )
+    throw new Error(
+      "The refund allocations must explain exactly the reviewed Purchases.",
+    );
+}
+
+/**
+ * A refunded Email's reviewed refund set must explain exactly the Purchases it
+ * links as refunded, whether or not this resolution carries a settlement:
+ * a later link cannot escape an earlier review, nor a review a subset of links.
+ */
+export async function reconcileMailRefundReview(
+  db: Database,
+  input: {
+    emailId: EmailId;
+    checksum: string;
+    purchaseIds: PurchaseId[];
+    review: MailSettlementReview | undefined;
+  },
+  actor: ActorContext,
+) {
+  if (input.review)
+    return recordMailFinancialReview(
+      db,
+      { ...input, review: input.review },
+      actor,
+    );
+  const existing = await reviewedRefundAssociations(db, input);
+  if (!existing.length) return;
+  const transactions = await getDb(db)
+    .select({
+      id: financialTransaction.id,
+      amount: financialTransaction.amount,
+    })
+    .from(financialTransaction)
+    .where(
+      and(
+        inArray(
+          financialTransaction.id,
+          existing.map((row) => row.transactionId),
+        ),
+        notDeleted(financialTransaction),
+      ),
+    )
+    .orderBy(financialTransaction.id)
+    .for("update");
+  if (transactions.length !== existing.length)
+    throw new Error("A reviewed refund transaction no longer exists.");
+  await assertRefundAllocationsExplain(db, transactions, input.purchaseIds);
+}
+
 /** Reviewed evidence only: existing settlement allocations remain the money authority. */
-export async function recordMailFinancialReview(
+async function recordMailFinancialReview(
   db: Database,
   input: {
     emailId: EmailId;
@@ -135,49 +238,8 @@ export async function recordMailFinancialReview(
     throw new Error(
       "The existing refund legs do not equal the reviewed credit amount.",
     );
-  const allocations = await tx
-    .select()
-    .from(financialTransactionAllocation)
-    .where(
-      and(
-        inArray(
-          financialTransactionAllocation.transactionId,
-          selected.map((row) => row.id),
-        ),
-        notDeleted(financialTransactionAllocation),
-      ),
-    )
-    .orderBy(
-      financialTransactionAllocation.transactionId,
-      financialTransactionAllocation.purchaseId,
-    )
-    .for("update");
-  const allocatedPurchases = new Set(allocations.map((row) => row.purchaseId));
-  if (
-    allocatedPurchases.size !== input.purchaseIds.length ||
-    input.purchaseIds.some((id) => !allocatedPurchases.has(id)) ||
-    transactions.some(
-      (row) =>
-        allocations
-          .filter((allocation) => allocation.transactionId === row.id)
-          .reduce(
-            (sum, allocation) => sum + Math.round(allocation.amount * 100),
-            0,
-          ) !== Math.round(row.amount * 100),
-    )
-  )
-    throw new Error(
-      "The refund allocations must explain exactly the reviewed Purchases.",
-    );
-  const existing = await tx
-    .select()
-    .from(emailFinancialAssociation)
-    .where(
-      and(
-        eq(emailFinancialAssociation.emailId, input.emailId),
-        eq(emailFinancialAssociation.evidenceChecksum, input.checksum),
-      ),
-    );
+  await assertRefundAllocationsExplain(db, transactions, input.purchaseIds);
+  const existing = await reviewedRefundAssociations(db, input);
   if (
     !sameReviewSet(
       existing,

@@ -157,6 +157,15 @@ function SearchBox({
 }
 
 /**
+ * The tiles' summary: the active filters MINUS matchState. The table footer
+ * reads its selected state's amount from this same query.
+ */
+const summaryQueryOptions = (filters: StatementRowFilters) =>
+  statementRow.summary.queryOptions({
+    filters: { ...filters, matchState: undefined },
+  });
+
+/**
  * Total / matched / unmatched / ignored counts plus the unmatched dollar
  * amount, computed over the active filters MINUS matchState — so the tiles
  * show the full breakdown regardless of which state the table is currently
@@ -172,13 +181,7 @@ function StatementRowSummary({
   matchState: MatchStateSearchValue;
   onSelectMatchState: (value: MatchStateSearchValue) => void;
 }) {
-  const summaryFilters = useMemo<StatementRowFilters>(
-    () => ({ ...filters, matchState: undefined }),
-    [filters],
-  );
-  const { data, isLoading, error } = useQuery(
-    statementRow.summary.queryOptions({ filters: summaryFilters }),
-  );
+  const { data, isLoading, error } = useQuery(summaryQueryOptions(filters));
 
   // A settled query with no data means it errored — `isLoading` alone would
   // leave this stuck on the skeleton forever instead of surfacing the error.
@@ -378,12 +381,10 @@ export function StatementRowList() {
   usePageCount(listQuery.data?.count);
 
   // The amount column's footer would otherwise sum only the loaded PAGE
-  // (createCurrencyColumn falls back to a client-side reduction) — a second,
-  // cheap aggregate query over the same (matchState-inclusive) filters gives
-  // it the true full-filtered-set total instead.
-  const footerTotalsQuery = useQuery(
-    statementRow.summary.queryOptions({ filters }),
-  );
+  // (createCurrencyColumn falls back to a client-side reduction). The tiles'
+  // summary already splits the full-filtered-set total by match state, so the
+  // footer reads the selected state's share from that same request.
+  const summaryQuery = useQuery(summaryQueryOptions(filters));
 
   const columns = useMemo(
     () =>
@@ -548,7 +549,12 @@ export function StatementRowList() {
   );
 
   const totalCount = listQuery.data?.count ?? 0;
-  const amountTotal = footerTotalsQuery.data?.amountTotal;
+  const summary = summaryQuery.data;
+  const amountTotal =
+    summary &&
+    (filters.matchState
+      ? summary[`${filters.matchState}Amount`]
+      : summary.amountTotal);
   const serverTotals = useMemo(
     () =>
       amountTotal === undefined

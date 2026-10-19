@@ -17,6 +17,8 @@ import {
   runFailureText,
 } from "./runs/lifecycle";
 
+const DISCOVERY_POLICY_WAITS = 30;
+
 export class AiRefreshWorkflow extends WorkflowEntrypoint<
   Env,
   WorkflowRunParams
@@ -42,14 +44,16 @@ export class AiRefreshWorkflow extends WorkflowEntrypoint<
           : false;
       });
       if (discovery) {
+        let policyWaits = 0;
         for (let page = 0; page < 128; page++) {
+          // true: more pages; false: done; null: this isolate's policy differs from the activation.
           const more = await step.do(
             `discover:${page}`,
             {
               retries: { limit: 2, delay: "5 seconds", backoff: "exponential" },
               timeout: "15 minutes",
             },
-            () =>
+            (): Promise<boolean | null> =>
               withDb(async (db) => {
                 const { readAiRefreshActivation, readAiDiscoveryCursor } =
                   await import("../ai/repo/ai-refresh");
@@ -67,9 +71,7 @@ export class AiRefreshWorkflow extends WorkflowEntrypoint<
                     await import("../domains/run/service/ai-refresh")
                   ).recoverAiRefresh(db))
                 )
-                  throw new Error(
-                    "Discovery Workflow policy differs from activated policy",
-                  );
+                  return null;
                 const cursor = await readAiDiscoveryCursor(db);
                 return (
                   cursor.revision === current.revision &&
@@ -82,7 +84,16 @@ export class AiRefreshWorkflow extends WorkflowEntrypoint<
                 );
               }),
           );
-          if (!more) break;
+          if (more === false) break;
+          if (more === null) {
+            // Deploy overlap: the activation row matches this isolate once the
+            // Gateway observation commits, or its revision bump ends this discovery.
+            if (++policyWaits > DISCOVERY_POLICY_WAITS)
+              throw new Error(
+                "Discovery Workflow policy differs from activated policy",
+              );
+            await step.sleep(`await-policy:${page}`, "1 minute");
+          }
           if (page === 127) {
             await step.do("continue-discovery", () =>
               withDb(async (db) => {

@@ -48,7 +48,9 @@ Discovery advances durable cursors through at most 200 field targets and 400
 eligible Emails per invocation; Email execution rosters still cap at 200.
 A new policy resets the scan cursor and its discovery Workflow checkpoints
 bounded pages until both independent streams finish. Cursor writes are fenced
-by activation revision, so an old page cannot overwrite a newer reset.
+by activation revision, so an old page cannot overwrite a newer reset. During
+deploy overlap a discovery page whose Worker policy differs from the activation
+sleeps and retries (up to 30 minutes) instead of failing the Run.
 There is no frequent polling cron. Request nudges stay in Durable Object storage
 when the deployment version is already observed. The nightly cron is the idle
 reconciliation exception. An alarm verifies and retries an interrupted startup handoff; external
@@ -68,8 +70,10 @@ app-open recovery reconcile stranded Runs and relevant evidence/option changes.
 The singleton uses its own compiled manifest, never a caller-supplied version;
 a request from an old Worker cannot reinstall that Worker's policy. Saved field results resume
 without another inference. Missing evidence, Mail import switched off and
-genuine ambiguity wait for a relevant fingerprint change; switching Mail import
-on creates fresh eligible work. Admission waits defer without consuming inference retries.
+genuine ambiguity wait for a relevant fingerprint change. Rediscovery reopens a
+blocked or obsolete target under its own work key (at most three times), moving
+it to a running Run; switching Mail import on therefore resumes the blocked
+Emails. Admission waits defer without consuming inference retries.
 Cancelled Runs remain stopped. Exhausted failures require Run retry; replacement
 evaluations retain the earlier failed rows and link their receipts.
 

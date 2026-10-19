@@ -261,8 +261,16 @@ export const assessmentReviewInput = feedbackEvent
     operationId: z
       .string()
       .min(1)
-      .regex(
-        /^(?!(?:command-application|receipt|application|merge|email-accuracy|automatic):)(?!(?:decision|resolution|saved-application|saved-correction)$)/,
+      // A refine, not a lookahead `.regex`: Codex's MCP validator has no
+      // lookaround, so a published lookahead pattern rejects every id.
+      .refine(
+        (id) =>
+          !/^(?:command-application|receipt|application|merge|email-accuracy|automatic):/.test(
+            id,
+          ) &&
+          !/^(?:decision|resolution|saved-application|saved-correction)$/.test(
+            id,
+          ),
         "Operation ID uses a reserved internal receipt namespace",
       ),
     assessmentId: assessmentChildHandle.optional(),

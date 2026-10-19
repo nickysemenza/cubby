@@ -619,8 +619,7 @@ async function acquireEligible(
         })
       : async () =>
           (await routeGmailMessage(message, normalized, ports.triage)).decision,
-    !relevanceModelRuns(input, executionPolicy) ||
-      (input.refreshSkipRelevance && prior?.checksum === checksum)
+    !relevanceModelRuns(input, executionPolicy)
       ? null
       : () =>
           interpretMailRelevance(
@@ -855,7 +854,6 @@ export async function ingestGmailMessages(
      */
     reclassify?: boolean;
     refreshStage?: "mailbox-triage" | "mailbox-relevance";
-    refreshSkipRelevance?: boolean;
     refreshDependencies?: AiProvenance["dependencies"];
     evaluation?: { id: string; token: string; reclassification?: boolean };
     storage?: OrderMailAttachmentStorage;

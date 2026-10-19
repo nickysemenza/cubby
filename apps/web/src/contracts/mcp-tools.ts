@@ -53,9 +53,9 @@ import {
   slimUsdaFood,
   slimUsdaFoodListItem,
 } from "~/contracts/mcp-projections";
+import { playbookContract } from "~/contracts/mcp.contract";
 import { mealContract } from "~/contracts/meal.contract";
 import { photoImportContract } from "~/contracts/photo-import.contract";
-import { playbookContract } from "~/contracts/playbook.contract";
 import {
   problemReportWantsCounts,
   problemsContract,
@@ -597,7 +597,7 @@ export const MCP_TOOLS = defineMcpTools({
       summary: mcpAction({
         op: statementRowContract.ops.summary,
         description:
-          "Count and total statement rows by match state for a filter — total, matched, unmatched, ignored, superseded, the unmatched dollar amount, and unmatchedCharges (distinct charges behind the unmatched observations). Size the remaining drift before working it, or confirm a bulk disposition landed.",
+          "Count and total statement rows by match state for a filter — total, matched, unmatched, ignored, superseded, the dollar amount in total and per match state, and unmatchedCharges (distinct charges behind the unmatched observations). Size the remaining drift before working it, or confirm a bulk disposition landed.",
       }),
       imports: mcpAction({
         op: statementRowContract.ops.imports,
@@ -676,6 +676,7 @@ export const MCP_TOOLS = defineMcpTools({
       }),
       mail_triage_preview: mcpAction({
         op: purchaseImportContract.ops.mailTriagePreview,
+        modelBacked: true,
         description:
           "Preview the full deployed classification of one retained Email's Gmail original: Jev/Clef triage, then Luna with bounded image evidence only when uncertain. Records only a diagnostic Run and model usage; never changes Relevance, observations or retained content. Pass decisionModel to pin Jev or Clef; omitted samples the live split. Returns the final classification/model, triage result/view, fallback result, image evidence/refusal diagnostics, Run, elapsed time and priced usage (unknown costs stay null).",
       }),

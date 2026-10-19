@@ -15,6 +15,7 @@ import {
   gt,
   inArray,
   isNull,
+  lt,
   notInArray,
   or,
   sql,
@@ -50,15 +51,15 @@ export type FieldRefreshCursor = Pick<
 const jsonSnapshot = (value: unknown) =>
   z.json().parse(JSON.parse(JSON.stringify(value)));
 
-async function insertTarget(
-  db: Database,
-  runId: string,
-  target: AiEvaluationTarget,
-  provenance: AiProvenance,
-  snapshot: unknown,
-  blockedReason?: string,
-) {
-  const workKey = await sha256Hex(
+type EvaluationTargetInput = {
+  target: AiEvaluationTarget;
+  provenance: AiProvenance;
+  snapshot: unknown;
+  blockedReason?: string;
+};
+
+const targetWorkKey = ({ target, provenance }: EvaluationTargetInput) =>
+  sha256Hex(
     JSON.stringify({
       entity: target.entity,
       recordId: target.recordId,
@@ -66,10 +67,51 @@ async function insertTarget(
       provenance: { ...provenance, model: null },
     }),
   );
+
+// Work that settled without publishing (a declined publication, Mail import
+// off, a fenced attempt) reopens under its own work key when discovery finds it
+// again. The bound stops a persistently declined source from re-spending every
+// pass; failed and cancelled work stays with the operator's retry.
+const MAX_REOPENS = 3;
+const reopenable = () =>
+  and(
+    inArray(aiEvaluation.state, ["blocked", "obsolete"]),
+    lt(aiEvaluation.restarts, MAX_REOPENS),
+  );
+
+/** Whether any target would insert a new row or reopen a settled one. */
+async function hasAdmissibleTarget(
+  db: Database,
+  targets: readonly EvaluationTargetInput[],
+) {
+  const keys = await Promise.all(targets.map(targetWorkKey));
+  const existing = keys.length
+    ? await getDb(db)
+        .select({
+          workKey: aiEvaluation.workKey,
+          reopenable: sql<boolean>`${reopenable()}`,
+        })
+        .from(aiEvaluation)
+        .where(inArray(aiEvaluation.workKey, keys))
+    : [];
+  return targets.some((item, index) => {
+    const row = existing.find((entry) => entry.workKey === keys[index]);
+    return !row || (row.reopenable && !item.blockedReason);
+  });
+}
+
+async function insertTarget(
+  db: Database,
+  runId: string,
+  item: EvaluationTargetInput,
+) {
+  const { target, provenance, blockedReason } = item;
+  const owner = runEntityId.parse(runId);
+  const snapshot = jsonSnapshot(item.snapshot);
   const inserted = await getDb(db)
     .insert(aiEvaluation)
     .values({
-      runId: runEntityId.parse(runId),
+      runId: owner,
       feature:
         target.kind === "connection"
           ? "entity-connections"
@@ -78,10 +120,10 @@ async function insertTarget(
             : target.kind === "product"
               ? "product-identity"
               : "mailbox-triage",
-      workKey,
+      workKey: await targetWorkKey(item),
       target,
       provenance,
-      snapshot: jsonSnapshot(snapshot),
+      snapshot,
       ...(blockedReason
         ? {
             state: "blocked" as const,
@@ -90,7 +132,27 @@ async function insertTarget(
           }
         : {}),
     })
-    .onConflictDoNothing()
+    .onConflictDoUpdate({
+      target: aiEvaluation.workKey,
+      set: {
+        runId: owner,
+        target,
+        provenance,
+        snapshot,
+        state: "queued",
+        attempts: 0,
+        runAttempt: 0,
+        attemptToken: null,
+        deadlineAt: null,
+        nextAttemptAt: null,
+        result: null,
+        receipt: null,
+        error: null,
+        restarts: sql`${aiEvaluation.restarts} + 1`,
+        updatedAt: new Date(),
+      },
+      setWhere: blockedReason ? sql`false` : reopenable(),
+    })
     .returning({ id: aiEvaluation.id });
   return inserted.length;
 }
@@ -98,26 +160,16 @@ async function insertTarget(
 /**
  * Adds evaluation rows to an existing Run. A target whose work key (record,
  * field and input fingerprint) was already evaluated or is in flight under
- * any Run is not inserted again; the count is what is new.
+ * any Run is not inserted again, while a reopenable settled one moves into
+ * this Run; the count is what is new or reopened.
  */
 export async function insertEvaluationTargets(
   db: Database,
   runId: string,
-  targets: readonly {
-    target: AiEvaluationTarget;
-    provenance: AiProvenance;
-    snapshot: unknown;
-  }[],
+  targets: readonly EvaluationTargetInput[],
 ) {
   let inserted = 0;
-  for (const item of targets)
-    inserted += await insertTarget(
-      db,
-      runId,
-      item.target,
-      item.provenance,
-      item.snapshot,
-    );
+  for (const item of targets) inserted += await insertTarget(db, runId, item);
   return inserted;
 }
 
@@ -126,31 +178,37 @@ export async function scheduleEvaluationRun(
   db: Database,
   actor: Parameters<typeof ensureRun>[1],
   input: Parameters<typeof ensureRun>[2],
-  targets: {
-    target: AiEvaluationTarget;
-    provenance: AiProvenance;
-    snapshot: unknown;
-    blockedReason?: string;
-  }[],
+  targets: EvaluationTargetInput[],
 ) {
   return withTransactionDatabase(db, async (tx) => {
-    const runId = await ensureRun(tx, actor, input);
+    const lockRun = async (id: string) =>
+      (
+        await getDb(tx)
+          .select({ status: run.status, failureCode: run.failureCode })
+          .from(run)
+          .where(eq(run.id, runEntityId.parse(id)))
+          .for("no key update")
+      )[0];
+    let runId = await ensureRun(tx, actor, input);
     // Work and its owner become visible together, before recovery can launch a Workflow.
-    await getDb(tx)
-      .select({ id: run.id })
-      .from(run)
-      .where(eq(run.id, runId))
-      .for("no key update");
+    let owner = await lockRun(runId);
+    // A settled Run never relaunches automatically, so reopened work continues in a successor.
+    if (input.status !== "completed" && input.clientKey)
+      for (
+        let generation = 1;
+        (owner?.status === "completed" ||
+          owner?.failureCode === "user_cancelled") &&
+        (await hasAdmissibleTarget(tx, targets));
+        generation++
+      ) {
+        runId = await ensureRun(tx, actor, {
+          ...input,
+          clientKey: `${input.clientKey}:reopen:${generation}`,
+        });
+        owner = await lockRun(runId);
+      }
     let inserted = 0;
-    for (const item of targets)
-      inserted += await insertTarget(
-        tx,
-        runId,
-        item.target,
-        item.provenance,
-        item.snapshot,
-        item.blockedReason,
-      );
+    for (const item of targets) inserted += await insertTarget(tx, runId, item);
     if (!inserted)
       await getDb(tx)
         .update(run)

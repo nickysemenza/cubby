@@ -1,6 +1,7 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
+import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { getPurchaseAgentQueue } from "~/server/cf-env";
@@ -36,7 +37,8 @@ export async function recordRunDispatchAttempt(
     .update(runTable)
     .set({
       dispatchAttempts: sql`${runTable.dispatchAttempts} + 1`,
-      dispatchError: input.error?.slice(0, 2_000) ?? null,
+      dispatchError:
+        input.error === undefined ? null : scrubErrorMessage(input.error),
       status: input.error ? "dispatch_failed" : "running",
       failureCode: input.error ? "dispatch_failed" : null,
       endedAt: input.error ? new Date() : null,

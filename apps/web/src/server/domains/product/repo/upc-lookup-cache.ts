@@ -13,7 +13,7 @@ import { count, ilike, inArray, isNotNull, or, sql } from "drizzle-orm";
 import {
   productSourceSchema,
   type UPCLookupResponse,
-} from "~/contracts/upc.schemas";
+} from "~/contracts/upc.contract";
 import { type Database } from "~/server/db/database";
 import { ilikeContains } from "~/server/db/helpers/predicates";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";

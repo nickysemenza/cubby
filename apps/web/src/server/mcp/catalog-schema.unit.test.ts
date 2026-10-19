@@ -938,4 +938,25 @@ describe("MCP catalog publication without services", () => {
     }
     expect(oversized).toEqual([]);
   });
+
+  // Codex validates `pattern` with a regex engine that has no lookaround, so a
+  // lookaround pattern rejects every value there. Keep such rules in a refine.
+  it("publishes only lookaround-free patterns", async () => {
+    const lookaround: string[] = [];
+    const visit = (node: JSONType, path: string) => {
+      if (Array.isArray(node)) {
+        node.forEach((item, index) => visit(item, `${path}[${index}]`));
+        return;
+      }
+      if (!isObject(node)) return;
+      for (const [key, value] of Object.entries(node)) {
+        if (key === "pattern" && isString(value) && /\(\?<?[=!]/.test(value))
+          lookaround.push(`${path}: ${value}`);
+        else visit(value, `${path}.${key}`);
+      }
+    };
+    for (const tool of (await listMcpToolCatalog()).tools)
+      visit(z.json().parse(tool.inputSchema), tool.name);
+    expect(lookaround).toEqual([]);
+  });
 });

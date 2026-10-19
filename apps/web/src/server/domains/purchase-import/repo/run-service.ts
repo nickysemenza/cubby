@@ -127,7 +127,7 @@ import {
 } from "~/server/domains/photo-import/repo/photo-import-commit";
 import { finalizeImportedImages } from "~/server/domains/photo-import/repo/photo-import-finalize";
 import {
-  readMailRunSources,
+  readMailRunRoster,
   transferMailRunSources,
 } from "~/server/domains/purchase-import/repo/mail-run-membership";
 import { getRunHeaderByShortcode } from "~/server/domains/run/repo/run";
@@ -149,9 +149,10 @@ async function selectNonPhotoTargets(
   client: DrizzleClient | DrizzleTransaction,
   runId: RunId,
 ) {
-  const mail = await readMailRunSources(client, runId);
+  const mail = await readMailRunRoster(client, runId);
   const receipts = await listRunTargetOutcomes(client, [runId]);
-  if (mail.length)
+  // An erased Mail import Run has no targets; its outcome receipts never stand in for the roster.
+  if (mail)
     return mail.map(({ email, orderMailId, checksum, position, owned }) => {
       const outcome = receipts
         .filter(
