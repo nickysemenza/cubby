@@ -350,4 +350,17 @@ describe("step-ledger Runs", () => {
     expect(await recoverStepRuns(ctx.db, launcher, [old])).toBe(0);
     expect(await readRun(old)).toMatchObject({ status: "failed" });
   });
+
+  // Failure mode (#2762 rebase): a funding stop inside a step's AI call ended
+  // the maintenance Run (needs_review), taking it from its own Workflow.
+  it("leaves a funding stop inside a step to the step engine", async () => {
+    const { id } = await startRun("scheduled");
+    const { pauseExecutionRun } =
+      await import("~/server/domains/run/repo/execution-context");
+    await pauseExecutionRun(ctx.db, id, "Waiting for free AI capacity");
+    expect(await readRun(id)).toMatchObject({
+      status: "running",
+      endedAt: null,
+    });
+  });
 });

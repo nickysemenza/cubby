@@ -1,9 +1,13 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import type { RunId } from "@cubby/schemas/identifiers";
-import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
+import {
+  runPurpose,
+  runStatus,
+  STEP_RUN_PURPOSES,
+} from "@cubby/schemas/run-fields";
 import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, notInArray, sql } from "drizzle-orm";
 
 import type { AiBudgetExhaustedError } from "~/server/ai/budget";
 import { getAiGatewayEgress } from "~/server/cf-env";
@@ -66,7 +70,18 @@ export async function pauseExecutionRun(
       failureCode: "execution_limit",
       dispatchError: message,
     })
-    .where(and(eq(run.id, runId), eq(run.status, "running"), notDeleted(run)));
+    .where(
+      and(
+        eq(run.id, runId),
+        eq(run.status, "running"),
+        // A step-ledger Run (maintenance, Sweep) pauses through its engine:
+        // the typed error reaches the step driver, which pauses the step at
+        // the resume time and keeps the step's cursor. Ending it here would
+        // take the Run away from its own Workflow mid-step.
+        notInArray(run.purpose, [...STEP_RUN_PURPOSES]),
+        notDeleted(run),
+      ),
+    );
 }
 
 const RESUME_MARGIN_MS = 60_000;
