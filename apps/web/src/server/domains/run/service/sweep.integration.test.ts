@@ -298,6 +298,30 @@ describe("Sweeps", () => {
       })
       .where(eq(run.id, childRunId as never));
 
+  // Failure mode (#2722 review): a scheduled Sweep's connection child was
+  // created manual, so its evaluations paid instead of waiting for credit.
+  it("makes a scheduled Sweep's connection child background work", async () => {
+    await activateAiRefresh(ctx.db, "synthetic-sweep-background", {
+      enabled: true,
+    });
+    await createRepoEntity(ctx, "project", { name: "Synthetic gutter repair" });
+    const runId = await startSweep(
+      ctx.db,
+      ctx.actor,
+      {
+        trigger: "scheduled",
+        families: [
+          { family: "recommendation", scope: { entityKinds: ["project"] } },
+        ],
+      },
+      launcher,
+    );
+    expect(await drive(runId)).toBe("wait");
+    const childRunId = await childOf(runId);
+    const { isBackgroundRun } = await import("~/server/ai/funding");
+    expect(await isBackgroundRun(ctx.db, childRunId)).toBe(true);
+  });
+
   // Failure mode: a field Sweep step finishes before its per-entity child
   // Runs do, or loses their counts.
   it("runs one field-sweep child per entity and reports its totals", async () => {

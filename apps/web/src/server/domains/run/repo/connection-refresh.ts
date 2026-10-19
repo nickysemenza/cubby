@@ -110,13 +110,15 @@ export async function ensureConnectionSweepRun(
   db: Database,
   actor: Parameters<typeof ensureRun>[1],
   parentRunId: RunId,
+  /** The parent's: a scheduled Sweep's child is background and never pays. */
+  trigger: "scheduled" | "manual",
 ) {
   const activation = await readAiRefreshActivation(db);
   if (!activation?.enabled || !activation.manifest["entity-connections"])
     return null;
   return ensureRun(db, actor, {
     purpose: "ai_refresh",
-    trigger: "manual",
+    trigger,
     status: "running",
     clientKey: `sweep:${parentRunId}:recommendation`,
     parentRunId,

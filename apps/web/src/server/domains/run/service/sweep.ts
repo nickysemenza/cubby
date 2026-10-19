@@ -222,7 +222,7 @@ async function statementPage(
       return {
         kind: "paused",
         reason: error.message,
-        until: new Date(error.status.windowEnd),
+        until: new Date(error.resumeAt),
       };
     throw error;
   }
@@ -271,7 +271,12 @@ async function connectionPage(
     ? runEntityId.parse(cursor.childRunId)
     : null;
   if (!childRunId) {
-    childRunId = await ensureConnectionSweepRun(db, actorOf(run), run.id);
+    childRunId = await ensureConnectionSweepRun(
+      db,
+      actorOf(run),
+      run.id,
+      run.trigger === "scheduled" ? "scheduled" : "manual",
+    );
     if (!childRunId) {
       // An unattended pass with AI refresh off has nothing to evaluate; a
       // member's Sweep reports why instead of finishing quietly.
