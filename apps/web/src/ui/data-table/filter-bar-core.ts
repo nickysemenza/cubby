@@ -9,6 +9,7 @@ import type { NumberRange } from "@cubby/shared";
 import type { ColumnFiltersState } from "@tanstack/react-table";
 
 import { colorizeSelectOptions } from "~/lib/select-options";
+import type { PickerRecordSource } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import type { FilterConfig } from "~/ui/data-table/table-meta";
 
@@ -41,6 +42,8 @@ export type FilterFieldConfig = {
   onActivate?: (selectedIds?: readonly string[]) => void;
   onSearchChange?: (query: string) => void;
   isLoading?: boolean;
+  /** A roster of one entity's records: its pickers run in record mode. */
+  records?: PickerRecordSource;
 };
 
 export type Filter = {
@@ -269,5 +272,6 @@ export function barFieldFromConfig(
     onActivate: config.onActivate,
     onSearchChange: config.onSearchChange,
     isLoading: config.isLoading,
+    records: config.records,
   };
 }

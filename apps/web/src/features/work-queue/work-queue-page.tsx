@@ -94,6 +94,7 @@ import { useBulkActions } from "~/ui/data-table/use-bulk-actions";
 import { useTableConfig } from "~/ui/data-table/use-table-config";
 import {
   deferredFilterOptionSource,
+  deferredRosterControls,
   type RuntimeFilterOptionSource,
 } from "~/ui/hooks/filter-option-types";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
@@ -509,9 +510,7 @@ function queueColumns(
             placeholder: "Filter vendor",
             filterType: "multiselect",
             options: vendorOptions?.options ?? [],
-            onActivate: vendorOptions?.onActivate,
-            onSearchChange: vendorOptions?.onSearchChange,
-            isLoading: vendorOptions?.isLoading,
+            ...deferredRosterControls(vendorOptions),
           },
         }),
         cell: ({ row }) => <VendorLink vendor={row.original.vendor} />,

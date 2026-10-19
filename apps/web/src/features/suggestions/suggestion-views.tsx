@@ -32,7 +32,10 @@ import {
   type FilterConfig,
 } from "~/ui/data-table/table-meta";
 import type { RuntimeFilterOptions } from "~/ui/hooks/filter-option-types";
-import { deferredFilterOptionSource } from "~/ui/hooks/filter-option-types";
+import {
+  deferredFilterOptionSource,
+  deferredRosterControls,
+} from "~/ui/hooks/filter-option-types";
 import { NoneValue } from "~/ui/primitives/none-value";
 
 import { AuthorizedBy, AutomaticWrongCell } from "./automatic-rules";
@@ -535,9 +538,7 @@ function statementColumns(
       placeholder,
       filterType: "multiselect",
       options: source?.options ?? [],
-      onActivate: source?.onActivate,
-      onSearchChange: source?.onSearchChange,
-      isLoading: source?.isLoading,
+      ...deferredRosterControls(source),
     };
   };
   return createCubbyColumnCollection<Row>((add) => {

@@ -1,6 +1,8 @@
 import { entityManifest } from "@cubby/schemas/entity-manifest";
 
 import { entityLabel } from "~/entity/entities";
+import { detailEntities } from "~/entity/generated/entity-details.gen";
+import { listEntities } from "~/entity/generated/entity-lists.gen";
 import type { PickerEntity } from "~/ui/combobox/combobox-types";
 import {
   Picker as ValuePicker,
@@ -25,10 +27,20 @@ export type RecordPickerProps<TId extends string = string> = WithEntity<
   ValueRecordPickerProps<TId>
 >;
 
+const pickerEntities = new Set<string>(
+  listEntities.filter((entity) =>
+    detailEntities.some((candidate) => candidate === entity),
+  ),
+);
+
+/** Whether a reference target can be picked as records (has a list and a detail read). */
+export const isPickerEntity = (entity: string): entity is PickerEntity =>
+  pickerEntities.has(entity);
+
 const sources = new Map<PickerEntity, PickerRecordSource>();
 
 /** An entity's record source: its noun, its shortcode prefix, and selected-code resolution. */
-function recordSource(entity: PickerEntity): PickerRecordSource {
+export function recordSource(entity: PickerEntity): PickerRecordSource {
   const known = sources.get(entity);
   if (known) return known;
   const source: PickerRecordSource = {

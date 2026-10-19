@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { CURRENT_MEMBER_FILTER, humanize } from "@cubby/shared";
 
+import { isPickerEntity, recordSource } from "~/entity/picker/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import {
   barFieldFromConfig,
@@ -9,6 +10,7 @@ import {
 import type { FilterConfig } from "~/ui/data-table/table-meta";
 import {
   deferredFilterOptionSource,
+  deferredRosterControls,
   filterOptionItems,
   type RuntimeFilterOptions,
 } from "~/ui/hooks/filter-option-types";
@@ -186,9 +188,13 @@ const specFilterConfig = (
     subtree: subtreeControl(spec, specs),
     dateRange: spec.range && !spec.range.number ? true : undefined,
     numberRange: spec.range?.number,
-    onActivate: deferred?.onActivate,
-    onSearchChange: deferred?.onSearchChange,
-    isLoading: deferred?.isLoading,
+    ...deferredRosterControls(deferred),
+    // A static reference roster (a graph picklist) picks records too.
+    records:
+      deferred?.records ??
+      (spec.referenceEntity && isPickerEntity(spec.referenceEntity)
+        ? recordSource(spec.referenceEntity)
+        : undefined),
   };
 };
 

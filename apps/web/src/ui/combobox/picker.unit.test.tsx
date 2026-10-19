@@ -14,6 +14,7 @@ import { Picker } from "~/entity/picker/picker";
 
 import type { ComboboxItem } from "./combobox-types";
 import { matchesPickerItem } from "./picker";
+import { pickerOptionItem } from "./picker-option";
 
 // Record pickers read stored codes' records through React Query.
 function render(ui: ReactElement, client = new QueryClient()) {
@@ -90,6 +91,19 @@ describe("matchesPickerItem", () => {
       expect(matchesPickerItem(ITEMS[0]!, query)).toBe(true);
     },
   );
+});
+
+describe("pickerOptionItem", () => {
+  // Regression: a filter roster keyed by shortcodes didn't match a pasted
+  // code, because option rows never carried their value as a shortcode.
+  it("matches a pasted shortcode against a record roster's option", () => {
+    const row = pickerOptionItem({ value: "FAC-4K7M", label: "Example card" });
+    expect(matchesPickerItem(row, " fac-4k7m ")).toBe(true);
+    expect(pickerOptionItem({ value: "pending", label: "Pending" })).toEqual({
+      id: "pending",
+      name: "Pending",
+    });
+  });
 });
 
 describe("Picker records", () => {
