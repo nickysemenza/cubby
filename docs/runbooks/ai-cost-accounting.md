@@ -89,31 +89,3 @@ amounts. Only exact zero is displayed as zero. Rounded currency cells and AI
 costs expose the full stored decimal amount on hover or keyboard focus. Table
 hover uses the shared full-value spill, while AI tooltips retain comparison
 coverage and price provenance.
-
-## Expand/contract rollout
-
-Follow [production migrations](production-migrations.md) with one exclusive
-migration owner. Apply through `0051_ai_cost_accounting_expand`, verify all
-retained rows, original charges, and unrelated household data, then deploy the
-matching code. While old writers remain deployed, new rows can still have null
-`costEvidence`: verify preserved expanded rows separately and count these late
-arrivals, rather than treating live-table fingerprint changes as data loss.
-Retain per-table aggregate fingerprints and compare unrelated household tables.
-After old in-flight writers settle, apply through
-`0054_ai_cost_accounting_contract`; it locks the legacy source while preserving late rows and removing the old
-column. Read back the catalog and preserved evidence.
-
-After the matching deployment and contract migration, preview the historical
-comparison reconstruction, apply it, then repeat to verify zero new candidates:
-
-```sh
-pnpm --filter @cubby/web db:backfill-ai-costs --target=production
-pnpm --filter @cubby/web db:backfill-ai-costs --target=production --apply
-pnpm --filter @cubby/web db:backfill-ai-costs --target=production --apply
-```
-
-The command requires the explicit direct production URL, captures one catalog
-per invocation, and reports aggregate counts only. Preview rolls back; applying
-changes only historical comparison prices and their evidence, never recorded
-charges. Writes are batched to avoid a database round trip per historical row;
-preview, atomic rollback, and replay guards are the same. A catalog outage refuses the reconstruction.
