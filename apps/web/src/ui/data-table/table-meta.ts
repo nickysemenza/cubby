@@ -203,7 +203,7 @@ export type ColumnValueKind =
   | "boolean";
 
 /** A Group by choice the table's header menu can offer for its column. */
-export interface TableGroupChoice {
+interface TableGroupChoice {
   key: string;
   /** The column the choice groups by; its header offers "Group by". */
   columnId: string;

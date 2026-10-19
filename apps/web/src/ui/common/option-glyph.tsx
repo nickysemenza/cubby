@@ -164,7 +164,7 @@ const loaded = new Map<string, Icon>(EAGER);
 const pending = new Map<string, Promise<Icon | null>>();
 
 /** Resolves a glyph once; later renders read the cache synchronously. */
-export function loadOptionGlyph(name: string): Promise<Icon | null> {
+function loadOptionGlyph(name: string): Promise<Icon | null> {
   const ready = loaded.get(name);
   if (ready) return Promise.resolve(ready);
   const inFlight = pending.get(name);

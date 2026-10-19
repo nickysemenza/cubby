@@ -415,17 +415,16 @@ export function useEntityList<
   const tableGrouping = useMemo(
     () =>
       onGroupByChange && {
-        choices: generatedEntityListFields[entity].grouping.flatMap(
-          (choice) =>
-            choice.reason === null && choice.filter
-              ? [
-                  {
-                    key: choice.key,
-                    columnId: choice.filter.columnId,
-                    label: choice.label,
-                  },
-                ]
-              : [],
+        choices: generatedEntityListFields[entity].grouping.flatMap((choice) =>
+          choice.reason === null && choice.filter
+            ? [
+                {
+                  key: choice.key,
+                  columnId: choice.filter.columnId,
+                  label: choice.label,
+                },
+              ]
+            : [],
         ),
         active: groupChoice?.key ?? null,
         onChange: onGroupByChange,

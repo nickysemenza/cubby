@@ -641,8 +641,8 @@
   /* Compact chrome is sized for fine pointers; touch gets room for 44px
      targets so rail and command-band controls never overflow their frame. */
   :root {
-  /* The docked side panel's width; the panel's resize handle overrides it. */
-  --side-panel-width: 25rem;
+    /* The docked side panel's width; the panel's resize handle overrides it. */
+    --side-panel-width: 25rem;
     --app-sidebar-collapsed-width: 3.5rem;
     --app-sidebar-header-height: 3rem;
   }

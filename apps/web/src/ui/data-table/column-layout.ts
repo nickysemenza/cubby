@@ -449,7 +449,7 @@ export function emptyColumnIds<TData extends RowData>(
 }
 
 /** An empty column's glyph strip (`emptyColumnIds`). */
-export const COLLAPSED_COLUMN_WIDTH = 40;
+const COLLAPSED_COLUMN_WIDTH = 40;
 
 /**
  * Resolves the widths the browser should paint without mutating TanStack's own

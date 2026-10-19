@@ -82,7 +82,9 @@ describe("declared option glyphs", () => {
         [
           ...(field.control?.options ?? []),
           ...(field.display.valueOptions ?? []),
-        ].flatMap((option) => (option.glyph ? [option.glyph.phosphor] : [])),
+        ].flatMap((option) =>
+          "glyph" in option && option.glyph ? [option.glyph.phosphor] : [],
+        ),
       ),
     );
     expect(declared.length).toBeGreaterThan(0);

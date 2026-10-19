@@ -200,8 +200,12 @@ describe("TableHeaderLayout", () => {
       );
 
     openMenu();
-    fireEvent.click(await screen.findByRole("menuitem", { name: /Sort descending/ }));
-    expect(lastTable?.state.sorting).toEqual([{ id: "nutrient-301", desc: true }]);
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: /Sort descending/ }),
+    );
+    expect(lastTable?.state.sorting).toEqual([
+      { id: "nutrient-301", desc: true },
+    ]);
 
     openMenu();
     fireEvent.click(

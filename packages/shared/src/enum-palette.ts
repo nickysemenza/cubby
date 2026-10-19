@@ -38,7 +38,8 @@ const CONDITION_COLORS = new Set([
 ]);
 
 /** A roster's visual role: `status` options are states, `category` options are kinds. */
-export type EnumRole = "status" | "category";
+export const enumRoles = ["status", "category"] as const;
+export type EnumRole = (typeof enumRoles)[number];
 
 /** One glyph for both clients: a Phosphor component name and an SF Symbol. */
 export interface EnumIcon {

@@ -93,7 +93,7 @@ function Lead({
  * full-strength ink on the tone's surface. Glyph and word carry the meaning;
  * color reinforces it.
  */
-export function StatusValue({
+function StatusValue({
   color = "var(--neutral-status)",
   glyph,
   icon,
@@ -132,7 +132,7 @@ export function StatusValue({
  * A kind ("Credit card", "Travel"): a neutral inset chip. The optional glyph
  * takes the option's color; the chip itself never carries a condition tone.
  */
-export function CategoryValue({
+function CategoryValue({
   color,
   glyph,
   icon,
@@ -153,7 +153,7 @@ export function CategoryValue({
 }
 
 /** The role an option renders as: declared, else inferred from its color. */
-export function enumRoleFor(role: EnumRole | null | undefined, color?: string) {
+function enumRoleFor(role: EnumRole | null | undefined, color?: string) {
   return role ?? paletteFor(undefined, color)?.role ?? "category";
 }
 

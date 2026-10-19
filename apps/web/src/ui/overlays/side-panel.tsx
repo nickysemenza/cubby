@@ -92,7 +92,7 @@ function measuredWidth() {
  * stylesheet default. Layouts read the CSS variable, not this hook; it exists
  * for the resize handle and tests.
  */
-export function useSidePanelWidth() {
+function useSidePanelWidth() {
   const width = useSyncExternalStore(
     (listener) => {
       listeners.add(listener);
@@ -447,7 +447,7 @@ const subscribeDock = (listener: () => void) => {
 };
 
 /** Whether panels dock beside their list (xl) or present as a sheet. */
-export function useSidePanelDocked(): boolean {
+function useSidePanelDocked(): boolean {
   return useSyncExternalStore(
     subscribeDock,
     () => globalThis.matchMedia?.(DOCK_QUERY).matches ?? false,

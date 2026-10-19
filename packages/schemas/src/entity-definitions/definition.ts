@@ -1,3 +1,4 @@
+import { enumRoles } from "@cubby/shared/enum-palette";
 import { z } from "zod";
 import {
   dataQualityCheckKind,
@@ -297,7 +298,7 @@ const buildMetadataSchemas = () => {
               /** The value's glyph on both clients; status rosters infer one. */
               glyph: enumOptionIconSchema.optional(),
               /** Compiler-filled from the roster (`display.optionRole` or inferred). */
-              role: z.enum(["status", "category"]).optional(),
+              role: z.enum(enumRoles).optional(),
             })
             .strict(),
         )
@@ -528,7 +529,7 @@ const buildMetadataSchemas = () => {
               color: nonEmptyString().optional(),
               glyph: enumOptionIconSchema.optional(),
               /** Compiler-filled from the roster (`display.optionRole` or inferred). */
-              role: z.enum(["status", "category"]).optional(),
+              role: z.enum(enumRoles).optional(),
             })
             .strict(),
         )
@@ -540,11 +541,7 @@ const buildMetadataSchemas = () => {
        * a glyph) or kinds (`category`: neutral chip). Omitted, the shared enum
        * palette infers it: every option carrying a condition color is status.
        */
-      optionRole: z
-        .enum(["status", "category"])
-        .nullable()
-        .optional()
-        .default(null),
+      optionRole: z.enum(enumRoles).nullable().optional().default(null),
       /**
        * A fact on the entity's hover preview card. An entity that declares
        * any shows exactly those, in model order; one that declares none falls

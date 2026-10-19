@@ -37,7 +37,7 @@ type DateDisplayProps = {
 );
 
 /** "yesterday" / "5d ago" as a deadline's distance: "1d overdue" / "5d overdue". */
-export function overdueDistance(relative: string): string {
+function overdueDistance(relative: string): string {
   return relative
     .replace(/^yesterday$/, "1d overdue")
     .replace(/ ago$/, " overdue");

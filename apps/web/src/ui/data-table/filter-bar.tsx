@@ -953,7 +953,7 @@ function PanelRow({
  * in place and every edit applies as it is made; the footer reports the
  * live result count.
  */
-export function FiltersPanel({
+function FiltersPanel({
   filters,
   fields,
   onChange,
@@ -1149,7 +1149,7 @@ function FilterChip({
  * filter, "+ Filter" into the panel, Clear, and the filtered total. The page
  * strip it renders into carries the totals and suggestion sweep status.
  */
-export function ActiveFilterChips({
+function ActiveFilterChips({
   filters,
   fields,
   onChange,
@@ -1309,7 +1309,7 @@ function useSlashHotkey(
 }
 
 /** The declared broad-search input: compact with a `/` hotkey on desktop, full-height in the mobile tier. */
-export function FilterSearchField({
+function FilterSearchField({
   dense = false,
   label,
   value,

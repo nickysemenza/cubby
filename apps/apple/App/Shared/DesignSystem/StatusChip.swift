@@ -44,26 +44,26 @@ struct StatusChip: View {
             }
             Text(text)
         }
-            .font(.caption.weight(.medium))
-            .foregroundStyle(
-                isNeutral
-                    ? FieldGuideTokens.graphite
-                    : ink.mix(with: FieldGuideTokens.graphite, by: 0.35, in: .device)
-            )
-            .padding(.horizontal, FieldGuideTokens.Space.sm - 2)
-            .padding(.vertical, 2)
-            .background(
-                RoundedRectangle(cornerRadius: FieldGuideTokens.radiusChip)
-                    .fill(ink.opacity(isNeutral ? 0.06 : 0.08))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: FieldGuideTokens.radiusChip)
-                    .strokeBorder(
-                        ink.opacity(isNeutral ? 0.35 : 0.5),
-                        lineWidth: FieldGuideTokens.hairlineWidth
-                    )
-            )
-            .fixedSize(horizontal: false, vertical: true)
+        .font(.caption.weight(.medium))
+        .foregroundStyle(
+            isNeutral
+                ? FieldGuideTokens.graphite
+                : ink.mix(with: FieldGuideTokens.graphite, by: 0.35, in: .device)
+        )
+        .padding(.horizontal, FieldGuideTokens.Space.sm - 2)
+        .padding(.vertical, 2)
+        .background(
+            RoundedRectangle(cornerRadius: FieldGuideTokens.radiusChip)
+                .fill(ink.opacity(isNeutral ? 0.06 : 0.08))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: FieldGuideTokens.radiusChip)
+                .strokeBorder(
+                    ink.opacity(isNeutral ? 0.35 : 0.5),
+                    lineWidth: FieldGuideTokens.hairlineWidth
+                )
+        )
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 

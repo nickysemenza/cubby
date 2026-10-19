@@ -23,7 +23,9 @@ describe("list facet counts", () => {
     const create = (
       name: string,
       type: "room" | "shelf" | "drawer",
-      parentId: string | null,
+      parentId: NonNullable<
+        Parameters<typeof makeLocationInput>[0]
+      >["parentId"],
     ) =>
       createLocationFixture(
         ctx.db,

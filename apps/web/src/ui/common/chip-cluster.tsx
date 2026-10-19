@@ -20,7 +20,7 @@ const LINE_GAP_PX = 2;
  * to a second line that the 32px cell clipped through the middle, because
  * only 12px chips fit two lines.
  */
-export const chipLinesThatFit = (chipHeight: number, lines: number) =>
+const chipLinesThatFit = (chipHeight: number, lines: number) =>
   Math.max(
     1,
     Math.min(

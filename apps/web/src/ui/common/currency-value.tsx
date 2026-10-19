@@ -47,7 +47,7 @@ export function CurrencyTooltip({
  * the positive tone, so a refund never reads as spend and spend never reads
  * as good news; a zero is a quiet fact.
  */
-export function moneyToneClass(value: number): string | undefined {
+function moneyToneClass(value: number): string | undefined {
   if (value < 0) return "text-positive";
   if (value === 0) return "text-muted-foreground";
   return undefined;
