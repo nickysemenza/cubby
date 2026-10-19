@@ -41,7 +41,6 @@ import { product, task } from "~/server/db/schema";
 import { syncEntityImages } from "~/server/domains/image/repo/entity-image-sync";
 import { resolveMemberAssignee } from "~/server/domains/ledger-party/repo/ledger-party-reference";
 import { dbTaskToAPI } from "~/server/domains/task/repo/helpers";
-import { bulkPatchEntities } from "~/server/entity-kernel/repo/entity-patch";
 import { createEntityReader } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -703,18 +702,6 @@ const resolveLiveTaskProjectId = (
   shortcode: ProjectShortcode,
 ): Promise<ProjectId> => resolveOrThrow(tx, "project", shortcode);
 
-type TaskBulkPatch = Pick<
-  TaskUpdateData,
-  | "assigneeId"
-  | "assigneeMode"
-  | "projectId"
-  | "projectMode"
-  | "status"
-  | "trade"
-  | "dueDate"
-  | "dueEndDate"
->;
-
 export const updateTask = (
   db: Database,
   shortcode: TaskShortcode,
@@ -737,53 +724,6 @@ export const updateTaskRead = (
   updateTaskWithOutput(db, shortcode, data, actor, hooks, (db, row) =>
     readTaskMutationOutput(db, row, fields),
   );
-
-export const updateTasksInBulk = (
-  db: Database,
-  shortcodes: TaskShortcode[],
-  data: TaskBulkPatch,
-  actor: ActorContext,
-) => {
-  if ((data.dueDate === undefined) !== (data.dueEndDate === undefined)) {
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "A bulk due-date patch must supply both dueDate and dueEndDate.",
-    );
-  }
-  return bulkPatchEntities(
-    db,
-    actor,
-    {
-      entity: "task",
-      table: task,
-      values: async (tx) => ({
-        assigneeId:
-          data.assigneeMode === "inherit"
-            ? null
-            : await resolveMemberAssignee(tx, data.assigneeId),
-        assigneeMode:
-          data.assigneeMode ??
-          (data.assigneeId === undefined ? undefined : "explicit"),
-        projectId:
-          data.projectMode === "inherit" || data.projectId === null
-            ? null
-            : data.projectId === undefined
-              ? undefined
-              : await resolveLiveTaskProjectId(tx, data.projectId),
-        projectMode:
-          data.projectMode ??
-          (data.projectId === undefined ? undefined : "explicit"),
-        status: data.status,
-        trade: data.trade,
-        dueDate: data.dueDate,
-        dueEndDate: data.dueEndDate,
-      }),
-      afterWrite: validateLiveEffectiveTrades,
-    },
-    shortcodes,
-    data,
-  );
-};
 
 /** Rank writes are deliberately unaudited: materializing manual priority
  * touches many rows. Only the dragged card's axis change is audited, in the

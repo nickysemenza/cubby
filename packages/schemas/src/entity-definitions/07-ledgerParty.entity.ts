@@ -126,7 +126,6 @@ export default defineEntity({
     ],
     create: ["name", "kind", "notes"],
     update: ["name", "kind", "notes"],
-    bulk: [],
     audit: ["name", "kind", "notes"],
     sort: {
       fields: ["name", "kind", "createdAt", "updatedAt"],
@@ -427,7 +426,6 @@ export default defineEntity({
     images: { storage: false },
     countable: false,
     delete: { mode: "soft", bulk: true },
-    bulkUpdate: null,
     merge: true,
     dataQuality: {
       checks: [

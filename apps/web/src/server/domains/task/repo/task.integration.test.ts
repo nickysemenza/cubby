@@ -7,6 +7,7 @@ import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
+import { bulkUpdateFor } from "~/server/testing/entity-kernel";
 let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
 beforeEach(() => {
   backgroundQueue = captureBackgroundQueue();
@@ -24,7 +25,6 @@ import {
   getTaskByShortcode,
   updateTask,
 } from "~/server/domains/task/repo/crud";
-import { updateTasksInBulk } from "~/server/domains/task/repo/crud";
 import { taskList } from "~/server/domains/task/repo/lookup";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityMutationCommand } from "~/server/entity-kernel/contracts";
@@ -36,6 +36,8 @@ import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
+
+const updateTasksInBulk = bulkUpdateFor("task");
 
 describe("task reorder workflow", () => {
   const ctx = withTestDb();
@@ -476,7 +478,7 @@ describe("task kernel — bulkUpdate", () => {
     );
   });
 
-  it("refuses half a due-date window rather than nulling the other half", async () => {
+  it("preserves the other half of a partially patched due-date window", async () => {
     const { output: t } = await createRepoEntity(ctx, "task", {
       trade: "other",
       name: "kernel due window",
@@ -484,9 +486,10 @@ describe("task kernel — bulkUpdate", () => {
       dueEndDate: "2024-03-05",
     });
 
-    await expect(
-      bulkUpdate([t.id], { dueDate: "2024-04-01" }),
-    ).rejects.toMatchObject({ reason: "CONSTRAINT_VIOLATION" });
+    await bulkUpdate([t.id], { dueDate: "2024-03-02" });
+    expect((await getTaskByShortcode(ctx.db, t.id))?.dueDate).toBe(
+      "2024-03-02",
+    );
     expect((await getTaskByShortcode(ctx.db, t.id))?.dueEndDate).toBe(
       "2024-03-05",
     );

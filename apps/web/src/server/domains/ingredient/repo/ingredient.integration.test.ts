@@ -25,6 +25,7 @@ import { patchEntityRows } from "~/server/entity-kernel/repo/entity-patch";
 import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { requireActor } from "~/server/http/request-context";
+import { bulkUpdateFor } from "~/server/testing/entity-kernel";
 import {
   createRecipeFixture as createRecipe,
   createPlantFixture,
@@ -41,7 +42,6 @@ import {
   findOrCreateIngredient,
   getIngredientByID,
   updateIngredient,
-  updateIngredientsUsuallyOnHand,
 } from "./crud";
 import { deleteIngredients } from "./deletion";
 import { mergeIngredients } from "./merge";
@@ -50,6 +50,8 @@ import {
   getIngredientsByIDsLean,
   ingredientList,
 } from "./search";
+
+const updateIngredientsUsuallyOnHand = bulkUpdateFor("ingredient");
 
 describe("ingredient", () => {
   const ctx = withTestDb();

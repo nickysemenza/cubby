@@ -525,7 +525,6 @@ export default defineEntity({
       "transplantedOn",
       "finishedOn",
     ],
-    bulk: ["status", "outcome", "finishedOn", "locationId"],
     audit: [
       "status",
       "outcome",
@@ -841,7 +840,6 @@ export default defineEntity({
       },
     },
     delete: { mode: "soft", bulk: true },
-    bulkUpdate: { fields: ["status", "outcome", "finishedOn", "locationId"] },
     merge: false,
     dataQuality: {
       checks: [

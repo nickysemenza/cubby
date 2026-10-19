@@ -294,7 +294,6 @@ export default defineEntity({
       "daysFromTransplantMax",
       "notes",
     ],
-    bulk: ["verdict", "gardenGuideKey"],
     audit: ["name", "gardenGuideKey", "verdict", "ingredientId", "notes"],
     sort: {
       fields: ["name", "createdAt", "updatedAt"],
@@ -469,7 +468,6 @@ export default defineEntity({
       ],
     },
     delete: { mode: "soft", bulk: true },
-    bulkUpdate: { fields: ["verdict", "gardenGuideKey"] },
     merge: true,
     resolve: { match: ["name"], createMissing: true },
     dataQuality: {

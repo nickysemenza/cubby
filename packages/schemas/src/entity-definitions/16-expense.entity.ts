@@ -802,6 +802,7 @@ Rules:
       },
       {
         key: "orderId",
+        semanticRole: "externalIdentifier",
         kind: "text",
         nullable: true,
         control: { kind: "text" },
@@ -1120,7 +1121,6 @@ Rules:
       "funders",
       "sourceClaims",
     ],
-    bulk: ["projectId", "trade", "costType"],
     audit: [
       "spendingCategoryId",
       "economicRole",
@@ -1904,7 +1904,6 @@ Rules:
       },
     },
     delete: { mode: "soft", bulk: true },
-    bulkUpdate: { fields: ["projectId", "trade", "costType", "date"] },
     merge: false,
     classificationPolicies: [
       {

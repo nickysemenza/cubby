@@ -99,7 +99,6 @@ const base = {
     countable: false,
     softDelete: false,
     delete: null,
-    bulkUpdate: null,
     merge: false,
     operationOwners: { delete: null, merge: null },
     mcp: [],
@@ -130,7 +129,6 @@ const model = {
   create: ["name"],
   update: ["name"],
   output: ["name"],
-  bulk: [],
   audit: ["name"],
 };
 
@@ -653,7 +651,6 @@ describe("typed entity compiler", () => {
         create: ["displayName"],
         update: ["displayName"],
         output: ["displayName"],
-        bulk: [],
         audit: [],
       },
     });
@@ -678,7 +675,6 @@ describe("typed entity compiler", () => {
         create: [],
         update: [],
         output: ["displayName"],
-        bulk: [],
         audit: [],
       },
       "example.model",

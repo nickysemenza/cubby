@@ -174,6 +174,7 @@ export default defineEntity({
       },
       {
         key: "imageOrder",
+        semanticRole: "attachment",
         kind: "text",
         validation: {
           read: null,
@@ -289,7 +290,6 @@ export default defineEntity({
       "removeImageIds",
       "imageOrder",
     ],
-    bulk: [],
     audit: [
       "locationId",
       "plantingIds",
@@ -517,7 +517,6 @@ export default defineEntity({
       },
     },
     delete: { mode: "soft", bulk: true },
-    bulkUpdate: null,
     merge: false,
     classificationPolicies: [
       {

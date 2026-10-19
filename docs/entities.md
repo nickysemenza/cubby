@@ -224,9 +224,8 @@ and writes `domain`/`sfSymbol` onto the Swift `EntityDescriptor`. The summary
 also carries the resolved `primarySearch` (the declared one, else
 `searchQuery` for a searchable entity with a contract) and the `bulkUpdate`
 field roster, from the same generator helpers the inspector uses
-(`apps/web/generator/entities/render/shared.ts`). `bulkUpdate` is the
-capability's own roster, not `entityFieldModels[entity].bulk` (Expense
-bulk-updates `date`, which the field model does not mark bulk). Navigation
+(`apps/web/generator/entities/render/shared.ts`). `bulkUpdate` and `entityFieldModels[entity].bulk` share the compiler-derived
+normal-update roster and the exclusions in the bulk edit contract below. Navigation
 grouping, the Records catalog, empty states and the native shell's sections
 all read it; none of them keep a per-entity list of their own.
 
@@ -602,18 +601,39 @@ claiming that the entity participates in global search (for example USDA's
 `nameFilter`). Native read metadata distinguishes generated resource readers
 from explicitly declared read-RPC adapters; it does not expand `httpActions`.
 
-`capabilities.bulkUpdate` (`{ fields: [...] } | null`) is the only thing an
-entity declares for bulk editing — there is no per-entity bulk-edit verb to
-write. The web list registers one generic `bulkEdit` action
-(`apps/web/src/entity/actions/bulk-edit-entity-action.tsx`) for every
-entity whose manifest declares it, and its dialog renders exactly those
-fields through `renderIntentField`, the dispatcher `EntityIntentFields` uses,
-wrapping each in unchanged/set/clear assignment modes
-(`FieldAssignmentPolicy` in `entity-primitive-fields.tsx`). The mutation
-payload is the form's dirty-field subset: an untouched field is omitted, an
-unchecked touched checkbox sends `false`, and a cleared nullable field sends
-`null`. Native has no
-`bulkUpdate` route or multi-select delete.
+### Bulk edit
+
+Every entity with a normal update contract supports `entity.bulkUpdate` through
+one runtime. The compiler derives the field roster from normal update fields;
+there is no entity or field bulk opt-in. Names, external identifiers (including
+barcodes, retailer SKUs and ASINs), images/attachments, and one-to-one links are
+excluded by declaration metadata. `display.standard`, image references, and
+unique single-column foreign-key indexes supply the existing semantics;
+`semanticRole: "externalIdentifier" | "attachment"` marks ambiguous fields.
+Shareable references remain editable.
+
+The web `bulkEdit` action and MCP expose that same roster. The web dialog uses
+normal intent controls, unchanged/set/clear assignment modes, and submits only
+touched fields. Explicit `false` and nullable clears survive. Value collections
+such as tags and aliases, and multi-reference lists such as Task blockers,
+accept only `[{ op: "add" | "remove", key: "…" }]`;
+replacement arrays and rename operations are refused. Each row retains its
+unrelated values, additions deduplicate, and removing an absent value is a no-op.
+Resolved values pass the normal update schema, including object refinements.
+
+Execution is atomic across the selection (1–500 unique public IDs). Ordinary
+stored scalar columns use one set-based UPDATE when the normal writer's
+`updatePolicy.recordFields` dependencies permit it; reference resolution,
+collections, compound values, and opaque/domain writers use the normal
+single-record update for every row in the same transaction. This policy describes
+normal write work, not a second editable-field roster. Per-row audit, CalDAV
+guards, assignment/dependency resolution, recipe costing, search projections,
+and suggestion supersession follow the normal mutation contract. A failure rolls
+back every row and pending publication; diagnostics retain the failing row or
+selected rows and raw database details, including SQLSTATE 23505 on a unique
+collision. Location reparenting retains Home and cycle checks; the arrange
+workflow's larger envelope delegates to the same runtime. Native has no bulk
+update route or multi-select delete UI.
 
 `capabilities.images` is `false`, `"gallery"` (an ordered `<Entity>Image` join
 table, bound in `apps/web/src/server/db/helpers/crud.ts`
@@ -659,7 +679,7 @@ must not survive as label conditions in SQL.
 
 The model owns scalar validation and physical column factories as well as
 presentation. `model.storage` declares stored columns; `create`, `update`,
-`output`, `bulk`, and `audit` select fields for their respective consumers.
+`output` and `audit` select fields for their respective consumers.
 The generator emits field schemas and storage factories; canonical schemas
 compose those generated fields with explicit relationship and domain validators.
 Each `entity-field-schemas.<entity>.gen.ts` map is `fieldSchemasOf(definition)`:
@@ -688,7 +708,7 @@ model: {
   }],
   storage: ["name"],
   create: ["name"], update: ["name"], output: ["name"],
-  bulk: [], audit: ["name"],
+  audit: ["name"],
 }
 ```
 
@@ -835,7 +855,7 @@ column name, and no database default. An object such as
 `{ key: "importedAt", defaultOverride: "now" }` overrides only the differing
 storage facts: `nullableOverride` and `defaultOverride` replace the field's
 nullability and the storage default.
-Stored-field order and create/update/output/bulk/audit rosters remain explicit:
+Stored-field order and create/update/output/audit rosters remain explicit:
 presentation defaults never grant mutation capabilities or introduce columns.
 
 The declaration's top-level `storage` block owns the rest of the entity's table,
@@ -1148,7 +1168,9 @@ kernel's progressive list, whether or not the browser writes the entity
 where rows come from. Its repository then implements `listRead`. Only a
 generated index feeds inline relation tables. The **CRUD roster**
 (`generatedBrowserCrudEntities`) is the list-roster entities with create and
-update contracts; bulk edit, mutation results, and the generic editor key on it.
+update contracts; mutation results and the generic editor key on it. Bulk edit
+uses the derived bulk roster across all mutable shortcode entities, including
+update-only entities such as imported Cookbooks.
 
 Complete client vocabularies use `entityListBaseFor`'s projected infinite read:
 each page loads base rows and only the declared enrichment groups the consumer
@@ -1208,7 +1230,7 @@ All generic entity work enters through `executeEntity(context, command)` in
 
 - public-id and Zod validation;
 - capability checks and normalized pagination/sorting;
-- baseline get/list/create/update/delete/merge/search commands;
+- baseline get/list/create/update/bulkUpdate/delete/merge/search commands;
 - declared attach/detach relation families;
 - in-transaction search projections, then post-commit object cleanup and
   best-effort background task publication using the captured projection
@@ -1220,9 +1242,17 @@ mutation order. Workflow services own operations that are not entity CRUD, such
 as expense splitting, reconciliation, cookbook import, and product enrichment.
 Extensions delegate to those services instead of branching inside the kernel.
 
+Summary `entity.commands` writes request reference-only mutation projections,
+without hydrating unreturned detail or coverage. Trusted operation receipts keep
+that summary; a later full replay reads the existing record without repeating
+the write. Field-scoped Sources reuse the mutation's authoritative snapshot,
+with the same JSON normalization, read paths and fingerprint algorithm as detail
+reads. Projected writes retain authoritative evidence separately from their
+response fields; the owning reader supplies a cited field absent from that snapshot.
+
 Partial updates preserve omitted fields. Scalar patching rejects undeclared
 keys, skips unchanged rows, and audits changes in the same transaction;
-convenience bulk setters keep their all-selected-row responses. Alias
+bulk mutations report every selected row, including unchanged rows. Alias
 deduplication, tree invariants, relationship writes, import settlement,
 quantity reconciliation, explicit receiving, and deletion/merge transactions
 stay on registered domain owners. Specialized renderers keep inline edits,

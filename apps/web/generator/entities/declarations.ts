@@ -459,7 +459,7 @@ export type CompiledEntity = Readonly<{
   filterUrlKeys: readonly string[];
   filterSchema: SourceRef | null;
   filterDescriptors: readonly FilterDescriptor[];
-  /** Fields a `bulkUpdate` command may patch; null means the capability is undeclared. */
+  /** Fields derived from ordinary updates and identity semantics; null without eligible updates. */
   bulkUpdateFields: readonly string[] | null;
   ports: EntityPorts;
   /** The manifest-owned image storage, display, ingress and routing policy. */

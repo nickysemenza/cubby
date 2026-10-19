@@ -41,6 +41,31 @@ export const valueCollectionPatch = z
     "Patch items: add, replace (renames `key` to `value`), or remove one value; replace/remove fail when `key` is absent.",
   )
   .meta({ id: "ValueCollectionPatch" });
+/** Bulk edits may add or remove shared values, never replace a record's collection. */
+export const bulkValueCollectionPatch = z
+  .array(
+    z.discriminatedUnion("op", [
+      z.strictObject({ op: z.literal("add"), key: z.string() }),
+      z.strictObject({ op: z.literal("remove"), key: z.string() }),
+    ]),
+  )
+  .min(1)
+  .meta({ id: "BulkValueCollectionPatch" });
+
+/** Preserve ordinary object refinements immediately for scalar edits; patched collections are validated after per-record resolution. */
+export const bulkUpdateInputSchema = <const Fields extends z.ZodRawShape>(
+  normalUpdate: z.ZodType,
+  fieldRules: Fields,
+  collectionFields: readonly string[],
+) =>
+  z.strictObject(fieldRules).superRefine((data, context) => {
+    if (collectionFields.some((key) => key in data)) return;
+    const parsed = normalUpdate.safeParse(data);
+    if (!parsed.success) {
+      for (const issue of parsed.error.issues) context.addIssue({ ...issue });
+    }
+  });
+
 export type ValueCollectionPatch = z.infer<typeof valueCollectionPatch>;
 
 /**

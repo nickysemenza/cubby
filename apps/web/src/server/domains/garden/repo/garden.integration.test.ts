@@ -32,6 +32,7 @@ import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
 import { getSearchDocumentEmbeddingText } from "~/server/generic/search/repo/search-document";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { bulkUpdateFor } from "~/server/testing/entity-kernel";
 import {
   createPlantFixture,
   createProductFixture,
@@ -741,7 +742,7 @@ describe("garden workflows", () => {
     expect(ids.has(inactive.id)).toBe(false);
   });
 
-  it("plantingRepository.repository.bulkUpdate patches status and finishedOn together and clears locationId with an explicit null", async () => {
+  it("generic bulk update patches status and finishedOn together and clears locationId with an explicit null", async () => {
     const crop = await createPlantFixture(
       ctx.db,
       { name: "Bulk update crop" },
@@ -759,10 +760,11 @@ describe("garden workflows", () => {
       TEST_ACTOR,
     );
 
-    await plantingRepository.repository.bulkUpdate!(
-      kernelContext(ctx.db),
+    await bulkUpdateFor("planting")(
+      ctx.db,
       [first.id, second.id],
       { status: "finished", finishedOn: "2026-08-01", locationId: null },
+      TEST_ACTOR,
     );
 
     for (const id of [first.id, second.id]) {

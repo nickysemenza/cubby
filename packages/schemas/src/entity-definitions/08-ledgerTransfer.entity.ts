@@ -324,7 +324,6 @@ export default defineEntity({
       "sourceClaims",
       "evidenceTransactionIds",
     ],
-    bulk: [],
     audit: [
       "fromPartyId",
       "toPartyId",
@@ -491,7 +490,6 @@ export default defineEntity({
     images: { storage: false },
     countable: false,
     delete: { mode: "soft", bulk: true },
-    bulkUpdate: null,
     merge: false,
     dataQuality: {
       // A cash transfer with no statement records why, instead of staying open.

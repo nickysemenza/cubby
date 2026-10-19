@@ -44,7 +44,6 @@ import { type output as ZodOutput, type ZodSchema, z } from "zod";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { updateLiveAndReturn, withTransactionOn } from "~/server/db/helpers";
 import type {
-  EntityKernelBulkUpdateResult,
   EntityKernelContext,
   EntityKernelDeleteResult,
   EntityLifecycleContract,
@@ -405,6 +404,7 @@ export interface RepositorySpec<
   updateRead?: EntityRepository<E, SchemasFor<E>>["updateRead"];
   /** `false` when writes have no projections or dependents to refresh. */
   sideEffects?: boolean;
+  updatePolicy?: { recordFields: readonly string[] };
   get: (
     ctx: EntityKernelContext,
     id: ZodOutput<SchemasFor<E>["id"]>,
@@ -424,11 +424,6 @@ export interface RepositorySpec<
     id: ZodOutput<SchemasFor<E>["id"]>,
     data: Present<SchemasFor<E>["updateInput"]>,
   ) => Promise<Written<E>>;
-  bulkUpdate?: (
-    ctx: EntityKernelContext,
-    ids: ZodOutput<SchemasFor<E>["id"]>[],
-    data: Present<SchemasFor<E>["bulkUpdateInput"]>,
-  ) => Promise<EntityKernelBulkUpdateResult<E>>;
   /**
    * An entity-specific delete. Omit it to delete by the declared
    * `lifecycle.delete` policy with `deleteHooks` and `afterDelete`.
@@ -564,8 +559,9 @@ export function defineRepository<
     };
   };
 
-  const { create, update, bulkUpdate, merge } = spec;
+  const { create, update, merge } = spec;
   const repository: EntityRepository<E, SchemasFor<E>> = {
+    updatePolicy: spec.updatePolicy,
     get: spec.get,
     list: spec.list,
     listRead: spec.listRead,
@@ -581,7 +577,6 @@ export function defineRepository<
     repository.update = async (ctx, id, data) =>
       written(ctx, await update(ctx, id, data));
   if (declared("update") && update) repository.updateRead = spec.updateRead;
-  if (declared("bulkUpdate") && bulkUpdate) repository.bulkUpdate = bulkUpdate;
   if (declared("delete"))
     repository.delete = async (ctx, ids) => {
       // Every DB touch inside the delete goes through the transaction-bound

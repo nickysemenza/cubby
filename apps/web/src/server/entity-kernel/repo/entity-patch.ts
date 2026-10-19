@@ -1,5 +1,4 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type {
   AuditableEntity,
   ShortcodeEntity,
@@ -126,7 +125,7 @@ type BulkRow<T extends PatchTable> = InferSelectModel<T> & {
 };
 
 /**
- * The manifest `model.bulk` patch: one complete patch over a unique selection
+ * The derived bulk patch: one complete patch over a unique selection
  * in one transaction, with per-row audit `changes` on the bulk roster.
  * `values` resolves the patch's references; `validate` sees every locked row
  * and the resolved values before the write, `afterWrite` runs after it.
@@ -196,11 +195,10 @@ export async function bulkPatchEntities<
       .set(set)
       .where(and(inArray(table.id, ids), notDeleted(table)));
     await spec.afterWrite?.(tx);
-    // SAFETY: the manifest's bulk roster names columns of the entity's table.
-    const fields = entityFieldModels[spec.entity].bulk as readonly Extract<
-      keyof BulkRow<T>,
-      string
-    >[];
+    const fields = Object.keys(getTableColumns(table)).filter(
+      (key): key is Extract<keyof BulkRow<T>, string> =>
+        Object.hasOwn(values, key),
+    );
     await logAuditEntries(
       tx,
       actor,

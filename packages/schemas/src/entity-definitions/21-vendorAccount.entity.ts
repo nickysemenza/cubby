@@ -239,7 +239,6 @@ export default defineEntity({
     ],
     create: ["vendorId", "ledgerPartyId", "inventoryOwnerDefaultEnabled"],
     update: ["vendorId", "ledgerPartyId", "inventoryOwnerDefaultEnabled"],
-    bulk: [],
     audit: ["vendorId", "ledgerPartyId", "inventoryOwnerDefaultEnabled"],
     derived: {
       // The Vendor and member names; its SQL is `vendorAccountLabelSql`.
@@ -415,7 +414,6 @@ export default defineEntity({
     },
     countable: false,
     delete: { mode: "soft", bulk: true },
-    bulkUpdate: null,
     merge: false,
   },
   extensions: {

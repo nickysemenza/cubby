@@ -485,7 +485,6 @@ export default defineEntity({
       "ownershipMode",
       "ownerLedgerPartyId",
     ],
-    bulk: [],
     audit: [
       "amount",
       "productId",
@@ -945,7 +944,6 @@ export default defineEntity({
       },
     },
     delete: { mode: "soft", bulk: true },
-    bulkUpdate: null,
     merge: false,
     dataQuality: {
       checks: [

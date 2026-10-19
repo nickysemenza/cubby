@@ -1,3 +1,4 @@
+import { deriveBulkUpdateFields } from "./bulk.ts";
 import type { ChildTableDeclaration } from "../../../../packages/schemas/src/entity-definitions/child-definition.ts";
 import { servesKernelGet } from "./list-capabilities.ts";
 import { humanize } from "../../../../packages/shared/src/text-case.ts";
@@ -504,6 +505,7 @@ const compileFieldModel = (
   relations: EntityDeclarationMetadata["relations"],
   entityKey: string,
   titleField: string,
+  indexes: NonNullable<EntityDeclarationMetadata["storage"]>["indexes"],
 ): EntityFieldModel => {
   if (value === undefined) {
     return {
@@ -809,7 +811,7 @@ const compileFieldModel = (
     throw new EntityDeclarationError(
       `${context}.storage contains duplicate keys.`,
     );
-  const policy = (key: "create" | "update" | "bulk" | "audit" | "output") => {
+  const policy = (key: "create" | "update" | "audit" | "output") => {
     const values = model[key];
     if (new Set(values).size !== values.length)
       throw new EntityDeclarationError(
@@ -836,7 +838,7 @@ const compileFieldModel = (
     storage,
     create: policy("create"),
     update: policy("update"),
-    bulk: policy("bulk"),
+    bulk: deriveBulkUpdateFields(model, indexes),
     audit: policy("audit"),
     output: policy("output"),
     sort,
@@ -1381,22 +1383,6 @@ const validateDeclarationCapabilities = (
       `${context}.capabilities.operationOwners.merge must match merge capability.`,
     );
   }
-  const bulkUpdateCapability = capabilities.bulkUpdate;
-  if (bulkUpdateCapability !== null) {
-    // The emitted update-schema `.pick({...})` rejects a field absent from the
-    // source-referenced update schema at typecheck time.
-    const names = bulkUpdateCapability.fields;
-    if (new Set(names).size !== names.length) {
-      throw new EntityDeclarationError(
-        `${context}.capabilities.bulkUpdate.fields contains duplicates.`,
-      );
-    }
-    if (declaration.fields === null) {
-      throw new EntityDeclarationError(
-        `${context}.capabilities.bulkUpdate requires an update schema.`,
-      );
-    }
-  }
   for (const [index, name] of (capabilities.mcp ?? []).entries()) {
     if (!SUPPORTED_MCP_ACTIONS.has(name))
       throw new EntityDeclarationError(
@@ -1457,7 +1443,14 @@ const compileMcpActions = (
       : [
           ...(declaration.fields?.create ? ["create"] : []),
           ...(declaration.fields?.update ? ["update"] : []),
-          ...(capabilities.bulkUpdate === null ? [] : ["bulkUpdate"]),
+          ...(declaration.fields?.update &&
+          declaration.model &&
+          deriveBulkUpdateFields(
+            declaration.model,
+            declaration.storage?.indexes,
+          ).length > 0
+            ? ["bulkUpdate"]
+            : []),
           ...(capabilities.delete === null ? [] : ["delete"]),
           ...(capabilities.merge ? ["merge"] : []),
         ];
@@ -1710,13 +1703,10 @@ const validateLifecycleAndResolve = (
   const readOnly = capabilities.lifecycle === "readOnly";
   if (
     readOnly &&
-    (fields?.create != null ||
-      fields?.update != null ||
-      capabilities.bulkUpdate !== null ||
-      capabilities.merge)
+    (fields?.create != null || fields?.update != null || capabilities.merge)
   )
     throw new EntityDeclarationError(
-      `${context}.capabilities.lifecycle is readOnly but the entity declares a create, update, bulkUpdate or merge capability.`,
+      `${context}.capabilities.lifecycle is readOnly but the entity declares a create, update or merge capability.`,
     );
   const { resolve } = capabilities;
   if (resolve === null) return;
@@ -2059,6 +2049,7 @@ export const compileEntity = (
     declaration.relations,
     key,
     declaration.presentation.titleField,
+    declaration.storage?.indexes ?? [],
   );
   const table = compileEntityTable(declaration, declaredFieldModel, context);
   const operationOwners = {
@@ -2321,7 +2312,12 @@ export const compileEntity = (
             },
           ],
   );
-  const bulkUpdateFields = declaration.capabilities.bulkUpdate?.fields ?? null;
+  const bulkUpdateFields =
+    declaration.capabilities.lifecycle !== "readOnly" &&
+    contract?.update &&
+    fieldModel.bulk.length > 0
+      ? fieldModel.bulk
+      : null;
   validateLifecycleAndResolve(
     declaration,
     fieldModel,

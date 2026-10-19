@@ -450,6 +450,37 @@ export const renderEntityArtifacts = (
         `import { ${[...exports].sort().join(", ")} } from ${JSON.stringify(module)};`,
     )
     .join("\n");
+  const bulkSchemaFor = (entity: CompiledEntity): string => {
+    if (entity.bulkUpdateFields === null) return "null";
+    const update = entity.contract?.update;
+    if (!update)
+      throw new EntityDeclarationError(
+        `${entity.key}.bulkUpdate requires an update contract.`,
+      );
+    const fields = entity.bulkUpdateFields
+      .map((key) => {
+        const field = entity.fieldModel.fields.find(
+          (candidate) => candidate.key === key,
+        );
+        const original = `${update.export}.shape[${JSON.stringify(key)}]`;
+        const schema =
+          field?.collection?.key === "value" ||
+          field?.reference?.multiple === true
+            ? "bulkValueCollectionPatch.optional()"
+            : original;
+        return `${JSON.stringify(key)}:${schema}`;
+      })
+      .join(",");
+    const collections = entity.fieldModel.fields
+      .filter(
+        (field) =>
+          entity.bulkUpdateFields?.includes(field.key) &&
+          (field.collection?.key === "value" ||
+            field.reference?.multiple === true),
+      )
+      .map((field) => field.key);
+    return `bulkUpdateInputSchema(${update.export},{${fields}},${JSON.stringify(collections)})`;
+  };
   const schemaEntitySpecs = projections.schema;
   const schemaBindings = schemaEntitySpecs
     .map((entity) => {
@@ -459,12 +490,7 @@ export const renderEntityArtifacts = (
           `${entity.key}.bulkUpdate requires an update contract.`,
         );
       }
-      const bulkUpdateInput =
-        entity.bulkUpdateFields === null
-          ? "null"
-          : `${contract.update?.export}.pick({${entity.bulkUpdateFields
-              .map((field) => `${JSON.stringify(field)}:true`)
-              .join(",")}}).strict()`;
+      const bulkUpdateInput = bulkSchemaFor(entity);
       const filters =
         filterSchema === null
           ? "z.object({})"
@@ -766,10 +792,8 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         `z.object({action:z.literal("list"),entity:z.literal(${JSON.stringify(key)}),items:z.array(withEntityListMedia(${contract.mcpList.export})${treeRowExtension(inspector)}),meta:paginatedMetaSchema})`,
     )
     .join(",\n  ");
-  // A declared field list is compiled into `.pick({...}).strict()` on the
-  // entity's own update schema: an undeclared field is REFUSED rather than
-  // silently stripped, and a field the update schema does not have fails
-  // `pnpm typecheck` on the generated file.
+  // Strict input objects reject excluded fields; references to normal update
+  // fields keep the derived roster checked against the actual update contract.
   const bulkUpdateEntities = entities.filter(
     (entity) =>
       entity.bulkUpdateFields !== null && entity.contract?.update !== null,
@@ -782,10 +806,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         const schemaRef = entity.contract?.update;
         if (!schemaRef)
           throw new EntityDeclarationError(`${entity.key}.update is missing.`);
-        const mask = (entity.bulkUpdateFields ?? [])
-          .map((field) => `${JSON.stringify(field)}:true`)
-          .join(",");
-        return `z.object({action:z.literal("bulkUpdate"),entity:z.literal(${JSON.stringify(entity.key)}),ids,data:${schemaRef.export}.pick({${mask}}).strict()})`;
+        return `z.object({action:z.literal("bulkUpdate"),entity:z.literal(${JSON.stringify(entity.key)}),ids,data:${bulkSchemaFor(entity)}})`;
       })
       .join(",\n  ");
   // No declaration anywhere means the command exists but matches nothing,
@@ -1658,6 +1679,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
       relativePath: "apps/web/src/server/generated/entity-bindings.gen.ts",
       source:
         generatedHeader +
+        'import { bulkUpdateInputSchema, bulkValueCollectionPatch } from "@cubby/schemas/entity-collection";\n' +
         'import { mutationSideEffectsSchema } from "@cubby/schemas/mutation-side-effects";\n' +
         'import { withEntityDetailMedia, withEntityListMedia } from "@cubby/schemas/entity-read-media";\n' +
         'import { entitySourceInputs } from "@cubby/schemas/entity-source";\n' +

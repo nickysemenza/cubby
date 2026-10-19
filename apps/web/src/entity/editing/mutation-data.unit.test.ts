@@ -19,7 +19,7 @@ describe("entity editing mutation data", () => {
     });
   });
 
-  it("uses only an entity's declared bulk-update schema", () => {
+  it("uses the derived bulk-update schema and excludes identity fields", () => {
     expect(parseEntityEditBulkUpdateInput("task", { status: "done" })).toEqual({
       status: "done",
     });
@@ -33,6 +33,11 @@ describe("entity editing mutation data", () => {
     }
     expect(() =>
       parseEntityEditBulkUpdateInput("recipe", { name: "Soup" }),
-    ).toThrow("recipe does not support bulk update");
+    ).toThrow(/Unrecognized key/);
+    expect(
+      parseEntityEditBulkUpdateInput("recipe", {
+        notes: "Synthetic shared note",
+      }),
+    ).toEqual({ notes: "Synthetic shared note" });
   });
 });

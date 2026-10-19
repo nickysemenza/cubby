@@ -251,7 +251,6 @@ export default defineEntity({
     storage: [],
     create: [],
     update: [],
-    bulk: [],
     audit: [],
     // Declared exception: a USDA list reads the external USDA release, not a
     // table, so the list field compiler builds no ORDER BY for it;
@@ -340,7 +339,6 @@ export default defineEntity({
     countable: false,
     softDelete: false,
     delete: null,
-    bulkUpdate: null,
     merge: false,
     mcp: ["get", "list"],
   },

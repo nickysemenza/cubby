@@ -11,6 +11,7 @@ import {
 import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
 import { z } from "zod";
 
+import { readPathValue } from "~/entity/read-path";
 import { createAppError } from "~/server/errors/app-error";
 
 import type {
@@ -31,10 +32,16 @@ function applyValueCollectionPatch(
   field: string,
   current: readonly string[],
   patch: ValueCollectionPatch,
+  bulk: boolean,
 ): string[] {
   const present = new Set(current);
   for (const item of patch) {
-    if (item.op === "add" || present.has(item.key)) continue;
+    if (
+      item.op === "add" ||
+      present.has(item.key) ||
+      (bulk && item.op === "remove")
+    )
+      continue;
     throw createAppError(
       "COLLECTION_PATCH_PRECONDITION_FAILED",
       `${entityInspectorMetadata[entity].singular} ${field} has no "${item.key}" to ${item.op}; it holds ${current.length ? current.map((value) => `"${value}"`).join(", ") : "nothing"}.`,
@@ -66,14 +73,17 @@ export async function resolveValueCollectionPatches<
   context: EntityKernelContext,
   binding: EntityKernelCoreBinding<E, S>,
   id: z.output<S["id"]>,
-  data: z.output<Extract<S["updateInput"], z.ZodType>>,
+  data: unknown,
+  options: { bulk?: boolean } = {},
 ): Promise<Map<string, string[]>> {
   const input = record.parse(data);
   const declared: EntityFieldModel["fields"] =
     entityFieldModels[binding.entity].fields;
   const fields = declared.filter(
     (field) =>
-      field.collection?.key === "value" && isCollectionPatch(input[field.key]),
+      (field.collection?.key === "value" ||
+        field.reference?.multiple === true) &&
+      isCollectionPatch(input[field.key]),
   );
   const resolved = new Map<string, string[]>();
   if (fields.length === 0) return resolved;
@@ -87,8 +97,16 @@ export async function resolveValueCollectionPatches<
       applyValueCollectionPatch(
         binding.entity,
         field.key,
-        z.array(z.string()).parse(detail[field.readKey ?? field.key] ?? []),
+        z
+          .array(z.string())
+          .parse(
+            readPathValue(
+              detail,
+              field.readKey ?? field.display.readPath ?? field.key,
+            ) ?? [],
+          ),
         valueCollectionPatch.parse(input[field.key]),
+        options.bulk ?? false,
       ),
     );
   }

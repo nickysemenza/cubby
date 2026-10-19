@@ -31,11 +31,7 @@ export const resolvedPrimarySearch = ({
       }
     : null);
 
-/**
- * The fields one bulk edit may set, or null without a `bulkUpdate` capability.
- * Not `entityFieldModels.bulk`: a bulk update can name fields (Expense `date`)
- * that the field model does not mark bulk-editable.
- */
+/** The bulk roster derived from ordinary updates and field identity semantics. */
 export const bulkUpdateFor = ({
   bulkUpdateFields,
 }: CompiledEntity): { fields: readonly string[] } | null =>

@@ -21,7 +21,6 @@ import { locationPickerSortableFields } from "@cubby/schemas/location";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { and, eq, inArray, isNotNull, type SQL, sql } from "drizzle-orm";
 import { alias, QueryBuilder } from "drizzle-orm/pg-core";
-import { uniq } from "es-toolkit";
 
 import { projectListRows } from "~/entity/model/list-read-schema";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
@@ -80,7 +79,6 @@ import {
 } from "~/server/errors/db-errors";
 import {
   computeChanges,
-  logAuditEntries,
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
@@ -500,90 +498,6 @@ export const updateLocation = async (
     }
     throw error;
   }
-};
-
-/**
- * Move a set of locations below one parent without replaying the full
- * single-location update pipeline for every row. Bulk reparenting has no image
- * work and does not return hydrated locations, so the per-row re-fetches are
- * pure overhead; it still keeps the cycle check and one audit entry per changed
- * location.
- */
-export const bulkReparentLocations = async (
-  db: Database,
-  rawIds: LocationId[],
-  requestedParentId: LocationId | null,
-  actor: ActorContext,
-): Promise<void> => {
-  // Dedupe so the `updated.length !== ids.length` guard below holds even for
-  // callers that don't pre-dedupe: `inArray` collapses duplicate ids in the
-  // UPDATE, so a duplicate in `ids` would otherwise trip a spurious
-  // LOCATION_NOT_FOUND.
-  const ids = uniq(rawIds);
-  await withTransaction(db, async (tx) => {
-    const home = await getHomeLocation(tx);
-    const parentId = requestedParentId ?? home.id;
-    if (ids.includes(home.id)) {
-      throw createAppError("CONSTRAINT_VIOLATION", "Home cannot be reparented");
-    }
-    // One snapshot serves both live-row validation and the parent-chain walk.
-    // Walking parent pointers in memory avoids one database round-trip per
-    // selected location while preserving the same "parent cannot be a
-    // descendant" invariant as updateLocation.
-    const liveLocations = await tx
-      .select({ id: location.id, parentId: location.parentId })
-      .from(location)
-      .where(notDeleted(location));
-    const parents = new Map(
-      liveLocations.map((row) => [row.id, row.parentId] as const),
-    );
-    const selected = new Set(ids);
-
-    for (const id of ids) {
-      if (!parents.has(id)) {
-        throw createAppError("LOCATION_NOT_FOUND", `Location ${id} not found`);
-      }
-    }
-
-    if (parentId) {
-      let currentId: LocationId | null = parentId;
-      while (currentId) {
-        if (selected.has(currentId)) {
-          throw createAppError(
-            "LOCATION_CYCLE_DETECTED",
-            "Cannot set parent: would create a circular reference",
-          );
-        }
-        currentId = parents.get(currentId) ?? null;
-      }
-    }
-
-    const changed = liveLocations.filter(
-      (row) => selected.has(row.id) && row.parentId !== parentId,
-    );
-    const updated = await tx
-      .update(location)
-      .set({ parentId })
-      .where(and(inArray(location.id, ids), notDeleted(location)))
-      .returning({ id: location.id });
-
-    // A row deleted between the snapshot and update must roll back rather than
-    // reporting a successful move/audit for a row it did not update.
-    if (updated.length !== ids.length) {
-      throw createAppError("LOCATION_NOT_FOUND", "A location was not found");
-    }
-
-    await logAuditEntries(
-      tx,
-      actor,
-      changed.map((row) => ({
-        entityKind: "location" as const,
-        entityId: row.id,
-        action: "update" as const,
-        changes: { parentId: { from: row.parentId, to: parentId } },
-      })),
-    );
-  });
 };
 
 const refuseHomeLocation = async (

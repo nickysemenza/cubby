@@ -1,5 +1,4 @@
 import { recomputeRecipesForPriceAffectedProducts } from "~/server/domains/expense/repo/price-affected-recipes";
-import { bulkUpdatedWithSideEffects } from "~/server/entity-kernel/adapter";
 import {
   defineRepository,
   listOn,
@@ -12,7 +11,6 @@ import {
   deleteExpensesWithPurchaseEffects,
   EXPENSE_DELETE_EDGE_POLICY,
   getExpenseByShortcode,
-  updateExpensesInBulk,
   updateExpense,
 } from "./crud";
 import { expenseList, expenseListRead, expenseListSummary } from "./lookup";
@@ -59,10 +57,4 @@ export const expenseRepository = defineRepository("expense", {
     );
     return { removed: result.deletedIds };
   },
-  bulkUpdate: async (ctx, ids, data) =>
-    bulkUpdatedWithSideEffects(
-      ctx,
-      "expense",
-      await updateExpensesInBulk(ctx.db, ids, data, ctx.actorContext),
-    ),
 });

@@ -35,6 +35,14 @@ export interface McpBatchConfig<TItemInput extends z.ZodType, TItemOutput> {
   key: string;
   itemInput: TItemInput;
   itemOutput: z.ZodType<TItemOutput>;
+  /** A summary receipt validates its reference without hydrating a full item. */
+  summaryOutput?: z.ZodType<{ reference: string }>;
+  /** Complete a persisted summary receipt for a later full replay without repeating its mutation. */
+  completeOutput?: (
+    produced: z.output<z.ZodType>,
+    item: z.output<TItemInput>,
+    extra: ToolExtra,
+  ) => Promise<z.output<z.ZodType>>;
   reference: (item: TItemOutput) => string;
   maxItems?: number;
   resultDetail?: BatchResultDetail;
@@ -45,6 +53,7 @@ export interface McpBatchConfig<TItemInput extends z.ZodType, TItemOutput> {
   run: (
     item: z.output<TItemInput>,
     extra: ToolExtra,
+    resultDetail: BatchResultDetail,
   ) => Promise<z.output<z.ZodType>>;
 }
 
@@ -175,12 +184,25 @@ export async function runMcpBatch<TItemInput extends z.ZodType, TItemOutput>(
               runId: execution!.runId,
               operationId: execution!.itemOperationIds![index]!,
             },
-            run: (transactionExtra) => config.run(item, transactionExtra),
+            run: (transactionExtra) =>
+              config.run(item, transactionExtra, input.resultDetail),
             baseExtra: extra,
           })
-        : await config.run(item, extra);
+        : await config.run(item, extra, input.resultDetail);
       stage = "output";
-      const parsed = config.itemOutput.parse(produced);
+      if (input.resultDetail === "summary" && config.summaryOutput) {
+        results.push({
+          index,
+          status: "succeeded",
+          reference: config.summaryOutput.parse(produced).reference,
+        });
+        continue;
+      }
+      const completed =
+        input.resultDetail === "full" && config.completeOutput
+          ? await config.completeOutput(produced, item, extra)
+          : produced;
+      const parsed = config.itemOutput.parse(completed);
       const success: BatchSuccess<TItemOutput> = {
         index,
         status: "succeeded",

@@ -620,6 +620,8 @@ const buildMetadataSchemas = () => {
     .object({
       key: nonEmptyString(),
       kind: z.enum(entityFieldKinds),
+      /** Identity or owned-resource semantics; these values cannot be shared by bulk assignment. */
+      semanticRole: z.enum(["externalIdentifier", "attachment"]).optional(),
       nullable: z
         .boolean({ error: "must be a boolean" })
         .optional()
@@ -989,7 +991,6 @@ const buildMetadataSchemas = () => {
       create: z.array(nonEmptyString()),
       update: z.array(nonEmptyString()),
       output: z.array(nonEmptyString()),
-      bulk: z.array(nonEmptyString()),
       audit: z.array(nonEmptyString()),
       /** Evidence-backed research may fill these ordinary editable fields. */
       research: z
@@ -1594,7 +1595,7 @@ const buildMetadataSchemas = () => {
             .default(null),
           /**
            * Workflow verbs from `action-verbs.ts`, ahead of the verbs derived
-           * from capabilities (`bulkEdit`, kernel `merge`, kernel `delete`).
+           * from eligible updates (`bulkEdit`) and capabilities (kernel `merge`, kernel `delete`).
            */
           extraActions: z.array(actionKey).optional().default([]),
           links: z
@@ -1752,10 +1753,6 @@ const buildMetadataSchemas = () => {
       mode: z.enum(["soft", "hard"]),
       bulk: z.boolean({ error: "must be a boolean" }),
     })
-    .strict();
-
-  const entityBulkUpdateMetadataSchema = z
-    .object({ fields: z.array(nonEmptyString()).min(1) })
     .strict();
 
   /**
@@ -2169,7 +2166,6 @@ const buildMetadataSchemas = () => {
         .optional()
         .default(true),
       delete: entityDeleteMetadataSchema.nullable(),
-      bulkUpdate: entityBulkUpdateMetadataSchema.nullable(),
       merge: z.boolean({ error: "must be a boolean" }),
       /**
        * Who serves delete and merge. Derived as `kernel` for each declared

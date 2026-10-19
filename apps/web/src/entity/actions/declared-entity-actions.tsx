@@ -134,12 +134,11 @@ function useDiscardProductAction(): EntityActionHandles {
   };
 }
 
-/** Project has no bulk-update contract, so its status verb writes per row. */
+/** A focused status action over the shared atomic bulk mutation. */
 function useSetProjectStatusAction(): EntityActionHandles {
   return useBulkEditEntityAction("project", {
     verb: "setStatus",
     fields: ["status"],
-    updateEach: true,
   });
 }
 

@@ -20,7 +20,6 @@ import type {
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   DeleteExpensesWithPurchaseEffectsOut,
-  ExpenseBulkCostTypeInput,
   ExpenseCreateInput,
   ExpenseOut,
   ExpenseUpdateInput,
@@ -32,7 +31,6 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   buildPartialUpdateValues,
-  getDb,
   notDeleted,
   relations,
   unwrapDb,
@@ -64,10 +62,6 @@ import {
   classificationFieldsToClear,
 } from "~/server/domains/spending-category/repo/classification-field-policy";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
-import {
-  bulkPatchEntities,
-  patchEntityRows,
-} from "~/server/entity-kernel/repo/entity-patch";
 import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -79,7 +73,6 @@ import { validateProductPolicy } from "~/server/generic/inheritance/repo/inherit
 import { deleteByPolicy } from "~/server/generic/removal/repo/dispositions";
 import {
   resolveAllOrThrow,
-  resolveAllPresent,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -157,57 +150,6 @@ const resolveLivePurchaseId = (
   tx: DrizzleTransaction,
   shortcode: PurchaseShortcode,
 ): Promise<PurchaseId> => resolveOrThrow(tx, "purchase", shortcode);
-
-/**
- * Resolve a bulk selection to live uuids, DROPPING codes that name nothing
- * live. Bulk writes here are documented to skip a soft-deleted or unknown id
- * rather than reject the whole batch — the alternative makes a selection that
- * merely raced a delete fail entirely, and callers pass sets they didn't
- * individually verify. A throwing variant would belong on single-row paths,
- * where "not found" is the caller's own mistake.
- */
-const resolveLiveExpenseIds = (
-  tx: DrizzleTransaction,
-  shortcodes: ExpenseShortcode[],
-): Promise<ExpenseId[]> => resolveAllPresent(tx, "expense", shortcodes);
-
-type ExpenseBulkPatch = Pick<
-  ExpenseUpdateData,
-  "projectId" | "trade" | "costType" | "date"
->;
-
-export const updateExpensesInBulk = (
-  db: Database,
-  shortcodes: ExpenseShortcode[],
-  data: ExpenseBulkPatch,
-  actor: ActorContext,
-) =>
-  bulkPatchEntities(
-    db,
-    actor,
-    {
-      entity: "expense",
-      table: expense,
-      values: async (tx) => ({
-        projectId:
-          data.projectId == null
-            ? data.projectId
-            : await resolveLiveProjectId(tx, data.projectId),
-        trade: data.trade,
-        costType: data.costType,
-        date: data.date,
-      }),
-      validate: async (tx, before, values) => {
-        for (const row of before) {
-          const next = { ...row, ...values };
-          assertExpenseDate(next.cost, next.date);
-          await validateExpenseInheritance(tx, next);
-        }
-      },
-    },
-    shortcodes,
-    data,
-  );
 
 const fetchExpenseById = (
   db: Database | DrizzleTransaction,
@@ -884,40 +826,6 @@ export const updateExpense = async (
   });
 };
 
-const getExpensesByIDs = async (
-  db: Database,
-  ids: ExpenseId[],
-): Promise<ExpenseOut[]> => {
-  if (ids.length === 0) return [];
-  const rows = await getDb(db).query.expense.findMany({
-    where: and(inArray(expense.id, ids), notDeleted(expense)),
-    extras: expenseInheritanceReadExtras(),
-    ...relations.expense.withProject,
-  });
-  const [allocations, dataQualities, spendingAllocations] = await Promise.all([
-    loadExpenseProjectAllocations(db, ids),
-    loadDataQualities(db, "expense", ids),
-    loadExpenseSpendingAllocations(db, ids),
-  ]);
-  const byExpense = new Map<ExpenseId, typeof allocations>();
-  for (const allocation of allocations) {
-    const existing = byExpense.get(allocation.expenseId) ?? [];
-    existing.push(allocation);
-    byExpense.set(allocation.expenseId, existing);
-  }
-  return rows.map((row) =>
-    dbExpenseToAPI(
-      {
-        ...row,
-        projectAllocations: byExpense.get(row.id) ?? [],
-        spendingCategoryAllocations: spendingAllocations.get(row.id),
-      },
-      // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
-      dataQualities.get(row.id)!,
-    ),
-  );
-};
-
 export const createExpense = async (
   db: Database,
   data: ExpenseCreateInput,
@@ -1053,36 +961,6 @@ export const createExpense = async (
     entityId: result.id,
     priceAffectedProductIds: result.priceAffectedProductIds,
   };
-};
-
-export const setExpensesCostType = async (
-  db: Database,
-  input: ExpenseBulkCostTypeInput,
-  actor: ActorContext,
-): Promise<ExpenseOut[]> => {
-  const { costType } = input;
-
-  const updatedIds = await withTransaction(db, async (tx) => {
-    const ids = await resolveLiveExpenseIds(tx, input.ids);
-    if (ids.length === 0) return [];
-
-    await patchEntityRows(
-      tx,
-      actor,
-      {
-        entity: "expense",
-        table: expense,
-        fields: entityFieldModels.expense.bulk,
-      },
-      ids,
-      { costType },
-    );
-    // Preserve the convenience setter's all-live-selection result even when
-    // patchEntityRows finds no changed rows.
-    return ids;
-  });
-
-  return getExpensesByIDs(db, updatedIds);
 };
 
 export const deleteExpensesWithPurchaseEffects = async (

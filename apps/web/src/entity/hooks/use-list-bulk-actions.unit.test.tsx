@@ -69,11 +69,9 @@ function wrapper({ children }: { children: ReactNode }) {
 
 describe("useListBulkActions", () => {
   it("offers Copy codes on a shortcode entity with no other actions", () => {
-    // `ledgerTransfer` has a shortcode but no bulk-capable actions (no merge
-    // or bulk update), so it isolates the generic half. Product is covered
-    // below, where the registry contributes.
+    // Read-only Runs isolate Copy codes from the mutable entity actions.
     const { result } = renderHook(
-      () => useListBulkActions<TestRow>({ entity: "ledgerTransfer" }),
+      () => useListBulkActions<TestRow>({ entity: "run" }),
       { wrapper },
     );
 
@@ -132,7 +130,7 @@ describe("useListBulkActions", () => {
     });
   });
 
-  it("earns the checkbox column for image on Copy codes alone", () => {
+  it("offers bulk edit alongside Copy codes for image metadata", () => {
     const { result } = renderHook(
       () => useListBulkActions<TestRow>({ entity: "image" }),
       { wrapper },
@@ -140,6 +138,7 @@ describe("useListBulkActions", () => {
 
     expect(result.current.config?.actions.map((a) => a.id)).toEqual([
       "copy-shortcodes",
+      "bulk-edit",
     ]);
     expect(result.current.enableRowSelection).toBe(true);
   });

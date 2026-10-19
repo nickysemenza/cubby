@@ -1,12 +1,10 @@
 import { withTransactionDatabase } from "~/server/db/helpers";
-import { entityMutationReferences } from "~/server/entity-kernel/adapter";
 import {
   mutationEvents,
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
 } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { defineRepository, onDb } from "~/server/entity-kernel/repo/repository";
-import { createAppError } from "~/server/errors/app-error";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
@@ -20,7 +18,6 @@ import {
   updateLocationAiDescription,
 } from "./crud";
 import { getLocationByShortcode } from "./lookup";
-import { reparentLocationsInBulk } from "./reparent";
 
 const locationShortcodes = bindShortcodeResolver("location");
 
@@ -90,28 +87,5 @@ export const locationRepository = defineRepository("location", {
       mutationEvents("location", "deleted", ids, "location.delete"),
     );
     return result;
-  },
-  /**
-   * The field mask says `parentId`; the semantics stay in
-   * {@link reparentLocationsInBulk} (Home mapping, cycle check, race guard).
-   * An ABSENT `parentId` is refused rather than defaulted: an explicit `null`
-   * moves to Home, so reading `undefined` as `null` would move a selection
-   * to Home on an empty patch.
-   */
-  bulkUpdate: async (ctx, shortcodes, data) => {
-    if (data.parentId === undefined)
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "A bulk location patch must supply parentId (null moves to Home).",
-      );
-    await reparentLocationsInBulk(
-      ctx.db,
-      ctx.actorContext,
-      shortcodes,
-      data.parentId,
-    );
-    return {
-      updatedReferences: entityMutationReferences("location", shortcodes),
-    };
   },
 });

@@ -10,6 +10,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SearchProviderProps } from "~/entity/picker/with-search-hook";
+import { installFeatures } from "~/features/registry";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {
@@ -41,6 +42,7 @@ function stubSearchProviderFor() {
 let harness: ReturnType<typeof createBrowserTestHarness>;
 
 beforeEach(() => {
+  installFeatures();
   harness = createBrowserTestHarness();
 });
 
@@ -49,6 +51,36 @@ afterEach(() => {
 });
 
 describe("BulkEditDialogBody", () => {
+  it("submits list additions and removals as patches", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <BulkEditDialogBody
+        entity="product"
+        items={[{ id: "PRD-ABCD", name: "Synthetic mount" }]}
+        fieldKeys={["tags"]}
+        onOpenChange={vi.fn()}
+        onSubmit={onSubmit}
+        isPending={false}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    const add = screen.getByPlaceholderText("Tags to add");
+    fireEvent.change(add, { target: { value: "mount-a" } });
+    fireEvent.keyDown(add, { key: "Enter" });
+    const remove = screen.getByPlaceholderText("Tags to remove");
+    fireEvent.change(remove, { target: { value: "mount-b" } });
+    fireEvent.keyDown(remove, { key: "Enter" });
+    fireEvent.click(screen.getByRole("button", { name: "Update" }));
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith({
+        tags: [
+          { op: "add", key: "mount-a" },
+          { op: "remove", key: "mount-b" },
+        ],
+      }),
+    );
+  });
+
   it("does not turn Set value with an empty control into an accidental clear", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     render(
@@ -161,7 +193,7 @@ describe("BulkEditDialogBody", () => {
   });
 
   // One dirtied field, several untouched siblings, across entities with
-  // different bulk-update rosters (task's five vs. planting's three) — the
+  // different bulk-update rosters — the
   // payload must carry exactly the touched key either way.
   it.each<{
     entity: Entity;

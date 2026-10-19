@@ -194,12 +194,11 @@ const deleteCommandSchema = z.object({
 /**
  * Bulk field patch over the same id bound bulk delete uses. `data` is the
  * entity's own update schema narrowed to the fields its literal spec declares
- * under `capabilities.bulkUpdate`, so an undeclared field is refused here
+ * from the normal update roster, so an undeclared field is refused here
  * rather than in a repository.
  */
-const bulkUpdateCommandSchema = generatedEntityBulkUpdateCommandSchema(
-  uniqueEntityIdsSchema,
-);
+export const entityBulkUpdateCommandSchema =
+  generatedEntityBulkUpdateCommandSchema(uniqueEntityIdsSchema);
 
 const resolvableEntitySchema = z.enum(generatedResolveEntityKernelEntities);
 
@@ -221,7 +220,7 @@ export const entityBrowserMutationCommandSchema = z.union([
   generatedEntityCreateCommandSchema,
   generatedEntityUpdateCommandSchema,
   deleteCommandSchema,
-  bulkUpdateCommandSchema,
+  entityBulkUpdateCommandSchema,
   generatedBrowserEntityRelationCommandSchema,
   // `data` is the entity's own merge input, parsed by its merge port.
   z.object({

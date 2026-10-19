@@ -207,10 +207,11 @@ const checkSections = (
  */
 const derivedListActions = (
   capabilities: EntityDeclarationMetadata["capabilities"],
+  hasBulkUpdate: boolean,
 ): string[] => {
   if (capabilities.lifecycle === "readOnly") return [];
   return [
-    ...(capabilities.bulkUpdate !== null ? ["bulkEdit"] : []),
+    ...(hasBulkUpdate ? ["bulkEdit"] : []),
     ...(capabilities.merge && capabilities.operationOwners.merge === "kernel"
       ? ["merge"]
       : []),
@@ -623,7 +624,13 @@ export const compilePresentation = (
         list.tree === null || fieldModel.hierarchy === null
           ? null
           : { parentField: fieldModel.hierarchy.parentField, ...list.tree },
-      actions: [...list.actions, ...derivedListActions(capabilities)],
+      actions: [
+        ...list.actions,
+        ...derivedListActions(
+          capabilities,
+          facts.hasUpdate && fieldModel.bulk.length > 0,
+        ),
+      ],
       links: list.links,
       timeline:
         list.timeline === null

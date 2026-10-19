@@ -38,10 +38,8 @@ import {
   createExpense,
   deleteExpenses,
   getExpenseByShortcode,
-  setExpensesCostType,
   updateExpense,
 } from "~/server/domains/expense/repo/crud";
-import { updateExpensesInBulk } from "~/server/domains/expense/repo/crud";
 import {
   expenseList,
   expenseListRead,
@@ -60,6 +58,7 @@ import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { resolveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
+import { bulkUpdateFor } from "~/server/testing/entity-kernel";
 import {
   makeExpenseInput,
   makeProductInput,
@@ -109,6 +108,8 @@ const purchaseIdOf = (expense: ExpenseOut): PurchaseShortcode => {
   }
   return expense.purchaseId;
 };
+
+const updateExpensesInBulk = bulkUpdateFor("expense");
 
 describe("expense workflows — analyzer orchestration", () => {
   const ctx = withTestDb();
@@ -988,7 +989,7 @@ describe("expense repository — bulk trade / cost-type writes", () => {
     expect(await updateEntries(alreadyId)).toHaveLength(0);
   });
 
-  it("setExpensesCostType writes the cost type and audits only the changed rows", async () => {
+  it("bulk cost type updates audit only the changed rows", async () => {
     const { output: a, entityId: aId } = await line("bulk costType a", {
       costType: "materials",
     });
@@ -997,12 +998,19 @@ describe("expense repository — bulk trade / cost-type writes", () => {
       { costType: "tools" },
     );
 
-    const updated = await setExpensesCostType(
+    await updateExpensesInBulk(
       ctx.db,
-      { ids: [a.id, already.id], costType: "tools" },
+      [a.id, already.id],
+      { costType: "tools" },
       ctx.actor,
     );
-    expect(updated.map((row) => row.costType)).toEqual(["tools", "tools"]);
+    expect(
+      await Promise.all(
+        [a.id, already.id].map(
+          async (id) => (await getExpenseByShortcode(ctx.db, id))?.costType,
+        ),
+      ),
+    ).toEqual(["tools", "tools"]);
 
     expect(changeOf((await updateEntries(aId))[0], "costType")).toEqual({
       from: "materials",

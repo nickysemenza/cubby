@@ -19,8 +19,8 @@ import {
   getProductByShortcode,
   listProductsRead,
   productList,
-  setProductsStockTracked,
 } from "~/server/domains/product/repo/crud";
+import { bulkStockTrackedThroughKernel as setProductsStockTracked } from "~/server/testing/entity-kernel";
 import {
   createInventoryFixture,
   createLocationFixture,

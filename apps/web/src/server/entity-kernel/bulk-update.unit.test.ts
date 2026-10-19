@@ -10,7 +10,7 @@ const parseCommand = <TInput>(command: TInput) =>
   entityCommandSchema.safeParse(command);
 
 describe("entity kernel bulkUpdate", () => {
-  it("accepts a patch limited to the declared fields", () => {
+  it("accepts ordinary update fields on the derived bulk roster", () => {
     expect(
       parseCommand({
         action: "bulkUpdate",
@@ -41,9 +41,8 @@ describe("entity kernel bulkUpdate", () => {
     ).toBe(true);
   });
 
-  it("refuses a field the entity never declared as bulk-updatable", () => {
-    // `name` is a real task update field; only the declared subset is
-    // patchable, and an undeclared one is refused rather than stripped.
+  it("refuses excluded names and unknown fields", () => {
+    // Identity fields are rejected rather than silently stripped.
     expect(
       parseCommand({
         action: "bulkUpdate",
@@ -60,8 +59,7 @@ describe("entity kernel bulkUpdate", () => {
         data: { stockTracked: true, name: "Renamed in bulk" },
       }).success,
     ).toBe(false);
-    // `variety` is a real planting update field; only status/finishedOn/
-    // locationId are declared bulk-updatable.
+    // An unknown update key is rejected alongside otherwise valid fields.
     expect(
       parseCommand({
         action: "bulkUpdate",
@@ -72,7 +70,7 @@ describe("entity kernel bulkUpdate", () => {
     ).toBe(false);
   });
 
-  it("refuses an entity that never declared the capability", () => {
+  it("refuses excluded names on newly bulk-editable entities", () => {
     expect(
       parseCommand({
         action: "bulkUpdate",

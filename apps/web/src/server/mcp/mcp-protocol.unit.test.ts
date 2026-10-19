@@ -692,4 +692,80 @@ describe("MCP protocol smoke", () => {
     expect(recordDatabaseWrite).toHaveBeenCalledOnce();
     expect(recordDatabaseWrite).toHaveBeenCalledWith("mcp.entity.commands");
   });
+  it("executes summary commands with reference-only output while full commands retain complete validation", async () => {
+    const full = mock(productTopLevelOut, { overrides: { externalIds: [] } });
+    const runEntity = vi.fn<ExecuteEntity>(
+      async (_context, command, detail) => {
+        if (command.action !== "create" || command.entity !== "product")
+          throw new Error("Unexpected command");
+        if (detail === "reference")
+          return {
+            action: "create",
+            entity: "product",
+            item: { id: full.id },
+            sideEffects: {},
+          };
+        if (detail === "full" && command.data.name === "Incomplete full result")
+          return {
+            action: "create",
+            entity: "product",
+            item: { id: full.id },
+            sideEffects: {},
+          };
+        if (detail === "full")
+          return {
+            action: "create",
+            entity: "product",
+            item: full,
+            sideEffects: {},
+          };
+        throw new Error("Batch did not select its output read");
+      },
+    );
+    const server = kernelServer(runEntity);
+    const command = {
+      action: "create",
+      entity: "product",
+      data: { name: "Synthetic batch product" },
+    };
+    const summary = await callMcpTool(
+      server,
+      "entity",
+      { action: "commands", commands: [command] },
+      {},
+      nullKernel,
+    );
+    expect(summary.isError).not.toBe(true);
+    expect(summary.structuredContent).toEqual({
+      summary: { requested: 1, succeeded: 1, failed: 0 },
+      results: [{ index: 0, status: "succeeded", reference: full.id }],
+    });
+    const detail = await callMcpTool(
+      server,
+      "entity",
+      { action: "commands", commands: [command], resultDetail: "full" },
+      {},
+      nullKernel,
+    );
+    expect(detail.isError).not.toBe(true);
+    expect(detail.structuredContent).toMatchObject({
+      summary: { succeeded: 1, failed: 0 },
+      results: [{ item: { item: { id: full.id, name: full.name } } }],
+    });
+    const invalidFull = await callMcpTool(
+      server,
+      "entity",
+      {
+        action: "commands",
+        commands: [{ ...command, data: { name: "Incomplete full result" } }],
+        resultDetail: "full",
+      },
+      {},
+      nullKernel,
+    );
+    expect(invalidFull.structuredContent).toMatchObject({
+      summary: { succeeded: 0, failed: 1 },
+      results: [{ status: "failed" }],
+    });
+  });
 });

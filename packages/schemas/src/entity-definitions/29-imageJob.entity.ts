@@ -284,7 +284,6 @@ export default defineEntity({
     ],
     create: [],
     update: [],
-    bulk: [],
     audit: [],
     output: [
       "id",
@@ -458,7 +457,6 @@ export default defineEntity({
     images: { storage: false },
     softDelete: false,
     delete: null,
-    bulkUpdate: null,
     merge: false,
     lifecycle: "readOnly",
     dataQuality: {

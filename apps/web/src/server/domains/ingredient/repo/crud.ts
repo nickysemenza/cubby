@@ -29,7 +29,6 @@ import {
 } from "~/server/db/helpers";
 import { ingredient, product } from "~/server/db/schema";
 import { markProductConversionCoverageInputStale } from "~/server/domains/product/repo/conversion-coverage";
-import { patchEntityRows } from "~/server/entity-kernel/repo/entity-patch";
 import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import {
@@ -137,28 +136,6 @@ export const updateIngredient = async (
     }
     return updated;
   });
-
-/** Bulk pantry-planning setting update. Inventory rows are deliberately never
- * selected or written here: this changes only an ingredient-level assumption. */
-export const updateIngredientsUsuallyOnHand = async (
-  db: Database,
-  ids: IngredientId[],
-  data: Pick<z.infer<typeof ingredientUpdateData>, "usuallyOnHand">,
-  actor: ActorContext,
-): Promise<IngredientId[]> => {
-  const updated = await patchEntityRows(
-    db,
-    actor,
-    {
-      entity: "ingredient",
-      table: ingredient,
-      fields: entityFieldModels.ingredient.bulk,
-    },
-    ids,
-    data,
-  );
-  return updated.map((row) => row.id);
-};
 
 export const findOrCreateIngredient = async (
   db: Database | DrizzleTransaction,

@@ -9,13 +9,13 @@ import {
   locationSearch,
 } from "~/server/domains/location/repo/crud";
 import { getLocationsByShortcodes } from "~/server/domains/location/repo/lookup";
-import { reparentLocationsInBulk } from "~/server/domains/location/repo/reparent";
 import {
   buildLocationTree,
   getLocationInventoryBreakdown,
 } from "~/server/domains/location/repo/tree";
 import { getLocationValuationSummary } from "~/server/domains/location/repo/valuation";
 import { runMutationSideEffects } from "~/server/entity-kernel/repo/mutation-side-effects";
+import { ENTITY_KERNEL_OPERATIONS } from "~/server/generated/entity-kernel-bindings.gen";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import { bindWorkflow, workflow } from "~/server/workflows/runtime";
@@ -72,18 +72,14 @@ export const locationHandlers = implementOperationDomain(locationContract, {
     ),
   ensureGlobalUnknown: (context) =>
     ensureGlobalUnknownWorkflow(context, undefined),
-  // Kept alongside the kernel's `location.bulkUpdate`: the arrange surface, the
-  // location sweep and the reparent dialog all drive this operation, and all
-  // three share `reparentLocationsInBulk` with the kernel path. Its `ids`
-  // bound is 3000, where the kernel's shared id schema caps at 500.
+  // The arrange workflow retains its 3000-row envelope; execution shares the
+  // generic bulk transaction and normal location invariants.
   bulkUpdateParent: async (context, input) => {
-    const { updated } = await reparentLocationsInBulk(
-      context.db,
-      context.actorContext,
-      input.ids,
-      input.parentId ?? null,
-    );
-    return { updated };
+    const result = await ENTITY_KERNEL_OPERATIONS.location.bulkUpdate(context, {
+      ids: [...new Set(input.ids)],
+      data: { parentId: input.parentId ?? null },
+    });
+    return { updated: result.updatedReferences.length };
   },
   getByShortcodes: (context, input) =>
     getLocationsByShortcodes(context.db, input.shortcodes),

@@ -89,6 +89,7 @@ export default defineEntity({
       },
       {
         key: "identity",
+        semanticRole: "externalIdentifier",
         kind: "json",
         control: { kind: "specialized", renderer: "structured-field" },
         display: {
@@ -230,6 +231,7 @@ export default defineEntity({
       },
       {
         key: "sourceAliases",
+        semanticRole: "externalIdentifier",
         kind: "json",
         control: { kind: "specialized", renderer: "source-aliases" },
         display: {
@@ -249,6 +251,7 @@ export default defineEntity({
       },
       {
         key: "cardNumbers",
+        semanticRole: "externalIdentifier",
         kind: "json",
         description:
           "Every last four this account has presented, dated: the primary card the statement labels it with (a reissue is an older primary with validTo), wallet device numbers, sibling cards, or gift-card instances.",
@@ -529,7 +532,6 @@ export default defineEntity({
       "inventoryOwnerDefaultEnabled",
       "notes",
     ],
-    bulk: [],
     audit: [
       "primaryCardholderId",
       "authorizedUsers",
@@ -986,7 +988,6 @@ export default defineEntity({
       storage: false,
     },
     delete: { mode: "soft", bulk: true },
-    bulkUpdate: null,
     merge: false,
     dataQuality: {
       checks: [

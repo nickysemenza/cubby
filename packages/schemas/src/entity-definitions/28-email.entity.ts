@@ -462,7 +462,6 @@ export default defineEntity({
     ],
     create: [],
     update: [],
-    bulk: [],
     audit: [],
     derived: {
       // Linked, then suggested, then unlinked; newest first within one.
@@ -742,7 +741,6 @@ export default defineEntity({
     images: { storage: false },
     softDelete: false,
     delete: null,
-    bulkUpdate: null,
     merge: false,
     lifecycle: "readOnly",
     // Relevance-conditional Email pipeline gaps; an unrelated Email can only

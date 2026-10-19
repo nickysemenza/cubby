@@ -18,13 +18,12 @@ import {
   createProductReadActions,
   readProductMutationFields,
 } from "~/server/domains/product/repo/write/product-writes";
-import { entityMutationReferences } from "~/server/entity-kernel/adapter";
+import { entityDetailJson } from "~/server/entity-kernel/repo/entity-source";
 import {
   mutationEvents,
   runMutationSideEffectsForEntities,
 } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { defineRepository } from "~/server/entity-kernel/repo/repository";
-import { createAppError } from "~/server/errors/app-error";
 import {
   bindShortcodeResolver,
   resolveLiveShortcodes,
@@ -37,7 +36,6 @@ import {
   productList,
   listProductsRead,
   productListSummary,
-  setProductsStockTracked,
 } from "./crud";
 import { readProductDetail } from "./detail";
 import { PRODUCT_DELETE_EDGE_POLICY } from "./edge-roles";
@@ -62,6 +60,7 @@ async function linkedProductIngredientIds(db: Database, shortcodes: string[]) {
  */
 export const productRepository = defineRepository("product", {
   sideEffects: false,
+  updatePolicy: { recordFields: ["price", "fdc_id", "labelNutrition", "kind"] },
   lifecycle: {
     delete: PRODUCT_DELETE_EDGE_POLICY,
     merge: PRODUCT_MERGE_EDGE_POLICY,
@@ -99,20 +98,27 @@ export const productRepository = defineRepository("product", {
     };
   },
   createRead: async (ctx, data, fields) => {
+    let sourceSnapshot: z.infer<ReturnType<typeof z.json>> | undefined;
     const { output, entityId } = await createProductWithReadSideEffects(
       {
         db: ctx.db,
         product: createProductReadActions(
           ctx.db,
           ctx.usdaClient,
-          (product, id) =>
-            readProductMutationFields(
+          async (product, id) => {
+            const projected = await readProductMutationFields(
               ctx.db,
               ctx.usdaClient,
               product,
               id,
               fields,
-            ),
+            );
+            sourceSnapshot = entityDetailJson.parse({
+              ...product,
+              ...projected,
+            });
+            return projected;
+          },
         ),
         recipeCosting: ctx.services.recipeCosting,
         upcLookupClient: ctx.upcLookupClient,
@@ -123,6 +129,7 @@ export const productRepository = defineRepository("product", {
     return {
       output,
       entityId,
+      sourceSnapshot,
       warnings: output.sideEffects.warnings,
     };
   },
@@ -142,20 +149,27 @@ export const productRepository = defineRepository("product", {
   },
   updateRead: async (ctx, shortcode, data, fields) => {
     const entityId = await productShortcodes.one(ctx.db, shortcode);
+    let sourceSnapshot: z.infer<ReturnType<typeof z.json>> | undefined;
     const output = await updateProductWithReadSideEffects(
       {
         db: ctx.db,
         product: createProductReadActions(
           ctx.db,
           ctx.usdaClient,
-          (product, id) =>
-            readProductMutationFields(
+          async (product, id) => {
+            const projected = await readProductMutationFields(
               ctx.db,
               ctx.usdaClient,
               product,
               id,
               fields,
-            ),
+            );
+            sourceSnapshot = entityDetailJson.parse({
+              ...product,
+              ...projected,
+            });
+            return projected;
+          },
         ),
         recipeCosting: ctx.services.recipeCosting,
       },
@@ -163,7 +177,7 @@ export const productRepository = defineRepository("product", {
       data,
       ctx.actorContext,
     );
-    return { output, entityId };
+    return { output, entityId, sourceSnapshot };
   },
   delete: async (ctx, shortcodes) => {
     const ids = await productShortcodes.all(ctx.db, shortcodes);
@@ -179,38 +193,6 @@ export const productRepository = defineRepository("product", {
       }),
     ]);
     return { detachedImageKeys, deletedImageShortcodes };
-  },
-  /**
-   * The kernel's `bulkUpdate` runs no generic side effects (it is shaped like
-   * `delete`), so the fan-out is dispatched here. Deliberately NOT routed
-   * through `updateProduct`: `stockTracked` feeds no price, unit mapping or
-   * quantity, so that recompute cascade has nothing to react to.
-   */
-  bulkUpdate: async (ctx, shortcodes, data) => {
-    if (data.stockTracked === undefined)
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "A bulk product patch must supply stockTracked.",
-      );
-    const items = await setProductsStockTracked(
-      ctx.db,
-      { ids: shortcodes, stockTracked: data.stockTracked },
-      ctx.actorContext,
-    );
-    const ids = await productShortcodes.all(
-      ctx.db,
-      items.map((item) => item.id),
-    );
-    await runMutationSideEffectsForEntities(
-      ctx.db,
-      mutationEvents("product", "updated", ids, "product.bulkUpdate"),
-    );
-    return {
-      updatedReferences: entityMutationReferences(
-        "product",
-        items.map((item) => item.id),
-      ),
-    };
   },
   merge: {
     input: mergeProductsInput,

@@ -11,13 +11,11 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { purchase as purchaseTable } from "~/server/db/schema";
-import {
-  updateExpense,
-  updateExpensesInBulk,
-} from "~/server/domains/expense/repo/crud";
+import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { projectCreateFromTasksWorkflow } from "~/server/domains/project/operations.server";
 import { listSuggestions } from "~/server/generic/assessment/repo/suggestion-review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { bulkUpdateFor } from "~/server/testing/entity-kernel";
 
 import {
   categoryPorts,
@@ -134,6 +132,8 @@ const writeCases: WriteCase[] = [
 // supersedes its pending Suggestions, including writes that bypass the
 // repository and columns derived through a backing Purchase; an unchanged
 // column leaves them pending.
+const updateExpensesInBulk = bulkUpdateFor("expense");
+
 describe("Suggestion supersede", () => {
   const ctx = withTestDb();
 

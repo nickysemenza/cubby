@@ -14,11 +14,6 @@ import type { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-c
 import type { TaskMutationHooks } from "~/server/domains/task/repo/crud";
 import type { USDAService } from "~/server/domains/usda-food/service/usda.service";
 import {
-  type MutationSideEffectEntity,
-  mutationEvents,
-  runMutationSideEffectsForEntities,
-} from "~/server/entity-kernel/repo/mutation-side-effects";
-import {
   ENTITY_SCHEMA_BINDINGS,
   type EntitySchemaBindingEntity,
   type EntitySchemaBindingMap,
@@ -69,7 +64,7 @@ export interface EntityMutationReference<
   id: string;
 }
 
-export const entityMutationReferences = <E extends EntitySchemaBindingEntity>(
+const entityMutationReferences = <E extends EntitySchemaBindingEntity>(
   entity: E,
   ids: readonly string[],
 ): EntityMutationReference<E>[] => ids.map((id) => ({ entity, id }));
@@ -87,31 +82,6 @@ export const deletedWithImages = <E extends EntitySchemaBindingEntity>(
   ...entityMutationReferences("image", imageShortcodes),
 ];
 
-/** A bulk patch's kernel result, after its one side-effect fan-out. */
-export const bulkUpdatedWithSideEffects = async <
-  E extends EntitySchemaBindingEntity & MutationSideEffectEntity,
->(
-  ctx: EntityKernelContext,
-  entity: E,
-  result: { updatedIds: EntityId<E>[]; updatedShortcodes: readonly string[] },
-) => {
-  await runMutationSideEffectsForEntities(
-    ctx.db,
-    mutationEvents(
-      entity,
-      "updated",
-      result.updatedIds,
-      `${entity}.bulkUpdate`,
-    ),
-  );
-  return {
-    updatedReferences: entityMutationReferences(
-      entity,
-      result.updatedShortcodes,
-    ),
-  };
-};
-
 export interface EntityKernelDeleteResult {
   deletedReferences: EntityMutationReference[];
   detachedImageKeys?: string[];
@@ -120,17 +90,6 @@ export interface EntityKernelDeleteResult {
     effect: OperationDisposition["effect"];
     changed: number;
   }>;
-}
-
-/**
- * A bulk patch is one repository call, not N kernel updates: the repository
- * owns the per-entity side-effect fan-out, exactly as `delete` does.
- */
-export interface EntityKernelBulkUpdateResult<
-  E extends EntitySchemaBindingEntity,
-> {
-  updatedReferences: EntityMutationReference<E>[];
-  detachedImageKeys?: string[];
 }
 
 type SchemaOutput<S> = S extends ZodSchema ? ZodOutput<S> : never;
@@ -186,6 +145,8 @@ export interface EntityRepositoryWriteResult<
 > {
   output: TOutput;
   entityId: EntityInternalId<E>;
+  /** Authoritative write values, independent of a requested output projection. */
+  sourceSnapshot?: z.infer<ReturnType<typeof z.json>>;
   detachedImageKeys?: string[];
   /** Best-effort follow-up failures, surfaced as `sideEffects.warnings`. */
   warnings?: readonly string[];
@@ -213,6 +174,7 @@ export type EntityRepository<
     ctx: EntityKernelContext,
     filters: ZodOutput<S["filters"]>,
   ): Promise<Record<string, number>>;
+  updatePolicy?: { recordFields: readonly string[] };
   get(
     ctx: EntityKernelContext,
     id: ZodOutput<S["id"]>,
@@ -244,11 +206,6 @@ export type EntityRepository<
     data: PresentSchemaOutput<S["updateInput"]>,
     fields: readonly string[],
   ): Promise<EntityRepositoryWriteResult<E, S, ListReadRow>>;
-  bulkUpdate?(
-    ctx: EntityKernelContext,
-    ids: ZodOutput<S["id"]>[],
-    data: PresentSchemaOutput<S["bulkUpdateInput"]>,
-  ): Promise<EntityKernelBulkUpdateResult<E>>;
   delete?(
     ctx: EntityKernelContext,
     ids: ZodOutput<S["id"]>[],

@@ -643,7 +643,6 @@ export default defineEntity({
       "capturedByPartyId",
       "capturedAt",
     ],
-    bulk: [],
     audit: [],
     rows: {
       importTargets: {
@@ -943,7 +942,6 @@ export default defineEntity({
     auditable: false,
     images: { storage: false },
     delete: { mode: "hard", bulk: true },
-    bulkUpdate: null,
     merge: false,
     dataQuality: {
       checks: [

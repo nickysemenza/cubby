@@ -96,6 +96,7 @@ export default defineEntity({
       {
         key: "aliases",
         kind: "text-array",
+        collection: { key: "value" },
         control: { kind: "specialized", renderer: "tag-list" },
         display: { detail: true },
         validation: {
@@ -323,7 +324,6 @@ export default defineEntity({
       "productExpectation",
       "stockTracked",
     ],
-    bulk: [],
     audit: [
       "name",
       "aliases",
@@ -497,7 +497,6 @@ export default defineEntity({
     images: { storage: false },
     countable: false,
     delete: { mode: "soft", bulk: true },
-    bulkUpdate: null,
     merge: true,
     dataQuality: {
       checks: [

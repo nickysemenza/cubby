@@ -32,7 +32,6 @@ import {
   type SortParams,
 } from "@cubby/schemas/pagination";
 import type {
-  ProductBulkStockTrackedInput,
   ProductFilters,
   ProductPickerItemOut,
 } from "@cubby/schemas/product";
@@ -143,7 +142,6 @@ import {
   resolveEntityDisplayImageLists,
   resolveEntityDisplayImages,
 } from "~/server/entity-kernel/repo/entity-display-image";
-import { patchEntityRows } from "~/server/entity-kernel/repo/entity-patch";
 import { createEntityReader } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import { findPgError } from "~/server/errors/db-errors";
@@ -2011,51 +2009,6 @@ export const updateProduct = async (
     }
     throw error;
   }
-};
-
-/**
- * Bulk stock-tracking write — the shape of `setExpensesCostType`, and
- * deliberately NOT routed through `updateProduct`.
- *
- * `stockTracked` is a pure worklist decision: it feeds no price, no unit
- * mapping and no quantity, so none of `updateProduct`'s recompute cascade
- * (recipe costing, location valuation, USDA resync) has anything to react to.
- * Running that per row over a several-hundred-row sweep would enqueue a
- * recompute wave for a flag no derivation reads.
- *
- * The audit entries are the point of the loop: this is the one write that
- * makes a product disappear from "Not on a shelf", so a wrong sweep has to be
- * legible after the fact rather than only reversible.
- */
-export const setProductsStockTracked = async (
-  db: Database,
-  input: ProductBulkStockTrackedInput,
-  actor: ActorContext,
-): Promise<ProductTopLevelOut[]> => {
-  const { stockTracked } = input;
-
-  const updatedShortcodes = await withTransaction(db, async (tx) => {
-    const ids = await resolveAllOrThrow(tx, "product", input.ids);
-    await patchEntityRows(
-      tx,
-      actor,
-      {
-        entity: "product",
-        table: product,
-        fields: entityFieldModels.product.bulk,
-      },
-      ids,
-      { stockTracked },
-    );
-
-    // Return every resolved selection, including rows whose value was already
-    // equal to the requested flag. The public bulk contract reports the
-    // selected rows, while patchEntityRows intentionally returns only changed
-    // rows for generic scalar callers.
-    return input.ids;
-  });
-
-  return getProductsByShortcodes(db, updatedShortcodes);
 };
 
 type ExternalIdRow = typeof entityExternalId.$inferSelect;
