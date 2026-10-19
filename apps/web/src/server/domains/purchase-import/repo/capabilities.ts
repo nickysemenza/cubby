@@ -1,6 +1,7 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
 import {
   agentImportRunPurpose,
+  entityReadKinds,
   importRunAgentManifest,
   type ImportRunAgentConfig,
 } from "@cubby/schemas/import-run-agent";
@@ -181,14 +182,19 @@ export async function purchaseAgentRunActions(db: Database, runId: string) {
     ? importRunAgentManifest[agentPurpose.data]
     : undefined;
   const allowed: readonly string[] = config?.mcpActions ?? [];
-  return { purpose, allowed, entityKinds: config?.mcpEntityKinds };
+  return {
+    purpose,
+    allowed,
+    entityRead: config?.entityRead,
+    entityKinds: entityReadKinds(config?.entityRead),
+  };
 }
 
 /**
  * Gate one trusted purchase-agent call: the run's purpose must mount the
  * action (`importRunAgentManifest[purpose].mcpActions`), and a write must also
  * hold its capability. Reads outside the manifest, and `entity_read` of a
- * kind outside `mcpEntityKinds`, are refused too, so a mounted tool never
+ * kind outside `entityRead`, are refused too, so a mounted tool never
  * exposes more than the purpose lists.
  */
 export async function assertPurchaseAgentAction(

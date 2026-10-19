@@ -628,6 +628,7 @@ function toolDescription(
 function toolSchema(
   declaration: string,
   actions: ReadonlyArray<{ action: CompiledAction; json: JsonObject }>,
+  runExecution = true,
 ) {
   return {
     description: toolDescription(declaration, actions),
@@ -637,10 +638,20 @@ function toolSchema(
         description: action.spec.description,
         schema: json,
       })),
-      { _runExecution: runExecutionJsonSchema },
+      runExecution ? { _runExecution: runExecutionJsonSchema } : {},
     ),
   };
 }
+
+/**
+ * Whether a purchase agent's call of `action` reads `_runExecution`: its
+ * writer takes the envelope, or the adapter's replay wrapper requires it for a
+ * write the writer does not govern (see the tool callback). Reads and
+ * self-governed writers without it (mail.*) are bound by the delegation alone.
+ */
+const agentReadsRunExecution = (action: CompiledAction) =>
+  action.keepsRunExecution ||
+  (action.kind === "mutation" && !selfGoverned(action));
 
 const narrowedSchemas = new Map<string, ReturnType<typeof toolSchema>>();
 
@@ -648,7 +659,8 @@ const narrowedSchemas = new Map<string, ReturnType<typeof toolSchema>>();
  * The description and input schema of `tool` limited to `allowed` actions
  * (`${tool}.${action}`), or null when none is allowed. The purchase agent's
  * catalog is narrowed this way: the agent mounts whole tools and resends every
- * mounted schema on each model call, so an agent sees only its actions.
+ * mounted schema on each model call, so an agent sees only its actions, and
+ * the `_runExecution` envelope only when one of them reads it.
  */
 export function narrowedToolSchema(
   tool: CompiledTool,
@@ -658,11 +670,6 @@ export function narrowedToolSchema(
     allowed.has(action.name),
   );
   if (actions.length === 0) return null;
-  if (actions.length === tool.actions.size)
-    return {
-      description: tool.description,
-      inputJsonSchema: tool.inputJsonSchema,
-    };
   const key = actions.map((action) => action.name).join("|");
   const cached = narrowedSchemas.get(key);
   if (cached) return cached;
@@ -672,6 +679,7 @@ export function narrowedToolSchema(
       action,
       json: tool.actionJson.get(shortName(action))!,
     })),
+    actions.some(agentReadsRunExecution),
   );
   narrowedSchemas.set(key, schema);
   return schema;
