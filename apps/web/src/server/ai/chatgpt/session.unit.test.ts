@@ -89,6 +89,8 @@ describe("ChatGPT credential ownership", () => {
         clientId: null,
         accessToken: null,
         refreshToken: null,
+        connected: false,
+        issue: "Example unconfirmed revocation warning",
       });
       expect(
         await session.connect({
@@ -98,7 +100,7 @@ describe("ChatGPT credential ownership", () => {
           nonce: "example-nonce-value",
           redirectUri: "http://127.0.0.1:12345/auth/callback",
         }),
-      ).toMatchObject({ connected: true, welcomeDismissed: true });
+      ).toMatchObject({ connected: true, welcomeDismissed: true, issue: null });
       records.set("connection", {
         ...registered,
         clientId: null,

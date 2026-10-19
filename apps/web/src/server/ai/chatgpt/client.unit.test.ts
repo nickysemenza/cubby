@@ -1,8 +1,9 @@
 import { getErrorMessage } from "@cubby/shared";
+import { gatewayFetchThrough } from "@cubby/shared/ai/gateway-request";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { inferChatGptPlan } from "./client";
+import { connectedChatGptInference, inferChatGptPlan } from "./client";
 import { ChatGptInferenceRequests, type ChatGptPlanRpc } from "./rpc";
 
 afterEach(() => vi.useRealTimers());
@@ -77,3 +78,68 @@ describe("ChatGPT caller cancellation bridge", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 });
+
+// A disabled connection must be skipped before transport selection, just like disconnect.
+it.each([
+  "user_not_eligible",
+  "invalid_user",
+  "scope removed",
+  "invalid_client",
+])("skips a plan needing reauthorization: %s", async (issue) => {
+  const infer = vi.fn<ChatGptPlanRpc["infer"]>();
+  const onSelected = vi.fn();
+  const plan = fromPartial<ChatGptPlanRpc>({
+    status: async () => ({
+      connected: true,
+      email: null,
+      needsReauthorization: true,
+      issue,
+    }),
+    infer,
+  });
+  expect(
+    await connectedChatGptInference(
+      plan,
+      { model: "gpt-6-sol" },
+      { onSelected },
+    ),
+  ).toBeNull();
+  expect(infer).not.toHaveBeenCalled();
+  expect(onSelected).not.toHaveBeenCalled();
+});
+
+// Exercise the real funding router: an unavailable plan must preserve paid
+// admission for normal callers and fail closed for subscription-only callers.
+it.each([undefined, "subscription"] as const)(
+  "routes a disabled plan with funding %s",
+  async (funding) => {
+    const plan = fromPartial<ChatGptPlanRpc>({
+      status: async () => ({
+        connected: true,
+        needsReauthorization: true,
+        email: null,
+      }),
+    });
+    const gateway = vi.fn(async () => Response.json({ example: "paid" }));
+    const admission = vi.fn(async () => undefined);
+    const send = gatewayFetchThrough({
+      provider: "openai",
+      funding,
+      chatGpt: (body, options) =>
+        connectedChatGptInference(plan, body, options),
+      beforePaidRequest: admission,
+      gateway,
+    });
+    const response = await send("https://ai-gateway.invalid/openai/responses", {
+      method: "POST",
+      body: JSON.stringify({ model: "gpt-6-sol" }),
+    });
+    expect(await response.json()).toMatchObject(
+      funding
+        ? { error: { code: "subscription_unavailable" } }
+        : { example: "paid" },
+    );
+    expect(gateway).toHaveBeenCalledTimes(funding ? 0 : 1);
+    expect(admission).toHaveBeenCalledTimes(funding ? 0 : 1);
+  },
+);

@@ -50,6 +50,7 @@ describe("ChatGPT connection recovery", () => {
       hostId: "urn:uuid:example",
       clientId: null,
       loginHint: "user@example.com",
+      permissionRecovery: false,
     });
     expect(await session.status()).toMatchObject({
       needsReauthorization: true,
@@ -76,29 +77,35 @@ describe("ChatGPT connection recovery", () => {
       scopes: "chatgpt.tokens.use.direct resource.invoke",
     });
   });
-  it("disables inference when refresh explicitly removes direct permission", async () => {
-    const upstream = vi.fn<typeof fetch>(async (url) =>
-      String(url).includes("oauth/token")
-        ? Response.json({
-            access_token: "next-access",
-            refresh_token: "next-refresh",
-            expires_in: 3600,
-            token_type: "Bearer",
-            scope: "resource.invoke",
-          })
-        : Response.json({ models: [] }),
-    );
-    const { session } = harness(upstream, {
-      ...credential(),
-      scopes: "chatgpt.tokens.use.direct resource.invoke",
-    });
-    await expect(session.models()).rejects.toThrow("permission");
-    expect(await session.status()).toMatchObject({
-      needsReauthorization: true,
-    });
-    await expect(session.models()).rejects.toThrow("permission");
-    expect(upstream).toHaveBeenCalledTimes(1);
-  });
+  it.each(["resource.invoke", ""])(
+    "disables inference when refresh removes direct permission: %s",
+    async (scope) => {
+      const upstream = vi.fn<typeof fetch>(async (url) =>
+        String(url).includes("oauth/token")
+          ? Response.json({
+              access_token: "next-access",
+              refresh_token: "next-refresh",
+              expires_in: 3600,
+              token_type: "Bearer",
+              scope,
+            })
+          : Response.json({ models: [] }),
+      );
+      const { session } = harness(upstream, {
+        ...credential(),
+        scopes: "chatgpt.tokens.use.direct resource.invoke",
+      });
+      await expect(session.models()).rejects.toThrow("permission");
+      expect(await session.status()).toMatchObject({
+        needsReauthorization: true,
+      });
+      await expect(session.models()).rejects.toThrow("permission");
+      expect(upstream).toHaveBeenCalledTimes(1);
+      expect(await session.authorizationHost()).toMatchObject({
+        permissionRecovery: true,
+      });
+    },
+  );
   it.each([
     "subscription_sharing_user_not_eligible",
     "subscription_sharing_invalid_user",
@@ -210,6 +217,11 @@ describe("ChatGPT connection recovery", () => {
         connected: false,
         issue: expect.stringContaining("couldn't confirm"),
       });
+      expect((await session.status()).issue).toContain(
+        failure === "network"
+          ? "example network failure"
+          : `OpenAI revocation HTTP ${failure}: example refusal`,
+      );
       expect((await session.authorizationHost()).hostId).toBe(
         "urn:uuid:example",
       );
@@ -225,4 +237,125 @@ describe("ChatGPT connection recovery", () => {
       welcomeDismissed: true,
     });
   });
+});
+
+// Failures: code exchange can retain a rejected client; deterministic discovery
+// errors can wait through all retries; a 503 wait can erase the last HTTP body.
+it("clears the issued registration when code exchange rejects invalid_client", async () => {
+  const { session, records } = harness(async () =>
+    Response.json({ error: "invalid_client" }, { status: 400 }),
+  );
+  await expect(
+    session.connect({
+      code: "example-code",
+      clientId: "oaiapp_example",
+      verifier: "v".repeat(43),
+      nonce: "example-nonce-value",
+      redirectUri: "http://127.0.0.1:12345/auth/callback",
+    }),
+  ).rejects.toThrow(
+    "OpenAI no longer accepts Cubby’s registration — connect again.",
+  );
+  expect(await session.authorizationHost()).toMatchObject({
+    hostId: "urn:uuid:example",
+    clientId: null,
+    permissionRecovery: false,
+  });
+  expect(records.get("connection")).toMatchObject({
+    subject: "example-subject",
+    accessToken: null,
+    refreshToken: null,
+  });
+});
+it.each(["parse", "origin"])(
+  "does not retry deterministic discovery failures: %s",
+  async (failure) => {
+    vi.useFakeTimers();
+    const upstream = vi.fn<typeof fetch>(async () =>
+      failure === "parse"
+        ? Response.json({})
+        : Response.json({
+            revocation_endpoint: "https://untrusted.example.com/revoke",
+          }),
+    );
+    const { session } = harness(upstream);
+    const pending = session.disconnect();
+    await vi.advanceTimersByTimeAsync(40000);
+    await pending;
+    expect(upstream).toHaveBeenCalledTimes(1);
+    const status = await session.status();
+    expect(status.issue).toContain(
+      failure === "parse"
+        ? "revocation_endpoint"
+        : "Unexpected OpenAI revocation endpoint",
+    );
+    await session.dismissWelcome();
+    expect(await session.status()).toMatchObject({
+      issue: null,
+      connected: false,
+    });
+  },
+);
+it("returns the last 503 body when the next wait cannot fit the deadline", async () => {
+  vi.useFakeTimers();
+  const upstream = vi.fn<typeof fetch>(
+    async () => new Response("example unavailable", { status: 503 }),
+  );
+  const { session } = harness(upstream, {
+    ...credential(),
+    expiresAt: Date.now() + 3600_000,
+  });
+  const pending = session.infer(
+    { input: [] },
+    "gpt-6-sol",
+    undefined,
+    Date.now() + 5000,
+  );
+  await vi.advanceTimersByTimeAsync(2000);
+  const response = await pending;
+  expect(response.status).toBe(503);
+  expect(await response.text()).toBe("example unavailable");
+  expect(upstream).toHaveBeenCalledTimes(2);
+});
+
+// Removing cache breakpoints must not buy another complete outage retry budget.
+it("shares the 503 retry budget with the breakpoint-stripped request", async () => {
+  vi.useFakeTimers();
+  let calls = 0;
+  const upstream = vi.fn<typeof fetch>(async () => {
+    calls += 1;
+    return calls === 2
+      ? Response.json(
+          {
+            error: {
+              type: "invalid_request_error",
+              param: "input",
+              message: "example breakpoint refusal",
+            },
+          },
+          { status: 400 },
+        )
+      : new Response("example unavailable", { status: 503 });
+  });
+  const { session } = harness(upstream, {
+    ...credential(),
+    expiresAt: Date.now() + 3600_000,
+  });
+  const pending = session.infer(
+    {
+      input: [
+        {
+          type: "function_call_output",
+          call_id: "example-call",
+          output: "Example",
+        },
+      ],
+    },
+    "gpt-6-sol",
+  );
+  await vi.advanceTimersByTimeAsync(40000);
+  const response = await pending;
+  expect(response.status).toBe(503);
+  expect(await response.text()).toBe("example unavailable");
+  expect(upstream).toHaveBeenCalledTimes(5);
 });

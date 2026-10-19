@@ -17,8 +17,9 @@ export class ChatGptPlanDurableObject extends DurableObject<Env> {
       put: (key, value) => ctx.storage.put(key, value),
       delete: (key) => ctx.storage.delete(key),
     });
-    this.requests = new ChatGptInferenceRequests((body, model, signal) =>
-      this.session.infer(body, model, signal),
+    this.requests = new ChatGptInferenceRequests(
+      (body, model, signal, deadlineAt) =>
+        this.session.infer(body, model, signal, deadlineAt),
     );
   }
 

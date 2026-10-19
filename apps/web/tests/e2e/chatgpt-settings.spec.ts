@@ -53,7 +53,7 @@ test("settings explains local authorization and exposes no model selectors", asy
   ).toBeVisible();
   await expect(
     card.getByText(/background work continues on paid billing/u),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await expect(card.getByRole("combobox")).toHaveCount(0);
 });
 
@@ -67,6 +67,8 @@ test("settings renders the complete returned catalog, refresh errors, and discon
   const warning =
     "Cubby cleared its tokens but couldn't confirm OpenAI revoked them; disconnect Cubby in ChatGPT settings to be sure.";
   let failed = false;
+  let warningDismissed = false;
+  let needsReauthorization = false;
   await page.route("**/api/ai/chatgpt*", async (route) => {
     const request = route.request();
     if (request.method() === "DELETE") {
@@ -74,8 +76,14 @@ test("settings renders the complete returned catalog, refresh errors, and discon
       await route.fulfill({ json: { disconnected: true } });
     } else if (request.method() === "PATCH") {
       welcomeDismissed = true;
+      warningDismissed = true;
       await route.fulfill({
-        json: { connected, email: "user@example.com", welcomeDismissed },
+        json: {
+          connected,
+          email: "user@example.com",
+          welcomeDismissed,
+          issue: null,
+        },
       });
     } else if (request.url().includes("models")) {
       await route.fulfill(
@@ -112,7 +120,14 @@ test("settings renders the complete returned catalog, refresh errors, and discon
           connected,
           email: connected ? "user@example.com" : null,
           welcomeDismissed,
-          issue: connected ? null : warning,
+          needsReauthorization,
+          issue: connected
+            ? needsReauthorization
+              ? "Example plan permission removed. Reconnect ChatGPT."
+              : null
+            : warningDismissed
+              ? null
+              : warning,
         },
       });
   });
@@ -152,6 +167,18 @@ test("settings renders the complete returned catalog, refresh errors, and discon
   failed = true;
   await card.getByRole("button", { name: "Refresh models" }).click();
   await expect(card.getByText(/example eligibility restriction/)).toBeVisible();
+  needsReauthorization = true;
+  await page.reload();
+  await expect(
+    card.getByText("Example plan permission removed. Reconnect ChatGPT."),
+  ).toBeVisible();
+  await expect(
+    card.getByRole("heading", { name: "Available models" }),
+  ).toHaveCount(0);
+  await expect(
+    card.getByText("Reconnect ChatGPT to load models and resume tasks."),
+  ).toHaveCount(0);
+  warningDismissed = false;
   await card.getByRole("button", { name: "Disconnect ChatGPT" }).click();
   await expect(card.getByText(warning)).toBeVisible();
   await expect(
@@ -160,4 +187,8 @@ test("settings renders the complete returned catalog, refresh errors, and discon
   await expect(
     card.getByText("example-future-model", { exact: true }),
   ).toHaveCount(0);
+  await card.getByRole("button", { name: "Dismiss warning" }).click();
+  await expect(card.getByText(warning)).toHaveCount(0);
+  await page.reload();
+  await expect(card.getByText(warning)).toHaveCount(0);
 });

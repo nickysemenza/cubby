@@ -41,5 +41,6 @@ export const chatGptAuthorizationHost = z.object({
   hostId: z.string(),
   clientId: z.string().nullable(),
   loginHint: z.string().nullable().optional(),
+  permissionRecovery: z.boolean().optional(),
 });
 export type ChatGptAuthorizationHost = z.infer<typeof chatGptAuthorizationHost>;
