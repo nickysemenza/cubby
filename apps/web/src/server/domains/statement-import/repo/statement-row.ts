@@ -366,6 +366,23 @@ const storedRowCount = async (
   return Number(result.rows[0]?.count ?? 0);
 };
 
+/**
+ * Before #1894 the CSV normalizer kept only the last four mask digits, and
+ * those exports are not retained, so stored rows cannot be migrated. A
+ * positioned replay of the same occurrence that carries the complete mask
+ * ending in exactly those four digits is the same account.
+ */
+function upgradesTruncatedMask(stored: string, incoming: string): boolean {
+  const truncated = stored.match(/^(.*) \(\.\.\.(\d{4})\)$/u);
+  const complete = incoming.match(/^(.*) \(\.\.\.(\d{5,})\)$/u);
+  return (
+    !!truncated &&
+    !!complete &&
+    truncated[1] === complete[1] &&
+    complete[2]!.endsWith(truncated[2]!)
+  );
+}
+
 function assertImmutableStatementOccurrence(
   saved: Pick<
     typeof statementRow.$inferSelect,
@@ -579,9 +596,29 @@ export async function recordStatementRows(
           "Reviewed legacy membership target is missing, conflicts with the source evidence, or has a competing canonical row.",
         );
     }
+    const maskUpgrades: { id: string; from: string; to: string }[] = [];
     for (const saved of stored) {
       const incoming = rows.find((row) => row.externalId === saved.externalId);
-      if (incoming) assertImmutableStatementOccurrence(saved, incoming);
+      if (!incoming) continue;
+      if (
+        incoming.rowPosition !== undefined &&
+        upgradesTruncatedMask(
+          saved.accountDescriptor,
+          incoming.accountDescriptor,
+        )
+      ) {
+        assertImmutableStatementOccurrence(saved, {
+          ...incoming,
+          accountDescriptor: saved.accountDescriptor,
+        });
+        maskUpgrades.push({
+          id: saved.id,
+          from: saved.accountDescriptor,
+          to: incoming.accountDescriptor,
+        });
+        continue;
+      }
+      assertImmutableStatementOccurrence(saved, incoming);
     }
     const existingMembership = existingBatch
       ? (
@@ -639,6 +676,19 @@ export async function recordStatementRows(
         "CONSTRAINT_VIOLATION",
         "Failed to create statement import batch.",
       );
+
+    // `legacyExternalId` stays hashed over the truncated descriptor: it is the
+    // charge key settlement refs and other observations already join on.
+    for (const upgrade of maskUpgrades)
+      await unwrapDb(tx)
+        .update(statementRow)
+        .set({ accountDescriptor: upgrade.to, updatedAt: new Date() })
+        .where(
+          and(
+            eq(statementRow.id, upgrade.id),
+            eq(statementRow.accountDescriptor, upgrade.from),
+          ),
+        );
 
     const insertable = rows.filter(
       (row) => row.reviewedLegacyAccountDescriptor === undefined,

@@ -138,6 +138,83 @@ describe("statement row ledger", () => {
 
   // This exercises the real PostgreSQL identity/ref constraints and shared
   // web/native CSV writer; a browser cannot expose duplicate ref ownership.
+  // Failure modes: a positioned replay of a pre-#1894 export rejects or
+  // duplicates the truncated row, a different trailing mask is accepted, an
+  // unpositioned replay is upgraded, or the frozen charge key moves.
+  it("upgrades a truncated account mask in place on a positioned replay", async () => {
+    const truncated = "Rewards Checking (...4821)";
+    const full = "Rewards Checking (...904821)";
+    const positioned = (accountDescriptor: string) => [
+      rowInput({ accountDescriptor, rowPosition: 1 }),
+    ];
+    const replay = { fingerprint: "fp-mask-replay", rowCountDeclared: 1 };
+    await record(ctx.db, ctx.actor, positioned(truncated), replay);
+    const [before] = (await listStatementRows(ctx.db, {})).data;
+
+    await expect(
+      record(
+        ctx.db,
+        ctx.actor,
+        positioned("Rewards Checking (...905555)"),
+        replay,
+      ),
+    ).rejects.toThrow("conflicting immutable evidence");
+    await expect(
+      record(
+        ctx.db,
+        ctx.actor,
+        positioned("Rewards Checking (...4822)"),
+        replay,
+      ),
+    ).rejects.toThrow("conflicting immutable evidence");
+
+    expect(
+      await record(ctx.db, ctx.actor, positioned(full), replay, true),
+    ).toMatchObject({ inserted: 0, alreadyInThisBatch: 1 });
+    expect((await listStatementRows(ctx.db, {})).data).toEqual([before]);
+
+    expect(
+      await record(ctx.db, ctx.actor, positioned(full), replay),
+    ).toMatchObject({ inserted: 0, unchanged: 1, rowCountStored: 1 });
+    const upgraded = (await listStatementRows(ctx.db, {})).data;
+    expect(upgraded).toEqual([
+      {
+        ...before,
+        accountDescriptor: full,
+        updatedAt: upgraded[0]?.updatedAt,
+      },
+    ]);
+    expect(upgraded[0]?.legacyExternalId).toBe(before?.legacyExternalId);
+
+    expect(
+      await record(ctx.db, ctx.actor, positioned(full), replay),
+    ).toMatchObject({ inserted: 0, unchanged: 1, rowCountStored: 1 });
+    expect((await listStatementRows(ctx.db, {})).data).toEqual(upgraded);
+    await expect(
+      record(ctx.db, ctx.actor, positioned(truncated), replay),
+    ).rejects.toThrow("conflicting immutable evidence");
+
+    const unpositioned = { fingerprint: "fp-mask-v1", rowCountDeclared: 1 };
+    const v1Row = rowInput({
+      accountDescriptor: "Joint Savings (...7310)",
+      statementDate: "2026-05-09",
+    });
+    await record(ctx.db, ctx.actor, [v1Row], unpositioned);
+    expect(
+      await record(
+        ctx.db,
+        ctx.actor,
+        [{ ...v1Row, accountDescriptor: "Joint Savings (...617310)" }],
+        unpositioned,
+      ),
+    ).toMatchObject({ inserted: 1 });
+    expect(
+      (await listStatementRows(ctx.db, {})).data
+        .map((row) => row.accountDescriptor)
+        .toSorted(),
+    ).toEqual(["Joint Savings (...617310)", "Joint Savings (...7310)", full]);
+  });
+
   it("retains identical and zero CSV occurrences, then reviews date/provider drift without another charge", async () => {
     await createRepoEntity(ctx, "financialAccount", {
       name: "Occurrence card",

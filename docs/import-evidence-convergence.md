@@ -146,6 +146,10 @@ Provider account masks retain all supplied digits, including non-card masks
 longer than four digits. An account name already containing that mask does not
 receive a second suffix. These descriptors participate in statement identity;
 normalization must not truncate them into a different account reference.
+Rows recorded before complete masks kept only `(...last4)`. A positioned replay
+of the same occurrence whose complete mask ends in those four digits upgrades
+the stored descriptor in place; its charge key keeps the original hash. A
+different trailing mask or an unpositioned row never matches this way.
 
 Retailer preparation can explicitly target an orderless Purchase. Receipt
 itemization proposes a replacement finding with original lines, proposed
