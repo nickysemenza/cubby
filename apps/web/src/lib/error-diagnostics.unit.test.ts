@@ -46,7 +46,7 @@ describe("error diagnostics", () => {
 
   it("scrubs credentials embedded in messages", () => {
     const message = scrubErrorMessage(
-      "postgres://user:password@db.invalid/db?token=fixture-secret Authorization: Bearer fixture-token password=fixture-password",
+      "postgres://user:password@db.invalid/db?token=fixture-secret Authorization: Bearer fixture-token-0000 password=fixture-password",
     );
     expect(message).not.toContain("fixture-");
     expect(message).not.toContain("user:password");

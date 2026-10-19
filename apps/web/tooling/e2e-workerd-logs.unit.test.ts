@@ -11,7 +11,7 @@ describe("workerd log attachments", () => {
         timestamp: 1,
         level: "error",
         message:
-          "connect postgresql://postgres:hunter2@localhost:5432/cubby failed; Authorization: Bearer abc.def",
+          "connect postgresql://postgres:hunter2@localhost:5432/cubby failed; Authorization: Bearer abc.def.synthetic0000",
       },
     ]);
     expect(log).toMatchObject({ timestamp: 1, level: "error" });
