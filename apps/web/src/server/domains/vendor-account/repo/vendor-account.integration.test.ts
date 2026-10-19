@@ -91,6 +91,45 @@ describe("vendor account run activity", () => {
     expect(saved?.status).toBe("paused");
   });
 
+  // A manual pause stores the plain `paused` status; the account must still
+  // refuse a second live import Run.
+  it("counts a manually paused import as the account's one active Run", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic pause member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const store = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic paused store",
+    });
+    const account = await insertWithShortcode(ctx.db, "vendorAccount", {
+      vendorId: store.id,
+      ledgerPartyId: party.id,
+    });
+    const paused = await startImportRunFixture(ctx.db, {
+      ledgerPartyId: party.id,
+      vendorAccountId: account.id,
+    });
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "paused" })
+      .where(eq(run.id, paused.id));
+    await expect(
+      startImportRunFixture(ctx.db, {
+        ledgerPartyId: party.id,
+        vendorAccountId: account.id,
+      }),
+    ).rejects.toMatchObject({
+      cause: { constraint: "Run_one_active_vendor_account_key" },
+    });
+    expect(
+      await getDb(ctx.db)
+        .select({ status: run.status })
+        .from(run)
+        .where(eq(run.vendorAccountId, account.id)),
+    ).toEqual([{ status: "paused" }]);
+  });
+
   it("reads lastRunAt and lastSuccessAt from the account's runs", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Activity member",

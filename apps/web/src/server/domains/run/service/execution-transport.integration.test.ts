@@ -164,7 +164,11 @@ describe("household AI funding at the paid transport boundary", () => {
 
   async function grant(
     runId: RunId,
-    options: { paidOverBudgetUsd?: number; createdAt?: Date } = {},
+    options: {
+      paidOverBudgetUsd?: number;
+      createdAt?: Date;
+      action?: "run_now_paid" | "resume";
+    } = {},
   ) {
     const party = await getDb(ctx.db).query.ledgerParty.findFirst();
     if (!party) throw new Error("Synthetic member party is missing");
@@ -172,7 +176,7 @@ describe("household AI funding at the paid transport boundary", () => {
       .insert(runControlEvent)
       .values({
         runId,
-        action: "run_now_paid",
+        action: options.action ?? "run_now_paid",
         controllerUserId: ctx.actor.userId,
         controllerName: "Synthetic member",
         controllerEmail: "member@example.test",
@@ -247,6 +251,26 @@ describe("household AI funding at the paid transport boundary", () => {
     ).toBeNull();
     await expect(automaticPaid(chatRequest())).resolves.toBeUndefined();
     await expect(interactivePaid(chatRequest())).resolves.toBeUndefined();
+  });
+
+  // Storage refuses a paid amount that is not a positive run_now_paid grant.
+  it("stores an over-budget amount only on a positive paid grant", async () => {
+    const runId = await setup("mail_import");
+    await grant(runId);
+    await grant(runId, { paidOverBudgetUsd: 2 });
+    for (const options of [
+      { paidOverBudgetUsd: 0 },
+      { paidOverBudgetUsd: -1 },
+      { paidOverBudgetUsd: 2, action: "resume" as const },
+    ])
+      await expect(grant(runId, options)).rejects.toMatchObject({
+        cause: { constraint: "RunControlEvent_paid_over_budget_check" },
+      });
+    const stored = await getDb(ctx.db)
+      .select({ paid: runControlEvent.paidOverBudgetUsd })
+      .from(runControlEvent)
+      .where(eq(runControlEvent.runId, runId));
+    expect(stored.map(({ paid }) => paid).sort()).toEqual([2, null]);
   });
 
   // Non-agent background features use the generic funding wrapper rather

@@ -70,8 +70,6 @@ whose journal already contains an undeployed contract.
 `0078_drop_vendor_account_status` removes a relationship status that did not
 control execution. Both former active and disabled accounts remain; ownership
 defaults, cursors, tombstones, Purchases, Runs and source claims are preserved.
-The populated-predecessor regression is
-`tooling/vendor-account-status-migration.integration.test.ts`.
 
 Before merging this contraction, set `PRODUCTION_MIGRATION_THROUGH` to
 `0077_card_field_suggestions`, the last compatible journal predecessor.
@@ -145,10 +143,7 @@ Apply through `0074_drop_vendor_account_label` and deploy the matching code in
 that idle window. Compare VendorAccount rows excluding `label` (UUID, shortcode,
 vendor, member, status, cursor, owner default, timestamps) and the Purchase, Run
 and ImportSourceClaim rows that reference them. Only the old label values may
-be discarded. Confirm the column is gone before ending the idle window. The
-populated-predecessor regression
-`vendor-account-label-migration.integration.test.ts` verifies preservation with
-synthetic data.
+be discarded. Confirm the column is gone before ending the idle window.
 
 ## Durable member AI work
 
@@ -165,8 +160,7 @@ Before and after application, compare aggregate household entity counts, signed
 Expense totals and immutable Run input/progress evidence. Read back changed
 purposes/statuses and the request-table/index/check catalog. Historical recovery
 starts under matching code and current authorization; migration itself does not
-rerun models or repair missing audit history. The populated predecessor
-migration regression verifies these preservation boundaries with synthetic data.
+rerun models or repair missing audit history.
 
 ## Photo import lifecycle
 
