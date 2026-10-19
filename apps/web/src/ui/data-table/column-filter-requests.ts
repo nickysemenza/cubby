@@ -1,4 +1,7 @@
+import type { RowData } from "@tanstack/react-table";
 import { useEffect } from "react";
+
+import type { CubbyTable } from "./table-features";
 
 /**
  * A column header asks the table's filter bar to open one column's editor.
@@ -9,20 +12,25 @@ import { useEffect } from "react";
  */
 type Listener = (columnId: string) => void;
 
-const listeners = new WeakMap<object, Set<Listener>>();
+const listeners = new WeakMap<WeakKey, Set<Listener>>();
 
-export function requestColumnFilterEdit(table: object, columnId: string) {
+export function requestColumnFilterEdit<TData extends RowData>(
+  table: CubbyTable<TData>,
+  columnId: string,
+) {
   for (const listener of listeners.get(table) ?? []) listener(columnId);
 }
 
 /** Whether some filter bar is listening, so a header offers "Filter…" only when it can open. */
-export function hasColumnFilterEditor(table: object): boolean {
+export function hasColumnFilterEditor<TData extends RowData>(
+  table: CubbyTable<TData>,
+): boolean {
   return (listeners.get(table)?.size ?? 0) > 0;
 }
 
 /** The filter bar's subscription to header requests for `table`. */
-export function useColumnFilterEditRequests(
-  table: object,
+export function useColumnFilterEditRequests<TData extends RowData>(
+  table: CubbyTable<TData>,
   onRequest: Listener,
 ) {
   useEffect(() => {

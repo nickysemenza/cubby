@@ -46,21 +46,21 @@ export interface EnumIcon {
   sfSymbol: string;
 }
 
-const STATUS_ICONS: Record<string, EnumIcon> = {
-  "var(--positive)": { phosphor: "CheckCircle", sfSymbol: "checkmark.circle.fill" },
-  "var(--warning)": { phosphor: "Clock", sfSymbol: "clock" },
-  "var(--destructive)": { phosphor: "XCircle", sfSymbol: "xmark.circle.fill" },
-  "var(--info)": { phosphor: "CircleHalf", sfSymbol: "circle.lefthalf.filled" },
-  "var(--neutral-status)": { phosphor: "CircleDashed", sfSymbol: "circle.dashed" },
-};
+const STATUS_ICONS = new Map<string, EnumIcon>([
+  ["var(--positive)", { phosphor: "CheckCircle", sfSymbol: "checkmark.circle.fill" }],
+  ["var(--warning)", { phosphor: "Clock", sfSymbol: "clock" }],
+  ["var(--destructive)", { phosphor: "XCircle", sfSymbol: "xmark.circle.fill" }],
+  ["var(--info)", { phosphor: "CircleHalf", sfSymbol: "circle.lefthalf.filled" }],
+  ["var(--neutral-status)", { phosphor: "CircleDashed", sfSymbol: "circle.dashed" }],
+]);
 
-const VALUE_ICONS: Record<string, EnumIcon> = {
-  blocked: { phosphor: "Prohibit", sfSymbol: "nosign" },
-  paused: { phosphor: "PauseCircle", sfSymbol: "pause.circle" },
-  planned: { phosphor: "CalendarDots", sfSymbol: "calendar" },
-  planning: { phosphor: "CalendarDots", sfSymbol: "calendar" },
-  waiting: { phosphor: "Hourglass", sfSymbol: "hourglass" },
-};
+const VALUE_ICONS = new Map<string, EnumIcon>([
+  ["blocked", { phosphor: "Prohibit", sfSymbol: "nosign" }],
+  ["paused", { phosphor: "PauseCircle", sfSymbol: "pause.circle" }],
+  ["planned", { phosphor: "CalendarDots", sfSymbol: "calendar" }],
+  ["planning", { phosphor: "CalendarDots", sfSymbol: "calendar" }],
+  ["waiting", { phosphor: "Hourglass", sfSymbol: "hourglass" }],
+]);
 
 function valueKey(value: string) {
   return value.toLowerCase().replace(/[\s-]+/g, "_");
@@ -189,7 +189,9 @@ export function colorizeEnumOptions<T extends EnumOptionInput>(
     const glyph =
       option.glyph ??
       (role === "status"
-        ? (VALUE_ICONS[valueKey(option.value)] ?? STATUS_ICONS[color] ?? null)
+        ? (VALUE_ICONS.get(valueKey(option.value)) ??
+          STATUS_ICONS.get(color) ??
+          null)
         : null);
     // Omitted when absent: the compiled model ships in a budgeted bundle.
     return glyph
