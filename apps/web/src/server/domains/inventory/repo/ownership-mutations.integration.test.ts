@@ -674,6 +674,22 @@ describe("inventory ownership mutations", () => {
       undefined,
       TEST_ACTOR,
     );
+    const { statements } = await countTestDbQueries(() =>
+      loadEffectiveInventoryOwnershipById(ctx.db, subject.entryId),
+    );
+    // The explicit owner needs no acquisition candidate, so its party read
+    // is issued beside the candidate chain rather than after its last step.
+    const firstPartyRead = statements.findIndex((statement) =>
+      statement.includes('from "LedgerParty"'),
+    );
+    const purchaseRead = statements.findIndex((statement) =>
+      statement.startsWith(
+        'select "id", "shortcode", "vendorAccountId", "date" from "Purchase"',
+      ),
+    );
+    expect(purchaseRead).toBeGreaterThan(-1);
+    expect(firstPartyRead).toBeGreaterThan(-1);
+    expect(firstPartyRead).toBeLessThan(purchaseRead);
 
     await addPurchase({
       label: "second acquisition",

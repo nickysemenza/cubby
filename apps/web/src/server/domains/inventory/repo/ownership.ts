@@ -922,19 +922,19 @@ export async function loadInventoryOwnershipTraces(
   entries: OwnershipEntry[],
 ): Promise<Map<InventoryId, InventoryOwnershipTrace>> {
   const productIds = [...new Set(entries.map((entry) => entry.productId))];
-  return traceInventoryOwnership(
-    db,
-    entries,
-    await loadInheritedCandidates(db, productIds),
-  );
+  // The explicit owners need no candidate, so the two reads run together.
+  const [inheritedByProduct, explicitById] = await Promise.all([
+    loadInheritedCandidates(db, productIds),
+    loadExplicitOwners(db, entries),
+  ]);
+  return traceInventoryOwnership(entries, inheritedByProduct, explicitById);
 }
 
-/** Traces `entries` against already-loaded inherited candidates for their products. */
-async function traceInventoryOwnership(
+/** The individual parties `entries` name as their explicit owners. */
+async function loadExplicitOwners(
   db: Database | DrizzleTransaction,
-  entries: OwnershipEntry[],
-  inheritedByProduct: ReadonlyMap<ProductId, InheritedCandidate>,
-): Promise<Map<InventoryId, InventoryOwnershipTrace>> {
+  entries: readonly OwnershipEntry[],
+): Promise<Map<LedgerPartyId, IndividualParty>> {
   const explicitIds = [
     ...new Set(
       entries.flatMap((entry) =>
@@ -942,24 +942,16 @@ async function traceInventoryOwnership(
       ),
     ),
   ];
-  const explicitRows =
-    explicitIds.length === 0
-      ? []
-      : await unwrapDb(db)
-          .select({
-            id: ledgerParty.id,
-            shortcode: ledgerParty.shortcode,
-            name: ledgerParty.name,
-            kind: ledgerParty.kind,
-          })
-          .from(ledgerParty)
-          .where(
-            and(inArray(ledgerParty.id, explicitIds), notDeleted(ledgerParty)),
-          );
-  const explicitById = new Map(
-    explicitRows.filter(isIndividual).map((row) => [row.id, row]),
-  );
+  const explicitRows = await loadIndividualParties(unwrapDb(db), explicitIds);
+  return new Map(explicitRows.filter(isIndividual).map((row) => [row.id, row]));
+}
 
+/** Traces `entries` against loaded inherited candidates and explicit owners. */
+async function traceInventoryOwnership(
+  entries: readonly OwnershipEntry[],
+  inheritedByProduct: ReadonlyMap<ProductId, InheritedCandidate>,
+  explicitById: ReadonlyMap<LedgerPartyId, IndividualParty>,
+): Promise<Map<InventoryId, InventoryOwnershipTrace>> {
   const resolved = new Map<InventoryId, InventoryOwnershipTrace>();
   for (const entry of entries) {
     const inherited =
@@ -1144,11 +1136,18 @@ export async function loadProductOwners(
   // traces against its product's candidate) and unstocked ones (the
   // candidate's owner is the rollup); it needs no entry, so it runs beside
   // the entry read rather than once after it for each population.
-  const [liveEntries, candidates] = await Promise.all([
-    liveOwnershipEntries(db, productIds),
+  const [{ liveEntries, explicitById }, candidates] = await Promise.all([
+    liveOwnershipEntries(db, productIds).then(async (liveEntries) => ({
+      liveEntries,
+      explicitById: await loadExplicitOwners(db, liveEntries),
+    })),
     loadInheritedCandidates(db, [...productIds]),
   ]);
-  const traces = await traceInventoryOwnership(db, liveEntries, candidates);
+  const traces = await traceInventoryOwnership(
+    liveEntries,
+    candidates,
+    explicitById,
+  );
   const states = withOwnerStates(
     liveEntries,
     new Map([...traces].map(([id, trace]) => [id, trace.ownership] as const)),
@@ -1224,13 +1223,20 @@ export async function productIdsByOwner(
   ]);
   // One inherited-candidate pass for both populations (see `loadProductOwners`).
   const unstockedIds = unstocked.map(({ id }) => id);
-  const candidates = await loadInheritedCandidates(db, [
-    ...new Set([
-      ...liveEntries.map((entry) => entry.productId),
-      ...unstockedIds,
+  const [candidates, explicitById] = await Promise.all([
+    loadInheritedCandidates(db, [
+      ...new Set([
+        ...liveEntries.map((entry) => entry.productId),
+        ...unstockedIds,
+      ]),
     ]),
+    loadExplicitOwners(db, liveEntries),
   ]);
-  const traces = await traceInventoryOwnership(db, liveEntries, candidates);
+  const traces = await traceInventoryOwnership(
+    liveEntries,
+    candidates,
+    explicitById,
+  );
   const states = withOwnerStates(
     liveEntries,
     new Map([...traces].map(([id, trace]) => [id, trace.ownership] as const)),
