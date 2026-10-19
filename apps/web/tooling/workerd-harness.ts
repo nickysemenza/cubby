@@ -463,12 +463,6 @@ export async function startWorkerdHarness(options: WorkerdHarnessOptions) {
   if (WORKERD_PROFILES[options.profile].harnessLock)
     cleanup.defer(await holdWorkerdHarness());
   const harnessOptions = await workerdHarnessOptions(options);
-  // The test process's module `db` binds its pool to the database URL present
-  // at first import. Load it before the environment names the borrowed
-  // database: a first import during the harness (Better Auth's startup seed
-  // under a lazily imported service) otherwise leaves an untracked session
-  // there that the next `withTestDb` reset refuses (#2529).
-  await import("../src/server/db");
   cleanup.defer(installDatabaseEnvironment(options.databaseUrl));
   const harness = createTestHarness(harnessOptions);
   const closeWorkerd = harness.close.bind(harness);
