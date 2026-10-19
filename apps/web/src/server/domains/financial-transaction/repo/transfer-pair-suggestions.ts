@@ -60,7 +60,7 @@ import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
 
 /** Rule revision stamped on every published pair; bump with any policy change. */
-export const TRANSFER_PAIR_REVISION = "2026-10-19.1";
+const TRANSFER_PAIR_REVISION = "2026-10-19.1";
 /** Candidates: the opposite leg posted within this many days. */
 const CANDIDATE_WINDOW_DAYS = 5;
 /** A clean pair's legs are at most this many days apart. */
@@ -1048,7 +1048,7 @@ export const transferPairStateData = z.object({
   evidenceFingerprint: z.string(),
   needsLabel: z.boolean(),
 });
-export type TransferPairStateData = z.infer<typeof transferPairStateData>;
+type TransferPairStateData = z.infer<typeof transferPairStateData>;
 
 /**
  * Rule output a label could change: both legs real, each lacking a label,
