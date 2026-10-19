@@ -163,20 +163,30 @@ describe("decideStatementKind and kindAgreed", () => {
   it("lets a label and history settle a kind no category spoke to", () => {
     const create = decideStatementKind({
       amount: -900,
-      votes: {
-        rule: null,
-        label: "credit_card_payment",
-        history: "credit_card_payment",
-      },
+      votes: { rule: null, label: "income", history: "income" },
       counterparty: { ...noCounterparty, label: "business" },
       transfer: null,
     });
-    expect(create).toMatchObject({
-      kind: "credit_card_payment",
-      kindSource: "model",
-    });
+    expect(create).toMatchObject({ kind: "income", kindSource: "model" });
     expect(kindAgreed(create, null)).toBe(true);
   });
+
+  // A bank transfer to another member's brokerage and a household checking
+  // payment of a member's own card were both bulk-acceptable on agreeing votes
+  // alone, skipping the LedgerTransfer a move between owners owes.
+  it.each(["account_transfer", "credit_card_payment"] as const)(
+    "holds a %s back until its destination account is known",
+    (kind) => {
+      const create = decideStatementKind({
+        amount: 5400,
+        votes: { rule: kind, label: kind, history: kind },
+        counterparty: { ...noCounterparty, label: "business" },
+        transfer: null,
+      });
+      expect(create).toMatchObject({ kind });
+      expect(kindAgreed(create, null)).toBe(false);
+    },
+  );
 
   it("holds a stored-value payment back until history names a business", () => {
     // Payment-app payees are people with merchant-like notes ("Burma",

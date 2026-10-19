@@ -147,11 +147,19 @@ export function decideStatementKind(input: {
   return decided(input.amount > 0 ? "purchase" : "refund", "sign");
 }
 
+/** Kinds that move money between two accounts rather than spending it. */
+const MOVE_KINDS = new Set<FinancialTransactionKind>([
+  "account_transfer",
+  "credit_card_payment",
+]);
+
 /**
  * Whether a create's kind is bulk-acceptable: at least two sources name it and
  * none disagrees, nobody says the counterparty is a person, and the model has
  * said it is a business (history must, on a stored-value account) — or the
- * descriptor names one same-owner own account.
+ * descriptor names one same-owner own account. A transfer or card payment is
+ * clean only with that named account: without it, nothing shows whether the
+ * other side belongs to another owner and owes a LedgerTransfer.
  */
 export function kindAgreed(
   create: KindDecision,
@@ -166,6 +174,7 @@ export function kindAgreed(
   if (counterparty.label === "person" || counterparty.history === "person")
     return false;
   if (transfer) return transfer.accountId !== null && !transfer.ledgerTransfer;
+  if (MOVE_KINDS.has(create.kind)) return false;
   if (counterparty.storedValue) return counterparty.history === "business";
   return counterparty.label === "business";
 }

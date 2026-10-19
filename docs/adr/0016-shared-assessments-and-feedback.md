@@ -238,7 +238,11 @@ must say business: its payees are mostly people whose notes read like
 merchants. A person counterparty is never clean: an outflow is the member's share
 of a shared cost (`purchase`), an inflow a repayment (`income`, booked as a
 reimbursement). An own-account move between different owners also owes a
-LedgerTransfer and is never clean.
+LedgerTransfer and is never clean. An `account_transfer` or
+`credit_card_payment` is clean only when the descriptor names its same-owner
+destination: votes alone cannot show whether the other side belongs to another
+owner. Finding the opposite leg on another account is the intended long-term
+test.
 
 ## Amendment: Sweeps, the Suggestions page and Automatic rules (2026-10)
 
