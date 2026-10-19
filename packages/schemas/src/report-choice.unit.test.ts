@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import type { CommitPreparedRequest, ReportChoice } from "./entity-report";
 import { shortcode } from "./identifiers";
 import {
+  type ChoiceAnswer,
   commitPreparedInput,
+  distinctFromSourceFeedback,
   isChoiceAnswered,
   remainingChoices,
   remainingSentence,
@@ -160,6 +162,88 @@ describe("commitPreparedInput", () => {
       operationId: "op-1",
       prepareOperationId: "prepare-1",
       resolutions: [],
+    });
+  });
+});
+
+// Failure modes (CubbyKit's `ReportChoiceAnswersTests` has the same cases): a new Product beside a
+// listed candidate counted as answered without its Source; a Source or reason outside the commit's
+// bounds sent anyway; feedback worded differently from native.
+describe("Distinct-from Sources", () => {
+  const choice: ReportChoice = {
+    ...decisionChoice("o1/l1"),
+    options: decisionChoice("o1/l1").options.map((option) =>
+      option.id === "new"
+        ? {
+            ...option,
+            distinctFrom: [
+              { entity: "product", id: "PRD-7Q2W", name: "Same-named" },
+            ],
+          }
+        : option,
+    ),
+  };
+  const request: CommitPreparedRequest = {
+    kind: "commit-prepared",
+    runId: shortcode("RUN-4K7M"),
+    prepareOperationId: "prepare-1",
+    tradeChoiceId: null,
+    lines: [{ choiceId: "o1/l1", stableOrderId: "o1", stableLineId: "l1" }],
+  };
+  const source = (url: string, quote: string) => ({
+    optionId: "new",
+    distinctFrom: { "PRD-7Q2W": { url, quote } },
+  });
+
+  it("needs a Source for each listed candidate before the choice is answered", () => {
+    expect(isChoiceAnswered(choice, { optionId: "new" })).toBe(false);
+    expect(
+      isChoiceAnswered(choice, source("https://example.com/a", "  ")),
+    ).toBe(false);
+    expect(
+      isChoiceAnswered(choice, source("https://example.com/a", "Family size")),
+    ).toBe(true);
+  });
+
+  it("sends the trimmed Source, and nothing outside the commit's bounds", () => {
+    const send = (answer: ChoiceAnswer) =>
+      commitPreparedInput(request, { "o1/l1": answer }, "op-1");
+    expect(
+      send(source(" https://example.com/a ", " Family size "))?.resolutions[0]
+        ?.resolution,
+    ).toEqual({
+      kind: "new",
+      distinctFrom: [
+        {
+          productId: "PRD-7Q2W",
+          url: "https://example.com/a",
+          quote: "Family size",
+        },
+      ],
+    });
+    expect(send(source("https://", "Family size"))).toBeNull();
+    expect(send(source("https://example.com/a", "q".repeat(2001)))).toBeNull();
+    expect(send({ optionId: "unresolved", text: "r".repeat(1001) })).toBeNull();
+  });
+
+  it("words each field's problem", () => {
+    expect(
+      distinctFromSourceFeedback({
+        url: "https://example.com/a",
+        quote: " Family size ",
+      }),
+    ).toEqual({
+      url: null,
+      quote: null,
+      quoteLength: "11 of 2,000 characters.",
+    });
+    expect(distinctFromSourceFeedback({ url: "  ", quote: "" }).url).toBeNull();
+    expect(
+      distinctFromSourceFeedback({ url: "https://", quote: "q".repeat(2001) }),
+    ).toEqual({
+      url: "Enter a full URL of at most 2,048 characters.",
+      quote: "Shorten the quote to at most 2,000 characters.",
+      quoteLength: "2,001 of 2,000 characters.",
     });
   });
 });

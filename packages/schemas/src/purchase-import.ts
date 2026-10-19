@@ -1,3 +1,4 @@
+import { PRODUCT_DECISION_REASON_MAX } from "@cubby/shared/client-constants";
 import { tradeSchema } from "./task-fields";
 import { z } from "zod";
 import { agentImportRunPurpose } from "./import-run-agent";
@@ -732,7 +733,7 @@ export const importWriterInput = z.object({
         z.object({
           kind: z.literal("unresolved"),
           lineIndex: z.number().int().nonnegative(),
-          reason: z.string().trim().min(1).max(1_000),
+          reason: z.string().trim().min(1).max(PRODUCT_DECISION_REASON_MAX),
         }),
         z.object({
           kind: z.literal("expense_only"),
@@ -905,7 +906,7 @@ export const preparedProductResolution = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("unresolved"),
-      reason: z.string().trim().min(1).max(1_000),
+      reason: z.string().trim().min(1).max(PRODUCT_DECISION_REASON_MAX),
     })
     .describe(
       "Retain a specific unresolved Product identity or variant ambiguity for review while preserving supported spending.",
