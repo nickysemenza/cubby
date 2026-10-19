@@ -207,6 +207,7 @@ describe("RecommendationWorkbench product matches", () => {
         assessmentId: "66666666-6666-4666-8666-666666666666",
         fingerprint: "d".repeat(64),
         identityConflict: false,
+        conflictReasons: [],
         review: {
           assessmentId: "66666666-6666-4666-8666-666666666666",
           suppression: {
@@ -293,6 +294,41 @@ describe("RecommendationWorkbench product matches", () => {
         }),
       ]),
     );
+  });
+
+  it("states why Review merge is disabled for an identity conflict", async () => {
+    const conflictReason = 'Verified model: "SYN-100" vs "SYN-200"';
+    const operations = {
+      ...productionRecommendationWorkbenchOperations,
+      productMatches: recommendations.productMatches.withTransport(
+        async () => ({
+          ...queue,
+          items: [
+            {
+              ...queue.items[0]!,
+              identityConflict: true,
+              conflictReasons: [conflictReason],
+            },
+          ],
+        }),
+      ),
+      displayImages: entityMedia.displayImages.withTransport(async () => ({
+        [`product:${keeperId}`]: null,
+        [`product:${photoId}`]: null,
+      })).queryOptions,
+    };
+
+    render(
+      <RecommendationWorkbench kind="product-match" operations={operations} />,
+      { wrapper: harness.wrapper },
+    );
+
+    const merge = await screen.findByRole("button", { name: "Review merge" });
+    expect(merge).toBeDisabled();
+    expect(merge).toHaveAccessibleDescription(
+      `Merge blocked by an identity conflict: ${conflictReason}`,
+    );
+    expect(screen.getByText(new RegExp(conflictReason))).toBeVisible();
   });
 
   it("moves a matched neighbour out of the relationship list and links the match queue", async () => {

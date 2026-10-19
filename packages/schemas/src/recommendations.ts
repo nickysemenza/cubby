@@ -136,8 +136,13 @@ export const productMatchCandidate = z.object({
   assessmentId: assessmentChildHandle,
   fingerprint: z.string().nullable(),
   identityConflict: z.boolean(),
+  /** Raw stored values behind `identityConflict` (model or variant literals). */
+  conflictReasons: z.array(z.string()),
   source: productMatchSource,
-  /** Merge survivor by default: the purchase side carries the spend history. */
+  /**
+   * Suggested merge survivor: the purchase side (it carries the spend
+   * history), then the higher data-quality score, then the older record.
+   */
   keeper: productMatchSide,
   other: productMatchSide,
   evidence: z.string().nullable(),

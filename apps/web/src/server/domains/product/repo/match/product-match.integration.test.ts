@@ -3,6 +3,7 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import { testUserId } from "@cubby/schemas/testing";
+import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { TEST_USER_ID, withTestDb } from "tooling/test-setup";
@@ -16,6 +17,7 @@ import {
   inventoryEntry,
   product as productTable,
 } from "~/server/db/schema";
+import { readEntityConnections } from "~/server/domains/connection/repo/entity-connections";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
 import {
@@ -542,6 +544,135 @@ describe("product_enrichment.propose_match", () => {
       source: "agent",
       state: "dismissed",
     });
+  });
+});
+
+describe("product match review surfaces", () => {
+  const ctx = withTestDb();
+  const make = (name: string) =>
+    createProductFixture(
+      ctx.db,
+      makeProductInput({ name, model: null }),
+      ctx.actor,
+    );
+  const ordered = async (names: readonly [string, string]) =>
+    (await Promise.all(names.map(make))).sort((a, b) =>
+      a.entityId < b.entityId ? -1 : 1,
+    );
+  const publishDetected = (
+    pair: readonly { entityId: Awaited<ReturnType<typeof make>>["entityId"] }[],
+    input: { evidence: string; actionable: boolean; conflict: boolean },
+  ) =>
+    publishProductPair(ctx.db, {
+      productIds: [pair[0]!.entityId, pair[1]!.entityId],
+      source: "detector",
+      sourceUrls: [],
+      fingerprint: `synthetic-${input.evidence}`,
+      ...input,
+    });
+
+  // A pair the detector cannot act on, or one with an identity conflict, is
+  // still pending review; hiding it left members unable to settle it.
+  it("lists conflicting and non-actionable pending pairs in Suggestions with their raw reason", async () => {
+    const anchor = await make("Synthetic suggestion anchor");
+    const [conflicting, weak, rejected, hidden] = await Promise.all(
+      ["conflicting", "weak", "rejected", "hidden"].map((label) =>
+        make(`Synthetic ${label} twin`),
+      ),
+    );
+    await publishDetected([anchor, conflicting!], {
+      evidence: "Synthetic GTIN 00000000000017 conflicts with 00000000000024",
+      actionable: true,
+      conflict: true,
+    });
+    await publishDetected([anchor, weak!], {
+      evidence: "Synthetic similar titles only",
+      actionable: false,
+      conflict: false,
+    });
+    const wrong = await publishDetected([anchor, rejected!], {
+      evidence: "Synthetic rejected pair",
+      actionable: true,
+      conflict: false,
+    });
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      assessmentId: wrong.id,
+      operationId: crypto.randomUUID(),
+      verdict: "wrong",
+      intent: "history",
+    });
+    await dismissPair(
+      ctx.db,
+      { productIds: [anchor.id, hidden!.id] },
+      kernelCtx(ctx),
+    );
+    const proposals = await readEntityConnections(ctx.db, {
+      entityKind: "product",
+      entityId: anchor.id,
+    });
+    const byOther = new Map(
+      proposals.map((proposal) => [
+        proposal.source.entityId === anchor.id
+          ? proposal.target.entityId
+          : proposal.source.entityId,
+        proposal,
+      ]),
+    );
+    expect([...byOther.keys()].sort()).toEqual(
+      [conflicting!.id, weak!.id].sort(),
+    );
+    expect(byOther.get(conflicting!.id)).toMatchObject({
+      relation: "product-identity",
+      integration: { kind: "product-pair-review" },
+      review: { family: "product_pair" },
+      evidence: {
+        contradictions: [
+          "Synthetic GTIN 00000000000017 conflicts with 00000000000024",
+        ],
+      },
+    });
+    expect(byOther.get(weak!.id)?.evidence).toMatchObject({
+      reasons: ["Synthetic similar titles only"],
+      contradictions: [],
+      unknowns: [expect.stringMatching(/^Not actionable/)],
+    });
+  });
+
+  it("suggests the better-identified Product as keeper when neither side was purchased", async () => {
+    const [sparse, rich] = await ordered([
+      "Synthetic keeper lamp A",
+      "Synthetic keeper lamp B",
+    ]);
+    // Row order would keep the lower id; quality must override it.
+    await getDb(ctx.db)
+      .update(productTable)
+      .set({ manufacturer: UNSPECIFIED_MANUFACTURER })
+      .where(eq(productTable.id, sparse!.entityId));
+    await publishDetected([sparse!, rich!], {
+      evidence: "Synthetic keeper quality",
+      actionable: true,
+      conflict: false,
+    });
+    const [item] = (await getProductMatchQueue(ctx.db, {})).items;
+    expect(item?.keeper.id).toBe(rich!.id);
+  });
+
+  it("breaks an equal-quality keeper tie toward the older Product", async () => {
+    const [newer, older] = await ordered([
+      "Synthetic keeper chair A",
+      "Synthetic keeper chair B",
+    ]);
+    await getDb(ctx.db)
+      .update(productTable)
+      .set({ createdAt: new Date("2020-01-01T00:00:00.000Z") })
+      .where(eq(productTable.id, older!.entityId));
+    await publishDetected([newer!, older!], {
+      evidence: "Synthetic keeper age",
+      actionable: true,
+      conflict: false,
+    });
+    const [item] = (await getProductMatchQueue(ctx.db, {})).items;
+    expect(item?.keeper.id).toBe(older!.id);
   });
 });
 

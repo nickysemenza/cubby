@@ -1,3 +1,4 @@
+import { isEntityPairAssessmentFamily } from "@cubby/schemas/assessment";
 import type { Entity, EntityRef } from "@cubby/schemas/entity";
 import type { ConnectionProposal } from "@cubby/schemas/entity-connections";
 import { entitySummary } from "@cubby/schemas/entity-summary";
@@ -39,6 +40,7 @@ import {
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
+import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import {
   Popover,
@@ -53,6 +55,8 @@ const ConnectionContext = createContext<{
   error: unknown;
 } | null>(null);
 const EMPTY_PROPOSALS: readonly ConnectionProposal[] = [];
+/** Detail-page section that hosts `ConnectionSuggestions`. */
+const RELATIONSHIPS_SECTION = "relationships";
 const combineBatches = (queries: UseQueryResult<StoredDocument[]>[]) => ({
   documents: queries.flatMap((query) => query.data ?? []),
   error: queries.find((query) => query.error)?.error ?? null,
@@ -363,43 +367,72 @@ export function ConnectionCell({
   const proposals = row.success
     ? (context?.rows.get(row.data.id) ?? EMPTY_PROPOSALS)
     : EMPTY_PROPOSALS;
-  const visible = proposals.filter((proposal) =>
-    proposal.integration.kind === "field-review" &&
-    proposal.source.entityId === code?.shortcode
-      ? proposal.integration.field === field
-      : field === titleField,
+  const onTitle = field === titleField;
+  // Entity-pair Assessments are possible duplicates of this record: a badge
+  // opens the record's Suggestions panel instead of the row popover.
+  const pairs = onTitle
+    ? proposals.filter((proposal) =>
+        isEntityPairAssessmentFamily(proposal.review.family),
+      )
+    : EMPTY_PROPOSALS;
+  const visible = proposals.filter(
+    (proposal) =>
+      !isEntityPairAssessmentFamily(proposal.review.family) &&
+      (proposal.integration.kind === "field-review" &&
+      proposal.source.entityId === code?.shortcode
+        ? proposal.integration.field === field
+        : onTitle),
   );
-  if (context?.error && field === titleField)
+  if (context?.error && onTitle)
     return (
       <Stack gap="xs">
         {children}
         <ErrorDisplay error={context.error} title="connection suggestions" />
       </Stack>
     );
-  if (visible.length === 0) return children;
+  if (visible.length === 0 && pairs.length === 0) return children;
   return (
     <Row gap="xs" align="center" className="min-w-0">
       <span className="min-w-0">{children}</span>
-      <Popover>
-        <PopoverTrigger
+      {code && pairs.length > 0 && isBrowserRoutedEntity(code.type) && (
+        <Badge
+          variant="warning"
           render={
-            <Button
-              size="icon"
-              variant="ghost"
-              aria-label="Review connections"
+            <Link
+              to={entities[code.type].routes.detail}
+              params={entityDetailParams(code.shortcode)}
+              hash={RELATIONSHIPS_SECTION}
               onClick={(event) => event.stopPropagation()}
             />
           }
         >
-          <LinkIcon className="size-3.5" aria-hidden="true" />
-        </PopoverTrigger>
-        <PopoverContent
-          className="max-h-[70dvh] w-96 max-w-[calc(100vw-2rem)] overflow-y-auto"
-          onClick={(event) => event.stopPropagation()}
-        >
-          <ConnectionReviewRows proposals={visible} />
-        </PopoverContent>
-      </Popover>
+          {pairs.length === 1
+            ? "Possible match"
+            : `${pairs.length} possible matches`}
+        </Badge>
+      )}
+      {visible.length > 0 && (
+        <Popover>
+          <PopoverTrigger
+            render={
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label="Review connections"
+                onClick={(event) => event.stopPropagation()}
+              />
+            }
+          >
+            <LinkIcon className="size-3.5" aria-hidden="true" />
+          </PopoverTrigger>
+          <PopoverContent
+            className="max-h-[70dvh] w-96 max-w-[calc(100vw-2rem)] overflow-y-auto"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <ConnectionReviewRows proposals={visible} />
+          </PopoverContent>
+        </Popover>
+      )}
     </Row>
   );
 }

@@ -658,6 +658,33 @@ describe("stored Product identity pairs", () => {
       ),
     ).toBe(true);
   });
+  // The Workbench must show the detector's stored grounding, not an abstention.
+  it("shows stored grounded variant relations and the raw conflict on the match card", async () => {
+    const { ids, runId, decisionPort } = await boundVariantPair(
+      [
+        "Synthetic blue medium scarf, pack of 2",
+        "Synthetic red medium scarf, pack of 2",
+      ],
+      undefined,
+      [
+        { color: "blue", size: "medium", pack: "2" },
+        { color: "red", size: "medium", pack: "2" },
+      ],
+    );
+    await publishProductIdentity(
+      ctx.db,
+      await evaluateProductIdentity(ctx.db, ids[0]!, runId, { decisionPort }),
+    );
+    const [item] = (await getProductMatchQueue(ctx.db, {})).items;
+    expect(item?.variant).toMatchObject({
+      color: { relation: "different" },
+      size: { relation: "same" },
+    });
+    expect(item?.identityConflict).toBe(true);
+    expect(item?.conflictReasons).toEqual([
+      expect.stringMatching(/Color.*"(blue|red)".*"(blue|red)"/),
+    ]);
+  });
   it("carries unresolved grounded conflict through actual Product merges", async () => {
     const { products, ids, runId, decisionPort } = await boundVariantPair(
       [
