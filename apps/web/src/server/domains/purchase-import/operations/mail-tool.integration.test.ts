@@ -53,6 +53,7 @@ import {
   readRetainedMail,
   retainedMailJoin,
 } from "~/server/domains/mail/repo/retained-mail";
+import { deletePurchases } from "~/server/domains/purchase/repo/purchase";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { loadMailAttachmentOriginal } from "../repo/gmail/attachment-original";
@@ -63,7 +64,12 @@ import { GmailAuthorizationError } from "../repo/gmail/tokens";
 import { GmailApiError, type GmailProvider } from "../repo/gmail/types";
 import * as routing from "../service/gmail/triage-model";
 import { readMail, resolveMail, searchMail, settleMail } from "./mail-tool";
-import { retainedMailFixture } from "./order-import.fixtures";
+import {
+  mailSource,
+  memberImport,
+  memberImportWorld,
+  retainedMailFixture,
+} from "./order-import.fixtures";
 
 const mailboxId = "synthetic-mailbox";
 const receiptBytes = new TextEncoder().encode(
@@ -700,6 +706,94 @@ describe("public mail tool", () => {
         purchaseId,
         purchaseDeleted: purchaseId === secondPurchase.shortcode,
       })),
+    });
+  });
+
+  // Deleting an imported Purchase must neither drop it from its Email's
+  // accepted history nor keep the source from importing again.
+  it("keeps a deleted imported Purchase in its Email's history and imports the source again", async () => {
+    const { party, vendor } = await memberImportWorld(ctx.db, ctx.actor);
+    const mail = await retainedMailFixture(ctx.db, {
+      ledgerPartyId: party.id,
+      mailboxId,
+      messageId: "synthetic-deleted-import",
+      checksum: await sha256Hex("Synthetic deleted import"),
+    });
+    const importOrder = async (key: string, title: string) => {
+      const { committed } = await memberImport(ctx.db, ctx.actor, {
+        key,
+        orders: [
+          {
+            stableOrderId: key,
+            vendorId: vendor.shortcode,
+            source: mailSource(mail),
+            extraction: {
+              status: "ready",
+              candidate: {
+                orderId: "SYN-DELETED-1",
+                orderedAt: "2026-10-01T12:00:00Z",
+                merchant: vendor.name,
+                currency: "USD",
+                printedGrandTotal: 12,
+                lines: [
+                  {
+                    title,
+                    amount: 12,
+                    lineKind: "principal",
+                  },
+                ],
+                payments: [],
+                allShipmentsDelivered: false,
+              },
+            },
+          },
+        ],
+      });
+      const code = committed.items[0]?.purchaseId;
+      if (!code) throw new Error("Synthetic import created no Purchase");
+      return code;
+    };
+    const readInput = { mailboxId, messageId: mail.messageId };
+    const deleted = await importOrder(
+      "deleted-import-first",
+      "Synthetic deleted widget",
+    );
+    await deletePurchases(ctx.db, [deleted], ctx.actor);
+
+    const [retained, ...extra] = await getDb(ctx.db)
+      .select()
+      .from(importSourceOrder);
+    expect(extra).toEqual([]);
+    expect(retained).toMatchObject({ purchaseId: null });
+    expect(await readMail(ctx.db, readInput, ctx.actor)).toMatchObject({
+      purchaseIds: [deleted],
+      purchaseAssociations: [
+        { purchaseId: deleted, purchaseDeleted: true, kind: "accepted" },
+      ],
+      acceptedSourceOrders: [
+        {
+          sourceOrderId: retained?.id,
+          purchaseId: deleted,
+          purchaseDeleted: true,
+        },
+      ],
+    });
+
+    // A fresh extraction of the same source order rebinds the history.
+    const replacement = await importOrder(
+      "deleted-import-second",
+      "Synthetic deleted widget, re-extracted",
+    );
+    expect(replacement).not.toBe(deleted);
+    expect(await readMail(ctx.db, readInput, ctx.actor)).toMatchObject({
+      purchaseIds: [replacement],
+      acceptedSourceOrders: [
+        {
+          sourceOrderId: retained?.id,
+          purchaseId: replacement,
+          purchaseDeleted: false,
+        },
+      ],
     });
   });
 

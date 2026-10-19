@@ -214,9 +214,9 @@ export const financialTransactionItemizationSql = (
   return sql<FinancialTransactionItemization>`(SELECT CASE
       WHEN count(*) = 0 THEN ${verdict.bare}
       WHEN bool_or(iz.shared) THEN ${verdict.shared}
-      WHEN bool_or(iz.itemized AND iz.mismatch) THEN ${verdict.itemized_mismatch}
-      WHEN bool_and(iz.itemized) THEN ${verdict.itemized_match}
-      ELSE ${verdict.lump}
+      WHEN NOT bool_and(iz.itemized) THEN ${verdict.lump}
+      WHEN bool_or(iz.mismatch) THEN ${verdict.itemized_mismatch}
+      ELSE ${verdict.itemized_match}
     END::text
     FROM (
       SELECT

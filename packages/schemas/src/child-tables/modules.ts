@@ -13,6 +13,8 @@ import { defineChildTable } from "../entity-definitions/child-definition.js";
  * shortcode registry that entity-source.ts reaches through `identifiers`.
  */
 export const ENTITY_SOURCE_QUOTE_MAX = 2000;
+/** Every Source write path shares one url bound, so a stored Source never depends on its writer. */
+export const ENTITY_SOURCE_URL_MAX = 2048;
 
 export const modulesChildren = [
   ...assessmentChildren,

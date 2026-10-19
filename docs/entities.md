@@ -430,7 +430,9 @@ an Email's family lookup must not scan unrelated accepted mailbox history.
 a `form` (its own choices, the progress wording, a `disabledReason` and the one command the answers
 unlock). The server words every label, ranks the `suggestions` (a prepared line's Product
 candidates), says what is `required` and never preselects an answer: identity is chosen by the
-person. A client records answers and asks the shared rules whether each is complete
+person. An option may also ask for a pick, a reason, or a Distinct-from Source (`url` and `quote`)
+per listed record; "Create a new Product" lists the exact-name and identity-review candidates the
+commit guard would otherwise refuse. A client records answers and asks the shared rules whether each is complete
 (`packages/schemas/src/report-choice.ts`, mirrored by CubbyKit's `ReportChoiceAnswers`), then sends
 the body those answers assemble (`commitPreparedInput`) with a fresh operation id per answer change.
 `run.import-prepared-orders` is the first user.

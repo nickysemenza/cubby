@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, or } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, or } from "drizzle-orm";
 
 import {
   type RepositoryQueryClient as DrizzleClient,
@@ -17,6 +17,17 @@ type FamilyIdentity = Pick<
 type Claim = typeof importSourceClaim.$inferSelect;
 type Family = { root: Claim; members: Claim[] };
 type ReadOptions = { lock?: "update" | "share"; writable?: boolean };
+type SourceOrder = typeof importSourceOrder.$inferSelect;
+/**
+ * An order association bound to a live Purchase. Deleting the Purchase leaves
+ * the row as Email history with a null link: it neither fences replay nor
+ * resolves as the family's order, so the same order can import again.
+ */
+export type LiveSourceOrder = SourceOrder & {
+  purchaseId: NonNullable<SourceOrder["purchaseId"]>;
+};
+export const isLiveSourceOrder = (row: SourceOrder): row is LiveSourceOrder =>
+  row.purchaseId !== null;
 
 function assertWritableIdentity(input: FamilyIdentity) {
   if (
@@ -153,11 +164,14 @@ export async function readSourceFamilyOrder(
           family.members.map((member) => member.id),
         ),
         eq(importSourceOrder.orderKey, orderKey),
+        isNotNull(importSourceOrder.purchaseId),
       ),
     )
     .orderBy(asc(importSourceOrder.id))
     .limit(2);
-  const orders = await (lock ? query.for(lock) : query);
+  const orders = (await (lock ? query.for(lock) : query)).filter(
+    isLiveSourceOrder,
+  );
   if (orders.length > 1)
     throw new Error(
       "Duplicate source family order associations require review.",
@@ -208,25 +222,27 @@ export async function loadImportSourceFamilyOrders(
   if (selected.length > 100)
     throw new Error("Source lineage needs a narrower research proposal.");
   const seen = new Set<Claim["id"]>();
-  const rows: {
-    claim: Claim;
-    association: typeof importSourceOrder.$inferSelect;
-  }[] = [];
+  const rows: { claim: Claim; association: LiveSourceOrder }[] = [];
   for (const claim of selected) {
     const family = await readImportSourceClaimFamily(db, claim, {});
     if (!family || seen.has(family.root.id)) continue;
     seen.add(family.root.id);
-    const orders = await db
-      .select()
-      .from(importSourceOrder)
-      .where(
-        inArray(
-          importSourceOrder.sourceClaimId,
-          family.members.map((member) => member.id),
-        ),
-      )
-      .orderBy(asc(importSourceOrder.id))
-      .limit(101);
+    const orders = (
+      await db
+        .select()
+        .from(importSourceOrder)
+        .where(
+          and(
+            inArray(
+              importSourceOrder.sourceClaimId,
+              family.members.map((member) => member.id),
+            ),
+            isNotNull(importSourceOrder.purchaseId),
+          ),
+        )
+        .orderBy(asc(importSourceOrder.id))
+        .limit(101)
+    ).filter(isLiveSourceOrder);
     const keys = new Set<string>();
     for (const association of orders) {
       if (keys.has(association.orderKey))

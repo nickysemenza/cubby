@@ -25,6 +25,8 @@ import {
   sourceOrderObservation,
 } from "~/server/db/schema";
 import {
+  isLiveSourceOrder,
+  type LiveSourceOrder,
   readImportSourceClaimFamily,
   readSourceFamilyOrder,
 } from "~/server/domains/purchase-import/repo/source-claim-family";
@@ -214,7 +216,8 @@ export async function mergedVendorSourceOrder(
     throw new Error(
       "Ambiguous merged Vendor source order associations require explicit review.",
     );
-  return rows[0]?.association ?? null;
+  const [row] = rows;
+  return row && isLiveSourceOrder(row.association) ? row.association : null;
 }
 
 /** Promote stored evidence only; absent historical decisions and media remain unknown. */
@@ -226,7 +229,8 @@ export async function promoteHistoricalAcceptedObservation(
     .select()
     .from(importSourceOrder)
     .where(eq(importSourceOrder.id, sourceOrderId));
-  if (!initial || initial.acceptedObservationId)
+  // A deleted Purchase's detached history has no live subject to observe.
+  if (!initial || initial.acceptedObservationId || initial.purchaseId === null)
     return initial?.acceptedObservationId ?? null;
   const preliminary = acceptedSourceOrder.safeParse(initial.originalOrder);
   if (!preliminary.success || preliminary.data.checksum !== initial.checksum)
@@ -322,7 +326,7 @@ export async function promoteHistoricalAcceptedObservation(
 /** A historical accepted extraction whose bytes were overwritten remains unknown. */
 export async function acceptedSourceExtraction(
   tx: Pick<DrizzleTransaction, "select">,
-  order: typeof importSourceOrder.$inferSelect,
+  order: LiveSourceOrder,
 ) {
   if (order.acceptedObservationId) {
     const [observation] = await tx

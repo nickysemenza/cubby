@@ -19,6 +19,7 @@ import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities
 import { Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
+import { Input } from "~/ui/primitives/input";
 import { StatusText } from "~/ui/primitives/status-text";
 import { Textarea } from "~/ui/primitives/textarea";
 
@@ -118,6 +119,8 @@ export function ChoiceControl({
             const kept: ChoiceAnswer = { optionId: next.id };
             if (next.pick && answer?.pickId) kept.pickId = answer.pickId;
             if (next.text && answer?.text) kept.text = answer.text;
+            if (next.distinctFrom && answer?.distinctFrom)
+              kept.distinctFrom = answer.distinctFrom;
             onAnswer(kept);
           }}
         />
@@ -157,6 +160,47 @@ export function ChoiceControl({
           />
         </label>
       ) : null}
+      {option?.distinctFrom?.map((record) => {
+        const source = answer?.distinctFrom?.[record.id] ?? {
+          url: "",
+          quote: "",
+        };
+        const setSource = (next: typeof source) =>
+          onAnswer({
+            optionId: option.id,
+            distinctFrom: { ...answer?.distinctFrom, [record.id]: next },
+          });
+        return (
+          <Stack gap="sm" key={record.id}>
+            <StatusText>
+              Show with a Source how this differs from {record.name}.
+            </StatusText>
+            <label className="flex flex-col gap-1 text-xs">
+              <span>Source URL for {record.name}</span>
+              <Input
+                type="url"
+                aria-label={`Source URL for ${record.name}`}
+                value={source.url}
+                disabled={disabled}
+                onChange={(event) =>
+                  setSource({ ...source, url: event.target.value })
+                }
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs">
+              <span>Quoted difference from {record.name}</span>
+              <Textarea
+                aria-label={`Quoted difference from ${record.name}`}
+                value={source.quote}
+                disabled={disabled}
+                onChange={(event) =>
+                  setSource({ ...source, quote: event.target.value })
+                }
+              />
+            </label>
+          </Stack>
+        );
+      })}
     </Stack>
   );
 }
@@ -244,8 +288,8 @@ export function ChoiceFormFooter({
       </StatusText>
       {unanswered === 0 && !buildable ? (
         <StatusText tone="destructive">
-          An answer cannot be sent: a reason is at most 1,000 characters and a
-          Product must be chosen from the picker.
+          An answer cannot be sent: a reason is at most 1,000 characters, a
+          Product must be chosen from the picker, and a Source needs a full URL.
         </StatusText>
       ) : null}
       <Button

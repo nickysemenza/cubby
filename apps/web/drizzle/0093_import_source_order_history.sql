@@ -1,0 +1,1 @@
+ALTER TABLE "ImportSourceOrder" ALTER COLUMN "purchaseId" DROP NOT NULL;

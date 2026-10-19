@@ -18,6 +18,10 @@ export interface ChoiceAnswer {
   pickId?: string | undefined;
   /** The reason written, for an option that asks for one. */
   text?: string | undefined;
+  /** The Source given per record id, for an option that asks for Distinct-from evidence. */
+  distinctFrom?:
+    | Readonly<Record<string, { url: string; quote: string } | undefined>>
+    | undefined;
 }
 export type ChoiceAnswers = Readonly<Record<string, ChoiceAnswer | undefined>>;
 
@@ -42,6 +46,10 @@ export function isChoiceAnswered(
   if (!option || !answer) return false;
   if (option.pick && !answer.pickId?.trim()) return false;
   if (option.text && !answer.text?.trim()) return false;
+  for (const record of option.distinctFrom ?? []) {
+    const source = answer.distinctFrom?.[record.id];
+    if (!source?.url.trim() || !source.quote.trim()) return false;
+  }
   return true;
 }
 
@@ -89,7 +97,23 @@ export function commitPreparedInput(
         ? { kind: "existing", productId: answer.pickId }
         : answer.optionId === "unresolved"
           ? { kind: "unresolved", reason: answer.text }
-          : { kind: answer.optionId },
+          : answer.optionId === "new" && answer.distinctFrom
+            ? {
+                kind: "new",
+                distinctFrom: Object.entries(answer.distinctFrom).flatMap(
+                  ([productId, source]) =>
+                    source
+                      ? [
+                          {
+                            productId,
+                            url: source.url.trim(),
+                            quote: source.quote,
+                          },
+                        ]
+                      : [],
+                ),
+              }
+            : { kind: answer.optionId },
     );
     if (!resolution.success) return null;
     resolutions.push({

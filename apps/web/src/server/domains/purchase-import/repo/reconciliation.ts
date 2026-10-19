@@ -67,7 +67,12 @@ import {
   type ReconciliationFix,
   type ReconciliationState,
 } from "./reconciliation-state";
-import { receiptProductQuantity, resolveLineProduct } from "./writer";
+import {
+  arrivalAsksToReceive,
+  fileArrivedFinding,
+  receiptProductQuantity,
+  resolveLineProduct,
+} from "./writer";
 export { commitAcceptedSourceOrderReconciliation } from "./reconciliation-accepted";
 
 /**
@@ -942,10 +947,21 @@ export async function commitSourceOrderReconciliation(
     })
     .onConflictDoUpdate({
       target: [importSourceOrder.sourceClaimId, importSourceOrder.orderKey],
+      // Without a live association, the conflict is a deleted Purchase's
+      // detached history, rebound here as a fresh acceptance.
       set: {
+        purchaseId: state.target.id,
         checksum: fix.source.checksum,
         acceptedObservationId: acceptedObservation.id,
         outputFingerprint,
+        ...(state.association
+          ? {}
+          : {
+              originalOrder: {
+                checksum: firstObservation.checksum,
+                extraction: firstObservation.extraction,
+              },
+            }),
         updatedAt: new Date(),
       },
     })
@@ -1018,6 +1034,36 @@ export async function commitSourceOrderReconciliation(
       .update(importSourceClaim)
       .set({ checksum: fix.source.checksum, updatedAt: new Date() })
       .where(eq(importSourceClaim.id, state.family.root.id));
+  // The writer files `arrived` when an import first sees delivery; a later
+  // source that reconciles the order as delivered files it here instead.
+  // An already-delivered accepted source was prompted at its import, and a
+  // finding needs a Run, which a promoted historical observation lacks.
+  const arrivalRunId = state.observation.runId;
+  if (
+    arrivalRunId !== null &&
+    !productOnly &&
+    candidate.allShipmentsDelivered === true &&
+    state.accepted?.extraction.candidate?.allShipmentsDelivered !== true &&
+    (resolvedBindings.some(
+      (binding) =>
+        binding.productId === null &&
+        candidate.lines[binding.lineIndex]?.lineKind === "principal",
+    ) ||
+      (await arrivalAsksToReceive(tx, {
+        purchaseId: state.target.id,
+        identityDecisions: [],
+        productLines: [],
+      })))
+  )
+    await fileArrivedFinding(
+      tx,
+      {
+        ledgerPartyId: ownerId,
+        runId: arrivalRunId,
+        source: fix.source,
+      },
+      state.target.id,
+    );
   audit.push({
     entityKind: "purchase" as const,
     entityId: state.target.id,

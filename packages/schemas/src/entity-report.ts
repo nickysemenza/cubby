@@ -439,6 +439,15 @@ export const reportChoice = z.object({
         pick: z.object({ entity: z.string(), label: z.string() }).optional(),
         /** Choosing this option also needs a written reason. */
         text: z.object({ label: z.string() }).optional(),
+        /**
+         * Choosing this option also needs, for each record, a Source (`url` and `quote`) showing
+         * the new record differs from it: a Distinct-from decision.
+         */
+        distinctFrom: z
+          .array(
+            z.object({ entity: z.string(), id: z.string(), name: z.string() }),
+          )
+          .optional(),
         /** Said once the option is chosen. */
         hint: z.string().optional(),
       }),

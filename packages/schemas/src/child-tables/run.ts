@@ -218,10 +218,13 @@ export const runChildren = [
         reference: { table: "importSourceClaim", column: "id" },
       },
       { key: "orderKey", kind: "text", notNull: true },
+      /**
+       * Null once its Purchase is deleted: the row stays as the Email's history
+       * until the same order imports again and rebinds it.
+       */
       {
         key: "purchaseId",
         kind: "uuid",
-        notNull: true,
         type: "PurchaseId",
         reference: { table: "purchase", column: "id" },
       },

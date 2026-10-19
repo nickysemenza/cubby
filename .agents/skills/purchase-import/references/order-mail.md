@@ -87,7 +87,11 @@ resolution; it creates no ledger or stock changes.
 
 The same read's `acceptedSourceOrders` separates accepted source orders from
 lifecycle-only links. Each carries its `sourceOrderId` review handle, Purchase
-code, deletion status and stored source identity. Use the handle with
+code, deletion status and stored source identity. Deleting an imported Purchase
+keeps its source order as history (`purchaseDeleted`, with a null code when it
+predates accepted observations) and lets the order import again, which rebinds
+that history to the new Purchase. A deleted Purchase's handle cannot be
+reconciled. Use the handle with
 `purchase_import.commit_accepted_reconciliation` and explicit attach-only
 Product choices; an optional preview is available through
 `prepare_reconciliation`. The Product-only transaction re-reads and validates

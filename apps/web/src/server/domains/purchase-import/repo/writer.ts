@@ -70,6 +70,7 @@ import {
 import { assertRunCapabilityById } from "~/server/domains/purchase-import/repo/capabilities";
 import { manufacturerPartRequests } from "~/server/domains/purchase-import/repo/manufacturer-identity";
 import {
+  type LiveSourceOrder,
   lockImportSourceClaimFamily,
   readImportSourceClaimFamily,
   readSourceFamilyOrder,
@@ -718,7 +719,7 @@ async function learnLineIdentifiers(
 
 async function fileFinding(
   tx: DrizzleTransaction,
-  input: ImportWriterInput,
+  input: Pick<ImportWriterInput, "ledgerPartyId" | "runId" | "source">,
   purchaseId: ReturnType<typeof parseEntityId<"purchase">>,
   kind:
     | "duplicate_lines"
@@ -772,13 +773,29 @@ async function fileFinding(
   return existing.id;
 }
 
+/** The one `arrived` prompt, shared by import and delivered reconciliation. */
+export function fileArrivedFinding(
+  tx: DrizzleTransaction,
+  input: Pick<ImportWriterInput, "ledgerPartyId" | "runId" | "source">,
+  purchaseId: ReturnType<typeof parseEntityId<"purchase">>,
+) {
+  return fileFinding(
+    tx,
+    input,
+    purchaseId,
+    "arrived",
+    "All shipments are marked delivered. Review and receive this purchase.",
+    { kind: "receive_purchase", purchaseId },
+  );
+}
+
 async function fileSourceReconciliation(
   tx: DrizzleTransaction,
   input: ImportWriterInput,
   purchaseId: typeof purchase.$inferSelect.id,
   sourceClaimId: typeof importSourceClaim.$inferSelect.id,
   orderKey: string,
-  accepted: typeof importSourceOrder.$inferSelect | null,
+  accepted: LiveSourceOrder | null,
 ) {
   const observation = await recordSourceOrderObservation(
     tx,
@@ -975,12 +992,16 @@ async function recordImportSourceAssociation(
     })
     .onConflictDoUpdate({
       target: [importSourceOrder.sourceClaimId, importSourceOrder.orderKey],
+      // Without a live `existing`, the conflict is a deleted Purchase's
+      // detached history: this import rebinds it as a fresh acceptance.
       set: {
+        purchaseId,
         checksum: input.source.checksum,
         outputFingerprint,
         originalOrder: existing
           ? existing.originalOrder
           : (input.originalOrder ?? null),
+        ...(existing ? {} : { acceptedObservationId: null }),
         updatedAt: new Date(),
       },
     })
@@ -2119,16 +2140,7 @@ export async function importVendorOrder(
         productLines,
       }))
     ) {
-      findingIds.push(
-        await fileFinding(
-          tx,
-          input,
-          purchaseId,
-          "arrived",
-          "All shipments are marked delivered. Review and receive this purchase.",
-          { kind: "receive_purchase", purchaseId },
-        ),
-      );
+      findingIds.push(await fileArrivedFinding(tx, input, purchaseId));
     }
 
     const claimFingerprint = await sha256Hex(
