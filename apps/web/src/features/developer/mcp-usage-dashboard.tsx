@@ -854,7 +854,7 @@ export function McpUsageDashboard() {
 
       <UsageCharts data={data} />
 
-      <div className={selected ? "relative xl:pr-[25rem]" : "relative"}>
+      <div className={selected ? "relative xl:pr-(--side-panel-width)" : "relative"}>
         <Card>
           <CardHeader>
             <CardTitle>Tool pruning worklist</CardTitle>
@@ -895,7 +895,7 @@ export function McpUsageDashboard() {
         {selected && wide ? (
           <aside
             aria-label="Selected tool detail"
-            className="absolute inset-y-0 right-0 w-[25rem] overflow-y-auto border-l border-border bg-background"
+            className="absolute inset-y-0 right-0 w-(--side-panel-width) overflow-y-auto border-l border-border bg-background"
           >
             <Button
               variant="ghost"

@@ -361,7 +361,7 @@ export function USDAFoodList({
           <div
             className={
               dockedInspector
-                ? "grid min-w-0 grid-cols-[minmax(0,1fr)_25rem]"
+                ? "grid min-w-0 grid-cols-[minmax(0,1fr)_var(--side-panel-width)]"
                 : "min-w-0"
             }
           >

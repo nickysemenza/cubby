@@ -832,7 +832,7 @@ function DesktopTableView<TItem extends RowData>({
           className={cn(
             "relative hidden flex-col md:flex",
             !embedded && "border-r border-b border-[var(--border)]",
-            desktopInspector && !embedded && "xl:pr-[25rem]",
+            desktopInspector && !embedded && "xl:pr-(--side-panel-width)",
           )}
           style={paneStyle}
         >
@@ -891,7 +891,7 @@ function DesktopTableView<TItem extends RowData>({
           ) : null}
           {desktopInspector && !embedded ? (
             <div
-              className="absolute inset-y-0 right-0 hidden w-[25rem] overflow-y-auto border-l border-border bg-card xl:block"
+              className="absolute inset-y-0 right-0 hidden w-(--side-panel-width) overflow-y-auto border-l border-border bg-card xl:block"
               data-desktop-inspector
             >
               {desktopInspector}

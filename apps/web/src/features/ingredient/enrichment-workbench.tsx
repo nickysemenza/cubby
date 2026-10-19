@@ -864,7 +864,7 @@ export function EnrichmentWorkbench({
           <div
             className={cn(
               "min-w-0",
-              dockedInspector && "xl:grid xl:grid-cols-[minmax(0,1fr)_25rem]",
+              dockedInspector && "xl:grid xl:grid-cols-[minmax(0,1fr)_var(--side-panel-width)]",
             )}
           >
             <ListWorkbench
