@@ -145,6 +145,13 @@ relevance fallback and the Mail import Runs it starts:
    never pays automatically; its pause reason says so with the raw diagnostics.
    Paused Runs resume when the next window starts.
 
+Amended after a Console spend limit was re-tried on every request (271 refused
+calls in 25 minutes, seconds of latency each): Cubby records a provider credit
+refusal until the date Anthropic names, or the window end, and skips the
+credit rung until then, probing once per window. A member reset or credit
+budget change clears it. The mechanism lives in
+[Infrastructure](../infrastructure.md#claude-subscriber-credits).
+
 A member's "Run now, paid allowed" override, available in the Run header's
 More actions menu and on the Mail import card, authorizes paid funding for one
 Run (its retries and the imports its discovery starts) within the paid budget

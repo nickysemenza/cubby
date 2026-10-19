@@ -128,6 +128,27 @@ describe("entity reference filter options", () => {
     ).toEqual([fallback]);
   });
 
+  // Regression: a pasted shortcode found nothing once the record had a name,
+  // because roster search matched only the displayed label.
+  it("finds a named record by its pasted shortcode", async () => {
+    const named = await createMealWithEntityId(
+      ctx.db,
+      buildEntity("meal", { date: "2026-08-03", name: "Synthetic dinner" }),
+      TEST_ACTOR,
+    );
+    const input = {
+      source: "entity" as const,
+      entity: "meal" as const,
+      search: ` ${named.output.id.toLowerCase()} `,
+      selectedIds: [],
+      limit: 25,
+      include: [],
+    };
+    expect((await getFilterOptions(ctx.db, input)).items).toEqual([
+      { id: named.output.id, label: "Synthetic dinner" },
+    ]);
+  });
+
   it("searches live shortcode entities and hydrates selected values outside the page query", async () => {
     const crop = await createIngredient(
       ctx.db,

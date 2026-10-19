@@ -108,6 +108,15 @@ struct EntityHeroView<Actions: View>: View {
                 Text(descriptor.singular).font(.caption)
             }
             .foregroundStyle(.secondary)
+            if let when = heroWhen {
+                HStack(spacing: FieldGuideTokens.Space.xs) {
+                    Text(when.label)
+                    DateDisplay(when.value)
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .accessibilityElement(children: .combine)
+            }
             if let chip = presentation.heroChip, let field = descriptor.field(chip),
                 let text = EntityFieldValue.text(in: row.raw, field: field, surface: "detail")
             {
@@ -142,6 +151,15 @@ struct EntityHeroView<Actions: View>: View {
             else { return nil }
             return (field.label, value, field)
         }
+    }
+
+    /// The declared `hero.when`: when the record happened (received, ordered, eaten), drawn
+    /// by the field's own date rendering; nil when undeclared or empty, as on web.
+    private var heroWhen: (label: String, value: String)? {
+        guard let when = presentation.heroWhen, let field = descriptor.field(when.field),
+            let value = EntityFieldValue.dateValue(in: row.raw, field: field, surface: "detail")
+        else { return nil }
+        return (when.label ?? field.label, value)
     }
 
     private var heroPhoto: PhotoAttachment? {

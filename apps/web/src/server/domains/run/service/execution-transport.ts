@@ -42,6 +42,15 @@ function runningOwnerMatches(
   );
 }
 
+/**
+ * Whether a request is a frontier chat call. Compare the path only: pi-ai's
+ * Anthropic SDK posts `v1/messages?beta=true`, and an exact match on the
+ * endpoint (query included) let every Claude credit call bypass the credit
+ * window budget (2026-10-19: $9.98 of $5 spent with no refusal).
+ */
+const isChatEndpoint = (request: GatewayFetchRequest) =>
+  ["responses", "v1/messages"].includes(request.endpoint.split("?")[0] ?? "");
+
 async function selectedCoordinatorExecution(
   db: Database,
   runId: RunId,
@@ -49,7 +58,7 @@ async function selectedCoordinatorExecution(
 ): Promise<boolean> {
   const body = await request.query();
   if (
-    (request.endpoint === "responses" || request.endpoint === "v1/messages") &&
+    isChatEndpoint(request) &&
     ["gpt-6-luna", "gpt-6-sol", "claude-opus-5-5"].includes(
       z.string().parse(body.model),
     )
@@ -107,8 +116,7 @@ async function selectedCoordinatorExecution(
 
 /** The frontier chat model a request names; other endpoints are never budgeted. */
 async function budgetedModel(request: GatewayFetchRequest) {
-  if (request.endpoint !== "responses" && request.endpoint !== "v1/messages")
-    return undefined;
+  if (!isChatEndpoint(request)) return undefined;
   const model = z.object({ model: z.string() }).safeParse(await request.query())
     .data?.model;
   return model && aiBudgetCovers(model) ? model : undefined;

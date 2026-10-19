@@ -74,14 +74,17 @@ export function workflowForRun(
   return {
     skills: null,
     instructions: [
-      // purchase_import writes must name the delegated Run by its private id;
-      // without it Pi could not form a valid `_runExecution` envelope.
-      `This Mail import Run is (runId ${runId}). Every \`purchase_import\` call carries \`_runExecution: { runId: "${runId}", operationId: <a stable id per call> }\`; \`commit\` names the \`prepare\` call's operationId.`,
+      // Writes that read `_runExecution` must name the delegated Run by its
+      // private id; only those tools advertise the envelope to the agent
+      // (`narrowedToolSchema`), so without this Pi could not form it.
+      `This Mail import Run is (runId ${runId}). Every call to a tool whose input offers \`_runExecution\` carries \`_runExecution: { runId: "${runId}", operationId: <a stable id per call> }\`; \`commit\` names the \`prepare\` call's operationId.`,
       mailImportWorkflow,
       extractionRules,
+      // Only the authority paragraph: the sign rules after it govern
+      // finance_read previews, which this Run does not mount.
       settlementRules
         .split("## Authority and signs\n")[1]
-        ?.split("**Verify the normalization")[0] ?? "",
+        ?.split("Cubby signs are positive")[0] ?? "",
       ...(options.escalation ? [ESCALATION_INSTRUCTIONS] : []),
     ].join("\n\n"),
   };

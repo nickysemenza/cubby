@@ -15,6 +15,7 @@ import {
   eq,
   exists,
   inArray,
+  or,
   type SQL,
   sql,
 } from "drizzle-orm";
@@ -197,6 +198,16 @@ const toOptionRow = (row: OptionQueryRow): OptionRow => ({
  * bypasses entity mappers: a dropdown never needs images, relation hydration,
  * pricing, counts, or data-quality enrichment.
  */
+/** A pasted shortcode finds its record even when the label never contains it. */
+const matchesLabelOrCode = (
+  label: AnyColumn | SQL,
+  code: AnyColumn,
+  search: string,
+): SQL | undefined => {
+  const byLabel = formatSearchTerm(label, search);
+  return byLabel && or(byLabel, formatSearchTerm(code, search.trim()));
+};
+
 async function loadRows(
   db: Database,
   input: Extract<FilterOptionsInput, { kind: FilterOptionKind }>,
@@ -237,7 +248,7 @@ async function loadRows(
           ? selected.length > 0
             ? inArray(spec.id, selected)
             : undefined
-          : formatSearchTerm(spec.label, input.search),
+          : matchesLabelOrCode(spec.label, spec.id, input.search),
       ),
     )
     .orderBy(asc(spec.label), asc(spec.id))
@@ -321,7 +332,7 @@ async function loadEntityRows(
           ? selected.length > 0
             ? inArray(table.shortcode, selected)
             : undefined
-          : formatSearchTerm(label, input.search),
+          : matchesLabelOrCode(label, table.shortcode, input.search),
       ),
     )
     .orderBy(...(count ? [desc(count)] : []), asc(label), asc(table.shortcode))

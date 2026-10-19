@@ -43,24 +43,67 @@ import { readMail, resolveMail } from "./mail-tool";
 
 type MailRunSource = Awaited<ReturnType<typeof readMailRunSources>>[number];
 
-/** True when a rule settled the Email; false leaves it to the coordinator. */
+/** Most order-id Purchases a claim lists; more means the id is not specific. */
+const KNOWN_PURCHASES_MAX = 5;
+
+/**
+ * What Cubby already established for the claimed Email, so the coordinator
+ * does not spend model calls on the Vendor and Purchase lookups most Emails
+ * otherwise start with: the Vendor its sender proves, the order identifiers
+ * it prints, and the live Purchases holding one of those order ids.
+ */
+type KnownForEmail = {
+  senderVendor: { id: string; name: string } | null;
+  orderIds: string[];
+  purchases: Array<{
+    id: string;
+    orderId: string;
+    vendorId: string;
+    date: string | null;
+    imported: boolean;
+  }>;
+};
+
+/**
+ * `settled` when a rule settled the Email; otherwise it goes to the
+ * coordinator with what the rule's evidence established (null when the
+ * retained copy is gone or changed).
+ */
 async function settleByRule(
   db: Database,
   source: MailRunSource,
   actor: ActorContext,
   memberSelected: boolean,
-) {
+): Promise<"settled" | { known: KnownForEmail | null }> {
   const [mail] = await readRetainedMail(db, {
     ledgerPartyIds: [source.email.ledgerPartyId],
     orderMailIds: [source.orderMailId],
   });
-  if (!mail || mail.rawChecksum !== source.checksum) return false;
+  if (!mail || mail.rawChecksum !== source.checksum) return { known: null };
   const content = mailReadContent(mail.content, {});
-  // A later page or omitted evidence may reverse an apparent lifecycle notice.
-  // The coordinator can page the read; a deterministic link cannot assume it.
-  if (content.truncated || content.nextOffset !== null) return false;
   const text = [content.preheader, content.bodyText].filter(Boolean).join("\n");
   const proof = await senderProofVendor(db, mail.sender);
+  const orderIds = orderIdentifiers(mail.subject, text);
+  const candidates = await readMailRuleCandidates(db, {
+    ledgerPartyId: mail.ledgerPartyId,
+    orderIds,
+  });
+  const known: KnownForEmail = {
+    senderVendor: proof
+      ? { id: proof.vendor.shortcode, name: proof.vendor.name }
+      : null,
+    orderIds,
+    purchases: candidates.slice(0, KNOWN_PURCHASES_MAX).map((candidate) => ({
+      id: candidate.purchaseId,
+      orderId: candidate.orderId,
+      vendorId: candidate.vendorShortcode,
+      date: candidate.date,
+      imported: candidate.importedSource,
+    })),
+  };
+  // A later page or omitted evidence may reverse an apparent lifecycle notice.
+  // The coordinator can page the read; a deterministic link cannot assume it.
+  if (content.truncated || content.nextOffset !== null) return { known };
   const decision = decideMailByRule({
     subject: mail.subject,
     text,
@@ -72,12 +115,9 @@ async function settleByRule(
     memberSelected,
     senderVendorId: proof?.vendor.id ?? null,
     retainedAttachments: await countRetainedMailAttachments(db, mail.id),
-    candidates: await readMailRuleCandidates(db, {
-      ledgerPartyId: mail.ledgerPartyId,
-      orderIds: orderIdentifiers(mail.subject, text),
-    }),
+    candidates,
   });
-  if (decision.kind === "coordinator") return false;
+  if (decision.kind === "coordinator") return { known };
   const ref = {
     mailboxId: mail.mailboxId,
     messageId: mail.messageId,
@@ -106,10 +146,10 @@ async function settleByRule(
     );
   } catch (error) {
     // SILENT: a refusal `mail.resolve` would give the coordinator (a member's dismissal, another Purchase's link, changed evidence) hands it the Email instead.
-    if (error instanceof AppError) return false;
+    if (error instanceof AppError) return { known };
     throw error;
   }
-  return true;
+  return "settled";
 }
 
 /** The claimed Email's read, or the refusal the coordinator would get reading it. */
@@ -155,8 +195,13 @@ export async function claimMailImportWork(db: Database, runId: string) {
       source.owned && source.unchanged && source.email.status === "researching",
   );
   for (const [index, source] of pending.entries()) {
-    if (await settleByRule(db, source, actor, current.trigger === "foreground"))
-      continue;
+    const ruled = await settleByRule(
+      db,
+      source,
+      actor,
+      current.trigger === "foreground",
+    );
+    if (ruled === "settled") continue;
     const { email } = source;
     const ref = { mailboxId: email.mailboxId, messageId: email.messageId };
     return {
@@ -170,6 +215,7 @@ export async function claimMailImportWork(db: Database, runId: string) {
         receivedAt: email.receivedAt?.toISOString() ?? null,
       },
       ...(await claimedRead(db, ref, actor)),
+      known: ruled.known,
     };
   }
   return { kind: "none" as const };

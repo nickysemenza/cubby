@@ -10,7 +10,11 @@ const create = (
   kind,
   kindSource: "rule" as const,
   votes,
-  counterparty: { label: "business" as const, history: null },
+  counterparty: {
+    label: "business" as const,
+    history: null,
+    storedValue: false,
+  },
   status: "posted" as const,
   amount: -12.5,
   transactionDate: null,

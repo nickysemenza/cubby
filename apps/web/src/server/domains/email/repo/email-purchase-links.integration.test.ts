@@ -282,6 +282,7 @@ describe("Email Purchase links", () => {
               changedSinceReview: false,
               replacesPurchaseIds: [],
               proposedBy: "import",
+              label: `${purchase.shortcode} (Linked)`,
             },
           ],
         }),

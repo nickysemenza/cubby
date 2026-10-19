@@ -150,7 +150,8 @@ export function decideStatementKind(input: {
 /**
  * Whether a create's kind is bulk-acceptable: at least two sources name it and
  * none disagrees, nobody says the counterparty is a person, and the model has
- * said it is a business — or the descriptor names one same-owner own account.
+ * said it is a business (history must, on a stored-value account) — or the
+ * descriptor names one same-owner own account.
  */
 export function kindAgreed(
   create: KindDecision,
@@ -165,6 +166,7 @@ export function kindAgreed(
   if (counterparty.label === "person" || counterparty.history === "person")
     return false;
   if (transfer) return transfer.accountId !== null && !transfer.ledgerTransfer;
+  if (counterparty.storedValue) return counterparty.history === "business";
   return counterparty.label === "business";
 }
 

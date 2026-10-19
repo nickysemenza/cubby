@@ -1,6 +1,6 @@
 {
-  "id": "00e63096-4034-4bf2-9ac4-93116b262c1a",
-  "prevId": "00f76fc2-6170-4609-ad3d-7134a1ba3ea9",
+  "id": "861c915c-0938-4752-9752-7111d638558b",
+  "prevId": "e30612db-4656-431d-8f21-9f1adddf8212",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2144,6 +2144,13 @@
           "primaryKey": false,
           "notNull": false
         },
+        "issuer": {
+          "name": "issuer",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
@@ -2152,7 +2159,24 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "ExternalSource_vendor_issuer_key": {
+          "name": "ExternalSource_vendor_issuer_key",
+          "columns": [
+            {
+              "expression": "vendorId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"ExternalSource\".\"issuer\"",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "ExternalSource_vendorId_Vendor_id_fk": {
           "name": "ExternalSource_vendorId_Vendor_id_fk",

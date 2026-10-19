@@ -17,19 +17,24 @@ Claude or Codex session researches it later through the Research queue.
    read; `readError` instead names why Cubby could not read it. Call
    `imports_read` `mail` only for an attachment's original (`attachmentId`,
    when the order details live in a PDF or image) or a later page. Note the
-   read's `checksum`. The read is compact text, never HTML: `preheader`,
-   `bodyText`, cue-first `links`, item `images` (exact `src` for a line's
-   `imageUrl`) and `structuredData`. When `content.nextOffset` is not null,
+   read's `checksum`; item `images` give the exact `src` for a line's
+   `imageUrl`. When `content.nextOffset` is not null,
    read again with `offset` set to it until it is null before extracting
    lines or a total. If `content.truncated` is still true after the last page,
    evidence is missing: import only when every item line and the total are
    present; otherwise `mail` `resolve` it `unresolved` naming what is missing.
+   The claim's `known` holds the lookups an Email usually starts with:
+   `senderVendor`, the Vendor its sender proves (null when none), and
+   `purchases`, the live Purchases (at most 5) whose order id is one of
+   `orderIds`, the order identifiers Cubby recognized in the Email, with
+   `imported` true when an import already itemized it. Use them instead of
+   repeating those lookups; look up only what they lack, such as an order id
+   Cubby did not recognize.
 3. Decide what the Email is:
    - **An order with priced lines** (confirmation, receipt, invoice): import it.
-     Find the Vendor first with `search` / `entity_read`; name it by
-     `vendorId`, or by `vendor.name` exactly as the Email names the seller;
-     an Email from a sender address the Vendor records resolves to it by
-     Sender proof even when the name differs.
+     Name the Vendor by `vendorId`: `known.senderVendor.id`, or else the
+     Vendor `search` / `entity_read` finds; or by `vendor.name` exactly as
+     the Email names the seller.
      `purchase_import` `prepare` the order from this Email
      (`source.kind: "mail_message"`, `externalKey`
      `gmail:<mailboxId>:<messageId>`, the read `checksum` as both source and
@@ -37,14 +42,12 @@ Claude or Codex session researches it later through the Research queue.
      in an attachment, use `source.kind: "mail_attachment"`, `externalKey`
      `gmail:<mailboxId>:<messageId>:attachment:<attachmentId>` with the
      read's `attachmentId` (itself the attachment's key, which Cubby also
-     accepts alone) and that attachment's `checksum`). Then `commit` it,
-     resolving every principal line: an existing Product returned as a
-     candidate when its exact item and variant match, `new` for a supported
-     tracked item, `unresolved` with the identity gap, or `expense_only` for
-     untracked spending. The commit links the Email to the Purchase.
+     accepts alone) and that attachment's `checksum`). Then `commit` it with a
+     resolution for every principal line.
    - **A lifecycle Email about an existing Purchase** (shipped, delivered,
-     cancelled, refunded, or another event): find that Purchase by order id
-     and Vendor, then `mail` `resolve` with `linked`, `purchaseIds` containing
+     cancelled, refunded, or another event): take that Purchase from
+     `known.purchases`, or find it by order id and Vendor, then `mail`
+     `resolve` with `linked`, `purchaseIds` containing
      every source-supported Purchase, and the event. A refund
      Email never books money by itself; the refund remains review work.
      A combined-credit alert may support several Purchases. A member reviews
@@ -58,7 +61,8 @@ Claude or Codex session researches it later through the Research queue.
      linking never manufactures itemization or resolves unknown Product facts.
    - **A payment, refund, transfer, card repayment or reimbursement Email
      without an order** (a payment app or bank notice): find the posted
-     Financial Transaction with `entity_read`. For a purchase payment,
+     Financial Transaction with `search` (`entityKinds:
+     ["financialTransaction"]`, by merchant). For a purchase payment,
      `finance` `converge` with its FTX- code and the Email's EML- `id`; Cubby
      books only what server evidence establishes. For a transfer, incoming
      payment, reimbursement, card repayment or refund, `mail` `resolve` with
@@ -83,10 +87,7 @@ Claude or Codex session researches it later through the Research queue.
      converge reason; do not retry. Only a member's `financial` disposition
      with `review` settles it.
    - **Not about a purchase**: `mail` `resolve` with `unrelated`. Cubby deletes
-     its unprotected retained copy. Confirming an automated unrelated decision
-     still records the member's checksum-bound resolution after disposal;
-     unchanged repeats preserve the existing resolution without duplicating
-     history. The prior prediction remains available for evaluation.
+     its unprotected retained copy.
 4. When the order's original is missing (a shipment Email for an order you have
    not seen), `mail` `search` by order number, sender or Vendor before
    deciding it is unresolved, and read retained matches from the same
@@ -122,9 +123,8 @@ stable id per `extraction.candidate.lines` entry in the same order. For example,
 describes a candidate with two lines. The extraction contains source facts;
 the order envelope contains their stable identities.
 
-Every MCP call in this Run uses the delegated `runId` in `_runExecution` and
-its stable `operationId`. A returned public Run code is for reporting; use the
-delegated identity for subsequent calls.
+A returned public Run code is for reporting; `_runExecution` keeps the
+delegated `runId`.
 
 On input validation failure, read the reported field path and correct that
 field before another call. An unchanged payload repeats the same failure.

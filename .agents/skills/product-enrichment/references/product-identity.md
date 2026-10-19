@@ -62,7 +62,10 @@ external ids, never for text in `notes`. When a photo shows a legible barcode,
 record it with an `entity.update product` `externalIds` add patch
 (`source: "gtin"`, `kind: "gtin_14"`); prep matches a numeric order-line SKU against it. A
 direct-selling brand's per-variant SKU printed on its own tag may be stored as
-`retailer_sku` under that brand's vendor source slug.
+`retailer_sku` under that brand's Vendor issuer source: the slug its existing
+imported identifiers already use. A Vendor's export or legacy slug is not its
+issuer; identifiers stored there are invisible to exact matching and appear in
+Problems as "Product identifiers outside the issuer".
 
 **Descriptive match** — compare the existing Product's own photos, labels and
 Sources against the purchased variant before creating. A different title or

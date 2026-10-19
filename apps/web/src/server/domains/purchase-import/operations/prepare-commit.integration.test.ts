@@ -1623,6 +1623,7 @@ describe("shared purchase-import prepare and commit", () => {
         slug: "amazon",
         label: "Example registered catalog",
         vendorId: vendor.id,
+        issuer: true,
       });
       await tx.insert(entityExternalId).values({
         entityId: existingProduct.entityId,

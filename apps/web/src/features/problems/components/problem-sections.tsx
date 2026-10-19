@@ -1872,6 +1872,24 @@ const DECLARED_SECTIONS = [
     }),
   }),
   section({
+    id: "product-identifiers-outside-issuer",
+    label: "Identifiers outside the issuer",
+    select: (p) => p.productIdentifiersOutsideIssuer,
+    problemKeys: ["productIdentifiersOutsideIssuer"],
+    entity: "vendor",
+    renderItem: (item) => ({
+      key: `${item.vendorId}:${item.source}`,
+      title: `${item.vendorName}: ${item.source}`,
+      fields: facts(
+        fact("Issuer", item.issuer ?? "None registered"),
+        fact("Identifiers", String(item.identifierCount)),
+        fact("Kinds", item.kinds.join(", ")),
+      ),
+      route: entityDetailLink("vendor", item.vendorId),
+      editLabel: "Open vendor",
+    }),
+  }),
+  section({
     id: "provisional-financial-accounts",
     label: "Provisional accounts",
     select: (p) => p.provisionalFinancialAccounts,

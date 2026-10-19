@@ -80,30 +80,6 @@ Deploy the code that no longer declares or writes status, then apply through
 and the absent column before clearing the boundary. Do not enable auto-merge
 or apply the contraction before the matching deployment.
 
-## Import source order live key
-
-Deleting an imported Purchase keeps its `ImportSourceOrder` row with a null
-`purchaseId` as the Email's accepted history, and the order's next import adds
-a row beside it. `0094_import_source_order_history` is the compatible
-expansion: `purchaseId` becomes nullable and the Source order observation
-content key gains `purchaseId`. `0095_import_source_order_live_key` is the
-contraction: `ImportSourceOrder_source_order_key` becomes partial
-(`WHERE "purchaseId" IS NOT NULL`). The deployed writer's predicate-less
-`ON CONFLICT ("sourceClaimId", "orderKey")` cannot infer a partial index, so
-its imports fail until the server that names the predicate deploys. Under
-`0094` alone, a re-import takes over the detached row instead of adding one.
-The populated-predecessor regression is
-`tooling/import-source-order-history-migration.integration.test.ts`.
-
-Before merging, set `PRODUCTION_MIGRATION_THROUGH` to
-`0094_import_source_order_history`. Deploy applies `0094` and the matching
-server. Then run `pnpm --filter @cubby/web db:migrate --target=production
---through=0095_import_source_order_live_key` and read back that
-`\d "ImportSourceOrder"` shows the key with `WHERE ("purchaseId" IS NOT NULL)`
-and `SELECT count(*) FROM "ImportSourceOrder" WHERE "purchaseId" IS NULL`
-(the detached history rows) before deleting the variable. Do not enable
-auto-merge. A renumbered migration changes these tags in the same commit.
-
 ## Image job entity cutover
 
 `0061_image_job_entity`, `0062_image_job_drop_public_id` and `0063_derived_ddl`

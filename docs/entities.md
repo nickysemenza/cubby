@@ -2426,12 +2426,21 @@ table each (ADR 0007):
   (`packages/schemas/src/external-id.ts`): product identifiers (`asin`,
   `retailer_sku`, `gtin_14`, …), `settlement_ref` on financial transactions,
   `page` (Notion) and `folder` (Drive). A live `(source, kind, externalId)`
-  names one entity; rows soft-delete with their entity.
+  names one entity; rows soft-delete with their entity. A Vendor may own several
+  sources (exports and settlement feeds beside its catalog), but exactly one
+  carries `issuer`: Product identifier resolution, exact lookup and import
+  fences read only that source. Ownership comes from explicit registration or
+  a member action; `ensureExternalSources` registers slugs unowned, since a
+  slug's spelling never names a Vendor. Merging two Vendors that each have an
+  issuer is refused until one is reconciled, and Problems lists Product
+  identifiers held under a Vendor's non-issuer source.
 - `EntitySource(entityId/entityKind, fieldPath, url, sourceEntityId/sourceEntityKind, quote, observedAt,
   selectedVariant, valueFingerprint, recorder)` records where a fact about an
   entity was seen ([terminology](guide/terminology.md#purchase-research) "Source";
   `entity-kernel/repo/entity-source.ts`). Every create/update command and image attach
-  accepts `sources[]`; the kernel validates `fieldPath` against the manifest,
+  accepts `sources[]`; the kernel validates `fieldPath` against the manifest
+  (a writable field the detail returns at its read key or, for a reference
+  read as an object such as Product `ingredientId`, its `display.readPath`),
   writes the rows in the mutation's transaction, takes the recorder from the
   actor (never input) and fingerprints the post-write field value. Detail
   reads return `sources` with `supportsCurrentValue`, so a Source for an
@@ -2650,7 +2659,11 @@ additional claims. Shared model/style names, URLs and partial variant text remai
 retrieval or recommendation evidence.
 Retained claim loads resolve issuer ownership from one operation-local Vendor and
 source-registry read, rather than repeating those reads for each accepted line.
-Later operations and registration writes read current registry ownership.
+Later operations and registration writes read current registry ownership. A line
+whose issuer cannot resolve (an ambiguous host, incompatible ownership, a
+non-HTTP page) drops only that claim; the catalog scan records the raw error,
+the Product and the page in the evaluation result's `coverage`, beside whether
+vector neighbour retrieval was queried, unconfigured or failed.
 
 Product Category describes identity and can supply a Spending category mapping
 through its ancestry. Cost type describes the Expense's accounting role; Trade

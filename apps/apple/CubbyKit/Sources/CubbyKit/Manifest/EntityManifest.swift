@@ -41,6 +41,12 @@ extension ConnectedViewSpec {
     public var id: String { key }
 }
 
+extension FieldDescriptor {
+    /// A table header's short form: the declared `columnLabel`, else the label. The full label
+    /// stays the header's accessible name, as on web.
+    public var columnHeader: String { columnLabel ?? label }
+}
+
 extension EntityDescriptor {
     public func field(_ key: String) -> FieldDescriptor? { fields.first { $0.key == key } }
     public func filter(_ columnId: String) -> FilterDescriptor? { filters.first { $0.columnId == columnId } }

@@ -1,6 +1,8 @@
 import Foundation
 
-/// Display-only dates: calendar values never pass through an instant's UTC day.
+/// Display-only dates: calendar values never pass through an instant's UTC day. Display text
+/// follows `locale` (the person's language and 12/24-hour clock); only the household zone and
+/// the Gregorian calendar are fixed.
 public struct DatePresentation: Sendable, Equatable {
     public let absolute: String
     public let relative: String
@@ -15,36 +17,47 @@ public struct DatePresentation: Sendable, Equatable {
 
     private static let transcoder = LenientISO8601DateTranscoder()
 
-    public static func timestamp(_ date: Date, now: Date = .now, compact: Bool = false) -> Self {
+    public static func timestamp(
+        _ date: Date, now: Date = .now, compact: Bool = false, locale: Locale = .autoupdatingCurrent
+    ) -> Self {
         Self(
-            absolute: absolute(date, now: now, compact: compact),
+            absolute: absolute(date, now: now, compact: compact, locale: locale),
             relative: distance(date.timeIntervalSince(now), compact: compact),
-            exact: format(date, pattern: "MMM d, yyyy, h:mm:ss a zzz"))
+            exact: date.formatted(
+                style(locale).month(.abbreviated).day().year().hour().minute().second()
+                    .timeZone(.specificName(.short))))
     }
 
     /// `timestamp(_:now:compact:).absolute` alone, for labels that never show the age or zone.
-    public static func absolute(_ date: Date, now: Date = .now, compact: Bool = false) -> String {
-        guard compact else { return format(date, pattern: "MMM d, yyyy, h:mm a") }
-        let sameYear = calendar.component(.year, from: date) == calendar.component(.year, from: now)
-        return format(date, pattern: sameYear ? "MMM d" : "MMM d, yyyy")
+    public static func absolute(
+        _ date: Date, now: Date = .now, compact: Bool = false, locale: Locale = .autoupdatingCurrent
+    ) -> String {
+        guard compact else {
+            return date.formatted(style(locale).month(.abbreviated).day().year().hour().minute())
+        }
+        return day(date, now: now, compact: true, locale: locale)
     }
 
     /// Capture provenance preserves the camera's recorded offset, without a live age.
-    public static func captureTimestamp(_ date: Date, offsetMinutes: Int?) -> String {
-        guard let offsetMinutes else { return timestamp(date).exact }
+    public static func captureTimestamp(
+        _ date: Date, offsetMinutes: Int?, locale: Locale = .autoupdatingCurrent
+    ) -> String {
+        guard let offsetMinutes else { return timestamp(date, locale: locale).exact }
         let seconds = offsetMinutes.multipliedReportingOverflow(by: 60)
         guard !seconds.overflow, let timeZone = TimeZone(secondsFromGMT: seconds.partialValue) else {
-            return timestamp(date).exact
+            return timestamp(date, locale: locale).exact
         }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.calendar = calendar
-        formatter.timeZone = timeZone
-        formatter.dateFormat = "MMM d, yyyy, h:mm:ss a (xxx)"
-        return formatter.string(from: date)
+        let local = date.formatted(
+            style(locale, timeZone: timeZone).month(.abbreviated).day().year().hour().minute().second())
+        let magnitude = abs(offsetMinutes)
+        let hours = magnitude / 60 < 10 ? "0\(magnitude / 60)" : "\(magnitude / 60)"
+        let minutes = magnitude % 60 < 10 ? "0\(magnitude % 60)" : "\(magnitude % 60)"
+        return "\(local) (\(offsetMinutes < 0 ? "-" : "+")\(hours):\(minutes))"
     }
 
-    public static func plainDate(_ value: String, now: Date = .now, compact: Bool = false) -> Self? {
+    public static func plainDate(
+        _ value: String, now: Date = .now, compact: Bool = false, locale: Locale = .autoupdatingCurrent
+    ) -> Self? {
         guard let date = HouseholdDay.date(from: value) else { return nil }
         let today = calendar.startOfDay(for: now)
         let days = calendar.dateComponents([.day], from: today, to: date).day ?? 0
@@ -82,15 +95,16 @@ public struct DatePresentation: Sendable, Equatable {
                 relative = days > 0 ? "in \(amount)" : "\(amount) ago"
             }
         }
-        let sameYear = calendar.component(.year, from: date) == calendar.component(.year, from: now)
         return Self(
-            absolute: format(date, pattern: compact && sameYear ? "MMM d" : "MMM d, yyyy"),
-            relative: relative, exact: value)
+            absolute: day(date, now: now, compact: compact, locale: locale), relative: relative,
+            exact: value)
     }
 
-    public static func value(_ value: String, now: Date = .now, compact: Bool = false) -> Self? {
-        if let day = plainDate(value, now: now, compact: compact) { return day }
-        return parse(value).map { timestamp($0, now: now, compact: compact) }
+    public static func value(
+        _ value: String, now: Date = .now, compact: Bool = false, locale: Locale = .autoupdatingCurrent
+    ) -> Self? {
+        if let day = plainDate(value, now: now, compact: compact, locale: locale) { return day }
+        return parse(value).map { timestamp($0, now: now, compact: compact, locale: locale) }
     }
 
     private static let calendar: Calendar = {
@@ -99,21 +113,21 @@ public struct DatePresentation: Sendable, Equatable {
         return value
     }()
 
-    private static let formatters: [String: DateFormatter] = {
-        let patterns = ["MMM d", "MMM d, yyyy", "MMM d, yyyy, h:mm a", "MMM d, yyyy, h:mm:ss a zzz"]
-        return Dictionary(
-            uniqueKeysWithValues: patterns.map { pattern in
-                let formatter = DateFormatter()
-                formatter.locale = Locale(identifier: "en_US_POSIX")
-                formatter.calendar = calendar
-                formatter.timeZone = HouseholdDay.timeZone
-                formatter.dateFormat = pattern
-                return (pattern, formatter)
-            })
-    }()
+    /// The chosen fields in the locale's own order and clock. A fixed POSIX pattern printed
+    /// English month names and a 12-hour clock for everyone; keep POSIX for wire formats only.
+    private static func style(_ locale: Locale, timeZone: TimeZone = HouseholdDay.timeZone)
+        -> Date.FormatStyle
+    {
+        var calendar = calendar
+        calendar.locale = locale
+        return Date.FormatStyle(locale: locale, calendar: calendar, timeZone: timeZone)
+    }
 
-    private static func format(_ date: Date, pattern: String) -> String {
-        formatters[pattern]!.string(from: date)
+    /// A calendar day; a compact one drops the year when it is this year.
+    private static func day(_ date: Date, now: Date, compact: Bool, locale: Locale) -> String {
+        let sameYear = calendar.component(.year, from: date) == calendar.component(.year, from: now)
+        let style = style(locale).month(.abbreviated).day()
+        return date.formatted(compact && sameYear ? style : style.year())
     }
 
     private static func distance(_ seconds: Double, compact: Bool) -> String {

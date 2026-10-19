@@ -54,8 +54,25 @@ export const chatGptPlanAvailability = z.strictObject({
 });
 export type ChatGptPlanAvailability = z.infer<typeof chatGptPlanAvailability>;
 
-/** Both budgets and the plan: what decides whether background work waits. */
+/**
+ * Whether Anthropic accepts the Claude subscriber credit: `refused` after a
+ * recorded provider refusal (a Console spend limit, a spent balance) until the
+ * date it names or the window end (`until`), probed once per window; `reason`
+ * keeps the provider's raw refusal.
+ */
+export const claudeCreditAvailability = z.strictObject({
+  state: z.enum(["available", "refused"]),
+  until: z.iso.datetime().nullable(),
+  reason: z.string().nullable(),
+});
+
+/**
+ * Household-wide frontier AI funding (ADR 0017): both budgets, the credit's
+ * refusal state and the plan, which together decide whether background work
+ * waits.
+ */
 export const aiFundingStatus = aiBudgetStatus.extend({
+  credit: budgetUse.extend(claudeCreditAvailability.shape),
   plan: chatGptPlanAvailability,
 });
 export type AiFundingStatus = z.infer<typeof aiFundingStatus>;
@@ -68,7 +85,6 @@ export const mailImportStatus = z.strictObject({
       searches: mailSearchProgress,
     }),
   ),
-  budget: aiFundingStatus,
 });
 export type MailImportStatus = z.infer<typeof mailImportStatus>;
 
