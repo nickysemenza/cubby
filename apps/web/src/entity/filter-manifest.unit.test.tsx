@@ -25,6 +25,7 @@ import {
   parseEntityListInput,
 } from "./generated/entity-lists.gen";
 import { entitySearch } from "./generated/entity-search.gen";
+import { recordSource } from "./picker/picker";
 
 const VENDOR_ONE = testShortcode("vendor", "VEN-4K7M");
 const VENDOR_TWO = testShortcode("vendor", "VEN-9Q2X");
@@ -152,6 +153,7 @@ describe("manifestFilterConfig", () => {
         { value: FILTER_NONE, label: "No value", meta: true },
         ...vendors,
       ],
+      records: recordSource("vendor"),
     });
   });
 
@@ -169,6 +171,7 @@ describe("manifestFilterConfig", () => {
         { value: FILTER_NONE, label: "No value", meta: true },
         ...projects,
       ],
+      records: recordSource("project"),
     });
   });
 
