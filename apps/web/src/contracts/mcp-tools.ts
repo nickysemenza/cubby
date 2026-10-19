@@ -19,8 +19,7 @@ import {
 import { parseShortcode } from "@cubby/shared";
 import { z } from "zod";
 
-import { aiFundingContract } from "~/contracts/ai-funding.contract";
-import { aiContract } from "~/contracts/ai.contract";
+import { aiContract, aiFundingContract } from "~/contracts/ai.contract";
 import { auditLogContract } from "~/contracts/audit-log.contract";
 import { cookbookContract } from "~/contracts/cookbook.contract";
 import { dataQualityContract } from "~/contracts/data-quality.contract";

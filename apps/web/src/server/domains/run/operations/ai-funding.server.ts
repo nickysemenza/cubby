@@ -1,4 +1,4 @@
-import { aiFundingContract } from "~/contracts/ai-funding.contract";
+import { aiFundingContract } from "~/contracts/ai.contract";
 import { setCreditBudget } from "~/server/ai/budget";
 import { readAiFundingStatus, resetCreditRefusal } from "~/server/ai/funding";
 import { resumeFundingPausedRuns } from "~/server/domains/run/service/ai-work";
