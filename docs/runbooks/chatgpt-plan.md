@@ -68,7 +68,14 @@ this separate OpenAI authorization is still required.
 Subscription calls go directly to `https://api.openai.com/v1/responses`, using
 the OAuth access token. They set `store: false` and `stream: true`, resend the
 conversation input, convert system messages to developer messages, and supply
-function/custom tools as developer `additional_tools` input. Unsupported preview
+function/custom tools as one developer `additional_tools` input item placed
+right after the leading developer instructions, so the plan's prefix cache
+covers the tool schemas instead of re-reading them after every new turn. That
+position was not verified live: an HTTP 400 `invalid_request_error` naming
+`input` (or `additional_tools`) retries the request once with the item last,
+logs the refusal, and the plan Durable Object keeps the trailing order while
+it lives; quota and rate refusals never trigger it. Remove the guard once
+production plan calls show cache reads with the leading order. Unsupported preview
 parameters are removed. Unsupported hosted tools fail before inference.
 pi-ai carries reasoning effort for gpt-6 models as `configuration_update` input
 items unless it sees the direct OpenAI base URL, which Cubby's gateway

@@ -114,9 +114,15 @@ checked-in configuration is part of `apps/web/cloudflare.config.ts`:
   Anthropic request marks a cache breakpoint at the end of that kept prefix,
   and each OpenAI request keys `prompt_cache_key` to the Run
   (`withWorkItemCaching`), so the prefix is read from cache on every Email;
-- the agent's `entity_read` schema narrowed to the purpose's `mcpEntityKinds`
-  (Mail import: purchase, vendor, product); other kinds are refused for the
-  Run, while members' `tools/list` keeps every kind.
+- the agent's `entity_read` schema narrowed to the purpose's `entityRead`
+  view (Mail import: purchase, vendor and product, each with only its curated
+  list filters, and no `groupBy`/`groupLevel`/`nesting`); other kinds are
+  refused for the Run, omitted filters still validate, and members'
+  `tools/list` keeps every kind and input. An agent tool advertises
+  `_runExecution` only when one of its mounted actions reads it (Mail import:
+  `purchase_import`, `finance`). The ChatGPT plan transport places the tool
+  block before the conversation so the plan's prefix cache covers it
+  ([runbook](runbooks/chatgpt-plan.md)).
 
 The Run page observes without resuming work. Opening a harness resumes its
 pending tasks, so `/stream` from an object whose agent is already constructed

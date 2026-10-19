@@ -66,7 +66,6 @@ const MAIL_IMPORT_MCP_ACTIONS = [
   "entity_read.resolve",
   "search.global",
   "imports_read.external_id_collisions",
-  "product_enrichment.propose_match",
   "finance.converge",
 ] as const satisfies readonly CubbyMcpToolAction[];
 
@@ -120,13 +119,55 @@ export type ImportRunAgentConfig = {
    */
   workItemContext: "current" | "all";
   /**
-   * Entity kinds `entity_read` serves this purpose's agent. Its per-kind list
-   * filters are most of the mounted schema, resent on every call, so the
-   * agent's copy carries only these and other kinds are refused. Omitted:
-   * every kind.
+   * What `entity_read` serves this purpose's agent. Its per-kind list filters
+   * are most of the mounted schema, resent on every call, so the agent's copy
+   * advertises only these kinds (other kinds are refused) and, per kind, only
+   * the named list filters; `omit` drops top-level inputs the workflow never
+   * uses. Server validation still accepts the full input. Omitted: every
+   * kind and input.
    */
-  mcpEntityKinds?: readonly string[];
+  entityRead?: EntityReadView;
 };
+
+export type EntityReadView = {
+  /** Entity kind → the list filter keys its agent-facing copy advertises. */
+  filters: Readonly<Record<string, readonly string[]>>;
+  omit: readonly string[];
+};
+
+/** The kinds an agent's `entity_read` serves (`undefined`: every kind). */
+export const entityReadKinds = (view: EntityReadView | undefined) =>
+  view ? Object.keys(view.filters) : undefined;
+
+/**
+ * Mail import's lookups: a Vendor by name, a Purchase by order id, Vendor and
+ * date, a Product to reuse (mail-import.md, extraction.md).
+ */
+const MAIL_IMPORT_ENTITY_READ = {
+  filters: {
+    purchase: [
+      "ids",
+      "search",
+      "searchQuery",
+      "orderId",
+      "vendorId",
+      "dateFrom",
+      "dateTo",
+      "expenseTotalMin",
+      "expenseTotalMax",
+    ],
+    vendor: ["ids", "search", "searchQuery"],
+    product: [
+      "ids",
+      "searchQuery",
+      "nameFilter",
+      "vendorId",
+      "manufacturerFilter",
+      "modelFilter",
+    ],
+  },
+  omit: ["groupBy", "groupLevel", "nesting"],
+} as const satisfies EntityReadView;
 
 /** Each purpose's model and authority: host tools plus narrowed MCP actions. */
 export const importRunAgentManifest = {
@@ -146,7 +187,7 @@ export const importRunAgentManifest = {
     mcpActions: MAIL_IMPORT_MCP_ACTIONS,
     mcpTools: toolsOf(MAIL_IMPORT_MCP_ACTIONS),
     workItemContext: "current",
-    mcpEntityKinds: ["purchase", "vendor", "product"],
+    entityRead: MAIL_IMPORT_ENTITY_READ,
   },
 } as const satisfies Record<AgentImportRunPurpose, ImportRunAgentConfig>;
 

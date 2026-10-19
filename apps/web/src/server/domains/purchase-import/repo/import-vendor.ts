@@ -189,7 +189,12 @@ async function learnSenderAlias(
 export async function senderProofVendor(db: Db, sender: string | null) {
   const address = senderAddress(sender);
   if (!address) return null;
-  const columns = { id: vendor.id, name: vendor.name, aliases: vendor.aliases };
+  const columns = {
+    id: vendor.id,
+    shortcode: vendor.shortcode,
+    name: vendor.name,
+    aliases: vendor.aliases,
+  };
   const proven = await unwrapDb(db)
     .select(columns)
     .from(vendor)
@@ -220,7 +225,12 @@ export async function senderProofVendor(db: Db, sender: string | null) {
   const [only, ...others] = sameDomain;
   return only && !others.length
     ? {
-        vendor: { id: only.id, name: only.name, aliases: only.aliases },
+        vendor: {
+          id: only.id,
+          shortcode: only.shortcode,
+          name: only.name,
+          aliases: only.aliases,
+        },
         address,
       }
     : null;

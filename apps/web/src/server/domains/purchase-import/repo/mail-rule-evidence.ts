@@ -12,6 +12,7 @@ import {
   importSourceOrder,
   orderMailAttachment,
   purchase,
+  vendor,
   vendorAccount,
 } from "~/server/db/schema";
 
@@ -28,11 +29,18 @@ export type MailRuleCandidate = {
   importedSource: boolean;
 };
 
+/** A candidate as the claim also shows it to the coordinator. */
+type MailOrderPurchase = MailRuleCandidate & {
+  vendorShortcode: ShortcodeFor<"vendor">;
+  orderId: string;
+  date: string | null;
+};
+
 /** Every live Purchase whose order id is one of `orderIds`, printed or upper-cased. */
 export async function readMailRuleCandidates(
   db: Database,
   input: { ledgerPartyId: LedgerPartyId; orderIds: readonly string[] },
-): Promise<MailRuleCandidate[]> {
+): Promise<MailOrderPurchase[]> {
   const orderIds = [
     ...new Set(input.orderIds.flatMap((id) => [id, id.toUpperCase()])),
   ];
@@ -42,10 +50,14 @@ export async function readMailRuleCandidates(
       id: purchase.id,
       shortcode: purchase.shortcode,
       vendorId: purchase.vendorId,
+      vendorShortcode: vendor.shortcode,
+      orderId: purchase.orderId,
+      date: purchase.date,
       accountPartyId: vendorAccount.ledgerPartyId,
       accountVendorId: vendorAccount.vendorId,
     })
     .from(purchase)
+    .innerJoin(vendor, eq(vendor.id, purchase.vendorId))
     .leftJoin(
       vendorAccount,
       and(
@@ -69,19 +81,31 @@ export async function readMailRuleCandidates(
         ).map((row) => row.purchaseId),
       )
     : new Set<string>();
-  return rows.flatMap(({ id, shortcode, vendorId, ...account }) =>
-    vendorId
-      ? [
-          {
-            purchaseId: parseShortcodeFor("purchase", shortcode),
-            vendorId,
-            ownAccount:
-              account.accountPartyId === input.ledgerPartyId &&
-              account.accountVendorId === vendorId,
-            importedSource: imported.has(id),
-          },
-        ]
-      : [],
+  return rows.flatMap(
+    ({
+      id,
+      shortcode,
+      vendorId,
+      vendorShortcode,
+      orderId,
+      date,
+      ...account
+    }) =>
+      vendorId && orderId
+        ? [
+            {
+              purchaseId: parseShortcodeFor("purchase", shortcode),
+              vendorId,
+              vendorShortcode: parseShortcodeFor("vendor", vendorShortcode),
+              orderId,
+              date,
+              ownAccount:
+                account.accountPartyId === input.ledgerPartyId &&
+                account.accountVendorId === vendorId,
+              importedSource: imported.has(id),
+            },
+          ]
+        : [],
   );
 }
 

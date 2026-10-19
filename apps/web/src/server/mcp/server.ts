@@ -164,12 +164,12 @@ async function purchaseAgentCatalogView(
   const operationContext = operationContextFromExtra(extra);
   if (!operationContext) return () => null;
   const prepared = await operationContext.prepare("strong");
-  const { allowed, entityKinds } = await purchaseAgentRunActions(
+  const { allowed, entityRead } = await purchaseAgentRunActions(
     prepared.entityKernel.db,
     trusted.runId,
   );
   const tools = new Map(
-    purchaseAgentTools(new Set(allowed), entityKinds).map((tool) => [
+    purchaseAgentTools(new Set(allowed), entityRead).map((tool) => [
       tool.name,
       tool,
     ]),
