@@ -55,7 +55,27 @@ it("keeps accepted source orders through the expansion and lets detached history
     await upsert("PUR-4K7M", deployed);
     await upsert("PUR-4K7M", current);
 
+    // The window before the contraction: the full key still conflicts with a
+    // detached row, which the server's upsert takes over for the re-import.
+    const linked = async () =>
+      (
+        await client.query(`SELECT p.shortcode FROM "ImportSourceOrder" o
+          LEFT JOIN "Purchase" p ON p.id = o."purchaseId" ORDER BY o."createdAt", o.id`)
+      ).rows;
+    await client.query(`UPDATE "ImportSourceOrder" SET "purchaseId" = NULL`);
+    await client.query(`INSERT INTO "ImportSourceOrder" ("sourceClaimId", "orderKey", "purchaseId", checksum, "outputFingerprint")
+      SELECT c.id, 'synthetic/order/1', p.id, 'synthetic-history-checksum', 'synthetic-fingerprint'
+      FROM "ImportSourceClaim" c, "Purchase" p WHERE p.shortcode = 'PUR-7M4K'
+      ON CONFLICT ("sourceClaimId", "orderKey") ${current} DO UPDATE SET "purchaseId" = excluded."purchaseId"`);
+    expect(await linked()).toEqual([{ shortcode: "PUR-7M4K" }]);
+    await client.query(
+      `UPDATE "ImportSourceOrder" SET "purchaseId" = p.id FROM "Purchase" p WHERE p.shortcode = 'PUR-4K7M'`,
+    );
+
     await migrateDatabase(drizzle(client), { through: tags[contract]! });
+    await expect(upsert("PUR-4K7M", deployed)).rejects.toThrow(
+      /no unique or exclusion constraint matching the ON CONFLICT/,
+    );
     await upsert("PUR-4K7M", current);
     await client.query(
       `UPDATE "ImportSourceOrder" SET "purchaseId" = NULL, "updatedAt" = now()`,

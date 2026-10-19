@@ -2193,6 +2193,7 @@ describe("shared purchase-import prepare and commit", () => {
     targetOrderless: boolean,
     categorized = false,
     includeTax = false,
+    delivered = false,
   ) {
     const { party, vendor } = await memberImportWorld(ctx.db, ctx.actor, {
       vendor: {
@@ -2292,7 +2293,7 @@ describe("shared purchase-import prepare and commit", () => {
                     },
                   ],
               payments: [],
-              allShipmentsDelivered: false,
+              allShipmentsDelivered: delivered,
             },
           },
           lineIds: includeTax
@@ -2349,6 +2350,62 @@ describe("shared purchase-import prepare and commit", () => {
       throw new Error("Expected source-order reconciliation finding");
     return finding;
   }
+
+  // A delivered order first accepted onto a hand-recorded Purchase has no
+  // earlier import that could have prompted receiving.
+  it("files arrived when a delivered order is first accepted onto a manual Purchase", async () => {
+    const { manualPurchase, manualExpense, productRow, result } =
+      await importOverManualAggregate(false, false, false, true);
+    expect(result.items[0]?.outcome).toBe("conflict");
+    const arrived = () =>
+      getDb(ctx.db)
+        .select()
+        .from(runFinding)
+        .where(
+          and(
+            eq(runFinding.entityId, manualPurchase.id),
+            eq(runFinding.kind, "arrived"),
+          ),
+        );
+    expect(await arrived()).toEqual([]);
+    const finding = await replacementFinding(manualPurchase.id);
+    const review = await prepareSourceOrderReconciliation(
+      ctx.db,
+      {
+        id: finding.id,
+        resolution: {
+          kind: "replace_lines",
+          expenseIds: [manualExpense.shortcode],
+          lines: [
+            {
+              lineIndex: 0,
+              expenseId: manualExpense.shortcode,
+              productId: parseShortcodeFor("product", productRow.shortcode),
+            },
+          ],
+        },
+      },
+      ctx.actor,
+    );
+    await resolveRunFinding(
+      ctx.db,
+      {
+        id: finding.id,
+        action: "apply",
+        reviewedFingerprint: review.reviewedFingerprint,
+      },
+      ctx.actor,
+    );
+    expect(await arrived()).toEqual([
+      expect.objectContaining({
+        status: "open",
+        proposedFix: {
+          kind: "receive_purchase",
+          purchaseId: manualPurchase.id,
+        },
+      }),
+    ]);
+  });
 
   it("replaces a categorized aggregate with an uncategorized tax line", async () => {
     const { manualPurchase, manualExpense, category, productRow, result } =

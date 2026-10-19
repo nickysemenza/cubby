@@ -62,6 +62,7 @@ import {
   sourceObservationIdentitySql,
 } from "./reconciliation-observations";
 import {
+  isFirstAcceptance,
   loadSourceReconciliationState,
   lockFindingSettlement,
   sourceReconciliationStateFingerprint,
@@ -1044,14 +1045,16 @@ export async function commitSourceOrderReconciliation(
       .set({ checksum: fix.source.checksum, updatedAt: new Date() })
       .where(eq(importSourceClaim.id, state.family.root.id));
   // The writer files `arrived` when an import first sees delivery; a later
-  // source that reconciles the order as delivered files it here instead. Only
-  // a known undelivered accepted extraction counts as first delivery: an
-  // unknown one may already have prompted.
+  // source that reconciles the order as delivered files it here instead. First
+  // delivery is a first acceptance or a known undelivered accepted
+  // extraction; an accepted source whose extraction is unknown may already
+  // have prompted.
   if (
     !productOnly &&
     candidate.allShipmentsDelivered === true &&
-    state.accepted !== null &&
-    state.accepted.extraction.candidate?.allShipmentsDelivered !== true &&
+    (isFirstAcceptance(state) ||
+      (state.accepted !== null &&
+        state.accepted.extraction.candidate?.allShipmentsDelivered !== true)) &&
     (resolvedBindings.some(
       (binding) =>
         binding.productId === null &&
