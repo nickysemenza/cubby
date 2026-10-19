@@ -1504,6 +1504,11 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
   ).toHaveCount(0);
   await expect(modelRow).toContainText("SJ-104");
   await expect(modelRow).not.toContainText("SJ-999");
+  // Pending edits must not change the saved model's match or invent a missing identifier.
+  await expect(modelRow.getByText("Matches the label")).toBeAttached();
+  await expect(attach.locator('[data-cross-check="identifiers"]')).toHaveCount(
+    0,
+  );
   await expect(attach.getByLabel("Proposed model change")).toContainText(
     "SJ-999",
   );

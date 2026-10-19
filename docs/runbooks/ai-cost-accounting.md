@@ -7,8 +7,8 @@ incremental charge and the standard API comparison; its nominal comparison
 tracks credit consumption separately from paid inference.
 Subscription fees remain separate. The household AI budgets
 (`server/ai/budget.ts`) read frontier chat-model rows per fixed six-hour UTC
-window: the Claude credit budget (default $5, set on the Mail import card or
-`run.set_credit_budget`) sums the standard cost of `subscriber_credit` rows,
+window: the Claude credit budget (default $5, set in Settings → AI funding or
+`ai_funding.set_credit_budget`) sums the standard cost of `subscriber_credit` rows,
 and the paid budget ($1) sums every other row's charged cost, falling back to
 the standard cost. Credit rows never count as paid. Both are soft limits read
 from the asynchronously written ledger.

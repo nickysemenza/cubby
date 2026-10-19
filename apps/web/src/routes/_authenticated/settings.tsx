@@ -4,6 +4,7 @@ import { getErrorMessage } from "@cubby/shared";
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
 import { CalendarIcon } from "@phosphor-icons/react/dist/csr/Calendar";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { CoinsIcon } from "@phosphor-icons/react/dist/csr/Coins";
 import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 import { EnvelopeIcon } from "@phosphor-icons/react/dist/csr/Envelope";
 import { PlugsIcon } from "@phosphor-icons/react/dist/csr/Plugs";
@@ -22,6 +23,7 @@ import {
   buildVendorComboboxItem,
 } from "~/entity/picker/combobox-builders";
 import { Picker } from "~/entity/picker/picker";
+import { AiFundingSettings } from "~/features/account/ai-funding";
 import { ChatGptPlanSettings } from "~/features/account/chatgpt-plan-card";
 import { PurchaseImportAgentConnection } from "~/features/activity/purchase-import-agent-connection";
 import { CalendarConnectDialog } from "~/features/calendar/calendar-connect-dialog";
@@ -96,6 +98,13 @@ function SettingsPage() {
                 icon: PlugsIcon,
                 overflowVisible: true,
                 content: <ChatGptPlanSettings />,
+              },
+              {
+                id: "ai-funding",
+                title: "AI funding",
+                icon: CoinsIcon,
+                overflowVisible: true,
+                content: <AiFundingSettings />,
               },
             ],
           },

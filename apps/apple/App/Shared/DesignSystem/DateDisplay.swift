@@ -8,6 +8,7 @@ public struct DateDisplay: View {
     private let date: Date?
     var compact = false
     var stacked = false
+    @Environment(\.locale) private var locale
 
     public init(_ value: String, compact: Bool = false, stacked: Bool = false) {
         self.value = value
@@ -27,9 +28,9 @@ public struct DateDisplay: View {
 
     public var body: some View {
         TimelineView(.periodic(from: .now, by: 60)) { context in
-            if let display = date.map({ DatePresentation.timestamp($0, now: context.date, compact: compact) })
-                ?? DatePresentation.value(value, now: context.date, compact: compact)
-            {
+            if let display = date.map({
+                DatePresentation.timestamp($0, now: context.date, compact: compact, locale: locale)
+            }) ?? DatePresentation.value(value, now: context.date, compact: compact, locale: locale) {
                 Group {
                     if stacked {
                         VStack(alignment: .leading, spacing: 2) {

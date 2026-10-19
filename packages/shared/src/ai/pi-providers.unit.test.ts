@@ -2,6 +2,7 @@ import { createModels } from "@earendil-works/pi-ai";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { creditRefusedResponse } from "./gateway-request";
 import {
   cubbyPiProviders,
   fundedCubbyPiProviders,
@@ -31,6 +32,43 @@ it("restarts a credit-refused generation on the subscription with its actual mod
           },
           { status: 400 },
         );
+      return new Response(
+        `data: ${JSON.stringify({ type: "response.completed", response: { id: "synthetic-response", status: "completed", output: [], usage: { input_tokens: 100, output_tokens: 10, total_tokens: 110 } } })}\n\n`,
+        { headers: { "content-type": "text/event-stream" } },
+      );
+    },
+  ))
+    models.setProvider(provider);
+  const model = models.getModel("anthropic", "claude-opus-5-5");
+  if (!model) throw new Error("Missing Opus");
+  const response = await models.completeSimple(
+    model,
+    { messages: [] },
+    { maxTokens: 512 },
+  );
+  expect(response.errorMessage).toBeUndefined();
+  expect(response.model).toBe("gpt-6-sol");
+  expect(attempts).toEqual([
+    "anthropic:subscriber_credit",
+    "openai:subscription",
+  ]);
+});
+
+// Regression: a Console-refused credit key was re-tried on every request. The
+// egress Durable Object now answers for it; the ladder must treat that answer
+// as the provider's own refusal and move to the plan.
+it("advances past a credit attempt the egress object refuses from its recorded refusal", async () => {
+  const attempts: string[] = [];
+  const models = createModels();
+  for (const provider of fundedCubbyPiProviders(
+    (route, _unbilled, funding) => async () => {
+      attempts.push(`${route}:${funding}`);
+      if (funding === "subscriber_credit")
+        return creditRefusedResponse({
+          until: Date.parse("2099-11-01T00:00:00Z"),
+          reason:
+            '{"type":"error","error":{"type":"invalid_request_error","message":"You have reached your specified API usage limits. You will regain access on 2099-11-01 at 00:00 UTC."}}',
+        });
       return new Response(
         `data: ${JSON.stringify({ type: "response.completed", response: { id: "synthetic-response", status: "completed", output: [], usage: { input_tokens: 100, output_tokens: 10, total_tokens: 110 } } })}\n\n`,
         { headers: { "content-type": "text/event-stream" } },

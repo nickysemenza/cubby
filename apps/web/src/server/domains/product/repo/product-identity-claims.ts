@@ -1,5 +1,6 @@
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { acceptedSourceOrder } from "@cubby/schemas/purchase-import";
+import { createLogger } from "@cubby/worker-tracing";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -14,6 +15,8 @@ import {
 } from "~/server/db/schema";
 import { lookupProductIdentifierSources } from "~/server/domains/product/repo/product-identifier-source";
 import { amazonAsin } from "~/server/domains/purchase-import/repo/writer";
+
+const log = createLogger("product-identity-claims");
 
 export const retainedProductIdentifierClaim = z.object({
   productId: z.uuid(),
@@ -38,10 +41,22 @@ export const retainedProductIdentifierClaim = z.object({
     .nullable()
     .default(null),
 });
-/** Only an accepted original line and its durable Product binding establish a claim. */
+export type DroppedProductIdentifierClaim = {
+  productId: string;
+  bindingId: string;
+  productUrl: string | null;
+  error: string;
+};
+
+/** Only an accepted original line and its durable Product binding establish a
+ * claim. A line whose issuer cannot resolve is dropped and reported with the
+ * raw resolution error instead of failing every Product's catalog scan. */
 export async function loadProductIdentifierClaims(
   db: Database,
   targetId?: ProductId,
+  options: {
+    onDropped?: (dropped: DroppedProductIdentifierClaim) => void;
+  } = {},
 ) {
   const rows = await getDb(db)
     .select({
@@ -107,7 +122,19 @@ export async function loadProductIdentifierClaims(
     index,
     { row, checksum, line, identifiers },
   ] of candidates.entries()) {
-    const source = sources[index];
+    const lookup = sources[index];
+    if (lookup?.error) {
+      const dropped = {
+        productId: row.productId,
+        bindingId: row.bindingId,
+        productUrl: line.productUrl ?? null,
+        error: lookup.error,
+      };
+      log.warn("product identifier claim dropped", dropped);
+      options.onDropped?.(dropped);
+      continue;
+    }
+    const source = lookup?.source;
     if (!source) continue;
     for (const identifier of identifiers)
       claims.push(

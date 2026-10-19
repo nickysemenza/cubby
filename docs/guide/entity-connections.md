@@ -92,6 +92,22 @@ projections while retaining immutable history and explicit suppression. Bare
 Wrong never becomes a persistent preference. Field and Email handles expose no
 suppression; Product pairs retain their existing suppression contract.
 
+Entity-pair Assessment families (`entityPairAssessmentFamilies` in
+`packages/schemas/src/assessment.ts`; today only `product_pair`) declare their
+relation, review integration, current-policy check and stored-reason reader in
+`existing-assessments.ts`. Every pending, active, served pair under current
+policy reaches Relations, including pairs that are not actionable or carry an
+identity conflict: the stored evidence text is a reason, the stored conflicting
+values are contradictions, and a missing exact identifier is an unknown. Member
+Wrong/Dismissed feedback and suppression still exclude a pair. Proposals carry
+`review.family`; on an entity list, a record with entity-pair proposals shows a
+compact "Possible match" mark (named with the count and record title) in its
+title cell that links to the record's Relationships section, read through the
+same batched `connection.readBatch` as the row popover. The mark is desktop-row
+only; phone users see the pairs in the record's Relationships section. The
+Workbench match card shows the same "Not actionable" line as Suggestions for a
+pair without exact-identifier admission, and keeps merge available.
+
 `applyEntityConnection` is the recommendation handler called by
 `reviewAssessment`. Payload rows are acquired before projection locks, evidence
 is read again, and the active/pending projection is checked before the domain
@@ -110,7 +126,11 @@ excluded from connection fingerprints.
   connection excludes only that Product/event pair. Confirming a Purchase uses
   `confirmPurchaseAcquisition`; confirming an individual Expense uses the normal
   Expense writer. Neither operation invents an amount, quantity or stock row.
-  Negative/exiting and `not_allowed` Expense evidence is excluded.
+  Negative/exiting and `not_allowed` Expense evidence is excluded. A
+  semantic-only hit must reach `SEMANTIC_MATCH_MIN_SIMILARITY`, and an Expense
+  line naming a known brand (a live Product `manufacturer`) other than the
+  Product's own is never proposed (`otherBrandNamed`); an unspecified or unknown brand
+  on either side does not reject.
 - Product identity and photo evidence use the existing identity detector,
   Product-pair Assessments and merge handler. Similarity is not merge authority.
 - Expense→Project, Project→tool usage and Inventory→Location reuse existing

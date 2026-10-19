@@ -537,12 +537,11 @@ a green non-conflicting branch need not rebase, allow administrator bypasses,
 and do not require human review.
 
 Optimize readiness across four concurrent PRs on the existing hosted plan.
-The Linux matrix admits two entries per PR; validation and short control jobs
-are additional demand, and native/optional work has repository-level limits.
-The normal web matrix pairs the selected non-browser checks with its two
-browser entries. This reduces repeated setup and leaves room
-for other PRs, main and release work; it does not reserve account-wide capacity
-or guarantee fairness against unrelated repositories.
+The Linux `lanes` matrix sets no `max-parallel`, so its six entries run
+concurrently; validation and short control jobs are additional demand, and
+native/optional work has repository-level limits. Standalone browser shards pay
+setup four times to shorten the slowest lane; this does not reserve
+account-wide capacity or guarantee fairness against unrelated repositories.
 
 Use the Actions job timeline to distinguish created-to-start waiting, setup,
 job duration and Nx cache replay. Compare

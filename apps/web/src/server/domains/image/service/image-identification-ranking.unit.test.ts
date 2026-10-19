@@ -1,4 +1,4 @@
-import { productShortcode } from "@cubby/schemas/identifiers";
+import { shortcode } from "@cubby/schemas/identifiers";
 import { describe, expect, it, vi } from "vitest";
 
 import { evaluateVisualProductCandidates } from "./image-identification-ranking";
@@ -6,12 +6,12 @@ import { evaluateVisualProductCandidates } from "./image-identification-ranking"
 const source = { content_type: "image/jpeg" as const, base64: "AQID" };
 const candidates = [
   {
-    productId: productShortcode.parse("PRD-4K7M"),
+    productId: shortcode("PRD-4K7M"),
     name: "Synthetic blue drill",
     imageUrl: "https://example.com/blue.jpg",
   },
   {
-    productId: productShortcode.parse("PRD-2345"),
+    productId: shortcode("PRD-2345"),
     name: "Synthetic red drill",
     imageUrl: "https://example.com/red.jpg",
   },

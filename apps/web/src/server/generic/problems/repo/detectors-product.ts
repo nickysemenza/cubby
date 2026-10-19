@@ -1,3 +1,4 @@
+import { entitySchema } from "@cubby/schemas/entity-core";
 import { displayGtin } from "@cubby/schemas/external-id";
 import { productShortcode } from "@cubby/schemas/identifiers";
 /**
@@ -14,7 +15,7 @@ import type {
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { ProblemItem } from "@cubby/schemas/problems";
+import { ProblemItem, problemDetectors } from "@cubby/schemas/problems";
 import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
 import { isMiscProduct } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
@@ -725,4 +726,34 @@ export const findWeightSoldProducts = async (
         ? null
         : parseShortcodeFor("ingredient", row.ingredientId),
   }));
+};
+
+/** Ownership comes only from `ExternalSource.vendorId`; unowned legacy slugs
+ * are never attributed to a Vendor by spelling. */
+export const findProductIdentifiersOutsideIssuer = async (
+  db: Database,
+): Promise<ProblemItem<"productIdentifiersOutsideIssuer">[]> => {
+  const rows = await getDb(db).execute<{
+    vendorId: string;
+    vendorName: string;
+    source: string;
+    issuer: string | null;
+    identifierCount: number;
+    kinds: string[];
+  }>(sql`
+    SELECT v.shortcode AS "vendorId", v.name AS "vendorName", s.slug AS source,
+      (SELECT i.slug FROM "ExternalSource" i
+        WHERE i."vendorId" = v.id AND i.issuer) AS issuer,
+      count(*)::int AS "identifierCount",
+      array_agg(DISTINCT e.kind ORDER BY e.kind) AS kinds
+    FROM "EntityExternalId" e
+    JOIN "ExternalSource" s ON s.slug = e.source
+    JOIN "Vendor" v ON v.id = s."vendorId" AND v."deletedAt" IS NULL
+    WHERE e."entityKind" = ${entitySchema.enum.product} AND e."deletedAt" IS NULL AND NOT s.issuer
+    GROUP BY v.id, v.shortcode, v.name, s.slug
+    ORDER BY v.name, s.slug
+  `);
+  return rows.rows.map((row) =>
+    problemDetectors.productIdentifiersOutsideIssuer.item.parse(row),
+  );
 };

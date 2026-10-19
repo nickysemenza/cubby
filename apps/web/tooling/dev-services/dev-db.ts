@@ -4,6 +4,7 @@ import { resolveDevProfile, DEV_DATABASE_ENV_KEYS } from "./dev-profile.ts";
 import { spawnToExit } from "../../../../scripts/lib/run.ts";
 
 import {
+  enableStatementStatistics,
   ensureSharedPostgres,
   psql,
   sharedPostgresRunning,
@@ -83,11 +84,7 @@ async function ensureDatabase(reseed = false): Promise<void> {
     { cwd: webRoot, stdio: "inherit", env: process.env },
   );
   if (code !== 0) throw new Error("Dev corpus template preparation failed");
-  await psql(
-    "CREATE EXTENSION IF NOT EXISTS pg_stat_statements",
-    devDatabaseName,
-  );
-  await psql("SELECT 1 FROM pg_stat_statements LIMIT 1", devDatabaseName);
+  await enableStatementStatistics(devDatabaseName);
 }
 
 async function ready(reseed = false): Promise<number> {

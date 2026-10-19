@@ -36,6 +36,14 @@
             #expect(
                 CliAuthOrigin.of(URL(string: "HTTPS://EXAMPLE.COM:8443/x")!)
                     == "https://example.com:8443")
+            // A scheme's default port names the same server as no port.
+            #expect(
+                CliAuthOrigin.of(URL(string: "https://cubby.example.com:443/")!)
+                    == "https://cubby.example.com")
+            #expect(
+                CliAuthOrigin.of(URL(string: "http://localhost:80")!) == "http://localhost")
+            #expect(
+                CliAuthOrigin.of(URL(string: "http://localhost:443")!) == "http://localhost:443")
         }
 
         @Test func senderAndListenerCompleteOneHandoff() async throws {

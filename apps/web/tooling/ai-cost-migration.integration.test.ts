@@ -2,10 +2,10 @@ import { withMigrationDatabase } from "./test-database-lease";
 import { projectAiModelPricing } from "@cubby/shared/ai/pricing";
 import { reconstructHistoricalAiCosts } from "./ai-cost-backfill";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
 import { expect, it, vi } from "vitest";
 
 import { migrationTags, migrateDatabase } from "./db-migrate";
+import { createPostgresPool } from "./postgres-pool";
 
 it("preserves legacy charges and late writers across the AI cost expand/contract migration", async () => {
   return withMigrationDatabase(async (client, databaseUrl) => {
@@ -118,7 +118,7 @@ it("preserves legacy charges and late writers across the AI cost expand/contract
         },
       },
     });
-    const pool = new Pool({ connectionString: databaseUrl });
+    const pool = createPostgresPool({ connectionString: databaseUrl });
     const connection = await pool.connect();
     try {
       expect(

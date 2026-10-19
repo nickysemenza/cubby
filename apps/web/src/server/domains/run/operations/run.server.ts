@@ -7,8 +7,6 @@ import { and, eq, isNull } from "drizzle-orm";
 import type { z } from "zod";
 
 import { runContract } from "~/contracts/run.contract";
-import { setCreditBudget } from "~/server/ai/budget";
-import { readAiFundingStatus } from "~/server/ai/funding";
 import { listAiUsageForRun } from "~/server/ai/repo/ai-usage";
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
@@ -48,7 +46,6 @@ import {
   loadMailDiscoveryRead,
 } from "~/server/domains/run/repo/run-discovery-read";
 import { loadMailReclassificationRead } from "~/server/domains/run/repo/run-reclassification-read";
-import { resumeFundingPausedRuns } from "~/server/domains/run/service/ai-work";
 import { assertPaidOverride } from "~/server/domains/run/service/paid-override";
 import { createAppError } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -164,12 +161,12 @@ async function controlRunOperation(
   };
 }
 
-/** The member's connected Google mailboxes with their switches, search progress, both budgets and the plan. */
+/** The member's connected Google mailboxes with their switches and search progress. */
 async function mailImportStatusFor(
   context: Parameters<typeof memberParty>[0],
 ): Promise<MailImportStatus> {
   const party = await memberParty(context);
-  const [connected, settings, budget] = await Promise.all([
+  const [connected, settings] = await Promise.all([
     getDb(context.db)
       .selectDistinct({ mailboxId: account.accountId })
       .from(account)
@@ -181,7 +178,6 @@ async function mailImportStatusFor(
       )
       .orderBy(account.accountId),
     readMailImportSettings(context.db),
-    readAiFundingStatus(context.db),
   ]);
   return {
     mailboxes: await withMailSearchProgress(
@@ -192,7 +188,6 @@ async function mailImportStatusFor(
         enabled: settings.enabledMailboxes.includes(mailboxId),
       })),
     ),
-    budget,
   };
 }
 
@@ -205,14 +200,6 @@ export const runHandlers = implementOperationDomain(runContract, {
         `Mailbox ${input.mailboxId} is not connected to this member.`,
       );
     await setMailImport(context.db, input);
-    return mailImportStatusFor(context);
-  },
-  setCreditBudget: async (context, input) => {
-    await memberParty(context);
-    await setCreditBudget(context.db, input.creditLimitUsd);
-    // Work paused on the old limit this window may proceed under the new one;
-    // anything still without capacity pauses again before spending.
-    await resumeFundingPausedRuns(context.db, { anyWindow: true });
     return mailImportStatusFor(context);
   },
   discoverMail: async (context, input) => {

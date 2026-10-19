@@ -19,7 +19,7 @@ import {
 import { parseShortcode } from "@cubby/shared";
 import { z } from "zod";
 
-import { aiContract } from "~/contracts/ai.contract";
+import { aiContract, aiFundingContract } from "~/contracts/ai.contract";
 import { auditLogContract } from "~/contracts/audit-log.contract";
 import { cookbookContract } from "~/contracts/cookbook.contract";
 import { dataQualityContract } from "~/contracts/data-quality.contract";
@@ -660,7 +660,7 @@ export const MCP_TOOLS = defineMcpTools({
       mail_import: mcpAction({
         op: runContract.ops.mailImport,
         description:
-          "The member's connected Gmail mailboxes with their automatic Mail import switch, and the current six-hour window's frontier chat-model budgets: budget.credit (Claude subscriber credit at standard API cost, default $5) and budget.paid (charged cost, $1), plus budget.plan (ChatGPT plan available, paused until a quota reset, disconnected or needing reauthorization, with the raw reason). Background work uses credit, then the plan, and otherwise waits; it never pays automatically.",
+          "The member's connected Gmail mailboxes with their automatic Mail import switch and targeted-search progress. AI funding for the imports is household-wide: ai_funding_read.status.",
       }),
 
       mail: mcpAction({
@@ -752,6 +752,18 @@ export const MCP_TOOLS = defineMcpTools({
         }),
         description:
           "Resolve a UPC barcode to an identity WITHOUT creating anything: the Product already claiming the barcode, the USDA branded-food match, and the UPC lookup service's record, all at once. Use it whenever the question is what a barcode names — verifying a scan, confirming a product page describes the item you hold, or telling a bare tool from the kit it ships in. A barcode identifies the PACKAGE, so a kit and its bare-tool variant carry different UPCs; a manufacturer page reached by guessing a URL from a barcode is not evidence. Prefer this over upc.find_or_create unless you intend to create a Product.",
+      }),
+    },
+  },
+
+  ai_funding_read: {
+    description:
+      "Household-wide frontier AI funding: what every feature's frontier chat calls (Mail import, suggestions, agents, chat) can spend now.",
+    actions: {
+      status: mcpAction({
+        op: aiFundingContract.ops.status,
+        description:
+          "The current six-hour window's funding: credit (Claude subscriber credit spent at standard API cost of limitUsd, default $5, with state available or refused: a recorded Anthropic refusal such as a Console spend limit, skipped until `until` with one probe per window, and its raw `reason`), paid (charged cost of $1) and plan (ChatGPT plan available, paused until a quota reset, disconnected or needing reauthorization, with the raw reason). Frontier calls use credit, then the plan, then paid only where allowed; background work waits instead of paying. Change it with ai_funding.",
       }),
     },
   },
@@ -851,7 +863,7 @@ export const MCP_TOOLS = defineMcpTools({
       resolve: mcpAction({
         op: purchaseImportContract.ops.mailResolve,
         description:
-          "Resolve one retained Email at its checksum: `linked` names every supported Purchase in purchaseIds for a lifecycle event; optional settlement records a member-reviewed mapping to existing posted refunds and their accounts. Writes no money or stock. `unresolved` names the gap; `unrelated` clears unaccepted content while preserving metadata and provenance. Matching reviews replay while evidence remains current; conflicting reviews refuse.",
+          "Resolve one retained Email at its checksum: `linked` names every supported Purchase in purchaseIds for a lifecycle event; optional settlement (only with event `refunded`) records a member-reviewed mapping to existing posted refunds and their accounts, which must explain every Purchase this Email links as refunded. Writes no money or stock. `unresolved` names the gap; `unrelated` clears unaccepted content while preserving metadata and provenance. Matching reviews replay while evidence remains current; conflicting reviews refuse.",
       }),
       decide_purchase: mcpAction({
         op: purchaseImportContract.ops.emailPurchaseDecide,
@@ -1044,11 +1056,6 @@ export const MCP_TOOLS = defineMcpTools({
         description:
           "Turn automatic Mail import on or off for one connected mailbox (imports_read.mail_import). On, scheduled discovery searches known Vendors' senders and unmatched transaction merchants and imports unambiguous purchases on Claude credit or the ChatGPT plan, waiting for free capacity rather than paying.",
       }),
-      set_credit_budget: mcpAction({
-        op: runContract.ops.setCreditBudget,
-        description:
-          "Set the household Claude subscriber-credit budget per six-hour window (creditLimitUsd, standard API cost; default $5). Background work past it moves to the ChatGPT plan, then waits; work paused under the old limit retries now. Returns imports_read.mail_import.",
-      }),
       sweep: mcpAction({
         op: runContract.ops.sweep,
         openWorld: true,
@@ -1070,6 +1077,23 @@ export const MCP_TOOLS = defineMcpTools({
         op: problemsContract.ops.resolveRunFinding,
         description:
           "Apply or dismiss one Run finding by id; apply requires its reviewedFingerprint when it carries one.",
+      }),
+    },
+  },
+
+  ai_funding: {
+    description:
+      "Change household-wide frontier AI funding (every feature's frontier chat calls, not only Mail import); read it with ai_funding_read.status. Call only on the member's explicit instruction.",
+    actions: {
+      set_credit_budget: mcpAction({
+        op: aiFundingContract.ops.setCreditBudget,
+        description:
+          "Set the household Claude subscriber-credit budget per six-hour window (creditLimitUsd, standard API cost; default $5). Background work past it moves to the ChatGPT plan, then waits. Also clears a recorded Claude credit refusal, and work paused for free capacity retries now. Returns ai_funding_read.status.",
+      }),
+      reset_credit_refusal: mcpAction({
+        op: aiFundingContract.ops.resetCreditRefusal,
+        description:
+          'Clear a recorded Claude credit refusal ("Retry Claude credit now") so the next frontier call tries Claude credit again, e.g. after raising the Console spend limit; work paused for free capacity retries now. A still-refusing Console records the refusal again on that call. Returns ai_funding_read.status.',
       }),
     },
   },

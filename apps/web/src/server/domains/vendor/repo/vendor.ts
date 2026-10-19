@@ -64,6 +64,10 @@ import {
   displayableImageSql,
   displayableImageWhere,
 } from "~/server/domains/image/repo/image-displayability";
+import {
+  detachVendorIdentifierSources,
+  repointVendorIdentifierSources,
+} from "~/server/domains/product/repo/product-identifier-source";
 import { loadGmailCursor } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import { listMemberMailboxes } from "~/server/domains/purchase-import/repo/gmail/targets";
 import { vendorSearchTerms } from "~/server/domains/purchase-import/repo/gmail/vendor-identity";
@@ -170,7 +174,7 @@ export const VENDOR_DELETE_EDGE_POLICY = {
     code: "clear-source-vendor",
     effect: "detach",
     description:
-      "Identifier sources that named this vendor stay registered and simply stop naming it.",
+      "Identifier sources that named this vendor stay registered and simply stop naming it; an unowned source issues no Product identifiers.",
   },
 } as const satisfies IncomingEdgePolicy<"vendor", OperationDisposition>;
 
@@ -231,7 +235,7 @@ export const VENDOR_MERGE_EDGE_POLICY = {
     code: "repoint-source-vendor",
     effect: "repoint",
     description:
-      "Identifier sources that named a merged vendor name the survivor.",
+      "Identifier sources that named a merged vendor name the survivor; merging two Vendors that each issue Product identifiers is refused until one issuer is reconciled.",
   },
 } as const satisfies IncomingEdgePolicy<"vendor", OperationDisposition>;
 
@@ -1208,6 +1212,8 @@ export const mergeVendors = async (
           // The keeper's food context and default now classify these lines.
           await validateProductPolicy(tx, { vendorId: keepId });
         },
+        "ExternalSource.vendorId": () =>
+          repointVendorIdentifierSources(tx, { keepId, loserIds: losers }),
         "VendorAccount.vendorId": async () => {
           accountFold = await foldVendorAccountsInto(tx, {
             keepVendorId: keepId,
@@ -1285,4 +1291,6 @@ export const mergeVendors = async (
  * A vendor delete is its declared policy: live purchases, accounts and import
  * provenance block it; its logo attachment goes with it (ADR 0006).
  */
-export const deleteVendors = policyDelete("vendor", VENDOR_DELETE_EDGE_POLICY);
+export const deleteVendors = policyDelete("vendor", VENDOR_DELETE_EDGE_POLICY, {
+  overrides: { "ExternalSource.vendorId": detachVendorIdentifierSources },
+});
