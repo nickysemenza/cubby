@@ -26,7 +26,10 @@ import { uniq } from "es-toolkit";
 
 import { comparePlainDatesDescending } from "~/lib/household-date";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
-import { expenseAcquisitionSql } from "~/server/db/computed/expense-aggregate-sql";
+import {
+  expenseAcquisitionSql,
+  actualExpense,
+} from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import {
   entityLink,
@@ -59,7 +62,7 @@ export const expenseAcquisitionPairPredicate = (scope: SQL) =>
   and(
     scope,
     notDeleted(expense),
-    eq(expense.future, false),
+    actualExpense(),
     sql.raw(expenseAcquisitionSql('"Expense"')),
   );
 

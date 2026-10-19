@@ -32,6 +32,7 @@ import { sumBy, uniq } from "es-toolkit";
 import { householdDaysFromNow, householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
+import { plannedExpense } from "~/server/db/computed/expense-aggregate-sql";
 import { countWhere, getDb, notDeleted, relations } from "~/server/db/helpers";
 import { expense, project, task } from "~/server/db/schema";
 import { expenseDerivedCostRead } from "~/server/domains/expense/repo/expense-derived-read";
@@ -319,11 +320,7 @@ export async function projectDashboardSummary(
             in90Days: sql<number>`coalesce(sum(${committedRead.cost}) filter (where ${expense.date} <= ${householdDaysFromNow(FORWARD_COMMITTED_WINDOWS_DAYS[2])}), 0)::float`,
           })
           .where(
-            and(
-              notDeleted(expense),
-              eq(expense.future, true),
-              gt(expense.cost, 0),
-            ),
+            and(notDeleted(expense), plannedExpense(), gt(expense.cost, 0)),
           )
       : Promise.resolve([{ in30Days: 0, in60Days: 0, in90Days: 0 }]),
     loadDataQualities(db, "project", ids),

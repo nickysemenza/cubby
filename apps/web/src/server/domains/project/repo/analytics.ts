@@ -14,6 +14,10 @@ import { uniq } from "es-toolkit";
 
 import type { Database } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
+import {
+  actualExpenseSql,
+  plannedExpenseSql,
+} from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, notDeleted, uuidArrayParam } from "~/server/db/helpers";
 import { task } from "~/server/db/schema";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
@@ -47,9 +51,9 @@ const projectExpenseStats = async (
     .execute<ProjectExpenseStatsRow>(sql`
       SELECT allocation."projectId",
         (coalesce(sum(allocation."attributedCents"::bigint), 0) / 100.0)::double precision AS "spent",
-        (coalesce(sum(allocation."attributedCents"::bigint) filter (where e."future" = false and e."cost" >= 0), 0) / 100.0)::double precision AS "actualSpent",
-        (coalesce(sum(allocation."attributedCents"::bigint) filter (where e."future" = true), 0) / 100.0)::double precision AS "committedSpent",
-        (coalesce(sum(-allocation."attributedCents"::bigint) filter (where e."future" = false and e."cost" < 0), 0) / 100.0)::double precision AS "credits",
+        (coalesce(sum(allocation."attributedCents"::bigint) filter (where ${sql.raw(actualExpenseSql("e"))} and e."cost" >= 0), 0) / 100.0)::double precision AS "actualSpent",
+        (coalesce(sum(allocation."attributedCents"::bigint) filter (where ${sql.raw(plannedExpenseSql("e"))}), 0) / 100.0)::double precision AS "committedSpent",
+        (coalesce(sum(-allocation."attributedCents"::bigint) filter (where ${sql.raw(actualExpenseSql("e"))} and e."cost" < 0), 0) / 100.0)::double precision AS "credits",
         count(distinct allocation."expenseId")::int AS "expenseCount",
         min(e."date") AS "contentStart", max(e."date") AS "contentEnd"
       FROM (${expenseDerivedReadSql("projects")}) allocation

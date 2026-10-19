@@ -21,6 +21,26 @@ import { type AnyColumn, type SQL, sql } from "drizzle-orm";
 import { expense } from "~/server/db/schema";
 
 /**
+ * An actual (already spent) Expense line versus a planned one (`future`).
+ * `Expense.future` is NOT NULL, so `= false`, `NOT future` and
+ * `IS NOT TRUE` agree on every stored row; only a LEFT JOIN that can null the
+ * Expense side would tell them apart, and no caller applies these there.
+ *
+ * The column form interpolates `future` (default: the unaliased table); the
+ * alias form is raw text for correlated subqueries and string-built SQL, where
+ * an interpolated column would bind to the wrong `"Expense"` (see
+ * {@link expenseAcquisitionSql}).
+ */
+export const actualExpense = (future: AnyColumn = expense.future): SQL =>
+  sql`${future} = false`;
+export const plannedExpense = (future: AnyColumn = expense.future): SQL =>
+  sql`${future} = true`;
+export const actualExpenseSql = (alias: string): string =>
+  `${alias}."future" = false`;
+export const plannedExpenseSql = (alias: string): string =>
+  `${alias}."future" = true`;
+
+/**
  * actual/committed/credits/net/count — the shared aggregate columns every
  * expense-based breakdown selects. `actual` = live spend already made,
  * `committed` = future/planned spend, `credits` = refunds and price adjustments
@@ -41,8 +61,8 @@ import { expense } from "~/server/db/schema";
 export const expenseAggregateFields = (
   cost: SQL<number | null> | AnyColumn = expense.cost,
 ) => ({
-  actual: sql<number>`coalesce(sum(${cost}) filter (where ${cost} > 0 and ${expense.future} = false), 0)::float`,
-  committed: sql<number>`coalesce(sum(${cost}) filter (where ${cost} > 0 and ${expense.future} = true), 0)::float`,
+  actual: sql<number>`coalesce(sum(${cost}) filter (where ${cost} > 0 and ${actualExpense()}), 0)::float`,
+  committed: sql<number>`coalesce(sum(${cost}) filter (where ${cost} > 0 and ${plannedExpense()}), 0)::float`,
   credits: sql<number>`coalesce(-sum(${cost}) filter (where ${cost} < 0), 0)::float`,
   net: sql<number>`coalesce(sum(${cost}), 0)::float`,
   count: sql<number>`count(*)::int`,
@@ -53,8 +73,8 @@ export const expenseAggregateFields = (
  * share's attributed cents, with `count` still counting distinct Expenses.
  */
 export const expenseShareAggregateFields = () => ({
-  actual: sql<number>`coalesce(sum(allocation."attributedCents"::bigint / 100.0) filter (where allocation."attributedCents"::bigint > 0 and ${expense.future} = false), 0)::float`,
-  committed: sql<number>`coalesce(sum(allocation."attributedCents"::bigint / 100.0) filter (where allocation."attributedCents"::bigint > 0 and ${expense.future} = true), 0)::float`,
+  actual: sql<number>`coalesce(sum(allocation."attributedCents"::bigint / 100.0) filter (where allocation."attributedCents"::bigint > 0 and ${actualExpense()}), 0)::float`,
+  committed: sql<number>`coalesce(sum(allocation."attributedCents"::bigint / 100.0) filter (where allocation."attributedCents"::bigint > 0 and ${plannedExpense()}), 0)::float`,
   credits: sql<number>`coalesce(-sum(allocation."attributedCents"::bigint / 100.0) filter (where allocation."attributedCents"::bigint < 0), 0)::float`,
   net: sql<number>`coalesce(sum(allocation."attributedCents"::bigint) / 100.0, 0)::float`,
   count: sql<number>`count(distinct ${expense.id})::int`,
@@ -121,7 +141,7 @@ const acquisitionDateBody = (productRef: SQL): SQL<string | null> => sql`(
       ON pad_p."id" = pad_e."purchaseId" AND pad_p."deletedAt" IS NULL
    WHERE pad_e."productId" = ${productRef}
      AND pad_e."deletedAt" IS NULL
-     AND pad_e."future" = false
+     AND ${sql.raw(actualExpenseSql("pad_e"))}
      AND ${sql.raw(expenseAcquisitionSql("pad_e"))})`;
 
 /** Correlated scalar for the list cell and ORDER BY. See the body's doc. */

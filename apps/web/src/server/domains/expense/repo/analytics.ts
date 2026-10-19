@@ -37,6 +37,8 @@ import {
   EXPENSE_MONTH_BUCKET as MONTH_BUCKET,
   expenseAggregateFields,
   expenseShareAggregateFields,
+  actualExpense,
+  plannedExpense,
 } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { expense, project, purchase, vendor } from "~/server/db/schema";
@@ -57,8 +59,8 @@ const effectiveTrade = effectiveExpenseTradeSql('"Expense"');
 const summaryFields = (cost: SQL<number | null>) => ({
   ...expenseAggregateFields(cost),
   unpricedCount: sql<number>`count(*) filter (where ${cost} is null)::int`,
-  actualCount: sql<number>`count(*) filter (where ${expense.future} = false)::int`,
-  plannedCount: sql<number>`count(*) filter (where ${expense.future} = true)::int`,
+  actualCount: sql<number>`count(*) filter (where ${actualExpense()})::int`,
+  plannedCount: sql<number>`count(*) filter (where ${plannedExpense()})::int`,
 });
 
 /**

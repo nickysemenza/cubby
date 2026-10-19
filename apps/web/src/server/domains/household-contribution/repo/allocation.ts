@@ -7,6 +7,7 @@ import type {
 import { and, lte, type SQL, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
 import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import {
   expense,
@@ -68,7 +69,7 @@ const scopeCondition = (scope: ExpenseAllocationScope): SQL =>
       ? sql`${expense.id} = ANY(${uuidArrayParam(scope.expenseIds)})`
       : undefined,
     scope.asOf ? lte(expense.date, scope.asOf) : undefined,
-    scope.includeFuture ? undefined : sql`${expense.future} = false`,
+    scope.includeFuture ? undefined : actualExpense(),
     sql`${expense.cost} IS NOT NULL`,
   ) ?? sql`true`;
 

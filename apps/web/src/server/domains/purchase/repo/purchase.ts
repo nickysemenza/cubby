@@ -128,7 +128,10 @@ import {
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
+import {
+  qualityReadColumn,
+  type QualityReadContext,
+} from "~/server/generic/data-quality/repo/registry";
 import {
   gapCondition,
   qualityFilterSource,
@@ -593,13 +596,12 @@ const syncPurchaseImages = async (
 const reconciliationSql = (read?: QualityReadContext): SQL => {
   const tolerance = cents(RECONCILIATION_TOLERANCE);
   // A bulk read binds the precomputed vendor aggregate and refund total.
-  const bulk = read?.derivedAlias ? sql.identifier(read.derivedAlias) : null;
-  const aggregate = bulk
-    ? sql`SELECT ${bulk}."vendorTotal" AS total, ${bulk}."vendorCount" AS "expenseCount", ${bulk}."vendorUnpricedCount" AS "unpricedCount"`
+  const vendorTotal = qualityReadColumn(read, "vendorTotal");
+  const aggregate = vendorTotal
+    ? sql`SELECT ${vendorTotal} AS total, ${qualityReadColumn(read, "vendorCount")} AS "expenseCount", ${qualityReadColumn(read, "vendorUnpricedCount")} AS "unpricedCount"`
     : sql.raw(vendorExpenseAggregateSql('"Purchase"'));
-  const refund = bulk
-    ? sql`${bulk}."postedRefundTotal"`
-    : purchasePostedRefundTotal;
+  const refund =
+    qualityReadColumn(read, "postedRefundTotal") ?? purchasePostedRefundTotal;
   // One vendor-expense scan feeds every verdict; the delta and refund are
   // whole cents, as `reconcilePurchase` compares them. Mirrors its
   // zero-expense guard: once the totals fail to match, a purchase with no

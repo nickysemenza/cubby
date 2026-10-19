@@ -15,7 +15,10 @@ import type { z } from "zod";
 
 import { comparePlainDatesDescending } from "~/lib/household-date";
 import type { Database } from "~/server/db";
-import { expenseAcquisitionSql } from "~/server/db/computed/expense-aggregate-sql";
+import {
+  expenseAcquisitionSql,
+  actualExpense,
+} from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
   entityAttachment,
@@ -222,7 +225,7 @@ export async function loadProductMatchSides(
         and(
           inArray(product.id, ids),
           notDeleted(expense),
-          eq(expense.future, false),
+          actualExpense(),
           sql.raw(expenseAcquisitionSql('"Expense"')),
         ),
       )
@@ -239,7 +242,7 @@ export async function loadProductMatchSides(
           inArray(expense.productId, ids),
           isNotNull(expense.purchaseId),
           notDeleted(expense),
-          eq(expense.future, false),
+          actualExpense(),
           sql.raw(expenseAcquisitionSql('"Expense"')),
         ),
       ),

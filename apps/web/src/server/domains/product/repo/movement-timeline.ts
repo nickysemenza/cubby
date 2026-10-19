@@ -36,6 +36,7 @@ import { groupBy, sumBy } from "es-toolkit";
 import { householdLocalDate } from "~/lib/household-date";
 import { formatCurrency } from "~/lib/number-format";
 import type { Database } from "~/server/db";
+import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
   entityLink,
@@ -178,11 +179,7 @@ const movementDates = (db: Database) =>
         and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
       )
       .where(
-        and(
-          notDeleted(expense),
-          eq(expense.future, false),
-          isNotNull(expense.productId),
-        ),
+        and(notDeleted(expense), actualExpense(), isNotNull(expense.productId)),
       ),
     getDb(db)
       .select({
@@ -205,7 +202,7 @@ const movementDates = (db: Database) =>
                 and(
                   eq(expense.purchaseId, purchase.id),
                   eq(expense.productId, entityLink.toEntityId),
-                  eq(expense.future, false),
+                  actualExpense(),
                   notDeleted(expense),
                   sql`(NOT ${entityLink.acquisitionConfirmed} OR ${expense.cost} > 0 OR (coalesce(${expense.cost}, 0) = 0 AND ${expense.productQuantity} > 0))`,
                 ),

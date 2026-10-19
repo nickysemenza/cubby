@@ -25,6 +25,7 @@ import { z } from "zod";
 
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database } from "~/server/db";
+import { actualExpenseSql } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, householdDaySqlText, ilikeContains } from "~/server/db/helpers";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
@@ -792,8 +793,8 @@ export async function loadRelatedSummary(
         COALESCE(sum("cost"), 0)::float8 AS "netSpend",
         COALESCE(bool_or("allocationIncomplete"), false) AS "incomplete",
         max(COALESCE("purchaseDate", "expenseDate"))::text AS "latestActivity",
-        COALESCE(sum("productQuantity") FILTER (WHERE "cost" > 0 AND NOT "future" AND "productQuantity" IS NOT NULL), 0)::double precision AS "knownAcquiredUnits",
-        count(DISTINCT "expenseId") FILTER (WHERE "cost" > 0 AND NOT "future" AND "productQuantity" IS NULL)::int AS "unknownAcquisitionQuantityCount"
+        COALESCE(sum("productQuantity") FILTER (WHERE "cost" > 0 AND ${sql.raw(actualExpenseSql("targeted"))} AND "productQuantity" IS NOT NULL), 0)::double precision AS "knownAcquiredUnits",
+        count(DISTINCT "expenseId") FILTER (WHERE "cost" > 0 AND ${sql.raw(actualExpenseSql("targeted"))} AND "productQuantity" IS NULL)::int AS "unknownAcquisitionQuantityCount"
       FROM targeted
       GROUP BY "targetId", "targetLabel", "imageId", "imageKey", "imageFilename", "imageContentType"
     ), totals AS (
@@ -805,8 +806,8 @@ export async function loadRelatedSummary(
         COALESCE(sum("cost") FILTER (WHERE "costComponent" = 'shared'), 0)::float8 AS "totalSharedChargeSpend",
         COALESCE(sum("cost"), 0)::float8 AS "totalNetSpend",
         COALESCE(bool_or("allocationIncomplete"), false) AS "totalIncomplete",
-        COALESCE(sum("productQuantity") FILTER (WHERE "cost" > 0 AND NOT "future" AND "productQuantity" IS NOT NULL), 0)::double precision AS "totalKnownAcquiredUnits",
-        count(DISTINCT "expenseId") FILTER (WHERE "cost" > 0 AND NOT "future" AND "productQuantity" IS NULL)::int AS "totalUnknownAcquisitionQuantityCount"
+        COALESCE(sum("productQuantity") FILTER (WHERE "cost" > 0 AND ${sql.raw(actualExpenseSql("targeted"))} AND "productQuantity" IS NOT NULL), 0)::double precision AS "totalKnownAcquiredUnits",
+        count(DISTINCT "expenseId") FILTER (WHERE "cost" > 0 AND ${sql.raw(actualExpenseSql("targeted"))} AND "productQuantity" IS NULL)::int AS "totalUnknownAcquisitionQuantityCount"
       FROM targeted
     ), paged AS (
       SELECT grouped.*, true AS "isPageRow"

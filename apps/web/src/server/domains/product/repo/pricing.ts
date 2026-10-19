@@ -11,6 +11,7 @@ import { and, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { actualExpenseSql } from "~/server/db/computed/expense-aggregate-sql";
 import {
   getDb,
   notDeleted,
@@ -29,7 +30,10 @@ import {
   projectionRows,
   unitWeighted,
 } from "~/server/domains/product/repo/kit-projection";
-import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
+import {
+  qualityReadColumn,
+  type QualityReadContext,
+} from "~/server/generic/data-quality/repo/registry";
 
 export type ProductPricing = ProductTopLevelOut["pricing"];
 
@@ -141,7 +145,7 @@ const PRICING_OWN_MEASURES = `sum(kpe."cost") FILTER (WHERE kpe."productQuantity
          count(*) FILTER (WHERE kpe."productQuantity" IS NULL) AS "unknownExpenseCount"`;
 
 const PRICING_OWN_PREDICATES = `kpe."deletedAt" IS NULL
-     AND kpe."future" = false
+     AND ${actualExpenseSql("kpe")}
      AND kpe."lineKind" = 'principal'
      AND kpe."cost" > 0`;
 
@@ -395,15 +399,17 @@ export const productPriceEvidenceSql = (ids?: SQL): SQL => {
 export const hasDerivedProductPriceSql = (
   productId: AnyColumn,
   context?: QualityReadContext,
-): SQL =>
-  context?.hasDerivedValue
-    ? context.hasDerivedValue("derivedPrice", productId)
-    : context?.derivedAlias
-      ? sql`${sql.identifier(context.derivedAlias)}."derivedPrice" IS NOT NULL`
-      : sql`${productId} IN (
+): SQL => {
+  if (context?.hasDerivedValue)
+    return context.hasDerivedValue("derivedPrice", productId);
+  const bulk = qualityReadColumn(context, "derivedPrice");
+  return bulk
+    ? sql`${bulk} IS NOT NULL`
+    : sql`${productId} IN (
   SELECT price_evidence."entityId" FROM (${productPriceEvidenceSql()}) price_evidence
   WHERE price_evidence."derivedPrice" IS NOT NULL
 )`;
+};
 
 const productPriceSumSql = (whereClause: SQL | undefined): SQL<number> => {
   const condition = whereClause ?? sql`TRUE`;

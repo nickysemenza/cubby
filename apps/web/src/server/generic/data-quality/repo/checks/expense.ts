@@ -1,6 +1,7 @@
 import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
 import { sql, type SQL } from "drizzle-orm";
 
+import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
 import { expense } from "~/server/db/schema";
 import {
   expenseDerivedValueSql,
@@ -9,6 +10,7 @@ import {
 import { expenseProductExpectedSql } from "~/server/domains/purchase/repo/purchase-evidence-policy";
 import {
   defineEntityChecks,
+  qualityReadColumn,
   type QualityReadContext,
 } from "~/server/generic/data-quality/repo/registry";
 
@@ -29,9 +31,8 @@ const categoryEvidence = <K extends "missing" | "evidence">(
   t: Expense,
   context?: QualityReadContext,
 ): SQL =>
-  context?.derivedAlias
-    ? sql`${sql.identifier(context.derivedAlias)}.${sql.identifier(field)}`
-    : expenseDerivedValueSql(field, sql`${t.id}`);
+  qualityReadColumn(context, field) ??
+  expenseDerivedValueSql(field, sql`${t.id}`);
 
 export const expenseChecks = defineEntityChecks({
   entity: "expense",
@@ -40,7 +41,7 @@ export const expenseChecks = defineEntityChecks({
     FROM (${expenseDerivedReadSql("categoryEvidence", { expenseIds: ids })}) evidence`,
   checks: {
     expense_receipt_role: {
-      expected: (t: Expense) => sql`${t.future} = false`,
+      expected: (t: Expense) => actualExpense(t.future),
       missing: (t: Expense) =>
         sql`${t.lineKind} = ${expenseLineKindSchema.enum.unclassified}`,
       fingerprint: (t: Expense) => [sql`${t.future}`, sql`${t.lineKind}`],
@@ -48,12 +49,12 @@ export const expenseChecks = defineEntityChecks({
     expense_cost: {
       // A future (planned, not yet spent) line may be unpriced; once it is
       // no longer future a cost is expected.
-      expected: (t: Expense) => sql`${t.future} = false`,
+      expected: (t: Expense) => actualExpense(t.future),
       missing: (t: Expense) => sql`${t.cost} IS NULL`,
       fingerprint: (t) => [sql`${t.future}`, sql`${t.cost}`],
     },
     expense_spending_category: {
-      expected: (t) => sql`${t.future} = false`,
+      expected: (t) => actualExpense(t.future),
       missing: (t, context) =>
         sql`coalesce(${categoryEvidence("missing", t, context)}, true)`,
       fingerprint: (t, context) => [categoryEvidence("evidence", t, context)],
@@ -62,7 +63,7 @@ export const expenseChecks = defineEntityChecks({
     // the quantity ledger; a fee, tax, or service line has no unit count.
     expense_quantity: {
       expected: (t) =>
-        sql`(${t.future} = false AND ${policyProjection(t, expenseProductExpectedSql)})`,
+        sql`(${actualExpense(t.future)} AND ${policyProjection(t, expenseProductExpectedSql)})`,
       missing: (t) => sql`${t.productQuantity} IS NULL`,
       fingerprint: (t) => [
         sql`${t.future}`,

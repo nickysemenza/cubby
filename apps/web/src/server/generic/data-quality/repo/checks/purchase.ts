@@ -3,6 +3,7 @@ import { vendorOrderEvidence } from "@cubby/schemas/vendor-import-fields";
 import { cents } from "@cubby/shared";
 import { getTableName, sql } from "drizzle-orm";
 
+import { actualExpenseSql } from "~/server/db/computed/expense-aggregate-sql";
 import { sqlEnumConstant } from "~/server/db/helpers/query";
 import { purchase } from "~/server/db/schema";
 import {
@@ -32,16 +33,11 @@ import {
 } from "~/server/domains/purchase/repo/purchase-evidence-policy";
 import {
   defineEntityChecks,
+  qualityReadColumn,
   type QualityReadContext,
 } from "~/server/generic/data-quality/repo/registry";
 
 type Purchase = typeof purchase;
-
-/** A bulk read's precomputed `filterRead` column, if bound. */
-const filtered = (context: QualityReadContext | undefined, column: string) =>
-  context?.derivedAlias
-    ? sql`${sql.identifier(context.derivedAlias)}.${sql.identifier(column)}`
-    : undefined;
 
 /** The quoted alias the reconciliation raw-SQL helpers correlate on. */
 const aliasOf = (t: Purchase) => `"${getTableName(t)}"`;
@@ -52,16 +48,10 @@ const expectsItemization = (t: Purchase) =>
   sql`(${effectivePurchaseItemizationExpectationSql(getTableName(t))} = 'required')`;
 const hasPrimaryDocument = (t: Purchase) =>
   purchaseHasPrimaryDocumentSql(getTableName(t));
-const hasItemization = (t: Purchase, context?: QualityReadContext) => {
-  const unclassified = filtered(context, "hasUnclassified");
-  const unlinkedRequired = filtered(context, "hasUnlinkedRequired");
-  return purchaseHasItemizationSql(
-    getTableName(t),
-    unclassified && unlinkedRequired
-      ? { unclassified, unlinkedRequired }
-      : undefined,
+const hasItemization = (t: Purchase, context?: QualityReadContext) =>
+  purchaseHasItemizationSql(getTableName(t), (fact) =>
+    qualityReadColumn(context, fact),
   );
-};
 // An imported order that carried an order id (`sourceOrderKey`'s `/order/`
 // form) expects its Purchase to keep one, whatever the source kind; an
 // orderless receipt or statement booking does not.
@@ -80,7 +70,7 @@ const expectsVendorAccount = (t: Purchase) => sql`NOT EXISTS (
 )`;
 
 const hasExpenses = (t: Purchase, context?: QualityReadContext) => {
-  const count = filtered(context, "expenseCount");
+  const count = qualityReadColumn(context, "expenseCount");
   return count
     ? sql`${count} > 0`
     : sql`EXISTS (
@@ -99,7 +89,7 @@ const expenseCount = (t: Purchase) => sql`(
 const unpricedExpenseCount = (t: Purchase) => sql`(
   SELECT count(*)::int FROM "Expense" dq_e
   WHERE dq_e."purchaseId" = ${t.id} AND dq_e."deletedAt" IS NULL AND dq_e."cost" IS NULL
-    AND dq_e."future" = false
+    AND ${sql.raw(actualExpenseSql("dq_e"))}
 )`;
 
 const expenseCents = (t: Purchase) =>
@@ -125,15 +115,15 @@ const tolerance = sql.raw(String(cents(RECONCILIATION_TOLERANCE)));
  * delta beyond tolerance, and posted refunds not fully explaining it.
  */
 const paperworkMismatch = (t: Purchase, context?: QualityReadContext) => {
-  const vendorTotal = filtered(context, "vendorTotal");
+  const vendorTotal = qualityReadColumn(context, "vendorTotal");
   if (vendorTotal) {
     const delta = sql`(floor((${vendorTotal} * 100)::numeric + 0.5) - floor((${t.statedTotal} * 100)::numeric + 0.5))`;
     return sql`(${t.statedTotal} IS NOT NULL
-      AND ${filtered(context, "vendorCount")} > 0
+      AND ${qualityReadColumn(context, "vendorCount")} > 0
       AND abs(${delta}) > ${tolerance}
-      AND NOT (${filtered(context, "vendorUnpricedCount")} = 0
+      AND NOT (${qualityReadColumn(context, "vendorUnpricedCount")} = 0
         AND ${delta} < ${sql.raw(`-${cents(RECONCILIATION_TOLERANCE)}`)}
-        AND floor((${filtered(context, "postedRefundTotal")} * 100)::numeric + 0.5) = ${delta}))`;
+        AND floor((${qualityReadColumn(context, "postedRefundTotal")} * 100)::numeric + 0.5) = ${delta}))`;
   }
   const delta = sql`(floor((dq_paperwork.total * 100)::numeric + 0.5) - floor((${t.statedTotal} * 100)::numeric + 0.5))`;
   const fullyPriced = sql`dq_paperwork."unpricedCount" = 0`;
@@ -221,7 +211,7 @@ export const purchaseChecks = defineEntityChecks({
     },
     unpriced_expense: {
       missing: (t, context) =>
-        sql`${filtered(context, "settleableUnpricedCount") ?? unpricedExpenseCount(t)} > 0`,
+        sql`${qualityReadColumn(context, "settleableUnpricedCount") ?? unpricedExpenseCount(t)} > 0`,
       fingerprint: (t) => [unpricedExpenseCount(t)],
     },
     paperwork_mismatch: {
@@ -236,7 +226,7 @@ export const purchaseChecks = defineEntityChecks({
     },
     settlement_reference: {
       missing: (t, context) => {
-        const present = filtered(context, "hasSettlementReference");
+        const present = qualityReadColumn(context, "hasSettlementReference");
         return present
           ? sql`NOT ${present}`
           : sql.raw(settlementReferenceAbsentSql(aliasOf(t)));
@@ -250,13 +240,13 @@ export const purchaseChecks = defineEntityChecks({
       // a source leaves a small residual; the raw verdict stays a financial
       // fact and only a reasoned exception removes it from the worklist.
       missing: (t, context) => {
-        const settleable = filtered(context, "settleableTotal");
+        const settleable = qualityReadColumn(context, "settleableTotal");
         if (!settleable)
           return sql`(${sql.raw(purchaseFinancialMismatchRawSql(aliasOf(t)))})`;
         // purchaseFinancialMismatchRawSql over the precomputed inputs.
-        return sql`(${filtered(context, "settleableUnpricedCount")} = 0
-          AND ${filtered(context, "hasSettlement")}
-          AND floor(${filtered(context, "comparisonTotal")} * 100 + 0.5)
+        return sql`(${qualityReadColumn(context, "settleableUnpricedCount")} = 0
+          AND ${qualityReadColumn(context, "hasSettlement")}
+          AND floor(${qualityReadColumn(context, "comparisonTotal")} * 100 + 0.5)
             IS DISTINCT FROM floor((${settleable}) * 100 + 0.5))`;
       },
       // Same inputs, in the same order, as the stored fingerprints written by

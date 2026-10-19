@@ -48,6 +48,7 @@ import {
 import { effectiveTaskDueDate } from "~/lib/task-dates";
 import type { Database } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
+import { plannedExpense } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { expense, task } from "~/server/db/schema";
 import {
@@ -212,7 +213,7 @@ export async function computeAttentionItems(
       .where(
         and(
           notDeleted(expense),
-          eq(expense.future, true),
+          plannedExpense(),
           isNotNull(expense.date),
           lt(expense.date, today),
         ),

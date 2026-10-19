@@ -12,7 +12,11 @@ import {
   emailRetainedContentSql,
 } from "~/server/domains/email/repo/email-sql";
 
-import { defineEntityChecks, type QualityReadContext } from "../registry";
+import {
+  defineEntityChecks,
+  qualityReadColumn,
+  type QualityReadContext,
+} from "../registry";
 
 type Email = typeof email;
 
@@ -22,9 +26,7 @@ type Email = typeof email;
 const { related, uncertain, unrelated } = mailboxClassification.enum;
 
 const linked = (context?: QualityReadContext) =>
-  context?.derivedAlias
-    ? sql`${sql.identifier(context.derivedAlias)}."linked"`
-    : emailLinkedSql();
+  qualityReadColumn(context, "linked") ?? emailLinkedSql();
 
 /** Settled automated negatives require no member review; their observations
  * remain available to independent accuracy sampling. */
@@ -42,9 +44,8 @@ export const emailChecks = defineEntityChecks({
         sql`${t.classification} <> ${unrelated} AND ${t.classificationStage} IN ${automatedStagesSql}`,
       missing: (_t: Email, context) =>
         sql`(${
-          context?.derivedAlias
-            ? sql`${sql.identifier(context.derivedAlias)}."memberClassification"`
-            : emailMemberClassificationSql()
+          qualityReadColumn(context, "memberClassification") ??
+          emailMemberClassificationSql()
         }) IS NULL`,
     },
     email_original_missing: {
@@ -52,9 +53,8 @@ export const emailChecks = defineEntityChecks({
         sql`${t.classification} IN (${related}, ${uncertain})`,
       missing: (_t: Email, context) =>
         sql`NOT ${
-          context?.derivedAlias
-            ? sql`${sql.identifier(context.derivedAlias)}."retainedContent"`
-            : emailRetainedContentSql()
+          qualityReadColumn(context, "retainedContent") ??
+          emailRetainedContentSql()
         }`,
     },
     email_preview_missing: {
@@ -70,9 +70,8 @@ export const emailChecks = defineEntityChecks({
       expected: (t: Email) => sql`${t.classification} = ${related}`,
       missing: (_t: Email, context) =>
         sql`NOT ${linked(context)} AND NOT ${
-          context?.derivedAlias
-            ? sql`${sql.identifier(context.derivedAlias)}."completedImport"`
-            : emailHasCompletedImportSql()
+          qualityReadColumn(context, "completedImport") ??
+          emailHasCompletedImportSql()
         }`,
     },
   },

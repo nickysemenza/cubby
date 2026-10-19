@@ -26,6 +26,7 @@ import {
 } from "@cubby/schemas/problems";
 import { type SQL, sql } from "drizzle-orm";
 
+import { actualExpenseSql } from "~/server/db/computed/expense-aggregate-sql";
 import { type Database } from "~/server/db/database";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import {
@@ -133,7 +134,7 @@ export const findDuplicateSpendCandidates = async (
       FROM ${expense} e
       WHERE e."deletedAt" IS NULL
         AND e."purchaseId" IS NULL
-        AND e."future" IS NOT TRUE
+        AND ${sql.raw(actualExpenseSql("e"))}
         AND e."cost" IS NOT NULL
         AND e."cost" <> 0
     ),

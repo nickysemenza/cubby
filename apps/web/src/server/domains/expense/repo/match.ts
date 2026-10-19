@@ -59,6 +59,7 @@ import type {
 import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
+import { actualExpenseSql } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb } from "~/server/db/helpers";
 import { effectiveExpenseProjectSql } from "~/server/domains/expense/repo/expense-inheritance";
 import {
@@ -190,8 +191,8 @@ export const matchExpenses = async (
         -- re-scan "Expense" for every candidate to recompute numbers this pass
         -- already has. Same rule, and it must stay the same rule — a different
         -- shape is the price.
-        COALESCE(sum(e."cost") FILTER (WHERE e."future" = false) OVER (PARTITION BY p."id"), 0)::double precision AS "purchaseSettleableExpenseTotal",
-        count(*) FILTER (WHERE e."cost" IS NULL AND e."future" = false) OVER (PARTITION BY p."id")::int AS "purchaseSettleableUnpricedExpenseCount",
+        COALESCE(sum(e."cost") FILTER (WHERE ${sql.raw(actualExpenseSql("e"))}) OVER (PARTITION BY p."id"), 0)::double precision AS "purchaseSettleableExpenseTotal",
+        count(*) FILTER (WHERE e."cost" IS NULL AND ${sql.raw(actualExpenseSql("e"))}) OVER (PARTITION BY p."id")::int AS "purchaseSettleableUnpricedExpenseCount",
         v."name"        AS "vendorName",
         pr."name"       AS "projectName",
         pd."name"       AS "productName"

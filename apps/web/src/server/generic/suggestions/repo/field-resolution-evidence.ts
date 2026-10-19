@@ -29,6 +29,7 @@ import {
   hierarchyInheritance,
   inheritanceLadderSql,
 } from "~/server/db/computed/effective-field";
+import { actualExpenseSql } from "~/server/db/computed/expense-aggregate-sql";
 import {
   getDb,
   notDeleted,
@@ -1223,7 +1224,7 @@ async function productPriceEvidence(
       count(*) OVER()::int AS total
     FROM kit_anc ka JOIN "Product" p ON p.id=ka."productId" AND p."deletedAt" IS NULL
     JOIN "Expense" e ON e."productId"=ka."productId" AND e."deletedAt" IS NULL
-      AND e.future=false AND e."lineKind"=${sqlEnumConstant(expenseLineKindSchema, expenseLineKindSchema.enum.principal)} AND e.cost>0
+      AND ${sql.raw(actualExpenseSql("e"))} AND e."lineKind"=${sqlEnumConstant(expenseLineKindSchema, expenseLineKindSchema.enum.principal)} AND e.cost>0
     ORDER BY ka.depth,e.date DESC NULLS LAST,e.shortcode LIMIT ${CONTRIBUTOR_LIMIT + 1}`);
   const rows = z
     .array(

@@ -69,6 +69,7 @@ import {
   productAcquisitionDateFilterSql,
   productExpenseCountFilterSql,
   productExpenseTotalFilterSql,
+  actualExpense,
 } from "~/server/db/computed/expense-aggregate-sql";
 import {
   categorySummarySql,
@@ -307,7 +308,7 @@ const productIdsWithRecordedDisposal = qb
   .where(
     and(
       notDeleted(expense),
-      eq(expense.future, false),
+      actualExpense(),
       isNotNull(expense.productId),
       ownershipExitExpensePredicate(),
     ),

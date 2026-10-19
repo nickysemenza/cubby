@@ -32,6 +32,8 @@ import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import {
   EXPENSE_MONTH_BUCKET,
   expenseShareAggregateFields,
+  actualExpense,
+  plannedExpense,
 } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, notDeleted, uuidArrayParam } from "~/server/db/helpers";
 import { expense, project, task } from "~/server/db/schema";
@@ -152,8 +154,8 @@ export async function projectPortfolioAnalytics(
         plannedVsActualRows: read
           .select({
             month: EXPENSE_MONTH_BUCKET,
-            planned: sql<number>`coalesce(sum(${read.cost}) filter (where ${expense.future} = true), 0)::float`,
-            actual: sql<number>`coalesce(sum(${read.cost}) filter (where ${expense.future} = false), 0)::float`,
+            planned: sql<number>`coalesce(sum(${read.cost}) filter (where ${plannedExpense()}), 0)::float`,
+            actual: sql<number>`coalesce(sum(${read.cost}) filter (where ${actualExpense()}), 0)::float`,
           })
           .where(expenseScopeWithDate)
           .groupBy(EXPENSE_MONTH_BUCKET)

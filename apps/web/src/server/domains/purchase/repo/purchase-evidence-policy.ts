@@ -15,6 +15,7 @@ import type { Database } from "~/server/db";
 import { sqlEnumConstant, unwrapDb } from "~/server/db/helpers";
 import { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
 export { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
+import { actualExpenseSql } from "~/server/db/computed/expense-aggregate-sql";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 // Alias-qualified columns preserve correlation when Drizzle compiles a
@@ -142,7 +143,7 @@ export const purchaseHasPrimaryDocumentSql = (
 const purchaseHasAllocationSql = (alias: string): SQL => sql`EXISTS (
   SELECT 1 FROM "Expense" ep_allocation_line
   WHERE ep_allocation_line."purchaseId" = ${column(alias, "id")} AND ep_allocation_line."deletedAt" IS NULL
-    AND ep_allocation_line.future = false AND ep_allocation_line."economicRole" = 'vendor'
+    AND ${sql.raw(actualExpenseSql("ep_allocation_line"))} AND ep_allocation_line."economicRole" = 'vendor'
     AND ep_allocation_line."lineBasis" = 'allocation'
 )`;
 
@@ -155,7 +156,7 @@ const purchaseHasAllocationSql = (alias: string): SQL => sql`EXISTS (
 const purchaseHasItemLinesSql = (alias: string): SQL => sql`(
   EXISTS (SELECT 1 FROM "Expense" ep_line
     WHERE ep_line."purchaseId" = ${column(alias, "id")} AND ep_line."deletedAt" IS NULL
-      AND ep_line.future = false AND ep_line."economicRole" = 'vendor'
+      AND ${sql.raw(actualExpenseSql("ep_line"))} AND ep_line."economicRole" = 'vendor'
       AND ep_line."lineKind" = 'principal' AND ep_line."lineBasis" = 'item_line')
   AND NOT ${purchaseHasAllocationSql(alias)}
 )`;
@@ -178,6 +179,16 @@ export const purchaseListsItemsSql = (alias: string): SQL => sql`(
   ${purchaseHasItemLinesSql(alias)} OR ${purchaseHasLinkedGoodsSql(alias)}
 )`;
 
+/** Each itemization line fact, stated once over an Expense line alias: the
+ * record-level read probes it with EXISTS, the bulk read folds it per
+ * Purchase with `bool_or`. */
+const itemizationLineFacts = {
+  hasUnclassified: (line: string): SQL =>
+    sql`${column(line, "lineKind")} = ${expenseLineKindSchema.enum.unclassified}`,
+  hasUnlinkedRequired: (line: string): SQL => unlinkedRequiredLineSql(line),
+} as const;
+type ItemizationLineFact = keyof typeof itemizationLineFacts;
+
 /** A Purchase is itemized when it lists its goods and every principal line
  * whose Product is expected links one, whichever shape lists them. A single
  * productless goods line is a lump, not an itemization. Totals stay with
@@ -186,23 +197,20 @@ export const purchaseListsItemsSql = (alias: string): SQL => sql`(
 export const purchaseHasItemizationSql = (
   alias: string,
   // Bulk reads bind `purchaseItemizationLineFactsSql` columns instead.
-  lines?: { unclassified: SQL; unlinkedRequired: SQL },
-): SQL => sql`(
+  bound?: (fact: ItemizationLineFact) => SQL | undefined,
+): SQL => {
+  const fact = (name: ItemizationLineFact) =>
+    bound?.(name) ??
+    sql`EXISTS (SELECT 1 FROM "Expense" ep_fact_line
+    WHERE ep_fact_line."purchaseId" = ${column(alias, "id")}
+      AND ep_fact_line."deletedAt" IS NULL
+      AND ${itemizationLineFacts[name]("ep_fact_line")})`;
+  return sql`(
   ${purchaseListsItemsSql(alias)}
-  AND NOT ${
-    lines?.unclassified ??
-    sql`EXISTS (SELECT 1 FROM "Expense" ep_unclassified
-    WHERE ep_unclassified."purchaseId" = ${column(alias, "id")}
-      AND ep_unclassified."deletedAt" IS NULL
-      AND ep_unclassified."lineKind" = ${expenseLineKindSchema.enum.unclassified})`
-  }
-  AND NOT ${
-    lines?.unlinkedRequired ??
-    sql`EXISTS (SELECT 1 FROM "Expense" ep_unlinked
-    WHERE ep_unlinked."purchaseId" = ${column(alias, "id")} AND ep_unlinked."deletedAt" IS NULL
-      AND ${unlinkedRequiredLineSql("ep_unlinked")})`
-  }
+  AND NOT ${fact("hasUnclassified")}
+  AND NOT ${fact("hasUnlinkedRequired")}
 )`;
+};
 
 /**
  * `purchaseHasItemizationSql`'s line facts for every Purchase in one grouped
@@ -212,8 +220,13 @@ export const purchaseHasItemizationSql = (
  */
 export const purchaseItemizationLineFactsSql = (): SQL => sql`SELECT
     ep_line."purchaseId",
-    bool_or(ep_line."lineKind" = ${expenseLineKindSchema.enum.unclassified}) AS "hasUnclassified",
-    coalesce(bool_or(${unlinkedRequiredLineSql("ep_line")}), false) AS "hasUnlinkedRequired"
+    ${sql.join(
+      Object.entries(itemizationLineFacts).map(
+        ([name, test]) =>
+          sql`coalesce(bool_or(${test("ep_line")}), false) AS ${sql.identifier(name)}`,
+      ),
+      sql`, `,
+    )}
   FROM "Expense" ep_line
   WHERE ep_line."deletedAt" IS NULL AND ep_line."purchaseId" IS NOT NULL
   GROUP BY ep_line."purchaseId"`;
@@ -261,7 +274,7 @@ export const expenseProductExpectedSql = (alias: string): SQL =>
 
 /** An incurred line still missing the Product its policy requires. */
 const unlinkedRequiredLineSql = (alias: string): SQL =>
-  sql`(${column(alias, "future")} = false AND ${column(alias, "productId")} IS NULL
+  sql`(${sql.raw(actualExpenseSql(alias))} AND ${column(alias, "productId")} IS NULL
     AND ${expenseProductExpectedSql(alias)})`;
 
 const purchaseBookingSql = (alias: string): SQL => sql`(SELECT CASE
@@ -269,7 +282,7 @@ const purchaseBookingSql = (alias: string): SQL => sql`(SELECT CASE
   WHEN count(*) FILTER (WHERE ep_book.cost IS NULL) > 0 THEN 'partial'
   ELSE 'recorded' END
   FROM "Expense" ep_book WHERE ep_book."purchaseId" = ${column(alias, "id")}
-    AND ep_book."deletedAt" IS NULL AND ep_book.future = false
+    AND ep_book."deletedAt" IS NULL AND ${sql.raw(actualExpenseSql("ep_book"))}
 )`;
 
 /** No policy requires a document: an attached receipt or invoice is useful
