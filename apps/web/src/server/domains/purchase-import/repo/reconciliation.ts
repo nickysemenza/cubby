@@ -14,7 +14,7 @@ import {
 } from "@cubby/schemas/purchase-import";
 import { tradeSchema } from "@cubby/schemas/task-fields";
 import { cents } from "@cubby/shared";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -59,6 +59,7 @@ import { reviewPreparedNewProducts } from "./reconciliation-new-product";
 import {
   reconciliationFingerprint,
   recordSourceOrderObservation,
+  sourceObservationIdentitySql,
 } from "./reconciliation-observations";
 import {
   loadSourceReconciliationState,
@@ -895,6 +896,8 @@ export async function commitSourceOrderReconciliation(
     observation: state.observation.id,
     reviewedFingerprint: fix.reviewedFingerprint,
   });
+  // The original is this Purchase's first observation of the order, as the
+  // writer's is its own import; a deleted Purchase's observations stay its own.
   const [firstObservation] = await tx
     .select()
     .from(sourceOrderObservation)
@@ -905,6 +908,11 @@ export async function commitSourceOrderReconciliation(
           state.observation.sourceClaimId,
         ),
         eq(sourceOrderObservation.orderKey, fix.orderKey),
+        sourceObservationIdentitySql(
+          "purchase",
+          sourceOrderObservation.purchaseId,
+          sql`${state.target.id}`,
+        ),
       ),
     )
     .orderBy(
@@ -947,8 +955,9 @@ export async function commitSourceOrderReconciliation(
     })
     .onConflictDoUpdate({
       target: [importSourceOrder.sourceClaimId, importSourceOrder.orderKey],
-      // Without a live association, the conflict is a deleted Purchase's
-      // detached history, rebound here as a fresh acceptance.
+      // As in the writer: only a live association arbitrates, and until the
+      // live-only key is applied a detached row is taken over instead.
+      targetWhere: isNotNull(importSourceOrder.purchaseId),
       set: {
         purchaseId: state.target.id,
         checksum: fix.source.checksum,
@@ -1035,15 +1044,14 @@ export async function commitSourceOrderReconciliation(
       .set({ checksum: fix.source.checksum, updatedAt: new Date() })
       .where(eq(importSourceClaim.id, state.family.root.id));
   // The writer files `arrived` when an import first sees delivery; a later
-  // source that reconciles the order as delivered files it here instead.
-  // An already-delivered accepted source was prompted at its import, and a
-  // finding needs a Run, which a promoted historical observation lacks.
-  const arrivalRunId = state.observation.runId;
+  // source that reconciles the order as delivered files it here instead. Only
+  // a known undelivered accepted extraction counts as first delivery: an
+  // unknown one may already have prompted.
   if (
-    arrivalRunId !== null &&
     !productOnly &&
     candidate.allShipmentsDelivered === true &&
-    state.accepted?.extraction.candidate?.allShipmentsDelivered !== true &&
+    state.accepted !== null &&
+    state.accepted.extraction.candidate?.allShipmentsDelivered !== true &&
     (resolvedBindings.some(
       (binding) =>
         binding.productId === null &&
@@ -1059,7 +1067,7 @@ export async function commitSourceOrderReconciliation(
       tx,
       {
         ledgerPartyId: ownerId,
-        runId: arrivalRunId,
+        runId: state.observation.runId,
         source: fix.source,
       },
       state.target.id,

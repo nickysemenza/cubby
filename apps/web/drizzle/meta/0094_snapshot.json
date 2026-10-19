@@ -1,5 +1,5 @@
 {
-  "id": "be27f4c6-d9ac-4bff-b120-c47c6d264c57",
+  "id": "00f76fc2-6170-4609-ad3d-7134a1ba3ea9",
   "prevId": "aef9ff79-1154-4de0-8b58-f3a4602b1456",
   "version": "7",
   "dialect": "postgresql",
@@ -19187,6 +19187,12 @@
             },
             {
               "expression": "contentFingerprint",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "purchaseId",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

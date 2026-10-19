@@ -1227,7 +1227,8 @@ export const ENTITY_EDGES = {
         column: importSourceOrder.purchaseId,
         role: "history",
         label: "import source claims",
-        description: "The idempotency claim that produced this purchase.",
+        description:
+          "The accepted source order that produced this purchase and fences its replay. Deleting the purchase clears the link and keeps the row as the Email's accepted history.",
         liveness: { kind: "must-target-live" },
       },
       "PurchasePaymentEvidence.purchaseId": {

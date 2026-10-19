@@ -717,9 +717,14 @@ async function learnLineIdentifiers(
   }
 }
 
+/** A reconciliation of a promoted historical observation has no Run. */
+type FindingOrigin = Pick<ImportWriterInput, "ledgerPartyId" | "source"> & {
+  runId: ImportWriterInput["runId"] | null;
+};
+
 async function fileFinding(
   tx: DrizzleTransaction,
-  input: Pick<ImportWriterInput, "ledgerPartyId" | "runId" | "source">,
+  input: FindingOrigin,
   purchaseId: ReturnType<typeof parseEntityId<"purchase">>,
   kind:
     | "duplicate_lines"
@@ -776,7 +781,7 @@ async function fileFinding(
 /** The one `arrived` prompt, shared by import and delivered reconciliation. */
 export function fileArrivedFinding(
   tx: DrizzleTransaction,
-  input: Pick<ImportWriterInput, "ledgerPartyId" | "runId" | "source">,
+  input: FindingOrigin,
   purchaseId: ReturnType<typeof parseEntityId<"purchase">>,
 ) {
   return fileFinding(
@@ -992,8 +997,11 @@ async function recordImportSourceAssociation(
     })
     .onConflictDoUpdate({
       target: [importSourceOrder.sourceClaimId, importSourceOrder.orderKey],
-      // Without a live `existing`, the conflict is a deleted Purchase's
-      // detached history: this import rebinds it as a fresh acceptance.
+      // Only a live association arbitrates, so a deleted Purchase's detached
+      // row stays as history beside this one. Until the live-only key is
+      // applied, the full key still conflicts with that row and this import
+      // takes it over as a fresh acceptance instead.
+      targetWhere: isNotNull(importSourceOrder.purchaseId),
       set: {
         purchaseId,
         checksum: input.source.checksum,

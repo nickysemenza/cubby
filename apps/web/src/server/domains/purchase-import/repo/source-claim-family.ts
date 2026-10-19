@@ -147,12 +147,15 @@ export async function lockImportSourceClaimFamily(
   return family;
 }
 
-/** Resolve one order across the family before replay or mutation; duplicates never choose an owner. */
-export async function readSourceFamilyOrder(
+/** A family's live order associations, oldest first; detached history is excluded. */
+async function readLiveFamilyOrders(
   db: Reader,
   family: Family,
-  orderKey: typeof importSourceOrder.$inferSelect.orderKey,
-  lock?: ReadOptions["lock"],
+  options: {
+    orderKey?: SourceOrder["orderKey"];
+    limit: number;
+    lock?: ReadOptions["lock"];
+  },
 ) {
   const query = db
     .select()
@@ -163,15 +166,32 @@ export async function readSourceFamilyOrder(
           importSourceOrder.sourceClaimId,
           family.members.map((member) => member.id),
         ),
-        eq(importSourceOrder.orderKey, orderKey),
+        options.orderKey === undefined
+          ? undefined
+          : eq(importSourceOrder.orderKey, options.orderKey),
         isNotNull(importSourceOrder.purchaseId),
       ),
     )
     .orderBy(asc(importSourceOrder.id))
-    .limit(2);
-  const orders = (await (lock ? query.for(lock) : query)).filter(
+    .limit(options.limit);
+  // The SQL predicate selects; the guard only narrows the row type.
+  return (await (options.lock ? query.for(options.lock) : query)).filter(
     isLiveSourceOrder,
   );
+}
+
+/** Resolve one order across the family before replay or mutation; duplicates never choose an owner. */
+export async function readSourceFamilyOrder(
+  db: Reader,
+  family: Family,
+  orderKey: typeof importSourceOrder.$inferSelect.orderKey,
+  lock?: ReadOptions["lock"],
+) {
+  const orders = await readLiveFamilyOrders(db, family, {
+    orderKey,
+    limit: 2,
+    lock,
+  });
   if (orders.length > 1)
     throw new Error(
       "Duplicate source family order associations require review.",
@@ -227,22 +247,7 @@ export async function loadImportSourceFamilyOrders(
     const family = await readImportSourceClaimFamily(db, claim, {});
     if (!family || seen.has(family.root.id)) continue;
     seen.add(family.root.id);
-    const orders = (
-      await db
-        .select()
-        .from(importSourceOrder)
-        .where(
-          and(
-            inArray(
-              importSourceOrder.sourceClaimId,
-              family.members.map((member) => member.id),
-            ),
-            isNotNull(importSourceOrder.purchaseId),
-          ),
-        )
-        .orderBy(asc(importSourceOrder.id))
-        .limit(101)
-    ).filter(isLiveSourceOrder);
+    const orders = await readLiveFamilyOrders(db, family, { limit: 101 });
     const keys = new Set<string>();
     for (const association of orders) {
       if (keys.has(association.orderKey))

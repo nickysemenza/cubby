@@ -1,0 +1,2 @@
+DROP INDEX "ImportSourceOrder_source_order_key";--> statement-breakpoint
+CREATE UNIQUE INDEX "ImportSourceOrder_source_order_key" ON "ImportSourceOrder" USING btree ("sourceClaimId","orderKey") WHERE "ImportSourceOrder"."purchaseId" IS NOT NULL;

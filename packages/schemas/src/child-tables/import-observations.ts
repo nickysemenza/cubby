@@ -77,9 +77,17 @@ export const importObservationChildren = [
     ],
     indexes: [
       {
+        // Keyed by subject: re-importing a deleted Purchase's order observes
+        // the same content for the new Purchase without rewriting history.
         name: "SourceOrderObservation_content_key",
         unique: true,
-        on: ["sourceClaimId", "orderKey", "checksum", "contentFingerprint"],
+        on: [
+          "sourceClaimId",
+          "orderKey",
+          "checksum",
+          "contentFingerprint",
+          "purchaseId",
+        ],
       },
       { name: "SourceOrderObservation_purchase_idx", on: ["purchaseId"] },
     ],

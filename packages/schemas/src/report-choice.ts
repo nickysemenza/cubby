@@ -1,8 +1,15 @@
 import { countLabel } from "@cubby/shared/pluralize";
 import type { z } from "zod";
 
+import {
+  ENTITY_SOURCE_QUOTE_MAX,
+  ENTITY_SOURCE_URL_MAX,
+} from "./child-tables/modules";
 import type { CommitPreparedRequest, ReportChoice } from "./entity-report";
-import { preparedProductResolution } from "./purchase-import";
+import {
+  distinctFromSource,
+  preparedProductResolution,
+} from "./purchase-import";
 import { tradeSchema } from "./task-fields";
 
 /**
@@ -51,6 +58,46 @@ export function isChoiceAnswered(
     if (!source?.url.trim() || !source.quote.trim()) return false;
   }
   return true;
+}
+
+type DistinctFromAnswer = NonNullable<ChoiceAnswer["distinctFrom"]>;
+
+/**
+ * Only `option`'s own records' Sources, so the body never carries evidence
+ * for a record another option (or an earlier report) listed.
+ */
+export function distinctFromForOption(
+  option: ReportChoice["options"][number],
+  sources: DistinctFromAnswer | undefined,
+): DistinctFromAnswer {
+  return Object.fromEntries(
+    (option.distinctFrom ?? []).flatMap((record) => {
+      const source = sources?.[record.id];
+      return source ? [[record.id, source]] : [];
+    }),
+  );
+}
+
+/**
+ * Per-field feedback for one typed Source under the bounds the commit parses:
+ * an error per field, and the quote's length against its bound.
+ */
+export function distinctFromSourceFeedback(source: {
+  url: string;
+  quote: string;
+}) {
+  const url = source.url.trim();
+  return {
+    quoteLength: `${source.quote.trim().length.toLocaleString("en-US")} of ${ENTITY_SOURCE_QUOTE_MAX.toLocaleString("en-US")} characters.`,
+    url:
+      url && !distinctFromSource.shape.url.safeParse(url).success
+        ? `Enter a full URL of at most ${ENTITY_SOURCE_URL_MAX.toLocaleString("en-US")} characters.`
+        : null,
+    quote:
+      source.quote.trim().length > ENTITY_SOURCE_QUOTE_MAX
+        ? `Shorten the quote to at most ${ENTITY_SOURCE_QUOTE_MAX.toLocaleString("en-US")} characters.`
+        : null,
+  };
 }
 
 /** How many required choices still lack a complete answer. */

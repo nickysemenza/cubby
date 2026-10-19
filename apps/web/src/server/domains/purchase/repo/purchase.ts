@@ -198,7 +198,7 @@ export const PURCHASE_DELETE_EDGE_POLICY = {
     code: "detach-import-order",
     effect: "detach",
     description:
-      "The order association stays as the Email's accepted history with its Purchase link cleared, and its original-line Product bindings are removed; importing the same order again rebinds it to the new Purchase.",
+      "The order association stays as the Email's accepted history with its Purchase link cleared, and its original-line Product bindings are removed; importing the same order again adds a new association beside it.",
   },
   "PurchasePaymentEvidence.purchaseId": {
     code: "delete-payment-evidence",

@@ -32,24 +32,24 @@ export const vendorOrderEvidence = z.enum([
   "receipt_only",
   "not_expected",
 ]);
+/** The Source of a Distinct-from decision: its url and quoted difference. */
+export const distinctFromSource = z.object({
+  url: z.url().max(ENTITY_SOURCE_URL_MAX),
+  quote: z.string().trim().min(1).max(ENTITY_SOURCE_QUOTE_MAX),
+});
 /**
  * A Distinct-from decision (terminology): the line is a different Product from
  * this exact name match, shown by the Source's url and quoted difference.
  */
 const distinctFromProduct = <Id extends z.ZodType<string>>(productId: Id) =>
-  z.object({
-    productId,
-    url: z.url().max(ENTITY_SOURCE_URL_MAX),
-    quote: z.string().trim().min(1).max(ENTITY_SOURCE_QUOTE_MAX),
-  });
+  z.object({ productId, ...distinctFromSource.shape });
 /** Bounds the per-line Distinct-from list: commit resolves and records each one. */
 const DISTINCT_FROM_MAX = 20;
 
 /** A Distinct-from decision for a new Vendor beside a similar existing one. */
 const distinctFromVendor = z.object({
   vendorId: vendorShortcode,
-  url: z.url().max(ENTITY_SOURCE_URL_MAX),
-  quote: z.string().trim().min(1).max(ENTITY_SOURCE_QUOTE_MAX),
+  ...distinctFromSource.shape,
 });
 export type DistinctFromVendor = z.infer<typeof distinctFromVendor>;
 

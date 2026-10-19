@@ -821,7 +821,7 @@ describe("public mail tool", () => {
       messageId: "synthetic-deleted-import",
       checksum: await sha256Hex("Synthetic deleted import"),
     });
-    const importOrder = async (key: string, title: string) => {
+    const importOrder = async (key: string) => {
       const { committed } = await memberImport(ctx.db, ctx.actor, {
         key,
         orders: [
@@ -839,7 +839,7 @@ describe("public mail tool", () => {
                 printedGrandTotal: 12,
                 lines: [
                   {
-                    title,
+                    title: "Synthetic deleted widget",
                     amount: 12,
                     lineKind: "principal",
                   },
@@ -856,10 +856,7 @@ describe("public mail tool", () => {
       return code;
     };
     const readInput = { mailboxId, messageId: mail.messageId };
-    const deleted = await importOrder(
-      "deleted-import-first",
-      "Synthetic deleted widget",
-    );
+    const deleted = await importOrder("deleted-import-first");
     await deletePurchases(ctx.db, [deleted], ctx.actor);
 
     const [retained, ...extra] = await getDb(ctx.db)
@@ -881,22 +878,31 @@ describe("public mail tool", () => {
       ],
     });
 
-    // A fresh extraction of the same source order rebinds the history.
-    const replacement = await importOrder(
-      "deleted-import-second",
-      "Synthetic deleted widget, re-extracted",
-    );
+    // The identical extraction imports again beside the deleted history.
+    const replacement = await importOrder("deleted-import-second");
     expect(replacement).not.toBe(deleted);
-    expect(await readMail(ctx.db, readInput, ctx.actor)).toMatchObject({
-      purchaseIds: [replacement],
-      acceptedSourceOrders: [
-        {
+    const read = await readMail(ctx.db, readInput, ctx.actor);
+    expect([...read.purchaseIds].sort()).toEqual([deleted, replacement].sort());
+    expect(read.purchaseAssociations).toEqual(
+      expect.arrayContaining([
+        { purchaseId: deleted, purchaseDeleted: true, kind: "accepted" },
+        { purchaseId: replacement, purchaseDeleted: false, kind: "accepted" },
+      ]),
+    );
+    expect(read.acceptedSourceOrders).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
           sourceOrderId: retained?.id,
+          purchaseId: deleted,
+          purchaseDeleted: true,
+        }),
+        expect.objectContaining({
           purchaseId: replacement,
           purchaseDeleted: false,
-        },
-      ],
-    });
+        }),
+      ]),
+    );
+    expect(read.acceptedSourceOrders).toHaveLength(2);
   });
 
   describe("search", () => {
