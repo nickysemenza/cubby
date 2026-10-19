@@ -68,6 +68,12 @@ does not stop other sources or new-mail discovery, and retains its diagnostics.
 Manual Run pauses remain active ownership: they can be resumed or cancelled,
 and retain the vendor account's active-Run exclusion; catch-up never resumes
 them.
+A Mail import Run that fails on its own (its coordinator fails or aborts)
+returns its unsettled Emails to catch-up once; an Email whose earlier Run
+already failed stays with the new failed Run, so a message that keeps failing
+does not spend a coordinator every pass. A member's cancel keeps its Emails
+with the cancelled Run. Retrying a failed Run transfers only the Emails it
+still holds.
 
 The household AI budget is a stopgap safety net on frontier chat-model spend:
 $1 per fixed six-hour UTC window (`server/ai/budget.ts`), summed from

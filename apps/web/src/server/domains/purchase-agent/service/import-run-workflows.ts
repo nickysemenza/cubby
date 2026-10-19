@@ -44,9 +44,11 @@ const fromBundle = (id: string, skills: SkillManifestEntry[]) =>
 const ESCALATION_INSTRUCTIONS = `## Escalation
 
 This Run can hand one Email at a time to a stronger escalation model. When an
-Email's evidence is beyond what you can settle confidently, call
-\`escalate_import_work\` with the reason instead of guessing: the escalation
-model continues that Email and the next claim returns to you. Cubby also
+Email's identity, attribution, meaning or amounts stay unclear after you have
+read its evidence, call \`escalate_import_work\` with the reason instead of
+guessing: the escalation model continues that Email and the next claim returns
+to you. A refusal that names its next step is not such a gap: take that step
+rather than repeating the refused call or escalating. Cubby also
 escalates an Email whose \`purchase_import\` \`prepare\` refuses twice, and
 holds an \`unresolved\` resolution until the escalation model has reviewed the
 Email. An escalated Email is settled by the escalation model, including as

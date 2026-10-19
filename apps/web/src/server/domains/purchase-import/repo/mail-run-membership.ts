@@ -3,7 +3,7 @@ import {
   mailResearchRunInput,
   runInputsErased,
 } from "@cubby/schemas/run-fields";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
 
 import {
   type RepositoryQueryClient as DrizzleClient,
@@ -172,23 +172,35 @@ export async function admitSupportingMailSource(
     message.deletedAt ||
     message.checksum !== mail.rawChecksum ||
     message.classification !== "related" ||
-    message.contentClearedAt ||
-    !["pending", "blocked"].includes(message.status)
+    message.contentClearedAt
   )
     throw createAppError(
       "MAIL_SOURCE_ADMISSION_REFUSED",
-      `A supporting original must be an unchanged, related Email no import has settled; ${mail.messageId} is ${message ? `${message.deletedAt ? "deleted" : message.status}, classified ${message.classification ?? "unclassified"}${message.checksum === mail.rawChecksum ? "" : ", changed since read"}${message.contentClearedAt ? ", content cleared" : ""}` : "not a retained Email"}.`,
+      `A supporting original must be an unchanged, related Email with retained content; ${mail.messageId} is ${message ? `${message.deletedAt ? "deleted" : `classified ${message.classification ?? "unclassified"}`}${message.checksum === mail.rawChecksum ? "" : ", changed since read"}${message.contentClearedAt ? ", content cleared" : ""}` : "not a retained Email"}.`,
     );
   if (message.runId) {
-    const [current] = await tx
-      .select({ retiredAt: run.retiredAt, deletedAt: run.deletedAt })
+    const [holder] = await tx
+      .select({
+        shortcode: run.shortcode,
+        status: run.status,
+        retiredAt: run.retiredAt,
+        deletedAt: run.deletedAt,
+      })
       .from(run)
       .where(eq(run.id, runEntityId.parse(message.runId)));
-    if (current && !current.retiredAt && !current.deletedAt)
-      throw new Error(
-        "Another Mail import Run owns that Email; it stays with that Run.",
+    // Name the holder and the way forward: a coordinator that only hears
+    // "refused" escalated to the paid model over an Email it could link.
+    if (holder && !holder.retiredAt && !holder.deletedAt)
+      throw createAppError(
+        "MAIL_SOURCE_HELD_BY_RUN",
+        `Another Mail import Run holds ${message.shortcode} (${holder.shortcode}, ${holder.status}); it stays with that Run until that Run settles it or a member resumes or retries it. Settle the current Email without it: link a lifecycle notice to the Purchase it names, or resolve it unresolved naming ${message.shortcode}. Escalating does not change this.`,
       );
   }
+  if (!["pending", "blocked"].includes(message.status))
+    throw createAppError(
+      "MAIL_SOURCE_ADMISSION_REFUSED",
+      `A supporting original must be an Email no import has settled; ${message.shortcode} is ${message.status}.`,
+    );
   await tx
     .update(run)
     .set({
@@ -208,7 +220,12 @@ export async function admitSupportingMailSource(
     .where(eq(emailTable.id, message.id));
 }
 
-/** An explicit member restart transfers only the original frozen roster, never discovery's pending queue. */
+/**
+ * An explicit member restart transfers the frozen roster's sources the Run
+ * still holds, never discovery's pending queue. A source a failed Run already
+ * returned to discovery (or another Run since admitted) stays where it is, and
+ * the successor's roster drops it.
+ */
 export async function transferMailRunSources(
   tx: DrizzleTransaction,
   fromRunId: RunId,
@@ -216,14 +233,16 @@ export async function transferMailRunSources(
   selected?: readonly string[],
 ) {
   const sources = (await readMailRunSources(tx, fromRunId)).filter(
-    (source) => !selected || selected.includes(source.orderMailId),
+    (source) =>
+      source.owned && (!selected || selected.includes(source.orderMailId)),
   );
-  if (
-    !sources.length ||
-    sources.some((source) => !source.owned || !source.unchanged)
-  )
+  if (!sources.length)
     throw new Error(
-      "Mail restart evidence or ownership changed; reconcile the original Run.",
+      "This Run no longer holds any of those Emails; Mail discovery or another Run has them.",
+    );
+  if (sources.some((source) => !source.unchanged))
+    throw new Error(
+      "Mail restart evidence changed; reconcile the original Run.",
     );
   const assigned = await tx
     .update(emailTable)
@@ -240,4 +259,86 @@ export async function transferMailRunSources(
     .returning({ id: emailTable.id });
   if (assigned.length !== sources.length)
     throw new Error("Mail successor ownership transfer is incomplete.");
+  const [successor] = await tx
+    .select({ input: run.input })
+    .from(run)
+    .where(eq(run.id, toRunId));
+  const roster = mailResearchRunInput.parse(successor?.input);
+  await tx
+    .update(run)
+    .set({
+      input: mailResearchRunInput.parse({
+        ...roster,
+        sources: roster.sources.filter((source) =>
+          sources.some((held) => held.orderMailId === source.orderMailId),
+        ),
+      }),
+      updatedAt: new Date(),
+    })
+    .where(eq(run.id, toRunId));
 }
+
+/**
+ * A Mail import Run that failed on its own returns its unsettled Emails to
+ * Mail discovery; nothing else would ever admit them again. An Email a failed
+ * Run already returned once stays with the failed Run instead, so a message
+ * that keeps failing its import does not spend a coordinator every discovery
+ * pass; a member's retry still transfers it.
+ */
+export async function releaseFailedMailRunSources(
+  tx: DrizzleTransaction,
+  runId: RunId,
+) {
+  const held = (await readMailRunSources(tx, runId)).filter(
+    (source) => source.owned && source.email.status === "researching",
+  );
+  if (!held.length) return [];
+  const earlierFailures = await tx
+    .select({ input: run.input })
+    .from(run)
+    .where(
+      and(
+        eq(run.purpose, "mail_import"),
+        eq(run.status, "failed"),
+        inArray(run.failureCode, [...SELF_FAILURE_CODES]),
+        ne(run.id, runId),
+        or(
+          ...held.map(
+            (source) =>
+              sql`${run.input}->'sources' @> ${JSON.stringify([{ orderMailId: source.orderMailId }])}::jsonb`,
+          ),
+        ),
+      ),
+    );
+  const failedBefore = new Set(
+    earlierFailures
+      .flatMap(
+        (row) => mailResearchRunInput.safeParse(row.input).data?.sources ?? [],
+      )
+      .map((source) => source.orderMailId),
+  );
+  const released = held.filter(
+    (source) => !failedBefore.has(source.orderMailId),
+  );
+  if (!released.length) return [];
+  // The admission replay key names this Run's source set; readmitting the same
+  // released Emails would otherwise replay this failed Run instead of starting one.
+  await tx.update(run).set({ clientKey: null }).where(eq(run.id, runId));
+  return tx
+    .update(emailTable)
+    .set({ runId: null, status: "pending", updatedAt: new Date() })
+    .where(
+      and(
+        eq(emailTable.runId, runId),
+        eq(emailTable.status, "researching"),
+        inArray(
+          emailTable.id,
+          released.map((source) => source.email.id),
+        ),
+      ),
+    )
+    .returning({ id: emailTable.id });
+}
+
+/** Failures the Run reached on its own; a member's cancel keeps its Emails. */
+const SELF_FAILURE_CODES = ["agent_failed", "agent_aborted"] as const;

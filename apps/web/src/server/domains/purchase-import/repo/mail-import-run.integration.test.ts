@@ -42,7 +42,7 @@ import { importPendingEmails, startMailImport } from "./mail-import-run";
 import { setMailImport } from "./mail-import-settings";
 import { transferMailRunSources } from "./mail-run-membership";
 import * as sourceIdentity from "./mail-source-identity";
-import { controlRun, loadRunDetail } from "./run-service";
+import { controlRun, loadRunDetail, markRunFailed } from "./run-service";
 
 // Admission must bind original sources without a known Vendor, order, or Mac;
 // replay cannot create a second Run, and stale/foreign sources cannot enter it.
@@ -405,6 +405,120 @@ describe("mail research admission", () => {
       },
     ]);
   });
+  // A failed Run must not strand its unsettled Emails (discovery admits only
+  // unowned ones), a message that fails twice must not spend a coordinator on
+  // every discovery pass, and a retry must not refuse because one source left.
+  it("returns a failed Run's unsettled Emails to discovery once and retries only what it still holds", async () => {
+    const { party, mail } = await source();
+    const settled = await retainedMailFixture(ctx.db, {
+      ledgerPartyId: party.id,
+      mailboxId: "synthetic-mailbox",
+      messageId: "synthetic-settled",
+      checksum: "c".repeat(64),
+    });
+    const queue = { send: async () => {} };
+    const [admitted] = await startMailImport(
+      ctx.db,
+      {
+        ledgerPartyId: party.id,
+        userId: ctx.actor.userId,
+        messageIds: [mail.id, settled.id],
+      },
+      queue,
+    );
+    if (!admitted) throw new Error("Synthetic Run missing");
+    const runId = parseEntityId("run", admitted.runId);
+    await settleMail(ctx.db, {
+      mail: settled,
+      importRunId: runId,
+      status: "blocked",
+      detail: "Synthetic gap the member reviews",
+    });
+    const emailState = async (orderMailId: string) =>
+      (
+        await getDb(ctx.db)
+          .select({ runId: emailTable.runId, status: emailTable.status })
+          .from(emailTable)
+          .where(eq(emailTable.orderMailId, orderMailId))
+      )[0];
+
+    await markRunFailed(ctx.db, { runId, failureCode: "agent_failed" });
+    expect(await emailState(mail.id)).toEqual({
+      runId: null,
+      status: "pending",
+    });
+    expect(await emailState(settled.id)).toEqual({ runId, status: "blocked" });
+    const [failed] = await getDb(ctx.db)
+      .select({ shortcode: run.shortcode })
+      .from(run)
+      .where(eq(run.id, runId));
+    expect(
+      (await loadRunDetail(ctx.db, failed!.shortcode)).targets,
+    ).toContainEqual(
+      expect.objectContaining({
+        state: "unresolved",
+        warning: "Returned to Mail discovery after this Run failed.",
+      }),
+    );
+
+    const successor = await controlRun(ctx.db, ctx.actor, {
+      runPublicId: failed!.shortcode,
+      action: "retry",
+    });
+    if (!("successorRunId" in successor) || !successor.successorRunId)
+      throw new Error("Synthetic retry missing");
+    expect(await frozenSources(successor.successorRunId)).toEqual([
+      { orderMailId: settled.id, checksum: settled.rawChecksum },
+    ]);
+    expect(await emailState(mail.id)).toEqual({
+      runId: null,
+      status: "pending",
+    });
+
+    const [again] = await startMailImport(
+      ctx.db,
+      {
+        ledgerPartyId: party.id,
+        userId: ctx.actor.userId,
+        messageIds: [mail.id],
+      },
+      queue,
+    );
+    if (!again) throw new Error("Synthetic readmission missing");
+    const againId = parseEntityId("run", again.runId);
+    await markRunFailed(ctx.db, {
+      runId: againId,
+      failureCode: "agent_failed",
+    });
+    expect(await emailState(mail.id)).toEqual({
+      runId: againId,
+      status: "researching",
+    });
+  });
+
+  it("readmits a released Email under a new Run when its failed Run admitted only it", async () => {
+    const { party, mail } = await source();
+    const admission = {
+      ledgerPartyId: party.id,
+      userId: ctx.actor.userId,
+      messageIds: [mail.id],
+    };
+    const queue = { send: async () => {} };
+    const [first] = await startMailImport(ctx.db, admission, queue);
+    if (!first) throw new Error("Synthetic Run missing");
+    await markRunFailed(ctx.db, {
+      runId: parseEntityId("run", first.runId),
+      failureCode: "agent_failed",
+    });
+    const [second] = await startMailImport(ctx.db, admission, queue);
+    expect(second?.runId).not.toBe(first.runId);
+    const [owned] = await getDb(ctx.db)
+      .select({ runId: emailTable.runId, status: emailTable.status })
+      .from(emailTable)
+      .where(eq(emailTable.orderMailId, mail.id));
+    expect(owned).toEqual({ runId: second?.runId, status: "researching" });
+  });
+
   it("preserves a migrated blocked receipt after its successor completes and the live Email changes", async () => {
     const { party, mail } = await source();
     const [admitted] = await startMailImport(
