@@ -809,7 +809,7 @@ export const MCP_TOOLS = defineMcpTools({
       update: mcpAction({
         op: statementRowContract.ops.update,
         description:
-          "Write judgments onto statement rows; the provider's own columns are immutable after ingest. Address rows by {source, externalIds} for a handful, or by {filter} for a bulk pass (an empty filter is refused). Set disposition 'ignored' with both a reason and a note to take rows off the worklist permanently — the intended move for the large tail of consumer spend Cubby does not model. `accountId` records which account a row belongs to, and `supersededByExternalId` links a pending row to the posted row that replaced it (superseding requires the explicit id selector).",
+          "Write judgments onto statement rows; the provider's own columns are immutable after ingest. Address rows by {source, externalIds} for a handful, or by {filter} for a bulk pass (an empty filter is refused). Set disposition 'ignored' with both a reason and a note to take rows off the worklist permanently — only for a row that must never become a transaction (a duplicate of another export's row, a mis-parsed line); every real charge, consumer spend included, is in scope. `accountId` records which account a row belongs to, and `supersededByExternalId` links a pending row to the posted row that replaced it (superseding requires the explicit id selector).",
       }),
       delete: mcpAction({
         op: statementRowContract.ops.delete,

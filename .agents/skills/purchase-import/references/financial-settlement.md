@@ -276,8 +276,10 @@ filtering a group with `where {account: {in: [FAC-…]}, month: {in: [YYYY-MM]}}
 6. Dismiss charges that should never become transactions with verdict
    `dismissed` and suppression `{scope: "statement_transaction", candidateKey:
    "<source>:<chargeKey>", fingerprint}`; prefer `disposition: "ignored"` with a
-   reason when the whole row is out of scope, because that also settles every
-   observation.
+   reason when the whole row must never become a transaction, because that also
+   settles every observation. Every real charge is in scope, consumer spend
+   included: ignore only duplicates of another export's row, pre-Cubby rows and
+   mis-parsed lines, never `not_modeled`.
 
 A refusal (evidence changed, a live candidate, a stale hold, an attach with
 several candidates and no named `transactionId`) writes nothing. Labelling

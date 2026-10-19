@@ -100,7 +100,11 @@ export type StatementRowDisposition = z.infer<typeof statementRowDisposition>;
  * wrong, this one is about a statement line Cubby will never hold.
  */
 export const statementRowDispositionReason = z.enum([
-  /** Real spend, but of a kind Cubby does not model (consumer purchases). */
+  /**
+   * Legacy: real spend once judged out of scope. Every charge is now in scope,
+   * consumer spend included, so new judgments never use it; it stays only so
+   * stored rows still parse.
+   */
   "not_modeled",
   "not_a_purchase",
   "duplicate_of_other_source",
@@ -187,10 +191,9 @@ export const statementRowFilters = z.object({
   disposition: statementRowDisposition.optional(),
   dispositionReason: statementRowDispositionReason.optional(),
   /**
-   * The provider's own category, verbatim. The triage lever that matters: the
-   * bulk of any statement import is spend Cubby does not model, and the
-   * provider already classified it — so dispositioning "every Restaurants row"
-   * is one filtered write rather than thousands of ids.
+   * The provider's own category, verbatim. The provider already classified
+   * every row, so a bulk pass over "every Restaurants row" is one filtered
+   * write rather than thousands of ids.
    */
   sourceCategory: z.string().optional(),
   // Plain days, not relative tokens: these filters also select the rows a
