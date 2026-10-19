@@ -1,0 +1,33 @@
+apps/web/src/features/purchase/purchase-import-run-detail.tsx
+  s_1b54b6ab53ca85::t_3bc5b93a589d18 35,654,657,785,788
+apps/web/src/features/purchase/purchase-import-run-detail.unit.test.tsx
+  s_1b54b6ab53ca85::t_341cd949a891c9 515
+packages/schemas/src/agent-conversation.ts
+  s_1b54b6ab53ca85::t_fa099d7bc3b4a3 9-11
+apps/web/src/features/run/agent-tool-renderers.tsx
+  s_1b54b6ab53ca85::t_5fd47671d2dce6 1-362
+apps/web/src/features/run/agent-transcript.tsx
+  s_1b54b6ab53ca85::t_b9e7bf41b388e3 1-457
+apps/web/src/features/run/agent-transcript.unit.test.tsx
+  s_1b54b6ab53ca85::t_cf7bde26084a6d 1-129
+apps/web/src/ui/primitives/code-block.tsx
+  s_1b54b6ab53ca85::t_c1ccaeda1a828e 1-100
+apps/web/src/ui/primitives/trace.tsx
+  s_1b54b6ab53ca85::t_64cc6e2639758c 1-151
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f075c53751a57ab6949a4c35f0116f010b9cf14d",
+  "prompts": {},
+  "sessions": {
+    "s_1b54b6ab53ca85": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "883b92de-9641-440c-9ecf-b2d00a0ded66",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
