@@ -52,6 +52,7 @@ import type {
   CubbyTable as ITable,
   CubbyRow as Row,
 } from "../../ui/data-table/table-features";
+import { isUnpaged } from "../../ui/data-table/table-features";
 import { TreeStatusRow } from "../../ui/data-table/tree-status-row";
 import { useDataTableController } from "../../ui/data-table/use-data-table-controller";
 import type { GroupConfig } from "../../ui/data-table/use-grouped-list";
@@ -940,7 +941,9 @@ function tableChrome<TItem extends RowData>({
     showToolbar:
       toolbarMode !== "none" &&
       (!embedded || showColumnMenu || hasToolbarContent),
-    showPagination: !embedded || table.getPageCount() > 1,
+    showPagination:
+      (!embedded && !isUnpaged(table.state.pagination.pageSize)) ||
+      table.getPageCount() > 1,
     topLevelInspectorToggle: embedded ? null : inspectorToggle,
     externalToolbar:
       !embedded &&

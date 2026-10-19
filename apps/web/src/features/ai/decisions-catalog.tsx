@@ -705,7 +705,7 @@ export function DecisionsCatalog({
           ariaLabel="Decisions"
           isLoading={catalog.isLoading}
           error={catalog.error}
-          embedded
+          toolbarMode="none"
           groupConfig={groupConfig}
           onRowClick={(row) => onSelect(row.original.key)}
           currentRowId={selected}

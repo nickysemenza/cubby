@@ -401,20 +401,6 @@ function distributeSlack(
   return remaining;
 }
 
-/**
- * Resolves the widths the browser should paint without mutating TanStack's own
- * column-sizing state. A user's deliberate resize remains the source of truth
- * (`userSized` and pinned columns never receive slack). A measured width
- * stops at the column's fit maximum. Pane slack goes only to the record
- * identity, up to its 240px fit; the rest goes to the trailing spacer.
- *
- * Regressions: all slack used to go to one column past its maxSize, so a
- * three-column table (Product Categories) painted a 1200px name beside
- * crammed facts; spreading slack evenly then widened every free-text column
- * while the title it exists for stayed truncated; a 560px title then pushed
- * the facts beside it off the pane; and a reference column grew to one long
- * sampled name, painting a 290px column of dashes.
- */
 function isEmptyValue(value: unknown) {
   return (
     value === null ||
@@ -451,7 +437,12 @@ export function emptyColumnIds<TData extends RowData>(
     // A deferred value is unknown, not empty; its accessor may not even run.
     const unavailable = column.columnDef.meta?.valueUnavailable;
     if (unavailable && rows.some((row) => unavailable(row.original))) continue;
-    if (rows.every((row) => isEmptyValue(row.getValue(column.id))))
+    const blank = column.columnDef.meta?.rendersBlank;
+    if (
+      rows.every(
+        (row) => isEmptyValue(row.getValue(column.id)) || blank?.(row.original),
+      )
+    )
       empty.add(column.id);
   }
   return empty;
@@ -460,6 +451,20 @@ export function emptyColumnIds<TData extends RowData>(
 /** An empty column's glyph strip (`emptyColumnIds`). */
 export const COLLAPSED_COLUMN_WIDTH = 40;
 
+/**
+ * Resolves the widths the browser should paint without mutating TanStack's own
+ * column-sizing state. A user's deliberate resize remains the source of truth
+ * (`userSized` and pinned columns never receive slack). A measured width
+ * stops at the column's fit maximum. Pane slack goes only to the record
+ * identity, up to its 240px fit; the rest goes to the trailing spacer.
+ *
+ * Regressions: all slack used to go to one column past its maxSize, so a
+ * three-column table (Product Categories) painted a 1200px name beside
+ * crammed facts; spreading slack evenly then widened every free-text column
+ * while the title it exists for stayed truncated; a 560px title then pushed
+ * the facts beside it off the pane; and a reference column grew to one long
+ * sampled name, painting a 290px column of dashes.
+ */
 export function resolvedTableColumnWidths(
   columns: readonly TableWidthColumn[],
   availableWidth: number,

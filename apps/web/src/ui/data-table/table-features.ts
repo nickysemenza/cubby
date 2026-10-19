@@ -132,6 +132,11 @@ function withUnpagedDefault<TOptions extends PaginationOptions>(
   };
 }
 
+/** An unpaged table has no pages to step through, so it shows no pager. */
+export function isUnpaged(pageSize: number): boolean {
+  return pageSize === UNPAGED.pageSize;
+}
+
 /** App-bound constructor: callers supply domain data/state, never feature plumbing. */
 export const useCubbyTable: typeof cubbyTableHook.useAppTable = (
   options,
