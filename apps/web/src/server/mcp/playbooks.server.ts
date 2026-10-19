@@ -1,4 +1,4 @@
-import { playbookContract } from "~/contracts/playbook.contract";
+import { playbookContract } from "~/contracts/mcp.contract";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 
 import { getPlaybook, listPlaybooks, readPlaybookFile } from "./playbooks";

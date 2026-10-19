@@ -74,7 +74,7 @@
       // Workflows that deploy, publish, review, or run journeys run no check.
       "!{workspaceRoot}/.github/workflows/{deploy.yaml,deploy-nx-cache.yaml,apple-testflight.yaml,claude.yml,journeys.yaml}",
       // Markdown tests read: docs, and the playbooks with their Claude plugin
-      // stubs (apps/web/generator/playbooks.ts, claude-plugin.unit.test.ts).
+      // stubs (apps/web/generator/playbooks.ts, claude-plugin.test.ts).
       {
         "runtime": "git ls-files -z -co --exclude-standard -- docs README.md plugins .agents/skills/purchase-import .agents/skills/product-enrichment .agents/skills/photo-inventory-import .agents/skills/cubby-meal-logging .agents/skills/log-household-maintenance .agents/skills/garden-plan-import | xargs -0 shasum -a 256"
       }

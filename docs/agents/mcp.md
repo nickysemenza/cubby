@@ -188,7 +188,7 @@ The repository is also a Claude plugin marketplace
 (`.claude-plugin/marketplace.json` → `plugins/cubby`). Its skills are pointer
 stubs that call `playbook.get`, so they change only when a playbook's name or
 description does; rerun `pnpm --dir apps/web generate:claude-plugin` when
-`claude-plugin.unit.test.ts` reports drift. The plugin declares no MCP server:
+`claude-plugin.test.ts` reports drift. The plugin declares no MCP server:
 each member adds the Cubby connector once. A member adds the marketplace in
 claude.ai under Customize › Plugins › Add marketplace (`nickysemenza/cubby`)
 with Sync automatically on; claude.ai plugins sync into Claude Code.
