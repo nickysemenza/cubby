@@ -103,7 +103,9 @@ styling. Share lower-level behavior and tokens where the contracts agree:
   stays available to ordinary callers. Exact-path lint exceptions cover only
   Overlay itself, the Dialog/Sheet implementations, cmdk's command presentation,
   the full photo viewer, the relationship graph inspector, the modeless entity
-  preview and the modeless MCP tool-detail inspector. New exceptions require a
+  preview, the modeless MCP tool-detail inspector, and the shared `SidePanel`'s
+  below-xl sheet (the docked record panel keeps its J/K row stepping and resize
+  handle when it becomes a sheet). New exceptions require a
   specialized interaction reason here, not a directory-wide exemption.
   Long phone action labels wrap within their share of the header; it grows
   beyond its 52px minimum rather than clipping controls. Raw overlay diagnostics
@@ -115,8 +117,15 @@ styling. Share lower-level behavior and tokens where the contracts agree:
   pages, dashboards and forms. Its disclosure defers children until open;
   `keepMounted` is explicit when a caller accepts eager work. Drafts that must
   survive closing belong in the form state owner, not a disclosure child.
-- Badge owns named semantic tones, EnumPill owns declaration-driven category
-  color/description, and Pill owns shared geometry, compact icon spacing and suggestion treatment.
+- Badge owns named semantic tones. EnumPill picks the declared role's renderer:
+  `StatusValue` (glyph, tone surface, tone ink) for states and `CategoryValue`
+  (neutral chip, glyph or dot in the option color) for kinds; booleans without
+  a roster use `BooleanValue`. Pill owns shared geometry, compact icon spacing
+  and suggestion treatment.
+- `SidePanel` (`ui/overlays/side-panel.tsx`) is the one docked record panel —
+  the entity inspector and specialist detail panels such as AI Decisions: a
+  sticky header with eyebrow, title and code, banded sections, a J/K/Esc
+  footer, and a resize handle that sets `--side-panel-width` for the session.
 - Apple keeps native SwiftUI controls and platform geometry; shared semantic
   tokens and declarations do not require a shared rendering implementation.
 
@@ -154,7 +163,7 @@ Default desktop buttons and inputs are compact (32px); small buttons and menu it
 
 Every value choice is one `Picker`, dense like a menu, never like a form card. Record popups grow to 36rem or the field's width, bounded by the available viewport; fixed choices retain the field width (growing to at most 16rem for narrow fields). Lists have 4px padding and no row gap. Rows have a minimum height of 28px desktop and 44px on phones: one fixed 20px leading mark (the record's picture, else the option's tinted glyph, else a swatch — never two), a flexible wrapping name, aligned secondary/status and right-aligned mono data columns, and a reserved checkmark column. Missing metadata leaves its column empty. Enum subtitles retain the declared label and semantic color through `EnumPill`; figures are tinted only for a real condition. On phones metadata wraps beneath the name. Search-match and disabled reasons remain beneath identity; trees use quiet uppercase group headings and indent. Opening a populated search picker reveals the selected row without reordering the roster, scrolling the page, moving input focus, or repeatedly resetting manual scrolling. Typing searches the full candidate scope. The closed field repeats the selected row's mark and, when it has room, its first chip. Segmented mode is the same picker inline for a handful of view modes or formats.
 
-Status, enum, category, and suggestion values share `Pill` geometry. Saved values retain semantic tint; suggestions have a quiet dashed boundary. Applying a suggestion shows cell-local pending feedback. Stored and live suggestions share the same surface contract. On detail pages and inspectors, a field suggestion shows the proposed value and Accept inline, on desktop and phone alike. Its field label and explanation control align with the proposal line in both collapsed and expanded Review states. Review expands beneath its owning row to expose confidence, runner-up, basis fields, evidence, Reject, and “Use a different value…”. Decision details contains provenance (model, time, Run, AI usage) and explains how a different value is recorded as a Miss. Table marks retain anchored popovers to preserve row geometry. Meaning never depends on a title attribute. `AiProposalCard` remains for prose proposals and uses the same confidence and Accept wording.
+Status, enum, category, and suggestion values share `Pill` geometry. Saved status values retain their tone surface and category values stay neutral; suggestions have a quiet dashed boundary. Applying a suggestion shows cell-local pending feedback. Stored and live suggestions share the same surface contract. On detail pages and inspectors, a field suggestion shows the proposed value and Accept inline, on desktop and phone alike. Its field label and explanation control align with the proposal line in both collapsed and expanded Review states. Review expands beneath its owning row to expose confidence, runner-up, basis fields, evidence, Reject, and “Use a different value…”. Decision details contains provenance (model, time, Run, AI usage) and explains how a different value is recorded as a Miss. Table marks retain anchored popovers to preserve row geometry. Meaning never depends on a title attribute. `AiProposalCard` remains for prose proposals and uses the same confidence and Accept wording.
 
 ### Records, forms, and tables
 
