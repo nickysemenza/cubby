@@ -250,15 +250,9 @@ export async function controlWorkflowRun(
     }
     let sharedDemand = false;
     if (purpose !== "ai_refresh" && purpose !== "mail_discovery") {
-      const {
-        cancelAiEvaluationRequests,
-        requestedAiEvaluations,
-        aiExecutionOwner,
-      } = await import("~/server/ai/repo/ai-evaluation-requests");
-      await cancelAiEvaluationRequests(tx, row.id);
-      const items = await requestedAiEvaluations(tx, row.id);
-      for (const item of items)
-        if (await aiExecutionOwner(tx, item)) sharedDemand = true;
+      const { cancelAiEvaluationRequests } =
+        await import("~/server/ai/repo/ai-evaluation-requests");
+      sharedDemand = await cancelAiEvaluationRequests(tx, row.id);
     }
     return sharedDemand;
   });

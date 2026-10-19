@@ -3,6 +3,7 @@ import { sql, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { claimAiEvaluation } from "~/server/ai/repo/ai-evaluation";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
 import {
@@ -17,10 +18,12 @@ import {
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
 
+import { publishGmailEvidence } from "../../repo/gmail/admitted-source";
 import { originalChecksum } from "../../repo/gmail/checksum";
 import { normalizeMessage } from "../../repo/gmail/normalize";
 import * as providers from "../../repo/gmail/provider";
 import type { GmailMessage, GmailProvider } from "../../repo/gmail/types";
+import { setMailImport } from "../../repo/mail-import-settings";
 import { syntheticMailImportRun } from "./execution.fixtures";
 
 // Script only external Gmail/model ports; ownership, ledger and publication are real.
@@ -31,6 +34,67 @@ describe("Email prompt refresh publication", () => {
   )!;
   beforeEach(() => createSystemUserFixture(ctx.db));
   afterEach(() => vi.restoreAllMocks());
+  it("rolls back Email publication when activation is disabled and re-enabled during its callback", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic activation fence owner",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const mailboxId = "synthetic-activation-fence";
+    await setMailImport(ctx.db, { mailboxId, enabled: true });
+    const item = await insertWithShortcode(ctx.db, "email", {
+      ledgerPartyId: party.id,
+      mailboxId,
+      messageId: "synthetic-activation-aba",
+      checksum: "synthetic-checksum",
+      classification: "uncertain",
+      classificationStage: "decision",
+      classificationReason: "Synthetic original",
+      status: "pending",
+      executionPolicy: "classification_only",
+    });
+    await activateAiRefresh(ctx.db, "synthetic-aba-enabled", { enabled: true });
+    await discoverAiRefresh(ctx.db);
+    const [evaluation] = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(sql`${aiEvaluation.target}->>'recordId' = ${item.id}`);
+    expect(evaluation).toBeDefined();
+    const claimed = await claimAiEvaluation(ctx.db, evaluation!.id);
+    expect(claimed?.attemptToken).toBeTruthy();
+    await expect(
+      publishGmailEvidence(
+        ctx.db,
+        {
+          ledgerPartyId: party.id,
+          mailboxId,
+          messageId: item.messageId,
+          expected: item,
+          executionPolicy: "classification_only",
+          recordHandlingReceipt: false,
+          evaluation: { id: evaluation!.id, token: claimed!.attemptToken! },
+        },
+        async (tx) => {
+          await getDb(tx)
+            .update(email)
+            .set({ classificationReason: "Synthetic tentative change" })
+            .where(eq(email.id, item.id));
+          await activateAiRefresh(ctx.db, "synthetic-aba-disabled", {
+            enabled: false,
+          });
+          await activateAiRefresh(ctx.db, "synthetic-aba-reenabled", {
+            enabled: true,
+          });
+          return { synthetic: true };
+        },
+      ),
+    ).rejects.toMatchObject({ cause: { code: "40001" } });
+    expect(
+      (await getDb(ctx.db).select().from(email).where(eq(email.id, item.id)))[0]
+        ?.classificationReason,
+    ).toBe("Synthetic original");
+  });
+
   it("reuses current triage, evaluates stale relevance and commits its receipt without transferring the source Run", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic refresh owner",

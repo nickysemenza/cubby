@@ -803,7 +803,20 @@ interrupted inference gets three attempts. Two independent refresh targets may
 run globally, with dependent calls sequential. An execution claim defers immediately
 when global admission is busy, preserving queued work and its attempt count for
 the existing Workflow retry instead of occupying an origin connection in a lock
-wait. Email Runs freeze at most 200
+wait. Publication locks Runs before evaluation items and takes the activation
+share lock only at its final commit fence, after business work and requester
+wakeups. A deactivation or generation change during publication refuses or
+rolls back the write. Product catalog preparation holds no transaction: each
+pair publishes or registers demand in its own guarded transaction, and the
+catalog completes afterward. Connection refresh likewise commits one prepared
+connection or identity pair per guarded transaction. Interrupted catalogs may retain already committed
+pairs; retries reuse their publication/work identities. Pair publication checks
+a transient MVCC row-set fence in one statement instead of repeating snapshots:
+preparation brackets the complete Product, identifier, source, photo/description,
+import-claim, issuer-registry and variant-history dependencies, and the write
+transaction rechecks them after taking the pair lock. New/deleted rows and edits
+invalidate preparation; issuer-registry edits conservatively retry it. No
+read-set fence is stored as durable provenance. Email Runs freeze at most 200
 items and run only while Mail import is on for that mailbox. Reused Email
 stages require current source checksum and feature provenance. The
 [AI refresh runbook](runbooks/ai-refresh.md) owns activation, observation and

@@ -19,6 +19,7 @@ import {
   sql,
   getTableColumns,
 } from "drizzle-orm";
+import type { PgTransactionConfig } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import {
@@ -29,11 +30,15 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   databaseForTransaction,
   getDb,
+  isTransaction,
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import { assessment, assessmentState } from "~/server/db/schema";
 import { variantVerification } from "~/server/domains/product/repo/product-variant-evidence";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
+
+import { productIdentityEvidenceFence } from "./product-identity-fence";
+import { prepareProductIdentityPair } from "./product-identity-snapshot";
 
 const pairProjection = z.object({
   otherId: productId,
@@ -88,6 +93,60 @@ export async function publishProductPair(
     producer?: AssessmentProducer;
   },
 ): Promise<ProductMatchCandidateRow & { created: boolean }> {
+  return publishProductPairWithGuard(db, input, (transactionDb) => {
+    const suppliedSignals =
+      z.record(z.string(), z.json()).safeParse(input.signals).data ?? {};
+    return prepareProductIdentityPair(transactionDb, input.productIds, {
+      variantEvidence: suppliedSignals.variantEvidence,
+    });
+  });
+}
+
+/** Snapshot/variant work runs before the caller opens its publication transaction. */
+export async function prepareProductPairPublication(
+  db: Database,
+  input: Parameters<typeof publishProductPair>[1],
+) {
+  if (isTransaction(getDb(db)))
+    throw new Error(
+      "Product pair preparation requires a database outside a transaction",
+    );
+  const fence = await productIdentityEvidenceFence(db, input.productIds);
+  const suppliedSignals =
+    z.record(z.string(), z.json()).safeParse(input.signals).data ?? {};
+  const guard = await prepareProductIdentityPair(db, input.productIds, {
+    variantEvidence: suppliedSignals.variantEvidence,
+  });
+  if (
+    !guard ||
+    (input.fingerprint && guard.fingerprint !== input.fingerprint) ||
+    (await productIdentityEvidenceFence(db, input.productIds)) !== fence
+  )
+    throw new Error("Product pair evidence changed during inference");
+  return (tx: Database) =>
+    publishProductPairWithGuard(
+      tx,
+      input,
+      async (transactionDb) => {
+        if (
+          (await productIdentityEvidenceFence(
+            transactionDb,
+            input.productIds,
+          )) !== fence
+        )
+          throw new Error("Product pair evidence changed during inference");
+        return guard;
+      },
+      { isolationLevel: "serializable" },
+    );
+}
+
+async function publishProductPairWithGuard(
+  db: Database,
+  input: Parameters<typeof publishProductPair>[1],
+  prepare: (tx: Database) => ReturnType<typeof prepareProductIdentityPair>,
+  config?: PgTransactionConfig,
+): Promise<ProductMatchCandidateRow & { created: boolean }> {
   const pair = canonicalProductPair(...input.productIds);
   if (pair.productAId === pair.productBId)
     throw new Error("Cannot assess a Product against itself");
@@ -95,186 +154,192 @@ export async function publishProductPair(
     otherId: pair.productBId,
     ...input,
   });
-  return withTransactionDatabase(db, async (transactionDb) => {
-    const client = getDb(transactionDb);
-    await client.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtextextended(${`product-pair-state:${pair.productAId}|${pair.productBId}`},0))`,
-    );
-    const { prepareProductIdentityPair } =
-      await import("./product-identity-snapshot");
-    const suppliedSignals =
-      z.record(z.string(), z.json()).safeParse(proposedData.signals).data ?? {};
-    const guard = await prepareProductIdentityPair(
-      transactionDb,
-      [pair.productAId, pair.productBId],
-      { variantEvidence: suppliedSignals.variantEvidence },
-    );
-    if (!guard) throw new Error("Product identity target no longer exists");
-    let data = pairProjection.parse({
-      ...proposedData,
-      conflict: proposedData.conflict || guard.conflict,
-      evidence:
-        guard.verification === "pending_verification"
-          ? "A historical variant conflict requires fresh current verification before merging"
-          : proposedData.evidence,
-      signals: {
-        ...suppliedSignals,
-        verification: guard.verification,
-        variantEvidence: guard.variantEvidence,
-        conflictLineage: guard.priorConflictIds,
-      },
-    });
-    const proof = guard.variantEvidence;
-    const semanticProof = z
-      .object({ producer: assessmentProducer })
-      .passthrough()
-      .safeParse(proof);
-    const identityData = {
-      ...data,
-      signals: {
-        ...suppliedSignals,
-        conflictLineage: null,
-        verification: guard.verification,
-        variantEvidence: semanticProof.success
-          ? {
-              ...semanticProof.data,
-              producer: {
-                ...semanticProof.data.producer,
-                runId: null,
-                evaluationId: null,
-              },
-            }
-          : null,
-      },
-    };
-    const digest = await sha256Hex(
-      JSON.stringify([
-        pair.productAId,
-        pair.productBId,
-        identityData,
-        input.fingerprint ?? null,
-        input.producer
-          ? [input.producer.kind, input.producer.model, input.producer.revision]
-          : null,
-      ]),
-    );
-    const publicationKey = `product-pair:${digest}`;
-    const [published] = await client
-      .select()
-      .from(assessment)
-      .where(eq(assessment.publicationKey, publicationKey))
-      .limit(1);
-    if (published) data = pairProjection.parse(published.evidence);
-    const distinct =
-      !data.actionable &&
-      z
-        .object({
-          decision: z.object({ selectedIndex: z.number().nullable() }),
-        })
-        .safeParse(data.signals).data?.decision.selectedIndex === 1;
-    // Exact suppression lookup is independent of queue limits and served policy.
-    const [previous] = await client
-      .select()
-      .from(assessmentState)
-      .where(
-        and(
-          eq(assessmentState.family, "product_pair"),
-          eq(assessmentState.active, true),
-          eq(assessmentState.recordId, pair.productAId),
-          sql`${assessmentState.data}->>'otherId' = ${pair.productBId}`,
-          or(
-            eq(assessmentState.status, "pending"),
-            sql`${assessmentState.suppression} IS NOT NULL`,
-          ),
-        ),
-      )
-      .limit(1);
-    const old = previous
-      ? {
-          state: previous.suppression
-            ? ("dismissed" as const)
-            : ("open" as const),
-        }
-      : undefined;
-    const prediction = await publishAssessment(
-      transactionDb,
-      {
-        publicationKey,
-        family: "product_pair",
-        subject: {
-          kind: "product_pair",
-          entity: "product",
-          recordId: pair.productAId,
-          otherId: pair.productBId,
-        },
-        judgment: { actionable: data.actionable, conflict: data.conflict },
-        producer:
-          published?.producer ??
-          input.producer ??
-          (input.source === "agent"
-            ? {
-                kind: "agent",
-                model: null,
-                revision: null,
-                runId: null,
-                evaluationId: null,
-              }
-            : null),
-        evidence: data,
-        fingerprint: input.fingerprint ?? null,
-      },
-      { data, ...(distinct ? { status: "resolved" } : {}) },
-    );
-    // A re-proposal replaces the earlier row; leaving it pending strands it.
-    await client
-      .update(assessmentState)
-      .set({
-        active: false,
-        status: sql`CASE WHEN ${assessmentState.status} = ${suggestionStatus.enum.pending} THEN ${suggestionStatus.enum.superseded} ELSE ${assessmentState.status} END`,
-      })
-      .where(
-        and(
-          eq(assessmentState.family, "product_pair"),
-          eq(assessmentState.recordId, pair.productAId),
-          sql`${assessmentState.data}->>'otherId' = ${pair.productBId}`,
-          sql`${assessmentState.id} <> ${prediction.id}`,
-        ),
+  return withTransactionDatabase(
+    db,
+    async (transactionDb) => {
+      const client = getDb(transactionDb);
+      await client.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${`product-pair-state:${pair.productAId}|${pair.productBId}`},0))`,
       );
-    await client
-      .update(assessmentState)
-      .set({
-        active: true,
-        ...(old?.state === "dismissed"
-          ? {
-              suppression: {
-                scope: "product_pair",
-                candidateKey: productPairKey(pair.productAId, pair.productBId),
-                fingerprint: null,
-              },
-              status: "resolved",
-            }
-          : {}),
-      })
-      .where(eq(assessmentState.id, prediction.id));
-    return {
-      ...pair,
-      id: prediction.id,
-      source: data.source,
-      state: old?.state ?? "open",
-      evidence: data.evidence,
-      sourceUrls: data.sourceUrls,
-      createdAt: prediction.createdAt,
-      updatedAt: new Date(),
-      fingerprint: input.fingerprint ?? null,
-      actionable: data.actionable,
-      conflict: data.conflict,
-      verification:
+      const suppliedSignals =
+        z.record(z.string(), z.json()).safeParse(proposedData.signals).data ??
+        {};
+      const guard = await prepare(transactionDb);
+      if (!guard) throw new Error("Product identity target no longer exists");
+      let data = pairProjection.parse({
+        ...proposedData,
+        conflict: proposedData.conflict || guard.conflict,
+        evidence:
+          guard.verification === "pending_verification"
+            ? "A historical variant conflict requires fresh current verification before merging"
+            : proposedData.evidence,
+        signals: {
+          ...suppliedSignals,
+          verification: guard.verification,
+          variantEvidence: guard.variantEvidence,
+          conflictLineage: guard.priorConflictIds,
+        },
+      });
+      const proof = guard.variantEvidence;
+      const semanticProof = z
+        .object({ producer: assessmentProducer })
+        .passthrough()
+        .safeParse(proof);
+      const identityData = {
+        ...data,
+        signals: {
+          ...suppliedSignals,
+          conflictLineage: null,
+          verification: guard.verification,
+          variantEvidence: semanticProof.success
+            ? {
+                ...semanticProof.data,
+                producer: {
+                  ...semanticProof.data.producer,
+                  runId: null,
+                  evaluationId: null,
+                },
+              }
+            : null,
+        },
+      };
+      const digest = await sha256Hex(
+        JSON.stringify([
+          pair.productAId,
+          pair.productBId,
+          identityData,
+          input.fingerprint ?? null,
+          input.producer
+            ? [
+                input.producer.kind,
+                input.producer.model,
+                input.producer.revision,
+              ]
+            : null,
+        ]),
+      );
+      const publicationKey = `product-pair:${digest}`;
+      const [published] = await client
+        .select()
+        .from(assessment)
+        .where(eq(assessment.publicationKey, publicationKey))
+        .limit(1);
+      if (published) data = pairProjection.parse(published.evidence);
+      const distinct =
+        !data.actionable &&
         z
-          .object({ verification: variantVerification.optional() })
-          .safeParse(data.signals).data?.verification ?? "unknown",
-      created: !old,
-    };
-  });
+          .object({
+            decision: z.object({ selectedIndex: z.number().nullable() }),
+          })
+          .safeParse(data.signals).data?.decision.selectedIndex === 1;
+      // Exact suppression lookup is independent of queue limits and served policy.
+      const [previous] = await client
+        .select()
+        .from(assessmentState)
+        .where(
+          and(
+            eq(assessmentState.family, "product_pair"),
+            eq(assessmentState.active, true),
+            eq(assessmentState.recordId, pair.productAId),
+            sql`${assessmentState.data}->>'otherId' = ${pair.productBId}`,
+            or(
+              eq(assessmentState.status, "pending"),
+              sql`${assessmentState.suppression} IS NOT NULL`,
+            ),
+          ),
+        )
+        .limit(1);
+      const old = previous
+        ? {
+            state: previous.suppression
+              ? ("dismissed" as const)
+              : ("open" as const),
+          }
+        : undefined;
+      const prediction = await publishAssessment(
+        transactionDb,
+        {
+          publicationKey,
+          family: "product_pair",
+          subject: {
+            kind: "product_pair",
+            entity: "product",
+            recordId: pair.productAId,
+            otherId: pair.productBId,
+          },
+          judgment: { actionable: data.actionable, conflict: data.conflict },
+          producer:
+            published?.producer ??
+            input.producer ??
+            (input.source === "agent"
+              ? {
+                  kind: "agent",
+                  model: null,
+                  revision: null,
+                  runId: null,
+                  evaluationId: null,
+                }
+              : null),
+          evidence: data,
+          fingerprint: input.fingerprint ?? null,
+        },
+        { data, ...(distinct ? { status: "resolved" } : {}) },
+      );
+      // A re-proposal replaces the earlier row; leaving it pending strands it.
+      await client
+        .update(assessmentState)
+        .set({
+          active: false,
+          status: sql`CASE WHEN ${assessmentState.status} = ${suggestionStatus.enum.pending} THEN ${suggestionStatus.enum.superseded} ELSE ${assessmentState.status} END`,
+        })
+        .where(
+          and(
+            eq(assessmentState.family, "product_pair"),
+            eq(assessmentState.recordId, pair.productAId),
+            sql`${assessmentState.data}->>'otherId' = ${pair.productBId}`,
+            sql`${assessmentState.id} <> ${prediction.id}`,
+          ),
+        );
+      await client
+        .update(assessmentState)
+        .set({
+          active: true,
+          ...(old?.state === "dismissed"
+            ? {
+                suppression: {
+                  scope: "product_pair",
+                  candidateKey: productPairKey(
+                    pair.productAId,
+                    pair.productBId,
+                  ),
+                  fingerprint: null,
+                },
+                status: "resolved",
+              }
+            : {}),
+        })
+        .where(eq(assessmentState.id, prediction.id));
+      return {
+        ...pair,
+        id: prediction.id,
+        source: data.source,
+        state: old?.state ?? "open",
+        evidence: data.evidence,
+        sourceUrls: data.sourceUrls,
+        createdAt: prediction.createdAt,
+        updatedAt: new Date(),
+        fingerprint: input.fingerprint ?? null,
+        actionable: data.actionable,
+        conflict: data.conflict,
+        verification:
+          z
+            .object({ verification: variantVerification.optional() })
+            .safeParse(data.signals).data?.verification ?? "unknown",
+        created: !old,
+      };
+    },
+    config,
+  );
 }
 /**
  * An agent proposal claims the two records are one item, not one snapshot of

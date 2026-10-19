@@ -10,7 +10,12 @@ import { z } from "zod";
 import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/policy/feature-identity";
 import { enqueueAiEvaluation } from "~/server/ai/repo/ai-evaluation-requests";
 import type { Database } from "~/server/db";
-import { getDb, notDeleted } from "~/server/db/helpers";
+import {
+  getDb,
+  isTransaction,
+  notDeleted,
+  withTransactionDatabase,
+} from "~/server/db/helpers";
 import {
   product,
   entityExternalId,
@@ -29,6 +34,8 @@ import {
   variantSourceSide,
 } from "~/server/domains/product/repo/product-variant-evidence";
 import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
+
+import { productIdentityEvidenceFence } from "./product-identity-fence";
 
 /**
  * Product identity evidence: the frozen per-Product snapshot, the prepared
@@ -254,6 +261,15 @@ export async function enqueueProductIdentityPair(
 ) {
   const pair = await prepareProductIdentityPair(db, ids);
   if (!pair) throw new Error("Product identity target no longer exists");
+  return enqueuePreparedProductIdentityPair(db, pair, runId, provenance);
+}
+
+async function enqueuePreparedProductIdentityPair(
+  db: Database,
+  pair: z.infer<typeof preparedProductIdentityPair>,
+  runId: RunId,
+  provenance: AiProvenance,
+) {
   const shareKey = `product-identity:${await sha256Hex(canonicalJson({ productIds: pair.productIds, fingerprint: pair.fingerprint, dependencies: provenance.dependencies, optionFingerprint: provenance.optionFingerprint }))}`;
   const frozen = aiProvenance.parse({
     ...provenance,
@@ -277,4 +293,35 @@ export async function enqueueProductIdentityPair(
     provenance: frozen,
     snapshot: z.json().parse(pair),
   });
+}
+
+/** A queued pair carries the same frozen evidence checked in its short write transaction. */
+export async function prepareProductIdentityPairRequest(
+  db: Database,
+  expected: z.infer<typeof preparedProductIdentityPair>,
+  runId: RunId,
+  provenance: AiProvenance,
+) {
+  if (isTransaction(getDb(db)))
+    throw new Error(
+      "Product pair preparation requires a database outside a transaction",
+    );
+  const fence = await productIdentityEvidenceFence(db, expected.productIds);
+  const pair = await prepareProductIdentityPair(db, expected.productIds);
+  if (
+    !pair ||
+    pair.fingerprint !== expected.fingerprint ||
+    (await productIdentityEvidenceFence(db, expected.productIds)) !== fence
+  )
+    throw new Error("Product pair evidence changed during inference");
+  return (db: Database) =>
+    withTransactionDatabase(
+      db,
+      async (tx) => {
+        if ((await productIdentityEvidenceFence(tx, pair.productIds)) !== fence)
+          throw new Error("Product pair evidence changed during inference");
+        return enqueuePreparedProductIdentityPair(tx, pair, runId, provenance);
+      },
+      { isolationLevel: "serializable" },
+    );
 }

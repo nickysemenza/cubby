@@ -22,6 +22,7 @@ import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
 import {
   publishProductPair,
+  prepareProductPairPublication,
   upsertAgentProductMatch,
   productPairKey,
 } from "~/server/domains/product/repo/match/product-match-candidate";
@@ -76,6 +77,37 @@ describe("product match queue", () => {
       }),
       ctx.actor,
     );
+
+  it("refuses prepared publication after a new evidence row or Product change", async () => {
+    const first = await product("Synthetic fence first"),
+      second = await product("Synthetic fence second");
+    const input = {
+      productIds: [first.entityId, second.entityId] as const,
+      source: "agent" as const,
+      evidence: "Synthetic proof",
+      sourceUrls: [],
+    };
+    const publish = await prepareProductPairPublication(ctx.db, input);
+    await getDb(ctx.db)
+      .update(productTable)
+      .set({ name: "Synthetic changed evidence" })
+      .where(eq(productTable.id, first.entityId));
+    await expect(publish(ctx.db)).rejects.toThrow("evidence changed");
+    expect(
+      (await getProductMatchQueue(ctx.db, { productId: first.id })).items,
+    ).toEqual([]);
+    const current = await prepareProductPairPublication(ctx.db, input);
+    const image = await createImageFixture(ctx.db, "synthetic-evidence-fence");
+    await insertEntityAttachments(ctx.db, [
+      { entityId: first.entityId, imageId: image.id },
+    ]);
+    await expect(current(ctx.db)).rejects.toThrow("evidence changed");
+    const fresh = await prepareProductPairPublication(ctx.db, input);
+    await fresh(ctx.db);
+    expect(
+      (await getProductMatchQueue(ctx.db, { productId: first.id })).items,
+    ).toHaveLength(1);
+  });
 
   it("requires stored pair evidence for a directed photo-review comparison", async () => {
     const source = await product("Synthetic directed source"),

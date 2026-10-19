@@ -13,10 +13,7 @@ import {
   dependencyStamps,
   fieldDependencyKeys,
 } from "~/server/ai/policy/refresh-manifest";
-import {
-  evaluateProductIdentity,
-  publishProductIdentity,
-} from "~/server/ai/product-identity";
+import { evaluateProductIdentity } from "~/server/ai/product-identity";
 import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import { retrieveConnectionCandidates } from "~/server/domains/connection/repo/connection-candidates";
@@ -25,6 +22,7 @@ import {
   prepareConnectionFieldGuard,
   saveConnectionFieldGuard,
 } from "~/server/domains/connection/repo/field-connections";
+import { prepareProductPairPublication } from "~/server/domains/product/repo/match/product-match-candidate";
 import { getEntityRecommendations } from "~/server/domains/recommendation/service/entity-recommendations.service";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { jsonValue } from "~/server/domains/run/repo/suggestion-sweep-state";
@@ -52,7 +50,7 @@ export type ConnectionPreparationPorts = {
   productIdentityPorts?: Parameters<typeof evaluateProductIdentity>[3];
 };
 
-/** Model work precedes the authority fence; only the returned publisher writes Assessments. */
+/** Model work precedes the authority fence; each returned unit publishes in a separate fenced transaction. */
 export async function prepareEntityConnections(
   db: Database,
   context: EntityKernelContext,
@@ -126,16 +124,17 @@ export async function prepareEntityConnections(
       ports.productIdentityPorts,
     );
     if (identity.failure) throw new Error(identity.failure);
-    publishers.push(async (transactionDb) => {
-      await publishProductIdentity(transactionDb, identity);
-    });
+    for (const pair of identity.pairs) {
+      const publish = await prepareProductPairPublication(db, pair);
+      publishers.push(async (transactionDb) => {
+        await publish(transactionDb);
+      });
+    }
   }
   publishers.push(
     ...(await prepareFieldConnections(db, context, source, ports)),
   );
-  return async (transactionDb: Database) => {
-    for (const publish of publishers) await publish(transactionDb);
-  };
+  return publishers;
 }
 
 async function prepareFieldConnections(
