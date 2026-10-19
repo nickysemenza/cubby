@@ -1934,6 +1934,14 @@ requests it; standalone filters retain their closed predicates. Numeric
 fingerprints keep the canonical scalar or joined value, so sharing presence
 does not change exception identity.
 
+A Product's `commodity` flag marks interchangeable goods with no single
+listing. It removes the brand, Identifier and Amazon ASIN checks from the
+Product's applicable set rather than recording an exception, and it is a
+deliberate member decision, never inferred from a placeholder manufacturer.
+Only applicability reads it; those checks' fingerprints are unchanged, so
+clearing the flag reopens the gaps while existing exceptions keep their
+evidence.
+
 Purchase paperwork-mismatch predicates share one vendor-Expense aggregate for
 the total, line count and unpriced count. The reconciliation module owns their
 common live vendor-line scope and numeric sum. Bulk reads (list quality

@@ -366,6 +366,7 @@ export const buildProductWrite = (
         price: eachPrice,
         unitMappings: newMappings,
         externalIds: [],
+        commodity: false,
       },
     };
   }

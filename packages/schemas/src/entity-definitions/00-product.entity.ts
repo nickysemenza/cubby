@@ -607,7 +607,14 @@ export default defineEntity({
         {
           id: "identity",
           title: "Identity",
-          fields: ["name", "model", "manufacturer", "categoryId", "notes"],
+          fields: [
+            "name",
+            "model",
+            "manufacturer",
+            "commodity",
+            "categoryId",
+            "notes",
+          ],
         },
         {
           id: "names-and-tags",
@@ -1252,6 +1259,30 @@ Rules:
           read: productKindSchema.nullable(),
           create: productKindSchema.nullable().optional(),
           update: productKindSchema.nullable().optional(),
+        },
+      },
+      {
+        // An explicit member decision, never inferred from a placeholder
+        // manufacturer such as "generic": that text also marks branded
+        // Products whose maker was simply not filled in. Interchangeable
+        // across sellers, not merely unbranded — an unbranded good with a real
+        // listing stays checked. Drives `expected` on the brand, identifier and
+        // Amazon ASIN checks (`checks/product.ts`).
+        key: "commodity",
+        kind: "boolean",
+        description:
+          "Interchangeable goods bought from any seller with no single listing that identifies them (loose produce, bulk meat, herb bunches). Not expected to carry a brand, identifier, or Amazon ASIN.",
+        control: { kind: "checkbox" },
+        display: {
+          columnLabel: "Commodity",
+          list: true,
+          listHidden: true,
+          detail: true,
+        },
+        validation: {
+          read: z.boolean(),
+          create: z.boolean().optional().default(false),
+          update: z.boolean().optional(),
         },
       },
       {
@@ -1915,6 +1946,7 @@ Rules:
       "usdaUnavailable",
       "stockTracked",
       { key: "kind", specialized: "enum:productKind" },
+      { key: "commodity", defaultValue: false },
       { key: "labelNutrition", specialized: "json:labelNutrition" },
     ],
     create: [
@@ -1939,6 +1971,7 @@ Rules:
       "usdaUnavailable",
       "stockTracked",
       "kind",
+      "commodity",
       "pendingImageIds",
       "pendingImagePurposes",
     ],
@@ -1964,6 +1997,7 @@ Rules:
       "usdaUnavailable",
       "stockTracked",
       "kind",
+      "commodity",
       "pendingImageIds",
       "pendingImagePurposes",
       "removeImageIds",
@@ -1976,6 +2010,7 @@ Rules:
       "aliases",
       "tags",
       "manufacturer",
+      "commodity",
       "categoryId",
       "externalIds",
       "fdc_id",
@@ -2103,6 +2138,7 @@ Rules:
           "price",
           "stockTracked",
           "kind",
+          "commodity",
           "unitMappings",
           "labelNutrition",
           "externalIds",
@@ -2130,6 +2166,7 @@ Rules:
           "price",
           "stockTracked",
           "kind",
+          "commodity",
           "unitMappings",
           "labelNutrition",
           "externalIds",
@@ -2184,6 +2221,7 @@ Rules:
       "usdaUnavailable",
       "stockTracked",
       "kind",
+      "commodity",
       "labelNutrition",
       "createdAt",
       "updatedAt",

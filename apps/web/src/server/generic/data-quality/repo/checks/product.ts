@@ -95,6 +95,12 @@ const hasLiveCategory = (t: Product) => sql`EXISTS (
   WHERE dq_cat."id" = ${t.categoryId} AND dq_cat."deletedAt" IS NULL
 )`;
 
+// A commodity (`product.commodity`) is interchangeable across sellers with no
+// single listing, so a brand, identifier or ASIN is not expected of it. Only
+// `expected` reads the flag: the fingerprints stay as they were, so turning it
+// off reopens the gaps without invalidating existing exceptions' evidence.
+const isBranded = (t: Product) => sql`NOT ${t.commodity}`;
+
 const hasIdentifier = (t: Product) =>
   sql`((${t.model} IS NOT NULL AND trim(${t.model}) <> '') OR ${hasExternalId(t)})`;
 
@@ -116,11 +122,13 @@ export const productChecks = defineEntityChecks({
       fingerprint: (t) => [sql`${t.name}`],
     },
     product_manufacturer: {
+      expected: isBranded,
       missing: (t) =>
         sql`(trim(${t.manufacturer}) = '' OR lower(trim(${t.manufacturer})) = lower(${UNSPECIFIED_MANUFACTURER}))`,
       fingerprint: (t) => [sql`${t.manufacturer}`],
     },
     product_external_id: {
+      expected: isBranded,
       missing: (t) => sql`NOT ${hasIdentifier(t)}`,
       fingerprint: (t) => [hasIdentifier(t)],
     },
@@ -151,7 +159,7 @@ export const productChecks = defineEntityChecks({
       fingerprint: (t) => [hasInventory(t), hasDisplayableImage(t)],
     },
     amazon_asin: {
-      expected: hasAmazonPurchase,
+      expected: (t) => sql`${isBranded(t)} AND ${hasAmazonPurchase(t)}`,
       missing: (t) => sql`NOT ${hasAmazonId(t)}`,
       fingerprint: (t) => [hasAmazonPurchase(t), hasAmazonId(t)],
     },
