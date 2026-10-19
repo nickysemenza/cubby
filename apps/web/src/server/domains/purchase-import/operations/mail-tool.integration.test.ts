@@ -493,6 +493,15 @@ describe("public mail tool", () => {
     await expect(resolveRefund(linkedBoth, [first], true)).rejects.toThrow(
       "explain exactly the reviewed Purchases",
     );
+
+    // A deleted reviewed refund leg no longer wedges replaying the Email.
+    await getDb(ctx.db)
+      .update(financialTransaction)
+      .set({ deletedAt: new Date() })
+      .where(eq(financialTransaction.id, refund.id));
+    await expect(
+      resolveRefund(reviewedFirst, [first], false),
+    ).resolves.toMatchObject({ status: "completed" });
   });
 
   it("atomically links a combined lifecycle Email to every Purchase and replays without duplicate evidence", async () => {

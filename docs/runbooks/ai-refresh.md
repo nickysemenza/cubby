@@ -71,9 +71,10 @@ The singleton uses its own compiled manifest, never a caller-supplied version;
 a request from an old Worker cannot reinstall that Worker's policy. Saved field results resume
 without another inference. Missing evidence, Mail import switched off and
 genuine ambiguity wait for a relevant fingerprint change. Rediscovery reopens a
-blocked or obsolete target under its own work key (at most three times), moving
-it to a running Run; switching Mail import on therefore resumes the blocked
-Emails. Admission waits defer without consuming inference retries.
+blocked or obsolete target at most three times: a replacement row
+(`<workKey>:reopen:<n>`) joins a running Run, while the settled row keeps its
+Run, receipt and error and links the replacement through `retryEvaluationId`.
+Switching Mail import on therefore resumes the blocked Emails. Admission waits defer without consuming inference retries.
 Cancelled Runs remain stopped. Exhausted failures require Run retry; replacement
 evaluations retain the earlier failed rows and link their receipts.
 
