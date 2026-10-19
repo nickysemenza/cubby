@@ -1,7 +1,7 @@
 import { parseEntityId, type RunId } from "@cubby/schemas/identifiers";
 import { backgroundTaskMessageSchema } from "@cubby/schemas/queue-messages";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, expect, it } from "vitest";
 
@@ -328,7 +328,8 @@ it("defers a funding-waiting job to its resume time without spending an attempt"
   for (let wait = 0; wait < 4; wait++) {
     await getDb(ctx.db)
       .update(imageProcessingJob)
-      .set({ nextAttemptAt: new Date() })
+      // Database time: the host clock can run ahead of the container's.
+      .set({ nextAttemptAt: sql`now() - interval '1 second'` })
       .where(eq(imageProcessingJob.id, row.jobId));
     expect(
       await handleCloudImageTask(ctx.db, message(row.jobId).body.task, {
