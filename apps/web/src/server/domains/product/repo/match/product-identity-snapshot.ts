@@ -142,6 +142,19 @@ export async function productIdentitySnapshot(db: Database, id: ProductId) {
     eligible: !isMiscProduct(row.name),
   };
 }
+/** Current pair fingerprint, independent of argument order; null once either Product is gone. */
+export async function productPairFingerprint(
+  db: Database,
+  ids: readonly [ProductId, ProductId],
+) {
+  const snapshots = await Promise.all(
+    ids.map((id) => productIdentitySnapshot(db, id)),
+  );
+  if (snapshots.some((value) => !value)) return null;
+  return sha256Hex(
+    canonicalJson(snapshots.map((value) => value!.fingerprint).sort()),
+  );
+}
 const identityFacts = z
   .object({
     identifiers: z.array(

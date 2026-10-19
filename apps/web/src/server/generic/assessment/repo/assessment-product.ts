@@ -1,6 +1,5 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { mergeProductMatchInput } from "@cubby/schemas/recommendations";
-import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
@@ -12,18 +11,20 @@ import {
   product,
 } from "~/server/db/schema";
 import {
-  productIdentitySnapshot,
+  productPairFingerprint,
   prepareProductIdentityPair,
 } from "~/server/domains/product/repo/match/product-identity-snapshot";
 import { loadProductImageOrderFacts } from "~/server/domains/product/repo/match/product-match";
-import { currentProductPairPolicy } from "~/server/domains/product/repo/match/product-match-candidate";
+import {
+  currentProductPairPolicy,
+  reviewedProductPairFingerprint,
+} from "~/server/domains/product/repo/match/product-match-candidate";
 import { matchSurvivorImageOrder } from "~/server/domains/product/repo/match/product-match-ranking";
 import {
   type EntityKernelContext,
   executeEntity,
   executeEntityAs,
 } from "~/server/entity-kernel";
-import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
 import {
   assertApplicationReceipt,
   recordFeedback,
@@ -126,16 +127,14 @@ export async function mergeReviewedProductPair(
       throw new Error(
         "Product pair is stale or has an unresolved identity conflict",
       );
-    const snapshots = await Promise.all(
-      [keepId, mergeId].map((id) => productIdentitySnapshot(transactionDb, id)),
-    );
-    if (snapshots.some((value) => !value))
-      throw new Error("Product identity evidence changed");
-    const fingerprint = await sha256Hex(
-      canonicalJson(snapshots.map((value) => value!.fingerprint).sort()),
-    );
+    const fingerprint = await productPairFingerprint(transactionDb, [
+      keepId,
+      mergeId,
+    ]);
+    if (!fingerprint) throw new Error("Product identity evidence changed");
     if (
-      state.fingerprint !== input.expectedFingerprint ||
+      (await reviewedProductPairFingerprint(transactionDb, state)) !==
+        input.expectedFingerprint ||
       fingerprint !== input.expectedFingerprint
     )
       throw new Error(

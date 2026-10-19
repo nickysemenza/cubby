@@ -61,14 +61,18 @@ DROP TRIGGER IF EXISTS "AssessmentState_publish_field" ON "AssessmentState";
 CREATE TRIGGER "AssessmentState_publish_field" BEFORE INSERT ON "AssessmentState" FOR EACH ROW EXECUTE FUNCTION "publish_field_assessment"();
 `;
 
-/** Identity invalidation shares the current projection, including every photo attachment. */
+/**
+ * Identity invalidation shares the current projection, including every photo
+ * attachment. Agent pairs survive enrichment (only deletion retires them):
+ * they are fingerprinted live at review.
+ */
 export const productIdentityInvalidationDdl = (
   classificationFields: readonly string[],
 ) => `
 CREATE OR REPLACE FUNCTION "retire_product_pair_evidence"() RETURNS trigger LANGUAGE plpgsql AS $$
-DECLARE targets uuid[] := '{}'; image_id uuid;
+DECLARE targets uuid[] := '{}'; image_id uuid; product_deleted boolean := false;
 BEGIN
- IF TG_TABLE_NAME='Product' THEN targets=ARRAY[NEW.id];
+ IF TG_TABLE_NAME='Product' THEN targets=ARRAY[NEW.id]; product_deleted=NEW."deletedAt" IS NOT NULL;
  ELSIF TG_TABLE_NAME IN ('EntityAttachment','EntitySource','EntityExternalId') THEN
   IF TG_OP<>'INSERT' AND OLD."entityKind"='product' THEN targets=array_append(targets,OLD."entityId"); END IF;
   IF TG_OP<>'DELETE' AND NEW."entityKind"='product' THEN targets=array_append(targets,NEW."entityId"); END IF;
@@ -87,7 +91,7 @@ BEGIN
   SELECT array_agg("entityId") INTO targets FROM "EntityAttachment" WHERE "imageId"=image_id AND "entityKind"='product' AND "deletedAt" IS NULL;
  END IF;
  IF cardinality(targets)>0 THEN
-  UPDATE "AssessmentState" SET status='superseded',"updatedAt"=now() WHERE family='product_pair' AND active AND ("recordId"=ANY(targets) OR (data->>'otherId')::uuid=ANY(targets));
+  UPDATE "AssessmentState" SET status='superseded',"updatedAt"=now() WHERE family='product_pair' AND active AND ("recordId"=ANY(targets) OR (data->>'otherId')::uuid=ANY(targets)) AND (data->>'source' IS DISTINCT FROM 'agent' OR product_deleted);
   IF TG_TABLE_NAME<>'Product' THEN
    UPDATE "AssessmentState" SET status='superseded',"updatedAt"=now(),"supersessionReceipt"=jsonb_build_object('reason','input_changed','evaluationId',NULL,'at',to_char(now() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')) WHERE family='field' AND entity='product' AND active AND status='pending' AND "recordId"=ANY(targets) AND field IN (${classificationFields.map((field) => `'${field.replaceAll("'", "''")}'`).join(",") || "NULL"});
   END IF;

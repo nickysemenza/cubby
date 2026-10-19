@@ -1,3 +1,4 @@
+import { suggestionStatus } from "@cubby/schemas/ai";
 import {
   assessmentChildHandle,
   assessmentProducer,
@@ -222,9 +223,13 @@ export async function publishProductPair(
       },
       { data, ...(distinct ? { status: "resolved" } : {}) },
     );
+    // A re-proposal replaces the earlier row; leaving it pending strands it.
     await client
       .update(assessmentState)
-      .set({ active: false })
+      .set({
+        active: false,
+        status: sql`CASE WHEN ${assessmentState.status} = ${suggestionStatus.enum.pending} THEN ${suggestionStatus.enum.superseded} ELSE ${assessmentState.status} END`,
+      })
       .where(
         and(
           eq(assessmentState.family, "product_pair"),
@@ -268,6 +273,24 @@ export async function publishProductPair(
       created: !old,
     };
   });
+}
+/**
+ * An agent proposal claims the two records are one item, not one snapshot of
+ * them, so enrichment never retires it: it is fingerprinted live and a merge
+ * pins what the member reviewed. Detector judgments keep their snapshot.
+ */
+export async function reviewedProductPairFingerprint(
+  db: Database,
+  state: { recordId: string; data: unknown; fingerprint: string | null },
+) {
+  const data = pairProjection.safeParse(state.data).data;
+  if (data?.source !== "agent") return state.fingerprint;
+  const { productPairFingerprint } =
+    await import("./product-identity-snapshot");
+  return productPairFingerprint(db, [
+    parseEntityId("product", state.recordId),
+    data.otherId,
+  ]);
 }
 export async function upsertAgentProductMatch(
   db: Database | DrizzleTransaction,
@@ -346,24 +369,27 @@ export async function listProductMatchRows(
       assessmentState.id,
     )
     .limit(options.limit ?? 2147483647);
-  return rows.map((row) => {
-    const data = pairProjection.parse(row.data);
-    return pairRow.parse({
-      ...row,
-      productAId: row.recordId,
-      productBId: data.otherId,
-      source: data.source,
-      state: row.suppression ? "dismissed" : "open",
-      evidence: data.evidence,
-      sourceUrls: data.sourceUrls,
-      actionable: data.actionable,
-      conflict: data.conflict,
-      verification:
-        z
-          .object({ verification: variantVerification.optional() })
-          .safeParse(data.signals).data?.verification ?? "unknown",
-    });
-  });
+  return Promise.all(
+    rows.map(async (row) => {
+      const data = pairProjection.parse(row.data);
+      return pairRow.parse({
+        ...row,
+        fingerprint: await reviewedProductPairFingerprint(db, row),
+        productAId: row.recordId,
+        productBId: data.otherId,
+        source: data.source,
+        state: row.suppression ? "dismissed" : "open",
+        evidence: data.evidence,
+        sourceUrls: data.sourceUrls,
+        actionable: data.actionable,
+        conflict: data.conflict,
+        verification:
+          z
+            .object({ verification: variantVerification.optional() })
+            .safeParse(data.signals).data?.verification ?? "unknown",
+      });
+    }),
+  );
 }
 /** Repoint only current projections. Self-pair actions retire; original subjects never change. */
 export async function repointProductMatchCandidatesTx(
