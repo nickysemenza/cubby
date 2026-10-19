@@ -7,9 +7,8 @@ import {
   getEntityFilters,
   referenceFilterOptionsKey,
 } from "~/entity/filter-manifest";
-import { recordSource } from "~/entity/picker/picker";
+import { isPickerEntity, recordSource } from "~/entity/picker/picker";
 import { entityFilterOptions } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
 import type { RuntimeFilterOptions } from "~/ui/hooks/filter-option-types";
 
 /**
@@ -121,7 +120,7 @@ export function useDeferredEntityRosters(
                     : { ...current, [key]: value },
                 ),
               isLoading: query?.isFetching ?? false,
-              ...(isReferencePickerEntity(target)
+              ...(isPickerEntity(target)
                 ? { records: recordSource(target) }
                 : {}),
             },

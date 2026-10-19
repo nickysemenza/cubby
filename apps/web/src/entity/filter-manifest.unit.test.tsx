@@ -139,6 +139,12 @@ describe("manifestFilterConfig", () => {
     ).toMatchObject({ field: "locationNameFilter", kind: "text" });
   });
 
+  it("picks a run reference as records even though runs have no assignment picker", () => {
+    expect(manifestFilterConfig("image", "runId")?.records).toBe(
+      recordSource("run"),
+    );
+  });
+
   it("puts the Product Vendors roster on its related preview column", () => {
     const vendors = [{ value: "VEN-4K7M", label: "Hardware Store" }];
     expect(

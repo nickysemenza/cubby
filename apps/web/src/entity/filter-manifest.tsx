@@ -1,9 +1,8 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { CURRENT_MEMBER_FILTER, humanize } from "@cubby/shared";
 
-import { recordSource } from "~/entity/picker/picker";
+import { isPickerEntity, recordSource } from "~/entity/picker/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
-import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
 import {
   barFieldFromConfig,
   type FilterBarField,
@@ -193,7 +192,7 @@ const specFilterConfig = (
     // A static reference roster (a graph picklist) picks records too.
     records:
       deferred?.records ??
-      (spec.referenceEntity && isReferencePickerEntity(spec.referenceEntity)
+      (spec.referenceEntity && isPickerEntity(spec.referenceEntity)
         ? recordSource(spec.referenceEntity)
         : undefined),
   };
