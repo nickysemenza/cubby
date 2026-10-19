@@ -15,6 +15,7 @@ import type {
 } from "@cubby/schemas/statement-row";
 import {
   statementImportOut,
+  statementRowMatchState,
   statementRowOut,
 } from "@cubby/schemas/statement-row";
 import { and, asc, desc, eq, inArray, or, type SQL, sql } from "drizzle-orm";
@@ -312,18 +313,24 @@ export async function getStatementRowSummary(
     ignored: number;
     superseded: number;
     amountTotal: string;
+    matchedAmount: string;
     unmatchedAmount: string;
+    ignoredAmount: string;
+    supersededAmount: string;
     unmatchedCharges: number;
   }>(sql`
     SELECT
       count(*)::int AS total,
-      count(*) FILTER (WHERE ms = 'matched')::int AS matched,
-      count(*) FILTER (WHERE ms = 'unmatched')::int AS unmatched,
-      count(*) FILTER (WHERE ms = 'ignored')::int AS ignored,
-      count(*) FILTER (WHERE ms = 'superseded')::int AS superseded,
       COALESCE(sum(amount), 0) AS "amountTotal",
-      COALESCE(sum(amount) FILTER (WHERE ms = 'unmatched'), 0) AS "unmatchedAmount",
-      count(DISTINCT charge) FILTER (WHERE ms = 'unmatched')::int AS "unmatchedCharges"
+      ${sql.join(
+        statementRowMatchState.options.map(
+          (state) => sql`
+            count(*) FILTER (WHERE ms = ${state})::int AS ${sql.identifier(state)},
+            COALESCE(sum(amount) FILTER (WHERE ms = ${state}), 0) AS ${sql.identifier(`${state}Amount`)}`,
+        ),
+        sql`,`,
+      )},
+      count(DISTINCT charge) FILTER (WHERE ms = ${statementRowMatchState.enum.unmatched})::int AS "unmatchedCharges"
     FROM (
       SELECT ${matchStateSql} AS ms, ${statementRow.amount} AS amount,
         "StatementRow".source || ':' || ${chargeKeyOf('"StatementRow"')} AS charge
@@ -339,7 +346,10 @@ export async function getStatementRowSummary(
     ignored: Number(row?.ignored ?? 0),
     superseded: Number(row?.superseded ?? 0),
     amountTotal: Number(row?.amountTotal ?? 0),
+    matchedAmount: Number(row?.matchedAmount ?? 0),
     unmatchedAmount: Number(row?.unmatchedAmount ?? 0),
+    ignoredAmount: Number(row?.ignoredAmount ?? 0),
+    supersededAmount: Number(row?.supersededAmount ?? 0),
     unmatchedCharges: Number(row?.unmatchedCharges ?? 0),
   };
 }
