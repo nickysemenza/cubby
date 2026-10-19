@@ -332,9 +332,10 @@ function isFlexibleColumn(column: TableWidthColumn) {
 }
 
 /**
- * The widest a fitted column paints, by what it holds: a record title stops
- * at 240px, free text at 160px, a status pill or a column of links to one
- * entity (whose names wrap to two lines) at 120px and a code at 96px;
+ * The widest a fitted column paints, by what it holds: a record title or a
+ * column of links to one entity (one chip, its name wrapping to two lines)
+ * stops at 240px, free text at 160px, a status pill at 120px and a code at
+ * 96px;
  * clipped values spill over on hover (`useCellSpill`).
  * Quantities, money and dates keep their natural width. A person's resize
  * still reaches `maxSize`.
@@ -342,7 +343,7 @@ function isFlexibleColumn(column: TableWidthColumn) {
 const IDENTITY_FIT_MAX = 240;
 const TEXT_FIT_MAX = 160;
 const SELECT_FIT_MAX = 120;
-const LINK_FIT_MAX = 120;
+const LINK_FIT_MAX = 240;
 const CODE_FIT_MAX = 96;
 
 function kindFitMax(meta: TableWidthColumn["columnDef"]["meta"]) {

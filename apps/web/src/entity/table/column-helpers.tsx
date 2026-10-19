@@ -88,6 +88,7 @@ import {
   type MobileColumnMeta,
 } from "../../ui/data-table/table-meta";
 import { serverTreeChildCount } from "../../ui/hooks/use-server-tree-children";
+import { isOpenDeadline } from "../display/entity-display";
 import { useEntityDisplayImage } from "../entity-media/entity-display-images";
 import {
   buildLocationComboboxItem,
@@ -1025,10 +1026,10 @@ export function createCurrencyColumn<
   const editable = options?.editable;
   const isEmpty = (v: number | null | undefined): v is null | undefined | 0 =>
     v === null || v === undefined || (zeroAsEmpty && v === 0);
-  // Flat green by default; sign-tinted columns leave positive spend neutral and
-  // green only the credits, so a refund never reads as spend.
+  // Money reads in ink and `CurrencyValue` greens only credits; a sign-tinted
+  // column also weights positive spend.
   const toneClass = (v: number) =>
-    signedTone ? (v < 0 ? "text-positive" : "font-medium") : "text-positive";
+    signedTone && v >= 0 ? "font-medium" : undefined;
   const cellData = numberCellData<T>(
     "currency",
     (row) => row[accessor] ?? null,
@@ -1537,6 +1538,9 @@ export function renderOptionCell(
   const option = colorizeSelectOptions(options).find((o) => o.value === value);
   return (
     <EnumPill
+      optionRole={option?.role}
+      glyph={option?.glyph}
+      value={value}
       icon={option?.icon}
       color={option?.color ?? "var(--slate)"}
       description={option?.description}
@@ -1888,10 +1892,14 @@ export function createPlainDateColumn<
 ) {
   const editable = options?.editable;
   const valueFor = (row: T): string | null => row[accessor] ?? null;
-  const renderValue = (value: string | null, muted?: boolean) =>
+  const renderValue = (value: string | null, row: T, muted?: boolean) =>
     value ? (
       <span className={muted ? "text-muted-foreground" : undefined}>
-        {renderScalarValue({ kind: "date", raw: value })}
+        {renderScalarValue({
+          kind: "date",
+          raw: value,
+          due: isOpenDeadline(String(accessor), row),
+        })}
       </span>
     ) : (
       <NoneValue />
@@ -1912,7 +1920,7 @@ export function createPlainDateColumn<
     cellData,
     renderValue: (value, row) => {
       const display = options?.displayValue?.(row);
-      return renderValue(display?.value ?? value, display?.muted);
+      return renderValue(display?.value ?? value, row, display?.muted);
     },
     renderEditable: editable
       ? (value, row, clipboard) => {
@@ -1941,6 +1949,7 @@ export function createPlainDateColumn<
               renderValue={(optimistic) =>
                 renderValue(
                   optimistic ?? display?.value ?? editableValue,
+                  row,
                   optimistic == null && display?.muted,
                 )
               }

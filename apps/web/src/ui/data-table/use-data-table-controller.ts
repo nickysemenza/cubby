@@ -188,8 +188,14 @@ export function useDataTableController<TItem extends RowData>({
   useCellSpill(tableContainerRef, desktopLayout);
   const collapsedColumns = useMemo(
     () => emptyColumnIds(table, rows),
-    // oxlint-disable-next-line react/exhaustive-deps -- fitScope stands in for the sort, filter and visibility state emptiness reads
-    [table, rows, fitScope, userSizedKey],
+    // oxlint-disable-next-line react/exhaustive-deps -- fitScope and the content version stand in for the table and row state emptiness reads
+    [
+      table,
+      rows,
+      fitScope,
+      userSizedKey,
+      table.options.meta?.rowContentVersion,
+    ],
   );
   const collapsedKey = [...collapsedColumns].join(",");
   const columnSizeVars = useMemo(

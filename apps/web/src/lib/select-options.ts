@@ -5,7 +5,7 @@ import type { PickerOption } from "~/ui/combobox/picker-option";
 /** Shared defaults also cover web-only editor sentinels. */
 export function colorizeSelectOptions<T extends PickerOption>(
   options: readonly T[],
-): Array<T & { color: string }> {
+) {
   return colorizeEnumOptions(options);
 }
 

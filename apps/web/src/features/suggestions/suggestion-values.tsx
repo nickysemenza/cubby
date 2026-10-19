@@ -106,18 +106,18 @@ export function ActionBadge({
 }
 
 /** What accepting restores or risks, each as its server-worded label. */
-/**
- * Impact chips inside the row: cautions lead so a "+N" never hides one, and
- * the rest count past two lines instead of clipping mid-chip.
- */
+/** Impact chips; cautions lead so the "+N" never hides one. */
 export function ImpactLabels({ impact }: { impact: SuggestionImpact[] }) {
   if (!impact.length) return <NoneValue />;
   const ordered = [
     ...impact.filter((item) => item.kind === "caution"),
     ...impact.filter((item) => item.kind !== "caution"),
   ];
+  // One line: the first label, then "+N" naming the rest. Wrapped badges were
+  // clipped mid-line by the 32px row.
   return (
     <ChipCluster
+      lines={1}
       items={ordered.map((item) => ({
         key: `${item.kind}:${item.label}`,
         label: item.label,
@@ -177,7 +177,8 @@ export function FieldValue({
     <span
       className={cn(
         "inline-flex min-w-0",
-        suggested && "[&_.border]:border-dashed",
+        suggested &&
+          "[&_.border]:border-dashed [&_.border]:border-muted-foreground/40",
       )}
     >
       {renderSuggestedListFieldValue(

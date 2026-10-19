@@ -24,7 +24,7 @@ import {
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
 import { Row, Stack } from "~/ui/layout";
-import { Overlay } from "~/ui/overlays/overlay";
+import { SidePanel, SidePanelLayout } from "~/ui/overlays/side-panel";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
@@ -632,6 +632,11 @@ export function DecisionsCatalog({
     { pending: 0, applied: 0, rejected: 0 },
   );
   const reviewed = totals.applied + totals.rejected;
+  const step = (direction: -1 | 1) => {
+    const index = rows.findIndex((row) => row.key === selected);
+    const next = rows[index + direction];
+    if (index >= 0 && next) onSelect(next.key);
+  };
   return (
     <Stack gap="sm">
       <div className="flex flex-wrap items-center gap-2">
@@ -674,32 +679,43 @@ export function DecisionsCatalog({
         </Link>
         .
       </Description>
-      <RTable
-        table={table}
-        ariaLabel="Decisions"
-        isLoading={catalog.isLoading}
-        error={catalog.error}
-        embedded
-        groupConfig={groupConfig}
-        onRowClick={(row) => onSelect(row.original.key)}
-        currentRowId={selected}
-        emptyState={
-          query
-            ? "No decision matches that search."
-            : "No decisions are declared."
-        }
-      />
-      <Overlay
-        placement="panel"
-        open={current !== undefined}
-        onOpenChange={(open) => {
-          if (!open) onSelect(undefined);
-        }}
+      <SidePanelLayout
         title={current?.label ?? "Decision"}
-        description={current?.key}
+        onClose={() => onSelect(undefined)}
+        panel={
+          current ? (
+            <SidePanel
+              label="Decision detail"
+              eyebrow="AI decision"
+              title={current.label}
+              code={current.key}
+              onClose={() => onSelect(undefined)}
+              onPrev={() => step(-1)}
+              onNext={() => step(1)}
+            >
+              <div className="p-3">
+                <DecisionDetail row={current} />
+              </div>
+            </SidePanel>
+          ) : null
+        }
       >
-        {current ? <DecisionDetail row={current} /> : null}
-      </Overlay>
+        <RTable
+          table={table}
+          ariaLabel="Decisions"
+          isLoading={catalog.isLoading}
+          error={catalog.error}
+          embedded
+          groupConfig={groupConfig}
+          onRowClick={(row) => onSelect(row.original.key)}
+          currentRowId={selected}
+          emptyState={
+            query
+              ? "No decision matches that search."
+              : "No decisions are declared."
+          }
+        />
+      </SidePanelLayout>
     </Stack>
   );
 }

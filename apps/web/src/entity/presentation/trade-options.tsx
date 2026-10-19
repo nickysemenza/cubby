@@ -1,27 +1,8 @@
-import { type Trade, tradeValues, TRADE_LABELS } from "@cubby/schemas/project";
-import { AirplaneTiltIcon } from "@phosphor-icons/react/dist/csr/AirplaneTilt";
-import { ArchiveIcon } from "@phosphor-icons/react/dist/csr/Archive";
-import { CarIcon } from "@phosphor-icons/react/dist/csr/Car";
-import { ClipboardTextIcon } from "@phosphor-icons/react/dist/csr/ClipboardText";
-import { DropIcon } from "@phosphor-icons/react/dist/csr/Drop";
-import { FanIcon } from "@phosphor-icons/react/dist/csr/Fan";
-import { GridNineIcon } from "@phosphor-icons/react/dist/csr/GridNine";
-import { HammerIcon } from "@phosphor-icons/react/dist/csr/Hammer";
-import { LightningIcon } from "@phosphor-icons/react/dist/csr/Lightning";
-import { OvenIcon } from "@phosphor-icons/react/dist/csr/Oven";
-import { PaintRollerIcon } from "@phosphor-icons/react/dist/csr/PaintRoller";
-import { PaletteIcon } from "@phosphor-icons/react/dist/csr/Palette";
-import { RectangleIcon } from "@phosphor-icons/react/dist/csr/Rectangle";
-import { RulerIcon } from "@phosphor-icons/react/dist/csr/Ruler";
-import { ShapesIcon } from "@phosphor-icons/react/dist/csr/Shapes";
-import { SquareIcon } from "@phosphor-icons/react/dist/csr/Square";
-import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
-import { TreeIcon } from "@phosphor-icons/react/dist/csr/Tree";
-import { TruckIcon } from "@phosphor-icons/react/dist/csr/Truck";
-import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
-import type { Icon } from "@phosphor-icons/react/lib";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import { type Trade, TRADE_LABELS } from "@cubby/schemas/project";
 
 import type { PickerOption } from "~/ui/combobox/picker-option";
+import { OptionGlyph } from "~/ui/common/option-glyph";
 
 /**
  * Trade presentation — glyphs, chips, and select options.
@@ -35,34 +16,16 @@ import type { PickerOption } from "~/ui/combobox/picker-option";
  */
 
 /**
- * Monochrome Phosphor glyph per trade — a scannable leading mark for badges and
- * select rows. Icons live here (client) rather than in `@cubby/schemas` so the
- * schema package stays presentation-free. Full-color emoji were deliberately
- * dropped in the Notion migration; these `currentColor` glyphs sit cleanly on
- * Porcelain surfaces without a glossy clash.
+ * Monochrome glyph per trade, from the trade declaration's option `glyph` so
+ * web and Apple draw the same mark. `currentColor` glyphs sit cleanly on the
+ * neutral category chip.
  */
-const TRADE_ICONS = {
-  planning: ClipboardTextIcon,
-  demolition: TrashIcon,
-  building: HammerIcon,
-  drywall: SquareIcon,
-  electrical: LightningIcon,
-  plumbing: DropIcon,
-  mechanical: FanIcon,
-  cabinetry: ArchiveIcon,
-  countertop: RectangleIcon,
-  flooring: GridNineIcon,
-  millwork: RulerIcon,
-  finishes: PaintRollerIcon,
-  appliances: OvenIcon,
-  landscaping: TreeIcon,
-  logistics: TruckIcon,
-  metalworking: WrenchIcon,
-  crafts: PaletteIcon,
-  auto: CarIcon,
-  travel: AirplaneTiltIcon,
-  other: ShapesIcon,
-} satisfies Record<Trade, Icon>;
+const tradeRoster =
+  entityFieldModels.task.fields.find((field) => field.key === "trade")?.control
+    ?.options ?? [];
+const TRADE_GLYPHS = new Map(
+  tradeRoster.map((option) => [option.value, option.glyph?.phosphor]),
+);
 
 /**
  * Bare trade glyph — the same icon as `TradeBadge` without the pill, for tight
@@ -75,8 +38,14 @@ export function TradeIcon({
   trade: Trade;
   className?: string;
 }) {
-  const Icon = TRADE_ICONS[trade];
-  return <Icon className={className} aria-label={TRADE_LABELS[trade]} />;
+  return (
+    <OptionGlyph
+      name={TRADE_GLYPHS.get(trade) ?? "Shapes"}
+      weight="regular"
+      className={className}
+      label={TRADE_LABELS[trade]}
+    />
+  );
 }
 
 /**
@@ -84,11 +53,14 @@ export function TradeIcon({
  * by tasks and expenses. The glyph mirrors `TradeBadge` so the select and the
  * chip match.
  */
-export const tradeOptions: PickerOption[] = tradeValues.map((value) => {
-  const Icon = TRADE_ICONS[value];
-  return {
-    value,
-    label: TRADE_LABELS[value],
-    icon: <Icon className="size-3.5" />,
-  };
-});
+export const tradeOptions: PickerOption[] = tradeRoster.map((option) => ({
+  value: option.value,
+  label: option.label,
+  icon: (
+    <OptionGlyph
+      name={option.glyph?.phosphor ?? "Shapes"}
+      weight="regular"
+      className="size-3.5"
+    />
+  ),
+}));

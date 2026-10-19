@@ -1,9 +1,11 @@
+import type { EnumIcon, EnumRole } from "@cubby/shared/enum-palette";
 import type { ReactNode } from "react";
 import { z } from "zod";
 
+import { formatCount } from "~/lib/number-format";
 import { DateDisplay } from "~/ui/common/date-display";
 import { MiddleTruncate } from "~/ui/common/middle-truncate";
-import { EnumPill } from "~/ui/primitives/enum-pill";
+import { BooleanValue, EnumPill } from "~/ui/primitives/enum-pill";
 import { NoneValue } from "~/ui/primitives/none-value";
 import {
   Popover,
@@ -23,15 +25,28 @@ export type ScalarDisplayValue =
       label: string;
       color: string;
       icon?: ReactNode;
+      /** Roster role: states take a tone surface, kinds a neutral chip. */
+      role?: EnumRole;
+      glyph?: EnumIcon | null;
       description?: string;
     }
   | { kind: "number"; raw: number }
   | { kind: "boolean"; raw: boolean }
-  | { kind: "date"; raw: string }
+  /** `due`: an open record's deadline, tinted once it has passed. */
+  | { kind: "date"; raw: string; due?: boolean }
   | { kind: "timestamp"; raw: string | Date }
   | { kind: "list"; raw: string[] }
   /** A structured value with no domain renderer; shown as readable JSON. */
   | { kind: "json"; raw: unknown };
+
+/** A plain number with locale grouping; a zero is a quiet fact, never a dash. */
+export function NumberValue({ value }: { value: number }) {
+  return (
+    <span className={value === 0 ? "text-muted-foreground" : undefined}>
+      {formatCount(value, 20)}
+    </span>
+  );
+}
 
 function ListTextValue({ label }: { label: string }) {
   return <MiddleTruncate text={label} title={label} />;
@@ -105,11 +120,23 @@ export function renderScalarValue(
     case "timestamp":
       return <DateDisplay timestamp={value.raw} />;
     case "date":
-      return <DateDisplay start={value.raw} />;
+      return <DateDisplay start={value.raw} due={value.due} />;
     case "boolean":
-      return value.raw ? "Yes" : "No";
+      return surface === "plain" ? (
+        value.raw ? (
+          "Yes"
+        ) : (
+          "No"
+        )
+      ) : (
+        <BooleanValue value={value.raw} />
+      );
     case "number":
-      return value.raw;
+      return surface === "plain" ? (
+        value.raw
+      ) : (
+        <NumberValue value={value.raw} />
+      );
     case "list":
       return value.raw.length ? value.raw.join(", ") : <NoneValue />;
     case "json":
@@ -118,6 +145,9 @@ export function renderScalarValue(
       if (surface === "plain") return value.label;
       return (
         <EnumPill
+          value={value.raw}
+          optionRole={value.role}
+          glyph={value.glyph}
           color={value.color}
           icon={value.icon}
           description={value.description}

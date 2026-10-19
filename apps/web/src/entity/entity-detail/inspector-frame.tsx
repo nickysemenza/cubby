@@ -1,6 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
-import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { Link } from "@tanstack/react-router";
 import { useId, useEffect, useState, type ReactNode } from "react";
 
@@ -11,8 +10,16 @@ import {
   entityLabel,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
-import { cn } from "~/lib/utils";
-import { CopyableShortcode } from "~/ui/common/copyable-shortcode";
+import {
+  domainForEntity,
+  domainWayfinding,
+} from "~/ui/navigation/domain-wayfinding";
+import {
+  SidePanel,
+  SidePanelIconTile,
+  SidePanelSection,
+  stepCurrentTableRow,
+} from "~/ui/overlays/side-panel";
 import { Button } from "~/ui/primitives/button";
 
 export type InspectorTab = "overview" | "relations" | "activity";
@@ -38,10 +45,15 @@ function OpenEntityLink({ entity, id }: { entity: Entity; id: string }) {
         )
       }
     >
-      Open record <ArrowSquareOutIcon />
+      Open <ArrowSquareOutIcon />
     </Button>
   );
 }
+
+const domainColor = (entity: Entity) => {
+  const domain = domainForEntity(entity);
+  return domain ? `var(${domainWayfinding(domain).accentToken})` : undefined;
+};
 
 /** Shared chrome for every responsive canonical-row inspector. */
 export function EntityInspectorFrame({
@@ -53,6 +65,8 @@ export function EntityInspectorFrame({
   activeTab,
   onTabChange,
   onClose,
+  onPrev = () => void stepCurrentTableRow(-1),
+  onNext = () => void stepCurrentTableRow(1),
   overview,
   relations,
   activity,
@@ -65,6 +79,9 @@ export function EntityInspectorFrame({
   activeTab: InspectorTab;
   onTabChange: (tab: InspectorTab) => void;
   onClose?: () => void;
+  /** J/K; defaults step the docked table's current row. */
+  onPrev?: () => void;
+  onNext?: () => void;
   overview: ReactNode;
   relations?: ReactNode;
   activity?: ReactNode;
@@ -85,127 +102,49 @@ export function EntityInspectorFrame({
         .getElementById(`${prefix}-${activeTab}`)
         ?.scrollIntoView({ block: "nearest" });
   }, [activeTab, prefix]);
+  const disclosure = (tab: Exclude<InspectorTab, "overview">) => ({
+    id: `${prefix}-${tab}`,
+    open: activeTab === tab,
+    onOpenChange: (open: boolean) => {
+      if (open) onTabChange(tab);
+      else if (activeTab === tab) onTabChange("overview");
+    },
+  });
 
   return (
-    <InspectorChrome
+    <SidePanel
       label={`${label} inspector`}
-      id={id}
-      name={name ?? label}
-      eyebrow={
-        eyebrow ?? (
-          <span className="text-2xs font-medium text-muted-foreground">
-            {label}
-          </span>
-        )
-      }
-      leading={
+      code={id}
+      title={name ?? label}
+      eyebrow={eyebrow ?? label}
+      icon={
         leading ?? (
-          <EntityIcon entity={entity} colored className="mt-0.5 size-4" />
+          <SidePanelIconTile color={domainColor(entity)}>
+            <EntityIcon entity={entity} />
+          </SidePanelIconTile>
         )
       }
       actions={<OpenEntityLink entity={entity} id={id} />}
       onClose={onClose}
+      closeLabel="Close inspector"
+      onPrev={onPrev}
+      onNext={onNext}
     >
       <div id={`${prefix}-overview`}>{overview}</div>
       {hasRelations ? (
-        <details
-          id={`${prefix}-relations`}
-          className="border-t border-border"
-          open={activeTab === "relations"}
-          onToggle={(event) => {
-            if (event.currentTarget.open) onTabChange("relations");
-            else if (activeTab === "relations") onTabChange("overview");
-          }}
-        >
-          <summary className="cursor-pointer px-3 py-2 text-xs font-semibold">
-            Relations
-          </summary>
+        <SidePanelSection title="Relations" {...disclosure("relations")}>
           {visited.has("relations") || activeTab === "relations"
             ? relations
             : null}
-        </details>
+        </SidePanelSection>
       ) : null}
       {hasActivity ? (
-        <details
-          id={`${prefix}-activity`}
-          className="border-t border-border"
-          open={activeTab === "activity"}
-          onToggle={(event) => {
-            if (event.currentTarget.open) onTabChange("activity");
-            else if (activeTab === "activity") onTabChange("overview");
-          }}
-        >
-          <summary className="cursor-pointer px-3 py-2 text-xs font-semibold">
-            Activity
-          </summary>
+        <SidePanelSection title="Activity" {...disclosure("activity")}>
           {visited.has("activity") || activeTab === "activity"
             ? activity
             : null}
-        </details>
+        </SidePanelSection>
       ) : null}
-    </InspectorChrome>
-  );
-}
-
-/** The sticky identity header and scroll surface every side inspector shares. */
-function InspectorChrome({
-  label,
-  id,
-  name,
-  eyebrow,
-  leading,
-  actions,
-  onClose,
-  className,
-  children,
-}: {
-  label: string;
-  id: string;
-  name: ReactNode;
-  eyebrow?: ReactNode;
-  leading?: ReactNode;
-  actions?: ReactNode;
-  onClose?: () => void;
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    <aside
-      aria-label={label}
-      className={cn(
-        "h-full w-full max-w-full overflow-y-auto bg-card text-xs text-foreground",
-        className,
-      )}
-    >
-      <header className="sticky top-0 z-20 border-b border-border bg-card p-3">
-        <div className="flex items-start gap-2">
-          {leading}
-          <div className="min-w-0 flex-1">
-            {eyebrow}
-            <h2 className="text-sm leading-snug font-semibold break-words text-foreground">
-              {name}
-            </h2>
-            <p className="truncate font-mono text-2xs text-muted-foreground">
-              <CopyableShortcode code={id} />
-            </p>
-          </div>
-          <div className="flex items-center gap-1">
-            {actions}
-            {onClose ? (
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                mobileSize="compact"
-                aria-label="Close inspector"
-                onClick={onClose}
-              >
-                <XIcon />
-              </Button>
-            ) : null}
-          </div>
-        </div>
-      </header>
-      {children}
-    </aside>
+    </SidePanel>
   );
 }

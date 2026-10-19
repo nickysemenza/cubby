@@ -46,6 +46,7 @@ import { CurrencyValue } from "~/ui/common/currency-value";
 import { DateDisplay } from "~/ui/common/date-display";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import {
+  NumberValue,
   renderScalarValue,
   type ScalarDisplayValue,
 } from "~/ui/common/scalar-value";
@@ -254,7 +255,9 @@ function renderFormattedScalar(
     // Known counts read literally: `0` is a fact, never a dash.
     case "count":
       return value.kind === "number" ? (
-        <span className="tabular-nums">{value.raw}</span>
+        <span className="tabular-nums">
+          <NumberValue value={value.raw} />
+        </span>
       ) : (
         renderScalarValue(value, surface)
       );
@@ -282,21 +285,12 @@ function renderFormattedScalar(
         <NoneValue />
       );
     }
+    // Money is ink; a credit (negative, sign printed) is the only green
+    // and a zero is muted — `CurrencyValue` owns that tone for both formats.
     case "currency":
-      return value.kind === "number" ? (
-        <CurrencyValue value={value.raw} className="text-positive" />
-      ) : (
-        renderScalarValue(value, surface)
-      );
-    // Negative money is legitimate domain-wide (a refund-only vendor, a
-    // credit), so a signed renderer — flat "text-positive" only reads as
-    // spend when the value is negative — is generic, not vendor-specific.
     case "signedCurrency":
       return value.kind === "number" ? (
-        <CurrencyValue
-          value={value.raw}
-          className={value.raw < 0 ? "text-positive" : "font-medium"}
-        />
+        <CurrencyValue value={value.raw} />
       ) : (
         renderScalarValue(value, surface)
       );
@@ -305,6 +299,7 @@ function renderFormattedScalar(
         {
           kind: "date",
           raw: value.kind === "date" ? value.raw : String(value.raw),
+          due: value.kind === "date" ? value.due : undefined,
         },
         surface,
       );
@@ -977,6 +972,35 @@ const spanDateOf = <TRecord extends object>(
   return value.kind === "date" ? value.raw : null;
 };
 
+/** Statuses that settle a deadline; a settled record is never overdue. */
+const SETTLED_STATUSES = new Set([
+  "done",
+  "completed",
+  "complete",
+  "cancelled",
+  "canceled",
+  "finished",
+  "skipped",
+  "closed",
+]);
+const settledRecord = z.looseObject({
+  status: z.string().nullish(),
+  completedAt: z.unknown().optional(),
+});
+
+/**
+ * Whether a date field is a deadline the record still owes: a `dueDate`-keyed
+ * field on a record that is neither settled by status nor completed.
+ */
+export function isOpenDeadline(key: string, record: unknown): boolean {
+  if (!/(^d|D)ue(End)?Date$/.test(key)) return false;
+  const parsed = settledRecord.safeParse(record);
+  if (!parsed.success) return true;
+  const { status, completedAt } = parsed.data;
+  if (status && SETTLED_STATUSES.has(status.toLowerCase())) return false;
+  return completedAt === undefined || completedAt === null;
+}
+
 const renderSpanValue = <TRecord extends object>(
   entity: Entity,
   record: TRecord,
@@ -987,7 +1011,12 @@ const renderSpanValue = <TRecord extends object>(
   return start === null && end === null ? (
     <NoneValue />
   ) : (
-    <DateDisplay start={start} end={end} className="tabular-nums" />
+    <DateDisplay
+      start={start}
+      end={end}
+      due={isOpenDeadline(span.start, record)}
+      className="tabular-nums"
+    />
   );
 };
 
@@ -1386,7 +1415,9 @@ function renderEditableField<TRecord extends object>(
           config={{ type: "number" }}
           clipboard={clipboard}
           onSave={save}
-          renderValue={(v) => displayed(v ?? <NoneValue />)}
+          renderValue={(v) =>
+            displayed(v === null ? <NoneValue /> : <NumberValue value={v} />)
+          }
         />
       );
     }
@@ -1407,7 +1438,7 @@ function renderEditableField<TRecord extends object>(
                 (v ? (
                   renderFormattedScalar(
                     format,
-                    { kind: "date", raw: v },
+                    { kind: "date", raw: v, due: isOpenDeadline(key, record) },
                     surface,
                   )
                 ) : (
@@ -2079,7 +2110,11 @@ export function createEntityDisplayColumns<TRecord extends object>(
               cellData: cellDataForField<TRecord>(entity, field),
             }),
             cell: ({ row }) => {
-              const value = readScalarField(entity, row.original, field);
+              const read = readScalarField(entity, row.original, field);
+              const value =
+                read.kind === "date" && isOpenDeadline(field.key, row.original)
+                  ? { ...read, due: true }
+                  : read;
               const domainValue = compactFieldRendererFor(
                 entity,
                 field.key,

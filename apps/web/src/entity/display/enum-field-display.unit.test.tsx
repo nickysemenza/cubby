@@ -10,7 +10,7 @@ import { fieldEnumOptions } from "./enum-field-display";
 afterEach(cleanup);
 
 const pillFor = (label: string) => {
-  const pill = screen.getByText(label).parentElement;
+  const pill = screen.getByText(label).closest("[data-enum-role]");
   if (!(pill instanceof HTMLElement))
     throw new Error(`Expected ${label} to render inside an enum pill`);
   return pill;
@@ -25,8 +25,10 @@ describe("declared value rosters (display.valueOptions)", () => {
       ).value,
     );
 
-    expect(pillFor("Gift card or store credit")).toHaveStyle(
-      "--enum-pill-color: var(--slate)",
+    // A kind reads as the neutral chip, never a condition tone.
+    expect(pillFor("Gift card or store credit")).toHaveAttribute(
+      "data-enum-role",
+      "category",
     );
   });
 
@@ -35,9 +37,8 @@ describe("declared value rosters (display.valueOptions)", () => {
       renderOptionCell("acquired", fieldEnumOptions("wish", "acquiredAt")),
     );
 
-    expect(pillFor("Acquired")).toHaveStyle(
-      "--enum-pill-color: var(--positive)",
-    );
+    expect(pillFor("Acquired")).toHaveAttribute("data-enum-role", "status");
+    expect(pillFor("Acquired")).toHaveClass("bg-positive-surface");
   });
 
   // Capture attribution is server-derived; reproducing ambiguous attribution needs an image
@@ -49,8 +50,9 @@ describe("declared value rosters (display.valueOptions)", () => {
         fieldEnumOptions("image", "captureAttribution"),
       ),
     );
-    expect(pillFor("Ambiguous")).toHaveStyle(
-      "--enum-pill-color: var(--warning)",
+    expect(pillFor("Ambiguous")).toHaveClass(
+      "bg-warning-surface",
+      "text-warning-ink",
     );
   });
 

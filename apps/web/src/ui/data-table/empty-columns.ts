@@ -15,7 +15,8 @@ function isEmptyValue(value: unknown) {
 /**
  * Columns with no value in any loaded row. They collapse to a glyph strip so
  * a sparse roster stops spending width on blank cells. A column the person
- * sized, sorted, filtered or pinned stays as they set it.
+ * sized, sorted, filtered or pinned stays as they set it, and one still
+ * loading its values stays open.
  */
 export function emptyColumnIds<TData extends RowData>(
   table: CubbyTable<TData>,
@@ -35,6 +36,9 @@ export function emptyColumnIds<TData extends RowData>(
       sized[column.id] !== undefined
     )
       continue;
+    // A deferred value is unknown, not empty; its accessor may not even run.
+    const unavailable = column.columnDef.meta?.valueUnavailable;
+    if (unavailable && rows.some((row) => unavailable(row.original))) continue;
     if (rows.every((row) => isEmptyValue(row.getValue(column.id))))
       empty.add(column.id);
   }

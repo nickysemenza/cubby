@@ -411,6 +411,49 @@ describe("table density", () => {
     ).not.toBeNull();
   });
 
+  it("never paints the ⓘ over clipped text; the spill carries it", async () => {
+    await page.viewport(1440, 900);
+    const view = render(
+      <Fixture
+        cells={[
+          {
+            id: "c13b",
+            width: 120,
+            content: (
+              <CellFrame
+                overlay
+                trailing={
+                  <button
+                    type="button"
+                    aria-label="Explain"
+                    className={CELL_RAIL_BUTTON_CLASS}
+                  >
+                    i
+                  </button>
+                }
+              >
+                {LONG_NAME}
+              </CellFrame>
+            ),
+          },
+        ]}
+      />,
+    );
+    const rail = view
+      .getByTestId("cell-0")
+      .querySelector<HTMLElement>("[data-cell-rail]");
+    if (!rail) throw new Error("missing rail");
+    await waitFor(() => expect(rail).toHaveAttribute("data-rail-covers"));
+    expect(getComputedStyle(rail).opacity).toBe("0");
+    expect(getComputedStyle(rail).pointerEvents).toBe("none");
+    await userEvent.hover(view.getByTestId("cell-0"));
+    await waitFor(() => expect(overlay()?.textContent).toContain(LONG_NAME));
+    const copy = overlay()?.querySelector<HTMLElement>(
+      "[data-cell-spill-rail]",
+    );
+    expect(copy && getComputedStyle(copy).opacity).toBe("1");
+  });
+
   it("wraps chips to two lines and counts what does not fit", async () => {
     await page.viewport(1440, 900);
     const names = [
@@ -457,6 +500,85 @@ describe("table density", () => {
       expect(rect(chip).right).toBeLessThanOrEqual(rect(cell).right);
     }
     expect(Math.round(rect(cell).height)).toBe(32);
+  });
+
+  // Regression: 20px pills wrapped to a second line the 32px cell clipped
+  // through the middle; only 12px chips fit two lines.
+  it("never wraps pill-height chips to a clipped second line", async () => {
+    await page.viewport(1440, 900);
+    const labels = ["Restores a link", "Clears a gap", "Needs a look"];
+    const view = render(
+      <Fixture
+        cells={[
+          {
+            id: "c5b",
+            width: 140,
+            content: (
+              <ChipCluster
+                items={labels.map((label) => ({
+                  key: label,
+                  label,
+                  node: (
+                    <span style={{ display: "block", height: 20 }}>
+                      {label}
+                    </span>
+                  ),
+                }))}
+              />
+            ),
+          },
+        ]}
+      />,
+    );
+    const cell = view.getByTestId("cell-0");
+    await waitFor(() =>
+      expect(cell.querySelector("[data-chip-overflow]")).not.toBeNull(),
+    );
+    const shown = [...cell.querySelectorAll<HTMLElement>("[data-chip]")];
+    const tops = new Set(shown.map((chip) => Math.round(rect(chip).top)));
+    expect(tops.size).toBe(1);
+    expect(Math.round(rect(cell).height)).toBe(32);
+  });
+
+  it("keeps a one-line list to its first chip and names the rest under +N", async () => {
+    await page.viewport(1440, 900);
+    const labels = ["Restores a link", "Clears a gap", "Needs a look"];
+    const view = render(
+      <Fixture
+        cells={[
+          {
+            id: "c5c",
+            width: 200,
+            content: (
+              <ChipCluster
+                lines={1}
+                items={labels.map((label) => ({
+                  key: label,
+                  label,
+                  node: <span>{label}</span>,
+                }))}
+              />
+            ),
+          },
+        ]}
+      />,
+    );
+    const cell = view.getByTestId("cell-0");
+    await waitFor(() =>
+      expect(cell.querySelector("[data-chip-overflow]")).not.toBeNull(),
+    );
+    const shown = [...cell.querySelectorAll<HTMLElement>("[data-chip]")];
+    const more = cell.querySelector<HTMLElement>("[data-chip-overflow]");
+    expect(more?.textContent).toBe(`+${labels.length - shown.length}`);
+    expect(more?.getAttribute("aria-label")).toBe(
+      `${labels.length - shown.length} more: ${labels.slice(shown.length).join(", ")}`,
+    );
+    const tops = new Set(
+      [...shown, ...(more ? [more] : [])].map((part) =>
+        Math.round(rect(part).top + rect(part).height / 2),
+      ),
+    );
+    expect(tops.size).toBe(1);
   });
 
   it("keeps a code's first and last four characters when it truncates", async () => {

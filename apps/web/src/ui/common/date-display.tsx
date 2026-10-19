@@ -26,25 +26,40 @@ type DateDisplayProps = {
    * day and time; both keep the relative distance in the tooltip instead of inline.
    */
   clock?: "time" | "day";
+  /**
+   * The date is an open record's deadline: once its last day has passed it
+   * reads destructive and its distance says "overdue" instead of "ago".
+   */
+  due?: boolean;
 } & (
   | { timestamp: string | Date | number; start?: never; end?: never }
   | { start: string | null; end?: string | null; timestamp?: never }
 );
 
+/** "yesterday" / "5d ago" as a deadline's distance: "1d overdue" / "5d overdue". */
+export function overdueDistance(relative: string): string {
+  return relative
+    .replace(/^yesterday$/, "1d overdue")
+    .replace(/ ago$/, " overdue");
+}
+
 function DateContents({
   primary,
   secondary,
   stacked,
+  overdue = false,
 }: {
   primary: string;
   secondary: string | null;
   stacked: boolean;
+  overdue?: boolean;
 }) {
   if (stacked)
     return (
       <StackedValue
         primary={primary}
         secondary={secondary}
+        secondaryClassName={overdue ? "text-destructive" : undefined}
         suppressSecondaryHydrationWarning
       />
     );
@@ -52,7 +67,10 @@ function DateContents({
     <>
       {primary}
       {secondary && (
-        <span className="text-muted-foreground" suppressHydrationWarning>
+        <span
+          className={overdue ? "text-destructive" : "text-muted-foreground"}
+          suppressHydrationWarning
+        >
           {" · "}
           {secondary}
         </span>
@@ -71,15 +89,26 @@ export function DateDisplay(props: DateDisplayProps) {
 
   if (props.timestamp === undefined) {
     const full = dateSpanParts(props.start, props.end ?? null, today);
-    const parts = stacked
+    const span = stacked
       ? stackedDateSpan(props.start, props.end ?? null, today)
       : { primary: full.label, secondary: full.relative };
+    const last = props.end ?? props.start;
+    const overdue = props.due === true && last !== null && last < today;
+    const parts = overdue
+      ? {
+          ...span,
+          secondary: span.secondary && overdueDistance(span.secondary),
+        }
+      : span;
+    const relative =
+      overdue && full.relative ? overdueDistance(full.relative) : full.relative;
     return (
       <span
-        className={props.className}
-        title={full.relative ? `${full.label} · ${full.relative}` : full.label}
+        className={cn(overdue && "text-destructive", props.className)}
+        data-overdue={overdue ? "" : undefined}
+        title={relative ? `${full.label} · ${relative}` : full.label}
       >
-        <DateContents {...parts} stacked={stacked} />
+        <DateContents {...parts} stacked={stacked} overdue={overdue} />
       </span>
     );
   }
