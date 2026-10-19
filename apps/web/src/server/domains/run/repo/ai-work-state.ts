@@ -1,9 +1,10 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { runStatus } from "@cubby/schemas/run-fields";
 import { MAX_AUTOMATIC_WORKFLOW_FAILURES } from "@cubby/schemas/workflow-runs";
-import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
+import { and, eq, inArray, lt, notExists, or, sql } from "drizzle-orm";
 
 import { guardAiEvaluation } from "~/server/ai/repo/ai-evaluation";
+import { PENDING_AI_STATES } from "~/server/ai/repo/ai-evaluation-requests";
 import type { Database } from "~/server/db";
 import {
   getDb,
@@ -42,8 +43,9 @@ export async function writeRunningAttemptProgress(
   runId: RunRow["id"],
   attempt: number,
   set: RunUpdate,
+  options: { requireNoOwnedPendingWork?: boolean } = {},
 ) {
-  await getDb(db)
+  const written = await getDb(db)
     .update(run)
     .set(set)
     .where(
@@ -51,8 +53,25 @@ export async function writeRunningAttemptProgress(
         eq(run.id, runId),
         eq(run.status, "running"),
         sql`COALESCE((${run.progress}->>'attempt')::integer, 0) = ${attempt}`,
+        // Discovery may add or reopen work after the attempt read its roster.
+        options.requireNoOwnedPendingWork
+          ? notExists(
+              getDb(db)
+                .select({ id: aiEvaluation.id })
+                .from(aiEvaluation)
+                .where(
+                  and(
+                    eq(aiEvaluation.runId, run.id),
+                    inArray(aiEvaluation.state, [...PENDING_AI_STATES]),
+                    sql`${aiEvaluation.receipt}->>'retryEvaluationId' IS NULL`,
+                  ),
+                ),
+            )
+          : undefined,
       ),
-    );
+    )
+    .returning({ id: run.id });
+  return written.length > 0;
 }
 
 export async function aiEvaluationsForRun(db: Database, runId: RunRow["id"]) {

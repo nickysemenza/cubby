@@ -598,22 +598,35 @@ describe("targeted prompt refresh", () => {
       .select()
       .from(aiEvaluation)
       .where(emailRefreshTarget);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({
-      id: blocked!.id,
-      workKey: blocked!.workKey,
+    expect(rows).toHaveLength(2);
+    const replacement = rows.find((row) => row.id !== blocked!.id)!;
+    expect(replacement).toMatchObject({
+      workKey: `${blocked!.workKey}:reopen:1`,
       state: "queued",
       error: null,
       receipt: null,
     });
-    expect(discovered).toContain(rows[0]!.runId);
+    // The settled row keeps its Run, receipt and error, linked to its replacement.
+    expect(rows.find((row) => row.id === blocked!.id)).toMatchObject({
+      runId: blocked!.runId,
+      state: "blocked",
+      error: blocked!.error,
+      receipt: {
+        reason: "mailbox_authorization_unavailable",
+        retryEvaluationId: replacement.id,
+      },
+    });
+    expect(discovered).toContain(replacement.runId);
     const [owner] = await getDb(ctx.db)
       .select()
       .from(run)
-      .where(eq(run.id, rows[0]!.runId));
+      .where(eq(run.id, replacement.runId));
     expect(owner?.status).toBe("running");
     // Queued work is not re-enqueued by another pass.
-    expect(await discoverAiRefresh(ctx.db)).not.toContain(rows[0]!.runId);
+    expect(await discoverAiRefresh(ctx.db)).not.toContain(replacement.runId);
+    expect(
+      await getDb(ctx.db).select().from(aiEvaluation).where(emailRefreshTarget),
+    ).toHaveLength(2);
   });
 
   it("keeps no-evidence completion terminal until the relevant input changes", async () => {

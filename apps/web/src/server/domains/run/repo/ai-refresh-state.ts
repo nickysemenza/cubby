@@ -15,7 +15,6 @@ import {
   gt,
   inArray,
   isNull,
-  lt,
   notInArray,
   or,
   sql,
@@ -69,35 +68,54 @@ const targetWorkKey = ({ target, provenance }: EvaluationTargetInput) =>
   );
 
 // Work that settled without publishing (a declined publication, Mail import
-// off, a fenced attempt) reopens under its own work key when discovery finds it
-// again. The bound stops a persistently declined source from re-spending every
-// pass; failed and cancelled work stays with the operator's retry.
+// off, a fenced attempt) reopens when discovery finds it again: a replacement
+// row `<workKey>:reopen:<n>` carries the work, and the settled row keeps its
+// Run, receipt and error, linked by `retryEvaluationId` (the operator-retry
+// shape). The bound stops a persistently declined source from re-spending
+// every pass; failed and cancelled work stays with the operator's retry.
 const MAX_REOPENS = 3;
-const reopenable = () =>
-  and(
-    inArray(aiEvaluation.state, ["blocked", "obsolete"]),
-    lt(aiEvaluation.restarts, MAX_REOPENS),
-  );
+const REOPEN_SEPARATOR = ":reopen:";
+const retryReceipt = z.object({ retryEvaluationId: z.uuid() });
+
+/** The row a work key's retries and reopens currently end at, with its reopen count. */
+async function workKeyTip(db: Database, workKey: string) {
+  const [base] = await getDb(db)
+    .select()
+    .from(aiEvaluation)
+    .where(eq(aiEvaluation.workKey, workKey));
+  let tip = base;
+  let reopens = 0;
+  for (let hop = 0; tip && hop <= MAX_REOPENS * 4; hop++) {
+    const next = retryReceipt.safeParse(tip.receipt).data?.retryEvaluationId;
+    if (!next) break;
+    const [row] = await getDb(db)
+      .select()
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.id, next));
+    if (!row) break;
+    tip = row;
+    if (row.workKey.startsWith(`${workKey}${REOPEN_SEPARATOR}`)) reopens++;
+  }
+  return {
+    tip,
+    reopens,
+    reopenable:
+      tip !== undefined &&
+      ["blocked", "obsolete"].includes(tip.state) &&
+      reopens < MAX_REOPENS,
+  };
+}
 
 /** Whether any target would insert a new row or reopen a settled one. */
 async function hasAdmissibleTarget(
   db: Database,
   targets: readonly EvaluationTargetInput[],
 ) {
-  const keys = await Promise.all(targets.map(targetWorkKey));
-  const existing = keys.length
-    ? await getDb(db)
-        .select({
-          workKey: aiEvaluation.workKey,
-          reopenable: sql<boolean>`${reopenable()}`,
-        })
-        .from(aiEvaluation)
-        .where(inArray(aiEvaluation.workKey, keys))
-    : [];
-  return targets.some((item, index) => {
-    const row = existing.find((entry) => entry.workKey === keys[index]);
-    return !row || (row.reopenable && !item.blockedReason);
-  });
+  for (const item of targets) {
+    const chain = await workKeyTip(db, await targetWorkKey(item));
+    if (!chain.tip || (chain.reopenable && !item.blockedReason)) return true;
+  }
+  return false;
 }
 
 async function insertTarget(
@@ -106,62 +124,60 @@ async function insertTarget(
   item: EvaluationTargetInput,
 ) {
   const { target, provenance, blockedReason } = item;
-  const owner = runEntityId.parse(runId);
-  const snapshot = jsonSnapshot(item.snapshot);
-  const inserted = await getDb(db)
-    .insert(aiEvaluation)
-    .values({
-      runId: owner,
-      feature:
-        target.kind === "connection"
-          ? "entity-connections"
-          : target.kind === "field"
-            ? "field-suggestion"
-            : target.kind === "product"
-              ? "product-identity"
-              : "mailbox-triage",
-      workKey: await targetWorkKey(item),
-      target,
-      provenance,
-      snapshot,
-      ...(blockedReason
-        ? {
-            state: "blocked" as const,
-            error: blockedReason,
-            receipt: { reason: "mailbox_authorization_unavailable" },
-          }
-        : {}),
-    })
-    .onConflictDoUpdate({
-      target: aiEvaluation.workKey,
-      set: {
-        runId: owner,
+  const workKey = await targetWorkKey(item);
+  const insert = (key: string) =>
+    getDb(db)
+      .insert(aiEvaluation)
+      .values({
+        runId: runEntityId.parse(runId),
+        feature:
+          target.kind === "connection"
+            ? "entity-connections"
+            : target.kind === "field"
+              ? "field-suggestion"
+              : target.kind === "product"
+                ? "product-identity"
+                : "mailbox-triage",
+        workKey: key,
         target,
         provenance,
-        snapshot,
-        state: "queued",
-        attempts: 0,
-        runAttempt: 0,
-        attemptToken: null,
-        deadlineAt: null,
-        nextAttemptAt: null,
-        result: null,
-        receipt: null,
-        error: null,
-        restarts: sql`${aiEvaluation.restarts} + 1`,
-        updatedAt: new Date(),
+        snapshot: jsonSnapshot(item.snapshot),
+        ...(blockedReason
+          ? {
+              state: "blocked" as const,
+              error: blockedReason,
+              receipt: { reason: "mailbox_authorization_unavailable" },
+            }
+          : {}),
+      })
+      .onConflictDoNothing()
+      .returning({ id: aiEvaluation.id });
+  if ((await insert(workKey)).length) return 1;
+  if (blockedReason) return 0;
+  const chain = await workKeyTip(db, workKey);
+  if (!chain.reopenable || !chain.tip) return 0;
+  const [replacement] = await insert(
+    `${workKey}${REOPEN_SEPARATOR}${chain.reopens + 1}`,
+  );
+  if (!replacement) return 0;
+  await getDb(db)
+    .update(aiEvaluation)
+    .set({
+      receipt: {
+        ...z.record(z.string(), z.unknown()).catch({}).parse(chain.tip.receipt),
+        retryEvaluationId: replacement.id,
       },
-      setWhere: blockedReason ? sql`false` : reopenable(),
+      updatedAt: new Date(),
     })
-    .returning({ id: aiEvaluation.id });
-  return inserted.length;
+    .where(eq(aiEvaluation.id, chain.tip.id));
+  return 1;
 }
 
 /**
  * Adds evaluation rows to an existing Run. A target whose work key (record,
  * field and input fingerprint) was already evaluated or is in flight under
- * any Run is not inserted again, while a reopenable settled one moves into
- * this Run; the count is what is new or reopened.
+ * any Run is not inserted again, while a reopenable settled one gets a
+ * replacement row in this Run; the count is what is new or reopened.
  */
 export async function insertEvaluationTargets(
   db: Database,
@@ -192,7 +208,7 @@ export async function scheduleEvaluationRun(
     let runId = await ensureRun(tx, actor, input);
     // Work and its owner become visible together, before recovery can launch a Workflow.
     let owner = await lockRun(runId);
-    // A settled Run never relaunches automatically, so reopened work continues in a successor.
+    // A settled Run never relaunches automatically, so new or reopened work continues in a successor.
     if (input.status !== "completed" && input.clientKey)
       for (
         let generation = 1;
@@ -203,7 +219,7 @@ export async function scheduleEvaluationRun(
       ) {
         runId = await ensureRun(tx, actor, {
           ...input,
-          clientKey: `${input.clientKey}:reopen:${generation}`,
+          clientKey: `${input.clientKey}:successor:${generation}`,
         });
         owner = await lockRun(runId);
       }
