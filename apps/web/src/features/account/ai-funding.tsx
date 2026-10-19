@@ -1,3 +1,4 @@
+import { CHATGPT_USAGE_URL } from "@cubby/schemas/chatgpt";
 import type { AiFundingStatus } from "@cubby/schemas/mail-import-settings";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -54,7 +55,9 @@ const creditLabel = ({ credit }: AiFundingStatus) =>
 const planLabel = ({ plan }: AiFundingStatus) =>
   plan.state === "available" && plan.spentUsd >= plan.limitUsd
     ? "budget spent"
-    : `${PLAN_LABEL[plan.state]}${plan.until ? ` until ${when(plan.until)}` : ""}`;
+    : plan.state === "paused" && !plan.until
+      ? "usage limit reached; ChatGPT didn’t say when it resets"
+      : `${PLAN_LABEL[plan.state]}${plan.until ? ` until ${when(plan.until)}` : ""}`;
 
 /** The one-line funding summary features show, linking to Settings. */
 export function AiFundingLine({ budget }: { budget: AiFundingStatus }) {
@@ -199,6 +202,27 @@ export function AiFundingSettings() {
                   </code>
                 ) : null}
               </Stack>
+            ) : null}
+            {budget.plan.state === "paused" ? (
+              <Row align="center" justify="between" gap="sm" wrap>
+                <p className="text-sm">
+                  {budget.plan.until
+                    ? `ChatGPT plan usage limit reached; resets ${when(budget.plan.until)}`
+                    : "ChatGPT plan usage limit reached; ChatGPT didn’t say when it resets"}
+                </p>
+                <Button
+                  render={
+                    <a
+                      aria-label="Manage usage"
+                      href={CHATGPT_USAGE_URL}
+                      target="_blank"
+                      rel="noreferrer"
+                    />
+                  }
+                >
+                  Manage usage
+                </Button>
+              </Row>
             ) : null}
             {budget.plan.state !== "available" && budget.plan.reason ? (
               <p className="text-xs break-words text-muted-foreground">

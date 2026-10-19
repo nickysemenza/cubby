@@ -600,3 +600,39 @@ it("keeps failed calls without reported tokens unknown", () => {
     outputTokens: 0,
   });
 });
+
+// Incomplete output can contain plausible tool calls. Agent callers must never
+// treat truncation as a successful turn; Rust's separate folding path retains it.
+it("rejects an incomplete Responses turn before handing tools to the coordinator", async () => {
+  const models = createModels();
+  for (const provider of cubbyPiProviders(
+    () => async () =>
+      new Response(
+        `data: ${JSON.stringify({
+          type: "response.incomplete",
+          response: {
+            id: "synthetic-incomplete",
+            status: "incomplete",
+            output: [],
+            incomplete_details: { reason: "max_output_tokens" },
+            usage: { input_tokens: 10, output_tokens: 1, total_tokens: 11 },
+          },
+        })}\n\n`,
+        { headers: { "content-type": "text/event-stream" } },
+      ),
+  ))
+    models.setProvider(provider);
+  const model = models.getModel("openai", "gpt-6-sol");
+  if (!model) throw new Error("Missing Sol");
+  const stream = models.streamSimple(model, { messages: [] });
+  const terminal: string[] = [];
+  for await (const event of stream)
+    if (event.type === "done" || event.type === "error")
+      terminal.push(event.type);
+  expect(terminal).toEqual(["error"]);
+  expect(await stream.result()).toMatchObject({
+    stopReason: "error",
+    errorMessage: expect.stringContaining("incomplete"),
+    usage: { output: 1 },
+  });
+});

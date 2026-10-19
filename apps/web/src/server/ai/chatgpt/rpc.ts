@@ -1,4 +1,5 @@
 import type {
+  ChatGptAuthorizationHost,
   ChatGptAuthorization,
   ChatGptModel,
   ChatGptStatus,
@@ -145,7 +146,8 @@ export class ChatGptInferenceRequests {
 
 export interface ChatGptPlanRpc {
   status(): Promise<ChatGptStatus>;
-  authorizationHost(): Promise<{ hostId: string; clientId: string | null }>;
+  authorizationHost(): Promise<ChatGptAuthorizationHost>;
+  dismissWelcome(): Promise<ChatGptStatus>;
   authorizePlan(input: ChatGptAuthorization): Promise<ChatGptStatus>;
   models(): Promise<ChatGptModel[]>;
   disconnect(): Promise<void>;

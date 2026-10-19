@@ -89,6 +89,33 @@ describe("AI funding controls", () => {
     );
   });
 
+  // Unknown quota reset must still offer the provider's usage controls.
+  it("offers Manage usage without inventing a plan reset", async () => {
+    harness = createBrowserTestHarness();
+    restore = overrideStartDispatch(async () => ({
+      ok: true,
+      data: budget({
+        plan: {
+          limitUsd: 2,
+          spentUsd: 0.5,
+          state: "paused",
+          until: null,
+          reason: "synthetic quota refusal",
+        },
+      }),
+    }));
+    render(<AiFundingSettings />, { wrapper: harness.wrapper });
+    expect(
+      await screen.findByText(
+        "ChatGPT plan usage limit reached; ChatGPT didn’t say when it resets",
+      ),
+    ).toBeVisible();
+    expect(screen.getByRole("link", { name: "Manage usage" })).toHaveAttribute(
+      "href",
+      "https://chatgpt.com/settings/usage",
+    );
+  });
+
   it("saves an edited credit budget", () => {
     const onSave = vi.fn();
     render(<CreditBudgetEditor limitUsd={5} pending={false} onSave={onSave} />);

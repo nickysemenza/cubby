@@ -25,6 +25,9 @@ export class ChatGptPlanDurableObject extends DurableObject<Env> {
   status() {
     return this.session.status();
   }
+  dismissWelcome() {
+    return this.session.dismissWelcome();
+  }
   authorizationHost() {
     return this.session.authorizationHost();
   }

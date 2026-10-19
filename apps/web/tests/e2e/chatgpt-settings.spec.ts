@@ -11,6 +11,8 @@ test("settings explains local authorization and exposes no model selectors", asy
     connected: false,
     email: null,
     needsReauthorization: false,
+    issue: null,
+    welcomeDismissed: false,
   });
   const host = await request.get("/api/v1/chatgpt/authorizationHost");
   expect(host.ok()).toBe(true);
@@ -24,6 +26,18 @@ test("settings explains local authorization and exposes no model selectors", asy
     headers: { Authorization: "Bearer invalid-example" },
   });
   expect(rejectedBearer.status()).toBe(401);
+  const crossOriginDismiss = await request.patch("/api/ai/chatgpt", {
+    headers: { Origin: "https://untrusted.example.com" },
+  });
+  expect(crossOriginDismiss.status()).toBe(403);
+  const dismissed = await request.patch("/api/ai/chatgpt", {
+    headers: { Origin: new URL(status.url()).origin },
+  });
+  expect(dismissed.ok()).toBe(true);
+  expect(await dismissed.json()).toMatchObject({
+    connected: false,
+    welcomeDismissed: false,
+  });
   const crossOrigin = await request.delete("/api/ai/chatgpt", {
     headers: { Origin: "https://untrusted.example.com" },
   });
@@ -37,6 +51,9 @@ test("settings explains local authorization and exposes no model selectors", asy
   await expect(
     card.getByText(/pnpm apple cli chatgpt connect --base-url/),
   ).toBeVisible();
+  await expect(
+    card.getByText(/background work continues on paid billing/u),
+  ).toBeVisible();
   await expect(card.getByRole("combobox")).toHaveCount(0);
 });
 
@@ -46,12 +63,20 @@ test("settings renders the complete returned catalog, refresh errors, and discon
   // External account access cannot run in CI. The browser receives synthetic
   // catalog responses; credential rotation has its own focused regression.
   let connected = true;
+  let welcomeDismissed = false;
+  const warning =
+    "Cubby cleared its tokens but couldn't confirm OpenAI revoked them; disconnect Cubby in ChatGPT settings to be sure.";
   let failed = false;
   await page.route("**/api/ai/chatgpt*", async (route) => {
     const request = route.request();
     if (request.method() === "DELETE") {
       connected = false;
       await route.fulfill({ json: { disconnected: true } });
+    } else if (request.method() === "PATCH") {
+      welcomeDismissed = true;
+      await route.fulfill({
+        json: { connected, email: "user@example.com", welcomeDismissed },
+      });
     } else if (request.url().includes("models")) {
       await route.fulfill(
         failed
@@ -83,11 +108,28 @@ test("settings renders the complete returned catalog, refresh errors, and discon
       );
     } else
       await route.fulfill({
-        json: { connected, email: connected ? "user@example.com" : null },
+        json: {
+          connected,
+          email: connected ? "user@example.com" : null,
+          welcomeDismissed,
+          issue: connected ? null : warning,
+        },
       });
   });
   await gotoAuthenticatedPage(page, "/settings");
   const card = page.getByRole("region", { name: "ChatGPT plan", exact: true });
+  await expect(
+    card.getByText(
+      "Background AI work in Cubby uses your ChatGPT plan. Manage usage in ChatGPT settings.",
+    ),
+  ).toBeVisible();
+  await card.getByRole("button", { name: "Got it" }).click();
+  await expect(card.getByRole("button", { name: "Got it" })).toHaveCount(0);
+  await page.reload();
+  await expect(
+    card.getByRole("button", { name: "Disconnect ChatGPT" }),
+  ).toBeVisible();
+  await expect(card.getByRole("button", { name: "Got it" })).toHaveCount(0);
   await expect(
     card.getByText("example-future-model", { exact: true }),
   ).toBeVisible();
@@ -111,6 +153,7 @@ test("settings renders the complete returned catalog, refresh errors, and discon
   await card.getByRole("button", { name: "Refresh models" }).click();
   await expect(card.getByText(/example eligibility restriction/)).toBeVisible();
   await card.getByRole("button", { name: "Disconnect ChatGPT" }).click();
+  await expect(card.getByText(warning)).toBeVisible();
   await expect(
     card.getByRole("button", { name: "Continue with ChatGPT" }),
   ).toBeVisible();

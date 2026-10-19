@@ -77,7 +77,7 @@ async function handle(
 
 export const handlers: HttpRouteHandlers<
   Record<never, never>,
-  "GET" | "DELETE"
+  "GET" | "DELETE" | "PATCH"
 > = {
   GET: ({ request }) =>
     handle(request, () => {
@@ -85,6 +85,8 @@ export const handlers: HttpRouteHandlers<
       const plan = requireChatGptPlan();
       return params.has("models") ? plan.models() : plan.status();
     }),
+  PATCH: ({ request }) =>
+    handle(request, () => requireChatGptPlan().dismissWelcome()),
   DELETE: ({ request }) =>
     handle(request, async () => {
       await requireChatGptPlan().disconnect();

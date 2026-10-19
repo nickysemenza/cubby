@@ -1,10 +1,12 @@
 import {
   chatGptAuthorization,
   chatGptModels,
+  type ChatGptAuthorizationHost,
   type ChatGptAuthorization,
   type ChatGptStatus,
 } from "@cubby/schemas/chatgpt";
 import type { GatewayQuery } from "@cubby/shared/ai/gateway-request";
+import { retryWithBackoff } from "@cubby/shared/retry";
 import { createLogger } from "@cubby/worker-tracing";
 import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
 import { createRemoteJWKSet, jwtVerify } from "jose";
@@ -27,7 +29,10 @@ const tokens = z.object({
   id_token: z.string().optional(),
 });
 const connection = z.object({
-  clientId: z.string(),
+  clientId: z.string().nullable(),
+  scopes: z.string().optional(),
+  issue: z.string().nullable().optional(),
+  welcomeDismissed: z.boolean().optional(),
   subject: z.string(),
   email: z.string().nullable(),
   connected: z.boolean().default(true),
@@ -38,6 +43,7 @@ const connection = z.object({
 export type ChatGptConnection = z.infer<typeof connection>;
 type Connection = ChatGptConnection;
 const activeConnection = connection.extend({
+  clientId: z.string(),
   accessToken: z.string(),
   refreshToken: z.string(),
 });
@@ -56,7 +62,7 @@ async function checkedJson(response: Response) {
 }
 
 function permission(scope: string | undefined) {
-  if (scope && !scope.split(" ").includes("chatgpt.tokens.use.direct")) {
+  if (!scope?.split(" ").includes("chatgpt.tokens.use.direct")) {
     throw new Error(
       "ChatGPT plan permission was not granted. Reconnect and allow plan usage.",
     );
@@ -140,7 +146,10 @@ export class ChatGptSession {
     return {
       connected: saved?.connected ?? false,
       email: saved?.connected ? saved.email : null,
-      needsReauthorization: !!saved?.connected && !saved.refreshToken,
+      needsReauthorization:
+        !!saved?.connected && (!saved.refreshToken || !!saved.issue),
+      issue: saved?.issue ?? null,
+      welcomeDismissed: saved?.welcomeDismissed ?? false,
     };
   }
 
@@ -148,19 +157,36 @@ export class ChatGptSession {
     return this.summary(await this.read());
   }
 
-  authorizationHost(): Promise<{ hostId: string; clientId: string | null }> {
+  dismissWelcome(): Promise<ChatGptStatus> {
+    return this.serial(async () => {
+      const saved = await this.read();
+      if (saved?.connected)
+        await this.store.put("connection", {
+          ...saved,
+          welcomeDismissed: true,
+        });
+      return this.status();
+    });
+  }
+
+  authorizationHost(): Promise<ChatGptAuthorizationHost> {
     return this.serial(async () => {
       const previous = await this.store.get("hostId");
       const hostId = previous
         ? z.string().parse(previous)
         : `urn:uuid:${crypto.randomUUID()}`;
       if (!previous) await this.store.put("hostId", hostId);
-      return { hostId, clientId: (await this.read())?.clientId ?? null };
+      const saved = await this.read();
+      return {
+        hostId,
+        clientId: saved?.clientId ?? null,
+        loginHint: saved?.email ?? null,
+      };
     });
   }
 
-  connect(raw: ChatGptAuthorization): Promise<ChatGptStatus> {
-    return this.serial(async () => {
+  async connect(raw: ChatGptAuthorization): Promise<ChatGptStatus> {
+    const saved = await this.serial(async () => {
       const input = chatGptAuthorization.parse(raw);
       const result = tokens.parse(
         await checkedJson(
@@ -193,9 +219,13 @@ export class ChatGptSession {
       const identity = z
         .object({ sub: z.string(), email: z.string().optional() })
         .parse(payload);
+      const previous = await this.read();
       // Authorization is validated before replacing a working registration.
       const saved: Connection = {
         connected: true,
+        scopes: result.scope,
+        welcomeDismissed: previous?.welcomeDismissed ?? false,
+        issue: null,
         clientId: input.clientId,
         subject: identity.sub,
         email: identity.email ?? null,
@@ -203,10 +233,9 @@ export class ChatGptSession {
         refreshToken: result.refresh_token,
         expiresAt: Date.now() + result.expires_in * 1000,
       };
-      const previous = await this.read();
       if (
         previous &&
-        (previous.clientId !== saved.clientId ||
+        ((previous.clientId !== null && previous.clientId !== saved.clientId) ||
           previous.subject !== saved.subject)
       ) {
         throw new Error(
@@ -214,9 +243,10 @@ export class ChatGptSession {
         );
       }
       await this.store.put("connection", saved);
-      await this.catalog(result.access_token);
-      return this.summary(saved);
+      return activeConnection.parse(saved);
     });
+    await this.catalog(saved.accessToken);
+    return this.summary(saved);
   }
 
   private active(): Promise<z.infer<typeof activeConnection>> {
@@ -224,7 +254,8 @@ export class ChatGptSession {
       const saved = await this.read();
       if (!saved?.connected)
         throw new Error("Connect a ChatGPT account in Settings first");
-      if (!saved.refreshToken || !saved.accessToken)
+      if (saved.issue) throw new Error(saved.issue);
+      if (!saved.clientId || !saved.refreshToken || !saved.accessToken)
         throw new Error("Reconnect ChatGPT in Settings to renew plan access");
       if (saved.expiresAt > Date.now() + 60_000)
         return activeConnection.parse(saved);
@@ -244,6 +275,7 @@ export class ChatGptSession {
         if (
           code &&
           [
+            "invalid_client",
             "invalid_grant",
             "invalid_refresh_token",
             "token_expired",
@@ -254,6 +286,11 @@ export class ChatGptSession {
         ) {
           await this.store.put("connection", {
             ...saved,
+            clientId: code === "invalid_client" ? null : saved.clientId,
+            issue:
+              code === "invalid_client"
+                ? "OpenAI no longer accepts Cubby’s registration — connect again."
+                : "Reconnect ChatGPT in Settings to renew plan access.",
             accessToken: null,
             refreshToken: null,
             expiresAt: 0,
@@ -262,27 +299,66 @@ export class ChatGptSession {
         throw new Error(`OpenAI HTTP ${response.status}: ${body}`);
       }
       const refreshed = tokens.parse(await response.json());
-      permission(refreshed.scope);
+      // Older stored connections already passed the direct-scope check at sign-in.
+      const scopes =
+        refreshed.scope ?? saved.scopes ?? "chatgpt.tokens.use.direct";
+      let issue: string | null = null;
+      try {
+        permission(scopes);
+      } catch (error) {
+        issue = error instanceof Error ? error.message : String(error);
+      }
       const next = {
         ...saved,
+        scopes,
+        issue,
         accessToken: refreshed.access_token,
         refreshToken: refreshed.refresh_token,
         expiresAt: Date.now() + refreshed.expires_in * 1000,
       };
       await this.store.put("connection", next);
+      if (issue) throw new Error(issue);
       return activeConnection.parse(next);
     });
   }
 
+  private async recordAdmissionFailure(
+    status: number,
+    failure: string,
+    accessToken: string,
+  ) {
+    const code = refreshFailureCode(failure);
+    if (
+      (status === 403 && code === "subscription_sharing_user_not_eligible") ||
+      (status === 401 && code === "subscription_sharing_invalid_user")
+    ) {
+      await this.serial(async () => {
+        const current = await this.read();
+        // An old in-flight refusal cannot disable a newer authorization.
+        if (current?.accessToken === accessToken)
+          await this.store.put("connection", {
+            ...current,
+            issue: `${code}: ${
+              code === "subscription_sharing_user_not_eligible"
+                ? "ChatGPT plan usage is unavailable for this account, workspace, or policy."
+                : "OpenAI could not validate the ChatGPT account."
+            } Reconnect ChatGPT to resume plan usage. OpenAI HTTP ${status}: ${scrubErrorMessage(failure)}`,
+          });
+      });
+    }
+  }
+
   private async catalog(accessToken: string) {
-    const result = chatGptModels.parse(
-      await checkedJson(
-        await this.upstream(`${API}/models`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-          signal: AbortSignal.timeout(30_000),
-        }),
-      ),
-    );
+    const response = await this.upstream(`${API}/models`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!response.ok) {
+      const failure = await response.text();
+      await this.recordAdmissionFailure(response.status, failure, accessToken);
+      throw new Error(`OpenAI HTTP ${response.status}: ${failure}`);
+    }
+    const result = chatGptModels.parse(await response.json());
     return result.models.filter((model) => model.visibility === "list");
   }
 
@@ -294,33 +370,60 @@ export class ChatGptSession {
     return this.serial(async () => {
       const saved = await this.read();
       if (!saved) return;
-      if (saved.refreshToken) {
-        const discovery = z.object({ revocation_endpoint: z.url() }).parse(
-          await checkedJson(
-            await this.upstream(`${AUTH}/.well-known/openid-configuration`, {
-              signal: AbortSignal.timeout(30_000),
-            }),
-          ),
-        );
-        if (new URL(discovery.revocation_endpoint).origin !== AUTH)
-          throw new Error("Unexpected OpenAI revocation endpoint");
-        const revoked = await this.upstream(discovery.revocation_endpoint, {
-          method: "POST",
-          body: new URLSearchParams({
-            token: saved.refreshToken,
-            token_type_hint: "refresh_token",
-            client_id: saved.clientId,
-          }),
-          signal: AbortSignal.timeout(30_000),
-        });
-        if (!revoked.ok)
-          throw new Error(
-            `OpenAI revocation HTTP ${revoked.status}: ${await revoked.text()}`,
+      let issue: string | null = null;
+      if (saved.refreshToken && saved.clientId) {
+        const signal = AbortSignal.timeout(90_000);
+        try {
+          const response = await retryWithBackoff(
+            async () => {
+              const discovered = await this.upstream(
+                `${AUTH}/.well-known/openid-configuration`,
+                { signal },
+              );
+              if (!discovered.ok) return discovered;
+              const discovery = z
+                .object({ revocation_endpoint: z.url() })
+                .parse(await discovered.json());
+              if (new URL(discovery.revocation_endpoint).origin !== AUTH)
+                throw new Error("Unexpected OpenAI revocation endpoint");
+              return this.upstream(discovery.revocation_endpoint, {
+                method: "POST",
+                body: new URLSearchParams({
+                  token: saved.refreshToken ?? "",
+                  token_type_hint: "refresh_token",
+                  client_id: saved.clientId ?? "",
+                }),
+                signal,
+              });
+            },
+            {
+              signal,
+              delayFor: (outcome, attempt) => {
+                const delay = [2000, 8000, 30000][attempt];
+                if (delay === undefined || signal.aborted) return null;
+                if (!outcome.ok) return delay;
+                if (outcome.value.status < 500) return null;
+                void outcome.value.body?.cancel();
+                return delay;
+              },
+            },
           );
+          if (!response.ok)
+            throw new Error(
+              `OpenAI revocation HTTP ${response.status}: ${await response.text()}`,
+            );
+        } catch (error) {
+          issue =
+            "Cubby cleared its tokens but couldn't confirm OpenAI revoked them; disconnect Cubby in ChatGPT settings to be sure.";
+          log.warn("plan revocation unconfirmed", {
+            error: scrubErrorMessage(String(error)),
+          });
+        }
       }
       await this.store.put("connection", {
         ...saved,
         connected: false,
+        issue,
         accessToken: null,
         refreshToken: null,
         expiresAt: 0,
@@ -339,15 +442,32 @@ export class ChatGptSession {
     const request = (breakpoints: boolean) =>
       JSON.stringify(chatGptRequest(body, model, { breakpoints }));
     const send = (payload: string) =>
-      this.upstream(`${API}/responses`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${saved.accessToken}`,
-          "Content-Type": "application/json",
+      retryWithBackoff(
+        () =>
+          this.upstream(`${API}/responses`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${saved.accessToken}`,
+              "Content-Type": "application/json",
+            },
+            body: payload,
+            signal,
+          }),
+        {
+          signal,
+          delayFor: (outcome, attempt) => {
+            const delay = [2000, 8000, 30000][attempt];
+            if (
+              delay === undefined ||
+              !outcome.ok ||
+              outcome.value.status !== 503
+            )
+              return null;
+            void outcome.value.body?.cancel();
+            return delay;
+          },
         },
-        body: payload,
-        signal,
-      });
+      );
     const breakpoints = this.cacheBreakpoints;
     const first = request(breakpoints);
     let response = await send(first);
@@ -379,6 +499,11 @@ export class ChatGptSession {
       }
       failure = await response.text();
     }
+    await this.recordAdmissionFailure(
+      response.status,
+      failure,
+      saved.accessToken,
+    );
     log.warn("plan refused inference", {
       model,
       status: response.status,
