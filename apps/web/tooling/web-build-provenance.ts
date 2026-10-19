@@ -106,8 +106,11 @@ function stampPath(repoRoot: string): string {
   return path.join(repoRoot, "apps/web/.cloudflare/web-build-provenance.json");
 }
 
+// The purchase agent's skills plus every playbook (generator/playbooks.ts);
+// playbooks also bundle the repository Markdown they link to.
 const AGENT_SKILLS =
-  ".agents/skills/{purchase-import,photo-inventory-import,product-enrichment}/**/*.md";
+  ".agents/skills/{purchase-import,photo-inventory-import,product-enrichment,cubby-meal-logging,log-household-maintenance,garden-plan-import}/**/*.md";
+const BUNDLED_MARKDOWN = ["docs/**/*.md", "README.md", AGENT_SKILLS];
 
 const WEB_BUILD_SOURCE = {
   globs: [
@@ -119,14 +122,15 @@ const WEB_BUILD_SOURCE = {
     "packages/**",
     "recipebridge/**",
     "scripts/**",
-    "docs/guide/**/*.md",
-    AGENT_SKILLS,
+    ...BUNDLED_MARKDOWN,
     "*.{json,jsonc,yaml,yml,toml,lock}",
     ".npmrc",
   ],
   // The in-app docs route bundles docs/guide/**/*.md (docs-registry.tsx); the
-  // purchase agent bundles its skills (purchase-agent/import-run-workflows.ts).
-  bundledMarkdown: ["docs/guide/**/*.md", AGENT_SKILLS],
+  // purchase agent bundles its skills (purchase-agent/import-run-workflows.ts);
+  // the playbooks bundle skills and the docs they link to. Freshness is checked
+  // before generation, so key on the sources rather than playbooks.gen.ts.
+  bundledMarkdown: BUNDLED_MARKDOWN,
   generatedRoots: ["apps/web/src", "apps/web/public", "packages"],
 } satisfies BuildSource;
 
