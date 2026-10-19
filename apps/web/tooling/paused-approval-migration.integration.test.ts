@@ -105,11 +105,13 @@ it("seeds each live image job's failures since its latest retry", async () => {
     );
     await client.query(
       `INSERT INTO "ImageProcessingJob" (shortcode, "imageId", kind, state, "sourceContentHash", "processorRevision", attempts, "completedAt")
-       SELECT v.shortcode, i.id, v.kind, v.state, 'synthetic-hash', 1, v.attempts, CASE WHEN v.state = 'failed' THEN now() END
+       SELECT v.shortcode, i.id, v.kind, v.state, 'synthetic-hash', v.revision, v.attempts, CASE WHEN v.state = 'failed' THEN now() END
        FROM "Image" i CROSS JOIN (VALUES
-         ('IPR-4K7M', 'describe_image', 'pending', 5),
-         ('IPR-7M4K', 'subject_lift', 'failed', 4)
-       ) AS v(shortcode, kind, state, attempts)`,
+         ('IPR-4K7M', 'describe_image', 'pending', 5, 1),
+         ('IPR-7M4K', 'subject_lift', 'failed', 4, 1),
+         ('IPR-9P3Q', 'describe_image', 'pending', 9, 2),
+         ('IPR-3Q9P', 'describe_image', 'waiting_for_device', 1, 3)
+       ) AS v(shortcode, kind, state, attempts, revision)`,
     );
     await client.query(
       `INSERT INTO "ImageProcessingSubmission" (id) VALUES (gen_random_uuid())`,
@@ -128,8 +130,11 @@ it("seeds each live image job's failures since its latest retry", async () => {
         )
       ).rows,
     ).toEqual([
+      { shortcode: "IPR-3Q9P", attempts: 1, failuresSinceRetry: 1 },
       { shortcode: "IPR-4K7M", attempts: 5, failuresSinceRetry: 2 },
       { shortcode: "IPR-7M4K", attempts: 4, failuresSinceRetry: 0 },
+      // Past the cap under the old uncapped loop: still keeps one try.
+      { shortcode: "IPR-9P3Q", attempts: 9, failuresSinceRetry: 2 },
     ]);
   });
 });

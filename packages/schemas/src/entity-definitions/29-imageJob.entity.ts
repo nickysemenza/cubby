@@ -145,7 +145,8 @@ export default defineEntity({
       },
       {
         // Failures since the last operator retry; the retry budget compares
-        // this, never the lifetime `attempts`.
+        // this, never the lifetime `attempts`. Declared in the model only
+        // because storage.columns has no number kind; it has no display.
         key: "failuresSinceRetry",
         kind: "number",
         validation: readOnly(z.int().nonnegative()),
