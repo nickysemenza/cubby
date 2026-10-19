@@ -100,9 +100,9 @@ extension EntityDescriptor {
                             ?? object[field.key]?.stringValue
                     }
                 } else {
-                    value =
-                        FieldResolutionPresentation.readValue(in: object, field: field, surface: "list")?
-                        .stringValue
+                    value = field.surfaceValue(in: object, surface: "list").flatMap {
+                        field.optionLabel(for: $0) ?? $0.stringValue
+                    }
                 }
                 guard let value, !value.isEmpty else {
                     return nil

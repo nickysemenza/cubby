@@ -46,6 +46,15 @@ extension FieldDescriptor {
         return raw[key]
     }
 
+    /// The value a surface reads, as the web does: a declared surface projection, else the
+    /// declared `readPath`, else the field (or its resolved effective value).
+    public func surfaceValue(in raw: JSONValue, surface: String) -> JSONValue? {
+        if readPath != nil, surface == "detail" || explanation?.projections[surface] == nil {
+            return detailValue(in: raw)
+        }
+        return FieldResolutionPresentation.readValue(in: raw, field: self, surface: surface)
+    }
+
     /// The declared label for a string value (`display.valueOptions`), if the field names one.
     public func optionLabel(for value: JSONValue) -> String? {
         guard let code = value.stringValue else { return nil }

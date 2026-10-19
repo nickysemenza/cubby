@@ -45,15 +45,10 @@ nonisolated enum EntityFieldValue {
     }
 
     static func text(in raw: JSONValue, field: FieldDescriptor, surface: String) -> String? {
-        if surface == "detail" {
-            // A declared server-composed sentence is the whole answer: the structure behind it
-            // is never re-worded here, and with no sentence the row is empty.
-            if field.detailLabelPath != nil { return field.detailLabel(in: raw) }
-            // A nested value (`identity.kind`, `meta.url`) is read where the declaration says.
-            if field.readPath != nil { return text(field.detailValue(in: raw), field: field) }
-        }
-        return text(
-            FieldResolutionPresentation.readValue(in: raw, field: field, surface: surface), field: field)
+        // A declared server-composed sentence is the whole detail answer: the structure behind it
+        // is never re-worded here, and with no sentence the row is empty.
+        if surface == "detail", field.detailLabelPath != nil { return field.detailLabel(in: raw) }
+        return text(field.surfaceValue(in: raw, surface: surface), field: field)
     }
 
     static func text(_ value: JSONValue?, field: FieldDescriptor) -> String? {
@@ -128,10 +123,7 @@ nonisolated enum EntityFieldValue {
     }
 
     static func optionColor(in raw: JSONValue, field: FieldDescriptor, surface: String) -> String? {
-        let value =
-            surface == "detail" && field.readPath != nil
-            ? field.detailValue(in: raw)
-            : FieldResolutionPresentation.readValue(in: raw, field: field, surface: surface)
+        let value = field.surfaceValue(in: raw, surface: surface)
         guard let code = value?.stringValue else { return nil }
         return (field.controlOptions ?? field.valueOptions)?.first { $0.value == code }?.color
     }
@@ -176,10 +168,7 @@ nonisolated enum EntityFieldValue {
             field.kind == .date || field.kind == .timestamp || field.format == "plainDate"
                 || field.format == "timestamp"
         else { return nil }
-        let value =
-            surface == "detail" && field.readPath != nil
-            ? field.detailValue(in: raw)
-            : FieldResolutionPresentation.readValue(in: raw, field: field, surface: surface)
+        let value = field.surfaceValue(in: raw, surface: surface)
         guard let string = value?.stringValue, DatePresentation.value(string) != nil else { return nil }
         return string
     }

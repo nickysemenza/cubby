@@ -169,7 +169,9 @@ None is committed; edit the generator or its inputs, never the output. A missing
 - **Structured values.** `FieldDescriptor.valueSchema` (from the field's Zod input schema) is
   drawn by the one `StructuredValueControl`, so a new structured field is a declaration, not a
   view. A structured detail field declares `display.detailLabelPath`, `display.itemsPath`, or a
-  `readPath` with `format`/`valueOptions`; never re-word a structure in Swift.
+  `readPath` with `format`/`valueOptions`; never re-word a structure in Swift. List rows and
+  subtitles read the same `readPath` (`FieldDescriptor.surfaceValue`) unless a surface projection
+  is declared, as web does.
 - **Manifest wire.** `packages/schemas/src/manifest-wire.ts` owns descriptor storage, labels, raw
   values, conformances, and initializer defaults. Change it, run `pnpm generate`, preserve
   Codable envelopes and decode defaults, and verify `EntityManifestTests` and the structured
