@@ -1,4 +1,4 @@
-import { closestCenter } from "@dnd-kit/core";
+import { closestCenter, type KeyboardCoordinateGetter } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
 import type {
   CellData,
@@ -218,8 +218,55 @@ export function moveColumn<TData extends RowData>(
  * `DndContext` props shared by the header and the customizer, which keep their
  * own drag strategies but announce and sense drags the same way.
  */
+/**
+ * Steps to the neighbouring column in painted order and centres the dragged
+ * header on it, so `closestCenter` resolves exactly that column. dnd-kit's
+ * sortable default aligns edges, and a wide header aligned with a narrower
+ * column (a collapsed empty one) centres past it onto the next.
+ * Vertical keys walk the customizer's list.
+ */
+const columnKeyboardCoordinates: KeyboardCoordinateGetter = (
+  event,
+  { context },
+) => {
+  const vertical = event.code === "ArrowDown" || event.code === "ArrowUp";
+  const step =
+    event.code === "ArrowRight" || event.code === "ArrowDown"
+      ? 1
+      : event.code === "ArrowLeft" || event.code === "ArrowUp"
+        ? -1
+        : 0;
+  const { active, over, collisionRect, droppableRects } = context;
+  if (step === 0 || !active || !collisionRect) return undefined;
+  event.preventDefault();
+  const edge = vertical ? "top" : "left";
+  const ordered = context.droppableContainers
+    .getEnabled()
+    .flatMap((container) => {
+      const rect = droppableRects.get(container.id);
+      return rect ? [{ id: container.id, rect }] : [];
+    })
+    .sort((a, b) => a.rect[edge] - b.rect[edge]);
+  const index = ordered.findIndex(
+    (entry) => entry.id === (over?.id ?? active.id),
+  );
+  const target = index === -1 ? undefined : ordered[index + step];
+  if (!target) return undefined;
+  // Sensor coordinates are the dragged rect's top-left in droppable-rect
+  // space, as dnd-kit's own getter returns them.
+  const { rect } = target;
+  return {
+    x: rect.left + (rect.width - collisionRect.width) / 2,
+    y: rect.top + (rect.height - collisionRect.height) / 2,
+  };
+};
+
 export function useColumnLayoutDndProps(targetNoun: string) {
-  const sensors = useCubbyDndSensors({ touchDelay: 150, touchTolerance: 5 });
+  const sensors = useCubbyDndSensors({
+    touchDelay: 150,
+    touchTolerance: 5,
+    keyboardCoordinates: columnKeyboardCoordinates,
+  });
   // dnd-kit's default `DndDescribedBy-<n>` id comes from a module-level counter
   // that advances differently on the server and the client, so every sortable
   // handle's `aria-describedby` hydration-mismatches. `useId` is tree-stable
@@ -333,10 +380,9 @@ function isFlexibleColumn(column: TableWidthColumn) {
 }
 
 /**
- * The widest a fitted column paints, by what it holds: a record title or a
- * column of links to one entity (one chip, its name wrapping to two lines)
- * stops at 240px, free text at 160px, a status pill at 120px and a code at
- * 96px;
+ * The widest a fitted column paints, by what it holds: a record title stops
+ * at 240px, free text at 160px, a status pill or a column of links to one
+ * entity (whose names wrap to two lines) at 120px and a code at 96px;
  * clipped values spill over on hover (`useCellSpill`).
  * Quantities, money and dates keep their natural width. A person's resize
  * still reaches `maxSize`.
@@ -344,7 +390,7 @@ function isFlexibleColumn(column: TableWidthColumn) {
 const IDENTITY_FIT_MAX = 240;
 const TEXT_FIT_MAX = 160;
 const SELECT_FIT_MAX = 120;
-const LINK_FIT_MAX = 240;
+const LINK_FIT_MAX = 120;
 const CODE_FIT_MAX = 96;
 
 function kindFitMax(meta: TableWidthColumn["columnDef"]["meta"]) {

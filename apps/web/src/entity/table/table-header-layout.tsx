@@ -285,9 +285,15 @@ function HeaderMenu<TData extends RowData>({
             aria-label={`${label} column menu`}
             data-cell-spill-off=""
             className={cn(
-              // In flow, not overlaid: an overlay covered a narrow column's
-              // sort target and its label.
-              "size-5 shrink-0 rounded-sm text-muted-foreground opacity-0 transition-opacity group-focus-within/th:opacity-100 group-hover/th:opacity-100 hover:text-foreground focus-visible:opacity-100 data-[popup-open]:opacity-100 pointer-coarse:opacity-100",
+              // In flow once shown, not overlaid: an overlay covered a narrow
+              // column's sort target and its label. Until then a 1px
+              // absolute box, so the fitted width reserves nothing and the
+              // menu stays in the accessibility tree.
+              "pointer-events-none absolute size-px shrink-0 overflow-hidden rounded-sm text-muted-foreground opacity-0 hover:text-foreground",
+              "group-focus-within/th:pointer-events-auto group-focus-within/th:static group-focus-within/th:size-5 group-focus-within/th:opacity-100",
+              "group-hover/th:pointer-events-auto group-hover/th:static group-hover/th:size-5 group-hover/th:opacity-100",
+              "data-[popup-open]:pointer-events-auto data-[popup-open]:static data-[popup-open]:size-5 data-[popup-open]:opacity-100",
+              "pointer-coarse:pointer-events-auto pointer-coarse:static pointer-coarse:size-5 pointer-coarse:opacity-100",
               numeric && "order-first",
             )}
           />
@@ -580,13 +586,14 @@ function SortableHeader<TData extends RowData>({
       <div className="flex min-w-0 items-center">
         {!locked && (
           // Overlays the leading padding instead of taking layout width, so
-          // header labels start on the same x as their cells' values.
+          // header labels start on the same x as their cells' values. Above
+          // a numeric header's leading menu caret, which shares that edge.
           <Button
             variant="ghost"
             size="icon-sm"
             aria-label={`Reorder ${header.column.id} column`}
             data-cell-spill-off=""
-            className="absolute inset-y-0 left-0 my-auto h-5 w-2 shrink-0 cursor-grab touch-none rounded-none px-0 text-muted-foreground opacity-0 transition-opacity group-focus-within/th:opacity-100 group-hover/th:opacity-100 active:cursor-grabbing pointer-coarse:opacity-100"
+            className="absolute inset-y-0 left-0 z-10 my-auto h-5 w-2 shrink-0 cursor-grab touch-none rounded-none px-0 text-muted-foreground opacity-0 transition-opacity group-focus-within/th:opacity-100 group-hover/th:opacity-100 active:cursor-grabbing pointer-coarse:opacity-100"
             {...attributes}
             {...listeners}
           >

@@ -245,10 +245,13 @@ test("wardrobe cards exclude a clothing type, keep uncategorized items, and a he
     .click();
   await page.keyboard.press("Escape");
 
+  // The open Filters panel repeats the strip's chip in its Active section.
   await expect(
-    page.getByRole("button", {
-      name: new RegExp(`^Category: is not .*${name} Outerwear`),
-    }),
+    page
+      .getByRole("button", {
+        name: new RegExp(`^Category: is not .*${name} Outerwear`),
+      })
+      .first(),
   ).toBeVisible();
   // No Outerwear section; the uncategorized item is not Outerwear, so it
   // stays, under the no-value section, which is always last.

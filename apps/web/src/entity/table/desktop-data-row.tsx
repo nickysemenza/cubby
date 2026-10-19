@@ -330,6 +330,10 @@ function DesktopDataRowInner<TItem extends RowData>({
   const handleRowClick = onRowClick
     ? (e: MouseEvent<HTMLTableRowElement>) => {
         if (isInteractiveEventTarget(e.target)) return;
+        // React bubbles a portaled popover's clicks (an explanation's
+        // disclosure) through the row that opened it; they are not row clicks.
+        if (!(e.target instanceof Node) || !e.currentTarget.contains(e.target))
+          return;
 
         // In cell-selection mode a click on an editable cell selects it (via the
         // container's mousedown delegation); don't also navigate/open the row.

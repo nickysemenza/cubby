@@ -1,6 +1,7 @@
 import { createEntityFixture } from "./fixtures/core";
 import { seedLocationPrerequisite } from "./fixtures/catalog";
 import {
+  openCellExplanation,
   gotoAuthenticatedPage,
   inlineExplanation,
 } from "./support/e2e-helpers";
@@ -40,10 +41,7 @@ test("product location context preserves links and explains the same partial gap
   await expect(
     row.locator(`a[href="/locations/${location.id}"]`).first(),
   ).toBeVisible();
-  await row.hover();
-  await row
-    .getByRole("button", { name: "How locations is determined", exact: true })
-    .click();
+  await openCellExplanation(row, "How locations is determined");
   const explanation = page.locator('[data-slot="popover-content"]:visible');
   await expect(explanation).toContainText("Stock not tracked");
   await expect(explanation).toContainText("1 expected item unlocated");

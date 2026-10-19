@@ -277,6 +277,28 @@ export async function expectViewportBounded(page: Page) {
   }).toPass({ timeout: 15000 });
 }
 
+/**
+ * Open a row's cell explanation. The explanation rail mounts only in the
+ * hovered cell of the active row, so hovering the row's centre reveals
+ * whichever column happens to sit there; this hovers each cell until the
+ * named control mounts. It then clicks the control the way the spill-over
+ * copy does: over clipped text the real rail is click-through in place and
+ * its copy forwards the click with `control.click()`.
+ */
+export async function openCellExplanation(row: Locator, name: string | RegExp) {
+  const button = row
+    .getByRole("button", { name, exact: typeof name === "string" })
+    .first();
+  await expect(async () => {
+    for (const cell of await row.getByRole("cell").all()) {
+      if ((await button.count()) > 0) break;
+      await cell.hover();
+    }
+    await expect(button).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 15000 });
+  await button.dispatchEvent("click");
+}
+
 export async function reloadAuthenticatedPage(page: Page, ready?: Locator) {
   await timedNavigation(page, async () => {
     await page.reload({ waitUntil: "domcontentloaded" });
@@ -295,7 +317,7 @@ export async function reloadAuthenticatedPage(page: Page, ready?: Locator) {
 export async function waitForFormHydration(page: Page) {
   await waitForAppHydration(page);
   await expect(
-    page.getByRole("button", { name: /Create|Save|Move/ }),
+    page.getByRole("button", { name: /^(Create|Save|Move)(\s|$)/ }),
   ).toBeVisible({ timeout: 15000 });
 }
 
