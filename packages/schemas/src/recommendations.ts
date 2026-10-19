@@ -131,6 +131,10 @@ export const productMatchSide = z.object({
 });
 export type ProductMatchSide = z.infer<typeof productMatchSide>;
 
+/** Shown wherever a pending pair lacks exact-identifier admission. */
+export const PRODUCT_PAIR_NOT_ACTIONABLE =
+  "Not actionable: no exact identifier binds both records; investigate before merging";
+
 export const productMatchCandidate = z.object({
   review: assessmentReviewReference.optional(),
   assessmentId: assessmentChildHandle,
@@ -138,6 +142,8 @@ export const productMatchCandidate = z.object({
   identityConflict: z.boolean(),
   /** Raw stored values behind `identityConflict` (model or variant literals). */
   conflictReasons: z.array(z.string()),
+  /** False without exact-identifier admission; merge stays available. */
+  actionable: z.boolean(),
   source: productMatchSource,
   /**
    * Suggested merge survivor: the purchase side (it carries the spend

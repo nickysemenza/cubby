@@ -11,6 +11,7 @@ import {
   type ConnectionProposal,
   type ConnectionRelation,
 } from "@cubby/schemas/entity-connections";
+import { PRODUCT_PAIR_NOT_ACTIONABLE } from "@cubby/schemas/recommendations";
 import { and, eq, inArray, notExists, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
@@ -56,7 +57,11 @@ const pairFamilies = {
     current: currentProductPairPolicy,
     explain: (evidence: unknown) => {
       const stored = readStoredProductPair(evidence);
-      return { reason: stored.evidence, conflicts: stored.conflictReasons };
+      return {
+        reason: stored.evidence,
+        conflicts: stored.conflictReasons,
+        notActionable: PRODUCT_PAIR_NOT_ACTIONABLE,
+      };
     },
   },
 } satisfies Record<
@@ -68,6 +73,8 @@ const pairFamilies = {
     explain: (evidence: unknown) => {
       reason: string | null;
       conflicts: string[];
+      /** Unknown shown when the judgment is not actionable. */
+      notActionable: string;
     };
   }
 >;
@@ -183,7 +190,9 @@ export async function readExistingConnectionAssessments(
         candidateKey: `${subject.recordId}|${subject.otherId}`,
         fingerprint: null,
       };
-      const { reason, conflicts } = family.explain(prediction.evidence);
+      const { reason, conflicts, notActionable } = family.explain(
+        prediction.evidence,
+      );
       evidence = {
         reasons: [reason ?? "Existing domain Assessment"],
         contradictions: judgment.data.conflict
@@ -191,11 +200,7 @@ export async function readExistingConnectionAssessments(
             ? conflicts
             : [reason ?? "Identity conflict"]
           : [],
-        unknowns: judgment.data.actionable
-          ? []
-          : [
-              "Not actionable: no exact identifier binds both records; investigate before merging",
-            ],
+        unknowns: judgment.data.actionable ? [] : [notActionable],
       };
     } else {
       // email_link records are operational decisions, never pending suggestions.

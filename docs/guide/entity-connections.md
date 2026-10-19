@@ -101,9 +101,12 @@ identity conflict: the stored evidence text is a reason, the stored conflicting
 values are contradictions, and a missing exact identifier is an unknown. Member
 Wrong/Dismissed feedback and suppression still exclude a pair. Proposals carry
 `review.family`; on an entity list, a record with entity-pair proposals shows a
-"Possible match" badge in its title cell that links to the record's
-Relationships section, read through the same batched `connection.readBatch`
-as the row popover.
+compact "Possible match" mark (named with the count and record title) in its
+title cell that links to the record's Relationships section, read through the
+same batched `connection.readBatch` as the row popover. The mark is desktop-row
+only; phone users see the pairs in the record's Relationships section. The
+Workbench match card shows the same "Not actionable" line as Suggestions for a
+pair without exact-identifier admission, and keeps merge available.
 
 `applyEntityConnection` is the recommendation handler called by
 `reviewAssessment`. Payload rows are acquired before projection locks, evidence

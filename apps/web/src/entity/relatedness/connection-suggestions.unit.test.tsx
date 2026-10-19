@@ -78,12 +78,14 @@ describe("entity list possible-match badge", () => {
       pair("22222222-2222-4222-8222-222222222222", "product_pair"),
     ];
     renderTitle();
-    const badge = await screen.findByRole("link", {
-      name: "2 possible matches",
+    const mark = await screen.findByRole("link", {
+      name: "2 possible matches for Synthetic lamp",
     });
-    expect(badge.getAttribute("href")).toMatch(
+    expect(mark.getAttribute("href")).toMatch(
       new RegExp(`${RECORD}#relationships$`),
     );
+    // A compact mark: the title keeps the cell's spare width.
+    expect(mark.textContent).toBe("");
   });
 
   it("shows no badge for proposals outside entity-pair families", async () => {

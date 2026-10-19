@@ -1,8 +1,9 @@
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import { preferredImageUrl } from "@cubby/schemas/image-summary";
-import type {
-  ProductMatchCandidate,
-  ProductMatchSide,
+import {
+  PRODUCT_PAIR_NOT_ACTIONABLE,
+  type ProductMatchCandidate,
+  type ProductMatchSide,
 } from "@cubby/schemas/recommendations";
 import { GitMergeIcon } from "@phosphor-icons/react/dist/csr/GitMerge";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
@@ -187,6 +188,11 @@ function ProductMatchCard({
         </div>
         {item.evidence && (
           <p className="text-sm whitespace-pre-line">{item.evidence}</p>
+        )}
+        {!item.actionable && (
+          <p className="text-xs text-muted-foreground">
+            {PRODUCT_PAIR_NOT_ACTIONABLE}
+          </p>
         )}
         {item.sourceUrls.length > 0 && (
           <ul className="flex flex-col gap-1 text-xs">

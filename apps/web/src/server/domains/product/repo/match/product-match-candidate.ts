@@ -58,6 +58,8 @@ const pairRow = z.object({
   actionable: z.boolean(),
   conflict: z.boolean(),
   verification: variantVerification.default("unknown"),
+  /** Stored detector signals (snapshots, grounded variant evidence). */
+  signals: z.json().optional(),
 });
 export type ProductMatchCandidateRow = z.infer<typeof pairRow>;
 const canonicalProductPair = (a: ProductId, b: ProductId) =>
@@ -387,6 +389,7 @@ export async function listProductMatchRows(
           z
             .object({ verification: variantVerification.optional() })
             .safeParse(data.signals).data?.verification ?? "unknown",
+        signals: data.signals,
       });
     }),
   );

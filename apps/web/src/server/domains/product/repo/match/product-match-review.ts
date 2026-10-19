@@ -10,12 +10,9 @@ import type {
   proposeProductMatchInput,
   proposeProductMatchOut,
 } from "@cubby/schemas/recommendations";
-import { inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
-import { assessmentState } from "~/server/db/schema";
 import {
   type LoadedMatchSide,
   loadProductMatchSides,
@@ -59,19 +56,20 @@ function candidate(
   source: ProductMatchCandidate["source"],
   a: RankedSide,
   b: RankedSide,
-  stored: unknown,
+  signals: unknown,
   details: Pick<
     ProductMatchCandidate,
     | "assessmentId"
     | "fingerprint"
     | "identityConflict"
+    | "actionable"
     | "evidence"
     | "sourceUrls"
     | "signals"
   >,
 ): ProductMatchCandidate {
   const [keeper, other] = orient(a, b);
-  const pair = readStoredProductPair(stored, keeper.entityId);
+  const pair = readStoredProductPair({ signals }, keeper.entityId);
   return {
     source,
     keeper: publicSide(keeper),
@@ -110,22 +108,10 @@ export async function getProductMatchQueue(
     })
   ).sort((a, b) => Number(b.source === "agent") - Number(a.source === "agent"));
   const productIds = rows.flatMap((row) => [row.productAId, row.productBId]);
-  const [sides, qualities, stored] = await Promise.all([
+  const [sides, qualities] = await Promise.all([
     loadProductMatchSides(db, productIds),
     loadDataQualities(db, "product", productIds),
-    rows.length
-      ? getDb(db)
-          .select({ id: assessmentState.id, data: assessmentState.data })
-          .from(assessmentState)
-          .where(
-            inArray(
-              assessmentState.id,
-              rows.map((row) => row.id),
-            ),
-          )
-      : [],
   ]);
-  const storedById = new Map(stored.map((row) => [row.id, row.data]));
   const ranked = (id: ProductId): RankedSide | undefined => {
     const side = sides.get(id);
     // An unscored record ranks below any scored one.
@@ -139,10 +125,11 @@ export async function getProductMatchQueue(
       return a && b
         ? [
             {
-              ...candidate(row.source, a, b, storedById.get(row.id), {
+              ...candidate(row.source, a, b, row.signals, {
                 assessmentId: row.id,
                 fingerprint: row.fingerprint,
                 identityConflict: row.conflict,
+                actionable: row.actionable,
                 evidence: row.evidence,
                 sourceUrls: row.sourceUrls,
                 signals:

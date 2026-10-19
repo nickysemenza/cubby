@@ -668,11 +668,12 @@ describe("product match review surfaces", () => {
       .where(eq(productTable.id, older!.entityId));
     await publishDetected([newer!, older!], {
       evidence: "Synthetic keeper age",
-      actionable: true,
+      actionable: false,
       conflict: false,
     });
     const [item] = (await getProductMatchQueue(ctx.db, {})).items;
     expect(item?.keeper.id).toBe(older!.id);
+    expect(item?.actionable).toBe(false);
   });
 });
 

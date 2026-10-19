@@ -1,3 +1,4 @@
+import { PRODUCT_PAIR_NOT_ACTIONABLE } from "@cubby/schemas/recommendations";
 import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -208,6 +209,7 @@ describe("RecommendationWorkbench product matches", () => {
         fingerprint: "d".repeat(64),
         identityConflict: false,
         conflictReasons: [],
+        actionable: true,
         review: {
           assessmentId: "66666666-6666-4666-8666-666666666666",
           suppression: {
@@ -329,6 +331,30 @@ describe("RecommendationWorkbench product matches", () => {
       `Merge blocked by an identity conflict: ${conflictReason}`,
     );
     expect(screen.getByText(new RegExp(conflictReason))).toBeVisible();
+  });
+
+  it("tells the same not-actionable story as Suggestions while merge stays available", async () => {
+    const operations = {
+      ...productionRecommendationWorkbenchOperations,
+      productMatches: recommendations.productMatches.withTransport(
+        async () => ({
+          ...queue,
+          items: [{ ...queue.items[0]!, actionable: false }],
+        }),
+      ),
+      displayImages: entityMedia.displayImages.withTransport(async () => ({
+        [`product:${keeperId}`]: null,
+        [`product:${photoId}`]: null,
+      })).queryOptions,
+    };
+
+    render(
+      <RecommendationWorkbench kind="product-match" operations={operations} />,
+      { wrapper: harness.wrapper },
+    );
+
+    expect(await screen.findByText(PRODUCT_PAIR_NOT_ACTIONABLE)).toBeVisible();
+    expect(screen.getByRole("button", { name: "Review merge" })).toBeEnabled();
   });
 
   it("moves a matched neighbour out of the relationship list and links the match queue", async () => {

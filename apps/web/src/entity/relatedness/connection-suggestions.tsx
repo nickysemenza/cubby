@@ -7,6 +7,7 @@ import {
   type RunShortcode,
 } from "@cubby/schemas/identifiers";
 import { parseShortcode } from "@cubby/shared";
+import { CopySimpleIcon } from "@phosphor-icons/react/dist/csr/CopySimple";
 import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
 import {
   useQueries,
@@ -40,13 +41,17 @@ import {
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
-import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "~/ui/primitives/popover";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/ui/primitives/tooltip";
 
 const identity = z.object({ id: z.string() });
 type StoredDocument = { source: EntityRef; proposals: ConnectionProposal[] };
@@ -391,25 +396,35 @@ export function ConnectionCell({
       </Stack>
     );
   if (visible.length === 0 && pairs.length === 0) return children;
+  const matchLabel =
+    pairs.length === 1 ? "Possible match" : `${pairs.length} possible matches`;
+  const rawTitle = titleField
+    ? z.record(z.string(), z.unknown()).safeParse(record).data?.[titleField]
+    : null;
+  const title = typeof rawTitle === "string" ? rawTitle : null;
   return (
     <Row gap="xs" align="center" className="min-w-0">
       <span className="min-w-0">{children}</span>
       {code && pairs.length > 0 && isBrowserRoutedEntity(code.type) && (
-        <Badge
-          variant="warning"
-          render={
-            <Link
-              to={entities[code.type].routes.detail}
-              params={entityDetailParams(code.shortcode)}
-              hash={RELATIONSHIPS_SECTION}
-              onClick={(event) => event.stopPropagation()}
-            />
-          }
-        >
-          {pairs.length === 1
-            ? "Possible match"
-            : `${pairs.length} possible matches`}
-        </Badge>
+        // A 20px rail mark like field suggestions: spare width stays with the
+        // record identity, and the tooltip/name carry the count.
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Link
+                to={entities[code.type].routes.detail}
+                params={entityDetailParams(code.shortcode)}
+                hash={RELATIONSHIPS_SECTION}
+                aria-label={`${matchLabel}${title ? ` for ${title}` : ""}`}
+                className="inline-flex size-5 shrink-0 items-center justify-center rounded-sm text-warning outline-none hover:bg-warning/10 focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={(event) => event.stopPropagation()}
+              />
+            }
+          >
+            <CopySimpleIcon className="size-3.5" aria-hidden="true" />
+          </TooltipTrigger>
+          <TooltipContent side="top">{matchLabel}</TooltipContent>
+        </Tooltip>
       )}
       {visible.length > 0 && (
         <Popover>
