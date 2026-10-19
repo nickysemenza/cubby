@@ -59,6 +59,11 @@ test("declared expectation colors and spending category navigation counts", asyn
   await expect(
     page.getByText("Unclassified", { exact: true }).first(),
   ).toBeVisible();
+  // Field suggestions wrap each suggestible value once they load, which
+  // remounts it; scroll the settled badge, not the one being replaced.
+  await expect(
+    page.getByRole("button", { name: /^Checking suggestions/ }),
+  ).toHaveCount(0);
   const mobileBadge = page
     .locator('[data-enum-role="status"].bg-warning-surface', {
       hasText: "Unclassified",
