@@ -1,5 +1,5 @@
 const VALUE = String.raw`[^\s,;}&"'<>]`;
-const PAGINATION_TOKEN = String.raw`(?:page|next|prev|previous|continuation|pagination|sync|cursor)[_-]?token`;
+const PAGINATION_TOKEN = String.raw`[\w-]*(?:page|next|prev|previous|continuation|pagination|sync|cursor)[_-]?token`;
 
 /**
  * Preserve SQL text, parameters, and upstream bodies; redact only credential-shaped
@@ -8,12 +8,21 @@ const PAGINATION_TOKEN = String.raw`(?:page|next|prev|previous|continuation|pagi
  * not enough: transcripts carry product names and prose ("Basic Tee",
  * "Cookie: Chocolate Chip"), so each value must also look like a credential.
  */
+/** `Basic` is prose ("Basic Tee") unless its value decodes to `user:password`. */
+function isBasicCredential(value: string): boolean {
+  try {
+    return atob(value).includes(":");
+  } catch {
+    return false;
+  }
+}
+
 export function scrubCredentialValues(message: string): string {
   return (
     message
       .replace(
         new RegExp(
-          String.raw`(^|[\s"'{,])(authorization["']?\s*:\s*["']?)(?:[A-Za-z-]+\s+)?[\w.+/=~-]{16,}[^\r\n"']*`,
+          String.raw`(^|[\s"'{,])(authorization["']?\s*:\s*["']?)(?:[A-Za-z\d-]+\s+[^\s"']+|[\w.+/=~-]{16,})[^\r\n"']*`,
           "giu",
         ),
         "$1$2[REDACTED]",
@@ -27,10 +36,11 @@ export function scrubCredentialValues(message: string): string {
         /(?<![\w.-])([a-z][a-z\d+.-]{0,30}:\/\/)[^\s/@]+:[^\s/@]+@/giu,
         "$1[REDACTED]@",
       )
-      .replace(/\b(Bearer)\s+[\w.+/=-]{16,}/gu, "$1 [REDACTED]")
+      .replace(/\b(Bearer)\s+[\w.+/=-]{16,}/giu, "$1 [REDACTED]")
       .replace(
-        /\b(Basic)\s+[A-Za-z\d+/]{16,}={0,2}(?![\w-])/gu,
-        "$1 [REDACTED]",
+        /\b(Basic)\s+([A-Za-z\d+/]{4,}={0,2})(?![\w-])/giu,
+        (match, scheme: string, value: string) =>
+          isBasicCredential(value) ? `${scheme} [REDACTED]` : match,
       )
       .replace(
         new RegExp(
@@ -44,10 +54,11 @@ export function scrubCredentialValues(message: string): string {
         "[REDACTED]",
       )
       // A `label: value` must be token-shaped (prose such as "Secret: order" is
-      // not); `label=value` and quoted values are assignments. SQL placeholders stay.
+      // not), except passwords, which are often plain words; `label=value` and
+      // quoted values are assignments. SQL placeholders stay.
       .replace(
         new RegExp(
-          String.raw`(?<![\w-])((?:password|passwd|secret|api_?key|token|access_token|refresh_token|authorization|cookie|set-cookie)["']?\s*[:=]\s*)(?!\$\d+\b)(?:(["'])(?:(?!\2)[^\r\n])*\2|(?<==\s*)${VALUE}+|(?=${VALUE}*[\d_.+/=-])${VALUE}{6,})`,
+          String.raw`(?<![\w-])((?:password|passwd|secret|api_?key|token|access_token|refresh_token|authorization|cookie|set-cookie)["']?\s*[:=]\s*)(?!\$\d+\b)(?:(["'])(?:(?!\2)[^\r\n])*\2|(?<==\s*)${VALUE}+|(?<=pass(?:word|wd)["']?\s*:\s*)${VALUE}+|(?=${VALUE}*[\d_.+/=-])${VALUE}{6,})`,
           "giu",
         ),
         (_match, label: string, quote = "") =>

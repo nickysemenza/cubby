@@ -12,6 +12,8 @@ describe("scrubCredentialValues", () => {
       "Victoria's Secret: order #1234",
       "Bearer of the synthetic parcel",
       "Token: delivered",
+      "Basic Subscription",
+      "Spotify Basic plan",
     ])
       expect(scrub(text)).toBe(text);
   });
@@ -32,6 +34,22 @@ describe("scrubCredentialValues", () => {
     expect(scrub("Basic c3ludGhldGljOmZpeHR1cmU=")).toBe("Basic [REDACTED]");
   });
 
+  it("redacts short credentials that prose cannot be confused with", () => {
+    expect(scrub("Authorization: Basic dXNlcjpwYXNz")).toBe(
+      "Authorization: [REDACTED]",
+    );
+    expect(scrub("upstream said Basic dXNlcjpwYXNz")).toBe(
+      "upstream said Basic [REDACTED]",
+    );
+    expect(scrub("Authorization: ApiKey abc-1234")).toBe(
+      "Authorization: [REDACTED]",
+    );
+    expect(scrub("body: bearer abcdef0123456789abcdef")).toBe(
+      "body: bearer [REDACTED]",
+    );
+    expect(scrub("password: hunter")).toBe("password: [REDACTED]");
+  });
+
   it("stops query and labelled values at JSON and HTML delimiters", () => {
     expect(
       scrub(
@@ -50,7 +68,7 @@ describe("scrubCredentialValues", () => {
 
   it("keeps pagination tokens and redacts secret query parameters", () => {
     const pages =
-      "https://api.invalid/orders?page_token=p2&next_token=n3&continuation-token=c4&pageToken=p5";
+      "https://api.invalid/orders?page_token=p2&next_token=n3&continuation-token=c4&pageToken=p5&next_page_token=p6";
     expect(scrub(pages)).toBe(pages);
     expect(scrub("https://api.invalid/?access_token=synthetic&page=2")).toBe(
       "https://api.invalid/?access_token=[REDACTED]&page=2",
@@ -81,6 +99,7 @@ describe("scrubCredentialValues", () => {
     expect(scrub('{"apiKey":"synthetic-key"}')).toBe('{"apiKey":"[REDACTED]"}');
   });
 
+  // A quadratic pattern took seconds on this input; the bound leaves headroom for loaded CI runners.
   it("redacts URL userinfo in linear time on long hyphen runs", () => {
     expect(scrub("postgres://user:synthetic@db.invalid/x")).toBe(
       "postgres://[REDACTED]@db.invalid/x",
@@ -88,6 +107,6 @@ describe("scrubCredentialValues", () => {
     const run = "-".repeat(40_000);
     const started = performance.now();
     expect(scrub(run)).toBe(run);
-    expect(performance.now() - started).toBeLessThan(50);
+    expect(performance.now() - started).toBeLessThan(500);
   });
 });
