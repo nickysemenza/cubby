@@ -1,0 +1,29 @@
+apps/web/DESIGN.md
+  s_9b829d577c7e4c::t_48688905d69bc5 247
+apps/web/src/entity/table/table-header-layout.tsx
+  s_9b829d577c7e4c::t_c6df9c3cbde41d 288-291,615-622
+apps/web/tests/e2e/declared-record-lists.spec.ts
+  s_9b829d577c7e4c::t_fe75cea878a6a2 59,189
+apps/web/tests/e2e/table-workbench.spec.ts
+  s_9b829d577c7e4c::t_68c4bd649a5e93 84,90-94
+apps/web/vite.config.ts
+  s_9b829d577c7e4c::t_f1ad0ac2dd2140 97-99
+packages/schemas/src/entity-definitions/27-spendingCategory.entity.ts
+  s_9b829d577c7e4c::t_ad2683aadcd000 205-206
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b886d06a43df1a79427653e675e793da09878a60",
+  "prompts": {},
+  "sessions": {
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
