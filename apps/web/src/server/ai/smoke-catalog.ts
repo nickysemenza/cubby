@@ -22,6 +22,7 @@ import {
   STATEMENT_CHARGE_IDENTITY_FEATURE,
   STATEMENT_COUNTERPARTY_FEATURE,
   STATEMENT_TRANSACTION_KIND_FEATURE,
+  TRANSFER_PAIR_MOVEMENT_FEATURE,
   MAIL_SOURCE_RELATION_FEATURE,
   UPC_OFFER_COMPARABILITY_FEATURE,
   IMAGE_PROVENANCE_CLASSIFICATION_FEATURE,
@@ -213,6 +214,13 @@ export const AI_SMOKE_CASES = {
     label: "Statement counterparty",
     description:
       "Decide whether a synthetic statement row's other side is a person or a business",
+    group: "Decisions",
+  },
+  transferPairMovement: {
+    feature: TRANSFER_PAIR_MOVEMENT_FEATURE,
+    label: "Transfer-pair movement",
+    description:
+      "Distinguish an explicit account move from a check or generic payment",
     group: "Decisions",
   },
 
