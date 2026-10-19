@@ -78,6 +78,8 @@
         "tests/**/*.{ts,tsx}!",
         "tooling/**/*.{ts,tsx}!",
         "generator/main.ts!",
+        // `generate:claude-plugin` rewrites the committed Claude plugin.
+        "generator/claude-plugin.ts!",
         "tooling/e2e-db-watchdog.mjs!",
         "drizzle.config.ts!"
       ],

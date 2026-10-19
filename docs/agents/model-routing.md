@@ -56,7 +56,7 @@ disagree on something material, fable / high rules on both positions and the
 evidence.
 
 Sonnet, Terra, and Luna are not implementation lanes. The full-repository
-audit (`.claude/skills/repo-audit`) is the one exception: its workflow declares
+audit (`.agents/skills/repo-audit`) is the one exception: its workflow declares
 its own measured audit lanes. The production research runtime's Luna/Sol
 routing (#1803) is separate from this agent routing.
 

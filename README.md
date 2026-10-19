@@ -298,8 +298,10 @@ static `Authorization` header. Only local development talks to
 
 Further docs:
 
-- [AGENTS.md](AGENTS.md): agent rules and skill routing. Household workflows
-  live in [.claude/skills/](.claude/skills).
+- [AGENTS.md](AGENTS.md): agent rules and skill routing. Skills live in
+  [.agents/skills/](.agents/skills) (`.claude/skills` links there); MCP clients
+  outside the repository read the household ones as
+  [playbooks](docs/agents/mcp.md#playbooks).
 - [docs/development.md](docs/development.md): architecture, commands, testing,
   deployment and the HTTP API.
 - [docs/local-development.md](docs/local-development.md): the dev session.

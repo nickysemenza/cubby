@@ -12,6 +12,10 @@ import { MCP_TOOLS } from "~/contracts/mcp-tools";
 import { purchaseAgentRunActions } from "~/server/domains/purchase-import/repo/capabilities";
 import { ENTITY_KERNEL_ENTITIES } from "~/server/entity-kernel/contracts";
 import { MCP_TOOL_BINDINGS } from "~/server/generated/mcp-tools.gen";
+import {
+  PLAYBOOK_FILES,
+  PLAYBOOK_SKILLS,
+} from "~/server/generated/playbooks.gen";
 
 import { purchaseAgentTools } from "./agent-tool-catalog";
 import { trustedPurchaseAgent } from "./purchase-agent-protocol";
@@ -48,6 +52,7 @@ A code with the wrong prefix for the field it's passed to (a LOC- code where a t
 Public outputs omit storage-only child-row and diagnostic ids when no shortcode exists. Three narrow exceptions retain a raw sub-entity id because it is the follow-up write handle: meal_recipe writes return their mealRecipe \`id\`, recipe_insights.using_ingredient returns a section \`lineId\`, and a product's \`unitMappings[]\` rows (from entity_read on product) keep their row \`id\` so resending it updates that mapping in place instead of deleting and recreating it. Entity write inputs may accept those raw sub-entity ids when editing an existing section, line, mapping, or meal-recipe row. USDA \`fdc_id\` is an external USDA identifier rather than a Cubby id.
 
 Workflow tips:
+- Household tasks follow a playbook: before purchase or receipt import, product enrichment, meal logging, maintenance logging, photo inventory import, or garden plan import, call playbook.list and playbook.get the matching one. The same files are skill:// resources.
 - Reads go through entity_read ({action:"list", entity:"product"} or {action:"get", entity:"product", id:"PRD-…"}), writes through entity ({action:"create", entity:"product", data:{…}}); consult entities://catalog only when a schema leaves a supported entity/action unclear. search.global searches every indexed entity at once. Project, task, and expense records use the same two tools; a project's markdown notes come back from entity_read.get(project).
 - Ingredients and plants: batch-resolve names with entity.resolve ({entity:"ingredient", names} or {entity:"plant", plants}) instead of one search+create per name. A Planting names its Plant, never free-text variety. entity.resolve {entity:"vendor", names} reads a merchant name's Vendor by name or alias without creating one.
 - Meals: meal_recipe.add returns \`mealRecipeId\`; use that occurrence id (not recipeId) with meal_recipe.update or meal_recipe.remove. Entity meal reads omit the storage-only mealRecipe id.
@@ -120,6 +125,36 @@ function registerEntityCatalog(server: McpServer) {
   );
 }
 
+/** Each playbook file as a `skill://<name>/<path>` resource (SEP-2640 naming). */
+function registerPlaybookResources(server: McpServer) {
+  for (const skill of PLAYBOOK_SKILLS) {
+    const root = skill.path.slice(0, -"SKILL.md".length);
+    for (const file of skill.files) {
+      const uri = `skill://${skill.name}/${file.slice(root.length)}`;
+      server.registerResource(
+        uri.slice("skill://".length),
+        uri,
+        {
+          description:
+            file === skill.path
+              ? skill.description
+              : `Part of the ${skill.name} playbook; links are repository paths for playbook.read.`,
+          mimeType: "text/markdown",
+        },
+        async () => ({
+          contents: [
+            {
+              uri,
+              mimeType: "text/markdown",
+              text: PLAYBOOK_FILES[file] ?? "",
+            },
+          ],
+        }),
+      );
+    }
+  }
+}
+
 /** The calling purchase agent sees only the actions its run's purpose mounts. */
 async function purchaseAgentCatalogView(
   extra: ToolExtra,
@@ -154,6 +189,7 @@ export function createMcpServer() {
   );
   registerMcpTools(server, MCP_TOOL_BINDINGS, MCP_TOOLS);
   registerEntityCatalog(server);
+  registerPlaybookResources(server);
   installToolCallTelemetryHandler(server);
   installMockStrippedListToolsHandler(server, purchaseAgentCatalogView);
   return server;
@@ -186,7 +222,7 @@ export async function listMcpToolCatalog() {
   return introspect((client) => client.listTools());
 }
 
-/** Introspect the live resource catalog (the entity catalog). */
+/** Introspect the live resource catalog (entity catalog and playbooks). */
 export async function listMcpResourceCatalog() {
   return introspect((client) => client.listResources());
 }

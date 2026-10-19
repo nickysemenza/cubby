@@ -173,3 +173,22 @@ exposed read; when the producer cannot be exposed, defer the write too. A member
 object, an optional object, a union of objects, or no input; a tool's
 actions are all queries or all mutations, so an operation's reads and writes
 land in different tools.
+
+## Playbooks
+
+The household skills in `PLAYBOOK_SKILLS` (`apps/web/generator/playbooks.ts`)
+ship with the Worker so every connected client follows the deployed rules:
+the read-only `playbook` tool (`list`, `get`, `read`) and one
+`skill://<name>/<path>` resource per file. The generator bundles each skill's
+Markdown plus every repository Markdown file it links to, rewrites served
+links to repository paths and other links to public GitHub URLs, and fails on
+a link that does not resolve. Engineering skills stay repository-only.
+
+The repository is also a Claude plugin marketplace
+(`.claude-plugin/marketplace.json` → `plugins/cubby`). Its skills are pointer
+stubs that call `playbook.get`, so they change only when a playbook's name or
+description does; rerun `pnpm --dir apps/web generate:claude-plugin` when
+`claude-plugin.unit.test.ts` reports drift. The plugin declares no MCP server:
+each member adds the Cubby connector once. A member adds the marketplace in
+claude.ai under Customize › Plugins › Add marketplace (`nickysemenza/cubby`)
+with Sync automatically on; claude.ai plugins sync into Claude Code.

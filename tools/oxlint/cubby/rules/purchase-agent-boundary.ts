@@ -29,7 +29,7 @@ const ALLOWED_PACKAGES = [
 ];
 
 /** The bundled skill Markdown the coordinator's workflow is built from. */
-const SKILL_MARKDOWN = /^(\.\.\/)+\.claude\/skills\/[^?]+\.md\?raw$/u;
+const SKILL_MARKDOWN = /^(\.\.\/)+\.agents\/skills\/[^?]+\.md\?raw$/u;
 
 function allowedSource(source: string): boolean {
   if (source.startsWith("./")) return !source.includes("/../");

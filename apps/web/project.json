@@ -120,7 +120,12 @@
         "{workspaceRoot}/*.{json,jsonc,yaml,yml,toml,lock}",
         "{workspaceRoot}/.npmrc",
         "{workspaceRoot}/docs/guide/**/*.md",
-        "{workspaceRoot}/.claude/skills/{purchase-import,photo-inventory-import,product-enrichment}/**/*.md",
+        "{workspaceRoot}/.agents/skills/{purchase-import,photo-inventory-import,product-enrichment}/**/*.md",
+        // The playbooks bundle skills and the Markdown they link to; their
+        // generated module is Git-ignored, so key on that output's bytes.
+        {
+          "dependentTasksOutputFiles": "apps/web/src/server/generated/playbooks.gen.ts"
+        },
         // The bundle embeds source identity, and its provenance requires HEAD.
         { "runtime": "git rev-parse HEAD" },
         { "runtime": "git rev-parse --abbrev-ref HEAD" },

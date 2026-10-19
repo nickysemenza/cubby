@@ -19,11 +19,11 @@ prepare a bounded batch when each record is independently settled.
    saved views narrow the same derived work; they are not separate task lists.
 3. Choose one record or a small bounded batch, then load the skill that owns
    the work:
-   - [Product enrichment](../../.claude/skills/product-enrichment/SKILL.md) for
+   - [Product enrichment](../../.agents/skills/product-enrichment/SKILL.md) for
      verified Product identity facts, identifiers, images and Sources.
-   - [Purchase import](../../.claude/skills/purchase-import/SKILL.md) for order,
+   - [Purchase import](../../.agents/skills/purchase-import/SKILL.md) for order,
      receipt, Email and settlement evidence.
-   - [Photo inventory import](../../.claude/skills/photo-inventory-import/SKILL.md)
+   - [Photo inventory import](../../.agents/skills/photo-inventory-import/SKILL.md)
      for belongings and wardrobe photos.
 
 Vendor website and logo research follows the shared routing contract. The

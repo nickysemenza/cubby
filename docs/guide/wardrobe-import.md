@@ -15,7 +15,7 @@ keeps each Run to one owner and a short list of locations.
   uses Cubby's ChatGPT connector. Sign in once through each connector; both use
   OAuth, so never paste a token. Run the agent from a checkout of the Cubby
   repository so it can load the
-  [photo inventory skill](../../.claude/skills/photo-inventory-import/SKILL.md).
+  [photo inventory skill](../../.agents/skills/photo-inventory-import/SKILL.md).
 - **Create the Locations** the clothes live in (for example "Closet", "Dresser
   — top drawer"). Inventory needs a real Location to receive into.
 - **Turn on image work.** On the Problems page, the image work card must show

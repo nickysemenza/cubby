@@ -93,7 +93,7 @@ pending: nothing here starts Product research.
    `stop_import_run_for_review`) plus the MCP actions its manifest mounts
    (`packages/schemas/src/import-run-agent.ts`), called in process through the
    MCP handler with a run-bound delegation (`agent-services.ts`
-   `mcpFetch`). Instructions: `.claude/skills/purchase-import/references/mail-import.md`
+   `mcpFetch`). Instructions: `.agents/skills/purchase-import/references/mail-import.md`
    via `server/domains/purchase-agent/service/import-run-workflows.ts`.
    A Mail import claim (`operations/mail-import-claim.ts`) returns the
    claimed Email's compact read (`readMail`, bounded by `fitMailRead`). Before

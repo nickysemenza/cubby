@@ -279,13 +279,16 @@ describe("web build freshness", () => {
       matchesSource: false,
     });
   });
-  it("treats only the guide the in-app docs route bundles as source", () => {
-    const { root, put } = fixture();
-    writeWebBuildProvenance(root);
-    put("docs/agents/synthetic.md");
-    expect(readWebBuildProvenance(root).sourceFresh).toBe(true);
-    put("docs/guide/synthetic.md");
-    expect(readWebBuildProvenance(root).details.reason).toBe("source-changed");
+  // Playbooks bundle the docs their skills link to, wherever they live.
+  it("treats repository docs and the README as source", () => {
+    for (const doc of ["docs/agents/synthetic.md", "README.md"]) {
+      const { root, put } = fixture();
+      writeWebBuildProvenance(root);
+      put(doc);
+      expect(readWebBuildProvenance(root).details.reason).toBe(
+        "source-changed",
+      );
+    }
   });
   // The purchase agent's workflows ship inside the web Worker (#1581); a
   // stale build would run coupled tests on the old instructions.
@@ -294,10 +297,11 @@ describe("web build freshness", () => {
       "purchase-import",
       "photo-inventory-import",
       "product-enrichment",
+      "cubby-meal-logging",
     ]) {
       const { root, put } = fixture();
       writeWebBuildProvenance(root);
-      put(`.claude/skills/${skill}/references/run-workflow.md`);
+      put(`.agents/skills/${skill}/references/run-workflow.md`);
       expect(readWebBuildProvenance(root).details.reason).toBe(
         "source-changed",
       );

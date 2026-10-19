@@ -96,7 +96,7 @@ shopping lines; `Task.subjectProductId` when a Product exists) plus planned
 `Planting`s carrying `taskId`. Seed packets become Products through
 `purchase-import` only once bought; the seed drawer is ordinary Inventory.
 Turning an AI-written seasonal plan document into these records is the
-`garden-plan-import` skill (`.claude/skills/garden-plan-import/`).
+`garden-plan-import` skill (`.agents/skills/garden-plan-import/`).
 
 ## Native photo import and calendar
 
