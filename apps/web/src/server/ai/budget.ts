@@ -20,10 +20,16 @@ import { aiBudgetWindow } from "./budget-window";
  * sums the standard API cost of subscriber-credit calls, which charge $0.
  * Embeddings, closed-set decision models and other model roles are not
  * budgeted. Admission (`paidRunPreflight`, `withAiBudget`,
- * `withCreditBudget`) and accounting (`readAiBudget`) share `aiBudgetCovers`.
+ * `withFreeBudget`) and accounting (`readAiBudget`) share `aiBudgetCovers`.
  */
 export const AI_BUDGET_LIMIT_USD = 1;
-export const DEFAULT_CREDIT_BUDGET_USD = 5;
+/** About $180 a month of the household's $200 monthly Claude credit. */
+export const DEFAULT_CREDIT_BUDGET_USD = 1.5;
+/**
+ * Cubby's slice of the household ChatGPT plan, whose quota the members' own
+ * coding shares.
+ */
+export const PLAN_BUDGET_LIMIT_USD = 2;
 const SETTINGS_ID = "00000000-0000-4000-8000-000000000077";
 const FRONTIER_MODELS: readonly string[] = supportedChatModelSchema.options;
 export const aiBudgetCovers = (model: string) =>
@@ -40,17 +46,6 @@ export class AiBudgetExhaustedError extends Error {
   ) {
     super(message);
     this.name = "AiBudgetExhaustedError";
-  }
-}
-
-/**
- * Background work reached the paid rung: it waits for free capacity instead
- * of paying. A budget pause to every recovery path that handles one.
- */
-export class AiFundingWaitError extends AiBudgetExhaustedError {
-  constructor(status: AiBudgetStatus, message: string, resumeAt: string) {
-    super(status, message, resumeAt);
-    this.name = "AiFundingWaitError";
   }
 }
 
@@ -79,7 +74,8 @@ export async function setCreditBudget(
   return metadata;
 }
 
-export const creditUsageRow = sql`${aiUsage.costEvidence}->>'billingReason' = 'subscriber_credit'`;
+const creditUsageRow = sql`${aiUsage.costEvidence}->>'billingReason' = 'subscriber_credit'`;
+const planUsageRow = sql`${aiUsage.costEvidence}->>'billingReason' = 'plan'`;
 
 /**
  * Spend reads the `AiUsage` ledger, which the telemetry queue writes after
@@ -95,6 +91,7 @@ export async function readAiBudget(
     getDb(db)
       .select({
         credit: sql<number>`COALESCE(sum(${aiUsage.standardCost}) FILTER (WHERE ${creditUsageRow}), 0)::double precision`,
+        plan: sql<number>`COALESCE(sum(${aiUsage.standardCost}) FILTER (WHERE ${planUsageRow}), 0)::double precision`,
         paid: sql<number>`COALESCE(sum(COALESCE(${aiUsage.chargedCost}, ${aiUsage.standardCost}, 0)) FILTER (WHERE (${creditUsageRow}) IS NOT TRUE), 0)::double precision`,
       })
       .from(aiUsage)
@@ -114,6 +111,10 @@ export async function readAiBudget(
       limitUsd: settings.creditLimitUsd,
       spentUsd: Math.max(0, row?.credit ?? 0),
     },
+    plan: {
+      limitUsd: PLAN_BUDGET_LIMIT_USD,
+      spentUsd: Math.max(0, row?.plan ?? 0),
+    },
     paid: {
       limitUsd: AI_BUDGET_LIMIT_USD,
       spentUsd: Math.max(0, row?.paid ?? 0),
@@ -129,10 +130,10 @@ export async function assertAiBudget(db: Database, allowanceUsd = 0) {
 }
 
 /**
- * Paid admission for a frontier call that has no Run-bound preflight.
- * Background work waits instead of paying; other work spends within the paid
- * budget. A stop pauses the call's Run, if any. A supplied preflight owns the
- * check itself (`paidRunPreflight`).
+ * Paid admission for a frontier call that has no Run-bound preflight: every
+ * call, background included, spends within the paid budget, or past it by a
+ * member's confirmed allowance. A stop pauses the call's Run, if any. A
+ * supplied preflight owns the check itself (`paidRunPreflight`).
  */
 export function withAiBudget<R>(
   db: Database | undefined,
@@ -143,14 +144,10 @@ export function withAiBudget<R>(
   const { runId } = call;
   return async () => {
     try {
-      let allowanceUsd = 0;
-      if (runId) {
-        const funding = await import("./funding");
-        const allowance = await funding.readPaidAllowance(db, runId);
-        if (allowance === null && (await funding.isBackgroundRun(db, runId)))
-          throw await funding.fundingWaitError(db);
-        allowanceUsd = allowance ?? 0;
-      }
+      const allowanceUsd = runId
+        ? ((await (await import("./funding")).readPaidAllowance(db, runId)) ??
+          0)
+        : 0;
       await assertAiBudget(db, allowanceUsd);
     } catch (error) {
       // A Run-bound stop pauses the Run for the next window, as the agent's
@@ -164,19 +161,29 @@ export function withAiBudget<R>(
   };
 }
 
-/** Credit-rung admission: background work stops drawing credit once its window budget is spent. */
-export function withCreditBudget<R>(
+/** Free-rung admission: background work stops drawing credit or plan once that window budget is spent. */
+export function withFreeBudget<R>(
   db: Database | undefined,
   call: { model: string; runId?: RunId },
-  preflight: ((request: R) => Promise<string | null>) | undefined,
-): ((request: R) => Promise<string | null>) | undefined {
+  preflight:
+    | ((
+        request: R,
+        funding: "subscriber_credit" | "subscription",
+      ) => Promise<string | null>)
+    | undefined,
+):
+  | ((
+      request: R,
+      funding: "subscriber_credit" | "subscription",
+    ) => Promise<string | null>)
+  | undefined {
   if (preflight || !db || !call.runId || !aiBudgetCovers(call.model))
     return preflight;
   const runId = call.runId;
-  return async () => {
-    const funding = await import("./funding");
-    return (await funding.isBackgroundRun(db, runId))
-      ? funding.creditBudgetRefusal(db)
+  return async (_request, funding) => {
+    const { isBackgroundRun, freeBudgetRefusal } = await import("./funding");
+    return (await isBackgroundRun(db, runId))
+      ? freeBudgetRefusal(db, funding)
       : null;
   };
 }

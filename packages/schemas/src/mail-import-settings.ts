@@ -25,14 +25,15 @@ const budgetUse = z.strictObject({
 });
 
 /**
- * Frontier chat-model spend in the current fixed UTC window. `credit` sums
- * the standard API cost of Claude subscriber-credit calls; `paid` sums the
- * charged cost of everything else, so credit calls never count as paid.
+ * Frontier chat-model spend in the current fixed UTC window. `credit` and
+ * `plan` sum the standard API cost of Claude subscriber-credit and ChatGPT
+ * plan calls, which charge $0; `paid` sums the charged cost of everything.
  */
 export const aiBudgetStatus = z.strictObject({
   windowStart: z.iso.datetime(),
   windowEnd: z.iso.datetime(),
   credit: budgetUse,
+  plan: budgetUse,
   paid: budgetUse,
 });
 export type AiBudgetStatus = z.infer<typeof aiBudgetStatus>;
@@ -73,7 +74,7 @@ export const claudeCreditAvailability = z.strictObject({
  */
 export const aiFundingStatus = aiBudgetStatus.extend({
   credit: budgetUse.extend(claudeCreditAvailability.shape),
-  plan: chatGptPlanAvailability,
+  plan: budgetUse.extend(chatGptPlanAvailability.shape),
 });
 export type AiFundingStatus = z.infer<typeof aiFundingStatus>;
 
@@ -99,8 +100,8 @@ export const setCreditBudgetInput = z.strictObject({
 });
 
 /**
- * A member's one-Run override of "background work never pays": paid funding
- * within the paid budget, or past it by the confirmed `paidOverBudgetUsd`
- * for the window the override was granted in.
+ * A member's one-Run paid grant: it resumes a paused Run now and lets it spend
+ * past the paid budget by the confirmed `paidOverBudgetUsd` for the window
+ * the grant was made in.
  */
 export const paidOverBudgetUsd = z.number().positive().max(10);

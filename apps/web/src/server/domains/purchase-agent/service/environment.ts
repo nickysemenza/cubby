@@ -71,8 +71,11 @@ export interface RunServices {
   authorize(): Promise<void>;
   /** Commit the bound Run allowance before one physical paid transmission. */
   admitPaidInference(request: GatewayFetchRequest): Promise<void>;
-  /** A refusal when background work has spent the window's Claude credit budget. */
-  admitCreditInference(request: GatewayFetchRequest): Promise<string | null>;
+  /** A refusal when background work has spent this window's credit or plan budget. */
+  admitFreeInference(
+    request: GatewayFetchRequest,
+    funding: "subscriber_credit" | "subscription",
+  ): Promise<string | null>;
   /** The Run's public identity: its purpose and agent instance name. */
   loadScope(): Promise<{
     purpose: AgentImportRunPurpose;

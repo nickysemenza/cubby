@@ -110,7 +110,7 @@ export async function ensureConnectionSweepRun(
   db: Database,
   actor: Parameters<typeof ensureRun>[1],
   parentRunId: RunId,
-  /** The parent's: a scheduled Sweep's child is background and never pays. */
+  /** The parent's: a scheduled Sweep's child is background work. */
   trigger: "scheduled" | "manual",
 ) {
   const activation = await readAiRefreshActivation(db);

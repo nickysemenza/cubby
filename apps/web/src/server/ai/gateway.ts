@@ -59,7 +59,7 @@ export interface GatewayCallOptions
       | "subscriptionRequired"
       | "subscriptionFallback"
       | "beforePaidRequest"
-      | "beforeCreditRequest"
+      | "beforeFreeRequest"
       | "funding"
     > {
   metadata: GatewayMetadata;
@@ -208,7 +208,7 @@ export function gatewayFetch(
     subscriptionRequired: opts.subscriptionRequired,
     subscriptionFallback: opts.subscriptionFallback,
     beforePaidRequest: opts.beforePaidRequest,
-    beforeCreditRequest: opts.beforeCreditRequest,
+    beforeFreeRequest: opts.beforeFreeRequest,
     testPeer: () => {
       const testGateway = getTestAiGateway();
       if (!testGateway) return undefined;

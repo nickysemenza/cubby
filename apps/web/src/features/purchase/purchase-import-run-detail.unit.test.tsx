@@ -170,7 +170,13 @@ beforeEach(() => {
             reason: null,
           },
           paid: { limitUsd: 1, spentUsd: 0.25 },
-          plan: { state: "available", until: null, reason: null },
+          plan: {
+            limitUsd: 2,
+            spentUsd: 2,
+            state: "available",
+            until: null,
+            reason: null,
+          },
         },
       };
     if (operation === "run.aiUsage")

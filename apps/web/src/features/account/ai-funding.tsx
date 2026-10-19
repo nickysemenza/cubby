@@ -52,7 +52,9 @@ const creditLabel = ({ credit }: AiFundingStatus) =>
       ? "budget spent"
       : "available";
 const planLabel = ({ plan }: AiFundingStatus) =>
-  `${PLAN_LABEL[plan.state]}${plan.until ? ` until ${when(plan.until)}` : ""}`;
+  plan.state === "available" && plan.spentUsd >= plan.limitUsd
+    ? "budget spent"
+    : `${PLAN_LABEL[plan.state]}${plan.until ? ` until ${when(plan.until)}` : ""}`;
 
 /** The one-line funding summary features show, linking to Settings. */
 export function AiFundingLine({ budget }: { budget: AiFundingStatus }) {
@@ -60,6 +62,7 @@ export function AiFundingLine({ budget }: { budget: AiFundingStatus }) {
     <p className="text-xs text-muted-foreground tabular-nums">
       Claude credit {usd(budget.credit.spentUsd)} of{" "}
       {usd(budget.credit.limitUsd)}, {creditLabel(budget)} · ChatGPT plan{" "}
+      {usd(budget.plan.spentUsd)} of {usd(budget.plan.limitUsd)},{" "}
       {planLabel(budget)} ·{" "}
       <Link to="/settings" hash="ai-funding" className="underline">
         AI funding
@@ -87,8 +90,8 @@ type FundingRow = {
 };
 
 /**
- * Household-wide frontier AI funding (ADR 0017): both six-hour budgets, the
- * Claude credit's refusal state with Anthropic's raw reason, and the plan.
+ * Household-wide frontier AI funding (ADR 0017): the three six-hour budgets,
+ * the Claude credit's refusal state with Anthropic's raw reason, and the plan.
  */
 export function AiFundingSettings() {
   const queryClient = useQueryClient();
@@ -120,7 +123,7 @@ export function AiFundingSettings() {
         {
           id: "plan",
           source: "ChatGPT plan",
-          window: "Subscription",
+          window: `${usd(budget.plan.spentUsd)} of ${usd(budget.plan.limitUsd)}`,
           state: planLabel(budget),
         },
         {
@@ -130,7 +133,7 @@ export function AiFundingSettings() {
           state:
             budget.paid.spentUsd >= budget.paid.limitUsd
               ? "budget spent"
-              : "only where allowed",
+              : "within budget",
         },
       ]
     : [];
@@ -138,8 +141,9 @@ export function AiFundingSettings() {
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
         Every feature’s frontier AI calls use Claude credit first, then the
-        ChatGPT plan, then paid models only where allowed. Background work waits
-        for free capacity instead of paying.
+        ChatGPT plan, then paid models. Background work stops drawing each free
+        source at its window budget (the plan’s quota is shared with your own
+        use), then pays within the paid budget.
       </p>
       <Stack gap="md">
         {status.isLoading ? <StatusText>Loading AI funding…</StatusText> : null}
@@ -264,9 +268,9 @@ export function CreditBudgetEditor({
 }
 
 /**
- * The one-Run override of "background work never pays". Within the paid
- * budget one confirmation suffices; once the window's paid budget is spent a
- * second confirmation names the amount past it (one more paid budget).
+ * The one-Run paid grant. Within the paid budget one confirmation resumes the
+ * Run; once the window's paid budget is spent a second confirmation names the
+ * amount past it (one more paid budget).
  */
 export function PaidRunButton({
   label,
@@ -314,8 +318,7 @@ export function PaidRunButton({
                 Allow paid models for this Run?
               </AlertDialogTitle>
               <AlertDialogDescription>
-                It skips the wait for Claude credit or the ChatGPT plan and
-                spends from the paid budget
+                It resumes now and spends from the paid budget
                 {paid
                   ? ` (${usd(paid.spentUsd)} of ${usd(paid.limitUsd)} used this window)`
                   : ""}
