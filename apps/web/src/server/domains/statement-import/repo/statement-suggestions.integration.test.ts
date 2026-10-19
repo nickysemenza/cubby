@@ -21,7 +21,10 @@ import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixture
 import { answering } from "~/server/domains/statement-import/repo/statement-decision-port.fixtures";
 import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
-import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
+import {
+  acceptCleanSuggestions,
+  listSuggestionPage,
+} from "~/server/generic/assessment/repo/suggestion-list";
 import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
 
 import {
@@ -820,6 +823,43 @@ describe("statement Transaction suggestions", () => {
     expect(rows.find((row) => row.amount > 0)).toMatchObject({
       clean: false,
       create: { kind: "purchase", counterparty: { label: "person" } },
+    });
+  });
+
+  // Failure mode: a card payment labelled clean under the earlier rule keeps
+  // its evidence fingerprint (labels ride on top of it), so "Accept clean"
+  // would still create it with no opposite leg.
+  it("leaves a money move labelled clean by an earlier rule out of Accept clean", async () => {
+    await card(ctx);
+    await record(ctx, [
+      rowInput({
+        providerAmount: 900,
+        merchant: "Synthetic Card Services",
+        rawDescription: "PAYMENT THANK YOU",
+        sourceCategory: "Credit Card Payment",
+      }),
+    ]);
+    await generate(ctx);
+    await label(
+      ctx,
+      answering({ kind: "credit_card_payment", counterparty: "business" }),
+    );
+    const [payment] = await suggestions(ctx);
+    expect(payment).toMatchObject({
+      clean: false,
+      create: { kind: "credit_card_payment" },
+    });
+    // The stored flag the earlier rule left; Accept clean selects by it.
+    await getDb(ctx.db).execute(
+      sql`UPDATE "AssessmentState" SET data = jsonb_set(data, '{clean}', 'true') WHERE id = ${payment!.assessmentId}::uuid`,
+    );
+    expect(
+      await acceptCleanSuggestions(ctx.db, kernelCtx(ctx), {
+        filters: { family: "statement_transaction" },
+      }),
+    ).toEqual([]);
+    expect(await stateOf(ctx, payment!.assessmentId)).toMatchObject({
+      status: "pending",
     });
   });
 

@@ -163,7 +163,11 @@ const MONEY_MOVES = new Set<KindDecision["kind"]>([
  */
 export function kindAgreed(
   create: KindDecision,
-  transfer: StatementTransactionJudgment["transfer"],
+  /** The judgment's own-account move, stored or as listed. */
+  transfer: Pick<
+    NonNullable<StatementTransactionJudgment["transfer"]>,
+    "ledgerTransfer"
+  > | null,
 ): boolean {
   const { votes, counterparty } = create;
   if (transfer || MONEY_MOVES.has(create.kind)) return false;
