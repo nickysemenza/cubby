@@ -52,8 +52,18 @@ const entityFacetCountsOutputSchema = z.object({
 
 const entityViewCountsInputSchema = z.object({
   entity: z.enum(listEntities),
-  /** Declared saved-view ids; unknown ones are omitted. */
-  viewIds: z.array(z.string().min(1)).max(24),
+  /**
+   * Each saved view with its filters compiled by the browser's filter
+   * manifest, exactly as the list sends them once the view is applied.
+   */
+  views: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        filters: z.record(z.string(), z.unknown()),
+      }),
+    )
+    .max(24),
 });
 
 const entityViewCountsOutputSchema = z.object({

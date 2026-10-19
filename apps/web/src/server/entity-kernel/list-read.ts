@@ -11,8 +11,6 @@ import {
   projectListRows,
   selectListReadRows,
 } from "~/entity/model/list-read-schema";
-import { viewsForEntity } from "~/entity/model/view-manifest";
-import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
 import { withListEntityMedia } from "~/server/entity-kernel/repo/entity-display-image";
 import { withRecordEmoji } from "~/server/entity-kernel/repo/entity-emoji";
 import {
@@ -46,7 +44,11 @@ const facetInputSchema = z.object({
   filters: z.record(z.string(), z.unknown()),
   facetIds: z.array(z.string()),
 });
-const viewCountsInputSchema = z.object({ viewIds: z.array(z.string()) });
+const viewCountsInputSchema = z.object({
+  views: z.array(
+    z.object({ id: z.string(), filters: z.record(z.string(), z.unknown()) }),
+  ),
+});
 const inputSchema = z.object({
   filters: z.record(z.string(), z.unknown()),
   pagination: z
@@ -368,11 +370,12 @@ export function defineProgressiveListOperations<
       };
     },
     /**
-     * Each requested declared saved view's row count, plus the unfiltered
-     * total, through the same list read (and count) a page uses.
+     * Each saved view's row count, plus the unfiltered total, through the
+     * same list read (and count) a page uses. The browser compiles the
+     * filters: Problem semantics alone cover only Problem-backed views.
      */
     async viewCounts(context: EntityKernelContext, value: unknown) {
-      const { viewIds } = viewCountsInputSchema.parse(value);
+      const { views } = viewCountsInputSchema.parse(value);
       const countOf = async (raw: z.output<typeof inputSchema>["filters"]) =>
         (
           await reader()(
@@ -383,17 +386,12 @@ export function defineProgressiveListOperations<
             { kind: "base" },
           )
         ).count;
-      const views = viewsForEntity(binding.entity).filter((view) =>
-        viewIds.includes(view.id),
-      );
       const [total, ...counts] = await withTrace(
         "entity.list.viewCounts",
         () =>
           Promise.all([
             countOf({}),
-            ...views.map((view) =>
-              countOf(compileProblemFilters(binding.entity, view.filters)),
-            ),
+            ...views.map((view) => countOf(view.filters)),
           ]),
         { "entity.kind": binding.entity },
       );

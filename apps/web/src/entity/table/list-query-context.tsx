@@ -3,6 +3,8 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createContext, type ReactNode, useContext, useMemo } from "react";
 
 import type { ListFacet } from "~/contracts/entity-list.contract";
+import { getEntityFilters } from "~/entity/filter-manifest";
+import { buildFiltersFromManifest } from "~/entity/filters";
 import type { ListEntity } from "~/entity/generated/entity-lists.gen";
 import { viewsForEntity } from "~/entity/model/view-manifest";
 import { entityList } from "~/integrations/tanstack-query/generated/catalog.gen";
@@ -100,10 +102,21 @@ export function withFacets(
 
 /** Each declared saved view's count and the unfiltered total ("All"). */
 export function useViewCounts(entity: ListEntity | undefined) {
+  const views = useMemo(() => {
+    if (!entity) return [];
+    const specs = getEntityFilters(entity);
+    return viewsForEntity(entity).map((view) => {
+      const values = new Map(view.filters.map(({ id, value }) => [id, value]));
+      return {
+        id: view.id,
+        filters: buildFiltersFromManifest(specs, (id) => values.get(id)),
+      };
+    });
+  }, [entity]);
   const result = useQuery({
     ...entityList.viewCounts.queryOptions({
       entity: entity ?? "product",
-      viewIds: viewsForEntity(entity).map((view) => view.id),
+      views,
     }),
     enabled: entity !== undefined,
     placeholderData: keepPreviousData,
