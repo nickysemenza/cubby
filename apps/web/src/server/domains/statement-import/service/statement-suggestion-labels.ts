@@ -7,7 +7,6 @@ import {
 } from "@cubby/schemas/statement-suggestion";
 import { selectDecisionModel } from "@cubby/shared/ai/models";
 
-import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import {
   decisionChoiceFitsContext,
@@ -28,6 +27,7 @@ import {
 } from "~/server/domains/statement-import/repo/statement-suggestions";
 import { labelStatementKind } from "~/server/domains/statement-import/service/statement-kind-labels";
 import { applyAutomaticRulesForCharge } from "~/server/generic/assessment/repo/automatic-rule-runtime";
+import { runFailureText } from "~/server/workflows/runs/lifecycle";
 
 /** One label page labels at most this many suggestions. */
 const STATEMENT_LABEL_BATCH = 20;
@@ -171,9 +171,7 @@ export async function labelStatementSuggestions(
       );
       failed.push({
         at: new Date().toISOString(),
-        message: scrubErrorMessage(
-          error instanceof Error ? error.message : String(error),
-        ),
+        message: runFailureText(error instanceof Error ? error : String(error)),
         ...(subject.success && {
           ref: `charge:${subject.data.source}:${subject.data.chargeKey}`,
         }),

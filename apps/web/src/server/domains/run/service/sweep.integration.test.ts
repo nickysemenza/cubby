@@ -199,6 +199,24 @@ describe("Sweeps", () => {
     });
     expect(first).toMatchObject({ labelled: 0, stale: 1 });
     expect(first.next).not.toBeNull();
+    // Failure mode: a charge's failure kept only the driver's "Failed query"
+    // text, dropping the Postgres cause and its SQLSTATE.
+    const broken = await labelStatementSuggestions(ctx.db, {
+      port: async () => {
+        throw new Error("Failed query: synthetic", {
+          cause: Object.assign(
+            new Error("canceling statement due to statement timeout"),
+            { code: "57014" },
+          ),
+        });
+      },
+      runId: labelRun,
+      limit: 1,
+      after: first.next,
+    });
+    expect(broken.failed).toHaveLength(1);
+    expect(broken.failed[0]?.message).toContain("57014");
+    expect(broken.failed[0]?.message).toContain("statement timeout");
     const second = await labelStatementSuggestions(ctx.db, {
       port: firstChoice,
       runId: labelRun,
