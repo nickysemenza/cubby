@@ -54,14 +54,15 @@ function withBreakpoint(entry: z.infer<typeof item>): z.infer<typeof item> {
         },
       ],
     };
-  const last = output.at(-1);
-  if (last?.type !== "input_text") return entry;
+  const text = output.map((block) => block.type).lastIndexOf("input_text");
+  if (text < 0) return entry;
   return {
     ...result.data,
-    output: [
-      ...output.slice(0, -1),
-      { ...last, prompt_cache_breakpoint: breakpoint },
-    ],
+    output: output.map((block, index) =>
+      index === text
+        ? { ...block, prompt_cache_breakpoint: breakpoint }
+        : block,
+    ),
   };
 }
 

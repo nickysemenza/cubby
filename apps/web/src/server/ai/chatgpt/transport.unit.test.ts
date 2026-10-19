@@ -120,9 +120,20 @@ describe("ChatGPT plan Responses transport", () => {
             { type: "input_text", text: "Synthetic caption" },
           ],
         },
+        {
+          type: "function_call_output",
+          call_id: "c3",
+          output: [
+            { type: "input_text", text: "Synthetic caption" },
+            { type: "input_image", image_url: "https://example.test/b.png" },
+          ],
+        },
       ],
     };
-    const [, , text, mixed] = chatGptRequest(body, "plan-model").input;
+    const [, , text, mixed, imageLast] = chatGptRequest(
+      body,
+      "plan-model",
+    ).input;
     expect(text).toMatchObject({
       output: [
         {
@@ -136,6 +147,12 @@ describe("ChatGPT plan Responses transport", () => {
       output: [
         { type: "input_image" },
         { type: "input_text", prompt_cache_breakpoint: { mode: "explicit" } },
+      ],
+    });
+    expect(imageLast).toMatchObject({
+      output: [
+        { type: "input_text", prompt_cache_breakpoint: { mode: "explicit" } },
+        { type: "input_image" },
       ],
     });
     expect(
