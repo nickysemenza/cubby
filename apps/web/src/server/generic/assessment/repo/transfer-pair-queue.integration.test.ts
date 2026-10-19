@@ -289,11 +289,24 @@ describe("transfer pairs in the global queue", () => {
     if (pair?.family !== "transfer_pair")
       throw new Error("Expected a transfer pair suggestion");
 
-    // Hold the shared parent legs until both public reviews are waiting. Neither
-    // may hold its projection before those locks, regardless of who later wins.
+    // Queue the pair first on the statement's one shared leg. The statement
+    // then queues behind it, making the pair the deterministic winner on release.
     const barrier = await withTransaction(ctx.db, async (tx) => {
-      await lockTransferPairLegs(databaseForTransaction(tx), pair.evidence.key);
-      const pending = Promise.allSettled([
+      await lockTransferPairLegs(
+        databaseForTransaction(tx),
+        pair.evidence.outflow.key,
+      );
+      const waitForAdvisory = (count: number) =>
+        vi.waitFor(
+          async () => {
+            const { rows } = await getDb(ctx.db).execute<{ count: number }>(
+              sql`SELECT count(*)::int AS count FROM pg_stat_activity WHERE datname=current_database() AND wait_event='advisory'`,
+            );
+            expect(rows[0]!.count).toBeGreaterThanOrEqual(count);
+          },
+          { timeout: 5000, interval: 20 },
+        );
+      const pairReview = Promise.allSettled([
         reviewAssessment(ctx.db, kernelCtx(ctx), {
           assessmentId: pair.assessmentId,
           operationId: crypto.randomUUID(),
@@ -302,6 +315,9 @@ describe("transfer pairs in the global queue", () => {
           intent: "apply",
           application: { kind: "transfer_pair" },
         }),
+      ]);
+      await waitForAdvisory(1);
+      const statementReview = Promise.allSettled([
         reviewAssessment(ctx.db, kernelCtx(ctx), {
           assessmentId: statement.assessmentId,
           operationId: crypto.randomUUID(),
@@ -311,14 +327,9 @@ describe("transfer pairs in the global queue", () => {
           application: { kind: "statement_transaction", action: "create" },
         }),
       ]);
-      await vi.waitFor(
-        async () => {
-          const { rows } = await getDb(ctx.db).execute<{ count: number }>(
-            sql`SELECT count(*)::int AS count FROM pg_stat_activity WHERE datname=current_database() AND wait_event='advisory'`,
-          );
-          expect(rows[0]!.count).toBeGreaterThanOrEqual(2);
-        },
-        { timeout: 5000, interval: 20 },
+      await waitForAdvisory(2);
+      const pending = Promise.all([pairReview, statementReview]).then(
+        (results) => results.flat(),
       );
       const [projection] = await Promise.allSettled([
         withTransaction(ctx.db, async (probe) => {
