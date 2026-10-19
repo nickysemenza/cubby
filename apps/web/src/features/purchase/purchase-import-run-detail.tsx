@@ -349,10 +349,12 @@ function AgentWorkOverview({
     : Number.POSITIVE_INFINITY;
   const usage = useQuery({
     ...runOperations.aiUsage.queryOptions({ runId: run.publicId, limit: 1 }),
-    refetchInterval: () =>
+    // Until a read lands after the settle point, including a cached read
+    // from before it when the page is revisited later.
+    refetchInterval: (query) =>
       run.status === "running" ||
       run.status.startsWith("paused") ||
-      Date.now() < settledAt
+      (run.endedAt !== null && query.state.dataUpdatedAt <= settledAt)
         ? 5_000
         : false,
   });
