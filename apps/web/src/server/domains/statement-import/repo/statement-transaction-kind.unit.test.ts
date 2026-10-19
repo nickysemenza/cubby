@@ -227,19 +227,9 @@ describe("decideStatementKind and kindAgreed", () => {
     expect(create).toMatchObject({ kind: "account_transfer" });
     // Failure mode: a descriptor naming an own account made a transfer clean
     // although no opposite leg was ever seen arriving.
-    expect(
-      kindAgreed(create, {
-        accountId: crypto.randomUUID(),
-        ledgerTransfer: false,
-      }),
-    ).toBe(false);
+    expect(kindAgreed(create, { ledgerTransfer: false })).toBe(false);
     // Between two owners the move is also a LedgerTransfer, a reviewed write.
-    expect(
-      kindAgreed(create, {
-        accountId: crypto.randomUUID(),
-        ledgerTransfer: true,
-      }),
-    ).toBe(false);
+    expect(kindAgreed(create, { ledgerTransfer: true })).toBe(false);
   });
 });
 
