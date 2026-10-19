@@ -6,7 +6,7 @@ import { z } from "zod";
 
 import { dashboardCountsOut } from "@cubby/schemas/dashboard";
 import { foodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
-import { productLookupResponseSchema } from "~/contracts/upc.schemas";
+import { productLookupResponseSchema } from "~/contracts/upc.contract";
 
 import { DEV_USER_EMAIL } from "../../tooling/dev/state";
 import { expect, test } from "./support/hmr-test";
