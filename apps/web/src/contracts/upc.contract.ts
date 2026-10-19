@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { defineContract, query } from "~/contracts/define";
 
-export const upcLookupInput = z.object({ upc });
+const upcLookupInput = z.object({ upc });
 
 /** `manual` rows are hand-entered (imported from the retired lookup Worker). */
 const UPC_SOURCE_NAMES = ["manual", "upcitemdb"] as const;
