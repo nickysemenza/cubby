@@ -11,6 +11,7 @@
  */
 import { type RunId, runEntityId } from "@cubby/schemas/identifiers";
 import type { purchaseImportDebugEvent } from "@cubby/schemas/purchase-import-debug";
+import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import type { z } from "zod";
 
@@ -31,9 +32,6 @@ const matchesKey = (key: OperationKey) =>
     eq(runOperation.runId, key.runId),
     eq(runOperation.operationId, key.operationId),
   );
-
-/** A `failed` row keeps a bounded diagnostic. */
-const boundedError = (message: string) => message.slice(0, 2_000);
 
 // Fence status/retirement writes without blocking child Run foreign-key checks.
 async function lockOperationRun(client: Client, key: OperationKey) {
@@ -117,7 +115,8 @@ export async function insertOperation(
         inputFingerprint: row.inputFingerprint,
         state: row.state ?? "started",
         result: row.result,
-        error: row.error === undefined ? undefined : boundedError(row.error),
+        error:
+          row.error === undefined ? undefined : scrubErrorMessage(row.error),
         executor: row.executor,
         completedAt: row.state === "completed" ? new Date() : undefined,
       })),
@@ -223,7 +222,7 @@ export async function failOperation(
       .update(runOperation)
       .set({
         state: "failed",
-        error: boundedError(error),
+        error: scrubErrorMessage(error),
         updatedAt: new Date(),
       })
       .where(matchesKey(key));
@@ -240,7 +239,7 @@ export async function failOperationsForRun(
     .update(runOperation)
     .set({
       state: "failed",
-      error: boundedError(error),
+      error: scrubErrorMessage(error),
       updatedAt: new Date(),
     })
     .where(

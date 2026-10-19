@@ -9,6 +9,7 @@ import {
   type RunStepState,
 } from "@cubby/schemas/run-step";
 import { MAX_AUTOMATIC_WORKFLOW_FAILURES } from "@cubby/schemas/workflow-runs";
+import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
 import {
   and,
   asc,
@@ -96,7 +97,12 @@ export async function recordRunStepPage(
     error.ref ? [error.ref] : [],
   );
   const errors = page.errors?.length
-    ? runStepErrors.parse(page.errors.slice(-RUN_STEP_ERROR_SAMPLE))
+    ? runStepErrors.parse(
+        page.errors.slice(-RUN_STEP_ERROR_SAMPLE).map((error) => ({
+          ...error,
+          message: scrubErrorMessage(error.message),
+        })),
+      )
     : null;
   const now = new Date();
   const counts = page.counts

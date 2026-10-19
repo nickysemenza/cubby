@@ -103,6 +103,9 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   Credential-shaped values are scrubbed; SQL and upstream response diagnostics
   remain visible. `scrubErrorMessage` comes from
   `@cubby/worker-tracing/scrub-error-message`; the web helper re-exports it.
+  Persisted or exposed diagnostics (Run operation/step/dispatch errors, every
+  string leaf of a purchase-agent transcript) pass through it at the writer or
+  proxy; do not add a second redactor.
   At the console sink, regression checks assert serialized diagnostic values,
   not native Error instances. When changing this boundary, search every consumer
   assertion across unit and integration tests; capture/callback boundaries still
