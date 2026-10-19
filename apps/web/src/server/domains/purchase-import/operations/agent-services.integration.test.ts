@@ -3,7 +3,15 @@ import { createModels } from "@earendil-works/pi-ai";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { afterEach, describe, expect, it } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 
 import { snapshotAiUsagePrice } from "~/server/ai/pricing";
 import { setCfEnv } from "~/server/cf-env";
@@ -14,12 +22,34 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 import { startAgentRunFixture } from "../service/import-run.fixtures";
 import { runServicesFor } from "./agent-services";
 
+// Integration files share a worker's module graph, and the pricing client
+// caches its first catalog (or a failed fetch, as null) per instance. Load a
+// fresh instance and price against a pinned catalog, never the network; later
+// files in the worker must not inherit that pinned catalog either.
+vi.hoisted(() => vi.resetModules());
+afterAll(() => vi.resetModules());
+beforeEach(() => {
+  const realFetch = globalThis.fetch;
+  vi.stubGlobal(
+    "fetch",
+    async (input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).includes("models.dev")
+        ? Response.json({
+            openai: {
+              models: { "gpt-6-sol": { cost: { input: 2, output: 10 } } },
+            },
+          })
+        : realFetch(input, init),
+  );
+});
+
 // A Run without an agent must not acquire agent MCP/legacy mutation authority
 // through the host adapter, even if a caller bypasses the tool registry.
 describe("non-agent host service authority", () => {
   const ctx = withTestDb();
   afterEach(() => {
     setCfEnv(undefined);
+    vi.unstubAllGlobals();
   });
   async function services() {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
@@ -105,7 +135,6 @@ describe("non-agent host service authority", () => {
       model.id,
       accounting,
     );
-    // The isolate can reuse a catalog captured by an earlier service call.
     expect(canonical.amount).toBeGreaterThan(0);
     await runServicesFor(
       env,
@@ -128,12 +157,12 @@ describe("non-agent host service authority", () => {
       .from(aiUsage)
       .where(eq(aiUsage.runId, owned.id));
     expect(recorded).toMatchObject({
-      standardCost: canonical.amount ?? accounting.standardCost,
+      standardCost: canonical.amount,
       chargedCost: 0,
       costEvidence: {
         standard: {
           source: "estimate",
-          pricingSource: canonical.amount === null ? "pi_sdk" : "models.dev",
+          pricingSource: "models.dev",
           pricingSnapshot: {
             provider: canonical.evidence?.pricingSnapshot.provider,
             model: canonical.evidence?.pricingSnapshot.model,
