@@ -129,9 +129,14 @@ nonisolated enum EntityFieldValue {
     }
 
     static func optionColor(in raw: JSONValue, field: FieldDescriptor, surface: String) -> String? {
+        option(in: raw, field: field, surface: surface)?.color
+    }
+
+    /// The declared option the row's value names, with its color, role and glyph.
+    static func option(in raw: JSONValue, field: FieldDescriptor, surface: String) -> LabeledOption? {
         let value = field.surfaceValue(in: raw, surface: surface)
         guard let code = value?.stringValue else { return nil }
-        return (field.controlOptions ?? field.valueOptions)?.first { $0.value == code }?.color
+        return (field.controlOptions ?? field.valueOptions)?.first { $0.value == code }
     }
 
     // MARK: - Value readers

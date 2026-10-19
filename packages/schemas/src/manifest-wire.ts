@@ -181,6 +181,7 @@ export const manifestWire = {
     prefill: "RelationSectionPrefill~",
     columns: "[string]~",
     sort: "SectionSort~",
+    groupBy: "string~",
     limit: "integer~",
     empty: "string~",
   }),

@@ -402,6 +402,7 @@ const detailSectionJSON = (entity: string, section: DetailSection) => {
                       field: section.sort.field,
                       direction: section.sort.direction,
                     },
+              groupBy: section.groupBy ?? null,
               limit: section.limit ?? null,
               empty: section.empty ?? null,
             },

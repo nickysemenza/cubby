@@ -72,7 +72,8 @@ public final class RelationSectionModel: Identifiable {
             pageSize: spec.limit ?? 25,
             sort: sort,
             filters: scope,
-            view: .table
+            view: .table,
+            groupBy: spec.groupBy
         )
     }
 

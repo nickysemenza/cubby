@@ -120,10 +120,9 @@ struct EntityHeroView<Actions: View>: View {
             if let chip = presentation.heroChip, let field = descriptor.field(chip),
                 let text = EntityFieldValue.text(in: row.raw, field: field, surface: "detail")
             {
-                StatusChip(
-                    text: text,
-                    color: FieldGuideMetrics.optionColor(
-                        EntityFieldValue.optionColor(in: row.raw, field: field, surface: "detail")))
+                EntityFieldValue.option(in: row.raw, field: field, surface: "detail")
+                    .flatMap { StatusChip(text: text, option: $0) }
+                    ?? StatusChip(text: text)
             }
             ForEach(heroStats, id: \.label) { stat in
                 LabeledContent {
@@ -398,11 +397,10 @@ struct FieldsSectionView<Inline: View>: View {
         {
             LabeledContent {
                 HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.xs) {
-                    if let color = FieldGuideMetrics.optionColor(
-                        EntityFieldValue.optionColor(in: row.raw, field: field, surface: "detail"))
+                    if let option = EntityFieldValue.option(in: row.raw, field: field, surface: "detail"),
+                        let chip = StatusChip(text: value, option: option)
                     {
-                        StatusChip(text: value, color: color)
-                            .textSelection(.enabled)
+                        chip.textSelection(.enabled)
                     } else if let date = EntityFieldValue.dateValue(
                         in: row.raw, field: field, surface: "detail")
                     {
