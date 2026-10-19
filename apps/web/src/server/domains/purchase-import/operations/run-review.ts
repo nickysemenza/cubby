@@ -42,7 +42,10 @@ import {
   runOperation,
   photoRunImage,
 } from "~/server/db/schema";
-import { readMailRunSources } from "~/server/domains/purchase-import/repo/mail-run-membership";
+import {
+  readMailRunSources,
+  releaseUnsettledMailRunSources,
+} from "~/server/domains/purchase-import/repo/mail-run-membership";
 import { WORKFLOW_RUN_PURPOSES } from "~/server/workflows/runs/contract";
 
 import { loadPurchaseAuditBatch } from "../repo/audit-batch";
@@ -620,7 +623,7 @@ async function stopRunForReviewOnce(
           ]),
         ),
       );
-    await tx
+    const [stopped] = await tx
       .update(runTable)
       .set({
         status: "needs_review",
@@ -633,7 +636,10 @@ async function stopRunForReviewOnce(
           eq(runTable.id, runId),
           inArray(runTable.status, [...ACTIVE_RUN_STATUSES]),
         ),
-      );
+      )
+      .returning({ purpose: runTable.purpose });
+    if (stopped?.purpose === "mail_import")
+      await releaseUnsettledMailRunSources(tx, runId);
     return { findingId: finding?.id ?? existingFinding?.id ?? null };
   });
 }

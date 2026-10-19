@@ -128,7 +128,7 @@ import {
 import { finalizeImportedImages } from "~/server/domains/photo-import/repo/photo-import-finalize";
 import {
   readMailRunRoster,
-  releaseFailedMailRunSources,
+  releaseUnsettledMailRunSources,
   transferMailRunSources,
 } from "~/server/domains/purchase-import/repo/mail-run-membership";
 import { getRunHeaderByShortcode } from "~/server/domains/run/repo/run";
@@ -197,7 +197,7 @@ async function selectNonPhotoTargets(
         warning:
           outcome?.warning ??
           (!owned && email.status === "pending" && !email.runId
-            ? "Returned to Mail discovery after this Run failed."
+            ? "Returned to Mail discovery after this Run ended."
             : email.classificationReason),
         diff: null,
         completedAt: outcome?.completedAt
@@ -1176,7 +1176,7 @@ export async function markRunFailed(
       )
       .returning({ purpose: runTable.purpose });
     if (failed?.purpose === "mail_import")
-      await releaseFailedMailRunSources(tx, runId);
+      await releaseUnsettledMailRunSources(tx, runId);
     return failed;
   });
   return { failed: Boolean(run), detail: input.detail ?? null };

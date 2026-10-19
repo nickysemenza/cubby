@@ -68,10 +68,12 @@ does not stop other sources or new-mail discovery, and retains its diagnostics.
 Manual Run pauses remain active ownership: they can be resumed or cancelled,
 and retain the vendor account's active-Run exclusion; catch-up never resumes
 them.
-A Mail import Run that fails on its own (its coordinator fails or aborts)
-returns its unsettled Emails to catch-up once; an Email whose earlier Run
-already failed stays with the new failed Run, so a message that keeps failing
-does not spend a coordinator every pass. A member's cancel keeps its Emails
+A Mail import Run that fails on its own (its coordinator fails or aborts), or
+whose coordinator stops for review before claiming every Email, returns its
+still-researching Emails to catch-up once; `blocked` Emails, the review's
+subject, stay. An Email an earlier Run already left unsettled stays with the
+new Run, so a message that keeps ending unsettled does not spend a coordinator
+every pass. A member's cancel keeps its Emails
 with the cancelled Run. Retrying a failed Run transfers only the Emails it
 still holds.
 
