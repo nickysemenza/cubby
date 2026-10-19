@@ -1,0 +1,19 @@
+apps/web/tests/e2e/table-workbench.spec.ts
+  s_9b829d577c7e4c::t_68ec3a29828a84 1-93
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6e0c5522200cfe21a597d8e1d2bbba5f1d0d0134",
+  "prompts": {},
+  "sessions": {
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
