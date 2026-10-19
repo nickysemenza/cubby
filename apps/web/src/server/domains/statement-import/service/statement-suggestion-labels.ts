@@ -28,6 +28,7 @@ import {
   isClean,
   labelledProposal,
   publishChargeProposal,
+  regenerateCharges,
   STATEMENT_PUBLISH_CONCURRENCY,
   suggestionsNeedingLabels,
   type LabelCursor,
@@ -289,14 +290,23 @@ export async function labelStatementSuggestions(
         fail(current.charge, error);
       }
     }
-    if (pauses[0]) throw pauses[0];
-    if (!applied.size) break;
     targets = targets.flatMap((target) => {
       const key = chargeId(target.charge);
       if (applied.has(key) || skipped.has(key) || failedCharges.has(key))
         return [];
       return [{ ...target, expected: published.get(key) ?? target.expected }];
     });
+    if (pauses[0]) {
+      // Without labels, a rule's moved evidence still republishes as rule
+      // output, so the resumed pass labels it instead of skipping it as stale.
+      if (applied.size)
+        await regenerateCharges(
+          db,
+          targets.map((target) => target.charge),
+        );
+      throw pauses[0];
+    }
+    if (!applied.size) break;
   }
   const last = page.at(-1);
   return {
