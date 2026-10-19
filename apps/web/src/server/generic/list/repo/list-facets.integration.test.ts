@@ -14,7 +14,8 @@ import {
  * applies its own filter, so every other value counts zero and the
  * checklist can only narrow; a facet that drops the other filters, so its
  * counts disagree with the list; a reference facet keyed by internal id
- * instead of the shortcode the filter writes.
+ * instead of the shortcode the filter writes; a hierarchical reference
+ * counted by direct assignment while its filter matches descendants.
  */
 describe("list facet counts", () => {
   const ctx = withTestDb();
@@ -60,19 +61,15 @@ describe("list facet counts", () => {
     expect(facet?.kind === "values" ? facet.options : []).toHaveLength(2);
   });
 
-  it("counts a reference facet by shortcode under the other filters but not its own", async () => {
-    const { kitchen, garage } = await seed();
+  // Picking a location includes its descendants, so direct counts would show
+  // a room whose rows sit on its shelves as 0; the facet is omitted instead.
+  it("omits a hierarchical reference facet rather than count direct children", async () => {
+    const { kitchen } = await seed();
     const facet = await listFacetCounter("location")?.countBy(
       ctx.db,
       { itemTypeFilter: ["shelf"], parentId: [kitchen.id] },
       "parent",
     );
-    const options = facet?.kind === "values" ? facet.options : [];
-    expect(options).toEqual(
-      expect.arrayContaining([
-        { value: kitchen.id, count: 2 },
-        { value: garage.id, count: 1 },
-      ]),
-    );
+    expect(facet).toBeNull();
   });
 });

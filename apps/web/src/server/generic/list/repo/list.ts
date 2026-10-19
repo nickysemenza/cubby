@@ -2003,8 +2003,9 @@ export function listScaffold<
     /**
      * One declared filter's facet over the filtered set minus that filter's
      * own request keys, so its alternatives stay meaningful: per-value counts
-     * for a stored enum, boolean, presence or reference filter, min/max for a
-     * stored range. Derived and `anyOf` filters have no facet (null).
+     * for a stored enum, boolean, presence or flat reference filter, min/max
+     * for a stored range. Derived, `anyOf` and hierarchical reference filters
+     * have no facet (null).
      */
     async countBy(
       db: Database | DrizzleTransaction,
@@ -2032,6 +2033,13 @@ export function listScaffold<
         ),
       );
       const stored = storedColumn(entity, table, descriptor, columnKey);
+      // Picking a hierarchy node matches its descendants too; a direct count
+      // would show a parent with child-only rows as 0.
+      if (
+        descriptor.kind === "idMulti" &&
+        isHierarchyEntity(String(stored.reference))
+      )
+        return null;
       const context = await scaffold.context(db, {
         filters: rest,
         readIntent: "count",

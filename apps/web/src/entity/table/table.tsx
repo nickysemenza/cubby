@@ -6,7 +6,7 @@ import type { CellSelectionState, RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
 import type { VirtualItem } from "@tanstack/react-virtual";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
 import { usePageIdentity, usePageWorkbenchTarget } from "~/entity/page/page";
@@ -57,6 +57,7 @@ import { TreeStatusRow } from "../../ui/data-table/tree-status-row";
 import { useDataTableController } from "../../ui/data-table/use-data-table-controller";
 import type { GroupConfig } from "../../ui/data-table/use-grouped-list";
 import { serverTreeStatusOf } from "../../ui/hooks/use-server-tree-children";
+import { TableRowStepContext } from "../../ui/overlays/side-panel";
 import {
   type EntityActionsEntry,
   EntityActionsProvider,
@@ -1029,7 +1030,19 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     tableContainerWidth,
     totalSize,
     virtualRows,
+    scrollToFlatRow,
   } = controller;
+  const stepRow = useCallback(
+    (direction: -1 | 1) => {
+      const index = rows.findIndex((row) => row.id === currentRowId);
+      const next = index < 0 ? undefined : rows[index + direction];
+      if (!next || !onRowClick) return false;
+      scrollToFlatRow(index + direction);
+      onRowClick(next);
+      return true;
+    },
+    [rows, currentRowId, onRowClick, scrollToFlatRow],
+  );
   const columnHeadHeight = useColumnHeadHeight(
     tableContainerRef,
     groupConfig !== undefined && !isMobile,
@@ -1323,7 +1336,13 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
               controller={controller}
               entity={entity}
               embedded={embedded}
-              desktopInspector={desktopInspector}
+              desktopInspector={
+                desktopInspector ? (
+                  <TableRowStepContext.Provider value={stepRow}>
+                    {desktopInspector}
+                  </TableRowStepContext.Provider>
+                ) : undefined
+              }
               externalToolbar={externalToolbar}
               desktopToolbar={desktopToolbar}
               showToolbar={showToolbar}

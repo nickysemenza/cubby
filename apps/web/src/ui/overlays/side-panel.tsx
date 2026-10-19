@@ -4,6 +4,8 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
   type RefObject,
+  createContext,
+  useContext,
   useEffect,
   useRef,
   useSyncExternalStore,
@@ -214,11 +216,24 @@ function usePanelKeys(
 }
 
 /**
+ * The docked table's own row stepper: it walks the row model, so it still
+ * works when the current row has scrolled out of the virtualized range.
+ */
+export const TableRowStepContext = createContext<
+  ((direction: -1 | 1) => boolean) | null
+>(null);
+
+/** J/K for a panel docked beside a table: the table's stepper, else the DOM. */
+export function useTableRowStep(): (direction: -1 | 1) => boolean {
+  return useContext(TableRowStepContext) ?? stepCurrentTableRow;
+}
+
+/**
  * Steps the docked table's current row (`tr[data-current]`) to its previous
  * or next record row, as a click on that row would. The default J/K for
  * panels opened from an RTable; hosts that own the order pass callbacks.
  */
-export function stepCurrentTableRow(direction: -1 | 1): boolean {
+function stepCurrentTableRow(direction: -1 | 1): boolean {
   const current = document.querySelector<HTMLTableRowElement>(
     "tr.table-record-row[data-current='true']",
   );

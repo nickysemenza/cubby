@@ -60,7 +60,9 @@ test("declared expectation colors and spending category navigation counts", asyn
     page.getByText("Unclassified", { exact: true }).first(),
   ).toBeVisible();
   const mobileBadge = page
-    .locator('[data-enum-role="status"].bg-warning-surface')
+    .locator('[data-enum-role="status"].bg-warning-surface', {
+      hasText: "Unclassified",
+    })
     .first();
   await expect(mobileBadge).toBeVisible();
   await mobileBadge.scrollIntoViewIfNeeded();

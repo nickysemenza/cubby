@@ -89,7 +89,9 @@ export function withFacets(
     return {
       ...field,
       options: field.options?.map((option) =>
-        option.hint !== undefined
+        // A meta option (No value, Any value) is a predicate, not a value the
+        // facet counts; a 0 there would be wrong, so it carries no hint.
+        option.hint !== undefined || option.meta
           ? option
           : {
               ...option,

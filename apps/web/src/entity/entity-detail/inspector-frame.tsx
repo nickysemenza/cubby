@@ -18,7 +18,7 @@ import {
   SidePanel,
   SidePanelIconTile,
   SidePanelSection,
-  stepCurrentTableRow,
+  useTableRowStep,
 } from "~/ui/overlays/side-panel";
 import { Button } from "~/ui/primitives/button";
 
@@ -65,8 +65,8 @@ export function EntityInspectorFrame({
   activeTab,
   onTabChange,
   onClose,
-  onPrev = () => void stepCurrentTableRow(-1),
-  onNext = () => void stepCurrentTableRow(1),
+  onPrev,
+  onNext,
   overview,
   relations,
   activity,
@@ -86,6 +86,7 @@ export function EntityInspectorFrame({
   relations?: ReactNode;
   activity?: ReactNode;
 }) {
+  const step = useTableRowStep();
   const label = entityLabel(entity);
   const hasRelations = relations !== undefined;
   const hasActivity = activity !== undefined;
@@ -127,8 +128,8 @@ export function EntityInspectorFrame({
       actions={<OpenEntityLink entity={entity} id={id} />}
       onClose={onClose}
       closeLabel="Close inspector"
-      onPrev={onPrev}
-      onNext={onNext}
+      onPrev={onPrev ?? (() => void step(-1))}
+      onNext={onNext ?? (() => void step(1))}
     >
       <div id={`${prefix}-overview`}>{overview}</div>
       {hasRelations ? (

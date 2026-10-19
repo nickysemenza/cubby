@@ -1205,11 +1205,20 @@ function InlinePicker<TId extends string>({
             )}
           />
         </div>
-      ) : null}
-      <ComboboxPrimitive.List
-        aria-label={searchable ? undefined : ariaLabel}
-        className="max-h-64 overflow-y-auto overscroll-contain outline-none"
-      >
+      ) : (
+        // A short roster has no search field, but the input still owns
+        // keyboard focus and arrow-key navigation; without it no option is
+        // reachable from the keyboard.
+        <ComboboxPrimitive.Input
+          id={inputId}
+          ref={fieldRef}
+          aria-label={ariaLabel}
+          aria-describedby={ariaDescribedBy}
+          readOnly
+          className="sr-only"
+        />
+      )}
+      <ComboboxPrimitive.List className="max-h-64 overflow-y-auto overscroll-contain rounded-sm outline-none [input:focus-visible+&]:ring-2 [input:focus-visible+&]:ring-ring">
         {orderedItems.map((item, index) => (
           <React.Fragment key={item.id}>
             <PickerRowPreamble item={item} previous={orderedItems[index - 1]} />

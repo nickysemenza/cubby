@@ -193,6 +193,7 @@ export function useDataTableController<TItem extends RowData>({
       rows,
       fitScope,
       userSizedKey,
+      table.state.columnPinning,
       table.options.meta?.rowContentVersion,
     ],
   );
@@ -228,6 +229,7 @@ export function useDataTableController<TItem extends RowData>({
   const rowContentVersion = table.options.meta?.rowContentVersion;
 
   return {
+    scrollToFlatRow,
     cellSelectionContainerProps,
     collapsedColumns,
     colSpan,

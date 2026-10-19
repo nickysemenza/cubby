@@ -25,7 +25,9 @@ const openFilter = async (page: Page, label: string) => {
  */
 const pickInline = async (page: Page, label: string, option: string) => {
   const search = page.getByRole("combobox", { name: `Filter ${label}` });
-  if ((await search.count()) > 0) await search.fill(option);
+  // A short roster's combobox is a read-only keyboard input, not a search.
+  if ((await search.count()) > 0 && (await search.isEditable()))
+    await search.fill(option);
   await page
     .getByRole("option", { name: new RegExp(`^${escapeRegExp(option)}`) })
     .first()
