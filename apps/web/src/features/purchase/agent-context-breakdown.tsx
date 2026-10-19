@@ -1,4 +1,9 @@
-import type { AgentConversationMessage } from "@cubby/schemas/agent-conversation";
+import type {
+  AgentConversationMessage,
+  AgentModelUsage,
+} from "@cubby/schemas/agent-conversation";
+import type { AiRunUsage } from "@cubby/schemas/ai";
+import { agentUsageEvent } from "@cubby/schemas/purchase-agent-services";
 import { useId, useMemo } from "react";
 
 import { formatCompactCount, formatCount } from "~/lib/number-format";
@@ -218,6 +223,136 @@ export function AgentContextPerCall({
             </Table>
           </details>
         </div>
+      </details>
+    </section>
+  );
+}
+
+const TOKEN_COUNTERS = [
+  ["inputTokens", "Input"],
+  ["outputTokens", "Output"],
+  ["cacheReadTokens", "Cache read"],
+  ["cacheWriteTokens", "Cache write"],
+] as const satisfies readonly (readonly [
+  Exclude<keyof AgentModelUsage, "model">,
+  string,
+])[];
+
+/**
+ * The coordinator's tokens as Cubby's usage rows recorded them beside pi's
+ * own `pi.usage` ledger. A difference names a model call one side missed,
+ * such as a compaction summary; cost stays with the usage rows.
+ */
+export function AgentTokenAccounting({
+  piUsage,
+  recorded,
+  settled,
+}: {
+  piUsage: readonly AgentModelUsage[] | undefined;
+  recorded: AiRunUsage["tokensByModel"] | undefined;
+  /** Whether usage was read after the Run ended, so a difference is real. */
+  settled: boolean;
+}) {
+  const headingId = useId();
+  const rows = useMemo(() => {
+    if (!piUsage || !recorded) return [];
+    const byModel = new Map<
+      string,
+      { pi?: AgentModelUsage; recorded?: AgentModelUsage }
+    >();
+    for (const usage of piUsage)
+      byModel.set(usage.model, { ...byModel.get(usage.model), pi: usage });
+    for (const row of recorded) {
+      if (row.feature !== agentUsageEvent.shape.feature.value) continue;
+      const model = `${row.provider}/${row.model}`;
+      byModel.set(model, {
+        ...byModel.get(model),
+        recorded: { ...row, model },
+      });
+    }
+    return [...byModel]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .flatMap(([model, sides]) =>
+        TOKEN_COUNTERS.map(([key, label]) => ({
+          model,
+          label,
+          recorded: sides.recorded?.[key] ?? 0,
+          pi: sides.pi?.[key] ?? 0,
+        })).filter((row) => row.recorded > 0 || row.pi > 0),
+      );
+  }, [piUsage, recorded]);
+  if (!rows.length) return null;
+  const mismatched = rows.filter((row) => row.recorded !== row.pi);
+  const flagged = settled && mismatched.length > 0;
+
+  return (
+    <section
+      className="mt-3 border-t border-border pt-2"
+      aria-labelledby={headingId}
+    >
+      <details open={flagged}>
+        <summary
+          id={headingId}
+          className="min-h-11 cursor-pointer text-xs font-semibold md:min-h-0"
+        >
+          Token accounting
+        </summary>
+        <p
+          className={`mt-1 text-xs ${flagged ? "text-destructive" : "text-muted-foreground"}`}
+        >
+          {!mismatched.length
+            ? "Cubby's usage records match pi's ledger."
+            : flagged
+              ? `${mismatched.length} ${mismatched.length === 1 ? "counter differs" : "counters differ"} between Cubby's usage records and pi's ledger.`
+              : "Usage records may trail pi's ledger until the Run settles."}
+        </p>
+        <Table
+          aria-label="Token accounting table"
+          containerClassName="mt-1"
+          className="table-auto text-xs tabular-nums"
+        >
+          <TableHeader>
+            <TableRow>
+              <TableHead className="h-auto py-1 pr-2 pl-0">Model</TableHead>
+              <TableHead className="h-auto px-2 py-1">Tokens</TableHead>
+              <TableHead className="h-auto px-2 py-1 text-right">
+                Recorded
+              </TableHead>
+              <TableHead className="h-auto px-2 py-1 text-right">pi</TableHead>
+              <TableHead className="h-auto px-2 py-1 text-right">
+                Difference
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((row) => {
+              const difference = row.pi - row.recorded;
+              return (
+                <TableRow key={`${row.model}:${row.label}`}>
+                  <TableHead
+                    scope="row"
+                    className="h-auto py-1 pr-2 pl-0 font-mono text-foreground"
+                  >
+                    {row.model}
+                  </TableHead>
+                  <TableCell className="px-2 py-1">{row.label}</TableCell>
+                  <TableCell className="px-2 py-1 text-right">
+                    {formatCount(row.recorded)}
+                  </TableCell>
+                  <TableCell className="px-2 py-1 text-right">
+                    {formatCount(row.pi)}
+                  </TableCell>
+                  <TableCell
+                    className={`px-2 py-1 text-right ${difference && settled ? "font-semibold text-destructive" : "text-muted-foreground"}`}
+                  >
+                    {difference > 0 ? "+" : null}
+                    {formatCount(difference)}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
       </details>
     </section>
   );

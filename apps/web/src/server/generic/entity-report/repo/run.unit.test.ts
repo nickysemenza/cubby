@@ -949,6 +949,7 @@ describe("aiUsageBlocks", () => {
     savings: 0.01,
     comparedCalls: 1,
     count: 3,
+    tokensByModel: [],
     nextCursor: "cursor-2",
     records: [
       {

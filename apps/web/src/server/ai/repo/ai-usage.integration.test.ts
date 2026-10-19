@@ -321,6 +321,49 @@ describe("listAiUsageForRun", () => {
     expect((await listAiUsageForRun(ctx.db, child)).chargedCost).toBe(5);
   });
 
+  it("totals tokens per feature and model across every page", async () => {
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
+    const call = (feature: string, inputTokens: number | null) => ({
+      runId,
+      feature,
+      provider: "synthetic",
+      model: "turn-model",
+      operation: "review",
+      inputTokens,
+      outputTokens: 2,
+      cacheReadTokens: 3,
+      cacheWriteTokens: null,
+      status: "succeeded" as const,
+      durationMs: 1,
+    });
+    await getDb(ctx.db)
+      .insert(aiUsage)
+      .values([call("agent", 10), call("agent", null), call("triage", 4)]);
+
+    const result = await listAiUsageForRun(ctx.db, runId, { limit: 1 });
+
+    expect(result.tokensByModel).toEqual([
+      {
+        feature: "agent",
+        provider: "synthetic",
+        model: "turn-model",
+        inputTokens: 10,
+        outputTokens: 4,
+        cacheReadTokens: 6,
+        cacheWriteTokens: 0,
+      },
+      {
+        feature: "triage",
+        provider: "synthetic",
+        model: "turn-model",
+        inputTokens: 4,
+        outputTokens: 2,
+        cacheReadTokens: 3,
+        cacheWriteTokens: 0,
+      },
+    ]);
+  });
+
   // Usage can carry both run attribution and attempt lineage; OR membership
   // must count that row once, and retain failed attempts alongside their retry.
   it("deduplicates linked image calls and exposes a retry with missing usage", async () => {

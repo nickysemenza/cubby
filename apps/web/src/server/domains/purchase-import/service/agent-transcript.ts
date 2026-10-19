@@ -15,6 +15,7 @@ import { CURRENT_SQLITE_SCHEMA_VERSION } from "@earendil-works/pi-durable/storag
 import { z } from "zod";
 
 import { projectConversation } from "~/server/domains/purchase-agent/service/conversation";
+import { readPiModelUsage } from "~/server/domains/purchase-agent/service/model-usage";
 
 // The installed Agents adapter prefixes pi's portable SQLite tables with pi_.
 // Keep this read adapter version-fenced; never open/migrate storage or construct
@@ -116,7 +117,8 @@ export function readStoredAgentConversation(sql: SqlStorage) {
           }),
         )
     : [];
-  return agentConversationSchema.parse(
-    projectConversation({ entries, running, settlements, contextCalls }),
-  );
+  return agentConversationSchema.parse({
+    ...projectConversation({ entries, running, settlements, contextCalls }),
+    modelUsage: readPiModelUsage(sql),
+  });
 }

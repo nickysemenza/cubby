@@ -382,7 +382,7 @@ export const runContract = defineContract("run", {
           error: z.string().nullable(),
           /** Recorded AI calls only. */
           usage: aiRunUsageOut
-            .omit({ records: true, nextCursor: true })
+            .omit({ records: true, tokensByModel: true, nextCursor: true })
             .extend({
               callCount: z.number().int().nonnegative(),
               retryCount: z.number().int().nonnegative(),

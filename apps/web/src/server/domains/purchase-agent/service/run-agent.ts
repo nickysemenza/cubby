@@ -67,6 +67,7 @@ import {
   type CoordinatorEscalation,
 } from "./escalation";
 import { workflowForRun } from "./import-run-workflows";
+import { readPiModelUsage } from "./model-usage";
 import { RunSettlement, SETTLEMENT_POLL_MS } from "./run-settlement";
 import { renderSignal } from "./signals";
 import { runAgentTools } from "./tools";
@@ -626,13 +627,16 @@ export class PurchaseImportRunAgent
       });
     // pi commits the in-flight partial as the JSON form of an AssistantMessage.
     const partial = assistantPartial.safeParse(live?.generation?.message).data;
-    return projectConversation({
-      entries,
-      running: live?.run !== undefined,
-      settlements,
-      contextCalls,
-      partial,
-    });
+    return {
+      ...projectConversation({
+        entries,
+        running: live?.run !== undefined,
+        settlements,
+        contextCalls,
+        partial,
+      }),
+      modelUsage: readPiModelUsage(this.ctx.storage.sql),
+    };
   }
 
   /**

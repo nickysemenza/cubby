@@ -118,7 +118,7 @@ export async function persistTelemetryMessages(
     // MCP rows beside it into the DLQ), so unknown runs file under the
     // system's run for the hour.
     const requestedRuns = [
-      ...new Set(ai.flatMap((event) => event.runId ?? [])),
+      ...new Set([...ai, ...mcp].flatMap((event) => event.runId ?? [])),
     ].map((id) => runEntityId.parse(id));
     const knownRuns = new Set(
       requestedRuns.length === 0
@@ -157,6 +157,12 @@ export async function persistTelemetryMessages(
             occurredAt: new Date(event.occurredAt),
             userId: userId.parse(event.userId),
             clientId: event.clientId,
+            // A Run deleted before ingest leaves the call unattributed rather
+            // than failing the batch on its foreign key.
+            runId:
+              event.runId && knownRuns.has(event.runId)
+                ? runEntityId.parse(event.runId)
+                : null,
           })),
         )
         .onConflictDoNothing();

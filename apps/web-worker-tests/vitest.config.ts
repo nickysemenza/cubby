@@ -57,6 +57,8 @@ export default defineConfig({
       },
     }),
   ],
+  // The Sentry-instrumented agent host reads the release the app build defines.
+  define: { __GIT_COMMIT__: JSON.stringify("workers-test") },
   resolve: {
     tsconfigPaths: true,
     // As the web app's SSR build does (recipebridgePlugin in

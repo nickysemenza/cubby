@@ -124,6 +124,7 @@ export const ENTITY_EDGE_OWNERS = {
     excluded: "Per-Run work membership and publication receipts.",
   },
   AiUsage: { excluded: "Telemetry attribution." },
+  McpToolCall: { excluded: "Telemetry attribution." },
   ExternalSource: {
     excluded: "Registry metadata naming the vendor a source slug is.",
   },

@@ -1,7 +1,9 @@
 import {
   agentConversationSchema,
   agentPromptSchema,
+  type AgentConversation,
   type AgentConversationMessage,
+  type AgentModelUsage,
   type AgentConversationPart,
   type AgentConversationSettlement,
 } from "@cubby/schemas/agent-conversation";
@@ -31,6 +33,7 @@ import {
   agentUrl,
   runHasAgent,
   useAgentObservation,
+  useAgentReviewSync,
   type AgentConversationObservationSnapshot,
 } from "~/features/run/agent-observation";
 import { usePhotoRunReview } from "~/features/run/photo-group-review";
@@ -55,7 +58,10 @@ import { Button } from "~/ui/primitives/button";
 import { StatusText } from "~/ui/primitives/status-text";
 
 import { PaidRunButton } from "../email/ai-funding";
-import { AgentContextPerCall } from "./agent-context-breakdown";
+import {
+  AgentContextPerCall,
+  AgentTokenAccounting,
+} from "./agent-context-breakdown";
 import {
   formatWorkDuration,
   plannedPhotoWorkSteps,
@@ -318,26 +324,44 @@ function agentWorkDetail(run: RunDetail, settledGroups?: number) {
   return `${run.ordersSeen} ${run.ordersSeen === 1 ? "order" : "orders"} seen · ${run.imported} imported · ${run.updated} updated`;
 }
 
+const USAGE_SETTLE_MS = 60_000;
+
 function AgentWorkOverview({
   run,
   messages,
+  modelUsage,
   proposedGroups,
   settledGroups,
   additionalWork = [],
 }: {
   run: RunDetail;
   messages: readonly AgentConversationMessage[];
+  modelUsage: readonly AgentModelUsage[] | undefined;
   proposedGroups?: number;
   settledGroups?: number;
   additionalWork?: AgentWorkItem[];
 }) {
+  // The last model call can land after the final poll, so usage keeps
+  // refreshing until the Run has settled; only then can a token difference
+  // mean a call the usage hook missed rather than a stale read.
+  const settledAt = run.endedAt
+    ? Date.parse(run.endedAt) + USAGE_SETTLE_MS
+    : Number.POSITIVE_INFINITY;
   const usage = useQuery({
     ...runOperations.aiUsage.queryOptions({ runId: run.publicId, limit: 1 }),
-    refetchInterval:
-      run.status === "running" || run.status.startsWith("paused")
+    // Until a read (or a failed one, so errors cannot poll forever) lands
+    // after the settle point, including a cached read from before it when the
+    // page is revisited later.
+    refetchInterval: (query) =>
+      run.status === "running" ||
+      run.status.startsWith("paused") ||
+      (run.endedAt !== null &&
+        Math.max(query.state.dataUpdatedAt, query.state.errorUpdatedAt) <=
+          settledAt)
         ? 5_000
         : false,
   });
+  const usageSettled = usage.dataUpdatedAt > settledAt;
   const work = [
     ...summarizeAgentWork(messages, run.operations),
     ...additionalWork,
@@ -387,6 +411,11 @@ function AgentWorkOverview({
         </div>
       ) : null}
       <AgentContextPerCall messages={messages} />
+      <AgentTokenAccounting
+        piUsage={modelUsage}
+        recorded={usage.data?.tokensByModel}
+        settled={usageSettled}
+      />
       <div className="mt-3 border-t border-border pt-2">
         <RecordList
           variant="timeline"
@@ -536,9 +565,11 @@ function StepTiming({
 function PhotoAgentWorkOverview({
   run,
   messages,
+  modelUsage,
 }: {
   run: RunDetail;
   messages: readonly AgentConversationMessage[];
+  modelUsage: readonly AgentModelUsage[] | undefined;
 }) {
   const review = usePhotoRunReview(run.publicId, run.status, runHasAgent(run));
   const descriptionWork = summarizePhotoDescriptions(
@@ -549,6 +580,7 @@ function PhotoAgentWorkOverview({
     <AgentWorkOverview
       run={run}
       messages={messages}
+      modelUsage={modelUsage}
       additionalWork={descriptionWork}
       proposedGroups={
         review.data?.review.proposals.filter(
@@ -566,15 +598,21 @@ function PhotoAgentWorkOverview({
 
 function AgentOverview({
   run,
-  messages,
+  conversation,
 }: {
   run: RunDetail;
-  messages: readonly AgentConversationMessage[];
+  conversation: AgentConversation | undefined;
 }) {
+  const messages = conversation?.messages ?? [];
+  const modelUsage = conversation?.modelUsage;
   return run.purpose === "photo_inventory" ? (
-    <PhotoAgentWorkOverview run={run} messages={messages} />
+    <PhotoAgentWorkOverview
+      run={run}
+      messages={messages}
+      modelUsage={modelUsage}
+    />
   ) : (
-    <AgentWorkOverview run={run} messages={messages} />
+    <AgentWorkOverview run={run} messages={messages} modelUsage={modelUsage} />
   );
 }
 
@@ -638,7 +676,7 @@ function TerminalAgentSurface({ run }: { run: RunDetail }) {
       ) : null}
       {history.data ? (
         <>
-          <AgentOverview run={run} messages={history.data.messages} />
+          <AgentOverview run={run} conversation={history.data} />
           <AgentTranscriptDisclosure
             messages={history.data.messages}
             settlements={history.data.settlements}
@@ -768,7 +806,7 @@ function ActiveAgentSurface({ run }: { run: RunDetail }) {
             agent.error?.message}
         </StatusText>
       ) : null}
-      <AgentOverview run={run} messages={messages} />
+      <AgentOverview run={run} conversation={agent.conversation} />
       <AgentTranscriptDisclosure
         messages={messages}
         settlements={agent.conversation?.settlements ?? []}
@@ -922,15 +960,26 @@ function ToolValue({ label, value }: { label: string; value: unknown }) {
 /**
  * The run's live read (agent transcript, operations, evidence), polled while
  * the run is active. Every run slot shares it through this one query key.
+ * A live agent stream invalidates it on each agent change, so the poll
+ * relaxes to a safety net for writes the agent does not make.
  */
 function useRun(runId: RunOut["id"]) {
-  return useQuery({
+  const [agentLive, setAgentLive] = useState(false);
+  const query = useQuery({
     ...runOperations.work.queryOptions({ runId }),
-    refetchInterval: (query) =>
-      query.state.data && ACTIVE_STATUSES.has(query.state.data.status)
-        ? 3_000
+    refetchInterval: (current) =>
+      current.state.data && ACTIVE_STATUSES.has(current.state.data.status)
+        ? agentLive
+          ? 30_000
+          : 3_000
         : false,
   });
+  const live = useAgentReviewSync(
+    query.data?.publicId ?? "",
+    Boolean(query.data && isActiveRun(query.data) && runHasAgent(query.data)),
+  );
+  useEffect(() => setAgentLive(live), [live]);
+  return query;
 }
 
 /**

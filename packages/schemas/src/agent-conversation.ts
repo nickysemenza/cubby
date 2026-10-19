@@ -86,6 +86,22 @@ export const agentConversationSchema = z.object({
   status: z.enum(["absent", "idle", "running"]),
   messages: z.array(agentConversationMessageSchema),
   settlements: z.array(agentConversationSettlementSchema),
+  /**
+   * pi's own token totals per `provider/model` over every conversation,
+   * including calls Cubby's usage hook never sees (compaction summaries,
+   * failed attempts). Compared against `AiUsage`; never a cost record.
+   */
+  modelUsage: z
+    .array(
+      z.object({
+        model: z.string(),
+        inputTokens: z.number().int().nonnegative(),
+        outputTokens: z.number().int().nonnegative(),
+        cacheReadTokens: z.number().int().nonnegative(),
+        cacheWriteTokens: z.number().int().nonnegative(),
+      }),
+    )
+    .optional(),
 });
 
 export type AgentConversationPart = z.infer<typeof agentConversationPartSchema>;
@@ -96,6 +112,9 @@ export type AgentConversationSettlement = z.infer<
   typeof agentConversationSettlementSchema
 >;
 export type AgentConversation = z.infer<typeof agentConversationSchema>;
+export type AgentModelUsage = NonNullable<
+  AgentConversation["modelUsage"]
+>[number];
 
 /** A member's prompt to a live run (`POST …/agent`). */
 export const agentPromptSchema = z.object({

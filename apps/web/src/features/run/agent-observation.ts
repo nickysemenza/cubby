@@ -2,7 +2,10 @@ import {
   agentConversationSchema,
   type AgentConversation,
 } from "@cubby/schemas/agent-conversation";
-import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
+import {
+  ACTIVE_RUN_STATUSES,
+  AGENT_OBSERVATION_HEADER,
+} from "@cubby/shared/client-constants";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { EventSourceParserStream } from "eventsource-parser/stream";
 import { useEffect, useSyncExternalStore } from "react";
@@ -16,7 +19,7 @@ export const agentUrl = (publicId: string) =>
   `/api/import/runs/${encodeURIComponent(publicId)}/agent`;
 
 /** The client's connection phase, distinct from the conversation's own `status`. */
-export type AgentConversationObservationPhase =
+type AgentConversationObservationPhase =
   | "connecting"
   | "live"
   | "absent"
@@ -25,6 +28,8 @@ export type AgentConversationObservationPhase =
 
 export interface AgentConversationObservationSnapshot {
   phase: AgentConversationObservationPhase;
+  /** The server holds the stream open and pushes changes (not one snapshot). */
+  held?: boolean;
   conversation?: AgentConversation;
   error?: Error;
 }
@@ -132,11 +137,14 @@ export function openAgentObservation(
           throw new Error(`Agent stream responded ${response.status}`);
         }
         attempt = 0;
+        const held =
+          response.headers.get(AGENT_OBSERVATION_HEADER) !== "snapshot";
         await readEvents(response.body, (data) => {
           const conversation = parseSnapshotData(data);
           if (conversation)
             setSnapshot({
               phase: phaseForStatus(conversation.status),
+              held,
               conversation,
             });
         });
@@ -263,13 +271,17 @@ export function useAgentObservation(publicId: string) {
 
 const noopSubscribe = () => () => {};
 
-function usePhase(
+/** A live conversation the server is pushing, not one reconnecting snapshot. */
+function useHeldLive(
   observation: AgentConversationObservation | undefined,
-): AgentConversationObservationPhase | undefined {
+): boolean {
   return useSyncExternalStore(
     observation?.subscribe ?? noopSubscribe,
-    () => observation?.getSnapshot().phase,
-    () => undefined,
+    () => {
+      const snapshot = observation?.getSnapshot();
+      return snapshot?.phase === "live" && snapshot.held === true;
+    },
+    () => false,
   );
 }
 
@@ -338,9 +350,11 @@ function retainReviewWatch(publicId: string, queryClient: QueryClient) {
 }
 
 /**
- * While `observing`, keeps a photo run's review query fresh from the shared
- * agent stream and reports whether that stream is live. `false` when the run
- * has no agent, is no longer live, or the stream has not connected.
+ * While `observing`, keeps a run's run-tagged reads (the photo review, the
+ * run's work) fresh from the shared agent stream and reports whether the
+ * server holds that stream live. `false` when the run has no agent, is no
+ * longer live, the stream has not connected, or each connection is only a
+ * retained snapshot.
  */
 export function useAgentReviewSync(publicId: string, observing: boolean) {
   const queryClient = useQueryClient();
@@ -354,7 +368,7 @@ export function useAgentReviewSync(publicId: string, observing: boolean) {
       release();
     };
   }, [observing, publicId, queryClient]);
-  return usePhase(observation) === "live";
+  return useHeldLive(observation);
 }
 
 const WORKER_PENDING_STATES = ["pending", "waiting_for_device", "leased"];

@@ -1,3 +1,4 @@
+import { AGENT_OBSERVATION_HEADER } from "@cubby/shared/client-constants";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -226,7 +227,7 @@ describe("openAgentObservation", () => {
   const snapshotLine = (status: "absent" | "idle" | "running") =>
     `data: ${JSON.stringify({ status, messages: [], settlements: [] })}\n\n`;
 
-  function streamResponse(chunks: string[]) {
+  function streamResponse(chunks: string[], headers: HeadersInit = {}) {
     const encoder = new TextEncoder();
     let index = 0;
     const body = new ReadableStream<Uint8Array>({
@@ -241,7 +242,7 @@ describe("openAgentObservation", () => {
     });
     return new Response(body, {
       status: 200,
-      headers: { "content-type": "text/event-stream" },
+      headers: { "content-type": "text/event-stream", ...headers },
     });
   }
 
@@ -282,5 +283,31 @@ describe("openAgentObservation", () => {
     // The malformed line that followed must not have cleared the snapshot.
     expect(observation.getSnapshot().conversation?.status).toBe("running");
     observation.close();
+  });
+
+  it("marks only a held stream, not a retained snapshot, as held", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        streamResponse([snapshotLine("running")], {
+          [AGENT_OBSERVATION_HEADER]: "snapshot",
+        }),
+      )
+      .mockResolvedValue(streamResponse([snapshotLine("running")]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const snapshot = openAgentObservation("/api/agent");
+    await vi.waitFor(() =>
+      expect(snapshot.getSnapshot()).toMatchObject({
+        phase: "live",
+        held: false,
+      }),
+    );
+    snapshot.close();
+    const held = openAgentObservation("/api/agent");
+    await vi.waitFor(() =>
+      expect(held.getSnapshot()).toMatchObject({ phase: "live", held: true }),
+    );
+    held.close();
   });
 });

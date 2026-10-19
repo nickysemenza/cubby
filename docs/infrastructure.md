@@ -118,6 +118,16 @@ checked-in configuration is part of `apps/web/cloudflare.config.ts`:
   (Mail import: purchase, vendor, product); other kinds are refused for the
   Run, while members' `tools/list` keeps every kind.
 
+The Run page observes without resuming work. Opening a harness resumes its
+pending tasks, so `/stream` from an object whose agent is already constructed
+for Run work is the agent's live push stream; every other observation reads the
+retained pi_ SQLite tables (`agent-transcript.ts`, version-fenced). Both
+include pi's own `pi.usage` token totals per model (`model-usage.ts`), which
+the Run page compares against the Run's `AiUsage` rows to expose calls the
+usage hook missed, such as compaction summaries; cost stays in `AiUsage`. The
+agent's MCP calls are recorded as `McpToolCall` with `surface: in_app_agent`
+and the Run.
+
 pi-durable owns migrations of its stored tool tasks. Validate preservation of
 live call identities, arguments, and replay checkpoints when upgrading it.
 The host discards a failed in-memory harness after it closes and reopens the
