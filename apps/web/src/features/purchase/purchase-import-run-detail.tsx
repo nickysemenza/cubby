@@ -4,8 +4,6 @@ import {
   type AgentConversation,
   type AgentConversationMessage,
   type AgentModelUsage,
-  type AgentConversationPart,
-  type AgentConversationSettlement,
 } from "@cubby/schemas/agent-conversation";
 import type { ReportRowState } from "@cubby/schemas/entity-report";
 import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
@@ -22,12 +20,10 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { z } from "zod";
 
 import type { RunDetail } from "~/contracts/run.contract";
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
-import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
 import { runHref } from "~/entity/routing/purchase-import-links";
 import {
   agentUrl,
@@ -36,6 +32,7 @@ import {
   useAgentReviewSync,
   type AgentConversationObservationSnapshot,
 } from "~/features/run/agent-observation";
+import { AgentTranscript } from "~/features/run/agent-transcript";
 import { usePhotoRunReview } from "~/features/run/photo-group-review";
 import {
   PhotoImportRunView,
@@ -533,14 +530,6 @@ function workItemState(item: AgentWorkItem): keyof typeof STEP_LABEL {
   return item.completed ? "done" : "running";
 }
 
-const SETTLEMENT_STATE = {
-  done: "done",
-  unanswered: "warning",
-} as const satisfies Record<
-  AgentConversationSettlement["outcome"],
-  ReportRowState
->;
-
 /** A step's timing breakdown, each figure with its caveat in text rather than a tooltip. */
 function StepTiming({
   rows,
@@ -618,23 +607,6 @@ function AgentOverview({
   );
 }
 
-function AgentTranscriptDisclosure({
-  messages,
-  settlements,
-}: {
-  messages: AgentConversationMessage[];
-  settlements: AgentConversationSettlement[];
-}) {
-  return (
-    <details className="border-t border-border pt-2">
-      <summary className="cursor-pointer text-sm font-medium">
-        Agent messages and tool calls · {messages.length} messages
-      </summary>
-      <AgentTranscript messages={messages} settlements={settlements} />
-    </details>
-  );
-}
-
 function useAbsentAgentRefresh(
   phase: string,
   dispatchEventId: string | null | undefined,
@@ -679,9 +651,10 @@ function TerminalAgentSurface({ run }: { run: RunDetail }) {
       {history.data ? (
         <>
           <AgentOverview run={run} conversation={history.data} />
-          <AgentTranscriptDisclosure
+          <AgentTranscript
             messages={history.data.messages}
             settlements={history.data.settlements}
+            live={history.data.status === "running"}
           />
         </>
       ) : null}
@@ -809,153 +782,12 @@ function ActiveAgentSurface({ run }: { run: RunDetail }) {
         </StatusText>
       ) : null}
       <AgentOverview run={run} conversation={agent.conversation} />
-      <AgentTranscriptDisclosure
+      <AgentTranscript
         messages={messages}
         settlements={agent.conversation?.settlements ?? []}
+        live={agent.conversation?.status === "running"}
       />
     </Section>
-  );
-}
-
-function AgentTranscript({
-  messages,
-  settlements,
-}: {
-  messages: AgentConversationMessage[];
-  settlements: AgentConversationSettlement[];
-}) {
-  if (messages.length === 0 && settlements.length === 0)
-    return <StatusText>No agent messages have been recorded yet.</StatusText>;
-  return (
-    <div
-      className="max-h-[70vh] overflow-auto border-t border-border pt-2"
-      aria-label="Agent conversation transcript"
-    >
-      {messages.map((message) => (
-        <AgentMessage key={message.id} message={message} />
-      ))}
-      {settlements.length ? (
-        <RecordList aria-label="Operation settlements" className="pt-2">
-          {settlements.map((settlement) => (
-            <RecordRow
-              key={settlement.operationId}
-              leading={
-                <RecordDot
-                  state={SETTLEMENT_STATE[settlement.outcome]}
-                  label={humanize(settlement.outcome)}
-                />
-              }
-              primary={
-                <code className="font-mono text-xs">
-                  {settlement.operationId}
-                </code>
-              }
-              secondary={settlement.reason ?? humanize(settlement.outcome)}
-              clip={false}
-            />
-          ))}
-        </RecordList>
-      ) : null}
-    </div>
-  );
-}
-
-function AgentMessage({ message }: { message: AgentConversationMessage }) {
-  return (
-    <article className="grid gap-1 border-b border-border py-2 last:border-0">
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge variant={message.role === "assistant" ? "default" : "outline"}>
-          {message.purpose}
-        </Badge>
-        <span className="text-xs text-muted-foreground">{message.display}</span>
-      </div>
-      {message.signal ? (
-        <p className="font-mono text-xs text-muted-foreground">
-          {message.signal.type}
-          {message.signal.attributes
-            ? ` · ${Object.entries(message.signal.attributes)
-                .map(([key, value]) => `${key}=${value}`)
-                .join(" ")}`
-            : ""}
-        </p>
-      ) : null}
-      <div className="grid gap-2">
-        {message.parts.map((part) => (
-          <AgentPart
-            key={`${message.id}:${part.type}:${JSON.stringify(part)}`}
-            part={part}
-          />
-        ))}
-      </div>
-    </article>
-  );
-}
-
-function AgentPart({ part }: { part: AgentConversationPart }) {
-  if (part.type === "text" || part.type === "reasoning") {
-    return (
-      <p
-        className={
-          part.type === "reasoning"
-            ? "text-sm text-muted-foreground"
-            : "text-sm whitespace-pre-wrap"
-        }
-      >
-        <ShortcodeProse>{part.text}</ShortcodeProse>
-      </p>
-    );
-  }
-  if (part.type === "file") {
-    return (
-      <span className="text-sm text-muted-foreground">
-        {part.filename ?? "Agent attachment"} · {part.mediaType}
-      </span>
-    );
-  }
-  return (
-    <details className="border border-border bg-muted/30 p-2 text-xs">
-      <summary className="cursor-pointer font-mono">
-        {part.toolName} · {part.state}
-        {part.durationMs !== undefined ? ` · ${part.durationMs}ms` : ""}
-      </summary>
-      <div className="grid gap-2 pt-2">
-        <ToolValue label="Arguments" value={part.input} />
-        {part.state === "output-available" ? (
-          <ToolValue label="Result" value={part.output} />
-        ) : null}
-        {part.state === "output-error" ? (
-          <p className="text-destructive">{part.errorText}</p>
-        ) : null}
-      </div>
-    </details>
-  );
-}
-
-function formattedToolValue(value: unknown): string {
-  const parsedValue = z.json().safeParse(value);
-  if (!parsedValue.success) return "No output";
-  const serialized = z.string().safeParse(parsedValue.data);
-  if (!serialized.success)
-    return JSON.stringify(parsedValue.data, null, 2) ?? "null";
-  const source = serialized.data.startsWith("Structured content:\n")
-    ? serialized.data.slice("Structured content:\n".length)
-    : serialized.data;
-  try {
-    const parsed = z.json().parse(JSON.parse(source));
-    return JSON.stringify(parsed, null, 2) ?? "null";
-  } catch {
-    return serialized.data;
-  }
-}
-
-function ToolValue({ label, value }: { label: string; value: unknown }) {
-  return (
-    <div>
-      <p className="text-muted-foreground">{label}</p>
-      <pre className="max-h-80 overflow-auto bg-background p-2 font-mono text-xs break-words whitespace-pre-wrap">
-        {formattedToolValue(value)}
-      </pre>
-    </div>
   );
 }
 
