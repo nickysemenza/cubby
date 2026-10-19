@@ -337,6 +337,7 @@ export const nativeCoverage = {
       "financialAccount.authorizedUsers",
       "financialAccount.fundingPeriods",
       "financialAccount.identity",
+      "financialTransaction.allocations",
       "ledgerTransfer.sourceClaims",
       "meal.recipes",
       "recipe.meta",

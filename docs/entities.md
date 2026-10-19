@@ -452,8 +452,7 @@ path, flip the status, and lower the ceiling.
 **Structured values.** A field whose control renderer is in
 `STRUCTURED_VALUE_RENDERERS` (`external-ids`, `label-nutrition`,
 `source-aliases`, `source-refs`, `unit-mappings`), or a `structured-field` marked `implemented` in
-`nativeCoverage.structuredField` (`recipe.sections`, `recipe.meta`, `recipe.yield`, meal `recipes`,
-account `identity`/`cardNumbers`, vendor `agentHints`, expense and ledger-transfer `sourceClaims`),
+`nativeCoverage.structuredField`,
 is an object or array of objects that **both clients edit with one generic editor** over the same
 generated description: CubbyKit's `StructuredValueControl` and web's `StructuredValueField`
 (`apps/web/src/entity/editing/structured-value-field.tsx`, which binds existing form primitives to
