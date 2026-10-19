@@ -1,0 +1,19 @@
+apps/web/docs/web-ui.md
+  s_9b829d577c7e4c::t_acc827e75cc818 37-40,46-49,102-106
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ad93b11d16cce0a0b6bd98c8f649dfae478bf7ce",
+  "prompts": {},
+  "sessions": {
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
