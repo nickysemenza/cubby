@@ -754,7 +754,14 @@ struct EntityListView: View {
         return descriptor.sortFields.contains(key) ? key : nil
     }
 
-    private func sortHeading(_ title: String, key: String?, model: GenericEntityListModel) -> some View {
+    /// A declared short header; the full label stays the accessible name.
+    private func columnHeader(_ field: FieldDescriptor) -> Text {
+        Text(field.columnHeader).accessibilityLabel(Text(field.label))
+    }
+
+    private func sortHeading(
+        _ title: String, accessibleTitle: String? = nil, key: String?, model: GenericEntityListModel
+    ) -> some View {
         Button {
             guard let key else { return }
             let current = model.sort
@@ -775,7 +782,9 @@ struct EntityListView: View {
         }
         .buttonStyle(.plain)
         .disabled(key == nil)
-        .accessibilityLabel(key == nil ? title : "Sort by \(title)")
+        .accessibilityLabel(
+            key == nil ? accessibleTitle ?? title : "Sort by \(accessibleTitle ?? title)"
+        )
         .accessibilityValue(
             key.map { model.sort == $0 ? "Ascending" : model.sort == "-\($0)" ? "Descending" : "Not sorted" }
                 ?? ""
@@ -858,7 +867,7 @@ struct EntityListView: View {
                     TableColumnForEach(fields, id: \.key) { field in
                         if let sortKey = sortKey(for: field) {
                             TableColumn(
-                                Text(field.label), sortUsing: EntityRowFieldComparator(fieldKey: sortKey)
+                                columnHeader(field), sortUsing: EntityRowFieldComparator(fieldKey: sortKey)
                             ) { row in
                                 tableCell(field, row: row, fact: tableFact(field, row: row))
                                     .environment(cellAppModel)
@@ -867,7 +876,7 @@ struct EntityListView: View {
                             .customizationID(field.key)
                         }
                         if sortKey(for: field) == nil {
-                            TableColumn(Text(field.label)) { (row: EntityRow) in
+                            TableColumn(columnHeader(field)) { (row: EntityRow) in
                                 tableCell(field, row: row, fact: tableFact(field, row: row))
                                     .environment(cellAppModel)
                             }
@@ -910,8 +919,11 @@ struct EntityListView: View {
                             )
                             .frame(width: titleColumnWidth, alignment: .leading)
                             ForEach(fields, id: \.key) { field in
-                                sortHeading(field.label, key: sortKey(for: field), model: model)
-                                    .frame(width: fieldColumnWidth, alignment: .leading)
+                                sortHeading(
+                                    field.columnHeader, accessibleTitle: field.label,
+                                    key: sortKey(for: field), model: model
+                                )
+                                .frame(width: fieldColumnWidth, alignment: .leading)
                             }
                         }
                         .padding(.horizontal, FieldGuideTokens.Space.md)
