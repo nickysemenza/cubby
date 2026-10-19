@@ -1,5 +1,6 @@
 import { mailImportOutcome } from "@cubby/schemas/assessment";
 import { parseEntityId } from "@cubby/schemas/identifiers";
+import { importRunAgentManifest } from "@cubby/schemas/import-run-agent";
 import { mailAttributionHeaders } from "@cubby/schemas/mailbox-research";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import {
@@ -142,12 +143,14 @@ if (!parsed.success)
     "Invalid replay input; expected retained text and a frozen outcome for every case",
   );
 const cases = parsed.data;
+// Without overrides a replay runs production's models.
 const primary = supportedChatModelSchema.parse(
-  process.env.MAIL_REPLAY_MODEL ?? "claude-opus-5-5",
+  process.env.MAIL_REPLAY_MODEL ?? importRunAgentManifest.mail_import.model,
 );
-const escalation = process.env.MAIL_REPLAY_ESCALATION_MODEL
-  ? supportedChatModelSchema.parse(process.env.MAIL_REPLAY_ESCALATION_MODEL)
-  : undefined;
+const escalation = supportedChatModelSchema.parse(
+  process.env.MAIL_REPLAY_ESCALATION_MODEL ??
+    importRunAgentManifest.mail_import.escalationModel,
+);
 const reports: (MailReplayCaseReport & {
   /** Runtime start, and admission to settlement, in seconds. */
   seconds?: { startup: number; settle: number };
@@ -198,7 +201,7 @@ describe("isolated Mail coordinator replay", () => {
         synthetic: !inputUrl,
         scripted,
         primary,
-        escalation: escalation ?? null,
+        escalation,
         cases: reports.length,
         parity: reports.length - disagreements.length,
         actualModels: [

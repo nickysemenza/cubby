@@ -931,7 +931,7 @@ describe("current purchase-agent system boundaries", () => {
       "purchase-agent",
       {
         coordinatorModels: {
-          primary: "claude-haiku-5-5",
+          primary: "gpt-6-luna",
           escalation: "claude-opus-5-5",
         },
       },
@@ -946,9 +946,9 @@ describe("current purchase-agent system boundaries", () => {
       ]),
     );
     expect(Object.fromEntries(modelAfter)).toMatchObject({
-      "a-claim": "claude-haiku-5-5",
+      "a-claim": "gpt-6-luna",
       "a-held": "claude-opus-5-5",
-      "b-claim": "claude-haiku-5-5",
+      "b-claim": "gpt-6-luna",
       "b-escalate": "claude-opus-5-5",
     });
     const detail = await loadRunDetail(

@@ -180,7 +180,7 @@ export const importRunAgentManifest = {
     workItemContext: "all",
   },
   mail_import: {
-    model: "claude-opus-5-5",
+    model: "gpt-6-luna",
     escalationModel: "claude-opus-5-5",
     effort: "medium",
     agentTools: [...RUN_AGENT_TOOLS, ESCALATE_TOOL],
