@@ -53,13 +53,17 @@ export async function labelStatementKind(
       feature.choices[result.selectedIndex ?? -1];
     return choice && result.confidence === "high" ? choice : null;
   };
+  const [kindChoice, counterpartyChoice] = await Promise.all([
+    ask(STATEMENT_TRANSACTION_KIND_FEATURE),
+    ask(STATEMENT_COUNTERPARTY_FEATURE),
+  ]);
   const kind = financialTransactionKind
     .nullable()
     .catch(null)
-    .parse(await ask(STATEMENT_TRANSACTION_KIND_FEATURE));
+    .parse(kindChoice);
   const counterparty = statementCounterparty.shape.label
     .catch(null)
-    .parse(await ask(STATEMENT_COUNTERPARTY_FEATURE));
+    .parse(counterpartyChoice);
   return {
     ...create,
     ...decideStatementKind({

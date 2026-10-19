@@ -31,6 +31,7 @@ import {
   updateStatementRows,
 } from "./statement-row";
 import {
+  buildChargeProposals,
   generateStatementSuggestionPage,
   pendingPostedMatch,
 } from "./statement-suggestions";
@@ -166,6 +167,98 @@ const label = async (ctx: Ctx, port: DecisionPort) =>
 
 describe("statement Transaction suggestions", () => {
   const ctx = withTestDb();
+
+  // Failure mode: pages build many charges at once while accept rebuilds one,
+  // so any batch-dependent evidence (unordered holds, another account's rows)
+  // makes every bulk-built suggestion fail as stale.
+  it("builds a page of charges exactly as it builds each one alone", async () => {
+    const account = (await card(ctx)).output;
+    await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic Debit",
+      identity: {
+        kind: "bank_account",
+        institution: "Synthetic Bank",
+        accountType: "checking",
+      },
+      sourceAliases: [
+        {
+          source: "monarch",
+          alias: "Synthetic Debit (...1111)",
+          externalAccountId: null,
+        },
+      ],
+    });
+    await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.id,
+      kind: "purchase",
+      status: "posted",
+      amount: 42.5,
+      postedDate: "2026-05-05",
+      merchant: "Example Grocer",
+      rawDescription: "EXAMPLE GROCER 0001",
+      sourceRefs: [],
+    });
+    for (const day of ["2026-04-28", "2026-04-29", "2026-04-30"])
+      await createRepoEntity(ctx, "financialTransaction", {
+        accountId: account.id,
+        kind: "purchase",
+        status: "pending",
+        amount: 15,
+        transactionDate: day,
+        merchant: "Example Bistro",
+        rawDescription: "EXAMPLE BISTRO PENDING",
+        sourceRefs: [],
+      });
+    await record(ctx, [
+      rowInput(),
+      rowInput({
+        providerAmount: -15,
+        statementDate: "2026-05-01",
+        merchant: "Example Bistro",
+        rawDescription: "EXAMPLE BISTRO",
+        sourceCategory: "Restaurants & Bars",
+      }),
+      rowInput({
+        providerAmount: -15,
+        statementDate: "2026-05-02",
+        merchant: "Example Bistro",
+        rawDescription: "EXAMPLE BISTRO",
+        sourceCategory: "Restaurants & Bars",
+      }),
+      rowInput({
+        accountDescriptor: "Synthetic Debit (...1111)",
+        providerAmount: -6.25,
+        merchant: "Example Cafe",
+        rawDescription: "EXAMPLE CAFE",
+        sourceCategory: "Coffee Shops",
+      }),
+    ]);
+    const { rows } = await getDb(ctx.db).execute<{
+      source: string;
+      chargeKey: string;
+    }>(
+      sql`SELECT source, COALESCE("legacyExternalId", "externalId") AS "chargeKey" FROM "StatementRow" WHERE "deletedAt" IS NULL`,
+    );
+    const charges = rows.map(({ source, chargeKey }) => ({
+      source,
+      chargeKey,
+    }));
+    const batch = await buildChargeProposals(ctx.db, charges);
+    const single = await Promise.all(
+      charges.map(
+        async (charge) => (await buildChargeProposals(ctx.db, [charge]))[0]!,
+      ),
+    );
+    const view = (proposals: typeof batch) =>
+      Object.fromEntries(
+        proposals.map((proposal) => [
+          proposal.charge.chargeKey,
+          [proposal.fingerprint, proposal.evidenceFingerprint],
+        ]),
+      );
+    expect(batch).toHaveLength(4);
+    expect(view(batch)).toEqual(view(single));
+  });
 
   // Failure modes: a re-export doubles the suggestion; an ignore recorded on
   // one observation leaves the other on the worklist; re-generation republishes

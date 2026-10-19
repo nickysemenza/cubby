@@ -1,3 +1,5 @@
+import { suggestionStatus } from "@cubby/schemas/ai";
+import { assessmentFamily } from "@cubby/schemas/assessment";
 import type { AutomaticRuleKey } from "@cubby/schemas/automatic-rule";
 import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
 import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
@@ -16,7 +18,10 @@ import {
   listStatementRows,
   recordStatementRows,
 } from "~/server/domains/statement-import/repo/statement-row";
-import { generateStatementSuggestionPage } from "~/server/domains/statement-import/repo/statement-suggestions";
+import {
+  buildChargeProposals,
+  generateStatementSuggestionPage,
+} from "~/server/domains/statement-import/repo/statement-suggestions";
 import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import {
@@ -467,6 +472,69 @@ describe("Automatic rules", () => {
         /Turned itself off.*n=50, hits=48, precision=0\.96,/,
       ),
     });
+  });
+
+  // Failure mode: a label page built up front publishes a charge with
+  // evidence an automatic rule earlier in the page already changed, so its
+  // suggestion fails as stale on accept.
+  it("leaves no stale suggestion after an automatic attach mid-page", async () => {
+    await createSystemUserFixture(ctx.db);
+    const { existing } = await soleCandidateCharge(ctx);
+    await recordStatementRows(
+      ctx.db,
+      recordStatementRowsInput.parse({
+        import: {
+          source: "monarch",
+          label: "synthetic-export.csv",
+          fingerprint: "fp-automatic-rule-1",
+          dateKind: "posted",
+          rowCountDeclared: null,
+          notes: null,
+        },
+        rows: [
+          {
+            accountDescriptor: "Synthetic Card (...4242)",
+            statementDate: "2026-05-06",
+            providerAmount: -42.5,
+            merchant: "Example Grocer",
+            rawDescription: "EXAMPLE GROCER 0002",
+            sourceCategory: "Groceries",
+            providerStatus: "posted",
+            providerNotes: null,
+            rowPosition: 2,
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
+    await eligibleFor(ctx, supportedDecisionModelSchema.options);
+    await setAutomaticRule(ctx.db, ctx.actor, {
+      ruleKey: ATTACH,
+      enabled: true,
+    });
+    await label(ctx);
+    const rows = (await listStatementRows(ctx.db, {})).data;
+    expect(rows.filter((row) => row.matchState === "matched")).toEqual([
+      expect.objectContaining({ transactionId: existing.id }),
+    ]);
+    const { rows: pending } = await getDb(ctx.db).execute<{
+      source: string;
+      chargeKey: string;
+      evidenceFingerprint: string;
+    }>(
+      sql`SELECT data->>${"source"} AS source, data->>${"chargeKey"} AS "chargeKey",
+          data->>${"evidenceFingerprint"} AS "evidenceFingerprint"
+        FROM "AssessmentState"
+        WHERE family = ${assessmentFamily.enum.statement_transaction} AND active
+          AND status = ${suggestionStatus.enum.pending} AND data ? ${"chargeKey"}`,
+    );
+    expect(pending).toHaveLength(1);
+    // Every pending suggestion still matches its charge's current evidence.
+    for (const row of pending) {
+      const [current] = await buildChargeProposals(ctx.db, [row]);
+      expect(current?.evidenceFingerprint).toBe(row.evidenceFingerprint);
+    }
   });
 
   // Failure modes: an automatic attach ticks diff fields, bypasses the

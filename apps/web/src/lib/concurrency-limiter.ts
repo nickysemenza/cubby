@@ -48,3 +48,17 @@ export function createConcurrencyLimiter(limit: number) {
     },
   };
 }
+
+/** Run `work` over `items`, at most `limit` at once, until every item is done. */
+export async function forEachConcurrently<T>(
+  items: readonly T[],
+  limit: number,
+  work: (item: T) => Promise<void>,
+) {
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (next < items.length) await work(items[next++]!);
+    }),
+  );
+}

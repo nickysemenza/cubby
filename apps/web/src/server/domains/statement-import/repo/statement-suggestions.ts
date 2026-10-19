@@ -29,6 +29,7 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import { type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { forEachConcurrently } from "~/lib/concurrency-limiter";
 import { plainDateDaysBetween } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import {
@@ -71,8 +72,16 @@ const SIBLING_WINDOW_DAYS = 3;
 /** Merchant history votes only once this many member-made transactions agree. */
 const HISTORY_MIN_TRANSACTIONS = 2;
 
+/**
+ * Charges published at once, by generation and label pages alike. Each publish holds a pooled
+ * connection for its transaction, and the Hyperdrive pools the app's requests
+ * share are capped at 12, so a Sweep keeps most of them free.
+ */
+export const STATEMENT_PUBLISH_CONCURRENCY = 4;
+
 export type ChargeRef = { source: string; chargeKey: string };
-const chargeId = (charge: ChargeRef) => `${charge.source}:${charge.chargeKey}`;
+export const chargeId = (charge: ChargeRef) =>
+  `${charge.source}:${charge.chargeKey}`;
 
 type Observation = {
   id: string;
@@ -1243,15 +1252,21 @@ export async function generateStatementSuggestionPage(
   // The final page also judges vanished holds, whose charges are matched.
   if (charges.length < limit)
     proposals.push(...(await buildHoldVoidProposals(db)));
-  for (const proposal of proposals) {
-    const outcome = await publishChargeProposal(
-      db,
-      proposal,
-      ruleProducer(input.runId),
-    );
-    if (outcome === "published") published++;
-    else unchanged++;
-  }
+  // Each publish locks only its own charge, and generation applies no rules,
+  // so a page's charges publish independently.
+  await forEachConcurrently(
+    proposals,
+    STATEMENT_PUBLISH_CONCURRENCY,
+    async (proposal) => {
+      const outcome = await publishChargeProposal(
+        db,
+        proposal,
+        ruleProducer(input.runId),
+      );
+      if (outcome === "published") published++;
+      else unchanged++;
+    },
+  );
   return {
     published,
     unchanged,
