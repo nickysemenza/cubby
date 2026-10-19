@@ -106,7 +106,8 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
    call receipt exists; latest Run-level usage cannot establish that attribution.
    Historical outcomes stay immutable after retries.
 3. Before paid inference, show the sample size, chosen primary/escalation model,
-   and the per-case eight-minute replay timeout. With the member's authorization,
+   and the per-case fifteen-minute budget (runtime start plus settlement; a stale
+   Worker rebuild runs once before the first case). With the member's authorization,
    pass originals and frozen outcomes through `eval:mail-replay:stdin`, using
    `MAIL_REPLAY_MODEL` and optional `MAIL_REPLAY_ESCALATION_MODEL`. Supply an array
    of `{subject, sender, receivedAt, bodyText, bodyHtml?, baseline}`; `baseline`
@@ -119,7 +120,9 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
    contains parity counts and disagreement case positions/field names only.
    Join those positions to the session worklist, then review only disagreements
    from the originals via authenticated MCP. Inspect `actualModels`: funding
-   recovery can substitute a model. Missing stable linked-target identity is unavailable, never parity. Reason-text differences are mechanical
+   recovery can substitute a model. A failed case carries the Run's `failure`,
+   each refused attempt's raw provider error in `failedAttempts`, and
+   coordinator logs plus peer route counts in `diagnostics`. Missing stable linked-target identity is unavailable, never parity. Reason-text differences are mechanical
    disagreements, not automatically wrong decisions. Keep unserved candidate
    judgments in the session; production MCP cannot grade disposable database
    handles.
