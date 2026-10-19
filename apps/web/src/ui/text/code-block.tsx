@@ -87,9 +87,8 @@ function CodeBlockContent({ className, ...props }: ComponentProps<"pre">) {
     <pre
       data-slot="code-block-content"
       dir="ltr"
-      tabIndex={0}
       className={cn(
-        "max-h-80 min-w-0 overflow-auto px-2 py-1.5 font-mono text-xs/4 wrap-break-word whitespace-pre-wrap outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-inset",
+        "max-h-80 min-w-0 overflow-auto px-2 py-1.5 font-mono text-xs/4 wrap-break-word whitespace-pre-wrap",
         className,
       )}
       {...props}

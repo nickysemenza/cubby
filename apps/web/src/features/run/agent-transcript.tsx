@@ -21,13 +21,13 @@ import { MarkdownText } from "~/entity/prose/markdown";
 import { displayToolAction } from "~/features/purchase/agent-tool-names";
 import { formatCompactCount, formatCount } from "~/lib/number-format";
 import { Button } from "~/ui/primitives/button";
+import { Spinner } from "~/ui/primitives/spinner";
+import { StatusText } from "~/ui/primitives/status-text";
 import {
   CodeBlock,
   CodeBlockContent,
   CodeBlockHeader,
-} from "~/ui/primitives/code-block";
-import { Spinner } from "~/ui/primitives/spinner";
-import { StatusText } from "~/ui/primitives/status-text";
+} from "~/ui/text/code-block";
 import {
   Trace,
   TraceCollapsible,
@@ -37,7 +37,7 @@ import {
   TraceIcon,
   TraceLine,
   TraceTitle,
-} from "~/ui/primitives/trace";
+} from "~/ui/text/trace";
 
 import {
   formatToolValue,
