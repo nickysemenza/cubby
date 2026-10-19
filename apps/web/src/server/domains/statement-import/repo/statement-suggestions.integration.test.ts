@@ -830,8 +830,20 @@ describe("statement Transaction suggestions", () => {
   // its evidence fingerprint (labels ride on top of it), so "Accept clean"
   // would still create it with no opposite leg.
   it("leaves a money move labelled clean by an earlier rule out of Accept clean", async () => {
-    await card(ctx);
+    const account = (await card(ctx)).output;
+    // A clean attach beside it: its create alternative never decides it.
+    await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.id,
+      kind: "purchase",
+      status: "posted",
+      amount: 42.5,
+      postedDate: "2026-05-05",
+      merchant: "Older import label",
+      rawDescription: "EXMPL GRCR #1 SYNTHETIC",
+      sourceRefs: [],
+    });
     await record(ctx, [
+      rowInput(),
       rowInput({
         providerAmount: 900,
         merchant: "Synthetic Card Services",
@@ -844,20 +856,37 @@ describe("statement Transaction suggestions", () => {
       ctx,
       answering({ kind: "credit_card_payment", counterparty: "business" }),
     );
-    const [payment] = await suggestions(ctx);
+    const listed = await suggestions(ctx);
+    const payment = listed.find((row) => row.recommended === "create");
+    const attach = listed.find((row) => row.recommended === "attach");
     expect(payment).toMatchObject({
       clean: false,
       create: { kind: "credit_card_payment" },
     });
+    expect(attach).toMatchObject({ clean: true });
     // The stored flag the earlier rule left; Accept clean selects by it.
     await getDb(ctx.db).execute(
       sql`UPDATE "AssessmentState" SET data = jsonb_set(data, '{clean}', 'true') WHERE id = ${payment!.assessmentId}::uuid`,
     );
+    // Refused with a reason, so the page skips it instead of stopping.
     expect(
       await acceptCleanSuggestions(ctx.db, kernelCtx(ctx), {
         filters: { family: "statement_transaction" },
       }),
-    ).toEqual([]);
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          assessmentId: payment!.assessmentId,
+          ok: false,
+          error: expect.stringContaining("No longer clean"),
+        }),
+        expect.objectContaining({
+          assessmentId: attach!.assessmentId,
+          ok: true,
+          applied: true,
+        }),
+      ]),
+    );
     expect(await stateOf(ctx, payment!.assessmentId)).toMatchObject({
       status: "pending",
     });

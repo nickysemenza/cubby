@@ -449,8 +449,9 @@ const statementTransaction: SuggestionFamilyPresentation<"statement_transaction"
       // Labels ride on top of the evidence fingerprint, so a create labelled
       // clean under an earlier rule still passes the apply-time check.
       // Accept clean re-reads today's rule instead of the stored flag.
-      const { create, transfer } = row.evidence;
-      if (create && !kindAgreed(create, transfer)) return null;
+      const { recommended, create, transfer } = row.evidence;
+      if (recommended === "create" && create && !kindAgreed(create, transfer))
+        return null;
       const application = statementAcceptApplication(row.evidence);
       return application
         ? {
