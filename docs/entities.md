@@ -813,10 +813,12 @@ connection or identity pair per guarded transaction. Interrupted catalogs may re
 pairs; retries reuse their publication/work identities. Pair publication checks
 a transient MVCC row-set fence in one statement instead of repeating snapshots:
 preparation brackets the complete Product, identifier, source, photo/description,
-import-claim, issuer-registry, active producing manifest and variant-history dependencies, and the write
-transaction rechecks them after taking the pair lock. New/deleted rows and edits
-invalidate preparation; issuer-registry edits conservatively retry it. No
-read-set fence is stored as durable provenance. Email Runs freeze at most 200
+import-claim, issuer-registry and variant-history dependencies, plus the whole
+activation row version containing the producing manifest. The write transaction
+rechecks them after taking the pair lock. New/deleted rows and edits invalidate
+preparation. Any activation-row rewrite, including a code-only deployment with
+identical policies, conservatively requires fresh preparation; issuer-registry
+edits do too. No read-set fence is stored as durable provenance. Email Runs freeze at most 200
 items and run only while Mail import is on for that mailbox. Reused Email
 stages require current source checksum and feature provenance. The
 [AI refresh runbook](runbooks/ai-refresh.md) owns activation, observation and
