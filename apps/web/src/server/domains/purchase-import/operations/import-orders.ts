@@ -922,7 +922,7 @@ async function finalizeReviewRun(
     .where(
       and(
         eq(runTable.id, runEntityId.parse(runId)),
-        inArray(runTable.status, ["running", "paused_approval"]),
+        eq(runTable.status, "running"),
       ),
     );
 }

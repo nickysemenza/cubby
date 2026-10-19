@@ -179,11 +179,10 @@ export type BackgroundTask = z.infer<typeof backgroundTaskSchema>;
 export type BackgroundTaskInput = z.input<typeof backgroundTaskSchema>;
 
 /**
- * What an explicit enqueue action reports back: how the work was accepted and
- * how many tasks it produced. No batch or job identity exists to return.
+ * What an explicit enqueue action reports back: how many tasks the queue
+ * accepted. No batch or job identity exists to return.
  */
 export const backgroundTaskReceiptSchema = z.object({
-  transport: z.literal("queue"),
   count: z.number().int().nonnegative(),
 });
 export type BackgroundTaskReceipt = z.infer<typeof backgroundTaskReceiptSchema>;

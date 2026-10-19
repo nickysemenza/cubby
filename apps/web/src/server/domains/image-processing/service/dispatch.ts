@@ -21,6 +21,7 @@ import {
   claimImageProcessingJob,
   completeImageProcessingJob,
   markImageProcessingWaitingForDevice,
+  SERVER_FAILURE_RETRYABLE,
   reclaimExpiredImageProcessingLeases,
 } from "~/server/domains/image-processing/repo/image-processing";
 import {
@@ -141,8 +142,7 @@ export async function dispatchImageProcessingWakeup(
       });
       return "waiting";
     }
-    const command = await prepareCompanionImageCommand(db, claimed);
-    if (!command) return "skipped";
+    const command = await prepareCompanionImageCommand(claimed);
     const dispatched = await companionRpc(
       namespace.getByName("household"),
     ).dispatch(command);
@@ -173,7 +173,7 @@ export async function dispatchImageProcessingWakeup(
         outcome: {
           kind: claimed.kind,
           status: "failed",
-          retryable: claimed.attempts < 3,
+          retryable: SERVER_FAILURE_RETRYABLE,
           reason: detail,
         },
       },
@@ -186,7 +186,6 @@ export async function dispatchImageProcessingWakeup(
 
 /** Both transports mint exactly the same source/output capabilities. */
 export async function prepareCompanionImageCommand(
-  db: Database,
   claimed: NonNullable<Awaited<ReturnType<typeof claimImageProcessingJob>>>,
 ) {
   if (claimed.kind === "identify_image")
@@ -223,13 +222,10 @@ export async function prepareCompanionImageCommand(
     }
     return command;
   }
-  if (!claimed.derivativeKey) {
-    await markImageProcessingWaitingForDevice(db, {
-      jobId: claimed.id,
-      attemptId: claimed.attemptId,
-    });
-    return null;
-  }
+  // The claim fails a subject lift without a live derivative and mints a
+  // fresh output key for every other one.
+  if (!claimed.derivativeKey)
+    throw new Error("Subject-lift lease has no output key");
   return imageProcessingCommand.parse({
     kind: "subject_lift",
     jobId: claimed.id,

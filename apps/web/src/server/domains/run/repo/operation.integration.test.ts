@@ -187,10 +187,8 @@ describe("RunOperation rows written by earlier code", () => {
     });
   });
 
-  /** A paused `mcp:<tool>` proposal as earlier code stored it, approved by a member. */
-  const seedMcpMutation = async (
-    decision: "approve" | "reject" = "approve",
-  ) => {
+  /** An `mcp:<tool>` operation as earlier code stored it: rejected, or still in flight. */
+  const seedMcpMutation = async (state: "failed" | "started") => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic paused member",
       kind: "member",
@@ -207,7 +205,7 @@ describe("RunOperation rows written by earlier code", () => {
       purpose: "mail_import",
       trigger: "manual",
       agentSessionId: "synthetic-paused-session",
-      status: "paused_approval",
+      status: "running",
     });
     const toolName = "statement_rows.update";
     const params = {
@@ -229,7 +227,8 @@ describe("RunOperation rows written by earlier code", () => {
       operationId,
       kind: `mcp:${toolName}`,
       inputFingerprint: argsFingerprint,
-      state: "paused_approval",
+      state,
+      error: state === "failed" ? "Rejected by member" : null,
       result: { approvalProposal },
     });
     await getDb(ctx.db)
@@ -244,13 +243,6 @@ describe("RunOperation rows written by earlier code", () => {
         evidenceFingerprint: argsFingerprint,
         state: "pending",
       });
-
-    if (decision === "reject") {
-      await getDb(ctx.db)
-        .update(runOperation)
-        .set({ state: "failed", error: "Rejected by member" })
-        .where(eq(runOperation.runId, run.id));
-    }
 
     let executions = 0;
     const execute = () =>
@@ -282,33 +274,23 @@ describe("RunOperation rows written by earlier code", () => {
     };
   };
 
-  it("executes a paused MCP mutation proposed by earlier code without a new approval", async () => {
-    const { run, operationId, execute, executions } = await seedMcpMutation();
-    await expect(execute()).resolves.toEqual({ accepted: true });
-    await expect(execute()).resolves.toEqual({ accepted: true });
-    expect(executions()).toBe(1);
-    expect(await stored(run.id, operationId)).toMatchObject({
-      state: "completed",
-      result: { accepted: true },
-    });
-  });
-
   it("keeps a rejected persisted mutation refused on every replay without an effect", async () => {
     const { run, operationId, execute, executions } =
-      await seedMcpMutation("reject");
+      await seedMcpMutation("failed");
     const before = await stored(run.id, operationId);
     expect(before).toMatchObject({
       state: "failed",
       error: expect.stringMatching(/reject/iu),
     });
-    await expect(execute()).rejects.toThrow("Mutation outcome is uncertain");
-    await expect(execute()).rejects.toThrow("Mutation outcome is uncertain");
+    await expect(execute()).rejects.toThrow("Rejected by member");
+    await expect(execute()).rejects.toThrow("Rejected by member");
     expect(executions()).toBe(0);
     expect(await stored(run.id, operationId)).toEqual(before);
   });
 
-  it("locks the Run before the operation when executing a historical paused mutation", async () => {
-    const { run, operationId, execute, executions } = await seedMcpMutation();
+  it("locks the Run before the operation when replaying a persisted mutation", async () => {
+    const { run, operationId, execute, executions } =
+      await seedMcpMutation("started");
     let pending: Promise<unknown> | undefined;
     // A transaction holding the Run lock stands in for `controlRun`, which
     // locks the Run before the operation. The mutation must queue behind the
@@ -347,8 +329,8 @@ describe("RunOperation rows written by earlier code", () => {
           .for("update", { noWait: true }),
       ).resolves.toHaveLength(1);
     });
-    await expect(pending).resolves.toEqual({ accepted: true });
-    expect(executions()).toBe(1);
+    await expect(pending).rejects.toThrow("Mutation outcome is uncertain");
+    expect(executions()).toBe(0);
   });
 
   it("ignores a re-sent device debug-event batch instead of duplicating it", async () => {

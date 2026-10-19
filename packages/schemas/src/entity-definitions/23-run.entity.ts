@@ -204,7 +204,6 @@ export default defineEntity({
               value: [
                 "paused",
                 "paused_auth",
-                "paused_approval",
                 "needs_review",
                 "failed",
                 "dispatch_failed",
@@ -256,7 +255,6 @@ export default defineEntity({
             { value: "paused", label: "Paused" },
             { value: "paused_auth", label: "Agent authorization needed" },
             { value: "paused_offline", label: "Paused offline (historical)" },
-            { value: "paused_approval", label: "Recovering legacy pause" },
             { value: "needs_review", label: "Needs review" },
             { value: "completed", label: "Completed" },
             { value: "failed", label: "Failed" },
@@ -814,7 +812,7 @@ export default defineEntity({
         on: ["vendorAccountId"],
         unique: true,
         where:
-          "{vendorAccountId} IS NOT NULL AND {status} IN ('running', 'paused', 'paused_auth', 'paused_offline', 'paused_approval')",
+          "{vendorAccountId} IS NOT NULL AND {status} IN ('running', 'paused', 'paused_auth', 'paused_offline')",
       },
       {
         // One scheduled pass per mailbox at a time: an overlapping cron and
@@ -886,11 +884,6 @@ export default defineEntity({
           {
             value: "paused_offline",
             label: "Paused offline (historical)",
-            color: "var(--warning)",
-          },
-          {
-            value: "paused_approval",
-            label: "Recovering legacy pause",
             color: "var(--warning)",
           },
           {

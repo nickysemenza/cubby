@@ -786,7 +786,6 @@ export default defineEntity({
         kind: "range",
         placeholder: "Filter by created date...",
         options: [
-          { value: "olderThan1h", label: "Older than 1 hour" },
           { value: "30d", label: "Last 30 days" },
           { value: "90d", label: "Last 90 days" },
           { value: "ytd", label: "Year to date" },
@@ -794,7 +793,7 @@ export default defineEntity({
         ],
         expandRef: {
           module: "~/entity/filter-behavior",
-          export: "resolveImageCreatedDate",
+          export: "resolveCreatedDate",
         },
         wire: { kind: "range", from: "createdFrom", to: "createdTo" },
       },

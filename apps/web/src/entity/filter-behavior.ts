@@ -125,8 +125,3 @@ export const resolveUpdatedDate = (preset: string | undefined) => {
   const { dateFrom, dateTo } = resolveDateRange(preset);
   return { updatedFrom: dateFrom, updatedTo: dateTo };
 };
-
-export const resolveImageCreatedDate = (value: string | undefined) => {
-  if (value === "olderThan1h") return { uploadedAgeHoursMin: 1 };
-  return resolveCreatedDate(value);
-};

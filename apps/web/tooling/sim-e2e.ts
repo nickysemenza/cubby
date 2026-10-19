@@ -1482,14 +1482,6 @@ async function assertQaOutcomes(): Promise<void> {
       throw new Error(
         `Unit mapping edit must update the one cup row in place: ${JSON.stringify(mappings)}`,
       );
-    const approvals = await rows<{ state: string }>(
-      `SELECT a.state FROM "RunApproval" a JOIN "Run" r ON r.id = a."runId" WHERE r.shortcode = $1`,
-      [qaIds.APPROVAL_RUN_ID],
-    );
-    if (approvals.map((row) => row.state).join() !== "granted")
-      throw new Error(
-        `Run approval must be granted: ${JSON.stringify(approvals)}`,
-      );
     const groups = await rows<{ groupKey: string; state: string }>(
       `SELECT g."groupKey", g.state FROM "PhotoGroupProposal" g JOIN "Run" r ON r.id = g."runId"
        WHERE r.shortcode = $1 ORDER BY g."groupKey"`,

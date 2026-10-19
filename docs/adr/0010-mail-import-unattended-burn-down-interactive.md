@@ -38,9 +38,11 @@ including unclaimed Email classified before automatic admission was introduced.
 MCP mutations allowed by a Run's capabilities execute without per-operation
 approval or approval bindings. Stable operation IDs, exact-input replay checks,
 member/source ownership, transaction fences and audit receipts remain enforced.
-Historical approval-paused Runs resume through the normal dispatch path; existing
-approval history remains stored. Photo group review and ambiguous business
-choices keep their domain review flows.
+There is no approval pause. A Run that held one is member `paused` and resumes
+through the normal dispatch path; its never-executed operations are `failed`
+and are re-issued under new operation ids. Approval history remains stored.
+Photo group review and ambiguous business choices keep their domain review
+flows.
 
 ## Mail import outcome measurement
 

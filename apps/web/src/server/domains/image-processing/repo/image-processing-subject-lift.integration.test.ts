@@ -71,12 +71,10 @@ describe("independent Apple subject lift", () => {
         leaseMs: 60_000,
       });
       if (!claimed) throw new Error("Expected subject-lift lease");
-      expect(await prepareCompanionImageCommand(ctx.db, claimed)).toMatchObject(
-        {
-          kind: "subject_lift",
-          jobId: scheduled.jobId,
-        },
-      );
+      expect(await prepareCompanionImageCommand(claimed)).toMatchObject({
+        kind: "subject_lift",
+        jobId: scheduled.jobId,
+      });
     },
   );
 });

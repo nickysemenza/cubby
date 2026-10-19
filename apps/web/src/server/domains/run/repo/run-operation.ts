@@ -22,7 +22,7 @@ type Client = DrizzleClient | DrizzleTransaction;
 
 export type OperationKey = { runId: RunId; operationId: string };
 
-type OperationState = "started" | "paused_approval" | "completed" | "failed";
+type OperationState = "started" | "completed" | "failed";
 
 /** The JSON a caller replays; its shape is owned by the writing site. */
 type OperationResult = typeof runOperation.$inferInsert.result;
@@ -229,7 +229,7 @@ export async function failOperation(
   });
 }
 
-/** Fail every operation of a Run that is still in flight or awaiting approval. */
+/** Fail every operation of a Run that is still in flight. */
 export async function failOperationsForRun(
   client: Client,
   runId: RunId,
@@ -243,9 +243,6 @@ export async function failOperationsForRun(
       updatedAt: new Date(),
     })
     .where(
-      and(
-        eq(runOperation.runId, runId),
-        inArray(runOperation.state, ["started", "paused_approval"]),
-      ),
+      and(eq(runOperation.runId, runId), eq(runOperation.state, "started")),
     );
 }

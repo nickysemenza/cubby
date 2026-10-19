@@ -26,7 +26,19 @@ import type {
   ImageProcessingTerminalResult as ImageProcessingResult,
 } from "@cubby/schemas/image-processing";
 import type { ImageRepresentations } from "@cubby/schemas/image-summary";
-import { and, asc, desc, eq, gt, inArray, lte, ne, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  inArray,
+  lte,
+  ne,
+  or,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 import { z } from "zod";
 
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
@@ -64,6 +76,12 @@ import {
   insertImageProcessingAttempt,
   recordImageProcessingEvent,
 } from "./image-processing-history";
+
+/** Failures since the last operator retry that end a job as `failed`. */
+export const IMAGE_PROCESSING_MAX_ATTEMPTS = 3;
+
+/** A server-side failure stays retryable; the failure budget decides when it ends. */
+export const SERVER_FAILURE_RETRYABLE = true;
 
 // Cloud eligibility no longer gates Apple subject lifting; prior skipped work can be rescheduled.
 export const IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION = 2;
@@ -143,7 +161,6 @@ export type ClaimedImageProcessingJob = {
   kind: ImageProcessingJobKind;
   sourceContentHash: string;
   processorRevision: number;
-  attempts: number;
   attemptId: string;
   derivativeId: string | null;
   originalKey: string;
@@ -334,7 +351,11 @@ export async function createTransparentDerivativeAndJob(
   });
 }
 
-/** Expired leases are safe to retry because every completion must echo attemptId. */
+/**
+ * Expired leases are safe to retry because every completion must echo
+ * attemptId. An expired executor attempt spends the retry budget, so an
+ * executor that always dies mid-job cannot loop forever.
+ */
 export async function reclaimExpiredImageProcessingLeases(
   db: Database,
   clock?: Date,
@@ -346,6 +367,8 @@ export async function reclaimExpiredImageProcessingLeases(
         id: imageProcessingJob.id,
         attemptId: imageProcessingJob.attemptId,
         attempts: imageProcessingJob.attempts,
+        derivativeId: imageProcessingJob.derivativeId,
+        failuresSinceRetry: imageProcessingJob.failuresSinceRetry,
       })
       .from(imageProcessingJob)
       .where(
@@ -356,15 +379,17 @@ export async function reclaimExpiredImageProcessingLeases(
       )
       .for("update");
     for (const job of expired) {
-      if (job.attemptId)
-        await tx
-          .update(imageProcessingAttempt)
-          .set({
-            state: "expired",
-            completedAt: now,
-            error: "Execution lease expired",
-          })
-          .where(eq(imageProcessingAttempt.id, job.attemptId));
+      const executed = job.attemptId
+        ? await tx
+            .update(imageProcessingAttempt)
+            .set({
+              state: "expired",
+              completedAt: now,
+              error: "Execution lease expired",
+            })
+            .where(eq(imageProcessingAttempt.id, job.attemptId))
+            .returning({ id: imageProcessingAttempt.id })
+        : [];
       await recordImageProcessingEvent(tx, {
         jobId: job.id,
         eventKey: `${job.attemptId}:expired`,
@@ -372,16 +397,24 @@ export async function reclaimExpiredImageProcessingLeases(
         attempt: job.attempts,
         level: "error",
       });
-      await tx
-        .update(imageProcessingJob)
-        .set({
-          state: "pending",
-          attemptId: null,
-          leaseExpiresAt: null,
-          nextAttemptAt: now,
-          lastError: "Execution lease expired",
-        })
-        .where(eq(imageProcessingJob.id, job.id));
+      const release = { attemptId: null, leaseExpiresAt: null };
+      if (executed.length)
+        await settleImageProcessingFailure(tx, job, {
+          reason: "Execution lease expired",
+          retryable: true,
+          set: release,
+          retryAt: now,
+        });
+      else
+        await tx
+          .update(imageProcessingJob)
+          .set({
+            ...release,
+            state: "pending",
+            nextAttemptAt: now,
+            lastError: "Execution lease expired",
+          })
+          .where(eq(imageProcessingJob.id, job.id));
     }
     return expired.length;
   });
@@ -413,7 +446,6 @@ export async function claimImageProcessingJob(
         kind: imageProcessingJob.kind,
         sourceContentHash: imageProcessingJob.sourceContentHash,
         processorRevision: imageProcessingJob.processorRevision,
-        attempts: imageProcessingJob.attempts,
         previousAttemptId: imageProcessingJob.attemptId,
         submissionId: imageProcessingJob.submissionId,
         derivativeId: imageProcessingJob.derivativeId,
@@ -466,7 +498,8 @@ export async function claimImageProcessingJob(
             eq(imageProcessingJob.state, "waiting_for_device"),
           ),
           // The no-device cooldown throttles queue wakeups, not a capable device's reconnect.
-          // Pending retries still honor backoff; only capability-scoped pulls bypass waiting.
+          // Pending retries and backoffs still honor `nextAttemptAt`; only
+          // capability-scoped pulls bypass `waiting_for_device`.
           input.processorRevisions !== undefined
             ? or(
                 lte(imageProcessingJob.nextAttemptAt, now),
@@ -580,7 +613,6 @@ export async function getLeasedImageProcessingJobContext(
       kind: imageProcessingJob.kind,
       processorRevision: imageProcessingJob.processorRevision,
       runId: imageProcessingJob.runId,
-      attempts: imageProcessingJob.attempts,
       inputKey: imageProcessingAttempt.inputKey,
     })
     .from(imageProcessingJob)
@@ -613,9 +645,9 @@ export async function getLeasedImageProcessingJobContext(
 }
 
 /**
- * A lease with no executor is not an attempt: the attempt row and
- * `job.attempts` are written by `assignImageProcessingExecutor`. The waiting
- * event uses a per-job key so idle retry cycles do not append history.
+ * No capable device was reachable. A lease with no executor is not an
+ * attempt, and a capable device's pull claims this row before the cooldown;
+ * the per-job event key keeps idle cycles out of history.
  */
 export async function markImageProcessingWaitingForDevice(
   db: Database,
@@ -638,13 +670,54 @@ export async function markImageProcessingWaitingForDevice(
         ),
       )
       .returning({ id: imageProcessingJob.id });
-    if (rows.length) {
+    if (rows.length)
       await recordImageProcessingEvent(tx, {
         jobId: input.jobId,
         eventKey: "dispatch:waiting",
         event: "dispatch.waiting",
       });
-    }
+  });
+}
+
+/**
+ * A capable device claimed the row but it could not be handed over. The row
+ * returns to `pending` so the cooldown holds: a waiting row would be reclaimed
+ * by the same device's next pull, rotating subject-lift output keys each time.
+ * Each backoff spends the retry budget, so a hand-off that always fails ends.
+ */
+export async function backOffImageProcessingLease(
+  db: Database,
+  input: { jobId: string; attemptId: string; reason: string },
+): Promise<void> {
+  await withTransaction(db, async (tx) => {
+    const [job] = await tx
+      .select({
+        id: imageProcessingJob.id,
+        derivativeId: imageProcessingJob.derivativeId,
+        failuresSinceRetry: imageProcessingJob.failuresSinceRetry,
+      })
+      .from(imageProcessingJob)
+      .where(
+        and(
+          eq(imageProcessingJob.id, input.jobId),
+          eq(imageProcessingJob.attemptId, input.attemptId),
+          eq(imageProcessingJob.state, "leased"),
+        ),
+      )
+      .for("update");
+    if (!job) return;
+    await settleImageProcessingFailure(tx, job, {
+      reason: input.reason,
+      retryable: true,
+      set: { attemptId: null, leaseExpiresAt: null },
+    });
+    await recordImageProcessingEvent(tx, {
+      jobId: input.jobId,
+      eventKey: "dispatch:backoff",
+      event: "dispatch.backoff",
+      level: "error",
+      details: { reason: input.reason },
+    });
   });
 }
 
@@ -834,6 +907,7 @@ export async function retryFailedImageProcessingJobs(
         nextAttemptAt: sql`now()`,
         lastError: null,
         completedAt: null,
+        failuresSinceRetry: 0,
         submissionId: options?.submissionId ?? null,
       })
       .where(inArray(imageProcessingJob.id, ids));
@@ -913,6 +987,7 @@ type CompletionJob = {
   kind: ImageProcessingJobKind;
   state: ImageProcessingJobState;
   attemptId: string | null;
+  failuresSinceRetry: number;
   leaseValid: boolean;
   sourceContentHash: string;
   processorRevision: number;
@@ -962,6 +1037,51 @@ function canAdoptCompletion(
   );
 }
 
+/**
+ * One more failure since the last operator retry. A retryable failure returns
+ * to `pending` with backoff until the budget is spent; then, like any terminal
+ * failure, the job and its derivative fail with the last error. An executor's
+ * retryable flag cannot outlast the budget: a deterministic failure reported
+ * as retryable would otherwise loop forever.
+ */
+async function settleImageProcessingFailure(
+  tx: DrizzleTransaction,
+  job: { id: string; derivativeId: string | null; failuresSinceRetry: number },
+  input: {
+    reason: string;
+    retryable: boolean;
+    set: Partial<typeof imageProcessingJob.$inferInsert>;
+    retryAt?: SQL | Date;
+  },
+): Promise<boolean> {
+  const failures = job.failuresSinceRetry + 1;
+  const retry = input.retryable && failures < IMAGE_PROCESSING_MAX_ATTEMPTS;
+  const reason =
+    input.retryable && !retry
+      ? `${input.reason} (stopped after ${failures} attempts)`
+      : input.reason;
+  await tx
+    .update(imageProcessingJob)
+    .set({
+      ...input.set,
+      failuresSinceRetry: failures,
+      lastError: reason,
+      ...(retry
+        ? {
+            state: "pending",
+            nextAttemptAt: input.retryAt ?? sql`now() + interval '1 minute'`,
+          }
+        : { state: "failed", completedAt: sql`now()` }),
+    })
+    .where(eq(imageProcessingJob.id, job.id));
+  if (!retry && job.derivativeId)
+    await tx
+      .update(imageDerivative)
+      .set({ status: "failed", failureReason: reason })
+      .where(eq(imageDerivative.id, job.derivativeId));
+  return retry;
+}
+
 async function adoptTerminalCompletion(
   tx: DrizzleTransaction,
   job: CompletionJob,
@@ -976,31 +1096,12 @@ async function adoptTerminalCompletion(
     result: outcome,
   };
   if (outcome.status === "failed") {
-    await tx
-      .update(imageProcessingJob)
-      .set(
-        outcome.retryable
-          ? {
-              ...base,
-              state: "pending",
-              nextAttemptAt: sql`now() + interval '1 minute'`,
-              lastError: outcome.reason,
-            }
-          : {
-              ...base,
-              state: "failed",
-              completedAt: sql`now()`,
-              lastError: outcome.reason,
-            },
-      )
-      .where(eq(imageProcessingJob.id, job.id));
-    if (!outcome.retryable && job.derivativeId) {
-      await tx
-        .update(imageDerivative)
-        .set({ status: "failed", failureReason: outcome.reason })
-        .where(eq(imageDerivative.id, job.derivativeId));
-    }
-    if (!outcome.retryable && input.orphanOutputKey) {
+    const retry = await settleImageProcessingFailure(tx, job, {
+      reason: outcome.reason,
+      retryable: outcome.retryable,
+      set: base,
+    });
+    if (!retry && input.orphanOutputKey) {
       await tx
         .insert(imageProcessingOrphan)
         .values({
@@ -1129,6 +1230,7 @@ export async function completeImageProcessingJob(
         kind: imageProcessingJob.kind,
         state: imageProcessingJob.state,
         attemptId: imageProcessingJob.attemptId,
+        failuresSinceRetry: imageProcessingJob.failuresSinceRetry,
         leaseValid: sql<boolean>`${imageProcessingJob.leaseExpiresAt} > now()`,
         sourceContentHash: imageProcessingJob.sourceContentHash,
         processorRevision: imageProcessingJob.processorRevision,

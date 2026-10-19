@@ -888,7 +888,7 @@ async function queryWorkQueue(
       OR (routed.entity = ${entitySchema.enum.run} AND EXISTS (
         SELECT 1 FROM "Run" waiting
         WHERE waiting.shortcode = routed.id AND waiting."deletedAt" IS NULL
-          AND (waiting.status IN (${runStatus.enum.paused}, ${runStatus.enum.paused_auth}, ${runStatus.enum.paused_offline}, ${runStatus.enum.paused_approval})
+          AND (waiting.status IN (${runStatus.enum.paused}, ${runStatus.enum.paused_auth}, ${runStatus.enum.paused_offline})
             OR waiting."failureCode" IN ('execution_limit'))
       ))
     )`);

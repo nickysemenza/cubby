@@ -98,7 +98,7 @@ describe("publishBackgroundTasks", () => {
       [recipeTask("a"), recipeTask("b")],
       { source: "test" },
     );
-    expect(receipt).toEqual({ transport: "queue", count: 2 });
+    expect(receipt).toEqual({ count: 2 });
     expect(sent).toHaveLength(1);
     expect(sent[0]).toHaveLength(2);
   });
@@ -115,7 +115,7 @@ describe("publishBackgroundTasks", () => {
     );
     await expect(
       publishBackgroundTasks(db, [], { source: "test" }),
-    ).resolves.toEqual({ transport: "queue", count: 0 });
+    ).resolves.toEqual({ count: 0 });
   });
 
   it("propagates a rejected send so an explicit action sees the failure", async () => {

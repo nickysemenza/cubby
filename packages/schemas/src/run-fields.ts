@@ -51,7 +51,6 @@ export const runStatus = z.enum([
   "paused",
   "paused_auth",
   "paused_offline",
-  "paused_approval",
   "needs_review",
   "completed",
   "failed",
