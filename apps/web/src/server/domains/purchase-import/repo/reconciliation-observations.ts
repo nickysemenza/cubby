@@ -8,7 +8,7 @@ import {
   type ImportWriterInput,
 } from "@cubby/schemas/purchase-import";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, eq, inArray, or, sql, type SQLWrapper } from "drizzle-orm";
+import { and, asc, eq, inArray, or, sql, type SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
@@ -25,6 +25,8 @@ import {
   sourceOrderObservation,
 } from "~/server/db/schema";
 import {
+  isLiveSourceOrder,
+  type LiveSourceOrder,
   readImportSourceClaimFamily,
   readSourceFamilyOrder,
 } from "~/server/domains/purchase-import/repo/source-claim-family";
@@ -93,15 +95,17 @@ export async function recordSourceOrderObservation(
     screenshotImageId: input.screenshotImageId,
     contentFingerprint,
   };
-  const [created] = await tx
-    .insert(sourceOrderObservation)
-    .values(values)
-    .onConflictDoNothing()
-    .returning();
-  if (created) return created;
-  const [existing] = await tx
-    .select()
+  // The same content is observed once per subject. A merged Purchase reuses
+  // its original observation; a deleted Purchase keeps its observation as
+  // history while the order's next import observes the content anew. Content
+  // already naming another live Purchase is an ownership change.
+  const observed = await tx
+    .select({
+      observation: sourceOrderObservation,
+      subjectDeletedAt: purchase.deletedAt,
+    })
     .from(sourceOrderObservation)
+    .innerJoin(purchase, eq(purchase.id, sourceOrderObservation.purchaseId))
     .where(
       and(
         eq(sourceOrderObservation.sourceClaimId, identity.sourceClaimId),
@@ -109,26 +113,44 @@ export async function recordSourceOrderObservation(
         eq(sourceOrderObservation.checksum, input.source.checksum),
         eq(sourceOrderObservation.contentFingerprint, contentFingerprint),
       ),
-    );
-  if (
-    !existing ||
-    !(await sourceObservationIdentityMatches(
-      tx,
-      "purchase",
-      existing.purchaseId,
-      identity.purchaseId,
-    )) ||
-    !(await sourceObservationIdentityMatches(
-      tx,
-      "vendor",
-      existing.vendorId,
-      values.vendorId,
-    ))
-  )
+    )
+    .orderBy(asc(sourceOrderObservation.createdAt));
+  for (const { observation } of observed)
+    if (
+      await sourceObservationIdentityMatches(
+        tx,
+        "purchase",
+        observation.purchaseId,
+        identity.purchaseId,
+      )
+    ) {
+      if (
+        await sourceObservationIdentityMatches(
+          tx,
+          "vendor",
+          observation.vendorId,
+          values.vendorId,
+        )
+      )
+        return observation;
+      throw new Error(
+        "Source observation identity changed; review its ownership.",
+      );
+    }
+  if (observed.some((row) => row.subjectDeletedAt === null))
     throw new Error(
       "Source observation identity changed; review its ownership.",
     );
-  return existing;
+  const [created] = await tx
+    .insert(sourceOrderObservation)
+    .values(values)
+    .onConflictDoNothing()
+    .returning();
+  if (!created)
+    throw new Error(
+      "Source observation identity changed; review its ownership.",
+    );
+  return created;
 }
 
 const observationIdentity = alias(
@@ -214,7 +236,8 @@ export async function mergedVendorSourceOrder(
     throw new Error(
       "Ambiguous merged Vendor source order associations require explicit review.",
     );
-  return rows[0]?.association ?? null;
+  const [row] = rows;
+  return row && isLiveSourceOrder(row.association) ? row.association : null;
 }
 
 /** Promote stored evidence only; absent historical decisions and media remain unknown. */
@@ -226,7 +249,8 @@ export async function promoteHistoricalAcceptedObservation(
     .select()
     .from(importSourceOrder)
     .where(eq(importSourceOrder.id, sourceOrderId));
-  if (!initial || initial.acceptedObservationId)
+  // A deleted Purchase's detached history has no live subject to observe.
+  if (!initial || initial.acceptedObservationId || initial.purchaseId === null)
     return initial?.acceptedObservationId ?? null;
   const preliminary = acceptedSourceOrder.safeParse(initial.originalOrder);
   if (!preliminary.success || preliminary.data.checksum !== initial.checksum)
@@ -322,7 +346,7 @@ export async function promoteHistoricalAcceptedObservation(
 /** A historical accepted extraction whose bytes were overwritten remains unknown. */
 export async function acceptedSourceExtraction(
   tx: Pick<DrizzleTransaction, "select">,
-  order: typeof importSourceOrder.$inferSelect,
+  order: LiveSourceOrder,
 ) {
   if (order.acceptedObservationId) {
     const [observation] = await tx

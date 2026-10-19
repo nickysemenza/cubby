@@ -1,7 +1,10 @@
 import { z } from "zod";
 
 import { auditChannelSchema } from "./context";
-import { ENTITY_SOURCE_QUOTE_MAX } from "./child-tables/modules";
+import {
+  ENTITY_SOURCE_QUOTE_MAX,
+  ENTITY_SOURCE_URL_MAX,
+} from "./child-tables/modules";
 import { entityRefSchema } from "./entity";
 import { shortcodeEntities } from "./entity-manifest";
 import {
@@ -27,7 +30,7 @@ const sourceFields = {
     ),
   url: z
     .url()
-    .max(2048)
+    .max(ENTITY_SOURCE_URL_MAX)
     .optional()
     .describe("Page or file the fact was seen on."),
   quote: z

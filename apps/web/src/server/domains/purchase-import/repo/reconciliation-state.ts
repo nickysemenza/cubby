@@ -28,6 +28,7 @@ import {
   vendorAccount,
 } from "~/server/db/schema";
 import {
+  isLiveSourceOrder,
   readImportSourceClaimFamily,
   readSourceFamilyOrder,
 } from "~/server/domains/purchase-import/repo/source-claim-family";
@@ -275,12 +276,14 @@ export async function loadSourceReconciliationState(
         .orderBy(asc(financialAccount.id))
         .for("share")
     : [];
-  const sourceOrders = await tx
-    .select()
-    .from(importSourceOrder)
-    .where(eq(importSourceOrder.purchaseId, target.id))
-    .orderBy(asc(importSourceOrder.id))
-    .for("update");
+  const sourceOrders = (
+    await tx
+      .select()
+      .from(importSourceOrder)
+      .where(eq(importSourceOrder.purchaseId, target.id))
+      .orderBy(asc(importSourceOrder.id))
+      .for("update")
+  ).filter(isLiveSourceOrder);
   const productBindings = sourceOrders.length
     ? await tx
         .select()
@@ -376,6 +379,14 @@ export async function loadSourceReconciliationState(
 export type ReconciliationState = Awaited<
   ReturnType<typeof loadSourceReconciliationState>
 >;
+
+/**
+ * No accepted source yet names this order or its Purchase. Derived rather than
+ * stored on the state: the whole state feeds the reviewed fingerprint, and a
+ * new field would stale every prepared reconciliation.
+ */
+export const isFirstAcceptance = (state: ReconciliationState) =>
+  state.association === null && state.sourceOrders.length === 0;
 export async function sourceReconciliationStateFingerprint(
   state: ReconciliationState,
   proposal: Pick<

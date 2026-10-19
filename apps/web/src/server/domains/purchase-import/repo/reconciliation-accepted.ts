@@ -23,6 +23,7 @@ import {
   sourceOrderObservation,
 } from "~/server/db/schema";
 import {
+  isLiveSourceOrder,
   readImportSourceClaimFamily,
   readSourceFamilyOrder,
 } from "~/server/domains/purchase-import/repo/source-claim-family";
@@ -100,6 +101,11 @@ async function acceptedFix(
   const [current] = await selectOwned();
   if (!current || current.claim.ledgerPartyId !== owner.claim.ledgerPartyId)
     throw new Error("Accepted source ownership changed; review it again.");
+  const accepted = current.association;
+  if (!isLiveSourceOrder(accepted))
+    throw new Error(
+      "This accepted source's Purchase was deleted; import the order again.",
+    );
   let family = await readImportSourceClaimFamily(
     tx,
     {
@@ -116,7 +122,7 @@ async function acceptedFix(
   const legacyReview = reviewedPreparation
     ? await canonicalizeReviewedLegacyOriginal(
         tx,
-        current.association,
+        accepted,
         family,
         reviewedPreparation,
         actor,
@@ -124,16 +130,10 @@ async function acceptedFix(
     : null;
   family = legacyReview?.family ?? family;
   const association = reviewedPreparation
-    ? (
-        await readSourceFamilyOrder(
-          tx,
-          family,
-          current.association.orderKey,
-          "update",
-        )
-      )?.association
-    : current.association;
-  if (!association || association.purchaseId !== current.association.purchaseId)
+    ? (await readSourceFamilyOrder(tx, family, accepted.orderKey, "update"))
+        ?.association
+    : accepted;
+  if (!association || association.purchaseId !== accepted.purchaseId)
     throw new Error(
       "Reviewed source family must still name the same Purchase.",
     );

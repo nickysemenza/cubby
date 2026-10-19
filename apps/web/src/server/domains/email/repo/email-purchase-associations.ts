@@ -1,6 +1,6 @@
 import { emailLinkEvidenceKind } from "@cubby/schemas/email-fields";
 import type { EmailId } from "@cubby/schemas/identifiers";
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
 
 import { type Database } from "~/server/db/database";
 import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
@@ -9,6 +9,7 @@ import {
   importSourceClaim,
   importSourceOrder,
   purchase,
+  sourceOrderObservation,
 } from "~/server/db/retained-tables";
 import {
   emailAcceptedEvidenceSql,
@@ -27,7 +28,7 @@ export async function readEmailAcceptedSourceOrders(
     .select({
       sourceOrderId: importSourceOrder.id,
       purchaseId: purchase.shortcode,
-      purchaseDeleted: sql<boolean>`${purchase.deletedAt} IS NOT NULL`,
+      purchaseDeleted: sql<boolean>`${importSourceOrder.purchaseId} IS NULL OR ${purchase.deletedAt} IS NOT NULL`,
       source: {
         kind: importSourceClaim.kind,
         externalKey: importSourceClaim.externalKey,
@@ -39,7 +40,20 @@ export async function readEmailAcceptedSourceOrders(
       importSourceClaim,
       eq(importSourceClaim.id, importSourceOrder.sourceClaimId),
     )
-    .innerJoin(purchase, eq(purchase.id, importSourceOrder.purchaseId))
+    .leftJoin(
+      sourceOrderObservation,
+      and(
+        isNull(importSourceOrder.purchaseId),
+        eq(sourceOrderObservation.id, importSourceOrder.acceptedObservationId),
+      ),
+    )
+    .leftJoin(
+      purchase,
+      eq(
+        purchase.id,
+        sql`coalesce(${importSourceOrder.purchaseId}, ${sourceOrderObservation.purchaseId})`,
+      ),
+    )
     .where(sql`"ImportSourceOrder"."id" IN (
       SELECT evidence."sourceOrderId" FROM "Email"
       CROSS JOIN LATERAL (${emailAcceptedEvidenceSql(true)}) evidence

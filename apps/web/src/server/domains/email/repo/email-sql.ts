@@ -77,7 +77,7 @@ export const emailAcceptedEvidenceSql = (
   includeDeleted = false,
   accountOwnerScope: "respect" | "ignore" = "respect",
 ): SQL => sql`
-  SELECT accepted."id" AS "sourceOrderId", accepted."purchaseId", accepted."checksum" AS "evidenceChecksum", accepted."createdAt" AS "acceptedAt",
+  SELECT accepted."id" AS "sourceOrderId", p."id" AS "purchaseId", accepted."checksum" AS "evidenceChecksum", accepted."createdAt" AS "acceptedAt",
     -- The accepted bytes differ from the current original: the Email's own
     -- checksum for a message source, the attachment's for an attachment.
     accepted."checksum" IS DISTINCT FROM (CASE
@@ -100,7 +100,16 @@ export const emailAcceptedEvidenceSql = (
     AND family."ledgerPartyId" = root."ledgerPartyId"
     AND family."kind" = root."kind"
   INNER JOIN "ImportSourceOrder" accepted ON accepted."sourceClaimId" = family."id"
-  INNER JOIN "Purchase" p ON p."id" = accepted."purchaseId" AND ${includeDeleted ? sql`true` : sql`p."deletedAt" IS NULL`}
+  ${
+    includeDeleted
+      ? // A deleted Purchase's detached association names it only through
+        // its accepted observation, which keeps the original subject; an
+        // association accepted before observations existed reads as unknown.
+        sql`LEFT JOIN "SourceOrderObservation" observation
+    ON accepted."purchaseId" IS NULL AND observation."id" = accepted."acceptedObservationId"
+  LEFT JOIN "Purchase" p ON p."id" = coalesce(accepted."purchaseId", observation."purchaseId")`
+      : sql`INNER JOIN "Purchase" p ON p."id" = accepted."purchaseId" AND p."deletedAt" IS NULL`
+  }
   LEFT JOIN "VendorAccount" account ON account."id" = p."vendorAccountId" AND account."deletedAt" IS NULL
   WHERE identity."ledgerPartyId" = "Email"."ledgerPartyId"
     AND ${accountOwnerScope === "respect" ? sql`(account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")` : sql`true`}

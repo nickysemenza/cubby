@@ -6,7 +6,10 @@ import { plainDate } from "./base-entity";
 import { mailAdmissionPath, mailEvent } from "./mailbox-research";
 import { importSourceIdentity, importSourceKind } from "./import-source";
 export { importSourceIdentity, importSourceKind } from "./import-source";
-import { ENTITY_SOURCE_QUOTE_MAX } from "./child-tables/modules";
+import {
+  ENTITY_SOURCE_QUOTE_MAX,
+  ENTITY_SOURCE_URL_MAX,
+} from "./child-tables/modules";
 import { money } from "./money";
 import { runPurpose, runStatus, runTrigger } from "./run-fields";
 import { costTypeSchema } from "./expense-fields";
@@ -29,22 +32,24 @@ export const vendorOrderEvidence = z.enum([
   "receipt_only",
   "not_expected",
 ]);
+/** The Source of a Distinct-from decision: its url and quoted difference. */
+export const distinctFromSource = z.object({
+  url: z.url().max(ENTITY_SOURCE_URL_MAX),
+  quote: z.string().trim().min(1).max(ENTITY_SOURCE_QUOTE_MAX),
+});
 /**
  * A Distinct-from decision (terminology): the line is a different Product from
  * this exact name match, shown by the Source's url and quoted difference.
  */
 const distinctFromProduct = <Id extends z.ZodType<string>>(productId: Id) =>
-  z.object({
-    productId,
-    url: z.url(),
-    quote: z.string().trim().min(1).max(ENTITY_SOURCE_QUOTE_MAX),
-  });
+  z.object({ productId, ...distinctFromSource.shape });
+/** Bounds the per-line Distinct-from list: commit resolves and records each one. */
+const DISTINCT_FROM_MAX = 20;
 
 /** A Distinct-from decision for a new Vendor beside a similar existing one. */
 const distinctFromVendor = z.object({
   vendorId: vendorShortcode,
-  url: z.url(),
-  quote: z.string().trim().min(1).max(ENTITY_SOURCE_QUOTE_MAX),
+  ...distinctFromSource.shape,
 });
 export type DistinctFromVendor = z.infer<typeof distinctFromVendor>;
 
@@ -53,6 +58,7 @@ const newProductResolution = z
     kind: z.literal("new"),
     distinctFrom: z
       .array(distinctFromProduct(productShortcode.describe("Product")))
+      .max(DISTINCT_FROM_MAX)
       .optional(),
   })
   .describe(
@@ -758,7 +764,7 @@ const preparedImportOrderInput = z
         name: z.string().trim().min(1).max(200),
         distinctFrom: z
           .array(distinctFromVendor)
-          .max(20)
+          .max(DISTINCT_FROM_MAX)
           .optional()
           .describe(
             "Reviewed vendorCandidates this seller is not, each with a Source showing the difference.",

@@ -54,6 +54,7 @@ import {
   prepareMemberImport,
   retainedMailFixture,
 } from "../operations/order-import.fixtures";
+import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "./mail-source-identity";
 import {
   commitAcceptedSourceOrderReconciliation,
   prepareSourceOrderReconciliation,
@@ -62,6 +63,7 @@ import {
   promoteHistoricalAcceptedObservation,
   recordSourceOrderObservation,
 } from "./reconciliation-observations";
+import { isLiveSourceOrder } from "./source-claim-family";
 
 // The accepted-source path must associate a photographed Product without a
 // fabricated finding, a second spend line, or stock receiving.
@@ -188,7 +190,7 @@ describe("reviewed accepted source Product association", () => {
     const item = await db.query.expense.findFirst({
       where: eq(expense.name, "Synthetic household item"),
     });
-    if (!association || !item)
+    if (!association || !isLiveSourceOrder(association) || !item)
       throw new Error("Synthetic accepted item missing");
     if (linked)
       await db
@@ -326,6 +328,9 @@ describe("reviewed accepted source Product association", () => {
           mailboxId: "legacy:synthetic-owner",
           checksum: original.checksum,
           content: mail.content,
+          // Migration 0025 marks every retained legacy original this way;
+          // the exact-copy review exists to repair exactly these families.
+          classificationVersion: HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
         });
         await w.db
           .update(importSourceClaim)
@@ -1881,7 +1886,8 @@ describe("reviewed accepted source Product association", () => {
         acceptedObservationId: null,
       })
       .returning();
-    if (!order) throw new Error("Synthetic sibling accepted order missing");
+    if (!order || !isLiveSourceOrder(order))
+      throw new Error("Synthetic sibling accepted order missing");
     return { claim, order, mail };
   }
   type AcceptedExtraction = NonNullable<

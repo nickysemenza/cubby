@@ -14,7 +14,7 @@ import {
 } from "@cubby/schemas/purchase-import";
 import { tradeSchema } from "@cubby/schemas/task-fields";
 import { cents } from "@cubby/shared";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -59,15 +59,22 @@ import { reviewPreparedNewProducts } from "./reconciliation-new-product";
 import {
   reconciliationFingerprint,
   recordSourceOrderObservation,
+  sourceObservationIdentitySql,
 } from "./reconciliation-observations";
 import {
+  isFirstAcceptance,
   loadSourceReconciliationState,
   lockFindingSettlement,
   sourceReconciliationStateFingerprint,
   type ReconciliationFix,
   type ReconciliationState,
 } from "./reconciliation-state";
-import { receiptProductQuantity, resolveLineProduct } from "./writer";
+import {
+  arrivalAsksToReceive,
+  fileArrivedFinding,
+  receiptProductQuantity,
+  resolveLineProduct,
+} from "./writer";
 export { commitAcceptedSourceOrderReconciliation } from "./reconciliation-accepted";
 
 /**
@@ -890,6 +897,8 @@ export async function commitSourceOrderReconciliation(
     observation: state.observation.id,
     reviewedFingerprint: fix.reviewedFingerprint,
   });
+  // The original is this Purchase's first observation of the order, as the
+  // writer's is its own import; a deleted Purchase's observations stay its own.
   const [firstObservation] = await tx
     .select()
     .from(sourceOrderObservation)
@@ -900,6 +909,11 @@ export async function commitSourceOrderReconciliation(
           state.observation.sourceClaimId,
         ),
         eq(sourceOrderObservation.orderKey, fix.orderKey),
+        sourceObservationIdentitySql(
+          "purchase",
+          sourceOrderObservation.purchaseId,
+          sql`${state.target.id}`,
+        ),
       ),
     )
     .orderBy(
@@ -942,10 +956,22 @@ export async function commitSourceOrderReconciliation(
     })
     .onConflictDoUpdate({
       target: [importSourceOrder.sourceClaimId, importSourceOrder.orderKey],
+      // As in the writer: only a live association arbitrates, and until the
+      // live-only key is applied a detached row is taken over instead.
+      targetWhere: isNotNull(importSourceOrder.purchaseId),
       set: {
+        purchaseId: state.target.id,
         checksum: fix.source.checksum,
         acceptedObservationId: acceptedObservation.id,
         outputFingerprint,
+        ...(state.association
+          ? {}
+          : {
+              originalOrder: {
+                checksum: firstObservation.checksum,
+                extraction: firstObservation.extraction,
+              },
+            }),
         updatedAt: new Date(),
       },
     })
@@ -1018,6 +1044,37 @@ export async function commitSourceOrderReconciliation(
       .update(importSourceClaim)
       .set({ checksum: fix.source.checksum, updatedAt: new Date() })
       .where(eq(importSourceClaim.id, state.family.root.id));
+  // The writer files `arrived` when an import first sees delivery; a later
+  // source that reconciles the order as delivered files it here instead. First
+  // delivery is a first acceptance or a known undelivered accepted
+  // extraction; an accepted source whose extraction is unknown may already
+  // have prompted.
+  if (
+    !productOnly &&
+    candidate.allShipmentsDelivered === true &&
+    (isFirstAcceptance(state) ||
+      (state.accepted !== null &&
+        state.accepted.extraction.candidate?.allShipmentsDelivered !== true)) &&
+    (resolvedBindings.some(
+      (binding) =>
+        binding.productId === null &&
+        candidate.lines[binding.lineIndex]?.lineKind === "principal",
+    ) ||
+      (await arrivalAsksToReceive(tx, {
+        purchaseId: state.target.id,
+        identityDecisions: [],
+        productLines: [],
+      })))
+  )
+    await fileArrivedFinding(
+      tx,
+      {
+        ledgerPartyId: ownerId,
+        runId: state.observation.runId,
+        source: fix.source,
+      },
+      state.target.id,
+    );
   audit.push({
     entityKind: "purchase" as const,
     entityId: state.target.id,
