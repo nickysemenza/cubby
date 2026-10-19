@@ -56,6 +56,17 @@ describe("error diagnostics", () => {
     ).not.toContain("fixture-");
   });
 
+  it("scrubs secret query parameters and prefixed API keys without masking diagnostics", () => {
+    const message = scrubErrorMessage(
+      "GET https://vendor.invalid/a?client_secret=fixture-one&X-Amz-Credential=fixture-two&sort_key=name failed: key sk-fixturekeyfixturekey0000 SQLSTATE 42P01",
+    );
+    expect(message).not.toContain("fixture-one");
+    expect(message).not.toContain("fixture-two");
+    expect(message).not.toContain("sk-fixturekeyfixturekey0000");
+    expect(message).toContain("sort_key=name");
+    expect(message).toContain("SQLSTATE 42P01");
+  });
+
   it("bounds cycles, aggregate causes and non-Error throws", () => {
     const error = new Error("cycle");
     error.cause = error;

@@ -4,6 +4,7 @@ import {
   ACTIVE_RUN_STATUSES,
   AGENT_OBSERVATION_HEADER,
 } from "@cubby/shared/client-constants";
+import { scrubCredentialValues } from "@cubby/worker-tracing/scrub-error-message";
 import { z } from "zod";
 
 import { getPurchaseImportRunAgentNamespace } from "~/server/cf-env";
@@ -226,7 +227,9 @@ function redactAgentValue(value: AgentJsonValue): AgentJsonValue {
   if (array.success) return array.data.map(redactAgentValue);
   const text = z.string().safeParse(value);
   if (text.success) {
-    return BINARY_VALUE.test(text.data) ? "[binary omitted]" : text.data;
+    return BINARY_VALUE.test(text.data)
+      ? "[binary omitted]"
+      : scrubCredentialValues(text.data);
   }
   const object = z.record(z.string(), z.json()).safeParse(value);
   if (!object.success) return value;

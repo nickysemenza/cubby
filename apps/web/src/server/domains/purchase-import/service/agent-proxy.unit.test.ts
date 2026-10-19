@@ -86,4 +86,26 @@ describe("purchase-agent proxy mutation fence", () => {
     expect(redactAgentEventLine("event: message")).toBe("event: message");
     expect(redactAgentEventLine("data: [DONE]")).toBe("data: [DONE]");
   });
+
+  it("scrubs credential-shaped strings in transcript values while keeping diagnostics raw", () => {
+    const line = redactAgentEventLine(
+      `data: ${JSON.stringify({
+        errorText:
+          'Failed query: select * from vendor where name = $1 params: ["Synthetic Market"] SQLSTATE 23505 Authorization: Bearer synthetic-bearer-value',
+        output: {
+          url: "https://user:synthetic-pass@vendor.invalid/orders?client_secret=synthetic-query-secret&page=2",
+          body: "upstream 401: key sk-syntheticfixturekey000000000 rejected",
+        },
+      })}`,
+    );
+    expect(line).not.toContain("synthetic-bearer-value");
+    expect(line).not.toContain("synthetic-pass");
+    expect(line).not.toContain("synthetic-query-secret");
+    expect(line).not.toContain("sk-syntheticfixturekey000000000");
+    expect(line).toContain(
+      'Failed query: select * from vendor where name = $1 params: [\\"Synthetic Market\\"] SQLSTATE 23505',
+    );
+    expect(line).toContain("page=2");
+    expect(line).toContain("upstream 401");
+  });
 });
