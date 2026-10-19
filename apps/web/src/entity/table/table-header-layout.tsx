@@ -177,6 +177,41 @@ function headerContent<TData extends RowData>(
   );
 }
 
+/**
+ * An empty column's header: its kind glyph, else its initial, with the full
+ * label kept for assistive tech and the tooltip.
+ */
+function CollapsedHeaderLabel<TData extends RowData>({
+  header,
+  label,
+}: {
+  header: Header<typeof cubbyTableFeatures, TData, unknown>;
+  label: string;
+}) {
+  const meta = header.column.columnDef.meta;
+  const Glyph = valueKindGlyph(columnValueKind(meta));
+  return (
+    <span
+      data-header-label=""
+      className="inline-flex min-w-0 items-center text-muted-foreground/70"
+      title={`${label} · empty in these rows`}
+    >
+      {meta?.linksTo ? (
+        <EntityIcon
+          entity={meta.linksTo}
+          aria-hidden="true"
+          className="size-3.5"
+        />
+      ) : Glyph ? (
+        <Glyph aria-hidden="true" className="size-3" />
+      ) : (
+        <span aria-hidden="true">{label.charAt(0)}</span>
+      )}
+      <span className="sr-only">{label}</span>
+    </span>
+  );
+}
+
 type ColumnMeta = CubbyColumnMeta | undefined;
 
 /** A declared kind, else one derived from the column's numeric and filter metadata. */
@@ -340,7 +375,9 @@ function ColumnFilterMenuItems<TData extends RowData>({
   return (
     <>
       <DropdownMenuSeparator />
-      <DropdownMenuItem onClick={() => requestColumnFilterEdit(table, column.id)}>
+      <DropdownMenuItem
+        onClick={() => requestColumnFilterEdit(table, column.id)}
+      >
         <FunnelSimpleIcon aria-hidden="true" />
         {filtered ? "Edit filter…" : "Filter…"}
       </DropdownMenuItem>
@@ -425,10 +462,12 @@ function HeaderHoverChrome({
 function SortableHeader<TData extends RowData>({
   header,
   table,
+  collapsed,
   styles,
 }: {
   header: Header<typeof cubbyTableFeatures, TData, unknown>;
   table: Table<TData>;
+  collapsed: boolean;
   styles: HeaderStyles;
 }) {
   const locked = isLockedColumn(header.column);
@@ -462,7 +501,11 @@ function SortableHeader<TData extends RowData>({
         numeric && "flex-row-reverse",
       )}
     >
-      <HeaderLabel label={headerLabel}>{headerContent(header)}</HeaderLabel>
+      {collapsed ? (
+        <CollapsedHeaderLabel header={header} label={headerLabel} />
+      ) : (
+        <HeaderLabel label={headerLabel}>{headerContent(header)}</HeaderLabel>
+      )}
       {header.column.getIsFiltered() && (
         <FunnelSimpleIcon
           data-header-filtered=""
@@ -492,6 +535,7 @@ function SortableHeader<TData extends RowData>({
       ref={setNodeRef}
       key={header.id}
       data-column-id={header.column.id}
+      data-column-collapsed={collapsed ? "" : undefined}
       colSpan={header.colSpan}
       aria-sort={ariaSort(sortDirection)}
       className={cn(
@@ -602,10 +646,13 @@ function SortableHeader<TData extends RowData>({
 
 export default function TableHeaderLayout<TData extends RowData>({
   table,
+  collapsedColumns,
   styles,
   isDebugEnabled,
 }: {
   table: Table<TData>;
+  /** Empty columns painted as a glyph strip; see `emptyColumnIds`. */
+  collapsedColumns?: ReadonlySet<string>;
   styles: HeaderStyles;
   isDebugEnabled: boolean;
 }) {
@@ -647,6 +694,7 @@ export default function TableHeaderLayout<TData extends RowData>({
               key={header.id}
               header={header}
               table={table}
+              collapsed={collapsedColumns?.has(header.column.id) ?? false}
               styles={styles}
             />
           );

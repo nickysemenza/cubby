@@ -413,17 +413,24 @@ function distributeSlack(
  * the facts beside it off the pane; and a reference column grew to one long
  * sampled name, painting a 290px column of dashes.
  */
+/** An empty column's glyph strip (`emptyColumnIds`). */
+export const COLLAPSED_COLUMN_WIDTH = 40;
+
 export function resolvedTableColumnWidths(
   columns: readonly TableWidthColumn[],
   availableWidth: number,
   userSized: ReadonlySet<string> = new Set(),
   measured: Readonly<Record<string, number>> = {},
+  collapsed: ReadonlySet<string> = new Set(),
 ) {
   const widths: Record<string, number> = {};
   for (const column of columns) {
     const fit = measured[column.id];
-    widths[column.id] =
-      !isLockedColumn(column) && !userSized.has(column.id) && fit !== undefined
+    widths[column.id] = collapsed.has(column.id)
+      ? COLLAPSED_COLUMN_WIDTH
+      : !isLockedColumn(column) &&
+          !userSized.has(column.id) &&
+          fit !== undefined
         ? Math.min(fit, columnFitMax(column))
         : column.getSize();
   }
@@ -432,7 +439,10 @@ export function resolvedTableColumnWidths(
     0,
   );
   const flexible = columns.filter(
-    (column) => isFlexibleColumn(column) && !userSized.has(column.id),
+    (column) =>
+      isFlexibleColumn(column) &&
+      !userSized.has(column.id) &&
+      !collapsed.has(column.id),
   );
   const remaining = distributeSlack(
     widths,
@@ -447,12 +457,14 @@ export function columnWidthVariables(
   availableWidth = 0,
   userSized?: ReadonlySet<string>,
   measured?: Readonly<Record<string, number>>,
+  collapsed?: ReadonlySet<string>,
 ): CSSProperties {
   const { widths, spacer } = resolvedTableColumnWidths(
     columns,
     availableWidth,
     userSized,
     measured,
+    collapsed,
   );
   const variables: CSSProperties &
     Partial<Record<ColumnWidthVariable, string>> = {};

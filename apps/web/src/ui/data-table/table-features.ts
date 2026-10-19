@@ -108,6 +108,8 @@ const UNPAGED = { pageIndex: 0, pageSize: Number.MAX_SAFE_INTEGER } as const;
 
 type PaginationOptions = {
   manualPagination?: boolean;
+  rowCount?: number;
+  pageCount?: number;
   initialState?: { pagination?: unknown };
   state?: { pagination?: unknown };
 };
@@ -115,8 +117,11 @@ type PaginationOptions = {
 function withUnpagedDefault<TOptions extends PaginationOptions>(
   options: TOptions,
 ): TOptions {
+  // A row or page count is a server's paging; it keeps TanStack's pages.
   if (
     options.manualPagination ||
+    options.rowCount !== undefined ||
+    options.pageCount !== undefined ||
     options.state?.pagination !== undefined ||
     options.initialState?.pagination !== undefined
   )

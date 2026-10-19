@@ -797,6 +797,7 @@ function DesktopTableView<TItem extends RowData>({
 }) {
   const {
     cellSelectionContainerProps,
+    collapsedColumns,
     columnSizeVars,
     isDebugEnabled,
     isTransitioning,
@@ -860,6 +861,7 @@ function DesktopTableView<TItem extends RowData>({
               <TableHeader className="sticky top-0 z-30 bg-card shadow-[0_1px_0_var(--border)] [&_th]:bg-card [&_tr]:border-b-0">
                 <TableHeaderLayout
                   table={table}
+                  collapsedColumns={collapsedColumns}
                   styles={styles}
                   isDebugEnabled={isDebugEnabled}
                 />

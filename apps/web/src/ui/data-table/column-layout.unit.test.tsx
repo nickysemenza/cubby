@@ -77,6 +77,7 @@ describe("desktop surplus allocation", () => {
     available: number;
     userSized: string[];
     measured: Record<string, number>;
+    collapsed?: string[];
     widths: Record<string, number>;
     spacer: number;
   }>([
@@ -139,6 +140,16 @@ describe("desktop surplus allocation", () => {
       spacer: 0,
     },
     {
+      case: "paints an empty column as a glyph strip over its fit",
+      columns: [name, parent, actions],
+      available: 600,
+      userSized: [],
+      measured: { parent: 140 },
+      collapsed: ["parent"],
+      widths: { name: 240, parent: 40, actions: 40 },
+      spacer: 600 - (240 + 40 + 40),
+    },
+    {
       case: "gives a pinned measurement column nothing",
       columns: [column("verifiedAt", 128, { pinned: "end" })],
       available: 400,
@@ -147,16 +158,28 @@ describe("desktop surplus allocation", () => {
       widths: { verifiedAt: 128 },
       spacer: 272,
     },
-  ])("$case", ({ columns, available, userSized, measured, widths, spacer }) => {
-    const resolved = resolvedTableColumnWidths(
+  ])(
+    "$case",
+    ({
       columns,
       available,
-      new Set(userSized),
+      userSized,
       measured,
-    );
-    expect(resolved.widths).toEqual(widths);
-    expect(resolved.spacer).toBe(spacer);
-  });
+      collapsed,
+      widths,
+      spacer,
+    }) => {
+      const resolved = resolvedTableColumnWidths(
+        columns,
+        available,
+        new Set(userSized),
+        measured,
+        new Set(collapsed),
+      );
+      expect(resolved.widths).toEqual(widths);
+      expect(resolved.spacer).toBe(spacer);
+    },
+  );
 });
 
 describe("column sizing defaults", () => {
