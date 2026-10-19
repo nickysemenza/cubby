@@ -381,7 +381,7 @@ test("the Run list hides ephemeral runs by default and shows them once cleared",
   await expect(table).toContainText(fixture.visibleName);
   await expect(table).not.toContainText(fixture.hiddenName);
 
-  await page.getByRole("button", { name: /^Clear/ }).click();
+  await page.getByRole("button", { name: "Clear", exact: true }).click();
   await expect(table).toContainText(fixture.hiddenName);
   await expect(table).toContainText(fixture.visibleName);
 

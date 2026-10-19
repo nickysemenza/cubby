@@ -12,7 +12,6 @@ import {
   withFacets,
 } from "~/entity/table/list-query-context";
 
-import { useColumnFilterEditRequests } from "../../ui/data-table/column-filter-requests";
 import {
   FilterBar,
   type FilterSheetSwitch,
@@ -24,6 +23,7 @@ import {
   filterStateToBarFilters,
 } from "../../ui/data-table/filter-bar-core";
 import type { CubbyTable as Table } from "../../ui/data-table/table-features";
+import { useColumnFilterEditRequests } from "../../ui/data-table/table-meta";
 import { useFilterBarDraft } from "../../ui/data-table/use-filter-bar-draft";
 
 function isColumnLabel(value: unknown): value is string {

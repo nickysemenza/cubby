@@ -10,7 +10,6 @@ import {
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { requestColumnFilterEdit } from "../../ui/data-table/column-filter-requests";
 import type { FilterFieldConfig } from "../../ui/data-table/filter-bar-core";
 import {
   barFiltersToFilterState,
@@ -20,6 +19,7 @@ import {
   createCubbyColumnHelper,
   useCubbyTable,
 } from "../../ui/data-table/table-features";
+import { requestColumnFilterEdit } from "../../ui/data-table/table-meta";
 import { useFilterBarDraft } from "../../ui/data-table/use-filter-bar-draft";
 import { LedgerFilters } from "./ledger-filters";
 

@@ -3,7 +3,7 @@ import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { humanize, type NumberRange, parseShortcode } from "@cubby/shared";
 import type { CellData, RowData } from "@tanstack/react-table";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect } from "react";
 import { z } from "zod";
 
 import type { PickerRecordSource } from "~/ui/combobox/picker";
@@ -226,4 +226,34 @@ function isNonEmptyHeaderLabel<TItem extends RowData>(
   header: CubbyColumn<TItem, unknown>["columnDef"]["header"],
 ): header is string {
   return typeof header === "string" && header.trim().length > 0;
+}
+
+// Column header "Filter…" requests (copied from main's table-meta channel so
+// this branch compiles; main's version wins on merge).
+type ColumnFilterEditListener = (columnId: string) => void;
+const columnFilterEditListeners = new WeakMap<
+  WeakKey,
+  Set<ColumnFilterEditListener>
+>();
+export function requestColumnFilterEdit(table: WeakKey, columnId: string) {
+  for (const listener of columnFilterEditListeners.get(table) ?? [])
+    listener(columnId);
+}
+export function hasColumnFilterEditor(table: WeakKey): boolean {
+  return (columnFilterEditListeners.get(table)?.size ?? 0) > 0;
+}
+export function useColumnFilterEditRequests(
+  table: WeakKey,
+  onRequest: ColumnFilterEditListener,
+) {
+  useEffect(() => {
+    const set =
+      columnFilterEditListeners.get(table) ??
+      new Set<ColumnFilterEditListener>();
+    columnFilterEditListeners.set(table, set);
+    set.add(onRequest);
+    return () => {
+      set.delete(onRequest);
+    };
+  }, [table, onRequest]);
 }

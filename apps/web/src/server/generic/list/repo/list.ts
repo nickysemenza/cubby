@@ -55,7 +55,7 @@ import {
 import type { PgSelect, PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
-import type { ListFacet } from "~/contracts/entity-facets.schema";
+import type { ListFacet } from "~/contracts/entity-list.contract";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   effectiveFieldInSql,

@@ -2,7 +2,7 @@ import { parseShortcode } from "@cubby/shared";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createContext, type ReactNode, useContext, useMemo } from "react";
 
-import type { ListFacet } from "~/contracts/entity-facets.schema";
+import type { ListFacet } from "~/contracts/entity-list.contract";
 import type { ListEntity } from "~/entity/generated/entity-lists.gen";
 import { viewsForEntity } from "~/entity/model/view-manifest";
 import { entityList } from "~/integrations/tanstack-query/generated/catalog.gen";

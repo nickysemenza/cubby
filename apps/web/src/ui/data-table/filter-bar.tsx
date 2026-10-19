@@ -1192,7 +1192,8 @@ export function ActiveFilterChips({
   );
   const counted =
     active.length > 0 && resultCount ? resultLine(resultCount) : null;
-  if (chipFields.length === 0) return null;
+  // Nothing active: no strip (the toolbar's Filter button is the way in).
+  if (shown.length === 0) return null;
   return (
     <div
       data-active-filter-strip=""
