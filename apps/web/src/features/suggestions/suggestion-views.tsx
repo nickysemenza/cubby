@@ -391,9 +391,10 @@ function TransferPairLegs({
   return (
     <span className="inline-flex min-w-0 items-center gap-1.5">
       {outflow}
-      <span aria-label="to" className="text-muted-foreground">
+      <span aria-hidden="true" className="text-muted-foreground">
         →
       </span>
+      <span className="sr-only">to</span>
       {inflow}
     </span>
   );

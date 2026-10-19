@@ -47,7 +47,7 @@ import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
 import { readEntityConnectionsBatch } from "~/server/domains/connection/repo/entity-connections";
 import {
-  discoverTransferPairs,
+  currentTransferPairs,
   transferPairEvidenceFingerprint,
   transferPairStateData,
 } from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
@@ -736,7 +736,14 @@ async function transferPairRows(
     query.filters.status === "pending" && !ids
       ? new Map(
           await Promise.all(
-            (await discoverTransferPairs(db)).map(
+            (
+              await currentTransferPairs(
+                db,
+                rows.map(
+                  (row) => transferPairStateData.parse(row.data).pairKey,
+                ),
+              )
+            ).map(
               async (pair) =>
                 [
                   pair.key,
@@ -816,7 +823,7 @@ const transferPair: SuggestionFamilyPresentation<"transfer_pair"> = {
         ].includes(reason),
       )
         ? "weak"
-        : row.evidence.dateGapDays > 3
+        : row.evidence.blockers.includes("date_gap")
           ? "medium"
           : "strong",
       impact: [outcome("Transfer paired")],

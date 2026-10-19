@@ -1060,7 +1060,7 @@ export const MCP_TOOLS = defineMcpTools({
         op: runContract.ops.sweep,
         openWorld: true,
         description:
-          "Find suggestions: start one Sweep over the chosen Suggestion families (statement_transaction scoped by accountIds/since, recommendation by entityKinds, field by entity and fields; omitted scope covers everything). Returns the Sweep Run; follow it with imports_read.run_status and review results with entity_read.suggestion_queue. Model calls spend within the household AI budget and pause at it.",
+          "Find suggestions: start one Sweep over the chosen Suggestion families (statement_transaction and transfer_pair scoped by accountIds/since, recommendation by entityKinds, field by entity and fields; omitted scope covers everything). Returns the Sweep Run; follow it with imports_read.run_status and review results with entity_read.suggestion_queue. Model calls spend within the household AI budget and pause at it.",
       }),
       discover_mail: mcpAction({
         op: runContract.ops.discoverMail,

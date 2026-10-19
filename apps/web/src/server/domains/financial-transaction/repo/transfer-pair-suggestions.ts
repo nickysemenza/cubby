@@ -1014,6 +1014,22 @@ export async function currentTransferPair(
   return (await buildTransferPair(db, key))?.judgment ?? null;
 }
 
+/** Refresh listed pairs from their legs, retaining the full competing-candidate pool. */
+export async function currentTransferPairs(
+  db: Database,
+  pairKeys: readonly string[],
+): Promise<TransferPairJudgment[]> {
+  if (!pairKeys.length) return [];
+  const wanted = new Set(pairKeys);
+  const pairs = await discover(db, {
+    kind: "legs",
+    keys: uniq(pairKeys.flatMap((key) => key.split("~"))),
+  });
+  return pairs
+    .filter((pair) => wanted.has(pair.judgment.key))
+    .map((pair) => pair.judgment);
+}
+
 // ------------------------------------------------------------- publication
 
 /** AssessmentState.data of a transfer-pair suggestion. */
