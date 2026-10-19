@@ -683,17 +683,24 @@ describe("current purchase-agent system boundaries", () => {
       { check: "supported-commit", includes: "created" },
     ];
     const firstSource = mailResearchRunInput.parse(parent.input).sources[0];
-    scenario = await startScenarioHarness(ctx.databaseUrl, {
-      steps:
-        firstSource?.orderMailId === supported.id
-          ? [...supportedSteps, ...unresolvedSteps("partial", parent.id)]
-          : [
-              ...unresolvedSteps("partial", parent.id, false),
-              ...supportedSteps,
-              call("partial-done", "claim_next_import_work"),
-              { check: "partial-done", includes: "none" },
-            ],
-    });
+    scenario = await startScenarioHarness(
+      ctx.databaseUrl,
+      {
+        steps:
+          firstSource?.orderMailId === supported.id
+            ? [...supportedSteps, ...unresolvedSteps("partial", parent.id)]
+            : [
+                ...unresolvedSteps("partial", parent.id, false),
+                ...supportedSteps,
+                call("partial-done", "claim_next_import_work"),
+                { check: "partial-done", includes: "none" },
+              ],
+      },
+      "purchase-agent",
+      // Escalation off: the primary's unresolved resolutions settle directly
+      // (the mail escalation scenario covers holding them).
+      { coordinatorModels: { primary: "gpt-6-luna" } },
+    );
     await scenario.dispatch(events[0]!);
     await waitForStatus(parent.id, "needs_review");
     expect(await scenario.violations()).toEqual([]);
@@ -931,7 +938,7 @@ describe("current purchase-agent system boundaries", () => {
       "purchase-agent",
       {
         coordinatorModels: {
-          primary: "claude-haiku-5-5",
+          primary: "gpt-6-luna",
           escalation: "claude-opus-5-5",
         },
       },
@@ -946,9 +953,9 @@ describe("current purchase-agent system boundaries", () => {
       ]),
     );
     expect(Object.fromEntries(modelAfter)).toMatchObject({
-      "a-claim": "claude-haiku-5-5",
+      "a-claim": "gpt-6-luna",
       "a-held": "claude-opus-5-5",
-      "b-claim": "claude-haiku-5-5",
+      "b-claim": "gpt-6-luna",
       "b-escalate": "claude-opus-5-5",
     });
     const detail = await loadRunDetail(

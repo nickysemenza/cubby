@@ -139,6 +139,14 @@ type AnthropicMessage = {
       }>;
 };
 
+/**
+ * A call emitted on the Responses wire reaches Messages as pi's
+ * `${call_id}|${item_id}` sanitized to `${call}_${call}`; this peer emits both
+ * as the step's call, so an escalation that changes wire keeps its script.
+ */
+const scriptCallId = (id: string | undefined) =>
+  id?.replace(/^(.+)_\1$/u, "$1");
+
 /** Flatten native blocks in transcript order; the script engine stays wire agnostic. */
 function messagesInput(messages: AnthropicMessage[]): InputItem[] {
   return messages.flatMap((message) => {
@@ -146,11 +154,11 @@ function messagesInput(messages: AnthropicMessage[]): InputItem[] {
       return [{ content: message.content }];
     return message.content.map((part): InputItem => {
       if (part.type === "tool_use")
-        return { type: "function_call", call_id: part.id };
+        return { type: "function_call", call_id: scriptCallId(part.id) };
       if (part.type === "tool_result")
         return {
           type: "function_call_output",
-          call_id: part.tool_use_id,
+          call_id: scriptCallId(part.tool_use_id),
           output: part.content,
         };
       return { content: part.text ?? "" };

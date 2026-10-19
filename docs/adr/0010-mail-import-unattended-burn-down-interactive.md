@@ -76,9 +76,13 @@ before Worker teardown on both completion and failure; timeouts retain observed
 successful-call models while their outcome remains unavailable rather than
 counting as parity.
 
-Production continues to use Opus. Candidate model and escalation settings are
-harness-only overrides until held-out real replay and member grading justify a
-change. With distinct primary and escalation models, one Email escalates on an
+Production runs Luna as the primary and Opus as the escalation model. A graded
+replay of 20 held-out import Emails matched Opus on every total Luna imported
+(differences were line names, $0 shipping lines, and split rather than netted
+discounts), and 9 of 10 unresolved Emails agreed. Linking to existing Purchases
+was not measurable in replay. Candidate settings remain harness-only overrides
+(`MAIL_REPLAY_MODEL`) until real replay and member grading justify a change.
+With distinct primary and escalation models, one Email escalates on an
 explicit request, two refused prepares, or before the primary records unresolved;
 the next claim returns to the primary. Coordinator model transitions retain a pending/applied configuration receipt.
 Recovery reconciles the desired model before accepting a replayed escalation,

@@ -109,7 +109,8 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
    and the per-case fifteen-minute budget (runtime start plus settlement; a stale
    Worker rebuild runs once before the first case). With the member's authorization,
    pass originals and frozen outcomes through `eval:mail-replay:stdin`, using
-   `MAIL_REPLAY_MODEL` and optional `MAIL_REPLAY_ESCALATION_MODEL`. Supply an array
+   `MAIL_REPLAY_MODEL` and `MAIL_REPLAY_ESCALATION_MODEL` to override the
+   production manifest's models (the default). Supply an array
    of `{subject, sender, receivedAt, bodyText, bodyHtml?, headers?, owner?,
    baseline}`; `baseline` follows `mailImportOutcome` in
    `packages/schemas/src/assessment.ts`. Attribution needs the original's
