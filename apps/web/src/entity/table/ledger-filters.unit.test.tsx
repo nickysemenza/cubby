@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ColumnFiltersState } from "@tanstack/react-table";
 import {
   act,
@@ -6,8 +7,10 @@ import {
   renderHook,
   screen,
 } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { requestColumnFilterEdit } from "../../ui/data-table/column-filter-requests";
 import type { FilterFieldConfig } from "../../ui/data-table/filter-bar-core";
 import {
   barFiltersToFilterState,
@@ -43,12 +46,17 @@ const columns = helper.columns([
   }),
 ]);
 
-function LedgerFiltersHarness() {
+function LedgerFiltersHarness({
+  onTable,
+}: {
+  onTable?: (table: ReturnType<typeof useCubbyTable<LedgerRow>>) => void;
+}) {
   const table = useCubbyTable({
     data: [],
     columns,
     getRowId: (row) => row.id,
   });
+  onTable?.(table);
 
   return (
     <>
@@ -83,34 +91,58 @@ function PrimarySearchHarness() {
   );
 }
 
-describe("LedgerFilters", () => {
-  it("writes a selected multiselect filter through the checklist's Apply", async () => {
-    render(<LedgerFiltersHarness />);
+// Facet and view-count queries are disabled outside a page list, but their
+// hooks still need a client.
+const wrapper = ({ children }: { children: ReactNode }) => (
+  <QueryClientProvider client={new QueryClient()}>
+    {children}
+  </QueryClientProvider>
+);
 
-    fireEvent.click(screen.getByRole("button", { name: "Trade: any" }));
+describe("LedgerFilters", () => {
+  it("writes a picked multiselect value to the table without an Apply step", async () => {
+    render(<LedgerFiltersHarness />, { wrapper });
+
+    fireEvent.click(screen.getByRole("button", { name: "Filters" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Trade" }));
     fireEvent.click(
       await screen.findByRole("option", { name: "Electrical & Lighting" }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 
-    expect(screen.getByTestId("column-filters")).toHaveTextContent(
-      '[{"id":"trade","value":["electrical"]}]',
-    );
+    // Live apply commits after the draft debounce.
+    expect(
+      await screen.findByText('[{"id":"trade","value":["electrical"]}]'),
+    ).toBeInTheDocument();
   });
 
-  it("uses declared primary search while keeping the title field as a narrow chip", () => {
-    render(<LedgerFiltersHarness />);
+  it("opens the panel on a column header's filter request", async () => {
+    let table: ReturnType<typeof useCubbyTable<LedgerRow>> | undefined;
+    render(<LedgerFiltersHarness onTable={(next) => (table = next)} />, {
+      wrapper,
+    });
+
+    act(() => requestColumnFilterEdit(table!, "trade"));
+
+    expect(
+      await screen.findByRole("button", { name: "Trade", expanded: true }),
+    ).toBeInTheDocument();
+  });
+
+  it("uses declared primary search and keeps the title field in the panel", async () => {
+    render(<LedgerFiltersHarness />, { wrapper });
 
     const search = screen.getByRole("textbox", {
       name: "Search tasks or shortcode",
     });
     expect(search).toHaveValue("");
-    expect(screen.getByRole("button", { name: "Name: any" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: /^Name/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Filters" }));
+    expect(await screen.findByRole("button", { name: "Name" })).toBeVisible();
     expect(screen.getByTestId("column-filters")).toHaveTextContent("[]");
   });
 
   it("renders the declared primary search even when no name column is mounted", () => {
-    render(<PrimarySearchHarness />);
+    render(<PrimarySearchHarness />, { wrapper });
 
     const search = screen.getByRole("textbox", {
       name: "Search tasks or shortcode",

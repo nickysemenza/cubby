@@ -152,10 +152,10 @@ export function filterSummary(
  */
 function chipOperator(
   field: FilterBarField,
-  filter: Filter,
+  filter: Filter | undefined,
   side: FilterSide,
 ): string {
-  if (side === "isNot") return "";
+  if (side === "isNot" || !filter) return "";
   if (field.type === "text") return "contains";
   if (field.valueType === "date" || field.valueType === "number") return "";
   const included = sideValues(filter.values, "is");
@@ -843,15 +843,24 @@ const resultLine = ({ matching, total, noun }: FilterResultCount) =>
       ? `${formatCount(matching)}${noun ? ` ${noun}` : ""}`
       : `${formatCount(matching)} of ${formatCount(total)}${noun ? ` ${noun}` : ""}`;
 
-/** Panel sections in first-appearance order, the active fields lifted out. */
+/**
+ * Panel sections in first-appearance order, the active fields lifted out.
+ * The open row keeps the section it opened in: moving it mid-edit would
+ * remount its editor under the cursor.
+ */
 function panelSections(
   fields: readonly FilterBarField[],
   filtersByField: ReadonlyMap<string, Filter>,
+  open: { key: string; active: boolean } | null,
 ) {
   const active: FilterBarField[] = [];
   const groups = new Map<string, FilterBarField[]>();
   for (const field of fields) {
-    if (isFieldActive(filtersByField.get(field.key))) {
+    const isActive =
+      field.key === open?.key
+        ? open.active
+        : isFieldActive(filtersByField.get(field.key));
+    if (isActive) {
       active.push(field);
       continue;
     }
@@ -960,13 +969,18 @@ export function FiltersPanel({
   resultCount?: FilterResultCount;
 }) {
   const [query, setQuery] = useState("");
-  const [openKey, setOpenKey] = useState<string | null>(initialKey);
   const { filtersByField, chipFields, setValues, clear } = useFilterEdits({
     filters,
     fields,
     onChange,
     searchKey,
   });
+  const placed = (key: string | null) =>
+    key === null
+      ? null
+      : { key, active: isFieldActive(filtersByField.get(key)) };
+  const [open, setOpen] = useState(() => placed(initialKey));
+  const openKey = open?.key ?? null;
   useEffect(() => {
     onEditorChange?.(openKey);
   }, [onEditorChange, openKey]);
@@ -974,7 +988,7 @@ export function FiltersPanel({
   const matches = chipFields.filter((field) =>
     labelOf(field).toLocaleLowerCase().includes(needle),
   );
-  const { active, groups } = panelSections(matches, filtersByField);
+  const { active, groups } = panelSections(matches, filtersByField, open);
   const activeCount = chipFields.filter((field) =>
     isFieldActive(filtersByField.get(field.key)),
   ).length;
@@ -984,9 +998,7 @@ export function FiltersPanel({
       field={field}
       filter={filtersByField.get(field.key)}
       open={openKey === field.key}
-      onToggle={() =>
-        setOpenKey((current) => (current === field.key ? null : field.key))
-      }
+      onToggle={() => setOpen(placed(openKey === field.key ? null : field.key))}
     >
       <FilterFieldEditor
         field={field}
@@ -1020,9 +1032,7 @@ export function FiltersPanel({
             variant="ghost"
             size="sm"
             className="h-7 shrink-0"
-            onClick={() =>
-              onChange(filters.filter((filter) => filter.field === searchKey))
-            }
+            onClick={() => onChange([])}
           >
             Clear all
           </Button>
@@ -1070,7 +1080,8 @@ function FilterChip({
   clear,
 }: {
   field: FilterBarField;
-  filter: Filter;
+  /** Absent while its open editor has emptied it; the chip stays until closed. */
+  filter: Filter | undefined;
   side: FilterSide;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -1081,8 +1092,9 @@ function FilterChip({
   const summary = filterSummary(field, filter, side);
   const values = filterSummary(field, filter, side, ", ");
   const operator = chipOperator(field, filter, side);
+  const name = summary ? `${label}: ${summary}` : label;
   const clearSide = () => {
-    const rest = withSideValues(filter.values, side, []);
+    const rest = withSideValues(filter?.values ?? [], side, []);
     if (field.type === "multiselect" && activeSides(rest).length)
       setValues(rest);
     else clear();
@@ -1094,8 +1106,8 @@ function FilterChip({
           render={
             <button
               type="button"
-              aria-label={`${label}: ${summary}`}
-              title={`${label}: ${summary}`}
+              aria-label={name}
+              title={name}
               className="flex h-full min-w-0 items-center gap-1 rounded-l-sm pr-1 pl-2 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
             />
           }
@@ -1160,10 +1172,23 @@ export function ActiveFilterChips({
   });
   useEffect(() => {
     if (addOpen) return;
-    onEditorChange?.(editingKey?.split(":")[0] ?? null);
+    onEditorChange?.(
+      editingKey ? editingKey.slice(0, editingKey.lastIndexOf(":")) : null,
+    );
   }, [addOpen, editingKey, onEditorChange]);
   const active = chipFields.filter((field) =>
     isFieldActive(filtersByField.get(field.key)),
+  );
+  // The chip being edited stays while its editor is open, even emptied:
+  // unpicking the last value before picking another must not close it.
+  const editingSplit = editingKey?.lastIndexOf(":") ?? -1;
+  const editingField = editingKey?.slice(0, editingSplit);
+  const editingSide: FilterSide =
+    editingKey?.slice(editingSplit + 1) === "isNot" ? "isNot" : "is";
+  const shown = chipFields.filter(
+    (field) =>
+      field.key === editingField ||
+      isFieldActive(filtersByField.get(field.key)),
   );
   const counted =
     active.length > 0 && resultCount ? resultLine(resultCount) : null;
@@ -1176,10 +1201,12 @@ export function ActiveFilterChips({
         className,
       )}
     >
-      {active.flatMap((field) => {
+      {shown.flatMap((field) => {
         const filter = filtersByField.get(field.key);
-        if (!filter) return [];
-        return activeSides(filter.values).map((side) => {
+        const sides = activeSides(filter?.values);
+        if (field.key === editingField && !sides.includes(editingSide))
+          sides.push(editingSide);
+        return sides.map((side) => {
           const key = `${field.key}:${side}`;
           return (
             <FilterChip
@@ -1232,9 +1259,7 @@ export function ActiveFilterChips({
           variant="ghost"
           size="sm"
           className="h-6 shrink-0 px-1.5 text-xs"
-          onClick={() =>
-            onChange(filters.filter((filter) => filter.field === searchKey))
-          }
+          onClick={() => onChange([])}
         >
           Clear
         </Button>
