@@ -10,7 +10,7 @@ import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { z } from "zod";
 
-import { chatGptRequest, type ChatGptToolPlacement } from "./transport";
+import { chatGptRequest } from "./transport";
 
 const log = createLogger("chatgpt-plan");
 
@@ -89,11 +89,11 @@ const planError = z.object({
 });
 
 /**
- * An HTTP 400 invalid request naming the `input` items (or `additional_tools`)
- * as what it refuses: the shape a refused tool placement takes. Quota and rate
- * refusals are funding outcomes, never placement errors.
+ * An HTTP 400 invalid request naming the `input` items (or the cache
+ * breakpoint) as what it refuses: the shape a refused breakpoint takes. Quota
+ * and rate refusals are funding outcomes, never request-shape errors.
  */
-function isToolPlacementRefusal(status: number, body: string): boolean {
+function isBreakpointRefusal(status: number, body: string): boolean {
   if (status !== 400) return false;
   let parsed: z.infer<typeof planError>;
   try {
@@ -108,14 +108,14 @@ function isToolPlacementRefusal(status: number, body: string): boolean {
   if (code && /usage_limit|rate_limit|quota/u.test(code)) return false;
   return (
     /^input(?:$|[[.])/u.test(param ?? "") ||
-    (message ?? "").includes("additional_tools")
+    (message ?? "").includes("prompt_cache_breakpoint")
   );
 }
 
 /** One deployment's shared plan. Only this owner ever reads renewable tokens. */
 export class ChatGptSession {
   private pending: Promise<unknown> = Promise.resolve();
-  private toolPlacement: ChatGptToolPlacement = "leading";
+  private cacheBreakpoints = true;
 
   constructor(
     private readonly store: CredentialStore,
@@ -336,8 +336,8 @@ export class ChatGptSession {
     signal?.throwIfAborted();
     const saved = await this.active();
     signal?.throwIfAborted();
-    const request = (placement: ChatGptToolPlacement) =>
-      JSON.stringify(chatGptRequest(body, model, placement));
+    const request = (breakpoints: boolean) =>
+      JSON.stringify(chatGptRequest(body, model, { breakpoints }));
     const send = (payload: string) =>
       this.upstream(`${API}/responses`, {
         method: "POST",
@@ -348,33 +348,33 @@ export class ChatGptSession {
         body: payload,
         signal,
       });
-    const placement = this.toolPlacement;
-    const first = request(placement);
+    const breakpoints = this.cacheBreakpoints;
+    const first = request(breakpoints);
     let response = await send(first);
     if (response.ok) return response;
     // Every plan caller passes through here; callers that fall back to paid
     // inference otherwise keep no copy of the plan's refusal.
     let failure = await response.text();
-    // CONSTRAINT: the leading `additional_tools` position (`chatGptRequest`)
-    // was never verified against the live plan. A refusal of the input shape
-    // retries that request once in the original trailing order; when that
-    // succeeds, this session keeps the trailing order. Delete this guard once
-    // production plan calls show cache reads with the leading order.
-    const trailing = request("trailing");
+    // CONSTRAINT: the plan's preview documents neither support nor refusal of
+    // `prompt_cache_breakpoint`. A refusal of the input shape retries that
+    // request once without breakpoints; when that succeeds, this session keeps
+    // sending none. Delete this guard once production plan calls succeed with
+    // breakpoints.
+    const plain = request(false);
     if (
-      placement === "leading" &&
-      trailing !== first &&
-      isToolPlacementRefusal(response.status, failure)
+      breakpoints &&
+      plain !== first &&
+      isBreakpointRefusal(response.status, failure)
     ) {
-      log.warn("plan refused leading tool placement; retrying trailing", {
+      log.warn("plan refused cache breakpoints; retrying without", {
         model,
         status: response.status,
         body: scrubErrorMessage(failure),
       });
       signal?.throwIfAborted();
-      response = await send(trailing);
+      response = await send(plain);
       if (response.ok) {
-        this.toolPlacement = "trailing";
+        this.cacheBreakpoints = false;
         return response;
       }
       failure = await response.text();

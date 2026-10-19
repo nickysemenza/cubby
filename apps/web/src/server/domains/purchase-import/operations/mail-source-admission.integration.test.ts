@@ -13,7 +13,8 @@
  * error instead of a client conflict; an order traced from an admitted carrier
  * notice through a shipping Email that ties tracking to the order number has
  * no admission path; batched via paths can form a cycle without reaching the
- * Run's admitted Emails.
+ * Run's admitted Emails; a supporting original another Run holds is refused
+ * without naming that Run, so the coordinator escalates instead of linking.
  * Deterministic original checks precede all admission judgments.
  */
 import type { ActorContext } from "@cubby/schemas/context";
@@ -549,6 +550,43 @@ describe("Mail import source admission", () => {
       expect(await emailRow(other)).toEqual({ runId: null, status: "pending" });
     },
   );
+
+  it("refuses a supporting original another Run holds, naming that Run", async () => {
+    const { party, vendor } = await world();
+    const shipment = await retain(party.id, "anchor-8", "Shipped SYN-8");
+    const original = await retain(
+      party.id,
+      "held-8",
+      "Order SYN-8 confirmed: Synthetic kettle USD 24.00",
+    );
+    const holder = await mailRun(party, [original], "discovery");
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "paused_auth" })
+      .where(eq(run.id, holder.id));
+    const [{ shortcode } = { shortcode: "" }] = await getDb(ctx.db)
+      .select({ shortcode: run.shortcode })
+      .from(run)
+      .where(eq(run.id, holder.id));
+    const { id, actor } = await mailRun(party, [shipment], "discovery");
+    await expect(
+      preparePurchaseImport(
+        ctx.db,
+        prepareInput(id, "held", vendor.shortcode, original, "SYN-8"),
+        actor,
+        decisions({ attribution: "recipient", relation: "same_purchase" }),
+      ),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      reason: "MAIL_SOURCE_HELD_BY_RUN",
+      message: expect.stringContaining(`${shortcode}, paused_auth`),
+    });
+    expect(await rosterOf(id)).toEqual([shipment.id]);
+    expect(await emailRow(original)).toEqual({
+      runId: holder.id,
+      status: "researching",
+    });
+  });
 
   it("admits an order traced from a carrier notice through the shipping Email naming both identifiers", async () => {
     const { party, vendor } = await world();

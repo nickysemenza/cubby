@@ -205,6 +205,9 @@ export const AppErrors = {
   // recipient's same purchase (attribution, relation, roster bound, settled
   // source); the message names the missing link.
   MAIL_SOURCE_ADMISSION_REFUSED: "CONFLICT",
+  // A supporting original another live Mail import Run holds; the message names
+  // that Run. A stronger model cannot change it, so it never escalates.
+  MAIL_SOURCE_HELD_BY_RUN: "CONFLICT",
   // A prepare naming an itemOperationId this Run already prepared under another
   // operation with different orders; the message names that preparation.
   PURCHASE_IMPORT_ITEM_PREPARED: "CONFLICT",

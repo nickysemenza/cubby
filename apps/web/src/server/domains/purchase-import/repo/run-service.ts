@@ -128,6 +128,7 @@ import {
 import { finalizeImportedImages } from "~/server/domains/photo-import/repo/photo-import-finalize";
 import {
   readMailRunRoster,
+  releaseFailedMailRunSources,
   transferMailRunSources,
 } from "~/server/domains/purchase-import/repo/mail-run-membership";
 import { getRunHeaderByShortcode } from "~/server/domains/run/repo/run";
@@ -193,7 +194,11 @@ async function selectNonPhotoTargets(
         outcome:
           outcome?.outcome ??
           (email.status === "completed" ? ("verified" as const) : null),
-        warning: outcome?.warning ?? email.classificationReason,
+        warning:
+          outcome?.warning ??
+          (!owned && email.status === "pending" && !email.runId
+            ? "Returned to Mail discovery after this Run failed."
+            : email.classificationReason),
         diff: null,
         completedAt: outcome?.completedAt
           ? new Date(outcome.completedAt)
@@ -1147,28 +1152,33 @@ export async function markRunFailed(
   },
 ) {
   const runId = runEntityId.parse(input.runId);
-  const [run] = await getDb(db)
-    .update(runTable)
-    .set({
-      status: "failed",
-      failureCode: input.failureCode,
-      // The Run page's raw failure text, as `failWorkflowRun` records it.
-      ...(input.detail !== undefined && { dispatchError: input.detail }),
-      endedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(runTable.id, runId),
-        eq(runTable.status, "running"),
-        input.dispatchEventId === undefined
-          ? undefined
-          : input.dispatchEventId === null
-            ? isNull(runTable.dispatchEventId)
-            : eq(runTable.dispatchEventId, input.dispatchEventId),
-      ),
-    )
-    .returning({ vendorAccountId: runTable.vendorAccountId });
+  const run = await withTransaction(db, async (tx) => {
+    const [failed] = await tx
+      .update(runTable)
+      .set({
+        status: "failed",
+        failureCode: input.failureCode,
+        // The Run page's raw failure text, as `failWorkflowRun` records it.
+        ...(input.detail !== undefined && { dispatchError: input.detail }),
+        endedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(runTable.id, runId),
+          eq(runTable.status, "running"),
+          input.dispatchEventId === undefined
+            ? undefined
+            : input.dispatchEventId === null
+              ? isNull(runTable.dispatchEventId)
+              : eq(runTable.dispatchEventId, input.dispatchEventId),
+        ),
+      )
+      .returning({ purpose: runTable.purpose });
+    if (failed?.purpose === "mail_import")
+      await releaseFailedMailRunSources(tx, runId);
+    return failed;
+  });
   return { failed: Boolean(run), detail: input.detail ?? null };
 }
 

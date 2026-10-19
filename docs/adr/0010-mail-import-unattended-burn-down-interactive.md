@@ -82,8 +82,15 @@ replay of 20 held-out import Emails matched Opus on every total Luna imported
 discounts), and 9 of 10 unresolved Emails agreed. Linking to existing Purchases
 was not measurable in replay. Candidate settings remain harness-only overrides
 (`MAIL_REPLAY_MODEL`) until real replay and member grading justify a change.
+Haiku 5.5 as both primary and escalation model, on the same 20 Emails, imported
+9 (Luna 16), with 3 totals differing from Opus, and left 10 unresolved that
+Opus imported; at about $0.005 per Email it cost no less than Luna, so it is not
+a candidate.
 With distinct primary and escalation models, one Email escalates on an
 explicit request, two refused prepares, or before the primary records unresolved;
+a prepare refused because another live Run holds its supporting original
+(`MAIL_SOURCE_HELD_BY_RUN`) never counts, since the escalation model meets the
+same refusal, and the coordinator links the lifecycle notice instead;
 a claim that returns another Email returns to the primary (re-claiming the same
 unsettled Email keeps it escalated). While the escalation model's funding refuses
 (a recorded Claude credit refusal, a spent background window budget), the
