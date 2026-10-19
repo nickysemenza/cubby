@@ -1,4 +1,7 @@
-import { locationTypeValues } from "@cubby/shared/location-type-theme";
+import {
+  locationTypeColors,
+  locationTypeValues,
+} from "@cubby/shared/location-type-theme";
 import { COST_TYPE_LABELS, costTypeValues } from "../expense-fields.js";
 import {
   EXPENSE_LINE_BASIS_LABELS,
@@ -132,6 +135,75 @@ const labeled = <Value extends string>(
     return { value, label: labels[value] };
   });
 
+type Glyph = Readonly<{ phosphor: string; sfSymbol: string }>;
+
+/** Attaches each value's glyph (web Phosphor name + Apple SF Symbol). */
+const withGlyphs = <Value extends string, Option extends { value: Value }>(
+  options: readonly Option[],
+  glyphs: Record<Value, Glyph>,
+) => options.map((option) => ({ ...option, glyph: glyphs[option.value] }));
+
+const g = (phosphor: string, sfSymbol: string): Glyph => ({
+  phosphor,
+  sfSymbol,
+});
+
+const tradeGlyphs = {
+  planning: g("ClipboardText", "list.clipboard"),
+  demolition: g("Trash", "trash"),
+  building: g("Hammer", "hammer"),
+  drywall: g("Square", "square"),
+  electrical: g("Lightning", "bolt"),
+  plumbing: g("Drop", "drop"),
+  mechanical: g("Fan", "fan"),
+  cabinetry: g("Archive", "archivebox"),
+  countertop: g("Rectangle", "rectangle"),
+  flooring: g("GridNine", "square.grid.3x3"),
+  millwork: g("Ruler", "ruler"),
+  finishes: g("PaintRoller", "paintbrush.pointed"),
+  appliances: g("Oven", "oven"),
+  landscaping: g("Tree", "tree"),
+  logistics: g("Truck", "truck.box"),
+  metalworking: g("Wrench", "wrench.adjustable"),
+  crafts: g("Palette", "paintpalette"),
+  auto: g("Car", "car"),
+  travel: g("AirplaneTilt", "airplane"),
+  other: g("Shapes", "square.on.circle"),
+} satisfies Record<(typeof tradeValues)[number], Glyph>;
+
+/** Form-factor glyphs; a `furniture` location shows its SKU's category mark where known. */
+const locationTypeGlyphs = {
+  house: g("House", "house"),
+  room: g("House", "house"),
+  area: g("SquaresFour", "square.grid.2x2"),
+  bed: g("Plant", "leaf"),
+  planter: g("Flower", "camera.macro"),
+  bag: g("ShoppingBag", "bag"),
+  box: g("Cube", "shippingbox"),
+  shelf: g("Stack", "square.stack.3d.up"),
+  table: g("Table", "table.furniture"),
+  drawer: g("FileArchive", "archivebox"),
+  cart: g("ShoppingCart", "cart"),
+  cabinet: g("Cube", "cabinet"),
+  furniture: g("Package", "shippingbox"),
+} satisfies Record<(typeof locationTypeValues)[number], Glyph>;
+
+/** Product category feature glyphs; the feature declaration carries them. */
+export const productCategoryFeatureGlyphs = {
+  food: g("ForkKnife", "fork.knife"),
+  books: g("BookOpen", "book"),
+  tools: g("Wrench", "wrench.and.screwdriver"),
+  "tool-consumables": g("Disc", "opticaldisc"),
+  "tool-accessories": g("Gear", "gearshape"),
+  storage: g("Archive", "archivebox"),
+  hardware: g("Lightning", "bolt"),
+  electronics: g("Cpu", "cpu"),
+  software: g("Package", "shippingbox"),
+  household: g("Couch", "sofa"),
+  supplies: g("Sparkle", "sparkles"),
+  apparel: g("TShirt", "tshirt"),
+} as const satisfies Record<string, Glyph>;
+
 const expenseLineKindDescriptions = {
   unclassified: "Receipt role is unresolved and needs review",
   principal: "The main item or service purchased",
@@ -149,7 +221,8 @@ const expenseLineKindDescriptions = {
  * decorate these values without defining another wording or color source.
  */
 export const selectControlOptions = {
-  locationType: labeled(
+  locationType: withGlyphs(
+    labeled(
     locationTypeValues,
     {
       house: "house",
@@ -166,8 +239,10 @@ export const selectControlOptions = {
       cabinet: "cabinet",
       furniture: "furniture",
     },
-    undefined,
+    locationTypeColors,
     location_typeDescriptions,
+    ),
+    locationTypeGlyphs,
   ),
   mealType: labeled(
     mealTypeValues,
@@ -218,7 +293,10 @@ export const selectControlOptions = {
     blocked: "var(--chart-negative)",
     done: "var(--chart-positive)",
   }),
-  trade: labeled(tradeValues, TRADE_LABELS, undefined, tradeDescriptions),
+  trade: withGlyphs(
+    labeled(tradeValues, TRADE_LABELS, undefined, tradeDescriptions),
+    tradeGlyphs,
+  ),
   productKind: labeled(productKindValues, PRODUCT_KIND_LABELS),
   expenseLineKind: labeled(
     expenseLineKindValues,

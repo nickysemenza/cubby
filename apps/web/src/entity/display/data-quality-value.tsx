@@ -4,15 +4,23 @@ import type { Entity } from "@cubby/schemas/entity";
 import { AsteriskSimpleIcon } from "@phosphor-icons/react/dist/csr/AsteriskSimple";
 import { z } from "zod";
 
-import {
-  dataQualityOptions,
-  dataQualityStatusLabel,
-} from "~/lib/data-quality-options";
+import { dataQualityStatusLabel } from "~/lib/data-quality-options";
+import { cn } from "~/lib/utils";
 import { useDenseCell } from "~/ui/common/stacked-value";
-import { EnumPill } from "~/ui/primitives/enum-pill";
 
 import { FieldExplanation } from "../fields/field-explanation";
 
+const METER_BARS = 5;
+
+/** Filled bars for a score below 100: one per full fifth, at least one. */
+export const qualityMeterFill = (score: number) =>
+  Math.min(METER_BARS - 1, Math.max(1, Math.floor(score / 20)));
+
+/**
+ * A quality value reads only when something is owed. Complete is silent (its
+ * label stays spoken); a gap shows a five-bar meter in its condition tone —
+ * warning for missing data, destructive for a defect — beside the score.
+ */
 export function DataQualityValue({
   quality,
   scored = true,
@@ -31,40 +39,57 @@ export function DataQualityValue({
       </span>
     );
   const label = dataQualityStatusLabel(quality.status);
+  if (quality.status === "complete")
+    return <span className="sr-only">{label}</span>;
+  if (quality.score === null || quality.status === "not_assessed")
+    return (
+      <span className="text-xs text-muted-foreground" title={label}>
+        {label}
+      </span>
+    );
+  // Caps keep an unresolved gap at 99 or below, so this never rounds a gap
+  // up to 100.
+  const score = Math.round(quality.score);
   // Exceptions-only completeness is a distinct state, not a plain 100: the
-  // marker is visible and spoken, not color alone. It trails the score as a
-  // superscript; as the pill's leading icon it widened the whole column.
-  const excepted = quality.status === "complete_with_exceptions";
+  // marker is visible and spoken, not color alone.
+  if (quality.status === "complete_with_exceptions")
+    return (
+      <span className="text-muted-foreground tabular-nums" title={label}>
+        {score}
+        <AsteriskSimpleIcon
+          weight="bold"
+          aria-hidden
+          className="inline size-2 align-super"
+        />
+        <span className="sr-only">, {label}</span>
+      </span>
+    );
+  const tone =
+    quality.status === "defect" ? "bg-destructive" : "bg-warning";
+  const filled = qualityMeterFill(score);
   return (
-    <EnumPill
-      color={
-        dataQualityOptions.find((option) => option.value === quality.status)
-          ?.color
-      }
-      description={label}
-      className="tabular-nums"
+    <span
+      data-quality-meter={quality.status}
+      className="inline-flex items-center gap-1.5 tabular-nums"
+      title={`${label} · ${score}/100`}
     >
-      {quality.score === null ? (
-        label
-      ) : (
-        // Caps keep an unresolved gap at 99 or below, so this never rounds
-        // a gap up to 100.
-        <>
-          {Math.round(quality.score)}
-          {dense ? null : "/100"}
-          {excepted ? (
-            <>
-              <AsteriskSimpleIcon
-                weight="bold"
-                aria-hidden
-                className="inline size-2 align-super"
-              />
-              <span className="sr-only">, {label}</span>
-            </>
-          ) : null}
-        </>
-      )}
-    </EnumPill>
+      <span aria-hidden className="inline-flex gap-px">
+        {Array.from({ length: METER_BARS }, (_, index) => (
+          <i
+            key={index}
+            className={cn(
+              "block h-2.5 w-[3px] rounded-[1px]",
+              index < filled ? tone : "bg-border",
+            )}
+          />
+        ))}
+      </span>
+      <span>
+        {score}
+        {dense ? null : "/100"}
+        <span className="sr-only">, {label}</span>
+      </span>
+    </span>
   );
 }
 

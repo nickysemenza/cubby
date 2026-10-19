@@ -93,7 +93,7 @@ function EntityWorkbenchInspectorContent({
           images={
             recordMedia.safeParse(resolvedRecord).data?.displayImages ?? []
           }
-          size={40}
+          size={28}
           alt={resolvedName ?? ""}
           preview
         />

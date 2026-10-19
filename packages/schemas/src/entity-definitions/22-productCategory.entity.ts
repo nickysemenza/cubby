@@ -12,6 +12,7 @@ import {
 } from "../product-category-fields.js";
 import { defineEntity } from "./definition.js";
 import { labelField } from "./label-field.js";
+import { productCategoryFeatureGlyphs } from "./select-control-options.js";
 
 export default defineEntity({
   key: "productCategory",
@@ -287,66 +288,78 @@ export default defineEntity({
           options: [
             {
               value: "food",
+              glyph: productCategoryFeatureGlyphs["food"],
               label: "Food",
               description:
                 "Edible/consumable products tracked against nutrition (USDA-linkable)",
             },
             {
               value: "books",
+              glyph: productCategoryFeatureGlyphs["books"],
               label: "Books",
               description: "Books, manuals, and other bound reading matter",
             },
             {
               value: "tools",
+              glyph: productCategoryFeatureGlyphs["tools"],
               label: "Tools",
               description: "Durable hand or power tools",
             },
             {
               value: "tool-consumables",
+              glyph: productCategoryFeatureGlyphs["tool-consumables"],
               label: "Tool consumables",
               description:
                 "Consumed alongside tool use: blades, bits, abrasives",
             },
             {
               value: "tool-accessories",
+              glyph: productCategoryFeatureGlyphs["tool-accessories"],
               label: "Tool accessories",
               description: "Non-consumed attachments and add-ons for tools",
             },
             {
               value: "storage",
+              glyph: productCategoryFeatureGlyphs["storage"],
               label: "Storage",
               description:
                 "Bins, totes, shelving, and other organizational containers",
             },
             {
               value: "hardware",
+              glyph: productCategoryFeatureGlyphs["hardware"],
               label: "Hardware",
               description: "Fasteners, fittings, and small hardware components",
             },
             {
               value: "electronics",
+              glyph: productCategoryFeatureGlyphs["electronics"],
               label: "Electronics",
               description: "Electronic devices and components",
             },
             {
               value: "software",
+              glyph: productCategoryFeatureGlyphs["software"],
               label: "Software",
               description: "Software, licenses, and digital subscriptions",
             },
             {
               value: "household",
+              glyph: productCategoryFeatureGlyphs["household"],
               label: "Household",
               description:
                 "General household goods with no more specific feature",
             },
             {
               value: "supplies",
+              glyph: productCategoryFeatureGlyphs["supplies"],
               label: "Supplies",
               description:
                 "Consumable general-purpose supplies (tape, paper, cleaning, …)",
             },
             {
               value: "apparel",
+              glyph: productCategoryFeatureGlyphs["apparel"],
               label: "Apparel",
               description: "Clothing, footwear, and wearable accessories",
             },

@@ -1,9 +1,8 @@
-import type { ReactNode } from "react";
+import type { EnumIcon, EnumRole } from "@cubby/shared/enum-palette";
+import { createElement, type ReactNode } from "react";
 
-import { productCategoryFeatureOptions } from "~/entity/presentation/feature-options";
-import { locationTypeOptionsWithTheme } from "~/entity/presentation/location-icons";
-import { tradeOptions } from "~/entity/presentation/trade-options";
 import { colorizeSelectOptions } from "~/lib/select-options";
+import { OptionGlyph } from "~/ui/primitives/option-glyph";
 
 /** One picker option: a value/label pair plus an optional leading icon or swatch color. */
 export type EntitySelectOption = Readonly<{
@@ -13,13 +12,17 @@ export type EntitySelectOption = Readonly<{
   description?: string;
   icon?: ReactNode;
   color?: string;
+  /** Compiler-filled roster role: states tint, kinds stay neutral. */
+  role?: EnumRole;
+  /** Declared (or status-inferred) glyph; becomes `icon` for pickers. */
+  glyph?: EnumIcon;
 }>;
 
 /**
- * Completes a declared enum roster with rich labels/icons and deterministic
- * presentation. Declared values stay first; rich-only values follow in their
- * source order. A caller's explicit color or icon always wins over a rich
- * option, while a rich value fills a missing presentation member.
+ * Completes a declared enum roster with web-only sentinels and deterministic
+ * presentation. Declared values stay first; sentinel-only values follow in
+ * their source order. A declared `glyph` becomes the picker's leading icon,
+ * tinted with the option's color; a caller's explicit icon wins.
  */
 export function presentEntitySelectOptions(
   entity: string,
@@ -42,33 +45,31 @@ export function presentEntitySelectOptions(
       const richOption = richByValue.get(declaredOption.value);
       return { ...richOption, ...declaredOption };
     });
-  return colorizeSelectOptions(merged);
+  return colorizeSelectOptions(merged).map((option) =>
+    option.glyph && option.icon === undefined
+      ? {
+          ...option,
+          icon: createElement(OptionGlyph, {
+            name: option.glyph.phosphor,
+            color: option.color,
+          }),
+        }
+      : option,
+  );
 }
 
 /**
- * Option labels for every `entity.field` whose manifest `control` carries no
- * `options` of its own — an enum backed by a themed/colored/iconed option set
- * rather than the plain `{value,label}` pairs `control.options` already
- * declares. Consolidates what were two separately maintained tables
- * (`richSelectOptions` in `entity-primitive-fields.tsx`, `bulkEditSelectOptions`
- * in `bulk-edit-entity-action.tsx`) into one, so the generic editor
- * (`EntityIntentFields`/`EntityPrimitiveFields`), bulk edit, and detail-page
- * inline `select` editors (`entity-display.tsx`) all read the same source —
- * see `docs/entities.md`'s `control.suggest` section for why a select field's
- * options and its auto-suggest hint must agree.
+ * Web-only editor sentinels. Labels, colors and glyphs belong to the
+ * declarations (`control.options[].glyph`), so every client draws the same
+ * mark; only choices the stored schema never holds live here. The generic
+ * editor, bulk edit and inline `select` editors all read this one source.
  */
 const ENTITY_SELECT_OPTIONS = {
-  "task.trade": tradeOptions,
-  "project.defaultTrade": tradeOptions,
-  "expense.trade": tradeOptions,
-  "purchase.defaultTrade": tradeOptions,
   // The capture form's `"auto"` sentinel asks the server's role Decision
   // before create; `buildData` strips it before validation.
   "expense.lineKind": [
     { value: "auto", label: "Decide from receipt evidence" },
   ],
-  "location.type": locationTypeOptionsWithTheme,
-  "productCategory.feature": productCategoryFeatureOptions,
 } satisfies Readonly<Record<string, readonly EntitySelectOption[]>>;
 
 /**

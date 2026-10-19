@@ -17,6 +17,7 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { renderSuggestedListFieldValue } from "~/entity/display/entity-display";
 import { formatCurrency } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
+import { ChipCluster } from "~/ui/common/chip-cluster";
 import { StackedValue } from "~/ui/common/stacked-value";
 import { Badge } from "~/ui/primitives/badge";
 import { NoneValue } from "~/ui/primitives/none-value";
@@ -107,17 +108,21 @@ export function ActionBadge({
 /** What accepting restores or risks, each as its server-worded label. */
 export function ImpactLabels({ impact }: { impact: SuggestionImpact[] }) {
   if (!impact.length) return <NoneValue />;
+  // One line: the first label, then "+N" naming the rest. Wrapped badges were
+  // clipped mid-line by the 32px row.
   return (
-    <span className="inline-flex min-w-0 flex-wrap gap-1">
-      {impact.map((item) => (
-        <Badge
-          key={`${item.kind}:${item.label}`}
-          variant={item.kind === "caution" ? "warning" : "outline"}
-        >
-          {item.label}
-        </Badge>
-      ))}
-    </span>
+    <ChipCluster
+      lines={1}
+      items={impact.map((item) => ({
+        key: `${item.kind}:${item.label}`,
+        label: item.label,
+        node: (
+          <Badge variant={item.kind === "caution" ? "warning" : "outline"}>
+            {item.label}
+          </Badge>
+        ),
+      }))}
+    />
   );
 }
 
@@ -167,7 +172,8 @@ export function FieldValue({
     <span
       className={cn(
         "inline-flex min-w-0",
-        suggested && "[&_.border]:border-dashed",
+        suggested &&
+          "[&_.border]:border-dashed [&_.border]:border-muted-foreground/40",
       )}
     >
       {renderSuggestedListFieldValue(

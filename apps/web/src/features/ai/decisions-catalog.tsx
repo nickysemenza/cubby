@@ -20,7 +20,7 @@ import {
 } from "~/ui/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import { Row, Stack } from "~/ui/layout";
-import { Overlay } from "~/ui/overlays/overlay";
+import { SidePanel, SidePanelLayout } from "~/ui/overlays/side-panel";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 import { Input } from "~/ui/primitives/input";
@@ -475,6 +475,11 @@ export function DecisionsCatalog({
     },
   });
   const current = rows.find((row) => row.key === selected);
+  const step = (direction: -1 | 1) => {
+    const index = rows.findIndex((row) => row.key === selected);
+    const next = rows[index + direction];
+    if (index >= 0 && next) onSelect(next.key);
+  };
   return (
     <Stack gap="sm">
       <Description size="xs" className="text-muted-foreground">
@@ -490,27 +495,38 @@ export function DecisionsCatalog({
         </Link>
         .
       </Description>
-      <RTable
-        table={table}
-        ariaLabel="Decisions"
-        isLoading={catalog.isLoading}
-        error={catalog.error}
-        embedded
-        onRowClick={(row) => onSelect(row.original.key)}
-        currentRowId={selected}
-        emptyState="No decisions are declared."
-      />
-      <Overlay
-        placement="panel"
-        open={current !== undefined}
-        onOpenChange={(open) => {
-          if (!open) onSelect(undefined);
-        }}
+      <SidePanelLayout
         title={current?.label ?? "Decision"}
-        description={current?.key}
+        onClose={() => onSelect(undefined)}
+        panel={
+          current ? (
+            <SidePanel
+              label="Decision detail"
+              eyebrow="AI decision"
+              title={current.label}
+              code={current.key}
+              onClose={() => onSelect(undefined)}
+              onPrev={() => step(-1)}
+              onNext={() => step(1)}
+            >
+              <div className="p-3">
+                <DecisionDetail row={current} />
+              </div>
+            </SidePanel>
+          ) : null
+        }
       >
-        {current ? <DecisionDetail row={current} /> : null}
-      </Overlay>
+        <RTable
+          table={table}
+          ariaLabel="Decisions"
+          isLoading={catalog.isLoading}
+          error={catalog.error}
+          embedded
+          onRowClick={(row) => onSelect(row.original.key)}
+          currentRowId={selected}
+          emptyState="No decisions are declared."
+        />
+      </SidePanelLayout>
     </Stack>
   );
 }

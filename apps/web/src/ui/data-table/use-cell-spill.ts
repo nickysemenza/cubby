@@ -59,7 +59,7 @@ function outerRail(cell: HTMLElement, source: HTMLElement) {
 }
 
 /** Whether a floating rail paints over the value's text. */
-function railCovers(value: HTMLElement, rail: HTMLElement) {
+export function railCovers(value: HTMLElement, rail: HTMLElement) {
   const range = document.createRange();
   range.selectNodeContents(value);
   const text = range.getBoundingClientRect();
@@ -159,6 +159,9 @@ function railCopy(
     boxShadow: "none",
     pointerEvents: "none",
     visibility: "visible",
+    // A rail standing aside for clipped text is transparent in place; its
+    // copy at the spill's end is the visible one.
+    opacity: "1",
   });
   const controls = [...rail.querySelectorAll<HTMLElement>("button, a")];
   // Only copied controls take the pointer: a decorative glyph (a header's

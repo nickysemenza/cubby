@@ -39,6 +39,7 @@ export function StackedValue({
   primarySpillText,
   secondarySpillText,
   className,
+  secondaryClassName,
   suppressSecondaryHydrationWarning,
 }: {
   primary: string;
@@ -48,6 +49,8 @@ export function StackedValue({
   primarySpillText?: string;
   secondarySpillText?: string;
   className?: string;
+  /** Replaces the muted tone of the second line (an overdue date). */
+  secondaryClassName?: string;
   /** Relative dates can cross a clock boundary between SSR and hydration. */
   suppressSecondaryHydrationWarning?: boolean;
 }) {
@@ -64,7 +67,7 @@ export function StackedValue({
         <span
           data-stacked-line=""
           data-cell-spill-text={secondarySpillText}
-          className={STACKED_SECONDARY_CLASS}
+          className={cn(STACKED_SECONDARY_CLASS, secondaryClassName)}
           suppressHydrationWarning={suppressSecondaryHydrationWarning}
         >
           {secondary}

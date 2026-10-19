@@ -1,9 +1,17 @@
-import { createContext, type ReactNode, useContext, useState } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 
 import { cn } from "~/lib/utils";
 
-import { useCoarsePointer, useRowActive } from "./row-activity";
+import { useCellActive, useCoarsePointer, useRowActive } from "./row-activity";
+import { railCovers } from "./use-cell-spill";
 
 /**
  * One anatomy for every decorated table cell: a value slot that truncates
@@ -16,10 +24,13 @@ import { useCoarsePointer, useRowActive } from "./row-activity";
  * rail never shrinks, lines up at the column's end edge, and sizing adds its
  * width to the column.
  *
- * An `overlay` rail reserves nothing: it mounts only on the active row and
- * sits over the cell's free edge, the start of a right-aligned number or the
- * end of text, where it covers a clipped tail that the hover spill-over then
- * shows in full. Reserved rails put 18px in every cell of 100 list columns.
+ * An `overlay` rail reserves nothing: it mounts only in the hovered or
+ * focused cell of the active row and sits over the cell's free edge, the
+ * start of a right-aligned number or the end of text. It never paints over
+ * a value: when the value is clipped (or its text reaches the rail) the rail
+ * turns transparent and click-through in place, and the hover spill-over
+ * draws its copy after the full value. Keyboard focus inside the rail still
+ * reveals it. Reserved rails put 18px in every cell of 100 list columns.
  * Coarse pointers have no hover, so their rail stays in flow and visible.
  *
  * A floating frame nested in another (a relation workbench inside an
@@ -38,13 +49,31 @@ export function CellFrame({
   className?: string;
 }) {
   const active = useRowActive();
+  const cellActive = useCellActive();
   const coarse = useCoarsePointer();
   const host = useContext(FloatingRail);
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   const floating = overlay && !coarse;
   const nested = floating && host !== undefined;
+  const floatingRailShown = floating && !nested && active && cellActive;
+  const valueRef = useRef<HTMLSpanElement>(null);
+  const railRef = useRef<HTMLSpanElement>(null);
+  const [covers, setCovers] = useState(false);
+  useLayoutEffect(() => {
+    const valueElement = valueRef.current;
+    const rail = railRef.current;
+    if (!floatingRailShown || !valueElement || !rail) return;
+    setCovers(
+      valueElement.scrollWidth > valueElement.clientWidth + 1 ||
+        railCovers(valueElement, rail),
+    );
+  });
   const value = (
-    <span data-cell-value="" className="min-w-0 flex-1 truncate">
+    <span
+      ref={valueRef}
+      data-cell-value=""
+      className="min-w-0 flex-1 truncate"
+    >
       {children}
     </span>
   );
@@ -63,13 +92,18 @@ export function CellFrame({
       )}
       {nested
         ? host && createPortal(trailing, host)
-        : (!floating || active) && (
+        : (!floating || floatingRailShown) && (
             <span
+              ref={railRef}
               data-cell-rail=""
+              data-rail-covers={floating && covers ? "" : undefined}
               className={cn(
                 "flex shrink-0 items-center",
                 floating &&
                   "absolute inset-y-0 end-0 my-auto h-fit rounded-sm bg-(--table-row-surface) shadow-[-6px_0_6px_var(--table-row-surface)] [td.text-right_&]:start-0 [td.text-right_&]:end-auto [td.text-right_&]:shadow-[6px_0_6px_var(--table-row-surface)]",
+                floating &&
+                  covers &&
+                  "pointer-events-none opacity-0 focus-within:pointer-events-auto focus-within:opacity-100",
               )}
             >
               {floating && <span ref={setSlot} className="contents" />}

@@ -8,14 +8,25 @@ import { createContext, useContext, useSyncExternalStore } from "react";
  */
 export function createRowActivityStore() {
   let activeId: string | null = null;
+  let activeCell: string | null = null;
   const listeners = new Set<() => void>();
+  const notify = () => {
+    for (const listener of listeners) listener();
+  };
   return {
     activate(id: string) {
       if (id === activeId) return;
       activeId = id;
-      for (const listener of listeners) listener();
+      notify();
     },
     isActive: (id: string) => activeId === id,
+    /** The last hovered or focused cell, sticky like the active row. */
+    activateCell(key: string) {
+      if (key === activeCell) return;
+      activeCell = key;
+      notify();
+    },
+    isCellActive: (key: string) => activeCell === key,
     subscribe(listener: () => void) {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -39,6 +50,29 @@ export function useRowActivity(rowId: string) {
     () => false,
   );
   return { active, activate: () => store.activate(rowId) };
+}
+
+/** The surrounding table cell's activity key; null outside a table cell. */
+const CellKeyContext = createContext<string | null>(null);
+
+export const CellKeyProvider = CellKeyContext.Provider;
+
+/** One key per cell of a table: its row id and column id. */
+export const tableCellKey = (rowId: string, columnId: string) =>
+  `${rowId}\u0000${columnId}`;
+
+/**
+ * Whether the surrounding cell is the one being worked in (last hovered or
+ * focused). Outside a table cell every value counts as active.
+ */
+export function useCellActive(): boolean {
+  const key = useContext(CellKeyContext);
+  const store = useContext(RowActivityStoreContext);
+  return useSyncExternalStore(
+    store.subscribe,
+    () => key === null || store.isCellActive(key),
+    () => key === null,
+  );
 }
 
 /**

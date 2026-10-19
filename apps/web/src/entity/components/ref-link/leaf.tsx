@@ -26,6 +26,7 @@ import {
 } from "~/entity/preview/preview-entities";
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { cn } from "~/lib/utils";
+import { PersonAvatar } from "~/ui/common/person-avatar";
 import { ExternalLinkIcon } from "~/ui/external-link";
 import {
   PreviewCard,
@@ -240,6 +241,9 @@ const isHoverPreviewEntity = (
 ): entity is HoverPreviewEntity =>
   hoverPreviewEntities.some((candidate) => candidate === entity);
 
+/** Entities whose records are people: they lead with an initials avatar. */
+const PERSON_ENTITIES: ReadonlySet<Entity> = new Set<Entity>(["ledgerParty"]);
+
 export type ChipRefLinkProps = {
   emoji?: string | null;
   variant: "chip";
@@ -281,6 +285,45 @@ export function ChipRefLink({
     entityId: id,
   });
   const image = displayImage === undefined ? providedImage : displayImage;
+  // A person reads by their initials disc, never a generic entity icon.
+  const avatar = PERSON_ENTITIES.has(entity) ? (
+    <PersonAvatar id={id} name={label} />
+  ) : null;
+  // One name may take a second line in a 32px row (15px + 15px) before it
+  // clamps; the cell spill shows the rest. `wrap` lets bounded panels flow.
+  const labelClass = wrap
+    ? "break-words whitespace-normal"
+    : "line-clamp-2 break-words whitespace-normal leading-[15px]";
+  if (avatar) {
+    const text = (
+      <span className={cn("min-w-0", compact ? "truncate" : labelClass)}>
+        {label}
+      </span>
+    );
+    const className = "inline-flex max-w-full min-w-0 items-center gap-1";
+    return isHoverPreviewEntity(entity) ? (
+      <PreviewRefLink
+        entity={entity}
+        id={id}
+        displayImage={image}
+        showIdentityMark={false}
+        className={tableLinkVariants({ className })}
+      >
+        {avatar}
+        {text}
+      </PreviewRefLink>
+    ) : (
+      <TableRefLink
+        to={entities[entity].routes.detail}
+        params={entityDetailParams(id)}
+        title={label}
+        className={className}
+      >
+        {avatar}
+        {text}
+      </TableRefLink>
+    );
+  }
   if (compact) {
     const chip =
       "inline-flex max-w-full min-w-0 rounded-sm bg-muted px-1 text-[0.6875rem] leading-3";
@@ -322,14 +365,7 @@ export function ChipRefLink({
         }
         className={tableLinkVariants({ className: "max-w-full min-w-0" })}
       >
-        <span
-          className={cn(
-            "min-w-0",
-            wrap ? "break-words whitespace-normal" : "truncate",
-          )}
-        >
-          {label}
-        </span>
+        <span className={cn("min-w-0", labelClass)}>{label}</span>
       </PreviewRefLink>
     );
   return (
@@ -352,14 +388,7 @@ export function ChipRefLink({
           />
         }
       />
-      <span
-        className={cn(
-          "min-w-0",
-          wrap ? "break-words whitespace-normal" : "truncate",
-        )}
-      >
-        {label}
-      </span>
+      <span className={cn("min-w-0", labelClass)}>{label}</span>
     </TableRefLink>
   );
 }
