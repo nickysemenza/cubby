@@ -951,7 +951,7 @@ export const importOperationStatusOut = z.object({
   runId: runShortcode,
   operationId: importOperationId,
   kind: z.string(),
-  state: z.enum(["started", "paused_approval", "completed", "failed"]),
+  state: z.enum(["started", "completed", "failed"]),
   result: z.json().nullable(),
   error: z.string().nullable(),
   startedAt: z.iso.datetime(),

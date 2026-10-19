@@ -39,7 +39,7 @@ export async function requestCatchUp(
 
 /**
  * Resumes paused or lost Runs (AI work, step-ledger maintenance and Sweeps,
- * budget- and approval-paused imports). The backlog drains themselves belong
+ * budget-paused imports). The backlog drains themselves belong
  * to the `maintenance` Run (`domains/maintenance/service/maintenance-run`), so
  * app open and the cron never run them twice.
  */
@@ -58,21 +58,10 @@ export async function recoverMissedWork(
   const aiWork = await import("~/server/domains/run/service/ai-work");
   await aiWork.recoverManualAiWork(db);
   await aiWork.resumeFundingPausedRuns(db);
-  const results = await Promise.allSettled([
-    (
-      await import("~/server/domains/purchase-import/repo/run-service")
-    ).resumeApprovalPausedRuns(db),
-    // Operator recovery with its own fixed cutoff; the nightly retirement is
-    // a maintenance step.
-    coordinatorRetireBefore
-      ? retireCoordinators(db, coordinatorRetireBefore)
-      : Promise.resolve(null),
-  ]);
-  const errors = results
-    .filter((result) => result.status === "rejected")
-    .map((result) => result.reason);
-  if (errors.length)
-    throw new AggregateError(errors, "Background recovery failed");
+  // Operator recovery with its own fixed cutoff; the nightly retirement is
+  // a maintenance step.
+  if (coordinatorRetireBefore)
+    await retireCoordinators(db, coordinatorRetireBefore);
 }
 
 /** Expires stale import Runs, fails Workflow Runs whose instance ended, prunes routine history. */

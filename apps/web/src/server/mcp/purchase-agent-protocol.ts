@@ -160,25 +160,18 @@ export async function executePurchaseAgentMutation<T>(input: {
         // SAFETY: the same tool, stable operation ID and exact arguments own this result.
         return operation.result as T;
       }
-      if (operation.state !== "paused_approval")
-        throw new Error(
-          "Mutation outcome is uncertain; inspect operation status",
-        );
+      throw new Error(
+        "Mutation outcome is uncertain; inspect operation status",
+      );
     }
     // Completed operations are read-only replays even after the Run stops.
-    if (
-      lockedRun?.retiredAt ||
-      !lockedRun ||
-      !["running", "paused_approval"].includes(lockedRun.status)
-    )
+    if (lockedRun?.retiredAt || !lockedRun || lockedRun.status !== "running")
       throw new Error(`Purchase-agent run is fenced in ${lockedRun?.status}`);
-    if (!operation) {
-      await insertOperation(database, {
-        ...operationKey,
-        kind: `mcp:${input.toolName}`,
-        inputFingerprint: argsFingerprint,
-      });
-    }
+    await insertOperation(database, {
+      ...operationKey,
+      kind: `mcp:${input.toolName}`,
+      inputFingerprint: argsFingerprint,
+    });
     const transactionalExtra: ToolExtra = {
       ...input.baseExtra,
       http: {

@@ -92,11 +92,11 @@ export async function publishBackgroundTasks(
   tasks: readonly BackgroundTaskInput[],
   options: PublishOptions,
 ): Promise<BackgroundTaskReceipt> {
-  if (tasks.length === 0) return { transport: "queue", count: 0 };
+  if (tasks.length === 0) return { count: 0 };
   const queue = requireBackgroundQueue(options.source);
   await sendToQueue(queue, tasks);
   log.info(`published count=${tasks.length} source=${options.source}`);
-  return { transport: "queue", count: tasks.length };
+  return { count: tasks.length };
 }
 
 function requireBackgroundQueue(source: string): BackgroundQueueProducer {

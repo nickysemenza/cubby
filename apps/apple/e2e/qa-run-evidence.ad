@@ -13,15 +13,15 @@ wait "label=Runs" 30000
 click "label=Runs"
 wait "id=browse.run.list" 60000
 # A row exposes its combined label (title, shortcode), not its identifier.
-wait "label=\"Synthetic Simulator Member · Photo inventory, ${APPROVAL_RUN_ID}\"" 60000
-click "label=\"Synthetic Simulator Member · Photo inventory, ${APPROVAL_RUN_ID}\""
+wait "label=\"Synthetic Simulator Member · Photo inventory, ${PAUSED_RUN_ID}\"" 60000
+click "label=\"Synthetic Simulator Member · Photo inventory, ${PAUSED_RUN_ID}\""
 
 wait "role=Button label=More" 90000
 click "role=Button label=More"
 wait "role=Button label=\"Transcript, logs and AI usage\"" 90000
 click "role=Button label=\"Transcript, logs and AI usage\""
 wait text "Durable transcript" 90000
-wait text "synthetic-approval-1" 90000
+wait text "synthetic-operation-1" 90000
 wait absent "label=\"Loading Run evidence\"" 90000
 is absent "text=\"Couldn’t load Run evidence\""
 wait text "run.started" 90000
@@ -33,7 +33,7 @@ click "role=Button label=More"
 wait "role=Button label=\"Transcript, logs and AI usage\"" 90000
 click "role=Button label=\"Transcript, logs and AI usage\""
 wait text "Durable transcript" 90000
-wait text "synthetic-approval-1" 90000
+wait text "synthetic-operation-1" 90000
 wait absent "label=\"Loading Run evidence\"" 90000
 is absent "text=\"Couldn’t load Run evidence\""
 wait text "run.started" 90000

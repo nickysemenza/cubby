@@ -19,7 +19,6 @@ export function workRunLifecycle(
     case "paused":
     case "paused_auth":
     case "paused_offline":
-    case "paused_approval":
     case "needs_review":
       return "paused";
   }

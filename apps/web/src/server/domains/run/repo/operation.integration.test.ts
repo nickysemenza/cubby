@@ -1,7 +1,7 @@
 import { commitPurchaseImportInput } from "@cubby/schemas/purchase-import";
 import { sha256Hex, sha256Uuid } from "@cubby/shared/sha256";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -187,10 +187,8 @@ describe("RunOperation rows written by earlier code", () => {
     });
   });
 
-  /** A paused `mcp:<tool>` proposal as earlier code stored it, approved by a member. */
-  const seedMcpMutation = async (
-    decision: "approve" | "reject" = "approve",
-  ) => {
+  /** An `mcp:<tool>` proposal as earlier code stored it, rejected by a member. */
+  const seedRejectedMcpMutation = async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic paused member",
       kind: "member",
@@ -207,7 +205,7 @@ describe("RunOperation rows written by earlier code", () => {
       purpose: "mail_import",
       trigger: "manual",
       agentSessionId: "synthetic-paused-session",
-      status: "paused_approval",
+      status: "running",
     });
     const toolName = "statement_rows.update";
     const params = {
@@ -229,7 +227,8 @@ describe("RunOperation rows written by earlier code", () => {
       operationId,
       kind: `mcp:${toolName}`,
       inputFingerprint: argsFingerprint,
-      state: "paused_approval",
+      state: "failed",
+      error: "Rejected by member",
       result: { approvalProposal },
     });
     await getDb(ctx.db)
@@ -244,13 +243,6 @@ describe("RunOperation rows written by earlier code", () => {
         evidenceFingerprint: argsFingerprint,
         state: "pending",
       });
-
-    if (decision === "reject") {
-      await getDb(ctx.db)
-        .update(runOperation)
-        .set({ state: "failed", error: "Rejected by member" })
-        .where(eq(runOperation.runId, run.id));
-    }
 
     let executions = 0;
     const execute = () =>
@@ -282,20 +274,9 @@ describe("RunOperation rows written by earlier code", () => {
     };
   };
 
-  it("executes a paused MCP mutation proposed by earlier code without a new approval", async () => {
-    const { run, operationId, execute, executions } = await seedMcpMutation();
-    await expect(execute()).resolves.toEqual({ accepted: true });
-    await expect(execute()).resolves.toEqual({ accepted: true });
-    expect(executions()).toBe(1);
-    expect(await stored(run.id, operationId)).toMatchObject({
-      state: "completed",
-      result: { accepted: true },
-    });
-  });
-
   it("keeps a rejected persisted mutation refused on every replay without an effect", async () => {
     const { run, operationId, execute, executions } =
-      await seedMcpMutation("reject");
+      await seedRejectedMcpMutation();
     const before = await stored(run.id, operationId);
     expect(before).toMatchObject({
       state: "failed",
@@ -305,50 +286,6 @@ describe("RunOperation rows written by earlier code", () => {
     await expect(execute()).rejects.toThrow("Mutation outcome is uncertain");
     expect(executions()).toBe(0);
     expect(await stored(run.id, operationId)).toEqual(before);
-  });
-
-  it("locks the Run before the operation when executing a historical paused mutation", async () => {
-    const { run, operationId, execute, executions } = await seedMcpMutation();
-    let pending: Promise<unknown> | undefined;
-    // A transaction holding the Run lock stands in for `controlRun`, which
-    // locks the Run before the operation. The mutation must queue behind the
-    // Run lock without first taking the operation row; otherwise the two wait
-    // on each other.
-    await getDb(ctx.db).transaction(async (tx) => {
-      await tx
-        .select({ id: runTable.id })
-        .from(runTable)
-        .where(eq(runTable.id, run.id))
-        .for("update");
-      pending = execute();
-      pending.catch(() => undefined);
-      await expect
-        .poll(
-          async () => {
-            const waiting = await getDb(ctx.db).execute<{ count: number }>(
-              sql`SELECT count(*)::int AS count FROM pg_stat_activity
-                  WHERE datname = current_database() AND wait_event_type = 'Lock'`,
-            );
-            return waiting.rows[0]?.count;
-          },
-          { timeout: 10_000 },
-        )
-        .toBe(1);
-      await expect(
-        tx
-          .select({ id: runOperation.id })
-          .from(runOperation)
-          .where(
-            and(
-              eq(runOperation.runId, run.id),
-              eq(runOperation.operationId, operationId),
-            ),
-          )
-          .for("update", { noWait: true }),
-      ).resolves.toHaveLength(1);
-    });
-    await expect(pending).resolves.toEqual({ accepted: true });
-    expect(executions()).toBe(1);
   });
 
   it("ignores a re-sent device debug-event batch instead of duplicating it", async () => {

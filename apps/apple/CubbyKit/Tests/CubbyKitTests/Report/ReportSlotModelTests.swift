@@ -580,7 +580,7 @@ struct ReportSlotModelTests {
 
     @Test("A status the screen does not show asks the screen to reload once")
     func staleRecordIsReportedOnce() async throws {
-        let service = FakeReports([try report(live: true, status: "paused_approval")])
+        let service = FakeReports([try report(live: true, status: "paused_auth")])
         let model = model(service, shown: "running")
         var reloads = 0
         model.onRecordStale = { reloads += 1 }

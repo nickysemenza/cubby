@@ -1,4 +1,4 @@
-import { buildActorContext, type ActorContext } from "@cubby/schemas/context";
+import type { ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
 import {
   imageId,
@@ -1107,8 +1107,6 @@ export async function claimPhotoInventoryWork(db: Database, runId: string) {
   const scope = await loadRunScope(db, runId);
   if (scope.public.purpose !== "photo_inventory")
     throw new Error("Photo work selection requires a photo inventory run");
-  if (scope.public.status === "paused_approval")
-    return { kind: "paused_approval" as const };
   if (scope.public.status === "paused_auth")
     return { kind: "paused_auth" as const };
   if (scope.public.status === "paused_offline")
@@ -1857,7 +1855,6 @@ export async function controlRun(
   db: Database,
   actor: ActorContext,
   rawInput: z.input<typeof runControlInput>,
-  precondition?: { status: "paused_approval" },
 ) {
   const input = runControlInput.parse(rawInput);
   const scope = await loadRunScopeByShortcode(db, input.runPublicId);
@@ -1928,9 +1925,6 @@ export async function controlRun(
       throw new Error("Purchase import control account changed.");
     if (locked.ledgerPartyId !== scope.ledgerPartyId)
       throw new Error("Purchase import control owner changed.");
-    // Automated recovery must not undo a member's newer pause or completion.
-    if (precondition && locked.status !== precondition.status)
-      return { publicId: input.runPublicId, status: locked.status };
     if (input.action === "restart") {
       if (
         !new Set([
@@ -2259,7 +2253,7 @@ export async function controlRun(
         !new Set(
           input.action === "run_now_paid"
             ? ["paused", "paused_auth"]
-            : ["paused", "paused_auth", "paused_offline", "paused_approval"],
+            : ["paused", "paused_auth", "paused_offline"],
         ).has(locked.status)
       )
         throw new Error(`Purchase import run is fenced in ${locked.status}`);
@@ -2288,53 +2282,4 @@ export async function controlRun(
 
     throw new Error(`Unsupported Run control: ${input.action}`);
   });
-}
-
-/** Routine agent work no longer requires a second per-operation decision. */
-export async function resumeApprovalPausedRuns(db: Database) {
-  const { dispatchStartedRun } = await import("./dispatch");
-  const pending = await getDb(db)
-    .select({
-      shortcode: runTable.shortcode,
-      actorUserId: runTable.actorUserId,
-    })
-    .from(runTable)
-    .where(
-      and(
-        eq(runTable.status, "paused_approval"),
-        inArray(runTable.purpose, agentImportRunPurpose.options),
-        isNull(runTable.retiredAt),
-        notDeleted(runTable),
-      ),
-    )
-    .orderBy(asc(runTable.startedAt), asc(runTable.id))
-    .limit(50);
-  const errors: unknown[] = [];
-  for (const row of pending) {
-    try {
-      const result = await controlRun(
-        db,
-        buildActorContext(row.actorUserId, "system"),
-        {
-          runPublicId: row.shortcode,
-          action: "resume",
-        },
-        { status: "paused_approval" },
-      );
-      if (
-        "dispatchRunId" in result &&
-        result.dispatchRunId &&
-        result.dispatchEventId
-      )
-        await dispatchStartedRun(db, {
-          id: result.dispatchRunId,
-          eventId: result.dispatchEventId,
-          purpose: result.dispatchPurpose,
-        });
-    } catch (error) {
-      errors.push(error);
-    }
-  }
-  if (errors.length)
-    throw new AggregateError(errors, "Legacy Run recovery failed");
 }

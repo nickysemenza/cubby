@@ -220,13 +220,6 @@ export const problemFilterSemantics = {
     { columnId: "status", kind: "multiselect" },
     { columnId: "processingIssue", kind: "multiselect" },
     { columnId: "entity", field: "referencePresenceFilter", kind: "presence" },
-    {
-      columnId: "createdAt",
-      kind: "range",
-      range: { from: "createdFrom", to: "createdTo" },
-      expand: (value) =>
-        value === "olderThan1h" ? { uploadedAgeHoursMin: 1 } : {},
-    },
   ],
   vendor: [
     {

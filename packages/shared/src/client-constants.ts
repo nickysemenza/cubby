@@ -37,7 +37,6 @@ export const ACTIVE_RUN_STATUSES = [
   "paused",
   "paused_auth",
   "paused_offline",
-  "paused_approval",
 ] as const;
 
 /**

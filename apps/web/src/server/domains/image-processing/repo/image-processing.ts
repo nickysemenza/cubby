@@ -65,6 +65,9 @@ import {
   recordImageProcessingEvent,
 } from "./image-processing-history";
 
+/** A retryable failure on this attempt or later is terminal and keeps its error. */
+const IMAGE_PROCESSING_MAX_ATTEMPTS = 3;
+
 // Cloud eligibility no longer gates Apple subject lifting; prior skipped work can be rescheduled.
 export const IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION = 2;
 // This policy revision changes eligibility, not the cutout format or algorithm.
@@ -143,7 +146,6 @@ export type ClaimedImageProcessingJob = {
   kind: ImageProcessingJobKind;
   sourceContentHash: string;
   processorRevision: number;
-  attempts: number;
   attemptId: string;
   derivativeId: string | null;
   originalKey: string;
@@ -413,7 +415,6 @@ export async function claimImageProcessingJob(
         kind: imageProcessingJob.kind,
         sourceContentHash: imageProcessingJob.sourceContentHash,
         processorRevision: imageProcessingJob.processorRevision,
-        attempts: imageProcessingJob.attempts,
         previousAttemptId: imageProcessingJob.attemptId,
         submissionId: imageProcessingJob.submissionId,
         derivativeId: imageProcessingJob.derivativeId,
@@ -466,7 +467,8 @@ export async function claimImageProcessingJob(
             eq(imageProcessingJob.state, "waiting_for_device"),
           ),
           // The no-device cooldown throttles queue wakeups, not a capable device's reconnect.
-          // Pending retries still honor backoff; only capability-scoped pulls bypass waiting.
+          // Pending retries and backoffs still honor `nextAttemptAt`; only
+          // capability-scoped pulls bypass `waiting_for_device`.
           input.processorRevisions !== undefined
             ? or(
                 lte(imageProcessingJob.nextAttemptAt, now),
@@ -580,7 +582,6 @@ export async function getLeasedImageProcessingJobContext(
       kind: imageProcessingJob.kind,
       processorRevision: imageProcessingJob.processorRevision,
       runId: imageProcessingJob.runId,
-      attempts: imageProcessingJob.attempts,
       inputKey: imageProcessingAttempt.inputKey,
     })
     .from(imageProcessingJob)
@@ -614,21 +615,28 @@ export async function getLeasedImageProcessingJobContext(
 
 /**
  * A lease with no executor is not an attempt: the attempt row and
- * `job.attempts` are written by `assignImageProcessingExecutor`. The waiting
- * event uses a per-job key so idle retry cycles do not append history.
+ * `job.attempts` are written by `assignImageProcessingExecutor`.
  */
-export async function markImageProcessingWaitingForDevice(
+async function releaseUnassignedImageProcessingLease(
   db: Database,
   input: { jobId: string; attemptId: string },
+  release: {
+    state: "waiting_for_device" | "pending";
+    lastError?: string;
+    event: Parameters<typeof recordImageProcessingEvent>[1];
+  },
 ): Promise<void> {
   await withTransaction(db, async (tx) => {
     const rows = await tx
       .update(imageProcessingJob)
       .set({
-        state: "waiting_for_device",
+        state: release.state,
         attemptId: null,
         leaseExpiresAt: null,
         nextAttemptAt: sql`now() + interval '1 minute'`,
+        ...(release.lastError !== undefined && {
+          lastError: release.lastError,
+        }),
       })
       .where(
         and(
@@ -638,13 +646,47 @@ export async function markImageProcessingWaitingForDevice(
         ),
       )
       .returning({ id: imageProcessingJob.id });
-    if (rows.length) {
-      await recordImageProcessingEvent(tx, {
-        jobId: input.jobId,
-        eventKey: "dispatch:waiting",
-        event: "dispatch.waiting",
-      });
-    }
+    if (rows.length) await recordImageProcessingEvent(tx, release.event);
+  });
+}
+
+/**
+ * No capable device was reachable. A capable device's pull claims this row
+ * before the cooldown; the per-job event key keeps idle cycles out of history.
+ */
+export async function markImageProcessingWaitingForDevice(
+  db: Database,
+  input: { jobId: string; attemptId: string },
+): Promise<void> {
+  await releaseUnassignedImageProcessingLease(db, input, {
+    state: "waiting_for_device",
+    event: {
+      jobId: input.jobId,
+      eventKey: "dispatch:waiting",
+      event: "dispatch.waiting",
+    },
+  });
+}
+
+/**
+ * A capable device claimed the row but it could not be handed over. The row
+ * returns to `pending` so the cooldown holds: a waiting row would be reclaimed
+ * by the same device's next pull, rotating subject-lift output keys each time.
+ */
+export async function backOffImageProcessingLease(
+  db: Database,
+  input: { jobId: string; attemptId: string; reason: string },
+): Promise<void> {
+  await releaseUnassignedImageProcessingLease(db, input, {
+    state: "pending",
+    lastError: input.reason,
+    event: {
+      jobId: input.jobId,
+      eventKey: `${input.attemptId}:backoff`,
+      event: "dispatch.backoff",
+      level: "error",
+      details: { reason: input.reason },
+    },
   });
 }
 
@@ -913,6 +955,7 @@ type CompletionJob = {
   kind: ImageProcessingJobKind;
   state: ImageProcessingJobState;
   attemptId: string | null;
+  attempts: number;
   leaseValid: boolean;
   sourceContentHash: string;
   processorRevision: number;
@@ -976,31 +1019,45 @@ async function adoptTerminalCompletion(
     result: outcome,
   };
   if (outcome.status === "failed") {
+    // An unassigned failure gets its attempt row after adoption; count it now.
+    const [recorded] = await tx
+      .select({ id: imageProcessingAttempt.id })
+      .from(imageProcessingAttempt)
+      .where(eq(imageProcessingAttempt.id, input.result.attemptId))
+      .limit(1);
+    const attempts = job.attempts + (recorded ? 0 : 1);
+    // An executor's retryable flag cannot outlast the shared budget: a
+    // deterministic failure reported as retryable would otherwise loop forever.
+    const retry = outcome.retryable && attempts < IMAGE_PROCESSING_MAX_ATTEMPTS;
+    const reason =
+      outcome.retryable && !retry
+        ? `${outcome.reason} (stopped after ${attempts} attempts)`
+        : outcome.reason;
     await tx
       .update(imageProcessingJob)
       .set(
-        outcome.retryable
+        retry
           ? {
               ...base,
               state: "pending",
               nextAttemptAt: sql`now() + interval '1 minute'`,
-              lastError: outcome.reason,
+              lastError: reason,
             }
           : {
               ...base,
               state: "failed",
               completedAt: sql`now()`,
-              lastError: outcome.reason,
+              lastError: reason,
             },
       )
       .where(eq(imageProcessingJob.id, job.id));
-    if (!outcome.retryable && job.derivativeId) {
+    if (!retry && job.derivativeId) {
       await tx
         .update(imageDerivative)
-        .set({ status: "failed", failureReason: outcome.reason })
+        .set({ status: "failed", failureReason: reason })
         .where(eq(imageDerivative.id, job.derivativeId));
     }
-    if (!outcome.retryable && input.orphanOutputKey) {
+    if (!retry && input.orphanOutputKey) {
       await tx
         .insert(imageProcessingOrphan)
         .values({
@@ -1129,6 +1186,7 @@ export async function completeImageProcessingJob(
         kind: imageProcessingJob.kind,
         state: imageProcessingJob.state,
         attemptId: imageProcessingJob.attemptId,
+        attempts: imageProcessingJob.attempts,
         leaseValid: sql<boolean>`${imageProcessingJob.leaseExpiresAt} > now()`,
         sourceContentHash: imageProcessingJob.sourceContentHash,
         processorRevision: imageProcessingJob.processorRevision,

@@ -330,7 +330,7 @@ export const runChildren = [
     checks: [
       {
         name: "RunOperation_state_check",
-        sql: "{state} IN ('started', 'paused_approval', 'completed', 'failed')",
+        sql: "{state} IN ('started', 'completed', 'failed')",
       },
     ],
   }),

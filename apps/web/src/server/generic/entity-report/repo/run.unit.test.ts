@@ -747,7 +747,6 @@ describe("isLiveRunStatus", () => {
     ["running", true],
     ["paused_auth", true],
     ["paused_offline", true],
-    ["paused_approval", true],
     ["needs_review", false],
     ["completed", false],
     ["failed", false],

@@ -137,27 +137,15 @@ const localStore = new LocalCacheStore();
 
 const ignoreUsage = () => undefined;
 
-// Entries published before usage retention hold the bare answer. The marker
-// key cannot occur in an answer, so both shapes stay readable through the TTL
-// instead of recomputing every legacy entry.
+// Any other stored shape (a bare pre-usage answer) is rejected, invalidated and
+// recomputed like any other invalid entry.
 const ENTRY_MARKER = "$cubbyResponseCacheEntry";
 const ENTRY_VERSION = 2;
-const versionedEntrySchema = z.object({
+const entrySchema = z.object({
   [ENTRY_MARKER]: z.literal(ENTRY_VERSION),
   value: jsonSchema,
   usage: aiAvoidedUsageSchema.nullable(),
 });
-
-function readEntry(stored: string): {
-  value: JsonValue;
-  usage: AiAvoidedUsage | null;
-} {
-  const value = jsonSchema.parse(JSON.parse(stored));
-  const entry = versionedEntrySchema.safeParse(value);
-  return entry.success
-    ? { value: entry.data.value, usage: entry.data.usage }
-    : { value, usage: null };
-}
 
 /** Every call that produced the answer; a hit avoids all of them. */
 function sumUsage(usage: readonly AiAvoidedUsage[]): AiAvoidedUsage {
@@ -289,7 +277,7 @@ export async function withAiResponseCache<T>(args: {
     status: ApplicationCacheStatus,
     recordUsage: (usage: AiAvoidedUsage) => void,
   ): Promise<T>;
-  /** `avoided` is null for entries published before usage was retained. */
+  /** `avoided` is null when the calls that produced the entry recorded no usage. */
   onHit?(durationMs: number, avoided: AiAvoidedUsage | null): Promise<void>;
   /** A batch may dispatch its owned misses while another request owns this key. */
   onWait?(): void;
@@ -321,7 +309,7 @@ export async function withAiResponseCache<T>(args: {
       let result: T;
       let avoided: AiAvoidedUsage | null;
       try {
-        const entry = readEntry(claim.value);
+        const entry = entrySchema.parse(JSON.parse(claim.value));
         avoided = entry.usage;
         result = args.validate(entry.value);
       } catch (error) {

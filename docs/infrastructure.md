@@ -627,8 +627,12 @@ attempts, for the normalization job's verified JPEG snapshot.
 
 An available Apple companion claims compatible waiting image jobs immediately
 when it connects. The queue's no-device cooldown does not delay that claim;
-pending retries still honor backoff. Device participation and advertised image
-capabilities both gate execution. The claim policy belongs to
+pending retries still honor backoff. A job the device claimed but could not
+take (refused assignment, failed command preparation) returns to `pending`
+with that backoff, so the same device cannot reclaim it on its next pull.
+Device participation and advertised image capabilities both gate execution.
+A retryable failure from any executor becomes terminal `failed` on its third
+attempt, keeping its last error. The claim and retry policy belongs to
 `server/domains/image-processing/repo/image-processing.ts`.
 
 Cloud image execution uses `cubby-image-cloud`, separate from
