@@ -1,0 +1,43 @@
+apps/web/src/entity/entity-detail/inspector-frame.tsx
+  s_9b829d577c7e4c::t_5014b8ac5285c1 21,68-69,89,131-132
+apps/web/src/entity/table/list-query-context.tsx
+  s_9b829d577c7e4c::t_dda3006ffb7aa7 92-94
+apps/web/src/entity/table/list-workbench.unit.test.tsx
+  s_9b829d577c7e4c::t_972383267f4cd7 87-89
+apps/web/src/entity/table/table-row-step.unit.test.tsx
+  s_9b829d577c7e4c::t_16cf878398bfa4 1-74
+apps/web/src/entity/table/table.tsx
+  s_9b829d577c7e4c::t_a1d69fa6b99126 9,60,1033,1035-1045,1339-1345
+apps/web/src/server/generic/list/repo/list-facets.integration.test.ts
+  s_9b829d577c7e4c::t_d6cc2ebd5dd363 17-18,64-67,73
+apps/web/src/server/generic/list/repo/list.ts
+  s_9b829d577c7e4c::t_531d1cedf72b29 2006-2008,2036-2042
+apps/web/src/ui/combobox/picker.tsx
+  s_9b829d577c7e4c::t_daa0a1baadf2e4 1208-1221
+apps/web/src/ui/combobox/picker.unit.test.tsx
+  s_9b829d577c7e4c::t_ab4b3cb8f5761f 16,777-802
+apps/web/src/ui/data-table/use-data-table-controller.ts
+  s_9b829d577c7e4c::t_b5801d6d5c099e 196,232
+apps/web/src/ui/overlays/side-panel.tsx
+  s_9b829d577c7e4c::t_3570e8c0c8b94c 7-8,218-230,236
+apps/web/tests/e2e/enum-colors-and-counts.spec.ts
+  s_9b829d577c7e4c::t_a47f4cdc287037 63-65
+apps/web/tests/e2e/filters-menu.spec.ts
+  s_9b829d577c7e4c::t_94569ee843bb96 28-30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d3c20edd70f7586554d6641fcae5eae99affedd8",
+  "prompts": {},
+  "sessions": {
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
