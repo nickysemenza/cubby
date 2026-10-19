@@ -60,14 +60,17 @@ describe("createLogger", () => {
 
   it("scrubs credentials through nested diagnostics without dropping SQL parameters", () => {
     const out = sink();
-    const error = new Error("Authorization: Bearer synthetic-token", {
+    const error = new Error("Authorization: Bearer synthetic-token-0000", {
       cause: new Error("postgres://user:synthetic-password@db.invalid/example"),
     });
-    createLogger("request", { token: "synthetic-token" }, out).warn("failed", {
-      errors: [error],
-      params: ["synthetic fixture"],
-      headers: { authorization: "Bearer synthetic-token" },
-    });
+    createLogger("request", { token: "synthetic-token-0000" }, out).warn(
+      "failed",
+      {
+        errors: [error],
+        params: ["synthetic fixture"],
+        headers: { authorization: "Bearer synthetic-token-0000" },
+      },
+    );
     const payload = JSON.stringify(out.warn.mock.calls[0]?.[1]);
     expect(payload).not.toContain("synthetic-token");
     expect(payload).not.toContain("synthetic-password");
@@ -78,7 +81,7 @@ describe("createLogger", () => {
   it("scrubs credentials when an exception is logged as the message", () => {
     const out = sink();
     createLogger("request", {}, out).error(
-      "upstream failed: Bearer synthetic-token",
+      "upstream failed: Bearer synthetic-token-0000",
     );
     expect(out.error).toHaveBeenCalledWith(
       "[request] upstream failed: Bearer [REDACTED]",

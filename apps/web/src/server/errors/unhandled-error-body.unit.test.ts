@@ -11,7 +11,7 @@ const genericH3Body = () =>
 describe("withUnhandledErrorBody", () => {
   it("replaces the generic 500 JSON body with the scrubbed thrown error", async () => {
     const error = new Error(
-      "runs[0].publicId expected string, got undefined; Authorization: Bearer abc",
+      "runs[0].publicId expected string, got undefined; Authorization: Bearer synthetic-bearer-0000",
     );
     const response = await withUnhandledErrorBody(genericH3Body(), error);
 
