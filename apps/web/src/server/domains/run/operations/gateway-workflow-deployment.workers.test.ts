@@ -5,6 +5,18 @@ import { describe, expect, it, vi } from "vitest";
 // The version authority must be the DO's currently running code, and a lost
 // create response must reuse the same search successor rather than duplicate it.
 describe("Workflow deployment authority", () => {
+  it("can await its own recovery-scheduling RPC without holding a concurrency gate", async () => {
+    const name = crypto.randomUUID();
+    const stub = env.AI_GATEWAY_EGRESS.getByName(name);
+    await runInDurableObject(stub, async (_instance, state) => {
+      await env.AI_GATEWAY_EGRESS.getByName(name).scheduleAiWorkRecovery();
+      const pending =
+        await state.storage.get<Record<string, string>>("manualAiWorkWakes");
+      expect(pending?.authorization).toBeTypeOf("string");
+      expect(await state.storage.getAlarm()).not.toBeNull();
+    });
+  });
+
   it("reads current metadata without relying on the retained AI observation", async () => {
     const stub = env.AI_GATEWAY_EGRESS.getByName(crypto.randomUUID());
     await runInDurableObject(stub, async (instance, state) => {
@@ -24,27 +36,54 @@ describe("Workflow deployment authority", () => {
     });
   });
 
-  it("accepts only an already-created successor and propagates other provider failures", async () => {
+  it("uses documented batch duplicates and propagates other provider failures", async () => {
     const stub = env.AI_GATEWAY_EGRESS.getByName(crypto.randomUUID());
     await runInDurableObject(stub, async (instance) => {
-      const create = vi.fn(async () => {
-        throw new Error("10405: An instance with this ID already exists.");
-      });
+      const createBatch = vi.fn(async () => ({
+        created: [],
+        errors: [
+          {
+            index: 0,
+            id: "synthetic-repair-next",
+            code: 10405,
+            message: "Synthetic duplicate result",
+          },
+        ],
+      }));
       Object.defineProperty(instance, "env", {
-        value: { SEARCH_INDEX_REPAIR: { create } },
+        value: {
+          SEARCH_INDEX_REPAIR: {
+            createBatch,
+            create: async () => {
+              throw new Error("Synthetic opaque duplicate refusal");
+            },
+          },
+        },
       });
       const input = {
         id: "synthetic-repair-next",
         params: { requestedAt: "2026-10-01T00:00:00Z" },
       };
       await instance.continueSearchIndexRepair(input);
-      expect(create).toHaveBeenCalledWith({
-        ...input,
-        retention: { successRetention: "1 day", errorRetention: "7 days" },
+      expect(createBatch).toHaveBeenCalledWith({
+        instances: [
+          {
+            ...input,
+            retention: { successRetention: "1 day", errorRetention: "7 days" },
+          },
+        ],
       });
-      create.mockRejectedValueOnce(
-        new Error("Synthetic Workflow service unavailable"),
-      );
+      createBatch.mockResolvedValueOnce({
+        created: [],
+        errors: [
+          {
+            index: 0,
+            id: input.id,
+            code: 10000,
+            message: "Synthetic Workflow service unavailable",
+          },
+        ],
+      });
       await expect(instance.continueSearchIndexRepair(input)).rejects.toThrow(
         "Synthetic Workflow service unavailable",
       );

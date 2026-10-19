@@ -26,6 +26,7 @@ import { getRequestId } from "~/server/observability/tracing";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import { implementSubscriptionDomain } from "~/server/operation-runtime/subscription-domain.server";
 import { publishBackgroundTasks } from "~/server/workflows/background-tasks/publish";
+import { SEARCH_INDEX_REPAIR_RETENTION } from "~/server/workflows/search-index-repair-retention";
 import { streamSearchIndexRepairWorkflow } from "~/server/workflows/search-index-repair-workflow-adapter";
 
 const log = createLogger("search-index-repair");
@@ -120,10 +121,7 @@ export const searchStreamHandlers = implementSubscriptionDomain(
       const instance = await workflow.create({
         id: crypto.randomUUID(),
         params: { requestedAt },
-        retention: {
-          successRetention: "1 day",
-          errorRetention: "7 days",
-        },
+        retention: SEARCH_INDEX_REPAIR_RETENTION,
       });
       log.info("Workflow started", {
         instanceId: instance.id,

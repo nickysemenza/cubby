@@ -83,6 +83,9 @@ create reply followed by rollback must not let the predecessor resume the same
 checkpoint. Each RPC attempt acquires a fresh DO stub because an exception can
 leave the previous stub permanently broken
 ([Cloudflare error handling](https://developers.cloudflare.com/durable-objects/best-practices/error-handling/)).
+At an instance's first boundary, a mismatch waits once for deployment propagation
+and rechecks before handing off. This bounds zero-progress instance creation
+during version propagation lag instead of immediately relaunching in a tight loop.
 
 Run-backed Workflows reuse `claimWorkflowRun` and the `launchWorkflowRun`
 `expectedAttempt` fence. The same Run retains its cursors, receipts and cancellation;
@@ -90,8 +93,10 @@ only the attempt changes. Cancelled, finished or superseded owners cannot relaun
 The existing stuck-Run reconcile still repairs interrupted dispatches. Search
 repair has no Run: its deterministic successor carries the committed phase,
 cursor, counters and original request timestamp, and its progress subscription
-follows that successor without reporting a premature completion. Instance page
-bounds remain a fallback even without a deploy; idle AI waits recheck within a
+follows that successor without reporting a premature completion.
+Successor creation uses `createBatch`'s documented duplicate code rather than
+matching `create()` error text, so a lost response safely reuses the same instance.
+Instance page bounds remain a fallback even without a deploy; idle AI waits recheck within a
 minute. An active page and its retries can delay cutover until its checkpoint.
 
 This rule first applies to instances created with the boundary check installed.

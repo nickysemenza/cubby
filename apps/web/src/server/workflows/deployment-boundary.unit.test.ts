@@ -10,6 +10,27 @@ import { runDeploymentBoundary } from "./runs/deployment";
 // rollback; only a new boundary observes the replacement deployment. A lookup
 // failure must not silently authorize another page of pinned code.
 describe("Workflow deployment boundaries", () => {
+  // A fresh instance may briefly lag the current DO during deploy propagation;
+  // it must wait and recheck before allocating another zero-progress successor.
+  it("waits for propagation at startup and rechecks before handing off", async () => {
+    const { steps, sleeps } = memoryDurableSteps();
+    let reads = 0;
+    const resume = vi.fn(async () => {});
+    const handedOff = await workflowDeploymentBoundary(steps, {
+      name: "page:0",
+      version: "synthetic-a",
+      initial: true,
+      currentVersion: async () =>
+        ++reads === 1 ? "synthetic-b" : "synthetic-a",
+      continue: resume,
+    });
+    expect(handedOff).toBe(false);
+    expect(sleeps).toEqual([
+      { name: "deployment-settle:page:0", durationMs: 30_000 },
+    ]);
+    expect(resume).not.toHaveBeenCalled();
+  });
+
   // A lost create response followed by rollback must never authorize the
   // predecessor to run another page while its successor owns that checkpoint.
   it("keeps the handoff decision after a lost reply and rollback", async () => {

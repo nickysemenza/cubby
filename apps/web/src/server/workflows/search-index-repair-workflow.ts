@@ -95,6 +95,7 @@ export class SearchIndexRepairWorkflow
             version: this.env.CF_VERSION_METADATA.id,
             currentVersion: () => current().currentDeploymentVersion(),
             force: completedPages >= REPAIR_PAGES_PER_INSTANCE,
+            initial: completedPages === 0,
             continue: () =>
               current().continueSearchIndexRepair({
                 id: nextInstanceId,
