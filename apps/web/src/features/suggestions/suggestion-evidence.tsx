@@ -605,8 +605,8 @@ function TransferPairEvidence({
                     label: "Competes with",
                     value:
                       candidate.against === "outflow"
-                        ? "Money out"
-                        : "Money in",
+                        ? "Money in"
+                        : "Money out",
                   },
                   {
                     label: "Amount",

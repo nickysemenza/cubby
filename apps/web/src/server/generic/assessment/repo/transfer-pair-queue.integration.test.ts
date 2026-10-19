@@ -1,12 +1,12 @@
 import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { dismissItem } from "~/features/suggestions/suggestion-review";
-import { getDb } from "~/server/db/helpers";
+import { getDb, withTransaction } from "~/server/db/helpers";
 import {
   financialAccount,
   financialTransaction,
@@ -15,6 +15,7 @@ import {
   statementRow,
 } from "~/server/db/schema";
 import { updateFinancialAccount } from "~/server/domains/financial-account/repo";
+import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { generateTransferPairSuggestions } from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
 import { labelTransferPairSuggestions } from "~/server/domains/financial-transaction/service/transfer-pair-labels";
 import { readRunSteps } from "~/server/domains/run/repo/run-step";
@@ -86,7 +87,7 @@ describe("transfer pairs in the global queue", () => {
               : cardPayment
                 ? "CARD PAYMENT TO EXAMPLE CARD"
                 : "TRANSFER TO SAVINGS",
-            merchant: null,
+            merchant: "Synthetic clearing",
             sourceCategory: categoryless
               ? null
               : cardPayment
@@ -105,7 +106,7 @@ describe("transfer pairs in the global queue", () => {
               : cardPayment
                 ? "PAYMENT RECEIVED FROM CHECKING"
                 : "TRANSFER FROM CHECKING",
-            merchant: null,
+            merchant: "Synthetic clearing",
             sourceCategory: categoryless
               ? null
               : cardPayment
@@ -178,6 +179,11 @@ describe("transfer pairs in the global queue", () => {
       limit: 100,
     });
     expect(page.items).toHaveLength(1);
+    const merchantMatches = await listSuggestionPage(ctx.db, {
+      family: "transfer_pair",
+      where: { merchant: { search: "Synthetic clearing" } },
+    });
+    expect(merchantMatches.items).toHaveLength(1);
     expect(page.items[0]).toMatchObject({
       family: "transfer_pair",
       clean: true,
@@ -255,6 +261,93 @@ describe("transfer pairs in the global queue", () => {
     ).items;
     expect(rows).toHaveLength(2);
     expect(rows.every((row) => row.clean)).toBe(true);
+  });
+
+  // Rebuilding rule evidence must not discard the accepted statement kind label
+  it("serializes a pre-pair statement review with a later pair review", async () => {
+    await seed();
+    await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
+    const [statement] = (
+      await listSuggestionPage(ctx.db, { family: "statement_transaction" })
+    ).items;
+    if (statement?.family !== "statement_transaction")
+      throw new Error("Expected a statement suggestion");
+    expect(statement.evidence.transferPair).toBeNull();
+    await generateTransferPairSuggestions(ctx.db, { runId: null });
+    const [pair] = (
+      await listSuggestionPage(ctx.db, { family: "transfer_pair" })
+    ).items;
+    if (pair?.family !== "transfer_pair")
+      throw new Error("Expected a transfer pair suggestion");
+    const leg = [pair.evidence.outflow, pair.evidence.inflow].find(
+      (candidate) =>
+        candidate.charge?.chargeKey === statement.evidence.chargeKey,
+    )!;
+    let reviews:
+      | Promise<
+          PromiseSettledResult<Awaited<ReturnType<typeof reviewAssessment>>>[]
+        >
+      | undefined;
+    let projectionUnlocked = false;
+    // Hold ref locks until both callers are actually waiting. Before the fix,
+    // the statement held its projection while the pair waited to retire it.
+    await withTransaction(ctx.db, async (tx) => {
+      await lockFinancialEvidenceKeys(
+        tx,
+        "transaction-ref",
+        leg.refs.map((ref) => `${ref.source}\0${ref.externalId}`),
+      );
+      reviews = Promise.allSettled([
+        reviewAssessment(ctx.db, kernelCtx(ctx), {
+          assessmentId: pair!.assessmentId,
+          operationId: crypto.randomUUID(),
+          expectedFingerprint: pair!.fingerprint!,
+          verdict: "correct",
+          intent: "apply",
+          application: { kind: "transfer_pair" },
+        }),
+        reviewAssessment(ctx.db, kernelCtx(ctx), {
+          assessmentId: statement.assessmentId,
+          operationId: crypto.randomUUID(),
+          expectedFingerprint: statement.fingerprint!,
+          verdict: "correct",
+          intent: "apply",
+          application: { kind: "statement_transaction", action: "create" },
+        }),
+      ]);
+      await vi.waitFor(
+        async () => {
+          const { rows } = await getDb(ctx.db).execute<{ count: number }>(
+            sql`SELECT count(*)::int AS count FROM pg_stat_activity WHERE datname=current_database() AND wait_event='advisory'`,
+          );
+          expect(rows[0]!.count).toBeGreaterThanOrEqual(2);
+        },
+        { timeout: 5000, interval: 20 },
+      );
+      try {
+        await withTransaction(ctx.db, async (probe) => {
+          await probe.execute(
+            sql`SELECT id FROM "AssessmentState" WHERE id=${statement.assessmentId}::uuid FOR UPDATE NOWAIT`,
+          );
+        });
+        projectionUnlocked = true;
+      } catch {
+        // The assertion below runs after releasing the barrier and draining both reviews.
+      }
+    });
+    const results = await reviews!;
+    expect(projectionUnlocked).toBe(true);
+    expect(
+      results.filter((result) => result.status === "fulfilled"),
+    ).toHaveLength(1);
+    const loser = results.find((result) => result.status === "rejected");
+    expect(loser?.status === "rejected" ? String(loser.reason) : "").toMatch(
+      /stale|no longer|changed/i,
+    );
+    expect(
+      await getDb(ctx.db).select().from(financialTransaction),
+    ).toHaveLength(2);
+    expect(await getDb(ctx.db).select().from(ledgerTransfer)).toHaveLength(1);
   });
 
   // Rebuilding rule evidence must not discard the accepted statement kind label

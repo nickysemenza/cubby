@@ -324,11 +324,18 @@ const assessmentFamilies = {
       const judgment = assessmentJudgments.statement_transaction.parse(
         prediction.judgment,
       );
-      if (judgment.transferPair) {
-        const { lockTransferPairLegs } =
-          await import("~/server/domains/financial-transaction/repo/transfer-pair-suggestions");
-        await lockTransferPairLegs(db, judgment.transferPair.key);
-      }
+      const subject = assessmentSubjects.statement_transaction.parse(
+        prediction.subject,
+      );
+      const { lockTransferPairLegs } =
+        await import("~/server/domains/financial-transaction/repo/transfer-pair-suggestions");
+      // Even a prediction made before pair discovery shares its charge's leg
+      // lock with a later pair apply, before either can hold its projection.
+      await lockTransferPairLegs(
+        db,
+        judgment.transferPair?.key ??
+          `stmt:${subject.source}:${subject.chargeKey}`,
+      );
     },
     actions: ["correct", "wrong", "uncertain", "dismissed"],
     apply: async (db, context, state, input) => {

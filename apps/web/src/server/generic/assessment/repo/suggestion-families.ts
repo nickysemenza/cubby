@@ -836,6 +836,8 @@ const transferPair: SuggestionFamilyPresentation<"transfer_pair"> = {
           row.evidence.inflow.owner?.id ?? null,
         ],
         merchant: [
+          row.evidence.outflow.merchant,
+          row.evidence.inflow.merchant,
           row.evidence.outflow.description,
           row.evidence.inflow.description,
         ]
