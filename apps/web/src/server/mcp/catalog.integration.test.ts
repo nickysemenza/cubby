@@ -201,6 +201,9 @@ describe("MCP catalog", () => {
       }),
     ).toBeDefined();
     expect(await call("finance_read", { action: "imports" })).toBeDefined();
+    expect(await call("ai_funding_read", { action: "status" })).toMatchObject({
+      credit: { state: "available" },
+    });
     expect(
       await call("imports_read", {
         action: "external_id_collisions",

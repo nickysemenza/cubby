@@ -18,13 +18,27 @@ export const gatewayEgressInput = z.object({
 const gatewayAdmission = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("admitted"), token: z.uuid() }),
   z.object({ kind: z.literal("wait"), until: z.number() }),
+  // A recorded provider credit refusal: refused now, with no upstream call.
+  z.object({
+    kind: z.literal("refused"),
+    until: z.number(),
+    reason: z.string(),
+  }),
 ]);
 export type GatewayAdmission = z.infer<typeof gatewayAdmission>;
+/** `reason` is the provider's raw refusal body; `until` is epoch ms. */
+export type CreditRefusal = Omit<
+  Extract<GatewayAdmission, { kind: "refused" }>,
+  "kind"
+>;
 export interface AiGatewayEgressRpc {
   scheduleAiWorkRecovery(runId?: string): Promise<void>;
   scheduleFundingResume(at: number): Promise<void>;
   fetch(request: Request): Promise<Response>;
   admit(bucket: string, now?: number): Promise<GatewayAdmission>;
+  creditRefusal(now?: number): Promise<CreditRefusal | null>;
+  resetCreditRefusal(): Promise<void>;
+  noteCreditResponse(status: number, body: string, now?: number): Promise<void>;
   finish(
     token: string,
     status: number,
