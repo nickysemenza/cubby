@@ -683,17 +683,24 @@ describe("current purchase-agent system boundaries", () => {
       { check: "supported-commit", includes: "created" },
     ];
     const firstSource = mailResearchRunInput.parse(parent.input).sources[0];
-    scenario = await startScenarioHarness(ctx.databaseUrl, {
-      steps:
-        firstSource?.orderMailId === supported.id
-          ? [...supportedSteps, ...unresolvedSteps("partial", parent.id)]
-          : [
-              ...unresolvedSteps("partial", parent.id, false),
-              ...supportedSteps,
-              call("partial-done", "claim_next_import_work"),
-              { check: "partial-done", includes: "none" },
-            ],
-    });
+    scenario = await startScenarioHarness(
+      ctx.databaseUrl,
+      {
+        steps:
+          firstSource?.orderMailId === supported.id
+            ? [...supportedSteps, ...unresolvedSteps("partial", parent.id)]
+            : [
+                ...unresolvedSteps("partial", parent.id, false),
+                ...supportedSteps,
+                call("partial-done", "claim_next_import_work"),
+                { check: "partial-done", includes: "none" },
+              ],
+      },
+      "purchase-agent",
+      // Escalation off: the primary's unresolved resolutions settle directly
+      // (the mail escalation scenario covers holding them).
+      { coordinatorModels: { primary: "gpt-6-luna" } },
+    );
     await scenario.dispatch(events[0]!);
     await waitForStatus(parent.id, "needs_review");
     expect(await scenario.violations()).toEqual([]);
