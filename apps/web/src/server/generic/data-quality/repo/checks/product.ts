@@ -4,10 +4,8 @@ import {
 } from "@cubby/shared";
 import { sql } from "drizzle-orm";
 
-import {
-  expenseAcquisitionSql,
-  actualExpenseSql,
-} from "~/server/db/computed/expense-aggregate-sql";
+import { expenseAcquisitionSql } from "~/server/db/computed/expense-aggregate-sql";
+import { actualExpenseSql } from "~/server/db/helpers/predicates";
 import { product } from "~/server/db/schema";
 import { productHasDisplayableImageSql } from "~/server/domains/image/repo/image-displayability";
 import { orphanedProductCondition } from "~/server/domains/product/repo/orphan-condition";

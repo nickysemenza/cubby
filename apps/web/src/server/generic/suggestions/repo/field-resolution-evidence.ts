@@ -29,13 +29,13 @@ import {
   hierarchyInheritance,
   inheritanceLadderSql,
 } from "~/server/db/computed/effective-field";
-import { actualExpenseSql } from "~/server/db/computed/expense-aggregate-sql";
 import {
   getDb,
   notDeleted,
   unwrapDb,
   sqlEnumConstant,
 } from "~/server/db/helpers";
+import { actualExpenseSql } from "~/server/db/helpers/predicates";
 import { inventoryEntry, location } from "~/server/db/schema";
 import { getExpenseByShortcode } from "~/server/domains/expense/repo/crud";
 import { expenseSpendingCategoryResolutionSql } from "~/server/domains/expense/repo/expense-category-resolution";

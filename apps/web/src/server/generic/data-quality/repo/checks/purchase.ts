@@ -3,7 +3,7 @@ import { vendorOrderEvidence } from "@cubby/schemas/vendor-import-fields";
 import { cents } from "@cubby/shared";
 import { getTableName, sql } from "drizzle-orm";
 
-import { actualExpenseSql } from "~/server/db/computed/expense-aggregate-sql";
+import { actualExpenseSql } from "~/server/db/helpers/predicates";
 import { sqlEnumConstant } from "~/server/db/helpers/query";
 import { purchase } from "~/server/db/schema";
 import {

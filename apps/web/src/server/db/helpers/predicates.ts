@@ -13,3 +13,13 @@ export const ilikeContains = (term: string): string => `%${escapeLike(term)}%`;
 
 export const notDeleted = <T extends { deletedAt: AnyColumn }>(table: T) =>
   isNull(table.deletedAt);
+
+/**
+ * Raw-text actual/planned Expense predicates for an aliased `"Expense"` in
+ * correlated subqueries and string-built SQL. Schema-free so repository-owned
+ * modules can use them (the column forms live in `computed/expense-aggregate-sql`).
+ */
+export const actualExpenseSql = (alias: string): string =>
+  `${alias}."future" = false`;
+export const plannedExpenseSql = (alias: string): string =>
+  `${alias}."future" = true`;

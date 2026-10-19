@@ -25,8 +25,8 @@ import { z } from "zod";
 
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database } from "~/server/db";
-import { actualExpenseSql } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, householdDaySqlText, ilikeContains } from "~/server/db/helpers";
+import { actualExpenseSql } from "~/server/db/helpers/predicates";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { createAppError } from "~/server/errors/app-error";

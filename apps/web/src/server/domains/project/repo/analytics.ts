@@ -1,3 +1,10 @@
+import type { ExpenseId, ProjectId } from "@cubby/schemas/identifiers";
+import { and, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
+import { uniq } from "es-toolkit";
+
+import type { Database } from "~/server/db";
+import { effectiveFieldSql } from "~/server/db/computed/effective-field";
+import { getDb, notDeleted, uuidArrayParam } from "~/server/db/helpers";
 /**
  * Project analytics: batched cost/progress rollups and dependency-edge reads.
  *
@@ -8,17 +15,10 @@
  * always batch the ids of the page/row they're mapping, so a list of 50
  * projects costs 4 queries total, not 200.
  */
-import type { ExpenseId, ProjectId } from "@cubby/schemas/identifiers";
-import { and, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
-import { uniq } from "es-toolkit";
-
-import type { Database } from "~/server/db";
-import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import {
   actualExpenseSql,
   plannedExpenseSql,
-} from "~/server/db/computed/expense-aggregate-sql";
-import { getDb, notDeleted, uuidArrayParam } from "~/server/db/helpers";
+} from "~/server/db/helpers/predicates";
 import { task } from "~/server/db/schema";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { effectiveTaskDueDateSql } from "~/server/domains/task/repo/helpers";

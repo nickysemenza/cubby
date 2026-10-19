@@ -26,8 +26,8 @@ import {
 } from "@cubby/schemas/problems";
 import { type SQL, sql } from "drizzle-orm";
 
-import { actualExpenseSql } from "~/server/db/computed/expense-aggregate-sql";
 import { type Database } from "~/server/db/database";
+import { actualExpenseSql } from "~/server/db/helpers/predicates";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import {
   expense,

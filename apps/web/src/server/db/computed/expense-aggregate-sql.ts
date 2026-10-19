@@ -18,6 +18,7 @@
  */
 import { type AnyColumn, type SQL, sql } from "drizzle-orm";
 
+import { actualExpenseSql } from "~/server/db/helpers/predicates";
 import { expense } from "~/server/db/schema";
 
 /**
@@ -27,18 +28,14 @@ import { expense } from "~/server/db/schema";
  * Expense side would tell them apart, and no caller applies these there.
  *
  * The column form interpolates `future` (default: the unaliased table); the
- * alias form is raw text for correlated subqueries and string-built SQL, where
- * an interpolated column would bind to the wrong `"Expense"` (see
- * {@link expenseAcquisitionSql}).
+ * alias form (`actualExpenseSql` in `db/helpers/predicates`) is raw text for
+ * correlated subqueries and string-built SQL, where an interpolated column
+ * would bind to the wrong `"Expense"` (see {@link expenseAcquisitionSql}).
  */
 export const actualExpense = (future: AnyColumn = expense.future): SQL =>
   sql`${future} = false`;
 export const plannedExpense = (future: AnyColumn = expense.future): SQL =>
   sql`${future} = true`;
-export const actualExpenseSql = (alias: string): string =>
-  `${alias}."future" = false`;
-export const plannedExpenseSql = (alias: string): string =>
-  `${alias}."future" = true`;
 
 /**
  * actual/committed/credits/net/count — the shared aggregate columns every

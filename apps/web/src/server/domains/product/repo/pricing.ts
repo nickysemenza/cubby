@@ -11,13 +11,13 @@ import { and, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { actualExpenseSql } from "~/server/db/computed/expense-aggregate-sql";
 import {
   getDb,
   notDeleted,
   unwrapDb,
   uuidArrayParam,
 } from "~/server/db/helpers";
+import { actualExpenseSql } from "~/server/db/helpers/predicates";
 import { product } from "~/server/db/schema";
 import {
   costWeighted,

@@ -13,9 +13,9 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { sqlEnumConstant, unwrapDb } from "~/server/db/helpers";
+import { actualExpenseSql } from "~/server/db/helpers/predicates";
 import { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
 export { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
-import { actualExpenseSql } from "~/server/db/computed/expense-aggregate-sql";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 // Alias-qualified columns preserve correlation when Drizzle compiles a

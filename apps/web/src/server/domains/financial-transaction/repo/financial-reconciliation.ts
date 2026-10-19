@@ -10,7 +10,7 @@ import {
 import { cents } from "@cubby/shared";
 import { sql, type SQL } from "drizzle-orm";
 
-import { actualExpenseSql } from "~/server/db/computed/expense-aggregate-sql";
+import { actualExpenseSql } from "~/server/db/helpers/predicates";
 import { purchaseListsItemsSql } from "~/server/domains/purchase/repo/purchase-evidence-policy";
 import type { PurchaseFinancialAggregate } from "~/server/domains/purchase/repo/purchase-financial-aggregates";
 

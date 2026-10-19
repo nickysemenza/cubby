@@ -50,8 +50,8 @@ import { compileProblemFilters } from "~/entity/problems/problem-filter-semantic
 import { problemQueryDeclarations } from "~/entity/problems/problem-registry";
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
-import { actualExpenseSql } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, ilikeContains } from "~/server/db/helpers";
+import { actualExpenseSql } from "~/server/db/helpers/predicates";
 import {
   expense,
   financialAccount,

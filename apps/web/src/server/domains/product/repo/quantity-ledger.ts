@@ -1,4 +1,3 @@
-/** Canonical read-time quantity ledger: known balance is acquired minus exited; unknown quantities stay explicit. */
 import { type ProductId, productId } from "@cubby/schemas/identifiers";
 import type {
   ProductPickerOnHandOut,
@@ -10,8 +9,9 @@ import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { actualExpenseSql } from "~/server/db/computed/expense-aggregate-sql";
 import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
+/** Canonical read-time quantity ledger: known balance is acquired minus exited; unknown quantities stay explicit. */
+import { actualExpenseSql } from "~/server/db/helpers/predicates";
 import { inventoryEntry, location } from "~/server/db/schema";
 import { inventoryAmountSql } from "~/server/domains/inventory/repo/helpers";
 import {

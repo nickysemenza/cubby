@@ -1,3 +1,13 @@
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import type {
+  ExpenseMatchCandidate,
+  ExpenseMatchOptions,
+  ExpenseMatchOut,
+} from "@cubby/schemas/project";
+import { sql } from "drizzle-orm";
+
+import type { Database } from "~/server/db";
+import { getDb } from "~/server/db/helpers";
 /**
  * The reconciliation matcher — link vendor-export lines to `Expense` rows.
  *
@@ -50,17 +60,7 @@
  * query makes it structurally impossible for a grading signal to drift into a
  * filter — which it must never become.
  */
-import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type {
-  ExpenseMatchCandidate,
-  ExpenseMatchOptions,
-  ExpenseMatchOut,
-} from "@cubby/schemas/project";
-import { sql } from "drizzle-orm";
-
-import type { Database } from "~/server/db";
-import { actualExpenseSql } from "~/server/db/computed/expense-aggregate-sql";
-import { getDb } from "~/server/db/helpers";
+import { actualExpenseSql } from "~/server/db/helpers/predicates";
 import { effectiveExpenseProjectSql } from "~/server/domains/expense/repo/expense-inheritance";
 import {
   classifyMatchRatio,
