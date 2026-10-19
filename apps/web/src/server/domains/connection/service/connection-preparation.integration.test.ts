@@ -39,6 +39,17 @@ import { controlWorkflowRun } from "~/server/workflows/runs/control";
 import { readEntityConnections } from "../repo/entity-connections";
 import { prepareEntityConnections } from "./entity-connections";
 
+// Existing rollback scenarios deliberately put all units in one caller-owned
+// transaction to verify that a publisher cannot escape its database capability.
+async function prepareCombinedConnections(
+  ...args: Parameters<typeof prepareEntityConnections>
+) {
+  const publications = await prepareEntityConnections(...args);
+  return async (db: Parameters<(typeof publications)[number]>[0]) => {
+    for (const publish of publications) await publish(db);
+  };
+}
+
 // Failure modes: model preparation publishes before cancellation is checked;
 // the field publisher escapes its caller's fenced transaction; a bespoke review
 // key reopens the exact inference a member already graded Wrong inline.
@@ -203,7 +214,7 @@ describe("connection preparation and publication authority", () => {
     const { source, item, task } = await fixture();
     const entered = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
-    const preparation = prepareEntityConnections(
+    const preparation = prepareCombinedConnections(
       ctx.db,
       kernelCtx(ctx),
       source,
@@ -286,7 +297,7 @@ describe("connection preparation and publication authority", () => {
       throw new Error("Synthetic expense search projection is missing");
     const entered = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
-    const preparation = prepareEntityConnections(
+    const preparation = prepareCombinedConnections(
       ctx.db,
       kernelCtx(ctx),
       { entityKind: "product", entityId: item.id },
@@ -355,7 +366,7 @@ describe("connection preparation and publication authority", () => {
 
   it("rolls field publication back with the fenced caller transaction", async () => {
     const { source, task } = await fixture();
-    const publish = await prepareEntityConnections(
+    const publish = await prepareCombinedConnections(
       ctx.db,
       kernelCtx(ctx),
       source,
@@ -406,7 +417,7 @@ describe("connection preparation and publication authority", () => {
 
   it("removes stale field connections from Relations and the household Work aggregate", async () => {
     const { source, item } = await fixture();
-    const publish = await prepareEntityConnections(
+    const publish = await prepareCombinedConnections(
       ctx.db,
       kernelCtx(ctx),
       source,
@@ -498,7 +509,7 @@ describe("connection preparation and publication authority", () => {
       verdict: "wrong",
       intent: "history",
     });
-    const publish = await prepareEntityConnections(ctx.db, context, source, {
+    const publish = await prepareCombinedConnections(ctx.db, context, source, {
       suggestPorts,
     });
     await publish(ctx.db);

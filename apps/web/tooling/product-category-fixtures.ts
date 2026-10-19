@@ -122,6 +122,7 @@ const productRowDefaults = {
   acquisitionOrigin: "unknown" as const,
   stockTracked: null,
   kind: null,
+  commodity: false,
   labelNutrition: null,
 };
 

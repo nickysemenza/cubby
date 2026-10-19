@@ -99,6 +99,7 @@ const dummyProducts = (count: number): ProductTopLevelOut[] =>
       usdaUnavailable: null,
       stockTracked: null,
       kind: null,
+      commodity: false,
       dataQuality: testCompleteDataQuality(),
       createdAt: new Date("2026-01-01"),
       updatedAt: new Date("2026-01-01"),

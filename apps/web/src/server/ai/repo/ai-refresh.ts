@@ -9,10 +9,13 @@ import { z } from "zod";
 import { compiledRefreshManifest } from "~/server/ai/policy/refresh-manifest";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
-import { appSettings } from "~/server/db/schema";
+import {
+  appSettings,
+  AI_REFRESH_ACTIVATION_SETTINGS_ID,
+} from "~/server/db/schema";
 
 // Infrastructure identity, independent of the hourly app-open catch-up claim.
-const SETTINGS_ID = "00000000-0000-4000-8000-000000000074";
+const SETTINGS_ID = AI_REFRESH_ACTIVATION_SETTINGS_ID;
 export async function readAiRefreshActivation(
   db: Database,
   lock: false | "share" | "update" = false,

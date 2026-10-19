@@ -81,6 +81,7 @@ export const makeProduct = (
   acquisitionOrigin: "unknown",
   stockTracked: null,
   kind: null,
+  commodity: false,
   labelNutrition: opts.labelNutrition ?? null,
   images: [],
   coverImageUrl: null,

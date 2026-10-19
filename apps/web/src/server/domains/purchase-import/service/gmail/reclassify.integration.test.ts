@@ -16,12 +16,15 @@ import {
   reclassifyForTest as reclassifyEmails,
 } from "tooling/ai-work";
 import { seedEmailClassificationFeedback } from "tooling/shared-assessment-fixtures";
-import { withTestDb } from "tooling/test-setup";
+import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AiBudgetExhaustedError, readAiBudget } from "~/server/ai/budget";
 import { wrapAiGatewayError } from "~/server/ai/gateway-error";
-import { requestedAiEvaluations } from "~/server/ai/repo/ai-evaluation-requests";
+import {
+  cancelAiEvaluationRequests,
+  requestedAiEvaluations,
+} from "~/server/ai/repo/ai-evaluation-requests";
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import {
@@ -641,6 +644,49 @@ describe("member Reclassify", () => {
       .from(run)
       .where(eq(run.shortcode, result.runIds[0]!));
     expect(recorded?.status).toBe("completed");
+  });
+
+  it("cancels a requested batch with bounded SQL while retaining other live demand", async () => {
+    vi.spyOn(models, "selectDecisionModel").mockReturnValue(
+      models.DECISION_MODEL,
+    );
+    const f = await fixture();
+    const emails = [];
+    for (let index = 0; index < 6; index++)
+      emails.push(
+        await f.seed(`synthetic-cancel-batch-${index}`, "Synthetic order", {}),
+      );
+    const first = await startReclassification(
+      ctx.db,
+      { ids: emails.map((item) => item.shortcode) },
+      ctx.actor,
+      { launcher: TEST_AI_WORK_LAUNCHER },
+    );
+    const second = await startReclassification(
+      ctx.db,
+      { ids: emails.map((item) => item.shortcode) },
+      ctx.actor,
+      { launcher: TEST_AI_WORK_LAUNCHER },
+    );
+    const [owner] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.shortcode, first.runIds[0]!));
+    const measurement = await countTestDbQueries(() =>
+      cancelAiEvaluationRequests(ctx.db, owner!.id),
+    );
+    // The caller holds global admission: SQL work must not grow per requested item.
+    expect(measurement.queryCount).toBeLessThanOrEqual(3);
+    const items = await getDb(ctx.db).select().from(aiEvaluation);
+    expect(items.filter((item) => item.state === "cancelled")).toHaveLength(0);
+    expect(items.filter((item) => item.state === "queued")).toHaveLength(6);
+    const [survivor] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.shortcode, second.runIds[0]!));
+    expect((await requestedAiEvaluations(ctx.db, survivor!.id))[0]?.state).toBe(
+      "queued",
+    );
   });
 
   // Shared demand must survive one cancellation, without giving the cancelled request another Run's receipt.

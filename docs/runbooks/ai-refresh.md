@@ -36,6 +36,17 @@ applies to production paid inference independently.
    create another Run. Rollback compares exact policies, including older versions.
    No activation endpoint, credential or post-deploy action is required.
 
+## Database pool diagnosis
+
+An idle Postgres server can still have no Hyperdrive origin slots: open and
+lock-waiting transactions each pin an origin connection. Inspect transaction
+age, `pg_blocking_pids` and singleton/advisory lock holders before increasing
+Postgres capacity. Product catalog size must not extend a publication
+transaction across per-pair snapshots. The [entity contract](../entities.md)
+owns the preparation, attempt/Run/activation fences and partial-catalog retry
+semantics. Cancellation batches requester updates and live-demand checks while
+holding AI admission; it must not issue per-item queries under that global lock.
+
 ## Observe and recover
 
 AiEvaluation is the durable per-target ledger: target/snapshot, dependency

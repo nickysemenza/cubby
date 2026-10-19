@@ -803,7 +803,22 @@ interrupted inference gets three attempts. Two independent refresh targets may
 run globally, with dependent calls sequential. An execution claim defers immediately
 when global admission is busy, preserving queued work and its attempt count for
 the existing Workflow retry instead of occupying an origin connection in a lock
-wait. Email Runs freeze at most 200
+wait. Publication locks Runs before evaluation items and takes the activation
+share lock only at its final commit fence, after business work and requester
+wakeups. A deactivation or generation change during publication refuses or
+rolls back the write. Product catalog preparation holds no transaction: each
+pair publishes or registers demand in its own guarded transaction, and the
+catalog completes afterward. Connection refresh likewise commits one prepared
+connection or identity pair per guarded transaction. Interrupted catalogs may retain already committed
+pairs; retries reuse their publication/work identities. Pair publication checks
+a transient MVCC row-set fence in one statement instead of repeating snapshots:
+preparation brackets the complete Product, identifier, source, photo/description,
+import-claim, issuer-registry and variant-history dependencies, plus the whole
+activation row version containing the producing manifest. The write transaction
+rechecks them after taking the pair lock. New/deleted rows and edits invalidate
+preparation. Any activation-row rewrite, including a code-only deployment with
+identical policies, conservatively requires fresh preparation; issuer-registry
+edits do too. No read-set fence is stored as durable provenance. Email Runs freeze at most 200
 items and run only while Mail import is on for that mailbox. Reused Email
 stages require current source checksum and feature provenance. The
 [AI refresh runbook](runbooks/ai-refresh.md) owns activation, observation and
@@ -1933,6 +1948,14 @@ queue registers one materialized price relation when a compiled predicate
 requests it; standalone filters retain their closed predicates. Numeric
 fingerprints keep the canonical scalar or joined value, so sharing presence
 does not change exception identity.
+
+A Product's `commodity` flag marks interchangeable goods with no single
+listing. It removes the brand, Identifier and Amazon ASIN checks from the
+Product's applicable set rather than recording an exception, and it is a
+deliberate member decision, never inferred from a placeholder manufacturer.
+Only applicability reads it; those checks' fingerprints are unchanged, so
+clearing the flag reopens the gaps while existing exceptions keep their
+evidence.
 
 Purchase paperwork-mismatch predicates share one vendor-Expense aggregate for
 the total, line count and unpriced count. The reconciliation module owns their

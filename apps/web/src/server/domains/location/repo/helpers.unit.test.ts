@@ -138,6 +138,7 @@ const product = {
   acquisitionOrigin: "unknown" as const,
   stockTracked: null,
   kind: null,
+  commodity: false,
   labelNutrition: null,
   createdAt: CREATED_AT,
   updatedAt: UPDATED_AT,
