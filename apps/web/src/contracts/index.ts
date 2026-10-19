@@ -7,6 +7,7 @@ export { workQueueContract } from "./work-queue.contract";
  * module that is not exported here is a generator error.
  */
 export { aiContract, aiStreamsContract } from "./ai.contract";
+export { aiFundingContract } from "./ai-funding.contract";
 export { auditLogContract } from "./audit-log.contract";
 export { calendarContract } from "./calendar.contract";
 export { collectionContract } from "./collection.contract";

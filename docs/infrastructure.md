@@ -522,6 +522,23 @@ event ("Run now, paid allowed" on the Run page, "Run discovery now, paid
 allowed" on the Mail import card, or MCP `run.lifecycle`/`run.discover_mail`)
 lets that Run and the imports its discovery starts pay within the paid budget,
 or past it by the confirmed `paidOverBudgetUsd` for the granting window.
+The credit preflight (`creditRunPreflight`) recognizes a chat call by endpoint
+path: pi-ai's Anthropic SDK posts `v1/messages?beta=true`.
+
+A provider credit refusal is held, not retried. When a credit response is a
+funding refusal `isInferenceFundingRefusal` recognizes (a Console spend limit,
+a spent balance; never Cubby's own `cubby_credit_budget_reached`), the
+`AI_GATEWAY_EGRESS` Durable Object records it with the raw body until the date
+Anthropic names ("You will regain access on …"), else the end of the current
+six-hour window. While it holds, credit admission answers at once with a
+`cubby_credit_refused` 400 carrying that raw reason and makes no upstream call,
+so every ladder moves straight to the ChatGPT plan; unified (paid) traffic is
+unaffected. One credit request per window passes as a probe: success clears
+the refusal, another refusal records it again. "Retry Claude credit now"
+(Settings → AI funding, MCP `ai_funding.reset_credit_refusal`) and any credit
+budget change clear it and resume funding-paused Runs. `ai_funding_read.status`
+and the AI funding card report it as `credit.state` `refused`, with `until` and
+`reason`. Refusals that arrive only inside a stream are not recorded.
 
 1. Link the eligible Claude plan to the intended Anthropic Console organization.
 2. Create a dedicated Cubby workspace with a monthly spend limit no larger than

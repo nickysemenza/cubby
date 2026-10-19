@@ -156,18 +156,21 @@ beforeEach(() => {
       };
     if (operation === "run.control")
       return { ok: true, data: { run: detailRun, successor: null } };
-    if (operation === "run.mailImport")
+    if (operation === "aiFunding.status")
       return {
         ok: true,
         data: {
-          mailboxes: [],
-          budget: {
-            windowStart: "2026-09-20T12:00:00.000Z",
-            windowEnd: "2026-09-20T18:00:00.000Z",
-            credit: { limitUsd: 5, spentUsd: 5 },
-            paid: { limitUsd: 1, spentUsd: 0.25 },
-            plan: { state: "available", until: null, reason: null },
+          windowStart: "2026-09-20T12:00:00.000Z",
+          windowEnd: "2026-09-20T18:00:00.000Z",
+          credit: {
+            limitUsd: 5,
+            spentUsd: 5,
+            state: "available",
+            until: null,
+            reason: null,
           },
+          paid: { limitUsd: 1, spentUsd: 0.25 },
+          plan: { state: "available", until: null, reason: null },
         },
       };
     if (operation === "run.aiUsage")

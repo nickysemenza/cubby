@@ -11,11 +11,8 @@ import { createLogger } from "@cubby/worker-tracing";
 import { z } from "zod";
 
 import { findErrorCause } from "~/lib/error-diagnostics";
-import {
-  AiBudgetExhaustedError,
-  aiBudgetWindow,
-  readAiBudget,
-} from "~/server/ai/budget";
+import { AiBudgetExhaustedError, readAiBudget } from "~/server/ai/budget";
+import { aiBudgetWindow } from "~/server/ai/budget-window";
 import {
   aiEvaluationProgress,
   claimAiEvaluation,
