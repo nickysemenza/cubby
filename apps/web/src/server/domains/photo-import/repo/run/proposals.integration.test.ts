@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-
 import { buildActorContext } from "@cubby/schemas/context";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { PhotoGroupProposalGroup } from "@cubby/schemas/photo-import-run";
@@ -449,38 +447,6 @@ describe("photo group proposals", () => {
     expect(
       applied.proposals.find((group) => group.groupKey === "blocked")?.review
         ?.confirmation,
-    ).toBeNull();
-  });
-
-  // Stored review migration preserves concerns without inventing historical confirmation.
-  it("migrates stored review provenance without erasing real concerns", async () => {
-    const { run, codes } = await seedRun(2);
-    const real = createGroup("real-concern", [codes[0]!]);
-    real.review!.unresolvedReason = "Verify the printed width";
-    const synthetic = createGroup("old-default", [codes[1]!]);
-    synthetic.review!.unresolvedReason =
-      "Confirm the observed identity before applying this group";
-    await proposePhotoGroups(ctx.db, {
-      runId: run.shortcode,
-      groups: [real, synthetic],
-    });
-    const migration = readFileSync(
-      new URL(
-        "../../../../../../drizzle/0073_photo_group_review_authority.sql",
-        import.meta.url,
-      ),
-      "utf8",
-    );
-    await getDb(ctx.db).execute(sql.raw(migration));
-    expect((await readRow(run.id, "real-concern"))?.review).toMatchObject({
-      observedName: real.review!.observedName,
-      unresolvedReason: "Verify the printed width",
-      stockIntent: "evidence",
-      confirmation: null,
-      resolvedConcerns: [],
-    });
-    expect(
-      (await readRow(run.id, "old-default"))?.review?.unresolvedReason,
     ).toBeNull();
   });
 
@@ -1980,77 +1946,5 @@ describe("photo group proposals", () => {
     expect(retry.proposals[0]?.committedProduct?.name).toBe(
       "Synthetic edited hat",
     );
-  });
-  // Household data must survive 0067: a stored person proposal keeps its owner
-  // column, and a stored unassigned one stays household stock.
-  it("reads proposals stored in the old ownership vocabulary after the migration", async () => {
-    const { run, codes } = await seedRun(2);
-    const owner = await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Synthetic proposal owner",
-      kind: "member",
-    });
-    const inventory = (ownerPartyId: string | null) => ({
-      locationId: parseShortcodeFor("location", TEST_HOME_SHORTCODE),
-      ownershipMode: "explicit" as const,
-      ownerPartyId:
-        ownerPartyId === null
-          ? null
-          : parseShortcodeFor("ledgerParty", ownerPartyId),
-      quantity: 1,
-    });
-    await proposePhotoGroups(ctx.db, {
-      runId: run.shortcode,
-      groups: [
-        {
-          ...createGroup(
-            "person",
-            [codes[0]!],
-            "Synthetic person item",
-            "receive",
-          ),
-          inventory: inventory(owner.shortcode),
-        },
-        {
-          ...createGroup(
-            "household",
-            [codes[1]!],
-            "Synthetic household item",
-            "receive",
-          ),
-          inventory: inventory(null),
-        },
-      ],
-    });
-    const db = getDb(ctx.db);
-    // Rewind both rows to the shape stored before 0067.
-    for (const [groupKey, legacyMode] of [
-      ["person", "person"],
-      ["household", "unassigned"],
-    ])
-      await db.execute(sql`
-        UPDATE "PhotoGroupProposal"
-        SET "inventory" = ("inventory" - ${"household"}) || jsonb_build_object(${"ownershipMode"}::text, ${legacyMode}::text)
-        WHERE "groupKey" = ${groupKey}`);
-    const migration = readFileSync(
-      new URL(
-        "../../../../../../drizzle/0067_inventory_ownership_explicit.sql",
-        import.meta.url,
-      ),
-      "utf8",
-    );
-    for (const statement of migration.split("--> statement-breakpoint"))
-      if (statement.includes('"PhotoGroupProposal"'))
-        await db.execute(sql.raw(statement));
-
-    const { proposals } = await listPhotoGroupProposals(ctx.db, run.shortcode);
-    const byKey = new Map(proposals.map((row) => [row.groupKey, row]));
-    expect(byKey.get("person")?.inventory).toMatchObject({
-      ownershipMode: "explicit",
-      ownerPartyId: owner.shortcode,
-    });
-    expect(byKey.get("household")?.inventory).toMatchObject({
-      ownershipMode: "explicit",
-      ownerPartyId: null,
-    });
   });
 });

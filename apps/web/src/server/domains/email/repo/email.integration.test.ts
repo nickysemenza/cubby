@@ -64,6 +64,72 @@ describe("Email generic persisted reads", () => {
     return content;
   }
 
+  // Lists read text presence without decompressing originals, so the derived
+  // flag must be exact for null, blank and HTML-only content and follow writes.
+  it("derives retained-text presence from the stored original on every write", async () => {
+    const party = await owner("Synthetic presence owner");
+    const cases = [
+      {
+        content: { snippet: null, bodyText: null, bodyHtml: null },
+        present: false,
+      },
+      {
+        content: { snippet: "  ", bodyText: " ", bodyHtml: "   " },
+        present: false,
+      },
+      {
+        content: {
+          snippet: "Synthetic summary",
+          bodyText: null,
+          bodyHtml: null,
+        },
+        present: true,
+      },
+      {
+        content: { snippet: null, bodyText: "Synthetic body", bodyHtml: null },
+        present: true,
+      },
+      {
+        content: {
+          snippet: null,
+          bodyText: null,
+          bodyHtml: "<p>Synthetic original</p>",
+        },
+        present: true,
+      },
+      // PostgreSQL BTRIM removes spaces, not all JavaScript whitespace.
+      {
+        content: { snippet: "\t", bodyText: null, bodyHtml: null },
+        present: true,
+      },
+      {
+        content: { headers: { subject: "Synthetic header only" } },
+        present: false,
+      },
+    ];
+    const stored = [];
+    for (const [index, sample] of cases.entries()) {
+      const [row] = await getDb(ctx.db)
+        .insert(orderMail)
+        .values({
+          ledgerPartyId: party.id,
+          rawChecksum: `checksum:presence-${index}`,
+          content: sql`${JSON.stringify(sample.content)}::jsonb`,
+        })
+        .returning({ id: orderMail.id, present: orderMail.hasRetainedText });
+      stored.push(row);
+    }
+    expect(stored.map((row) => row?.present)).toEqual(
+      cases.map(({ present }) => present),
+    );
+    const [cleared] = await getDb(ctx.db)
+      .update(orderMail)
+      .set({ content: { snippet: null, bodyText: null, bodyHtml: null } })
+      .where(eq(orderMail.id, stored[2]!.id))
+      .returning({ present: orderMail.hasRetainedText });
+    expect(cleared).toEqual({ present: false });
+  });
+
   it("reads unrelated metadata without a body and filters owned Emails by headers and EML code", async () => {
     const party = await owner("Email reader");
     const otherParty = await owner("Other Email reader");

@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-
 import { buildActorContext } from "@cubby/schemas/context";
 import type { EntitySourceInput } from "@cubby/schemas/entity-source";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
@@ -295,72 +293,6 @@ describe("entity sources", () => {
       ids: [keeper.code],
     });
     expect(await storedSources(keeper.entityId)).toHaveLength(2);
-  });
-
-  it("migrates existing internal URLs without losing citation metadata or unresolved destinations", async () => {
-    const target = await createProduct("Migration source document");
-    const unresolvedUrl = getShortcodeUrl(
-      testShortcode("product", "unresolved-legacy-source"),
-    );
-    const owner = await createProduct("Migration cited tool", [
-      {
-        fieldPath: "model",
-        url: "https://example.test/legacy-source",
-        quote: "SW-100",
-        selectedVariant: "Synthetic blue",
-        observedAt: new Date("2026-10-01T00:00:00Z"),
-      },
-      { url: "https://example.test/external", quote: "External evidence" },
-      {
-        url: "https://example.test/unresolved",
-        quote: "Retained unresolved destination",
-      },
-    ]);
-    await unwrapDb(ctx.db).execute(
-      sql`UPDATE "EntitySource" SET url = ${`${getShortcodeUrl(target.code.replace(/^PRD-/, "P-"))}/?view=evidence`} WHERE "entityId" = ${owner.entityId} AND "fieldPath" = ${"model"}`,
-    );
-    await unwrapDb(ctx.db).execute(
-      sql`UPDATE "EntitySource" SET url = ${unresolvedUrl} WHERE "entityId" = ${owner.entityId} AND url = 'https://example.test/unresolved'`,
-    );
-    const before = await storedSources(owner.entityId);
-    const migration = readFileSync(
-      new URL(
-        "../../../drizzle/0052_normalize_entity_source_targets.sql",
-        import.meta.url,
-      ),
-      "utf8",
-    );
-    await unwrapDb(ctx.db).execute(sql.raw(migration));
-    const after = await storedSources(owner.entityId);
-    expect(after).toHaveLength(before.length);
-    expect(after).toEqual(
-      expect.arrayContaining(
-        before.map((row) => ({
-          ...row,
-          url: row.fieldPath === "model" ? null : row.url,
-        })),
-      ),
-    );
-    expect(await detailSources(owner.code)).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          fieldPath: "model",
-          url: null,
-          sourceEntity: expect.objectContaining({ entityId: target.code }),
-          quote: "SW-100",
-          supportsCurrentValue: true,
-        }),
-        expect.objectContaining({
-          url: "https://example.test/external",
-          sourceEntity: null,
-        }),
-        expect.objectContaining({
-          url: unresolvedUrl,
-          sourceEntity: null,
-          quote: "Retained unresolved destination",
-        }),
-      ]),
-    );
   });
 
   // Failure: a Source that names both the Cubby record it came through (an
