@@ -181,9 +181,19 @@ export function colorizeEnumOptions<T extends EnumOptionInput>(
       : (LEGACY_COLORS.get(option.color) ?? option.color),
   );
   const slate = explicit.map((color) => color === "var(--slate)");
-  const semantic = options.map((option, index) =>
-    slate[index] ? undefined : (explicit[index] ?? semanticColor(option.value)),
-  );
+  // A legacy chart hue was picked for contrast, not meaning: a value that
+  // names a state ("in_progress") takes that state's color instead.
+  const semantic = options.map((option, index) => {
+    if (slate[index]) return undefined;
+    const declared = explicit[index];
+    const legacyHue =
+      option.color !== undefined &&
+      declared?.startsWith("var(--category-") === true &&
+      LEGACY_COLORS.has(option.color);
+    return legacyHue
+      ? (semanticColor(option.value) ?? declared)
+      : (declared ?? semanticColor(option.value));
+  });
   // Explicit slate is the neutral state inside a condition roster (a
   // reconciliation's explained difference) and noise anywhere else.
   const inferredRole: EnumRole =

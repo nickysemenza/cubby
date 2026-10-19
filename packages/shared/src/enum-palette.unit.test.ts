@@ -88,5 +88,17 @@ describe("shared enum palette", () => {
         { value: "note", color: "var(--plum)" },
       ]).map((option) => option.color),
     ).toEqual(["var(--category-1)", "var(--positive)", "var(--category-5)"]);
+    // A legacy hue on a state value kept a whole status roster a category.
+    expect(
+      colorizeEnumOptions([
+        { value: "not_started", color: "var(--chart-neutral)" },
+        { value: "in_progress", color: "var(--chart-1)" },
+        { value: "done", color: "var(--chart-positive)" },
+      ]).map((option) => [option.role, option.color]),
+    ).toEqual([
+      ["status", "var(--neutral-status)"],
+      ["status", "var(--info)"],
+      ["status", "var(--positive)"],
+    ]);
   });
 });

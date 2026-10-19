@@ -17,7 +17,7 @@ struct EntityManifestTests {
             options.first { $0["value"] as? String == "unknown" }?["color"] as? String == "var(--warning)")
         #expect(
             options.first { $0["value"] as? String == "required" }?["color"] as? String
-                == "var(--brand-domain-house)")
+                == "var(--info)")
     }
 
     // Apple used to read `groupBy` out of the filter dictionary; the wire now carries the saved
@@ -35,6 +35,22 @@ struct EntityManifestTests {
         let tags = try #require(EntityCatalog[.product].grouping.first { $0.id == "tags" })
         #expect(tags.reason == "A record can have several Tags, so it would appear in more than one group.")
         #expect(EntityCatalog[.product].groupChoice("tags") == nil)
+    }
+
+    // Native dropped option roles and glyphs at the catalog, and relation sections lost their
+    // declared grouping, so Project Tasks rendered flat, uncoloured chips.
+    @Test func relationGroupingAndOptionRolesArriveOnTheWire() throws {
+        let tasks = try #require(
+            EntityCatalog[.project].presentation.detailSections.first { $0.id == "tasks" })
+        guard case .relation(let spec) = tasks.kind else {
+            Issue.record("Project Tasks is not a relation section")
+            return
+        }
+        #expect(spec.groupBy == "status")
+        let status = try #require(EntityCatalog[.task].fields.first { $0.key == "status" })
+        let inProgress = try #require(status.controlOptions?.first { $0.value == "in_progress" })
+        #expect(inProgress.role == "status")
+        #expect(inProgress.glyph?.sfSymbol == "circle.lefthalf.filled")
     }
 
     @Test func schemaDerivedReadOnlyPaletteSurvivesTheCatalog() throws {
