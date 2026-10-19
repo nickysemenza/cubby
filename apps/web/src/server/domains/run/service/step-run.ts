@@ -23,6 +23,7 @@ import {
   claimWorkflowRun,
   launchWorkflowRun,
   recordRunProgress,
+  runFailureText,
 } from "~/server/workflows/runs/lifecycle";
 import { wakeStepRunParent } from "~/server/workflows/runs/wake";
 
@@ -187,9 +188,13 @@ export async function advanceStepRun(
     });
   } catch (error) {
     // A thrown page ends this step only; the Run moves on to the next one.
-    const message = scrubErrorMessage(
-      error instanceof Error ? (error.stack ?? error.message) : String(error),
-    );
+    // The causes carry the Postgres SQLSTATE a driver's "Failed query" hides.
+    const message =
+      error instanceof Error
+        ? [runFailureText(error), scrubErrorMessage(error.stack ?? "")]
+            .filter(Boolean)
+            .join("\n")
+        : runFailureText(String(error));
     if (!(await claimWorkflowRun(db, params, "id")))
       return lostAfterPage(db, owner, launcher);
     await recordRunStepPage(db, owner.id, current.key, {
