@@ -596,7 +596,7 @@ export const MCP_TOOLS = defineMcpTools({
       summary: mcpAction({
         op: statementRowContract.ops.summary,
         description:
-          "Count and total statement rows by match state for a filter — total, matched, unmatched, ignored, superseded, the unmatched dollar amount, and unmatchedCharges (distinct charges behind the unmatched observations). Size the remaining drift before working it, or confirm a bulk disposition landed.",
+          "Count and total statement rows by match state for a filter — total, matched, unmatched, ignored, superseded, the dollar amount in total and per match state, and unmatchedCharges (distinct charges behind the unmatched observations). Size the remaining drift before working it, or confirm a bulk disposition landed.",
       }),
       imports: mcpAction({
         op: statementRowContract.ops.imports,

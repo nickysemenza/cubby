@@ -20,6 +20,7 @@ import { statementImportMembers } from "./statement-import-membership";
 import {
   deleteStatementRows,
   findStatementRowDrift,
+  getStatementRowSummary,
   listStatementImports,
   listStatementRows,
   recordStatementRows,
@@ -715,6 +716,66 @@ describe("statement row ledger", () => {
       matchState: "unmatched",
       transactionId: null,
     });
+  });
+
+  // The list footer reads a state's total from the unfiltered summary instead
+  // of a second summary filtered to that state; the two must agree.
+  it("splits the summary amount by match state as a state filter totals it", async () => {
+    await record(
+      ctx.db,
+      ctx.actor,
+      [
+        rowInput(),
+        rowInput({
+          merchant: "Example Market",
+          rawDescription: "EXAMPLE MARKET OAKLAND CA",
+          providerAmount: -20.25,
+        }),
+      ],
+      { fingerprint: "fp-summary-split" },
+    );
+    const matchedRow = (await listStatementRows(ctx.db, {})).data.find(
+      (row) => row.merchant === "Acme Supply",
+    );
+    const account = (
+      await createRepoEntity(ctx, "financialAccount", {
+        name: "Test Card",
+        identity: { kind: "credit_card", issuer: null, network: "amex" },
+        cardNumbers: [],
+        sourceAliases: [],
+      })
+    ).output;
+    await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.id,
+      kind: "purchase",
+      status: "posted",
+      amount: 128.5,
+      postedDate: "2026-05-04",
+      sourceRefs: [
+        { source: matchedRow!.source, externalId: matchedRow!.externalId },
+      ],
+    });
+
+    const summary = await getStatementRowSummary(ctx.db, {});
+    expect(summary).toMatchObject({ matched: 1, unmatched: 1 });
+    expect(summary.matchedAmount).not.toBe(0);
+    expect(summary.unmatchedAmount).not.toBe(0);
+    for (const matchState of [
+      "matched",
+      "unmatched",
+      "ignored",
+      "superseded",
+    ] as const) {
+      expect(summary[`${matchState}Amount`]).toBe(
+        (await getStatementRowSummary(ctx.db, { matchState })).amountTotal,
+      );
+    }
+    expect(
+      summary.matchedAmount +
+        summary.unmatchedAmount +
+        summary.ignoredAmount +
+        summary.supersededAmount,
+    ).toBeCloseTo(summary.amountTotal);
   });
 
   it("reports one transaction carrying two providers' refs exactly once", async () => {
