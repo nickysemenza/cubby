@@ -21,15 +21,32 @@ import {
   relativeDateToken,
   UNRESOLVABLE_ENTITY_FILTER,
 } from "@cubby/shared";
+import { CalendarBlankIcon } from "@phosphor-icons/react/dist/csr/CalendarBlank";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { GearSixIcon } from "@phosphor-icons/react/dist/csr/GearSix";
+import { HashIcon } from "@phosphor-icons/react/dist/csr/Hash";
+import { LinkSimpleIcon } from "@phosphor-icons/react/dist/csr/LinkSimple";
+import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
+import { TextTIcon } from "@phosphor-icons/react/dist/csr/TextT";
+import { ToggleLeftIcon } from "@phosphor-icons/react/dist/csr/ToggleLeft";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import type { RowData } from "@tanstack/react-table";
-import { useEffect, useId, useMemo, useState } from "react";
+import {
+  type ReactNode,
+  useEffect,
+  useId,
+  useMemo,
+  type RefObject,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
 
 import { householdLocalDate } from "~/lib/household-date";
+import { formatCount } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
 import { focusOnMount } from "~/ui/hooks/focus-on-mount";
@@ -50,6 +67,7 @@ import {
   type Filter,
   type FilterBarField,
   type FilterSide,
+  type FilterValueType,
   hasFilterValue,
   operatorFor,
   selectedValues,
@@ -68,12 +86,7 @@ const INVALID_FILTER_OPTION: NonNullable<FilterBarField["options"]>[number] = {
   meta: true,
 };
 
-/** Chips shown before the rest collapse behind the ghost `More` control. */
-// Three declared chips plus the search input fit in one band beside the
-// 176px domain rail at 1440; a fourth wraps `More` onto a second line.
-const CHIP_CAP = 3;
-
-/** A declared field is "active" (tints its chip, counts toward Clear N) once its filter has a real value. */
+/** A declared field is "active" (shows a chip, counts toward Clear) once its filter has a real value. */
 function isFieldActive(filter: Filter | undefined): boolean {
   return filter !== undefined && hasFilterValue(filter);
 }
@@ -86,19 +99,22 @@ function visibleOptions(field: FilterBarField, filter: Filter | undefined) {
     : options;
 }
 
+const labelOf = (field: FilterBarField) => field.label ?? field.key;
+
 /**
- * The chip's value text. "any" is the declared-but-inactive state, per
- * DESIGN.md; an active Any value reads "has a value" so the two never look
- * alike. Picked values join with "or", or "and" under Match all; excluded
+ * An active filter's value text; empty while inactive, so a row or chip
+ * never shows a value it does not hold. An active Any value reads "has a
+ * value"; picked values join with "or", or "and" under Match all; excluded
  * values read "is not …". Without a `side` the text covers both sides.
  */
 export function filterSummary(
   field: FilterBarField,
   filter: Filter | undefined,
   side?: FilterSide,
+  joiner?: string,
 ): string {
-  if (filter === undefined || !isFieldActive(filter)) return "any";
-  if (field.type === "text") return filter.values[0] ?? "any";
+  if (filter === undefined || !isFieldActive(filter)) return "";
+  if (field.type === "text") return filter.values[0] ?? "";
   const bounds = field.dateRange
     ? describeRangeBounds(filter.values[0] ?? "")
     : field.numberRange
@@ -110,14 +126,14 @@ export function filterSummary(
   );
   const excluded = sideValues(filter.values, "isNot")
     .map((value) => labels.get(value) ?? value)
-    .join(" or ");
+    .join(joiner ?? " or ");
   const isNot = excluded ? `is not ${excluded}` : "";
-  if (side === "isNot") return isNot || "any";
+  if (side === "isNot") return isNot;
   const included = sideValues(filter.values, "is");
   const picked = included
     .filter((value) => value !== FILTER_NONE && value !== FILTER_ANY)
     .map((value) => labels.get(value) ?? value)
-    .join(filter.values.includes(FILTER_ALL) ? " and " : " or ");
+    .join(joiner ?? (filter.values.includes(FILTER_ALL) ? " and " : " or "));
   const is = included.includes(FILTER_ANY)
     ? "has a value"
     : !included.includes(FILTER_NONE)
@@ -125,17 +141,51 @@ export function filterSummary(
       : picked
         ? `${picked} or no value`
         : "no value";
-  if (side === "is") return is || "any";
+  if (side === "is") return is;
   return [is, isNot].filter(Boolean).join(" · ");
 }
 
 /**
- * Multiselect editor: the one Picker in `multiple` mode, editing a draft so
- * the table re-queries once, on Apply — Clear and Apply sit in its footer.
- * Any value / No value lead the roster above its divider; a multi-valued
- * field adds Match any | Match all, a hierarchical reference its
- * "Include sub-…" switch.
+ * A chip's operator between its field and values: "is any of" for several
+ * picked values, "contains" for text. Bounds and the Any/No value
+ * predicates already read as a phrase, so they take none.
  */
+function chipOperator(
+  field: FilterBarField,
+  filter: Filter | undefined,
+  side: FilterSide,
+): string {
+  if (side === "isNot" || !filter) return "";
+  if (field.type === "text") return "contains";
+  if (field.valueType === "date" || field.valueType === "number") return "";
+  const included = sideValues(filter.values, "is");
+  if (included.includes(FILTER_ANY) || included.includes(FILTER_NONE))
+    return "";
+  if (field.type !== "multiselect" || included.length < 2) return "is";
+  return filter.values.includes(FILTER_ALL) ? "is all of" : "is any of";
+}
+
+/** The type glyph a Filters panel row leads with. */
+function FilterTypeGlyph({ field }: { field: FilterBarField }) {
+  const type: FilterValueType = field.valueType ?? "enum";
+  if (type === "entity" && field.icon)
+    return (
+      <span aria-hidden className="flex size-3.5 items-center justify-center">
+        {field.icon}
+      </span>
+    );
+  const Glyph = {
+    text: TextTIcon,
+    enum: ListChecksIcon,
+    entity: LinkSimpleIcon,
+    date: CalendarBlankIcon,
+    number: HashIcon,
+    boolean: ToggleLeftIcon,
+    presence: ToggleLeftIcon,
+  }[type];
+  return <Glyph aria-hidden className="size-3.5" />;
+}
+
 const MATCH_OPTIONS = [
   { value: "any", label: "Match any" },
   { value: "all", label: "Match all" },
@@ -179,109 +229,6 @@ function SideControl({
         <p className="px-1 text-xs text-muted-foreground">{reason}</p>
       )}
     </div>
-  );
-}
-
-function MultiselectEditor({
-  field,
-  filter,
-  initialSide = "is",
-  onApply,
-  onClear,
-}: {
-  field: FilterBarField;
-  filter: Filter | undefined;
-  initialSide?: FilterSide;
-  onApply: (values: string[]) => void;
-  onClear: () => void;
-}) {
-  const [draft, setDraft] = useState<string[]>(() => filter?.values ?? []);
-  const [side, setSide] = useState<FilterSide>(initialSide);
-  const roster = visibleOptions(field, filter);
-  // Any value / No value belong to the "is" side.
-  const isNotRoster = useMemo(
-    () =>
-      roster.filter(
-        (option) => option.value !== FILTER_ANY && option.value !== FILTER_NONE,
-      ),
-    [roster],
-  );
-  const options = side === "is" ? roster : isNotRoster;
-  const label = field.label ?? field.key;
-  useEffect(() => {
-    field.onActivate?.(selectedValues(filter?.values ?? []));
-  }, [field, filter?.values]);
-  // Inside the picker's popup: anything beside it would sit behind the
-  // popup's modal focus scope, unreachable while the list is open.
-  const header =
-    field.matchAll || field.subtree || field.exclude ? (
-      <>
-        {field.exclude && (
-          <SideControl
-            label={label}
-            side={side}
-            reason={field.exclude.reason}
-            onSideChange={setSide}
-          />
-        )}
-        {field.matchAll && side === "is" && (
-          <Picker
-            mode="segmented"
-            label={`Match ${label}`}
-            options={MATCH_OPTIONS}
-            value={draft.includes(FILTER_ALL) ? "all" : "any"}
-            onValueChange={(value) => {
-              if (value) setDraft(withMode(draft, FILTER_ALL, value === "all"));
-            }}
-          />
-        )}
-        {field.subtree && (
-          <label className="flex items-center justify-between gap-3 px-1 text-xs">
-            {field.subtree.label}
-            <Switch
-              checked={!draft.includes(FILTER_EXACT)}
-              onCheckedChange={(checked: boolean) =>
-                setDraft(withMode(draft, FILTER_EXACT, !checked))
-              }
-            />
-          </label>
-        )}
-      </>
-    ) : undefined;
-  return (
-    <Picker
-      multiple
-      openOnMount
-      label={`Filter ${label}`}
-      options={options}
-      values={sideValues(draft, side)}
-      onValuesChange={(values) => setDraft(withSideValues(draft, side, values))}
-      onSearchChange={field.onSearchChange}
-      isLoading={field.isLoading}
-      records={field.records}
-      header={header}
-      footer={
-        <>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="text-muted-foreground"
-            onClick={() => {
-              // Clear empties this side; the other side's chip stays.
-              const rest = withSideValues(draft, side, []);
-              if (activeSides(rest).length) onApply(rest);
-              else onClear();
-            }}
-          >
-            Clear
-          </Button>
-          <Button type="button" size="sm" onClick={() => onApply(draft)}>
-            Apply
-          </Button>
-        </>
-      }
-    />
   );
 }
 
@@ -604,7 +551,6 @@ function NumberRangeBounds({
   );
 }
 
-/** The editor body for one field's popover — shape depends on its declared type. */
 /**
  * A rosterless multiselect (an external id): values typed comma-separated.
  * The input keeps what was typed (spacing, a trailing comma); the filter
@@ -652,21 +598,170 @@ function TypedValuesEditor({
   );
 }
 
-function FilterValueEditor({
+/** Any | Yes | No: a boolean or presence filter holds one value or none. */
+const ANY_SEGMENT = "*any";
+
+const isTriState = (field: FilterBarField): boolean =>
+  (field.valueType === "boolean" || field.valueType === "presence") &&
+  field.type === "select" &&
+  (field.options ?? []).filter((option) => !option.meta).length === 2;
+
+function TriStateEditor({ field, filter, setValues, clear }: FieldEditorProps) {
+  const choices = (field.options ?? [])
+    .filter((option) => !option.meta)
+    .map(({ value, label }) => ({ value, label }));
+  const value = filter?.values[0];
+  return (
+    <Picker
+      mode="segmented"
+      label={`Filter ${labelOf(field)}`}
+      options={[{ value: ANY_SEGMENT, label: "Any" }, ...choices]}
+      value={
+        value !== undefined && choices.some((choice) => choice.value === value)
+          ? value
+          : ANY_SEGMENT
+      }
+      onValueChange={(next) => {
+        if (next === null || next === ANY_SEGMENT) clear();
+        else setValues([next]);
+      }}
+    />
+  );
+}
+
+/**
+ * A value list edited in place: the inline Picker's checklist, each pick
+ * written as it is made. Any value / No value lead the roster above its
+ * divider; a multi-valued field adds Match any | Match all, an excludable one
+ * is | is not, a hierarchical reference its "Include sub-…" switch.
+ */
+function ChecklistEditor({
   field,
   filter,
-  side,
+  side: initialSide = "is",
+  setValues,
+}: FieldEditorProps) {
+  const [side, setSide] = useState<FilterSide>(initialSide);
+  const values = filter?.values ?? [];
+  const roster = visibleOptions(field, filter);
+  // Any value / No value belong to the "is" side.
+  const isNotRoster = useMemo(
+    () =>
+      roster.filter(
+        (option) => option.value !== FILTER_ANY && option.value !== FILTER_NONE,
+      ),
+    [roster],
+  );
+  const label = labelOf(field);
+  useEffect(() => {
+    field.onActivate?.(selectedValues(filter?.values ?? []));
+  }, [field, filter?.values]);
+  const header =
+    field.matchAll || field.subtree || field.exclude ? (
+      <>
+        {field.exclude && (
+          <SideControl
+            label={label}
+            side={side}
+            reason={field.exclude.reason}
+            onSideChange={setSide}
+          />
+        )}
+        {field.matchAll && side === "is" && (
+          <Picker
+            mode="segmented"
+            label={`Match ${label}`}
+            options={MATCH_OPTIONS}
+            value={values.includes(FILTER_ALL) ? "all" : "any"}
+            onValueChange={(value) => {
+              if (value)
+                setValues(withMode(values, FILTER_ALL, value === "all"));
+            }}
+          />
+        )}
+        {field.subtree && (
+          <label className="flex items-center justify-between gap-3 px-1 text-xs">
+            {field.subtree.label}
+            <Switch
+              checked={!values.includes(FILTER_EXACT)}
+              onCheckedChange={(checked: boolean) =>
+                setValues(withMode(values, FILTER_EXACT, !checked))
+              }
+            />
+          </label>
+        )}
+      </>
+    ) : undefined;
+  return (
+    <Picker
+      presentation="inline"
+      multiple
+      label={`Filter ${label}`}
+      options={side === "is" ? roster : isNotRoster}
+      values={sideValues(values, side)}
+      onValuesChange={(picked) =>
+        setValues(withSideValues(values, side, picked))
+      }
+      onSearchChange={field.onSearchChange}
+      isLoading={field.isLoading}
+      records={field.records}
+      header={header}
+    />
+  );
+}
+
+/** "In this list: 3 to 48", from the range facet under the other filters. */
+function BoundsHint({ field }: { field: FilterBarField }) {
+  const { min, max } = field.bounds ?? { min: null, max: null };
+  if (min === null && max === null) return null;
+  return (
+    <p className="px-1 text-xs text-muted-foreground tabular-nums">
+      In this list: {min ?? "…"} to {max ?? "…"}
+    </p>
+  );
+}
+
+/** One value (a preset, a single reference) picked from the inline list. */
+function SingleValueEditor({
+  field,
+  filter,
   setValues,
   clear,
-}: {
+}: FieldEditorProps) {
+  const value = filter?.values[0];
+  const isBounds =
+    (field.dateRange === true || field.numberRange !== undefined) &&
+    value !== undefined &&
+    parseRangeBounds(value) !== undefined;
+  useEffect(() => {
+    field.onActivate?.(selectedValues(filter?.values ?? []));
+  }, [field, filter?.values]);
+  return (
+    <Picker
+      presentation="inline"
+      options={visibleOptions(field, filter)}
+      value={isBounds ? null : (value ?? null)}
+      onValueChange={(next) => (next === null ? clear() : setValues([next]))}
+      label={`Filter ${labelOf(field)}`}
+      onSearchChange={field.onSearchChange}
+      isLoading={field.isLoading}
+      records={field.records}
+    />
+  );
+}
+
+interface FieldEditorProps {
   field: FilterBarField;
   filter: Filter | undefined;
-  /** The side a chip opens on; the editor can switch it. */
+  /** The side a chip opens on; a checklist can switch it. */
   side?: FilterSide;
   setValues: (values: string[]) => void;
   clear: () => void;
-}) {
-  const options = visibleOptions(field, filter);
+}
+
+/** The editor for one field, shaped by what its values are; every edit applies. */
+function FieldValueEditor(props: FieldEditorProps) {
+  const { field, filter, setValues } = props;
   if (field.type === "text") {
     return (
       <Input
@@ -677,82 +772,53 @@ function FilterValueEditor({
         type={field.inputType ?? "text"}
         min={field.min}
         max={field.max}
-        aria-label={`Filter ${field.label ?? field.key}`}
+        aria-label={`Filter ${labelOf(field)}`}
+        className="h-7 text-xs"
       />
     );
   }
-  if (field.type === "multiselect" && field.freeText) {
+  if (field.type === "multiselect" && field.freeText)
     return (
       <TypedValuesEditor field={field} filter={filter} setValues={setValues} />
     );
-  }
-  if (field.type === "multiselect") {
-    return (
-      <MultiselectEditor
-        field={field}
-        filter={filter}
-        initialSide={side}
-        onApply={setValues}
-        onClear={clear}
-      />
-    );
-  }
+  if (field.type === "multiselect") return <ChecklistEditor {...props} />;
+  if (isTriState(field)) return <TriStateEditor {...props} />;
   const value = filter?.values[0];
-  const isBounds =
-    (field.dateRange === true || field.numberRange !== undefined) &&
-    value !== undefined &&
-    parseRangeBounds(value) !== undefined;
-  const picker = (
-    <Picker
-      options={options}
-      value={isBounds ? null : (value ?? null)}
-      onValueChange={(value) => setValues(value === null ? [] : [value])}
-      placeholder={
-        isBounds ? "Custom range" : `Filter ${field.label ?? field.key}`
-      }
-      label={`Filter ${field.label ?? field.key}`}
-      clearable
-      className="w-full"
-      onOpenChange={(open) => {
-        if (open) field.onActivate?.(selectedValues(filter?.values ?? []));
-      }}
-      onSearchChange={field.onSearchChange}
-      isLoading={field.isLoading}
-      records={field.records}
-    />
-  );
-  if (field.numberRange) {
+  const hasPresets = visibleOptions(field, filter).length > 0;
+  if (field.numberRange)
     return (
       <>
-        {options.length > 0 && picker}
+        {hasPresets && <SingleValueEditor {...props} />}
         <NumberRangeBounds
-          label={field.label ?? field.key}
+          label={labelOf(field)}
           range={field.numberRange}
           value={value}
-          separated={options.length > 0}
+          separated={hasPresets}
           onChange={(next) => setValues(next === undefined ? [] : [next])}
         />
+        <BoundsHint field={field} />
       </>
     );
-  }
-  if (!field.dateRange) return picker;
-  return (
-    <>
-      {options.length > 0 && picker}
-      <DateRangeBounds
-        value={value}
-        onChange={(next) => setValues(next === undefined ? [] : [next])}
-      />
-    </>
-  );
+  if (field.dateRange)
+    return (
+      <>
+        {hasPresets && <SingleValueEditor {...props} />}
+        <DateRangeBounds
+          value={value}
+          onChange={(next) => setValues(next === undefined ? [] : [next])}
+        />
+        <BoundsHint field={field} />
+      </>
+    );
+  return <SingleValueEditor {...props} />;
 }
 
-function FilterEditor(props: Parameters<typeof FilterValueEditor>[0]) {
+function FilterFieldEditor(props: FieldEditorProps) {
   return (
     <div className="flex flex-col gap-2">
-      <FilterValueEditor {...props} />
+      <FieldValueEditor {...props} />
       {props.field.description && (
-        <p className="text-xs text-muted-foreground">
+        <p className="px-1 text-xs text-muted-foreground">
           {props.field.description}
         </p>
       )}
@@ -760,9 +826,249 @@ function FilterEditor(props: Parameters<typeof FilterValueEditor>[0]) {
   );
 }
 
+/** What the list shows under the current filters, for the panel footer and strip. */
+export interface FilterResultCount {
+  /** Rows matching every filter. */
+  matching?: number;
+  /** Rows with no filter applied. */
+  total?: number;
+  /** The plural noun the counts name ("accounts"). */
+  noun?: string;
+}
+
+const resultLine = ({ matching, total, noun }: FilterResultCount) =>
+  matching === undefined
+    ? null
+    : total === undefined || total === matching
+      ? `${formatCount(matching)}${noun ? ` ${noun}` : ""}`
+      : `${formatCount(matching)} of ${formatCount(total)}${noun ? ` ${noun}` : ""}`;
+
 /**
- * One declared-filter chip: `<b>Label</b> value|any`, or `<b>Label</b> is not
- * value` for the excluded side, and opens its editor on that side.
+ * Panel sections in first-appearance order, the active fields lifted out.
+ * The open row keeps the section it opened in: moving it mid-edit would
+ * remount its editor under the cursor.
+ */
+function panelSections(
+  fields: readonly FilterBarField[],
+  filtersByField: ReadonlyMap<string, Filter>,
+  open: { key: string; active: boolean } | null,
+) {
+  const active: FilterBarField[] = [];
+  const groups = new Map<string, FilterBarField[]>();
+  for (const field of fields) {
+    const isActive =
+      field.key === open?.key
+        ? open.active
+        : isFieldActive(filtersByField.get(field.key));
+    if (isActive) {
+      active.push(field);
+      continue;
+    }
+    const group = field.group ?? "Other";
+    groups.set(group, [...(groups.get(group) ?? []), field]);
+  }
+  return { active, groups: [...groups] };
+}
+
+function PanelSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="flex flex-col py-1">
+      <h3 className="px-2 pt-1 pb-0.5 text-2xs font-medium tracking-wide text-muted-foreground uppercase">
+        {title}
+      </h3>
+      {children}
+    </section>
+  );
+}
+
+/**
+ * One field in the panel: type glyph, label, and its value only while
+ * active. Clicking expands its editor in place, one row at a time.
+ */
+function PanelRow({
+  field,
+  filter,
+  open,
+  onToggle,
+  children,
+}: {
+  field: FilterBarField;
+  filter: Filter | undefined;
+  open: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  const label = labelOf(field);
+  const summary = filterSummary(field, filter);
+  const editorId = useId();
+  return (
+    <div className={cn("rounded-sm", open && "bg-muted/60")}>
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={open ? editorId : undefined}
+        aria-label={summary ? `${label}: ${summary}` : label}
+        title={summary ? `${label}: ${summary}` : undefined}
+        className="flex min-h-7 w-full items-center gap-2 rounded-sm px-2 text-left text-xs outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring max-sm:min-h-11"
+        onClick={onToggle}
+      >
+        <span className="flex shrink-0 text-muted-foreground">
+          <FilterTypeGlyph field={field} />
+        </span>
+        <span className={cn("shrink-0", summary && "font-medium")}>
+          {label}
+        </span>
+        {summary ? (
+          <span className="ml-auto min-w-0 truncate text-muted-foreground">
+            {summary}
+          </span>
+        ) : null}
+        <CaretDownIcon
+          aria-hidden
+          className={cn(
+            "size-3 shrink-0 text-muted-foreground transition-transform duration-150 motion-reduce:transition-none",
+            !summary && "ml-auto",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+      {open ? (
+        <div id={editorId} className="pt-1 pr-2 pb-2 pl-7">
+          {children}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The Filters panel: every declared filter, searchable, the active ones
+ * first and the rest grouped by their edit section. Rows expand their editor
+ * in place and every edit applies as it is made; the footer reports the
+ * live result count.
+ */
+export function FiltersPanel({
+  filters,
+  fields,
+  onChange,
+  searchKey,
+  initialKey = null,
+  onEditorChange,
+  resultCount,
+}: FilterEditsArgs & {
+  /** A field whose editor starts open (a header's Filter). */
+  initialKey?: string | null;
+  /** Which editor is open, so its owner can load that field's facets. */
+  onEditorChange?: (key: string | null) => void;
+  resultCount?: FilterResultCount;
+}) {
+  const [query, setQuery] = useState("");
+  const { filtersByField, chipFields, setValues, clear } = useFilterEdits({
+    filters,
+    fields,
+    onChange,
+    searchKey,
+  });
+  const placed = (key: string | null) =>
+    key === null
+      ? null
+      : { key, active: isFieldActive(filtersByField.get(key)) };
+  const [open, setOpen] = useState(() => placed(initialKey));
+  const openKey = open?.key ?? null;
+  useEffect(() => {
+    onEditorChange?.(openKey);
+  }, [onEditorChange, openKey]);
+  const needle = query.trim().toLocaleLowerCase();
+  const matches = chipFields.filter((field) =>
+    labelOf(field).toLocaleLowerCase().includes(needle),
+  );
+  const { active, groups } = panelSections(matches, filtersByField, open);
+  const activeCount = chipFields.filter((field) =>
+    isFieldActive(filtersByField.get(field.key)),
+  ).length;
+  const row = (field: FilterBarField) => (
+    <PanelRow
+      key={field.key}
+      field={field}
+      filter={filtersByField.get(field.key)}
+      open={openKey === field.key}
+      onToggle={() => setOpen(placed(openKey === field.key ? null : field.key))}
+    >
+      <FilterFieldEditor
+        field={field}
+        filter={filtersByField.get(field.key)}
+        setValues={(values) => setValues(field, values)}
+        clear={() => clear(field)}
+      />
+    </PanelRow>
+  );
+  const counted = resultCount ? resultLine(resultCount) : null;
+  return (
+    <div className="flex max-h-[min(36rem,var(--available-height,36rem))] min-h-0 flex-col">
+      <div className="flex shrink-0 items-center gap-2 border-b border-border p-2">
+        <div className="relative flex flex-1 items-center">
+          <MagnifyingGlassIcon
+            aria-hidden
+            className="pointer-events-none absolute left-2 size-3.5 text-muted-foreground"
+          />
+          <Input
+            ref={focusOnMount}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Find a filter"
+            aria-label="Find a filter"
+            className="h-7 pl-7 text-xs"
+          />
+        </div>
+        {activeCount > 0 && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 shrink-0"
+            onClick={() => onChange([])}
+          >
+            Clear all
+          </Button>
+        )}
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 py-0.5">
+        {active.length > 0 && (
+          <PanelSection title={`Active · ${active.length}`}>
+            {active.map(row)}
+          </PanelSection>
+        )}
+        {groups.map(([group, members]) => (
+          <PanelSection key={group} title={group}>
+            {members.map(row)}
+          </PanelSection>
+        ))}
+        {matches.length === 0 && (
+          <p className="px-2 py-3 text-xs text-muted-foreground">
+            No filter matches “{query.trim()}”.
+          </p>
+        )}
+      </div>
+      <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border px-3 py-1.5 text-xs text-muted-foreground">
+        <span className="tabular-nums" aria-live="polite">
+          {activeCount === 1 ? "1 filter" : `${activeCount} filters`}
+          {counted ? ` · ${counted}` : ""}
+        </span>
+        <span>Applies as you go</span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * One active filter: "Field · is any of · values", with its own ×. The chip
+ * opens that field's editor alone; an excluded side gets its own chip.
  */
 function FilterChip({
   field,
@@ -774,6 +1080,7 @@ function FilterChip({
   clear,
 }: {
   field: FilterBarField;
+  /** Absent while its open editor has emptied it; the chip stays until closed. */
   filter: Filter | undefined;
   side: FilterSide;
   open: boolean;
@@ -781,50 +1088,228 @@ function FilterChip({
   setValues: (values: string[]) => void;
   clear: () => void;
 }) {
-  const label = field.label ?? field.key;
+  const label = labelOf(field);
   const summary = filterSummary(field, filter, side);
-  const active = activeSides(filter?.values).includes(side);
+  const values = filterSummary(field, filter, side, ", ");
+  const operator = chipOperator(field, filter, side);
+  const name = summary ? `${label}: ${summary}` : label;
+  const clearSide = () => {
+    const rest = withSideValues(filter?.values ?? [], side, []);
+    if (field.type === "multiselect" && activeSides(rest).length)
+      setValues(rest);
+    else clear();
+  };
   return (
-    <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger
-        render={
-          <button
-            type="button"
-            aria-label={`${label}: ${summary}`}
-            title={`${label}: ${summary}`}
-            className={cn(
-              "flex h-7 max-w-56 shrink-0 items-center gap-1.5 rounded-md border border-border bg-card px-2 pl-2.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-primary",
-              active && "border-primary bg-primary/8",
-            )}
+    <span className="inline-flex h-6 max-w-80 min-w-0 shrink-0 items-center rounded-sm border border-border bg-card text-xs">
+      <Popover open={open} onOpenChange={onOpenChange}>
+        <PopoverTrigger
+          render={
+            <button
+              type="button"
+              aria-label={name}
+              title={name}
+              className="flex h-full min-w-0 items-center gap-1 rounded-l-sm pr-1 pl-2 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          }
+        >
+          <span className="shrink-0 font-medium">{label}</span>
+          {operator ? (
+            <span className="shrink-0 text-muted-foreground">{operator}</span>
+          ) : null}
+          <span className="min-w-0 truncate">{values}</span>
+        </PopoverTrigger>
+        <PopoverContent
+          align="start"
+          className="max-h-(--available-height) w-72 overflow-y-auto"
+        >
+          <PopoverTitle className="text-sm font-semibold">{label}</PopoverTitle>
+          <FilterFieldEditor
+            field={field}
+            filter={filter}
+            side={side}
+            setValues={setValues}
+            clear={clear}
           />
-        }
+        </PopoverContent>
+      </Popover>
+      <button
+        type="button"
+        aria-label={`Clear ${label} filter`}
+        className="flex h-full w-5 shrink-0 items-center justify-center rounded-r-sm text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        onClick={clearSide}
       >
-        <b className="font-medium">{label}</b>
-        <span className="min-w-0 truncate text-muted-foreground">
-          {summary}
-        </span>
-      </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        className="max-h-(--available-height) w-72 overflow-y-auto"
-      >
-        <PopoverTitle className="font-heading font-bold">
-          Filter by {label}
-        </PopoverTitle>
-        <FilterEditor
-          field={field}
-          filter={filter}
-          side={side}
-          setValues={setValues}
-          clear={clear}
-        />
-      </PopoverContent>
-    </Popover>
+        <XIcon className="size-3" />
+      </button>
+    </span>
   );
 }
 
-/** The declared broad-search input: compact on the desktop bar, full-height in the mobile tier. */
-function FilterSearchField({
+/**
+ * The active-filter strip directly above the records: one chip per active
+ * filter, "+ Filter" into the panel, Clear, and the filtered total. The page
+ * strip it renders into carries the totals and suggestion sweep status.
+ */
+export function ActiveFilterChips({
+  filters,
+  fields,
+  onChange,
+  searchKey,
+  resultCount,
+  onEditorChange,
+  className,
+}: FilterEditsArgs & {
+  resultCount?: FilterResultCount;
+  onEditorChange?: (key: string | null) => void;
+  className?: string;
+}) {
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const { filtersByField, chipFields, setValues, clear } = useFilterEdits({
+    filters,
+    fields,
+    onChange,
+    searchKey,
+  });
+  useEffect(() => {
+    if (addOpen) return;
+    onEditorChange?.(
+      editingKey ? editingKey.slice(0, editingKey.lastIndexOf(":")) : null,
+    );
+  }, [addOpen, editingKey, onEditorChange]);
+  const active = chipFields.filter((field) =>
+    isFieldActive(filtersByField.get(field.key)),
+  );
+  // The chip being edited stays while its editor is open, even emptied:
+  // unpicking the last value before picking another must not close it.
+  const editingSplit = editingKey?.lastIndexOf(":") ?? -1;
+  const editingField = editingKey?.slice(0, editingSplit);
+  const editingSide: FilterSide =
+    editingKey?.slice(editingSplit + 1) === "isNot" ? "isNot" : "is";
+  const shown = chipFields.filter(
+    (field) =>
+      field.key === editingField ||
+      isFieldActive(filtersByField.get(field.key)),
+  );
+  const counted =
+    active.length > 0 && resultCount ? resultLine(resultCount) : null;
+  // Nothing active: no strip (the toolbar's Filter button is the way in).
+  if (shown.length === 0) return null;
+  return (
+    <div
+      data-active-filter-strip=""
+      className={cn(
+        "flex min-w-0 flex-1 flex-wrap items-center gap-1.5",
+        className,
+      )}
+    >
+      {shown.flatMap((field) => {
+        const filter = filtersByField.get(field.key);
+        const sides = activeSides(filter?.values);
+        if (field.key === editingField && !sides.includes(editingSide))
+          sides.push(editingSide);
+        return sides.map((side) => {
+          const key = `${field.key}:${side}`;
+          return (
+            <FilterChip
+              key={key}
+              field={field}
+              filter={filter}
+              side={side}
+              open={editingKey === key}
+              onOpenChange={(open) => setEditingKey(open ? key : null)}
+              setValues={(values) => setValues(field, values)}
+              clear={() => {
+                clear(field);
+                setEditingKey(null);
+              }}
+            />
+          );
+        });
+      })}
+      {chipFields.length > 0 && (
+        <Popover open={addOpen} onOpenChange={setAddOpen}>
+          <PopoverTrigger
+            render={
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-label="Add filter"
+                className="h-6 shrink-0 px-1.5 text-xs text-muted-foreground"
+              />
+            }
+          >
+            <PlusIcon className="size-3" />
+            Filter
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-[28rem] p-0">
+            <FiltersPanel
+              filters={filters}
+              fields={fields}
+              onChange={onChange}
+              searchKey={searchKey}
+              onEditorChange={onEditorChange}
+              resultCount={resultCount}
+            />
+          </PopoverContent>
+        </Popover>
+      )}
+      {active.length > 0 && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-6 shrink-0 px-1.5 text-xs"
+          onClick={() => onChange([])}
+        >
+          Clear
+        </Button>
+      )}
+      {counted ? (
+        <span className="ml-auto text-xs text-muted-foreground tabular-nums">
+          {counted}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/** `/` focuses the search when the person is not already typing somewhere. */
+function useSlashHotkey(
+  input: RefObject<HTMLInputElement | null>,
+  enabled: boolean,
+) {
+  useEffect(() => {
+    if (!enabled) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.key !== "/" ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        event.defaultPrevented
+      )
+        return;
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target.closest("input, textarea, select, [role='combobox']"))
+      )
+        return;
+      const element = input.current;
+      // Hidden (the other breakpoint's copy): leave the key alone.
+      if (!element || element.getClientRects().length === 0) return;
+      event.preventDefault();
+      element.focus();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [enabled, input]);
+}
+
+/** The declared broad-search input: compact with a `/` hotkey on desktop, full-height in the mobile tier. */
+export function FilterSearchField({
   dense = false,
   label,
   value,
@@ -838,6 +1323,8 @@ function FilterSearchField({
   /** Desktop only: renders a clear button while the input has text. */
   onClear?: () => void;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  useSlashHotkey(inputRef, dense);
   return (
     <div
       className={cn(
@@ -852,13 +1339,18 @@ function FilterSearchField({
         )}
       />
       <Input
+        ref={inputRef}
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && dense) event.currentTarget.blur();
+        }}
         placeholder={label}
         aria-label={label}
-        className={dense ? "h-8 pr-6 pl-7 text-xs" : "h-9 pr-3 pl-8"}
+        aria-keyshortcuts={dense ? "/" : undefined}
+        className={dense ? "h-8 pr-7 pl-7 text-xs" : "h-9 pr-3 pl-8"}
       />
-      {value && onClear && (
+      {value && onClear ? (
         <button
           type="button"
           aria-label="Clear search"
@@ -867,23 +1359,162 @@ function FilterSearchField({
         >
           <XIcon className="size-3.5" />
         </button>
+      ) : dense ? (
+        <kbd
+          aria-hidden
+          className="pointer-events-none absolute right-1.5 flex h-4 min-w-4 items-center justify-center rounded-[3px] border border-border px-1 font-mono text-2xs text-muted-foreground"
+        >
+          /
+        </kbd>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The desktop query controls: search, `Filter · N` opening the panel, and
+ * the active-filter strip — in place, or portaled into the strip above the
+ * records when the page provides one (`chipsTarget`).
+ */
+export function FilterBar({
+  filters,
+  fields,
+  onChange,
+  className,
+  searchKey,
+  searchPlaceholder,
+  chipsTarget,
+  resultCount,
+  onEditorChange,
+  editRequest,
+}: FilterEditsArgs & {
+  className?: string;
+  /**
+   * Open the panel on one field's editor (a column header's Filter…). A new
+   * object reopens even when the key repeats.
+   */
+  editRequest?: { key: string } | null;
+  searchPlaceholder?: string;
+  /** The strip above the records; `null` while it mounts, omitted for inline chips. */
+  chipsTarget?: HTMLElement | null;
+  resultCount?: FilterResultCount;
+  /** Which editor is open, so the owner can load its facets. */
+  onEditorChange?: (key: string | null) => void;
+}) {
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [panelKey, setPanelKey] = useState<string | null>(null);
+  useEffect(() => {
+    if (!editRequest) return;
+    setPanelKey(editRequest.key);
+    setPanelOpen(true);
+  }, [editRequest]);
+  const onPanelOpenChange = (open: boolean) => {
+    setPanelOpen(open);
+    if (!open) setPanelKey(null);
+  };
+  const {
+    filtersByField,
+    searchField,
+    chipFields,
+    setValues,
+    clear,
+    searchValue,
+  } = useFilterEdits({ filters, fields, onChange, searchKey });
+  useEffect(() => {
+    for (const field of fields) {
+      const filter = filtersByField.get(field.key);
+      if (filter && isFieldActive(filter))
+        field.onActivate?.(selectedValues(filter.values));
+    }
+  }, [fields, filtersByField]);
+  const activeCount = chipFields.filter((field) =>
+    isFieldActive(filtersByField.get(field.key)),
+  ).length;
+  const chips = (
+    <ActiveFilterChips
+      filters={filters}
+      fields={fields}
+      onChange={onChange}
+      searchKey={searchKey}
+      resultCount={resultCount}
+      onEditorChange={onEditorChange}
+      className={chipsTarget ? "max-md:hidden" : undefined}
+    />
+  );
+  return (
+    <div
+      className={cn("flex min-w-0 flex-wrap items-center gap-1.5", className)}
+    >
+      {searchField && (
+        <FilterSearchField
+          dense
+          label={
+            searchPlaceholder ?? `Search ${searchField.label ?? "records"}`
+          }
+          value={searchValue}
+          onChange={(value) => setValues(searchField, [value])}
+          onClear={() => clear(searchField)}
+        />
       )}
+      {chipFields.length > 0 && (
+        <Popover open={panelOpen} onOpenChange={onPanelOpenChange}>
+          <PopoverTrigger
+            render={
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                aria-label="Filters"
+                className="h-8 shrink-0 gap-1.5"
+              />
+            }
+          >
+            <FunnelIcon className="size-3.5" />
+            Filter
+            {activeCount > 0 && (
+              <span className="font-medium text-foreground tabular-nums">
+                {activeCount}
+              </span>
+            )}
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-[28rem] p-0">
+            <FiltersPanel
+              key={panelKey ?? ""}
+              filters={filters}
+              fields={fields}
+              onChange={onChange}
+              searchKey={searchKey}
+              initialKey={panelKey}
+              onEditorChange={onEditorChange}
+              resultCount={resultCount}
+            />
+          </PopoverContent>
+        </Popover>
+      )}
+      {chipsTarget === undefined
+        ? chips
+        : chipsTarget
+          ? createPortal(chips, chipsTarget)
+          : null}
     </div>
   );
 }
 
 /** Filter-list edits shared by the desktop bar and the phone filter tier. */
+interface FilterEditsArgs {
+  filters: Filter[];
+  fields: FilterBarField[];
+  onChange: (filters: Filter[]) => void;
+  /** The declared broad search field, rendered as an input rather than a filter row. */
+  searchKey?: string | undefined;
+}
+
 function useFilterEdits({
   filters,
   fields,
   onChange,
   searchKey,
-}: {
-  filters: Filter[];
-  fields: FilterBarField[];
-  onChange: (filters: Filter[]) => void;
-  searchKey: string | undefined;
-}) {
+}: FilterEditsArgs) {
   const filtersByField = useMemo(
     () => new Map(filters.map((filter) => [filter.field, filter])),
     [filters],
@@ -941,207 +1572,6 @@ function useFilterEdits({
     clear,
     searchValue,
   };
-}
-
-/**
- * Compact, manifest-backed expression of the table's active query: a search
- * input for the entity's declared primary search, one chip per every other declared
- * field (capped, with the rest behind `More`), and a `Clear N` link.
- *
- * This intentionally supports only the three filter shapes emitted by
- * `barFieldFromConfig`. The old copy-owned ReUI component advertised async
- * loaders, custom renderers, nested groups, arbitrary operators and shortcut
- * handling, none of which Cubby's two production filter bars supplied.
- */
-export function FilterBar({
-  filters,
-  fields,
-  onChange,
-  className,
-  searchKey,
-  searchPlaceholder,
-  collapsed = false,
-}: {
-  filters: Filter[];
-  fields: FilterBarField[];
-  onChange: (filters: Filter[]) => void;
-  className?: string;
-  /** Page workbenches show active chips and disclose inactive fields. */
-  collapsed?: boolean;
-  /** The declared broad search field rendered as an input instead of a chip. */
-  searchKey?: string;
-  searchPlaceholder?: string;
-}) {
-  const [editingKey, setEditingKey] = useState<string | null>(null);
-  const [moreOpen, setMoreOpen] = useState(false);
-  const {
-    filtersByField,
-    searchField,
-    chipFields,
-    activeCount,
-    setValues,
-    clear,
-    searchValue,
-  } = useFilterEdits({ filters, fields, onChange, searchKey });
-  useEffect(() => {
-    for (const field of fields) {
-      const filter = filtersByField.get(field.key);
-      if (filter && isFieldActive(filter))
-        field.onActivate?.(selectedValues(filter.values));
-    }
-  }, [fields, filtersByField]);
-  const visibleChipFields = collapsed
-    ? chipFields.filter((field) => isFieldActive(filtersByField.get(field.key)))
-    : chipFields.slice(0, CHIP_CAP);
-  const overflowChipFields = collapsed
-    ? chipFields
-    : chipFields.slice(CHIP_CAP);
-
-  return (
-    <div
-      className={cn(
-        "flex min-w-0 items-center gap-1.5 overflow-x-auto overscroll-x-contain md:flex-wrap md:overflow-visible",
-        className,
-      )}
-    >
-      {searchField && (
-        <FilterSearchField
-          dense
-          label={
-            searchPlaceholder ?? `Search ${searchField.label ?? "records"}`
-          }
-          value={searchValue}
-          onChange={(value) => setValues(searchField, [value])}
-          onClear={() => clear(searchField)}
-        />
-      )}
-
-      {visibleChipFields.flatMap((field) => {
-        const filter = filtersByField.get(field.key);
-        // Each active side gets its own chip; an inactive field shows one.
-        const sides = activeSides(filter?.values);
-        return (sides.length ? sides : (["is"] as const)).map((side) => {
-          const key = `${field.key}:${side}`;
-          return (
-            <FilterChip
-              key={key}
-              field={field}
-              filter={filter}
-              side={side}
-              open={editingKey === key && !moreOpen}
-              onOpenChange={(open) => setEditingKey(open ? key : null)}
-              setValues={(values) => {
-                setValues(field, values);
-                // Apply commits and closes; a text/combobox editor commits per
-                // keystroke and stays open until dismissed.
-                if (field.type === "multiselect" && !field.freeText)
-                  setEditingKey(null);
-              }}
-              clear={() => {
-                clear(field);
-                setEditingKey(null);
-              }}
-            />
-          );
-        });
-      })}
-
-      {overflowChipFields.length > 0 &&
-        (() => {
-          const editingOverflow = overflowChipFields.find(
-            (field) => field.key === editingKey,
-          );
-          return (
-            <Popover
-              open={moreOpen}
-              onOpenChange={(open) => {
-                setMoreOpen(open);
-                if (!open) setEditingKey(null);
-              }}
-            >
-              <PopoverTrigger
-                render={
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 shrink-0"
-                    aria-label={collapsed ? "Filters" : "More"}
-                  />
-                }
-              >
-                {collapsed ? (
-                  <FunnelIcon className="size-3.5" />
-                ) : (
-                  <CaretDownIcon className="size-3.5" />
-                )}
-                {collapsed ? "Filters" : "More"}
-              </PopoverTrigger>
-              <PopoverContent
-                align="start"
-                className="max-h-(--available-height) w-72 overflow-y-auto"
-              >
-                {editingOverflow ? (
-                  <>
-                    <PopoverTitle className="font-heading font-bold">
-                      Filter by {editingOverflow.label ?? editingOverflow.key}
-                    </PopoverTitle>
-                    <FilterEditor
-                      field={editingOverflow}
-                      filter={filtersByField.get(editingOverflow.key)}
-                      setValues={(values) => setValues(editingOverflow, values)}
-                      clear={() => {
-                        clear(editingOverflow);
-                        setEditingKey(null);
-                      }}
-                    />
-                  </>
-                ) : (
-                  <>
-                    <PopoverTitle className="font-heading font-bold">
-                      {collapsed ? "Filters" : "More filters"}
-                    </PopoverTitle>
-                    <div className="flex flex-col gap-px">
-                      {overflowChipFields.map((field) => {
-                        const filter = filtersByField.get(field.key);
-                        const label = field.label ?? field.key;
-                        const summary = filterSummary(field, filter);
-                        return (
-                          <button
-                            key={field.key}
-                            type="button"
-                            aria-label={`${label}: ${summary}`}
-                            className="flex min-h-9 items-center justify-between gap-2 rounded-sm px-2 text-left text-xs hover:bg-muted"
-                            onClick={() => setEditingKey(field.key)}
-                          >
-                            <b className="font-medium">{label}</b>
-                            <span className="min-w-0 truncate text-muted-foreground">
-                              {summary}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
-              </PopoverContent>
-            </Popover>
-          );
-        })()}
-
-      {activeCount > 0 && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 shrink-0 text-primary"
-          onClick={() => onChange([])}
-        >
-          Clear {activeCount}
-        </Button>
-      )}
-    </div>
-  );
 }
 
 /**
@@ -1303,7 +1733,7 @@ export function MobileFilterTier<TData extends RowData>({
         }
       >
         {editingField ? (
-          <FilterEditor
+          <FilterFieldEditor
             field={editingField}
             filter={filtersByField.get(editingField.key)}
             setValues={(values) => {

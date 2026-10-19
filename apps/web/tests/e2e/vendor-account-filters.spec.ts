@@ -2,7 +2,6 @@ import {
   closePopovers,
   gotoAuthenticatedPage,
   reloadAuthenticatedPage,
-  selectComboboxItem,
   uniqueName,
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
@@ -43,15 +42,11 @@ test("vendor accounts filter by member from the Filters menu", async ({
   await expect(account(birch)).toBeVisible();
 
   await page.getByRole("button", { name: "Filters", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Ledger party: any", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Ledger party", exact: true }).click();
   const picker = page.getByRole("combobox", { name: "Filter Ledger party" });
-  await picker.click();
   await picker.fill(alder.name);
+  // The pick applies at once; there is no Apply step.
   await page.getByRole("option", { name: alder.name }).click();
-  await picker.click();
-  await page.getByRole("button", { name: "Apply", exact: true }).click();
   await closePopovers(page);
 
   const chip = page.getByRole("button", {
@@ -67,7 +62,7 @@ test("vendor accounts filter by member from the Filters menu", async ({
   await expect(chip).toBeVisible();
   await expect(account(birch)).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Clear 1", exact: true }).click();
+  await page.getByRole("button", { name: "Clear", exact: true }).click();
   await expect(account(birch)).toBeVisible();
   expect(new URL(page.url()).searchParams.has("ledgerPartyId")).toBe(false);
 
@@ -75,14 +70,14 @@ test("vendor accounts filter by member from the Filters menu", async ({
   const pickHasPurchases = async (answer: "Yes" | "No") => {
     await page.getByRole("button", { name: "Filters", exact: true }).click();
     await page
-      .getByRole("button", { name: /^Has purchases: / })
+      .getByRole("button", { name: /^Has purchases(: |$)/ })
       .last()
       .click();
-    await selectComboboxItem(
-      page,
-      page.getByRole("combobox", { name: "Filter Has purchases" }),
-      answer,
-    );
+    // A presence filter edits as Any | Yes | No.
+    await page
+      .getByRole("group", { name: "Filter Has purchases" })
+      .getByRole("button", { name: answer, exact: true })
+      .click();
     await closePopovers(page);
   };
 

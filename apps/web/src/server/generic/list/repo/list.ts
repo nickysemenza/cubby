@@ -55,6 +55,7 @@ import {
 import type { PgSelect, PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
+import type { ListFacet } from "~/contracts/entity-list.contract";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   effectiveFieldInSql,
@@ -1614,6 +1615,26 @@ type ListScaffoldArgs<E extends Entity> = [
 
 const scopeValue = listFilterValues.optional();
 
+/** What the generic facet operation needs from an entity's list scaffold. */
+interface ListFacetCounter {
+  countBy(
+    db: Database | DrizzleTransaction,
+    filters: ListFilterValues,
+    descriptorId: string,
+  ): Promise<ListFacet | null>;
+}
+
+/**
+ * Each entity's scaffold, registered when its repository module builds it
+ * (once per entity, at module scope), so the generic facet operation can
+ * reach the same filtered WHERE without a per-repository method.
+ */
+const facetCounters = new Map<Entity, ListFacetCounter>();
+
+/** The entity's facet counter once its repository module has loaded. */
+export const listFacetCounter = (entity: Entity): ListFacetCounter | null =>
+  facetCounters.get(entity) ?? null;
+
 /**
  * `entity`/`table` scope the helpers to one entity's list. Call once per
  * repository (module scope is fine — request data lives in the
@@ -1980,6 +2001,85 @@ export function listScaffold<
     },
 
     /**
+     * One declared filter's facet over the filtered set minus that filter's
+     * own request keys, so its alternatives stay meaningful: per-value counts
+     * for a stored enum, boolean, presence or reference filter, min/max for a
+     * stored range. Derived and `anyOf` filters have no facet (null).
+     */
+    async countBy(
+      db: Database | DrizzleTransaction,
+      filters: ListFilterValues,
+      descriptorId: string,
+    ): Promise<ListFacet | null> {
+      const descriptor = descriptorsFor(entity).find(
+        (candidate) => candidate.columnId === descriptorId,
+      );
+      const [columnKey] = descriptor?.stored?.columns ?? [];
+      if (
+        !descriptor ||
+        columnKey === undefined ||
+        descriptor.derived !== null ||
+        descriptor.anyOf !== null
+      )
+        return null;
+      const own = new Set([
+        descriptor.field ?? descriptor.columnId,
+        ...descriptorValueKeys(descriptor),
+      ]);
+      const rest = Object.fromEntries(
+        Object.entries(listFilterValues.parse(filters)).filter(
+          ([key]) => !own.has(key),
+        ),
+      );
+      const stored = storedColumn(entity, table, descriptor, columnKey);
+      const context = await scaffold.context(db, {
+        filters: rest,
+        readIntent: "count",
+      });
+      const where = scaffold.where(rest, { context });
+      const source: PgTable | SQL =
+        scored !== null && hasDataQualityFilter(rest) ? qualitySource : table;
+      const value = stored.value;
+      if (descriptor.kind === "range") {
+        const bound = (aggregate: "min" | "max") =>
+          stored.kind === "timestamp"
+            ? sql<string | null>`${sql.raw(aggregate)}(${value})::date::text`
+            : sql<string | null>`${sql.raw(aggregate)}(${value})::text`;
+        const [row] = await unwrapDb(db)
+          .select({ min: bound("min"), max: bound("max") })
+          .from(source)
+          .where(where);
+        return {
+          id: descriptorId,
+          kind: "range",
+          min: row?.min ?? null,
+          max: row?.max ?? null,
+        };
+      }
+      const keyed = facetValueSql(entity, descriptor, stored);
+      if (keyed === null) return null;
+      const rows = await unwrapDb(db)
+        .select({
+          value: sql<string | null>`(${keyed})::text`,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(source)
+        .where(where)
+        .groupBy(sql`1`);
+      return {
+        id: descriptorId,
+        kind: "values",
+        options: rows.flatMap(({ value: key, count }) =>
+          key !== null
+            ? [{ value: key, count }]
+            : descriptor.nullable
+              ? [{ value: FILTER_NONE, count }]
+              : [],
+        ),
+      };
+    },
+
+    /**
      * One list read: where → order → page → rows + count → hydrate. A
      * `count` read never runs the row query or hydration.
      */
@@ -2182,5 +2282,46 @@ export function listScaffold<
       );
     },
   };
+  if (!facetCounters.has(entity)) facetCounters.set(entity, scaffold);
   return scaffold;
 }
+
+/**
+ * The key a row contributes to a value facet, as the filter value a pick
+ * sends: the enum value, `true`/`false`, `has`/`none`, or the referenced
+ * row's public shortcode (NULL is No value, a dangling or soft-deleted
+ * reference included). A text array contributes each element.
+ */
+const PRESENCE = presenceFilter.unwrap().enum;
+
+const facetValueSql = (
+  entity: Entity,
+  descriptor: StoredDescriptorView,
+  { value, kind, reference }: StoredColumn,
+): SQL | null => {
+  switch (descriptor.kind) {
+    case "boolean":
+      return kind === "boolean" ? sql`${value}` : sql`(${value}) IS NOT NULL`;
+    case "presence":
+      return sql`CASE WHEN (${value}) IS NULL THEN ${PRESENCE.none}::text ELSE ${PRESENCE.has}::text END`;
+    case "multiselect":
+      return descriptor.stored?.array ? sql`unnest(${value})` : sql`${value}`;
+    case "idMulti": {
+      const target = Object.keys(SHORTCODE_TABLE).find(
+        (key): key is ShortcodeEntity => key === reference,
+      );
+      const dbTable = target ? entityManifest[target].dbTable : null;
+      if (!target || dbTable === null)
+        throw new Error(
+          `${entity}.${descriptor.columnId} references ${String(reference)}, which has no shortcode table`,
+        );
+      return sql`(SELECT ref."shortcode" FROM ${sql.identifier(dbTable)} ref WHERE ref."id" = ${value}${
+        entityManifest[target].softDelete
+          ? sql` AND ref."deletedAt" IS NULL`
+          : sql``
+      })`;
+    }
+    default:
+      return null;
+  }
+};

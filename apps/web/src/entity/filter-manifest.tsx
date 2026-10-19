@@ -1,11 +1,15 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { entityKeys, entitySummary } from "@cubby/schemas/entity-summary";
 import { CURRENT_MEMBER_FILTER, humanize } from "@cubby/shared";
+import { match } from "ts-pattern";
 
+import { EntityIcon } from "~/entity/entities";
 import { isPickerEntity, recordSource } from "~/entity/picker/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import {
   barFieldFromConfig,
   type FilterBarField,
+  type FilterValueType,
 } from "~/ui/data-table/filter-bar-core";
 import type { FilterConfig } from "~/ui/data-table/table-meta";
 import {
@@ -167,6 +171,55 @@ const resolveSpecOptions = (
   ];
 };
 
+/** Which entity declares a generated spec, by identity: callers pass specs only. */
+const specEntity = new WeakMap<FilterSpec, Entity>(
+  entityKeys.flatMap((entity) =>
+    getEntityFilters(entity).map((spec) => [spec, entity] as const),
+  ),
+);
+
+/** What a declared filter's values are — the panel's glyph and editor. */
+export const filterValueType = (spec: FilterSpec): FilterValueType =>
+  match(spec.kind)
+    .with("text", () => "text" as const)
+    .with("boolean", () => "boolean" as const)
+    .with("presence", () => "presence" as const)
+    .with("idMulti", () => "entity" as const)
+    .with("range", () =>
+      spec.range?.number ? ("number" as const) : ("date" as const),
+    )
+    .otherwise(() =>
+      spec.referenceEntity ? ("entity" as const) : ("enum" as const),
+    );
+
+/**
+ * The Filters panel section a declared filter sits in: the titled edit
+ * section holding its field, else one named by what its values are.
+ */
+export const filterGroup = (
+  spec: FilterSpec,
+  entity: Entity | undefined,
+): string => {
+  const keys = [spec.columnId, spec.field].filter(Boolean);
+  const section =
+    entity === undefined
+      ? undefined
+      : entitySummary[entity].edit.sections.find(
+          (candidate) =>
+            candidate.title !== null &&
+            candidate.fields.some((key) => keys.includes(key)),
+        );
+  if (section?.title) return section.title;
+  const type = filterValueType(spec);
+  return type === "entity"
+    ? "Relations"
+    : type === "date" || type === "number"
+      ? "Dates & numbers"
+      : type === "boolean" || type === "presence"
+        ? "Quality"
+        : "Other";
+};
+
 const specFilterConfig = (
   spec: FilterSpec,
   specs: readonly FilterSpec[],
@@ -176,10 +229,21 @@ const specFilterConfig = (
   const deferred = optionsKey
     ? deferredFilterOptionSource(runtimeOptions?.[optionsKey])
     : undefined;
+  const entity = specEntity.get(spec);
+  const reference = spec.referenceEntity;
   return {
     placeholder: spec.placeholder,
     ...(spec.label ? { label: spec.label } : {}),
     filterType: filterTypeForSpec(spec),
+    kind: spec.kind,
+    valueType: filterValueType(spec),
+    ...(reference
+      ? {
+          referenceEntity: reference,
+          icon: <EntityIcon entity={reference} className="size-3.5" />,
+        }
+      : {}),
+    group: filterGroup(spec, entity),
     ...(isFreeText(spec, runtimeOptions) ? { freeText: true } : {}),
     ...(spec.exclusiveGroup ? { exclusiveGroup: spec.exclusiveGroup } : {}),
     options: resolveSpecOptions(spec, runtimeOptions),

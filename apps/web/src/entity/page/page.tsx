@@ -52,7 +52,7 @@ const isTextTitle = (value: ReactNode): value is string =>
 
 /** Stable slots for table-owned query tools, actions, and suggestion status. */
 export function usePageWorkbenchTarget(
-  slot: "utilities" | "actions" | "status" = "utilities",
+  slot: "utilities" | "actions" | "status" | "tabs" = "utilities",
   enabled = true,
 ): HTMLDivElement | null {
   const [target, setTarget] = useState<HTMLDivElement | null>(null);

@@ -87,7 +87,7 @@ test("Work queue filters routing before paging and opens its source record", asy
   await page
     .getByRole("button", { name: "Clear selection", exact: true })
     .click();
-  // Waiting for is any-of: swap the one picked choice, then Apply. A choice
+  // Waiting for is any-of: swap the one picked choice, live. A choice
   // is its option label and its chip summary.
   type Choice = { option: string; chip: string };
   const either: Choice = { option: "Either", chip: "Either" };
@@ -101,11 +101,15 @@ test("Work queue filters routing before paging and opens its source record", asy
       name: "Filter Waiting for",
       exact: true,
     });
+    // Unpicking `from` first empties the filter; the chip's editor stays.
+    // A short roster lists inline without a search field.
     for (const { option } of [from, to]) {
-      await search.fill(option);
+      if ((await search.count()) > 0) await search.fill(option);
       await page.getByRole("option", { name: option, exact: true }).click();
     }
-    await page.getByRole("button", { name: "Apply", exact: true }).click();
+    // Edits apply live, so the editor stays open until dismissed; the next
+    // chip click must open it, not toggle it shut.
+    await page.keyboard.press("Escape");
     await expect(
       page.getByRole("button", {
         name: `Waiting for: ${to.chip}`,

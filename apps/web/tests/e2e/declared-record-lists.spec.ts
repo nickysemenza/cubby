@@ -68,7 +68,11 @@ test("combined records retain server sorting, pagination, and filters after relo
   await expect(alpha).toBeVisible();
   await page.getByRole("button", { name: "Go to next page" }).click();
   await expect(zulu).toBeVisible();
-  await page.getByRole("button", { name: "Type: any", exact: true }).click();
+  const openFilter = async (label: string) => {
+    await page.getByRole("button", { name: "Filters", exact: true }).click();
+    await page.getByRole("button", { name: label, exact: true }).click();
+  };
+  await openFilter("Type");
   await page.getByRole("combobox", { name: "Filter Type" }).fill("Location");
   await page.getByRole("option", { name: "Location", exact: true }).click();
   await page.getByRole("heading", { name: "Entities", exact: true }).click();
@@ -82,8 +86,7 @@ test("combined records retain server sorting, pagination, and filters after relo
   await expect(alpha).toBeVisible();
 
   const editOverflow = async (label: string, value: string) => {
-    await page.getByRole("button", { name: "More", exact: true }).click();
-    await page.getByRole("button", { name: new RegExp(`^${label}:`) }).click();
+    await openFilter(label);
     await page.getByLabel(`Filter ${label}`, { exact: true }).fill(value);
   };
   await editOverflow("Maximum quality", "0");
@@ -91,17 +94,13 @@ test("combined records retain server sorting, pagination, and filters after relo
   await page.getByLabel("Filter Maximum quality", { exact: true }).fill("");
   await expect(alpha).toBeVisible();
   await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "Image: any", exact: true }).click();
-  await page.getByRole("combobox", { name: "Filter Image" }).fill("No image");
-  await page.getByRole("option", { name: "No image", exact: true }).click();
+  // Image is presence: Any | Has image | No image.
+  await openFilter("Image");
+  await page.getByRole("button", { name: "No image", exact: true }).click();
   await expect(alpha).toBeVisible();
-  await page.getByRole("combobox", { name: "Filter Image" }).fill("Has image");
-  await page.getByRole("option", { name: "Has image", exact: true }).click();
+  await page.getByRole("button", { name: "Has image", exact: true }).click();
   await expect(alpha).toHaveCount(0);
-  await page
-    .getByRole("button", { name: "Clear Filter Image", exact: true })
-    .first()
-    .click();
+  await page.getByRole("button", { name: "Any", exact: true }).click();
   await page.keyboard.press("Escape");
   await editOverflow("Updated through", "2000-01-01");
   await expect(alpha).toHaveCount(0);
@@ -113,11 +112,11 @@ test("combined records retain server sorting, pagination, and filters after relo
     .click();
   await expect(page).toHaveURL(/orderBy=quality/);
   await expect(qualityCell()).toHaveText("Not assessed");
-  await page.getByRole("button", { name: /^Clear \d+$/ }).click();
+  await page.getByRole("button", { name: "Clear", exact: true }).click();
   await expect(
     page.getByRole("textbox", { name: "Name or shortcode" }),
   ).toHaveValue("");
-  await expect(page.getByRole("button", { name: "Type: any" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Type: / })).toHaveCount(0);
   await page.goBack();
   await expect(
     page.getByRole("button", { name: "Type: Location" }),
@@ -382,7 +381,7 @@ test("the Run list hides ephemeral runs by default and shows them once cleared",
   await expect(table).toContainText(fixture.visibleName);
   await expect(table).not.toContainText(fixture.hiddenName);
 
-  await page.getByRole("button", { name: /^Clear/ }).click();
+  await page.getByRole("button", { name: "Clear", exact: true }).click();
   await expect(table).toContainText(fixture.hiddenName);
   await expect(table).toContainText(fixture.visibleName);
 

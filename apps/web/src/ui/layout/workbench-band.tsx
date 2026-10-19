@@ -54,6 +54,12 @@ export function WorkbenchBand({
         <div data-workbench-actions className="contents" />
         {actions}
       </div>
+      {/* The list's saved-view tabs, a row under the title; empty (and
+          collapsed) for an entity that declares no views. */}
+      <div
+        data-workbench-tabs
+        className="-mb-2 flex min-w-0 basis-full empty:hidden"
+      />
     </div>
   );
 }

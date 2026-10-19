@@ -168,8 +168,9 @@ describe("list editor metadata refresh", () => {
       expect(input).toHaveFocus();
       expect(screen.getByRole("textbox")).toHaveValue("Unfinished draft");
       fireEvent.keyDown(input, { key: "Escape" });
+      fireEvent.click(screen.getByRole("button", { name: "Filters" }));
       fireEvent.click(
-        screen.getByRole("button", { name: "Manufacturer: any" }),
+        await screen.findByRole("button", { name: "Manufacturer" }),
       );
       expect(
         await screen.findByRole("option", { name: "Updated maker" }),

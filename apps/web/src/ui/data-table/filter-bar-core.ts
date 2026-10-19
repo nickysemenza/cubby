@@ -7,6 +7,7 @@ import {
 } from "@cubby/schemas/filter-sentinel-fields";
 import type { NumberRange } from "@cubby/shared";
 import type { ColumnFiltersState } from "@tanstack/react-table";
+import type { ReactNode } from "react";
 
 import { colorizeSelectOptions } from "~/lib/select-options";
 import type { PickerRecordSource } from "~/ui/combobox/picker";
@@ -15,10 +16,36 @@ import type { FilterConfig } from "~/ui/data-table/table-meta";
 
 type FilterOption = PickerOption;
 
+/**
+ * What a filter's values are, carried from the declared filter kind so the
+ * panel can show a type glyph and pick the editor: a checklist for `enum` and
+ * `entity`, Any | Yes | No for `boolean` and `presence`, bounds for `date` and
+ * `number`, an input for `text`.
+ */
+export type FilterValueType =
+  | "text"
+  | "enum"
+  | "entity"
+  | "date"
+  | "number"
+  | "boolean"
+  | "presence";
+
 export type FilterFieldConfig = {
   key: string;
   label?: string;
   type: "text" | "select" | "multiselect";
+  /** The declared filter kind (`multiselect`, `idMulti`, `range`, …). */
+  kind?: string;
+  valueType?: FilterValueType;
+  /** The entity an `entity` filter's values are records of. */
+  referenceEntity?: string;
+  /** The Filters panel section: the field's edit section, else by type. */
+  group?: string;
+  /** The type glyph override; an `entity` filter shows its entity's icon. */
+  icon?: ReactNode;
+  /** A range's lowest and highest value under the other filters (server facets). */
+  bounds?: { min: string | null; max: string | null };
   options?: FilterOption[];
   placeholder?: string;
   inputType?: "text" | "number" | "date";
@@ -255,6 +282,11 @@ export function barFieldFromConfig(
     key,
     label,
     type,
+    kind: config.kind,
+    valueType: config.valueType ?? valueTypeOf(type, config),
+    referenceEntity: config.referenceEntity,
+    group: config.group,
+    icon: config.icon,
     placeholder: type === "text" ? `Filter ${label.toLowerCase()}…` : undefined,
     options: config.options
       ? colorizeSelectOptions(config.options).map((option) => ({
@@ -275,3 +307,18 @@ export function barFieldFromConfig(
     records: config.records,
   };
 }
+
+/** A value type for a config that declares none (a hand-built column filter). */
+const valueTypeOf = (
+  type: FilterBarField["type"],
+  config: FilterConfig,
+): FilterValueType =>
+  config.dateRange
+    ? "date"
+    : config.numberRange
+      ? "number"
+      : type === "text"
+        ? "text"
+        : config.records
+          ? "entity"
+          : "enum";

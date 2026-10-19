@@ -31,8 +31,8 @@ interface ManifestFilterBarProps {
 /**
  * The URL-backed manifest filter bar, for a page with no table under it.
  *
- * `LedgerFilters` is the table-backed twin; both render the same reui
- * `<Filters>` over `useFilterBarDraft`, so they cannot drift in chrome,
+ * `LedgerFilters` is the table-backed twin; both render the same
+ * `FilterBar` over `useFilterBarDraft`, so they cannot drift in chrome,
  * debounce behavior, or reconciliation. The only difference is where state
  * lives — column filters there, search params here.
  *

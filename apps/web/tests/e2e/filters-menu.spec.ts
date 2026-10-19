@@ -1,34 +1,51 @@
-import type { Page, Response } from "@playwright/test";
-import { z } from "zod";
+import type { Page } from "@playwright/test";
 
 import {
   closePopovers,
+  escapeRegExp,
   gotoAuthenticatedPage,
   reloadAuthenticatedPage,
-  selectComboboxItem,
   uniqueName,
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 import { createEntityFixture } from "./fixtures/core";
-import { dispatchOperations, operationResult } from "./support/dispatch-wire";
+import { dispatchOperations } from "./support/dispatch-wire";
 
 const inputText = (input: unknown): string => JSON.stringify(input) ?? "";
 
-/** The next dispatched operation whose input matches, answered `ok`. */
+/** Open the Filters panel on one (inactive) filter's editor. */
+const openFilter = async (page: Page, label: string) => {
+  await page.getByRole("button", { name: "Filters", exact: true }).click();
+  await page.getByRole("button", { name: label, exact: true }).click();
+};
+
+/**
+ * Pick a row from the open editor's inline list, searching first when the
+ * list is long enough to offer search; the pick applies at once.
+ */
+const pickInline = async (page: Page, label: string, option: string) => {
+  const search = page.getByRole("combobox", { name: `Filter ${label}` });
+  if ((await search.count()) > 0) await search.fill(option);
+  await page
+    .getByRole("option", { name: new RegExp(`^${escapeRegExp(option)}`) })
+    .first()
+    .click();
+};
+
+/**
+ * The next list read whose input matches. The request, not the response:
+ * live apply rewrites the URL, and Playwright cannot read a response body
+ * after that navigation. Facet and view-count reads carry the same filters
+ * and are skipped.
+ */
 const succeedsWith = (page: Page, matches: (input: string) => boolean) =>
-  page
-    .waitForResponse((response) =>
-      dispatchOperations(response.request()).some((item) =>
+  page.waitForRequest((request) =>
+    dispatchOperations(request).some(
+      (item) =>
+        !/facetCounts|viewCounts/.test(item.operation) &&
         matches(inputText(item.input)),
-      ),
-    )
-    .then(async (response: Response) => {
-      const item = dispatchOperations(response.request()).find((candidate) =>
-        matches(inputText(candidate.input)),
-      );
-      if (!item) throw new Error("no matching operation");
-      return operationResult(response, item.operation, z.unknown());
-    });
+    ),
+  );
 
 // Failure mode: typed `ext-a, ext-b` reached the server as one value, a
 // reload of the same URL decoded two, and the editor showed only the first.
@@ -36,8 +53,7 @@ test("typed id values keep one meaning through entry, reload and edit", async ({
   page,
 }) => {
   await gotoAuthenticatedPage(page, "/financial-transactions");
-  await page.getByRole("button", { name: "Filters", exact: true }).click();
-  await page.getByRole("button", { name: /^External id: any$/i }).click();
+  await openFilter(page, "External id");
   const input = page.getByRole("textbox", { name: /^Filter External id$/i });
   const typed = succeedsWith(page, (body) =>
     body.includes('["ext-a","ext-b"]'),
@@ -85,16 +101,8 @@ test("picking one Email scope replaces the other", async ({
     ledgerPartyId: member.id,
   });
   const pick = async (label: string, option: string) => {
-    await page.getByRole("button", { name: "Filters", exact: true }).click();
-    await page
-      .getByRole("button", { name: new RegExp(`^${label}: `) })
-      .last()
-      .click();
-    await selectComboboxItem(
-      page,
-      page.getByRole("combobox", { name: `Filter ${label}` }),
-      option,
-    );
+    await openFilter(page, label);
+    await pickInline(page, label, option);
     await closePopovers(page);
   };
 
@@ -168,15 +176,10 @@ test("Linked transactions reference pickers load their rosters", async ({
   const workbench = page
     .locator("div")
     .filter({ has: linked })
-    .filter({ has: page.getByRole("button", { name: /: any$/ }) })
+    .filter({ has: page.getByRole("button", { name: "Filters", exact: true }) })
     .last();
-  const accountChip = workbench.getByRole("button", { name: /^Account: / });
-  if ((await accountChip.count()) === 0)
-    await workbench.getByRole("button", { name: "More", exact: true }).click();
-  await page
-    .getByRole("button", { name: /^Account: / })
-    .last()
-    .click();
+  await workbench.getByRole("button", { name: "Filters", exact: true }).click();
+  await page.getByRole("button", { name: "Account", exact: true }).click();
   const picker = page.getByRole("combobox", { name: "Filter Account" });
   await picker.click();
   await picker.fill(accountName);
@@ -199,20 +202,11 @@ test("a picked tag containing a comma stays one tag through URL and reload", asy
     page.getByRole("link", { name, exact: true });
 
   await gotoAuthenticatedPage(page, "/recipes");
-  await page.getByRole("button", { name: "Filters", exact: true }).click();
-  await page
-    .getByRole("button", { name: /^Tags: / })
-    .last()
-    .click();
-  const picker = page.getByRole("combobox", { name: "Filter Tags" });
-  await picker.click();
-  await picker.fill(tag);
-  await page.getByRole("option", { name: tag, exact: true }).click();
-  await picker.click();
+  await openFilter(page, "Tags");
   const filtered = succeedsWith(page, (body) =>
     body.includes(JSON.stringify([tag])),
   );
-  await page.getByRole("button", { name: "Apply", exact: true }).click();
+  await pickInline(page, "Tags", tag);
   await filtered;
   await closePopovers(page);
   await expect(recipe(tagged)).toBeVisible();
@@ -259,14 +253,9 @@ test("editing Parent task after landing on its deep-link alias", async ({
   await page
     .getByRole("button", { name: `Parent task: ${parentA.name}`, exact: true })
     .click();
-  const picker = page.getByRole("combobox", { name: "Filter Parent task" });
-  for (const parent of [parentA, parentB]) {
-    await picker.click();
-    await picker.fill(parent.name);
-    await page.getByRole("option", { name: parent.name, exact: true }).click();
-  }
-  await picker.click();
-  await page.getByRole("button", { name: "Apply", exact: true }).click();
+  // Unpicking A first empties the filter; the chip's editor stays open.
+  for (const parent of [parentA, parentB])
+    await pickInline(page, "Parent task", parent.name);
   await closePopovers(page);
 
   await expect(row(childB.name)).toBeVisible();
@@ -284,10 +273,7 @@ test("a number range filter keeps its bounds through entry, reload and clear", a
 }) => {
   const param = () => new URL(page.url()).searchParams.get("uploadedAgeHours");
   await gotoAuthenticatedPage(page, "/images");
-  await page.getByRole("button", { name: "Filters", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Upload age: any", exact: true })
-    .click();
+  await openFilter(page, "Upload age");
   const min = page.getByRole("textbox", { name: "Upload age minimum" });
   const max = page.getByRole("textbox", { name: "Upload age maximum" });
   await expect(
@@ -360,21 +346,16 @@ test("typing a bound after picking a preset keeps every digit", async ({
 }) => {
   const param = () => new URL(page.url()).searchParams.get("purchaseCount");
   await gotoAuthenticatedPage(page, "/vendors");
-  await page.getByRole("button", { name: "Filters", exact: true }).click();
-  await page
-    .getByRole("button", { name: /^Purchase count: / })
-    .last()
-    .click();
-  await selectComboboxItem(
-    page,
-    page.getByRole("combobox", { name: "Filter Purchase count" }),
-    "5+ purchases",
-  );
+  await openFilter(page, "Purchase count");
+  await page.getByRole("option", { name: /^5\+ purchases/ }).click();
+  // The strip's chip (the open panel row shares its name).
   await expect(
-    page.getByRole("button", {
-      name: "Purchase count: 5+ purchases",
-      exact: true,
-    }),
+    page
+      .getByRole("button", {
+        name: "Purchase count: 5+ purchases",
+        exact: true,
+      })
+      .first(),
   ).toBeVisible();
 
   const min = page.getByRole("textbox", { name: "Purchase count minimum" });

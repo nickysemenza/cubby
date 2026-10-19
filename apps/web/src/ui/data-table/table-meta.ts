@@ -3,7 +3,7 @@ import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { humanize, type NumberRange, parseShortcode } from "@cubby/shared";
 import type { CellData, RowData } from "@tanstack/react-table";
-import { useEffect } from "react";
+import { type ReactNode, useEffect } from "react";
 import { z } from "zod";
 
 import type { PickerRecordSource } from "~/ui/combobox/picker";
@@ -11,7 +11,7 @@ import type { PickerOption } from "~/ui/combobox/picker-option";
 
 import type { ColumnCellData } from "./cell-data";
 import type { CubbyDefaultTableLayout } from "./column-layout";
-import type { FilterBarField } from "./filter-bar-core";
+import type { FilterBarField, FilterValueType } from "./filter-bar-core";
 import type { CubbyColumn, CubbyTable } from "./table-features";
 
 /** Configuration for an inline column-header filter. */
@@ -20,6 +20,16 @@ export interface FilterConfig {
   /** The filter's declared name; it wins over the hosting column's header. */
   label?: string;
   filterType?: "text" | "select" | "multiselect";
+  /** The declared filter kind (`multiselect`, `idMulti`, `range`, …). */
+  kind?: string;
+  /** What the values are; drives the panel's type glyph and editor. */
+  valueType?: FilterValueType;
+  /** The entity an `entity` filter's values are records of. */
+  referenceEntity?: string;
+  /** The Filters panel section (the field's edit section, else by type). */
+  group?: string;
+  /** The type glyph override (an entity filter's entity icon). */
+  icon?: ReactNode;
   /** A multiselect with no roster: its values are typed, comma-separated. */
   freeText?: boolean;
   /** Filters sharing a group hold one value between them: picking replaces. */

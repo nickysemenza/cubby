@@ -11,9 +11,14 @@ import {
   projectListRows,
   selectListReadRows,
 } from "~/entity/model/list-read-schema";
+import { viewsForEntity } from "~/entity/model/view-manifest";
+import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
 import { withListEntityMedia } from "~/server/entity-kernel/repo/entity-display-image";
 import { withRecordEmoji } from "~/server/entity-kernel/repo/entity-emoji";
-import { withListGroupBy } from "~/server/generic/list/repo/list";
+import {
+  listFacetCounter,
+  withListGroupBy,
+} from "~/server/generic/list/repo/list";
 import { listTotalLabels } from "~/server/generic/list/repo/list-display-labels";
 import {
   expandListGroups,
@@ -37,6 +42,11 @@ import {
 } from "./list-input";
 
 type ListReadFailure = Parameters<typeof normalizeStartOperationError>[0];
+const facetInputSchema = z.object({
+  filters: z.record(z.string(), z.unknown()),
+  facetIds: z.array(z.string()),
+});
+const viewCountsInputSchema = z.object({ viewIds: z.array(z.string()) });
 const inputSchema = z.object({
   filters: z.record(z.string(), z.unknown()),
   pagination: z
@@ -331,6 +341,70 @@ export function defineProgressiveListOperations<
           ],
         };
       }
+    },
+    /**
+     * Facets for the requested declared filters under the request's other
+     * filters (`listScaffold.countBy`); a filter without one is omitted.
+     */
+    async facets(context: EntityKernelContext, value: unknown) {
+      const input = facetInputSchema.parse(value);
+      const filters = await filtersFor(context, input.filters);
+      const counter = listFacetCounter(binding.entity);
+      const facets = counter
+        ? await withTrace(
+            "entity.list.facets",
+            () =>
+              Promise.all(
+                [...new Set(input.facetIds)].map((id) =>
+                  counter.countBy(context.db, filters, id),
+                ),
+              ),
+            { "entity.kind": binding.entity },
+          )
+        : [];
+      return {
+        entity: binding.entity,
+        facets: facets.filter((facet) => facet !== null),
+      };
+    },
+    /**
+     * Each requested declared saved view's row count, plus the unfiltered
+     * total, through the same list read (and count) a page uses.
+     */
+    async viewCounts(context: EntityKernelContext, value: unknown) {
+      const { viewIds } = viewCountsInputSchema.parse(value);
+      const countOf = async (raw: z.output<typeof inputSchema>["filters"]) =>
+        (
+          await reader()(
+            context,
+            await filtersFor(context, raw),
+            [],
+            { pageIndex: 0, pageSize: 1 },
+            { kind: "base" },
+          )
+        ).count;
+      const views = viewsForEntity(binding.entity).filter((view) =>
+        viewIds.includes(view.id),
+      );
+      const [total, ...counts] = await withTrace(
+        "entity.list.viewCounts",
+        () =>
+          Promise.all([
+            countOf({}),
+            ...views.map((view) =>
+              countOf(compileProblemFilters(binding.entity, view.filters)),
+            ),
+          ]),
+        { "entity.kind": binding.entity },
+      );
+      return {
+        entity: binding.entity,
+        total: total ?? 0,
+        views: views.map((view, index) => ({
+          id: view.id,
+          count: counts[index] ?? 0,
+        })),
+      };
     },
     async summary(context: EntityKernelContext, value: unknown) {
       const input = inputSchema.parse(value);

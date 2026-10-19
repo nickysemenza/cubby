@@ -2,9 +2,15 @@ import type { Entity } from "@cubby/schemas/entity";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { humanize } from "@cubby/shared";
 import type { RowData } from "@tanstack/react-table";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
+import {
+  useFilterFacets,
+  useListQuery,
+  useViewCounts,
+  withFacets,
+} from "~/entity/table/list-query-context";
 
 import {
   FilterBar,
@@ -17,6 +23,7 @@ import {
   filterStateToBarFilters,
 } from "../../ui/data-table/filter-bar-core";
 import type { CubbyTable as Table } from "../../ui/data-table/table-features";
+import { useColumnFilterEditRequests } from "../../ui/data-table/table-meta";
 import { useFilterBarDraft } from "../../ui/data-table/use-filter-bar-draft";
 
 function isColumnLabel(value: unknown): value is string {
@@ -64,7 +71,7 @@ export function LedgerFilters<TData extends RowData>({
   optionHints,
   variant = "desktop",
   switches,
-  collapsed = false,
+  workbench = false,
 }: {
   table: Table<TData>;
   /** Drives the search placeholder ("Search products"); omitted tables get no plural. */
@@ -77,7 +84,12 @@ export function LedgerFilters<TData extends RowData>({
    * fields, same draft state, different presentation.
    */
   variant?: "desktop" | "mobile";
-  collapsed?: boolean;
+  /**
+   * A page workbench: active chips render into the page list's strip above
+   * the records, with its facet counts and filtered total; elsewhere they
+   * follow the Filter button in place.
+   */
+  workbench?: boolean;
   /** Phone only: the presentation switches, which live in the Filter sheet. */
   switches?: readonly FilterSheetSwitch[] | undefined;
 }) {
@@ -92,7 +104,7 @@ export function LedgerFilters<TData extends RowData>({
     .map((column) => column.id)
     .join("|");
   const primarySearch = entity ? entitySummary[entity].primarySearch : null;
-  const fields = useMemo(
+  const declaredFields = useMemo(
     () => getLedgerFields(table, optionHints, primarySearch),
     // oxlint-disable-next-line react/exhaustive-deps -- filterColumnsKey is the late-materializing TanStack v9 signal described above
     [
@@ -104,7 +116,26 @@ export function LedgerFilters<TData extends RowData>({
       primarySearch,
     ],
   );
+  // This bar owns the table's filter editors: a column header's Filter…
+  // opens the panel on that column's field.
+  const [editRequest, setEditRequest] = useState<{ key: string } | null>(null);
+  const requestEdit = useCallback(
+    (columnId: string) => setEditRequest({ key: columnId }),
+    [],
+  );
+  useColumnFilterEditRequests(table, requestEdit);
+  const query = useListQuery(workbench ? entity : undefined);
+  const [openEditor, setOpenEditor] = useState<string | null>(null);
   const externalColumnFilters = table.state.columnFilters;
+  const facets = useFilterFacets(query, [
+    ...(openEditor ? [openEditor] : []),
+    ...externalColumnFilters.map((filter) => filter.id),
+  ]);
+  const fields = useMemo(
+    () => withFacets(declaredFields, facets),
+    [declaredFields, facets],
+  );
+  const { total } = useViewCounts(query?.entity);
   const externalFilters = useMemo(
     () => filterStateToBarFilters(externalColumnFilters, fields),
     [externalColumnFilters, fields],
@@ -149,13 +180,20 @@ export function LedgerFilters<TData extends RowData>({
 
   return (
     <FilterBar
-      collapsed={collapsed}
       filters={draftFilters}
       fields={fields}
       onChange={handleChange}
       className="min-w-0"
       searchKey={primarySearch?.key}
       searchPlaceholder={searchPlaceholder}
+      chipsTarget={query ? query.chipsTarget : undefined}
+      onEditorChange={setOpenEditor}
+      editRequest={editRequest}
+      resultCount={{
+        matching: query?.matching,
+        total,
+        noun: pluralLower,
+      }}
     />
   );
 }
