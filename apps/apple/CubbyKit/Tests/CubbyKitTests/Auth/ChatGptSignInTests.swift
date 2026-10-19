@@ -40,6 +40,29 @@
             }
         }
 
+        // A forged denial is still an invalid callback; only a state-validated
+        // user denial gets the distinct cancellation explanation.
+        @Test("Reauthorization hints identity and distinguishes a declined grant")
+        func reauthorization() throws {
+            let attempt = ChatGptAuthorizationAttempt(
+                host: .init(
+                    hostId: "urn:uuid:example", clientId: "oaiapp_existing", loginHint: "user@example.com"))
+            let redirect = URL(string: "http://127.0.0.1:12345/auth/callback")!
+            let url = try attempt.authorizationURL(redirect: redirect)
+            let query = URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!
+            #expect(query.first { $0.name == "login_hint" }?.value == "user@example.com")
+            #expect(!query.contains { $0.name == "id_token_hint" })
+            #expect(throws: ChatGptSignInError.accessDenied) {
+                try attempt.authorization(
+                    callback: URL(string: "\(redirect)?state=\(attempt.state)&error=access_denied")!,
+                    redirect: redirect)
+            }
+            #expect(throws: ChatGptSignInError.invalidCallback) {
+                try attempt.authorization(
+                    callback: URL(string: "\(redirect)?state=wrong&error=access_denied")!, redirect: redirect)
+            }
+        }
+
         @Test("Forged state cannot consume the real loopback callback")
         @MainActor func callback() async throws {
             let listener = try ChatGptLoopbackCallback(state: "expected")

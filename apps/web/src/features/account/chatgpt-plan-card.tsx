@@ -9,11 +9,14 @@ import { useState } from "react";
 import { z } from "zod";
 
 import { copyTextWithToast } from "~/lib/clipboard";
+import { formatCurrency } from "~/lib/number-format";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { StaticTable } from "~/ui/primitives/static-table";
 import { StatusText } from "~/ui/primitives/status-text";
+
+import { aiFundingStatusQuery } from "./ai-funding";
 
 const STATUS_KEY = ["chatgpt", "status"];
 const DISCONNECTED = z.object({ disconnected: z.boolean() });
@@ -41,7 +44,12 @@ export function ChatGptPlanSettings() {
     queryFn: () => request(chatGptStatus),
     enabled: hydrated,
   });
+  const budget = useQuery(aiFundingStatusQuery());
   const connected = status.data?.connected === true;
+  const dismiss = useMutation({
+    mutationFn: () => request(chatGptStatus, "", "PATCH"),
+    onSuccess: (data) => client.setQueryData(STATUS_KEY, data),
+  });
   const models = useQuery({
     queryKey: MODEL_KEY,
     queryFn: () => request(modelList, "?models"),
@@ -50,13 +58,9 @@ export function ChatGptPlanSettings() {
   });
   const disconnect = useMutation({
     mutationFn: () => request(DISCONNECTED, "", "DELETE"),
-    onSuccess: () => {
+    onSuccess: async () => {
       client.removeQueries({ queryKey: MODEL_KEY });
-      client.setQueryData(STATUS_KEY, {
-        connected: false,
-        email: null,
-        needsReauthorization: false,
-      });
+      await status.refetch();
       setSetup(false);
     },
   });
@@ -71,7 +75,41 @@ export function ChatGptPlanSettings() {
         purchase-import agent. Cubby keeps its current Luna and Sol models.
       </p>
 
+      {budget.data ? (
+        <p className="text-sm text-muted-foreground">
+          When your plan’s usage limit or Cubby’s{" "}
+          {formatCurrency(budget.data.plan.limitUsd)} per 6-hour plan cap is
+          reached, background work continues on paid billing within{" "}
+          {formatCurrency(budget.data.paid.limitUsd)} per 6 hours.
+        </p>
+      ) : null}
+
       <Stack gap="md">
+        {status.data?.issue ? (
+          <StatusText tone="destructive">{status.data.issue}</StatusText>
+        ) : null}
+        {connected &&
+        !status.data?.needsReauthorization &&
+        !status.data?.welcomeDismissed ? (
+          <Stack gap="sm">
+            <p className="text-sm">
+              Background AI work in Cubby uses your ChatGPT plan. Manage usage
+              in ChatGPT settings.
+            </p>
+            <Button
+              variant="outline"
+              disabled={dismiss.isPending}
+              onClick={() => dismiss.mutate()}
+            >
+              Got it
+            </Button>
+            {dismiss.isError ? (
+              <StatusText tone="destructive">
+                {getErrorMessage(dismiss.error)}
+              </StatusText>
+            ) : null}
+          </Stack>
+        ) : null}
         {!hydrated || status.isPending ? (
           <StatusText>Checking ChatGPT connection…</StatusText>
         ) : status.isError ? (

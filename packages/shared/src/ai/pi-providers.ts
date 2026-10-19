@@ -90,6 +90,12 @@ function throughFetch(
     });
     const output = createAssistantMessageEventStream();
     const normalize = (message: AssistantMessage) => {
+      // Agent turns cannot execute partial tool calls. Rust extraction bypasses
+      // pi-ai and retains incomplete roots for its own truncation recovery.
+      if (message.rawStopReason?.split(".", 1)[0] === "incomplete") {
+        message.stopReason = "error";
+        message.errorMessage ??= `Response incomplete: ${message.rawStopReason}`;
+      }
       const prompt =
         message.usage.input +
         message.usage.cacheRead +
@@ -142,7 +148,9 @@ function throughFetch(
               ? event.error
               : event.partial;
         normalize(message);
-        output.push(event);
+        if (event.type === "done" && message.stopReason === "error")
+          output.push({ type: "error", reason: "error", error: message });
+        else output.push(event);
       }
       const result = await source.result();
       normalize(result);

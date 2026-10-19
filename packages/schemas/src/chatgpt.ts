@@ -10,6 +10,8 @@ export const chatGptStatus = z.object({
   connected: z.boolean(),
   needsReauthorization: z.boolean().default(false),
   email: z.string().nullable(),
+  issue: z.string().nullable().optional(),
+  welcomeDismissed: z.boolean().optional(),
 });
 export const chatGptAuthorization = z.object({
   code: z.string().min(1).max(8192),
@@ -38,4 +40,6 @@ export const CHATGPT_USAGE_URL = "https://chatgpt.com/settings/usage";
 export const chatGptAuthorizationHost = z.object({
   hostId: z.string(),
   clientId: z.string().nullable(),
+  loginHint: z.string().nullable().optional(),
 });
+export type ChatGptAuthorizationHost = z.infer<typeof chatGptAuthorizationHost>;

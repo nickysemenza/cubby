@@ -78,6 +78,41 @@ describe("ChatGPT credential ownership", () => {
       });
       catalogFails = false;
       expect(await session.models()).toEqual([]);
+      await session.dismissWelcome();
+      const registered = records.get("connection");
+      if (!registered || typeof registered === "string")
+        throw new Error("Missing registration");
+      // invalid_client forgets only the mapping. A fresh registration for the
+      // verified subject succeeds, while a different subject stays refused.
+      records.set("connection", {
+        ...registered,
+        clientId: null,
+        accessToken: null,
+        refreshToken: null,
+      });
+      expect(
+        await session.connect({
+          code: "example-code",
+          clientId: "oaiapp_example",
+          verifier: "v".repeat(43),
+          nonce: "example-nonce-value",
+          redirectUri: "http://127.0.0.1:12345/auth/callback",
+        }),
+      ).toMatchObject({ connected: true, welcomeDismissed: true });
+      records.set("connection", {
+        ...registered,
+        clientId: null,
+        subject: "another-example-subject",
+      });
+      await expect(
+        session.connect({
+          code: "example-code",
+          clientId: "oaiapp_example",
+          verifier: "v".repeat(43),
+          nonce: "example-nonce-value",
+          redirectUri: "http://127.0.0.1:12345/auth/callback",
+        }),
+      ).rejects.toThrow("originally registered");
     } finally {
       vi.unstubAllGlobals();
     }

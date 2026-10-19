@@ -46,14 +46,14 @@ const RECENT_MS = AI_BUDGET_WINDOW_MS;
 const PLAN_QUOTA =
   /usage_limit_reached|rate_limit_exceeded|subscription_sharing_usage_limit_exceeded/u;
 
-/** A plan quota refusal's reset: its hint when present, else the next window. */
-function planResetAt(failure: string, refusedAt: Date): Date {
+/** Only OpenAI can supply a plan quota reset; Cubby's window is a probe deadline. */
+function planResetAt(failure: string, refusedAt: Date): Date | null {
   const absolute = /"resets_at"\s*:\s*(\d{9,})/u.exec(failure);
   if (absolute) return new Date(Number(absolute[1]) * 1000);
   const relative = /"resets_in_seconds"\s*:\s*(\d+)/u.exec(failure);
   if (relative)
     return new Date(refusedAt.getTime() + Number(relative[1]) * 1000);
-  return aiBudgetWindow(refusedAt).end;
+  return null;
 }
 
 export interface FundingStatusPorts {
@@ -62,6 +62,7 @@ export interface FundingStatusPorts {
   planConnection?: () => Promise<{
     connected: boolean;
     needsReauthorization: boolean;
+    issue?: string | null;
   } | null>;
   /** The egress Durable Object's recorded credit refusal; null without one. */
   creditRefusal?: () => Promise<CreditRefusal | null>;
@@ -97,7 +98,8 @@ export async function readChatGptPlanAvailability(
     return {
       state: "needs_reauthorization",
       until: null,
-      reason: "The household ChatGPT plan needs reauthorization.",
+      reason:
+        connection.issue ?? "The household ChatGPT plan needs reauthorization.",
     };
   const [latest] = await getDb(db)
     .select({ createdAt: aiUsage.createdAt, failure: aiUsage.failure })
@@ -111,14 +113,17 @@ export async function readChatGptPlanAvailability(
     )
     .orderBy(desc(aiUsage.createdAt))
     .limit(1);
+  const quotaRefused = !!latest?.failure && PLAN_QUOTA.test(latest.failure);
   const until =
-    latest?.failure && PLAN_QUOTA.test(latest.failure)
+    quotaRefused && latest?.failure
       ? planResetAt(latest.failure, latest.createdAt)
       : null;
-  return until && until > now
+  const probeAt =
+    until ?? (latest ? aiBudgetWindow(latest.createdAt).end : null);
+  return quotaRefused && probeAt && probeAt > now
     ? {
         state: "paused",
-        until: until.toISOString(),
+        until: until?.toISOString() ?? null,
         reason: latest?.failure ?? null,
       }
     : { state: "available", until: null, reason: null };

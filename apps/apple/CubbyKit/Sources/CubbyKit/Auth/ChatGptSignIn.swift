@@ -5,11 +5,12 @@
     import Network
 
     public enum ChatGptSignInError: Error, LocalizedError {
-        case invalidCallback, browserUnavailable, timedOut, invalidServer
+        case invalidCallback, accessDenied, browserUnavailable, timedOut, invalidServer
         public var errorDescription: String? {
             switch self {
             case .invalidServer: "Cubby must use an HTTPS origin, except a local development server."
-            case .invalidCallback: "ChatGPT authorization was denied or returned an invalid registration."
+            case .invalidCallback: "ChatGPT authorization returned an invalid callback or registration."
+            case .accessDenied: "You declined ChatGPT plan access"
             case .browserUnavailable: "macOS could not open ChatGPT sign-in."
             case .timedOut: "ChatGPT sign-in timed out."
             }
@@ -68,6 +69,7 @@
                 "code_challenge": Data(SHA256.hash(data: Data(verifier.utf8))).chatGptBase64URL,
             ]
             if host.clientId == nil { values["agent_name_hint"] = "Cubby" }
+            if let email = host.loginHint { values["login_hint"] = email }
             components.queryItems = values.sorted { $0.key < $1.key }.map {
                 .init(name: $0.key, value: $0.value)
             }
@@ -81,7 +83,11 @@
                 let matches = items.filter { $0.name == key }
                 return matches.count == 1 ? matches[0].value : nil
             }
-            guard callback.path == "/auth/callback", value("state") == state, value("error") == nil,
+            guard callback.path == "/auth/callback", value("state") == state else {
+                throw ChatGptSignInError.invalidCallback
+            }
+            if value("error") == "access_denied" { throw ChatGptSignInError.accessDenied }
+            guard !items.contains(where: { $0.name == "error" }),
                 let code = value("code"), !code.isEmpty,
                 let clientId = value("client_id") ?? host.clientId, clientId.hasPrefix("oaiapp_"),
                 host.clientId == nil || host.clientId == clientId
