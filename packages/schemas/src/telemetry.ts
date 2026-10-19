@@ -36,7 +36,9 @@ export const mcpToolCallTelemetrySchema = z.strictObject({
   // retry window old, not just ones from the version deploying right now.
   entity: entitySchema.optional(),
   // The in-app agent's Run. Optional so messages queued by the preceding
-  // deployment, and every external client's call, still validate.
+  // deployment, and every external client's call, still validate. A message
+  // carrying it that an old isolate consumes during a deploy swap fails its
+  // strict parse and is dropped: one lost telemetry row, accepted.
   runId: z.uuid().optional(),
 });
 export type McpToolCallTelemetry = z.infer<typeof mcpToolCallTelemetrySchema>;

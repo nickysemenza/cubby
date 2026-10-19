@@ -26,6 +26,12 @@ export const TASK_BOARD_UNTITLED_PROJECT_LABEL = "Untitled project";
 export const HOUSEHOLD_TIMEZONE = "America/Los_Angeles";
 
 /** Statuses in which a Run is still moving: clients poll and show the live variants only then. */
+/**
+ * Set to `snapshot` on a Run agent `/stream` answer that is one retained frame
+ * rather than a held push stream, so the observer does not treat it as live.
+ */
+export const AGENT_OBSERVATION_HEADER = "x-cubby-agent-observation";
+
 export const ACTIVE_RUN_STATUSES = [
   "running",
   "paused",

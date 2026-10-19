@@ -1,6 +1,9 @@
 import { agentConversationSchema } from "@cubby/schemas/agent-conversation";
 import { runShortcode } from "@cubby/schemas/purchase-import";
-import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
+import {
+  ACTIVE_RUN_STATUSES,
+  AGENT_OBSERVATION_HEADER,
+} from "@cubby/shared/client-constants";
 import { z } from "zod";
 
 import { getPurchaseImportRunAgentNamespace } from "~/server/cf-env";
@@ -115,6 +118,7 @@ export async function proxyPurchaseAgentRequest(input: {
       headers: {
         "content-type": "text/event-stream",
         "cache-control": "no-store",
+        [AGENT_OBSERVATION_HEADER]: "snapshot",
       },
     });
   return redacted;
