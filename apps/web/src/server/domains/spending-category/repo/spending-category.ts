@@ -37,6 +37,10 @@ import { resolveStockTrackingField } from "~/server/domains/inventory/repo/stock
 import { loadCategoryConnections } from "~/server/domains/product-category/repo/category-connections";
 import { assertReviewedSpendingClassification } from "~/server/domains/spending-category/repo/spending-classification-review-authorization";
 import {
+  type MutationReceipt,
+  defineMutationWriter,
+} from "~/server/entity-kernel/repo/repository";
+import {
   createEntityCrud,
   defineRepository,
   asActor,
@@ -233,43 +237,80 @@ async function resolveParent(
   if (child && (await selfAndAncestors(db, id)).has(child)) throw ownAncestor();
   return id;
 }
-const create = async (
-  db: Database,
-  data: SpendingCategoryCreateInput,
-  actor: ActorContext,
-) =>
-  withTransaction(db, async (tx) => {
-    const row = await insertWithShortcode(tx, "spendingCategory", {
-      ...data,
-      parentId: (await resolveParent(tx, data.parentId)) ?? null,
-    });
-    await logAuditEntry(tx, actor, {
-      entityKind: "spendingCategory",
-      entityId: row.id,
-      action: "create",
-    });
-    return { output: await crud.getByID(tx, row.id), entityId: row.id };
-  });
-const update = async (
-  db: Database,
-  code: ShortcodeFor<"spendingCategory">,
-  data: SpendingCategoryUpdateData,
-  actor: ActorContext,
-) =>
-  withTransaction(db, async (tx) => {
-    const id = await resolveOrThrow(tx, "spendingCategory", code);
-    const output = await crud.update(
-      tx,
-      id,
-      { ...data, parentId: await resolveParent(tx, data.parentId, id) },
-      actor,
-    );
-    // Moving a category to `not_allowed` is refused while any Expense in it
-    // still links a Product; the error lists them.
-    if (data.productExpectation === "not_allowed")
-      await validateProductPolicy(tx);
-    return { output, entityId: id };
-  });
+const create = defineMutationWriter({
+  entity: "spendingCategory",
+  read: async (
+    receipt: MutationReceipt<"spendingCategory">,
+    db: Database,
+    _data: SpendingCategoryCreateInput,
+    _actor: ActorContext,
+  ) => ({
+    output: await crud.getByID(db, receipt.entityId),
+    entityId: receipt.entityId,
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    data: SpendingCategoryCreateInput,
+    actor: ActorContext,
+  ) =>
+    withTransaction(db, async (tx) => {
+      const row = await insertWithShortcode(tx, "spendingCategory", {
+        ...data,
+        parentId: (await resolveParent(tx, data.parentId)) ?? null,
+      });
+      await logAuditEntry(tx, actor, {
+        entityKind: "spendingCategory",
+        entityId: row.id,
+        action: "create",
+      });
+      return readOutput(
+        { entityId: row.id, shortcode: row.shortcode },
+        async () => ({
+          output: await crud.getByID(tx, row.id),
+          entityId: row.id,
+        }),
+      );
+    }),
+});
+const update = defineMutationWriter({
+  entity: "spendingCategory",
+  read: async (
+    receipt: MutationReceipt<"spendingCategory">,
+    db: Database,
+    _code: ShortcodeFor<"spendingCategory">,
+    _data: SpendingCategoryUpdateData,
+    _actor: ActorContext,
+  ) => ({
+    output: await crud.getByID(db, receipt.entityId),
+    entityId: receipt.entityId,
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    code: ShortcodeFor<"spendingCategory">,
+    data: SpendingCategoryUpdateData,
+    actor: ActorContext,
+  ) =>
+    withTransaction(db, async (tx) => {
+      const id = await resolveOrThrow(tx, "spendingCategory", code);
+      const receipt = await crud.update(
+        tx,
+        id,
+        { ...data, parentId: await resolveParent(tx, data.parentId, id) },
+        actor,
+        async (_db, receipt) => receipt,
+      );
+      // Moving a category to `not_allowed` is refused while any Expense in it
+      // still links a Product; the error lists them.
+      if (data.productExpectation === "not_allowed")
+        await validateProductPolicy(tx);
+      return readOutput(receipt, async () => ({
+        output: await crud.getByID(tx, id),
+        entityId: id,
+      }));
+    }),
+});
 /**
  * Merge is keeper-wins: every reference moves to the keeper and children
  * reparent under it. The keeper's own name and expectations stay unchanged.

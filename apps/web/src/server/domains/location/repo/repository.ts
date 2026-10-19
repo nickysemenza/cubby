@@ -1,26 +1,21 @@
 import { withTransactionDatabase } from "~/server/db/helpers";
-import { entityMutationReferences } from "~/server/entity-kernel/adapter";
 import {
   mutationEvents,
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
 } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { defineRepository, onDb } from "~/server/entity-kernel/repo/repository";
-import { createAppError } from "~/server/errors/app-error";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
   createLocationRecord,
   deleteLocations,
-  getLocationById,
   LOCATION_DELETE_EDGE_POLICY,
   locationList,
   locationListRead,
   updateLocation,
-  updateLocationAiDescription,
 } from "./crud";
 import { getLocationByShortcode } from "./lookup";
-import { reparentLocationsInBulk } from "./reparent";
 
 const locationShortcodes = bindShortcodeResolver("location");
 
@@ -50,6 +45,21 @@ export const locationRepository = defineRepository("location", {
     });
     return { output, entityId };
   },
+  createRead: async (ctx, data, fields) => {
+    const result = await createLocationRecord.read(
+      fields,
+      ctx.db,
+      data,
+      ctx.actorContext,
+    );
+    await runMutationSideEffects(ctx.db, {
+      action: "created",
+      entity: { entity: "location", id: result.entityId },
+      source: "location.create",
+      locationImagesChanged: (data.pendingImageIds?.length ?? 0) > 0,
+    });
+    return result;
+  },
   update: async (ctx, shortcode, data) => {
     const entityId = await locationShortcodes.one(ctx.db, shortcode);
     const imagesChanged =
@@ -65,8 +75,6 @@ export const locationRepository = defineRepository("location", {
         data,
         ctx.actorContext,
       );
-      if (imagesChanged && updated.images.length === 0)
-        await updateLocationAiDescription(transactionDb, entityId, null);
       await runMutationSideEffects(transactionDb, {
         action: "updated",
         entity: { entity: "location", id: entityId },
@@ -74,12 +82,32 @@ export const locationRepository = defineRepository("location", {
         locationImagesChanged: imagesChanged,
       });
       return {
-        output: imagesChanged
-          ? await getLocationById(transactionDb, entityId)
-          : updated,
+        output: updated,
         entityId,
         detachedImageKeys,
       };
+    });
+  },
+  updateRead: async (ctx, shortcode, data, fields) => {
+    const entityId = await locationShortcodes.one(ctx.db, shortcode);
+    const imagesChanged =
+      (data.pendingImageIds?.length ?? 0) > 0 ||
+      (data.removeImageIds?.length ?? 0) > 0;
+    return withTransactionDatabase(ctx.db, async (transactionDb) => {
+      const result = await updateLocation.read(
+        fields,
+        transactionDb,
+        entityId,
+        data,
+        ctx.actorContext,
+      );
+      await runMutationSideEffects(transactionDb, {
+        action: "updated",
+        entity: { entity: "location", id: entityId },
+        source: "location.update",
+        locationImagesChanged: imagesChanged,
+      });
+      return result;
     });
   },
   delete: async (ctx, shortcodes) => {
@@ -90,28 +118,5 @@ export const locationRepository = defineRepository("location", {
       mutationEvents("location", "deleted", ids, "location.delete"),
     );
     return result;
-  },
-  /**
-   * The field mask says `parentId`; the semantics stay in
-   * {@link reparentLocationsInBulk} (Home mapping, cycle check, race guard).
-   * An ABSENT `parentId` is refused rather than defaulted: an explicit `null`
-   * moves to Home, so reading `undefined` as `null` would move a selection
-   * to Home on an empty patch.
-   */
-  bulkUpdate: async (ctx, shortcodes, data) => {
-    if (data.parentId === undefined)
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "A bulk location patch must supply parentId (null moves to Home).",
-      );
-    await reparentLocationsInBulk(
-      ctx.db,
-      ctx.actorContext,
-      shortcodes,
-      data.parentId,
-    );
-    return {
-      updatedReferences: entityMutationReferences("location", shortcodes),
-    };
   },
 });

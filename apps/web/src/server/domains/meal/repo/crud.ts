@@ -31,6 +31,10 @@ import {
 } from "~/server/db/helpers";
 import { meal, mealRecipe, mealRecipePortion } from "~/server/db/schema";
 import { syncEntityImages } from "~/server/domains/image/repo/entity-image-sync";
+import {
+  type MutationReceipt,
+  defineMutationWriter,
+} from "~/server/entity-kernel/repo/repository";
 import { createEntityReader } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
@@ -293,97 +297,126 @@ export const mealList = async (
   return parseCompleteListRead(mealListItemOut, Promise.resolve(result));
 };
 
-export const createMealWithEntityId = async (
-  db: Database,
-  data: MealCreateInput,
-  actor: ActorContext,
-): Promise<MealMutationResult> => {
-  const id = await withTransaction(db, async (tx) => {
-    const mealValues = {
-      date: data.date,
-      name: data.name ?? null,
-      sortOrder: data.sortOrder ?? null,
-      mealType: data.mealType ?? null,
-    };
-    // Omitted rather than coalesced — let the column default supply "cooked"
-    // in one place instead of restating it here.
-    if (data.mealKind !== undefined) {
-      Object.assign(mealValues, { mealKind: data.mealKind });
-    }
-    const created = await insertWithShortcode(tx, "meal", mealValues);
-    if (data.recipes?.length) {
-      // `resolveAllOrThrow` returns ids positionally, one per input code, so
-      // `recipeIds[i]` pairs with `data.recipes[i]` — the documented zip case.
-      const recipeIds = await resolveAllOrThrow(
-        tx,
-        "recipe",
-        data.recipes.map((recipe) => recipe.recipeId),
-      );
-      await tx.insert(mealRecipe).values(
-        data.recipes.map((r, i) => ({
-          mealId: created.id,
-          recipeId: recipeIds[i]!,
-          scale: r.scale,
-          sortOrder: r.sortOrder ?? null,
-        })),
-      );
-    }
-    if (data.pendingImageIds && data.pendingImageIds.length > 0) {
-      const resolvedImageIds = await resolveAllPresent(
-        tx,
-        "image",
-        data.pendingImageIds,
-      );
-      await associatePendingImages(
-        tx,
-        imageJoinBindings.meal,
-        created.id,
-        resolvedImageIds,
-      );
-    }
-    await logAuditEntry(tx, actor, {
-      entityKind: "meal",
-      entityId: created.id,
-      action: "create",
+export const createMealWithEntityId = defineMutationWriter({
+  entity: "meal",
+  read: async (
+    receipt: MutationReceipt<"meal">,
+    db: Database,
+    _data: MealCreateInput,
+    _actor: ActorContext,
+  ) => ({
+    output: await requireMeal(db, receipt.entityId),
+    entityId: receipt.entityId,
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    data: MealCreateInput,
+    actor: ActorContext,
+  ) => {
+    const id = await withTransaction(db, async (tx) => {
+      const mealValues = {
+        date: data.date,
+        name: data.name ?? null,
+        sortOrder: data.sortOrder ?? null,
+        mealType: data.mealType ?? null,
+      };
+      // Omitted rather than coalesced — let the column default supply "cooked"
+      // in one place instead of restating it here.
+      if (data.mealKind !== undefined) {
+        Object.assign(mealValues, { mealKind: data.mealKind });
+      }
+      const created = await insertWithShortcode(tx, "meal", mealValues);
+      if (data.recipes?.length) {
+        // `resolveAllOrThrow` returns ids positionally, one per input code, so
+        // `recipeIds[i]` pairs with `data.recipes[i]` — the documented zip case.
+        const recipeIds = await resolveAllOrThrow(
+          tx,
+          "recipe",
+          data.recipes.map((recipe) => recipe.recipeId),
+        );
+        await tx.insert(mealRecipe).values(
+          data.recipes.map((r, i) => ({
+            mealId: created.id,
+            recipeId: recipeIds[i]!,
+            scale: r.scale,
+            sortOrder: r.sortOrder ?? null,
+          })),
+        );
+      }
+      if (data.pendingImageIds && data.pendingImageIds.length > 0) {
+        const resolvedImageIds = await resolveAllPresent(
+          tx,
+          "image",
+          data.pendingImageIds,
+        );
+        await associatePendingImages(
+          tx,
+          imageJoinBindings.meal,
+          created.id,
+          resolvedImageIds,
+        );
+      }
+      await logAuditEntry(tx, actor, {
+        entityKind: "meal",
+        entityId: created.id,
+        action: "create",
+      });
+      return created.id;
     });
-    return created.id;
-  });
-  return { output: await requireMeal(db, id), entityId: id };
-};
+    return readOutput({ entityId: id });
+  },
+});
 
-export const updateMeal = async (
-  db: Database,
-  id: MealId,
-  data: MealUpdateInput["data"],
-  actor: ActorContext,
-  hooks?: MealMutationHooks,
-): Promise<{ meal: MealOut; detachedImageKeys: string[] }> => {
-  let detachedImageKeys: string[] = [];
-  // Mutation + audit in one transaction so the change is never left unrecorded.
-  await withTransaction(db, async (tx) => {
-    await hooks?.beforeUpdate?.(tx, id);
-    const mealPatch: MealColumnPatch = {};
-    if (data.date !== undefined) mealPatch.date = data.date;
-    if (data.name !== undefined) mealPatch.name = data.name;
-    if (data.sortOrder !== undefined) mealPatch.sortOrder = data.sortOrder;
-    if (data.mealType !== undefined) mealPatch.mealType = data.mealType;
-    if (data.mealKind !== undefined) mealPatch.mealKind = data.mealKind;
-    await updateLiveAndReturn(tx, meal, mealPatch, id);
-    ({ detachedImageKeys } = await syncEntityImages(
-      tx,
-      "meal",
-      imageJoinBindings.meal,
-      id,
-      data,
-    ));
-    await logAuditEntry(tx, actor, {
-      entityKind: "meal",
-      entityId: id,
-      action: "update",
+export const updateMeal = defineMutationWriter({
+  entity: "meal",
+  read: async (
+    receipt: MutationReceipt<"meal">,
+    db: Database,
+    _id: MealId,
+    _data: MealUpdateInput["data"],
+    _actor: ActorContext,
+    _hooks?: MealMutationHooks,
+  ) => ({
+    meal: await requireMeal(db, receipt.entityId),
+    detachedImageKeys: receipt.detachedImageKeys ?? [],
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    id: MealId,
+    data: MealUpdateInput["data"],
+    actor: ActorContext,
+    hooks?: MealMutationHooks,
+  ) => {
+    let detachedImageKeys: string[] = [];
+    // Mutation + audit in one transaction so the change is never left unrecorded.
+    await withTransaction(db, async (tx) => {
+      await hooks?.beforeUpdate?.(tx, id);
+      const mealPatch: MealColumnPatch = {};
+      if (data.date !== undefined) mealPatch.date = data.date;
+      if (data.name !== undefined) mealPatch.name = data.name;
+      if (data.sortOrder !== undefined) mealPatch.sortOrder = data.sortOrder;
+      if (data.mealType !== undefined) mealPatch.mealType = data.mealType;
+      if (data.mealKind !== undefined) mealPatch.mealKind = data.mealKind;
+      await updateLiveAndReturn(tx, meal, mealPatch, id);
+      ({ detachedImageKeys } = await syncEntityImages(
+        tx,
+        "meal",
+        imageJoinBindings.meal,
+        id,
+        data,
+      ));
+      await logAuditEntry(tx, actor, {
+        entityKind: "meal",
+        entityId: id,
+        action: "update",
+      });
     });
-  });
-  return { meal: await requireMeal(db, id), detachedImageKeys };
-};
+    return readOutput({ entityId: id, detachedImageKeys });
+  },
+  item: (full) => full.meal,
+});
 
 /**
  * A portion has two independent meanings: it is served at its target Meal

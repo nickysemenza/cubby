@@ -37,6 +37,7 @@ interface ArrayFieldManagerProps<
   titleClassName?: string;
   itemClassName?: string;
   showRemoveButton?: boolean;
+  removeButtonLabel?: string;
   maxItems?: number;
   /**
    * Tabular mode: one header row of the given column labels above the
@@ -90,6 +91,7 @@ export const ArrayFieldManager = <
   titleClassName,
   itemClassName,
   showRemoveButton = true,
+  removeButtonLabel,
   maxItems,
   columns,
 }: ArrayFieldManagerProps<T, TFieldValues>) => {
@@ -140,7 +142,7 @@ export const ArrayFieldManager = <
               variant="ghost"
               size="icon-sm"
               className="mb-1"
-              aria-label={`Remove ${title.slice(0, -1).toLowerCase()} ${index + 1}`}
+              aria-label={`${removeButtonLabel ?? `Remove ${title.slice(0, -1).toLowerCase()}`} ${index + 1}`}
               onClick={() => handleRemove(index)}
             >
               <XIcon className="size-3.5" />

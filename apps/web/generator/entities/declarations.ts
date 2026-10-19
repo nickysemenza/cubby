@@ -245,7 +245,10 @@ export type EntityField = Readonly<{
     filters: readonly Readonly<{ field: string; values: readonly string[] }>[];
   }> | null;
   provenance: EntityFieldProvenance | null;
-  collection?: Readonly<{ key: "value" | readonly string[] }>;
+  collection?: Readonly<{
+    key: "value" | readonly string[];
+    readPath?: string;
+  }>;
   explanation: Readonly<{
     ruleId: string;
     version: number;
@@ -459,7 +462,7 @@ export type CompiledEntity = Readonly<{
   filterUrlKeys: readonly string[];
   filterSchema: SourceRef | null;
   filterDescriptors: readonly FilterDescriptor[];
-  /** Fields a `bulkUpdate` command may patch; null means the capability is undeclared. */
+  /** Fields derived from ordinary updates and identity semantics; null without eligible updates. */
   bulkUpdateFields: readonly string[] | null;
   ports: EntityPorts;
   /** The manifest-owned image storage, display, ingress and routing policy. */

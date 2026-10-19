@@ -228,6 +228,7 @@ export default defineEntity({
       {
         key: "aliases",
         kind: "text-array",
+        collection: { key: "value" },
         control: { kind: "specialized", renderer: "tag-list" },
         display: { detail: true },
         validation: {
@@ -605,7 +606,6 @@ Rules:
       "feature",
       "stockTracked",
     ],
-    bulk: [],
     audit: [
       "spendingCategoryMode",
       "spendingCategoryId",
@@ -823,7 +823,6 @@ Rules:
     },
     countable: false,
     delete: { mode: "soft", bulk: true },
-    bulkUpdate: null,
     merge: false,
     // A Product's effective feature (`productCategory.effective-feature`)
     // decides which identity fields it may carry. A write whose evidence a

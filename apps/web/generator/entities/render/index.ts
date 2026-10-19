@@ -450,6 +450,35 @@ export const renderEntityArtifacts = (
         `import { ${[...exports].sort().join(", ")} } from ${JSON.stringify(module)};`,
     )
     .join("\n");
+  const bulkSchemaFor = (entity: CompiledEntity): string => {
+    if (entity.bulkUpdateFields === null) return "null";
+    const update = entity.contract?.update;
+    if (!update)
+      throw new EntityDeclarationError(
+        `${entity.key}.bulkUpdate requires an update contract.`,
+      );
+    const fields = entity.bulkUpdateFields
+      .map((key) => {
+        const field = entity.fieldModel.fields.find(
+          (candidate) => candidate.key === key,
+        );
+        const original = `${update.export}.shape[${JSON.stringify(key)}]`;
+        const schema =
+          field?.collection || field?.reference?.multiple === true
+            ? `bulkCollectionPatchSchema(${original},${JSON.stringify(field?.collection?.key ?? "value")},${JSON.stringify(`${entity.key}${key}BulkCollection`)}).optional()`
+            : original;
+        return `${JSON.stringify(key)}:${schema}`;
+      })
+      .join(",");
+    const collections = entity.fieldModel.fields
+      .filter(
+        (field) =>
+          entity.bulkUpdateFields?.includes(field.key) &&
+          (field.collection || field.reference?.multiple === true),
+      )
+      .map((field) => field.key);
+    return `bulkUpdateInputSchema(${update.export},{${fields}},${JSON.stringify(collections)})`;
+  };
   const schemaEntitySpecs = projections.schema;
   const schemaBindings = schemaEntitySpecs
     .map((entity) => {
@@ -459,12 +488,7 @@ export const renderEntityArtifacts = (
           `${entity.key}.bulkUpdate requires an update contract.`,
         );
       }
-      const bulkUpdateInput =
-        entity.bulkUpdateFields === null
-          ? "null"
-          : `${contract.update?.export}.pick({${entity.bulkUpdateFields
-              .map((field) => `${JSON.stringify(field)}:true`)
-              .join(",")}}).strict()`;
+      const bulkUpdateInput = bulkSchemaFor(entity);
       const filters =
         filterSchema === null
           ? "z.object({})"
@@ -766,10 +790,8 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         `z.object({action:z.literal("list"),entity:z.literal(${JSON.stringify(key)}),items:z.array(withEntityListMedia(${contract.mcpList.export})${treeRowExtension(inspector)}),meta:paginatedMetaSchema})`,
     )
     .join(",\n  ");
-  // A declared field list is compiled into `.pick({...}).strict()` on the
-  // entity's own update schema: an undeclared field is REFUSED rather than
-  // silently stripped, and a field the update schema does not have fails
-  // `pnpm typecheck` on the generated file.
+  // Strict input objects reject excluded fields; references to normal update
+  // fields keep the derived roster checked against the actual update contract.
   const bulkUpdateEntities = entities.filter(
     (entity) =>
       entity.bulkUpdateFields !== null && entity.contract?.update !== null,
@@ -782,10 +804,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         const schemaRef = entity.contract?.update;
         if (!schemaRef)
           throw new EntityDeclarationError(`${entity.key}.update is missing.`);
-        const mask = (entity.bulkUpdateFields ?? [])
-          .map((field) => `${JSON.stringify(field)}:true`)
-          .join(",");
-        return `z.object({action:z.literal("bulkUpdate"),entity:z.literal(${JSON.stringify(entity.key)}),ids,data:${schemaRef.export}.pick({${mask}}).strict()})`;
+        return `z.object({action:z.literal("bulkUpdate"),entity:z.literal(${JSON.stringify(entity.key)}),ids,data:${bulkSchemaFor(entity)}})`;
       })
       .join(",\n  ");
   // No declaration anywhere means the command exists but matches nothing,
@@ -1283,7 +1302,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         "type GeneratedEntityFieldResolutionValue = string | number | boolean | null | readonly GeneratedEntityFieldResolutionValue[] | GeneratedEntityFieldResolutionObject;\ninterface GeneratedEntityFieldResolutionObject { readonly [key: string]: GeneratedEntityFieldResolutionValue }\n\n" +
         'export type GeneratedEntityFieldProvenance = { kind: "reference" | "relation" | "derived"; sources: readonly { entity: Entity | null; label: string | null; relation: string | null }[] };\n\n' +
         "export type GeneratedEntityFieldModel = {\n" +
-        '  fields: readonly { key: string; kind: GeneratedEntityFieldKind; nullable: boolean; requiredOnCreate: boolean; label: string; description: string | null; readKey: string | null; reference: { entity: string; multiple: boolean; scope: readonly { sourceField: string; targetField: string }[]; filters: readonly { field: string; values: readonly string[] }[] } | null; explanation: { ruleId: string; version: number; description: string; readPath?: string; resolver: "field" | "productValuation" | "imageRepresentation" | "imageCapture" | "productQuantity" | "recipeTotals" | "locationValuation" | "merchantVendorInference" | "expenseAttribution"; projections?: Readonly<{ list?: string; detail?: string; summary?: string }>; sourceDependencies?: readonly Readonly<{ path: string; label: string }>[]; } | null; resolution: { reset: Readonly<Record<string, GeneratedEntityFieldResolutionValue>>; none: Readonly<Record<string, GeneratedEntityFieldResolutionValue>> | null; redundancy: "eligible" | "intentional"; confirm: Readonly<Record<string, GeneratedEntityFieldResolutionValue>> | null; labels: { none?: string; unresolved?: string } | null } | null; provenance: GeneratedEntityFieldProvenance | null; collection?: { readonly key: "value" | readonly string[] }; control: { kind: GeneratedEntityFieldControlKind; renderer: string | null; options: readonly { value: string; label: string; description?: string; color?: string; role?: "status" | "category"; glyph?: { phosphor: string; sfSymbol: string } }[] | null; width: "half" | null; placeholder: string | null; initial: "today" | { value: string | number | boolean | null } | null; required: boolean | null; suggest: { readonly basis: readonly string[]; readonly backedBy?: readonly ({ readonly column: string } | { readonly entity: string; readonly column: string; readonly via: string })[]; readonly rules?: readonly string[]; readonly mode: "fill" | "prune"; readonly allowNone: boolean; readonly reviewRequired: boolean } | null } | null; display: { list: boolean; detail: boolean; columnId: string | null; standard: "name" | "image" | null; detailOrder: number | null; listOrder: number | null; width: "xs" | "sm" | "md" | "lg" | null; readPath: string | null; labelPath: string | null; emptyLabel?: string | null; detailLabelPath?: string | null; itemsPath?: string | null; format: "currency" | "signedCurrency" | "plainDate" | "timestamp" | "external-link" | "amount" | "presence" | "bytes" | "join" | "arrayCount" | "count" | "resolvedList" | null; renderer: { list: string | null; detail: string | null } | null; mobile: { slot: string; priority: number; interactive?: boolean } | null; listHidden: boolean; referencePreviewLimit: number | null; columnLabel: string | null; valueOptions: { value: string; label: string; color?: string; role?: "status" | "category"; glyph?: { phosphor: string; sfSymbol: string } }[] | null; preview: boolean } }[];\n' +
+        '  fields: readonly { key: string; kind: GeneratedEntityFieldKind; nullable: boolean; requiredOnCreate: boolean; label: string; description: string | null; readKey: string | null; reference: { entity: string; multiple: boolean; scope: readonly { sourceField: string; targetField: string }[]; filters: readonly { field: string; values: readonly string[] }[] } | null; explanation: { ruleId: string; version: number; description: string; readPath?: string; resolver: "field" | "productValuation" | "imageRepresentation" | "imageCapture" | "productQuantity" | "recipeTotals" | "locationValuation" | "merchantVendorInference" | "expenseAttribution"; projections?: Readonly<{ list?: string; detail?: string; summary?: string }>; sourceDependencies?: readonly Readonly<{ path: string; label: string }>[]; } | null; resolution: { reset: Readonly<Record<string, GeneratedEntityFieldResolutionValue>>; none: Readonly<Record<string, GeneratedEntityFieldResolutionValue>> | null; redundancy: "eligible" | "intentional"; confirm: Readonly<Record<string, GeneratedEntityFieldResolutionValue>> | null; labels: { none?: string; unresolved?: string } | null } | null; provenance: GeneratedEntityFieldProvenance | null; collection?: { readonly key: "value" | readonly string[]; readonly readPath?: string }; control: { kind: GeneratedEntityFieldControlKind; renderer: string | null; options: readonly { value: string; label: string; description?: string; color?: string; role?: "status" | "category"; glyph?: { phosphor: string; sfSymbol: string } }[] | null; width: "half" | null; placeholder: string | null; initial: "today" | { value: string | number | boolean | null } | null; required: boolean | null; suggest: { readonly basis: readonly string[]; readonly backedBy?: readonly ({ readonly column: string } | { readonly entity: string; readonly column: string; readonly via: string })[]; readonly rules?: readonly string[]; readonly mode: "fill" | "prune"; readonly allowNone: boolean; readonly reviewRequired: boolean } | null } | null; display: { list: boolean; detail: boolean; columnId: string | null; standard: "name" | "image" | null; detailOrder: number | null; listOrder: number | null; width: "xs" | "sm" | "md" | "lg" | null; readPath: string | null; labelPath: string | null; emptyLabel?: string | null; detailLabelPath?: string | null; itemsPath?: string | null; format: "currency" | "signedCurrency" | "plainDate" | "timestamp" | "external-link" | "amount" | "presence" | "bytes" | "join" | "arrayCount" | "count" | "resolvedList" | null; renderer: { list: string | null; detail: string | null } | null; mobile: { slot: string; priority: number; interactive?: boolean } | null; listHidden: boolean; referencePreviewLimit: number | null; columnLabel: string | null; valueOptions: { value: string; label: string; color?: string; role?: "status" | "category"; glyph?: { phosphor: string; sfSymbol: string } }[] | null; preview: boolean } }[];\n' +
         '  storage: readonly { key: string; column: string; kind: GeneratedEntityFieldKind; nullable: boolean; default: "none" | "generated" | "now" | "literal"; defaultValue: unknown; reference: string | null; specialized: string | null }[];\n' +
         "  create: readonly string[];\n" +
         "  update: readonly string[];\n" +
@@ -1658,6 +1677,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
       relativePath: "apps/web/src/server/generated/entity-bindings.gen.ts",
       source:
         generatedHeader +
+        'import { bulkUpdateInputSchema, bulkCollectionPatchSchema } from "@cubby/schemas/entity-collection";\n' +
         'import { mutationSideEffectsSchema } from "@cubby/schemas/mutation-side-effects";\n' +
         'import { withEntityDetailMedia, withEntityListMedia } from "@cubby/schemas/entity-read-media";\n' +
         'import { entitySourceInputs } from "@cubby/schemas/entity-source";\n' +

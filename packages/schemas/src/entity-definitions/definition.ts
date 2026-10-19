@@ -620,6 +620,8 @@ const buildMetadataSchemas = () => {
     .object({
       key: nonEmptyString(),
       kind: z.enum(entityFieldKinds),
+      /** Identity or owned-resource semantics; these values cannot be shared by bulk assignment. */
+      semanticRole: z.enum(["externalIdentifier", "attachment"]).optional(),
       nullable: z
         .boolean({ error: "must be a boolean" })
         .optional()
@@ -638,13 +640,16 @@ const buildMetadataSchemas = () => {
       /**
        * A collection field `entity.update` can patch item by item
        * (`@cubby/schemas/entity-collection`). `key` names the item identity:
-       * `"value"` for a text array (the kernel applies the patch), or the
+       * `"value"` for whole-item equality, or the
        * identity fields of a record collection (the entity repository
-       * applies it, keeping its slot and uniqueness rules).
+       * applies normal patches, keeping its slot and uniqueness rules). Bulk
+       * list patches are resolved generically. `readPath` supplies their
+       * authoritative value when detail and input use different shapes.
        */
       collection: z
         .strictObject({
           key: z.union([z.literal("value"), z.array(nonEmptyString()).min(1)]),
+          readPath: nonEmptyString().optional(),
         })
         .nullable()
         .optional()
@@ -989,7 +994,6 @@ const buildMetadataSchemas = () => {
       create: z.array(nonEmptyString()),
       update: z.array(nonEmptyString()),
       output: z.array(nonEmptyString()),
-      bulk: z.array(nonEmptyString()),
       audit: z.array(nonEmptyString()),
       /** Evidence-backed research may fill these ordinary editable fields. */
       research: z
@@ -1594,7 +1598,7 @@ const buildMetadataSchemas = () => {
             .default(null),
           /**
            * Workflow verbs from `action-verbs.ts`, ahead of the verbs derived
-           * from capabilities (`bulkEdit`, kernel `merge`, kernel `delete`).
+           * from eligible updates (`bulkEdit`) and capabilities (kernel `merge`, kernel `delete`).
            */
           extraActions: z.array(actionKey).optional().default([]),
           links: z
@@ -1752,10 +1756,6 @@ const buildMetadataSchemas = () => {
       mode: z.enum(["soft", "hard"]),
       bulk: z.boolean({ error: "must be a boolean" }),
     })
-    .strict();
-
-  const entityBulkUpdateMetadataSchema = z
-    .object({ fields: z.array(nonEmptyString()).min(1) })
     .strict();
 
   /**
@@ -2169,7 +2169,6 @@ const buildMetadataSchemas = () => {
         .optional()
         .default(true),
       delete: entityDeleteMetadataSchema.nullable(),
-      bulkUpdate: entityBulkUpdateMetadataSchema.nullable(),
       merge: z.boolean({ error: "must be a boolean" }),
       /**
        * Who serves delete and merge. Derived as `kernel` for each declared

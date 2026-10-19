@@ -1,3 +1,4 @@
+import { ingredientShortcode } from "@cubby/schemas/identifiers";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import type { FoodSummary } from "@cubby/usda";
 import { fromPartial } from "@total-typescript/shoehorn";
@@ -8,14 +9,20 @@ import { describe, expect, it } from "vitest";
 import type { UPCLookupResponse } from "~/contracts/upc.contract";
 import type { UpcLookupService, UpcLookupPort } from "~/server/clients/upc";
 import type { UsdaFoodLookupPort } from "~/server/clients/usda";
+import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import { resolveProductCategory } from "~/server/domains/product-category/repo/product-category";
 import { quickCreateProduct } from "~/server/domains/product/repo/crud";
 import { findProductByGtin } from "~/server/domains/product/repo/lookup";
-import { createProductWriteActions } from "~/server/domains/product/repo/write/product-writes";
+import {
+  createProductWriteActions,
+  createProductReadActions,
+  readProductMutationFields,
+} from "~/server/domains/product/repo/write/product-writes";
 import { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
 import type { UsdaFoodBatchPort } from "~/server/domains/usda-food/repo/usda-helpers";
 import { executeEntity } from "~/server/entity-kernel";
 import { runDiagnostic } from "~/server/generic/problems/service/problem-diagnostics.service";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { requireActor } from "~/server/http/request-context";
 import {
   createProductFixture,
@@ -507,5 +514,47 @@ describe("product create cover-photo warnings", () => {
     expect(result.sideEffects.warnings).toEqual([
       `Cover photo import for ${upc.padStart(14, "0")} failed: External URL points to a private or local host`,
     ]);
+  });
+});
+
+describe("projected Product mutation reads", () => {
+  const ctx = withTestDb();
+  it("reads an id-only mutation result and its costing ingredient without looking up food", async () => {
+    const ingredient = await findOrCreateIngredient(
+      ctx.db,
+      "Synthetic snapshot ingredient",
+    );
+    if (!ingredient) throw new Error("Missing synthetic ingredient");
+    const ingredientId = ingredientShortcode.parse(ingredient.shortcode);
+    const product = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic snapshot product",
+        ingredientId,
+        fdc_id: 123456,
+      }),
+      ctx.actor,
+    );
+    const id = await resolveOrThrow(ctx.db, "product", product.id);
+    const client = unexpectedUsdaClient();
+    const actions = createProductReadActions(
+      ctx.db,
+      client,
+      (current, productId) =>
+        readProductMutationFields(ctx.db, client, current, productId, ["id"]),
+    );
+    expect(await actions.getProductMutationSnapshot(id)).toEqual({
+      id: product.id,
+      ingredient: { id: ingredientId },
+    });
+    const updated = await actions.updateProduct(
+      id,
+      { notes: "Synthetic snapshot update" },
+      ctx.actor,
+    );
+    expect(updated.output).toEqual({
+      id: product.id,
+      ingredient: { id: ingredientId },
+    });
   });
 });

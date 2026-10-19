@@ -1,3 +1,4 @@
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import type { MutationSideEffects } from "@cubby/schemas/mutation-side-effects";
 import type { UseMutationOptions } from "@tanstack/react-query";
 import { z } from "zod";
@@ -78,12 +79,36 @@ export type EntityMutationOptionsFactory<
   A extends StandardAction,
 > = (callbacks?: EntityMutationCallbacks<E, A>) => EntityMutationOptions<E, A>;
 
-function mutationMeta(entity: StandardEntity): CubbyOperationMeta {
+function mutationMeta(entity: ShortcodeEntity): CubbyOperationMeta {
   return {
     operation: "entity.mutate",
     entity,
     invalidates: entityRipple(entity),
   };
+}
+
+/** Bulk editing also serves update-only entities, such as imported Cookbooks. */
+export function bulkUpdateMutationOptionsFactory(
+  entity: ShortcodeEntity,
+  transport?: EntityMutationTransport,
+) {
+  return () => ({
+    mutationKey: ["operation", "entity.mutate", entity, "bulkUpdate"],
+    meta: mutationMeta(entity),
+    mutationFn: async (variables: { ids: string[]; data: unknown }) => {
+      const result = await executeEntityMutationCommand(
+        entity,
+        { action: "bulkUpdate", entity, ...variables },
+        transport,
+      );
+      if (result.action !== "bulkUpdate")
+        throw new Error("Expected bulk update result");
+      return {
+        updated: result.updatedReferences.length,
+        sideEffects: result.sideEffects,
+      };
+    },
+  });
 }
 
 function mutationBase<E extends StandardEntity>(

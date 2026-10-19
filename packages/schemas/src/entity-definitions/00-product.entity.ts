@@ -794,6 +794,7 @@ Rules:
       },
       {
         key: "upc",
+        semanticRole: "externalIdentifier",
         kind: "text",
         nullable: true,
         control: { kind: "specialized", renderer: "upc-lookup", width: "half" },
@@ -809,6 +810,7 @@ Rules:
       },
       {
         key: "isbn",
+        semanticRole: "externalIdentifier",
         kind: "text",
         nullable: true,
         control: { kind: "text", width: "half" },
@@ -1115,6 +1117,7 @@ Rules:
       },
       {
         key: "unitMappings",
+        collection: { key: ["a"] },
         kind: "json",
         control: { kind: "specialized", renderer: "unit-mappings" },
         provenance: {
@@ -1146,6 +1149,7 @@ Rules:
       },
       {
         key: "externalIds",
+        semanticRole: "externalIdentifier",
         collection: { key: ["source", "kind", "externalId"] },
         // Stays `text-array`: the field kind only gates the pruning
         // (`control.suggest.mode: "prune"`) and section-coverage machinery,
@@ -1301,6 +1305,7 @@ Rules:
       },
       {
         key: "pendingImagePurposes",
+        semanticRole: "attachment",
         kind: "json",
         validation: {
           read: null,
@@ -1324,6 +1329,7 @@ Rules:
       },
       {
         key: "imageOrder",
+        semanticRole: "attachment",
         kind: "text",
         control: { kind: "specialized", renderer: "image-order" },
         provenance: {
@@ -2003,7 +2009,6 @@ Rules:
       "removeImageIds",
       "imageOrder",
     ],
-    bulk: ["stockTracked"],
     audit: [
       "acquisitionOrigin",
       "name",
@@ -3512,7 +3517,6 @@ Rules:
       },
     },
     delete: { mode: "soft", bulk: true },
-    bulkUpdate: { fields: ["stockTracked"] },
     merge: true,
     // Receipt lines name products loosely; a miss is the caller's decision
     // (create, merge, or pick a candidate), never an automatic row.

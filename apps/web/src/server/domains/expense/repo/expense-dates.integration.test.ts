@@ -12,6 +12,7 @@ import {
 } from "~/server/domains/product/repo/movement-timeline";
 import { loadProductOwnershipTimelines } from "~/server/domains/product/repo/ownership";
 import { loadProductQuantityLedgers } from "~/server/domains/product/repo/quantity-ledger";
+import { bulkUpdateFor } from "~/server/testing/entity-kernel";
 import {
   createProductFixture,
   makeExpenseInput,
@@ -20,7 +21,8 @@ import {
 
 import { expenseAnalytics, expenseMonthlySummary } from "./analytics";
 import { createExpense, getExpenseByShortcode, updateExpense } from "./crud";
-import { updateExpensesInBulk } from "./crud";
+
+const updateExpensesInBulk = bulkUpdateFor("expense");
 
 describe("unknown expense dates", () => {
   const ctx = withTestDb();

@@ -1,5 +1,4 @@
 import { getDb } from "~/server/db/helpers";
-import { bulkUpdatedWithSideEffects } from "~/server/entity-kernel/adapter";
 import { refreshDerivedSearchRefs } from "~/server/entity-kernel/repo/mutation-side-effects";
 import {
   asActor,
@@ -15,7 +14,6 @@ import {
   getTaskByShortcode,
   liveSubtasks,
   TASK_DELETE_EDGE_POLICY,
-  updateTasksInBulk,
   updateTask,
   updateTaskRead,
 } from "./crud";
@@ -64,10 +62,4 @@ export const taskRepository = defineRepository("task", {
     );
     return { ...result, removed: result.shortcodes };
   },
-  bulkUpdate: async (ctx, ids, data) =>
-    bulkUpdatedWithSideEffects(
-      ctx,
-      "task",
-      await updateTasksInBulk(ctx.db, ids, data, ctx.actorContext),
-    ),
 });

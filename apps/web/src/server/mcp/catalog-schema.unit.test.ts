@@ -652,6 +652,12 @@ describe("MCP catalog schemas", () => {
       "entity.data.sections[].ingredients[].id",
       "entity.data.sections[].instructions[].id",
       "entity.data.unitMappings[].id",
+      // Bulk patches retain the ordinary child-row shape; these optional ids
+      // identify collection children, never shortcode entities.
+      "entity.data.unitMappings[].value.id",
+      "entity.data.sections[].key.id",
+      "entity.data.sections[].key.ingredients[].id",
+      "entity.data.sections[].key.instructions[].id",
       // entity.commands items are the same create/update commands, so they
       // carry the same child-row ids (the ones an update edits in place).
       "entity.commands[].data.externalIds[].id",

@@ -802,6 +802,7 @@ Rules:
       },
       {
         key: "orderId",
+        semanticRole: "externalIdentifier",
         kind: "text",
         nullable: true,
         control: { kind: "text" },
@@ -848,6 +849,7 @@ Rules:
       },
       {
         key: "beneficiaries",
+        collection: { key: ["partyId"] },
         kind: "json",
         control: { kind: "specialized", renderer: "ledger-attributions" },
         provenance: {
@@ -872,6 +874,7 @@ Rules:
       },
       {
         key: "funders",
+        collection: { key: ["partyId"] },
         kind: "json",
         control: { kind: "specialized", renderer: "ledger-attributions" },
         provenance: {
@@ -896,6 +899,7 @@ Rules:
       },
       {
         key: "sourceClaims",
+        semanticRole: "externalIdentifier",
         kind: "json",
         control: {
           kind: "specialized",
@@ -1120,7 +1124,6 @@ Rules:
       "funders",
       "sourceClaims",
     ],
-    bulk: ["projectId", "trade", "costType"],
     audit: [
       "spendingCategoryId",
       "economicRole",
@@ -1904,7 +1907,6 @@ Rules:
       },
     },
     delete: { mode: "soft", bulk: true },
-    bulkUpdate: { fields: ["projectId", "trade", "costType", "date"] },
     merge: false,
     classificationPolicies: [
       {

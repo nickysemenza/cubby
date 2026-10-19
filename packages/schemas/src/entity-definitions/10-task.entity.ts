@@ -584,6 +584,7 @@ export default defineEntity({
       },
       {
         key: "imageOrder",
+        semanticRole: "attachment",
         kind: "text",
         validation: {
           read: null,
@@ -780,16 +781,6 @@ export default defineEntity({
       "pendingImageIds",
       "removeImageIds",
       "imageOrder",
-    ],
-    bulk: [
-      "assigneeId",
-      "assigneeMode",
-      "projectId",
-      "projectMode",
-      "status",
-      "trade",
-      "dueDate",
-      "dueEndDate",
     ],
     audit: [
       "name",
@@ -1250,18 +1241,6 @@ export default defineEntity({
       },
     },
     delete: { mode: "soft", bulk: true },
-    bulkUpdate: {
-      fields: [
-        "assigneeId",
-        "assigneeMode",
-        "projectId",
-        "projectMode",
-        "status",
-        "trade",
-        "dueDate",
-        "dueEndDate",
-      ],
-    },
     merge: false,
     dataQuality: {
       checks: [

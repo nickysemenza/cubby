@@ -24,4 +24,6 @@ export const cookbookRepository = defineRepository("cookbook", {
   listRead: listReadOn(cookbookListRead),
   update: (ctx, shortcode, data) =>
     updateCookbook(ctx.db, ctx.actorContext, shortcode, data),
+  updateRead: (ctx, shortcode, data, fields) =>
+    updateCookbook.read(fields, ctx.db, ctx.actorContext, shortcode, data),
 });

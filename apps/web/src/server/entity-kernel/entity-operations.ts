@@ -18,6 +18,7 @@ import {
   type PaginationParams,
 } from "@cubby/schemas/pagination";
 import type { SearchableEntityRef } from "@cubby/schemas/search";
+import { getErrorMessage } from "@cubby/shared";
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
@@ -27,6 +28,10 @@ import { deleteStoredObjects } from "~/server/clients/s3";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { runAfterCommit } from "~/server/db/helpers/core";
 import { assessmentState as suggestionTable } from "~/server/db/schema";
+import {
+  canUpdateColumns,
+  updateColumns,
+} from "~/server/entity-kernel/repo/column-update";
 import {
   withListEntityMedia,
   withUniversalEntityMedia,
@@ -49,14 +54,17 @@ import {
   assertEntitySourceFieldPaths,
   entityDetailJson,
   recordEntitySources,
+  sourceSnapshotCovers,
 } from "~/server/entity-kernel/repo/entity-source";
 import {
   isMutationSideEffectRef,
   type MutationSideEffectEvent,
   projectMutationEvent,
+  runMutationSideEffectsForEntities,
   runMutationSideEffects,
 } from "~/server/entity-kernel/repo/mutation-side-effects";
-import { createAppError } from "~/server/errors/app-error";
+import { AppError, createAppError } from "~/server/errors/app-error";
+import { findPgError } from "~/server/errors/db-errors";
 import { withListGroupBy } from "~/server/generic/list/repo/list";
 import { listTotalLabels } from "~/server/generic/list/repo/list-display-labels";
 import { withChildCounts } from "~/server/generic/list/repo/list-read-adapters";
@@ -73,10 +81,11 @@ import type {
   EntityKernelContext,
   EntityKernelCoreBinding,
 } from "./adapter";
-import { resolveValueCollectionPatches } from "./collection-patch";
+import { resolveCollectionPatches } from "./collection-patch";
 import {
   type EntityKernelEntity,
   entityBrowserMutationResultSchema,
+  entityBulkUpdateResultSchema,
   entityMutationReadResultSchema,
   entityQueryResultSchema,
 } from "./contracts";
@@ -225,8 +234,8 @@ const runSideEffects = async <
 
 /**
  * Caller sources ride the write's transaction. A field-scoped source is
- * fingerprinted against the entity's detail read after the write, the same
- * shape the detail read compares against later.
+ * fingerprinted against the mutation's authoritative snapshot using the same
+ * JSON normalization and field paths as a later detail read.
  */
 const recordWriteSources = async <
   E extends EntityKernelEntity,
@@ -237,13 +246,16 @@ const recordWriteSources = async <
   entityId: EntityInternalId<E>,
   code: string,
   sources: readonly EntitySourceInput[],
+  snapshot: unknown,
 ): Promise<void> => {
   const detail = sources.some((source) => source.fieldPath !== undefined)
     ? entityDetailJson.parse(
-        await binding.repository.get(
-          context,
-          parseSchema<S["id"], string>(binding.schemas.id, code),
-        ),
+        sourceSnapshotCovers(binding.entity, snapshot, sources)
+          ? snapshot
+          : await binding.repository.get(
+              context,
+              parseSchema<S["id"], string>(binding.schemas.id, code),
+            ),
       )
     : undefined;
   await recordEntitySources(context.db, {
@@ -271,277 +283,70 @@ const mutationReadFields = (entity: EntityKernelEntity, fields: unknown) => {
   return requested;
 };
 
-const buildEntityOperations = <
+/** Target and basis changes supersede pending suggestions in the mutation transaction. */
+const supersedeWriteSuggestions = async (
+  context: EntityKernelContext,
+  entity: EntityKernelEntity,
+  ids: readonly string[],
+  changedFields: readonly string[],
+): Promise<void> => {
+  const dependentFields = entityFieldModels[entity].fields
+    .filter((field) =>
+      field.control?.suggest?.basis?.some((input) =>
+        changedFields.includes(input),
+      ),
+    )
+    .map((field) => field.key);
+  if (dependentFields.length)
+    await getDb(context.db)
+      .update(suggestionTable)
+      .set({
+        status: "superseded",
+        supersessionReceipt: {
+          reason: "input_changed",
+          evaluationId: null,
+          at: new Date().toISOString(),
+        },
+      })
+      .where(
+        and(
+          eq(suggestionTable.entity, entity),
+          inArray(suggestionTable.recordId, ids),
+          inArray(suggestionTable.field, dependentFields),
+          eq(suggestionTable.status, "pending"),
+        ),
+      );
+  if (changedFields.length) {
+    await getDb(context.db)
+      .update(suggestionTable)
+      .set({
+        status: "superseded",
+        supersessionReceipt: {
+          reason: "target_changed",
+          evaluationId: null,
+          at: new Date().toISOString(),
+        },
+      })
+      .where(
+        and(
+          eq(suggestionTable.entity, entity),
+          inArray(suggestionTable.recordId, ids),
+          inArray(suggestionTable.field, changedFields),
+          eq(suggestionTable.status, "pending"),
+        ),
+      );
+  }
+};
+
+const buildUpdateOperation = <
   const E extends EntityKernelEntity,
   const S extends EntityBindingSchemas,
   const Read extends boolean,
 >(
   binding: EntityKernelCoreBinding<E, S>,
   readMode: Read,
-) => ({
-  get: bindWorkflow(
-    workflow<EntityKernelContext, { id: string; missing: "error" | "null" }>(
-      `${binding.entity}.get`,
-    )
-      .call("id", async (_, { input }) =>
-        parseSchema<S["id"], string>(binding.schemas.id, input.id),
-      )
-      .call("found", async ({ context }, { input, id }) => {
-        const item = await binding.repository.get(context, id);
-        if (item !== null)
-          return { item, redirectedFrom: null, missingMessage: null };
-        // A merged-away code reads as its survivor (ADR 0006). Mutations never
-        // follow this redirect; they refuse with the survivor's code instead.
-        const identity = await resolveEntityIdentity(context.db, input.id);
-        const canonical =
-          identity.state === "redirected" &&
-          identity.kind === binding.entity &&
-          identity.canonicalDeletedAt === null
-            ? await binding.repository.get(
-                context,
-                parseSchema<S["id"], string>(
-                  binding.schemas.id,
-                  identity.canonicalShortcode,
-                ),
-              )
-            : null;
-        if (canonical !== null && identity.state === "redirected")
-          return {
-            item: canonical,
-            redirectedFrom: identity.requested,
-            missingMessage: null,
-          };
-        return {
-          item: null,
-          redirectedFrom: null,
-          missingMessage: isShortcodeEntity(binding.entity)
-            ? await describeUnresolvableCode(
-                context.db,
-                binding.entity,
-                input.id,
-              )
-            : null,
-        };
-      })
-      .call("media", async ({ context }, { found }) =>
-        found.item === null
-          ? null
-          : {
-              ...(
-                await withUniversalEntityMedia(
-                  context.db,
-                  binding.entity,
-                  [found.item],
-                  true,
-                )
-              )[0],
-              redirectedFrom: found.redirectedFrom,
-            },
-      )
-      .output(({ input, found, media }) => {
-        if (media === null && input.missing !== "null")
-          throw createAppError(
-            ENTITY_NOT_FOUND_REASON[binding.entity],
-            found.missingMessage ??
-              `${ENTITY_LABEL[binding.entity]} ${input.id} not found`,
-          );
-        return entityQueryResultSchema.parse({
-          action: "get",
-          entity: binding.entity,
-          item:
-            media === null
-              ? null
-              : parseSchema<S["detail"], typeof media>(
-                  binding.schemas.detail,
-                  media,
-                ),
-        });
-      }),
-  ),
-  list: bindWorkflow(
-    workflow<EntityKernelContext, EntityListInput>(`${binding.entity}.list`)
-      .call("validated", async ({ context }, { input }) => {
-        const { ids, ...repositoryFilters } = z
-          .object({
-            ids: z.array(z.string()).max(500).optional(),
-          })
-          .passthrough()
-          .parse(input.filters);
-        for (const id of ids ?? []) binding.schemas.id.parse(id);
-        const filters = await resolveFilterTokens(
-          context,
-          binding.schemas.filters,
-          parseSchema<S["filters"], unknown>(
-            binding.schemas.filters,
-            repositoryFilters,
-          ),
-        );
-        const searchQuery = entityListSearchSchema.parse(filters).searchQuery;
-        return {
-          filters,
-          ids,
-          pagination: input.pagination ?? DEFAULT_PAGINATION,
-          sorts: parseSorts(binding, input.sort, Boolean(searchQuery)),
-          groupBy: parseGroupBy(binding, input.groupBy, input.groupLevel),
-          nesting: parseNesting(binding, input.nesting),
-        };
-      })
-      .call("page", async ({ context }, { validated }) => {
-        return binding.repository.list(
-          context,
-          withListGroupBy(
-            Object.assign(
-              {},
-              validated.filters,
-              validated.ids === undefined ? {} : { ids: validated.ids },
-              { nesting: validated.nesting },
-            ),
-            validated.groupBy,
-          ),
-          validated.sorts,
-          validated.pagination,
-        );
-      })
-      .call("mediaPage", async ({ context }, { page }) => ({
-        ...page,
-        data: await withListEntityMedia(context.db, binding.entity, page.data),
-      }))
-      .output(({ validated, mediaPage }) =>
-        entityQueryResultSchema.parse({
-          action: "list",
-          entity: binding.entity,
-          ...buildPaginatedResponse(
-            validated.pagination,
-            withChildCounts(
-              z.array(binding.schemas.list).parse(mediaPage.data),
-              mediaPage.data,
-            ),
-            mediaPage.count,
-            aggregates(
-              binding.entity,
-              "sums" in mediaPage
-                ? z
-                    .record(z.string(), z.number())
-                    .optional()
-                    .parse(mediaPage.sums)
-                : undefined,
-              "groups" in mediaPage
-                ? z
-                    .array(listGroupSummarySchema)
-                    .optional()
-                    .parse(mediaPage.groups)
-                : undefined,
-            ),
-          ),
-        }),
-      ),
-  ),
-  create: bindWorkflow(
-    workflow<
-      EntityKernelContext,
-      {
-        data: unknown;
-        sources?: EntitySourceInput[];
-      } & MutationReadDemand<Read>
-    >(`${binding.entity}.create`)
-      .call("validated", async (_, { input }) => {
-        const schema = binding.schemas.createInput;
-        const read = binding.repository.createRead;
-        const fields = readMode
-          ? mutationReadFields(binding.entity, input.fields)
-          : undefined;
-        const run = binding.repository.create;
-        if (!schema || !run)
-          throw createAppError(
-            "CONSTRAINT_VIOLATION",
-            `${ENTITY_LABEL[binding.entity]} does not support create`,
-          );
-        assertEntitySourceFieldPaths(binding.entity, input.sources);
-        return {
-          projected: fields !== undefined && read !== undefined,
-          run:
-            fields && read
-              ? (
-                  context: EntityKernelContext,
-                  data: Parameters<typeof run>[1],
-                ) => read(context, data, fields)
-              : run,
-          sources: input.sources ?? [],
-          data: parseSchema(
-            presentSchema<S["createInput"]>(schema),
-            normalizeRecordEmoji(binding.entity, input.data),
-          ),
-        };
-      })
-      .commit("created", async ({ context }, { validated }) =>
-        writeWithProjections(
-          context,
-          binding,
-          "created",
-          `${binding.entity}.create`,
-          async (writeContext) => {
-            const created = await validated.run(
-              writeContext,
-              parseSchema(
-                presentSchema<S["createInput"]>(binding.schemas.createInput),
-                repositoryRecordInput(binding.entity, validated.data),
-              ),
-            );
-            await writeRecordEmoji(
-              writeContext.db,
-              binding.entity,
-              created.entityId,
-              validated.data,
-            );
-            if (validated.sources.length > 0)
-              await recordWriteSources(
-                writeContext,
-                binding,
-                created.entityId,
-                writtenCode.parse(created.output).id,
-                validated.sources,
-              );
-            return {
-              ...created,
-              output: (
-                await withRecordEmoji(writeContext.db, binding.entity, [
-                  created.output,
-                ])
-              )[0],
-            };
-          },
-        ),
-      )
-      .effect("storage", async ({ context }, { created }) =>
-        deleteDetachedObjects(context, created.detachedImageKeys),
-      )
-      .effect("sideEffects", async ({ context }, { created }) =>
-        runSideEffects(
-          context,
-          binding,
-          "created",
-          created.entityId,
-          `${binding.entity}.create`,
-          created.projectedRefs,
-        ),
-      )
-      .output(({ validated, created }) => {
-        const item = validated.projected
-          ? listReadRowSchema.parse(created.output)
-          : parseSchema<S["output"], typeof created.output>(
-              binding.schemas.output,
-              created.output,
-            );
-        const result = {
-          action: "create" as const,
-          entity: binding.entity,
-          item,
-          sideEffects: mutationSideEffectsWithWarnings(created.warnings),
-        };
-        return result;
-      }),
-  ),
-  update: bindWorkflow(
+) =>
+  bindWorkflow(
     workflow<
       EntityKernelContext,
       {
@@ -603,7 +408,7 @@ const buildEntityOperations = <
               {},
               validated.data,
               Object.fromEntries(
-                await resolveValueCollectionPatches(
+                await resolveCollectionPatches(
                   writeContext,
                   binding,
                   validated.id,
@@ -622,52 +427,12 @@ const buildEntityOperations = <
             const changedFields = Object.keys(
               z.record(z.string(), z.unknown()).parse(validated.data),
             );
-            const dependentFields = entityFieldModels[binding.entity].fields
-              .filter((field) =>
-                field.control?.suggest?.basis?.some((input) =>
-                  changedFields.includes(input),
-                ),
-              )
-              .map((field) => field.key);
-            if (dependentFields.length)
-              await getDb(writeContext.db)
-                .update(suggestionTable)
-                .set({
-                  status: "superseded",
-                  supersessionReceipt: {
-                    reason: "input_changed",
-                    evaluationId: null,
-                    at: new Date().toISOString(),
-                  },
-                })
-                .where(
-                  and(
-                    eq(suggestionTable.entity, binding.entity),
-                    eq(suggestionTable.recordId, updated.entityId),
-                    inArray(suggestionTable.field, dependentFields),
-                    eq(suggestionTable.status, "pending"),
-                  ),
-                );
-            if (changedFields.length) {
-              await getDb(writeContext.db)
-                .update(suggestionTable)
-                .set({
-                  status: "superseded",
-                  supersessionReceipt: {
-                    reason: "target_changed",
-                    evaluationId: null,
-                    at: new Date().toISOString(),
-                  },
-                })
-                .where(
-                  and(
-                    eq(suggestionTable.entity, binding.entity),
-                    eq(suggestionTable.recordId, updated.entityId),
-                    inArray(suggestionTable.field, changedFields),
-                    eq(suggestionTable.status, "pending"),
-                  ),
-                );
-            }
+            await supersedeWriteSuggestions(
+              writeContext,
+              binding.entity,
+              [updated.entityId],
+              changedFields,
+            );
             await writeRecordEmoji(
               writeContext.db,
               binding.entity,
@@ -687,8 +452,9 @@ const buildEntityOperations = <
                 writeContext,
                 binding,
                 updated.entityId,
-                z.string().parse(validated.id),
+                writtenCode.parse(updated.output).id,
                 validated.sources,
+                updated.sourceSnapshot ?? updated.output,
               );
             return {
               ...updated,
@@ -729,85 +495,467 @@ const buildEntityOperations = <
         };
         return result;
       }),
-  ),
-  delete: bindWorkflow(
-    workflow<EntityKernelContext, string[]>(`${binding.entity}.delete`)
-      .call("validated", async (_, { input }) => {
-        const run = binding.repository.delete;
-        if (!run)
-          throw createAppError(
-            "CONSTRAINT_VIOLATION",
-            `${ENTITY_LABEL[binding.entity]} does not support delete`,
-          );
-        return {
-          run,
-          ids: input.map((id) =>
-            parseSchema<S["id"], string>(binding.schemas.id, id),
-          ),
-        };
-      })
-      .commit("deleted", async ({ context }, { validated }) =>
-        validated.run(context, validated.ids),
+  );
+
+const buildEntityOperations = <
+  const E extends EntityKernelEntity,
+  const S extends EntityBindingSchemas,
+  const Read extends boolean,
+>(
+  binding: EntityKernelCoreBinding<E, S>,
+  readMode: Read,
+) => {
+  const update = buildUpdateOperation(binding, readMode);
+  const updateRow = buildUpdateOperation(binding, false);
+  return {
+    get: bindWorkflow(
+      workflow<EntityKernelContext, { id: string; missing: "error" | "null" }>(
+        `${binding.entity}.get`,
       )
-      .effect("receipt", async (_, { deleted }) => {
-        if (!deleted.affectedEdges)
-          throw new Error(
-            `${binding.entity} delete returned without affected-edge counts`,
-          );
-        return { ...deleted, affectedEdges: deleted.affectedEdges };
-      })
-      .effect("storage", async ({ context }, { receipt }) =>
-        deleteDetachedObjects(context, receipt.detachedImageKeys),
-      )
-      .output(({ receipt }) =>
-        entityBrowserMutationResultSchema.parse({
-          action: "delete",
-          entity: binding.entity,
-          deletedReferences: receipt.deletedReferences,
-          affectedEdges: receipt.affectedEdges,
-          sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
+        .call("id", async (_, { input }) =>
+          parseSchema<S["id"], string>(binding.schemas.id, input.id),
+        )
+        .call("found", async ({ context }, { input, id }) => {
+          const item = await binding.repository.get(context, id);
+          if (item !== null)
+            return { item, redirectedFrom: null, missingMessage: null };
+          // A merged-away code reads as its survivor (ADR 0006). Mutations never
+          // follow this redirect; they refuse with the survivor's code instead.
+          const identity = await resolveEntityIdentity(context.db, input.id);
+          const canonical =
+            identity.state === "redirected" &&
+            identity.kind === binding.entity &&
+            identity.canonicalDeletedAt === null
+              ? await binding.repository.get(
+                  context,
+                  parseSchema<S["id"], string>(
+                    binding.schemas.id,
+                    identity.canonicalShortcode,
+                  ),
+                )
+              : null;
+          if (canonical !== null && identity.state === "redirected")
+            return {
+              item: canonical,
+              redirectedFrom: identity.requested,
+              missingMessage: null,
+            };
+          return {
+            item: null,
+            redirectedFrom: null,
+            missingMessage: isShortcodeEntity(binding.entity)
+              ? await describeUnresolvableCode(
+                  context.db,
+                  binding.entity,
+                  input.id,
+                )
+              : null,
+          };
+        })
+        .call("media", async ({ context }, { found }) =>
+          found.item === null
+            ? null
+            : {
+                ...(
+                  await withUniversalEntityMedia(
+                    context.db,
+                    binding.entity,
+                    [found.item],
+                    true,
+                  )
+                )[0],
+                redirectedFrom: found.redirectedFrom,
+              },
+        )
+        .output(({ input, found, media }) => {
+          if (media === null && input.missing !== "null")
+            throw createAppError(
+              ENTITY_NOT_FOUND_REASON[binding.entity],
+              found.missingMessage ??
+                `${ENTITY_LABEL[binding.entity]} ${input.id} not found`,
+            );
+          return entityQueryResultSchema.parse({
+            action: "get",
+            entity: binding.entity,
+            item:
+              media === null
+                ? null
+                : parseSchema<S["detail"], typeof media>(
+                    binding.schemas.detail,
+                    media,
+                  ),
+          });
         }),
-      ),
-  ),
-  bulkUpdate: bindWorkflow(
-    workflow<EntityKernelContext, { ids: string[]; data: unknown }>(
-      `${binding.entity}.bulkUpdate`,
-    )
-      .call("validated", async (_, { input }) => {
-        const schema = binding.schemas.bulkUpdateInput;
-        const run = binding.repository.bulkUpdate;
-        if (!schema || !run)
-          throw createAppError(
-            "CONSTRAINT_VIOLATION",
-            `${ENTITY_LABEL[binding.entity]} does not support bulk update`,
+    ),
+    list: bindWorkflow(
+      workflow<EntityKernelContext, EntityListInput>(`${binding.entity}.list`)
+        .call("validated", async ({ context }, { input }) => {
+          const { ids, ...repositoryFilters } = z
+            .object({
+              ids: z.array(z.string()).max(500).optional(),
+            })
+            .passthrough()
+            .parse(input.filters);
+          for (const id of ids ?? []) binding.schemas.id.parse(id);
+          const filters = await resolveFilterTokens(
+            context,
+            binding.schemas.filters,
+            parseSchema<S["filters"], unknown>(
+              binding.schemas.filters,
+              repositoryFilters,
+            ),
           );
-        return {
-          run,
-          ids: input.ids.map((id) =>
-            parseSchema<S["id"], string>(binding.schemas.id, id),
+          const searchQuery = entityListSearchSchema.parse(filters).searchQuery;
+          return {
+            filters,
+            ids,
+            pagination: input.pagination ?? DEFAULT_PAGINATION,
+            sorts: parseSorts(binding, input.sort, Boolean(searchQuery)),
+            groupBy: parseGroupBy(binding, input.groupBy, input.groupLevel),
+            nesting: parseNesting(binding, input.nesting),
+          };
+        })
+        .call("page", async ({ context }, { validated }) => {
+          return binding.repository.list(
+            context,
+            withListGroupBy(
+              Object.assign(
+                {},
+                validated.filters,
+                validated.ids === undefined ? {} : { ids: validated.ids },
+                { nesting: validated.nesting },
+              ),
+              validated.groupBy,
+            ),
+            validated.sorts,
+            validated.pagination,
+          );
+        })
+        .call("mediaPage", async ({ context }, { page }) => ({
+          ...page,
+          data: await withListEntityMedia(
+            context.db,
+            binding.entity,
+            page.data,
           ),
-          data: parseSchema(
+        }))
+        .output(({ validated, mediaPage }) =>
+          entityQueryResultSchema.parse({
+            action: "list",
+            entity: binding.entity,
+            ...buildPaginatedResponse(
+              validated.pagination,
+              withChildCounts(
+                z.array(binding.schemas.list).parse(mediaPage.data),
+                mediaPage.data,
+              ),
+              mediaPage.count,
+              aggregates(
+                binding.entity,
+                "sums" in mediaPage
+                  ? z
+                      .record(z.string(), z.number())
+                      .optional()
+                      .parse(mediaPage.sums)
+                  : undefined,
+                "groups" in mediaPage
+                  ? z
+                      .array(listGroupSummarySchema)
+                      .optional()
+                      .parse(mediaPage.groups)
+                  : undefined,
+              ),
+            ),
+          }),
+        ),
+    ),
+    create: bindWorkflow(
+      workflow<
+        EntityKernelContext,
+        {
+          data: unknown;
+          sources?: EntitySourceInput[];
+        } & MutationReadDemand<Read>
+      >(`${binding.entity}.create`)
+        .call("validated", async (_, { input }) => {
+          const schema = binding.schemas.createInput;
+          const read = binding.repository.createRead;
+          const fields = readMode
+            ? mutationReadFields(binding.entity, input.fields)
+            : undefined;
+          const run = binding.repository.create;
+          if (!schema || !run)
+            throw createAppError(
+              "CONSTRAINT_VIOLATION",
+              `${ENTITY_LABEL[binding.entity]} does not support create`,
+            );
+          assertEntitySourceFieldPaths(binding.entity, input.sources);
+          return {
+            projected: fields !== undefined && read !== undefined,
+            run:
+              fields && read
+                ? (
+                    context: EntityKernelContext,
+                    data: Parameters<typeof run>[1],
+                  ) => read(context, data, fields)
+                : run,
+            sources: input.sources ?? [],
+            data: parseSchema(
+              presentSchema<S["createInput"]>(schema),
+              normalizeRecordEmoji(binding.entity, input.data),
+            ),
+          };
+        })
+        .commit("created", async ({ context }, { validated }) =>
+          writeWithProjections(
+            context,
+            binding,
+            "created",
+            `${binding.entity}.create`,
+            async (writeContext) => {
+              const created = await validated.run(
+                writeContext,
+                parseSchema(
+                  presentSchema<S["createInput"]>(binding.schemas.createInput),
+                  repositoryRecordInput(binding.entity, validated.data),
+                ),
+              );
+              await writeRecordEmoji(
+                writeContext.db,
+                binding.entity,
+                created.entityId,
+                validated.data,
+              );
+              if (validated.sources.length > 0)
+                await recordWriteSources(
+                  writeContext,
+                  binding,
+                  created.entityId,
+                  writtenCode.parse(created.output).id,
+                  validated.sources,
+                  created.sourceSnapshot ?? created.output,
+                );
+              return {
+                ...created,
+                output: (
+                  await withRecordEmoji(writeContext.db, binding.entity, [
+                    created.output,
+                  ])
+                )[0],
+              };
+            },
+          ),
+        )
+        .effect("storage", async ({ context }, { created }) =>
+          deleteDetachedObjects(context, created.detachedImageKeys),
+        )
+        .effect("sideEffects", async ({ context }, { created }) =>
+          runSideEffects(
+            context,
+            binding,
+            "created",
+            created.entityId,
+            `${binding.entity}.create`,
+            created.projectedRefs,
+          ),
+        )
+        .output(({ validated, created }) => {
+          const item = validated.projected
+            ? listReadRowSchema.parse(created.output)
+            : parseSchema<S["output"], typeof created.output>(
+                binding.schemas.output,
+                created.output,
+              );
+          const result = {
+            action: "create" as const,
+            entity: binding.entity,
+            item,
+            sideEffects: mutationSideEffectsWithWarnings(created.warnings),
+          };
+          return result;
+        }),
+    ),
+    update,
+    delete: bindWorkflow(
+      workflow<EntityKernelContext, string[]>(`${binding.entity}.delete`)
+        .call("validated", async (_, { input }) => {
+          const run = binding.repository.delete;
+          if (!run)
+            throw createAppError(
+              "CONSTRAINT_VIOLATION",
+              `${ENTITY_LABEL[binding.entity]} does not support delete`,
+            );
+          return {
+            run,
+            ids: input.map((id) =>
+              parseSchema<S["id"], string>(binding.schemas.id, id),
+            ),
+          };
+        })
+        .commit("deleted", async ({ context }, { validated }) =>
+          validated.run(context, validated.ids),
+        )
+        .effect("receipt", async (_, { deleted }) => {
+          if (!deleted.affectedEdges)
+            throw new Error(
+              `${binding.entity} delete returned without affected-edge counts`,
+            );
+          return { ...deleted, affectedEdges: deleted.affectedEdges };
+        })
+        .effect("storage", async ({ context }, { receipt }) =>
+          deleteDetachedObjects(context, receipt.detachedImageKeys),
+        )
+        .output(({ receipt }) =>
+          entityBrowserMutationResultSchema.parse({
+            action: "delete",
+            entity: binding.entity,
+            deletedReferences: receipt.deletedReferences,
+            affectedEdges: receipt.affectedEdges,
+            sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
+          }),
+        ),
+    ),
+    bulkUpdate: bindWorkflow(
+      workflow<EntityKernelContext, { ids: string[]; data: unknown }>(
+        `${binding.entity}.bulkUpdate`,
+      )
+        .call("validated", async (_, { input }) => {
+          const schema = binding.schemas.bulkUpdateInput;
+          if (!schema || !binding.repository.update)
+            throw createAppError(
+              "CONSTRAINT_VIOLATION",
+              `${ENTITY_LABEL[binding.entity]} does not support bulk update`,
+            );
+          const data = parseSchema(
             presentSchema<S["bulkUpdateInput"]>(schema),
             input.data,
-          ),
-        };
-      })
-      .commit("updated", async ({ context }, { validated }) =>
-        validated.run(context, validated.ids, validated.data),
-      )
-      .effect("storage", async ({ context }, { updated }) =>
-        deleteDetachedObjects(context, updated.detachedImageKeys),
-      )
-      .output(({ updated }) =>
-        entityBrowserMutationResultSchema.parse({
-          action: "bulkUpdate",
-          entity: binding.entity,
-          updatedReferences: updated.updatedReferences,
-          sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
-        }),
-      ),
-  ),
-});
+          );
+          if (
+            !Object.values(z.record(z.string(), z.unknown()).parse(data)).some(
+              (value) => value !== undefined,
+            )
+          )
+            throw createAppError(
+              "CONSTRAINT_VIOLATION",
+              "A bulk patch must supply at least one field.",
+            );
+          return { ids: input.ids, data };
+        })
+        .commit("updated", async ({ context }, { validated }) => {
+          const deferred = deferPublications();
+          let offending: string | undefined;
+          try {
+            const updated = await withTransactionDatabase(
+              context.db,
+              async (db) => {
+                const writeContext = {
+                  ...context,
+                  db,
+                  services: {
+                    ...context.services,
+                    recipeCosting: context.services.recipeCosting.bindTo(
+                      db,
+                      deferred.publish,
+                    ),
+                  },
+                };
+                if (
+                  canUpdateColumns(
+                    binding.entity,
+                    validated.data,
+                    binding.repository.updatePolicy,
+                  )
+                ) {
+                  const result = await updateColumns(
+                    writeContext,
+                    binding.entity,
+                    validated.ids,
+                    validated.data,
+                  );
+                  await supersedeWriteSuggestions(
+                    writeContext,
+                    binding.entity,
+                    result.updatedIds,
+                    Object.keys(
+                      z.record(z.string(), z.unknown()).parse(validated.data),
+                    ),
+                  );
+                  const events = result.updatedIds.flatMap(
+                    (id): MutationSideEffectEvent[] => {
+                      const ref = parseEntityRef<ShortcodeEntity>(
+                        binding.entity,
+                        id,
+                      );
+                      return isMutationSideEffectRef(ref)
+                        ? [
+                            {
+                              action: "updated",
+                              entity: ref,
+                              source: `${binding.entity}.bulkUpdate`,
+                            },
+                          ]
+                        : [];
+                    },
+                  );
+                  await runMutationSideEffectsForEntities(db, events);
+                } else {
+                  for (const id of validated.ids) {
+                    offending = id;
+                    const parsedId = parseSchema<S["id"], string>(
+                      binding.schemas.id,
+                      id,
+                    );
+                    const data = Object.assign(
+                      {},
+                      validated.data,
+                      Object.fromEntries(
+                        await resolveCollectionPatches(
+                          writeContext,
+                          binding,
+                          parsedId,
+                          validated.data,
+                          { bulk: true },
+                        ),
+                      ),
+                    );
+                    await updateRow(writeContext, { id, data });
+                  }
+                }
+                return {
+                  updatedReferences: validated.ids.map((id) => ({
+                    entity: binding.entity,
+                    id,
+                  })),
+                };
+              },
+            );
+            await deferred.flush(context.db);
+            return updated;
+          } catch (error) {
+            const pg = findPgError(error);
+            const message = `Bulk ${binding.entity} update failed${offending ? ` at row ${offending}` : ""}; selected rows: ${validated.ids.join(", ")}. ${pg ? `SQLSTATE ${pg.code}: ${pg.message ?? ""} ${pg.detail ?? ""}. ` : ""}${getErrorMessage(error)}`;
+            if (error instanceof AppError)
+              throw new AppError({
+                code: error.code,
+                reason: error.reason,
+                blockers: error.blockers,
+                message,
+                cause: error,
+              });
+            throw new Error(message, { cause: error });
+          }
+        })
+        .output(({ updated }) =>
+          entityBulkUpdateResultSchema.parse({
+            action: "bulkUpdate",
+            entity: binding.entity,
+            updatedReferences: updated.updatedReferences,
+            sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
+          }),
+        ),
+    ),
+  };
+};
 
 /** Both output contracts retain the same executable graph and dependencies. */
 export const defineEntityOperations = <

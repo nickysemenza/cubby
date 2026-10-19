@@ -100,6 +100,7 @@ export default defineEntity({
         kind: "identifier",
         reference: { entity: "product", multiple: true },
         control: { kind: "specialized", renderer: "entity-multi-select" },
+        collection: { key: "value", readPath: "candidates[].id" },
         validation: {
           read: null,
           create: z.array(productShortcode).default([]),
@@ -272,7 +273,6 @@ export default defineEntity({
     ],
     create: ["name", "notes", "candidateProductIds"],
     update: ["name", "notes", "candidateProductIds", "acquired"],
-    bulk: [],
     audit: ["name", "notes", "acquiredAt", "candidateProductIds"],
     derived: {
       // The midpoint of the candidates' price range.
@@ -421,7 +421,6 @@ export default defineEntity({
       },
     },
     delete: { mode: "soft", bulk: true },
-    bulkUpdate: null,
     merge: false,
     dataQuality: {
       checks: [

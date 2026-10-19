@@ -1,5 +1,8 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import { ingredientShortcode } from "@cubby/schemas/identifiers";
+import {
+  ingredientShortcode,
+  productShortcode,
+} from "@cubby/schemas/identifiers";
 import {
   type ProductId,
   type ProductShortcode,
@@ -23,7 +26,7 @@ import { startOperationDefinition } from "~/lib/start-operation-observability";
 import { deleteStoredObjects } from "~/server/clients/s3";
 import type { UsdaFoodLookupPort } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
-import { getDb, notDeleted } from "~/server/db/helpers";
+import { getDb, notDeleted, runAfterCommit } from "~/server/db/helpers";
 import { product as productTable } from "~/server/db/schema";
 import { getRecipeUsagesForIngredient } from "~/server/domains/ingredient/repo/search";
 import { loadProductOwners } from "~/server/domains/inventory/repo/ownership";
@@ -60,6 +63,27 @@ export type ProductWriteResult<TOutput = ProductWithFoodOut> = {
   entityId: ProductId;
 };
 
+/** Only ingredient identity is needed to recompute recipes before or after a write. */
+const readProductMutationSnapshot = async (
+  db: Database,
+  id: ProductId,
+): Promise<ProductMutationSnapshot> => {
+  const current = await getDb(db).query.product.findFirst({
+    where: and(eq(productTable.id, id), notDeleted(productTable)),
+    columns: { shortcode: true },
+    with: { ingredient: { columns: { shortcode: true, deletedAt: true } } },
+  });
+  if (!current)
+    throw createAppError("PRODUCT_NOT_FOUND", `Product ${id} not found`);
+  return {
+    id: productShortcode.parse(current.shortcode),
+    ingredient:
+      current.ingredient && !current.ingredient.deletedAt
+        ? { id: ingredientShortcode.parse(current.ingredient.shortcode) }
+        : null,
+  };
+};
+
 /** The write already computed authoritative quality and external identifiers.
  * Recipe recomputation independently needs the current ingredient identity. */
 export const readProductMutationFields = async (
@@ -71,7 +95,7 @@ export const readProductMutationFields = async (
 ): Promise<ListReadRow & ProductMutationSnapshot> => {
   if (
     fields.some(
-      (field) => !["name", "externalIds", "dataQuality"].includes(field),
+      (field) => !["id", "name", "externalIds", "dataQuality"].includes(field),
     )
   ) {
     const full = await getProductWithFood(db, usdaClient, id);
@@ -81,23 +105,9 @@ export const readProductMutationFields = async (
       ingredient: full.ingredient,
     };
   }
-  const current = await getDb(db).query.product.findFirst({
-    where: and(eq(productTable.id, id), notDeleted(productTable)),
-    columns: { id: true },
-    with: { ingredient: { columns: { shortcode: true, deletedAt: true } } },
-  });
-  if (!current)
-    throw createAppError(
-      "PRODUCT_NOT_FOUND",
-      `Product ${product.id} not found`,
-    );
   return {
     ...selectListReadFields(product, fields),
-    id: product.id,
-    ingredient:
-      current.ingredient && !current.ingredient.deletedAt
-        ? { id: ingredientShortcode.parse(current.ingredient.shortcode) }
-        : null,
+    ...(await readProductMutationSnapshot(db, id)),
   };
 };
 
@@ -105,6 +115,7 @@ export type ProductWriteActions<
   TOutput extends ProductMutationSnapshot = ProductWithFoodOut,
 > = {
   getProductByID(id: ProductId): Promise<ProductWithFoodOut>;
+  getProductMutationSnapshot(id: ProductId): Promise<ProductMutationSnapshot>;
   createProduct(
     data: ProductCreateInput,
     actor: ActorContext,
@@ -320,7 +331,7 @@ const updateProductWithOutput = async <TOutput>(
   );
   // After the commit, never inside it: an R2 delete has no rollback. Best-effort
   // by contract — stranded bytes are cheaper than failing a committed update.
-  await deleteStoredObjects(detachedImageKeys);
+  await runAfterCommit(db, () => deleteStoredObjects(detachedImageKeys));
   // Eager recompute of dependent recipes (and inventory valuations) happens at
   // the router layer (covers UI + MCP callers) — see the product router's
   // update proc.
@@ -359,6 +370,7 @@ export const createProductReadActions = <
   readOutput: (product: ProductTopLevelOut, id: ProductId) => Promise<TOutput>,
 ): ProductWriteActions<TOutput> => ({
   getProductByID: (id) => getProductWithFood(db, usdaClient, id),
+  getProductMutationSnapshot: (id) => readProductMutationSnapshot(db, id),
   createProduct: (data, actor) =>
     createProductWithOutput(db, data, actor, readOutput),
   updateProduct: (id, data, actor) =>
@@ -370,6 +382,7 @@ export const createProductWriteActions = (
   usdaClient: UsdaFoodLookupPort,
 ): ProductWriteActions => ({
   getProductByID: (id) => getProductWithFood(db, usdaClient, id),
+  getProductMutationSnapshot: (id) => readProductMutationSnapshot(db, id),
   createProduct: (data, actor) =>
     createProductWithFood(db, usdaClient, data, actor),
   updateProduct: (id, data, actor) =>

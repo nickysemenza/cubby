@@ -41,10 +41,11 @@ import type { AnyColumn, InferSelectModel } from "drizzle-orm";
 import type { PgTable, PgUpdateSetSource } from "drizzle-orm/pg-core";
 import { type output as ZodOutput, type ZodSchema, z } from "zod";
 
+import type { ListReadRow } from "~/entity/model/list-read-fields";
+import { selectListReadFields } from "~/entity/model/list-read-schema";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { updateLiveAndReturn, withTransactionOn } from "~/server/db/helpers";
 import type {
-  EntityKernelBulkUpdateResult,
   EntityKernelContext,
   EntityKernelDeleteResult,
   EntityLifecycleContract,
@@ -76,6 +77,7 @@ import {
   type DeleteHooks,
 } from "~/server/generic/removal/repo/dispositions";
 import {
+  lookupEntityReferences,
   resolveLiveShortcode,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -229,12 +231,22 @@ export interface EntityCrud<
    * updates both diff against the same before-state; last write wins, which
    * a single-household tool accepts rather than paying a row lock per write.
    */
-  update: (
+  update(
     db: ReaderDb,
     id: EntityId<E>,
     data: TUpdate,
     actor: ActorContext,
-  ) => Promise<TOut>;
+  ): Promise<TOut>;
+  update<TResult>(
+    db: ReaderDb,
+    id: EntityId<E>,
+    data: TUpdate,
+    actor: ActorContext,
+    readOutput: (
+      db: ReaderDb,
+      receipt: { entityId: EntityId<E>; shortcode: string },
+    ) => Promise<TResult>,
+  ): Promise<TResult>;
 }
 
 /**
@@ -257,13 +269,33 @@ export function createEntityCrud<
   config: EntityCrudConfig<TTable, TRow, TOut, TUpdate, E, TRelKey>,
 ): EntityCrud<TOut, TUpdate, E> {
   const reader = createEntityReader<TRow, TOut, E, ReaderDb>(config);
-  const update = (
+  function update(
     db: ReaderDb,
     id: EntityId<E>,
     data: TUpdate,
     actor: ActorContext,
-  ): Promise<TOut> =>
-    withTransactionOn(db, async (tx) => {
+  ): Promise<TOut>;
+  function update<TResult>(
+    db: ReaderDb,
+    id: EntityId<E>,
+    data: TUpdate,
+    actor: ActorContext,
+    readOutput: (
+      db: ReaderDb,
+      receipt: { entityId: EntityId<E>; shortcode: string },
+    ) => Promise<TResult>,
+  ): Promise<TResult>;
+  function update<TResult>(
+    db: ReaderDb,
+    id: EntityId<E>,
+    data: TUpdate,
+    actor: ActorContext,
+    readOutput?: (
+      db: ReaderDb,
+      receipt: { entityId: EntityId<E>; shortcode: string },
+    ) => Promise<TResult>,
+  ): Promise<TOut | TResult> {
+    return withTransactionOn(db, async (tx) => {
       await config.prepare?.(tx, id, data);
       const before = await config.fetchById(tx, id);
       if (!before) {
@@ -301,9 +333,88 @@ export function createEntityCrud<
       }
       // Re-read on `tx`: the new state is uncommitted, so another pool
       // connection would neither see it nor be free to.
-      return reader.getByID(tx, id);
+      return readOutput
+        ? readOutput(tx, {
+            entityId: id,
+            shortcode: z.object({ shortcode: z.string() }).parse(updated)
+              .shortcode,
+          })
+        : reader.getByID(tx, id);
     });
+  }
   return { ...reader, update };
+}
+
+/** A mutation's authoritative identity and non-response effects survive every output demand. */
+export type MutationReceipt<E extends ShortcodeEntity> = {
+  entityId: EntityId<E>;
+  shortcode?: string;
+  sourceSnapshot?: z.infer<ReturnType<typeof z.json>>;
+  detachedImageKeys?: string[];
+  warnings?: readonly string[];
+};
+
+/** One mutation body; only its final output reader varies between full and requested fields. */
+export function defineMutationWriter<
+  const E extends ShortcodeEntity,
+  Args extends [ReaderDb, ...unknown[]],
+  Full,
+  Receipt extends MutationReceipt<E> = MutationReceipt<E>,
+>(config: {
+  entity: E;
+  write: <Output>(
+    readOutput: (
+      receipt: NoInfer<Receipt>,
+      readFull?: () => Promise<NoInfer<Full>>,
+    ) => Promise<Output>,
+    ...args: Args
+  ) => Promise<Output>;
+  read: (receipt: Receipt, ...args: Args) => Promise<Full>;
+  item?: (full: NoInfer<Full>) => object;
+}) {
+  const run = (...args: Args): Promise<Full> =>
+    config.write(
+      (receipt, readFull) =>
+        readFull ? readFull() : config.read(receipt, ...args),
+      ...args,
+    );
+  const read = (fields: readonly string[], ...args: Args) =>
+    config.write(
+      async (receipt, readFull) => {
+        if (fields.every((field) => field === "id")) {
+          const code =
+            receipt.shortcode ??
+            (
+              await lookupEntityReferences(args[0], config.entity, [
+                receipt.entityId,
+              ])
+            ).get(receipt.entityId)?.id;
+          if (!code)
+            throw new Error(`Missing ${config.entity} mutation identity`);
+          return { ...receipt, output: { id: code } };
+        }
+        const full = await (readFull
+          ? readFull()
+          : config.read(receipt, ...args));
+        const envelope = z
+          .object({ output: z.looseObject({}) })
+          .safeParse(full);
+        const item =
+          config.item?.(full) ??
+          (envelope.success
+            ? envelope.data.output
+            : z.looseObject({}).parse(full));
+        return {
+          ...receipt,
+          output: selectListReadFields(
+            z.looseObject({ id: z.string() }).parse(item),
+            fields,
+          ),
+        };
+      },
+      ...args,
+    );
+  return Object.assign(run, { read, withOutput: config.write });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -360,12 +471,34 @@ export const listReadOn =
     fn(ctx.db, filters, sorts, pagination, projection);
 
 /** A `(db, …args, actor)` repository write as a kernel method `(ctx, …args)`. */
-export const asActor =
-  <TArgs extends readonly unknown[], TResult>(
-    fn: (db: Database, ...args: [...TArgs, ActorContext]) => TResult,
-  ) =>
-  (ctx: EntityKernelContext, ...args: TArgs): TResult =>
+export const asActor = <
+  TArgs extends readonly unknown[],
+  TResult,
+  TRead extends {
+    entityId: string;
+    output: ListReadRow;
+    detachedImageKeys?: string[];
+    warnings?: readonly string[];
+  } = never,
+>(
+  fn: ((db: Database, ...args: [...TArgs, ActorContext]) => TResult) & {
+    read?: (
+      fields: readonly string[],
+      db: Database,
+      ...args: [...TArgs, ActorContext]
+    ) => Promise<TRead>;
+  },
+) => {
+  const run = (ctx: EntityKernelContext, ...args: TArgs): TResult =>
     fn(ctx.db, ...args, ctx.actorContext);
+  const read = fn.read;
+  return Object.assign(run, {
+    read: read
+      ? (fields: readonly string[], ctx: EntityKernelContext, ...args: TArgs) =>
+          read(fields, ctx.db, ...args, ctx.actorContext)
+      : undefined,
+  });
+};
 
 type SchemasFor<E extends EntitySchemaBindingEntity> =
   EntitySchemaBindingMap[E];
@@ -405,6 +538,7 @@ export interface RepositorySpec<
   updateRead?: EntityRepository<E, SchemasFor<E>>["updateRead"];
   /** `false` when writes have no projections or dependents to refresh. */
   sideEffects?: boolean;
+  updatePolicy?: { recordFields: readonly string[] };
   get: (
     ctx: EntityKernelContext,
     id: ZodOutput<SchemasFor<E>["id"]>,
@@ -415,20 +549,28 @@ export interface RepositorySpec<
     sorts: Parameters<EntityRepositoryListFn<E>>[2],
     pagination: Parameters<EntityRepositoryListFn<E>>[3],
   ) => ReturnType<EntityRepositoryListFn<E>>;
-  create?: (
+  create?: ((
     ctx: EntityKernelContext,
     data: Present<SchemasFor<E>["createInput"]>,
-  ) => Promise<Written<E>>;
-  update?: (
+  ) => Promise<Written<E>>) & {
+    read?: (
+      fields: readonly string[],
+      ctx: EntityKernelContext,
+      data: Present<SchemasFor<E>["createInput"]>,
+    ) => Promise<EntityRepositoryWriteResult<E, SchemasFor<E>, ListReadRow>>;
+  };
+  update?: ((
     ctx: EntityKernelContext,
     id: ZodOutput<SchemasFor<E>["id"]>,
     data: Present<SchemasFor<E>["updateInput"]>,
-  ) => Promise<Written<E>>;
-  bulkUpdate?: (
-    ctx: EntityKernelContext,
-    ids: ZodOutput<SchemasFor<E>["id"]>[],
-    data: Present<SchemasFor<E>["bulkUpdateInput"]>,
-  ) => Promise<EntityKernelBulkUpdateResult<E>>;
+  ) => Promise<Written<E>>) & {
+    read?: (
+      fields: readonly string[],
+      ctx: EntityKernelContext,
+      id: ZodOutput<SchemasFor<E>["id"]>,
+      data: Present<SchemasFor<E>["updateInput"]>,
+    ) => Promise<EntityRepositoryWriteResult<E, SchemasFor<E>, ListReadRow>>;
+  };
   /**
    * An entity-specific delete. Omit it to delete by the declared
    * `lifecycle.delete` policy with `deleteHooks` and `afterDelete`.
@@ -564,8 +706,9 @@ export function defineRepository<
     };
   };
 
-  const { create, update, bulkUpdate, merge } = spec;
+  const { create, update, merge } = spec;
   const repository: EntityRepository<E, SchemasFor<E>> = {
+    updatePolicy: spec.updatePolicy,
     get: spec.get,
     list: spec.list,
     listRead: spec.listRead,
@@ -576,12 +719,27 @@ export function defineRepository<
   if (declared("create") && create)
     repository.create = async (ctx, data) =>
       written(ctx, await create(ctx, data));
-  if (declared("create") && create) repository.createRead = spec.createRead;
+  if (declared("create") && create) {
+    const read = create.read;
+    repository.createRead =
+      spec.createRead ??
+      (read ? (ctx, data, fields) => read(fields, ctx, data) : undefined);
+    if (!repository.createRead)
+      throw new Error(`${entity}.create requires a final-output reader`);
+  }
   if (declared("update") && update)
     repository.update = async (ctx, id, data) =>
       written(ctx, await update(ctx, id, data));
-  if (declared("update") && update) repository.updateRead = spec.updateRead;
-  if (declared("bulkUpdate") && bulkUpdate) repository.bulkUpdate = bulkUpdate;
+  if (declared("update") && update) {
+    const read = update.read;
+    repository.updateRead =
+      spec.updateRead ??
+      (read
+        ? (ctx, id, data, fields) => read(fields, ctx, id, data)
+        : undefined);
+    if (!repository.updateRead)
+      throw new Error(`${entity}.update requires a final-output reader`);
+  }
   if (declared("delete"))
     repository.delete = async (ctx, ids) => {
       // Every DB touch inside the delete goes through the transaction-bound

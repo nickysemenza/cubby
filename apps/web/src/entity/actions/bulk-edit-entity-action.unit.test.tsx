@@ -1,5 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
+import { recipeSectionsInput } from "@cubby/schemas/recipe-fields";
 import {
   fireEvent,
   render,
@@ -8,8 +9,10 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import type { SearchProviderProps } from "~/entity/picker/with-search-hook";
+import { installFeatures } from "~/features/registry";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {
@@ -38,9 +41,23 @@ function stubSearchProviderFor() {
   };
 }
 
+function purchaseSearchProviderFor() {
+  return function SyntheticPurchaseSearch({
+    children,
+  }: SearchProviderProps<string>) {
+    return children({
+      items: [{ id: "PUR-ABCD", name: "Synthetic purchase" }],
+      onSearchChange: vi.fn(),
+      isLoading: false,
+      onOpenChange: vi.fn(),
+    });
+  };
+}
+
 let harness: ReturnType<typeof createBrowserTestHarness>;
 
 beforeEach(() => {
+  installFeatures();
   harness = createBrowserTestHarness();
 });
 
@@ -49,6 +66,201 @@ afterEach(() => {
 });
 
 describe("BulkEditDialogBody", () => {
+  it("makes structured removal controls visibly distinct", () => {
+    render(
+      <BulkEditDialogBody
+        entity="financialTransaction"
+        items={[{ id: "FTX-ABCD", name: "Synthetic charge" }]}
+        fieldKeys={["allocations"]}
+        onOpenChange={vi.fn()}
+        onSubmit={vi.fn()}
+        isPending={false}
+        searchProviderFor={purchaseSearchProviderFor}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    const removals = within(
+      screen.getByRole("group", { name: "Allocations to remove" }),
+    );
+    expect(removals.getByText("Allocations to remove")).toBeVisible();
+    fireEvent.click(
+      removals.getByRole("button", { name: "Choose item to remove" }),
+    );
+    expect(
+      removals.getByRole("button", { name: "Cancel removal 1" }),
+    ).toBeVisible();
+  });
+  it("stages keyed removals before additions so an existing allocation can change", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <BulkEditDialogBody
+        entity="financialTransaction"
+        items={[{ id: "FTX-ABCD", name: "Synthetic charge" }]}
+        fieldKeys={["allocations"]}
+        onOpenChange={vi.fn()}
+        onSubmit={onSubmit}
+        isPending={false}
+        searchProviderFor={purchaseSearchProviderFor}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    for (const operation of ["add", "remove"]) {
+      const group = within(
+        screen.getByRole("group", { name: `Allocations to ${operation}` }),
+      );
+      fireEvent.click(
+        group.getByRole("button", {
+          name: /Add allocation|Choose item to remove/,
+        }),
+      );
+      const purchase = group.getByRole("combobox", { name: "Purchase id" });
+      purchase.focus();
+      fireEvent.keyDown(purchase, { key: "ArrowDown" });
+      fireEvent.change(purchase, { target: { value: "Synthetic" } });
+      fireEvent.keyDown(purchase, { key: "ArrowDown" });
+      fireEvent.keyDown(purchase, { key: "Enter" });
+      if (operation === "add")
+        fireEvent.change(group.getByLabelText("Amount"), {
+          target: { value: "6" },
+        });
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Update" }));
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith({
+        allocations: [
+          { op: "remove", key: { purchaseId: "PUR-ABCD" } },
+          { op: "add", key: { purchaseId: "PUR-ABCD" }, value: { amount: 6 } },
+        ],
+      }),
+    );
+  });
+  it("normalizes cleared optional lists in structured additions", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <BulkEditDialogBody
+        entity="recipe"
+        items={[{ id: "RCP-ABCD", name: "Synthetic recipe" }]}
+        fieldKeys={["sections"]}
+        onOpenChange={vi.fn()}
+        onSubmit={onSubmit}
+        isPending={false}
+        searchProviderFor={stubSearchProviderFor}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    const additions = within(
+      screen.getByRole("group", { name: "Composition to add" }),
+    );
+    fireEvent.click(additions.getByRole("button", { name: "Add composition" }));
+    fireEvent.click(additions.getByRole("button", { name: "Add ingredient" }));
+    fireEvent.click(
+      additions.getByRole("button", { name: "Remove ingredient 1" }),
+    );
+    fireEvent.click(additions.getByRole("button", { name: "Add instruction" }));
+    fireEvent.change(additions.getByLabelText("Instruction"), {
+      target: { value: "Synthetic step" },
+    });
+    expect(screen.getByRole("button", { name: "Update" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Update" }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    const submitted = z
+      .object({ sections: z.array(z.object({ key: z.json() })) })
+      .parse(onSubmit.mock.calls[0]?.[0]);
+    expect(
+      recipeSectionsInput.safeParse(submitted.sections.map((item) => item.key))
+        .success,
+    ).toBe(true);
+    expect(submitted.sections[0]?.key).toEqual(
+      expect.objectContaining({
+        instructions: [{ instruction: "Synthetic step" }],
+      }),
+    );
+  });
+  it("renders editable references without an explicit normal control", () => {
+    render(
+      <BulkEditDialogBody
+        entity="recipe"
+        items={[{ id: "RCP-ABCD", name: "Synthetic recipe" }]}
+        fieldKeys={["cookbookId"]}
+        onOpenChange={vi.fn()}
+        onSubmit={vi.fn()}
+        isPending={false}
+        searchProviderFor={stubSearchProviderFor}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    expect(screen.getByRole("combobox", { name: "Cookbook" })).toBeVisible();
+  });
+
+  it("submits structured additions for financial allocations", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <BulkEditDialogBody
+        entity="financialTransaction"
+        items={[{ id: "FTX-ABCD", name: "Synthetic charge" }]}
+        fieldKeys={["allocations"]}
+        onOpenChange={vi.fn()}
+        onSubmit={onSubmit}
+        isPending={false}
+        searchProviderFor={purchaseSearchProviderFor}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    const additions = screen.getByRole("group", { name: "Allocations to add" });
+    fireEvent.click(
+      within(additions).getByRole("button", { name: /Add allocation/ }),
+    );
+    const purchase = within(additions).getByRole("combobox", {
+      name: "Purchase id",
+    });
+    purchase.focus();
+    fireEvent.keyDown(purchase, { key: "ArrowDown" });
+    fireEvent.change(purchase, { target: { value: "Synthetic" } });
+    fireEvent.click(
+      await screen.findByRole("option", { name: "Synthetic purchase" }),
+    );
+    fireEvent.change(within(additions).getByLabelText("Amount"), {
+      target: { value: "6" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Update" }));
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith({
+        allocations: [
+          { op: "add", key: { purchaseId: "PUR-ABCD" }, value: { amount: 6 } },
+        ],
+      }),
+    );
+  });
+  it("submits list additions and removals as patches", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <BulkEditDialogBody
+        entity="product"
+        items={[{ id: "PRD-ABCD", name: "Synthetic mount" }]}
+        fieldKeys={["tags"]}
+        onOpenChange={vi.fn()}
+        onSubmit={onSubmit}
+        isPending={false}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    const add = screen.getByPlaceholderText("Tags to add");
+    fireEvent.change(add, { target: { value: "mount-a" } });
+    fireEvent.keyDown(add, { key: "Enter" });
+    const remove = screen.getByPlaceholderText("Tags to remove");
+    fireEvent.change(remove, { target: { value: "mount-b" } });
+    fireEvent.keyDown(remove, { key: "Enter" });
+    fireEvent.click(screen.getByRole("button", { name: "Update" }));
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith({
+        tags: [
+          { op: "remove", key: "mount-b" },
+          { op: "add", key: "mount-a" },
+        ],
+      }),
+    );
+  });
+
   it("does not turn Set value with an empty control into an accidental clear", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     render(
@@ -161,7 +373,7 @@ describe("BulkEditDialogBody", () => {
   });
 
   // One dirtied field, several untouched siblings, across entities with
-  // different bulk-update rosters (task's five vs. planting's three) — the
+  // different bulk-update rosters — the
   // payload must carry exactly the touched key either way.
   it.each<{
     entity: Entity;

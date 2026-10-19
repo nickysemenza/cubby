@@ -16,7 +16,7 @@ import { expect, test } from "./support/e2e-test";
 
 /**
  * The generic `bulkEdit` action (`bulk-edit-entity-action.tsx`): a list's
- * multi-select bar opens one dialog driven by `capabilities.bulkUpdate.fields`,
+ * multi-select bar opens one dialog driven by the derived bulk update roster,
  * and the write touches only the fields the dialog's form was dirtied on —
  * every unselected task/planting keeps its other seeded values. The later
  * cases pin the assignment distinctions the dialog must keep: an explicit

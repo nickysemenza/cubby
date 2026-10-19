@@ -189,7 +189,7 @@ export async function updateProductWithReadSideEffects<
 ): Promise<TOutput & { sideEffects: MutationSideEffects }> {
   const previous =
     data.ingredientId !== undefined
-      ? await services.product.getProductByID(id)
+      ? await services.product.getProductMutationSnapshot(id)
       : null;
   const { output: result } = await services.product.updateProduct(
     id,

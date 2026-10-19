@@ -645,6 +645,7 @@ export default defineEntity({
       },
       {
         key: "sourceRefs",
+        semanticRole: "externalIdentifier",
         kind: "json",
         // Stored as `settlement_ref` EntityExternalId rows.
         provenance: {
@@ -687,7 +688,8 @@ export default defineEntity({
       {
         key: "allocations",
         kind: "text-array",
-        control: { kind: "specialized", renderer: "tag-list" },
+        collection: { key: ["purchaseId"] },
+        control: { kind: "specialized", renderer: "structured-field" },
         display: {
           detail: true,
           renderer: { detail: "financial-transaction-allocations" },
@@ -940,7 +942,6 @@ export default defineEntity({
       "notes",
       "allocations",
     ],
-    bulk: [],
     audit: [
       "itemizationExpectation",
       "accountId",
@@ -1641,7 +1642,6 @@ export default defineEntity({
       },
     },
     delete: { mode: "soft", bulk: true },
-    bulkUpdate: null,
     merge: false,
     dataQuality: {
       exceptions: true,

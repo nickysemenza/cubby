@@ -36,6 +36,15 @@ export const mealRepository = defineRepository("meal", {
     );
     return { output: meal, entityId, detachedImageKeys };
   },
+  updateRead: async (ctx, id, data, fields) =>
+    updateMeal.read(
+      fields,
+      ctx.db,
+      await mealShortcodes.one(ctx.db, id),
+      data,
+      ctx.actorContext,
+      ctx.caldavHooks?.meal,
+    ),
   delete: async (ctx, ids) =>
     deleteMeals(
       ctx.db,

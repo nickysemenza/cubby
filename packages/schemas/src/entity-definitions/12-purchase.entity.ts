@@ -601,6 +601,7 @@ export default defineEntity({
       },
       {
         key: "orderId",
+        semanticRole: "externalIdentifier",
         kind: "text",
         nullable: true,
         control: {
@@ -741,6 +742,7 @@ export default defineEntity({
       },
       {
         key: "imageOrder",
+        semanticRole: "attachment",
         kind: "text",
         control: { kind: "specialized", renderer: "image-order" },
         provenance: {
@@ -1152,7 +1154,6 @@ export default defineEntity({
       "removeImageIds",
       "imageOrder",
     ],
-    bulk: [],
     audit: [
       "purchaserOverrideId",
       "spendingCategoryId",
@@ -2078,7 +2079,6 @@ export default defineEntity({
       },
     },
     delete: { mode: "soft", bulk: true },
-    bulkUpdate: null,
     merge: true,
   },
   extensions: {

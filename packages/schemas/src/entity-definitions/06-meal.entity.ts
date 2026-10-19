@@ -289,6 +289,7 @@ Rules:
       },
       {
         key: "imageOrder",
+        semanticRole: "attachment",
         kind: "text",
         validation: {
           read: null,
@@ -506,7 +507,6 @@ Rules:
       "removeImageIds",
       "imageOrder",
     ],
-    bulk: [],
     audit: [],
     // Slot order (`mealTypeValues` is clock order), not slug order.
     derived: {
@@ -912,7 +912,6 @@ Rules:
       },
     },
     delete: { mode: "soft", bulk: true },
-    bulkUpdate: null,
     merge: false,
     dataQuality: {
       checks: [

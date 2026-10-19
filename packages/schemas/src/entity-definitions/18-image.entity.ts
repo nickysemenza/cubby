@@ -289,6 +289,15 @@ export default defineEntity({
       {
         key: "source",
         kind: "enum",
+        control: {
+          kind: "select",
+          options: [
+            { value: "own", label: "Own" },
+            { value: "catalog", label: "Catalog" },
+            { value: "unknown", label: "Unknown" },
+            { value: "screenshot", label: "Screenshot" },
+          ],
+        },
         display: { list: true, detail: true },
         validation: {
           read: z.enum(imageSourceValues),
@@ -298,6 +307,7 @@ export default defineEntity({
       },
       {
         key: "sourcePageUrl",
+        control: { kind: "text" },
         kind: "text",
         nullable: true,
         display: { detail: true },
@@ -309,6 +319,7 @@ export default defineEntity({
       },
       {
         key: "sourceAssetUrl",
+        control: { kind: "text" },
         kind: "text",
         nullable: true,
         display: { detail: true },
@@ -320,6 +331,7 @@ export default defineEntity({
       },
       {
         key: "sourceName",
+        control: { kind: "text" },
         kind: "text",
         nullable: true,
         display: { detail: true },
@@ -331,6 +343,7 @@ export default defineEntity({
       },
       {
         key: "useOriginal",
+        control: { kind: "checkbox" },
         kind: "boolean",
         display: { list: true, detail: true },
         validation: {
@@ -352,6 +365,7 @@ export default defineEntity({
       },
       {
         key: "capturedAt",
+        control: { kind: "text", placeholder: "ISO date and time" },
         kind: "timestamp",
         nullable: true,
         display: { list: true, detail: true, format: "timestamp" },
@@ -643,7 +657,6 @@ export default defineEntity({
       "capturedByPartyId",
       "capturedAt",
     ],
-    bulk: [],
     audit: [],
     rows: {
       importTargets: {
@@ -943,7 +956,6 @@ export default defineEntity({
     auditable: false,
     images: { storage: false },
     delete: { mode: "hard", bulk: true },
-    bulkUpdate: null,
     merge: false,
     dataQuality: {
       checks: [

@@ -21,7 +21,6 @@ import { locationPickerSortableFields } from "@cubby/schemas/location";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { and, eq, inArray, isNotNull, type SQL, sql } from "drizzle-orm";
 import { alias, QueryBuilder } from "drizzle-orm/pg-core";
-import { uniq } from "es-toolkit";
 
 import { projectListRows } from "~/entity/model/list-read-schema";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
@@ -73,6 +72,10 @@ import { parseLocationType } from "~/server/domains/location/repo/parse-type";
 import { loadProductPricing } from "~/server/domains/product/repo/pricing";
 import { assertClassificationPolicies } from "~/server/domains/spending-category/repo/classification-field-policy";
 import { withDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
+import {
+  type MutationReceipt,
+  defineMutationWriter,
+} from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import {
   isUniqueViolation,
@@ -80,7 +83,6 @@ import {
 } from "~/server/errors/db-errors";
 import {
   computeChanges,
-  logAuditEntries,
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
@@ -198,19 +200,32 @@ export const createLocation = async (
 ) => (await createLocationRecord(db, data, actor)).output;
 
 /** `createLocation` with the inserted row's id, so a caller never re-resolves the code it just minted. */
-export const createLocationRecord = async (
-  db: Database,
-  data: LocationCreateInput,
-  actor: ActorContext,
-) => {
-  try {
-    return await createLocationTx(db, data, actor);
-  } catch (error) {
-    // Safe on a clean connection: withTransaction has already rolled back.
-    await throwIfDuplicateLocation(db, data.name, error);
-    throw error;
-  }
-};
+export const createLocationRecord = defineMutationWriter({
+  entity: "location",
+  read: async (
+    receipt: MutationReceipt<"location">,
+    db: Database,
+    _data: LocationCreateInput,
+    _actor: ActorContext,
+  ) => ({
+    output: await getLocationById(db, receipt.entityId),
+    entityId: receipt.entityId,
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    data: LocationCreateInput,
+    actor: ActorContext,
+  ) => {
+    try {
+      return await createLocationTx.withOutput(readOutput, db, data, actor);
+    } catch (error) {
+      // Safe on a clean connection: withTransaction has already rolled back.
+      await throwIfDuplicateLocation(db, data.name, error);
+      throw error;
+    }
+  },
+});
 
 /**
  * A caller-supplied product code that does not resolve is bad input, not a
@@ -234,80 +249,96 @@ const raiseMissingType = (): never => {
   );
 };
 
-const createLocationTx = async (
-  db: Database,
-  data: LocationCreateInput,
-  actor: ActorContext,
-) => {
-  return await withTransaction(db, async (tx) => {
-    let parentId: LocationId;
-    if (data.parentId) {
-      const resolvedParent = await resolveLiveShortcode(
-        tx,
-        data.parentId,
-        "location",
-      );
-      if (!resolvedParent) {
-        throw createAppError(
-          "REFERENCED_RECORD_MISSING",
-          "Cannot set parent: the specified parent location does not exist",
+const createLocationTx = defineMutationWriter({
+  entity: "location",
+  read: async (
+    receipt: MutationReceipt<"location">,
+    db: Database,
+    _data: LocationCreateInput,
+    _actor: ActorContext,
+  ) => ({
+    output: await getLocationById(db, receipt.entityId),
+    entityId: receipt.entityId,
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    data: LocationCreateInput,
+    actor: ActorContext,
+  ) => {
+    return await withTransaction(db, async (tx) => {
+      let parentId: LocationId;
+      if (data.parentId) {
+        const resolvedParent = await resolveLiveShortcode(
+          tx,
+          data.parentId,
+          "location",
+        );
+        if (!resolvedParent) {
+          throw createAppError(
+            "REFERENCED_RECORD_MISSING",
+            "Cannot set parent: the specified parent location does not exist",
+          );
+        }
+        parentId = parseEntityId("location", resolvedParent);
+      } else {
+        parentId = (await getHomeLocation(tx)).id;
+      }
+      // A miss here is a validation failure on caller-supplied input, not a 404
+      // for the location being created — hence the raw resolve rather than
+      // `resolveOrThrow`.
+      const productId = data.productId
+        ? parseEntityId(
+            "product",
+            (await resolveLiveShortcode(tx, data.productId, "product")) ??
+              raiseMissingProduct(),
+          )
+        : null;
+      const type = data.type ?? (productId ? "furniture" : raiseMissingType());
+      assertClassificationPolicies("location", { type, productId });
+      const newLocation = await insertWithShortcode(tx, "location", {
+        name: data.name,
+        aliases: data.aliases,
+        tags: data.tags ?? [],
+        // `type` is the physical form factor; `productId` is identity. A
+        // product-linked location can still carry a type (e.g. a raised bed
+        // that is also a specific product); without one it is `furniture`.
+        type,
+        notes: data.notes ?? null,
+        productId,
+        parentId,
+      });
+
+      if (data.pendingImageIds && data.pendingImageIds.length > 0) {
+        const resolvedImageIds = await resolveAllPresent(
+          tx,
+          "image",
+          data.pendingImageIds,
+        );
+        await associatePendingImages(
+          tx,
+          imageJoinBindings.location,
+          newLocation.id,
+          resolvedImageIds,
         );
       }
-      parentId = parseEntityId("location", resolvedParent);
-    } else {
-      parentId = (await getHomeLocation(tx)).id;
-    }
-    // A miss here is a validation failure on caller-supplied input, not a 404
-    // for the location being created — hence the raw resolve rather than
-    // `resolveOrThrow`.
-    const productId = data.productId
-      ? parseEntityId(
-          "product",
-          (await resolveLiveShortcode(tx, data.productId, "product")) ??
-            raiseMissingProduct(),
-        )
-      : null;
-    const type = data.type ?? (productId ? "furniture" : raiseMissingType());
-    assertClassificationPolicies("location", { type, productId });
-    const newLocation = await insertWithShortcode(tx, "location", {
-      name: data.name,
-      aliases: data.aliases,
-      tags: data.tags ?? [],
-      // `type` is the physical form factor; `productId` is identity. A
-      // product-linked location can still carry a type (e.g. a raised bed
-      // that is also a specific product); without one it is `furniture`.
-      type,
-      notes: data.notes ?? null,
-      productId,
-      parentId,
-    });
 
-    if (data.pendingImageIds && data.pendingImageIds.length > 0) {
-      const resolvedImageIds = await resolveAllPresent(
-        tx,
-        "image",
-        data.pendingImageIds,
+      await logAuditEntry(tx, actor, {
+        entityKind: "location",
+        entityId: newLocation.id,
+        action: "create",
+      });
+
+      return readOutput(
+        { entityId: newLocation.id, shortcode: newLocation.shortcode },
+        async () => ({
+          output: await getLocationById(tx, newLocation.id),
+          entityId: newLocation.id,
+        }),
       );
-      await associatePendingImages(
-        tx,
-        imageJoinBindings.location,
-        newLocation.id,
-        resolvedImageIds,
-      );
-    }
-
-    await logAuditEntry(tx, actor, {
-      entityKind: "location",
-      entityId: newLocation.id,
-      action: "create",
     });
-
-    return {
-      output: await getLocationById(tx, newLocation.id),
-      entityId: newLocation.id,
-    };
-  });
-};
+  },
+});
 
 /**
  * Identifying predicate for the single global "Unknown" parking location — the
@@ -364,227 +395,172 @@ export const ensureGlobalUnknownLocation = async (
  * (`Database`) path — the router's — may drain the keys directly. Today the
  * router is the only caller that passes a `Database`.
  */
-export const updateLocation = async (
-  db: Database | DrizzleTransaction,
-  id: LocationId,
-  data: LocationUpdateInput["data"],
-  actor: ActorContext,
-  options?: { resolvedParentId?: LocationId | null },
-) => {
-  let detachedImageKeys: string[] = [];
-  const resolveUpdatedParentId = async (tx: DrizzleTransaction) => {
-    if (data.parentId === undefined) return undefined;
-    const home = await getHomeLocation(tx);
-    if (id === home.id) {
-      throw createAppError("CONSTRAINT_VIOLATION", "Home cannot be reparented");
-    }
-    let parentId: LocationId | null;
-    if (options && "resolvedParentId" in options) {
-      parentId = options.resolvedParentId ?? home.id;
-    } else if (data.parentId === null) {
-      parentId = home.id;
-    } else {
-      const resolved = await resolveLiveShortcode(
-        tx,
-        data.parentId,
-        "location",
-      );
-      if (!resolved) {
+export const updateLocation = defineMutationWriter({
+  entity: "location",
+  read: async (
+    receipt: MutationReceipt<"location">,
+    db: Database | DrizzleTransaction,
+    _id: LocationId,
+    _data: LocationUpdateInput["data"],
+    _actor: ActorContext,
+    _options?: { resolvedParentId?: LocationId | null },
+  ) => ({
+    location: await getLocationById(db, receipt.entityId),
+    detachedImageKeys: receipt.detachedImageKeys ?? [],
+  }),
+  write: async (
+    readOutput,
+    db: Database | DrizzleTransaction,
+    id: LocationId,
+    data: LocationUpdateInput["data"],
+    actor: ActorContext,
+    options?: { resolvedParentId?: LocationId | null },
+  ) => {
+    let detachedImageKeys: string[] = [];
+    const resolveUpdatedParentId = async (tx: DrizzleTransaction) => {
+      if (data.parentId === undefined) return undefined;
+      const home = await getHomeLocation(tx);
+      if (id === home.id) {
         throw createAppError(
-          "REFERENCED_RECORD_MISSING",
-          "Cannot set parent: the specified parent location does not exist",
+          "CONSTRAINT_VIOLATION",
+          "Home cannot be reparented",
         );
       }
-      parentId = parseEntityId("location", resolved);
-    }
-    if (parentId && (await wouldCreateParentCycle(tx, id, parentId))) {
-      throw createAppError(
-        "LOCATION_CYCLE_DETECTED",
-        "Cannot set parent: would create a circular reference",
-      );
-    }
-    return parentId;
-  };
-
-  const resolveUpdatedProductId = async (tx: DrizzleTransaction) => {
-    if (data.productId === undefined) return undefined;
-    if (data.productId === null) return null;
-    const resolved =
-      (await resolveLiveShortcode(tx, data.productId, "product")) ??
-      raiseMissingProduct();
-    return parseEntityId("product", resolved);
-  };
-
-  const syncLocationImages = async (
-    tx: DrizzleTransaction,
-    locationId: LocationId,
-  ) => {
-    ({ detachedImageKeys } = await syncEntityImages(
-      tx,
-      "location",
-      imageJoinBindings.location,
-      locationId,
-      data,
-    ));
-  };
-
-  const runUpdate = async (tx: DrizzleTransaction) => {
-    const before = await tx.query.location.findFirst({
-      where: and(eq(location.id, id), notDeleted(location)),
-    });
-    const parentId = await resolveUpdatedParentId(tx);
-    // `type` (form factor) and `productId` (identity) are independent facts
-    // now — neither write clears the other.
-    const productId = await resolveUpdatedProductId(tx);
-    // `furniture` IS "an instance of a Product": unlinking the Product (or
-    // retyping to furniture with none) must say which form factor is left.
-    const nextType = data.type ?? before?.type;
-    const nextProductId =
-      productId === undefined ? before?.productId : productId;
-    assertClassificationPolicies("location", {
-      type: nextType,
-      productId: nextProductId,
-    });
-
-    const updateValues = buildPartialUpdateValues({
-      name: data.name,
-      aliases: data.aliases,
-      tags: data.tags,
-      type: data.type,
-      notes: data.notes,
-      productId,
-      parentId,
-    });
-
-    const updated = await updateLiveAndReturn(tx, location, updateValues, id);
-
-    // Reorder existing images (first = cover) before appending new ones so
-    // additions always land after the reordered set. `data.imageOrder` /
-    // `data.removeImageIds` are public `IMG-` shortcodes (what
-    // `LocationOut.images[].id` hands back) — resolved to uuids here, right
-    // before the two helpers below that still take uuids. A code that doesn't
-    // resolve is dropped rather than thrown on, matching today's silent
-    // no-op for a uuid naming no live row.
-    await syncLocationImages(tx, updated.id);
-
-    if (before) {
-      const changes = computeChanges(before, updated, [
-        ...entityFieldModels.location.audit,
-      ]);
-      if (changes) {
-        await logAuditEntry(tx, actor, {
-          entityKind: "location",
-          entityId: id,
-          action: "update",
-          changes,
-        });
-      }
-    }
-
-    return getLocationById(tx, updated.id);
-  };
-
-  // A rename collides on the same `Location_name_key` a create does, so it gets
-  // the same blocker-naming treatment. Only on the standalone branch: when the
-  // caller passes its OWN open transaction, the violation has poisoned it and
-  // the recovery lookup could not run — that caller rethrows as before.
-  if ("rollback" in db) {
-    return { location: await runUpdate(db), detachedImageKeys };
-  }
-  try {
-    const location = await withTransaction(db, runUpdate);
-    return { location, detachedImageKeys };
-  } catch (error) {
-    if (data.name !== undefined) {
-      await throwIfDuplicateLocation(db, data.name, error);
-    }
-    throw error;
-  }
-};
-
-/**
- * Move a set of locations below one parent without replaying the full
- * single-location update pipeline for every row. Bulk reparenting has no image
- * work and does not return hydrated locations, so the per-row re-fetches are
- * pure overhead; it still keeps the cycle check and one audit entry per changed
- * location.
- */
-export const bulkReparentLocations = async (
-  db: Database,
-  rawIds: LocationId[],
-  requestedParentId: LocationId | null,
-  actor: ActorContext,
-): Promise<void> => {
-  // Dedupe so the `updated.length !== ids.length` guard below holds even for
-  // callers that don't pre-dedupe: `inArray` collapses duplicate ids in the
-  // UPDATE, so a duplicate in `ids` would otherwise trip a spurious
-  // LOCATION_NOT_FOUND.
-  const ids = uniq(rawIds);
-  await withTransaction(db, async (tx) => {
-    const home = await getHomeLocation(tx);
-    const parentId = requestedParentId ?? home.id;
-    if (ids.includes(home.id)) {
-      throw createAppError("CONSTRAINT_VIOLATION", "Home cannot be reparented");
-    }
-    // One snapshot serves both live-row validation and the parent-chain walk.
-    // Walking parent pointers in memory avoids one database round-trip per
-    // selected location while preserving the same "parent cannot be a
-    // descendant" invariant as updateLocation.
-    const liveLocations = await tx
-      .select({ id: location.id, parentId: location.parentId })
-      .from(location)
-      .where(notDeleted(location));
-    const parents = new Map(
-      liveLocations.map((row) => [row.id, row.parentId] as const),
-    );
-    const selected = new Set(ids);
-
-    for (const id of ids) {
-      if (!parents.has(id)) {
-        throw createAppError("LOCATION_NOT_FOUND", `Location ${id} not found`);
-      }
-    }
-
-    if (parentId) {
-      let currentId: LocationId | null = parentId;
-      while (currentId) {
-        if (selected.has(currentId)) {
+      let parentId: LocationId | null;
+      if (options && "resolvedParentId" in options) {
+        parentId = options.resolvedParentId ?? home.id;
+      } else if (data.parentId === null) {
+        parentId = home.id;
+      } else {
+        const resolved = await resolveLiveShortcode(
+          tx,
+          data.parentId,
+          "location",
+        );
+        if (!resolved) {
           throw createAppError(
-            "LOCATION_CYCLE_DETECTED",
-            "Cannot set parent: would create a circular reference",
+            "REFERENCED_RECORD_MISSING",
+            "Cannot set parent: the specified parent location does not exist",
           );
         }
-        currentId = parents.get(currentId) ?? null;
+        parentId = parseEntityId("location", resolved);
       }
+      if (parentId && (await wouldCreateParentCycle(tx, id, parentId))) {
+        throw createAppError(
+          "LOCATION_CYCLE_DETECTED",
+          "Cannot set parent: would create a circular reference",
+        );
+      }
+      return parentId;
+    };
+
+    const resolveUpdatedProductId = async (tx: DrizzleTransaction) => {
+      if (data.productId === undefined) return undefined;
+      if (data.productId === null) return null;
+      const resolved =
+        (await resolveLiveShortcode(tx, data.productId, "product")) ??
+        raiseMissingProduct();
+      return parseEntityId("product", resolved);
+    };
+
+    const syncLocationImages = async (
+      tx: DrizzleTransaction,
+      locationId: LocationId,
+    ) => {
+      ({ detachedImageKeys } = await syncEntityImages(
+        tx,
+        "location",
+        imageJoinBindings.location,
+        locationId,
+        data,
+      ));
+    };
+
+    const runUpdate = async (tx: DrizzleTransaction) => {
+      const before = await tx.query.location.findFirst({
+        where: and(eq(location.id, id), notDeleted(location)),
+      });
+      const parentId = await resolveUpdatedParentId(tx);
+      // `type` (form factor) and `productId` (identity) are independent facts
+      // now — neither write clears the other.
+      const productId = await resolveUpdatedProductId(tx);
+      // `furniture` IS "an instance of a Product": unlinking the Product (or
+      // retyping to furniture with none) must say which form factor is left.
+      const nextType = data.type ?? before?.type;
+      const nextProductId =
+        productId === undefined ? before?.productId : productId;
+      assertClassificationPolicies("location", {
+        type: nextType,
+        productId: nextProductId,
+      });
+
+      const updateValues = buildPartialUpdateValues({
+        name: data.name,
+        aliases: data.aliases,
+        tags: data.tags,
+        type: data.type,
+        notes: data.notes,
+        productId,
+        parentId,
+      });
+
+      const updated = await updateLiveAndReturn(tx, location, updateValues, id);
+
+      // Reorder existing images (first = cover) before appending new ones so
+      // additions always land after the reordered set. `data.imageOrder` /
+      // `data.removeImageIds` are public `IMG-` shortcodes (what
+      // `LocationOut.images[].id` hands back) — resolved to uuids here, right
+      // before the two helpers below that still take uuids. A code that doesn't
+      // resolve is dropped rather than thrown on, matching today's silent
+      // no-op for a uuid naming no live row.
+      await syncLocationImages(tx, updated.id);
+
+      if (before) {
+        const changes = computeChanges(before, updated, [
+          ...entityFieldModels.location.audit,
+        ]);
+        if (changes) {
+          await logAuditEntry(tx, actor, {
+            entityKind: "location",
+            entityId: id,
+            action: "update",
+            changes,
+          });
+        }
+      }
+
+      const imagesChanged =
+        (data.pendingImageIds?.length ?? 0) > 0 ||
+        (data.removeImageIds?.length ?? 0) > 0;
+      if (imagesChanged && !(await hasLocationImages(tx, id)))
+        await updateLocationAiDescription(tx, id, null);
+      return readOutput(
+        { entityId: id, shortcode: updated.shortcode, detachedImageKeys },
+        async () => ({
+          location: await getLocationById(tx, updated.id),
+          detachedImageKeys,
+        }),
+      );
+    };
+
+    // A rename collides on the same `Location_name_key` a create does, so it gets
+    // the same blocker-naming treatment. Only on the standalone branch: when the
+    // caller passes its OWN open transaction, the violation has poisoned it and
+    // the recovery lookup could not run — that caller rethrows as before.
+    if ("rollback" in db) {
+      return await runUpdate(db);
     }
-
-    const changed = liveLocations.filter(
-      (row) => selected.has(row.id) && row.parentId !== parentId,
-    );
-    const updated = await tx
-      .update(location)
-      .set({ parentId })
-      .where(and(inArray(location.id, ids), notDeleted(location)))
-      .returning({ id: location.id });
-
-    // A row deleted between the snapshot and update must roll back rather than
-    // reporting a successful move/audit for a row it did not update.
-    if (updated.length !== ids.length) {
-      throw createAppError("LOCATION_NOT_FOUND", "A location was not found");
+    try {
+      return await withTransaction(db, runUpdate);
+    } catch (error) {
+      if (data.name !== undefined) {
+        await throwIfDuplicateLocation(db, data.name, error);
+      }
+      throw error;
     }
-
-    await logAuditEntries(
-      tx,
-      actor,
-      changed.map((row) => ({
-        entityKind: "location" as const,
-        entityId: row.id,
-        action: "update" as const,
-        changes: { parentId: { from: row.parentId, to: parentId } },
-      })),
-    );
-  });
-};
+  },
+  item: (full) => full.location,
+});
 
 const refuseHomeLocation = async (
   tx: DrizzleTransaction,
@@ -1039,11 +1015,11 @@ export const locationSearch = async (
  * its own analysis through `upsertAiAnalysis` and never needs this.
  */
 export const updateLocationAiDescription = async (
-  db: Database,
+  db: Database | DrizzleTransaction,
   id: LocationId,
   aiDescription: string | null,
 ) => {
-  const client = getDb(db);
+  const client = unwrapDb(db);
   await client
     .update(aiAnalysis)
     .set({ deletedAt: new Date() })
@@ -1255,4 +1231,21 @@ export const locationList = async (
     readIntent,
   );
   return parseCompleteListRead(locationListItemOut, Promise.resolve(page));
+};
+
+/** Only image presence is required when clearing a description after the last attachment is removed. */
+const hasLocationImages = async (
+  db: Database | DrizzleTransaction,
+  id: LocationId,
+): Promise<boolean> => {
+  const [row] = await unwrapDb(db)
+    .select({ id: entityAttachment.id })
+    .from(entityAttachment)
+    .innerJoin(
+      image,
+      and(eq(image.id, entityAttachment.imageId), notDeleted(image)),
+    )
+    .where(and(eq(entityAttachment.entityId, id), notDeleted(entityAttachment)))
+    .limit(1);
+  return row !== undefined;
 };

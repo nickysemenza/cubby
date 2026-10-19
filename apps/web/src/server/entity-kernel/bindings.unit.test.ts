@@ -95,7 +95,11 @@ describe("entity kernel bindings", () => {
     const cookbook = ENTITY_SCHEMA_BINDINGS.cookbook;
     expect(cookbook.createInput).toBeNull();
     expect(cookbook.updateInput).not.toBeNull();
-    expect(cookbook.bulkUpdateInput).toBeNull();
+    expect(
+      cookbook.bulkUpdateInput?.safeParse({
+        author: [{ op: "add", key: "Synthetic Author" }],
+      }).success,
+    ).toBe(true);
     expect(
       entityCommandSchema.safeParse({
         action: "create",

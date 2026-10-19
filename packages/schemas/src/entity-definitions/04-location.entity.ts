@@ -200,6 +200,7 @@ export default defineEntity({
       {
         key: "aliases",
         kind: "text-array",
+        collection: { key: "value" },
         control: { kind: "specialized", renderer: "tag-list" },
         display: { detail: true },
         validation: {
@@ -221,6 +222,7 @@ export default defineEntity({
       {
         key: "tags",
         kind: "text-array",
+        collection: { key: "value" },
         control: { kind: "specialized", renderer: "tag-list" },
         display: { detail: true },
         validation: {
@@ -347,6 +349,7 @@ Rules:
       },
       {
         key: "imageOrder",
+        semanticRole: "attachment",
         kind: "text",
         control: { kind: "specialized", renderer: "image-order" },
         provenance: {
@@ -586,7 +589,6 @@ Rules:
       "removeImageIds",
       "imageOrder",
     ],
-    bulk: ["parentId"],
     audit: ["name", "aliases", "tags", "type", "parentId"],
     derived: {
       parent: { via: "parent" },
@@ -1083,7 +1085,6 @@ Rules:
       },
     },
     delete: { mode: "soft", bulk: true },
-    bulkUpdate: { fields: ["parentId"] },
     merge: false,
     classificationPolicies: [
       // `furniture` marks a Product-instance location (the bin or rack

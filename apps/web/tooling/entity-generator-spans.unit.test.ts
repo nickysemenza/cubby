@@ -51,7 +51,6 @@ const declarationWithSpans = (
     countable: false,
     softDelete: false,
     delete: null,
-    bulkUpdate: null,
     merge: false,
     operationOwners: { delete: null, merge: null },
     mcp: [],
@@ -71,7 +70,6 @@ const declarationWithSpans = (
     create: ["subject", "startsOn", "endsOn", "note"],
     update: ["subject", "startsOn", "endsOn", "note"],
     output: ["subject", "startsOn", "endsOn", "note"],
-    bulk: [],
     audit: [],
   },
 });

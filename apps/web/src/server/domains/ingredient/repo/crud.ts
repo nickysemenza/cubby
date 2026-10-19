@@ -29,8 +29,11 @@ import {
 } from "~/server/db/helpers";
 import { ingredient, product } from "~/server/db/schema";
 import { markProductConversionCoverageInputStale } from "~/server/domains/product/repo/conversion-coverage";
-import { patchEntityRows } from "~/server/entity-kernel/repo/entity-patch";
-import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
+import {
+  type MutationReceipt,
+  createEntityCrud,
+  defineMutationWriter,
+} from "~/server/entity-kernel/repo/repository";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import {
   lexicalEligibility,
@@ -72,44 +75,45 @@ const ingredientCrud = createEntityCrud({
 });
 
 export const getIngredientByID = (
-  db: Database,
+  db: Database | DrizzleTransaction,
   id: IngredientId,
 ): Promise<IngredientWithRecipesAndProductOut> =>
   ingredientCrud.getByID(db, id);
 
-export const createIngredient = async (
-  db: Database | DrizzleTransaction,
-  data: z.input<typeof ingredientCreateInput>,
-  actor: ActorContext,
-): Promise<IngredientWithRecipesAndProductOut> => {
-  const newIngredient = await insertWithShortcode(db, "ingredient", {
-    name: data.name,
-    aliases: data.aliases || [],
-    naKinds: data.naKinds ?? [],
-    usuallyOnHand: data.usuallyOnHand ?? false,
-  });
+export const createIngredient = defineMutationWriter({
+  entity: "ingredient",
+  read: (
+    receipt: MutationReceipt<"ingredient">,
+    db: Database | DrizzleTransaction,
+    _data: z.input<typeof ingredientCreateInput>,
+    _actor: ActorContext,
+  ) => getIngredientByID(db, receipt.entityId),
+  write: async (
+    readOutput,
+    db: Database | DrizzleTransaction,
+    data: z.input<typeof ingredientCreateInput>,
+    actor: ActorContext,
+  ) => {
+    const newIngredient = await insertWithShortcode(db, "ingredient", {
+      name: data.name,
+      aliases: data.aliases || [],
+      naKinds: data.naKinds ?? [],
+      usuallyOnHand: data.usuallyOnHand ?? false,
+    });
 
-  // Log audit entry
-  await logAuditEntry(db, actor, {
-    entityKind: "ingredient",
-    entityId: newIngredient.id,
-    action: "create",
-  });
+    // Log audit entry
+    await logAuditEntry(db, actor, {
+      entityKind: "ingredient",
+      entityId: newIngredient.id,
+      action: "create",
+    });
 
-  const ingredientData = await unwrapDb(db).query.ingredient.findFirst({
-    where: eq(ingredient.id, newIngredient.id),
-    ...relations.ingredient.full,
-  });
-
-  if (!ingredientData) {
-    // INTERNAL_SERVER_ERROR (500): the row was just written, so its absence is a
-    // genuine internal fault, not a missing-entity 404. No createAppError reason
-    // maps to 500 here, and matches the sibling pattern in recipe/crud.ts.
-    throw new Error("Failed to fetch created ingredient");
-  }
-
-  return await dbIngredientToAPI(db, ingredientData);
-};
+    return readOutput({
+      entityId: newIngredient.id,
+      shortcode: newIngredient.shortcode,
+    });
+  },
+});
 
 /**
  * Accepts an open transaction as well as the pooled handle, matching
@@ -117,48 +121,43 @@ export const createIngredient = async (
  * rather than opening its own, so an importer that creates a recipe and renames
  * its ingredients can keep the whole thing atomic.
  */
-export const updateIngredient = async (
-  db: Database | DrizzleTransaction,
-  id: IngredientId,
-  data: z.infer<typeof ingredientUpdateData>,
-  actor: ActorContext,
-): Promise<IngredientWithRecipesAndProductOut> =>
-  withTransactionOn(db, async (tx) => {
-    const updated = await ingredientCrud.update(tx, id, data, actor);
-    if (data.naKinds !== undefined) {
-      const linked = await tx
-        .select({ id: product.id })
-        .from(product)
-        .where(and(eq(product.ingredientId, id), notDeleted(product)));
-      await markProductConversionCoverageInputStale(
+export const updateIngredient = defineMutationWriter({
+  entity: "ingredient",
+  read: (
+    receipt: MutationReceipt<"ingredient">,
+    db: Database | DrizzleTransaction,
+    _id: IngredientId,
+    _data: z.infer<typeof ingredientUpdateData>,
+    _actor: ActorContext,
+  ) => getIngredientByID(db, receipt.entityId),
+  write: async (
+    readOutput,
+    db: Database | DrizzleTransaction,
+    id: IngredientId,
+    data: z.infer<typeof ingredientUpdateData>,
+    actor: ActorContext,
+  ) =>
+    withTransactionOn(db, async (tx) => {
+      const updated = await ingredientCrud.update(
         tx,
-        linked.map((row) => row.id),
+        id,
+        data,
+        actor,
+        async (_db, receipt) => receipt,
       );
-    }
-    return updated;
-  });
-
-/** Bulk pantry-planning setting update. Inventory rows are deliberately never
- * selected or written here: this changes only an ingredient-level assumption. */
-export const updateIngredientsUsuallyOnHand = async (
-  db: Database,
-  ids: IngredientId[],
-  data: Pick<z.infer<typeof ingredientUpdateData>, "usuallyOnHand">,
-  actor: ActorContext,
-): Promise<IngredientId[]> => {
-  const updated = await patchEntityRows(
-    db,
-    actor,
-    {
-      entity: "ingredient",
-      table: ingredient,
-      fields: entityFieldModels.ingredient.bulk,
-    },
-    ids,
-    data,
-  );
-  return updated.map((row) => row.id);
-};
+      if (data.naKinds !== undefined) {
+        const linked = await tx
+          .select({ id: product.id })
+          .from(product)
+          .where(and(eq(product.ingredientId, id), notDeleted(product)));
+        await markProductConversionCoverageInputStale(
+          tx,
+          linked.map((row) => row.id),
+        );
+      }
+      return readOutput(updated, () => ingredientCrud.getByID(tx, id));
+    }),
+});
 
 export const findOrCreateIngredient = async (
   db: Database | DrizzleTransaction,

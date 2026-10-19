@@ -1,13 +1,6 @@
-import type { PlantId } from "@cubby/schemas/identifiers";
 import { plantOut } from "@cubby/schemas/plant";
 import { z } from "zod";
 
-import { withTransactionDatabase } from "~/server/db/helpers";
-import { entityMutationReferences } from "~/server/entity-kernel/adapter";
-import {
-  mutationEvents,
-  runMutationSideEffectsForEntities,
-} from "~/server/entity-kernel/repo/mutation-side-effects";
 import {
   asActor,
   defineRepository,
@@ -41,6 +34,7 @@ const plantMergeSummary = z.object({
 });
 
 export const plantRepository = defineRepository("plant", {
+  updatePolicy: { recordFields: [] },
   lifecycle: {
     delete: PLANT_DELETE_EDGE_POLICY,
     merge: PLANT_MERGE_EDGE_POLICY,
@@ -50,29 +44,6 @@ export const plantRepository = defineRepository("plant", {
   listRead: listReadOn(listPlantsRead),
   create: asActor(createPlant),
   update: asActor(updatePlant),
-  bulkUpdate: async (ctx, ids, data) => {
-    // A household catalogue is small; one audited update per plant is fine.
-    // One transaction, so a failing plant leaves the whole patch unapplied;
-    // its projections refresh inside it and the embedding tasks publish
-    // after its commit.
-    await withTransactionDatabase(ctx.db, async (transactionDb) => {
-      const entityIds: PlantId[] = [];
-      for (const id of ids) {
-        const { entityId } = await updatePlant(
-          transactionDb,
-          id,
-          data,
-          ctx.actorContext,
-        );
-        entityIds.push(entityId);
-      }
-      await runMutationSideEffectsForEntities(
-        transactionDb,
-        mutationEvents("plant", "updated", entityIds, "plant.bulkUpdate"),
-      );
-    });
-    return { updatedReferences: entityMutationReferences("plant", ids) };
-  },
   merge: {
     input: mergeInput,
     output: z.object({ plant: plantOut, mergeSummary: plantMergeSummary }),

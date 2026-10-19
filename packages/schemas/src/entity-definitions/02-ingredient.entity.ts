@@ -144,6 +144,7 @@ export default defineEntity({
       {
         key: "aliases",
         kind: "text-array",
+        collection: { key: "value" },
         control: { kind: "specialized", renderer: "tag-list" },
         display: {
           list: true,
@@ -171,6 +172,7 @@ export default defineEntity({
         description:
           "Measurement kinds or nutrient keys intentionally excluded from enrichment. Nutrient opt-outs remain unavailable rather than zero.",
         kind: "text-array",
+        collection: { key: "value" },
         control: { kind: "specialized", renderer: "tag-list" },
         validation: {
           read: z.array(ingredientApplicabilityKey),
@@ -273,7 +275,6 @@ export default defineEntity({
     ],
     create: ["name", "aliases", "naKinds", "usuallyOnHand"],
     update: ["naKinds", "usuallyOnHand", "name", "aliases"],
-    bulk: ["usuallyOnHand"],
     audit: ["name", "aliases", "naKinds", "usuallyOnHand"],
     derived: {
       appearsInRecipes: { type: "number" },
@@ -628,7 +629,6 @@ export default defineEntity({
       },
     },
     delete: { mode: "soft", bulk: true },
-    bulkUpdate: { fields: ["usuallyOnHand"] },
     merge: true,
     // Standalone ingredients only: a recipe's own ingredient rows (`recipeId`
     // set) are never a resolve target.

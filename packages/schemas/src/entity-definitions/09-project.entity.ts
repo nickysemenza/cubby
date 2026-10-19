@@ -294,6 +294,7 @@ Rules:
       {
         key: "locations",
         kind: "text-array",
+        collection: { key: "value" },
         control: { kind: "specialized", renderer: "tag-list" },
         display: { detail: true },
         resolution: {
@@ -815,7 +816,6 @@ Rules:
       "notionPageUrl",
       "blockedByIds",
     ],
-    bulk: [],
     audit: [
       "name",
       "status",
@@ -1547,7 +1547,6 @@ Rules:
       },
     },
     delete: { mode: "soft", bulk: true },
-    bulkUpdate: null,
     merge: false,
     dataQuality: {
       checks: [

@@ -41,6 +41,96 @@ export const valueCollectionPatch = z
     "Patch items: add, replace (renames `key` to `value`), or remove one value; replace/remove fail when `key` is absent.",
   )
   .meta({ id: "ValueCollectionPatch" });
+/** The full list input beneath optional/nullable and ordinary patch unions. */
+export function collectionArraySchema(
+  schema: z.core.$ZodType | null,
+): z.ZodArray | null {
+  if (schema instanceof z.ZodArray) return schema;
+  if (
+    schema instanceof z.ZodOptional ||
+    schema instanceof z.ZodNullable ||
+    schema instanceof z.ZodDefault
+  )
+    return collectionArraySchema(schema.unwrap());
+  if (schema instanceof z.ZodUnion)
+    return (
+      schema.options
+        .map((option) => collectionArraySchema(option))
+        .find((option) => option !== null) ?? null
+    );
+  return null;
+}
+
+/** Bulk lists share ordinary item validation; record identities are normal collection metadata. */
+export function bulkCollectionPatchSchema(
+  normalField: z.ZodType,
+  identity: "value" | readonly string[],
+  id: string,
+) {
+  const array = collectionArraySchema(normalField);
+  if (!array)
+    throw new Error("A collection patch requires a normal list input");
+  const item = array.element;
+  if (identity === "value")
+    return z
+      .array(
+        z.discriminatedUnion("op", [
+          z
+            .strictObject({ op: z.literal("add"), key: item })
+            .meta({ id: `${id}Add` }),
+          z
+            .strictObject({ op: z.literal("remove"), key: item })
+            .meta({ id: `${id}Remove` }),
+        ]),
+      )
+      .min(1)
+      .meta({ id });
+  if (!(item instanceof z.ZodObject))
+    throw new Error("A keyed collection requires record items");
+  const key = z.strictObject(
+    Object.fromEntries(
+      identity.map((key) => {
+        const rule = item.shape[key];
+        if (!rule)
+          throw new Error(`Collection identity ${key} is not an item field`);
+        return [key, rule];
+      }),
+    ),
+  );
+  const value = z.strictObject(
+    Object.fromEntries(
+      Object.entries(item.shape).filter(([key]) => !identity.includes(key)),
+    ),
+  );
+  return z
+    .array(
+      z.discriminatedUnion("op", [
+        z
+          .strictObject({ op: z.literal("add"), key, value })
+          .meta({ id: `${id}Add` }),
+        z
+          .strictObject({ op: z.literal("remove"), key })
+          .meta({ id: `${id}Remove` }),
+      ]),
+    )
+    .min(1)
+    .meta({ id });
+}
+
+/** Preserve ordinary object refinements immediately for scalar edits; patched collections are validated after per-record resolution. */
+export const bulkUpdateInputSchema = <const Fields extends z.ZodRawShape>(
+  normalUpdate: z.ZodType,
+  fieldRules: Fields,
+  collectionFields: readonly string[],
+) =>
+  z.strictObject(fieldRules).superRefine((data, context) => {
+    if (collectionFields.some((key) => key in data)) return;
+    const parsed = normalUpdate.safeParse(data);
+    if (!parsed.success) {
+      for (const issue of parsed.error.issues) context.addIssue({ ...issue });
+    }
+  });
+
 export type ValueCollectionPatch = z.infer<typeof valueCollectionPatch>;
 
 /**

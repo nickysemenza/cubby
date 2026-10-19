@@ -32,6 +32,7 @@ import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
 
+import type { SearchProviderFor } from "./entity-primitive-fields";
 import { blank, blankCase, isDrawn } from "./structured-value";
 
 /**
@@ -50,6 +51,7 @@ type NodeProps = {
   schema: StructuredValueSchema;
   /** The input schema rejects this key absent; an optional one may be cleared. */
   required: boolean;
+  arrayLabels?: { title?: string; add?: string; remove?: string };
 };
 
 // SAFETY: a nested structured path (`rows.0.unit`) is a runtime string, and the form's
@@ -61,6 +63,9 @@ const singular = (label: string) =>
 
 /** Whether a record is being created; a `createOnly` value is locked once it exists. */
 const CreatingContext = createContext(true);
+const ReferenceSearchContext = createContext<SearchProviderFor>(
+  requireReferenceEntitySearch,
+);
 
 export function StructuredValueField({
   form,
@@ -68,22 +73,29 @@ export function StructuredValueField({
   label,
   schema,
   creating = true,
+  searchProviderFor = requireReferenceEntitySearch,
+  arrayLabels,
 }: {
   form: Form;
   name: string;
   label: string;
   schema: StructuredValueSchema;
   creating?: boolean;
+  searchProviderFor?: SearchProviderFor;
+  arrayLabels?: NodeProps["arrayLabels"];
 }) {
   return (
     <CreatingContext.Provider value={creating}>
-      <NodeEditor
-        form={form}
-        path={name}
-        label={label}
-        schema={schema}
-        required
-      />
+      <ReferenceSearchContext.Provider value={searchProviderFor}>
+        <NodeEditor
+          form={form}
+          path={name}
+          label={label}
+          schema={schema}
+          required
+          arrayLabels={arrayLabels}
+        />
+      </ReferenceSearchContext.Provider>
     </CreatingContext.Provider>
   );
 }
@@ -264,6 +276,7 @@ function ReferenceEditor({
   required,
   entity,
 }: NodeProps & { entity: string }) {
+  const searchProviderFor = useContext(ReferenceSearchContext);
   if (!isReferencePickerEntity(entity))
     return (
       <UnifiedTextField
@@ -282,7 +295,7 @@ function ReferenceEditor({
       entity={entity}
       label={label}
       clearable={schema.nullable || !required}
-      SearchProvider={requireReferenceEntitySearch(entity)}
+      SearchProvider={searchProviderFor(entity)}
     />
   );
 }
@@ -376,6 +389,7 @@ function ArrayEditor({
   path,
   label,
   item,
+  arrayLabels,
 }: NodeProps & { item: StructuredValueSchema }) {
   const rowLabel = singular(label);
   const scalar = !("object" in item.node) && !("variant" in item.node);
@@ -383,8 +397,9 @@ function ArrayEditor({
     <ArrayFieldManager
       form={form}
       name={path}
-      title={label || "Items"}
-      addButtonText={`Add ${rowLabel.toLowerCase()}`}
+      title={arrayLabels?.title ?? (label || "Items")}
+      addButtonText={arrayLabels?.add ?? `Add ${rowLabel.toLowerCase()}`}
+      removeButtonLabel={arrayLabels?.remove}
       emptyValue={blank(item, true)}
     >
       {(_row, index) => (

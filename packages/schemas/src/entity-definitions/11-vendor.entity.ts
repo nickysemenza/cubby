@@ -455,6 +455,7 @@ export default defineEntity({
       {
         key: "aliases",
         kind: "text-array",
+        collection: { key: "value" },
         description:
           "Other names this Vendor trades under. Import finds the Vendor by its name or any alias; Sender proof and Vendor merges add them.",
         control: { kind: "specialized", renderer: "tag-list" },
@@ -468,6 +469,7 @@ export default defineEntity({
       {
         key: "orderEmailSenders",
         kind: "text-array",
+        collection: { key: "value" },
         control: {
           kind: "specialized",
           renderer: "tag-list",
@@ -482,6 +484,7 @@ export default defineEntity({
       {
         key: "browserDomains",
         kind: "text-array",
+        collection: { key: "value" },
         control: {
           kind: "specialized",
           renderer: "tag-list",
@@ -779,7 +782,6 @@ export default defineEntity({
       "returnWindowDays",
       "notes",
     ],
-    bulk: [],
     audit: [
       "spendingProfile",
       "defaultSpendingCategoryId",
@@ -1299,7 +1301,6 @@ export default defineEntity({
       },
     },
     delete: { mode: "soft", bulk: true },
-    bulkUpdate: null,
     resolve: { match: ["name", "aliases"], createMissing: false },
     merge: true,
     dataQuality: {

@@ -147,6 +147,10 @@ import { displayableImageWhere } from "~/server/domains/image/repo/image-display
 import { photoRunImageOrder } from "~/server/domains/photo-import/repo/photo-import";
 import { provenanceEvidenceLabel } from "~/server/entity-kernel/repo/detail-display-labels";
 import { recordEntitySources } from "~/server/entity-kernel/repo/entity-source";
+import {
+  type MutationReceipt,
+  defineMutationWriter,
+} from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import { retireAssessmentTargetsTx } from "~/server/generic/assessment/repo/assessment-state";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
@@ -1584,48 +1588,58 @@ export const getImagesByShortcodes = async (
  * Re-reads via {@link getImageById} so the output matches `getByID`'s shape
  * (including the resolved entity association) rather than a bare row.
  */
-export const updateImage = async (
-  db: Database,
-  imageId: string,
-  data: ImageUpdateInput,
-): Promise<ImageWithEntity> => {
-  // A manual write to either capture field is a confirmation: it always sets
-  // `captureAttribution: "confirmed"` (never overwritten by later derivation
-  // — see `deriveImageCapture`) and records `provenanceEvidence: { basis:
-  // "manual" }`, even when the caller clears `capturedByPartyId` to `null`.
-  const manualCapture =
-    data.capturedByPartyId !== undefined || data.capturedAt !== undefined;
-  await withTransaction(db, async (tx) => {
-    const capturedByPartyId =
-      data.capturedByPartyId === undefined
-        ? undefined
-        : data.capturedByPartyId === null
-          ? null
-          : await resolveOrThrow(tx, "ledgerParty", data.capturedByPartyId);
-    const values: PgUpdateSetSource<typeof image> = {
-      filename: data.filename,
-      useOriginal: data.useOriginal,
-      source: data.source,
-      ...(data.source !== undefined ? { sourceEvidence: null } : {}),
-      sourcePageUrl: data.sourcePageUrl,
-      sourceAssetUrl: data.sourceAssetUrl,
-      sourceName: data.sourceName,
-    };
-    if (manualCapture) {
-      values.capturedAt = data.capturedAt;
-      values.capturedByPartyId = capturedByPartyId;
-      values.captureAttribution = "confirmed";
-      values.provenanceEvidence = { basis: "manual" };
-    }
-    await updateAndReturn(
-      tx,
-      image,
-      values,
-      and(eq(image.id, imageId), notDeleted(image)),
-    );
-  });
-  return getImageById(db, imageId);
-};
+export const updateImage = defineMutationWriter({
+  entity: "image",
+  read: async (
+    receipt: MutationReceipt<"image">,
+    db: Database,
+    _imageId: string,
+    _data: ImageUpdateInput,
+  ) => getImageById(db, receipt.entityId),
+  write: async (
+    readOutput,
+    db: Database,
+    imageId: string,
+    data: ImageUpdateInput,
+  ) => {
+    // A manual write to either capture field is a confirmation: it always sets
+    // `captureAttribution: "confirmed"` (never overwritten by later derivation
+    // — see `deriveImageCapture`) and records `provenanceEvidence: { basis:
+    // "manual" }`, even when the caller clears `capturedByPartyId` to `null`.
+    const manualCapture =
+      data.capturedByPartyId !== undefined || data.capturedAt !== undefined;
+    await withTransaction(db, async (tx) => {
+      const capturedByPartyId =
+        data.capturedByPartyId === undefined
+          ? undefined
+          : data.capturedByPartyId === null
+            ? null
+            : await resolveOrThrow(tx, "ledgerParty", data.capturedByPartyId);
+      const values: PgUpdateSetSource<typeof image> = {
+        filename: data.filename,
+        useOriginal: data.useOriginal,
+        source: data.source,
+        ...(data.source !== undefined ? { sourceEvidence: null } : {}),
+        sourcePageUrl: data.sourcePageUrl,
+        sourceAssetUrl: data.sourceAssetUrl,
+        sourceName: data.sourceName,
+      };
+      if (manualCapture) {
+        values.capturedAt = data.capturedAt;
+        values.capturedByPartyId = capturedByPartyId;
+        values.captureAttribution = "confirmed";
+        values.provenanceEvidence = { basis: "manual" };
+      }
+      await updateAndReturn(
+        tx,
+        image,
+        values,
+        and(eq(image.id, imageId), notDeleted(image)),
+      );
+    });
+    return readOutput({ entityId: parseEntityId("image", imageId) });
+  },
+});
 
 /**
  * Flip a PENDING image row to UPLOADED once the browser's presigned PUT to R2

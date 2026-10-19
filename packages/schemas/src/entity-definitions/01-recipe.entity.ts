@@ -221,6 +221,7 @@ export default defineEntity({
       {
         key: "tags",
         kind: "text-array",
+        collection: { key: "value" },
         nullable: true,
         control: { kind: "specialized", renderer: "tag-list" },
         display: { list: true, detail: true },
@@ -371,6 +372,7 @@ export default defineEntity({
       },
       {
         key: "imageOrder",
+        semanticRole: "attachment",
         kind: "text",
         control: { kind: "specialized", renderer: "image-order" },
         provenance: {
@@ -602,6 +604,7 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "cookbook" },
+        control: { kind: "specialized", renderer: "entity-select" },
         validation: {
           read: null,
           create: null,
@@ -733,7 +736,6 @@ export default defineEntity({
       "forkedFromRecipeId",
       "cookbookId",
     ],
-    bulk: [],
     audit: ["name", "forkedFromRecipeId"],
     derived: {
       cookbook: { via: "cookbook" },
@@ -1290,7 +1292,6 @@ export default defineEntity({
       },
     },
     delete: { mode: "soft", bulk: true },
-    bulkUpdate: null,
     merge: false,
     dataQuality: {
       checks: [

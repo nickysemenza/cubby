@@ -27,6 +27,7 @@ import type {
 } from "~/server/entity-kernel/contracts";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { requireActor } from "~/server/http/request-context";
+import { reparentThroughKernel as bulkReparentLocations } from "~/server/testing/entity-kernel";
 import {
   createInventoryFixture,
   createLocationFixture,
@@ -37,12 +38,7 @@ import {
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
-import {
-  bulkReparentLocations,
-  createLocation,
-  deleteLocations,
-  getLocationById,
-} from "./crud";
+import { createLocation, deleteLocations, getLocationById } from "./crud";
 import { buildLocationTree } from "./tree";
 
 describe("createLocation name race", () => {

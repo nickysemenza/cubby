@@ -8,24 +8,18 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { entityLink, planting } from "~/server/db/schema";
-import { bulkUpdatedWithSideEffects } from "~/server/entity-kernel/adapter";
-import { bulkPatchEntities } from "~/server/entity-kernel/repo/entity-patch";
 import { refreshDerivedSearchRefs } from "~/server/entity-kernel/repo/mutation-side-effects";
 import {
   asActor,
   defineRepository,
 } from "~/server/entity-kernel/repo/repository";
-import { createAppError } from "~/server/errors/app-error";
 import {
   diffUnorderedIdSet,
   logAuditEntries,
 } from "~/server/generic/audit-log/repo/audit-log";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
 import { deleteByPolicy } from "~/server/generic/removal/repo/dispositions";
-import {
-  bindShortcodeResolver,
-  resolveLiveShortcode,
-} from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
   createGardenEntry,
@@ -65,47 +59,6 @@ const GARDEN_ENTRY_DELETE_EDGE_POLICY = {
       "Planting associations are removed with the garden entry; plantings remain.",
   },
 } as const satisfies IncomingEdgePolicy<"gardenEntry", OperationDisposition>;
-
-type PlantingBulkPatch = {
-  status?: "planned" | "growing" | "finished";
-  outcome?: "succeeded" | "failed" | null;
-  finishedOn?: string | null;
-  locationId?: string | null;
-};
-
-const raiseMissingLocation = (): never => {
-  throw createAppError(
-    "REFERENCED_RECORD_MISSING",
-    "The selected location no longer exists.",
-  );
-};
-
-const updatePlantingsInBulk = (
-  db: Database,
-  shortcodes: readonly string[],
-  data: PlantingBulkPatch,
-  actor: ActorContext,
-) =>
-  bulkPatchEntities(
-    db,
-    actor,
-    {
-      entity: "planting",
-      table: planting,
-      values: async (tx) => ({
-        status: data.status,
-        outcome: data.outcome,
-        finishedOn: data.finishedOn,
-        locationId:
-          data.locationId == null
-            ? data.locationId
-            : ((await resolveLiveShortcode(tx, data.locationId, "location")) ??
-              raiseMissingLocation()),
-      }),
-    },
-    shortcodes,
-    data,
-  );
 
 /** Live (entry, planting code) pairs of every entry naming one of `ids`. */
 const entryPlantingSets = async (
@@ -190,6 +143,14 @@ export const plantingRepository = defineRepository("planting", {
     );
     return { output, entityId: id, detachedImageKeys };
   },
+  updateRead: async (ctx, shortcode, data, fields) =>
+    updatePlanting.read(
+      fields,
+      ctx.db,
+      await plantings.one(ctx.db, shortcode),
+      data,
+      ctx.actorContext,
+    ),
   // The detached entries are read before the delete removes their links.
   delete: async (ctx, shortcodes) => {
     const ids = await plantings.all(ctx.db, shortcodes);
@@ -214,12 +175,6 @@ export const plantingRepository = defineRepository("planting", {
     );
     return result;
   },
-  bulkUpdate: async (ctx, ids, data) =>
-    bulkUpdatedWithSideEffects(
-      ctx,
-      "planting",
-      await updatePlantingsInBulk(ctx.db, ids, data, ctx.actorContext),
-    ),
 });
 
 export const gardenEntryRepository = defineRepository("gardenEntry", {
@@ -238,4 +193,12 @@ export const gardenEntryRepository = defineRepository("gardenEntry", {
       entityId: id,
     };
   },
+  updateRead: async (ctx, shortcode, data, fields) =>
+    updateGardenEntry.read(
+      fields,
+      ctx.db,
+      await entries.one(ctx.db, shortcode),
+      data,
+      ctx.actorContext,
+    ),
 });

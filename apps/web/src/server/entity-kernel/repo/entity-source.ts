@@ -58,6 +58,28 @@ function fieldReadPath(entity: Entity, fieldPath: string): string | null {
   return field?.readKey ?? field?.display.readPath ?? null;
 }
 
+/** A projected mutation may omit evidence fields; a complete mutation already
+ * owns the same authoritative values used by subsequent detail fingerprints. */
+export function sourceSnapshotCovers(
+  entity: Entity,
+  snapshot: unknown,
+  sources: readonly EntitySourceInput[],
+): boolean {
+  const row = z.record(z.string(), z.unknown()).safeParse(snapshot);
+  if (!row.success) return false;
+  return sources.every((source) => {
+    if (source.fieldPath === undefined) return true;
+    const path = fieldReadPath(entity, source.fieldPath);
+    if (!path) return false;
+    const root = path.split(/[.[]/u)[0];
+    return (
+      root !== undefined &&
+      Object.hasOwn(row.data, root) &&
+      (row.data[root] === null || readPathValue(row.data, path) !== undefined)
+    );
+  });
+}
+
 /**
  * A field-scoped source must name a field the caller can write and the detail
  * read returns, so its value can be fingerprinted now and compared later.

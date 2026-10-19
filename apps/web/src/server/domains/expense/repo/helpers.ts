@@ -195,7 +195,7 @@ const purchaseVendorLogo = (
 };
 
 const expenseAttributions = (
-  row: ExpenseRow,
+  row: Pick<ExpenseRow, "attributions">,
   role: "beneficiary" | "funder",
 ): ExpenseOut["beneficiaries"] =>
   row.attributions
@@ -208,7 +208,9 @@ const expenseAttributions = (
       weight: value.weight,
     }));
 
-const expenseSourceClaims = (row: ExpenseRow): ExpenseOut["sourceClaims"] =>
+const expenseSourceClaims = (
+  row: Pick<ExpenseRow, "sourceClaims">,
+): ExpenseOut["sourceClaims"] =>
   row.sourceClaims
     .filter((value) => value.deletedAt === null)
     .map((value) => ({
@@ -227,6 +229,14 @@ const expenseSourceClaims = (row: ExpenseRow): ExpenseOut["sourceClaims"] =>
       createdAt: value.createdAt,
       updatedAt: value.updatedAt,
     }));
+
+export const expenseAuditChildren = (
+  row: Pick<ExpenseRow, "attributions" | "sourceClaims">,
+) => ({
+  beneficiaries: expenseAttributions(row, "beneficiary"),
+  funders: expenseAttributions(row, "funder"),
+  sourceClaims: expenseSourceClaims(row),
+});
 
 const expenseSpendingCategoryAllocationSource = (
   hasSingleCategory: boolean,
@@ -594,9 +604,7 @@ export const dbExpenseToAPI = <Q extends DataQuality | undefined>(
             orderId: purchaseRow.orderId,
           })
         : null,
-    beneficiaries: expenseAttributions(row, "beneficiary"),
-    funders: expenseAttributions(row, "funder"),
-    sourceClaims: expenseSourceClaims(row),
+    ...expenseAuditChildren(row),
     fieldResolutions:
       row.effectiveProjectShortcode === undefined
         ? undefined

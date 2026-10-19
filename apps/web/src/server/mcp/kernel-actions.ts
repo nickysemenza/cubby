@@ -134,7 +134,7 @@ const kernelCommand = (
 export type McpEntityExecutor = (
   context: ReturnType<typeof getEntityKernelContext>,
   command: McpEntityCommand,
-  detail?: ResultDetail,
+  detail?: ResultDetail | "reference",
   selection?: ReadSelection | null,
 ) => Promise<z.output<z.ZodType>>;
 
@@ -173,10 +173,15 @@ const executeMcpEntity: McpEntityExecutor = async (
   return executeEntity(context, command);
 };
 
-const executeDetail: McpEntityExecutor = async (context, command, detail) =>
-  detail === "summary" &&
-  command.action === "list" &&
-  hasListReader(command.entity)
+const executeDetail: McpEntityExecutor = async (context, command, detail) => {
+  if (
+    detail === "reference" &&
+    (command.action === "create" || command.action === "update")
+  )
+    return executeEntityMutationRead(context, command, ["id"]);
+  return detail === "summary" &&
+    command.action === "list" &&
+    hasListReader(command.entity)
     ? ENTITY_LIST_READ_OPERATIONS[command.entity].listFields(
         context,
         { ...command, filters: command.filters ?? {} },
@@ -190,6 +195,7 @@ const executeDetail: McpEntityExecutor = async (context, command, detail) =>
           entityWriteSummaryFields(command.entity),
         )
       : executeEntity(context, command);
+};
 
 const writtenEntity = z.object({
   entity: z.string(),
@@ -317,17 +323,62 @@ type BatchSpec<TInput extends z.ZodType, TOutput extends z.ZodType> = Omit<
   "name"
 >;
 
+const batchCommandReference = z
+  .object({
+    action: z.enum(["create", "update"]),
+    entity: z.string(),
+    item: z.object({ id: z.string() }),
+  })
+  .passthrough();
+const batchCommandReceipt = batchCommandReference.extend({
+  resultDetail: z.literal("summary"),
+});
+
 const commandsBatch = (
   execute: McpEntityExecutor,
 ): BatchSpec<typeof batchCommandItemInput, typeof batchCommandItemOutput> => ({
   key: "commands",
   itemInput: batchCommandItemInput,
   itemOutput: batchCommandItemOutput,
+  summaryOutput: batchCommandReference.transform((result) => ({
+    reference: result.item.id,
+  })),
+  completeOutput: async (produced, item, extra) => {
+    const receipt = batchCommandReceipt.safeParse(produced);
+    if (!receipt.success) return produced;
+    const read = z.object({ item: z.unknown() }).parse(
+      await execute(
+        getEntityKernelContext(extra),
+        kernelCommand(
+          commandWithDetail.parse({
+            action: "get",
+            entity: item.entity,
+            id: receipt.data.item.id,
+          }),
+        ),
+        "full",
+      ),
+    );
+    return { ...receipt.data, item: read.item };
+  },
   reference: (item: z.output<typeof batchCommandItemOutput>) => item.item.id,
   mutation: true,
   telemetryEntity: (items: Array<{ entity: string }>) => items[0]?.entity,
-  run: async (item: z.output<typeof batchCommandItemInput>, extra: ToolExtra) =>
-    executeWithCoverage(execute, getEntityKernelContext(extra), item),
+  run: async (item, extra, detail) =>
+    detail === "summary"
+      ? {
+          ...batchCommandReference.parse(
+            await execute(getEntityKernelContext(extra), item, "reference"),
+          ),
+          resultDetail: "summary",
+        }
+      : executeWithCoverage(
+          execute,
+          getEntityKernelContext(extra),
+          item,
+          undefined,
+          "full",
+        ),
 });
 
 const previewBatch: BatchSpec<

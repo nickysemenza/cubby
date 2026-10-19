@@ -65,6 +65,8 @@ describe("structured field read-to-input vectors", () => {
           "meal",
           "vendor",
           "financialAccount",
+          "financialTransaction",
+          "purchase",
           "expense",
           "ledgerTransfer",
           "ledgerParty",
@@ -85,6 +87,7 @@ describe("structured field read-to-input vectors", () => {
           "meal",
           "vendor",
           "financialAccount",
+          "financialTransaction",
           "expense",
           "ledgerTransfer",
         ])
@@ -98,6 +101,39 @@ describe("structured field read-to-input vectors", () => {
 
   /** Each case writes one synthetic record and returns the id to read the field from. */
   const records = {
+    "financialTransaction.allocations": async () => {
+      const vendorId = await create(
+        "vendor",
+        buildEntity("vendor", { name: "Synthetic allocation vector vendor" }),
+      );
+      const purchaseId = await create(
+        "purchase",
+        buildEntity("purchase", {
+          vendorId,
+          date: "2026-04-01",
+          orderId: "synthetic-allocation-vector",
+        }),
+      );
+      const accountId = await create(
+        "financialAccount",
+        buildEntity("financialAccount", {
+          name: "Synthetic allocation vector account",
+          identity: { kind: "credit_card", issuer: null, network: "visa" },
+          cardNumbers: [],
+        }),
+      );
+      return create(
+        "financialTransaction",
+        buildEntity("financialTransaction", {
+          accountId,
+          kind: "purchase",
+          status: "posted",
+          postedDate: "2026-04-01",
+          amount: 10,
+          allocations: [{ purchaseId, amount: 10 }],
+        }),
+      );
+    },
     "recipe.meta": () =>
       create("recipe", {
         ...buildEntity("recipe", { name: "Vector loaf", sections: [] }),

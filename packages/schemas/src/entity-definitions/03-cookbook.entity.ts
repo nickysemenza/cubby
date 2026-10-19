@@ -69,6 +69,7 @@ export default defineEntity({
       {
         key: "author",
         kind: "text-array",
+        collection: { key: "value" },
         control: { kind: "specialized", renderer: "tag-list" },
         display: {
           list: true,
@@ -84,6 +85,7 @@ export default defineEntity({
       {
         key: "subjects",
         kind: "text-array",
+        collection: { key: "value" },
         control: { kind: "specialized", renderer: "tag-list" },
         display: { list: true, detail: true },
         validation: {
@@ -156,6 +158,7 @@ export default defineEntity({
       },
       {
         key: "coverUrl",
+        semanticRole: "attachment",
         kind: "text",
         nullable: true,
         // The list shows the cover as the standard image column (`images`).
@@ -273,7 +276,6 @@ export default defineEntity({
     ],
     create: [],
     update: ["name", "author", "subjects"],
-    bulk: [],
     audit: ["name", "author", "subjects"],
     derived: { recipeCount: { type: "number" } },
     sort: {
@@ -419,7 +421,6 @@ export default defineEntity({
       },
     },
     delete: { mode: "soft", bulk: false },
-    bulkUpdate: null,
     merge: false,
     operationOwners: { delete: "workflow", merge: null },
     mcpExclude: {

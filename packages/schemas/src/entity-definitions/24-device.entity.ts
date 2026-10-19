@@ -46,6 +46,7 @@ export default defineEntity({
     fields: [
       {
         key: "installationId",
+        semanticRole: "externalIdentifier",
         kind: "text",
         control: { kind: "text", placeholder: "Installation identifier" },
         display: { detail: true },
@@ -85,6 +86,7 @@ export default defineEntity({
       },
       {
         key: "appVersion",
+        control: { kind: "text" },
         kind: "text",
         nullable: true,
         display: { detail: true },
@@ -96,6 +98,7 @@ export default defineEntity({
       },
       {
         key: "osVersion",
+        control: { kind: "text" },
         kind: "text",
         nullable: true,
         display: { detail: true },
@@ -107,6 +110,7 @@ export default defineEntity({
       },
       {
         key: "lastSeenAt",
+        control: { kind: "text", placeholder: "ISO date and time" },
         kind: "timestamp",
         nullable: true,
         display: { list: true, detail: true, format: "timestamp" },
@@ -277,7 +281,6 @@ export default defineEntity({
       "ledgerPartyId",
       "productId",
     ],
-    bulk: [],
     audit: [
       "name",
       "appVersion",
@@ -452,7 +455,6 @@ export default defineEntity({
     },
     countable: false,
     delete: { mode: "soft", bulk: true },
-    bulkUpdate: null,
     merge: false,
     dataQuality: {
       checks: [

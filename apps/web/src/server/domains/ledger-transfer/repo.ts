@@ -40,6 +40,10 @@ import {
   replaceLedgerSourceClaims,
 } from "~/server/domains/ledger-party/repo/ledger-source-claim";
 import {
+  type MutationReceipt,
+  defineMutationWriter,
+} from "~/server/entity-kernel/repo/repository";
+import {
   asActor,
   defineRepository,
   listOn,
@@ -474,123 +478,151 @@ async function replaceEvidence(
       );
 }
 
-export async function createLedgerTransfer(
-  db: Database,
-  data: LedgerTransferCreateInput,
-  actor: ActorContext,
-) {
-  const id = await withTransaction(db, async (tx) => {
-    const parties = await resolvePartyIds(tx, data);
-    const { sourceClaims, evidenceTransactionIds, ...columns } = data;
-    const created = await insertWithShortcode(tx, "ledgerTransfer", {
-      ...columns,
-      ...parties,
-    });
-    const evidence = evidenceTransactionIds
-      ? await resolveAllOrThrow(
-          tx,
-          "financialTransaction",
-          evidenceTransactionIds,
-        )
-      : [];
-    await replaceLedgerSourceClaims(
-      tx,
-      { ledgerTransferId: created.id, targetAmount: data.amount },
-      sourceClaims ?? [],
-    );
-    await replaceEvidence(
-      tx,
-      { id: created.id, ...parties, amount: data.amount },
-      evidence,
-    );
-    await logAuditEntry(tx, actor, {
-      entityKind: "ledgerTransfer",
-      entityId: created.id,
-      action: "create",
-    });
-    return created.id;
-  });
-  return { output: await crud.getByID(db, id), entityId: id };
-}
-
-export async function updateLedgerTransfer(
-  db: Database,
-  shortcode: LedgerTransferShortcode,
-  data: LedgerTransferUpdateData,
-  actor: ActorContext,
-) {
-  const id = await resolveOrThrow(db, "ledgerTransfer", shortcode);
-  await withTransaction(db, async (tx) => {
-    const [locked] = await tx
-      .select({ id: ledgerTransfer.id })
-      .from(ledgerTransfer)
-      .where(and(eq(ledgerTransfer.id, id), notDeleted(ledgerTransfer)))
-      .for("update")
-      .limit(1);
-    if (!locked)
-      throw createAppError(
-        "LEDGER_TRANSFER_NOT_FOUND",
-        `Ledger transfer not found: ${shortcode}`,
-      );
-    const before = await getById(tx, id);
-    if (!before)
-      throw createAppError(
-        "LEDGER_TRANSFER_NOT_FOUND",
-        `Ledger transfer not found: ${shortcode}`,
-      );
-    await assertExplicitSourceClaimsForAmountChange(
-      tx,
-      { ledgerTransferId: id },
-      before.amount,
-      data.amount ?? before.amount,
-      data.sourceClaims,
-    );
-    const parties =
-      data.fromPartyId === undefined && data.toPartyId === undefined
-        ? { fromPartyId: before.fromPartyId, toPartyId: before.toPartyId }
-        : await resolvePartyIds(tx, {
-            fromPartyId:
-              data.fromPartyId ??
-              parseShortcodeFor("ledgerParty", before.fromPartyShortcode),
-            toPartyId:
-              data.toPartyId ??
-              parseShortcodeFor("ledgerParty", before.toPartyShortcode),
-          });
-    const amount = data.amount ?? before.amount;
-    // Party shortcodes are resolved into `parties` above; the columns carry ids.
-    const {
-      sourceClaims,
-      evidenceTransactionIds,
-      fromPartyId: _fromParty,
-      toPartyId: _toParty,
-      ...columnData
-    } = data;
-    const evidence =
-      evidenceTransactionIds === undefined
-        ? await tx
-            .select({ id: financialTransaction.id })
-            .from(financialTransaction)
-            .where(
-              and(
-                eq(financialTransaction.ledgerTransferId, id),
-                notDeleted(financialTransaction),
-              ),
-            )
-            .then((rows) => rows.map((row) => row.id))
-        : await resolveAllOrThrow(
+export const createLedgerTransfer = defineMutationWriter({
+  entity: "ledgerTransfer",
+  read: async (
+    receipt: MutationReceipt<"ledgerTransfer">,
+    db: Database,
+    _data: LedgerTransferCreateInput,
+    _actor: ActorContext,
+  ) => ({
+    output: await crud.getByID(db, receipt.entityId),
+    entityId: receipt.entityId,
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    data: LedgerTransferCreateInput,
+    actor: ActorContext,
+  ) => {
+    const id = await withTransaction(db, async (tx) => {
+      const parties = await resolvePartyIds(tx, data);
+      const { sourceClaims, evidenceTransactionIds, ...columns } = data;
+      const created = await insertWithShortcode(tx, "ledgerTransfer", {
+        ...columns,
+        ...parties,
+      });
+      const evidence = evidenceTransactionIds
+        ? await resolveAllOrThrow(
             tx,
             "financialTransaction",
-            evidenceTransactionIds ?? [],
-          );
-    await crud.update(
-      tx,
-      id,
-      { columns: columnData, parties, amount, evidence, sourceClaims },
-      actor,
-    );
-  });
-  return { output: await crud.getByID(db, id), entityId: id };
-}
+            evidenceTransactionIds,
+          )
+        : [];
+      await replaceLedgerSourceClaims(
+        tx,
+        { ledgerTransferId: created.id, targetAmount: data.amount },
+        sourceClaims ?? [],
+      );
+      await replaceEvidence(
+        tx,
+        { id: created.id, ...parties, amount: data.amount },
+        evidence,
+      );
+      await logAuditEntry(tx, actor, {
+        entityKind: "ledgerTransfer",
+        entityId: created.id,
+        action: "create",
+      });
+      return created.id;
+    });
+    return readOutput({ entityId: id });
+  },
+});
+
+export const updateLedgerTransfer = defineMutationWriter({
+  entity: "ledgerTransfer",
+  read: async (
+    receipt: MutationReceipt<"ledgerTransfer">,
+    db: Database,
+    _shortcode: LedgerTransferShortcode,
+    _data: LedgerTransferUpdateData,
+    _actor: ActorContext,
+  ) => ({
+    output: await crud.getByID(db, receipt.entityId),
+    entityId: receipt.entityId,
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    shortcode: LedgerTransferShortcode,
+    data: LedgerTransferUpdateData,
+    actor: ActorContext,
+  ) => {
+    const id = await resolveOrThrow(db, "ledgerTransfer", shortcode);
+    await withTransaction(db, async (tx) => {
+      const [locked] = await tx
+        .select({ id: ledgerTransfer.id })
+        .from(ledgerTransfer)
+        .where(and(eq(ledgerTransfer.id, id), notDeleted(ledgerTransfer)))
+        .for("update")
+        .limit(1);
+      if (!locked)
+        throw createAppError(
+          "LEDGER_TRANSFER_NOT_FOUND",
+          `Ledger transfer not found: ${shortcode}`,
+        );
+      const before = await getById(tx, id);
+      if (!before)
+        throw createAppError(
+          "LEDGER_TRANSFER_NOT_FOUND",
+          `Ledger transfer not found: ${shortcode}`,
+        );
+      await assertExplicitSourceClaimsForAmountChange(
+        tx,
+        { ledgerTransferId: id },
+        before.amount,
+        data.amount ?? before.amount,
+        data.sourceClaims,
+      );
+      const parties =
+        data.fromPartyId === undefined && data.toPartyId === undefined
+          ? { fromPartyId: before.fromPartyId, toPartyId: before.toPartyId }
+          : await resolvePartyIds(tx, {
+              fromPartyId:
+                data.fromPartyId ??
+                parseShortcodeFor("ledgerParty", before.fromPartyShortcode),
+              toPartyId:
+                data.toPartyId ??
+                parseShortcodeFor("ledgerParty", before.toPartyShortcode),
+            });
+      const amount = data.amount ?? before.amount;
+      // Party shortcodes are resolved into `parties` above; the columns carry ids.
+      const {
+        sourceClaims,
+        evidenceTransactionIds,
+        fromPartyId: _fromParty,
+        toPartyId: _toParty,
+        ...columnData
+      } = data;
+      const evidence =
+        evidenceTransactionIds === undefined
+          ? await tx
+              .select({ id: financialTransaction.id })
+              .from(financialTransaction)
+              .where(
+                and(
+                  eq(financialTransaction.ledgerTransferId, id),
+                  notDeleted(financialTransaction),
+                ),
+              )
+              .then((rows) => rows.map((row) => row.id))
+          : await resolveAllOrThrow(
+              tx,
+              "financialTransaction",
+              evidenceTransactionIds ?? [],
+            );
+      await crud.update(
+        tx,
+        id,
+        { columns: columnData, parties, amount, evidence, sourceClaims },
+        actor,
+        async () => undefined,
+      );
+    });
+    return readOutput({ entityId: id });
+  },
+});
 
 const ledgerTransferScaffold = listScaffold("ledgerTransfer", ledgerTransfer);
 

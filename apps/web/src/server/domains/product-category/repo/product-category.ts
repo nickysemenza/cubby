@@ -59,6 +59,10 @@ import { loadCategoryConnections } from "~/server/domains/product-category/repo/
 import { assertReviewedSpendingClassification } from "~/server/domains/spending-category/repo/spending-classification-review-authorization";
 import { categoryPathLabel } from "~/server/entity-kernel/repo/detail-display-labels";
 import {
+  type MutationReceipt,
+  defineMutationWriter,
+} from "~/server/entity-kernel/repo/repository";
+import {
   asActor,
   defineRepository,
   listOn,
@@ -532,154 +536,181 @@ const assertAffectedProductsRemainAdmissible = async (
   await validateLiveInheritedPolicies(tx);
 };
 
-export async function createProductCategory(
-  db: Database,
-  data: ProductCategoryCreateInput,
-  actor: ActorContext,
-): Promise<{ output: ProductCategoryOut; entityId: ProductCategoryId }> {
-  const id = await withTransaction(db, async (tx) => {
-    const parentId = data.parentId
-      ? await resolveOrThrow(tx, "productCategory", data.parentId)
-      : null;
-    await assertValidParent(tx, null, parentId);
-    const spendingCategoryId = data.spendingCategoryId
-      ? await resolveOrThrow(tx, "spendingCategory", data.spendingCategoryId)
-      : null;
-    if (
-      (data.spendingCategoryMode === "mapped") !==
-      (spendingCategoryId !== null)
-    )
-      throw new Error(
-        "Mapped requires a spending category; inherit and blocked require none",
-      );
-    const row = await insertWithShortcode(tx, "productCategory", {
-      name: data.name.trim(),
-      aliases: cleanAliases(data.aliases),
-      description: data.description,
-      parentId,
-      sortOrder: data.sortOrder,
-      feature: data.feature,
-      stockTracked: data.stockTracked,
-      spendingCategoryMode: data.spendingCategoryMode,
-      spendingCategoryId,
+export const createProductCategory = defineMutationWriter({
+  entity: "productCategory",
+  read: async (
+    receipt: MutationReceipt<"productCategory">,
+    db: Database,
+    _data: ProductCategoryCreateInput,
+    _actor: ActorContext,
+  ) => ({
+    output: await crud.getByID(db, receipt.entityId),
+    entityId: receipt.entityId,
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    data: ProductCategoryCreateInput,
+    actor: ActorContext,
+  ) => {
+    const id = await withTransaction(db, async (tx) => {
+      const parentId = data.parentId
+        ? await resolveOrThrow(tx, "productCategory", data.parentId)
+        : null;
+      await assertValidParent(tx, null, parentId);
+      const spendingCategoryId = data.spendingCategoryId
+        ? await resolveOrThrow(tx, "spendingCategory", data.spendingCategoryId)
+        : null;
+      if (
+        (data.spendingCategoryMode === "mapped") !==
+        (spendingCategoryId !== null)
+      )
+        throw new Error(
+          "Mapped requires a spending category; inherit and blocked require none",
+        );
+      const row = await insertWithShortcode(tx, "productCategory", {
+        name: data.name.trim(),
+        aliases: cleanAliases(data.aliases),
+        description: data.description,
+        parentId,
+        sortOrder: data.sortOrder,
+        feature: data.feature,
+        stockTracked: data.stockTracked,
+        spendingCategoryMode: data.spendingCategoryMode,
+        spendingCategoryId,
+      });
+      await logAuditEntry(tx, actor, {
+        entityKind: "productCategory",
+        entityId: row.id,
+        action: "create",
+      });
+      return parseEntityId("productCategory", row.id);
     });
-    await logAuditEntry(tx, actor, {
-      entityKind: "productCategory",
-      entityId: row.id,
-      action: "create",
-    });
-    return parseEntityId("productCategory", row.id);
-  });
-  return { output: await crud.getByID(db, id), entityId: id };
-}
+    return readOutput({ entityId: id });
+  },
+});
 
-export async function updateProductCategory(
-  db: Database,
-  shortcode: ProductCategoryShortcode,
-  data: ProductCategoryUpdateData,
-  actor: ActorContext,
-): Promise<{ output: ProductCategoryOut; entityId: ProductCategoryId }> {
-  const id = await resolveOrThrow(db, "productCategory", shortcode);
-  if (
-    data.spendingCategoryMode !== undefined ||
-    data.spendingCategoryId !== undefined
-  ) {
-    const [current] = await unwrapDb(db)
-      .select({
-        mode: productCategory.spendingCategoryMode,
-        target: productCategory.spendingCategoryId,
-      })
-      .from(productCategory)
-      .where(and(eq(productCategory.id, id), notDeleted(productCategory)))
-      .limit(1);
-    if (!current) throw new Error("Product category not found");
-    const target =
-      data.spendingCategoryId === undefined
-        ? current.target
-        : data.spendingCategoryId === null
-          ? null
-          : await resolveOrThrow(
-              db,
-              "spendingCategory",
-              data.spendingCategoryId,
-            );
+export const updateProductCategory = defineMutationWriter({
+  entity: "productCategory",
+  read: async (
+    receipt: MutationReceipt<"productCategory">,
+    db: Database,
+    _shortcode: ProductCategoryShortcode,
+    _data: ProductCategoryUpdateData,
+    _actor: ActorContext,
+  ) => ({
+    output: await crud.getByID(db, receipt.entityId),
+    entityId: receipt.entityId,
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    shortcode: ProductCategoryShortcode,
+    data: ProductCategoryUpdateData,
+    actor: ActorContext,
+  ) => {
+    const id = await resolveOrThrow(db, "productCategory", shortcode);
     if (
-      (data.spendingCategoryMode ?? current.mode) !== current.mode ||
-      target !== current.target
+      data.spendingCategoryMode !== undefined ||
+      data.spendingCategoryId !== undefined
     ) {
-      const affected = await unwrapDb(db)
-        .execute(sql`SELECT 1 FROM "Expense" e JOIN "Product" p ON p.id=e."productId"
+      const [current] = await unwrapDb(db)
+        .select({
+          mode: productCategory.spendingCategoryMode,
+          target: productCategory.spendingCategoryId,
+        })
+        .from(productCategory)
+        .where(and(eq(productCategory.id, id), notDeleted(productCategory)))
+        .limit(1);
+      if (!current) throw new Error("Product category not found");
+      const target =
+        data.spendingCategoryId === undefined
+          ? current.target
+          : data.spendingCategoryId === null
+            ? null
+            : await resolveOrThrow(
+                db,
+                "spendingCategory",
+                data.spendingCategoryId,
+              );
+      if (
+        (data.spendingCategoryMode ?? current.mode) !== current.mode ||
+        target !== current.target
+      ) {
+        const affected = await unwrapDb(db)
+          .execute(sql`SELECT 1 FROM "Expense" e JOIN "Product" p ON p.id=e."productId"
         WHERE e."deletedAt" IS NULL AND p."deletedAt" IS NULL AND p."categoryId" IN ${hierarchyDescendantsSql("productCategory", [id])} LIMIT 1`);
-      if (affected.rows.length) assertReviewedSpendingClassification(db);
+        if (affected.rows.length) assertReviewedSpendingClassification(db);
+      }
     }
-  }
-  await withTransaction(db, async (tx) => {
-    const parentId =
-      data.parentId === undefined
-        ? undefined
-        : data.parentId === null
-          ? null
-          : await resolveOrThrow(tx, "productCategory", data.parentId);
-    if (parentId !== undefined) await assertValidParent(tx, id, parentId);
-    const [before] = await unwrapDb(tx)
-      .select()
-      .from(productCategory)
-      .where(and(eq(productCategory.id, id), notDeleted(productCategory)))
-      .limit(1);
-    if (!before) throw new Error("Product category not found");
-    // A bound category may move anywhere in the tree — its own binding still
-    // wins over any ancestor's — but the binding itself is permanent.
-    if (
-      before.feature !== null &&
-      data.feature !== undefined &&
-      data.feature !== before.feature
-    ) {
-      throw new Error(
-        "A category behavior binding cannot be cleared or replaced",
-      );
-    }
-    const spendingCategoryId =
-      data.spendingCategoryId === undefined
-        ? undefined
-        : data.spendingCategoryId === null
-          ? null
-          : await resolveOrThrow(
-              tx,
-              "spendingCategory",
-              data.spendingCategoryId,
-            );
-    const spendingCategoryMode =
-      data.spendingCategoryMode ?? before.spendingCategoryMode;
-    if (
-      (spendingCategoryMode === "mapped") !==
-      ((spendingCategoryId === undefined
-        ? before.spendingCategoryId
-        : spendingCategoryId) !==
-        null)
-    )
-      throw new Error(
-        "Mapped requires a spending category; inherit and blocked require none",
-      );
-    const patch = {
-      spendingCategoryMode: data.spendingCategoryMode,
-      spendingCategoryId,
-      name: data.name?.trim(),
-      aliases: data.aliases ? cleanAliases(data.aliases) : undefined,
-      description: data.description,
-      parentId,
-      sortOrder: data.sortOrder,
-      feature: data.feature,
-      stockTracked: data.stockTracked,
-    };
-    const values = buildPartialUpdateValues(patch);
-    if (Object.keys(values).length === 0) return;
-    await crud.update(tx, id, values, actor);
-    if (parentId !== undefined || data.feature !== undefined) {
-      await assertAffectedProductsRemainAdmissible(tx, id);
-    }
-  });
-  return { output: await crud.getByID(db, id), entityId: id };
-}
+    await withTransaction(db, async (tx) => {
+      const parentId =
+        data.parentId === undefined
+          ? undefined
+          : data.parentId === null
+            ? null
+            : await resolveOrThrow(tx, "productCategory", data.parentId);
+      if (parentId !== undefined) await assertValidParent(tx, id, parentId);
+      const [before] = await unwrapDb(tx)
+        .select()
+        .from(productCategory)
+        .where(and(eq(productCategory.id, id), notDeleted(productCategory)))
+        .limit(1);
+      if (!before) throw new Error("Product category not found");
+      // A bound category may move anywhere in the tree — its own binding still
+      // wins over any ancestor's — but the binding itself is permanent.
+      if (
+        before.feature !== null &&
+        data.feature !== undefined &&
+        data.feature !== before.feature
+      ) {
+        throw new Error(
+          "A category behavior binding cannot be cleared or replaced",
+        );
+      }
+      const spendingCategoryId =
+        data.spendingCategoryId === undefined
+          ? undefined
+          : data.spendingCategoryId === null
+            ? null
+            : await resolveOrThrow(
+                tx,
+                "spendingCategory",
+                data.spendingCategoryId,
+              );
+      const spendingCategoryMode =
+        data.spendingCategoryMode ?? before.spendingCategoryMode;
+      if (
+        (spendingCategoryMode === "mapped") !==
+        ((spendingCategoryId === undefined
+          ? before.spendingCategoryId
+          : spendingCategoryId) !==
+          null)
+      )
+        throw new Error(
+          "Mapped requires a spending category; inherit and blocked require none",
+        );
+      const patch = {
+        spendingCategoryMode: data.spendingCategoryMode,
+        spendingCategoryId,
+        name: data.name?.trim(),
+        aliases: data.aliases ? cleanAliases(data.aliases) : undefined,
+        description: data.description,
+        parentId,
+        sortOrder: data.sortOrder,
+        feature: data.feature,
+        stockTracked: data.stockTracked,
+      };
+      const values = buildPartialUpdateValues(patch);
+      if (Object.keys(values).length === 0) return;
+      await crud.update(tx, id, values, actor, async () => undefined);
+      if (parentId !== undefined || data.feature !== undefined) {
+        await assertAffectedProductsRemainAdmissible(tx, id);
+      }
+    });
+    return readOutput({ entityId: id });
+  },
+});
 
 /** A category bound to a behavior feature is structural; it cannot go. */
 const refuseBoundCategories = async (

@@ -670,7 +670,6 @@ export default defineEntity({
       "createdAt",
       "updatedAt",
     ],
-    bulk: [],
     audit: [],
     sort: {
       fields: [
@@ -1068,7 +1067,6 @@ export default defineEntity({
     },
     softDelete: false,
     delete: null,
-    bulkUpdate: null,
     merge: false,
     // The run service and import writers own every write.
     lifecycle: "readOnly",

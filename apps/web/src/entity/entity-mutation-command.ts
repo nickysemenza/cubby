@@ -1,3 +1,4 @@
+import type { Entity } from "@cubby/schemas/entity";
 import { z } from "zod";
 
 import { entityMutation } from "~/integrations/tanstack-query/generated/catalog.gen";
@@ -6,8 +7,6 @@ import {
   type EntityBrowserMutationInput,
   type EntityBrowserMutationResult,
 } from "~/server/entity-kernel/contracts";
-
-import type { EditableEntity } from "./editing/types";
 
 const unparsedEntityMutationSchema = z.unknown();
 type UnparsedEntityMutation = z.input<typeof unparsedEntityMutationSchema>;
@@ -24,7 +23,7 @@ const startEntityMutationTransport: EntityMutationTransport = {
 };
 
 /** Parse, execute, and correlate one standard browser mutation. */
-export async function executeEntityMutationCommand<E extends EditableEntity>(
+export async function executeEntityMutationCommand<E extends Entity>(
   entity: E,
   input: UnparsedEntityMutation,
   transport: EntityMutationTransport = startEntityMutationTransport,

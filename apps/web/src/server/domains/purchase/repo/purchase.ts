@@ -120,6 +120,10 @@ import {
 } from "~/server/domains/purchase/repo/purchase-financial-aggregates";
 import { resolveSplitPartClassification } from "~/server/domains/purchase/repo/purchase-split-draft";
 import { assertClassificationPolicies } from "~/server/domains/spending-category/repo/classification-field-policy";
+import {
+  type MutationReceipt,
+  defineMutationWriter,
+} from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import {
   type AuditEntryInput,
@@ -1144,55 +1148,72 @@ export const findOrCreatePurchase = async (
   return row.id;
 };
 
-export const createPurchase = async (
-  db: Database,
-  data: PurchaseCreateInput,
-  actor: ActorContext,
-): Promise<{ output: PurchaseOut; entityId: PurchaseId }> => {
-  const id = await withTransaction(db, async (tx) => {
-    const vendorId = await resolveOrThrow(tx, "vendor", data.vendorId);
-    const vendorAccountId = data.vendorAccountId
-      ? await resolveOrThrow(tx, "vendorAccount", data.vendorAccountId)
-      : null;
-    const created = await insertWithShortcode(tx, "purchase", {
-      defaultProjectId: data.defaultProjectId
-        ? await resolveOrThrow(tx, "project", data.defaultProjectId)
-        : null,
-      spendingCategoryId: data.spendingCategoryId
-        ? await resolveOrThrow(tx, "spendingCategory", data.spendingCategoryId)
-        : null,
-      spendingCategoryOrigin: data.spendingCategoryId ? "manual" : "legacy",
-      itemizationExpectation: data.itemizationExpectation,
-      defaultTrade: data.defaultTrade,
-      vendorId,
-      vendorAccountId,
-      purchaserOverrideId: await resolveMemberAssignee(
+export const createPurchase = defineMutationWriter({
+  entity: "purchase",
+  read: async (
+    receipt: MutationReceipt<"purchase">,
+    db: Database,
+    _data: PurchaseCreateInput,
+    _actor: ActorContext,
+  ) => ({
+    output: await getPurchaseByID(db, receipt.entityId),
+    entityId: receipt.entityId,
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    data: PurchaseCreateInput,
+    actor: ActorContext,
+  ) => {
+    const id = await withTransaction(db, async (tx) => {
+      const vendorId = await resolveOrThrow(tx, "vendor", data.vendorId);
+      const vendorAccountId = data.vendorAccountId
+        ? await resolveOrThrow(tx, "vendorAccount", data.vendorAccountId)
+        : null;
+      const created = await insertWithShortcode(tx, "purchase", {
+        defaultProjectId: data.defaultProjectId
+          ? await resolveOrThrow(tx, "project", data.defaultProjectId)
+          : null,
+        spendingCategoryId: data.spendingCategoryId
+          ? await resolveOrThrow(
+              tx,
+              "spendingCategory",
+              data.spendingCategoryId,
+            )
+          : null,
+        spendingCategoryOrigin: data.spendingCategoryId ? "manual" : "legacy",
+        itemizationExpectation: data.itemizationExpectation,
+        defaultTrade: data.defaultTrade,
+        vendorId,
+        vendorAccountId,
+        purchaserOverrideId: await resolveMemberAssignee(
+          tx,
+          data.purchaserOverrideId,
+        ),
+        orderId: data.orderId?.trim() || null,
+        displayLabel: data.displayLabel?.trim() || null,
+        date: data.date,
+        statedTotal: data.statedTotal,
+        notes: data.notes,
+      });
+      // Claim uploaded documents in the insert transaction so failure leaves no pending files.
+      await syncPurchaseImages(
         tx,
-        data.purchaserOverrideId,
-      ),
-      orderId: data.orderId?.trim() || null,
-      displayLabel: data.displayLabel?.trim() || null,
-      date: data.date,
-      statedTotal: data.statedTotal,
-      notes: data.notes,
+        created.id,
+        data.pendingImageIds,
+        undefined,
+        undefined,
+      );
+      await logAuditEntry(tx, actor, {
+        entityKind: "purchase",
+        entityId: created.id,
+        action: "create",
+      });
+      return created.id;
     });
-    // Claim uploaded documents in the insert transaction so failure leaves no pending files.
-    await syncPurchaseImages(
-      tx,
-      created.id,
-      data.pendingImageIds,
-      undefined,
-      undefined,
-    );
-    await logAuditEntry(tx, actor, {
-      entityKind: "purchase",
-      entityId: created.id,
-      action: "create",
-    });
-    return created.id;
-  });
-  return { output: await getPurchaseByID(db, id), entityId: id };
-};
+    return readOutput({ entityId: id });
+  },
+});
 
 const resolvePurchaseDefaultProjectUpdate = async (
   tx: DrizzleTransaction,
@@ -1213,144 +1234,153 @@ const reviewedPurchaseCategoryOrigin = (
 ): "manual" | "source" | undefined =>
   value === undefined ? undefined : (sourceOrigin ?? "manual");
 
-export const updatePurchase = async (
-  db: Database,
-  shortcode: PurchaseShortcode,
-  data: PurchaseUpdateData,
-  actor: ActorContext,
-  options: { spendingCategoryOrigin?: "source" } = {},
-): Promise<{
-  output: PurchaseOut;
-  entityId: PurchaseId;
-  /** R2 objects `removeImageIds` reaped; drop them after this commit. */
-  detachedImageKeys: string[];
-}> => {
-  const id = await resolveOrThrow(db, "purchase", shortcode);
-  let detachedImageKeys: string[] = [];
+export const updatePurchase = defineMutationWriter({
+  entity: "purchase",
+  read: async (
+    receipt: MutationReceipt<"purchase">,
+    db: Database,
+    _shortcode: PurchaseShortcode,
+    _data: PurchaseUpdateData,
+    _actor: ActorContext,
+    _options: { spendingCategoryOrigin?: "source" } = {},
+  ) => ({
+    output: await getPurchaseByID(db, receipt.entityId),
+    entityId: receipt.entityId,
+    detachedImageKeys: receipt.detachedImageKeys ?? [],
+  }),
+  write: async (
+    readOutput,
+    db: Database,
+    shortcode: PurchaseShortcode,
+    data: PurchaseUpdateData,
+    actor: ActorContext,
+    options: { spendingCategoryOrigin?: "source" } = {},
+  ) => {
+    const id = await resolveOrThrow(db, "purchase", shortcode);
+    let detachedImageKeys: string[] = [];
 
-  await withTransaction(db, async (tx) => {
-    const before = await tx.query.purchase.findFirst({
-      where: and(eq(purchase.id, id), notDeleted(purchase)),
-    });
-    if (!before) {
-      throw createAppError("PURCHASE_NOT_FOUND", `Purchase not found: ${id}`);
-    }
-
-    let resolvedVendorId: VendorId | undefined;
-    if (data.vendorId !== undefined) {
-      resolvedVendorId = await resolveOrThrow(tx, "vendor", data.vendorId);
-    }
-    const resolvedVendorAccountId =
-      data.vendorAccountId === undefined
-        ? undefined
-        : data.vendorAccountId === null
-          ? null
-          : await resolveOrThrow(tx, "vendorAccount", data.vendorAccountId);
-
-    // This is the one writer that can move BOTH halves of the partial-unique
-    // `(vendorId, orderId)` key, so it is the one that can collide. Two charges
-    // legitimately share an order id across vendors — order ids are only unique
-    // per vendor (Tool Nirvana's "#11325") — so moving a charge to a vendor that
-    // already holds that order id raises 23505. Nothing maps that to an AppError,
-    // so it surfaced as an untyped 500 instead of the message
-    // `renameChargeOrderId` was built to give. Pre-checked with a SELECT for the
-    // same reason it is there: a failed statement poisons the transaction.
-    const nextVendorId = resolvedVendorId ?? before.vendorId;
-    const nextOrderId =
-      data.orderId === undefined
-        ? before.orderId
-        : data.orderId?.trim() || null;
-    if (
-      nextOrderId !== null &&
-      (nextVendorId !== before.vendorId || nextOrderId !== before.orderId)
-    ) {
-      const [clash] = await tx
-        .select({ id: purchase.id })
-        .from(purchase)
-        .where(
-          and(
-            eq(purchase.vendorId, nextVendorId),
-            eq(purchase.orderId, nextOrderId),
-            ne(purchase.id, id),
-            notDeleted(purchase),
-          ),
-        )
-        .limit(1);
-      if (clash) {
-        throw createAppError(
-          "PURCHASE_MERGE_ORDER_COLLISION",
-          `Another purchase for this vendor already carries order id ${nextOrderId}. Merge the two purchases instead of moving this one onto it.`,
-        );
-      }
-    }
-
-    detachedImageKeys = await syncPurchaseImages(
-      tx,
-      id,
-      data.pendingImageIds,
-      data.removeImageIds,
-      data.imageOrder,
-    );
-
-    const after = await updateLiveAndReturn(
-      tx,
-      purchase,
-      buildPartialUpdateValues({
-        vendorId: resolvedVendorId,
-        vendorAccountId: resolvedVendorAccountId,
-        purchaserOverrideId: await resolveMemberAssignee(
-          tx,
-          data.purchaserOverrideId,
-        ),
-        defaultProjectId: await resolvePurchaseDefaultProjectUpdate(
-          tx,
-          data.defaultProjectId,
-        ),
-        spendingCategoryId: await resolvePurchaseCategoryUpdate(
-          tx,
-          data.spendingCategoryId,
-        ),
-        spendingCategoryOrigin: reviewedPurchaseCategoryOrigin(
-          data.spendingCategoryId,
-          options.spendingCategoryOrigin,
-        ),
-        itemizationExpectation: data.itemizationExpectation,
-        defaultTrade: data.defaultTrade,
-        orderId:
-          data.orderId === undefined ? undefined : data.orderId?.trim() || null,
-        displayLabel:
-          data.displayLabel === undefined
-            ? undefined
-            : data.displayLabel?.trim() || null,
-        date: data.date,
-        statedTotal: data.statedTotal,
-        notes: data.notes,
-      }),
-      id,
-    );
-
-    await validatePurchaseItemInheritance(tx, [id]);
-    await validateLiveInheritedPolicies(tx);
-
-    const changes = computeChanges(before, after, [
-      ...entityFieldModels.purchase.audit,
-    ]);
-    if (changes) {
-      await logAuditEntry(tx, actor, {
-        entityKind: "purchase",
-        entityId: id,
-        action: "update",
-        changes,
+    await withTransaction(db, async (tx) => {
+      const before = await tx.query.purchase.findFirst({
+        where: and(eq(purchase.id, id), notDeleted(purchase)),
       });
-    }
-  });
+      if (!before) {
+        throw createAppError("PURCHASE_NOT_FOUND", `Purchase not found: ${id}`);
+      }
 
-  return {
-    output: await getPurchaseByID(db, id),
-    entityId: id,
-    detachedImageKeys,
-  };
-};
+      let resolvedVendorId: VendorId | undefined;
+      if (data.vendorId !== undefined) {
+        resolvedVendorId = await resolveOrThrow(tx, "vendor", data.vendorId);
+      }
+      const resolvedVendorAccountId =
+        data.vendorAccountId === undefined
+          ? undefined
+          : data.vendorAccountId === null
+            ? null
+            : await resolveOrThrow(tx, "vendorAccount", data.vendorAccountId);
+
+      // This is the one writer that can move BOTH halves of the partial-unique
+      // `(vendorId, orderId)` key, so it is the one that can collide. Two charges
+      // legitimately share an order id across vendors — order ids are only unique
+      // per vendor (Tool Nirvana's "#11325") — so moving a charge to a vendor that
+      // already holds that order id raises 23505. Nothing maps that to an AppError,
+      // so it surfaced as an untyped 500 instead of the message
+      // `renameChargeOrderId` was built to give. Pre-checked with a SELECT for the
+      // same reason it is there: a failed statement poisons the transaction.
+      const nextVendorId = resolvedVendorId ?? before.vendorId;
+      const nextOrderId =
+        data.orderId === undefined
+          ? before.orderId
+          : data.orderId?.trim() || null;
+      if (
+        nextOrderId !== null &&
+        (nextVendorId !== before.vendorId || nextOrderId !== before.orderId)
+      ) {
+        const [clash] = await tx
+          .select({ id: purchase.id })
+          .from(purchase)
+          .where(
+            and(
+              eq(purchase.vendorId, nextVendorId),
+              eq(purchase.orderId, nextOrderId),
+              ne(purchase.id, id),
+              notDeleted(purchase),
+            ),
+          )
+          .limit(1);
+        if (clash) {
+          throw createAppError(
+            "PURCHASE_MERGE_ORDER_COLLISION",
+            `Another purchase for this vendor already carries order id ${nextOrderId}. Merge the two purchases instead of moving this one onto it.`,
+          );
+        }
+      }
+
+      detachedImageKeys = await syncPurchaseImages(
+        tx,
+        id,
+        data.pendingImageIds,
+        data.removeImageIds,
+        data.imageOrder,
+      );
+
+      const after = await updateLiveAndReturn(
+        tx,
+        purchase,
+        buildPartialUpdateValues({
+          vendorId: resolvedVendorId,
+          vendorAccountId: resolvedVendorAccountId,
+          purchaserOverrideId: await resolveMemberAssignee(
+            tx,
+            data.purchaserOverrideId,
+          ),
+          defaultProjectId: await resolvePurchaseDefaultProjectUpdate(
+            tx,
+            data.defaultProjectId,
+          ),
+          spendingCategoryId: await resolvePurchaseCategoryUpdate(
+            tx,
+            data.spendingCategoryId,
+          ),
+          spendingCategoryOrigin: reviewedPurchaseCategoryOrigin(
+            data.spendingCategoryId,
+            options.spendingCategoryOrigin,
+          ),
+          itemizationExpectation: data.itemizationExpectation,
+          defaultTrade: data.defaultTrade,
+          orderId:
+            data.orderId === undefined
+              ? undefined
+              : data.orderId?.trim() || null,
+          displayLabel:
+            data.displayLabel === undefined
+              ? undefined
+              : data.displayLabel?.trim() || null,
+          date: data.date,
+          statedTotal: data.statedTotal,
+          notes: data.notes,
+        }),
+        id,
+      );
+
+      await validatePurchaseItemInheritance(tx, [id]);
+      await validateLiveInheritedPolicies(tx);
+
+      const changes = computeChanges(before, after, [
+        ...entityFieldModels.purchase.audit,
+      ]);
+      if (changes) {
+        await logAuditEntry(tx, actor, {
+          entityKind: "purchase",
+          entityId: id,
+          action: "update",
+          changes,
+        });
+      }
+    });
+
+    return readOutput({ entityId: id, detachedImageKeys });
+  },
+});
 
 export const linkExpensesToPurchase = async (
   db: Database,

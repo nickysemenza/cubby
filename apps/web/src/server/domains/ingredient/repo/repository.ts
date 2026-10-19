@@ -7,7 +7,6 @@ import {
 import { z } from "zod";
 
 import { getIngredientByID as getIngredientDetail } from "~/server/domains/ingredient/repo/ingredient-with-food";
-import { entityMutationReferences } from "~/server/entity-kernel/adapter";
 import {
   mutationEvents,
   runMutationSideEffectsForEntities,
@@ -23,12 +22,7 @@ import {
   resolveLiveShortcode,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
-import {
-  createIngredient,
-  getIngredientByID,
-  updateIngredient,
-  updateIngredientsUsuallyOnHand,
-} from "./crud";
+import { createIngredient, getIngredientByID, updateIngredient } from "./crud";
 import { deleteIngredients, INGREDIENT_DELETE_EDGE_POLICY } from "./deletion";
 import { INGREDIENT_MERGE_EDGE_POLICY, mergeIngredients } from "./merge";
 import { ingredientListRead } from "./search";
@@ -68,30 +62,20 @@ export const ingredientRepository = defineRepository("ingredient", {
     });
     return { output, entityId };
   },
-  bulkUpdate: async (ctx, shortcodes, data) => {
-    const ids = await ingredientShortcodes.all(ctx.db, shortcodes);
-    const updatedIds = await updateIngredientsUsuallyOnHand(
+  updateRead: async (ctx, shortcode, data, fields) => {
+    const entityId = await ingredientShortcodes.one(ctx.db, shortcode);
+    const result = await updateIngredient.read(
+      fields,
       ctx.db,
-      ids,
+      entityId,
       data,
       ctx.actorContext,
     );
-    await runMutationSideEffectsForEntities(
-      ctx.db,
-      mutationEvents(
-        "ingredient",
-        "updated",
-        updatedIds,
-        "ingredient.bulkUpdate",
-      ),
-    );
-    const updatedSet = new Set(updatedIds);
-    return {
-      updatedReferences: entityMutationReferences(
-        "ingredient",
-        shortcodes.filter((_, index) => updatedSet.has(ids[index]!)),
-      ),
-    };
+    await ctx.services.recipeCosting.recomputeForIngredient(entityId, {
+      source: "ingredient.update",
+      entity: { entityKind: "ingredient", entityId },
+    });
+    return result;
   },
   delete: async (ctx, shortcodes) => {
     const ids = await ingredientShortcodes.all(ctx.db, shortcodes);
