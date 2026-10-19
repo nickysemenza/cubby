@@ -52,9 +52,9 @@ import {
   slimUsdaFood,
   slimUsdaFoodListItem,
 } from "~/contracts/mcp-projections";
+import { playbookContract } from "~/contracts/mcp.contract";
 import { mealContract } from "~/contracts/meal.contract";
 import { photoImportContract } from "~/contracts/photo-import.contract";
-import { playbookContract } from "~/contracts/playbook.contract";
 import {
   problemReportWantsCounts,
   problemsContract,

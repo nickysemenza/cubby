@@ -10,7 +10,7 @@ import { collectPlaybooks } from "./playbooks.ts";
  * lives on the MCP server (`playbook` tool), so the plugin only changes when a
  * playbook's name or description does. It declares no MCP server because each
  * member already has the Cubby connector; a plugin copy would duplicate it.
- * `claude-plugin.unit.test.ts` fails when the committed files drift; rerun
+ * `claude-plugin.test.ts` fails when the committed files drift; rerun
  * `pnpm --dir apps/web generate:claude-plugin` to rewrite them.
  */
 export async function renderClaudePlugin(root: string) {
