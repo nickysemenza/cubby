@@ -47,13 +47,16 @@ belongs to that Run. Unpriced calls remain counted. Missing checkpoint/coverage
 stays null. Query lists are summarized (counts plus the first or next pending
 queries) and an in-flight page reads as message/event counts, so a status read
 stays bounded however many searches a mailbox has. `imports_read.mail_import` reads each connected mailbox's Mail import
-switch and the current AI budget window. These reads never
+switch and search progress; `ai_funding_read.status` reads household-wide
+frontier AI funding (the window's Claude credit, including a recorded
+Anthropic refusal, paid budget and ChatGPT plan). These reads never
 load or resume a Workflow. Discovery has no coordinator conversation, so its owned
 `imports_read.run_transcript` returns `absent`; that is not evidence it never ran.
 `run.lifecycle` runs every Run control
 (cancel, retry, restart, approve, reject and the rest). Review and spending
 decisions are reachable on MCP too
 (`run.set_mail_import`, `run.discover_mail`, `run.commit_prepared`,
+`ai_funding.set_credit_budget`, `ai_funding.reset_credit_refusal`,
 `run.resolve_finding`, `photo_run.approve_groups`,
 `product_enrichment.merge_match`, suggestion review: `entity.review_assessment`,
 `entity.review_assessments`, each batch returning a per-id `ok`/`error`

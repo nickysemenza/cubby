@@ -1,6 +1,11 @@
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
-import type { GatewayFetchRequest } from "@cubby/shared/ai/gateway-request";
+import {
+  gatewayFetchThrough,
+  type GatewayFetchRequest,
+} from "@cubby/shared/ai/gateway-request";
+import { fundedCubbyPiProviders } from "@cubby/shared/ai/pi-providers";
+import { createModels } from "@earendil-works/pi-ai";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -11,11 +16,11 @@ import {
   AiBudgetExhaustedError,
   AiFundingWaitError,
   DEFAULT_CREDIT_BUDGET_USD,
-  aiBudgetWindow,
   readAiBudget,
   withAiBudget,
   withCreditBudget,
 } from "~/server/ai/budget";
+import { aiBudgetWindow } from "~/server/ai/budget-window";
 import { readChatGptPlanAvailability } from "~/server/ai/funding";
 import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
@@ -28,7 +33,8 @@ import { resumeFundingPausedRuns } from "./ai-work";
 import { creditRunPreflight, paidRunPreflight } from "./execution-transport";
 
 const chatRequest = (model = "gpt-6-sol"): GatewayFetchRequest => ({
-  endpoint: model.startsWith("claude") ? "v1/messages" : "responses",
+  // pi-ai's Anthropic SDK sends the beta query; budget checks must see past it.
+  endpoint: model.startsWith("claude") ? "v1/messages?beta=true" : "responses",
   headers: new Headers(),
   input: "https://gateway.invalid/openai/responses",
   init: undefined,
@@ -313,6 +319,48 @@ describe("household AI funding at the paid transport boundary", () => {
     expect(
       await creditRunPreflight(ctx.db, background)(decisionRequest()),
     ).toBeNull();
+  });
+
+  // Regression (2026-10-19): pi-ai's Anthropic SDK posts
+  // `v1/messages?beta=true`, which the credit preflight did not recognize as a
+  // chat call, so background coordinator and relevance calls spent $9.98 of a
+  // $5 window budget without one refusal. Drive the real SDK request.
+  it("stops background Claude credit at the window budget on pi-ai's real Anthropic request", async () => {
+    const runId = await setup("mail_import");
+    await spend(runId, DEFAULT_CREDIT_BUDGET_USD, { credit: true });
+    const sent: string[] = [];
+    const models = createModels();
+    for (const provider of fundedCubbyPiProviders(
+      (route, _unbilled, funding) =>
+        gatewayFetchThrough({
+          provider: route,
+          funding,
+          beforeCreditRequest: creditRunPreflight(ctx.db, runId),
+          chatGpt: async () => {
+            sent.push("chatgpt");
+            return new Response(
+              `data: ${JSON.stringify({ type: "response.completed", response: { id: "synthetic-response", status: "completed", output: [], usage: { input_tokens: 100, output_tokens: 10, total_tokens: 110 } } })}\n\n`,
+              { headers: { "content-type": "text/event-stream" } },
+            );
+          },
+          gateway: async (request) => {
+            sent.push(`gateway:${funding}:${request.endpoint}`);
+            return new Response("synthetic gateway failure", { status: 500 });
+          },
+        }),
+      undefined,
+      { paid: false },
+    ))
+      models.setProvider(provider);
+    const model = models.getModel("anthropic", "claude-opus-5-5");
+    if (!model) throw new Error("Missing Opus");
+    const response = await models.completeSimple(
+      model,
+      { messages: [] },
+      { maxTokens: 512 },
+    );
+    expect(sent).toEqual(["chatgpt"]);
+    expect(response.model).toBe("gpt-6-sol");
   });
 
   it("pauses background work for the next window instead of paying while the plan is quota-refused", async () => {

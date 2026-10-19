@@ -152,13 +152,7 @@ describe("automatic Mail import switch", () => {
       await invoke("setMailImport", { mailboxId, enabled: true }),
     ).toMatchObject({
       ok: true,
-      data: {
-        mailboxes: [{ mailboxId, enabled: true }],
-        budget: {
-          credit: { limitUsd: 5, spentUsd: 0 },
-          paid: { limitUsd: 1, spentUsd: 0 },
-        },
-      },
+      data: { mailboxes: [{ mailboxId, enabled: true }] },
     });
     expect(await invoke("mailImport", {})).toMatchObject({
       ok: true,

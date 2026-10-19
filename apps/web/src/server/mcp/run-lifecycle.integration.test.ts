@@ -246,11 +246,26 @@ describe("Mail import switch and discovery through MCP", () => {
   const ctx = withTestDb("mcp");
   const mailboxId = "synthetic-mcp-approval-mailbox";
   const launched: WorkflowRunParams[] = [];
+  const CONSOLE_LIMIT =
+    '{"type":"error","error":{"type":"invalid_request_error","message":"You have reached your specified API usage limits. You will regain access on 2099-11-01 at 00:00 UTC."}}';
+  // The egress Durable Object's credit refusal, as funding reads see it.
+  let creditRefusal: { until: number; reason: string } | null = null;
 
   beforeEach(() => {
     launched.length = 0;
+    creditRefusal = null;
     setCfEnv(
       fromPartial<Env>({
+        AI_GATEWAY_EGRESS: {
+          getByName: () => ({
+            creditRefusal: async () => creditRefusal,
+            resetCreditRefusal: async () => {
+              creditRefusal = null;
+            },
+            scheduleFundingResume: async () => undefined,
+            scheduleAiWorkRecovery: async () => undefined,
+          }),
+        },
         MAIL_DISCOVERY: {
           create: async (options: {
             id?: string;
@@ -344,10 +359,12 @@ describe("Mail import switch and discovery through MCP", () => {
     });
   });
 
-  // Failure modes: the card's budgets or plan state are missing from MCP;
-  // the credit budget cannot be changed; "Run discovery now, paid allowed"
-  // starts discovery without recording the member's paid grant.
-  it("reports both budgets and the plan, sets the credit budget, and grants paid discovery", async () => {
+  // Failure modes: household funding (budgets, a recorded credit refusal with
+  // its raw reason, the plan state) is missing from MCP; the credit budget
+  // cannot be changed, or changing it leaves Claude credit refused; the
+  // refusal cannot be reset; "Run discovery now, paid allowed" starts
+  // discovery without recording the member's paid grant.
+  it("reports household funding, resets a credit refusal, sets the credit budget, and grants paid discovery", async () => {
     await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic MCP approval member",
       kind: "member",
@@ -357,23 +374,42 @@ describe("Mail import switch and discovery through MCP", () => {
     await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic MCP discovery vendor",
     });
+    const until = Date.parse("2099-11-01T00:00:00Z");
+    creditRefusal = { until, reason: CONSOLE_LIMIT };
+    expect(
+      (await call("ai_funding_read", { action: "status" })).structuredContent,
+    ).toMatchObject({
+      credit: {
+        limitUsd: 5,
+        spentUsd: 0,
+        state: "refused",
+        until: "2099-11-01T00:00:00.000Z",
+        reason: CONSOLE_LIMIT,
+      },
+      paid: { limitUsd: 1, spentUsd: 0 },
+      plan: { state: "disconnected", until: null },
+    });
     expect(
       (await call("imports_read", { action: "mail_import" })).structuredContent,
-    ).toMatchObject({
-      budget: {
-        credit: { limitUsd: 5, spentUsd: 0 },
-        paid: { limitUsd: 1, spentUsd: 0 },
-        plan: { state: "disconnected", until: null },
-      },
+    ).not.toHaveProperty("budget");
+    const reset = await call("ai_funding", { action: "reset_credit_refusal" });
+    expect(reset.isError).not.toBe(true);
+    expect(reset.structuredContent).toMatchObject({
+      credit: { state: "available", until: null, reason: null },
     });
-    const set = await call("run", {
+    creditRefusal = { until, reason: CONSOLE_LIMIT };
+    const set = await call("ai_funding", {
       action: "set_credit_budget",
       creditLimitUsd: 7.5,
     });
     expect(set.isError).not.toBe(true);
     expect(set.structuredContent).toMatchObject({
-      budget: { credit: { limitUsd: 7.5 } },
+      credit: { limitUsd: 7.5, state: "available" },
     });
+    expect(creditRefusal).toBeNull();
+    expect((await call("run", { action: "set_credit_budget" })).isError).toBe(
+      true,
+    );
     expect((await call("run", enable())).isError).not.toBe(true);
     const discovered = await call("run", {
       action: "discover_mail",

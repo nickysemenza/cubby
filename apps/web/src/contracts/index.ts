@@ -6,7 +6,11 @@ export { workQueueContract } from "./work-queue.contract";
  * this barrel at build time; the HTTP router imports it at runtime. A contract
  * module that is not exported here is a generator error.
  */
-export { aiContract, aiStreamsContract } from "./ai.contract";
+export {
+  aiContract,
+  aiFundingContract,
+  aiStreamsContract,
+} from "./ai.contract";
 export { auditLogContract } from "./audit-log.contract";
 export { calendarContract } from "./calendar.contract";
 export { collectionContract } from "./collection.contract";

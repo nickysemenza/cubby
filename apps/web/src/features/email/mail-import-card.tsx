@@ -3,17 +3,16 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
+import {
+  AiFundingLine,
+  aiFundingStatusQuery,
+  PaidRunButton,
+} from "~/features/account/ai-funding";
 import { run } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Stack } from "~/ui/layout";
 import { StatusText } from "~/ui/primitives/status-text";
 import { Switch } from "~/ui/primitives/switch";
-
-import {
-  AiFundingSummary,
-  CreditBudgetEditor,
-  PaidRunButton,
-} from "./ai-funding";
 
 const MAIL_IMPORT_REFRESH_MS = 30_000;
 /** Poll only while a switched-on mailbox still has searches to run. */
@@ -80,14 +79,7 @@ export function MailImportSettings() {
       queryClient.setQueryData(run.mailImport.queryOptions({}).queryKey, data);
     },
   });
-  const setCredit = useActionMutation({
-    mutationFn: () => run.setCreditBudget.mutationOptions(),
-    success: "Claude credit budget updated",
-    error: "Couldn't update the Claude credit budget",
-    onSuccess: (data) => {
-      queryClient.setQueryData(run.mailImport.queryOptions({}).queryKey, data);
-    },
-  });
+  const funding = useQuery(aiFundingStatusQuery());
   const discover = useActionMutation({
     mutationFn: () => run.discoverMail.mutationOptions(),
     success: (data) =>
@@ -97,7 +89,7 @@ export function MailImportSettings() {
     error: "Couldn't start discovery",
   });
   const mailboxes = status.data?.mailboxes ?? [];
-  const budget = status.data?.budget;
+  const budget = funding.data;
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
@@ -167,17 +159,7 @@ export function MailImportSettings() {
             Mail imports waiting for review
           </Link>
         ) : null}
-        {budget ? (
-          <Stack gap="sm">
-            <AiFundingSummary budget={budget} />
-            <CreditBudgetEditor
-              key={budget.credit.limitUsd}
-              limitUsd={budget.credit.limitUsd}
-              pending={setCredit.isPending}
-              onSave={(creditLimitUsd) => setCredit.mutate({ creditLimitUsd })}
-            />
-          </Stack>
-        ) : null}
+        {budget ? <AiFundingLine budget={budget} /> : null}
       </Stack>
     </div>
   );
