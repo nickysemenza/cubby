@@ -61,7 +61,7 @@ import {
   type PiCallTarget,
   type SharedEffort,
 } from "~/server/ai/adapters";
-import { withAiBudget, withCreditBudget } from "~/server/ai/budget";
+import { withAiBudget, withFreeBudget } from "~/server/ai/budget";
 import type { GatewayCallOptions, GatewayMetadata } from "~/server/ai/gateway";
 import { wrapAiGatewayError } from "~/server/ai/gateway-error";
 import { MODEL_FOR_TIER } from "~/server/ai/policy/feature-identity";
@@ -121,7 +121,7 @@ export interface AiRunContext<T = unknown> extends Pick<
   | "subscriptionRequired"
   | "subscriptionFallback"
   | "beforePaidRequest"
-  | "beforeCreditRequest"
+  | "beforeFreeRequest"
 > {
   /**
    * Where the `AiUsage` row is written. Omit to run without usage accounting
@@ -322,10 +322,10 @@ export function planStructuredRun<T = unknown>(
         { model: spec.model, runId: ctx.runId },
         ctx.beforePaidRequest,
       ),
-      beforeCreditRequest: withCreditBudget(
+      beforeFreeRequest: withFreeBudget(
         ctx.db,
         { model: spec.model, runId: ctx.runId },
-        ctx.beforeCreditRequest,
+        ctx.beforeFreeRequest,
       ),
     },
   };

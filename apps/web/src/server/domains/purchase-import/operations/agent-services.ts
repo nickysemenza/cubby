@@ -104,13 +104,13 @@ export function runServicesFor(
         ]);
         await paidRunPreflight(db, runEntityId.parse(runId))(request);
       }),
-    admitCreditInference: (request) =>
+    admitFreeInference: (request, funding) =>
       withDatabase(async (db) => {
-        const [{ creditRunPreflight }, { runEntityId }] = await Promise.all([
+        const [{ freeRunPreflight }, { runEntityId }] = await Promise.all([
           import("~/server/domains/run/service/execution-transport"),
           import("@cubby/schemas/identifiers"),
         ]);
-        return creditRunPreflight(db, runEntityId.parse(runId))(request);
+        return freeRunPreflight(db, runEntityId.parse(runId))(request, funding);
       }),
     coordinatorRetired: () =>
       withDatabase(async (db) => {

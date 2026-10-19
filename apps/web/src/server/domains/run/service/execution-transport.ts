@@ -12,11 +12,9 @@ import {
   assertAiBudget,
 } from "~/server/ai/budget";
 import {
-  creditBudgetRefusal,
-  fundingWaitError,
+  freeBudgetRefusal,
   isBackgroundRun,
   readPaidAllowance,
-  type FundingStatusPorts,
 } from "~/server/ai/funding";
 import type { Database } from "~/server/db";
 import {
@@ -124,15 +122,13 @@ async function budgetedModel(request: GatewayFetchRequest) {
 
 /**
  * Run-bound paid admission (ADR 0017). The Run must still be executable.
- * Background work never pays automatically: it pauses until free capacity
- * returns, unless a member granted "Run now, paid allowed". Granted and
- * interactive work spends within the paid budget. Any stop pauses the Run so
- * recovery can resume it in a later window.
+ * Every Run, background included, spends within the paid budget, or past it
+ * by a "Run now, paid allowed" grant's confirmed allowance. A stop pauses the
+ * Run so recovery can resume it in a later window.
  */
 export function paidRunPreflight(
   db: Database,
   runId: RunId,
-  ports: FundingStatusPorts = {},
 ): NonNullable<GatewayFetchRoutes["beforePaidRequest"]> {
   return async (request) => {
     // A member-requested coordinator is foreground work, not background spend.
@@ -140,10 +136,7 @@ export function paidRunPreflight(
     await assertRunExecutable(db, runId);
     if (!(await budgetedModel(request))) return;
     try {
-      const allowance = await readPaidAllowance(db, runId);
-      if (allowance === null && (await isBackgroundRun(db, runId)))
-        throw await fundingWaitError(db, ports);
-      await assertAiBudget(db, allowance ?? 0);
+      await assertAiBudget(db, (await readPaidAllowance(db, runId)) ?? 0);
     } catch (error) {
       if (error instanceof AiBudgetExhaustedError)
         await pauseForFunding(db, runId, error);
@@ -155,17 +148,16 @@ export function paidRunPreflight(
 }
 
 /**
- * Run-bound credit-rung admission: background work stops drawing Claude
- * credit once the window's credit budget is spent. The returned refusal
- * advances the funding ladder to the ChatGPT plan; interactive work keeps
- * today's unbudgeted credit.
+ * Run-bound free-rung admission: background work stops drawing Claude credit
+ * or the ChatGPT plan once that window's budget is spent. The returned
+ * refusal advances the funding ladder; interactive work stays unbudgeted.
  */
-export function creditRunPreflight(
+export function freeRunPreflight(
   db: Database,
   runId: RunId,
-): NonNullable<GatewayFetchRoutes["beforeCreditRequest"]> {
-  return async (request) =>
+): NonNullable<GatewayFetchRoutes["beforeFreeRequest"]> {
+  return async (request, funding) =>
     (await budgetedModel(request)) && (await isBackgroundRun(db, runId))
-      ? creditBudgetRefusal(db)
+      ? freeBudgetRefusal(db, funding)
       : null;
 }

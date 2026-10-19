@@ -116,7 +116,7 @@ describe("inference funding", () => {
       gatewayFetchThrough({
         provider: "anthropic",
         funding: "subscriber_credit",
-        beforeCreditRequest: async () => refusal,
+        beforeFreeRequest: async () => refusal,
         gateway: async () => {
           sent.push("credit");
           return Response.json({});
@@ -137,6 +137,43 @@ describe("inference funding", () => {
     expect(sent).toEqual([]);
     expect((await send(null)).status).toBe(200);
     expect(sent).toEqual(["credit"]);
+  });
+
+  // The ChatGPT plan's quota is shared with the members' own use: a spent
+  // plan budget must leave the plan untouched and advance the ladder, and an
+  // unladdered call must take its paid path instead.
+  it("refuses a plan attempt Cubby's plan budget stops, before the plan is called", async () => {
+    const sent: string[] = [];
+    const send = (funding: "subscription" | undefined) =>
+      gatewayFetchThrough({
+        provider: "openai",
+        funding,
+        subscriptionFallback: funding ? undefined : "budgeted",
+        beforePaidRequest: async () => undefined,
+        beforeFreeRequest: async (_request, rung) =>
+          rung === "subscription"
+            ? "ChatGPT plan budget reached: $2 of $2 standard cost"
+            : null,
+        chatGpt: async () => {
+          sent.push("plan");
+          return Response.json({});
+        },
+        gateway: async () => {
+          sent.push("paid");
+          return Response.json({});
+        },
+      })("https://ai-gateway.invalid/openai/responses", {
+        method: "POST",
+        body: '{"model":"gpt-6-luna"}',
+      });
+    const refused = await send("subscription");
+    const body = await refused.text();
+    expect(refused.status).toBe(429);
+    expect(body).toContain("cubby_plan_budget_reached");
+    expect(isInferenceFundingRefusal(429, body, "subscription")).toBe(true);
+    expect(sent).toEqual([]);
+    expect((await send(undefined)).status).toBe(200);
+    expect(sent).toEqual(["paid"]);
   });
 
   it("requires the named credit key and leaves paid requests unaliased", () => {

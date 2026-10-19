@@ -1054,7 +1054,7 @@ export const MCP_TOOLS = defineMcpTools({
       set_mail_import: mcpAction({
         op: runContract.ops.setMailImport,
         description:
-          "Turn automatic Mail import on or off for one connected mailbox (imports_read.mail_import). On, scheduled discovery searches known Vendors' senders and unmatched transaction merchants and imports unambiguous purchases on Claude credit or the ChatGPT plan, waiting for free capacity rather than paying.",
+          "Turn automatic Mail import on or off for one connected mailbox (imports_read.mail_import). On, scheduled discovery searches known Vendors' senders and unmatched transaction merchants and imports unambiguous purchases within the household AI funding budgets (ai_funding_read.status), pausing until the next window once all are spent.",
       }),
       sweep: mcpAction({
         op: runContract.ops.sweep,
@@ -1066,7 +1066,7 @@ export const MCP_TOOLS = defineMcpTools({
         op: runContract.ops.discoverMail,
         openWorld: true,
         description:
-          'Start Mail discovery now for one mailbox with Mail import on; replays an active launch. paidAllowed ("Run discovery now, paid allowed") lets this discovery and the imports it starts pay within the paid budget instead of waiting for free capacity, resuming a waiting discovery; once the paid budget is spent it refuses unless paidOverBudgetUsd names the confirmed amount past it. Use paidAllowed only on the member\'s explicit instruction.',
+          'Start Mail discovery now for one mailbox with Mail import on; replays an active launch. paidAllowed ("Run discovery now, paid allowed") resumes a paused discovery now; once the paid budget is spent it refuses unless paidOverBudgetUsd names the confirmed amount past it, which this discovery and the imports it starts may then spend. Use paidAllowed only on the member\'s explicit instruction.',
       }),
       commit_prepared: mcpAction({
         op: runContract.ops.commitPrepared,
@@ -1088,7 +1088,7 @@ export const MCP_TOOLS = defineMcpTools({
       set_credit_budget: mcpAction({
         op: aiFundingContract.ops.setCreditBudget,
         description:
-          "Set the household Claude subscriber-credit budget per six-hour window (creditLimitUsd, standard API cost; default $5). Background work past it moves to the ChatGPT plan, then waits. Also clears a recorded Claude credit refusal, and work paused for free capacity retries now. Returns ai_funding_read.status.",
+          "Set the household Claude subscriber-credit budget per six-hour window (creditLimitUsd, standard API cost; default $1.50). Background work past it moves to the ChatGPT plan (its own $2 budget), then pays within the paid budget. Also clears a recorded Claude credit refusal, and work paused for free capacity retries now. Returns ai_funding_read.status.",
       }),
       reset_credit_refusal: mcpAction({
         op: aiFundingContract.ops.resetCreditRefusal,

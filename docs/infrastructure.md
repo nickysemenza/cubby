@@ -100,8 +100,7 @@ checked-in configuration is part of `apps/web/cloudflare.config.ts`:
   by the shared pi-ai providers (`@cubby/shared/ai/pi-providers`). The gateway
   shim disables parallel tool calls: pi ends a run on a terminating tool only
   when it is the round's sole call. A paid- or credit-admission refusal
-  (household AI budget, background work waiting for free capacity, Run no
-  longer executable) reaches the coordinator as an HTTP 403 carrying its
+  (household AI budget, Run no longer executable) reaches the coordinator as an HTTP 403 carrying its
   reason, not a network error;
 - each request's context per the purpose's `workItemContext`
   (`@cubby/schemas/import-run-agent`): Mail import sends only the kickoff, user
@@ -509,15 +508,18 @@ the gateway before relying on a feature that selects it.
 Every tier-routed chat call uses subscriber credits first (Opus), then the
 ChatGPT subscription transport (Sol), then paid Unified Billing (Sol);
 `fundedChatAttempts` owns the ladder. The implementation
-and model declarations own the model choices; [ADR 0017](adr/0017-subscription-funded-model-fallback.md#background-work-waits-instead-of-paying)
+and model declarations own the model choices; [ADR 0017](adr/0017-subscription-funded-model-fallback.md#background-work-spends-within-window-budgets)
 records when paid fallback is allowed. Fixed-model evaluations do not change model.
 
 Background work (a Run whose lineage root was scheduled, discovered or
-backfilled) never takes the paid rung on its own. Its credit rung stops once
-the window's Claude credit budget is spent (`beforeCreditRequest` returns a
-`cubby_credit_budget_reached` funding refusal), and at the paid rung
-`paidRunPreflight` pauses the Run (`paused_auth`, `execution_limit`) with the
-raw credit and plan reasons. The `AI_GATEWAY_EGRESS` Durable Object holds one
+backfilled) draws each free rung only within its window budget: the Claude
+credit's (default $1.50) and the ChatGPT plan's ($2, `PLAN_BUDGET_LIMIT_USD`),
+both at standard cost, because the household shares both with its own use.
+Past one, `beforeFreeRequest` returns a `cubby_credit_budget_reached` or
+`cubby_plan_budget_reached` funding refusal and the ladder moves on; an
+unladdered plan call skips the plan for its paid or subscription-required
+path. Every Run then pays within the paid budget, and once that is spent
+`paidRunPreflight` pauses the Run (`paused_auth`, `execution_limit`). The `AI_GATEWAY_EGRESS` Durable Object holds one
 `fundingResumeAt` alarm at the window end. Before recovery it consumes that
 wake into a persisted, generation-tagged in-flight record; recovery retries
 retain that record and any newly requested window remains pending separately.
@@ -526,9 +528,9 @@ paused Mail discovery, and the
 nightly/app-open recovery calls it too. A member's `run_now_paid` control
 event ("Run now, paid allowed" on the Run page, "Run discovery now, paid
 allowed" on the Mail import card, or MCP `run.lifecycle`/`run.discover_mail`)
-lets that Run and the imports its discovery starts pay within the paid budget,
-or past it by the confirmed `paidOverBudgetUsd` for the granting window.
-The credit preflight (`creditRunPreflight`) recognizes a chat call by endpoint
+resumes that Run now and lets it and the imports its discovery starts pay past
+the paid budget by the confirmed `paidOverBudgetUsd` for the granting window.
+The free-rung preflight (`freeRunPreflight`) recognizes a chat call by endpoint
 path: pi-ai's Anthropic SDK posts `v1/messages?beta=true`.
 
 A provider credit refusal is held, not retried. When a credit response is a

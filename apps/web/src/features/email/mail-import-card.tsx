@@ -61,7 +61,7 @@ function MailSearchSummary({
   );
 }
 
-/** Discovery waits for free capacity unless the member allows paid work. */
+/** Discovery spends within the household AI funding budgets. */
 export function MailImportSettings() {
   const queryClient = useQueryClient();
   const status = useQuery({

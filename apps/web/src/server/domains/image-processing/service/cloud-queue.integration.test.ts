@@ -5,7 +5,7 @@ import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, expect, it } from "vitest";
 
-import { AiFundingWaitError } from "~/server/ai/budget";
+import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
 import { image, imageProcessingJob } from "~/server/db/schema";
@@ -322,8 +322,9 @@ it("defers a funding-waiting job to its resume time without spending an attempt"
   const status = {
     windowStart: "2026-10-18T12:00:00.000Z",
     windowEnd: resumeAt,
-    credit: { limitUsd: 5, spentUsd: 5 },
-    paid: { limitUsd: 1, spentUsd: 0 },
+    credit: { limitUsd: 1.5, spentUsd: 1.5 },
+    plan: { limitUsd: 2, spentUsd: 2 },
+    paid: { limitUsd: 1, spentUsd: 1 },
   };
   for (let wait = 0; wait < 4; wait++) {
     await getDb(ctx.db)
@@ -334,9 +335,9 @@ it("defers a funding-waiting job to its resume time without spending an attempt"
     expect(
       await handleCloudImageTask(ctx.db, message(row.jobId).body.task, {
         async describe() {
-          throw new AiFundingWaitError(
+          throw new AiBudgetExhaustedError(
             status,
-            "Waiting for free AI capacity; background work never pays.",
+            "AI budget reached: $1 of $1 paid.",
             resumeAt,
           );
         },
@@ -352,6 +353,6 @@ it("defers a funding-waiting job to its resume time without spending an attempt"
     attemptId: null,
     attempts: 0,
     nextAttemptAt: new Date(resumeAt),
-    lastError: "Waiting for free AI capacity; background work never pays.",
+    lastError: "AI budget reached: $1 of $1 paid.",
   });
 });

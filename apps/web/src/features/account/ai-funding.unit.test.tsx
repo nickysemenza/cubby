@@ -24,7 +24,7 @@ const budget = (overrides: Partial<AiFundingStatus> = {}): AiFundingStatus => ({
   windowEnd: "2026-10-01T06:00:00.000Z",
   credit: { limitUsd: 5, spentUsd: 2.5, ...AVAILABLE },
   paid: { limitUsd: 1, spentUsd: 0.4 },
-  plan: AVAILABLE,
+  plan: { limitUsd: 2, spentUsd: 0.75, ...AVAILABLE },
   ...overrides,
 });
 const refused = budget({
@@ -80,7 +80,9 @@ describe("AI funding controls", () => {
     harness = createBrowserTestHarness();
     render(<AiFundingLine budget={refused} />, { wrapper: harness.wrapper });
     expect(screen.getByText(/Claude credit \$2\.50 of \$5\.00/u)).toBeVisible();
-    expect(screen.getByText(/ChatGPT plan available/u)).toBeVisible();
+    expect(
+      screen.getByText(/ChatGPT plan \$0\.75 of \$2\.00, available/u),
+    ).toBeVisible();
     expect(screen.getByRole("link", { name: "AI funding" })).toHaveAttribute(
       "href",
       "/settings#ai-funding",

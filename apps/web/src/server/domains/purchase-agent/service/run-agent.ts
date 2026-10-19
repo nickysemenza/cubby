@@ -285,8 +285,8 @@ export class PurchaseImportRunAgent
           subscriptionFallback: photo ? undefined : "budgeted",
           beforePaidRequest: (request) =>
             this.services().admitPaidInference(request),
-          beforeCreditRequest: (request) =>
-            this.services().admitCreditInference(request),
+          beforeFreeRequest: (request, funding) =>
+            this.services().admitFreeInference(request, funding),
         };
       },
       onTransport: (transport) => {

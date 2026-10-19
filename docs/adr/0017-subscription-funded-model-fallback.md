@@ -123,7 +123,7 @@ retain their diagnostics instead of authorizing spend on another provider.
 The pre-existing ChatGPT OAuth transports remain separate from AI Gateway;
 billed Anthropic and OpenAI requests continue through the gateway.
 
-## Background work waits instead of paying
+## Background work spends within window budgets
 
 Amended after Claude credit drained at standard cost uncounted and background
 relevance and Mail import calls paid Unified Billing while free capacity was
@@ -135,15 +135,20 @@ feature refreshes with the default `ephemeral` trigger, Mail discovery, its
 relevance fallback and the Mail import Runs it starts:
 
 1. Claude subscriber credit, while the window's credit budget (standard cost of
-   `subscriber_credit` usage, default $5 per six-hour window, member-editable)
+   `subscriber_credit` usage, default $1.50 per six-hour window, member-editable)
    has room and Anthropic does not refuse.
-2. The ChatGPT plan, while connected and not quota-refused.
-3. Otherwise the Run pauses. The credit window resets within six hours by
-   construction, and a plan quota resets at its hint or is assumed back by the
-   next window. When neither can return — Anthropic's Console limit refused the
-   credit and the plan is disconnected or needs reauthorization — the Run still
-   never pays automatically; its pause reason says so with the raw diagnostics.
-   Paused Runs resume when the next window starts.
+2. The ChatGPT plan, while connected, not quota-refused, and the window's plan
+   budget (standard cost of `plan` usage, $2) has room.
+3. Paid models within the paid budget ($1 per window).
+4. Otherwise the Run pauses and resumes when the next window starts.
+
+Amended 2026-10-19: both free sources are capped resources the household
+shares with its own use. The Claude credit is a $200 monthly allowance; $5
+per window allowed about $600 a month. The ChatGPT plan's quota is shared
+with members' own coding, and was uncapped: Mail import alone drew $263 of
+standard-cost Sol from it in one day. Background work previously never paid
+and waited for a free source instead; with both free sources capped, the
+member chose a bounded paid rung over waiting.
 
 Amended after a Console spend limit was re-tried on every request (271 refused
 calls in 25 minutes, seconds of latency each): Cubby records a provider credit
@@ -152,17 +157,12 @@ credit rung until then, probing once per window. A member reset or credit
 budget change clears it. The mechanism lives in
 [Infrastructure](../infrastructure.md#claude-subscriber-credits).
 
-A member's "Run now, paid allowed" override, available in the Run header's
-More actions menu and on the Mail import card, authorizes paid funding for one
-Run (its retries and the imports its discovery starts) within the paid budget
-for that Run's whole life: a granted Run paused on a spent paid budget resumes
-and pays again in the next window without another click, because the member
-asked for that batch to finish. Spending past a spent paid budget requires a
-second confirmation naming the amount, valid only for the window it was
-granted in. The paid budget counts charged cost only, so credit usage never
-consumes it. "Run discovery now" without the override is background work like
-scheduled discovery: it waits for free capacity, and the override is how a
-member chooses to pay.
+A member's "Run now, paid allowed" grant, available in the Run header's
+More actions menu and on the Mail import card, resumes a paused Run (its
+retries and the imports its discovery starts) now. Spending past a spent paid
+budget requires a second confirmation naming the amount, valid only for the
+window it was granted in. The paid budget counts charged cost only, so credit
+and plan usage never consume it.
 The header exposes this funding action for discovery and suggestion Runs too,
 without giving them import-agent commands. Every frontier admission path reads
 the same Run grant and window-scoped allowance.
