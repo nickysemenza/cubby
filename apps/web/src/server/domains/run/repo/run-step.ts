@@ -15,6 +15,7 @@ import {
   eq,
   gt,
   inArray,
+  isNull,
   lte,
   notExists,
   or,
@@ -273,7 +274,12 @@ export async function finishStepRunRow(
 
 export async function readStepRunOwner(db: Database, runId: RunId) {
   const [owner] = await getDb(db)
-    .select({ id: run.id, purpose: run.purpose, status: run.status })
+    .select({
+      id: run.id,
+      purpose: run.purpose,
+      status: run.status,
+      failureCode: run.failureCode,
+    })
     .from(run)
     .where(eq(run.id, runId));
   return owner ?? null;
@@ -439,16 +445,20 @@ export async function otherActiveRun(
   return row?.shortcode ?? null;
 }
 
-/** The unfinished child Runs a step-ledger Run's steps delegated to. */
+/**
+ * The unfinished child Runs a step-ledger Run delegated to, by parentage: a
+ * step's `childRunId` misses a child still being prepared (the connection
+ * roster) and earlier children a retry relaunched together (field).
+ */
 export async function unfinishedStepChildren(db: Database, runId: RunId) {
   return getDb(db)
     .select({ id: run.id, shortcode: run.shortcode, purpose: run.purpose })
-    .from(runStep)
-    .innerJoin(run, eq(run.id, runStep.childRunId))
+    .from(run)
     .where(
       and(
-        eq(runStep.runId, runId),
+        eq(run.parentRunId, runId),
         inArray(run.status, ["running", "paused", "paused_auth"]),
+        isNull(run.deletedAt),
       ),
     );
 }

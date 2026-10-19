@@ -1,5 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import { runShortcode } from "@cubby/schemas/identifiers";
+import { runShortcode, type RunId } from "@cubby/schemas/identifiers";
 import type { RunControlAction } from "@cubby/schemas/run-fields";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
@@ -271,19 +271,29 @@ export async function controlWorkflowRun(
       purpose,
       workflowInstanceId(row.shortcode, row.attempt),
     );
-  // A step-ledger Run's children are its own work: cancelling a Sweep stops
-  // the field or connection Run a step is waiting on, keeping what committed.
-  if (isStepRunPurpose(purpose)) {
-    const { unfinishedStepChildren } =
-      await import("~/server/domains/run/repo/run-step");
-    for (const child of await unfinishedStepChildren(db, row.id))
-      if (isWorkflowRunPurpose(child.purpose))
-        await controlWorkflowRun(
-          db,
-          actor,
-          { runPublicId: child.shortcode, action: "cancel" },
-          child.purpose,
-          launcher,
-        );
-  }
+  if (isStepRunPurpose(purpose))
+    await cancelStepChildren(db, actor, row.id, launcher);
+}
+
+/**
+ * A step-ledger Run's children are its own work: cancelling a Sweep stops
+ * the field or connection Runs it started, keeping what committed.
+ */
+export async function cancelStepChildren(
+  db: Database,
+  actor: ActorContext,
+  runId: RunId,
+  launcher: WorkflowLauncher,
+) {
+  const { unfinishedStepChildren } =
+    await import("~/server/domains/run/repo/run-step");
+  for (const child of await unfinishedStepChildren(db, runId))
+    if (isWorkflowRunPurpose(child.purpose))
+      await controlWorkflowRun(
+        db,
+        actor,
+        { runPublicId: child.shortcode, action: "cancel" },
+        child.purpose,
+        launcher,
+      );
 }

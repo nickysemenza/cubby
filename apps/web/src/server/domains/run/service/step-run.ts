@@ -1,3 +1,4 @@
+import { buildActorContext } from "@cubby/schemas/context";
 import type { RunId } from "@cubby/schemas/identifiers";
 import type {
   RunStepCounts,
@@ -189,7 +190,8 @@ export async function advanceStepRun(
     const message = scrubErrorMessage(
       error instanceof Error ? (error.stack ?? error.message) : String(error),
     );
-    if (!(await claimWorkflowRun(db, params, "id"))) return { kind: "lost" };
+    if (!(await claimWorkflowRun(db, params, "id")))
+      return lostAfterPage(db, owner, launcher);
     await recordRunStepPage(db, owner.id, current.key, {
       state: "failed",
       errors: [failure(message)],
@@ -203,7 +205,8 @@ export async function advanceStepRun(
     );
     return { kind: "continue" };
   }
-  if (!(await claimWorkflowRun(db, params, "id"))) return { kind: "lost" };
+  if (!(await claimWorkflowRun(db, params, "id")))
+    return lostAfterPage(db, owner, launcher);
   const elapsed = Date.now() - started;
   const timing = {
     timing: {
@@ -278,6 +281,29 @@ export async function advanceStepRun(
     if (after) await stepEnded(db, owner, current, after, stamp);
   }
   return { kind: "continue" };
+}
+
+/**
+ * A member cancelled the Run while a page ran: cancellation already stopped
+ * the children it could see, so stop any this page started after it.
+ */
+async function lostAfterPage(
+  db: Database,
+  owner: RunRow,
+  launcher: WorkflowLauncher,
+): Promise<StepAdvance> {
+  const now = await readStepRunOwner(db, owner.id);
+  if (now?.status === "failed" && now.failureCode === "user_cancelled") {
+    const { cancelStepChildren } =
+      await import("~/server/workflows/runs/control");
+    await cancelStepChildren(
+      db,
+      buildActorContext(owner.actorUserId, owner.channel),
+      owner.id,
+      launcher,
+    );
+  }
+  return { kind: "lost" };
 }
 
 const failure = (message: string, ref?: string): RunStepError => ({

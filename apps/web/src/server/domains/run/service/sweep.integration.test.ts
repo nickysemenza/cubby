@@ -10,7 +10,7 @@ import { z } from "zod";
 import type { DecisionPort } from "~/server/ai/decision-model";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
-import { run } from "~/server/db/schema";
+import { run, runStep } from "~/server/db/schema";
 import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
 import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -347,6 +347,12 @@ describe("Sweeps", () => {
     const cancelled = await fieldSweep();
     await drive(cancelled);
     const runningChild = await childOf(cancelled);
+    // A child still being prepared (the connection roster) is not yet on its
+    // step; cancellation finds it by parentage.
+    await getDb(ctx.db)
+      .update(runStep)
+      .set({ childRunId: null })
+      .where(eq(runStep.runId, cancelled as never));
     const shortcode = (
       await getDb(ctx.db)
         .select({ shortcode: run.shortcode })
