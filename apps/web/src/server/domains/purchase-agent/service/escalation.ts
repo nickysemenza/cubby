@@ -46,6 +46,9 @@ const modelConfiguration = z.object({
   status: z.enum(["pending", "applied"]),
 });
 const refusedCalls = z.array(z.string());
+const claimedEmail = z.looseObject({
+  email: z.looseObject({ mailboxId: z.string(), messageId: z.string() }),
+});
 const toolArguments = z.looseObject({
   action: z.string().optional(),
   disposition: z
@@ -57,14 +60,18 @@ const KEYS = {
   configuration: "escalation:model-configuration",
   item: "escalation:work-item",
   escalated: (item: string) => `escalation:escalated:${item}`,
+  unavailable: (item: string) => `escalation:unavailable:${item}`,
   refused: (item: string) => `escalation:refused:${item}`,
   blocked: (callId: string) => `escalation:blocked:${callId}`,
 };
 
 /**
  * Per-Email escalation of a Mail import coordinator from its primary model to
- * its escalation model. A work item is the latest `claim_next_import_work`
- * call; escalation lasts until the next claim. The model changes by
+ * its escalation model. A work item is the Email the latest
+ * `claim_next_import_work` returned (else that call); escalation lasts until a
+ * claim returns another item. Re-claiming the same unsettled Email keeps it
+ * escalated: keyed by the claim call, each re-claim reset it to the primary,
+ * which escalated again in a loop (2026-10-19, 194 calls on one Email). The model changes by
  * reconfiguring the conversation, so pi's request checkpoint records which
  * model each request used and a recovered request reuses it. Every decision
  * is keyed by its tool call id, so a recovered call decides as it first did.
@@ -74,6 +81,13 @@ export function coordinatorEscalation(input: {
   store: EscalationStore;
   /** Configure the conversation's model for its next request. */
   useModel: (model: SupportedChatModel) => Promise<void>;
+  /**
+   * Why the escalation model's funding cannot answer now (a refused Claude
+   * credit, a spent window budget), else null. Escalating then would only
+   * fall through the funding ladder to another model, so the primary settles
+   * the Email itself.
+   */
+  unavailable?: (model: SupportedChatModel) => Promise<string | null>;
 }) {
   const { primary } = input.models;
   const target = input.models.escalation ?? primary;
@@ -86,6 +100,16 @@ export function coordinatorEscalation(input: {
   };
   const note = (detail: string) =>
     `Cubby escalated this Email to ${target} (${detail}); ${target} settles it from here.`;
+
+  /** Decided once per work item, so a recovered call decides as it first did. */
+  async function unavailableReason(): Promise<string | null> {
+    const key = KEYS.unavailable(item());
+    const recorded = store.read(key);
+    if (recorded !== undefined) return recorded || null;
+    const reason = (await input.unavailable?.(target)) ?? null;
+    store.write(key, reason ?? "");
+    return reason;
+  }
 
   const desiredModel = (): SupportedChatModel =>
     active && escalated() ? target : primary;
@@ -120,12 +144,18 @@ export function coordinatorEscalation(input: {
     reason: Trigger;
     detail: string;
     callId?: string;
-  }): Promise<{ escalated: boolean; model: SupportedChatModel }> {
+  }): Promise<{
+    escalated: boolean;
+    model: SupportedChatModel;
+    unavailable?: string;
+  }> {
     if (!active) return { escalated: false, model: primary };
     if (escalated()) {
       await reconcileConfiguration();
       return { escalated: false, model: target };
     }
+    const unavailable = await unavailableReason();
+    if (unavailable) return { escalated: false, model: primary, unavailable };
     store.write(
       KEYS.escalated(item()),
       JSON.stringify(
@@ -161,6 +191,7 @@ export function coordinatorEscalation(input: {
         return { block: blocked };
       }
       if (escalated() && configurationIsCurrent()) return undefined;
+      if (!escalated() && (await unavailableReason())) return undefined;
       // Pi can complete a failed beforeTool call as an error and let the
       // primary retry with a new ID. Persist its hold before reconciliation,
       // so recovery cannot mistake that primary-authored call for a stronger turn.
@@ -180,7 +211,18 @@ export function coordinatorEscalation(input: {
     ): Promise<ToolExecutionResult | undefined> {
       if (!active) return undefined;
       if (call.name === CLAIM_TOOL) {
-        if (item() !== call.id) store.write(KEYS.item, call.id);
+        const text = result.output?.find((part) => part.type === "text");
+        let claimed: unknown;
+        try {
+          claimed = text && "text" in text ? JSON.parse(text.text) : undefined;
+        } catch {
+          // SILENT: an unparseable claim result keys the item by its call.
+        }
+        const email = claimedEmail.safeParse(claimed).data?.email;
+        const key = email
+          ? `email:${email.mailboxId}:${email.messageId}`
+          : call.id;
+        if (item() !== key) store.write(KEYS.item, key);
         await reconcileConfiguration();
         return undefined;
       }
@@ -207,12 +249,12 @@ export function coordinatorEscalation(input: {
       refused.add(call.id);
       store.write(KEYS.refused(item()), JSON.stringify([...refused]));
       if (refused.size < PREPARE_REFUSAL_LIMIT) return undefined;
-      await escalate({
+      const outcome = await escalate({
         reason: "prepare_refused",
         detail: "prepare refused twice",
         callId: call.id,
       });
-      return withNote();
+      return outcome.escalated ? withNote() : undefined;
     },
   };
 }

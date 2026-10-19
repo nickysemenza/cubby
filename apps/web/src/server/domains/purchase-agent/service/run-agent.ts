@@ -327,6 +327,7 @@ export class PurchaseImportRunAgent
         write: (key, value) => this.writeState(key, value),
       },
       useModel: (model) => this.useModel(model),
+      unavailable: (model) => this.services().escalationUnavailable(model),
     });
     this.escalation = escalation;
     const workflow = workflowForRun(purpose, runId, {

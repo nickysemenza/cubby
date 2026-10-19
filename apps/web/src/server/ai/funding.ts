@@ -4,6 +4,10 @@ import type {
   ChatGptPlanAvailability,
 } from "@cubby/schemas/mail-import-settings";
 import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
+import {
+  getChatModelConfig,
+  type SupportedChatModel,
+} from "@cubby/shared/ai/models";
 import { and, desc, eq, gte, isNull } from "drizzle-orm";
 
 import { getAiGatewayEgress } from "~/server/cf-env";
@@ -148,6 +152,27 @@ export async function readAiFundingStatus(
   };
 }
 
+/**
+ * Why `model`'s free funding cannot answer this Run now, else null: a recorded
+ * Claude credit refusal, or a background Run's spent window budget. An
+ * escalation then only falls through the ladder to another model.
+ */
+export async function escalationFundingRefusal(
+  db: Database,
+  runId: RunId,
+  model: SupportedChatModel,
+): Promise<string | null> {
+  const credit = getChatModelConfig(model).gatewayProvider === "anthropic";
+  if (credit) {
+    const refusal = await egress()?.creditRefusal();
+    if (refusal)
+      return `Claude credit refused until ${new Date(refusal.until).toISOString()}: ${refusal.reason}`;
+  }
+  return (await isBackgroundRun(db, runId))
+    ? freeBudgetRefusal(db, credit ? "subscriber_credit" : "subscription")
+    : null;
+}
+
 const BACKGROUND_TRIGGERS: readonly string[] = [
   "scheduled",
   "discovery",
@@ -165,6 +190,28 @@ export async function isBackgroundRun(
   db: Database,
   runId: RunId,
 ): Promise<boolean> {
+  const known = backgroundRuns.get(runId);
+  if (known !== undefined) return known;
+  const background = await readBackgroundRun(db, runId);
+  // A Run's lineage root never changes; only a found root is remembered.
+  if (background !== null) {
+    if (backgroundRuns.size >= 1000) backgroundRuns.clear();
+    backgroundRuns.set(runId, background);
+  }
+  return background ?? false;
+}
+
+/**
+ * Every frontier admission asks this, and each read competes for a pooled
+ * connection (pool-slot timeouts failed Runs on 2026-10-19), so an isolate
+ * remembers it.
+ */
+const backgroundRuns = new Map<RunId, boolean>();
+
+async function readBackgroundRun(
+  db: Database,
+  runId: RunId,
+): Promise<boolean | null> {
   let current = runId;
   const visited = new Set<RunId>();
   for (let depth = 0; depth < MAX_LINEAGE; depth++) {
@@ -178,7 +225,7 @@ export async function isBackgroundRun(
       .from(run)
       .where(eq(run.id, current))
       .limit(1);
-    if (!row) return false;
+    if (!row) return null;
     if (!row.predecessorRunId || visited.has(row.predecessorRunId))
       return (
         row.purpose === "background" ||
@@ -186,7 +233,7 @@ export async function isBackgroundRun(
       );
     current = row.predecessorRunId;
   }
-  return false;
+  return null;
 }
 
 /** A grant allows paid fallback; its confirmed excess lapses with its window. */

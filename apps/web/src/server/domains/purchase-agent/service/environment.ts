@@ -24,6 +24,7 @@ import type {
   GatewayFetchRequest,
   UniversalGateway,
 } from "@cubby/shared/ai/gateway-request";
+import type { SupportedChatModel } from "@cubby/shared/ai/models";
 import type { JSONType, z } from "zod";
 
 import type { AgentSignal } from "./signals";
@@ -76,6 +77,11 @@ export interface RunServices {
     request: GatewayFetchRequest,
     funding: "subscriber_credit" | "subscription",
   ): Promise<string | null>;
+  /**
+   * Why `model` cannot be funded for this Run now (a refused Claude credit, a
+   * spent background window budget), else null.
+   */
+  escalationUnavailable(model: SupportedChatModel): Promise<string | null>;
   /** The Run's public identity: its purpose and agent instance name. */
   loadScope(): Promise<{
     purpose: AgentImportRunPurpose;

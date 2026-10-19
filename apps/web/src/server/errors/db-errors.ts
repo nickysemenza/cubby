@@ -55,6 +55,23 @@ export function findPgError(
   }
 }
 
+/**
+ * A lost connection or a Hyperdrive pool-slot timeout (SQLSTATE 58000 "Timed
+ * out while waiting for an open slot in the pool"): the same read can succeed
+ * on retry.
+ */
+export function isTransientConnectionError(
+  error: UnparsedDatabaseError,
+): boolean {
+  const pg = findPgError(error);
+  if (!pg) return false;
+  return (
+    pg.code.startsWith("08") ||
+    pg.code === "57P01" ||
+    (pg.code === "58000" && /open slot in the pool/iu.test(pg.message ?? ""))
+  );
+}
+
 /** "EntityExternalId" -> "entity external id" for prose. */
 function prettyTable(table?: string): string {
   if (!table) return "record";
