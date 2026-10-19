@@ -100,8 +100,9 @@ extension EntityDescriptor {
                             ?? object[field.key]?.stringValue
                     }
                 } else {
-                    value = field.surfaceValue(in: object, surface: "list").flatMap {
-                        field.optionLabel(for: $0) ?? $0.stringValue
+                    value = field.surfaceValue(in: object, surface: "list")?.stringValue.map { code in
+                        (field.controlOptions ?? field.valueOptions)?.first { $0.value == code }?.label
+                            ?? code
                     }
                 }
                 guard let value, !value.isEmpty else {

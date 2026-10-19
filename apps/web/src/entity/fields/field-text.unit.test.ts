@@ -3,7 +3,10 @@ import { describe, expect, it } from "vitest";
 
 import { compactFieldText } from "./field-text";
 
-const field = (entity: "project" | "financialAccount", key: string) => {
+const field = (
+  entity: "project" | "financialAccount" | "wish",
+  key: string,
+) => {
   const found = entityFieldModels[entity].fields.find(
     (candidate) => candidate.key === key,
   );
@@ -42,5 +45,16 @@ describe("compactFieldText", () => {
         field("financialAccount", "identity"),
       ),
     ).toBe("Gift card or store credit");
+  });
+
+  it("reads a timestamp as a date even when it declares value options", () => {
+    const at = "2026-03-14T12:00:00.000Z";
+    expect(
+      compactFieldText(
+        "wish",
+        { id: "WSH-4K7M", acquiredAt: at },
+        field("wish", "acquiredAt"),
+      ),
+    ).toBe(new Date(at).toLocaleDateString());
   });
 });

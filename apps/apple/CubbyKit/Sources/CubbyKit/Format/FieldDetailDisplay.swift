@@ -46,8 +46,9 @@ extension FieldDescriptor {
         return raw[key]
     }
 
-    /// The value a surface reads, as the web does: a declared surface projection, else the
-    /// declared `readPath`, else the field (or its resolved effective value).
+    /// The value a surface reads, as the web does. Detail reads the declared `readPath`; other
+    /// surfaces prefer a declared surface projection, then `readPath`. With neither, the field
+    /// (or its resolved effective value).
     public func surfaceValue(in raw: JSONValue, surface: String) -> JSONValue? {
         if readPath != nil, surface == "detail" || explanation?.projections[surface] == nil {
             return detailValue(in: raw)
