@@ -9,7 +9,7 @@
  * page and is incorrectly settled without the coordinator.
  */
 import type { ActorContext } from "@cubby/schemas/context";
-import type { RunId } from "@cubby/schemas/identifiers";
+import type { PurchaseId, RunId } from "@cubby/schemas/identifiers";
 import { runTargetOutcomeReceipt } from "@cubby/schemas/run-fields";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -92,7 +92,7 @@ describe("Mail import claim", () => {
         content: { snippet: null, bodyText, bodyHtml: null },
       });
     // An accepted import source: what makes a Purchase itemized for the rule.
-    const itemize = async (purchaseId: string, orderKey: string) => {
+    const itemize = async (purchaseId: PurchaseId, orderKey: string) => {
       const imported = await insertWithShortcode(ctx.db, "run", {
         purpose: "file_import",
         status: "completed",
