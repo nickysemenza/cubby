@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { UPCLookupResponse } from "~/contracts/upc.schemas";
+import type { UPCLookupResponse } from "~/contracts/upc.contract";
 import type { Database } from "~/server/db";
 
 import {
