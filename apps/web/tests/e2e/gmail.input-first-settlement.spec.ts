@@ -228,8 +228,12 @@ test("reviews CSV charge groups and refunds against captured retailer orders", a
       .getByRole("button", { name: "Approve and import", exact: true })
       .click();
     await expect(confirmation).toHaveCount(0);
-    // Each captured order is a member's own import Run.
-    await expect(approve).toHaveCount(0);
+    // Each captured order is a member's own import Run; wait for its committed result.
+    await expect(
+      page.getByText("Prepared import approved and committed.", {
+        exact: true,
+      }),
+    ).toBeVisible();
     const purchase = await database.query.purchase.findFirst({
       where: and(
         eq(schema.purchase.vendorId, vendorId),

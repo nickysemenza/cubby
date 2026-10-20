@@ -440,6 +440,8 @@ body to write), `purchase.linkExpenseCandidates` and `purchase.checkLinkExpenses
 move off another purchase), `purchase.linkProductCandidates` (a search minus the
 explicitly attached). The write re-validates; a refused check sends no write.
 
+When an indexed section supplies a report block’s heading, its nested renderer omits that heading so the section has one title and one accessible region name.
+
 **Report commands and batching.** A `records` row may carry `badges` (toned chips), `lines` (an
 untoned line is the row's result, `muted` lines its evidence, and an optional
 `ref` opens its context record), a `trailing` figure, an `externalLink` (label

@@ -44,7 +44,13 @@ export function ProjectPortfolioAnalyticsView({
                 overflowVisible: true,
                 title:
                   "title" in block ? (block.title ?? "Portfolio") : "Portfolio",
-                content: <ReportBlocks blocks={[block]} />,
+                content: (
+                  <ReportBlocks
+                    blocks={[
+                      "title" in block ? { ...block, title: undefined } : block,
+                    ]}
+                  />
+                ),
               })),
             },
           ]}
