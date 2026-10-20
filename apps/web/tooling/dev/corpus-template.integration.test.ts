@@ -37,6 +37,14 @@ it("clones the application corpus, retains checkout edits, and collects only aba
       expect(counts.rows[0].search).toBeGreaterThan(100);
       expect(counts.rows[0].images).toBe(3);
       expect(counts.rows[0].credentials).toBe(1);
+      // Bootstrap must leave durable refresh captures for the real Worker.
+      expect(
+        (
+          await db.query(
+            'SELECT count(*)::int AS captures FROM "DerivedRefreshCaptureInbox"',
+          )
+        ).rows[0].captures,
+      ).toBeGreaterThan(0);
       const pending = await db.query<{ body: unknown }>(
         "SELECT body FROM cubby_dev_background_task",
       );
