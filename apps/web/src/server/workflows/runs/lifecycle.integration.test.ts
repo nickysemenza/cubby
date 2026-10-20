@@ -2,7 +2,7 @@ import {
   aiRefreshProgress,
   aiRefreshRunInput,
 } from "@cubby/schemas/ai-evaluation";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -10,10 +10,96 @@ import { getDb } from "~/server/db/helpers";
 import { run, runControlEvent } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { memoryDurableSteps } from "~/server/testing/durable-steps";
+import { runStepRunWorkflow } from "~/server/workflows/step-run-execution";
 
 import { controlWorkflowRun } from "./control";
 import type { WorkflowLauncher } from "./launcher";
-import { claimWorkflowRun, launchWorkflowRun } from "./lifecycle";
+import {
+  claimWorkflowRun,
+  failWorkflowRun,
+  launchWorkflowRun,
+} from "./lifecycle";
+
+describe("Workflow failure recording", () => {
+  const ctx = withTestDb();
+
+  // A committed failed status must not make the fresh retry a no-op after
+  // progress recording fails: both error chains belong in the durable Run.
+  it("stores both errors when failure progress errors after the status write", async () => {
+    const id = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "maintenance",
+      status: "running",
+    });
+    const { attempt } = await launchWorkflowRun(
+      ctx.db,
+      { runId: id, purpose: "maintenance" },
+      {
+        create: async () => {},
+        terminate: async () => {},
+        status: async () => ({ state: "running", error: null }),
+      },
+    );
+    await getDb(ctx.db).execute(
+      sql`CREATE SEQUENCE synthetic_failure_sequence`,
+    );
+    await getDb(ctx.db).execute(sql`
+      CREATE FUNCTION synthetic_fail_progress() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        IF NEW."failureCode" = 'synthetic_failure'
+          AND NEW."progressHistory" IS DISTINCT FROM OLD."progressHistory"
+          AND nextval('synthetic_failure_sequence') = 1 THEN
+          RAISE EXCEPTION 'Synthetic progress connection reset' USING ERRCODE = '08006';
+        END IF;
+        RETURN NEW;
+      END $$
+    `);
+    await getDb(ctx.db).execute(sql`
+      CREATE TRIGGER synthetic_fail_progress BEFORE UPDATE ON "Run"
+      FOR EACH ROW EXECUTE FUNCTION synthetic_fail_progress()
+    `);
+    try {
+      await expect(
+        runStepRunWorkflow(memoryDurableSteps().steps, {
+          advance: async () => {
+            throw new Error("Synthetic original Workflow failure");
+          },
+          boundary: async () => false,
+          wait: async () => {},
+          recover: async () => {},
+          fail: (message) =>
+            failWorkflowRun(
+              ctx.db,
+              { runId: id, attempt },
+              {
+                failureCode: "synthetic_failure",
+                message,
+              },
+            ),
+        }),
+      ).rejects.toThrow("Synthetic original Workflow failure");
+      const [recorded] = await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.id, id));
+      expect(recorded?.dispatchError).toContain(
+        "Synthetic original Workflow failure",
+      );
+      expect(recorded?.dispatchError).toContain("08006");
+      expect(recorded?.dispatchError).toContain(
+        "Synthetic progress connection reset",
+      );
+    } finally {
+      await getDb(ctx.db).execute(
+        sql`DROP TRIGGER synthetic_fail_progress ON "Run"`,
+      );
+      await getDb(ctx.db).execute(sql`DROP FUNCTION synthetic_fail_progress()`);
+      await getDb(ctx.db).execute(
+        sql`DROP SEQUENCE synthetic_failure_sequence`,
+      );
+    }
+  });
+});
 
 // A boolean admission guard must not transfer retained Run payloads. Narrow
 // and full reads must keep the same running-status and current-attempt fence.

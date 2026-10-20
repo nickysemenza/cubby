@@ -139,7 +139,10 @@ attach or suppress a create.
 
 A repeated statement Sweep keeps labels for the same source and charge key
 when the statement model inputs and the candidate identities/model inputs
-match. Observation occurrences, memos, rule/history votes and clean-policy
+match, and the recorded label prompt revision is current. Bump
+`STATEMENT_LABEL_REVISION` with any statement label prompt or model-policy
+change; it retains the deployed revision so existing compatible labels survive.
+Observation occurrences, memos, rule/history votes and clean-policy
 changes can move the broader evidence fingerprint without requiring fresh
 model decisions. Replacement suggestions retain the original model provenance,
 copy only the model votes and candidate labels, and recompute kind and clean

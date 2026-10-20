@@ -64,10 +64,17 @@ belongs to the Workflow instance, so a new `step.do` alone does not reset it
 Statement Sweeps also bound generation and label page sizes. The driver owns
 those executable bounds; continuation retains the RunStep cursors and the
 attempt/cancellation fences instead of starting generation over.
+The shared bound also increases handoff frequency for maintenance and parent
+Runs waiting on children; waiting parents normally hand off after five waits.
+Statement label-round logs retain charge and planned decision counts, including
+candidate fanout. These are logical workload counts, not measured subrequests
+or a production-scale completion guarantee.
 
 Page failures are logged before database failure bookkeeping. If bookkeeping
 also fails, the original error and the complete recording-error chain survive
-in the retry's message. Each Workflow failure-write retry opens a fresh database
+in the retry's message. Failure status and timeline commit together, so a
+partial failure cannot make the next retry skip the combined diagnostic.
+Each Workflow failure-write retry opens a fresh database
 scope. If all retries fail, the combined raw diagnostic is the terminal instance
 error, allowing reconciliation in a later invocation to save it on the Run.
 Only credential-shaped values are scrubbed; SQL, parameters, SQLSTATE codes and

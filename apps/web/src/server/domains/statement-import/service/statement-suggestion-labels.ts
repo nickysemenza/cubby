@@ -9,6 +9,7 @@ import {
   selectDecisionModel,
   type SupportedDecisionModel,
 } from "@cubby/shared/ai/models";
+import { createLogger } from "@cubby/worker-tracing";
 
 import { forEachConcurrently } from "~/lib/concurrency-limiter";
 import { AiBudgetExhaustedError, settleDecisions } from "~/server/ai/budget";
@@ -45,6 +46,7 @@ import { runFailureText } from "~/server/workflows/runs/lifecycle";
 const STATEMENT_LABEL_BATCH = 10;
 /** Page rebuilds after automatic rules move the ledger mid-page. */
 const MAX_LABEL_ROUNDS = 3;
+const log = createLogger("statement-suggestion-labels");
 
 const identityLabel = {
   same_charge: "same",
@@ -243,6 +245,19 @@ export async function labelStatementSuggestions(
       return current && (round === 0 || moved) ? [{ target, current }] : [];
     });
     const published = new Map<string, string>();
+    log.info("Statement label round", {
+      round: round + 1,
+      charges: ready.length,
+      // Logical decisions, before context-fit checks and provider retries;
+      // this is workload evidence, not a measurement of Worker subrequests.
+      plannedDecisions: ready.reduce(
+        (total, { current }) =>
+          total +
+          current.judgment.candidates.length +
+          (current.judgment.create ? 2 : 0),
+        0,
+      ),
+    });
     await forEachConcurrently(
       ready,
       STATEMENT_PUBLISH_CONCURRENCY,

@@ -24,6 +24,7 @@ import {
   type StatementTransactionCandidate,
   statementTransactionAction,
   type StatementTransactionJudgment,
+  STATEMENT_LABEL_REVISION,
 } from "@cubby/schemas/statement-suggestion";
 import { cents } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -1096,7 +1097,7 @@ export async function publishChargeProposal(
     await client.execute(
       sql`SELECT pg_advisory_xact_lock(hashtextextended(${`statement-suggestion:${chargeId(charge)}`}, 0))`,
     );
-    const { rows: prior } = await client.execute<{
+    const { rows: stored } = await client.execute<{
       id: string;
       status: string;
       fingerprint: string | null;
@@ -1117,6 +1118,10 @@ export async function publishChargeProposal(
       ORDER BY s."createdAt" DESC, s.id DESC
       FOR UPDATE OF s
     `);
+    const prior = stored.map((row) => ({
+      ...row,
+      producer: assessmentProducer.nullable().parse(row.producer),
+    }));
     if (prior.some((row) => row.suppression !== null)) return "suppressed";
     // A charge matched, ignored or superseded after it was listed (an accept or
     // an import-page attach in between) needs no suggestion; a ref inserted
@@ -1136,6 +1141,11 @@ export async function publishChargeProposal(
       prior.some(
         (row) =>
           row.active &&
+          !(
+            producer.kind === "rule" &&
+            row.producer?.kind === "model" &&
+            row.producer.revision !== STATEMENT_LABEL_REVISION
+          ) &&
           (row.fingerprint === proposal.fingerprint ||
             (producer.kind === "rule" &&
               row.evidenceFingerprint === proposal.evidenceFingerprint)),
@@ -1149,6 +1159,8 @@ export async function publishChargeProposal(
       const reusable = prior.find((row) => {
         if (
           row.needsLabel !== "false" ||
+          row.producer?.kind !== "model" ||
+          row.producer.revision !== STATEMENT_LABEL_REVISION ||
           !["pending", "superseded"].includes(row.status)
         )
           return false;
@@ -1161,8 +1173,8 @@ export async function publishChargeProposal(
         const previous = assessmentJudgments.statement_transaction.parse(
           reusable.judgment,
         );
-        const previousProducer = assessmentProducer.parse(reusable.producer);
-        if (previous.create && previousProducer.kind === "model") {
+        const previousProducer = reusable.producer;
+        if (previous.create && previousProducer?.kind === "model") {
           const judgment = structuredClone(proposal.judgment);
           const create = judgment.create!;
           Object.assign(

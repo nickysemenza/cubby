@@ -37,6 +37,8 @@ import {
 import {
   buildChargeProposals,
   generateStatementSuggestionPage,
+  labelledProposal,
+  publishChargeProposal,
   pendingPostedMatch,
 } from "./statement-suggestions";
 
@@ -677,6 +679,110 @@ describe("statement Transaction suggestions", () => {
       ),
     ).toBe(true);
   });
+
+  // Prompt instructions are model inputs too; an obsolete producer revision
+  // cannot be kept merely because the charge's evidence fingerprint matches.
+  it("relabels an obsolete prompt revision even when evidence is unchanged", async () => {
+    await card(ctx);
+    await record(ctx, [rowInput()]);
+    await generate(ctx);
+    const [existing] = await suggestions(ctx);
+    const [proposal] = await buildChargeProposals(ctx.db, [
+      { source: existing!.source, chargeKey: existing!.chargeKey },
+    ]);
+    const judgment = structuredClone(proposal!.judgment);
+    judgment.create!.votes.label = "purchase";
+    judgment.create!.counterparty.label = "business";
+    judgment.clean = true;
+    await publishChargeProposal(
+      ctx.db,
+      await labelledProposal(proposal!, judgment),
+      {
+        kind: "model",
+        model: "synthetic-decision-model",
+        revision: "synthetic-obsolete-prompt",
+        runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
+        evaluationId: null,
+      },
+    );
+    await generate(ctx);
+    const [rebuilt] = await suggestions(ctx);
+    expect(rebuilt).toMatchObject({
+      model: null,
+      clean: false,
+      create: { votes: { label: null }, counterparty: { label: null } },
+    });
+    expect(
+      await label(
+        ctx,
+        answering({ kind: "purchase", counterparty: "business" }),
+      ),
+    ).toMatchObject({ labelled: 1 });
+  });
+
+  // Both statement inputs and the candidate identity set participate in label
+  // validity; retaining a previous clean result would permit stale bulk advice.
+  it.each(["statement", "candidates"] as const)(
+    "retires labels when %s model inputs change",
+    async (changed) => {
+      const account = (await card(ctx)).output;
+      await createRepoEntity(ctx, "financialTransaction", {
+        accountId: account.id,
+        kind: "purchase",
+        status: "posted",
+        amount: 42.5,
+        postedDate: "2026-05-05",
+        rawDescription: "SYNTHETIC PREVIOUS CANDIDATE",
+        sourceRefs: [],
+      });
+      const observed = rowInput();
+      await record(ctx, [observed]);
+      await generate(ctx);
+      await label(
+        ctx,
+        answering({ kind: "purchase", counterparty: "business" }),
+      );
+      if (changed === "statement") {
+        await record(
+          ctx,
+          [
+            {
+              ...observed,
+              rowPosition: 10,
+              merchant: "Example Changed Merchant",
+            },
+          ],
+          { fingerprint: "synthetic-changed-subject" },
+        );
+      } else {
+        await createRepoEntity(ctx, "financialTransaction", {
+          accountId: account.id,
+          kind: "purchase",
+          status: "posted",
+          amount: 42.5,
+          postedDate: "2026-05-05",
+          rawDescription: "SYNTHETIC ADDITIONAL CANDIDATE",
+          sourceRefs: [],
+        });
+      }
+      await generate(ctx);
+      const [rebuilt] = await suggestions(ctx);
+      expect(rebuilt).toMatchObject({
+        model: null,
+        clean: false,
+        create: { votes: { label: null }, counterparty: { label: null } },
+      });
+      expect(
+        rebuilt!.candidates.every((candidate) => candidate.label === null),
+      ).toBe(true);
+      expect(
+        await label(
+          ctx,
+          answering({ kind: "purchase", counterparty: "business" }),
+        ),
+      ).toMatchObject({ labelled: 1 });
+    },
+  );
 
   // A pause after generation must preserve earlier paid labels while new
   // charges remain unlabelled; retrying asks only for those unfinished charges.

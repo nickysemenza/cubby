@@ -290,33 +290,37 @@ export async function failWorkflowRun(
   input: { failureCode: string; message: string },
 ): Promise<boolean> {
   const runId = runEntityId.parse(params.runId);
-  const [failed] = await getDb(db)
-    .update(runTable)
-    .set({
-      status: "failed",
-      endedAt: new Date(),
-      failureCode: input.failureCode,
-      dispatchError: input.message,
-      progress: sql`coalesce(${runTable.progress}, '{}'::jsonb) || '{"phase":"failed"}'::jsonb`,
-    })
-    .where(
-      and(
-        eq(runTable.id, runId),
-        eq(runTable.status, "running"),
-        attemptIs(params.attempt),
-      ),
-    )
-    .returning({ id: runTable.id });
-  if (!failed) return false;
-  await recordRunProgress(
-    db,
-    runId,
-    "failed",
-    input.message.split("\n", 1)[0] ?? "",
-    { attempt: params.attempt, sequence: Number.MAX_SAFE_INTEGER },
-  );
-  await (await import("./wake")).wakeStepRunParent(db, runId);
-  return true;
+  // A partially committed failure would make the fresh retry's running-status
+  // fence skip its combined diagnostic. Commit the status and timeline together.
+  return withTransactionDatabase(db, async (tx) => {
+    const [failed] = await getDb(tx)
+      .update(runTable)
+      .set({
+        status: "failed",
+        endedAt: new Date(),
+        failureCode: input.failureCode,
+        dispatchError: input.message,
+        progress: sql`coalesce(${runTable.progress}, '{}'::jsonb) || '{"phase":"failed"}'::jsonb`,
+      })
+      .where(
+        and(
+          eq(runTable.id, runId),
+          eq(runTable.status, "running"),
+          attemptIs(params.attempt),
+        ),
+      )
+      .returning({ id: runTable.id });
+    if (!failed) return false;
+    await recordRunProgress(
+      tx,
+      runId,
+      "failed",
+      input.message.split("\n", 1)[0] ?? "",
+      { attempt: params.attempt, sequence: Number.MAX_SAFE_INTEGER },
+    );
+    await (await import("./wake")).wakeStepRunParent(tx, runId);
+    return true;
+  });
 }
 
 /** Quiet this long before a running Run's instance is checked. */

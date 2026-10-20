@@ -48,6 +48,7 @@ import {
   type RecipeFlowArtifact,
   recipeFlowArtifactSchema,
 } from "@cubby/schemas/recipe-flow";
+import { STATEMENT_LABEL_REVISION } from "@cubby/schemas/statement-suggestion";
 
 import {
   defineFeature,
@@ -218,7 +219,7 @@ export const STATEMENT_CHARGE_IDENTITY_FEATURE = defineFeature({
   prompt: statementChargeIdentityPrompt,
   choices: statementChargeIdentityChoices,
   feature: "statement-charge-identity",
-  promptVersion: "2026-10-17.1",
+  promptVersion: STATEMENT_LABEL_REVISION,
   tier: "decision",
   cache: true,
   collectPayload: false,
