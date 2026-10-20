@@ -21,7 +21,7 @@ import {
 } from "~/server/testing/repo.fixtures";
 
 import { captureDerivedRefresh } from "./capture";
-import { currentInputRevision } from "./freshness";
+import { assertInputRevision, currentInputRevision } from "./freshness";
 
 // Each barrier controls a real PostgreSQL interleaving; no timing assertions.
 describe("derived refresh publication ownership", () => {
@@ -40,6 +40,27 @@ describe("derived refresh publication ownership", () => {
       makeProductInput({ name: "Synthetic ownership subject" }),
       ctx.actor,
     );
+
+  // Publication checks may lock the input epoch, but must not manufacture an
+  // input-row update that aborts an otherwise current serializable save.
+  it("does not make a serializable save stale when background work only fences unchanged inputs", async () => {
+    const subject = await fixture();
+    await expect(
+      withTransactionDatabase(
+        ctx.db,
+        async (tx) => {
+          const revision = await currentInputRevision(tx);
+          await withTransactionDatabase(ctx.db, (background) =>
+            assertInputRevision(background, revision),
+          );
+          await captureDerivedRefresh(tx, [
+            { entityKind: "product", entityId: subject.entityId },
+          ]);
+        },
+        { isolationLevel: "serializable" },
+      ),
+    ).resolves.toBeUndefined();
+  });
 
   it("rolls back prepared output when a newer source edit replaces ownership", async () => {
     const subject = await fixture();

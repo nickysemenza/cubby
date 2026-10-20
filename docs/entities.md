@@ -1279,7 +1279,12 @@ a surviving row; they never fall back to full detail hydration. New collection
 citations retain evidence without a whole-collection fingerprint; existing
 hash-based citations still compare against detail values. Explicit unchanged
 writes capture a durable root even when no audit diff exists, so background
-processing can retire pending advice for that write intent.
+processing can retire pending advice for that write intent. The fallback checks
+this update's transaction enrollments, including released savepoints, rather
+than depending on optional audit-receipt collection; audited writes do not
+receive a second fallback capture.
+Publication fences lock the expected input revision without rewriting its row;
+unchanged background checks must not invalidate a serializable save's snapshot.
 Field advice fences use the target's point revision and shared input epochs.
 An inherited target/basis or same-kind basis reference retains its own-kind
 epoch for ancestor values and referenced labels;

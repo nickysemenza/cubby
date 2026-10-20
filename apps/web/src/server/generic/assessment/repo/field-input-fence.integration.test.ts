@@ -9,6 +9,7 @@ import {
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { executeEntityAs } from "~/server/entity-kernel";
 import { acceptSuggestion } from "~/server/generic/assessment/repo/suggestion-review";
+import { readInputRevisions } from "~/server/generic/derived-refresh/repo/revisions";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   captureBackgroundQueue,
@@ -27,6 +28,29 @@ describe("field input revision scope", () => {
     queue = captureBackgroundQueue();
   });
   afterEach(() => queue.restore());
+
+  // Audited writes already enrolled their root; the no-audit fallback must
+  // not create a second Work generation and queue wake-up for the same edit.
+  it("captures one refresh generation for an ordinary audited update", async () => {
+    const subject = (
+      await executeEntityAs(kernelCtx(ctx), "create", {
+        entity: "spendingCategory",
+        data: buildEntity("spendingCategory", {
+          name: "Synthetic single capture category",
+        }),
+      })
+    ).item;
+    const id = await resolveOrThrow(ctx.db, "spendingCategory", subject.id);
+    const key = `entity:spendingCategory:${id}`;
+    const before = new Map(await readInputRevisions(ctx.db, [key])).get(key);
+    await executeEntityAs(kernelCtx(ctx), "update", {
+      entity: "spendingCategory",
+      id: subject.id,
+      data: { name: "Synthetic updated single capture category" },
+    });
+    const after = new Map(await readInputRevisions(ctx.db, [key])).get(key);
+    expect(after).toBe((before ?? 0) + 1);
+  });
 
   it("refuses advice after a same-kind basis reference is renamed", async () => {
     const parent = await createLocationFixture(

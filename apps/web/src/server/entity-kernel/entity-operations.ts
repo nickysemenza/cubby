@@ -22,7 +22,10 @@ import { z } from "zod";
 
 import { listReadFields } from "~/entity/model/list-read-schema";
 import { deleteStoredObjects } from "~/server/clients/s3";
-import { withTransactionDatabase } from "~/server/db/helpers";
+import {
+  pendingTransactionChanges,
+  withTransactionDatabase,
+} from "~/server/db/helpers";
 import { runAfterCommit } from "~/server/db/helpers/core";
 import {
   canUpdateColumns,
@@ -58,7 +61,6 @@ import {
 } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { AppError, createAppError } from "~/server/errors/app-error";
 import { findPgError } from "~/server/errors/db-errors";
-import { currentAuditReceiptCount } from "~/server/generic/audit-log/repo/audit-receipts";
 import { captureDerivedRefresh } from "~/server/generic/derived-refresh/repo/capture";
 import { withListGroupBy } from "~/server/generic/list/repo/list";
 import { listTotalLabels } from "~/server/generic/list/repo/list-display-labels";
@@ -332,7 +334,7 @@ const buildUpdateOperation = <
                 ),
               ),
             );
-            const auditCount = currentAuditReceiptCount();
+            const changesBefore = pendingTransactionChanges(writeContext.db);
             const updated = await validated.run(
               writeContext,
               validated.id,
@@ -341,20 +343,6 @@ const buildUpdateOperation = <
                 repositoryRecordInput(binding.entity, data),
               ),
             );
-            // Explicit unchanged writes still retire pending advice. Their
-            // repository emits no audit, so capture that intent durably here.
-            if (
-              validated.submittedFields.length > 0 &&
-              currentAuditReceiptCount() === auditCount
-            ) {
-              await captureDerivedRefresh(writeContext.db, [
-                {
-                  entityKind: binding.entity,
-                  entityId: updated.entityId,
-                  changedFields: validated.submittedFields,
-                },
-              ]);
-            }
             await writeRecordEmoji(
               writeContext.db,
               binding.entity,
@@ -393,6 +381,23 @@ const buildUpdateOperation = <
                 validated.sources,
                 receipt.sourceSnapshot,
               );
+            // Older commands in the same batch may already name this root.
+            // Only a new enrollment from this update replaces its fallback.
+            const rootKey = `entity:${binding.entity}:${updated.entityId}`;
+            const captures = (keys: readonly string[]) =>
+              keys.filter((key) => key === rootKey).length;
+            if (
+              validated.submittedFields.length > 0 &&
+              captures(pendingTransactionChanges(writeContext.db)) ===
+                captures(changesBefore)
+            )
+              await captureDerivedRefresh(writeContext.db, [
+                {
+                  entityKind: binding.entity,
+                  entityId: updated.entityId,
+                  changedFields: validated.submittedFields,
+                },
+              ]);
             return {
               ...updated,
               output: {

@@ -149,31 +149,32 @@ test("Suggestions lists every family with named records and category pills, and 
   ]);
   await generateStatementSuggestions(db);
   await drainDerivedRefreshFrontier(db);
-  await getDb(db)
-    .insert(suggestionTable)
-    .values({
-      runId,
-      entity: "product",
-      recordId: itemId,
-      field: "categoryId",
-      currentValue: null,
-      suggestedValue: category.id,
-      confidence: 0.91,
-      runnerUpValue: null,
-      runnerUpConfidence: null,
-      model: "typesafe/jev",
-      kind: "addition",
-      status: "pending",
-      data: {
-        liveInputFingerprint: await fieldInputFingerprint(
-          db,
-          "product",
-          itemId,
-          "categoryId",
-        ),
-      },
-    });
-
+  const seedCategoryAdvice = async () =>
+    getDb(db)
+      .insert(suggestionTable)
+      .values({
+        runId,
+        entity: "product",
+        recordId: itemId,
+        field: "categoryId",
+        currentValue: null,
+        suggestedValue: category.id,
+        confidence: 0.91,
+        runnerUpValue: null,
+        runnerUpConfidence: null,
+        model: "typesafe/jev",
+        kind: "addition",
+        status: "pending",
+        data: {
+          liveInputFingerprint: await fieldInputFingerprint(
+            db,
+            "product",
+            itemId,
+            "categoryId",
+          ),
+        },
+      });
+  await seedCategoryAdvice();
   await gotoAuthenticatedPage(page, "/suggestions");
   const families = page.getByRole("group", { name: "Suggestion families" });
   for (const family of [
@@ -204,8 +205,8 @@ test("Suggestions lists every family with named records and category pills, and 
     ),
   ).toContainText(categoryName);
 
-  // Confirm first: the field write changes the Product, which retires its
-  // pending connection evidence.
+  // Confirming the acquisition changes the Product's classification evidence.
+  // Its older category advice must be replaced by a fresh assessment.
   await connection
     .getByRole("button", { name: "Confirm", exact: true })
     .click();
@@ -228,6 +229,20 @@ test("Suggestions lists every family with named records and category pills, and 
     .toBe(item.id);
   await expect(connection).toHaveCount(0);
 
+  await field.getByRole("button", { name: "Accept", exact: true }).click();
+  await expect(field).toHaveCount(0);
+  expect(
+    (
+      await getDb(db)
+        .select({ categoryId: productTable.categoryId })
+        .from(productTable)
+        .where(eq(productTable.id, itemId))
+    )[0]?.categoryId,
+  ).toBeNull();
+  await drainDerivedRefreshFrontier(db);
+  await seedCategoryAdvice();
+  await gotoAuthenticatedPage(page, `/suggestions?record=product:${item.id}`);
+  await expect(field).toHaveCount(1);
   await field.getByRole("button", { name: "Accept", exact: true }).click();
   await expect
     .poll(

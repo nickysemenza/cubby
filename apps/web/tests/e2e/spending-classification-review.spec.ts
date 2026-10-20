@@ -192,7 +192,8 @@ test("reviews historical item classification and preserves explicit purpose", as
     spendingCategoryMode: "mapped",
     spendingCategoryId: tools,
   });
-  expect((await apply(mapping)).ok()).toBeTruthy();
+  const mapped = await apply(mapping);
+  expect(mapped.ok(), await mapped.text()).toBeTruthy();
   const reassignment = {
     action: "products",
     productIds: [product, unbooked],
@@ -217,7 +218,8 @@ test("reviews historical item classification and preserves explicit purpose", as
       0,
     ),
   ).toBe(0);
-  expect((await apply(reviewed)).ok()).toBeTruthy();
+  const applied = await apply(reviewed);
+  expect(applied.ok(), await applied.text()).toBeTruthy();
   expect(await read()).toMatchObject({ cost: 61, spendingCategoryId: gifts });
   const refundRead = await entityApi(page.request).get("expense", refund, {});
   expect(await refundRead.json()).toMatchObject({

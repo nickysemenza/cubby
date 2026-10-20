@@ -80,15 +80,17 @@ export async function assertInputRevision(
       .values({ key: "all", revision: 0 })
       .onConflictDoNothing();
   const rows = await unwrapDb(db)
-    .update(derivedRefreshRevision)
-    .set({ revision: sql`${derivedRefreshRevision.revision}` })
+    .select({ key: derivedRefreshRevision.key })
+    .from(derivedRefreshRevision)
     .where(
       and(
         eq(derivedRefreshRevision.key, "all"),
         eq(derivedRefreshRevision.revision, expected),
       ),
     )
-    .returning({ key: derivedRefreshRevision.key });
+    // A no-op UPDATE creates a new tuple and aborts serializable foreground
+    // writers whose input snapshot is still current. Lock without rewriting.
+    .for("update");
   if (rows.length === 0)
     throw new DerivedInputsChanged(
       "Derived inputs changed during publication; retry current inputs",
