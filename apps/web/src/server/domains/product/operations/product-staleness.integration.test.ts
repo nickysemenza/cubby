@@ -16,6 +16,7 @@ import { getRecipeTotalsState } from "~/server/domains/recipe/repo/totals";
 import { executeEntity } from "~/server/entity-kernel";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { requireActor } from "~/server/http/request-context";
+import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import {
   ingredientRef,
   makeProductInput,
@@ -92,6 +93,7 @@ describe("product mutation recipe-cost staleness", () => {
     );
     const context = workflowContext();
 
+    await drainDerivedRefreshFrontier(ctx.db);
     await context.services.recipeCosting.recompute([recipe]);
     expect(await totalsComputedAt(recipe)).not.toBeNull();
 
@@ -101,6 +103,7 @@ describe("product mutation recipe-cost staleness", () => {
       entity: "product",
       ids: [product],
     });
+    await drainDerivedRefreshFrontier(ctx.db);
     expect(await totalsComputedAt(recipe)).toBeNull();
   });
 
@@ -118,6 +121,7 @@ describe("product mutation recipe-cost staleness", () => {
     );
     const context = workflowContext();
 
+    await drainDerivedRefreshFrontier(ctx.db);
     await context.services.recipeCosting.recompute([recipe]);
     expect(await totalsComputedAt(recipe)).not.toBeNull();
 
@@ -127,6 +131,7 @@ describe("product mutation recipe-cost staleness", () => {
       entity: "product",
       data: { keepId: keeper, mergeIds: [loser] },
     });
+    await drainDerivedRefreshFrontier(ctx.db);
     expect(await totalsComputedAt(recipe)).toBeNull();
   });
 });

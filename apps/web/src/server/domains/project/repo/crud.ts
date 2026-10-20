@@ -250,7 +250,6 @@ export const createProject = defineMutationWriter({
         googleDriveFolderUrl: data.googleDriveFolderUrl,
         notionPageUrl: data.notionPageUrl,
       });
-      await validateLiveEffectiveTrades(tx);
       await logAuditEntry(tx, actor, {
         entityKind: "project",
         entityId: created.id,
@@ -420,7 +419,8 @@ export const updateProject = defineMutationWriter({
         notionPageUrl: data.notionPageUrl,
       });
       const [updated] = await withProjectExternalUrls(tx, [updatedRow]);
-      await validateLiveEffectiveTrades(tx);
+      if (["defaultTrade", "parentProjectId"].some((key) => key in data))
+        await validateLiveEffectiveTrades(tx, { kind: "project", ids: [id] });
 
       // Full-replacement set: clear this project's blocked-by edges and insert
       // the new ones, all inside the same transaction as the column update.

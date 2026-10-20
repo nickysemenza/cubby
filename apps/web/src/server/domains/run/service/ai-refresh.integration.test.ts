@@ -3,6 +3,7 @@ import {
   aiEvaluationTarget,
   aiProvenance,
 } from "@cubby/schemas/ai-evaluation";
+import { assessmentFamily } from "@cubby/schemas/assessment";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { generateShortcode } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -42,6 +43,7 @@ import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { settleDerivedRefreshForDiscovery } from "~/server/testing/background-queue";
 import {
   createProductFixture,
   makeProductInput,
@@ -492,6 +494,7 @@ describe("targeted prompt refresh", () => {
         ),
       );
     expect(evaluation).toBeDefined();
+    await settleDerivedRefreshForDiscovery(ctx.db);
     const measured = await countTestDbQueries(() =>
       executeAiRefreshTarget(ctx.db, evaluation!.id, {
         context: kernelCtx(ctx),
@@ -543,6 +546,7 @@ describe("targeted prompt refresh", () => {
     await activateAiRefresh(ctx.db, "synthetic-bounded-connections", {
       enabled: true,
     });
+    await settleDerivedRefreshForDiscovery(ctx.db);
     const { runId } = await scheduleConnectionRefresh(
       ctx.db,
       { entityKind: "product", entityId: source.id },
@@ -593,14 +597,21 @@ describe("targeted prompt refresh", () => {
       } else if (open) statements++;
     }
     expect(largest).toBeLessThanOrEqual(40);
+    const [savedEvaluation] = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.id, evaluation!.id));
+    // Positive pairs publish without certifying an unavailable semantic roster.
+    expect(savedEvaluation).toMatchObject({
+      state: "retry_wait",
+      error: expect.stringContaining("candidate coverage is unconfirmed"),
+    });
     expect(
-      (
-        await getDb(ctx.db)
-          .select()
-          .from(aiEvaluation)
-          .where(eq(aiEvaluation.id, evaluation!.id))
-      )[0]?.state,
-    ).toBe("completed");
+      await getDb(ctx.db)
+        .select({ id: suggestion.id })
+        .from(suggestion)
+        .where(eq(suggestion.family, assessmentFamily.enum.product_pair)),
+    ).toHaveLength(4);
   });
 
   it("leaves activation unlocked during publication work and fences deactivation before commit", async () => {

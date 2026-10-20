@@ -71,13 +71,7 @@ async function shortcodes(
   return new Map(rows.map((row) => [String(row.id), row.shortcode]));
 }
 
-/**
- * Apply the member's chosen statement action inside the review transaction.
- *
- * Order matters: the suggestion is marked applied before any settlement ref is
- * written, because a new live ref supersedes every still-pending suggestion
- * that names it (derived DDL trigger) — including this one.
- */
+/** Apply revalidates authoritative evidence under its keys, independently of background retirement. */
 export async function applyStatementTransactionSuggestion(
   db: Database,
   context: EntityKernelContext,

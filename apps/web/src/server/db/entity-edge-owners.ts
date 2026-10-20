@@ -119,6 +119,9 @@ export const ENTITY_EDGE_OWNERS = {
   ImageProcessingEvent: { owner: imageProcessingEvent.jobId },
   ImageProcessingSubmissionJob: { owner: imageProcessingSubmissionJob.jobId },
   ImageSighting: { owner: imageSighting.imageId },
+  DerivedDiscoveryPass: {
+    excluded: "Coalesced discovery scheduling and input-epoch coverage.",
+  },
   AiEvaluation: { excluded: "Durable inference and publication history." },
   AiEvaluationRequest: {
     excluded: "Per-Run work membership and publication receipts.",

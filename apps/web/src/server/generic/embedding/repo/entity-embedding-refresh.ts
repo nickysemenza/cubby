@@ -1,4 +1,4 @@
-import { entityRefKey } from "@cubby/schemas/entity";
+import { embeddingArtifactState } from "@cubby/schemas/derived-refresh";
 import type {
   FinancialAccountCardNumber,
   FinancialAccountIdentity,
@@ -15,7 +15,13 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { locationAiDescriptionExtras } from "~/server/db/computed/location-ai-description";
 import { categorySummarySql } from "~/server/db/computed/product-category-sql";
-import { notDeleted, unwrapDb } from "~/server/db/helpers";
+import {
+  notDeleted,
+  unwrapDb,
+  withTransactionDatabase,
+  isTransaction,
+  databaseForTransaction,
+} from "~/server/db/helpers";
 import {
   cookbook,
   entityLink,
@@ -50,6 +56,10 @@ import {
   plantingDisplayName,
 } from "~/server/domains/plant/repo/windows";
 import { loadAllGtins } from "~/server/domains/product/repo/gtin";
+import {
+  assertInputRevision,
+  currentInputRevision,
+} from "~/server/generic/derived-refresh/repo/freshness";
 import { embeddingTextHash } from "~/server/generic/embedding/repo/semantic/hash";
 import {
   buildCookbookEmbeddingText,
@@ -111,23 +121,7 @@ const withOptionalLimit = <const TConfig extends object>(
   limit: number | undefined,
 ) => (limit === undefined ? config : { ...config, limit });
 
-/**
- * One query for a whole refresh wave (or a single ref, from
- * {@link getEntityEmbeddingReadiness}) instead of one per ref, keyed
- * `${entityKind}:${entityId}` so a caller can compare against a locally
- * computed hash without a second lookup.
- *
- * Exposed so callers can decide BEFORE paying for an embedding.
- * `upsertEntityEmbeddingsIfCurrent` is the live write path and runs the same
- * comparison implicitly (via `embeddingHash`), but only after the provider
- * has already been called and billed — that check saves the HNSW write, not
- * the request. Mutation-sourced refreshes carry no expected hash and fan out
- * on every edit, so without a pre-call gate an entity is re-embedded
- * whenever any of its projected text is rewritten, identical or not.
- *
- * Refs with no live row under the config's (provider, model, dimensions) are
- * simply absent from the map.
- */
+/** Selected immutable-artifact hashes for a bounded reference batch. */
 export async function getStoredEmbeddingHashes(
   db: Database | DrizzleTransaction,
   refs: ReadonlyArray<SearchableEntityRef>,
@@ -147,7 +141,7 @@ export async function getStoredEmbeddingHashes(
   }>(sql`
     WITH refs("entityKind", "entityId") AS (VALUES ${values})
     SELECT ee."entityKind", ee."entityId"::text AS "entityId",
-      ee."embeddingHash"
+      ee."artifactHash" AS "embeddingHash"
     FROM refs
     JOIN "EntityEmbedding" ee
       ON ee."entityKind" = refs."entityKind"
@@ -156,6 +150,7 @@ export async function getStoredEmbeddingHashes(
       AND ee.model = ${config.model}::text
       AND ee.dimensions = ${config.dimensions}::integer
       AND ee."deletedAt" IS NULL
+      AND ee."artifactState" = ${embeddingArtifactState.enum.selected} AND ee."artifactHash" IS NOT NULL
   `);
   return new Map(
     result.rows.map((row) => [
@@ -166,6 +161,7 @@ export async function getStoredEmbeddingHashes(
 }
 
 export interface EntityEmbeddingUpsert extends SearchableEntityText {
+  inputRevision: number;
   /**
    * The hash the caller already compared against the stored one. Passed in
    * rather than recomputed so the value that decided to pay for the vector is
@@ -175,98 +171,65 @@ export interface EntityEmbeddingUpsert extends SearchableEntityText {
   config: SemanticEmbeddingConfig;
 }
 
-/**
- * Write vectors' bookkeeping rows only where the projection each was
- * computed for is still the live projection — one statement for a whole
- * refresh wave instead of one round trip per ref.
- *
- * Each provider call happened outside any transaction, so by the time a
- * vector arrives its entity may have been edited again or deleted. Joining
- * the write to `SearchDocument` on the exact text that was embedded makes the
- * check and the write one statement: a newer projection never receives an
- * older vector, and a soft-deleted document never gets a vector resurrected.
- * A ref absent from the returned set means exactly that — the caller should
- * not retry with the same vector; the next refresh task (or "Settle now")
- * will embed the current text.
- */
-export async function upsertEntityEmbeddingsIfCurrent(
-  db: Database | DrizzleTransaction,
-  inputs: ReadonlyArray<EntityEmbeddingUpsert>,
-): Promise<Set<string>> {
-  if (inputs.length === 0) return new Set();
-  // A JS array interpolates as a row constructor, not a Postgres list — build
-  // the VALUES rows with `sql.join`, mirroring `getStoredEmbeddingHashes`.
-  const values = sql.join(
-    inputs.map(
-      (input) =>
-        sql`(${input.entityKind}::text, ${input.entityId}::uuid, ${input.embeddingText}::text, ${input.embeddingHash}::text, ${input.config.provider}::text, ${input.config.model}::text, ${input.config.dimensions}::int)`,
-    ),
-    sql`, `,
-  );
-  const result = await unwrapDb(db).execute<{
-    entityKind: SearchableEntity;
-    entityId: string;
-  }>(sql`
-    INSERT INTO "EntityEmbedding" (
-      "entityKind", "entityId", "embeddingText", "embeddingHash",
-      provider, model, dimensions, "updatedAt"
-    )
-    SELECT sd."entityKind", sd."entityId", sd."semanticText",
-      v."embeddingHash", v.provider, v.model, v.dimensions, now()
-    FROM (VALUES ${values}) AS v(
-      "entityKind", "entityId", "embeddingText", "embeddingHash",
-      provider, model, dimensions
-    )
-    JOIN "SearchDocument" sd
-      ON sd."entityKind" = v."entityKind"
-      AND sd."entityId" = v."entityId"
-      AND sd."deletedAt" IS NULL
-      AND sd."semanticText" = v."embeddingText"
-    ON CONFLICT ("entityKind", "entityId", provider, model, dimensions)
-      WHERE "deletedAt" IS NULL
-    DO UPDATE SET
-      "embeddingText" = EXCLUDED."embeddingText",
-      "embeddingHash" = EXCLUDED."embeddingHash",
-      "updatedAt" = now()
-    RETURNING "entityKind", "entityId"::text AS "entityId"
-  `);
-  return new Set(
-    result.rows.map((row) => entityRefKey(row.entityKind, row.entityId)),
-  );
-}
-
-/**
- * Test-only seed for an `EntityEmbedding` row: computes the hash and delegates
- * to the production write path, {@link upsertEntityEmbeddingsIfCurrent}, with
- * a one-element batch. That path requires a matching
- * `SearchDocument.semanticText` row, so callers must seed (or otherwise
- * produce) one with the same `embeddingText` first. Lives here rather than
- * inline in the calling test because services code cannot import DB
- * schema/helpers directly (`cubby/domain-layers`).
- */
+/** Test fixture for a selected artifact; production selection requires observed remote storage. */
 export async function seedEntityEmbedding(
   db: Database | DrizzleTransaction,
   input: SearchableEntityText & {
     config: SemanticEmbeddingConfig;
+    values?: readonly number[];
   },
-): Promise<void> {
+): Promise<string> {
   const embeddingHash = await embeddingTextHash({
     entityKind: input.entityKind,
-    provider: input.config.provider,
-    model: input.config.model,
-    dimensions: input.config.dimensions,
+    ...input.config,
     text: normalizeSearchText(input.embeddingText),
   });
-
-  await upsertEntityEmbeddingsIfCurrent(db, [
-    {
-      entityKind: input.entityKind,
-      entityId: input.entityId,
-      embeddingText: input.embeddingText,
-      embeddingHash,
-      config: input.config,
+  const revision = await currentInputRevision(db);
+  const { entityEmbedding } = await import("~/server/db/schema");
+  const { vectorPayloadHash } = await import("./embedding-artifact");
+  return withTransactionDatabase(
+    isTransaction(db) ? databaseForTransaction(db) : db,
+    async (tx) => {
+      const live = await unwrapDb(tx)
+        .execute(sql`SELECT id FROM "SearchDocument"
+      WHERE "entityKind"=${input.entityKind} AND "entityId"=${input.entityId}::uuid
+        AND "semanticText"=${input.embeddingText} AND "deletedAt" IS NULL LIMIT 1`);
+      if (!live.rows.length)
+        throw new Error(
+          "Synthetic embedding needs a matching live search document",
+        );
+      await unwrapDb(tx)
+        .update(entityEmbedding)
+        .set({ deletedAt: new Date(), artifactState: "retired" })
+        .where(
+          and(
+            eq(entityEmbedding.entityKind, input.entityKind),
+            eq(entityEmbedding.entityId, input.entityId),
+            isNull(entityEmbedding.deletedAt),
+          ),
+        );
+      const [artifact] = await unwrapDb(tx)
+        .insert(entityEmbedding)
+        .values({
+          entityKind: input.entityKind,
+          entityId: input.entityId,
+          embeddingText: input.embeddingText,
+          embeddingHash,
+          artifactHash: embeddingHash,
+          ...input.config,
+          artifactState: "selected",
+          observedAt: new Date(),
+          indexedAt: new Date(),
+          vectorHash: input.values
+            ? await vectorPayloadHash(input.values)
+            : null,
+        })
+        .returning({ id: entityEmbedding.id });
+      await assertInputRevision(tx, revision);
+      if (!artifact) throw new Error("Synthetic embedding was not stored");
+      return artifact.id;
     },
-  ]);
+  );
 }
 
 async function getProductEmbeddingTexts(

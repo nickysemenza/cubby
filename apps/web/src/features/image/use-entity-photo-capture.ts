@@ -36,11 +36,9 @@
  * gallery entity runs the byte-identical sequence (`syncEntityImages`), so the
  * fix would also fork every one of those code paths that today read once.
  *
- * The round trip is cheap where it lands: only a retake pays it. An entity with
- * no photos yet — the whole backlog case — is a single call. And it does not
- * re-enqueue location's AI work, because `locationImagesChanged` is computed
- * from `pendingImageIds`/`removeImageIds` and deliberately excludes
- * `imageOrder`.
+ * Gallery contents load through a separate read after the attach receipt.
+ * Reordering does not trigger location AI work because `imageOrder` is not
+ * a photo-content change.
  *
  * `capture`'s `asCover` (default `true`) opts out of this second round trip:
  * a multi-file batch (`EntityPhotosSection`'s "Add photos") passes `false` so
@@ -54,6 +52,7 @@ import type { ImageShortcode } from "@cubby/schemas/identifiers";
 import {
   ALLOWED_IMAGE_TYPES,
   MAX_IMAGE_UPLOAD_BYTES,
+  imageOut,
   type ImageOut,
 } from "@cubby/schemas/image";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -61,9 +60,9 @@ import { useCallback } from "react";
 
 import {
   entityMutationOptionsFactory,
-  type EntityMutationData,
   type EntityMutationVariables,
 } from "~/entity/entity-contracts";
+import { entityDetailFor } from "~/entity/entity-detail";
 import { type EntityMutationTransport } from "~/entity/entity-mutation-command";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { imageUpload } from "~/integrations/tanstack-query/generated/catalog.gen";
@@ -81,17 +80,15 @@ type GalleryUpdateVariables<E extends GalleryEntity> = EntityMutationVariables<
   E,
   "update"
 >;
-/**
- * Not every `GalleryEntity` update result carries `images` on its output type
- * (project attaches through a different path today), so the response is
- * asserted here for the entities this hook actually serves — location and the
- * generic-editor gallery entities (meal, task, planting) all return their full
- * `images` list from `update`.
- */
-type GalleryUpdateResult<E extends GalleryEntity> = EntityMutationData<
-  E,
-  "update"
-> & { images: ImageOut[] };
+const readGalleryImages = async (
+  entity: GalleryEntity,
+  id: string,
+): Promise<ImageOut[]> => {
+  const detail = await entityDetailFor(entity).readFresh(id);
+  if (!detail || !("images" in detail))
+    throw new Error(`Saved ${entity} gallery is unavailable: ${id}`);
+  return imageOut.array().parse(detail.images);
+};
 
 export interface UseEntityPhotoCaptureOptions {
   /** Run after the standard cache invalidation, for a caller with extra ripple. */
@@ -99,6 +96,7 @@ export interface UseEntityPhotoCaptureOptions {
   /** Injectable transport seams for tests; production keeps the real ones. */
   transport?: EntityMutationTransport;
   uploadImageOperation?: typeof imageUpload.uploadImage;
+  readImages?: typeof readGalleryImages;
 }
 
 /** Generic entity-photo capture: `EntityMutationVariables<E, "update">` isn't
@@ -113,6 +111,7 @@ export function useEntityPhotoCapture<E extends GalleryEntity>(
     onInvalidated,
     transport,
     uploadImageOperation = imageUpload.uploadImage,
+    readImages = readGalleryImages,
   }: UseEntityPhotoCaptureOptions = {},
 ) {
   const queryClient = useQueryClient();
@@ -179,19 +178,16 @@ export function useEntityPhotoCapture<E extends GalleryEntity>(
       // `{ id, data: { pendingImageIds } }` — the per-entity shapes only differ
       // in fields this hook never sets, which is why `entityMutationOptionsFactory`
       // stays generic over `E` instead of a hand-written union of the nine call sites.
-      const attached = (await updateEntity.mutateAsync({
+      await updateEntity.mutateAsync({
         id,
         data: { pendingImageIds: [init.imageId] },
-      } as GalleryUpdateVariables<E>)) as GalleryUpdateResult<E>;
+      } as GalleryUpdateVariables<E>);
 
-      // `init.imageId` is the raw upload uuid — `imageOrder`/`removeImageIds`
-      // take the public `IMG-` shortcode instead, which only exists once the
-      // server hands it back in `attached.images`. Recovered here rather than
-      // resolved separately: `associatePendingImages` appends via
-      // `nextImageSortOrder` (max + 1), so the image just attached always has
-      // the highest sortOrder, and the response orders images by sortOrder —
-      // making it reliably the LAST entry.
-      const newCode = attached.images.at(-1)!.id;
+      // The write returns a bounded receipt. Gallery expansion is a separate read.
+      const images = await readImages(entity, String(id));
+      const newCode = images.at(-1)?.id;
+      if (!newCode)
+        throw new Error("The saved gallery contains no attached image");
 
       if (asCover) {
         // Order off the server's own post-attach list rather than a
@@ -199,7 +195,7 @@ export function useEntityPhotoCapture<E extends GalleryEntity>(
         // an omitted id keeps its old sortOrder — on legacy rows that all sit
         // at `0` it would then TIE the new cover at 0, and the relation's
         // `createdAt` tiebreak hands the cover back to the older photo.
-        const otherIds = attached.images
+        const otherIds = images
           .map((img) => img.id)
           .filter((id) => id !== newCode);
         if (otherIds.length > 0) {
@@ -216,7 +212,7 @@ export function useEntityPhotoCapture<E extends GalleryEntity>(
       invalidate();
       return newCode;
     },
-    [entityKind, uploadImage, updateEntity, invalidate],
+    [entity, entityKind, uploadImage, updateEntity, invalidate, readImages],
   );
 
   /**

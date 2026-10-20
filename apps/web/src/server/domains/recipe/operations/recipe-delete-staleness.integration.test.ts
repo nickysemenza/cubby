@@ -20,6 +20,7 @@ import { executeEntity } from "~/server/entity-kernel";
 import { findParentRecipesWithDeletedSubRecipes } from "~/server/generic/problems/repo/detectors-recipe";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { requireActor } from "~/server/http/request-context";
+import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import { makeCookbookExtraction } from "~/server/testing/repo.fixtures";
 import {
   ingredientRef,
@@ -123,6 +124,7 @@ describe("recipe deletion cost-staleness workflows", () => {
 
   it("marks the parent stale when its sub-recipe is deleted", async () => {
     const { child, childCode, parent } = await seedParentWithSubRecipe();
+    await drainDerivedRefreshFrontier(ctx.db);
     await recompute([parent, child]);
     expect(
       (await getRecipeTotalsState(ctx.db, parent))?.totalsComputedAt,
@@ -134,11 +136,12 @@ describe("recipe deletion cost-staleness workflows", () => {
       entity: "recipe",
       ids: [childCode],
     });
+    await drainDerivedRefreshFrontier(ctx.db);
 
     expect(
       (await getRecipeTotalsState(ctx.db, parent))?.totalsComputedAt,
     ).toBeNull();
-    expect(published).toContain("recipe-totals.recompute");
+    expect(published).toContain("derived-refresh.wakeup");
     expect(await findParentRecipesWithDeletedSubRecipes(ctx.db)).toHaveLength(
       0,
     );
@@ -157,6 +160,7 @@ describe("recipe deletion cost-staleness workflows", () => {
       const { child, childCode, parent } = await seedParentWithSubRecipe({
         parentIsFork: true,
       });
+      await drainDerivedRefreshFrontier(ctx.db);
       await recompute([parent, child]);
 
       const published = installFakeQueue();
@@ -165,6 +169,7 @@ describe("recipe deletion cost-staleness workflows", () => {
         entity: "recipe",
         ids: [childCode],
       });
+      await drainDerivedRefreshFrontier(ctx.db);
 
       expect(
         (await getRecipeTotalsState(ctx.db, parent))?.totalsComputedAt,
@@ -172,7 +177,7 @@ describe("recipe deletion cost-staleness workflows", () => {
       expect(
         (await getRecipeByID(ctx.db, parent))?.forkedFromRecipeId,
       ).toBeNull();
-      expect(published).toContain("recipe-totals.recompute");
+      expect(published).toContain("derived-refresh.wakeup");
     },
   );
 

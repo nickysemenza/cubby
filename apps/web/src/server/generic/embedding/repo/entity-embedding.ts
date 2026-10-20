@@ -12,25 +12,6 @@
  * delegates to the same place.
  */
 
-export {
-  findDescendantTaskEmbeddingRefs,
-  findCommercialEmbeddingRefsForExpenses,
-  findEmbeddingRefsForPurchases,
-  findEmbeddingRefsForVendors,
-  findGardenEntryEmbeddingRefsForLocations,
-  findGardenEntryEmbeddingRefsForPlantings,
-  findInventoryEmbeddingRefsForLocations,
-  findInventoryEmbeddingRefsForProducts,
-  findMealEmbeddingRefsForRecipes,
-  findPlantingEmbeddingRefsForPlants,
-  findPlantingEmbeddingRefsForLocations,
-  findEmbeddingRefsForCategories,
-  findRecipeEmbeddingRefsForIngredients,
-  findTaskEmbeddingRefsForProducts,
-  findTrackerEmbeddingRefsForProjects,
-  findTransactionEmbeddingRefsForAccounts,
-  findWishEmbeddingRefsForProducts,
-  getEntityEmbeddingDeletedAtForRef,
-} from "./entity-embedding-cleanup";
+export { getEntityEmbeddingDeletedAtForRef } from "./entity-embedding-cleanup";
 export * from "./entity-embedding-refresh";
 export * from "./entity-embedding-search";

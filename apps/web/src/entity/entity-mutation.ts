@@ -53,7 +53,7 @@ export type EntityMergeResult<E extends MergeCommand["entity"]> = Extract<
   { action: "merge"; entity: E }
 >;
 
-/** Recover the entity-specific output through the same schema that backs the kernel. */
+/** Validate a bounded write receipt through the same schema that backs the kernel. */
 function parseEntityMutationResultFor<E extends EditableEntity>(
   entity: E,
   value: EntityMutationResultInput,

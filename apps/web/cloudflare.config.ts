@@ -51,6 +51,7 @@ export const productionWorker = defineWorker({
   domains: ["cubby.nickysemenza.com"],
   // No dead-letter queues: freshness gates retain unfinished work for retry.
   triggers: [
+    triggers.scheduled({ schedule: "* * * * *" }),
     triggers.scheduled({
       schedule: "0 12 * * *",
     }),

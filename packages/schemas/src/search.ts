@@ -227,6 +227,7 @@ export type RelatedSearchGroupsOut = z.infer<
 /** Semantic results are separate so they cannot reorder lexical hits. */
 export const relatedSearchOutSchema = z.object({
   status: z.enum(["ready", "unavailable"]),
+  complete: z.boolean().optional(),
   results: z.array(searchHitSchema),
 });
 export type RelatedSearchOut = z.infer<typeof relatedSearchOutSchema>;
@@ -240,6 +241,7 @@ export type SimilarEntityResult = z.infer<typeof similarEntityResultSchema>;
 export const similarEntitiesOut = z.object({
   source: searchableEntityRefSchema,
   status: embeddingReadinessSchema,
+  complete: z.boolean().optional(),
   results: z.array(similarEntityResultSchema),
 });
 export type SimilarEntitiesOut = z.infer<typeof similarEntitiesOut>;

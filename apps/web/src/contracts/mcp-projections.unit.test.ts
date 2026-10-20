@@ -116,12 +116,12 @@ describe("product MCP response projection", () => {
 describe("data-quality coverage projection", () => {
   // coverageFor is structural (any item carrying `dataQuality`), not a
   // product-only branch, so a non-product scored entity (purchase here)
-  // must produce the identical coverage shape from an update result.
-  it("projects coverage for a non-product scored entity carrying dataQuality", () => {
+  // retains its coverage when merge returns expanded detail.
+  it("projects coverage for a non-product scored entity's merge result", () => {
     const result = projectEntityResult(
       { resultDetail: "summary" },
       {
-        action: "update",
+        action: "merge",
         entity: "purchase",
         item: {
           id: "PUR-2ABC",
@@ -154,7 +154,7 @@ describe("data-quality coverage projection", () => {
     const result = projectEntityResult(
       { resultDetail: "summary" },
       {
-        action: "update",
+        action: "get",
         entity: "cookbook",
         item: { id: "CBK-2ABC", name: "Synthetic book" },
       },

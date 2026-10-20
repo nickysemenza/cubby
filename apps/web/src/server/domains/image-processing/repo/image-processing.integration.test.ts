@@ -35,6 +35,7 @@ import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-re
 import { imageDescriptionInputFingerprint } from "~/server/domains/image/service/image-description.service";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import {
   createProductFixture,
   makeProductInput,
@@ -531,6 +532,7 @@ describe("durable image representations", () => {
       "Confirmed navy cotton shirt",
     );
     expect(projection.status.cutout).toBe("pending");
+    await drainDerivedRefreshFrontier(ctx.db);
     const documents = await getDb(ctx.db)
       .select()
       .from(searchDocument)
@@ -586,6 +588,7 @@ describe("durable image representations", () => {
       intent: "apply",
     });
 
+    await drainDerivedRefreshFrontier(ctx.db);
     const before = await getDb(ctx.db)
       .select()
       .from(searchDocument)
@@ -593,6 +596,7 @@ describe("durable image representations", () => {
     expect(before[0]?.body).toContain("Confirmed searchable cobalt textile");
 
     await deleteImages(ctx.db, [imageId]);
+    await drainDerivedRefreshFrontier(ctx.db);
 
     const ownerDocuments = await getDb(ctx.db)
       .select()

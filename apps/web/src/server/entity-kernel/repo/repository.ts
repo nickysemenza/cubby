@@ -44,7 +44,11 @@ import { type output as ZodOutput, type ZodSchema, z } from "zod";
 import type { ListReadRow } from "~/entity/model/list-read-fields";
 import { selectListReadFields } from "~/entity/model/list-read-schema";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { updateLiveAndReturn, withTransactionOn } from "~/server/db/helpers";
+import {
+  runAfterCommit,
+  updateLiveAndReturn,
+  withTransactionOn,
+} from "~/server/db/helpers";
 import type {
   EntityKernelContext,
   EntityKernelDeleteResult,
@@ -210,6 +214,7 @@ interface EntityCrudConfig<
     read: (
       tx: DrizzleTransaction,
       id: EntityId<E>,
+      data: TUpdate,
     ) => Promise<RelationSnapshot<TRelKey>>;
     write?: (
       tx: DrizzleTransaction,
@@ -305,17 +310,15 @@ export function createEntityCrud<
         );
       }
       const relationsBefore: RelationSnapshot<TRelKey> =
-        (await config.relations?.read(tx, id)) ?? {};
+        (await config.relations?.read(tx, id, data)) ?? {};
       await config.relations?.write?.(tx, id, data);
-      const updated = await updateLiveAndReturn(
-        tx,
-        config.table,
-        config.toUpdate(data, before),
-        id,
-      );
+      const values = config.toUpdate(data, before);
+      const updated = Object.values(values).some((value) => value !== undefined)
+        ? await updateLiveAndReturn(tx, config.table, values, id)
+        : before;
       if (entityManifest[config.entity].auditable) {
         const relationsAfter: RelationSnapshot<TRelKey> =
-          (await config.relations?.read(tx, id)) ?? {};
+          (await config.relations?.read(tx, id, data)) ?? {};
         // The fetch may carry relations the UPDATE's returned row lacks;
         // overlaying keeps the richer row and the exact post-write scalars.
         const changes = computeChanges<TRow & RelationSnapshot<TRelKey>>(
@@ -745,14 +748,14 @@ export function defineRepository<
       // Every DB touch inside the delete goes through the transaction-bound
       // context (a pool-bound service UPDATE on a row this transaction locked
       // waits forever), and queue publications wait for the commit.
-      const deferred = deferPublications();
       const { result, affectedEdges } = await executeDeleteWithEffects(
         ctx.db,
         removable,
         ids,
         lifecycle.delete,
-        (transactionDb) =>
-          deleteInTransaction(
+        async (transactionDb) => {
+          const deferred = deferPublications();
+          const result = await deleteInTransaction(
             {
               ...ctx,
               db: transactionDb,
@@ -765,9 +768,13 @@ export function defineRepository<
               },
             },
             ids,
-          ),
+          );
+          await runAfterCommit(transactionDb, (committedDb) =>
+            deferred.flush(committedDb),
+          );
+          return result;
+        },
       );
-      await deferred.flush(ctx.db);
       return { ...result, affectedEdges };
     };
 

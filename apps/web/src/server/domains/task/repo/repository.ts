@@ -5,7 +5,6 @@ import {
   defineRepository,
   onDb,
 } from "~/server/entity-kernel/repo/repository";
-import { findDescendantTaskEmbeddingRefs } from "~/server/generic/embedding/repo/entity-embedding-cleanup";
 
 import {
   createTask,
@@ -51,13 +50,10 @@ export const taskRepository = defineRepository("task", {
     );
     await refreshDerivedSearchRefs(
       ctx.db,
-      [
-        ...survivors.map((entityId) => ({
-          entityKind: "task" as const,
-          entityId,
-        })),
-        ...(await findDescendantTaskEmbeddingRefs(ctx.db, survivors)),
-      ],
+      survivors.map((entityId) => ({
+        entityKind: "task" as const,
+        entityId,
+      })),
       "task.delete.inheritingDescendants",
     );
     return { ...result, removed: result.shortcodes };

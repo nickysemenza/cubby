@@ -1,4 +1,5 @@
 import {
+  parseShortcodeFor,
   type MealShortcode,
   type RecipeShortcode,
 } from "@cubby/schemas/identifiers";
@@ -116,7 +117,9 @@ function DailyAddFood({
     entityMutationOptionsFactory(
       "meal",
       "create",
-    )({ onSuccess: (created) => setTarget(created.id) }),
+    )({
+      onSuccess: (created) => setTarget(parseShortcodeFor("meal", created.id)),
+    }),
   );
   if (target)
     return recipeId ? (

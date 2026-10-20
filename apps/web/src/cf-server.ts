@@ -647,6 +647,30 @@ const handler = {
           cronLog.warn("skipped: maintenance mode");
           return;
         }
+        if (controller.cron === "* * * * *") {
+          await withInvocationDb(env.HYPERDRIVE.connectionString, async () => {
+            const [
+              { db },
+              { wakeDerivedRefresh },
+              { scheduleDerivedDiscovery },
+              { recoverMissedWork },
+            ] = await Promise.all([
+              import("./server/db"),
+              import("./server/domains/run/service/derived-refresh"),
+              import("./server/domains/run/service/derived-discovery"),
+              import("./server/workflows/catch-up"),
+            ]);
+            const jobs = await Promise.allSettled([
+              wakeDerivedRefresh(db),
+              scheduleDerivedDiscovery(db),
+              recoverMissedWork(db),
+            ]);
+            for (const job of jobs)
+              if (job.status === "rejected")
+                Sentry.captureException(job.reason);
+          });
+          return;
+        }
         if (controller.cron !== "0 12 * * *")
           throw new Error(`Unexpected cron trigger: ${controller.cron}`);
         await Sentry.withMonitor(

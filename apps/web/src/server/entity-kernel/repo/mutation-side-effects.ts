@@ -1,38 +1,9 @@
 import type { BackgroundTaskInput } from "@cubby/schemas/background-tasks";
 import type { EntityId, EntityRef, RunId } from "@cubby/schemas/identifiers";
-import { parseEntityRef } from "@cubby/schemas/identifiers";
-import {
-  isEmbeddableEntity,
-  searchableEntities,
-  type SearchableEntity,
-  type SearchableEntityRef,
-} from "@cubby/schemas/search";
-import { uniqBy } from "es-toolkit";
+import { type SearchableEntityRef } from "@cubby/schemas/search";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import {
-  findDescendantTaskEmbeddingRefs,
-  findCommercialEmbeddingRefsForExpenses,
-  findEmbeddingRefsForCategories,
-  findEmbeddingRefsForPurchases,
-  findEmbeddingRefsForVendors,
-  findGardenEntryEmbeddingRefsForLocations,
-  findGardenEntryEmbeddingRefsForPlantings,
-  findInventoryEmbeddingRefsForLocations,
-  findInventoryEmbeddingRefsForProducts,
-  findMealEmbeddingRefsForRecipes,
-  findPlantingEmbeddingRefsForLocations,
-  findPlantingEmbeddingRefsForPlants,
-  findRecipeEmbeddingRefsForIngredients,
-  findTaskEmbeddingRefsForProducts,
-  findTrackerEmbeddingRefsForProjects,
-  findTransactionEmbeddingRefsForAccounts,
-  findWishEmbeddingRefsForProducts,
-} from "~/server/generic/embedding/repo/entity-embedding";
-import {
-  findDirectImageSearchOwnerRefs,
-  refreshSearchDocuments,
-} from "~/server/generic/search/repo/search-document";
+import { captureDerivedRefresh } from "~/server/generic/derived-refresh/repo/capture";
 import {
   type PublishOptions,
   publishInBackground,
@@ -87,11 +58,6 @@ export const isMutationSideEffectRef = (
   mutationSideEffectEntitySet.has(ref.entity);
 
 export interface MutationSideEffectPorts {
-  readonly scheduleConnections?: (
-    db: Database,
-    events: readonly MutationSideEffectEvent[],
-    refs: readonly SearchableEntityRef[],
-  ) => Promise<void>;
   /** Publish after commit; failures are reported, never surfaced as rollback. */
   readonly publishTasks: (
     db: Database,
@@ -102,208 +68,16 @@ export interface MutationSideEffectPorts {
 
 const productionMutationSideEffectPorts: MutationSideEffectPorts = {
   publishTasks: publishInBackground,
-  scheduleConnections: async (db, events, refs) => {
-    const { lookupShortcodes } =
-      await import("~/server/generic/shortcode/repo/shortcode-resolver");
-    const { scheduleConnectionRefresh } =
-      await import("~/server/domains/run/repo/connection-refresh");
-    const liveRefs = [
-      ...events
-        .filter((event) => event.action !== "deleted")
-        .map((event) => event.entity),
-      ...refs.map((ref) => parseEntityRef(ref.entityKind, ref.entityId)),
-    ];
-    const codes = await lookupShortcodes(db, liveRefs);
-    const seen = new Set<string>();
-    for (const ref of liveRefs) {
-      const key = `${ref.entity}:${ref.id}`;
-      const code = codes.get(key);
-      if (!code || seen.has(key)) continue;
-      seen.add(key);
-      await scheduleConnectionRefresh(db, {
-        entityKind: ref.entity,
-        entityId: code,
-      });
-    }
-  },
 };
 
-/** The search documents that embed text from a batch of one entity's rows. */
-type SearchDependent<E extends MutationSideEffectEntity> = (
-  db: Database | DrizzleTransaction,
-  ids: EntityId<E>[],
-) => Promise<SearchableEntityRef[]>;
-
-type SearchDependents = {
-  [E in MutationSideEffectEntity]: Partial<
-    Record<"created" | "updated", readonly SearchDependent<E>[]>
-  >;
-};
-
-const findImageSearchOwnerRefs: SearchDependent<"image"> = async (db, ids) => {
-  const refs: SearchableEntityRef[] = [];
-  for (const id of ids)
-    refs.push(...(await findDirectImageSearchOwnerRefs(db, id)));
-  return refs;
-};
-
-/**
- * The one roster of search dependencies. Each entry names the other search
- * documents whose text embeds the changed entity, so the same declaration
- * drives the synchronous projection refresh and the post-commit embedding
- * wave. A searchable entity's own document is implicit on create and update.
- *
- * Triggers are deliberately coarse — any create or update, never changed-field
- * detection — and each dependency is an explicit query rather than one
- * inferred from relation edges: Cubby data is low-volume and refresh tasks
- * skip unchanged text by hash, so obvious coverage beats fragile precision.
- * Deletes have no entry: `cascadeRemoval` retires search artifacts inside
- * every delete transaction, including direct repo deletes that skip this path.
- */
-const searchDependents: SearchDependents = {
-  device: {},
-  product: {
-    created: [findInventoryEmbeddingRefsForProducts],
-    updated: [
-      findInventoryEmbeddingRefsForProducts,
-      findTaskEmbeddingRefsForProducts,
-      findWishEmbeddingRefsForProducts,
-    ],
-  },
-  productCategory: { updated: [findEmbeddingRefsForCategories] },
-  location: {
-    updated: [
-      findInventoryEmbeddingRefsForLocations,
-      findPlantingEmbeddingRefsForLocations,
-      findGardenEntryEmbeddingRefsForLocations,
-    ],
-  },
-  ingredient: { updated: [findRecipeEmbeddingRefsForIngredients] },
-  recipe: { updated: [findMealEmbeddingRefsForRecipes] },
-  cookbook: {},
-  inventory: {},
-  meal: {},
-  project: { updated: [findTrackerEmbeddingRefsForProjects] },
-  task: { updated: [findDescendantTaskEmbeddingRefs] },
-  vendor: { updated: [findEmbeddingRefsForVendors] },
-  purchase: { updated: [(db, ids) => findEmbeddingRefsForPurchases(db, ids)] },
-  financialAccount: { updated: [findTransactionEmbeddingRefsForAccounts] },
-  financialTransaction: {},
-  // Expense writes can resolve Purchase/Vendor rows implicitly.
-  expense: {
-    created: [findCommercialEmbeddingRefsForExpenses],
-    updated: [findCommercialEmbeddingRefsForExpenses],
-  },
-  wish: {},
-  plant: { updated: [findPlantingEmbeddingRefsForPlants] },
-  planting: { updated: [findGardenEntryEmbeddingRefsForPlantings] },
-  gardenEntry: {},
-  image: {
-    created: [findImageSearchOwnerRefs],
-    updated: [findImageSearchOwnerRefs],
-  },
-};
-
-const searchDependentsFor = <E extends MutationSideEffectEntity>(
-  entity: E,
-  action: "created" | "updated",
-): readonly SearchDependent<E>[] => searchDependents[entity][action] ?? [];
-
-const searchableEntitySet = new Set<string>(searchableEntities);
-const isSearchable = (
-  entity: MutationSideEffectEntity,
-): entity is MutationSideEffectEntity & SearchableEntity =>
-  searchableEntitySet.has(entity);
-
-const uniqueRefs = (refs: SearchableEntityRef[]) =>
-  uniqBy(refs, (ref) => `${ref.entityKind}:${ref.entityId}`);
-
-/**
- * Every search document a wave of events changes: each entity's own
- * projection plus its declared dependents (a product rename rewrites its
- * inventory, task, and wish documents). Events are batched per entity and
- * action, so a bulk wave runs each dependency query once.
- */
-async function collectSearchRefs(
-  db: Database | DrizzleTransaction,
-  events: readonly MutationSideEffectEvent[],
-): Promise<SearchableEntityRef[]> {
-  const batches = new Map<
-    string,
-    {
-      entity: MutationSideEffectEntity;
-      action: "created" | "updated";
-      ids: EntityId<MutationSideEffectEntity>[];
-    }
-  >();
-  for (const { action, entity } of events) {
-    if (action === "deleted") continue;
-    const key = `${entity.entity}:${action}`;
-    const batch = batches.get(key) ?? {
-      entity: entity.entity,
-      action,
-      ids: [],
-    };
-    batch.ids.push(entity.id);
-    batches.set(key, batch);
-  }
-  const refs: SearchableEntityRef[] = [];
-  for (const { entity, action, ids } of batches.values()) {
-    if (isSearchable(entity))
-      refs.push(...ids.map((entityId) => ({ entityKind: entity, entityId })));
-    for (const collect of searchDependentsFor(entity, action))
-      refs.push(...(await collect(db, ids)));
-  }
-  return uniqueRefs(refs);
-}
-
-/**
- * Refresh every projection one event changes, on `db`. The entity kernel
- * calls this inside the write transaction; other writers get it from
- * {@link runMutationSideEffects}. Either way a projection failure is a visible
- * error, not a swallowed log — the projection is a SQL view of the row being
- * written and has no reason to fail independently.
- */
-export async function projectMutationEvent(
-  db: Database | DrizzleTransaction,
-  event: MutationSideEffectEvent,
-): Promise<SearchableEntityRef[]> {
-  const refs = await collectSearchRefs(db, [event]);
-  if (refs.length > 0) await refreshSearchDocuments(db, refs);
-  return refs;
-}
-
-export async function refreshProjectionsForEvent(
+/** Capture a root inside a caller-owned transaction; dependency expansion is background work. */
+export async function captureMutationEvent(
   db: Database | DrizzleTransaction,
   event: MutationSideEffectEvent,
 ): Promise<void> {
-  await projectMutationEvent(db, event);
-}
-
-async function publishEmbeddingRefreshes(
-  db: Database,
-  refs: SearchableEntityRef[],
-  source: string,
-  ports: MutationSideEffectPorts,
-): Promise<void> {
-  // Purchase/financialTransaction/expense are searchable but not embeddable
-  // (see `entity-manifest.ts` `embeddableEntities`): never queue a vector
-  // refresh for them, even though they can appear in a collected ref set.
-  const embeddable = uniqueRefs(
-    refs.filter((ref) => isEmbeddableEntity(ref.entityKind)),
-  );
-  if (embeddable.length === 0) return;
-  const requestedAt = new Date().toISOString();
-  await ports.publishTasks(
-    db,
-    embeddable.map((ref) => ({
-      kind: "entity-embedding.refresh" as const,
-      requestedAt,
-      entityKind: ref.entityKind,
-      entityId: ref.entityId,
-    })),
-    { source },
-  );
+  await captureDerivedRefresh(db, [
+    { entityKind: event.entity.entity, entityId: event.entity.id },
+  ]);
 }
 
 /**
@@ -314,13 +88,16 @@ async function publishEmbeddingRefreshes(
 export async function refreshDerivedSearchRefs(
   db: Database,
   refs: SearchableEntityRef[],
-  source: string,
-  ports: MutationSideEffectPorts = productionMutationSideEffectPorts,
+  _source: string,
+  _ports: MutationSideEffectPorts = productionMutationSideEffectPorts,
 ): Promise<void> {
-  const unique = uniqueRefs(refs);
+  const unique = [
+    ...new Map(
+      refs.map((ref) => [`${ref.entityKind}:${ref.entityId}`, ref]),
+    ).values(),
+  ];
   if (unique.length === 0) return;
-  await refreshSearchDocuments(db, unique);
-  await publishEmbeddingRefreshes(db, unique, source, ports);
+  await captureDerivedRefresh(db, unique);
 }
 
 /** Independent of search: Location vision analysis, gated on image changes. */
@@ -360,30 +137,21 @@ async function enqueueLocationAiRefresh(
 }
 
 export interface RunMutationSideEffectsOptions {
-  /**
-   * `"skip"` when the caller already refreshed the projections inside its own
-   * write transaction (the entity kernel does); the default refreshes them
-   * synchronously first, so a non-kernel writer's document is current before
-   * its response returns.
-   */
-  projection?: "refresh" | "skip";
-  /** Dependency wave captured while projecting this write, before commit. */
-  projectedRefs?: SearchableEntityRef[];
+  /** The authoritative repo already recorded this root in its transaction. */
+  captured?: boolean;
 }
 
 export async function runMutationSideEffects(
   db: Database,
   event: MutationSideEffectEvent,
   ports: MutationSideEffectPorts = productionMutationSideEffectPorts,
-  options: RunMutationSideEffectsOptions = {},
+  _options: RunMutationSideEffectsOptions = {},
 ): Promise<void> {
-  await runMutationSideEffectsForEntities(db, [event], ports, options);
+  await runMutationSideEffectsForEntities(db, [event], ports, _options);
 }
 
 /**
- * One wave of mutations: refresh the projections it changes (unless the
- * caller already did, in its transaction), then publish one deduplicated
- * embedding-refresh task list for the whole wave.
+ * Capture roots only; derived refresh and connection admission run in the background.
  */
 export async function runMutationSideEffectsForEntities(
   db: Database,
@@ -393,17 +161,15 @@ export async function runMutationSideEffectsForEntities(
 ): Promise<void> {
   const [firstEvent] = events;
   if (!firstEvent) return;
-  const refs = options.projectedRefs ?? (await collectSearchRefs(db, events));
-  if (options.projection !== "skip" && refs.length > 0)
-    await refreshSearchDocuments(db, refs);
-  await publishEmbeddingRefreshes(
-    db,
-    refs,
-    `${firstEvent.source}:${firstEvent.action}`,
-    ports,
-  );
+  if (!options.captured)
+    await captureDerivedRefresh(
+      db,
+      events.map((event) => ({
+        entityKind: event.entity.entity,
+        entityId: event.entity.id,
+      })),
+    );
   for (const event of events) await enqueueLocationAiRefresh(db, event, ports);
-  await ports.scheduleConnections?.(db, events, refs);
 }
 
 /**

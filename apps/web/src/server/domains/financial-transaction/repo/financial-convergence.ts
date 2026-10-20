@@ -24,6 +24,7 @@ import {
   getDb,
   notDeleted,
   withTransaction,
+  withSnapshotWrite,
 } from "~/server/db/helpers";
 import {
   emailFinancialAssociation,
@@ -344,7 +345,7 @@ async function runFinancialConvergence(
   evidence?: PreparedMailFinancialEvent,
   dryRun = false,
 ): Promise<Result | Ready> {
-  return withTransaction(
+  return (dryRun ? withTransaction : withSnapshotWrite)(
     db,
     async (tx) => {
       await lockFinancialEvidenceKeys(tx, "reviewed-booking", [

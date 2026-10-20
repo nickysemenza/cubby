@@ -28,7 +28,6 @@ import {
   withTransactionOn,
 } from "~/server/db/helpers";
 import { ingredient, product } from "~/server/db/schema";
-import { markProductConversionCoverageInputStale } from "~/server/domains/product/repo/conversion-coverage";
 import {
   type MutationReceipt,
   createEntityCrud,
@@ -145,16 +144,6 @@ export const updateIngredient = defineMutationWriter({
         actor,
         async (_db, receipt) => receipt,
       );
-      if (data.naKinds !== undefined) {
-        const linked = await tx
-          .select({ id: product.id })
-          .from(product)
-          .where(and(eq(product.ingredientId, id), notDeleted(product)));
-        await markProductConversionCoverageInputStale(
-          tx,
-          linked.map((row) => row.id),
-        );
-      }
       return readOutput(updated, () => ingredientCrud.getByID(tx, id));
     }),
 });

@@ -58,9 +58,9 @@ retain inference and actual business-write provenance.
 Discovery advances durable cursors through at most 200 field targets and 400
 eligible Emails per invocation; Email execution rosters still cap at 200.
 Ordinary refresh execution has two active Run slots across the household,
-including funding/auth pauses. Discovery is a separate activation Run; a Sweep's
-connection child remains owned by its explicit parent rather than taking an
-ordinary slot. Product, field and on-demand connection targets share a running
+including funding/auth pauses and connection Sweep children. Discovery is a
+separate activation Run; a Sweep's connection child retains its explicit parent
+while consuming the same admission capacity. Product, field and on-demand connection targets share a running
 non-Email Run for their actor and activation revision. New policy work waits
 for capacity rather than joining an older policy owner. Frozen Email rosters retain their mailbox and
 200-item boundary. A short scheduling transaction uses a nonblocking advisory
@@ -84,8 +84,9 @@ existing recoverable failed or dispatch-failed owner for relaunch, reporting
 admission refusal while preserving its automatic recovery budget. Cancelled, exhausted or paused
 owners report their retained status and diagnostic instead of silently returning
 no work.
-Automatic connection side effects defer without failing the entity write; the
-next routine Sweep can rediscover those live sources.
+Ordinary entity writes capture dirty roots and wake the generic background
+refresh framework. Connection discovery and admission happen in the resulting
+background Sweep; see the [derived-data contract](../entities.md#background-derived-data).
 Scheduling requires an actor without an inherited Run: a Run-scoped actor cannot
 create an independent owner or advance its successor key through `ensureRun`.
 A new policy resets the scan cursor and its discovery Workflow checkpoints

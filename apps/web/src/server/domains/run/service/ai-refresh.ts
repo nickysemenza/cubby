@@ -53,6 +53,7 @@ import {
   saveAiDiscoveryCursor,
 } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
+import { connectionInputKeys } from "~/server/domains/connection/repo/discovery-inputs";
 import { productIdentityEvidenceFence } from "~/server/domains/product/repo/match/product-identity-fence";
 import {
   productIdentitySnapshot,
@@ -68,6 +69,11 @@ import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
 import type { AuditSampler } from "~/server/generic/assessment/repo/automatic-rules";
 import { fieldReviewIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/audit-log";
+import {
+  fenceDerivedInputsAtCommit,
+  currentInputRevision,
+  hasUnmaterializedInputs,
+} from "~/server/generic/derived-refresh/repo/freshness";
 import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { buildCrudServices } from "~/server/http/request-context";
 
@@ -623,6 +629,15 @@ export async function executeAiRefreshTarget(
       const { entityGraphRootSchema } =
         await import("@cubby/schemas/entity-graph");
       const source = entityGraphRootSchema.parse(claimed.snapshot);
+      const revision = await currentInputRevision(db);
+      const kinds = [
+        source.entityKind,
+        ...connectionInputKeys(source.entityKind)
+          .filter((key) => key.startsWith("kind:"))
+          .map((key) => key.slice(5)),
+      ];
+      if (await hasUnmaterializedInputs(db, kinds, { pendingOnly: true }))
+        throw new Error("Connection discovery waits for current projections");
       if (
         source.entityKind !== target.entity ||
         (await connectionSourceFingerprint(db, source)) !==
@@ -633,7 +648,7 @@ export async function executeAiRefreshTarget(
         );
       const { prepareEntityConnections } =
         await import("~/server/domains/connection/service/entity-connections");
-      const publications = await prepareEntityConnections(
+      const preparation = await prepareEntityConnections(
         db,
         kernel(db, ports, claimed.runId),
         source,
@@ -644,6 +659,12 @@ export async function executeAiRefreshTarget(
       );
       const checkSource = async (transactionDb: Database) => {
         if (
+          await hasUnmaterializedInputs(transactionDb, kinds, {
+            pendingOnly: true,
+          })
+        )
+          throw new Error("Connection discovery inputs are pending refresh");
+        if (
           (await connectionSourceFingerprint(transactionDb, source)) !==
           claimed.provenance.inputFingerprint
         )
@@ -651,7 +672,7 @@ export async function executeAiRefreshTarget(
             "Connection discovery source changed during evaluation",
           );
       };
-      for (const publish of publications)
+      for (const publish of preparation.publications)
         await publishAiEvaluation(
           db,
           id,
@@ -659,12 +680,25 @@ export async function executeAiRefreshTarget(
           async (transactionDb) => {
             await checkSource(transactionDb);
             await publish(transactionDb);
+            await fenceDerivedInputsAtCommit(transactionDb, revision, (tx) =>
+              connectionSourceFingerprint(tx, source),
+            );
             return null;
           },
           "continue",
         );
       await publishAiEvaluation(db, id, token, async (transactionDb) => {
         await checkSource(transactionDb);
+        if (
+          !preparation.complete ||
+          (await hasUnmaterializedInputs(transactionDb, kinds))
+        )
+          throw new Error(
+            `Connection candidate coverage is unconfirmed. ${preparation.coverageErrors.join("\n")}`,
+          );
+        await fenceDerivedInputsAtCommit(transactionDb, revision, (tx) =>
+          connectionSourceFingerprint(tx, source),
+        );
         return { source, discovered: true };
       });
       return true;

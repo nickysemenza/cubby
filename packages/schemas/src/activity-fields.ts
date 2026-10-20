@@ -19,6 +19,7 @@ export const runPurpose = z.enum([
   "mail_reclassify",
   // Step-ledger purposes: one ordered RunStep per backlog or Suggestion family.
   "maintenance",
+  "derived_refresh",
   "sweep",
 ]);
 export type RunPurpose = z.infer<typeof runPurpose>;
@@ -26,6 +27,7 @@ export type RunPurpose = z.infer<typeof runPurpose>;
 /** Run purposes whose progress is an ordered RunStep ledger. */
 export const STEP_RUN_PURPOSES = [
   "maintenance",
+  "derived_refresh",
   "sweep",
 ] as const satisfies readonly RunPurpose[];
 export type StepRunPurpose = (typeof STEP_RUN_PURPOSES)[number];
@@ -87,6 +89,7 @@ export const RUN_PURPOSE_LABEL = {
   mail_discovery: "Mail discovery",
   mail_reclassify: "Email reclassification",
   maintenance: "Maintenance",
+  derived_refresh: "Derived refresh",
   sweep: "Sweep",
 } as const satisfies Record<RunPurpose, string>;
 

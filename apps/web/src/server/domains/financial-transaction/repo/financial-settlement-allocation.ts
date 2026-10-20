@@ -8,7 +8,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   databaseForTransaction,
   notDeleted,
-  withTransaction,
+  withSnapshotWrite,
 } from "~/server/db/helpers";
 import {
   financialTransaction,
@@ -69,7 +69,7 @@ export async function applyFinancialSettlementAllocation(
   input: FinancialSettlementAllocationInput,
   actor: ActorContext,
 ) {
-  return withTransaction(
+  return withSnapshotWrite(
     db,
     async (tx) => {
       const txDb = databaseForTransaction(tx);

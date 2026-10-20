@@ -57,7 +57,10 @@ test("kernel HTTP round trip preserves fields, audit identity, and calendar effe
     );
     expect(updated.status()).toBe(200);
     expect(updated.parsedBody).toMatchObject({
-      item: { id, name: `${name} renamed`, notes: "Keep this" },
+      item: { id, name: `${name} renamed` },
+    });
+    expect((await api.get("vendor", id)).parsedBody).toMatchObject({
+      notes: "Keep this",
     });
     const list = await api.list("vendor", {
       filters: { search: name },

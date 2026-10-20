@@ -79,15 +79,22 @@ export const getIngredientsByIDs = async (
     async (span) => {
       span.setAttribute("ingredient.requested_count", ids.length);
       const ingredients = await getIngredientsByIDsLeanRepo(db, ids);
-      return batchEnrichNestedItems(
-        ingredients,
-        (ing) => ing.product,
-        (products) => enrichProductsWithFood(usdaClient, products),
-        (ing, enrichedProducts) => ({ ...ing, product: enrichedProducts }),
-      );
+      return enrichPreparedIngredients(usdaClient, ingredients);
     },
   );
 };
+
+/** Enrich an already captured costing snapshot without reading mutable inputs again. */
+export const enrichPreparedIngredients = (
+  usdaClient: UsdaFoodBatchPort,
+  ingredients: Awaited<ReturnType<typeof getIngredientsByIDsLeanRepo>>,
+): Promise<IngredientWithFoodLeanOut[]> =>
+  batchEnrichNestedItems(
+    ingredients,
+    (ingredient) => ingredient.product,
+    (products) => enrichProductsWithFood(usdaClient, products),
+    (ingredient, product) => ({ ...ingredient, product }),
+  );
 
 export const getIngredientByName = async (
   db: Database,

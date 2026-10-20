@@ -14,22 +14,26 @@ import {
   acquisitionPairEligible,
 } from "~/server/domains/connection/repo/connection-candidates";
 import { connectionRecord } from "~/server/domains/connection/repo/connection-evidence";
-import { semanticEntityCandidates } from "~/server/generic/embedding/service/semantic-search.service";
+import { semanticEntityCandidateScan } from "~/server/generic/embedding/service/semantic-search.service";
 import { SEMANTIC_MATCH_MIN_SIMILARITY } from "~/server/generic/embedding/service/semantic/constants";
 import { findLexicalSearchCandidates } from "~/server/generic/search/service/search.service";
 
 /** Bounded indexed retrieval, including unitemized orders with evidence in notes. */
-export async function discoverAcquisitionCandidates(
+export async function discoverAcquisitionCandidateScan(
   db: Database,
   source: EntityRef,
-): Promise<ConnectionCandidate[]> {
+): Promise<{
+  candidates: ConnectionCandidate[];
+  complete: boolean;
+  coverageErrors: string[];
+}> {
   if (!["product", "purchase", "expense"].includes(source.entityKind))
-    return [];
+    return { candidates: [], complete: true, coverageErrors: [] };
   if (
     source.entityKind === "expense" &&
     !(await expenseConnectionEligible(db, source.entityId))
   )
-    return [];
+    return { candidates: [], complete: true, coverageErrors: [] };
   const record = z
     .record(z.string(), z.json())
     .parse((await connectionRecord(db, source)).row);
@@ -59,6 +63,7 @@ export async function discoverAcquisitionCandidates(
   const kinds: SearchableEntity[] =
     source.entityKind === "product" ? ["purchase", "expense"] : ["product"];
   const candidates = new Map<string, ConnectionCandidate>();
+  const coverageErrors: string[] = [];
   const notes = await retrieveAcquisitionNotes(db, source, {
     name: basisValueOf(record.name) ?? identity,
     notes: description,
@@ -78,13 +83,17 @@ export async function discoverAcquisitionCandidates(
           { query, entityKinds: [kind], limit: 10 },
           10,
         ),
-        semanticEntityCandidates(db, query, 10, kind),
+        semanticEntityCandidateScan(db, query, 10, kind),
       ]);
+      if (!semantic.complete)
+        coverageErrors.push(
+          semantic.error ?? `Semantic coverage is unconfirmed for ${kind}`,
+        );
       const otherRefs: EntityRef[] = [
         ...lexical.map((hit) => ({ entityKind: kind, entityId: hit.id })),
         // Meaning alone must clear the floor; a record also hit lexically or
         // by notes still enters through those lists.
-        ...semantic
+        ...semantic.candidates
           .filter(
             ({ similarity }) => similarity >= SEMANTIC_MATCH_MIN_SIMILARITY,
           )
@@ -137,5 +146,17 @@ export async function discoverAcquisitionCandidates(
         });
       }
     }
-  return [...candidates.values()].slice(0, 30);
+  return {
+    candidates: [...candidates.values()].slice(0, 30),
+    complete: coverageErrors.length === 0,
+    coverageErrors: [...new Set(coverageErrors)],
+  };
+}
+
+/** Advisory callers can use positives without claiming complete discovery. */
+export async function discoverAcquisitionCandidates(
+  db: Database,
+  source: EntityRef,
+): Promise<ConnectionCandidate[]> {
+  return (await discoverAcquisitionCandidateScan(db, source)).candidates;
 }

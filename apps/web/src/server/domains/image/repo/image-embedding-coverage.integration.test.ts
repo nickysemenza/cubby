@@ -5,9 +5,12 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { searchDocument } from "~/server/db/schema";
+import { searchDocument, derivedRefreshCaptureInbox } from "~/server/db/schema";
 import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
-import { captureBackgroundQueue } from "~/server/testing/background-queue";
+import {
+  captureBackgroundQueue,
+  drainDerivedRefreshFrontier,
+} from "~/server/testing/background-queue";
 
 import {
   createOrReuseAttachedImage,
@@ -64,13 +67,14 @@ describe("image create paths project and enqueue embedding", () => {
         )
     ).length;
 
-  const refreshQueuedFor = (imageId: string) =>
-    queue.tasks.some(
-      (task) =>
-        task.kind === "entity-embedding.refresh" &&
-        task.entityKind === "image" &&
-        task.entityId === imageId,
-    );
+  const refreshQueuedFor = async (imageId: string) =>
+    (
+      await getDb(ctx.db)
+        .select()
+        .from(derivedRefreshCaptureInbox)
+        .where(eq(derivedRefreshCaptureInbox.entityId, imageId))
+        .limit(1)
+    ).length > 0;
 
   it("createPendingImageRecord", async () => {
     const row = await createPendingImageRecord(ctx.db, {
@@ -79,8 +83,10 @@ describe("image create paths project and enqueue embedding", () => {
       contentType: "image/jpeg",
       size: 1024,
     });
+    expect(await liveDocumentFor(row.id)).toBe(0);
+    expect(await refreshQueuedFor(row.id)).toBe(true);
+    await drainDerivedRefreshFrontier(ctx.db);
     expect(await liveDocumentFor(row.id)).toBe(1);
-    expect(refreshQueuedFor(row.id)).toBe(true);
   });
 
   it("createUploadedImageRecord", async () => {
@@ -90,8 +96,10 @@ describe("image create paths project and enqueue embedding", () => {
       contentType: "image/jpeg",
       size: 1024,
     });
+    expect(await liveDocumentFor(row.id)).toBe(0);
+    expect(await refreshQueuedFor(row.id)).toBe(true);
+    await drainDerivedRefreshFrontier(ctx.db);
     expect(await liveDocumentFor(row.id)).toBe(1);
-    expect(refreshQueuedFor(row.id)).toBe(true);
   });
 
   it("createOrReuseAttachedImage refreshes only after the transaction commits", async () => {
@@ -108,7 +116,9 @@ describe("image create paths project and enqueue embedding", () => {
       },
       { entity: "project", id: projectId },
     );
+    expect(await liveDocumentFor(row.id)).toBe(0);
+    expect(await refreshQueuedFor(row.id)).toBe(true);
+    await drainDerivedRefreshFrontier(ctx.db);
     expect(await liveDocumentFor(row.id)).toBe(1);
-    expect(refreshQueuedFor(row.id)).toBe(true);
   });
 });

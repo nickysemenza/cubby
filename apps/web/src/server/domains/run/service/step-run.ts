@@ -107,6 +107,9 @@ export type StepRunDrivers = (
 ) => Promise<StepDriver[]>;
 
 const registry = {
+  derived_refresh: async () =>
+    (await import("~/server/domains/run/service/derived-refresh"))
+      .derivedRefreshDrivers,
   maintenance: async () =>
     (await import("~/server/domains/maintenance/service/maintenance-run"))
       .maintenanceDrivers,

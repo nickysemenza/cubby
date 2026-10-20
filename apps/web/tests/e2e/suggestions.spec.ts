@@ -1,3 +1,5 @@
+import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
+import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import type { Page } from "@playwright/test";
 import superjson from "superjson";
 import { fieldSuggestionsOut } from "@cubby/schemas/ai";
@@ -114,20 +116,7 @@ test("Suggestions lists every family with named records and category pills, and 
   });
   const itemId = await resolveOrThrow(db, "product", item.id);
   const runId = await ensureRun(db, actor, { purpose: "ai_suggest" });
-  await getDb(db).insert(suggestionTable).values({
-    runId,
-    entity: "product",
-    recordId: itemId,
-    field: "categoryId",
-    currentValue: null,
-    suggestedValue: category.id,
-    confidence: 0.91,
-    runnerUpValue: null,
-    runnerUpConfidence: null,
-    model: "typesafe/jev",
-    kind: "addition",
-    status: "pending",
-  });
+
   const charge = await createEntityFixture(page, "expense", {
     name: productName,
     cost: 24,
@@ -159,7 +148,33 @@ test("Suggestions lists every family with named records and category pills, and 
     },
   ]);
   await generateStatementSuggestions(db);
-
+  await drainDerivedRefreshFrontier(db);
+  const seedCategoryAdvice = async () =>
+    getDb(db)
+      .insert(suggestionTable)
+      .values({
+        runId,
+        entity: "product",
+        recordId: itemId,
+        field: "categoryId",
+        currentValue: null,
+        suggestedValue: category.id,
+        confidence: 0.91,
+        runnerUpValue: null,
+        runnerUpConfidence: null,
+        model: "typesafe/jev",
+        kind: "addition",
+        status: "pending",
+        data: {
+          liveInputFingerprint: await fieldInputFingerprint(
+            db,
+            "product",
+            itemId,
+            "categoryId",
+          ),
+        },
+      });
+  await seedCategoryAdvice();
   await gotoAuthenticatedPage(page, "/suggestions");
   const families = page.getByRole("group", { name: "Suggestion families" });
   for (const family of [
@@ -190,8 +205,8 @@ test("Suggestions lists every family with named records and category pills, and 
     ),
   ).toContainText(categoryName);
 
-  // Confirm first: the field write changes the Product, which retires its
-  // pending connection evidence.
+  // Confirming the acquisition changes the Product's classification evidence.
+  // Its older category advice must be replaced by a fresh assessment.
   await connection
     .getByRole("button", { name: "Confirm", exact: true })
     .click();
@@ -214,6 +229,20 @@ test("Suggestions lists every family with named records and category pills, and 
     .toBe(item.id);
   await expect(connection).toHaveCount(0);
 
+  await drainDerivedRefreshFrontier(db);
+  await gotoAuthenticatedPage(page, `/suggestions?record=product:${item.id}`);
+  await expect(field).toHaveCount(0);
+  expect(
+    (
+      await getDb(db)
+        .select({ categoryId: productTable.categoryId })
+        .from(productTable)
+        .where(eq(productTable.id, itemId))
+    )[0]?.categoryId,
+  ).toBeNull();
+  await seedCategoryAdvice();
+  await gotoAuthenticatedPage(page, `/suggestions?record=product:${item.id}`);
+  await expect(field).toHaveCount(1);
   await field.getByRole("button", { name: "Accept", exact: true }).click();
   await expect
     .poll(
@@ -444,23 +473,34 @@ test("list pills accept immediately without unloading another row's suggestion",
   const firstRecordId = recordIds[0];
   if (!firstRecordId) throw new Error("Synthetic first Product is missing");
   const runId = await ensureRun(db, actor, { purpose: "ai_suggest" });
+  await drainDerivedRefreshFrontier(db);
   await getDb(db)
     .insert(suggestionTable)
     .values(
-      recordIds.map((recordId) => ({
-        runId,
-        entity: "product",
-        recordId,
-        field: "categoryId",
-        currentValue: null,
-        suggestedValue: category.id,
-        confidence: 0.97,
-        runnerUpValue: null,
-        runnerUpConfidence: null,
-        model: "typesafe/jev",
-        kind: "addition" as const,
-        status: "pending" as const,
-      })),
+      await Promise.all(
+        recordIds.map(async (recordId) => ({
+          runId,
+          entity: "product",
+          recordId,
+          field: "categoryId",
+          currentValue: null,
+          suggestedValue: category.id,
+          confidence: 0.97,
+          runnerUpValue: null,
+          runnerUpConfidence: null,
+          model: "typesafe/jev",
+          kind: "addition" as const,
+          status: "pending" as const,
+          data: {
+            liveInputFingerprint: await fieldInputFingerprint(
+              db,
+              "product",
+              recordId,
+              "categoryId",
+            ),
+          },
+        })),
+      ),
     );
   const acceptance = Promise.withResolvers<void>();
   await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {

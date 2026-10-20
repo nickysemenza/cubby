@@ -5,7 +5,10 @@ import {
   projectCreateInput,
   taskCreateInput,
 } from "@cubby/schemas/project";
-import type { SearchableEntity } from "@cubby/schemas/search";
+import type {
+  SearchableEntity,
+  SearchableEntityRef,
+} from "@cubby/schemas/search";
 import { testUserId } from "@cubby/schemas/testing";
 import { eq } from "drizzle-orm";
 import type { CreatableEntity, EntityOverrides } from "tooling/factories/build";
@@ -15,6 +18,8 @@ import { buildKernelContext } from "tooling/scenarios/context";
 import { TEST_USER_ID, withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { processDerivedRefreshPage } from "~/server/domains/run/service/derived-refresh";
+import type { DerivedRefreshPorts } from "~/server/generic/derived-refresh/repo/refresh-ports.boundary";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
 beforeEach(() => {
@@ -56,38 +61,68 @@ import {
 } from "~/server/testing/repo.fixtures";
 
 import {
-  projectMutationEvent,
-  runMutationSideEffects,
-  runMutationSideEffectsForEntities,
+  runMutationSideEffects as captureSideEffects,
+  runMutationSideEffectsForEntities as captureSideEffectsForEntities,
   type MutationSideEffectEvent,
   type MutationSideEffectPorts,
 } from "./mutation-side-effects";
 
-/** Fan-out and projections run against the real database; publication is captured. */
+/** Database fanout is real; the external embedding provider records its bounded batches. */
 function capturingPorts(): MutationSideEffectPorts & {
   published: BackgroundTaskInput[][];
+  embeddingBatches: SearchableEntityRef[][];
 } {
   const published: BackgroundTaskInput[][] = [];
   return {
     published,
+    embeddingBatches: [],
     publishTasks: async (_db, tasks) => {
       published.push([...tasks]);
     },
   };
 }
 
-const embeddingRefreshRefs = (tasks: readonly BackgroundTaskInput[]) =>
-  tasks.flatMap((task) =>
-    task.kind === "entity-embedding.refresh"
-      ? [{ entityKind: task.entityKind, entityId: task.entityId }]
-      : [],
+async function drain(db: Database, ports = capturingPorts()) {
+  const computation: DerivedRefreshPorts = {
+    prepareRecipe: async () => {
+      throw new Error("No recipe computation expected in this fixture");
+    },
+    refreshEmbeddings: async (_db, refs) => {
+      ports.embeddingBatches.push([...refs]);
+      return new Map(
+        refs.map((ref) => [
+          `${ref.entityKind}:${ref.entityId}`,
+          { state: "ready" },
+        ]),
+      );
+    },
+  };
+  for (let page = 0; page < 500; page++) {
+    const result = await processDerivedRefreshPage(db, computation);
+    expect(result.errors).toEqual([]);
+    if (result.done) return;
+  }
+  throw new Error(
+    "Synthetic refresh did not finish within bounded fixture pages",
   );
+}
 
-/** Publications that carry embedding refreshes (location AI work is separate). */
-const embeddingWaves = (published: readonly BackgroundTaskInput[][]) =>
-  published.filter((tasks) =>
-    tasks.some((task) => task.kind === "entity-embedding.refresh"),
-  );
+async function runMutationSideEffects(
+  db: Database,
+  event: MutationSideEffectEvent,
+  ports = capturingPorts(),
+) {
+  await captureSideEffects(db, event, ports);
+  await drain(db, ports);
+}
+async function runMutationSideEffectsForEntities(
+  db: Database,
+  events: MutationSideEffectEvent[],
+  ports = capturingPorts(),
+) {
+  await captureSideEffectsForEntities(db, events, ports);
+  await drain(db, ports);
+}
 
 /**
  * Seeds through the entity kernel (the browser's write path) and returns the
@@ -101,6 +136,7 @@ function kernelSeeder(db: Database) {
     overrides: EntityOverrides<E>,
   ) => {
     const created = await createEntity(context, entity, overrides, { faker });
+    await drain(db);
     const id = await resolveLiveShortcode(db, created.id, entity);
     if (!id) throw new Error(`${entity} ${created.id} was not created`);
     return { code: created.id, id };
@@ -118,7 +154,7 @@ const semanticText = async (
 describe("mutation side effects integration", () => {
   const ctx = withTestDb();
 
-  it("product update enqueues product and related inventory/task embedding refreshes", async () => {
+  it("product update refreshes product and related inventory/task embeddings in the background", async () => {
     const product = await createProduct(
       ctx.db,
       makeProductInput({ name: "Manifest tarp" }),
@@ -150,21 +186,16 @@ describe("mutation side effects integration", () => {
       ctx.actor,
     );
 
-    // The publication must use exactly the dependency wave projected in the
-    // write transaction, including Inventory and Task documents.
+    // Background frontiers include Inventory and Task projections.
     const event = {
       action: "updated" as const,
       entity: { entity: "product" as const, id: product.entityId },
       source: "test.product.update",
     };
-    const projectedRefs = await projectMutationEvent(ctx.db, event);
     const ports = capturingPorts();
-    await runMutationSideEffects(ctx.db, event, ports, {
-      projection: "skip",
-      projectedRefs,
-    });
+    await runMutationSideEffects(ctx.db, event, ports);
 
-    const refs = embeddingRefreshRefs(ports.published.flat());
+    const refs = ports.embeddingBatches.flat();
     expect(refs).toEqual(
       expect.arrayContaining([
         { entityKind: "product", entityId: product.entityId },
@@ -174,7 +205,7 @@ describe("mutation side effects integration", () => {
     );
   });
 
-  it("project rename enqueues project and related task/expense embedding refreshes", async () => {
+  it("project rename refreshes project/task embeddings and Expense search projections in the background", async () => {
     const { output: project, entityId: projectId } = await createProject(
       ctx.db,
       mock(projectCreateInput, {
@@ -207,11 +238,7 @@ describe("mutation side effects integration", () => {
       ctx.actor,
     );
 
-    // Tasks/expenses embed their project's name, so a rename must fan out
-    // (see findTrackerEmbeddingRefsForProjects).
-    // Expense is searchable but not embeddable (financial entity), so its
-    // SearchDocument still refreshes but no `entity-embedding.refresh` task is
-    // published for it — see `publishEmbeddingRefreshes`.
+    // Financial entities refresh search text without generating embeddings.
     await updateProject(
       ctx.db,
       project.id,
@@ -229,7 +256,7 @@ describe("mutation side effects integration", () => {
       ports,
     );
 
-    const refs = embeddingRefreshRefs(ports.published.flat());
+    const refs = ports.embeddingBatches.flat();
     expect(refs).toEqual(
       expect.arrayContaining([
         { entityKind: "project", entityId: projectId },
@@ -242,13 +269,13 @@ describe("mutation side effects integration", () => {
     });
   });
 
-  it("bulk wave publishes exactly one entity-embedding task list for N entities", async () => {
+  it("bulk capture coalesces repeated roots before background embedding publication", async () => {
     const location = await createLocation(
       ctx.db,
       makeLocationInput({ name: "Manifest embedding bin" }),
       ctx.actor,
     );
-    const entries = [];
+    const entries: Awaited<ReturnType<typeof createInventoryEntry>>[] = [];
     for (const n of [1, 2, 3]) {
       const product = await createProduct(
         ctx.db,
@@ -271,7 +298,7 @@ describe("mutation side effects integration", () => {
     const ports = capturingPorts();
     await runMutationSideEffectsForEntities(
       ctx.db,
-      entries.map((entry) => ({
+      [...entries, ...entries].map((entry) => ({
         action: "created" as const,
         entity: { entity: "inventory" as const, id: entry.entityId },
         source: "test.embedding.bulk",
@@ -279,10 +306,11 @@ describe("mutation side effects integration", () => {
       ports,
     );
 
-    // Three entities with no dependents must collapse into a single
-    // publishTasks call (one wave-wide dispatch), not one per entity.
-    expect(ports.published).toHaveLength(1);
-    const refs = embeddingRefreshRefs(ports.published[0] ?? []);
+    const refs = ports.embeddingBatches
+      .flat()
+      .filter((ref) =>
+        entries.some((entry) => entry.entityId === ref.entityId),
+      );
     expect(refs).toEqual(
       expect.arrayContaining(
         entries.map((entry) => ({
@@ -291,7 +319,7 @@ describe("mutation side effects integration", () => {
         })),
       ),
     );
-    expect(refs).toHaveLength(3);
+    expect(new Set(refs.map((ref) => ref.entityId)).size).toBe(3);
   });
 
   it("repo delete soft-deletes the entity's search embedding", async () => {
@@ -379,7 +407,7 @@ describe("mutation side effects integration", () => {
       expect(text).toContain("Fanout awning");
       expect(text).not.toContain("Fanout tarp");
     }
-    expect(embeddingRefreshRefs(ports.published.flat())).toEqual(
+    expect(ports.embeddingBatches.flat()).toEqual(
       expect.arrayContaining([
         { entityKind: "product", entityId: tarp.id },
         { entityKind: "inventory", entityId: stock.id },
@@ -462,6 +490,7 @@ describe("mutation side effects integration", () => {
       entity: "task",
       ids: [top.code],
     });
+    await drain(ctx.db);
 
     expect(await semanticText(ctx.db, "task", bottom.id)).not.toContain(
       "Orphan tarp",
@@ -514,7 +543,7 @@ describe("mutation side effects integration", () => {
       },
       ports,
     );
-    expect(embeddingRefreshRefs(ports.published.flat())).toEqual(
+    expect(ports.embeddingBatches.flat()).toEqual(
       expect.arrayContaining([
         { entityKind: "product", entityId: cover.id },
         { entityKind: "inventory", entityId: stock.id },
@@ -550,7 +579,7 @@ describe("mutation side effects integration", () => {
     expect(await semanticText(ctx.db, "gardenEntry", entry.id)).toContain(
       "Fanout raised bed",
     );
-    expect(embeddingRefreshRefs(quiet.published.flat())).toEqual(
+    expect(quiet.embeddingBatches.flat()).toEqual(
       expect.arrayContaining([
         { entityKind: "location", entityId: bed.id },
         { entityKind: "planting", entityId: planting.id },
@@ -591,7 +620,7 @@ describe("mutation side effects integration", () => {
       ports,
     );
 
-    expect(embeddingRefreshRefs(ports.published.flat())).toEqual(
+    expect(ports.embeddingBatches.flat()).toEqual(
       expect.arrayContaining([
         { entityKind: "plant", entityId: plant.id },
         { entityKind: "planting", entityId: planting.id },
@@ -599,7 +628,7 @@ describe("mutation side effects integration", () => {
     );
   });
 
-  it("a bulk wave of related edits publishes one deduplicated embedding wave", async () => {
+  it("a bulk wave of related edits reaches every affected embedding", async () => {
     const seed = kernelSeeder(ctx.db);
     const place = await seed("location", { name: "Fanout garage" });
     const rope = await seed("product", { name: "Fanout rope" });
@@ -634,10 +663,13 @@ describe("mutation side effects integration", () => {
       ports,
     );
 
-    const waves = embeddingWaves(ports.published);
-    expect(waves).toHaveLength(1);
-    const refs = embeddingRefreshRefs(waves[0] ?? []);
-    expect(refs).toHaveLength(new Set(refs.map((ref) => ref.entityId)).size);
+    const waves = ports.embeddingBatches;
+
+    const refs = waves.flat();
+    for (const batch of waves)
+      expect(batch).toHaveLength(
+        new Set(batch.map((ref) => ref.entityId)).size,
+      );
     expect(refs).toEqual(
       expect.arrayContaining([
         { entityKind: "product", entityId: rope.id },
@@ -648,13 +680,13 @@ describe("mutation side effects integration", () => {
     );
   });
 
-  it("projection: 'skip' leaves the search documents to the caller's transaction", async () => {
+  it("leaves derived projections unchanged until the background wave runs", async () => {
     const seed = kernelSeeder(ctx.db);
     const kit = await seed("product", { name: "Fanout kit" });
     await renameFixtureRaw(ctx.db, "product", kit.id, "Fanout bundle");
 
     const ports = capturingPorts();
-    await runMutationSideEffects(
+    await captureSideEffects(
       ctx.db,
       {
         action: "updated",
@@ -662,13 +694,17 @@ describe("mutation side effects integration", () => {
         source: "test.product.skip",
       },
       ports,
-      { projection: "skip" },
     );
 
     expect(await semanticText(ctx.db, "product", kit.id)).toContain(
       "Fanout kit",
     );
-    expect(embeddingRefreshRefs(ports.published.flat())).toContainEqual({
+    expect(ports.embeddingBatches).toEqual([]);
+    await drain(ctx.db, ports);
+    expect(await semanticText(ctx.db, "product", kit.id)).toContain(
+      "Fanout bundle",
+    );
+    expect(ports.embeddingBatches.flat()).toContainEqual({
       entityKind: "product",
       entityId: kit.id,
     });

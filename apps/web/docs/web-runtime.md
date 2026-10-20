@@ -11,6 +11,9 @@ Pass the displayed selection as mutation variables at the action boundary.
 Queries stay passive on remount. When a write closes an editor, await
 `invalidateOperationTags` with `removeInactive` so navigation cannot reuse that
 editor's stale detail cache.
+Create-from-picker dialogs resolve the pending choice synchronously from the
+saved receipt's identity/title before closing. They must not require a full
+detail schema from a mutation response; later picker queries own expanded rows.
 
 Browser query HTTP requests share one admission budget across batches, header
 groups, singleton reads and batch fallbacks, owned by

@@ -6,13 +6,21 @@ import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { setCfEnv } from "~/server/cf-env";
-import { discoverAcquisitionCandidates } from "~/server/domains/connection/service/acquisition-discovery";
-import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
+import { getDb } from "~/server/db/helpers";
+import { derivedRefreshWork } from "~/server/db/schema";
 import {
-  createInMemoryVectorizeIndex,
-  vectorId,
-} from "~/server/generic/embedding/service/semantic/vector-store";
-import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
+  discoverAcquisitionCandidates,
+  discoverAcquisitionCandidateScan,
+} from "~/server/domains/connection/service/acquisition-discovery";
+import { seedEntityEmbedding } from "~/server/generic/embedding/repo/entity-embedding";
+import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
+import { semanticEmbeddingsConfigured } from "~/server/generic/embedding/service/semantic/embeddings";
+import { createInMemoryVectorizeIndex } from "~/server/generic/embedding/service/semantic/vector-store";
+import {
+  refreshSearchDocument,
+  getSearchDocumentEmbeddingText,
+  hasUnembeddedSearchDocuments,
+} from "~/server/generic/search/repo/search-document";
 import {
   createProductFixture,
   createSystemUserFixture,
@@ -51,6 +59,7 @@ describe("acquisition Expense discovery gating", () => {
     setCfEnv(
       fromPartial<Env & { CUBBY_TEST_AI_GATEWAY: { fetch: typeof fetch } }>({
         VECTORIZE: index,
+        BACKGROUND_QUEUE: { sendBatch: async () => {} },
         CUBBY_TEST_AI_GATEWAY: { fetch: embeddings },
       }),
     );
@@ -70,15 +79,73 @@ describe("acquisition Expense discovery gating", () => {
     });
     await refreshSearchDocument(ctx.db, "expense", created.entityId);
     const ref = { entityKind: "expense" as const, entityId: created.entityId };
+    const text = await getSearchDocumentEmbeddingText(
+      ctx.db,
+      ref.entityKind,
+      ref.entityId,
+    );
+    if (!text) throw new Error("Synthetic Expense projection missing");
+    const id = await seedEntityEmbedding(ctx.db, {
+      ...text,
+      config: getSemanticEmbeddingConfig(),
+      values: vectorAt(similarity),
+    });
     await index.upsert([
       {
-        id: vectorId(ref),
+        id,
         values: vectorAt(similarity),
         metadata: { entityType: "expense" },
       },
     ]);
     return created.output.id;
   };
+
+  it("keeps valid acquisition candidates when other corpus documents have no vector", async () => {
+    await createSystemUserFixture(ctx.db);
+    const index = semanticIndex();
+    const runner = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic Acme Runner", manufacturer: "Acme" }),
+      ctx.actor,
+    );
+    const lexical = await charge(index, "Synthetic Acme Runner purchase", 0.95);
+    const missing = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic unrelated unembedded document" }),
+      ctx.actor,
+    );
+    await refreshSearchDocument(ctx.db, "product", runner.entityId);
+    await refreshSearchDocument(ctx.db, "product", missing.entityId);
+    await getDb(ctx.db)
+      .update(derivedRefreshWork)
+      .set({ state: "completed", publishing: false });
+    expect(semanticEmbeddingsConfigured()).toBe(true);
+    expect(
+      await hasUnembeddedSearchDocuments(ctx.db, getSemanticEmbeddingConfig(), [
+        "product",
+      ]),
+    ).toBe(true);
+    await expect(
+      discoverAcquisitionCandidates(ctx.db, {
+        entityKind: "expense",
+        entityId: lexical,
+      }),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: expect.objectContaining({ entityId: runner.id }),
+        }),
+      ]),
+    );
+    expect(
+      (
+        await discoverAcquisitionCandidateScan(ctx.db, {
+          entityKind: "expense",
+          entityId: lexical,
+        })
+      ).complete,
+    ).toBe(false);
+  });
 
   it("drops weak semantic-only hits and other-brand lines, keeping same-brand charges", async () => {
     // Query embeddings book their AI call under a system background Run.
@@ -103,6 +170,9 @@ describe("acquisition Expense discovery gating", () => {
     const lexical = await charge(index, "Acme Trail Runner shoe", 0.95);
     const semantic = await charge(index, "Acme running sneaker", 0.85);
 
+    await getDb(ctx.db)
+      .update(derivedRefreshWork)
+      .set({ state: "completed", publishing: false });
     const targets = (
       await discoverAcquisitionCandidates(ctx.db, {
         entityKind: "product",
@@ -125,6 +195,9 @@ describe("acquisition Expense discovery gating", () => {
       }),
       ctx.actor,
     );
+    await getDb(ctx.db)
+      .update(derivedRefreshWork)
+      .set({ state: "completed", publishing: false });
     expect(
       (
         await discoverAcquisitionCandidates(ctx.db, {

@@ -1,5 +1,5 @@
 /** Persistence seam for the catalog-wide conversion projection. */
-import { parseEntityId, type ProductId } from "@cubby/schemas/identifiers";
+import type { ProductId } from "@cubby/schemas/identifiers";
 import type { ProductConversionCoverageFreshness } from "@cubby/schemas/problems";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -12,11 +12,10 @@ import {
   repositoryQueries as unwrapDb,
 } from "~/server/db/repository-access.boundary";
 import {
-  entityLink,
   product,
   productConversionCoverage,
 } from "~/server/db/retained-tables";
-import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
+import { recordDerivedRefreshRoots } from "~/server/generic/derived-refresh/repo/capture.boundary";
 
 const PRODUCT_CONVERSION_COVERAGE_ENGINE_VERSION = "conversion-coverage-v1";
 const productConversionCoverageStatusSchema = z.enum(["ready", "unavailable"]);
@@ -164,7 +163,7 @@ export const writeProductConversionCoverageProjection = async (
     });
 };
 
-const markProductConversionCoverageStale = async (
+export const markProductConversionCoverageStale = async (
   db: Database | DrizzleTransaction,
   productIds: readonly ProductId[],
 ): Promise<void> => {
@@ -175,35 +174,16 @@ const markProductConversionCoverageStale = async (
     .where(inArray(productConversionCoverage.productId, [...productIds]));
 };
 
-/**
- * A conversion input change propagates up every containing kit. Component
- * graphs are validated acyclic when edges are written, but this traversal is
- * still cycle-safe so an old/bad row cannot loop a mutation forever.
- */
+/** Containing kits are visited through the durable background dependency frontier. */
 export const markProductConversionCoverageInputStale = async (
   db: Database | DrizzleTransaction,
   productIds: readonly ProductId[],
 ): Promise<void> => {
-  const affected = new Set<ProductId>(productIds);
-  let frontier = [...affected];
-  const dbc = unwrapDb(db);
-  while (frontier.length > 0) {
-    const parents = await dbc
-      .select({ productId: entityLink.fromEntityId })
-      .from(entityLink)
-      .where(
-        and(
-          inArray(entityLink.toEntityId, frontier),
-          liveLinks("productComponent"),
-        ),
-      );
-    frontier = parents
-      .map((row) => parseEntityId("product", row.productId))
-      .filter((id) => {
-        if (affected.has(id)) return false;
-        affected.add(id);
-        return true;
-      });
-  }
-  await markProductConversionCoverageStale(db, [...affected]);
+  await recordDerivedRefreshRoots(
+    db,
+    productIds.map((entityId) => ({
+      entityKind: "product",
+      entityId,
+    })),
+  );
 };

@@ -35,6 +35,7 @@ import {
   computeChanges,
   logAuditEntries,
 } from "~/server/generic/audit-log/repo/audit-log";
+import { captureDerivedRefresh } from "~/server/generic/derived-refresh/repo/capture";
 import { resolveAllOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 type PatchTable = PgTable & {
@@ -199,22 +200,30 @@ export async function bulkPatchEntities<
       (key): key is Extract<keyof BulkRow<T>, string> =>
         Object.hasOwn(values, key),
     );
-    await logAuditEntries(
+    const auditEntries = before.flatMap((row) => {
+      const changes = computeChanges(row, { ...row, ...values }, [...fields]);
+      return changes
+        ? [
+            {
+              entityKind: spec.entity,
+              entityId: row.id,
+              action: "update" as const,
+              changes,
+            },
+          ]
+        : [];
+    });
+    await logAuditEntries(tx, actor, auditEntries);
+    const audited = new Set(auditEntries.map((entry) => entry.entityId));
+    await captureDerivedRefresh(
       tx,
-      actor,
-      before.flatMap((row) => {
-        const changes = computeChanges(row, { ...row, ...values }, [...fields]);
-        return changes
-          ? [
-              {
-                entityKind: spec.entity,
-                entityId: row.id,
-                action: "update" as const,
-                changes,
-              },
-            ]
-          : [];
-      }),
+      before
+        .filter((row) => !audited.has(row.id))
+        .map((row) => ({
+          entityKind: spec.entity,
+          entityId: row.id,
+          changedFields: fields,
+        })),
     );
     return {
       updatedIds: before.map((row) => parseEntityId(spec.entity, row.id)),

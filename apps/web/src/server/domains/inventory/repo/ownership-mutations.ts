@@ -9,7 +9,6 @@ import {
   notDeleted,
   parseInventoryAmount,
   updateAndReturn,
-  getDb,
   withTransaction,
 } from "~/server/db/helpers";
 import { expense, inventoryEntry } from "~/server/db/schema";
@@ -56,7 +55,7 @@ const withSerializableConfirmation = async <Result>(
   confirm: (tx: DrizzleTransaction) => Promise<Result>,
 ): Promise<Result> => {
   try {
-    return await getDb(db).transaction(confirm, {
+    return await withTransaction(db, confirm, {
       isolationLevel: "serializable",
     });
   } catch (error) {

@@ -3,150 +3,130 @@ import type {
   VectorizeQueryOptions,
   VectorizeVector,
 } from "@cloudflare/workers-types";
-import type {
-  SearchableEntity,
-  SearchableEntityRef,
-} from "@cubby/schemas/search";
+import type { SearchableEntity } from "@cubby/schemas/search";
 import { searchableEntitySchema } from "@cubby/schemas/search";
 import { chunk } from "es-toolkit";
 import { z } from "zod";
 
 import { getVectorIndex } from "~/server/cf-env";
 
-/**
- * The slice of the Cloudflare Vectorize (v2) binding Cubby uses. Declared here
- * rather than taken from the generated `Env` type because `wrangler types`
- * emits the legacy `VectorizeIndex` class, which lacks `queryById`; the
- * runtime binding has it. Tests satisfy this with
- * {@link createInMemoryVectorizeIndex} via `setCfEnv`, the same way queues
- * are faked — one fake at the binding boundary, no parallel port fake.
- */
+interface VectorizeMutation {
+  mutationId: string;
+}
+
+/** The v2 binding surface; mutations are accepted before they become queryable. */
 export interface VectorizeIndexBinding {
   query(
     vector: number[],
     options?: VectorizeQueryOptions,
   ): Promise<VectorizeMatches>;
   queryById(
-    vectorId: string,
+    id: string,
     options?: VectorizeQueryOptions,
   ): Promise<VectorizeMatches>;
+  getByIds(ids: string[]): Promise<VectorizeVector[]>;
   upsert(vectors: VectorizeVector[]): Promise<VectorizeMutation>;
   deleteByIds(ids: string[]): Promise<VectorizeMutation>;
 }
 
-/** Mutations are async on Vectorize; the id is the only thing it returns. */
-interface VectorizeMutation {
-  mutationId: string;
-}
-
-export interface VectorMatch extends SearchableEntityRef {
+export interface PhysicalVectorMatch {
+  id: string;
   similarity: number;
 }
-
-interface StoredVector extends SearchableEntityRef {
+export interface StoredVector {
+  id: string;
+  entityKind: SearchableEntity;
   values: number[];
 }
-
 interface VectorQueryOptions {
   entityKinds?: SearchableEntity[];
   topK: number;
 }
 
-/**
- * Where entity vectors live. Postgres keeps only the slim `EntityEmbedding`
- * row (hash + model bookkeeping); the vector itself is here. Every consumer
- * checks {@link VectorStorePort.configured} through
- * `semanticEmbeddingsConfigured()` before calling anything else, so an absent
- * binding (the vite Node dev server) degrades to "unavailable" rather than
- * throwing.
- */
+/** Physical IDs identify immutable artifacts, never mutable entity slots. */
 export interface VectorStorePort {
   configured(): boolean;
-  upsert(vectors: ReadonlyArray<StoredVector>): Promise<void>;
-  deleteByIds(refs: ReadonlyArray<SearchableEntityRef>): Promise<void>;
-  query(vector: number[], opts: VectorQueryOptions): Promise<VectorMatch[]>;
+  upsert(vectors: ReadonlyArray<StoredVector>): Promise<Map<string, string>>;
+  deleteByIds(ids: readonly string[]): Promise<Map<string, string>>;
+  getByIds(ids: readonly string[]): Promise<{ id: string; values: number[] }[]>;
+  query(
+    vector: number[],
+    options: VectorQueryOptions,
+  ): Promise<PhysicalVectorMatch[]>;
   queryById(
-    ref: SearchableEntityRef,
-    opts: VectorQueryOptions,
-  ): Promise<VectorMatch[]>;
+    id: string,
+    options: VectorQueryOptions,
+  ): Promise<PhysicalVectorMatch[]>;
 }
 
-/**
- * Deterministic id so upsert is idempotent and delete needs no lookup.
- * Longest entity name (`financialTransaction`, 20) + `:` + uuid (36) = 57
- * bytes, under Vectorize's 64-byte id limit.
- */
-export const vectorId = (ref: SearchableEntityRef): string =>
-  `${ref.entityKind}:${ref.entityId}`;
-
-const parseVectorId = (id: string): SearchableEntityRef | undefined => {
-  const separator = id.indexOf(":");
-  if (separator === -1) return undefined;
-  const entityKind = searchableEntitySchema.safeParse(id.slice(0, separator));
-  if (!entityKind.success) return undefined;
-  return { entityKind: entityKind.data, entityId: id.slice(separator + 1) };
-};
-
-/** Vectorize caps a single Worker `upsert`/`deleteByIds` at 1000 vectors. */
 const MUTATION_BATCH = 1000;
-
-const queryOptions = (opts: VectorQueryOptions): VectorizeQueryOptions => {
-  const options: VectorizeQueryOptions = {
-    topK: opts.topK,
-    returnMetadata: "none",
-  };
-  // Filter runs before topK, so the caller gets up to `topK` matching rows.
-  // The Vectorize metadata property stays `entityType`: the index is created
-  // out of band per property name and renaming it would orphan stored vectors.
-  // It is the only metadata index (low cardinality by design).
-  if (opts.entityKinds && opts.entityKinds.length > 0) {
-    options.filter = { entityType: { $in: opts.entityKinds } };
-  }
-  return options;
-};
-
-const toMatches = (matches: VectorizeMatches): VectorMatch[] =>
-  matches.matches.flatMap((match) => {
-    const ref = parseVectorId(match.id);
-    return ref ? [{ ...ref, similarity: match.score }] : [];
-  });
-
+const queryOptions = (options: VectorQueryOptions): VectorizeQueryOptions => ({
+  topK: Math.min(100, Math.max(1, options.topK)),
+  returnMetadata: "none",
+  ...(options.entityKinds?.length
+    ? { filter: { entityType: { $in: options.entityKinds } } }
+    : {}),
+});
+const matchSchema = z.object({ id: z.string(), score: z.number() });
+const observationSchema = z.object({
+  id: z.string(),
+  values: z.array(z.number()),
+});
+const toMatches = (matches: VectorizeMatches): PhysicalVectorMatch[] =>
+  z
+    .array(matchSchema)
+    .parse(matches.matches)
+    .map(({ id, score }) => ({ id, similarity: score }));
 const requireIndex = (): VectorizeIndexBinding => {
   const index = getVectorIndex();
-  if (!index)
-    throw new Error(
-      "Vectorize binding is not configured; gate on semanticEmbeddingsConfigured() first.",
-    );
+  if (!index) throw new Error("Vectorize binding is not configured");
   return index;
 };
 
 export const productionVectorStore: VectorStorePort = {
   configured: () => getVectorIndex() !== undefined,
   async upsert(vectors) {
-    const index = requireIndex();
+    const receipts = new Map<string, string>();
     for (const batch of chunk(vectors, MUTATION_BATCH)) {
-      await index.upsert(
-        batch.map((vector) => ({
-          id: vectorId(vector),
-          values: vector.values,
-          metadata: { entityType: vector.entityKind },
+      const receipt = await requireIndex().upsert(
+        batch.map(({ id, values, entityKind }) => ({
+          id,
+          values,
+          metadata: { entityType: entityKind },
         })),
       );
+      for (const vector of batch) receipts.set(vector.id, receipt.mutationId);
     }
+    return receipts;
   },
-  async deleteByIds(refs) {
-    const index = requireIndex();
-    for (const batch of chunk(refs, MUTATION_BATCH)) {
-      await index.deleteByIds(batch.map(vectorId));
+  async deleteByIds(ids) {
+    const receipts = new Map<string, string>();
+    for (const batch of chunk(ids, MUTATION_BATCH)) {
+      const receipt = await requireIndex().deleteByIds(batch);
+      for (const id of batch) receipts.set(id, receipt.mutationId);
     }
+    return receipts;
   },
-  async query(vector, opts) {
-    return toMatches(await requireIndex().query(vector, queryOptions(opts)));
+  async getByIds(ids) {
+    const vectors = [];
+    for (const batch of chunk(ids, MUTATION_BATCH)) {
+      const observed = await requireIndex().getByIds(batch);
+      vectors.push(
+        ...z.array(observationSchema).parse(
+          observed.map((vector) => ({
+            id: vector.id,
+            values: [...vector.values],
+          })),
+        ),
+      );
+    }
+    return vectors;
   },
-  async queryById(ref, opts) {
-    return toMatches(
-      await requireIndex().queryById(vectorId(ref), queryOptions(opts)),
-    );
+  async query(vector, options) {
+    return toMatches(await requireIndex().query(vector, queryOptions(options)));
+  },
+  async queryById(id, options) {
+    return toMatches(await requireIndex().queryById(id, queryOptions(options)));
   },
 };
 
@@ -217,13 +197,19 @@ export function createInMemoryVectorizeIndex(): VectorizeIndexBinding & {
         ? search([...seed.values], options)
         : { count: 0, matches: [] };
     },
+    async getByIds(ids) {
+      return ids.flatMap((id) => {
+        const vector = vectors.get(id);
+        return vector ? [vector] : [];
+      });
+    },
     async upsert(input) {
       for (const vector of input) vectors.set(vector.id, vector);
-      return { mutationId: "in-memory" };
+      return { mutationId: crypto.randomUUID() };
     },
     async deleteByIds(ids) {
       for (const id of ids) vectors.delete(id);
-      return { mutationId: "in-memory" };
+      return { mutationId: crypto.randomUUID() };
     },
   };
 }

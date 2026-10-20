@@ -47,11 +47,9 @@ import type {
   StepRunDrivers,
 } from "~/server/domains/run/service/step-run";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
-import { semanticEmbeddingsConfigured } from "~/server/generic/embedding/service/semantic/embeddings";
 import {
   countUnembeddedSearchDocuments,
   selectUnembeddedSearchDocumentRefs,
-  type SearchDocumentCursor,
 } from "~/server/generic/search/repo/search-document";
 import {
   type EmbeddingRefreshPort,
@@ -617,33 +615,15 @@ export function maintenanceSteps(ports: MaintenancePorts = {}): StepDriver[] {
       };
     }),
     onceStep("vector-reconcile", "Vector reconcile", async ({ db }) => {
-      if (!semanticEmbeddingsConfigured())
-        return { found: 0, meta: detail({ deleted: 0 }) };
-      const [
-        { selectRecentlySoftDeletedSearchRefs },
-        { productionVectorStore },
-      ] = await Promise.all([
-        import("~/server/generic/embedding/repo/entity-embedding-cleanup"),
-        import("~/server/generic/embedding/service/semantic/vector-store"),
-      ]);
-      // Vectorize cannot join the transaction that soft-deletes a document,
-      // so a removed entity's vector is deleted here; `deleteByIds` is
-      // idempotent, which is why re-deleted refs are not counted as backlog.
-      const since = new Date(Date.now() - 7 * 24 * 60 * 60_000);
-      let cursor: SearchDocumentCursor | undefined;
-      let deleted = 0;
-      do {
-        const page = await selectRecentlySoftDeletedSearchRefs(db, {
-          since,
-          cursor,
-        });
-        if (page.refs.length) {
-          await productionVectorStore.deleteByIds(page.refs);
-          deleted += page.refs.length;
-        }
-        cursor = page.nextCursor ?? undefined;
-      } while (cursor);
-      return { found: 0, meta: detail({ deleted }) };
+      const { recoverEmbeddingArtifactsPage } =
+        await import("~/server/workflows/background-tasks/embedding");
+      const page = await recoverEmbeddingArtifactsPage(db);
+      return {
+        found: 0,
+        done: page.processed,
+        errors: page.errors.map((message) => failure(message)),
+        more: !page.done,
+      };
     }),
     onceStep("calendar", "Calendar refresh", async () => {
       const origin = getAppOrigin();

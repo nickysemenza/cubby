@@ -18,6 +18,7 @@ import { z } from "zod";
 import { getDb } from "~/server/db/helpers";
 import { auditLog } from "~/server/db/schema";
 import { createDevice } from "~/server/domains/device/repo/device";
+import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import { updateThroughKernel } from "~/server/testing/entity-kernel";
 
 type Patch = Record<string, string | number | boolean | null>;
@@ -101,6 +102,14 @@ describe("entity kernel update patch", () => {
       const { output, entityId } = await create();
       const update = (data: Patch) =>
         updateThroughKernel(ctx.db, ctx.actor, entity, output.id, data);
+      const read = async () => {
+        const table = SHORTCODE_TABLE[entity];
+        const [item] = await getDb(ctx.db)
+          .select()
+          .from(table)
+          .where(eq(table.id, entityId));
+        return updatedItem.parse({ item }).item;
+      };
       const updateAudits = () =>
         getDb(ctx.db)
           .select({ id: auditLog.id })
@@ -115,7 +124,11 @@ describe("entity kernel update patch", () => {
 
       await update(seed);
       const changed = await update(patch);
-      const changedItem = updatedItem.parse(changed).item;
+      expect(changed).toMatchObject({
+        action: "update",
+        item: { id: output.id, ...patch },
+      });
+      const changedItem = await read();
       expect(changedItem).toMatchObject({ ...seed, ...patch });
       await expect(updateAudits()).resolves.toHaveLength(2);
 
@@ -124,7 +137,11 @@ describe("entity kernel update patch", () => {
       const empty = await update({});
       await expect(updateAudits()).resolves.toHaveLength(2);
       for (const unchanged of [repeated, empty]) {
-        const item = updatedItem.parse(unchanged).item;
+        expect(unchanged).toMatchObject({
+          action: "update",
+          item: { id: output.id },
+        });
+        const item = await read();
         expect(item).toMatchObject({ ...seed, ...patch });
         // A case that keeps `updatedAt` must report the changing write's time.
         expect(

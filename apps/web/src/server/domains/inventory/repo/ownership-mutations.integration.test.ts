@@ -18,7 +18,7 @@ import {
 import { describe, expect, it, vi } from "vitest";
 
 import { selectListReadRows } from "~/entity/model/list-read-schema";
-import { getDb, notDeleted } from "~/server/db/helpers";
+import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import { amountFromColumns } from "~/server/db/helpers";
 import {
   financialAccount,
@@ -499,7 +499,7 @@ describe("inventory ownership mutations", () => {
 
     const { loser } = await raceUniqueInsert(ctx, {
       winner: async ({ releaseSignal, markWinnerReady }) =>
-        await getDb(ctx.db).transaction(async (tx) => {
+        await withTransaction(ctx.db, async (tx) => {
           const result = await applyInventoryOwnershipInTransaction(
             tx,
             subject.entryId,

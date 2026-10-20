@@ -74,6 +74,7 @@ import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-re
 import { findDuplicateProductIdentities } from "~/server/generic/problems/repo/detectors-product";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { createMcpServer } from "~/server/mcp/server";
+import { reconcileDerivedRefreshInputs } from "~/server/testing/background-queue";
 import { callMcpTool } from "~/server/testing/mcp-test-utils";
 import {
   createLocationFixture,
@@ -647,6 +648,7 @@ describe("stored Product identity pairs", () => {
         valueFingerprint: await sha256Hex(canonicalJson(nextName)),
       })
       .where(eq(entitySource.id, source.id));
+    await reconcileDerivedRefreshInputs(ctx.db);
     const staleQueue = await getProductMatchQueue(ctx.db, {});
     expect(staleQueue.items).toEqual([]);
     const partial = await evaluateProductIdentity(ctx.db, ids[0]!, runId, {

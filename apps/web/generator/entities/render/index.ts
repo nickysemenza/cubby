@@ -661,43 +661,6 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         `  ${JSON.stringify(key)}: z.object({items:z.array(${key}ListItem),meta:entityListMetaSchema}),`,
     )
     .join("\n");
-  const mutationOutputImportEntries = new Map<string, Set<string>>();
-  for (const { contract } of crudEntitySpecs) {
-    if (!contract)
-      throw new EntityDeclarationError(
-        "Browser CRUD entity is missing its contract.",
-      );
-    const exports =
-      mutationOutputImportEntries.get(contract.output.module) ??
-      new Set<string>();
-    exports.add(contract.output.export);
-    mutationOutputImportEntries.set(contract.output.module, exports);
-  }
-  const mutationOutputImports = [...mutationOutputImportEntries.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(
-      ([module, exports]) =>
-        `import { ${[...exports].sort().join(", ")} } from ${JSON.stringify(module)};`,
-    )
-    .join("\n");
-  const mutationOutputTypes = crudEntitySpecs
-    .map(({ key, contract }) => {
-      if (!contract)
-        throw new EntityDeclarationError(
-          "Browser CRUD entity is missing its contract.",
-        );
-      return `  ${JSON.stringify(key)}: z.output<typeof ${contract.output.export}>;`;
-    })
-    .join("\n");
-  const mutationOutputSchemas = crudEntitySpecs
-    .map(({ key, contract }) => {
-      if (!contract)
-        throw new EntityDeclarationError(
-          "Browser CRUD entity is missing its contract.",
-        );
-      return `  ${JSON.stringify(key)}: ${contract.output.export},`;
-    })
-    .join("\n");
   const commandVariants = (
     action: "create" | "update",
     schema: "create" | "update",
@@ -735,7 +698,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         const output = entity.contract?.output;
         if (!output)
           throw new EntityDeclarationError(`${entity.key}.output is missing.`);
-        return `z.object({action:z.literal(${JSON.stringify(action)}),entity:z.literal(${JSON.stringify(entity.key)}),item:${output.export},sideEffects:mutationSideEffectsSchema})`;
+        return `z.object({action:z.literal(${JSON.stringify(action)}),entity:z.literal(${JSON.stringify(entity.key)}),item:entityMutationItemFor(${JSON.stringify(entity.key)}),appliedFields:entityMutationAppliedFields,sideEffects:mutationSideEffectsSchema})`;
       })
       .join(",\n  ");
   const mcpMutationResultVariants = (action: "create" | "update") =>
@@ -753,7 +716,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
           throw new EntityDeclarationError(
             `${entity.key}.mcpOutput is missing.`,
           );
-        return `z.object({action:z.literal(${JSON.stringify(action)}),entity:z.literal(${JSON.stringify(entity.key)}),item:${output.export},sideEffects:mutationSideEffectsSchema})`;
+        return `z.object({action:z.literal(${JSON.stringify(action)}),entity:z.literal(${JSON.stringify(entity.key)}),item:entityMutationItemFor(${JSON.stringify(entity.key)}),appliedFields:entityMutationAppliedFields,sideEffects:mutationSideEffectsSchema})`;
       })
       .join(",\n  ");
   const queryGetResultVariants = schemaEntitySpecs
@@ -1644,20 +1607,17 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         "apps/web/src/entity/generated/entity-mutation-results.gen.ts",
       source:
         generatedHeader +
-        `${mutationOutputImports}\n` +
+        'import { entityMutationItem } from "@cubby/schemas/entity-mutation";\n' +
+        'import { shortcodeSchema } from "@cubby/schemas/identifiers";\n' +
         'import type { z } from "zod";\n\n' +
         `export const entityMutationOutputEntities = ${compactLiteral(browserCrudEntities)} as const;\n` +
         "export type EntityMutationOutputEntity = (typeof entityMutationOutputEntities)[number];\n\n" +
-        "export type EntityMutationOutputByEntity = {\n" +
-        `${mutationOutputTypes}\n` +
-        "};\n\n" +
-        "// One generated mutation output schema per entity.\n// oxfmt-ignore\n" +
-        `const ENTITY_MUTATION_OUTPUT_SCHEMAS = {\n${mutationOutputSchemas}\n} as const;\n\n` +
+        "export type EntityMutationOutputByEntity = { [E in EntityMutationOutputEntity]: z.output<typeof entityMutationItem> };\n\n" +
         'type UnparsedMutationOutput = Parameters<z.ZodType["parse"]>[0];\n' +
-        "type EntityMutationOutput = EntityMutationOutputByEntity[EntityMutationOutputEntity];\n\n" +
-        "export function parseEntityMutationOutput<E extends EntityMutationOutputEntity>(entity: E, value: UnparsedMutationOutput): EntityMutationOutputByEntity[E];\n" +
-        "export function parseEntityMutationOutput(entity: EntityMutationOutputEntity, value: UnparsedMutationOutput): EntityMutationOutput {\n" +
-        "  return ENTITY_MUTATION_OUTPUT_SCHEMAS[entity].parse(value);\n" +
+        "export function parseEntityMutationOutput<E extends EntityMutationOutputEntity>(entity: E, value: UnparsedMutationOutput): EntityMutationOutputByEntity[E] {\n" +
+        "  const item = entityMutationItem.parse(value);\n" +
+        "  shortcodeSchema(entity).parse(item.id);\n" +
+        "  return item;\n" +
         "}\n",
     },
     {
@@ -1679,6 +1639,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         generatedHeader +
         'import { bulkUpdateInputSchema, bulkCollectionPatchSchema } from "@cubby/schemas/entity-collection";\n' +
         'import { mutationSideEffectsSchema } from "@cubby/schemas/mutation-side-effects";\n' +
+        'import { entityMutationItemFor, entityMutationAppliedFields } from "@cubby/schemas/entity-mutation";\n' +
         'import { withEntityDetailMedia, withEntityListMedia } from "@cubby/schemas/entity-read-media";\n' +
         'import { entitySourceInputs } from "@cubby/schemas/entity-source";\n' +
         'import { listChildCountSchema, paginatedMetaSchema } from "@cubby/schemas/pagination";\n' +

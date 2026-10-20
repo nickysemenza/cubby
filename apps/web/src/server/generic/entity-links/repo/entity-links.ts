@@ -25,6 +25,7 @@ import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import { entityLink } from "~/server/db/retained-tables";
 import { createAppError } from "~/server/errors/app-error";
+import { recordContextRefresh as captureContextRefresh } from "~/server/generic/derived-refresh/repo/capture.boundary";
 
 /** `entityLink` or an alias of it. */
 type LinkTable = {
@@ -93,7 +94,21 @@ export async function attachLinks(
       links.map((link) => linkValues(kind, link.from, link.to, link.quantity)),
     )
     .onConflictDoNothing()
-    .returning({ id: entityLink.id });
+    .returning({
+      id: entityLink.id,
+      fromEntityId: entityLink.fromEntityId,
+      toEntityId: entityLink.toEntityId,
+    });
+  const endpoints = ENTITY_LINK_KINDS[kind];
+  if (rows.length)
+    await captureContextRefresh(
+      tx,
+      "EntityLink",
+      rows.flatMap((row) => [
+        { entityKind: endpoints.from, entityId: row.fromEntityId },
+        { entityKind: endpoints.to, entityId: row.toEntityId },
+      ]),
+    );
   return rows.map((row) => row.id);
 }
 
@@ -104,7 +119,7 @@ async function softDeleteLinks(
   where: SQL | undefined,
   now: Date = new Date(),
 ): Promise<{ id: string; fromEntityId: string; toEntityId: string }[]> {
-  return await tx
+  const rows = await tx
     .update(entityLink)
     .set({ deletedAt: now })
     .where(and(liveLinks(kind), where))
@@ -113,6 +128,17 @@ async function softDeleteLinks(
       fromEntityId: entityLink.fromEntityId,
       toEntityId: entityLink.toEntityId,
     });
+  const endpoints = ENTITY_LINK_KINDS[kind];
+  if (rows.length)
+    await captureContextRefresh(
+      tx,
+      "EntityLink",
+      rows.flatMap((row) => [
+        { entityKind: endpoints.from, entityId: row.fromEntityId },
+        { entityKind: endpoints.to, entityId: row.toEntityId },
+      ]),
+    );
+  return rows;
 }
 
 /** Live `to` ids per `from` id, or the reverse for `end: "to"`. */

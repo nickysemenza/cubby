@@ -24,6 +24,7 @@ import {
 import { readConfirmedDescription } from "~/server/generic/assessment/repo/assessment-image";
 import { assessRecommendation } from "~/server/generic/assessment/repo/assessment-recommendation";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 // Failure modes: retry publication mutates historical evidence; corrected null
@@ -171,6 +172,14 @@ describe("shared Assessment history", () => {
           suggestedValue: "Proposed note",
           currentValue: "Original note",
           confidence: 1,
+          data: {
+            liveInputFingerprint: await fieldInputFingerprint(
+              ctx.db,
+              "product",
+              target,
+              "notes",
+            ),
+          },
         },
       );
       const command = {

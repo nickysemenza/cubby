@@ -1,7 +1,11 @@
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { captureBackgroundQueue } from "~/server/testing/background-queue";
+import { selectStaleRecipeIds } from "~/server/domains/recipe/repo/totals";
+import {
+  captureBackgroundQueue,
+  drainDerivedRefreshFrontier,
+} from "~/server/testing/background-queue";
 import {
   createIngredientFixture,
   createProductFixture,
@@ -38,7 +42,7 @@ describe("recomputeRecipesForPriceAffectedProducts", () => {
       makeProductInput({ name: "Non-food product" }),
       ctx.actor,
     );
-    await createRecipeFixture(
+    const recipe = await createRecipeFixture(
       ctx.db,
       makeRecipeInput({
         name: "Expense-priced recipe",
@@ -55,13 +59,19 @@ describe("recomputeRecipesForPriceAffectedProducts", () => {
       auth: { userId: ctx.actor.userId },
     }).services.recipeCosting;
 
-    const result = await recomputeRecipesForPriceAffectedProducts(
+    await drainDerivedRefreshFrontier(ctx.db);
+    await service.recomputeQueued([recipe.entityId]);
+    expect(await selectStaleRecipeIds(ctx.db, [recipe.entityId])).toEqual([]);
+    await recomputeRecipesForPriceAffectedProducts(
       ctx.db,
       service,
       [linked.entityId, linked.entityId, unlinked.entityId],
       "expense.test",
     );
 
-    expect(result).toBe(1);
+    await drainDerivedRefreshFrontier(ctx.db);
+    expect(await selectStaleRecipeIds(ctx.db, [recipe.entityId])).toEqual([
+      recipe.entityId,
+    ]);
   });
 });

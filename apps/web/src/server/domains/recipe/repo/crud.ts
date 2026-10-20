@@ -532,7 +532,7 @@ export const recipeListRead = async (
           .orderBy(...page.orderBy)
           .limit(page.limit)
           .offset(page.offset),
-      hydrate: (rows, selected) =>
+      hydrate: async (rows, selected) =>
         hydrateListRead(db, "recipe", rows, selected, {
           media: true,
           load: async () => undefined,
@@ -989,16 +989,15 @@ export const updateRecipe = defineMutationWriter({
     actor: ActorContext,
   ) => {
     let detachedImageKeys: string[] = [];
-    const existingRecipe = await getDb(db).query.recipe.findFirst({
-      where: eq(recipe.id, id),
-      with: {
-        sections: {
-          with: {
-            ingredients: true,
-          },
-        },
-      },
-    });
+    const existingRecipe =
+      updates.sections !== undefined
+        ? await getDb(db).query.recipe.findFirst({
+            where: eq(recipe.id, id),
+            with: { sections: { with: { ingredients: true } } },
+          })
+        : await getDb(db)
+            .query.recipe.findFirst({ where: eq(recipe.id, id) })
+            .then((row) => (row ? { ...row, sections: [] } : undefined));
 
     if (!existingRecipe) {
       throw createAppError(

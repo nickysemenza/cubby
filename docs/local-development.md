@@ -97,7 +97,10 @@ resets; other instances keep their generations.
 It inserts the synthetic account with Better Auth's password hasher, then runs
 the entity kernel and specialist repositories. Before a Worker exists, its
 background publications are stored in the template's development-only
-`cubby_dev_background_task` outbox. Clones hand those envelopes to the local
+`cubby_dev_background_task` outbox. After creating the static graph, the generic
+search-index repair initializes its search documents in pages and queues
+embedding work. Bootstrap leaves durable derived-refresh captures intact rather
+than draining every root's overlapping dependency graph. Clones hand those envelopes to the local
 Worker queue on startup, deleting them only after acceptance. A partial handoff
 may redeliver; handlers retain their freshness checks. Import, account and corpus
 timings

@@ -92,7 +92,8 @@ function createCalendarOperations(
       return {
         action: "update" as const,
         entity: "expense" as const,
-        item: savedExpense,
+        item: { id: savedExpense.id },
+        appliedFields: [],
         sideEffects: {},
       };
     }

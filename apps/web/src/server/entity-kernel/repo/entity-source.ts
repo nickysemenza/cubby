@@ -25,6 +25,7 @@ import {
   resolveEntityIdentity,
 } from "~/server/entity-kernel/repo/entity-identity";
 import { createAppError } from "~/server/errors/app-error";
+import { captureContextRefresh } from "~/server/generic/derived-refresh/repo/context-capture";
 import { lookupEntityLabels } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 const cubbyOrigin = new URL(getShortcodeUrl("")).origin;
@@ -60,7 +61,7 @@ function fieldReadPath(entity: Entity, fieldPath: string): string | null {
 
 /** A projected mutation may omit evidence fields; a complete mutation already
  * owns the same authoritative values used by subsequent detail fingerprints. */
-export function sourceSnapshotCovers(
+function sourceSnapshotCovers(
   entity: Entity,
   snapshot: unknown,
   sources: readonly EntitySourceInput[],
@@ -171,6 +172,11 @@ export async function recordEntitySources(
   if (args.sources.length === 0) return;
   assertEntitySourceFieldPaths(args.entityKind, args.sources);
   const client = unwrapDb(db);
+  const collections = new Set(
+    fieldsOf(args.entityKind)
+      .fields.filter((field) => field.collection)
+      .map((field) => field.key),
+  );
   for (const source of args.sources) {
     // An internal Cubby URL is the record it names, never a second target.
     const internalCode = internalSourceCode(source.url);
@@ -192,7 +198,9 @@ export async function recordEntitySources(
           : target.id;
     const sourceEntityKind = target === null ? null : target.kind;
     const valueFingerprint =
-      source.fieldPath === undefined
+      source.fieldPath === undefined ||
+      collections.has(source.fieldPath) ||
+      !sourceSnapshotCovers(args.entityKind, args.detail, [source])
         ? null
         : await entityFieldFingerprint(
             args.entityKind,
@@ -225,6 +233,13 @@ export async function recordEntitySources(
       deviceId: args.recorder.deviceId,
       runId: args.recorder.runId,
     });
+    await captureContextRefresh(db, "EntitySource", [
+      {
+        entityKind: args.entityKind,
+        entityId: args.entityId,
+        changedFields: ["classificationEvidence"],
+      },
+    ]);
   }
 }
 
@@ -376,7 +391,7 @@ export async function loadEntitySources(
       observedAt: row.observedAt,
       selectedVariant: row.selectedVariant,
       supportsCurrentValue:
-        row.fieldPath === null
+        row.fieldPath === null || row.valueFingerprint === null
           ? null
           : row.valueFingerprint ===
             (await currentFingerprint(row.entityId, row.fieldPath)),

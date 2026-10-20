@@ -19,6 +19,7 @@ import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-d
 import { loadRecordEmojiReferences } from "~/server/entity-kernel/repo/entity-emoji";
 import { findSemanticEntityCandidates } from "~/server/generic/embedding/repo/entity-embedding-search";
 import { normalizeSearchText } from "~/server/generic/embedding/repo/semantic/text";
+import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { SEMANTIC_MIN_QUERY_LENGTH } from "~/server/generic/embedding/service/semantic/constants";
 import {
   embedQuery,
@@ -56,7 +57,7 @@ export interface RelatedSearchPort {
 }
 
 export type InternalRelatedSearchCandidates =
-  | { status: "ready"; results: InternalSearchCandidate[] }
+  | { status: "ready"; results: InternalSearchCandidate[]; complete: boolean }
   | { status: "unavailable"; results: [] };
 
 const productionRelatedSearchPort: RelatedSearchPort = {
@@ -260,14 +261,16 @@ export async function findRelatedSearchCandidates(
     const limit = Math.min(Math.max(input.limit ?? 5, 1), maxLimit);
     const entityKinds = scopes(input.entityKinds);
     const matchTerms = searchTerms(input.query);
-    const refs = await findSemanticEntityCandidates(
+    const scan = await findSemanticEntityCandidates(
+      db,
       port.vectorStore,
       embedding,
-      { entityKinds, limit },
+      { entityKinds, limit, config: getSemanticEmbeddingConfig() },
     );
     // Ghosts (a stale vector for a deleted/never-indexed entity) drop out
     // here: hydration only returns rows with a live SearchDocument, so the
     // result can legitimately be shorter than `refs`/`limit`.
+    const refs = scan.candidates;
     const hits = await hydrateSearchHitRefs(db, refs);
     const hitByRef = new Map(
       hits.map((hit) => [`${hit.entityKind}:${hit.entityId}`, hit] as const),
@@ -286,7 +289,7 @@ export async function findRelatedSearchCandidates(
         },
       ];
     });
-    return { status: "ready", results };
+    return { status: "ready", results, complete: scan.complete };
   } catch (error) {
     log.warn("related failed", { message: getErrorMessage(error) });
     return { status: "unavailable", results: [] };
@@ -304,6 +307,7 @@ export async function findRelatedSearchHits(
   if (!db) throw new Error("Configured related search requires a database.");
   return {
     status: "ready",
+    complete: related.complete,
     results: await withThumbnails(db, related.results),
   };
 }

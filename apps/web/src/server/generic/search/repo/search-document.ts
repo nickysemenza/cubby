@@ -1,3 +1,4 @@
+import { embeddingArtifactState } from "@cubby/schemas/derived-refresh";
 import { entityRefKey, entitySchema } from "@cubby/schemas/entity";
 import { gardenEntryKind } from "@cubby/schemas/garden-fields";
 import {
@@ -14,10 +15,17 @@ import { wasm } from "~/lib/wasm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { categorySummarySql } from "~/server/db/computed/product-category-sql";
-import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
+import {
+  unwrapDb,
+  uuidArrayParam,
+  withTransactionOn,
+} from "~/server/db/helpers";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { effectiveExpenseTradeSql } from "~/server/domains/expense/repo/expense-inheritance";
 import { loadSelectedDescriptions } from "~/server/domains/image/repo/image-description-selection";
+import { claimDerivedPublication } from "~/server/generic/derived-refresh/repo/publication";
+import { readInputRevisions } from "~/server/generic/derived-refresh/repo/revisions";
+import { advanceInputRevisions } from "~/server/generic/derived-refresh/repo/revisions";
 import {
   getEmbeddingTextsForRefs,
   type SearchableEntityText,
@@ -135,12 +143,9 @@ export async function refreshDirectImageOwnerSearchDocuments(
   db: Database,
   imageId: string,
 ): Promise<void> {
-  const refs = await findDirectImageSearchOwnerRefs(db, imageId);
-  await refreshCapturedImageSearchOwnerRefs(
-    db,
-    refs,
-    "image-processing.search-text",
-  );
+  const { captureDerivedRefresh } =
+    await import("~/server/generic/derived-refresh/repo/capture");
+  await captureDerivedRefresh(db, [{ entityKind: "image", entityId: imageId }]);
 }
 
 /** Refresh image owners captured before an attachment edge is removed. */
@@ -611,10 +616,13 @@ async function markSearchDocumentMissing(
   entityKind: SearchableEntity,
   entityId: string,
 ): Promise<SearchDocumentRefreshResult> {
-  await unwrapDb(db).execute(sql`
+  const changed = await unwrapDb(db).execute(sql`
     UPDATE "SearchDocument" SET "deletedAt" = now(), "updatedAt" = now()
     WHERE "entityKind" = ${entityKind} AND "entityId" = ${entityId}::uuid AND "deletedAt" IS NULL
+    RETURNING "entityId"
   `);
+  if (changed.rows.length > 0)
+    await advanceInputRevisions(db, [`projection:${entityKind}`]);
   return { status: "missing", entityKind, entityId };
 }
 
@@ -636,7 +644,9 @@ async function upsertSearchDocumentBatch(
       )`;
     }),
   );
-  await unwrapDb(db).execute(sql`
+  const changed = await unwrapDb(db).execute<{
+    entityKind: SearchableEntity;
+  }>(sql`
     INSERT INTO "SearchDocument" (
       "entityKind", "entityId", title, subtitle, "typeHint",
       aliases, keywords, body, "semanticText", "normalizedText",
@@ -661,7 +671,16 @@ async function upsertSearchDocumentBatch(
       "searchVector" = EXCLUDED."searchVector",
       "sourceHash" = EXCLUDED."sourceHash", "updatedAt" = now(),
       "deletedAt" = NULL
+    WHERE "SearchDocument"."sourceHash" IS DISTINCT FROM EXCLUDED."sourceHash"
+      OR "SearchDocument".body IS DISTINCT FROM EXCLUDED.body
+      OR "SearchDocument"."semanticText" IS DISTINCT FROM EXCLUDED."semanticText"
+      OR "SearchDocument".title IS DISTINCT FROM EXCLUDED.title
+    RETURNING "entityKind"
   `);
+  await advanceInputRevisions(
+    db,
+    changed.rows.map((row) => `projection:${row.entityKind}`),
+  );
   return entries.map(({ source }) => ({
     status: "upserted",
     entityKind: source.entityKind,
@@ -669,12 +688,10 @@ async function upsertSearchDocumentBatch(
   }));
 }
 
-export async function refreshSearchDocuments(
+export async function prepareSearchDocuments(
   db: Database | DrizzleTransaction,
   refs: ReadonlyArray<{ entityKind: SearchableEntity; entityId: string }>,
-): Promise<SearchDocumentRefreshResult[]> {
-  if (refs.length === 0) return [];
-
+) {
   const idsByType = new Map<SearchableEntity, string[]>();
   for (const ref of refs) {
     const ids = idsByType.get(ref.entityKind);
@@ -706,7 +723,7 @@ export async function refreshSearchDocuments(
     texts.map((text) => [entityRefKey(text.entityKind, text.entityId), text]),
   );
 
-  const results: SearchDocumentRefreshResult[] = [];
+  const missing: SearchableEntityRef[] = [];
   const entries: Array<{ source: SearchDocumentSource; body: string }> = [];
   const seen = new Set<string>();
   for (const ref of refs) {
@@ -724,21 +741,52 @@ export async function refreshSearchDocuments(
       });
       continue;
     }
-    results.push(
-      await markSearchDocumentMissing(db, ref.entityKind, ref.entityId),
-    );
+    missing.push(ref);
   }
 
-  const batchSize = 250;
-  for (let index = 0; index < entries.length; index += batchSize) {
-    results.push(
-      ...(await upsertSearchDocumentBatch(
-        db,
-        entries.slice(index, index + batchSize),
-      )),
+  return { entries, missing };
+}
+
+export async function publishPreparedSearchDocuments(
+  db: Database | DrizzleTransaction,
+  prepared: Awaited<ReturnType<typeof prepareSearchDocuments>>,
+  revision: number,
+): Promise<SearchDocumentRefreshResult[]> {
+  const results: SearchDocumentRefreshResult[] = [];
+  const refs = [
+    ...prepared.entries.map((entry) => entry.source),
+    ...prepared.missing,
+  ].sort((a, b) =>
+    entityRefKey(a.entityKind, a.entityId).localeCompare(
+      entityRefKey(b.entityKind, b.entityId),
+    ),
+  );
+  for (const ref of refs) {
+    if (!(await claimDerivedPublication(db, ref, "search", revision))) continue;
+    const entry = prepared.entries.find(
+      (entry) =>
+        entry.source.entityKind === ref.entityKind &&
+        entry.source.entityId === ref.entityId,
     );
+    if (entry) results.push(...(await upsertSearchDocumentBatch(db, [entry])));
+    else
+      results.push(
+        await markSearchDocumentMissing(db, ref.entityKind, ref.entityId),
+      );
   }
   return results;
+}
+
+export async function refreshSearchDocuments(
+  db: Database | DrizzleTransaction,
+  refs: ReadonlyArray<{ entityKind: SearchableEntity; entityId: string }>,
+): Promise<SearchDocumentRefreshResult[]> {
+  if (refs.length === 0) return [];
+  const revision = (await readInputRevisions(db, ["all"]))[0]?.[1] ?? 0;
+  const prepared = await prepareSearchDocuments(db, refs);
+  return withTransactionOn(db, (tx) =>
+    publishPreparedSearchDocuments(tx, prepared, revision),
+  );
 }
 
 export async function getSearchDocumentEmbeddingText(
@@ -838,11 +886,33 @@ const unembeddedDocumentsSql = (config: SemanticEmbeddingConfig): SQL => sql`
     AND ee.model = ${config.model}
     AND ee.dimensions = ${config.dimensions}
     AND ee."deletedAt" IS NULL
+    AND ee."artifactState" = ${embeddingArtifactState.enum.selected} AND ee."artifactHash" IS NOT NULL AND ee."vectorHash" IS NOT NULL
+    AND ee."observedAt" IS NOT NULL AND ee."indexedAt" IS NOT NULL
   WHERE sd."deletedAt" IS NULL
     AND sd."entityKind" IN (${embeddableEntityKindsSql})
     AND (ee.id IS NULL
       OR ${normalizedTextSql(sql`ee."embeddingText"`)} <> ${normalizedTextSql(sql`sd."semanticText"`)})
 `;
+
+/** Eligibility witness only: ANN recall is not an exhaustive similarity proof. */
+export async function hasUnembeddedSearchDocuments(
+  db: Database | DrizzleTransaction,
+  config: SemanticEmbeddingConfig,
+  kinds: readonly SearchableEntity[],
+): Promise<boolean> {
+  if (!kinds.length) return false;
+  const result = await unwrapDb(db).execute(sql`SELECT EXISTS (
+    SELECT 1 ${unembeddedDocumentsSql(config)}
+      AND sd."entityKind" IN (${sql.join(
+        kinds.map((kind) => sql`${kind}`),
+        sql`, `,
+      )}) LIMIT 1
+  ) AS missing`);
+  return (
+    z.array(z.object({ missing: z.boolean() })).parse(result.rows)[0]
+      ?.missing ?? false
+  );
+}
 
 export async function countUnembeddedSearchDocuments(
   db: Database | DrizzleTransaction,

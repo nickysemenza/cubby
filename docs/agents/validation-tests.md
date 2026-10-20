@@ -28,6 +28,10 @@ kernel also creates their SearchDocument. A raw row insert can appear in the
 initial picker list and disappear when typed search resolves. For typed search,
 use the picker helper's query/code option to wait for the actual search response
 before selecting the record.
+For a same-kind fixture cohort without intermediate reads, use
+`createEntityFixtures`; it writes through the kernel in one transaction and
+settles the frontier after the cohort commits. This keeps background publication
+from repeatedly processing partially created fixture cohorts.
 A virtualized table's DOM contains only its mounted window. Cursor-pagination
 fixtures that assert every row at once must fit that window; bounded-viewport
 journeys inspect rows across scrolling instead of treating unmounted rows as missing.

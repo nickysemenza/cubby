@@ -15,7 +15,7 @@ import type { Database } from "~/server/db";
 import {
   getDb,
   notDeleted,
-  withTransaction,
+  withSnapshotWrite,
   databaseForTransaction,
 } from "~/server/db/helpers";
 import { financialTransaction, purchase } from "~/server/db/schema";
@@ -187,7 +187,7 @@ export async function commitFinancialBookingCorrection(
   review: FinancialBookingCorrectionPreview,
   actor: ActorContext,
 ) {
-  return withTransaction(
+  return withSnapshotWrite(
     db,
     async (tx) => {
       await lockFinancialEvidenceKeys(tx, "reviewed-booking", [

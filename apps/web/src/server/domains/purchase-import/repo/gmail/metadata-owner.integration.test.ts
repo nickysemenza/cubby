@@ -1,6 +1,6 @@
 /** Email-null headers must stay unknown despite stale legacy shell metadata;
  * cleanup and refetch must keep the same content/source-history identity. */
-import { eq, sql } from "drizzle-orm";
+import { eq, getTableName, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -69,7 +69,7 @@ describe("Gmail Email-owned metadata", () => {
     // Exercise pre-contraction rows too; after the drop, Email remains the same boundary.
     const legacy = await getDb(ctx.db).execute<{ column_name: string }>(sql`
       SELECT column_name FROM information_schema.columns
-      WHERE table_schema = 'public' AND table_name = 'OrderMail' AND column_name = 'mailboxId'
+      WHERE table_schema = 'public' AND table_name = ${getTableName(orderMail)} AND column_name = 'mailboxId'
     `);
     if (legacy.rows.length)
       await getDb(ctx.db).execute(sql`

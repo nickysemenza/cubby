@@ -104,7 +104,8 @@ test("Work queue filters routing before paging and opens its source record", asy
     // Unpicking `from` first empties the filter; the chip's editor stays.
     // A short roster lists inline without a search field.
     for (const { option } of [from, to]) {
-      if ((await search.count()) > 0) await search.fill(option);
+      if ((await search.count()) > 0 && (await search.isEditable()))
+        await search.fill(option);
       await page.getByRole("option", { name: option, exact: true }).click();
     }
     // Edits apply live, so the editor stays open until dismissed; the next

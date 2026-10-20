@@ -85,6 +85,6 @@ export type EntityEditRecordFor<E extends TypedEditableEntity> = {
     K in keyof EntityEditSpecification<E>["record"]
   ]: EntityEditSpecification<E>["record"][K];
 };
-/** Exact public output returned by this entity's generated mutation schema. */
+/** Canonical scalar receipt returned by this entity's generated mutation schema. */
 export type EntityEditResultFor<E extends TypedEditableEntity> =
   EntityEditSpecification<E>["result"];

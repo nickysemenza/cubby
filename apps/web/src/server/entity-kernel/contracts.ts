@@ -1,4 +1,8 @@
 import { operationEffectSchema } from "@cubby/schemas/entity-integrity";
+import {
+  entityMutationItem,
+  entityMutationAppliedFields,
+} from "@cubby/schemas/entity-mutation";
 import { anyShortcodeSchema } from "@cubby/schemas/identifiers";
 import {
   mcpReadSelectionFields,
@@ -24,7 +28,6 @@ import {
   generatedEntityRelationListCommandSchema,
   generatedEntityRelationListResultSchema,
 } from "~/entity/generated/entity-relation-lists.gen";
-import { listReadRowSchema } from "~/entity/model/list-read-fields";
 import {
   generatedEntityBulkUpdateCommandSchema,
   generatedEntityCreateCommandSchema,
@@ -59,7 +62,8 @@ const entityKernelEntitySchema = z.enum(ENTITY_KERNEL_ENTITIES);
 export const entityMutationReadResultSchema = z.object({
   action: z.enum(["create", "update"]),
   entity: entityKernelEntitySchema,
-  item: listReadRowSchema,
+  item: entityMutationItem,
+  appliedFields: entityMutationAppliedFields,
   sideEffects: mutationSideEffectsSchema,
 });
 export type EntityKernelEntity = z.infer<typeof entityKernelEntitySchema>;

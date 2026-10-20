@@ -58,7 +58,8 @@ describe("useEntityCommands structured refusals", () => {
       entityBrowserMutationResultSchema.parse({
         action: "update",
         entity: "product",
-        item,
+        item: { id: item.id, name: item.name },
+        appliedFields: ["name"],
         sideEffects,
       }),
     );

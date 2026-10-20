@@ -398,7 +398,14 @@ Two different "a recipe inside something" relationships — don't conflate them:
 
 **Totals.** `Recipe.totals` (cost/calorie rollup) is **persisted** server-side
 with a `totalsComputedAt` staleness stamp; lists read the persisted value
-rather than recomputing. Meals and portions never persist totals — planned
+rather than recomputing. Writes record a dirty root; the generic background
+frontier finds affected recipes and their parents in bounded pages. It computes
+each recipe outside the transaction and commits totals with the page's durable
+acknowledgement. Queue delivery is a wake-up, not completion of cache work.
+A persistent publication watermark prevents a delayed invalidation from
+clearing totals already computed from the same or newer inputs. While a
+relevant frontier is unfinished, reads report the totals as pending.
+Meals and portions never persist totals — planned
 Meals scale the Recipe's current totals, while portions project the same live
 totals through their source preparation's yield.
 

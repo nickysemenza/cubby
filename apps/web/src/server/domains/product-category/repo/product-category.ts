@@ -533,7 +533,10 @@ const assertAffectedProductsRemainAdmissible = async (
   }
   const { validateLiveInheritedPolicies } =
     await import("~/server/generic/inheritance/repo/inheritance-validation");
-  await validateLiveInheritedPolicies(tx);
+  await validateLiveInheritedPolicies(tx, {
+    kind: "productCategory",
+    ids: [categoryId],
+  });
 };
 
 export const createProductCategory = defineMutationWriter({
@@ -704,7 +707,12 @@ export const updateProductCategory = defineMutationWriter({
       const values = buildPartialUpdateValues(patch);
       if (Object.keys(values).length === 0) return;
       await crud.update(tx, id, values, actor, async () => undefined);
-      if (parentId !== undefined || data.feature !== undefined) {
+      if (
+        parentId !== undefined ||
+        data.feature !== undefined ||
+        data.spendingCategoryId !== undefined ||
+        data.spendingCategoryMode !== undefined
+      ) {
         await assertAffectedProductsRemainAdmissible(tx, id);
       }
     });

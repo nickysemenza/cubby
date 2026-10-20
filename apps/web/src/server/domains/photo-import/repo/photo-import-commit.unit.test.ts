@@ -98,7 +98,7 @@ const portsFor = (
     activateImages: vi.fn(async () => (status === "PENDING" ? 1 : 0)),
     persistAnalysis: vi.fn(async () => undefined),
     withTransaction: async (_db, operation) => operation(database),
-    refreshProjection: vi.fn(async () => undefined),
+    captureRefresh: vi.fn(async () => undefined),
     runSideEffects: vi.fn(async () => undefined),
     applyProvenance: vi.fn(async () => undefined),
     ...overrides,

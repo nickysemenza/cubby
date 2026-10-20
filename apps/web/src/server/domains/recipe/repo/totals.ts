@@ -5,6 +5,7 @@
  * by the presence-driven drain. See recipe-costing.service.
  */
 
+import { entitySchema } from "@cubby/schemas/entity";
 import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
 import { toStoredTotals } from "@cubby/schemas/nutrition";
 import type { StoredRecipeTotals } from "@cubby/schemas/recipe-shared";
@@ -23,7 +24,14 @@ import {
   recipe,
   recipeSection,
   recipeSectionIngredient,
+  derivedRefreshRevision,
+  derivedRefreshPublication,
 } from "~/server/db/retained-tables";
+import { claimDerivedPublication } from "~/server/generic/derived-refresh/repo/publication";
+import {
+  currentInputRevision,
+  DerivedInputsChanged,
+} from "~/server/generic/derived-refresh/repo/revisions";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 const log = createLogger("recompute");
@@ -82,27 +90,43 @@ const markRecipeTotalsFresh = async (
 };
 
 /**
- * Flag recipes' totals stale (`totalsComputedAt = null`) without recomputing —
- * the correctness floor when the recompute is deferred to the queue: the rows
- * read as pending until the queue drains. If a wave is lost (DLQ), they stay
- * stale and are surfaced by `countStaleRecipeTotals` on Settings → Maintenance,
- * cleared by recompute-all. Unconditional on purpose: that's about the
- * fresh/stale predicate (no `AND totalsComputedAt IS NOT NULL` guard, unlike
- * the transitioned-only variant below), NOT about liveness — this is still the
- * durable "these are pending" stamp at dispatch (and at merge). The cascade
- * tail uses {@link markRecipesStaleReturningTransitioned} instead, to avoid
- * re-staling recipes a sibling chunk already queued. `notDeleted` is required:
- * every path that could later heal this stamp (`selectStaleRecipeIds`,
- * `selectAllStaleRecipeIds`, `countStaleRecipeTotals`, `getRecipesByIDs`)
- * filters to live recipes, so a soft-deleted recipe stamped stale here would
- * be nulled forever with nothing to clear it or report it.
+ * Record pending totals for supplied live recipes. A delayed frontier cannot
+ * invalidate a cache already published from the same or newer input revision.
+ * The null stamp remains durable if the queue wake-up is lost.
  */
 export const markRecipesStale = async (
   db: Database | DrizzleTransaction,
   ids: RecipeId[],
+  inputRevision?: number,
 ): Promise<void> => {
   if (ids.length === 0) return;
-  await unwrapDb(db).execute(sql`
+  const revision = inputRevision ?? (await currentInputRevision(db));
+  const invalidate = async (tx: DrizzleTransaction) => {
+    // Both invalidation and computation lock this persistent row before Recipe.
+    // Equal revisions already computed from these inputs must remain fresh.
+    for (const id of [...ids].sort()) {
+      await tx
+        .insert(derivedRefreshPublication)
+        .values({
+          entityKind: "recipe",
+          entityId: id,
+          phase: "recipe-totals",
+          revision: -1,
+        })
+        .onConflictDoNothing();
+      await tx
+        .select({ revision: derivedRefreshPublication.revision })
+        .from(derivedRefreshPublication)
+        .where(
+          and(
+            eq(derivedRefreshPublication.entityKind, "recipe"),
+            eq(derivedRefreshPublication.entityId, id),
+            eq(derivedRefreshPublication.phase, "recipe-totals"),
+          ),
+        )
+        .for("update");
+    }
+    await tx.execute(sql`
     UPDATE ${recipe}
     SET ${sql.identifier("totalsComputedAt")} = NULL
     WHERE ${recipe.id} IN (${sql.join(
@@ -110,7 +134,13 @@ export const markRecipesStale = async (
       sql`, `,
     )})
       AND ${notDeleted(recipe)}
+      AND NOT EXISTS (SELECT 1 FROM ${derivedRefreshPublication} p
+        WHERE p."entityKind"=${entitySchema.enum.recipe} AND p."entityId"=${recipe.id}
+          AND p.phase='recipe-totals' AND p.revision >= ${revision})
   `);
+  };
+  if ("rollback" in db) await invalidate(db);
+  else await withTransaction(db, invalidate);
 };
 
 /**
@@ -118,9 +148,7 @@ export const markRecipesStale = async (
  * The `AND "totalsComputedAt" IS NOT NULL` predicate (+ `RETURNING id`) makes a
  * recipe that is already stale a no-op that yields nothing. The cascade uses
  * this inside its transaction so a duplicate wakeup never re-stales a parent
- * that is already fresh; publication of parents is decided separately by
- * {@link findStaleParentRecipeIds}, which reads the current stale set rather
- * than this transition, so a lost publication stays recoverable.
+ * that is already fresh. Durable dependency pages separately propagate parents.
  */
 const markRecipesStaleReturningTransitioned = async (
   db: Database | DrizzleTransaction,
@@ -222,30 +250,6 @@ export const selectAllStaleRecipeIds = async (
 };
 
 /**
- * Recipes that reference ANY of the given ingredients (via any section), as a
- * flat deduped list. Used to invalidate when a product's price/USDA
- * link/ingredient changes (a product feeds recipe cost via its linked
- * ingredient). Batched so `recomputeForIngredients` does one `inArray`
- * round-trip instead of one query per ingredient; `selectDistinct` dedupes
- * recipe ids within the query.
- */
-export const findRecipeIdsUsingIngredients = async (
-  db: Database | DrizzleTransaction,
-  ingredientIds: IngredientId[],
-): Promise<RecipeId[]> => {
-  if (ingredientIds.length === 0) return [];
-  const rows = await unwrapDb(db)
-    .selectDistinct({ recipeId: recipeSection.recipeId })
-    .from(recipeSectionIngredient)
-    .innerJoin(
-      recipeSection,
-      eq(recipeSectionIngredient.recipeSectionId, recipeSection.id),
-    )
-    .where(inArray(recipeSectionIngredient.ingredientId, ingredientIds));
-  return rows.map((r) => r.recipeId);
-};
-
-/**
  * Parent recipes that use any of the given recipes as a sub-recipe (recipe-as-
  * ingredient is modelled as an ingredient row whose `recipeId` points at the
  * sub-recipe), returned as `subRecipeId → parentRecipeId[]`. The recompute
@@ -292,42 +296,6 @@ export const findParentRecipeIdsBatch = async (
     bySubRecipe.set(sub, parents);
   }
   return bySubRecipe;
-};
-
-/**
- * Parents of the given recipes that are CURRENTLY stale, whether this wakeup
- * staled them or an earlier one did. This is what a recompute publishes after
- * commit: it depends on the present state of the parents, not on observing a
- * fresh→stale transition, so a parent whose publication was lost is picked up
- * by any later wakeup of any of its children (or by a Maintenance Run).
- */
-export const findStaleParentRecipeIds = async (
-  db: Database | DrizzleTransaction,
-  subRecipeIds: RecipeId[],
-): Promise<RecipeId[]> => {
-  if (subRecipeIds.length === 0) return [];
-  const rows = await unwrapDb(db)
-    .selectDistinct({ parentRecipeId: recipeSection.recipeId })
-    .from(recipeSectionIngredient)
-    .innerJoin(
-      recipeSection,
-      eq(recipeSectionIngredient.recipeSectionId, recipeSection.id),
-    )
-    .innerJoin(
-      ingredient,
-      eq(recipeSectionIngredient.ingredientId, ingredient.id),
-    )
-    .innerJoin(recipe, eq(recipe.id, recipeSection.recipeId))
-    .where(
-      and(
-        inArray(ingredient.recipeId, subRecipeIds),
-        recipeTotalsAreStale,
-        notDeleted(recipe),
-      ),
-    );
-  return rows
-    .map((r) => r.parentRecipeId)
-    .filter((id) => !subRecipeIds.includes(id));
 };
 
 /**
@@ -402,15 +370,42 @@ export const commitRecipeTotals = async (
      * must not be re-staled by the child's change.
      */
     processedIds: readonly RecipeId[];
+    inputRevision?: number;
+    /** Generic refresh already pages through parent recipes. */
+    cascadeParents?: boolean;
   },
 ): Promise<{ changedParentIds: RecipeId[] }> => {
   return withTransaction(db, async (tx) => {
-    await updateRecipeTotalsBatch(tx, input.updates);
-    await markRecipeTotalsFresh(tx, input.freshOnlyIds);
-    const parentsByRecipe = await findParentRecipeIdsBatch(
+    const revision = input.inputRevision ?? (await currentInputRevision(tx));
+    const accepted = new Set<RecipeId>();
+    for (const id of [
+      ...new Set([
+        ...input.updates.map((entry) => entry.id),
+        ...input.freshOnlyIds,
+      ]),
+    ].sort()) {
+      if (
+        await claimDerivedPublication(
+          tx,
+          { entityKind: "recipe", entityId: id },
+          "recipe-totals",
+          revision,
+        )
+      )
+        accepted.add(id);
+    }
+    await updateRecipeTotalsBatch(
       tx,
-      input.changedIds,
+      input.updates.filter((entry) => accepted.has(entry.id)),
     );
+    await markRecipeTotalsFresh(
+      tx,
+      input.freshOnlyIds.filter((id) => accepted.has(id)),
+    );
+    const parentsByRecipe =
+      input.cascadeParents === false
+        ? new Map<RecipeId, RecipeId[]>()
+        : await findParentRecipeIdsBatch(tx, input.changedIds);
     const descendants = await findSubRecipeDescendantIds(tx, [
       ...parentsByRecipe.keys(),
     ]);
@@ -430,6 +425,27 @@ export const commitRecipeTotals = async (
       );
     }
     await markRecipesStaleReturningTransitioned(tx, [...changedParents]);
+    if (input.inputRevision !== undefined) {
+      if (input.inputRevision === 0)
+        await tx
+          .insert(derivedRefreshRevision)
+          .values({ key: "all", revision: 0 })
+          .onConflictDoNothing();
+      const stable = await tx
+        .update(derivedRefreshRevision)
+        .set({ revision: sql`${derivedRefreshRevision.revision}` })
+        .where(
+          and(
+            eq(derivedRefreshRevision.key, "all"),
+            eq(derivedRefreshRevision.revision, input.inputRevision),
+          ),
+        )
+        .returning({ key: derivedRefreshRevision.key });
+      if (stable.length === 0)
+        throw new DerivedInputsChanged(
+          "Recipe inputs changed during recomputation; retry current inputs",
+        );
+    }
     return { changedParentIds: [...changedParents] };
   });
 };

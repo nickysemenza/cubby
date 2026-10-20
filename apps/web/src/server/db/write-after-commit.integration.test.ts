@@ -1,9 +1,12 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { fromPartial } from "@total-typescript/shoehorn";
+import { inArray } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { setCfEnv } from "~/server/cf-env";
+import { getDb } from "~/server/db/helpers";
+import { derivedRefreshCaptureInbox } from "~/server/db/schema";
 import {
   createLocation,
   getLocationById,
@@ -62,7 +65,7 @@ describe("repository writes publish after their commit", () => {
     return published;
   };
 
-  it("bulk-updates plants in one transaction and refreshes their embeddings after it commits", async () => {
+  it("bulk-updates plants and publishes durable refresh wakeups after commit", async () => {
     const first = await createPlantFixture(
       ctx.db,
       { name: "Bulk verdict tomato" },
@@ -80,16 +83,17 @@ describe("repository writes publish after their commit", () => {
         return id;
       }),
     );
-    const verdictsAtPublish: (string | null | undefined)[] = [];
+    const verdictsAtPublish: (string | null | undefined)[][] = [];
     const published = recordingQueue(async (task) => {
-      if (task.kind !== "entity-embedding.refresh") return;
-      const plant = [first, second][
-        ids.findIndex((id) => id === task.entityId)
-      ];
-      if (plant)
-        verdictsAtPublish.push(
-          (await getPlantByShortcode(ctx.db, plant.id))?.verdict,
-        );
+      if (task.kind !== "derived-refresh.wakeup") return;
+      verdictsAtPublish.push(
+        await Promise.all(
+          [first, second].map(
+            async (plant) =>
+              (await getPlantByShortcode(ctx.db, plant.id))?.verdict,
+          ),
+        ),
+      );
     });
 
     await executeEntity(context(), {
@@ -99,13 +103,31 @@ describe("repository writes publish after their commit", () => {
       data: { verdict: "no" },
     });
 
+    expect(published).toContainEqual(
+      expect.objectContaining({ kind: "derived-refresh.wakeup" }),
+    );
+    expect(verdictsAtPublish).toEqual(expect.arrayContaining([["no", "no"]]));
     expect(
-      published
-        .filter((task) => task.kind === "entity-embedding.refresh")
-        .map((task) => task.entityId)
-        .sort(),
+      verdictsAtPublish.every((values) =>
+        values.every((value) => value === "no"),
+      ),
+    ).toBe(true);
+    const captures = await getDb(ctx.db)
+      .select({
+        entityId: derivedRefreshCaptureInbox.entityId,
+        change: derivedRefreshCaptureInbox.change,
+      })
+      .from(derivedRefreshCaptureInbox)
+      .where(inArray(derivedRefreshCaptureInbox.entityId, ids));
+    expect(
+      [
+        ...new Set(
+          captures
+            .filter((row) => row.change.changedFields?.includes("verdict"))
+            .map((row) => row.entityId),
+        ),
+      ].sort(),
     ).toEqual([...ids].sort());
-    expect(verdictsAtPublish).toEqual(["no", "no"]);
   });
 
   it("clears a location's AI description with its last image before the vision refresh is published", async () => {
@@ -145,7 +167,11 @@ describe("repository writes publish after their commit", () => {
     });
 
     if (updated.action !== "update") throw new Error("expected update");
-    expect(updated.item).toMatchObject({ aiDescription: null, images: [] });
+    expect(updated.item).toMatchObject({ id: created.id });
+    expect(await getLocationById(ctx.db, locationId)).toMatchObject({
+      aiDescription: null,
+      images: [],
+    });
     expect(seenAtRefresh).toEqual([{ images: 0, aiDescription: null }]);
   });
 });

@@ -61,95 +61,11 @@ DROP TRIGGER IF EXISTS "AssessmentState_publish_field" ON "AssessmentState";
 CREATE TRIGGER "AssessmentState_publish_field" BEFORE INSERT ON "AssessmentState" FOR EACH ROW EXECUTE FUNCTION "publish_field_assessment"();
 `;
 
-/**
- * Identity invalidation shares the current projection, including every photo
- * attachment. Agent pairs survive enrichment (only deletion retires them):
- * they are fingerprinted live at review.
- */
-export const productIdentityInvalidationDdl = (
-  classificationFields: readonly string[],
-) => `
-CREATE OR REPLACE FUNCTION "retire_product_pair_evidence"() RETURNS trigger LANGUAGE plpgsql AS $$
-DECLARE targets uuid[] := '{}'; image_id uuid; product_deleted boolean := false;
-BEGIN
- IF TG_TABLE_NAME='Product' THEN targets=ARRAY[NEW.id]; product_deleted=NEW."deletedAt" IS NOT NULL;
- ELSIF TG_TABLE_NAME IN ('EntityAttachment','EntitySource','EntityExternalId') THEN
-  IF TG_OP<>'INSERT' AND OLD."entityKind"='product' THEN targets=array_append(targets,OLD."entityId"); END IF;
-  IF TG_OP<>'DELETE' AND NEW."entityKind"='product' THEN targets=array_append(targets,NEW."entityId"); END IF;
- ELSIF TG_TABLE_NAME='ImportSourceProduct' THEN
-  IF TG_OP<>'INSERT' THEN targets=array_append(targets,OLD."productId"); END IF;
-  IF TG_OP<>'DELETE' THEN targets=array_append(targets,NEW."productId"); END IF;
- ELSIF TG_TABLE_NAME='ImportSourceOrder' THEN
-  SELECT array_agg("productId") INTO targets FROM "ImportSourceProduct" WHERE "sourceOrderId"=NEW.id;
- ELSIF TG_TABLE_NAME='Image' THEN image_id=NEW.id;
- ELSIF TG_TABLE_NAME='AssessmentState' THEN
-  IF NEW.family='image_description' THEN image_id=NEW."recordId"; END IF;
- ELSIF TG_TABLE_NAME='AiAnalysis' THEN
-  IF NEW."entityKind"='image' AND NEW.feature='image-description' THEN image_id=NEW."entityId"; END IF;
- END IF;
- IF image_id IS NOT NULL THEN
-  SELECT array_agg("entityId") INTO targets FROM "EntityAttachment" WHERE "imageId"=image_id AND "entityKind"='product' AND "deletedAt" IS NULL;
- END IF;
- IF cardinality(targets)>0 THEN
-  UPDATE "AssessmentState" SET status='superseded',"updatedAt"=now() WHERE family='product_pair' AND active AND ("recordId"=ANY(targets) OR (data->>'otherId')::uuid=ANY(targets)) AND (data->>'source' IS DISTINCT FROM 'agent' OR product_deleted);
-  IF TG_TABLE_NAME<>'Product' THEN
-   UPDATE "AssessmentState" SET status='superseded',"updatedAt"=now(),"supersessionReceipt"=jsonb_build_object('reason','input_changed','evaluationId',NULL,'at',to_char(now() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')) WHERE family='field' AND entity='product' AND active AND status='pending' AND "recordId"=ANY(targets) AND field IN (${classificationFields.map((field) => `'${field.replaceAll("'", "''")}'`).join(",") || "NULL"});
-  END IF;
- END IF;
- RETURN NULL;
-END;
-$$;
-DROP TRIGGER IF EXISTS "Product_retire_identity_pairs" ON "Product";
-CREATE TRIGGER "Product_retire_identity_pairs" AFTER UPDATE OF name,manufacturer,model,aliases,"deletedAt" ON "Product" FOR EACH ROW WHEN (OLD.name IS DISTINCT FROM NEW.name OR OLD.manufacturer IS DISTINCT FROM NEW.manufacturer OR OLD.model IS DISTINCT FROM NEW.model OR OLD.aliases IS DISTINCT FROM NEW.aliases OR OLD."deletedAt" IS DISTINCT FROM NEW."deletedAt") EXECUTE FUNCTION "retire_product_pair_evidence"();
-${[
-  "EntityAttachment",
-  "EntitySource",
-  "EntityExternalId",
-  "ImportSourceProduct",
-]
-  .map(
-    (
-      table,
-    ) => `DROP TRIGGER IF EXISTS "${table}_retire_identity_pairs" ON "${table}";
-CREATE TRIGGER "${table}_retire_identity_pairs" AFTER INSERT OR UPDATE OR DELETE ON "${table}" FOR EACH ROW EXECUTE FUNCTION "retire_product_pair_evidence"();`,
-  )
-  .join("\n")}
-DROP TRIGGER IF EXISTS "ImportSourceOrder_retire_identity_pairs" ON "ImportSourceOrder";
-CREATE TRIGGER "ImportSourceOrder_retire_identity_pairs" AFTER UPDATE ON "ImportSourceOrder" FOR EACH ROW EXECUTE FUNCTION "retire_product_pair_evidence"();
-DROP TRIGGER IF EXISTS "Image_retire_identity_pairs" ON "Image";
-CREATE TRIGGER "Image_retire_identity_pairs" AFTER UPDATE OF sha256,"deletedAt" ON "Image" FOR EACH ROW EXECUTE FUNCTION "retire_product_pair_evidence"();
-DROP TRIGGER IF EXISTS "AssessmentState_retire_image_identity_pairs" ON "AssessmentState";
-CREATE TRIGGER "AssessmentState_retire_image_identity_pairs" AFTER UPDATE OF "confirmedValue",active ON "AssessmentState" FOR EACH ROW WHEN (OLD."confirmedValue" IS DISTINCT FROM NEW."confirmedValue" OR OLD.active IS DISTINCT FROM NEW.active) EXECUTE FUNCTION "retire_product_pair_evidence"();
-DROP TRIGGER IF EXISTS "AiAnalysis_retire_image_identity_pairs" ON "AiAnalysis";
-CREATE TRIGGER "AiAnalysis_retire_image_identity_pairs" AFTER INSERT OR UPDATE ON "AiAnalysis" FOR EACH ROW EXECUTE FUNCTION "retire_product_pair_evidence"();
-`;
-
-/**
- * Statement Transaction suggestions. One active suggestion per charge; a
- * settlement ref appearing on any path, or an observation being ignored,
- * superseded or deleted, retires every still-pending suggestion naming it.
- * Applied suggestions are untouched: apply marks its own state first.
- */
+/** Statement suggestion identity and bounded lookup indexes; retirement is background work. */
 export const statementSuggestionDdl = () => `
 CREATE UNIQUE INDEX IF NOT EXISTS "AssessmentState_statement_charge_key" ON "AssessmentState" ((data->>'source'),(data->>'chargeKey')) WHERE family='statement_transaction' AND active;
 CREATE INDEX IF NOT EXISTS "AssessmentState_statement_refs_idx" ON "AssessmentState" USING gin ((data->'refs')) WHERE family='statement_transaction' AND active AND status='pending';
 CREATE INDEX IF NOT EXISTS "AssessmentState_statement_account_idx" ON "AssessmentState" ((data->>'accountId'),(data->>'month')) WHERE family='statement_transaction' AND active AND status='pending';
 CREATE INDEX IF NOT EXISTS "StatementRow_source_charge_idx" ON "StatementRow" (source,(COALESCE("legacyExternalId","externalId"))) WHERE "deletedAt" IS NULL;
 
-CREATE OR REPLACE FUNCTION "retire_statement_suggestions"() RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
- IF TG_TABLE_NAME='EntityExternalId' THEN
-  IF NEW.kind<>'settlement_ref' OR NEW."deletedAt" IS NOT NULL THEN RETURN NULL; END IF;
- ELSIF NOT (NEW."deletedAt" IS NOT NULL OR NEW.disposition='ignored' OR NEW."supersededByRowId" IS NOT NULL) THEN
-  RETURN NULL;
- END IF;
- UPDATE "AssessmentState" SET active=false,status='superseded',"updatedAt"=now()
- WHERE family='statement_transaction' AND active AND status='pending' AND data->'refs' ? (NEW.source||':'||NEW."externalId");
- RETURN NULL;
-END;
-$$;
-DROP TRIGGER IF EXISTS "EntityExternalId_retire_statement_suggestions" ON "EntityExternalId";
-CREATE TRIGGER "EntityExternalId_retire_statement_suggestions" AFTER INSERT OR UPDATE OF "deletedAt","externalId",kind ON "EntityExternalId" FOR EACH ROW EXECUTE FUNCTION "retire_statement_suggestions"();
-DROP TRIGGER IF EXISTS "StatementRow_retire_statement_suggestions" ON "StatementRow";
-CREATE TRIGGER "StatementRow_retire_statement_suggestions" AFTER UPDATE OF "deletedAt",disposition,"supersededByRowId" ON "StatementRow" FOR EACH ROW EXECUTE FUNCTION "retire_statement_suggestions"();
 `;

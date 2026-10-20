@@ -15,11 +15,13 @@ import { z } from "zod";
 
 import { project, wireValue } from "~/entity/editing/structured-value";
 import { readPathValue } from "~/entity/read-path";
+import { isShortcodeEntity } from "~/server/entity-kernel/repo/entity-identity";
 import {
   canonicalJson,
   entityDetailJson,
 } from "~/server/entity-kernel/repo/entity-source";
 import { createAppError } from "~/server/errors/app-error";
+import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import type {
   EntityBindingSchemas,
@@ -27,6 +29,7 @@ import type {
   EntityKernelCoreBinding,
 } from "./adapter";
 import type { EntityKernelEntity } from "./contracts";
+import { readMutationReceiptFields } from "./repo/mutation-receipt";
 
 /**
  * Apply `{op, key}` patch items to a value-keyed collection (a text array).
@@ -165,7 +168,35 @@ export async function resolveCollectionPatches<
   );
   const resolved = new Map<string, z.infer<ReturnType<typeof z.json>>[]>();
   if (fields.length === 0) return resolved;
-  const found = await binding.repository.get(context, id);
+  const stored = fields.every(
+    (field) =>
+      !field.reference?.multiple &&
+      entityFieldModels[binding.entity].storage.some(
+        (column) => column.key === field.key,
+      ),
+  );
+  const storedId =
+    stored && isShortcodeEntity(binding.entity)
+      ? await resolveLiveShortcode(
+          context.db,
+          z.string().parse(id),
+          binding.entity,
+        )
+      : null;
+  const found =
+    stored && isShortcodeEntity(binding.entity)
+      ? storedId
+        ? (
+            await readMutationReceiptFields(
+              context.db,
+              binding.entity,
+              storedId,
+              fields.map((field) => field.key),
+              { includeStoredCollections: true },
+            )
+          ).item
+        : null
+      : await binding.repository.get(context, id);
   // A missing record is the repository's refusal to report.
   if (found === null) return resolved;
   const detail = record.parse(found);

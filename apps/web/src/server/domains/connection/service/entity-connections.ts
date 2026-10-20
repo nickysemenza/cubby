@@ -35,7 +35,7 @@ import { prepareTagSuggestions } from "~/server/generic/assessment/service/tag-s
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/audit-log";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
-import { discoverAcquisitionCandidates } from "./acquisition-discovery";
+import { discoverAcquisitionCandidateScan } from "./acquisition-discovery";
 
 const connectionFields = new Map<string, readonly string[]>(
   Object.entries({
@@ -76,7 +76,8 @@ export async function prepareEntityConnections(
   };
   await captureCandidates(await retrieveConnectionCandidates(db, source));
   // Indexed/semantic retrieval may call a model; preserve earlier candidates first.
-  await captureCandidates(await discoverAcquisitionCandidates(db, source));
+  const acquisition = await discoverAcquisitionCandidateScan(db, source);
+  await captureCandidates(acquisition.candidates);
   const candidates: ConnectionCandidate[] = [];
   if (source.entityKind === "expense" || source.entityKind === "inventory") {
     const recommendations = await getEntityRecommendations(db, source);
@@ -142,7 +143,11 @@ export async function prepareEntityConnections(
   publishers.push(
     ...(await prepareFieldConnections(db, context, source, ports)),
   );
-  return publishers;
+  return {
+    publications: publishers,
+    complete: acquisition.complete,
+    coverageErrors: acquisition.coverageErrors,
+  };
 }
 
 async function prepareFieldConnections(

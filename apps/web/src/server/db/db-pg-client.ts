@@ -188,7 +188,7 @@ const observeConnectionSetup = (
 export const createDatabaseClientConstructor = (
   role: RequestDbRole,
   nextOrdinal?: () => number,
-) => {
+): typeof pg.Client => {
   let ordinal = 0;
   return class DatabaseClient extends pg.Client {
     constructor(config?: string | pg.ClientConfig) {

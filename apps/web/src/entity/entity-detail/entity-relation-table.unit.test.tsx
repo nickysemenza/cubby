@@ -406,7 +406,8 @@ describe("EntityRelationTable", () => {
         return {
           action: "update",
           entity: "task",
-          item: { ...task, status: "done" },
+          item: { id: task.id, status: "done" },
+          appliedFields: [],
           sideEffects: {},
         };
       },

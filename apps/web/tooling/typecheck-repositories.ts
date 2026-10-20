@@ -27,6 +27,7 @@ export const repositoryOwners = [
   "src/server/db/generated/entity-table-definitions.gen.ts",
   "src/server/db/retained-tables.ts",
   "src/server/db/helpers/query.ts",
+  "src/server/db/sql-enum.ts",
   "src/server/db/helpers/crud.ts",
   "src/server/db/helpers/transform.ts",
   "src/server/generic/list/repo/list-contracts.ts",
@@ -36,6 +37,8 @@ export const repositoryOwners = [
   "src/server/generic/list/repo/label-canonical.ts",
   "src/server/generic/work-queue/repo/catch-up-claim.ts",
   "src/server/generic/assessment/repo/assessment-image.ts",
+  "src/server/generic/derived-refresh/repo/revisions.ts",
+  "src/server/generic/derived-refresh/repo/publication.ts",
   "src/server/generic/assessment/repo/assessment-state.ts",
   "src/server/generic/assessment/repo/assessment.ts",
   "src/server/generic/problems/repo/detectors-vendor.ts",
@@ -248,6 +251,12 @@ export function createRepositoryPrograms(
         noEmitOnError: true,
         paths: {
           ...paths,
+          "~/server/generic/derived-refresh/repo/capture.boundary": [
+            join(
+              app,
+              "artifacts/server-contracts/server/generic/derived-refresh/repo/capture.boundary.d.ts",
+            ),
+          ],
           "~/server/db/repository-access.boundary": [
             join(
               app,

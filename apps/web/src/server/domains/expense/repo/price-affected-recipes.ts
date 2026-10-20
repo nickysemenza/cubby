@@ -15,9 +15,9 @@ export const recomputeRecipesForPriceAffectedProducts = async (
   recipeCosting: RecipeCostingService,
   productIds: readonly ProductId[],
   source: string,
-): Promise<number> => {
+): Promise<void> => {
   const ids = uniq(productIds);
-  if (ids.length === 0) return 0;
+  if (ids.length === 0) return;
   const ingredientIds = await loadIngredientIdsForProducts(db, ids);
   return await recipeCosting.recomputeForIngredients(uniq(ingredientIds), {
     source,

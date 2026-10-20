@@ -1,4 +1,3 @@
-import { scoredEntities } from "@cubby/schemas/data-quality";
 import { entityKeys, entitySummary } from "@cubby/schemas/entity-summary";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import { inventoryMcpOut } from "@cubby/schemas/inventory";
@@ -259,7 +258,7 @@ const entitySummaryItemSchema = z
 
 export const entitySummaryResultSchema = z
   .object({
-    action: z.enum(["get", "list", "create", "update", "merge"]),
+    action: z.enum(["get", "list", "merge"]),
     entity: z.enum(entityKeys),
     item: entitySummaryItemSchema.nullable().optional(),
     items: z.array(entitySummaryItemSchema).optional(),
@@ -333,17 +332,6 @@ export const entitySummaryFields = (
   ...(entity === "product" ? ["externalIds"] : []),
 ];
 
-/** Write coverage is part of the summary contract, independent of full detail. */
-export const entityWriteSummaryFields = (
-  entity: keyof typeof entitySummary,
-): string[] => [
-  ...entitySummaryFields(entity),
-  ...(scoredEntities.some((scored) => scored === entity)
-    ? ["dataQuality"]
-    : []),
-  ...(entity === "recipe" ? ["totals"] : []),
-];
-
 function summarizeEntityItem(
   entity: keyof typeof entitySummary,
   item: unknown,
@@ -377,7 +365,12 @@ export function projectEntityResult<TResult extends ProjectableEntityResult>(
   command: { action?: string; resultDetail?: "summary" | "full" },
   result: TResult,
 ) {
-  if (command.resultDetail === "full") return result;
+  if (
+    command.resultDetail === "full" ||
+    result.action === "create" ||
+    result.action === "update"
+  )
+    return result;
   const payload = z
     .object({
       action: z.string(),

@@ -5,10 +5,6 @@ import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
-import {
-  entitySummaryResultSchema,
-  projectEntityResult,
-} from "~/contracts/mcp-projections";
 import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
 import { product, ingredient as ingredientTable } from "~/server/db/schema";
@@ -22,6 +18,7 @@ import {
 } from "~/server/generated/entity-bindings.gen";
 import { ENTITY_KERNEL_OPERATIONS } from "~/server/generated/entity-kernel-bindings.gen";
 import { createMcpServer } from "~/server/mcp/server";
+import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import {
   callMcpTool,
   kernelRequestContext,
@@ -126,8 +123,9 @@ describe("mutation response demand", () => {
       { entityKernel: context },
     );
     requireMutationSuccess(created);
-    const id = entitySummaryResultSchema.parse(created.structuredContent).item
-      ?.id;
+    const id = generatedMcpEntityMutationCreateResultSchema.parse(
+      created.structuredContent,
+    ).item?.id;
     if (!id) throw new Error("Synthetic Product identity missing");
     await getDb(ctx.db)
       .update(ingredientTable)
@@ -148,12 +146,14 @@ describe("mutation response demand", () => {
     );
     requireMutationSuccess(updated);
     expect(
-      entitySummaryResultSchema.parse(updated.structuredContent).item?.name,
+      generatedMcpEntityMutationUpdateResultSchema.parse(
+        updated.structuredContent,
+      ).item?.name,
     ).toBe("Synthetic renamed historical ingredient product");
   });
 
   // Ingredient identity is needed by a side effect even when the response omits it.
-  it("publishes recipe recomputation after summary and full Product writes commit", async () => {
+  it("captures durable refresh after summary and full Product writes commit", async () => {
     const context = entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
@@ -164,7 +164,7 @@ describe("mutation response demand", () => {
       );
       if (!ingredient)
         throw new Error("Synthetic costing ingredient was not created");
-      const recipe = await createRecipeFixture(
+      await createRecipeFixture(
         ctx.db,
         makeRecipeInput({
           name: `Synthetic ${resultDetail} costing recipe`,
@@ -194,7 +194,7 @@ describe("mutation response demand", () => {
               messages: Iterable<{ body: { task: BackgroundTaskInput } }>,
             ) => {
               for (const { body } of messages) {
-                if (body.task.kind !== "recipe-totals.recompute") continue;
+                if (body.task.kind !== "derived-refresh.wakeup") continue;
                 // The queue consumer uses a fresh connection, outside the write transaction.
                 const visible = await getDb(ctx.db).query.product.findFirst({
                   where: eq(product.name, expectedName),
@@ -224,19 +224,16 @@ describe("mutation response demand", () => {
         { entityKernel: context },
       );
       requireMutationSuccess(created);
-      expect(published).toMatchObject([
-        { kind: "recipe-totals.recompute", recipeIds: [recipe.entityId] },
-      ]);
-      const identity = entitySummaryResultSchema.parse(
-        resultDetail === "full"
-          ? projectEntityResult(
-              { resultDetail: "summary" },
-              generatedMcpEntityMutationCreateResultSchema.parse(
-                created.structuredContent,
-              ),
-            )
-          : created.structuredContent,
-      ).item?.id;
+      expect(published).toEqual(
+        expect.arrayContaining(
+          [{ kind: "derived-refresh.wakeup" }].map((task) =>
+            expect.objectContaining(task),
+          ),
+        ),
+      );
+      const identity = generatedMcpEntityMutationCreateResultSchema.parse(
+        created.structuredContent,
+      ).item.id;
       if (!identity)
         throw new Error("Synthetic costing Product has no identity");
       published.length = 0;
@@ -255,13 +252,17 @@ describe("mutation response demand", () => {
         { entityKernel: context },
       );
       requireMutationSuccess(updated);
-      expect(published).toMatchObject([
-        { kind: "recipe-totals.recompute", recipeIds: [recipe.entityId] },
-      ]);
+      expect(published).toEqual(
+        expect.arrayContaining(
+          [{ kind: "derived-refresh.wakeup" }].map((task) =>
+            expect.objectContaining(task),
+          ),
+        ),
+      );
     }
   });
 
-  it("preserves summary coverage and stored effects for Task and Product writes", async () => {
+  it("returns the same bounded receipts and preserves stored effects for Task and Product writes", async () => {
     const context = entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
@@ -297,16 +298,10 @@ describe("mutation response demand", () => {
           { entityKernel: context },
         );
         requireMutationSuccess(created);
-        const createdSummary = entitySummaryResultSchema.parse(
-          resultDetail === "full"
-            ? projectEntityResult(
-                { resultDetail: "summary" },
-                generatedMcpEntityMutationCreateResultSchema.parse(
-                  created.structuredContent,
-                ),
-              )
-            : created.structuredContent,
-        );
+        const createdSummary =
+          generatedMcpEntityMutationCreateResultSchema.parse(
+            created.structuredContent,
+          );
         const id = createdSummary.item?.id;
         if (!id) throw new Error("Synthetic create did not return an identity");
         const updatedName = `Synthetic ${resultDetail} renamed projection ${entity}`;
@@ -324,24 +319,16 @@ describe("mutation response demand", () => {
           { entityKernel: context },
         );
         requireMutationSuccess(updated);
-        const updatedSummary = entitySummaryResultSchema.parse(
-          resultDetail === "full"
-            ? projectEntityResult(
-                { resultDetail: "summary" },
-                generatedMcpEntityMutationUpdateResultSchema.parse(
-                  updated.structuredContent,
-                ),
-              )
-            : updated.structuredContent,
-        );
+        const updatedSummary =
+          generatedMcpEntityMutationUpdateResultSchema.parse(
+            updated.structuredContent,
+          );
         for (const [action, summary] of [
           ["create", createdSummary],
           ["update", updatedSummary],
         ] as const) {
-          expect(summary.item?.coverage).toBeDefined();
-          expect(summary.item?.externalIds?.length).toBe(
-            entity === "product" ? 1 : undefined,
-          );
+          expect(summary.item).not.toHaveProperty("coverage");
+          expect(summary.item).not.toHaveProperty("externalIds");
           summaries.set(
             `${entity}:${action}:${resultDetail}`,
             JSON.parse(
@@ -354,13 +341,22 @@ describe("mutation response demand", () => {
             ),
           );
         }
+        await drainDerivedRefreshFrontier(ctx.db);
         const stored = await getDb(ctx.db).execute(sql`SELECT document.title,
+          (SELECT count(*)::int FROM "EntityExternalId" external
+            WHERE external."entityId"=identity.id AND external."deletedAt" IS NULL) AS external_ids,
           (SELECT count(*)::int FROM "AuditLog" audit
             WHERE audit."entityKind"=identity.kind AND audit."entityId"=identity.id) AS audits
           FROM "Entity" identity JOIN "SearchDocument" document
             ON document."entityKind"=identity.kind AND document."entityId"=identity.id
           WHERE identity.shortcode=${id} AND identity.kind=${entity}`);
-        expect(stored.rows).toEqual([{ title: updatedName, audits: 2 }]);
+        expect(stored.rows).toEqual([
+          {
+            title: updatedName,
+            audits: 2,
+            external_ids: entity === "product" ? 1 : 0,
+          },
+        ]);
       }
       for (const action of ["create", "update"])
         expect(summaries.get(`${entity}:${action}:summary`)).toEqual(

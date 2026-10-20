@@ -90,7 +90,12 @@ const testOperations: AddToMealOperations = {
       return {
         action: "create" as const,
         entity: "meal" as const,
-        item: tuesdayDinner,
+        item: {
+          id: tuesdayDinner.id,
+          date: tuesdayDinner.date,
+          mealType: tuesdayDinner.mealType,
+        },
+        appliedFields: [],
         sideEffects: {},
       };
     }

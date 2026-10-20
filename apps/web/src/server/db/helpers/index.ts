@@ -14,9 +14,13 @@ export {
   isTransaction,
   parentTransactionDatabase,
   runAfterCommit,
+  runBeforeCommitDatabase,
+  pendingTransactionChanges,
   unwrapDb,
   withTransaction,
   withTransactionDatabase,
+  withSnapshotWrite,
+  withSnapshotWriteDatabase,
   withTransactionOn,
 } from "./core";
 // CRUD operations

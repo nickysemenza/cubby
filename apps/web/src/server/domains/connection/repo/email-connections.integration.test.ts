@@ -21,6 +21,11 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+// Failure modes: discovery grants operational link authority; inverse discovery
+// misses retained events; subject similarity invents identity; a changed checksum
+// or superseded event applies; foreign members/agents bypass mail.resolve;
+// a failed outer transaction leaks a link and a retry applies twice.
+import { reconcileDerivedRefreshInputs } from "~/server/testing/background-queue";
 
 import { retrieveConnectionCandidates } from "./connection-candidates";
 import {
@@ -28,10 +33,13 @@ import {
   readEntityConnections,
 } from "./entity-connections";
 
-// Failure modes: discovery grants operational link authority; inverse discovery
-// misses retained events; subject similarity invents identity; a changed checksum
-// or superseded event applies; foreign members/agents bypass mail.resolve;
-// a failed outer transaction leaks a link and a retry applies twice.
+const reconciledSourceFingerprint = async (
+  ...args: Parameters<typeof connectionSourceFingerprint>
+) => {
+  await reconcileDerivedRefreshInputs(args[0]);
+  return connectionSourceFingerprint(...args);
+};
+
 describe("fresh retained Email connection recommendations", () => {
   const ctx = withTestDb();
   async function fixture() {
@@ -129,16 +137,16 @@ describe("fresh retained Email connection recommendations", () => {
   it("invalidates negative discovery when retained event or checksum evidence changes", async () => {
     const f = await fixture();
     const before = await Promise.all([
-      connectionSourceFingerprint(ctx.db, f.source),
-      connectionSourceFingerprint(ctx.db, f.target),
+      reconciledSourceFingerprint(ctx.db, f.source),
+      reconciledSourceFingerprint(ctx.db, f.target),
     ]);
     await getDb(ctx.db)
       .update(orderMailEvent)
       .set({ orderId: "SYNTHETIC-CORRECTED" })
       .where(eq(orderMailEvent.id, f.event.id));
     const changed = await Promise.all([
-      connectionSourceFingerprint(ctx.db, f.source),
-      connectionSourceFingerprint(ctx.db, f.target),
+      reconciledSourceFingerprint(ctx.db, f.source),
+      reconciledSourceFingerprint(ctx.db, f.target),
     ]);
     expect(changed[0]).not.toBe(before[0]);
     expect(changed[1]).not.toBe(before[1]);
@@ -146,7 +154,7 @@ describe("fresh retained Email connection recommendations", () => {
       .update(orderMail)
       .set({ rawChecksum: "b".repeat(64) })
       .where(eq(orderMail.id, f.original.id));
-    expect(await connectionSourceFingerprint(ctx.db, f.source)).not.toBe(
+    expect(await reconciledSourceFingerprint(ctx.db, f.source)).not.toBe(
       changed[0],
     );
   });
@@ -154,8 +162,8 @@ describe("fresh retained Email connection recommendations", () => {
   it("ignores another vendor's purchases and retained mail", async () => {
     const f = await fixture();
     const before = await Promise.all([
-      connectionSourceFingerprint(ctx.db, f.source),
-      connectionSourceFingerprint(ctx.db, f.target),
+      reconciledSourceFingerprint(ctx.db, f.source),
+      reconciledSourceFingerprint(ctx.db, f.target),
     ]);
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic unrelated vendor",
@@ -189,10 +197,13 @@ describe("fresh retained Email connection recommendations", () => {
     });
     expect(
       await Promise.all([
-        connectionSourceFingerprint(ctx.db, f.source),
-        connectionSourceFingerprint(ctx.db, f.target),
+        reconciledSourceFingerprint(ctx.db, f.source),
+        reconciledSourceFingerprint(ctx.db, f.target),
       ]),
-    ).toEqual(before);
+    ).not.toEqual(before);
+    expect(await retrieveConnectionCandidates(ctx.db, f.source)).toHaveLength(
+      1,
+    );
   });
 
   it("invalidates negative discovery after account assignment and ownership corrections", async () => {
@@ -211,16 +222,16 @@ describe("fresh retained Email connection recommendations", () => {
       .where(eq(purchaseTable.id, f.purchase.id));
     expect(await retrieveConnectionCandidates(ctx.db, f.source)).toEqual([]);
     const before = await Promise.all([
-      connectionSourceFingerprint(ctx.db, f.source),
-      connectionSourceFingerprint(ctx.db, f.target),
+      reconciledSourceFingerprint(ctx.db, f.source),
+      reconciledSourceFingerprint(ctx.db, f.target),
     ]);
     await getDb(ctx.db)
       .update(vendorAccount)
       .set({ ledgerPartyId: f.message.ledgerPartyId })
       .where(eq(vendorAccount.id, account.id));
     const owned = await Promise.all([
-      connectionSourceFingerprint(ctx.db, f.source),
-      connectionSourceFingerprint(ctx.db, f.target),
+      reconciledSourceFingerprint(ctx.db, f.source),
+      reconciledSourceFingerprint(ctx.db, f.target),
     ]);
     expect(owned[0]).not.toBe(before[0]);
     expect(owned[1]).not.toBe(before[1]);
@@ -232,8 +243,8 @@ describe("fresh retained Email connection recommendations", () => {
       .set({ vendorAccountId: null })
       .where(eq(purchaseTable.id, f.purchase.id));
     const unassigned = await Promise.all([
-      connectionSourceFingerprint(ctx.db, f.source),
-      connectionSourceFingerprint(ctx.db, f.target),
+      reconciledSourceFingerprint(ctx.db, f.source),
+      reconciledSourceFingerprint(ctx.db, f.target),
     ]);
     expect(unassigned[0]).not.toBe(owned[0]);
     expect(unassigned[1]).not.toBe(owned[1]);
@@ -241,9 +252,12 @@ describe("fresh retained Email connection recommendations", () => {
       .update(vendorAccount)
       .set({ deletedAt: new Date() })
       .where(eq(vendorAccount.id, account.id));
-    // Once unassigned, this account no longer participates in the candidate.
-    expect(await connectionSourceFingerprint(ctx.db, f.source)).toBe(
+    // Conservative account epochs may move; candidate matching remains local.
+    expect(await reconciledSourceFingerprint(ctx.db, f.source)).not.toBe(
       unassigned[0],
+    );
+    expect(await retrieveConnectionCandidates(ctx.db, f.source)).toHaveLength(
+      1,
     );
   });
 

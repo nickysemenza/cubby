@@ -13,20 +13,31 @@ import { dependencyStamps } from "~/server/ai/policy/refresh-manifest";
 import { PENDING_AI_STATES } from "~/server/ai/repo/ai-evaluation-requests";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
-import { getDb, notDeleted } from "~/server/db/helpers";
+import {
+  getDb,
+  notDeleted,
+  withTransactionDatabase,
+} from "~/server/db/helpers";
 import { entityIdentity, run, aiEvaluation } from "~/server/db/schema";
 import { connectionRecord } from "~/server/domains/connection/repo/connection-evidence";
 import {
   connectionDiscoveryFingerprint,
   connectionDiscoveryFingerprints,
 } from "~/server/domains/connection/repo/discovery-fingerprint";
-import { refreshSearchDocuments } from "~/server/generic/search/repo/search-document";
+import { connectionInputKeys } from "~/server/domains/connection/repo/discovery-inputs";
+import { hasUnmaterializedInputs } from "~/server/generic/derived-refresh/repo/freshness";
 
+import {
+  hasAiRefreshRunCapacity,
+  tryLockAiRefreshScheduling,
+} from "./ai-refresh-admission";
 import {
   insertEvaluationTargets,
   scheduleEvaluationRun,
 } from "./ai-refresh-state";
 import { ensureRun, systemActor } from "./ensure-run";
+
+export class ConnectionAdmissionDeferred extends Error {}
 
 const discoveryEntities = [
   "product",
@@ -66,16 +77,10 @@ export async function scheduleConnectionRefresh(
   if (!activation?.enabled || !activation.manifest["entity-connections"])
     return { kind: "unchanged", runId: null };
   const record = await connectionRecord(db, source);
-  // The initial cursor pass also carries the expanded notes projection into
-  // existing rows; fallback retrieval remains useful until that pass reaches them.
-  if (source.entityKind === "purchase" || source.entityKind === "expense")
-    await refreshSearchDocuments(db, [
-      { entityKind: source.entityKind, entityId: record.id },
-    ]);
   const provenance = aiProvenance.parse({
     dependencies: dependencyStamps(activation.manifest, ["entity-connections"]),
     inputFingerprint: await connectionSourceFingerprint(db, source),
-    optionFingerprint: "typed-connection-discovery-v1",
+    optionFingerprint: "typed-connection-discovery-v2",
     model: null,
   });
   const target = aiEvaluationTarget.parse({
@@ -156,13 +161,29 @@ export async function ensureConnectionSweepRun(
   const activation = await readAiRefreshActivation(db);
   if (!activation?.enabled || !activation.manifest["entity-connections"])
     return null;
-  return ensureRun(db, actor, {
-    purpose: "ai_refresh",
-    trigger,
-    status: "running",
-    clientKey: `sweep:${parentRunId}:recommendation`,
-    parentRunId,
-    input: aiRefreshRunInput.parse({ kind: "ai_refresh", activation }),
+  return withTransactionDatabase(db, async (tx) => {
+    const [existing] = await getDb(tx)
+      .select({ id: run.id })
+      .from(run)
+      .where(eq(run.clientKey, `sweep:${parentRunId}:recommendation`))
+      .limit(1);
+    if (existing) return existing.id;
+    if (
+      trigger === "scheduled" &&
+      (!(await tryLockAiRefreshScheduling(tx)) ||
+        !(await hasAiRefreshRunCapacity(tx)))
+    )
+      throw new ConnectionAdmissionDeferred(
+        "Connection discovery waits for AI capacity",
+      );
+    return ensureRun(tx, actor, {
+      purpose: "ai_refresh",
+      trigger,
+      status: "running",
+      clientKey: `sweep:${parentRunId}:recommendation`,
+      parentRunId,
+      input: aiRefreshRunInput.parse({ kind: "ai_refresh", activation }),
+    });
   });
 }
 
@@ -191,6 +212,23 @@ export async function prepareConnectionSweepPage(
     input.limit,
     input.entityKinds,
   );
+  for (const kind of new Set(page.map((record) => record.source.entityKind))) {
+    const kinds = [
+      kind,
+      ...connectionInputKeys(kind)
+        .filter((key) => key.startsWith("kind:"))
+        .map((key) => key.slice(5)),
+    ];
+    if (
+      await hasUnmaterializedInputs(db, kinds, {
+        includePublishing: true,
+        pendingOnly: true,
+      })
+    )
+      throw new ConnectionAdmissionDeferred(
+        `Connection discovery waits for derived inputs: ${kind}`,
+      );
+  }
   const sources = page.map((record) => record.source);
   const fingerprints = await connectionSourceFingerprints(db, sources);
   const inserted = await insertEvaluationTargets(
@@ -209,7 +247,7 @@ export async function prepareConnectionSweepPage(
           "entity-connections",
         ]),
         inputFingerprint: fingerprints[index],
-        optionFingerprint: "typed-connection-discovery-v1",
+        optionFingerprint: "typed-connection-discovery-v2",
         model: null,
       }),
       snapshot: record.source,

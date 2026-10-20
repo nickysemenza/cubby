@@ -30,7 +30,7 @@ import {
 import { finalizeImportedImages } from "~/server/domains/photo-import/repo/photo-import-finalize";
 import type { EntityKernelContext } from "~/server/entity-kernel";
 import {
-  refreshProjectionsForEvent,
+  captureMutationEvent,
   runMutationSideEffectsForEntities,
   type MutationSideEffectEvent,
 } from "~/server/entity-kernel/repo/mutation-side-effects";
@@ -101,7 +101,7 @@ export interface PhotoImportCommitPorts {
   activateImages: typeof activateImportImages;
   persistAnalysis: typeof persistLocalImageAnalysis;
   withTransaction: typeof withPhotoImportTransaction;
-  refreshProjection: typeof refreshProjectionsForEvent;
+  captureRefresh: typeof captureMutationEvent;
   runSideEffects: typeof runMutationSideEffectsForEntities;
   /** Injectable so a unit test can stub the DB writes `applyImportProvenance`
    * makes directly (outside every other port's mediation) without a real
@@ -117,7 +117,7 @@ export const productionPhotoImportCommitPorts: PhotoImportCommitPorts = {
   activateImages: activateImportImages,
   persistAnalysis: persistLocalImageAnalysis,
   withTransaction: withPhotoImportTransaction,
-  refreshProjection: refreshProjectionsForEvent,
+  captureRefresh: captureMutationEvent,
   applyProvenance: applyImportProvenance,
   runSideEffects: runMutationSideEffectsForEntities,
 };
@@ -493,7 +493,7 @@ export async function commitPhotoImport(
         transactionContext.actorContext,
       );
       for (const event of sideEffectEvents) {
-        await ports.refreshProjection(transactionDb, event);
+        await ports.captureRefresh(transactionDb, event);
       }
       await finalizeImportedImages(transactionDb, {
         pending: lockedVerified.map(({ row, integrity }) => ({
@@ -543,7 +543,7 @@ export async function commitPhotoImport(
   );
   await deferred.flush(context.db);
   await ports.runSideEffects(context.db, sideEffectEvents, undefined, {
-    projection: "skip",
+    captured: true,
   });
   return result;
 }

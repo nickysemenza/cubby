@@ -1,12 +1,15 @@
 import { entityRefKey } from "@cubby/schemas/entity";
 import type { SearchableEntityRef } from "@cubby/schemas/search";
 import { fromPartial } from "@total-typescript/shoehorn";
+import { and, eq, isNull } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { type getAiGateway, setCfEnv } from "~/server/cf-env";
 import type { Database } from "~/server/db";
+import { getDb } from "~/server/db/helpers";
+import { entityEmbedding } from "~/server/db/schema";
 import { countUnembeddedEntities } from "~/server/domains/maintenance/service/maintenance.service";
 import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
@@ -20,7 +23,6 @@ import {
   createInMemoryVectorizeIndex,
   productionVectorStore,
   type VectorStorePort,
-  vectorId,
 } from "~/server/generic/embedding/service/semantic/vector-store";
 import { requestEmbeddingRefreshWorkflow } from "~/server/generic/search/operations/search.server";
 import {
@@ -55,16 +57,26 @@ const fakeVectorStore = (): VectorStorePort & {
     vectors,
     configured: () => true,
     async upsert(items) {
-      for (const item of items) vectors.set(vectorId(item), item.values);
+      for (const item of items) vectors.set(item.id, item.values);
+      return new Map(items.map((item) => [item.id, crypto.randomUUID()]));
     },
     async deleteByIds(refs) {
-      for (const ref of refs) vectors.delete(vectorId(ref));
+      for (const ref of refs) vectors.delete(ref);
+      return new Map(refs.map((id) => [id, crypto.randomUUID()]));
     },
     async query() {
       return [];
     },
-    async queryById() {
-      return [];
+    async queryById(id) {
+      return vectors.has(id)
+        ? [...vectors.keys()].map((id) => ({ id, similarity: 1 }))
+        : [];
+    },
+    async getByIds(ids) {
+      return ids.flatMap((id) => {
+        const values = vectors.get(id);
+        return values ? [{ id, values }] : [];
+      });
     },
   };
 };
@@ -317,10 +329,7 @@ describe("semantic search background tasks", () => {
     const vectorFor = (marker: number) =>
       Array.from({ length: config.dimensions }, () => marker);
 
-    // Two writers share one vector store, the way production shares one
-    // Vectorize index — this is what lets writer A's stale upsert actually
-    // clobber writer B's fresher one below. `productionVectorStore` reads the
-    // binding through cf-env, so both ports below resolve to this same index.
+    // Both writers share the remote index; their physical identities must remain distinct.
     const index = createInMemoryVectorizeIndex();
     setCfEnv(fromPartial<Env>({ VECTORIZE: index }));
     const sharedVectorStore = productionVectorStore;
@@ -340,11 +349,7 @@ describe("semantic search background tasks", () => {
       configured: () => true,
       config: getSemanticEmbeddingConfig,
       vectorStore: sharedVectorStore,
-      // The provider call is where the race lives: writer B fully completes
-      // its own refresh — text, vector, AND row — while writer A's slow call
-      // for the pre-change text is still in flight. A's own vector (0.1,
-      // below) would clobber B's (0.9) in the shared store if A did not
-      // retry after its "obsolete" write.
+      // Writer B publishes the new input while A's provider is still in flight.
       embed: async (texts) => {
         if (!racedOnce) {
           racedOnce = true;
@@ -358,19 +363,12 @@ describe("semantic search background tasks", () => {
           await refreshEntityEmbeddings(ctx.db, [ref], writerBPort);
           return texts.map(() => vectorFor(0.1));
         }
-        // A's retry, now embedding the current (v2) text B already wrote.
         return texts.map(() => vectorFor(0.9));
       },
     };
 
-    // A's own call self-heals: its first (pre-change) attempt is clobbered
-    // onto an "obsolete" PG write (the guard rejects it, since the live
-    // SearchDocument text moved on under it), but the bounded retry re-embeds
-    // the now-current text and lands both the vector and the row — repairing
-    // A's own clobber of B's vector rather than leaving the store behind
-    // Postgres.
     await expect(refreshOne(ctx.db, ref, writerAPort)).resolves.toEqual({
-      outcome: "written",
+      outcome: "obsolete",
     });
 
     const currentText = await getSearchDocumentEmbeddingText(
@@ -382,8 +380,20 @@ describe("semantic search background tasks", () => {
       "Embedding after concurrent change",
     );
     expect(await countUnembeddedSearchDocuments(ctx.db, config)).toBe(0);
-    // The store holds a vector for v2, never A's stale v1 clobber.
-    expect(index.vectors.get(vectorId(ref))?.values).toEqual(vectorFor(0.9));
+    const [selected] = await getDb(ctx.db)
+      .select({ id: entityEmbedding.id })
+      .from(entityEmbedding)
+      .where(
+        and(
+          eq(entityEmbedding.entityId, ref.entityId),
+          eq(entityEmbedding.artifactState, "selected"),
+          isNull(entityEmbedding.deletedAt),
+        ),
+      );
+    expect(selected).toBeDefined();
+    expect(selected ? index.vectors.get(selected.id)?.values : null).toEqual(
+      Array.from(new Float32Array(vectorFor(0.9))),
+    );
   });
 
   it("vector upsert throws: no EntityEmbedding hash row is written, and the error propagates", async () => {
@@ -399,7 +409,8 @@ describe("semantic search background tasks", () => {
       upsert: async () => {
         throw new Error("vectorize outage");
       },
-      deleteByIds: async () => {},
+      deleteByIds: async () => new Map(),
+      getByIds: async () => [],
       query: async () => [],
       queryById: async () => [],
     };
@@ -420,6 +431,7 @@ describe("semantic search background tasks", () => {
     expect(result).toEqual({
       error: expect.objectContaining({ message: "vectorize outage" }),
       throttled: false,
+      exhausted: false,
     });
 
     const stored = await getStoredEmbeddingHashes(ctx.db, [ref], config);
@@ -453,14 +465,13 @@ describe("semantic search background tasks", () => {
 
     const calls: string[][] = [];
     const upsertCalls: unknown[][] = [];
+    const storage = fakeVectorStore();
     const vectorStore: VectorStorePort = {
-      configured: () => true,
+      ...storage,
       upsert: async (items) => {
         upsertCalls.push([...items]);
+        return storage.upsert(items);
       },
-      deleteByIds: async () => {},
-      query: async () => [],
-      queryById: async () => [],
     };
     const port = fakeEmbeddingPort(calls, vectorStore);
 

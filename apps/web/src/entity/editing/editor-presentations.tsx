@@ -24,7 +24,6 @@ import type { PendingImage } from "~/entity/entity-media/pending-image-upload";
 import { featureRegistry } from "~/entity/feature-registry";
 import type { FinancialTransactionFormValues } from "~/features/finance/financial-transaction-form";
 import { formatDateSpan } from "~/lib/date-span";
-import { purchaseLabel } from "~/lib/purchase-label";
 import { AliasesField } from "~/ui/forms/aliases-field";
 import { Row, Stack } from "~/ui/layout";
 import type { Overlay } from "~/ui/overlays/overlay";
@@ -521,10 +520,11 @@ const presentations = {
       "Plan a meal onto the calendar — add recipes once it's created.",
     Fields: () => <EntityIntentFields entity="meal" intent="capture" />,
     successMessage: (result) => {
-      if (result.name) {
+      if (typeof result.name === "string" && result.name)
         return `Added "${result.name}"`;
-      }
-      return `Added meal for ${formatDateSpan(result.date, null)}`;
+      return typeof result.date === "string"
+        ? `Added meal for ${formatDateSpan(result.date, null)}`
+        : "Added meal";
     },
   },
   "task:create:capture": {
@@ -575,7 +575,8 @@ const presentations = {
     description: () =>
       "One vendor order or receipt event. Its Expenses are the categorized spend lines added afterward, and every dollar lives on them.",
     Fields: () => <EntityIntentFields entity="purchase" intent="capture" />,
-    successMessage: (result) => `Logged "${purchaseLabel(result)}"`,
+    successMessage: (result) =>
+      `Logged purchase ${typeof result.orderId === "string" && result.orderId ? result.orderId : result.id}`,
   },
   "product:create:full": {
     title: () => "New product",

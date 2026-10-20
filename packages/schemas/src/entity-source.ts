@@ -106,7 +106,7 @@ export const entitySourceRead = z.object({
   /**
    * Field-scoped sources only: true while the field still holds the value
    * this source was recorded against; false once it was overwritten. Null
-   * for a source about the whole record.
+   * when whole-field support is unassessed (record or collection evidence).
    */
   supportsCurrentValue: z.boolean().nullable(),
   recorder: z.object({

@@ -12,7 +12,7 @@ import type { Database } from "~/server/db";
 import {
   databaseForTransaction,
   notDeleted,
-  withTransaction,
+  withSnapshotWrite,
 } from "~/server/db/helpers";
 import {
   financialAccount,
@@ -42,7 +42,7 @@ export async function acceptFinancialTransferPair(
   input: AcceptFinancialTransferPairInput,
   actor: ActorContext,
 ): Promise<AcceptFinancialTransferPairOut> {
-  const result = await withTransaction(
+  const result = await withSnapshotWrite(
     db,
     async (tx) => {
       const codes = [input.outflowTransactionId, input.inflowTransactionId];

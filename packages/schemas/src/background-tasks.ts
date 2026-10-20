@@ -2,6 +2,7 @@ import { z } from "zod";
 import { searchableEntities } from "./entity-manifest";
 import { imageId, locationId, parseEntityRef, recipeId } from "./identifiers";
 import { imageProcessingResult } from "./image-processing";
+import { derivedRefreshWakeupTask } from "./derived-refresh";
 
 /**
  * Background tasks are self-contained queue payloads: the message carries
@@ -14,6 +15,7 @@ import { imageProcessingResult } from "./image-processing";
  * of pending work; a lost message is repaired on read or by "Settle now".
  */
 export const backgroundTaskKinds = [
+  "derived-refresh.wakeup",
   "recipe-totals.recompute",
   "entity-embedding.refresh",
   "location-ai.description.refresh",
@@ -159,6 +161,7 @@ export const statementSuggestionsLabelTaskSchema = z.object({
 });
 
 export const backgroundTaskSchema = z.discriminatedUnion("kind", [
+  derivedRefreshWakeupTask,
   recipeTotalsRecomputeTaskSchema,
   entityEmbeddingRefreshTaskSchema,
   locationAiDescriptionRefreshTaskSchema,

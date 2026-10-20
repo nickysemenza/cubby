@@ -20,8 +20,9 @@ import {
   buildKernelContext,
   createFixtureWithContext,
 } from "../../../tooling/scenarios/context";
-import { getDb } from "~/server/db/helpers";
+import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import { e2eFaker } from "../support/e2e-helpers";
 
 type CreatedEntity = { id: string };
@@ -112,7 +113,9 @@ export async function createFixture<Input>(
   input: Input,
 ): Promise<CreatedEntity> {
   const context = buildKernelContext(getFixtureDb(), await fixtureUserId(page));
-  return createFixtureWithContext(context, entity, input);
+  const created = await createFixtureWithContext(context, entity, input);
+  await drainDerivedRefreshFrontier(getFixtureDb());
+  return created;
 }
 
 /** The kernel context a fixture writes through, acting as the page's signed-in user. */
@@ -130,9 +133,37 @@ export async function createEntityFixture<E extends CreatableEntity>(
   entity: E,
   overrides: EntityOverrides<E> = {},
 ): Promise<CreatedEntity> {
-  return createEntity(await fixtureKernelContext(page), entity, overrides, {
-    faker: e2eFaker(),
+  const created = await createEntity(
+    await fixtureKernelContext(page),
+    entity,
+    overrides,
+    {
+      faker: e2eFaker(),
+    },
+  );
+  await drainDerivedRefreshFrontier(getFixtureDb());
+  return created;
+}
+
+/** Commit a fixture cohort together, then settle its derived projections. */
+export async function createEntityFixtures<E extends CreatableEntity>(
+  page: Page,
+  entity: E,
+  overrides: readonly EntityOverrides<E>[],
+): Promise<CreatedEntity[]> {
+  const userId = await fixtureUserId(page);
+  const created = await withTransactionDatabase(getFixtureDb(), async (db) => {
+    const context = buildKernelContext(db, userId);
+    const rows: CreatedEntity[] = [];
+    for (const input of overrides) {
+      rows.push(
+        await createEntity(context, entity, input, { faker: e2eFaker() }),
+      );
+    }
+    return rows;
   });
+  await drainDerivedRefreshFrontier(getFixtureDb());
+  return created;
 }
 
 /** The signed-in user's member LedgerParty, created on first use. */

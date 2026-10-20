@@ -54,6 +54,7 @@ import {
 } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
+import { recordContextRefresh } from "~/server/generic/derived-refresh/repo/capture.boundary";
 import {
   ensureExternalSources,
   assertSettlementRefsAvailable,
@@ -422,7 +423,7 @@ async function insertStatementEvidence(
   rows: (typeof statementRow.$inferInsert)[],
 ) {
   if (!rows.length) return [];
-  return unwrapDb(tx)
+  const inserted = await unwrapDb(tx)
     .insert(statementRow)
     .values(rows)
     .onConflictDoNothing({
@@ -430,6 +431,8 @@ async function insertStatementEvidence(
       where: sql`"StatementRow"."deletedAt" IS NULL`,
     })
     .returning({ id: statementRow.id });
+  if (inserted.length) await recordContextRefresh(tx, "StatementRow", []);
+  return inserted;
 }
 
 /**
@@ -699,6 +702,7 @@ export async function recordStatementRows(
         );
     }
 
+    if (maskUpgrades.length) await recordContextRefresh(tx, "StatementRow", []);
     const insertable = rows.filter(
       (row) => row.reviewedLegacyAccountDescriptor === undefined,
     );
@@ -1006,6 +1010,7 @@ export async function updateStatementRows(
         ),
       )
       .returning({ id: statementRow.id });
+    if (updated.length) await recordContextRefresh(tx, "StatementRow", []);
     return { affected: updated.length };
   });
 }
@@ -1032,6 +1037,7 @@ export async function deleteStatementRows(
       .set({ deletedAt: new Date() })
       .where(selectorConditions(selector))
       .returning({ id: statementRow.id });
+    if (deleted.length) await recordContextRefresh(tx, "StatementRow", []);
     return { affected: deleted.length };
   });
 }

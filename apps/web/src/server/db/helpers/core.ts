@@ -1,3 +1,4 @@
+import { sleep } from "@cubby/shared/retry";
 import type { PgTransactionConfig } from "drizzle-orm/pg-core";
 
 import type { DrizzleClient, DrizzleTransaction } from "~/server/db";
@@ -7,6 +8,7 @@ import {
   resolveDatabaseRuntime,
 } from "~/server/db/database-runtime";
 import type { RepositoryQueryTransaction } from "~/server/db/repository-access.boundary";
+import { isSerializationFailure } from "~/server/errors/db-errors";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 /** Work that must not happen unless the enclosing transaction commits. */
@@ -25,20 +27,79 @@ export type AfterCommitEffect = (committedDb: Database) => Promise<void>;
  * purchase-agent call, a kernel write inside a workflow) neither wakes a
  * consumer before its rows are visible nor destroys bytes for rows a later
  * rollback restores. A transaction opened with a raw `.transaction()` instead
- * of `withTransaction` has no queue, so its effects run immediately.
+ * of `withTransaction` has no commit boundary and rejects deferred effects.
  */
 const afterCommitQueues = new WeakMap<object, AfterCommitEffect[]>();
+type BeforeCommitEffect = (tx: DrizzleTransaction) => Promise<void>;
+type BeforeCommitEntry = {
+  effect: BeforeCommitEffect;
+  phase: "validation" | "fence" | "capture";
+  changedKeys: readonly string[];
+};
+const beforeCommitQueues = new WeakMap<object, BeforeCommitEntry[]>();
+
+/** Includes released savepoints; a rolled-back child never reaches its parent. */
+export const pendingTransactionChanges = (
+  db: Database | RepositoryQueryTransaction,
+): string[] => {
+  const seen = new Set<object>();
+  const keys: string[] = [];
+  let current: Database | RepositoryQueryTransaction | undefined = db;
+  while (current) {
+    const queue = beforeCommitQueues.get(current);
+    if (queue && !seen.has(queue)) {
+      seen.add(queue);
+      keys.push(...queue.flatMap((entry) => entry.changedKeys));
+    }
+    current = transactionParents.get(
+      "rollback" in current ? current : getDb(current),
+    );
+  }
+  return keys;
+};
+
+/** Metadata follows all business writes, including successfully released savepoints. */
+export const runBeforeCommit = async (
+  db: Database | RepositoryQueryTransaction,
+  effect: BeforeCommitEffect,
+  options: {
+    phase?: "validation" | "fence" | "capture";
+    changedKeys?: readonly string[];
+  } = {},
+): Promise<void> => {
+  const pending = beforeCommitQueues.get(db);
+  if (pending) {
+    pending.push({
+      effect,
+      phase: options.phase ?? "capture",
+      changedKeys: options.changedKeys ?? [],
+    });
+    return;
+  }
+  if ("rollback" in db)
+    throw new Error(
+      "Before-commit work requires a transaction opened with withTransaction",
+    );
+  await withTransaction(db, effect);
+};
 
 // Active savepoint ancestry lets scoped server capabilities follow kernel writes
 // without granting authority to the request pool or later transactions.
 const transactionParents = new WeakMap<object, Database>();
+
+/** Final semantic checks run before the revision lock and metadata flush. */
+export const runBeforeCommitDatabase = (
+  db: Database,
+  effect: (tx: Database) => Promise<void>,
+  phase: "validation" | "fence",
+) => runBeforeCommit(db, (tx) => effect(databaseForTransaction(tx)), { phase });
 
 /**
  * Run `effect` now on a pool-bound handle; on a handle inside a
  * {@link withTransaction}, hold it until the outermost commit.
  */
 export const runAfterCommit = async (
-  db: Database,
+  db: Database | RepositoryQueryTransaction,
   effect: AfterCommitEffect,
 ): Promise<void> => {
   const pending = afterCommitQueues.get(db);
@@ -46,7 +107,15 @@ export const runAfterCommit = async (
     pending.push(effect);
     return;
   }
-  await effect(db);
+  if (!("rollback" in db)) await effect(db);
+  else {
+    const parent = transactionParents.get(db);
+    if (!parent)
+      throw new Error(
+        "After-commit work requires a transaction opened with withTransaction",
+      );
+    await effect(parent);
+  }
 };
 
 /** Every effect is attempted; the transaction already committed either way. */
@@ -120,28 +189,83 @@ export const parentTransactionDatabase = (
  * Transaction wrapper for interactive transactions (sequential operations).
  * Use this in repo functions when you need multiple operations to be atomic.
  */
-export const withTransaction = async <T>(
+const withTransactionAttempts = async <T>(
+  db: Database,
+  fn: (tx: DrizzleTransaction) => Promise<T>,
+  config: PgTransactionConfig | undefined,
+  attempts: number,
+): Promise<T> => {
+  const parentBefore = beforeCommitQueues.get(db);
+  const limit = isTransaction(getDb(db)) ? 1 : attempts;
+  for (let attempt = 1; ; attempt++) {
+    const pending: AfterCommitEffect[] = [];
+    const before: BeforeCommitEntry[] = [];
+    let result: T;
+    try {
+      result = await withTrace(TraceNames.db("transaction"), async () => {
+        return await getDb(db).transaction(async (tx) => {
+          afterCommitQueues.set(tx, pending);
+          beforeCommitQueues.set(tx, before);
+          transactionParents.set(tx, db);
+          try {
+            const value = await fn(tx);
+            if (!parentBefore) {
+              for (const entry of before.filter(
+                (entry) => entry.phase === "validation",
+              ))
+                await entry.effect(tx);
+              for (const entry of before.filter(
+                (entry) => entry.phase === "fence",
+              ))
+                await entry.effect(tx);
+              for (const entry of before.filter(
+                (entry) => entry.phase === "capture",
+              ))
+                await entry.effect(tx);
+            }
+            return value;
+          } finally {
+            transactionParents.delete(tx);
+          }
+        }, config);
+      });
+    } catch (error) {
+      if (attempt >= limit || !isSerializationFailure(error)) throw error;
+      // Immediate retries can collide with the same background publication page.
+      await sleep(200 * attempt);
+      continue;
+    }
+    // Commit succeeded: effect failures must never enter the replay catch.
+    if (parentBefore) parentBefore.push(...before);
+    const parent = afterCommitQueues.get(db);
+    if (parent) parent.push(...pending);
+    else await flushAfterCommit(db, pending);
+    return result;
+  }
+};
+
+export const withTransaction = <T>(
   db: Database,
   fn: (tx: DrizzleTransaction) => Promise<T>,
   config?: PgTransactionConfig,
-): Promise<T> => {
-  const pending: AfterCommitEffect[] = [];
-  const result = await withTrace(TraceNames.db("transaction"), async () => {
-    return await getDb(db).transaction(async (tx) => {
-      afterCommitQueues.set(tx, pending);
-      transactionParents.set(tx, db);
-      try {
-        return await fn(tx);
-      } finally {
-        transactionParents.delete(tx);
-      }
-    }, config);
-  });
-  const parent = afterCommitQueues.get(db);
-  if (parent) parent.push(...pending);
-  else await flushAfterCommit(db, pending);
-  return result;
+): Promise<T> => withTransactionAttempts(db, fn, config, 1);
+
+type SnapshotWriteConfig = PgTransactionConfig & {
+  isolationLevel: "serializable" | "repeatable read";
+  accessMode?: "read write";
 };
+
+/**
+ * Opt-in recovery for DB-only snapshot writes. Rebuild all callback-local
+ * state and revalidate the original review on each attempt; effects and
+ * publication buffers belong to that attempt's transaction. Caller-owned
+ * boundaries execute once, and committed consumer failures never replay.
+ */
+export const withSnapshotWrite = <T>(
+  db: Database,
+  fn: (tx: DrizzleTransaction) => Promise<T>,
+  config: SnapshotWriteConfig,
+): Promise<T> => withTransactionAttempts(db, fn, config, 3);
 
 /**
  * Composable transaction: **join** the caller's transaction when one is already
@@ -183,6 +307,8 @@ export const databaseForTransaction = (tx: DrizzleTransaction): Database => {
   }));
   const pending = afterCommitQueues.get(tx);
   if (pending) afterCommitQueues.set(database, pending);
+  const before = beforeCommitQueues.get(tx);
+  if (before) beforeCommitQueues.set(database, before);
   return database;
 };
 
@@ -193,3 +319,10 @@ export const withTransactionDatabase = async <T>(
   config?: PgTransactionConfig,
 ): Promise<T> =>
   withTransaction(db, (tx) => fn(databaseForTransaction(tx)), config);
+
+export const withSnapshotWriteDatabase = <T>(
+  db: Database,
+  fn: (transactionDb: Database) => Promise<T>,
+  config: SnapshotWriteConfig,
+): Promise<T> =>
+  withSnapshotWrite(db, (tx) => fn(databaseForTransaction(tx)), config);

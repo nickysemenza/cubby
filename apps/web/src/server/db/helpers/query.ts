@@ -31,7 +31,6 @@ import {
 import type { PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 import { match } from "ts-pattern";
-import type { z } from "zod";
 
 import {
   HOUSEHOLD_TIMEZONE,
@@ -649,11 +648,4 @@ export const eqAnyOrPresence = <TColumn extends AnyColumn, TValue>(
 ): SQL | undefined =>
   or(eqAny(column, value), presenceCondition(column, presence));
 
-/** Repeated SELECT/GROUP BY expressions need identical constants, not separate
- * bind slots. Only a schema-validated enum value may be emitted as a literal. */
-export function sqlEnumConstant<const Values extends Record<string, string>>(
-  schema: z.ZodEnum<Values>,
-  value: Values[keyof Values],
-): SQL {
-  return sql.raw("'" + schema.parse(value).replaceAll("'", "''") + "'");
-}
+export { sqlEnumConstant } from "~/server/db/sql-enum";

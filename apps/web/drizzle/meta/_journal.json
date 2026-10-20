@@ -687,6 +687,20 @@
       "when": 1792434328334,
       "tag": "0097_product_commodity",
       "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1792474900593,
+      "tag": "0098_derived_refresh_expand",
+      "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "7",
+      "when": 1792474952336,
+      "tag": "0099_derived_refresh_contract",
+      "breakpoints": true
     }
   ]
 }

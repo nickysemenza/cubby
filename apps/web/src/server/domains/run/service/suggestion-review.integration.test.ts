@@ -31,6 +31,7 @@ import {
   applyFieldCorrection,
 } from "~/server/generic/assessment/repo/suggestion-review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 
 import { aiCallRunInput, ensureRun } from "../repo/ensure-run";
 import {
@@ -421,6 +422,7 @@ describe("Suggestion review", () => {
       .returning({ id: suggestionTable.id });
 
     await acceptSuggestion(ctx.db, context, { id: row.id });
+    await drainDerivedRefreshFrontier(ctx.db);
     expect(await suggestionStatus(ctx.db, row.id)).toBe("applied");
     expect(await suggestionStatus(ctx.db, sibling!.id)).toBe("superseded");
     expect(await productCategoryId(ctx.db, product.id)).toBe(

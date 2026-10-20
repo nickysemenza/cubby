@@ -410,7 +410,7 @@ export async function refuseSettlementConflicts(
   const codes = await tx
     .select({ id: purchase.id, shortcode: purchase.shortcode })
     .from(purchase)
-    .where(inArray(purchase.id, [...conflicts.keys()]));
+    .where(inArray(purchase.id, [...conflicts.keys()].sort().slice(0, 50)));
   const detail = codes
     .map(
       (row) =>
@@ -421,6 +421,6 @@ export async function refuseSettlementConflicts(
     .join(". ");
   throw createAppError(
     "CONSTRAINT_VIOLATION",
-    `This charge cannot settle ${detail}. Allocate it to the order its account paid, link the paying account to the order, or use finance.allocate_settlement with acknowledgeConflicts and a note.`,
+    `This charge cannot settle ${detail}.${conflicts.size > 50 ? " Showing 50 conflicts; additional affected Purchases also conflict." : ""} Allocate it to the order its account paid, link the paying account to the order, or use finance.allocate_settlement with acknowledgeConflicts and a note.`,
   );
 }

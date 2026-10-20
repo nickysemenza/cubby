@@ -1252,15 +1252,21 @@ All generic entity work enters through `executeEntity(context, command)` in
 - capability checks and normalized pagination/sorting;
 - baseline get/list/create/update/bulkUpdate/delete/merge/search commands;
 - declared attach/detach relation families;
-- in-transaction search projections, then post-commit object cleanup and
-  best-effort background task publication using the captured projection
-  dependency wave;
+- in-transaction dirty-root capture, then post-commit object cleanup and
+  best-effort queue wake-ups; paged background work refreshes projections,
+  embeddings and derived invalidations, with periodic repair for lost wake-ups;
 - one normalized delete result with public references and affected-edge data.
 
 Repositories own database access, transactions, invariants, and the exact
 mutation order. Workflow services own operations that are not entity CRUD, such
 as expense splitting, reconciliation, cookbook import, and product enrichment.
 Extensions delegate to those services instead of branching inside the kernel.
+Delete-effect accounting keeps its repeatable-read snapshot. A background cache
+write may replace a tuple after that snapshot; the owning delete boundary makes
+bounded fresh-transaction retries on serialization failure. A caller-owned
+transaction or a committed delete's consumer failure propagates without replay.
+Snapshot-based financial booking and classification reviews use the same
+recovery boundary, retaining the submitted review fingerprint across attempts.
 
 Summary `entity.commands` writes request reference-only mutation projections,
 without hydrating unreturned detail or coverage. Trusted operation receipts keep
@@ -1270,11 +1276,26 @@ the write. Normal write bodies expose one final-output reader through
 projected create/update readers. A declared writer without that capability is
 refused when bindings load. Mandatory mutation snapshots and domain work run
 before the final reader; requesting a reference skips only response hydration.
-Field-scoped Sources reuse the mutation's authoritative snapshot,
-with the same JSON normalization, read paths and fingerprint algorithm as detail
-reads. Projected writes retain authoritative evidence separately from their
-response fields; the owning reader supplies a cited field absent from that snapshot,
-using the mutation's returned identity when an update folds into a surviving row.
+Field-scoped Sources use scalar projections with the same JSON normalization,
+read paths and fingerprint algorithm as detail reads. Linked URLs, card identity
+fields, amounts and to-one purchase fields have narrow scalar adapters. Cited
+inherited fields select their effective value separately from the receipt's
+stored override. These reads use the returned identity when an update folds into
+a surviving row; they never fall back to full detail hydration. New collection
+citations retain evidence without a whole-collection fingerprint; existing
+hash-based citations still compare against detail values. Explicit unchanged
+writes capture a durable root even when no audit diff exists, so background
+processing can retire pending advice for that write intent. The fallback checks
+this update's transaction enrollments, including released savepoints, rather
+than depending on optional audit-receipt collection; audited writes do not
+receive a second fallback capture.
+Publication fences lock the expected input revision without rewriting its row;
+unchanged background checks must not invalidate a serializable save's snapshot.
+Field advice fences use the target's point revision and shared input epochs.
+An inherited target/basis or same-kind basis reference retains its own-kind
+epoch for ancestor values and referenced labels;
+ordinary scalar advice does not become stale when an unrelated row of the same
+kind is accepted. Connection discovery keeps its broader corpus epochs.
 
 Partial updates preserve omitted fields. Scalar patching rejects undeclared
 keys, skips unchanged rows, and audits changes in the same transaction;
@@ -1485,22 +1506,29 @@ custom selectors/counts and group summaries
 retain their existing paths. Tracing reports the combined page/count phase as
 `entity.list.core.pageWithCount`, without invented separate timings.
 
-MCP create/update summaries request `entityWriteSummaryFields` before response
-hydration through the kernel's `createRead`/`updateRead` repository ports. They
-share the complete mutation workflow, including validation, transactional
-audit/search projection, source recording, and post-commit publications.
-Write summaries include quality coverage; Product summaries also include
-external identifiers and retain the ingredient identity needed for recipe
-recomputation. Task readers reuse `RETURNING` scalars plus authoritative quality,
-and Product readers reuse the write's validated top-level result. Other
-repository writes fall back to their full reader until they support requested
-fields. Full responses and direct domain helpers retain their existing output
-and commit/error contracts, including Product's explicit committed-write receipt
-when a post-commit food read-back fails.
-Full operations cannot select a partial output; read operations require fields
-and reject undeclared fields before writing. Summary responses do not load
-output-only USDA food details, so failures of that unrequested read do not fail
-a summary write. Required write validation and side effects still run.
+Create/update responses are bounded receipts across browser, native and MCP,
+including `entity.commands` batches. They return the stable shortcode, canonical
+saved scalar values limited to explicitly submitted fields, `appliedFields`,
+and bounded mutation warnings. Collection fields are acknowledged by name;
+the response never reloads an existing collection, dependent records, quality
+coverage or recipe coverage. Full/summary result-detail requests do not turn a
+write into an expanded entity read. Clients fetch expanded detail separately.
+The same generated receipt schema owns every entity; read endpoints retain
+their entity-specific detail schemas.
+
+Relational collection patches use repository collection adapters: the kernel
+owns declared identity and patch preconditions, while adapters read only
+submitted keys and apply audited member deltas. Stored collections are selected
+from the owning row, including in mixed patches. Decoding an existing JSON
+column still costs its stored size; that does not permit a relational detail
+read or rewriting untouched child rows. Member lookups require matching indexes.
+
+Source recording reuses bounded scalar snapshots. Collection citations, and
+fields whose current value is absent from that snapshot, retain their evidence
+with whole-field support unassessed. They never force full response hydration.
+Required authoritative validation and audit records remain transactional.
+`sideEffects.derivedRefresh.mode = "background"` describes the freshness policy;
+it does not claim a particular Run or provider request has already completed.
 
 Timing evidence comes from
 `pnpm --dir apps/web exec tsx tooling/checks/read-performance.ts --origin <origin> --output <artifact.json>`
@@ -1855,17 +1883,123 @@ row-set terminal reference (an image's import run) gets the toggle like a
 category's effective spending category) is a `via` path through its effective
 edge and gets the toggle like any other.
 
-Searchable entities use persisted `SearchDocument` rows for lexical and
-embedding input. The spec generates search capability gates, while projection
-SQL and embedding loaders remain explicit because several entities need joins,
-aggregates, and workflow-specific text. Fan-out is declared once per
-dependency in `searchDependents` (`server/entity-kernel/repo/mutation-side-effects.ts`):
-any create or update of the source entity refreshes its dependents, never a
-field-sensitive subset and never one inferred from relation edges. The kernel
-refreshes an entity's own projection and its fan-out projections inside the
-write transaction, then publishes one embedding wave after commit; a change
-to projection SQL itself does not rewrite persisted rows — run the streaming
-"Repair index" maintenance action after such a change.
+### Background derived data
+
+Searchable entities use persisted `SearchDocument` rows for lexical search and
+embedding input. An ordinary write records a durable dirty root and known
+old/new endpoints after all authoritative changes in its transaction. It does
+not enumerate dependents, refresh projections, fingerprint a corpus, run AI
+admission, or fetch expanded mutation detail. Capture work scales with the
+rows explicitly changed. Inheritance-changing edits are the deliberate
+exception: they validate their affected authoritative graph transactionally.
+FinancialTransaction account/date/kind changes similarly retain immediate
+settlement-conflict validation across the Purchases they fund. These scoped
+invariant checks may scale with affected records; unrelated edits skip them.
+Neither exception permits synchronous derived fanout. Immediate refusal evidence
+is bounded.
+
+The bound covers ordinary scalar edits and derived refresh, rather than every
+existing mutation workflow. Collection patch resolution can still read the
+current collection/detail, and financial allocation edits keep their existing
+whole-set validation and audit behavior. Product creation with a catalog code
+also retains its existing optional cover lookup. Those paths have no uniform
+foreground bound; they need separate collection and provider-work changes.
+
+Dependency traversal lives in `generic/derived-refresh/repo/dependencies.ts` as
+indexed keyset routes. Projection-only dependents are leaves; only declared
+transitive input routes continue traversal. A Product's purchase-line text does
+not turn sibling Products or the vendor's other purchases into dirty inputs.
+A best-effort post-commit queue wake-up processes small
+provider-free projection and dependency pages; the existing `derived_refresh` Run/StepRun handles longer work and
+recovery. Search projections, assessment retirement, recipe totals and
+embeddings complete through durable pages. Statement observation and settlement
+writers advance a small input clock; a separate cursor checks at most 100
+pending statement suggestions per page. Apply always revalidates authoritative
+statement evidence, so delayed retirement cannot authorize a stale action.
+The projection frontier completes before recipe or embedding providers are
+consulted. Provider backoff therefore cannot block new queue-driven projection
+waves. Pending recipe computation remains visible after the frontier completes.
+Recipe computation reads current
+inputs outside the publication transaction; totals and page acknowledgement
+commit together. A failed phase retains its error and continues dependency
+traversal, so one failed record cannot hide its parents or other affected rows.
+The projection page invalidates only that Recipe's totals and Product's
+conversion coverage. Containing kits and Expense price evidence follow the
+declared dependency routes. Unrelated failed work never hides healthy totals
+or valid semantic candidates; suggestion application checks its authoritative
+field inputs directly.
+
+Each page has a single-use lease and acknowledges its exact Work version and
+owner token. Expensive preparation and provider calls happen outside the
+transaction. Short output transactions validate the captured input revision,
+then update frontier metadata. Authoritative saves advance input revisions and
+append immutable roots, field deltas and known old/new endpoints to
+`DerivedRefreshCaptureInbox` after business writes. They never read or update
+worker-owned Work/Scope progress. A bounded background transaction folds a
+locked inbox page into Work/Scope and deletes exactly those captures atomically;
+rollback retains the captures. Folding does not advance input revisions again.
+Pending captures count as unmaterialized inputs until that fold commits, so
+search/discovery cannot mistake the interval before folding for freshness. Lock contention reschedules without spending the
+failure budget. Failures are bounded per phase and actual input fingerprint,
+survive transport retries and new Runs, and retain raw credential-scrubbed
+diagnostics for explicit retry in existing Run/maintenance surfaces. A derived
+failure does not undo a successful save.
+
+Application hooks provide immediate coverage; no database capture triggers
+are required. Periodic reconciliation pages through authoritative rows and
+removals without trusting hooks or timestamps, and separately repairs missing
+recipe totals, missing configured embeddings and unfinished vector artifacts even when input snapshots are
+unchanged. Healthy-service targets are search catch-up and discovery queue
+eligibility within 60 seconds. Provider completion depends on capacity. Recipe
+reads expose pending totals after that Recipe's invalidation page until its
+totals publish. Projection-code changes require the streaming "Repair index"
+maintenance action.
+The full repair pass runs hourly. Ordinary entity edits do not advance the
+repair-wide snapshot clocks: own-row changes traverse their dependency pages.
+Observations retain direct owner identities, including child owners. Context
+edits refresh those owners. Entity endpoint changes or removals retain the changed
+entity as the root and refresh old/current endpoints as projection leaves,
+except endpoints declared as transitive dependencies, such as Product pricing.
+Saved Purchase endpoints of an Expense have a narrower paged frontier: project
+text on adjustment lines refreshes without traversing principal lines or their
+Products, including after reassignment or physical source removal.
+Reassigning a reference must not traverse unrelated members of its old/new Project
+or Vendor. Only input rows without a recognizable owner use conservative
+repair clocks that can revisit a broader corpus. This backstop scans full
+authoritative row contents in bounded pages, including opaque imported data.
+
+`EntityEmbedding` retains immutable physical artifacts and submission receipts.
+An intent commits before an external upload. Selection requires the expected
+payload in storage, a positive observation of that physical ID through ANN
+search, current document/model inputs and a final publication fence. Submission
+acceptance alone is not readiness. A changed text returning to an earlier value
+gets a new physical ID; retired IDs are never reused. Delayed uploads and
+deletes therefore cannot overwrite or remove a newer selection. Remote cleanup
+is paged independently and retains tombstones after delete submission.
+Selected artifacts receive a daily integrity check; retired physical IDs are
+re-deleted weekly to catch late remote submissions. Initial deployment replaces
+legacy artifacts through bounded pages, so semantic coverage remains incomplete
+during that one-time re-embedding pass. These maintenance reads and deletions
+are ongoing background costs, separate from save work.
+
+Every semantic query validates both its seed and returned physical IDs against
+selected artifacts, live identities, current projections and model configuration.
+One fixed candidate budget bounds overfetch; insufficient valid results or
+unfinished relevant work reports incomplete coverage. Approximate search does
+not claim exhaustive neighbour retrieval. A missing configured artifact also
+withholds completeness, including documents saved while providers were disabled.
+Unconfirmed visibility is retried
+without regenerating embeddings and cannot certify a completed negative scan.
+Connection fingerprints use fixed-size input/projection/embedding revision
+vectors; a newly selected vector invalidates earlier source discovery coverage.
+Valid connection candidates publish even when semantic coverage is incomplete.
+The evaluation retains a raw coverage diagnostic and its existing bounded retry
+budget; it cannot record completed discovery until coverage is confirmed.
+Exhausted unrelated refresh work withholds that completion rather than preventing
+all positive discovery for the input class.
+Ordinary writes never perform discovery or manage AI admission.
+Pending field suggestions created before authoritative input fingerprints are
+retired and evaluated again; they cannot be applied using their old basis.
 
 ### Row sets and same-row matching
 
@@ -2525,9 +2659,14 @@ table each (ADR 0007):
   (a writable field the detail returns at its read key or, for a reference
   read as an object such as Product `ingredientId`, its `display.readPath`),
   writes the rows in the mutation's transaction, takes the recorder from the
-  actor (never input) and fingerprints the post-write field value. Detail
-  reads return `sources` with `supportsCurrentValue`, so a Source for an
-  overwritten value reads as an earlier value. Merge moves and de-duplicates
+  actor (never input) and fingerprints the post-write field value. A new Source
+  attached to a collection field retains the field association and citation
+  without reading or hashing the whole collection; `valueFingerprint` and
+  `supportsCurrentValue` are null, meaning whole-field support is unassessed.
+  It is evidence for the edit, and later edits do not automatically certify or
+  retire it. Existing hash-based Sources remain supported. Detail reads compare
+  their hashes with the current field value, so an overwritten value reads as
+  an earlier value. Merge moves and de-duplicates
   Sources to the survivor (`finalizeMerge`); a soft delete keeps them. Internal
   citations accept a `sourceEntity` shortcode and store a typed durable Entity
   identity; recognized Cubby URLs normalize to that reference on writes. External

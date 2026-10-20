@@ -26,6 +26,7 @@ import {
   acceptCleanSuggestions,
   listSuggestionPage,
 } from "~/server/generic/assessment/repo/suggestion-list";
+import { processStatementRetirementPage } from "~/server/generic/derived-refresh/repo/statement-retirement";
 import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
 
 import {
@@ -341,7 +342,8 @@ describe("statement Transaction suggestions", () => {
         (row) => row.matchState,
       ),
     ).toEqual(["ignored", "ignored"]);
-    // The trigger retired the coffee suggestion.
+    // Retirement follows the authoritative ignore through the background cursor.
+    await processStatementRetirementPage(ctx.db);
     expect(await stateOf(ctx, first!.assessmentId)).toMatchObject({
       status: "superseded",
       active: false,
@@ -565,6 +567,11 @@ describe("statement Transaction suggestions", () => {
       (row) => row.recommended === "void",
     );
     expect(voids).toHaveLength(1);
+    await processStatementRetirementPage(ctx.db);
+    expect(await stateOf(ctx, voids[0]!.assessmentId)).toMatchObject({
+      status: "pending",
+      active: true,
+    });
     await accept(ctx, voids[0]!);
     const transaction = await getDb(ctx.db).execute<{ status: string }>(
       sql`SELECT status FROM "FinancialTransaction" WHERE shortcode = ${voids[0]!.voidTransactionId}`,
@@ -890,7 +897,7 @@ describe("statement Transaction suggestions", () => {
   // Failure modes: a ref attached on another path (the import page, an
   // agent's entity.update) leaves the suggestion live, and accepting it
   // records the charge twice.
-  it("retires a suggestion when its charge's ref is attached elsewhere", async () => {
+  it("defers retirement but refuses stale evidence when its charge is attached elsewhere", async () => {
     const account = (await card(ctx)).output;
     await record(ctx, [rowInput()]);
     await generate(ctx);
@@ -907,10 +914,17 @@ describe("statement Transaction suggestions", () => {
       sourceRefs: [{ source: "monarch", externalId: row!.externalId }],
     });
     expect(await stateOf(ctx, suggestion!.assessmentId)).toMatchObject({
+      status: "pending",
+      active: true,
+    });
+    await expect(accept(ctx, suggestion!)).rejects.toThrow(
+      /evidence changed|stale/,
+    );
+    await processStatementRetirementPage(ctx.db);
+    expect(await stateOf(ctx, suggestion!.assessmentId)).toMatchObject({
       status: "superseded",
       active: false,
     });
-    await expect(accept(ctx, suggestion!)).rejects.toThrow(/stale/);
     expect(await generate(ctx)).toBe(0);
   });
 

@@ -1,7 +1,7 @@
 /** Classifier-version refresh must not readmit or mutate admitted/stuck sources,
  * including provider removals; unassigned historical Email still refreshes. */
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
-import { eq, sql } from "drizzle-orm";
+import { eq, getTableName, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
@@ -65,7 +65,7 @@ describe("classification-only refresh of admitted Email", () => {
         headers: {},
       };
       const legacy = await getDb(ctx.db).execute<{ column_name: string }>(
-        sql`SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='OrderMail' AND column_name='mailboxId'`,
+        sql`SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name=${getTableName(orderMail)} AND column_name='mailboxId'`,
       );
       if (legacy.rows.length)
         await getDb(ctx.db).execute(
