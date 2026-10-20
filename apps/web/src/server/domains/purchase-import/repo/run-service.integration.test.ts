@@ -506,11 +506,20 @@ describe("purchase import run admission", () => {
     expect(detail.findings.map((finding) => finding.proposedFix)).toEqual(
       Array(6).fill(null),
     );
-    const report = JSON.stringify(
-      importReportBlocks("run.import-findings", detail),
+    const commands = importReportBlocks("run.import-findings", detail).flatMap(
+      (block) =>
+        block.kind === "records"
+          ? block.rows.flatMap((row) => row.commands ?? [])
+          : [],
     );
-    expect(report).toContain('"decision":"dismiss"');
-    expect(report).not.toContain('"decision":"apply"');
+    expect(commands).toHaveLength(3);
+    for (const command of commands) {
+      expect(command.request).toMatchObject({
+        kind: "operation",
+        operation: "problems.resolveRunFinding",
+        body: { action: "dismiss" },
+      });
+    }
     const problems = runFindingProblemSchema
       .array()
       .parse(await findOpenRunFindings(ctx.db));

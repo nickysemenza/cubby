@@ -2218,6 +2218,8 @@ and emit no migration.
 
 ## Data quality
 
+Compact entity facts, including board cards, use the shared quality value and lazy field explanation; they never summarize the quality object as a field count.
+
 Product price checks share catalog price evidence for filtering and a scoped
 numeric projection for quality hydration. Applicability, missing-value checks,
 and exception fingerprints read the same projection during hydration. Both

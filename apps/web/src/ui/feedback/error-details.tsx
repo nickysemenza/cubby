@@ -148,6 +148,7 @@ export function showErrorToast(error: UnparsedError, message?: string) {
     action: {
       label: "Details",
       onClick: () => {
+        toast.dismiss(id);
         openErrorDetailsDialog(error);
       },
     },

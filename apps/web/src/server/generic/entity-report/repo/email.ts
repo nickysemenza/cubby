@@ -27,8 +27,8 @@ import { mailResearchRunInput, runWorkLabel } from "@cubby/schemas/run-fields";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { groupBy } from "es-toolkit";
 
+import { operationCommandRequest } from "~/contracts/define";
 import { purchaseImportContract } from "~/contracts/purchase-import.contract";
-import { operationCommandRequest } from "~/contracts/workflow-command";
 import {
   formatAiCost,
   formatAiCostSubtotal,

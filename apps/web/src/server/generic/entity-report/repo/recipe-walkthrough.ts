@@ -1,8 +1,8 @@
 import type { ReportBlock, ReportCommand } from "@cubby/schemas/entity-report";
 import { recipeShortcode, type RecipeId } from "@cubby/schemas/identifiers";
 
+import { operationCommandRequest } from "~/contracts/define";
 import { recipeContract } from "~/contracts/recipe.contract";
-import { operationCommandRequest } from "~/contracts/workflow-command";
 import type { Database } from "~/server/db";
 
 /**

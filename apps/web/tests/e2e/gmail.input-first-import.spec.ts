@@ -486,6 +486,14 @@ for (const statementFirst of [true, false]) {
       await expect(approve).toBeEnabled();
       await mergeReviewedProducts();
       await approve.click();
+      const confirmation = page.getByRole("dialog", {
+        name: "Approve and import",
+        exact: true,
+      });
+      await confirmation
+        .getByRole("button", { name: "Approve and import", exact: true })
+        .click();
+      await expect(confirmation).toHaveCount(0);
       if (purchaseCode) {
         // Preparation writes a finding outside the open Run's query cache.
         // A fresh direct link reads it immediately instead of waiting for the

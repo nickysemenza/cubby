@@ -18,10 +18,10 @@ import { CF_ACCOUNT_ID } from "@cubby/shared/ai/gateway-metadata";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { z } from "zod";
 
+import { operationCommandRequest } from "~/contracts/define";
 import { problemsContract } from "~/contracts/problems.contract";
 import { runContract } from "~/contracts/run.contract";
 import type { RunDetail, RunLogEntry } from "~/contracts/run.contract";
-import { operationCommandRequest } from "~/contracts/workflow-command";
 import { formatInstant } from "~/lib/date-format";
 import { formatDuration } from "~/lib/format-duration";
 import { formatAiCost, formatAiCostSubtotal } from "~/lib/number-format";

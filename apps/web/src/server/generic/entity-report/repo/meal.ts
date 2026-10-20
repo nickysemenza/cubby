@@ -13,8 +13,8 @@ import { hasKnownEstimate } from "@cubby/schemas/nutrition";
 import { countLabel } from "@cubby/shared/pluralize";
 import { and, asc, inArray } from "drizzle-orm";
 
+import { operationCommandRequest } from "~/contracts/define";
 import { mealContract } from "~/contracts/meal.contract";
-import { operationCommandRequest } from "~/contracts/workflow-command";
 import { formatCount } from "~/lib/number-format";
 import { formatEstimate } from "~/lib/nutrition-format";
 import type { Database } from "~/server/db";

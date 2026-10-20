@@ -94,7 +94,7 @@ describe("manifest registries", () => {
         }
       }
       for (const view of entitySummary[entity].list.views) {
-        if (view !== "table" && view !== "shelf" && view !== "timeline") {
+        if (typeof view === "object" && view.kind === "slot") {
           inspect(
             `list-slot:${entity}.${view.id}`,
             nested(listSlotCoverage, entity, view.id),
