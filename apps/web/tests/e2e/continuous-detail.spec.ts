@@ -2,7 +2,12 @@ import {
   seedProductPrerequisite,
   seedProductCategoryPrerequisite,
 } from "./fixtures/catalog";
-import { seedConcurrently } from "./fixtures/core";
+import { createEntityFixture, seedConcurrently } from "./fixtures/core";
+import {
+  householdDateTime,
+  householdDaysFromNow,
+  householdLocalDate,
+} from "~/lib/household-date";
 import {
   attachProductImagePrerequisite,
   seedImagePrerequisite,
@@ -12,6 +17,65 @@ import {
   gotoAuthenticatedPage,
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
+
+// Calendar age must survive an evening view; chart edge values must escape
+// the strip's clipping without duplicating values or adding twelve tab stops.
+test("activity uses calendar days and spend readouts remain accessible at both edges", async ({
+  page,
+}) => {
+  const today = householdLocalDate();
+  const yesterday = householdDaysFromNow(-1);
+  await page.clock.setFixedTime(householdDateTime(today, 23 * 60));
+  const product = await seedProductPrerequisite(page, {
+    name: `Synthetic chart and activity ${Date.now()}`,
+  });
+  await createEntityFixture(page, "expense", {
+    name: "Synthetic yesterday expense",
+    productId: product.id,
+    cost: 42,
+    date: yesterday,
+    costType: "materials",
+    trade: "other",
+  });
+  await gotoAuthenticatedPage(page, `/products/${product.id}`);
+  await expect(
+    page.getByTestId("detail-activity").getByText("yesterday", { exact: true }),
+  ).toBeVisible();
+  const chart = page.getByTestId("monthly-spend-chart");
+  const bars = chart.getByRole("img");
+  await expect(bars).toHaveCount(12);
+  await expect(chart.locator('[tabindex="0"]')).toHaveCount(1);
+  await expect(chart.locator("dl")).toHaveCount(0);
+  await bars.first().focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(bars.nth(1)).toBeFocused();
+  await page.keyboard.press("Home");
+  await expect(bars.first()).toBeFocused();
+  const tooltip = page.getByRole("tooltip").and(page.locator("[data-open]"));
+  await expect(tooltip).toBeVisible();
+  const checkReadout = async () => {
+    const bounds = await tooltip.boundingBox();
+    expect(bounds).not.toBeNull();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(
+      page.viewportSize()!.width,
+    );
+    expect(
+      await tooltip.evaluate(
+        (element) =>
+          element.closest('[data-testid="monthly-spend-chart"]') === null,
+      ),
+    ).toBe(true);
+  };
+  await checkReadout();
+  await page.keyboard.press("End");
+  await expect(bars.last()).toBeFocused();
+  await expect(tooltip).toHaveText(
+    (await bars.last().getAttribute("aria-label"))!.replace(" spend:", " ·"),
+  );
+  await checkReadout();
+  await expect(chart.locator('[tabindex="0"]')).toHaveCount(1);
+});
 
 // Long record identity and many actions must never compete for the same pixels.
 // Overflow must retain registry dialogs and lazy workflow controls on every width.

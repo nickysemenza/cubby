@@ -1,8 +1,14 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { useRef, useState } from "react";
 
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/number-format";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/ui/primitives/tooltip";
 
 import { useMonthlyExpenseSpend } from "./use-detail-data";
 
@@ -26,6 +32,8 @@ export function MonthlySpendChart({
   const spend = useMonthlyExpenseSpend({
     source: { entityKind: entity, entityId: id },
   });
+  const [focusedMonth, setFocusedMonth] = useState(0);
+  const monthElements = useRef<(HTMLElement | null)[]>([]);
   if (spend.isError)
     return <ErrorDisplay error={spend.error} title="monthly spend" />;
   const months = spend.data ?? [];
@@ -92,51 +100,67 @@ export function MonthlySpendChart({
           ? Array.from({ length: 12 }, () => null)
           : months
         ).map((month, index) => (
-          <div
+          <Tooltip
             // Pending placeholders carry no month; the index is their identity.
             key={month?.month ?? index}
-            role={month ? "img" : undefined}
-            tabIndex={month ? 0 : undefined}
-            aria-label={
-              month
-                ? `${monthReadoutLabel(month.month)} spend: ${formatCurrency(month.cents / 100)}`
-                : undefined
-            }
-            className="group relative h-full min-w-0 flex-1 rounded-sm outline-none focus-visible:z-30 focus-visible:ring-2 focus-visible:ring-ring"
           >
-            {month && month.cents !== 0 ? (
-              <div
-                aria-hidden
-                className={`absolute left-1/2 w-3/5 -translate-x-1/2 ${month.month === last?.month ? "bg-foreground-strong" : "bg-muted-foreground/25"}`}
-                style={{
-                  bottom: month.cents > 0 ? `${100 - zero}%` : undefined,
-                  top: month.cents < 0 ? `${zero}%` : undefined,
-                  height: extent(month.cents),
-                }}
-              />
-            ) : null}
+            <TooltipTrigger
+              render={<div />}
+              ref={(element) => {
+                monthElements.current[index] = element;
+              }}
+              role={month ? "img" : undefined}
+              tabIndex={month && index === focusedMonth ? 0 : -1}
+              disabled={!month}
+              onFocus={() => setFocusedMonth(index)}
+              onKeyDown={(event) => {
+                const next =
+                  event.key === "Home"
+                    ? 0
+                    : event.key === "End"
+                      ? months.length - 1
+                      : event.key === "ArrowRight"
+                        ? (index + 1) % months.length
+                        : event.key === "ArrowLeft"
+                          ? (index + months.length - 1) % months.length
+                          : undefined;
+                if (next === undefined || !month) return;
+                event.preventDefault();
+                monthElements.current[next]?.focus();
+              }}
+              aria-label={
+                month
+                  ? `${monthReadoutLabel(month.month)} spend: ${formatCurrency(month.cents / 100)}`
+                  : undefined
+              }
+              className="group relative h-full min-w-0 flex-1 rounded-sm outline-none focus-visible:z-30 focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {month && month.cents !== 0 ? (
+                <div
+                  aria-hidden
+                  className={`absolute left-1/2 w-3/5 -translate-x-1/2 ${month.month === last?.month ? "bg-foreground-strong" : "bg-muted-foreground/25"}`}
+                  style={{
+                    bottom: month.cents > 0 ? `${100 - zero}%` : undefined,
+                    top: month.cents < 0 ? `${zero}%` : undefined,
+                    height: extent(month.cents),
+                  }}
+                />
+              ) : null}
+              {month ? (
+                <span className="pointer-events-none absolute inset-x-0 bottom-0 text-center font-sans text-xs text-muted-foreground">
+                  {monthLabel(month.month).slice(0, 1)}
+                </span>
+              ) : null}
+            </TooltipTrigger>
             {month ? (
-              <span className="pointer-events-none absolute top-1 left-1/2 z-20 hidden -translate-x-1/2 rounded-sm bg-foreground-strong px-2 py-1 text-xs whitespace-nowrap text-background tabular-nums group-hover:block group-focus-visible:block">
+              <TooltipContent role="tooltip">
                 {monthReadoutLabel(month.month)} ·{" "}
                 {formatCurrency(month.cents / 100)}
-              </span>
+              </TooltipContent>
             ) : null}
-            {month ? (
-              <span className="pointer-events-none absolute inset-x-0 bottom-0 text-center font-sans text-xs text-muted-foreground">
-                {monthLabel(month.month).slice(0, 1)}
-              </span>
-            ) : null}
-          </div>
+          </Tooltip>
         ))}
       </div>
-      <dl className="sr-only">
-        {months.map((month) => (
-          <div key={month.month}>
-            <dt>{monthLabel(month.month)}</dt>
-            <dd>{formatCurrency(month.cents / 100)}</dd>
-          </div>
-        ))}
-      </dl>
     </figure>
   );
 }
