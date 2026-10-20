@@ -47,8 +47,8 @@ import {
 } from "~/server/domains/statement-import/repo/statement-suggestions";
 import { decideStatementKind } from "~/server/domains/statement-import/repo/statement-transaction-kind";
 import { labelStatementKind } from "~/server/domains/statement-import/service/statement-kind-labels";
-import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
 import { applyAutomaticRulesForCharge } from "~/server/generic/assessment/repo/automatic-rule-runtime";
+import { canonicalJson } from "~/server/lib/canonical-json";
 import { runFailureText } from "~/server/workflows/runs/lifecycle";
 
 /** One label page labels at most this many suggestions. */
