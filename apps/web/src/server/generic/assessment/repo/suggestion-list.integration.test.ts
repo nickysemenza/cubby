@@ -19,6 +19,7 @@ import { answering } from "~/server/domains/statement-import/repo/statement-deci
 import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
 import { generateStatementSuggestionPage } from "~/server/domains/statement-import/repo/statement-suggestions";
 import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
+import { readAssessmentRecordRefs } from "~/server/generic/assessment/repo/review-families";
 import { suggestionFamilies } from "~/server/generic/assessment/repo/suggestion-families";
 import {
   createProductFixture,
@@ -176,6 +177,10 @@ describe("cross-family Suggestion list", () => {
         family === "field" ? [id] : [],
       );
     }
+    // Per-record counts expand the whole touching roster, not only one page.
+    expect(
+      (await readAssessmentRecordRefs(ctx.db, assessmentIds)).get(id),
+    ).toEqual([{ entity: "product", id: item.id }]);
   });
 
   // Reference proposals touch both the old and proposed records, even when

@@ -19,7 +19,7 @@ import { sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { unwrapDb } from "~/server/db/helpers";
+import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import {
   EMAIL_APPLICATION_RECEIPT,
   EMAIL_OBSERVATION_RECEIPT,
@@ -203,7 +203,7 @@ export const automaticApplicationVerified = sql`CASE ${sql.join(
   sql` `,
 )} ELSE true END`;
 
-export const assessmentRecordsSql = sql`CASE ${sql.join(
+const assessmentRecordsSql = sql`CASE ${sql.join(
   Object.entries(reviewFamilyDeclarations).map(
     ([family, spec]) => sql`WHEN a.family = ${family} THEN ${spec.records}`,
   ),
@@ -226,10 +226,7 @@ export async function readAssessmentRecordRefs(
     refs: unknown;
   }>(sql`
     SELECT a.id, ${assessmentRecordsSql} AS refs FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id
-    WHERE a.id IN (${sql.join(
-      ids.map((id) => sql`${id}::uuid`),
-      sql`, `,
-    )})`);
+    WHERE a.id = ANY(${uuidArrayParam(ids)})`);
   const parsed = rows.map((row) => ({
     id: row.id,
     refs: z
