@@ -1,0 +1,19 @@
+apps/web/tests/e2e/table-density.spec.ts
+  s_5cde4f274bfc1e::t_279c853829ba3f 211
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "36f441e429825e877a26c34c65eebda0f60106a1",
+  "prompts": {},
+  "sessions": {
+    "s_5cde4f274bfc1e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15b42-126a-77e1-aad1-954da30a454f",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
