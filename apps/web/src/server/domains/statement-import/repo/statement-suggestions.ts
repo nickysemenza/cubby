@@ -808,8 +808,11 @@ export async function buildChargeProposals(
               ),
           )
         : [];
-    for (const hold of holds)
-      if (!candidates.some((c) => c.transactionId === hold.id))
+    for (const hold of holds) {
+      const listed = candidates.find((c) => c.transactionId === hold.id);
+      // The hold carries its own pending rows' refs; that is what supersede settles.
+      if (listed) listed.claimed = false;
+      else
         candidates.push({
           transactionId: hold.id,
           amount: hold.amount,
@@ -831,9 +834,9 @@ export async function buildChargeProposals(
             },
           ),
           label: null,
-          // The hold carries its own pending rows' refs; that is what supersede settles.
           claimed: false,
         });
+    }
     candidates.sort(
       (a, b) =>
         Number(cents(a.amount) !== cents(statementAmount)) -

@@ -499,6 +499,8 @@ describe("statement Transaction suggestions", () => {
       recommended: "supersede",
       clean: false,
       supersedeTransactionId: expect.stringMatching(/^FTX-/),
+      // The hold's own pending refs never read as another charge's claim.
+      candidates: [expect.objectContaining({ claimed: false })],
     });
     await accept(ctx, posted!);
     const states = Object.fromEntries(
@@ -1041,13 +1043,23 @@ describe("statement Transaction suggestions", () => {
       const olderRows = await rowsOf("EXAMPLE CAFE 0001");
       expect(olderRows).toHaveLength(2);
       const [canonical] = await rowsOf("EXAMPLE CAFE 0002");
-      const reobserved = olderRows.find((row) => row.matchState !== "matched");
+      const original = olderRows.find(
+        (row) => row.importFingerprint === "fp-suggest-1",
+      )!;
+      const reobserved = olderRows.find(
+        (row) => row.importFingerprint === "fp-older-again",
+      )!;
+      // Another observation of the same charge, not the one the ref names.
+      expect(reobserved.externalId).not.toBe(original.externalId);
+      expect(reobserved.legacyExternalId ?? reobserved.externalId).toBe(
+        original.legacyExternalId ?? original.externalId,
+      );
       await updateStatementRows(
         ctx.db,
         {
           selector: {
             source: "monarch",
-            externalIds: [(reobserved ?? olderRows[1]!).externalId],
+            externalIds: [reobserved.externalId],
           },
           data:
             decision === "superseded"
