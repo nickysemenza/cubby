@@ -20,5 +20,5 @@ it("discloses credits that the spend bars cannot show", () => {
       ]}
     />,
   );
-  expect(screen.getByText(/\$5 in credits/)).toBeVisible();
+  expect(screen.getByText(/\$5\.00 in credits/)).toBeVisible();
 });

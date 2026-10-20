@@ -361,10 +361,16 @@ export function useIsometricPantry() {
   }, [rooms, size]);
 
   const isLoading = treeQuery.isLoading || inventoryQuery.isLoading;
+  const error = treeQuery.error ?? inventoryQuery.error;
+  const retry = () => {
+    if (treeQuery.error) void treeQuery.refetch();
+    if (inventoryQuery.error) void inventoryQuery.refetch();
+  };
 
   return {
     canvasRef,
     containerRef,
+    error,
     handleMouseDown,
     handleMouseLeave,
     handleMouseMove,
@@ -373,6 +379,7 @@ export function useIsometricPantry() {
     isLoading,
     openLocation,
     resetView,
+    retry,
     rooms,
   };
 }

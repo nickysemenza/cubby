@@ -56,11 +56,11 @@ describe("WeekSummaryGrid", () => {
     expect(
       within(todayHeader).getByText("1,875 known · partial"),
     ).toBeInTheDocument();
-    expect(within(todayHeader).getByText("$1,299")).toBeInTheDocument();
-    expect(within(todayHeader).getByText("$4,200")).toBeInTheDocument();
+    expect(within(todayHeader).getByText("$1,299.00")).toBeInTheDocument();
+    expect(within(todayHeader).getByText("$4,200.00")).toBeInTheDocument();
     expect(within(sundayHeader).getByText("0")).toBeInTheDocument();
     expect(within(sundayHeader).getByText("—")).toBeInTheDocument();
-    expect(within(sundayHeader).getAllByText("$0")).toHaveLength(2);
+    expect(within(sundayHeader).getAllByText("$0.00")).toHaveLength(2);
   });
 
   it("opens the canonical day represented by a header", () => {

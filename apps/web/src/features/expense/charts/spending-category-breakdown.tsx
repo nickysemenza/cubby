@@ -74,7 +74,7 @@ export function SpendingCategoryBreakdown({
   const ranked = [...rows].sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
   const summary = `Net spend by root Spending Category: ${ranked
     .slice(0, 5)
-    .map((row) => `${row.label} ${formatCurrency(row.net, 0)}`)
+    .map((row) => `${row.label} ${formatCurrency(row.net)}`)
     .join(", ")}`;
 
   return (

@@ -13,6 +13,7 @@ import { useId, useState } from "react";
 import { collection } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { focusOnMount } from "~/ui/hooks/focus-on-mount";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -175,14 +176,11 @@ export function CollectionsIndexPage({
             Finding smart Collection matches…
           </p>
         ) : smartCollections.error ? (
-          <div className="border-y border-destructive/40 py-5">
-            <p className="text-sm font-medium text-destructive">
-              Could not load smart Collections
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {smartCollections.error.message}
-            </p>
-          </div>
+          <ErrorDisplay
+            error={smartCollections.error}
+            title="smart Collections"
+            onRetry={() => void smartCollections.refetch()}
+          />
         ) : (
           <div className="border-t border-border">
             {definitions.map((definition) => {
@@ -236,6 +234,13 @@ export function CollectionsIndexPage({
 
         {collections.isLoading ? (
           <p className="text-muted-foreground">Loading Collections…</p>
+        ) : collections.error ? (
+          // Regression: a failed read fell through to "No Collections yet".
+          <ErrorDisplay
+            error={collections.error}
+            title="Collections"
+            onRetry={() => void collections.refetch()}
+          />
         ) : collections.data?.length ? (
           <div className="border-t border-border">
             {collections.data.map((collection) => (

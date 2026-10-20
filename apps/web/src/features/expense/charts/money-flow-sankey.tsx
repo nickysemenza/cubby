@@ -82,7 +82,7 @@ export function MoneyFlowSankey({
       .slice(0, 5)
       .map(
         (link) =>
-          `${labels.get(link.source)} to ${labels.get(link.target)} ${formatCurrency(link.value, 0)}`,
+          `${labels.get(link.source)} to ${labels.get(link.target)} ${formatCurrency(link.value)}`,
       );
     return {
       nodeById,
@@ -103,7 +103,7 @@ export function MoneyFlowSankey({
           link.filter,
         ]),
       ),
-      summary: `Money flow of ${formatCurrency(data.totals.linked, 0)} from funders through projects to Spending Categories. Largest flows: ${topLinks.join("; ")}`,
+      summary: `Money flow of ${formatCurrency(data.totals.linked)} from funders through projects to Spending Categories. Largest flows: ${topLinks.join("; ")}`,
     };
   }, [data]);
 
@@ -149,7 +149,7 @@ export function MoneyFlowSankey({
                 labelPadding={8}
                 labelTextColor="var(--foreground)"
                 theme={nivoChartTheme}
-                valueFormat={(value) => formatCurrency(value, 0)}
+                valueFormat={(value) => formatCurrency(value)}
                 onClick={(datum) => {
                   const filter =
                     "source" in datum
@@ -166,7 +166,7 @@ export function MoneyFlowSankey({
                 }) => (
                   <ChartTooltip>
                     <strong>{view.labels.get(node.id)}</strong> —{" "}
-                    {formatCurrency(node.value, 0)}
+                    {formatCurrency(node.value)}
                   </ChartTooltip>
                 )}
                 linkTooltip={({
@@ -177,7 +177,7 @@ export function MoneyFlowSankey({
                   <ChartTooltip>
                     {view.labels.get(link.source.id)} →{" "}
                     {view.labels.get(link.target.id)} —{" "}
-                    <strong>{formatCurrency(link.value, 0)}</strong>
+                    <strong>{formatCurrency(link.value)}</strong>
                   </ChartTooltip>
                 )}
               />

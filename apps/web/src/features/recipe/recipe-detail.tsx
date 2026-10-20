@@ -216,6 +216,7 @@ function RecipeDataView({
         nutritionBasisLabel={nutritionBasisLabel}
       />
       <RecipeDataCharts
+        loading={costing === null}
         ingredients={ingredientDataItems}
         totals={totals}
         nutrition={nutrition}
@@ -265,49 +266,52 @@ function RecipeSummary({
 }
 
 function RecipeDataCharts({
+  loading,
   ingredients,
   totals,
   nutrition,
   nutritionBasisLabel,
   nutritionFactor,
 }: {
+  loading: boolean;
   ingredients: RecipeCosting["rows"];
   totals: CalculateTotalsResult | null;
   nutrition: React.ComponentProps<typeof NutritionLabel>["estimates"] | null;
   nutritionBasisLabel: string;
   nutritionFactor: number;
 }) {
-  const chart =
-    ingredients.length > 0 ? (
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle>Cost Breakdown</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <RecipeCostTreemap
-              ingredients={ingredients}
-              totalCost={totals?.price ?? 0}
-            />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle>Nutrition Breakdown</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <NutritionBars
-              ingredients={ingredients}
-              nutrition={nutrition}
-              basisLabel={nutritionBasisLabel}
-              factor={nutritionFactor}
-            />
-          </CardContent>
-        </Card>
-      </div>
-    ) : (
-      <LoadingRecipeView />
-    );
+  if (loading) return <LoadingRecipeView />;
+  // Nothing to break down; the ingredient table above already says so.
+  // Regression: an ingredient-less recipe spun here forever.
+  if (ingredients.length === 0) return null;
+  const chart = (
+    <div className="grid gap-6 lg:grid-cols-2">
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle>Cost Breakdown</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <RecipeCostTreemap
+            ingredients={ingredients}
+            totalCost={totals?.price ?? 0}
+          />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle>Nutrition Breakdown</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <NutritionBars
+            ingredients={ingredients}
+            nutrition={nutrition}
+            basisLabel={nutritionBasisLabel}
+            factor={nutritionFactor}
+          />
+        </CardContent>
+      </Card>
+    </div>
+  );
   return <Suspense fallback={<LoadingRecipeView />}>{chart}</Suspense>;
 }
 

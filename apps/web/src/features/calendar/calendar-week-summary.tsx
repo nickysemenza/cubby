@@ -79,11 +79,11 @@ function WeekSummaryGrid({
               />
               <SummaryLine
                 label="Spent"
-                value={formatCurrency(summary.actualSpend, 0)}
+                value={formatCurrency(summary.actualSpend)}
               />
               <SummaryLine
                 label="Planned"
-                value={formatCurrency(summary.plannedSpend, 0)}
+                value={formatCurrency(summary.plannedSpend)}
               />
             </dl>
           </button>

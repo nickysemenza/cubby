@@ -623,8 +623,8 @@ function missingBudgetDetail(item: ProjectAttentionItem): ReactNode[] {
   if (actualSpend <= 0 || committedSpend <= 0) return [];
   return [
     <div key="split" className="text-sm text-muted-foreground">
-      {formatCurrency(actualSpend, 0)} actual +{" "}
-      {formatCurrency(committedSpend, 0)} committed
+      {formatCurrency(actualSpend)} actual + {formatCurrency(committedSpend)}{" "}
+      committed
     </div>,
   ];
 }

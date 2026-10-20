@@ -13,6 +13,7 @@ import { useMemo } from "react";
 import { createActionFor } from "~/entity/actions/action-items";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { Button } from "~/ui/primitives/button";
 
@@ -57,6 +58,7 @@ export function IsometricPantry() {
   const {
     canvasRef,
     containerRef,
+    error,
     handleMouseDown,
     handleMouseLeave,
     handleMouseMove,
@@ -65,6 +67,7 @@ export function IsometricPantry() {
     isLoading: queryLoading,
     openLocation,
     resetView,
+    retry,
     rooms,
   } = useIsometricPantry();
 
@@ -87,8 +90,17 @@ export function IsometricPantry() {
       <div className="flex h-full items-center justify-center bg-background">
         <div className="flex items-center gap-2 text-muted-foreground">
           <CircleNotchIcon className="size-5 animate-spin" />
-          <span>Loading pantry...</span>
+          <span>Loading pantry…</span>
         </div>
+      </div>
+    );
+  }
+
+  // Regression: a failed tree or inventory read drew "Your pantry is empty".
+  if (error) {
+    return (
+      <div className="flex h-full items-center justify-center bg-background p-4">
+        <ErrorDisplay error={error} title="the pantry" onRetry={retry} />
       </div>
     );
   }

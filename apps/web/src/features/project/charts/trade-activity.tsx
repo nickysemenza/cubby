@@ -50,7 +50,7 @@ export function TradeActivity({
   const creditsNote =
     credits > 0 ? (
       <p className="mt-2 text-center text-xs text-muted-foreground">
-        Bars exclude {formatCurrency(credits, 0)} in credits.
+        Bars exclude {formatCurrency(credits)} in credits.
       </p>
     ) : null;
 
@@ -112,7 +112,7 @@ export function TradeActivity({
           <ChartTooltip>
             <strong>{indexValue}</strong> —{" "}
             {id === "actual" ? "Actual" : "Committed"}:{" "}
-            <span style={{ color }}>{formatCurrency(value, 0)}</span>
+            <span style={{ color }}>{formatCurrency(value)}</span>
           </ChartTooltip>
         )}
         theme={nivoChartTheme}

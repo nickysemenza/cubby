@@ -61,7 +61,7 @@ export function PlannedActualBar({ data }: { data: PlannedActualDatum[] }) {
       tooltip={({ id, value, indexValue, color }) => (
         <ChartTooltip>
           <strong>{indexValue}</strong> — {seriesLabelFor(id)}:{" "}
-          <span style={{ color }}>{formatCurrency(value, 0)}</span>
+          <span style={{ color }}>{formatCurrency(value)}</span>
         </ChartTooltip>
       )}
       legendLabel={(datum) => seriesLabelFor(datum.id)}
