@@ -3,6 +3,7 @@ import {
   aiRefreshActivation,
   aiRefreshRunInput,
   suggestionSupersessionReceipt,
+  suggestionAcceptanceReceipt,
   type AiEvaluationTarget,
   type AiProvenance,
 } from "@cubby/schemas/ai-evaluation";
@@ -21,6 +22,7 @@ import {
   eq,
   gt,
   inArray,
+  isNotNull,
   isNull,
   notInArray,
   or,
@@ -354,12 +356,48 @@ export async function liveProductIdsAfter(
     .limit(limit);
 }
 
+/** Settle an evaluation with no replacement without rewriting historical Feedback. */
+export async function settleAppliedFieldRefresh(
+  db: Database,
+  id: string,
+  fingerprint: string,
+  provenance: AiProvenance,
+) {
+  const [row] = await getDb(db)
+    .select({ receipt: suggestion.acceptanceReceipt })
+    .from(suggestion)
+    .where(and(eq(suggestion.id, id), eq(suggestion.family, "field")))
+    .for("update");
+  const receipt = suggestionAcceptanceReceipt
+    .nullable()
+    .parse(row?.receipt ?? null);
+  if (!receipt) return;
+  await getDb(db)
+    .update(suggestion)
+    .set({
+      acceptanceReceipt: {
+        ...receipt,
+        evaluatedInput: { fingerprint, provenance },
+      },
+    })
+    .where(eq(suggestion.id, id));
+}
+
+// Applications identify logical targets even when inactive or rejected after
+// a member correction. Rejected proposals without a receipt stay resolved.
 const eligibleSuggestions = () =>
   or(
-    eq(suggestion.status, "pending"),
+    eq(suggestion.status, "applied"),
+    isNotNull(suggestion.acceptanceReceipt),
     and(
-      eq(suggestion.status, "superseded"),
-      sql`${suggestion.supersessionReceipt}->>'reason' IN (${suggestionSupersessionReceipt.shape.reason.enum.input_changed}, ${suggestionSupersessionReceipt.shape.reason.enum.no_proposal})`,
+      eq(suggestion.active, true),
+      or(
+        eq(suggestion.status, "pending"),
+        and(
+          eq(suggestion.status, "superseded"),
+          sql`${suggestion.supersessionReceipt}->>'reason' IN (${suggestionSupersessionReceipt.shape.reason.enum.input_changed}, ${suggestionSupersessionReceipt.shape.reason.enum.no_proposal})`,
+        ),
+      ),
     ),
   );
 
@@ -380,7 +418,6 @@ export async function pendingFieldRefreshes(
       and(
         eligibleSuggestions(),
         eq(suggestion.family, "field"),
-        eq(suggestion.active, true),
         after
           ? sql`(${suggestion.entity}, ${suggestion.recordId}, ${suggestion.field}) > (${after.entity}, ${after.recordId}::uuid, ${after.field})`
           : undefined,
@@ -404,6 +441,7 @@ export async function fieldRefreshHistory(
     .from(suggestion)
     .where(
       and(
+        eq(suggestion.family, "field"),
         eq(suggestion.entity, key.entity),
         eq(suggestion.recordId, key.recordId),
         eq(suggestion.field, key.field),

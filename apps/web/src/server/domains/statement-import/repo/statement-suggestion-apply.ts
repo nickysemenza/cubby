@@ -27,6 +27,10 @@ import {
 import { assessment, assessmentState } from "~/server/db/schema";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
+  previewFinancialSpending,
+  commitFinancialSpending,
+} from "~/server/domains/financial-transaction/repo/financial-spending";
+import {
   createFinancialTransaction,
   updateFinancialTransaction,
 } from "~/server/domains/financial-transaction/repo/financial-transaction";
@@ -40,7 +44,7 @@ import {
 import { isMoneyMoveKind } from "~/server/domains/statement-import/repo/statement-transaction-kind";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
-import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
+import { settlementRefsIncluding } from "~/server/generic/entity-links/repo/entity-external-ids";
 
 const log = createLogger("statement-suggestions");
 
@@ -100,6 +104,8 @@ export async function applyStatementTransactionSuggestion(
     );
   if (!input.corrected && application.kindOverride)
     throw refused("Changing the kind is a correction to the suggestion.");
+  if (!input.corrected && application.booking)
+    throw refused("Changing the booking is a correction to the suggestion.");
 
   if (
     published.transferPair &&
@@ -168,6 +174,7 @@ export async function applyStatementTransactionSuggestion(
     ...judgment.candidates.map((candidate) => candidate.transactionId),
     ...(judgment.supersede ? [judgment.supersede.pendingTransactionId] : []),
     ...(judgment.void ? [judgment.void.transactionId] : []),
+    ...(judgment.matchedTransactionId ? [judgment.matchedTransactionId] : []),
   ]);
   const codeOf = (id: string) =>
     parseShortcodeFor("financialTransaction", transactionCodes.get(id)!);
@@ -186,25 +193,67 @@ export async function applyStatementTransactionSuggestion(
     );
   };
 
+  let appliedTransactionId: FinancialTransactionShortcode | undefined;
   switch (application.action) {
     case "create":
-      await applyCreate(db, judgment, application, codeOf, accountCode, {
-        claimRows,
-        actor,
-      });
+      appliedTransactionId = await applyCreate(
+        db,
+        judgment,
+        application,
+        codeOf,
+        accountCode,
+        {
+          claimRows,
+          actor,
+        },
+      );
       break;
     case "attach":
-      await applyAttach(db, judgment, application, codeOf, {
+      appliedTransactionId = await applyAttach(
+        db,
+        judgment,
+        application,
+        codeOf,
+        {
+          claimRows,
+          actor,
+        },
+      );
+      break;
+    case "supersede":
+      appliedTransactionId = await applySupersede(db, current, codeOf, {
         claimRows,
         actor,
       });
       break;
-    case "supersede":
-      await applySupersede(db, current, codeOf, { claimRows, actor });
+    case "book":
+      if (!judgment.matchedTransactionId)
+        throw refused(
+          "The matched transaction is no longer available for booking.",
+        );
+      appliedTransactionId = codeOf(judgment.matchedTransactionId);
       break;
     case "void":
       await applyVoid(db, judgment, application, codeOf, actor);
       break;
+  }
+  if (appliedTransactionId) {
+    const spending = await previewFinancialSpending(db, {
+      transactionId: appliedTransactionId,
+      ...application.booking,
+      advice: published.spending?.request.advice ?? null,
+    });
+    if (spending.status === "deferred") {
+      const kind = application.kindOverride ?? judgment.create?.kind;
+      if (
+        judgment.providerStatus === "posted" &&
+        kind &&
+        ["purchase", "refund", "fee"].includes(kind)
+      )
+        throw refused(
+          "The matched transaction's kind or status cannot book this spending; correct it first.",
+        );
+    } else await commitFinancialSpending(db, spending, actor);
   }
   // A sibling's evidence included this charge being unmatched; refresh it
   // now rather than leaving it stale until a whole-ledger pass.
@@ -254,7 +303,7 @@ async function applyCreate(
       `Possible existing transactions must be rejected before creating: ${live.map((candidate) => codeOf(candidate.transactionId)).join(", ")}.`,
     );
   await effects.claimRows();
-  await createFinancialTransaction(
+  const created = await createFinancialTransaction(
     db,
     financialTransactionCreateInput.parse({
       accountId: accountCode,
@@ -272,21 +321,7 @@ async function applyCreate(
     }),
     effects.actor,
   );
-}
-
-async function appendRef(
-  db: Database,
-  transactionId: string,
-  ref: { source: string; externalId: string },
-) {
-  const existing =
-    (await settlementRefsFor(db, [transactionId])).get(transactionId) ?? [];
-  return existing.some(
-    (saved) =>
-      saved.source === ref.source && saved.externalId === ref.externalId,
-  )
-    ? existing
-    : [...existing, ref];
+  return created.output.id;
 }
 
 async function applyAttach(
@@ -319,7 +354,7 @@ async function applyAttach(
         `The transaction's ${field} already matches the statement.`,
       );
   const data: FinancialTransactionUpdateData = {
-    sourceRefs: await appendRef(
+    sourceRefs: await settlementRefsIncluding(
       db,
       target.transactionId,
       judgment.create.sourceRef,
@@ -340,6 +375,7 @@ async function applyAttach(
     data,
     effects.actor,
   );
+  return codeOf(target.transactionId);
 }
 
 async function applySupersede(
@@ -381,13 +417,18 @@ async function applySupersede(
     db,
     codeOf(transactionId),
     {
-      sourceRefs: await appendRef(db, transactionId, judgment.create.sourceRef),
+      sourceRefs: await settlementRefsIncluding(
+        db,
+        transactionId,
+        judgment.create.sourceRef,
+      ),
       status: "posted",
       postedDate: judgment.statementDate,
       amount: judgment.create.amount,
     },
     effects.actor,
   );
+  return codeOf(transactionId);
 }
 
 async function applyVoid(

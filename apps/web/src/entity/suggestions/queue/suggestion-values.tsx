@@ -89,6 +89,10 @@ const ACTION_PRESENTATION = {
     label: "Void hold",
     className: "bg-destructive/10 text-action-remove",
   },
+  book: {
+    label: "Book spending",
+    className: "bg-action-create-surface text-action-create",
+  },
 } satisfies Record<
   StatementTransactionAction,
   { label: string; className: string }
@@ -168,13 +172,13 @@ export const fieldLabel = (entity: ShortcodeEntity, field: string) =>
  */
 export function FieldValue({
   entity,
-  recordId,
+  recordId = "",
   field,
   value,
   suggested = false,
 }: {
   entity: ShortcodeEntity;
-  recordId: string;
+  recordId?: string;
   field: string;
   value: unknown;
   suggested?: boolean;

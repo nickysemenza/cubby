@@ -1,0 +1,2 @@
+ALTER TABLE "AutomaticRule" DROP CONSTRAINT "AutomaticRule_key_check";--> statement-breakpoint
+ALTER TABLE "AutomaticRule" ADD CONSTRAINT "AutomaticRule_key_check" CHECK ("AutomaticRule"."ruleKey" IN ('field.addition', 'statement_transaction.attach', 'statement_transaction.book_spending') AND starts_with("AutomaticRule"."ruleKey", "AutomaticRule"."family" || '.'));

@@ -1,16 +1,73 @@
 # Purchase, photo, and statement evidence
 
-Bank transactions are evidence; Expenses are the spending ledger. Importing a
-CSV never creates spending implicitly. Booking either
-links recorded Expenses or creates an aggregate allocation line. Purchases
-created from bank evidence have no invented order identifier or printed total.
+Bank transactions are evidence; Expenses are the spending ledger. Statement
+imports and re-imports discover booking work for every observed charge,
+including unchanged observations already matched to an unbooked transaction.
+Clean posted purchases and fees book spending automatically; uncertain work
+remains in the shared Suggestions queue. Pending holds book no Expenses until
+posted. Transfers, card payments and ordinary income remain settlement-only.
+Booking links recorded Expenses or creates one bare Purchase and one lump
+Expense. Purchases created from bank evidence have no invented itemization,
+order identifier or printed total. New bare Purchases use the account's live
+member owner as purchaser; household-only or missing purchaser evidence needs
+review. Funding attribution remains its own dated contract.
+
+The financial spending planner and booking writer are shared by direct finance
+commands, statement create/attach/supersede, matched-transaction `book`, and
+import convergence. Current evidence and the complete allocation graph are
+revalidated in the outer serializable write with its application receipt.
+The review family declares this snapshot requirement; unrelated review families
+retain their existing transaction boundaries. Attach plans use the target
+transaction's current facts, since attaching evidence alone changes no kind,
+amount or posting state.
+Already-booked spending is a no-op, and another possible Purchase prevents a
+new clean booking. All money continues to be `SUM(Expense.cost)`.
+Matched transactions with live allocations create no new statement booking
+work; an existing pending booking is revisited so completion can retire it.
+Expense edits use generic field Suggestions, and allocation reconciliation uses
+explicit finance commands. Transactions without statement observations can
+invoke the shared commands directly; statement discovery uses retained rows.
+
+Clean new spending requires one high-confidence live Cubby spending category
+without conflicting merchant history, plus the existing transaction-kind
+agreement checks. Category history is optional and there is no amount cap.
+The provider category stays verbatim evidence. Vendor name/alias resolution
+runs first; an unresolved merchant may propose a supported cleaned business
+name and retain the literal merchant alias. Person, processor-only, unsupported
+and competing identities need review. Both names resolve again before a Vendor
+and its booking are created atomically; one charge never establishes a
+Vendor-wide spending default. A member may explicitly choose an existing Vendor
+and acknowledge conflicting category history while correcting a held booking.
+Reviewed category and new business-name choices are retained separately from
+model advice. Booking corrections use the server's retained advice and explicit
+reviewed fields; clients cannot submit replacement model evidence.
+
+Existing Purchase settlement reuses the retained-payment matcher: exact cents,
+card/tender and owner evidence, the existing posting window, and a complete
+unique conserved set. Retained settlement matches posted charges only; a
+pending authorization remains unallocated until posted. Weaker same-Vendor candidates within fourteen days,
+including tips, partial payments, splits and combined charges, need review;
+amount/date coincidence never proves identity. Refunds require supported
+original-Purchase evidence independently of that weak-candidate window. Reuse
+recorded negative Expenses before creating a negative lump line. An identified
+original's single live effective category on vendor spending, excluding future
+and reimbursement lines, supplies the refund category unless
+a member explicitly chooses another. An unmatched
+refund needs explicit review before a standalone refund Purchase is booked.
+
+The import-clean execution policy applies every current clean spending plan;
+optional measured-rule switches and withheld audit samples do not gate that
+policy. Each application still uses `entity.review_assessment(s)` and records
+automatic authority and its policy revision in Review automatic decisions.
+Changing a booking policy never turns an old transaction-only receipt into
+proof of spending; regenerate and revalidate the unbooked work.
 
 Mail preparation validates source kind, owned original identity and exact
 checksums before any paid attribution or relationship judgment. Admission
 decisions cannot repair altered bytes; the writer repeats those checks and
 requires roster membership inside its transaction.
 
-`finance.converge` is the explicit automatic path for a genuine purchase payment.
+`finance.converge` also retains its verified financial-mail convergence path.
 The server rechecks posted transaction identity, stable provider references,
 live account funding and exact Vendor identity. An existing Purchase requires
 an accepted allocation or retained financial Email association plus its

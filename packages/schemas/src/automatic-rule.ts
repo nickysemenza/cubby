@@ -9,7 +9,11 @@ export const AUTOMATIC_RULE_FAMILIES = [
 export const AUTOMATIC_RULE_KEYS = [
   "field.addition",
   "statement_transaction.attach",
+  "statement_transaction.book_spending",
 ] as const;
+
+/** Widening assignment policy starts a fresh measured window. */
+export const FIELD_ASSIGNMENT_REVISION = "2026-10-20.1";
 
 export const automaticRuleFamily = z.enum(AUTOMATIC_RULE_FAMILIES);
 export type AutomaticRuleFamily = z.infer<typeof automaticRuleFamily>;

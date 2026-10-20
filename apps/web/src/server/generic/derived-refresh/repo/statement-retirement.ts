@@ -88,7 +88,7 @@ export async function processStatementRetirementPage(db: Database) {
         -- includes-deleted: retiring suggestions whose observations were deleted.
         AND EXISTS (
           SELECT 1 FROM jsonb_array_elements_text(s.data->'refs') ref(value)
-          WHERE (s.data->>'recommended'<>${statementTransactionAction.enum.void} AND EXISTS (SELECT 1 FROM "EntityExternalId" e WHERE e.kind='settlement_ref' AND e."deletedAt" IS NULL
+          WHERE (s.data->>'recommended' NOT IN (${statementTransactionAction.enum.void}, ${statementTransactionAction.enum.book}) AND EXISTS (SELECT 1 FROM "EntityExternalId" e WHERE e.kind='settlement_ref' AND e."deletedAt" IS NULL
             AND e.source=split_part(ref.value,':',1) AND e."externalId"=substr(ref.value,strpos(ref.value,':')+1)))
             -- includes-deleted: deleted observations invalidate pending suggestions.
             OR EXISTS (SELECT 1 FROM "StatementRow" r WHERE r.source=split_part(ref.value,':',1) AND r."externalId"=substr(ref.value,strpos(ref.value,':')+1)

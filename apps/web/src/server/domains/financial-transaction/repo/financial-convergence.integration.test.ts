@@ -1,3 +1,4 @@
+import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { ExtractedOrderCandidate } from "@cubby/schemas/purchase-import";
 import { eq } from "drizzle-orm";
@@ -77,6 +78,50 @@ describe("server verified financial convergence", () => {
       .from(expense)
       .where(notDeleted(expense));
   }
+  // Direct convergence must share spending's category, owner and replay fences
+  // when retained advice is supplied, without changing verified-mail policy.
+  it("converges clean current spending advice through the shared planner once", async () => {
+    const owner = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Synthetic advice owner",
+      kind: "member",
+    });
+    const account = await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic advice account",
+      identity: { kind: "cash" },
+      ledgerPartyId: owner.output.id,
+      provisional: false,
+    });
+    await createRepoEntity(ctx, "vendor", { name: "Synthetic advice market" });
+    const category = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: "Synthetic advice category",
+    });
+    const transaction = await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      kind: "fee",
+      status: "posted",
+      amount: 18,
+      postedDate: "2026-09-01",
+      merchant: "Synthetic advice market",
+      sourceRefs: [{ source: "synthetic-bank", externalId: "advised-fee" }],
+    });
+    const input = {
+      transactionId: transaction.output.id,
+      advice: financialSpendingAdvice.parse({
+        vendorName: "Synthetic advice market",
+        vendorConfidence: "high",
+        counterparty: "business",
+        spendingCategoryId: category.shortcode,
+        categoryConfidence: "high",
+      }),
+    };
+    expect(
+      (await convergeFinancialTransaction(ctx.db, input, ctx.actor)).status,
+    ).toBe("applied");
+    expect(
+      (await convergeFinancialTransaction(ctx.db, input, ctx.actor)).status,
+    ).toBe("already_recorded");
+    expect(await liveCosts()).toEqual([{ cost: 18 }]);
+  });
   it("books an accepted identity once and refuses replay after the accepted amount changes", async () => {
     const { transaction } = await fixture();
     const input = { transactionId: transaction.output.id };

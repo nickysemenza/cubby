@@ -228,6 +228,7 @@ export function FinancialBookingReview({
                   purchaseId: purchase?.id ?? null,
                   vendorId: vendor?.id ?? null,
                   spendingCategoryId: categoryId ?? null,
+                  purchaserId: null,
                   economicRole: role,
                   trade,
                   costType,

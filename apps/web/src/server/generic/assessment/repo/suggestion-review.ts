@@ -18,6 +18,7 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import {
   getDb,
+  runBeforeCommitDatabase,
   withTransactionDatabase,
   uuidArrayParam,
 } from "~/server/db/helpers";
@@ -371,11 +372,11 @@ async function writeSuggestionValue(
 async function applySuggestionValue(
   db: Database,
   context: EntityKernelContext,
-  row: Parameters<typeof writeSuggestionValue>[2],
+  row: z.infer<typeof suggestionRowSchema>,
   value: unknown,
   options: {
     mode?: "automatic" | "member";
-    reason?: "confident_addition" | "member_acceptance" | "member_correction";
+    reason?: "confident_assignment" | "member_acceptance" | "member_correction";
     confidence?: number;
   } = {},
 ) {
@@ -383,7 +384,7 @@ async function applySuggestionValue(
   const { auditIds } = await withAuditReceipts(() =>
     writeSuggestionValue(db, context, row, suppliedValue),
   );
-  return suggestionAcceptanceReceipt.parse({
+  const receipt = suggestionAcceptanceReceipt.parse({
     mode: options.mode ?? "member",
     runId: context.actorContext.runId,
     auditIds,
@@ -393,6 +394,25 @@ async function applySuggestionValue(
     threshold:
       options.mode === "automatic" ? SUGGESTION_AUTO_APPLY_THRESHOLD : null,
   });
+  // Capture advances dependency revisions after business writes. Only the
+  // mutable projection gets this settled fingerprint; history stays immutable.
+  await runBeforeCommitDatabase(
+    db,
+    async (tx) => {
+      const appliedInputFingerprint = await fieldInputFingerprint(
+        tx,
+        row.entity,
+        row.recordId,
+        row.field,
+      );
+      await getDb(tx)
+        .update(suggestionTable)
+        .set({ acceptanceReceipt: { ...receipt, appliedInputFingerprint } })
+        .where(eq(suggestionTable.id, row.id));
+    },
+    "capture",
+  );
+  return receipt;
 }
 
 export async function acceptSuggestion(
@@ -445,7 +465,7 @@ export async function acceptSuggestion(
       { ...context, db: transactionDb },
       parsed,
       row.suggestedValue,
-      automatic ? { ...automatic, reason: "confident_addition" } : {},
+      automatic ? { ...automatic, reason: "confident_assignment" } : {},
     );
     await getDb(transactionDb)
       .update(suggestionTable)
@@ -493,6 +513,7 @@ export async function applyFieldCorrection(
       if (!row)
         throw new Error(`Pending Suggestion not found: ${parsedInput.id}`);
       const parsed = suggestionRowSchema.parse(row);
+      const revision = await currentInputRevision(transactionDb);
       // Remove this row from the pending set before the shared write path
       // supersedes sibling Suggestions. A failure rolls both operations back.
       await getDb(transactionDb)
@@ -523,6 +544,9 @@ export async function applyFieldCorrection(
         },
         receipt: z.json().parse(receipt),
       });
+      await fenceDerivedInputsAtCommit(transactionDb, revision, (tx) =>
+        fieldInputFingerprint(tx, parsed.entity, parsed.recordId, parsed.field),
+      );
       return { id: parsedInput.id, status: "rejected" as const };
     });
   }

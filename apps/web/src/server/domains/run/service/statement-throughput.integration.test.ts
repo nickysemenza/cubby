@@ -1,9 +1,12 @@
 import { assessmentFamily } from "@cubby/schemas/assessment";
+import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
 import { WORKFLOW_EXECUTION_LIMITS } from "@cubby/shared/workflow-limits";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq, sql } from "drizzle-orm";
+import { createEntity } from "tooling/factories/create";
 import { createRepoEntity } from "tooling/factories/repo";
+import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -13,8 +16,10 @@ import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import * as cfEnv from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
+import * as spending from "~/server/domains/financial-transaction/repo/financial-spending";
 import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
 import * as publications from "~/server/domains/statement-import/repo/statement-suggestions";
+import * as labels from "~/server/domains/statement-import/service/statement-suggestion-labels";
 import { memoryDurableSteps } from "~/server/testing/durable-steps";
 import { continueWorkflowRun } from "~/server/workflows/runs/continuation";
 import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
@@ -113,9 +118,15 @@ describe("statement Sweep throughput", () => {
   // create questions, DB publication, durable waits and successor overhead.
   it("measures cold complete suggestions through the actual workflow and batched transport", async () => {
     const total = 3_072;
+    const owner = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Synthetic benchmark member",
+      kind: "member",
+    });
     await createRepoEntity(ctx, "financialAccount", {
       name: "Synthetic benchmark card",
       identity: { kind: "credit_card", issuer: null, network: "visa" },
+      ledgerPartyId: owner.output.id,
+      provisional: false,
       sourceAliases: [
         {
           source: "monarch",
@@ -124,6 +135,11 @@ describe("statement Sweep throughput", () => {
         },
       ],
     });
+    const category = await createEntity(
+      buildKernelContext(ctx.db, ctx.actor.userId),
+      "spendingCategory",
+      { name: "Synthetic benchmark spending" },
+    );
     for (let offset = 0; offset < total; offset += 400) {
       const count = Math.min(400, total - offset);
       await recordStatementRows(
@@ -163,6 +179,35 @@ describe("statement Sweep throughput", () => {
     const clock = virtualLatency();
     const epoch = clock.now();
     const date = vi.spyOn(Date, "now").mockImplementation(clock.now);
+    // Spending advice is an external seam; keep the full label service and
+    // real spending preview without adding generative model work to this
+    // closed-choice transport benchmark.
+    const label = labels.labelStatementSuggestions;
+    const advice = vi
+      .spyOn(labels, "labelStatementSuggestions")
+      .mockImplementation((db, input) =>
+        label(db, {
+          ...input,
+          spendingAdvice: async ({ judgment }) =>
+            financialSpendingAdvice.parse({
+              spendingCategoryId: category.id,
+              categoryConfidence: "high",
+              vendorName: judgment.create?.merchant,
+              vendorConfidence: "high",
+              counterparty: "business",
+            }),
+        }),
+      );
+    // Planner SQL is host work, just like publication SQL; it must not
+    // stagger the benchmark's modeled transport clock by machine speed.
+    const preview = spending.previewFinancialSpending;
+    const planning = vi
+      .spyOn(spending, "previewFinancialSpending")
+      .mockImplementation((...args) => clock.unmodeled(() => preview(...args)));
+    // Booking preparation consumes a third page allowance per charge. A faster
+    // synthetic provider keeps this workload above the admission ceiling so
+    // rate refusals and durable waits remain exercised after that extra work.
+    const modelMs = 5_000;
     const starts: number[] = [];
     const finishes: number[] = [];
     const requests: { at: number; questions: number }[] = [];
@@ -197,14 +242,14 @@ describe("statement Sweep throughput", () => {
             });
           }
           starts.push(clock.now());
-          const end = clock.now() + 10_000;
+          const end = clock.now() + modelMs;
           finishes.push(end);
           requests.push({
             at: clock.now() - epoch,
             questions: Object.keys(query.questions).length,
           });
           peakModels = Math.max(peakModels, ++activeModels);
-          await clock.delay(10_000);
+          await clock.delay(modelMs);
           activeModels--;
           finishes.splice(finishes.indexOf(end), 1);
           return Response.json({
@@ -382,7 +427,7 @@ describe("statement Sweep throughput", () => {
           instances,
           pagePolicy: WORKFLOW_EXECUTION_LIMITS,
           latency: {
-            modelMs: 10_000,
+            modelMs,
             labelPublicationMs: 25,
             handoffMs: 10_000,
           },
@@ -410,6 +455,8 @@ describe("statement Sweep throughput", () => {
     } finally {
       publication.mockRestore();
       egress.mockRestore();
+      advice.mockRestore();
+      planning.mockRestore();
       date.mockRestore();
     }
   }, 180_000);

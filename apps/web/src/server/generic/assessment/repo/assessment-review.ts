@@ -24,6 +24,7 @@ import {
   getDb,
   notDeleted,
   withTransactionDatabase,
+  withSnapshotWriteDatabase,
 } from "~/server/db/helpers";
 import {
   assessment,
@@ -80,6 +81,8 @@ type Handler = {
   target: z.ZodType;
   actions: readonly Review["verdict"][];
   transactionBound: boolean;
+  /** Snapshot-dependent domain planning owns the outer retry boundary. */
+  isolationLevel?: "serializable";
   /** Domain parent locks must precede the suggestion's projection row lock. */
   lockForApply?: (
     db: Database,
@@ -307,6 +310,7 @@ const assessmentFamilies = {
     },
   },
   statement_transaction: {
+    isolationLevel: "serializable",
     subject: assessmentSubjects.statement_transaction,
     target: assessmentProjectionTargets.statement_transaction,
     // The domain write appends settlement refs, which supersede pending
@@ -439,19 +443,23 @@ export async function reviewAssessment(
     throw new Error("An Automatic rule only accepts an Assessment as is");
   const { assertAutomaticRuleOn } =
     await import("~/server/generic/assessment/repo/automatic-rule-runtime");
-  return withTransactionDatabase(db, async (transactionDb) => {
-    await assertAutomaticRuleOn(
-      transactionDb,
-      automatic.rule.key,
-      automatic.rule.stamp,
-    );
-    return settleReview(
-      transactionDb,
-      { ...context, db: transactionDb },
-      input,
-      automatic,
-    );
-  });
+  return withSnapshotWriteDatabase(
+    db,
+    async (transactionDb) => {
+      await assertAutomaticRuleOn(
+        transactionDb,
+        automatic.rule.key,
+        automatic.rule.stamp,
+      );
+      return settleReview(
+        transactionDb,
+        { ...context, db: transactionDb },
+        input,
+        automatic,
+      );
+    },
+    { isolationLevel: "serializable" },
+  );
 }
 
 function assertReviewAction(
@@ -656,7 +664,7 @@ async function settleReview(
       status: "applied",
       applied: true,
     };
-    return withTransactionDatabase(db, async (transactionDb) => {
+    const apply = async (transactionDb: Database) => {
       // Serialize generic commands without taking projection locks ahead of the
       // domain's parent locks. Receipt and mutation commit in the same boundary.
       await getDb(transactionDb).execute(
@@ -766,7 +774,11 @@ async function settleReview(
         },
       });
       return outcome;
-    });
+    };
+    return "isolationLevel" in family &&
+      family.isolationLevel === "serializable"
+      ? withSnapshotWriteDatabase(db, apply, { isolationLevel: "serializable" })
+      : withTransactionDatabase(db, apply);
   }
   const status = await withTransactionDatabase(db, async (transactionDb) => {
     const [state] = await getDb(transactionDb)

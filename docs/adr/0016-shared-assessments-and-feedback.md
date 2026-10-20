@@ -315,10 +315,14 @@ and the rule turns itself off when audited precision falls below the bar.
 Every automatic application records `automatic` Feedback that names the rule
 and revision, and stays listed in Review automatic decisions. Wrong on an automatic
 application records a Miss and opens the normal correction; it is not an undo,
-since the household has no restore or undo. The field family's existing
-Addition auto-apply becomes its first rule and keeps running under audit.
+since the household has no restore or undo. The [field assignment and refresh
+contract](../entities.md) owns assignment eligibility and rediscovery.
 Statement attach becomes a rule that starts off, which amends the advisory-only
 sole-candidate rule in `docs/import-evidence-convergence.md` for that one rule.
+
+The [convergence contract](../import-evidence-convergence.md) owns statement
+import-clean execution, its financial evidence and booking requirements. That
+explicit import policy also uses shared review and automatic receipts.
 
 The alternatives were keeping every apply reviewed, which leaves the
 statement backlog manual indefinitely, and confidence thresholds per family,

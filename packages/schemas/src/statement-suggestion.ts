@@ -14,6 +14,10 @@ import {
 } from "./identifiers";
 import { plainDate } from "./project";
 import { statementTransferPairRef } from "./transfer-pair-suggestion";
+import {
+  financialSpendingPlan,
+  financialSpendingRequest,
+} from "./financial-booking";
 
 /** Bump with any statement label prompt/model-policy change; retained votes carry this revision. */
 export const STATEMENT_LABEL_REVISION = "2026-10-17.1";
@@ -23,6 +27,7 @@ export const statementTransactionAction = z.enum([
   "attach",
   "supersede",
   "void",
+  "book",
 ]);
 export type StatementTransactionAction = z.infer<
   typeof statementTransactionAction
@@ -145,6 +150,8 @@ export const statementTransactionJudgment = z.object({
   siblings: z.array(z.string()),
   transfer: statementOwnAccountMove.nullable().default(null),
   transferPair: statementTransferPairRef.nullable().default(null),
+  matchedTransactionId: z.uuid().optional(),
+  spending: financialSpendingPlan.nullable().optional(),
   clean: z.boolean(),
 });
 export type StatementTransactionJudgment = z.infer<
@@ -158,6 +165,7 @@ export const statementLabelCheckpoint = z.object({
   judgment: statementTransactionJudgment,
   kind: z.boolean(),
   counterparty: z.boolean(),
+  spending: z.boolean().default(false),
 });
 export type StatementLabelCheckpoint = z.infer<typeof statementLabelCheckpoint>;
 
@@ -172,6 +180,9 @@ export const statementTransactionApplication = z.object({
   fields: z.array(statementTransactionField).default([]),
   kindOverride: kind.optional(),
   rejectedCandidateIds: z.array(financialTransactionShortcode).default([]),
+  booking: financialSpendingRequest
+    .omit({ transactionId: true, source: true, advice: true })
+    .optional(),
 });
 export type StatementTransactionApplication = z.infer<
   typeof statementTransactionApplication
@@ -211,6 +222,8 @@ export const statementSuggestionOut = z.object({
   recommended: statementTransactionAction,
   clean: z.boolean(),
   create: statementTransactionCreate.omit({ sourceRef: true }).nullable(),
+  matchedTransactionId: financialTransactionShortcode.optional(),
+  spending: financialSpendingPlan.nullable().optional(),
   candidates: z.array(publicCandidate),
   supersedeTransactionId: financialTransactionShortcode.nullable(),
   voidTransactionId: financialTransactionShortcode.nullable(),

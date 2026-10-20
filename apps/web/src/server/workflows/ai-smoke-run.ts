@@ -28,6 +28,8 @@ import {
   IMAGE_IDENTIFICATION_FEATURE,
   ENTITY_EMBEDDING_FEATURE,
   MAILBOX_TRIAGE_FEATURE,
+  MERCHANT_IDENTITY_FEATURE,
+  MERCHANT_IDENTITY_SUPPORT_FEATURE,
   MAILBOX_RELEVANCE_FEATURE,
   MAIL_FINANCIAL_EVENT_FEATURE,
   STATEMENT_CHARGE_IDENTITY_FEATURE,
@@ -558,6 +560,40 @@ async function runCase(
             { db, runId, operation: "smoke.mailSourceRelation" },
           ),
         },
+      };
+    }
+    case "merchantIdentity": {
+      const { fixture } = aiSmokeInputs.merchantIdentity.parse(raw);
+      return {
+        result: await runStructuredFeature(
+          MERCHANT_IDENTITY_FEATURE,
+          MERCHANT_IDENTITY_FEATURE.request(
+            fixture === "standard"
+              ? "EXAMPLE GARDEN SUPPLY #012"
+              : "PAYMENT SERVICE",
+            null,
+          ),
+          { db, runId, operation: "smoke.merchantIdentity" },
+        ),
+      };
+    }
+    case "merchantIdentitySupport": {
+      const { fixture } = aiSmokeInputs.merchantIdentitySupport.parse(raw);
+      return {
+        result: await runDecisionChoice({
+          feature: MERCHANT_IDENTITY_SUPPORT_FEATURE,
+          choices: MERCHANT_IDENTITY_SUPPORT_FEATURE.choices,
+          ...MERCHANT_IDENTITY_SUPPORT_FEATURE.prompt(
+            JSON.stringify({
+              merchant:
+                fixture === "standard"
+                  ? "EXAMPLE GARDEN SUPPLY #012"
+                  : "PAYMENT SERVICE",
+              proposed: "Example Garden Supply",
+            }),
+          ),
+          usage: { db, runId, operation: "smoke.merchantIdentitySupport" },
+        }),
       };
     }
     case "mailFinancialEvent": {

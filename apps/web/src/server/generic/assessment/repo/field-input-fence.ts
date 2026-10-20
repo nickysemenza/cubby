@@ -20,6 +20,26 @@ export async function fieldInputFingerprint(
   recordId: string,
   field: string,
 ) {
+  const fingerprint = await fieldInputFingerprintIfLive(
+    db,
+    entity,
+    recordId,
+    field,
+  );
+  if (fingerprint === null)
+    throw new Error(
+      `Suggestion subject is no longer live: ${entity}:${recordId}`,
+    );
+  return fingerprint;
+}
+
+/** Discovery skips deleted subjects; write fences still require a live subject. */
+export async function fieldInputFingerprintIfLive(
+  db: Database,
+  entity: string,
+  recordId: string,
+  field: string,
+) {
   const kind = entitySchema.parse(entity);
   const model = entityFieldModels[kind].fields.find(
     (candidate) => candidate.key === field,
@@ -35,10 +55,7 @@ export async function fieldInputFingerprint(
     SELECT to_jsonb(r) AS value FROM ${table} r WHERE r.id=${recordId}::uuid AND r."deletedAt" IS NULL LIMIT 1
   `)
   ).rows;
-  if (!source)
-    throw new Error(
-      `Suggestion subject is no longer live: ${entity}:${recordId}`,
-    );
+  if (!source) return null;
   const row = z.record(z.string(), z.json()).parse(source.value);
   const backings =
     policy && "backedBy" in policy ? (policy.backedBy ?? []) : [];

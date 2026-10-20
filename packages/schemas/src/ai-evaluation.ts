@@ -22,7 +22,15 @@ export const suggestionAcceptanceReceipt = z.object({
   runId: z.uuid().nullable(),
   auditIds: z.array(z.uuid()),
   acceptedAt: z.iso.datetime(),
+  /** Authoritative evidence after application; absent on retained legacy receipts. */
+  appliedInputFingerprint: z.string().optional(),
+  /** Mutable projection bookkeeping for an agreeing reevaluation; historical Feedback is unchanged. */
+  evaluatedInput: z
+    .object({ fingerprint: z.string(), provenance: aiProvenance })
+    .optional(),
   reason: z.enum([
+    "confident_assignment",
+    // Historical application receipts describe the policy actually applied.
     "confident_addition",
     "member_acceptance",
     "member_correction",

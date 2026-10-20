@@ -151,6 +151,27 @@ export async function settlementRefsFor(
   return out;
 }
 
+/** Preview and attachment share the same idempotent reference merge. */
+export async function settlementRefsIncluding(
+  db: Db,
+  transactionId: string,
+  ref: SettlementRef,
+): Promise<SettlementRef[]> {
+  const existing =
+    (await settlementRefsFor(db, [transactionId])).get(transactionId) ?? [];
+  const refs = existing.some(
+    (saved) =>
+      saved.source === ref.source && saved.externalId === ref.externalId,
+  )
+    ? existing
+    : [...existing, ref];
+  return refs.sort(
+    (a, b) =>
+      a.source.localeCompare(b.source) ||
+      a.externalId.localeCompare(b.externalId),
+  );
+}
+
 /**
  * Refuse settlement references another live transaction already holds. The
  * live unique is the backstop (`db-errors.ts` maps its violation to the same

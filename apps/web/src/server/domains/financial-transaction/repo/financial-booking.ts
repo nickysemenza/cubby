@@ -24,6 +24,7 @@ import {
   expense,
   expenseAttribution,
   ledgerSourceClaim,
+  ledgerParty,
   financialTransaction,
   purchase,
 } from "~/server/db/schema";
@@ -205,6 +206,18 @@ export async function previewFinancialBooking(
     graph.target?.spendingCategoryId ?? row.spendingCategoryId,
   );
   if (input.vendorId) await resolveOrThrow(db, "vendor", input.vendorId);
+  if (input.purchaserId) {
+    const purchaserId = await resolveOrThrow(
+      db,
+      "ledgerParty",
+      input.purchaserId,
+    );
+    const member = await getDb(db).query.ledgerParty.findFirst({
+      where: and(eq(ledgerParty.id, purchaserId), notDeleted(ledgerParty)),
+    });
+    if (member?.kind !== "member")
+      return fail("A purchaser override must name a live member LedgerParty.");
+  }
   const allocations = await getDb(
     db,
   ).query.financialTransactionAllocation.findMany({
@@ -219,12 +232,36 @@ export async function previewFinancialBooking(
     return fail(
       "This transaction already settles another Purchase. Review that allocation before booking.",
     );
+  if (
+    allocations.length &&
+    cents(
+      allocations.reduce((sum, allocation) => sum + allocation.amount, 0),
+    ) !== cents(row.amount)
+  )
+    return fail(
+      "Existing partial allocations require reconciliation before booking.",
+    );
   const capacity = await bookingAction(db, input, row, graph);
   const { action } = capacity;
   const account = await getDb(db).query.financialAccount.findFirst({
     where: (account, { eq }) => eq(account.id, row.accountId),
     with: { ledgerParty: true },
   });
+  if (!purchaseId && !input.purchaserId) {
+    if (
+      account?.ledgerParty?.kind !== "member" ||
+      account.ledgerParty.deletedAt ||
+      account.deletedAt ||
+      account.provisional
+    )
+      return fail(
+        "Choose a live member purchaser before creating a bare Purchase.",
+      );
+    input.purchaserId = parseShortcodeFor(
+      "ledgerParty",
+      account.ledgerParty.shortcode,
+    );
+  }
   const decision = {
     ...input,
     categoryOverride: input.spendingCategoryId,
@@ -278,6 +315,13 @@ async function replayBooking(db: Database, review: FinancialBookingPreview) {
   )
     return fail("The approved booking allocation changed.");
   const graph = await bookingGraph(db, allocation.purchaseId);
+  if (review.action === "link_existing") {
+    const capacity = await bookingAction(db, review, row, graph);
+    if (capacity.action !== "link_existing")
+      return fail(
+        "Existing itemized spending no longer covers the approved settlement.",
+      );
+  }
   if (!review.purchaseId && review.vendorId) {
     const vendorId = await resolveOrThrow(db, "vendor", review.vendorId);
     if (graph.target?.vendorId !== vendorId)
@@ -342,6 +386,7 @@ export async function commitFinancialBooking(
               defaultTrade: review.trade,
               date: fresh.date,
               displayLabel: fresh.name,
+              purchaserOverrideId: review.purchaserId,
             }),
             actor,
           )

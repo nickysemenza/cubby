@@ -1,4 +1,9 @@
 import { assessmentFamily } from "@cubby/schemas/assessment";
+import type { FinancialSpendingPlan } from "@cubby/schemas/financial-booking";
+import {
+  financialTransactionKind,
+  financialTransactionStatus,
+} from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   statementSuggestionOut,
@@ -18,6 +23,14 @@ import {
   automaticApplicationRule,
   matchedRulesOf,
 } from "~/server/generic/assessment/repo/assessment";
+import { reviewFamilyDeclarations } from "~/server/generic/assessment/repo/review-families";
+
+import { isClean } from "./statement-suggestions";
+
+const currentClean = sql`coalesce((coalesce((${suggestionField("clean")})::boolean, false) AND (
+  a.judgment->${"create"}->>${"status"} IS DISTINCT FROM ${financialTransactionStatus.enum.posted}
+  OR a.judgment->${"create"}->>${"kind"} NOT IN (${financialTransactionKind.enum.purchase}, ${financialTransactionKind.enum.refund}, ${financialTransactionKind.enum.fee})
+  OR a.judgment->${"spending"}->>${"status"} IN (${"ready" satisfies FinancialSpendingPlan["status"]}, ${"already_booked" satisfies FinancialSpendingPlan["status"]}))), false)`;
 
 /** Record-level scope the cross-family list pushes into SQL. */
 export type StatementSuggestionScope = {
@@ -50,7 +63,8 @@ const conditions = (filters: StatementSuggestionScope): SQL => {
     where.push(sql`(fa.id::text IN (${ids})
       OR EXISTS (SELECT 1 FROM jsonb_array_elements(a.judgment->'candidates') candidate WHERE candidate->>'transactionId' IN (${ids}))
       OR a.judgment->${"supersede"}->>'pendingTransactionId' IN (${ids})
-      OR a.judgment->${"void"}->>'transactionId' IN (${ids}))`);
+      OR a.judgment->${"void"}->>'transactionId' IN (${ids})
+      OR EXISTS (SELECT 1 FROM jsonb_array_elements(${reviewFamilyDeclarations.statement_transaction.records}) ref WHERE ref->>'id' IN (${ids})))`);
   }
   return sql.join(where, sql` AND `);
 };
@@ -88,7 +102,7 @@ export async function statementSuggestionKeys(
     matchedRules: string[];
     automaticRule: string | null;
   }>(sql`
-    SELECT s.id, s.fingerprint, (${suggestionField("clean")})::boolean AS clean,
+    SELECT s.id, s.fingerprint, (${currentClean}) AS clean,
       ${suggestionField("recommended")} AS recommended,
       first_candidate.label->>${"same"} AS "labelSame",
       first_candidate.label->>${"confidence"} AS "labelConfidence",
@@ -159,6 +173,9 @@ export async function readStatementSuggestions(
           ? [judgment.supersede.pendingTransactionId]
           : []),
         ...(judgment.void ? [judgment.void.transactionId] : []),
+        ...(judgment.matchedTransactionId
+          ? [judgment.matchedTransactionId]
+          : []),
       ]),
     ),
   ];
@@ -223,7 +240,10 @@ export async function readStatementSuggestions(
       sourceCategory: row.sourceCategory,
       providerStatus: judgment.providerStatus,
       recommended: judgment.recommended,
-      clean: judgment.clean,
+      clean: isClean(judgment, judgment.create?.amount ?? 0),
+      spending: judgment.spending,
+      matchedTransactionId:
+        judgment.matchedTransactionId && code(judgment.matchedTransactionId),
       transferPair: judgment.transferPair,
       create: judgment.create ? create : null,
       candidates: candidates.map((candidate) => ({

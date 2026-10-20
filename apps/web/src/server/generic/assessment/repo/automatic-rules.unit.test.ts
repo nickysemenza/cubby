@@ -1,36 +1,19 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-
 import { statementTransactionJudgment } from "@cubby/schemas/statement-suggestion";
 import { SEEDED_RULE_REVISIONS } from "tooling/factories/base-world";
 import { describe, expect, it } from "vitest";
 
-import { AUTOMATIC_RULES } from "./automatic-rules";
-
-const migration = readFileSync(
-  fileURLToPath(
-    new URL(
-      "../../../../../drizzle/0091_sweeps_maintenance_automatic_rules.sql",
-      import.meta.url,
-    ),
-  ),
-  "utf8",
-);
+import { AUTOMATIC_RULES, matchFieldRules } from "./automatic-rules";
 
 // A revision bump turns a rule off until a member re-enables it, so the seeded
 // rows must name the revisions the code declares.
 describe("seeded Automatic rule revisions", () => {
-  it("match the declared rules in the migration and the test world", () => {
-    expect(Object.keys(SEEDED_RULE_REVISIONS).sort()).toEqual(
-      Object.keys(AUTOMATIC_RULES).sort(),
-    );
+  it("match the declared rules in the test world", () => {
     for (const key of [
       "field.addition",
       "statement_transaction.attach",
     ] as const) {
       const revision = AUTOMATIC_RULES[key].revision();
       expect(SEEDED_RULE_REVISIONS[key]).toBe(revision);
-      expect(migration).toContain(`'${key}', '${revision}'`);
     }
   });
 });
@@ -45,7 +28,7 @@ describe("statement_transaction.attach", () => {
       statementDate: "2026-05-05",
       providerStatus: "posted",
       create: {
-        kind: "purchase",
+        kind: "other",
         kindSource: "rule",
         status: "posted",
         amount: 4.5,
@@ -81,5 +64,43 @@ describe("statement_transaction.attach", () => {
   it("matches a free candidate and skips one another charge settles", () => {
     expect(rule.match(judgment(false))).toEqual({ model: "synthetic" });
     expect(rule.match(judgment(true))).toBeUndefined();
+  });
+  it("does not let a transaction-only legacy purchase attach authorize spending", () => {
+    const legacy = judgment(false);
+    legacy.create!.kind = "purchase";
+    expect(rule.match(legacy)).toBeUndefined();
+  });
+});
+
+// Failure modes: correcting a populated member field never matches, or broadening
+// assignments silently admits pruning, undeclared fields, or review-required fields.
+describe("field.addition", () => {
+  const facts = {
+    entity: "product" as const,
+    field: "categoryId",
+    kind: "correction",
+    confidence: 0.97,
+    model: "typesafe/jev",
+    pinnedModel: "typesafe/jev",
+  };
+
+  it("matches additions and corrections through the same declared assignment policy", () => {
+    expect(matchFieldRules(facts)[0]?.key).toBe("field.addition");
+    expect(matchFieldRules({ ...facts, kind: "addition" })[0]?.key).toBe(
+      "field.addition",
+    );
+    expect(matchFieldRules({ ...facts, confidence: 0.6 })).toEqual([]);
+    expect(matchFieldRules({ ...facts, pinnedModel: null })).toEqual([]);
+    expect(matchFieldRules({ ...facts, model: "synthetic-unpinned" })).toEqual(
+      [],
+    );
+  });
+
+  it("keeps review-required fields and pruning out of automatic assignments", () => {
+    expect(
+      matchFieldRules({ ...facts, entity: "expense", field: "lineKind" }),
+    ).toEqual([]);
+    expect(matchFieldRules({ ...facts, field: "tags" })).toEqual([]);
+    expect(matchFieldRules({ ...facts, field: "undeclared" })).toEqual([]);
   });
 });

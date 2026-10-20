@@ -2,6 +2,7 @@ import {
   aiRefreshRunInput,
   aiEvaluationTarget,
   aiProvenance,
+  suggestionAcceptanceReceipt,
 } from "@cubby/schemas/ai-evaluation";
 import { assessmentFamily } from "@cubby/schemas/assessment";
 import { runEntityId } from "@cubby/schemas/identifiers";
@@ -12,7 +13,7 @@ import {
   taxonomyShortcode,
 } from "tooling/product-category-fixtures";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
 import { compiledRefreshManifest } from "~/server/ai/policy/refresh-manifest";
@@ -35,6 +36,7 @@ import {
   email,
   product,
   appSettings,
+  feedback,
 } from "~/server/db/schema";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { writeRunningAttemptProgress } from "~/server/domains/run/repo/ai-work-state";
@@ -42,6 +44,7 @@ import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
 import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { reconcileDerivedRefreshPage } from "~/server/generic/derived-refresh/repo/reconcile";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { settleDerivedRefreshForDiscovery } from "~/server/testing/background-queue";
 import {
@@ -402,6 +405,467 @@ describe("targeted prompt refresh", () => {
     expect(
       await getDb(ctx.db).select().from(aiEvaluation).where(fieldRefreshTarget),
     ).toHaveLength(1);
+  });
+
+  // Failure modes: applied/inactive saved-form targets and rejected corrections
+  // with retained application receipts disappear from discovery;
+  // their original value or a later member write permanently vetoes reevaluation;
+  // a new policy rewrites their immutable receipts, or each application reinfers.
+  it.each(["accepted", "corrected"])(
+    "reopens an applied inactive target after policy change using the current member value and then skips unchanged evidence (%s)",
+    async (state) => {
+      const item = await productFixture(
+        ctx,
+        "Synthetic saved-form policy product",
+      );
+      const oldManifest = await compiledRefreshManifest();
+      oldManifest["field:product.categoryId"]!.policyFingerprint =
+        "synthetic-old-assignment-policy";
+      await activateAiRefresh(ctx.db, "synthetic-before-assignment", {
+        enabled: true,
+        manifest: oldManifest,
+      });
+      await startSuggestionSweep(
+        ctx.db,
+        {
+          entity: "product",
+          fields: ["categoryId"],
+          filters: { ids: [item.id] },
+        },
+        {
+          context: kernelCtx(ctx),
+          ...categoryPorts(state === "corrected" ? 0.6 : 0.95),
+        },
+      );
+      const [initial] = await getDb(ctx.db).select().from(suggestion);
+      expect(initial!.status).toBe(
+        state === "corrected" ? "pending" : "applied",
+      );
+      if (state === "corrected") {
+        await reviewAssessment(ctx.db, kernelCtx(ctx), {
+          assessmentId: initial!.id,
+          operationId: crypto.randomUUID(),
+          verdict: "wrong",
+          correction: { present: true, value: taxonomyShortcode("tools") },
+          intent: "apply",
+        });
+      }
+      const [original] = await getDb(ctx.db).select().from(suggestion);
+      expect(original!.status).toBe(
+        state === "corrected" ? "rejected" : "applied",
+      );
+      expect(original!.acceptanceReceipt).toMatchObject({
+        reason:
+          state === "corrected" ? "member_correction" : "confident_assignment",
+        appliedInputFingerprint: expect.any(String),
+      });
+      expect(await productCategoryId(ctx.db, item.id)).toBe(
+        taxonomyId(state === "corrected" ? "tools" : "food"),
+      );
+      await getDb(ctx.db)
+        .update(suggestion)
+        .set({ active: false })
+        .where(eq(suggestion.id, original!.id));
+      await executeEntity(
+        kernelCtx(ctx),
+        entityCommandSchema.parse({
+          action: "update",
+          entity: "product",
+          id: item.id,
+          data: { categoryId: taxonomyShortcode("tools") },
+        }),
+      );
+      const changed = await compiledRefreshManifest();
+      await activateAiRefresh(ctx.db, "synthetic-after-assignment", {
+        enabled: true,
+        manifest: changed,
+      });
+      let calls = 0;
+      const ordinary = categoryPorts(0.95).suggestPorts;
+      const ports = {
+        context: kernelCtx(ctx),
+        auditSample: () => false,
+        suggestPorts: {
+          ...ordinary,
+          decisionModel: PRIMARY_MODEL,
+          decisionPort: async (
+            ...args: Parameters<typeof ordinary.decisionPort>
+          ) => {
+            calls++;
+            return ordinary.decisionPort(...args);
+          },
+        },
+      };
+      await discoverAiRefresh(ctx.db, ports);
+      const [evaluation] = await getDb(ctx.db)
+        .select()
+        .from(aiEvaluation)
+        .where(fieldRefreshTarget);
+      expect(evaluation).toBeDefined();
+      await executeAiRefreshTarget(ctx.db, evaluation!.id, ports);
+      expect(await productCategoryId(ctx.db, item.id)).toBe(taxonomyId("food"));
+      expect(calls).toBe(1);
+      expect(
+        (
+          await getDb(ctx.db)
+            .select()
+            .from(suggestion)
+            .where(eq(suggestion.id, original!.id))
+        )[0],
+      ).toMatchObject({
+        status: original!.status,
+        active: false,
+        acceptanceReceipt: original!.acceptanceReceipt,
+      });
+      for (let pass = 0; pass < 3; pass++)
+        expect(await discoverFieldRefresh(ports)).toEqual([]);
+      expect(
+        await getDb(ctx.db)
+          .select()
+          .from(aiEvaluation)
+          .where(fieldRefreshTarget),
+      ).toHaveLength(1);
+      expect(calls).toBe(1);
+    },
+  );
+
+  // Retained applications outlive subjects and must not become recurring errors.
+  it("quietly skips a deleted subject with a retained applied receipt", async () => {
+    const item = await productFixture(
+      ctx,
+      "Synthetic deleted assignment subject",
+    );
+    await activateAiRefresh(ctx.db, "synthetic-deleted-assignment", {
+      enabled: true,
+    });
+    await startSuggestionSweep(
+      ctx.db,
+      {
+        entity: "product",
+        fields: ["categoryId"],
+        filters: { ids: [item.id] },
+      },
+      { context: kernelCtx(ctx), ...categoryPorts(0.95) },
+    );
+    await getDb(ctx.db)
+      .update(product)
+      .set({ deletedAt: new Date() })
+      .where(eq(product.shortcode, item.id));
+    const errors = vi.spyOn(console, "error");
+    try {
+      expect(
+        await discoverFieldRefresh({
+          context: kernelCtx(ctx),
+          ...categoryPorts(0.95),
+        }),
+      ).toEqual([]);
+      expect(errors).not.toHaveBeenCalledWith(
+        "[ai-refresh] Field refresh discovery failed",
+        expect.anything(),
+      );
+    } finally {
+      errors.mockRestore();
+    }
+  });
+
+  // Reconciliation can advance revisions after an application. An agreeing
+  // evaluation must settle that basis rather than re-prepare it every cycle.
+  it.each([false, true])(
+    "settles an agreeing applied-field refresh after reconciliation without repeating evidence preparation (legacy receipt: %s)",
+    async (legacy) => {
+      const item = await productFixture(ctx, "Synthetic reconciled assignment");
+      await activateAiRefresh(ctx.db, "synthetic-reconciled-assignment", {
+        enabled: true,
+      });
+      await startSuggestionSweep(
+        ctx.db,
+        {
+          entity: "product",
+          fields: ["categoryId"],
+          filters: { ids: [item.id] },
+        },
+        { context: kernelCtx(ctx), ...categoryPorts(0.95) },
+      );
+      if (legacy) {
+        const [applied] = await getDb(ctx.db).select().from(suggestion);
+        await getDb(ctx.db)
+          .update(suggestion)
+          .set({
+            provenance: null,
+            acceptanceReceipt: suggestionAcceptanceReceipt
+              .omit({ appliedInputFingerprint: true })
+              .parse(applied!.acceptanceReceipt),
+          })
+          .where(eq(suggestion.id, applied!.id));
+      }
+      let complete = false;
+      for (let page = 0; page < 2_000; page++) {
+        if ((await reconcileDerivedRefreshPage(ctx.db)).done) {
+          complete = true;
+          break;
+        }
+      }
+      expect(complete).toBe(true);
+      await settleDerivedRefreshForDiscovery(ctx.db);
+      const ports = { context: kernelCtx(ctx), ...categoryPorts(0.95) };
+      await discoverFieldRefresh(ports);
+      const [evaluation] = await getDb(ctx.db)
+        .select()
+        .from(aiEvaluation)
+        .where(fieldRefreshTarget);
+      expect(evaluation).toBeDefined();
+      await executeAiRefreshTarget(ctx.db, evaluation!.id, ports);
+      const measured = await countTestDbQueries(async () => {
+        for (let pass = 0; pass < 3; pass++)
+          expect(await discoverFieldRefresh(ports)).toEqual([]);
+      });
+      expect(measured.tables).not.toContain("AuditLog");
+      expect(await productCategoryId(ctx.db, item.id)).toBe(taxonomyId("food"));
+    },
+  );
+
+  // Failure mode: a reviewed-wrong proposal publishes no replacement, leaving
+  // its legacy applied predecessor preparing unchanged evidence every cycle.
+  it("settles a legacy applied predecessor when an exact wrong review filters every refresh proposal", async () => {
+    const item = await productFixture(
+      ctx,
+      "Synthetic reviewed refresh product",
+    );
+    await activateAiRefresh(ctx.db, "synthetic-reviewed-refresh", {
+      enabled: true,
+    });
+    const input = {
+      entity: "product",
+      fields: ["categoryId"],
+      filters: { ids: [item.id] },
+    } satisfies Parameters<typeof startSuggestionSweep>[1];
+    await startSuggestionSweep(ctx.db, input, {
+      context: kernelCtx(ctx),
+      ...categoryPorts(0.95),
+    });
+    const [applied] = await getDb(ctx.db).select().from(suggestion);
+    expect(applied!.status).toBe("applied");
+    const legacyReceipt = suggestionAcceptanceReceipt
+      .omit({ appliedInputFingerprint: true })
+      .parse(applied!.acceptanceReceipt);
+    await getDb(ctx.db)
+      .update(suggestion)
+      .set({
+        active: false,
+        provenance: null,
+        acceptanceReceipt: legacyReceipt,
+      })
+      .where(eq(suggestion.id, applied!.id));
+    await executeEntity(
+      kernelCtx(ctx),
+      entityCommandSchema.parse({
+        action: "update",
+        entity: "product",
+        id: item.id,
+        data: { categoryId: taxonomyShortcode("tools") },
+      }),
+    );
+    await startSuggestionSweep(ctx.db, input, {
+      context: kernelCtx(ctx),
+      ...categoryPorts(0.6),
+    });
+    const [pending] = await getDb(ctx.db)
+      .select()
+      .from(suggestion)
+      .where(eq(suggestion.status, "pending"));
+    expect(pending).toBeDefined();
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      assessmentId: pending!.id,
+      operationId: crypto.randomUUID(),
+      verdict: "wrong",
+      intent: "history",
+    });
+    await settleDerivedRefreshForDiscovery(ctx.db);
+    const historicalFeedback = await getDb(ctx.db)
+      .select()
+      .from(feedback)
+      .orderBy(feedback.id);
+    const ordinary = categoryPorts(0.6).suggestPorts;
+    const decisionPort = vi.fn(ordinary.decisionPort);
+    const ports = {
+      context: kernelCtx(ctx),
+      auditSample: () => false,
+      suggestPorts: { ...ordinary, decisionModel: PRIMARY_MODEL, decisionPort },
+    };
+    await discoverFieldRefresh(ports);
+    const [evaluation] = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(fieldRefreshTarget);
+    expect(evaluation).toBeDefined();
+    await executeAiRefreshTarget(ctx.db, evaluation!.id, ports);
+    expect(decisionPort).toHaveBeenCalledTimes(1);
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(aiEvaluation)
+          .where(eq(aiEvaluation.id, evaluation!.id))
+      )[0],
+    ).toMatchObject({ state: "completed", receipt: { outcome: "settled" } });
+    expect(await productCategoryId(ctx.db, item.id)).toBe(taxonomyId("tools"));
+    const rows = await getDb(ctx.db).select().from(suggestion);
+    expect(rows).toHaveLength(2);
+    expect(rows.find((row) => row.id === pending!.id)?.status).toBe("rejected");
+    expect(rows.find((row) => row.id === applied!.id)).toMatchObject({
+      active: false,
+      status: "applied",
+      provenance: null,
+      acceptanceReceipt: {
+        ...legacyReceipt,
+        evaluatedInput: {
+          fingerprint: expect.any(String),
+          provenance: expect.objectContaining({
+            inputFingerprint: expect.any(String),
+          }),
+        },
+      },
+    });
+    expect(
+      await getDb(ctx.db).select().from(feedback).orderBy(feedback.id),
+    ).toEqual(historicalFeedback);
+    const measured = await countTestDbQueries(async () => {
+      for (let pass = 0; pass < 3; pass++)
+        expect(await discoverFieldRefresh(ports)).toEqual([]);
+    });
+    expect(measured.tables).not.toContain("AuditLog");
+    expect(decisionPort).toHaveBeenCalledTimes(1);
+  });
+
+  // Failure mode: capture blesses later same-transaction member writes, even
+  // when an ABA edit restores the corrected value, as the correction's inputs.
+  it("rolls back a field correction followed by a member ABA edit in the same transaction", async () => {
+    const item = await productFixture(ctx, "Synthetic corrected ABA product");
+    await startSuggestionSweep(
+      ctx.db,
+      {
+        entity: "product",
+        fields: ["categoryId"],
+        filters: { ids: [item.id] },
+      },
+      { context: kernelCtx(ctx), ...categoryPorts(0.6) },
+    );
+    const [pending] = await getDb(ctx.db).select().from(suggestion);
+    expect(pending!.status).toBe("pending");
+    await expect(
+      withTransactionDatabase(ctx.db, async (transactionDb) => {
+        const context = kernelCtx({ ...ctx, db: transactionDb });
+        await reviewAssessment(transactionDb, context, {
+          assessmentId: pending!.id,
+          operationId: crypto.randomUUID(),
+          verdict: "wrong",
+          correction: { present: true, value: taxonomyShortcode("tools") },
+          intent: "apply",
+        });
+        for (const categoryId of [
+          taxonomyShortcode("household"),
+          taxonomyShortcode("tools"),
+        ])
+          await executeEntity(
+            context,
+            entityCommandSchema.parse({
+              action: "update",
+              entity: "product",
+              id: item.id,
+              data: { categoryId },
+            }),
+          );
+      }),
+    ).rejects.toThrow("Derived inputs changed later in the same transaction");
+    expect(await productCategoryId(ctx.db, item.id)).toBeNull();
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(suggestion)
+          .where(eq(suggestion.id, pending!.id))
+      )[0],
+    ).toMatchObject({ status: "pending", acceptanceReceipt: null });
+  });
+
+  // Failure mode: removing historical author/value vetoes also removes the
+  // current write fence and lets a correction overwrite an edit during inference.
+  it("rejects a later current write while reevaluating an applied inactive target", async () => {
+    const item = await productFixture(ctx, "Synthetic applied race product");
+    await startSuggestionSweep(
+      ctx.db,
+      {
+        entity: "product",
+        fields: ["categoryId"],
+        filters: { ids: [item.id] },
+      },
+      { context: kernelCtx(ctx), ...categoryPorts(0.95) },
+    );
+    await getDb(ctx.db)
+      .update(suggestion)
+      .set({ active: false, provenance: null });
+    await executeEntity(
+      kernelCtx(ctx),
+      entityCommandSchema.parse({
+        action: "update",
+        entity: "product",
+        id: item.id,
+        data: { categoryId: taxonomyShortcode("tools") },
+      }),
+    );
+    await activateAiRefresh(ctx.db, "synthetic-applied-race", {
+      enabled: true,
+    });
+    const started = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const ordinary = categoryPorts(0.95).suggestPorts;
+    const ports = {
+      context: kernelCtx(ctx),
+      suggestPorts: {
+        ...ordinary,
+        decisionModel: PRIMARY_MODEL,
+        decisionPort: async (
+          ...args: Parameters<typeof ordinary.decisionPort>
+        ) => {
+          started.resolve();
+          await release.promise;
+          return ordinary.decisionPort(...args);
+        },
+      },
+    };
+    await discoverAiRefresh(ctx.db, ports);
+    const [evaluation] = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(fieldRefreshTarget);
+    expect(evaluation).toBeDefined();
+    const outstanding = executeAiRefreshTarget(ctx.db, evaluation!.id, ports);
+    await started.promise;
+    try {
+      await executeEntity(
+        kernelCtx(ctx),
+        entityCommandSchema.parse({
+          action: "update",
+          entity: "product",
+          id: item.id,
+          data: { categoryId: taxonomyShortcode("household") },
+        }),
+      );
+    } finally {
+      release.resolve();
+    }
+    await outstanding;
+    expect(await productCategoryId(ctx.db, item.id)).toBe(
+      taxonomyId("household"),
+    );
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(aiEvaluation)
+          .where(eq(aiEvaluation.id, evaluation!.id))
+      )[0]?.state,
+    ).toBe("obsolete");
   });
 
   it("fences an old result on rollback while leaving unrelated feature generations alone", async () => {

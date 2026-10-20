@@ -1,27 +1,38 @@
 import { formatConfidence } from "@cubby/schemas/ai";
 import { financialTransactionKind } from "@cubby/schemas/financial-transaction";
 import type {
+  SpendingCategoryShortcode,
+  PurchaseShortcode,
+  VendorShortcode,
+} from "@cubby/schemas/identifiers";
+import type {
   SuggestionListRow,
   DeclaredSuggestionEvidence,
 } from "@cubby/schemas/suggestion-list";
 import { humanize } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { match } from "ts-pattern";
 
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
+import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
+import { Picker as RecordPicker } from "~/entity/picker/picker";
+import { WithVendorShortcodeSearch } from "~/entity/picker/with-vendor-search";
 import {
   SuggestionBody,
   suggestionBasisLabels,
 } from "~/entity/suggestions/suggestion-body";
 import { renderOptionCell } from "~/entity/table/column-helpers";
 import { formatCurrency } from "~/lib/number-format";
+import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { Picker } from "~/ui/combobox/picker";
 import { DateDisplay } from "~/ui/common/date-display";
 import { FactList } from "~/ui/common/fact-list";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
+import { Section } from "~/ui/layout/section";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
+import { Input } from "~/ui/primitives/input";
 
 import {
   CounterpartyLine,
@@ -38,6 +49,308 @@ import { useSuggestionReview } from "./suggestion-review-context";
 import { FieldValue, RecordLink } from "./suggestion-values";
 
 const KIND_OPTIONS = fieldEnumOptions("financialTransaction", "kind");
+
+function SpendingEvidence({ row }: { row: StatementRow }) {
+  const { draft, setDraft, outcome } = useSuggestionReview();
+  const current = draft(row.id);
+  const plan = row.evidence.spending;
+  const [category, setCategory] =
+    useState<ComboboxItem<SpendingCategoryShortcode> | null>(null);
+  const [purchase, setPurchase] =
+    useState<ComboboxItem<PurchaseShortcode> | null>(null);
+  const [vendor, setVendor] = useState<ComboboxItem<VendorShortcode> | null>(
+    null,
+  );
+  if (!plan) return null;
+  const busy = outcome(row.id)?.state === "pending";
+  const booking = {
+    rejectedPurchaseIds: plan.request.rejectedPurchaseIds,
+    ...current.booking,
+  };
+  return (
+    <section
+      aria-label="Spending"
+      className="flex flex-col gap-2 border-t pt-2 text-xs"
+    >
+      <p className="font-medium">
+        {plan.status === "already_booked"
+          ? "Spending already booked"
+          : plan.status === "deferred"
+            ? "Settlement only"
+            : "Book spending"}
+      </p>
+      {plan.status === "deferred" || plan.status === "review_required" ? (
+        <p>{plan.reason}</p>
+      ) : null}
+      {plan.status === "already_booked"
+        ? plan.purchaseIds.map((id) => (
+            <RecordLink key={id} record={{ entity: "purchase", id }} />
+          ))
+        : null}
+      {plan.status === "ready" ? (
+        <Facts
+          rows={[
+            [
+              "Effect",
+              plan.effect === "create_aggregate"
+                ? plan.purchaseId
+                  ? "One lump Expense on the existing Purchase"
+                  : "One Purchase and one lump Expense"
+                : "Settle existing spending",
+            ],
+            [
+              "Vendor",
+              plan.vendorId ? (
+                <RecordLink
+                  key="vendor"
+                  record={{ entity: "vendor", id: plan.vendorId }}
+                />
+              ) : (
+                plan.vendorName
+              ),
+            ],
+            [
+              "Spending category",
+              <FieldValue
+                key="category"
+                entity="expense"
+                field="spendingCategoryId"
+                value={plan.spendingCategoryId}
+              />,
+            ],
+            [
+              "Purchaser",
+              <RecordLink
+                key="purchaser"
+                record={{ entity: "ledgerParty", id: plan.purchaserId }}
+              />,
+            ],
+          ]}
+        />
+      ) : null}
+      {plan.candidates.length ? (
+        <ul
+          aria-label="Possible existing Purchases"
+          className="flex flex-col gap-1"
+        >
+          {plan.candidates.map((candidate) => (
+            <li
+              key={candidate.purchaseId}
+              className="flex flex-wrap items-center gap-2"
+            >
+              <RecordLink
+                record={{ entity: "purchase", id: candidate.purchaseId }}
+              />
+              <span className="text-muted-foreground">
+                {candidate.strength === "strong"
+                  ? "Retained payment evidence"
+                  : "Needs matching review"}
+              </span>
+              {!row.automaticRule &&
+              plan.status !== "already_booked" &&
+              plan.status !== "deferred" ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => {
+                    setPurchase({
+                      id: candidate.purchaseId,
+                      name: candidate.name,
+                    });
+                    setDraft(row.id, {
+                      booking: { ...booking, purchaseId: candidate.purchaseId },
+                    });
+                  }}
+                >
+                  Use this Purchase
+                </Button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {!row.automaticRule &&
+      plan.status !== "already_booked" &&
+      plan.status !== "deferred" ? (
+        <Section
+          title="Correct booking"
+          headingAs="h4"
+          disclosure={{
+            defaultOpen: plan.status === "review_required",
+            keepMounted: true,
+          }}
+        >
+          <div className="flex flex-col gap-2 pt-2">
+            <p>
+              Acceptance books spending. Corrections record Wrong feedback for
+              the proposed booking.
+            </p>
+            <p>
+              Review account ownership:{" "}
+              <RecordLink
+                record={{
+                  entity: "financialAccount",
+                  id: row.evidence.accountId,
+                }}
+              />
+            </p>
+            <EntityReferencePicker
+              entity="spendingCategory"
+              label="Reviewed spending category"
+              placeholder="Choose a category"
+              value={
+                category?.id === current.booking?.spendingCategoryId
+                  ? category
+                  : null
+              }
+              disabled={busy}
+              setValue={(item) => {
+                setCategory(item);
+                setDraft(row.id, {
+                  booking: { ...booking, spendingCategoryId: item?.id },
+                });
+              }}
+            />
+            <WithVendorShortcodeSearch>
+              {(search) => (
+                <RecordPicker
+                  {...search}
+                  onCreateNew={undefined}
+                  entity="vendor"
+                  label="Existing Vendor"
+                  placeholder="Choose a reviewed Vendor"
+                  value={
+                    vendor?.id === current.booking?.vendorId ? vendor : null
+                  }
+                  disabled={busy}
+                  setValue={(item) => {
+                    setVendor(item);
+                    setDraft(row.id, {
+                      booking: {
+                        ...booking,
+                        vendorId: item?.id,
+                        reviewedVendorName: undefined,
+                      },
+                    });
+                  }}
+                />
+              )}
+            </WithVendorShortcodeSearch>
+            <label
+              htmlFor={`spending-vendor-${row.id}`}
+              className="flex flex-col gap-1"
+            >
+              Reviewed new Vendor business name
+              <Input
+                id={`spending-vendor-${row.id}`}
+                value={current.booking?.reviewedVendorName ?? ""}
+                placeholder={
+                  row.evidence.merchant ??
+                  row.evidence.rawDescription ??
+                  "Business name"
+                }
+                disabled={busy}
+                onChange={(event) =>
+                  setDraft(row.id, {
+                    booking: {
+                      ...booking,
+                      vendorId: undefined,
+                      reviewedVendorName: event.target.value || undefined,
+                    },
+                  })
+                }
+              />
+            </label>
+            <label
+              htmlFor={`spending-history-${row.id}`}
+              className="inline-flex items-center gap-2"
+            >
+              <Checkbox
+                id={`spending-history-${row.id}`}
+                disabled={busy}
+                checked={current.booking?.categoryHistoryReviewed === true}
+                onCheckedChange={(checked) =>
+                  setDraft(row.id, {
+                    booking: {
+                      ...booking,
+                      categoryHistoryReviewed: checked === true,
+                    },
+                  })
+                }
+              />
+              Use this reviewed category despite conflicting merchant history
+            </label>
+            <EntityReferencePicker
+              entity="purchase"
+              label="Existing Purchase"
+              placeholder="Choose an existing Purchase"
+              value={
+                purchase?.id === current.booking?.purchaseId ? purchase : null
+              }
+              disabled={busy}
+              setValue={(item) => {
+                setPurchase(item);
+                setDraft(row.id, {
+                  booking: { ...booking, purchaseId: item?.id },
+                });
+              }}
+            />
+            {(row.evidence.create?.kind ?? row.columns.kind) === "refund" ? (
+              <label
+                htmlFor={`spending-standalone-${row.id}`}
+                className="inline-flex items-center gap-2"
+              >
+                <Checkbox
+                  id={`spending-standalone-${row.id}`}
+                  disabled={busy}
+                  checked={current.booking?.purchaseId === null}
+                  onCheckedChange={(checked) =>
+                    setDraft(row.id, {
+                      booking: {
+                        ...booking,
+                        purchaseId: checked ? null : undefined,
+                      },
+                    })
+                  }
+                />
+                Book this reviewed refund as a standalone Purchase
+              </label>
+            ) : null}
+            {plan.candidates.length ? (
+              <label
+                htmlFor={`spending-distinct-${row.id}`}
+                className="inline-flex items-center gap-2"
+              >
+                <Checkbox
+                  id={`spending-distinct-${row.id}`}
+                  disabled={busy}
+                  checked={Boolean(
+                    current.booking?.rejectedPurchaseIds?.length,
+                  )}
+                  onCheckedChange={(checked) =>
+                    setDraft(row.id, {
+                      booking: {
+                        ...booking,
+                        rejectedPurchaseIds: checked
+                          ? plan.candidates.map(
+                              (candidate) => candidate.purchaseId,
+                            )
+                          : [],
+                      },
+                    })
+                  }
+                />
+                These Purchases represent different charges
+              </label>
+            ) : null}
+          </div>
+        </Section>
+      ) : null}
+    </section>
+  );
+}
+
 const FIELD_LABELS = {
   amount: "amount",
   postedDate: "posted date",
@@ -242,6 +555,7 @@ function StatementEvidence({ row }: { row: StatementRow }) {
                           void review([row], () =>
                             statementApplyItem(charge, {
                               action: "attach",
+                              booking: rowDraft.booking,
                               transactionId: candidate.transactionId,
                               fields: [...ticked],
                             }),
@@ -337,6 +651,7 @@ function StatementEvidence({ row }: { row: StatementRow }) {
             <p className="text-muted-foreground">Labelled by {charge.model}</p>
           ) : null}
         </div>
+        <SpendingEvidence row={row} />
       </EvidenceBox>
     </div>
   );

@@ -71,10 +71,12 @@ import {
   matchStatementRules,
   statementSubjectKey,
 } from "~/server/generic/assessment/repo/automatic-rules";
-import { canonicalJson } from "~/server/lib/canonical-json";
+import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
+
+import { prepareStatementSpending } from "./statement-spending";
 
 /** Matching revision and Automatic attach precision window; clean-only changes use the policy below. */
-export const STATEMENT_SUGGESTION_REVISION = "2026-10-18.3";
+export const STATEMENT_SUGGESTION_REVISION = "2026-10-20.1";
 /**
  * Bump when only bulk-acceptability changes. Labels ride on top of the
  * evidence fingerprint, so a stricter clean rule would otherwise leave
@@ -82,7 +84,7 @@ export const STATEMENT_SUGGESTION_REVISION = "2026-10-18.3";
  * renaming the revision, which the automatic attach rule's measured windows
  * are keyed by.
  */
-const STATEMENT_CLEAN_POLICY = "2026-10-20.1";
+const STATEMENT_CLEAN_POLICY = "2026-10-20.2";
 const STATEMENT_SUGGESTION_PAGE = FINANCIAL_STATEMENT_IMPORT_MAX_ROWS;
 /** A hold's posted twin lands within this window, and a vanished hold is judged after it. */
 const PENDING_POST_WINDOW_DAYS = 7;
@@ -190,7 +192,19 @@ async function nextUnmatchedCharges(
     : CHARGE_STATE;
   const { rows } = await unwrapDb(db).execute<ChargeRef>(sql`
     SELECT cs.source, cs."chargeKey" FROM ${state} cs
-    WHERE NOT cs.ignored AND NOT cs.superseded AND cs.shortcode IS NULL ${after}
+    WHERE NOT cs.ignored AND NOT cs.superseded
+      AND (cs.shortcode IS NULL OR EXISTS (SELECT 1 FROM "FinancialTransaction" ft
+        WHERE ft.shortcode = cs.shortcode AND ft."deletedAt" IS NULL
+          AND ft.status = ${financialTransactionStatus.enum.posted}
+          AND ft.kind IN (${financialTransactionKind.enum.purchase},${financialTransactionKind.enum.refund},${financialTransactionKind.enum.fee})
+          AND (NOT EXISTS (SELECT 1 FROM "FinancialTransactionAllocation" allocation
+              WHERE allocation."transactionId" = ft.id AND allocation."deletedAt" IS NULL)
+            OR EXISTS (SELECT 1 FROM "AssessmentState" existing
+              WHERE existing.family = ${assessmentFamily.enum.statement_transaction} AND existing.active
+                AND existing.status = ${suggestionStatus.enum.pending}
+                AND existing.data->>${"source"} = cs.source AND existing.data->>${"chargeKey"} = cs."chargeKey"
+                AND existing.data->>${"recommended"} = ${statementTransactionAction.enum.book}))))
+      ${after}
     ORDER BY cs.source, cs."chargeKey"
     LIMIT ${input.limit}
   `);
@@ -198,8 +212,8 @@ async function nextUnmatchedCharges(
 }
 
 /**
- * How many unmatched charges a scope's import and date bounds cover, for a
- * Sweep's estimate; an account scope narrows that further at generation.
+ * Charge work within the import/date bounds: unmatched charges and matched,
+ * unallocated spending, plus pending booking work that may now be complete.
  */
 export async function countUnmatchedCharges(
   db: Database,
@@ -666,6 +680,18 @@ export async function buildChargeProposals(
       : [];
   });
   if (!grouped.length) return [];
+  const { rows: matchedCharges } = await unwrapDb(db).execute<{
+    source: string;
+    chargeKey: string;
+    shortcode: string;
+  }>(sql`
+    SELECT cs.source, cs."chargeKey", cs.shortcode FROM ${CHARGE_STATE} cs
+    WHERE (cs.source, cs."chargeKey") IN (${tuples(charges)}) AND cs.shortcode IS NOT NULL
+      AND NOT cs.ignored AND NOT cs.superseded
+  `);
+  const matchedByCharge = new Map(
+    matchedCharges.map((row) => [chargeId(row), row.shortcode]),
+  );
   const preview = await previewFinancialStatementImport(
     db,
     {
@@ -686,12 +712,13 @@ export async function buildChargeProposals(
   );
   const previewByKey = new Map(preview.rows.map((row) => [row.key, row]));
   const shortcodes = [
-    ...new Set(
-      preview.rows.flatMap((row) => [
+    ...new Set([
+      ...matchedCharges.map((row) => row.shortcode),
+      ...preview.rows.flatMap((row) => [
         ...row.existingTransactionIds,
         ...(row.accountId ? [row.accountId] : []),
       ]),
-    ),
+    ]),
   ];
   const ids = new Map<string, string>();
   if (shortcodes.length) {
@@ -881,11 +908,14 @@ export async function buildChargeProposals(
       transfer,
     });
     const chargeSiblings = siblings.get(chargeId(charge)) ?? [];
-    const recommended = hold
-      ? "supersede"
-      : candidates.length
-        ? "attach"
-        : "create";
+    const matchedCode = matchedByCharge.get(chargeId(charge));
+    const recommended = matchedCode
+      ? "book"
+      : hold
+        ? "supersede"
+        : candidates.length
+          ? "attach"
+          : "create";
     const judgment: StatementTransactionJudgment = {
       recommended,
       accountId,
@@ -921,7 +951,11 @@ export async function buildChargeProposals(
       transfer,
       transferPair: pairsByCharge.get(chargeId(charge)) ?? null,
       clean: false,
+      ...(matchedCode && { matchedTransactionId: ids.get(matchedCode) }),
     };
+    judgment.spending = await prepareStatementSpending(db, judgment);
+    if (recommended === "book" && judgment.spending?.status === "deferred")
+      continue;
     judgment.clean = isClean(judgment, statementAmount);
     proposals.push(await finishProposal(charge, canonical, rows, judgment));
   }
@@ -934,6 +968,19 @@ export function isClean(
   statementAmount: number,
 ): boolean {
   if (judgment.siblings.length) return false;
+  if (
+    judgment.create?.status === "posted" &&
+    ["purchase", "refund", "fee"].includes(judgment.create.kind) &&
+    judgment.spending?.status !== "ready" &&
+    judgment.spending?.status !== "already_booked"
+  )
+    return false;
+  if (judgment.recommended === "book")
+    return (
+      judgment.spending?.status === "ready" &&
+      judgment.create !== null &&
+      kindAgreed(judgment.create, judgment.transfer, judgment.transferPair)
+    );
   if (judgment.recommended === "create")
     return (
       judgment.candidates.length === 0 &&
@@ -1006,18 +1053,24 @@ export async function labelledProposal(
     ...proposal,
     judgment,
     fingerprint: await sha256Hex(
-      canonicalJson({
-        evidence: proposal.evidenceFingerprint,
-        candidates: judgment.candidates.map((c) => [c.transactionId, c.label]),
-        kind: judgment.create
-          ? [
-              judgment.create.kind,
-              judgment.create.kindSource,
-              judgment.create.votes,
-              judgment.create.counterparty,
-            ]
-          : null,
-      }),
+      canonicalJson(
+        jsonSnapshot.parse({
+          evidence: proposal.evidenceFingerprint,
+          spending: judgment.spending,
+          candidates: judgment.candidates.map((c) => [
+            c.transactionId,
+            c.label,
+          ]),
+          kind: judgment.create
+            ? [
+                judgment.create.kind,
+                judgment.create.kindSource,
+                judgment.create.votes,
+                judgment.create.counterparty,
+              ]
+            : null,
+        }),
+      ),
     ),
   };
 }
@@ -1189,6 +1242,7 @@ export async function publishChargeProposal(
         Number(value.create.counterparty.label !== null)
       : 0);
   return withTransactionDatabase(db, async (tx) => {
+    let retainedSpendingCheckpoint: StatementLabelCheckpoint | undefined;
     const client = getDb(tx);
     await client.execute(
       sql`SELECT pg_advisory_xact_lock(hashtextextended(${`statement-suggestion:${chargeId(charge)}`}, 0))`,
@@ -1231,9 +1285,21 @@ export async function publishChargeProposal(
         SELECT 1 FROM ${chargeStateOf(
           sql`r.source = ${charge.source} AND ${chargeKeyOf("r")} = ${charge.chargeKey}`,
         )} cs
-        WHERE cs.ignored OR cs.superseded OR cs.shortcode IS NOT NULL
+        WHERE cs.ignored OR cs.superseded OR (cs.shortcode IS NOT NULL AND ${proposal.judgment.recommended !== "book"})
       `);
       if (settled.length) return { outcome: "settled", labelsReused: 0 };
+    }
+    if (
+      proposal.judgment.recommended === "book" &&
+      proposal.judgment.spending?.status === "already_booked"
+    ) {
+      const fresh = await prepareStatementSpending(tx, proposal.judgment);
+      if (fresh?.status === "already_booked") {
+        await client.execute(sql`UPDATE "AssessmentState" SET active=false, status=${suggestionStatus.enum.superseded}, "updatedAt"=now()
+          WHERE family=${assessmentFamily.enum.statement_transaction} AND active AND status=${suggestionStatus.enum.pending}
+            AND data->>${"source"}=${charge.source} AND data->>${"chargeKey"}=${charge.chargeKey}`);
+        return { outcome: "settled", labelsReused: 0 };
+      }
     }
     // A rule re-run never displaces labels a model added to the same evidence.
     const unchanged = prior.find(
@@ -1301,9 +1367,27 @@ export async function publishChargeProposal(
             candidate.label = previous.candidates.find(
               (entry) => entry.transactionId === candidate.transactionId,
             )!.label;
+          judgment.spending = await prepareStatementSpending(
+            tx,
+            judgment,
+            previous.spending?.request.advice ?? null,
+          );
           judgment.clean = isClean(judgment, proposal.canonical.amount);
           proposal = await labelledProposal(proposal, judgment);
-          producer = previousProducer;
+          if (
+            judgment.spending?.status === "deferred" ||
+            previous.spending?.request.advice
+          )
+            producer = previousProducer;
+          else
+            retainedSpendingCheckpoint = statementLabelCheckpoint.parse({
+              revision: STATEMENT_LABEL_REVISION,
+              model: previousProducer.model,
+              judgment,
+              kind: true,
+              counterparty: true,
+              spending: false,
+            });
         }
       }
     }
@@ -1321,7 +1405,8 @@ export async function publishChargeProposal(
       `);
     const { judgment } = proposal;
     const checkpoint =
-      producer.kind === "rule"
+      retainedSpendingCheckpoint ??
+      (producer.kind === "rule"
         ? prior
             .flatMap((row) => (row.checkpoint ? [row.checkpoint] : []))
             .find(
@@ -1330,7 +1415,7 @@ export async function publishChargeProposal(
                 canonicalJson(statementLabelSubject(saved.judgment)) ===
                   canonicalJson(statementLabelSubject(judgment)),
             )
-        : undefined;
+        : undefined);
     const published = await publishAssessment(
       tx,
       {
@@ -1389,7 +1474,7 @@ export async function publishChargeProposal(
                 SELECT 1 FROM ${chargeStateOf(
                   sql`r.source = ${charge.source} AND ${chargeKeyOf("r")} = ${charge.chargeKey}`,
                 )} cs
-                WHERE cs.ignored OR cs.superseded OR cs.shortcode IS NOT NULL
+                WHERE cs.ignored OR cs.superseded OR (cs.shortcode IS NOT NULL AND ${judgment.recommended !== "book"})
               )`,
           )
           .then(() => undefined),
@@ -1457,8 +1542,8 @@ export async function generateStatementSuggestionPage(
   // The final page also judges vanished holds, whose charges are matched.
   if (charges.length < limit)
     proposals.push(...(await buildHoldVoidProposals(db)));
-  // Each publish locks only its own charge, and generation applies no rules,
-  // so a page's charges publish independently.
+  // Publish independent charges first; import applications then recheck the
+  // current ledger sequentially, including reused labels on unchanged imports.
   await forEachConcurrently(
     proposals,
     STATEMENT_PUBLISH_CONCURRENCY,
@@ -1473,6 +1558,14 @@ export async function generateStatementSuggestionPage(
       else unchanged++;
     },
   );
+  if (input.scope?.importId) {
+    const { applyAutomaticRulesForCharge } =
+      await import("~/server/generic/assessment/repo/automatic-rule-runtime");
+    for (const proposal of proposals) {
+      await regenerateCharges(db, [proposal.charge]);
+      await applyAutomaticRulesForCharge(db, proposal.charge, true);
+    }
+  }
   return {
     published,
     processed: charges.length,
@@ -1520,7 +1613,7 @@ export async function recordStatementLabelCheckpoint(
     UNION ALL
     SELECT 1 FROM ${chargeStateOf(sql`r.source = ${input.charge.source} AND ${chargeKeyOf("r")} = ${input.charge.chargeKey}`)} cs
     WHERE ${checkpoint.judgment.recommended !== statementTransactionAction.enum.void}
-      AND (cs.ignored OR cs.superseded OR cs.shortcode IS NOT NULL)
+      AND (cs.ignored OR cs.superseded OR (cs.shortcode IS NOT NULL AND ${checkpoint.judgment.recommended !== "book"}))
     LIMIT 1
   `);
   return settled.length ? "settled" : "moved";

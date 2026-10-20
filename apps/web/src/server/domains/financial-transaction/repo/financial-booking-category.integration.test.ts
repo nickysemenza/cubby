@@ -48,9 +48,14 @@ describe("reviewed booking category and refund capacity", () => {
       date: "2026-09-01",
       defaultTrade: "other",
     });
+    const owner = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Synthetic booking member",
+      kind: "member",
+    });
     const account = await createRepoEntity(ctx, "financialAccount", {
       name: "Booking fixture cash",
       identity: { kind: "cash" },
+      ledgerPartyId: owner.output.id,
     });
     const transaction = async (amount: number) => {
       const saved = await createRepoEntity(ctx, "financialTransaction", {
@@ -96,8 +101,61 @@ describe("reviewed booking category and refund capacity", () => {
       const result = await commitFinancialBooking(ctx.db, preview, ctx.actor);
       return { preview, result };
     };
-    return { category, purchase, vendor, transaction, line, book };
+    return { category, purchase, vendor, transaction, line, book, owner };
   }
+  // A bare Purchase must carry a real member purchaser; resolving a live
+  // household party alone does not validate the Purchase override contract.
+  it("defaults a bare Purchase to its live account member and rejects a household purchaser override", async () => {
+    const { vendor, transaction, owner } = await fixture();
+    const source = await transaction(17);
+    const household = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Synthetic booking household",
+      kind: "household",
+    });
+    await expect(
+      previewFinancialBooking(
+        ctx.db,
+        financialBookingInput.parse({
+          transactionId: source.output.id,
+          vendorId: vendor.shortcode,
+          purchaserId: household.output.id,
+        }),
+      ),
+    ).rejects.toThrow(/member/i);
+    const preview = await previewFinancialBooking(
+      ctx.db,
+      financialBookingInput.parse({
+        transactionId: source.output.id,
+        vendorId: vendor.shortcode,
+      }),
+    );
+    expect(preview.purchaserId).toBe(owner.output.id);
+    const saved = await commitFinancialBooking(ctx.db, preview, ctx.actor);
+    const stored = await getDb(ctx.db).query.purchase.findFirst({
+      where: eq(purchaseTable.shortcode, saved.purchaseId),
+    });
+    expect(stored?.purchaserOverrideId).not.toBeNull();
+  });
+  it("refuses replay when linked itemized spending no longer covers its settlement", async () => {
+    const { purchase, transaction, line } = await fixture();
+    const receipt = await line(25);
+    const source = await transaction(25);
+    const review = await previewFinancialBooking(
+      ctx.db,
+      financialBookingInput.parse({
+        transactionId: source.output.id,
+        purchaseId: purchase.shortcode,
+      }),
+    );
+    await commitFinancialBooking(ctx.db, review, ctx.actor);
+    await getDb(ctx.db)
+      .update(expense)
+      .set({ cost: 1 })
+      .where(eq(expense.id, receipt.id));
+    await expect(
+      commitFinancialBooking(ctx.db, review, ctx.actor),
+    ).rejects.toThrow(/cover|capacity|spending/i);
+  });
   it("refuses settlement while unresolved signed receipt lines could duplicate money", async () => {
     const { purchase, transaction, line } = await fixture();
     await line(-25, "unclassified");
@@ -347,9 +405,14 @@ describe("finance.book_transaction", () => {
       lineBasis: "item_line",
       economicRole: "vendor",
     });
+    const owner = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Synthetic lodge payer",
+      kind: "member",
+    });
     const account = await createRepoEntity(ctx, "financialAccount", {
       name: "Synthetic booking checking",
       identity: { kind: "cash" },
+      ledgerPartyId: owner.output.id,
     });
     await createRepoEntity(ctx, "financialTransaction", {
       accountId: account.output.id,

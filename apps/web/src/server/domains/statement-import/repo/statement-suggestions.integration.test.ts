@@ -1,3 +1,4 @@
+import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import type { FinancialTransactionKind } from "@cubby/schemas/financial-transaction";
 import {
   recordStatementRowsInput,
@@ -9,8 +10,11 @@ import type {
   StatementTransactionApplication,
 } from "@cubby/schemas/statement-suggestion";
 import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
+import { eq } from "drizzle-orm";
 import { sql } from "drizzle-orm";
+import { createEntity } from "tooling/factories/create";
 import { createRepoEntity } from "tooling/factories/repo";
+import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
@@ -19,11 +23,12 @@ import type { DecisionPort } from "~/server/ai/decision-model";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import * as cfEnv from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
+import { spendingCategory } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { answering } from "~/server/domains/statement-import/repo/statement-decision-port.fixtures";
 import * as statementSuggestionsRepo from "~/server/domains/statement-import/repo/statement-suggestions";
-import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
+import { labelStatementSuggestions as runStatementLabels } from "~/server/domains/statement-import/service/statement-suggestion-labels";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import {
   acceptCleanSuggestions,
@@ -77,6 +82,29 @@ const rowInput = (
 
 type Ctx = ReturnType<typeof withTestDb>;
 
+const labelStatementSuggestions: typeof runStatementLabels = async (
+  db,
+  input,
+) => {
+  const category = await getDb(db).query.spendingCategory.findFirst({
+    where: eq(spendingCategory.name, "Synthetic statement spending"),
+  });
+  return runStatementLabels(db, {
+    ...input,
+    spendingAdvice: async ({ judgment }) =>
+      financialSpendingAdvice.parse({
+        spendingCategoryId: category?.shortcode,
+        categoryConfidence: "high",
+        vendorName:
+          judgment.create?.merchant ??
+          judgment.create?.rawDescription ??
+          "Synthetic reviewed business",
+        vendorConfidence: "high",
+        counterparty: "business",
+      }),
+  });
+};
+
 const record = (
   ctx: Ctx,
   rows: StatementRowInput[],
@@ -91,9 +119,22 @@ const record = (
     ctx.actor,
   );
 
-const card = (ctx: Ctx) =>
-  createRepoEntity(ctx, "financialAccount", {
+const card = async (ctx: Ctx) => {
+  const owner = await createRepoEntity(ctx, "ledgerParty", {
+    name: "Synthetic statement owner",
+    kind: "member",
+  });
+  await createEntity(
+    buildKernelContext(ctx.db, ctx.actor.userId),
+    "spendingCategory",
+    {
+      name: "Synthetic statement spending",
+    },
+  );
+  return createRepoEntity(ctx, "financialAccount", {
     name: "Synthetic Card",
+    ledgerPartyId: owner.output.id,
+    provisional: false,
     identity: { kind: "credit_card", issuer: null, network: "visa" },
     sourceAliases: [
       {
@@ -103,6 +144,7 @@ const card = (ctx: Ctx) =>
       },
     ],
   });
+};
 
 const generate = async (ctx: Ctx) => {
   let after = null as Parameters<
@@ -137,17 +179,42 @@ const suggestions = async (ctx: Ctx) =>
         a.assessmentId.localeCompare(b.assessmentId),
     );
 
-const accept = (
+const accept = async (
   ctx: Ctx,
   suggestion: StatementSuggestionOut,
   overrides: Partial<StatementTransactionApplication> = {},
   corrected = false,
 ) => {
+  // Unlabelled manual cases explicitly review category/business identity;
+  // clean/bulk cases retain the advice carried by their published suggestion.
+  const category = await getDb(ctx.db).query.spendingCategory.findFirst({
+    where: eq(spendingCategory.name, "Synthetic statement spending"),
+  });
+  const needsBooking =
+    suggestion.create?.status === "posted" &&
+    ["purchase", "refund", "fee"].includes(suggestion.create.kind) &&
+    suggestion.spending?.status !== "ready" &&
+    suggestion.spending?.status !== "already_booked";
+  if (needsBooking && !category)
+    throw new Error("Synthetic spending category is required");
+  const booking = needsBooking
+    ? {
+        spendingCategoryId: category!.shortcode,
+        reviewedVendorName:
+          suggestion.merchant ??
+          suggestion.rawDescription ??
+          "Synthetic reviewed business",
+        rejectedPurchaseIds: [],
+        categoryHistoryReviewed: true,
+      }
+    : undefined;
+  corrected ||= Boolean(booking);
   const application = {
     kind: "statement_transaction" as const,
     action: suggestion.recommended,
     fields: [],
     rejectedCandidateIds: [],
+    ...(booking && { booking }),
     ...overrides,
   };
   return reviewAssessment(ctx.db, kernelCtx(ctx), {
@@ -601,6 +668,35 @@ describe("statement Transaction suggestions", () => {
     expect(rows.every((row) => !row.clean && row.siblings === 1)).toBe(true);
   });
 
+  // Matching statement labels must not replace the attach target's actual kind.
+  it("keeps an attach to a non-spending transaction out of clean booking despite matching statement labels", async () => {
+    const account = (await card(ctx)).output;
+    await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.id,
+      kind: "account_transfer",
+      status: "posted",
+      amount: 42.5,
+      postedDate: "2026-05-05",
+      merchant: "Example Grocer",
+      sourceRefs: [],
+    });
+    await record(ctx, [rowInput()]);
+    await generate(ctx);
+    await labelStatementSuggestions(ctx.db, {
+      port: answering({ kind: "purchase", counterparty: "business" }),
+      runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
+    });
+    const [proposal] = await suggestions(ctx);
+    expect(proposal).toMatchObject({
+      recommended: "attach",
+      clean: false,
+      spending: { status: "deferred" },
+    });
+    await expect(accept(ctx, proposal!)).rejects.toThrow(
+      "kind or status cannot book this spending",
+    );
+  });
+
   // Failure modes: a model "same" leaves a descriptor-different attach
   // unreviewable in bulk; a label silently changes the evidence fingerprint
   // the apply step checks.
@@ -642,6 +738,29 @@ describe("statement Transaction suggestions", () => {
     expect((await listStatementRows(ctx.db, {})).data[0]).toMatchObject({
       matchState: "matched",
     });
+  });
+
+  // A pending hold needs kind/counterparty labels, never a spending decision.
+  it("finishes settlement-only labels without reserving spending allowance", async () => {
+    const queue = captureBackgroundQueue();
+    try {
+      await card(ctx);
+      await record(ctx, [rowInput({ providerStatus: "pending" })]);
+      await generate(ctx);
+      const result = await runStatementLabels(ctx.db, {
+        runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
+        port: answering({ kind: "purchase", counterparty: "business" }),
+        spendingAdvice: async () => {
+          throw new Error(
+            "Settlement-only evidence cannot request spending advice",
+          );
+        },
+        decisionLimit: 2,
+      });
+      expect(result).toMatchObject({ labelled: 1, next: null, failed: [] });
+    } finally {
+      queue.restore();
+    }
   });
 
   // A page cap must preserve every candidate and every completed decision,
@@ -956,7 +1075,7 @@ describe("statement Transaction suggestions", () => {
       expect(outcome).toMatchObject({
         labelled: 8,
         failed: [],
-        labels: { generated: 16 },
+        labels: { generated: 24 },
       });
       expect(requests.reduce((total, questions) => total + questions, 0)).toBe(
         16,
@@ -1079,7 +1198,7 @@ describe("statement Transaction suggestions", () => {
       expect(modelPeak).toBeGreaterThanOrEqual(30);
       expect(outcome).toMatchObject({
         labelled: 40,
-        labels: { generated: 80 },
+        labels: { generated: 120 },
       });
       expect(publishPeak).toBeGreaterThan(1);
       expect(publishPeak).toBeLessThanOrEqual(4);
@@ -1164,10 +1283,10 @@ describe("statement Transaction suggestions", () => {
     try {
       const first = await label(ctx, port);
       expect(first.failed).toHaveLength(1);
-      expect(first.labels).toEqual({ reused: 0, generated: 2 });
+      expect(first.labels).toEqual({ reused: 0, generated: 3 });
       const resumed = await label(ctx, port);
       expect(resumed.labelled).toBe(1);
-      expect(resumed.labels).toEqual({ reused: 2, generated: 0 });
+      expect(resumed.labels).toEqual({ reused: 3, generated: 0 });
       expect(calls).toBe(2);
     } finally {
       publish.mockRestore();
@@ -1308,7 +1427,11 @@ describe("statement Transaction suggestions", () => {
       status: "superseded",
       active: false,
     });
-    expect(await generate(ctx)).toBe(0);
+    expect(await generate(ctx)).toBe(1);
+    expect((await suggestions(ctx))[0]).toMatchObject({
+      recommended: "book",
+      clean: false,
+    });
   });
 
   // Failure mode: two members (or an agent and a member) accepting the same
@@ -1822,15 +1945,21 @@ describe("statement Transaction suggestions", () => {
     // By the third accept two earlier cafe transactions exist: were they
     // counted, its history vote would move and its evidence check refuse it.
     await record(ctx, [
-      cafe("2026-04-01", -3.25),
-      cafe("2026-04-08", -4.75),
-      cafe("2026-04-15", -2.5),
+      cafe("2026-03-01", -3.25),
+      cafe("2026-03-21", -4.75),
+      cafe("2026-04-10", -2.5),
     ]);
     await generate(ctx);
     await label(ctx, answering({ kind: "purchase", counterparty: "business" }));
-    for (const suggestion of await suggestions(ctx)) {
+    while ((await suggestions(ctx)).length) {
+      const suggestion = (await suggestions(ctx))[0]!;
       expect(suggestion.clean).toBe(true);
       await accept(ctx, suggestion);
+      await generate(ctx);
+      await label(
+        ctx,
+        answering({ kind: "purchase", counterparty: "business" }),
+      );
     }
 
     await record(

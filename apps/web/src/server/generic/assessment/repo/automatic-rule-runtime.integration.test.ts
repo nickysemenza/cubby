@@ -1,10 +1,17 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
 import { assessmentFamily } from "@cubby/schemas/assessment";
 import type { AutomaticRuleKey } from "@cubby/schemas/automatic-rule";
+import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
 import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import { and, desc, eq, sql } from "drizzle-orm";
+import { createEntity } from "tooling/factories/create";
 import { createRepoEntity } from "tooling/factories/repo";
+import {
+  taxonomyId,
+  taxonomyShortcode,
+} from "tooling/product-category-fixtures";
+import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -12,9 +19,20 @@ import { z } from "zod";
 import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import { AiWorkDeferredError } from "~/server/ai/cooperative-work";
 import { getDb } from "~/server/db/helpers";
-import { assessment, assessmentState, feedback } from "~/server/db/schema";
+import {
+  assessment,
+  assessmentState,
+  feedback,
+  spendingCategory,
+} from "~/server/db/schema";
 import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
-import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import {
+  categoryPorts,
+  kernelCtx,
+  productFixture,
+  productCategoryId,
+  startSuggestionSweep,
+} from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { answering } from "~/server/domains/statement-import/repo/statement-decision-port.fixtures";
 import {
   listStatementRows,
@@ -26,7 +44,9 @@ import {
   suggestionsNeedingLabels,
 } from "~/server/domains/statement-import/repo/statement-suggestions";
 import * as labelCheckpointRepo from "~/server/domains/statement-import/repo/statement-suggestions";
-import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
+import { labelStatementSuggestions as runStatementLabels } from "~/server/domains/statement-import/service/statement-suggestion-labels";
+import { executeEntity } from "~/server/entity-kernel";
+import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { listAutomaticDecisions } from "~/server/generic/assessment/repo/automatic-decisions";
 import {
@@ -41,8 +61,28 @@ import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
 
 type Ctx = ReturnType<typeof withTestDb>;
 
+const labelStatementSuggestions: typeof runStatementLabels = async (
+  db,
+  input,
+) => {
+  const category = await getDb(db).query.spendingCategory.findFirst({
+    where: eq(spendingCategory.name, "Synthetic automatic spending"),
+  });
+  return runStatementLabels(db, {
+    ...input,
+    spendingAdvice: async ({ judgment }) =>
+      financialSpendingAdvice.parse({
+        spendingCategoryId: category?.shortcode,
+        categoryConfidence: "high",
+        vendorName: judgment.create?.merchant ?? "Synthetic automatic merchant",
+        vendorConfidence: "high",
+        counterparty: "business",
+      }),
+  });
+};
+
 const ATTACH: AutomaticRuleKey = "statement_transaction.attach";
-const ADDITION: AutomaticRuleKey = "field.addition";
+const ASSIGNMENT: AutomaticRuleKey = "field.addition";
 
 type Verdict = "correct" | "wrong" | "dismissed";
 
@@ -188,9 +228,22 @@ const stateOf = async (ctx: Ctx, assessmentId: string) =>
 
 // --- statement fixtures: one charge whose only candidate is the same money ---
 
-const card = (ctx: Ctx) =>
-  createRepoEntity(ctx, "financialAccount", {
+const card = async (ctx: Ctx) => {
+  const owner = await createRepoEntity(ctx, "ledgerParty", {
+    name: "Synthetic automatic member",
+    kind: "member",
+  });
+  await createEntity(
+    buildKernelContext(ctx.db, ctx.actor.userId),
+    "spendingCategory",
+    {
+      name: "Synthetic automatic spending",
+    },
+  );
+  return createRepoEntity(ctx, "financialAccount", {
     name: "Synthetic Card",
+    ledgerPartyId: owner.output.id,
+    provisional: false,
     identity: { kind: "credit_card", issuer: null, network: "visa" },
     sourceAliases: [
       {
@@ -200,6 +253,7 @@ const card = (ctx: Ctx) =>
       },
     ],
   });
+};
 
 async function soleCandidateCharge(ctx: Ctx) {
   const account = (await card(ctx)).output;
@@ -400,7 +454,7 @@ describe("Automatic rules", () => {
     // Off needs no eligibility: the field rule has no reviews at all.
     expect(
       await setAutomaticRule(ctx.db, ctx.actor, {
-        ruleKey: ADDITION,
+        ruleKey: ASSIGNMENT,
         enabled: false,
       }),
     ).toMatchObject({ enabled: false, n: 0, eligible: false });
@@ -413,12 +467,12 @@ describe("Automatic rules", () => {
   it("measures only served matches of the current revision in the latest 200", async () => {
     await seedReviews(ctx, {
       family: "field",
-      stamp: ruleBase(ADDITION),
+      stamp: ruleBase(ASSIGNMENT),
       verdicts: times(10, "correct"),
     });
     await seedReviews(ctx, {
       family: "field",
-      stamp: ruleBase(ADDITION),
+      stamp: ruleBase(ASSIGNMENT),
       verdicts: ["wrong", "wrong", "correct"],
       automatic: true,
     });
@@ -427,13 +481,13 @@ describe("Automatic rules", () => {
       stamp: "field.addition@2000-01-01.1",
       verdicts: times(5, "wrong"),
     });
-    expect(await ruleOf(ctx, ADDITION)).toMatchObject({
+    expect(await ruleOf(ctx, ASSIGNMENT)).toMatchObject({
       n: 10,
       hits: 10,
       precision: 1,
       correctedAutomatic: 2,
       windows: [
-        expect.objectContaining({ stamp: ruleBase(ADDITION), model: null }),
+        expect.objectContaining({ stamp: ruleBase(ASSIGNMENT), model: null }),
       ],
     });
 
@@ -506,7 +560,7 @@ describe("Automatic rules", () => {
   it("turns itself off when a member review takes audited precision below 98%", async () => {
     await seedReviews(ctx, {
       family: "field",
-      stamp: ruleBase(ADDITION),
+      stamp: ruleBase(ASSIGNMENT),
       verdicts: [...times(48, "correct"), "wrong"],
       agedFrom: 10,
     });
@@ -523,17 +577,20 @@ describe("Automatic rules", () => {
         kind: "addition",
         confidence: 0.97,
         model: "typesafe/jev",
-        data: { matchedRules: [ruleBase(ADDITION)], auditSample: true },
+        data: { matchedRules: [ruleBase(ASSIGNMENT)], auditSample: true },
         status: "pending",
       });
-    expect(await ruleOf(ctx, ADDITION)).toMatchObject({ enabled: true, n: 49 });
+    expect(await ruleOf(ctx, ASSIGNMENT)).toMatchObject({
+      enabled: true,
+      n: 49,
+    });
     await reviewAssessment(ctx.db, kernelCtx(ctx), {
       assessmentId: id,
       operationId: crypto.randomUUID(),
       verdict: "wrong",
       intent: "history",
     });
-    expect(await ruleOf(ctx, ADDITION)).toMatchObject({
+    expect(await ruleOf(ctx, ASSIGNMENT)).toMatchObject({
       enabled: false,
       n: 50,
       hits: 48,
@@ -593,7 +650,7 @@ describe("Automatic rules", () => {
       const outcome = await labelStatementSuggestions(ctx.db, {
         runId,
         cooperative: true,
-        ...(reason === "decisions" && { decisionLimit: 3 }),
+        ...(reason === "decisions" && { decisionLimit: 4 }),
         port: async (request) => {
           if (
             reason === "capacity" &&
@@ -653,7 +710,7 @@ describe("Automatic rules", () => {
       const page = await labelStatementSuggestions(ctx.db, {
         runId,
         port: sameCharge,
-        decisionLimit: 6,
+        decisionLimit: 8,
       });
       expect(page.next).not.toBeNull();
       expect(
@@ -982,4 +1039,107 @@ describe("Automatic rules", () => {
       matchState: "unmatched",
     });
   });
+});
+
+// Failure mode: a confident correction is held solely because a member populated
+// the old value, even though the assignment rule is enabled and measured eligible.
+describe("automatic field assignments", () => {
+  const ctx = withTestDb();
+
+  it("automatically corrects a populated member field through its eligible rule", async () => {
+    const item = await productFixture(
+      ctx,
+      "Synthetic member-classified product",
+    );
+    await executeEntity(
+      kernelCtx(ctx),
+      entityCommandSchema.parse({
+        action: "update",
+        entity: "product",
+        id: item.id,
+        data: { categoryId: taxonomyShortcode("tools") },
+      }),
+    );
+    await seedReviews(ctx, {
+      family: "field",
+      stamp: ruleBase(ASSIGNMENT),
+      verdicts: times(50, "correct"),
+    });
+    await setAutomaticRule(ctx.db, ctx.actor, {
+      ruleKey: ASSIGNMENT,
+      enabled: true,
+    });
+    const sweep = await startSuggestionSweep(
+      ctx.db,
+      {
+        entity: "product",
+        fields: ["categoryId"],
+        filters: { ids: [item.id] },
+      },
+      { context: kernelCtx(ctx), ...categoryPorts() },
+    );
+    const [applied] = await getDb(ctx.db)
+      .select()
+      .from(assessmentState)
+      .where(eq(assessmentState.runId, sweep.id));
+    expect(applied).toMatchObject({
+      kind: "correction",
+      status: "applied",
+      acceptanceReceipt: { mode: "automatic", reason: "confident_assignment" },
+    });
+    expect(await productCategoryId(ctx.db, item.id)).toBe(taxonomyId("food"));
+    expect(
+      (await feedbackFor(ctx, applied!.id)).some(
+        (row) =>
+          row.authority === "automatic" &&
+          row.metadata.rule?.key === ASSIGNMENT,
+      ),
+    ).toBe(true);
+  });
+});
+
+// Failure mode: broadening automatic assignments bypasses the persisted switch
+// or audit holdback instead of keeping the correction available for review.
+describe("field correction holdbacks", () => {
+  const ctx = withTestDb();
+
+  it.each(["disabled", "audit"] as const)(
+    "keeps a confident correction pending when %s",
+    async (holdback) => {
+      const item = await productFixture(ctx, "Synthetic held correction", {
+        categoryId: taxonomyId("tools"),
+      });
+      await seedReviews(ctx, {
+        family: "field",
+        stamp: ruleBase(ASSIGNMENT),
+        verdicts: times(50, "correct"),
+      });
+      await setAutomaticRule(ctx.db, ctx.actor, {
+        ruleKey: ASSIGNMENT,
+        enabled: holdback !== "disabled",
+      });
+      const sweep = await startSuggestionSweep(
+        ctx.db,
+        {
+          entity: "product",
+          fields: ["categoryId"],
+          filters: { ids: [item.id] },
+        },
+        {
+          context: kernelCtx(ctx),
+          ...categoryPorts(),
+          auditSample: () => holdback === "audit",
+        },
+      );
+      const [pending] = await getDb(ctx.db)
+        .select()
+        .from(assessmentState)
+        .where(eq(assessmentState.runId, sweep.id));
+      expect(pending).toMatchObject({ kind: "correction", status: "pending" });
+      expect(await productCategoryId(ctx.db, item.id)).toBe(
+        taxonomyId("tools"),
+      );
+      expect(await feedbackFor(ctx, pending!.id)).toEqual([]);
+    },
+  );
 });
