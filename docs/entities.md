@@ -154,6 +154,8 @@ Static generator inputs also cannot execute schemas that consume generated
 output: install runs generation before those files exist. Shared presentation
 vocabulary such as `activity-fields.ts` owns primitive enums and labels so runtime
 and native generation share exhaustive labels without a bootstrap cycle.
+Cross-client input limits live in bootstrap-safe `shared/client-constants.ts`;
+native constant rendering must not import an identifier-dependent input schema.
 Existing specialist list columns declare `route.listColumns: { module, export }`;
 the generated index route passes that synchronous override to `listPage`. Its
 component split owns the import, so other entities do not load that specialist

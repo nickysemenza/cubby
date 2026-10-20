@@ -1,7 +1,7 @@
 import {
   DISTINCT_FROM_QUOTE_MAX,
   DISTINCT_FROM_URL_MAX,
-} from "./purchase-import";
+} from "@cubby/shared/client-constants";
 import { countLabel } from "@cubby/shared/pluralize";
 import type { z } from "zod";
 

@@ -1,13 +1,11 @@
 import {
-  DISTINCT_FROM_QUOTE_MAX,
-  DISTINCT_FROM_URL_MAX,
-} from "../../../../../packages/schemas/src/purchase-import.ts";
-import {
   COLLECTION_TAG_PREFIX,
   collectionSlugPattern,
 } from "../../../../../packages/shared/src/collection-tag.ts";
 import {
   ACTIVE_RUN_STATUSES,
+  DISTINCT_FROM_QUOTE_MAX,
+  DISTINCT_FROM_URL_MAX,
   HOUSEHOLD_TIMEZONE,
   IMAGE_WIDTHS,
   PHOTO_RUN_IMAGE_LIMIT,

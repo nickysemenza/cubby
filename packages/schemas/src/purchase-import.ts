@@ -1,4 +1,8 @@
-import { PRODUCT_DECISION_REASON_MAX } from "@cubby/shared/client-constants";
+import {
+  DISTINCT_FROM_QUOTE_MAX,
+  DISTINCT_FROM_URL_MAX,
+  PRODUCT_DECISION_REASON_MAX,
+} from "@cubby/shared/client-constants";
 import { tradeSchema } from "./task-fields";
 import { z } from "zod";
 import { agentImportRunPurpose } from "./import-run-agent";
@@ -6,8 +10,6 @@ import { plainDate } from "./base-entity";
 
 import { mailAdmissionPath, mailEvent } from "./mailbox-research";
 import { importSourceIdentity, importSourceKind } from "./import-source";
-export const DISTINCT_FROM_QUOTE_MAX = 2000;
-export const DISTINCT_FROM_URL_MAX = 2048;
 export { importSourceIdentity, importSourceKind } from "./import-source";
 import { money } from "./money";
 import { runPurpose, runStatus, runTrigger } from "./run-fields";
