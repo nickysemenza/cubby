@@ -29,7 +29,14 @@ const EMPTY_ROWS: WorkQueueRow[] = [];
  * reason), the next action, and who it waits for. Absent rows render nothing;
  * a failed read shows its raw diagnostics.
  */
-export function RecordWorkQueue({ id }: { id: string }) {
+export function RecordWorkQueue({
+  id,
+  variant = "section",
+}: {
+  id: string;
+  /** `rows` renders bare Needs-you rows for the detail page's block. */
+  variant?: "section" | "rows";
+}) {
   const hydrated = useHydrated();
   const input = workQueueRecordInput.safeParse({ id });
   const result = useQuery({
@@ -37,10 +44,47 @@ export function RecordWorkQueue({ id }: { id: string }) {
     enabled: hydrated && input.success,
   });
   if (result.isError)
-    return <ErrorDisplay error={result.error} title="Work queue" />;
+    return variant === "rows" ? (
+      <div data-needs-row className="px-3 py-2">
+        <ErrorDisplay error={result.error} title="Work queue" />
+      </div>
+    ) : (
+      <ErrorDisplay error={result.error} title="Work queue" />
+    );
   const rows = result.data?.items ?? EMPTY_ROWS;
   if (rows.length === 0) return null;
   const memberOptions = memberOptionsOf(result.data?.members ?? []);
+  if (variant === "rows")
+    return (
+      <>
+        {rows.map((row) => (
+          <div
+            key={row.key}
+            data-needs-row
+            className="flex min-h-10 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2"
+          >
+            <div className="flex min-w-0 flex-wrap items-center gap-1">
+              {row.gaps.length > 0
+                ? row.gaps.map((gap) => <GapChip key={gap.check} gap={gap} />)
+                : row.reason}
+            </div>
+            <div className="min-w-0 flex-1 text-muted-foreground">
+              {row.nextAction}
+              <WorkActionDetails explanations={row.explanations} />
+            </div>
+            <WaitingForPill
+              waitingFor={row.waitingFor}
+              memberOptions={memberOptions}
+            />
+          </div>
+        ))}
+        {rows.some(isTransferEvidenceRow) ? (
+          <div data-needs-row className="px-3 py-2">
+            <TransferPairAccept transactionId={id} />
+          </div>
+        ) : null}
+      </>
+    );
   return (
     <section aria-label="Work queue" className="min-w-0">
       <SectionHeading

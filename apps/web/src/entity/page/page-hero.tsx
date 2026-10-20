@@ -4,14 +4,6 @@ import { cva, type VariantProps } from "class-variance-authority";
 import type { ReactNode } from "react";
 import { z } from "zod";
 
-/* THESIS: dense household records use one continuous content column and a ToC.
- * OWN-WORLD: open white work surfaces, compact ink controls, inset section bands.
- * STORY: identify the record, inspect every fact, and act beside its context.
- * FIRST VIEWPORT: thumbnail and readable identity precede facts; Edit and one
- * workflow action remain visible, and secondary actions have one overflow.
- * FORM: approved A+B composition, seed a9ed9de0; retain the ToC sidebar.
- * FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
- */
 import { EntityCover } from "~/entity/components/entity-cover";
 import { entityHeroWhen } from "~/entity/display/entity-display";
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
@@ -53,10 +45,14 @@ const titleVariants = cva("font-heading tracking-tight break-words", {
   defaultVariants: { variant: "list" },
 });
 
-/** Inline ledger stat on the detail spec-plate hero (on hand, value, ...). */
+/** One key number in the detail strip under the title (spend, on hand, ...). */
 export interface DetailHeroStat {
   label: string;
   value: ReactNode;
+  /** Quiet line under the number. */
+  caption?: ReactNode;
+  /** `warning` paints the number in warning ink when it needs attention. */
+  tone?: "warning";
 }
 
 /** Authored action hierarchy for a detail plate. */
@@ -238,8 +234,10 @@ interface DetailPlateProps {
   heroNo?: string;
   /** Status stamp on the plate (e.g. IN STOCK). */
   heroStamp?: { label: string; tone?: "ink" | "red" | "green" };
-  /** Inline record stats strip (on hand, value, ...). */
+  /** Key numbers strip under the title (on hand, value, ...). */
   heroStats?: DetailHeroStat[];
+  /** Declared chart closing the key-numbers strip (monthly spend). */
+  heroChart?: ReactNode;
   /** Deliberate page-level action hierarchy rendered on the plate. */
   heroActions?: DetailHeroActions;
   /** Identity thumbnail; the full gallery stays in the Images section. */
@@ -258,6 +256,7 @@ function DetailPlate({
   heroNo,
   heroStamp,
   heroStats,
+  heroChart,
   heroActions,
   heroImages,
 }: DetailPlateProps) {
@@ -271,9 +270,10 @@ function DetailPlate({
     ? entityHeroWhen(entity, parsedRawData.data)
     : null;
   const cover = heroImages?.[0];
+  const strip = (heroStats?.length ?? 0) > 0 || heroChart != null;
   return (
     <header
-      className="border-b border-border pb-3"
+      className={cn(!strip && "border-b border-border pb-3")}
       data-testid="detail-spec-plate"
     >
       <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
@@ -335,21 +335,41 @@ function DetailPlate({
         </div>
         <DetailPlateActions actions={heroActions} />
       </div>
-      {heroStats && heroStats.length > 0 && (
-        // Compact record stats — hairline separators, plain-language
-        // labels, and tabular numerals.
-        <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs">
-          {heroStats.map((stat) => (
+      {strip && (
+        // Key numbers run edge to edge between hairlines; the chart takes
+        // what the numbers leave.
+        <div
+          className="-mx-2 mt-3 flex flex-wrap border-y border-border md:-mx-4"
+          data-testid="detail-key-numbers"
+        >
+          {heroStats?.map((stat) => (
             <div
               key={stat.label}
-              className="flex min-w-0 items-baseline gap-1.5"
+              className="min-w-36 flex-[0_1_11rem] border-r border-border px-2 py-2.5 md:px-4"
             >
-              <span className="text-muted-foreground">{stat.label}</span>
-              <div className="min-w-0 font-semibold tabular-nums">
+              <div className="text-sm font-medium text-muted-foreground">
+                {stat.label}
+              </div>
+              <div
+                className={cn(
+                  "mt-0.5 min-w-0 text-xl leading-7 font-semibold tracking-[-0.02em] text-foreground-strong tabular-nums [&_*]:text-inherit",
+                  stat.tone === "warning" && "text-warning",
+                )}
+              >
                 {stat.value}
               </div>
+              {stat.caption ? (
+                <div className="mt-0.5 text-xs text-muted-foreground">
+                  {stat.caption}
+                </div>
+              ) : null}
             </div>
           ))}
+          {heroChart ? (
+            <div className="min-w-64 flex-1 px-2 py-2.5 md:px-4">
+              {heroChart}
+            </div>
+          ) : null}
         </div>
       )}
     </header>
@@ -383,6 +403,7 @@ interface PageHeaderProps {
   heroNo?: string;
   heroStamp?: { label: string; tone?: "ink" | "red" | "green" };
   heroStats?: DetailHeroStat[];
+  heroChart?: ReactNode;
   heroImages?: Array<{ id: string; url: string; filename: string }>;
   count?: number;
   listChrome?: "hero" | "workbench";
@@ -410,6 +431,7 @@ export function PageHeader({
   heroNo,
   heroStamp,
   heroStats,
+  heroChart,
   heroImages,
   count,
   listChrome = "hero",
@@ -429,6 +451,7 @@ export function PageHeader({
         heroNo={heroNo}
         heroStamp={heroStamp}
         heroStats={heroStats}
+        heroChart={heroChart}
         heroActions={heroActions}
         heroImages={heroImages}
       />

@@ -147,6 +147,7 @@ export function SuggestionStatus({
       size="xs"
       as="output"
       className="flex min-w-0 items-center gap-1"
+      data-needs-row
     >
       <Popover>
         <PopoverTrigger

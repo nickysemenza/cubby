@@ -154,6 +154,8 @@ interface PageDetailProps extends PageBaseProps {
   wayfinding?: DetailWayfinding | false;
   heroStamp?: { label: string; tone?: "ink" | "red" | "green" };
   heroStats?: DetailHeroStat[];
+  /** Declared chart closing the key-numbers strip. */
+  heroChart?: ReactNode;
   heroNo?: string;
   heroImages?: Array<{ id: string; url: string; filename: string }>;
   /** Edit, the main workflow action, and overflow at every width. */
@@ -264,7 +266,7 @@ function DetailPageShell(props: PageDetailProps) {
     : "Loading records…";
   return (
     <PageWrapper layout={props.layout}>
-      <div className="space-y-2">
+      <div className="space-y-4">
         <PageHeader {...props} variant="detail" count={undefined} />
         <PageIdentityContext.Provider value={null}>
           <PageDetailContext.Provider

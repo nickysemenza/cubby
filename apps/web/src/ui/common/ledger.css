@@ -22,10 +22,10 @@
   grid-template-columns: subgrid;
   align-items: center;
   min-width: 0;
-  min-height: 1.75rem;
+  min-height: 2rem;
   row-gap: var(--brand-space-1);
   padding-block: 0.125rem;
-  border-top: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+  border-top: 1px solid var(--hairline-soft);
 }
 
 .ledger-row:first-child {
@@ -78,7 +78,92 @@
 }
 
 .ledger[data-ledger="facts"] {
-  grid-template-columns: minmax(6.5rem, 7.5rem) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(7rem, 9.5rem) minmax(0, 1fr) auto;
+}
+.ledger[data-ledger="facts"] > .ledger-row:first-child {
+  border-top: 0;
+}
+
+/* Field explanations stay one hover or focus away; an open explanation, a
+   touch screen, or keyboard focus keeps its button visible. */
+@media (hover: hover) {
+  .ledger[data-ledger="facts"]
+    > .ledger-row:not(:hover, :focus-within)
+    [data-slot="fact-explain"]:not([aria-expanded="true"]) {
+    opacity: 0;
+  }
+}
+
+/* A wide fact list reflows into two columns read top-to-bottom; each row keeps
+   its own label track, so labels still align within a column. */
+@container ledger (min-width: 40rem) {
+  .ledger[data-ledger="facts"] {
+    display: block;
+    columns: 2;
+    column-gap: 2rem;
+  }
+  .ledger[data-ledger="facts"] > .ledger-row {
+    grid-template-columns: minmax(7rem, 9.5rem) minmax(0, 1fr) auto;
+    break-inside: avoid;
+    border-top: 0;
+    border-bottom: 1px solid var(--hairline-soft);
+  }
+  .ledger[data-ledger="facts"] > .ledger-row[data-full-width="true"] {
+    column-span: all;
+  }
+}
+
+/* Narrow surfaces: label, dotted leader, right-aligned value. A leader list
+   that lands somewhere wide reflows like any other fact list. */
+@container ledger (max-width: 39.99rem) {
+  .ledger[data-ledger="facts"][data-facts-layout="leader"] {
+    display: block;
+  }
+  .ledger[data-ledger="facts"][data-facts-layout="leader"] > .ledger-row {
+    grid-template-columns: fit-content(55%) minmax(0.75rem, 1fr) fit-content(
+        60%
+      ) auto;
+    column-gap: var(--brand-space-2);
+  }
+  .ledger[data-ledger="facts"][data-facts-layout="leader"]
+    > .ledger-row::before {
+    content: "";
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+    margin-top: 0.4rem;
+    border-bottom: 1.5px dotted color-mix(in oklab, var(--border) 85%, black);
+  }
+  .ledger[data-ledger="facts"][data-facts-layout="leader"]
+    > .ledger-row
+    > [data-ledger-slot="primary"] {
+    grid-column: 1;
+    min-width: 0;
+  }
+  .ledger[data-ledger="facts"][data-facts-layout="leader"]
+    > .ledger-row
+    > [data-ledger-slot="secondary"] {
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: end;
+    text-align: end;
+  }
+  .ledger[data-ledger="facts"][data-facts-layout="leader"]
+    > .ledger-row
+    > [data-ledger-slot="secondary"]
+    > div {
+    justify-content: flex-end;
+  }
+  .ledger[data-ledger="facts"][data-facts-layout="leader"]
+    > .ledger-row
+    > [data-ledger-slot="actions"] {
+    grid-column: 4;
+  }
+  .ledger[data-ledger="facts"][data-facts-layout="leader"]
+    > .ledger-row
+    > [data-ledger-slot="detail"] {
+    grid-column: 1 / -1;
+  }
 }
 
 .ledger[data-ledger="facts"] > .ledger-row {

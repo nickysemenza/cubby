@@ -4,7 +4,10 @@ import {
   entityFieldModels,
   type EntityFieldModel,
 } from "@cubby/schemas/entity-fields";
-import { isGalleryEntity } from "@cubby/schemas/entity-manifest";
+import {
+  isAuditableEntity,
+  isGalleryEntity,
+} from "@cubby/schemas/entity-manifest";
 import { entityAttachmentRead } from "@cubby/schemas/entity-read-media";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { imageOut, partitionEntityFiles } from "@cubby/schemas/image";
@@ -17,7 +20,7 @@ import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
 import { PuzzlePieceIcon } from "@phosphor-icons/react/dist/csr/PuzzlePiece";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 import { Link } from "@tanstack/react-router";
-import { lazy, Suspense, useState } from "react";
+import { type ComponentProps, lazy, Suspense, useState } from "react";
 import { z } from "zod";
 
 import { RecordEmoji } from "~/entity/components/record-emoji";
@@ -49,6 +52,8 @@ import type {
 import { RecordSuggestionsProvider } from "~/entity/suggestions/record-suggestions";
 import { RecordWorkQueue } from "~/entity/work-queue/record-work-queue";
 import { useNativeRunEvidence } from "~/lib/native-workspace";
+import { FactsAddProvider, FactsLayoutProvider } from "~/ui/common/basic-info";
+import { SectionHeading } from "~/ui/layout";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -75,6 +80,7 @@ import {
 } from "../timeline/entity-timeline";
 import { ConnectedRecordsSection } from "./connected-records-table";
 import { DetailActionProvider, DetailActionTarget } from "./detail-action-bar";
+import { DetailActivity } from "./detail-activity";
 import { detailEditOverrideFor } from "./detail-edit-overrides";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 import { detailSlotsFor } from "./detail-slots";
@@ -85,7 +91,9 @@ import {
   planRelationSection,
   RelationSectionActions,
 } from "./entity-relation-table";
+import { NeedsYou, NeedsYouProvider, useNeedsYouTarget } from "./needs-you";
 import { RecordQualityProvider, QualitySectionChecks } from "./record-quality";
+import { MonthlySpendChart } from "./spend-chart";
 
 const RecordProposals = lazy(() =>
   import("~/entity/suggestions/queue/record-proposals").then((module) => ({
@@ -513,6 +521,16 @@ function RunEvidenceDetail<E extends GenericDetailEntity>({
   );
 }
 
+/** Suggestion status lands in the page's Needs-you block. */
+function DetailSuggestions(
+  props: Omit<ComponentProps<typeof RecordSuggestionsProvider>, "statusTarget">,
+) {
+  const target = useNeedsYouTarget("suggestions");
+  return (
+    <RecordSuggestionsProvider {...props} statusTarget={target ?? undefined} />
+  );
+}
+
 function FullEntityDetail<E extends GenericDetailEntity>({
   entity,
   record,
@@ -537,6 +555,15 @@ function FullEntityDetail<E extends GenericDetailEntity>({
   const { images, documents } = detailFiles(entity, record, bag);
   const heroImages = detail.hero.images ? images : undefined;
   const sections = declaredSections(entity, record, bag, operations);
+  // The first fields section is the record's compact facts: the third
+  // column at full width, first in the stack when narrow.
+  const factsId = detail.sections.find(
+    (section) => section.kind === "fields",
+  )?.id;
+  const facts = sections.find((section) => section.id === factsId);
+  // Change history plus declared dated relations, merged into one timeline.
+  const timeline =
+    isAuditableEntity(entity) || detail.activityRelations.length > 0;
   if (connectedViews[entity].length > 0) {
     sections.push({
       id: "connected-records",
@@ -675,6 +702,11 @@ function FullEntityDetail<E extends GenericDetailEntity>({
         heroNo={bag.id}
         heroStamp={heroStamp}
         heroStats={heroStats.length > 0 ? heroStats : undefined}
+        heroChart={
+          detail.hero.chart ? (
+            <MonthlySpendChart entity={entity} id={bag.id} />
+          ) : undefined
+        }
         heroActions={plateActions}
       >
         <AncestryBreadcrumb
@@ -682,33 +714,64 @@ function FullEntityDetail<E extends GenericDetailEntity>({
           chain={breadcrumbChain}
           current={title}
         />
-        <RecordSuggestionsProvider
-          entity={entity}
-          records={[record]}
-          fieldKeys={entityFieldModels[entity].fields
-            .filter((field) => field.display.detail)
-            .map((field) => field.key)}
-        >
-          <RecordQualityProvider
-            entity={entity}
-            id={bag.id}
-            renderedSections={sections.map((section) => section.id)}
-          >
-            <RecordWorkQueue id={bag.id} />
-            <DetailSections
-              sections={sections.map((section) => ({
-                ...section,
-                content: (
-                  <>
-                    <QualitySectionChecks section={section.id} />
-                    {section.content}
-                  </>
-                ),
-              }))}
-              rawData={record}
-            />
-          </RecordQualityProvider>
-        </RecordSuggestionsProvider>
+        <NeedsYouProvider>
+          <FactsAddProvider onAdd={editable ? () => setEditing(true) : null}>
+            <DetailSuggestions
+              entity={entity}
+              records={[record]}
+              fieldKeys={entityFieldModels[entity].fields
+                .filter((field) => field.display.detail)
+                .map((field) => field.key)}
+            >
+              <RecordQualityProvider
+                entity={entity}
+                id={bag.id}
+                renderedSections={sections.map((section) => section.id)}
+              >
+                <DetailSections
+                  sections={sections
+                    .filter((section) => section !== facts)
+                    .map((section) => ({
+                      ...section,
+                      content: (
+                        <>
+                          <QualitySectionChecks section={section.id} />
+                          {section.content}
+                        </>
+                      ),
+                    }))}
+                  rawData={record}
+                  omitActivity={timeline}
+                  lead={
+                    <>
+                      <NeedsYou>
+                        <RecordWorkQueue id={bag.id} variant="rows" />
+                      </NeedsYou>
+                      {timeline ? (
+                        <DetailActivity entity={entity} id={bag.id} />
+                      ) : null}
+                    </>
+                  }
+                  aside={
+                    facts ? (
+                      <section
+                        id={facts.id}
+                        aria-label={facts.title}
+                        className="min-w-0 scroll-mt-[var(--app-chrome-top)]"
+                      >
+                        <SectionHeading title={facts.title} />
+                        <FactsLayoutProvider layout="leader">
+                          <QualitySectionChecks section={facts.id} />
+                          {facts.content}
+                        </FactsLayoutProvider>
+                      </section>
+                    ) : undefined
+                  }
+                />
+              </RecordQualityProvider>
+            </DetailSuggestions>
+          </FactsAddProvider>
+        </NeedsYouProvider>
         {editable && editing ? (
           EditOverride ? (
             <EditOverride

@@ -13,17 +13,21 @@ import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle"
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { createContext, useContext, useId, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import { ExceptionControls } from "~/entity/fields/field-explanation-exception";
 import {
   fieldExplanation,
   suggestions,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { cn } from "~/lib/utils";
 import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Stack, SectionHeading } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
+
+import { useNeedsYouTarget } from "./needs-you";
 
 type Breakdown = NonNullable<FieldExplanationOutput["qualityBreakdown"]>;
 export type RecordQualityCheck = Breakdown["checks"][number];
@@ -259,91 +263,105 @@ function AssessedRecordQuality({
   const checks = allChecks.filter(placed);
   const orphaned = allChecks.filter((check) => !placed(check));
   const attention = allChecks.filter((check) => check.state === "gap");
+  const target = useNeedsYouTarget("quality");
+  // Loading holds the block open; a clean record does not.
+  const needsYou = result.isPending || result.isError || attention.length > 0;
   const anchor = (check: RecordQualityCheck) => {
     const placement = placementOf(check);
     return placement && "field" in placement && placed(check)
       ? `${prefix}-field-${placement.field}`
       : `${prefix}-${check.check}`;
   };
+  const summary = (
+    <>
+      {result.isPending ? (
+        <output className="text-xs text-muted-foreground">
+          Loading quality checks…
+        </output>
+      ) : result.isError ? (
+        <div>
+          <ErrorDisplay error={result.error} title="quality checks" />
+          <Button
+            size="xs"
+            variant="outline"
+            onClick={() => void result.refetch()}
+          >
+            Retry quality checks
+          </Button>
+        </div>
+      ) : breakdown ? (
+        <div
+          className={cn("text-xs", !target && "border-b border-border pb-2")}
+        >
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <strong>
+              Quality{" "}
+              {breakdown.score === null
+                ? "not assessed"
+                : `${breakdown.score}/100`}
+            </strong>
+            <span className="text-muted-foreground">
+              {allChecks.filter((check) => check.state === "satisfied").length}{" "}
+              satisfied · {attention.length} unresolved ·{" "}
+              {allChecks.filter((check) => check.state === "excepted").length}{" "}
+              accepted exceptions
+            </span>
+          </div>
+          {attention.length > 0 ? (
+            <nav
+              aria-label="Quality issues"
+              className="mt-1 flex flex-wrap gap-x-3 gap-y-1"
+            >
+              {attention.map((check) => (
+                <a
+                  key={check.check}
+                  href={`#${anchor(check)}`}
+                  className="text-warning-ink underline-offset-2 hover:underline"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    const target = document.getElementById(anchor(check));
+                    target?.scrollIntoView({ block: "center" });
+                    if (target) {
+                      target.tabIndex = -1;
+                      target.focus({ preventScroll: true });
+                    }
+                  }}
+                >
+                  {check.label}
+                </a>
+              ))}
+            </nav>
+          ) : null}
+          {attention.length > 0 ? (
+            <div className="mt-1">
+              <SuggestionsImpactLink
+                entity={entity}
+                id={id}
+                failing={attention}
+              />
+            </div>
+          ) : null}
+          <details className="mt-1">
+            <summary className="cursor-pointer text-muted-foreground">
+              Score calculation
+            </summary>
+            <p className="pt-2">{breakdown.summary}</p>
+          </details>
+        </div>
+      ) : null}
+    </>
+  );
   return (
     <QualityContext value={{ entity, id, prefix, checks }}>
       <Stack gap="sm">
-        {result.isPending ? (
-          <output className="text-xs text-muted-foreground">
-            Loading quality checks…
-          </output>
-        ) : result.isError ? (
-          <div>
-            <ErrorDisplay error={result.error} title="quality checks" />
-            <Button
-              size="xs"
-              variant="outline"
-              onClick={() => void result.refetch()}
-            >
-              Retry quality checks
-            </Button>
-          </div>
-        ) : breakdown ? (
-          <div className="border-b border-border pb-2 text-xs">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <strong>
-                Quality{" "}
-                {breakdown.score === null
-                  ? "not assessed"
-                  : `${breakdown.score}/100`}
-              </strong>
-              <span className="text-muted-foreground">
-                {
-                  allChecks.filter((check) => check.state === "satisfied")
-                    .length
-                }{" "}
-                satisfied · {attention.length} unresolved ·{" "}
-                {allChecks.filter((check) => check.state === "excepted").length}{" "}
-                accepted exceptions
-              </span>
-            </div>
-            {attention.length > 0 ? (
-              <nav
-                aria-label="Quality issues"
-                className="mt-1 flex flex-wrap gap-x-3 gap-y-1"
-              >
-                {attention.map((check) => (
-                  <a
-                    key={check.check}
-                    href={`#${anchor(check)}`}
-                    className="text-warning-ink underline-offset-2 hover:underline"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      const target = document.getElementById(anchor(check));
-                      target?.scrollIntoView({ block: "center" });
-                      if (target) {
-                        target.tabIndex = -1;
-                        target.focus({ preventScroll: true });
-                      }
-                    }}
-                  >
-                    {check.label}
-                  </a>
-                ))}
-              </nav>
-            ) : null}
-            {attention.length > 0 ? (
-              <div className="mt-1">
-                <SuggestionsImpactLink
-                  entity={entity}
-                  id={id}
-                  failing={attention}
-                />
-              </div>
-            ) : null}
-            <details className="mt-1">
-              <summary className="cursor-pointer text-muted-foreground">
-                Score calculation
-              </summary>
-              <p className="pt-2">{breakdown.summary}</p>
-            </details>
-          </div>
-        ) : null}
+        {target === undefined
+          ? summary
+          : target
+            ? createPortal(
+                <div data-needs-row={needsYou || undefined}>{summary}</div>,
+                target,
+              )
+            : null}
         {orphaned.length > 0 ? (
           <section>
             <SectionHeading title="Record quality" />

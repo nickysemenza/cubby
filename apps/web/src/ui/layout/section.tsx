@@ -37,14 +37,14 @@ export function SectionHeading({
   muted?: boolean;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-sm border-b border-border/60 bg-muted/60 px-2 py-1">
+    <div className="flex min-h-8 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-border pb-1">
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           {title && (
             <Heading
               id={id}
               className={cn(
-                "flex min-w-0 items-center gap-2 text-[0.8125rem] font-semibold",
+                "flex min-w-0 items-center gap-2 text-sm font-semibold text-foreground-strong",
                 muted && "text-muted-foreground",
               )}
             >
@@ -127,7 +127,7 @@ export function Section({
       as={headingAs}
       title={
         disclosure ? (
-          <CollapsibleTrigger className="-my-1 -ml-2 flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-sm px-2 py-1 text-left hover:text-primary focus-visible:outline-2 focus-visible:outline-ring sm:min-h-0">
+          <CollapsibleTrigger className="-my-1 flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-sm py-1 text-left hover:text-primary focus-visible:outline-2 focus-visible:outline-ring sm:min-h-0">
             <CaretRightIcon
               aria-hidden
               className={cn("size-3 shrink-0", open && "rotate-90")}
@@ -145,7 +145,7 @@ export function Section({
     />
   );
   const body = (
-    <div className="min-w-0 space-y-2 px-2 text-xs/relaxed">{children}</div>
+    <div className="min-w-0 space-y-2 text-xs/relaxed">{children}</div>
   );
   return (
     <section
