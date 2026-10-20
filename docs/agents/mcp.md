@@ -191,8 +191,10 @@ a link that does not resolve. Engineering skills stay repository-only.
 The repository is also a Claude plugin marketplace
 (`.claude-plugin/marketplace.json` → `plugins/cubby`). Its skills are pointer
 stubs that call `playbook.get`, so they change only when a playbook's name or
-description does; rerun `pnpm --dir apps/web generate:claude-plugin` when
-`claude-plugin.test.ts` reports drift. The plugin declares no MCP server:
+description does. Regenerate and commit them with
+`pnpm --dir apps/web generate:claude-plugin` in the same change as that metadata;
+ordinary generation leaves these committed stubs alone. `claude-plugin.test.ts`
+detects drift. The plugin declares no MCP server:
 each member adds the Cubby connector once. A member adds the marketplace in
 claude.ai under Customize › Plugins › Add marketplace (`nickysemenza/cubby`)
 with Sync automatically on; claude.ai plugins sync into Claude Code.

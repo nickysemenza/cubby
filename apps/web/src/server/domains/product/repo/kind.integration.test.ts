@@ -114,14 +114,14 @@ describe("Product.kind", () => {
     it("fills an undecided survivor from the merged-away Product", async () => {
       const keeper = await createProduct(
         ctx.db,
-        makeProductInput({ name: "Kind merge keeper A", model: "KIND-A1" }),
+        makeProductInput({ name: "Kind merge keeper A", model: "KIND-A" }),
         ctx.actor,
       );
       const loser = await createProduct(
         ctx.db,
         makeProductInput({
           name: "Kind merge loser A",
-          model: "KIND-A2",
+          model: "KIND-A",
           kind: "consumable",
         }),
         ctx.actor,
@@ -142,7 +142,7 @@ describe("Product.kind", () => {
         ctx.db,
         makeProductInput({
           name: "Kind merge keeper B",
-          model: "KIND-B1",
+          model: "KIND-B",
           kind: "durable",
         }),
         ctx.actor,
@@ -151,7 +151,7 @@ describe("Product.kind", () => {
         ctx.db,
         makeProductInput({
           name: "Kind merge loser B",
-          model: "KIND-B2",
+          model: "KIND-B",
           kind: "consumable",
         }),
         ctx.actor,

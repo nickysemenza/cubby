@@ -9,14 +9,14 @@ import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { assessment, assessmentState } from "~/server/db/schema";
 
-export const variantDimension = z.enum(["color", "size", "pack"]);
+const variantDimension = z.enum(["color", "size", "pack"]);
 export const productIdentitySide = z.object({
   id: productId,
   model: z.string().nullable(),
 });
 
 // Decoder for retained Assessment JSON only; these receipts confer no current authority.
-export const variantLiteral = z.object({
+const variantLiteral = z.object({
   productId,
   sourceId: z.uuid(),
   field: z.literal("name"),
@@ -28,7 +28,7 @@ export const variantLiteral = z.object({
   binding: z.enum(["unambiguous", "selected_variant"]),
   selectedVariant: z.string().nullable(),
 });
-export const variantDecisionReceipt = z.object({
+const variantDecisionReceipt = z.object({
   request: z.object({
     subject: z.string(),
     rules: z.string(),

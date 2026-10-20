@@ -1,6 +1,6 @@
 ---
 name: product-enrichment
-description: Burn down Cubby's Research queue - enrich Products with verified identity facts, Sources and representative cover images using your own browser. Use for missing product metadata/images, specific Products from purchase import, or source-backed corrections.
+description: Burn down Cubby's Research queue - enrich Products with researched identity facts, notes and representative cover images using your own browser. Use for missing product metadata/images, specific Products from purchase import, or source-backed corrections.
 ---
 
 <!-- Generated from .agents/skills/product-enrichment/SKILL.md by apps/web/generator/claude-plugin.ts — do not edit. -->
