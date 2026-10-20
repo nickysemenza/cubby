@@ -127,7 +127,6 @@ const dataQualityRenderer = <TRow extends object>(
             (row) => qualityOf(row)?.score ?? null,
           ),
           mobile: { slot: "meta", priority: 0, showWhenEmpty: true },
-          rendersBlank: (row) => qualityOf(row)?.status === "complete",
         }),
         cell: (info) => {
           const quality = qualityOf(info.row.original);
