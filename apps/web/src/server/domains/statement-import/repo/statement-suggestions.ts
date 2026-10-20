@@ -196,7 +196,14 @@ async function nextUnmatchedCharges(
       AND (cs.shortcode IS NULL OR EXISTS (SELECT 1 FROM "FinancialTransaction" ft
         WHERE ft.shortcode = cs.shortcode AND ft."deletedAt" IS NULL
           AND ft.status = ${financialTransactionStatus.enum.posted}
-          AND ft.kind IN (${financialTransactionKind.enum.purchase},${financialTransactionKind.enum.refund},${financialTransactionKind.enum.fee})))
+          AND ft.kind IN (${financialTransactionKind.enum.purchase},${financialTransactionKind.enum.refund},${financialTransactionKind.enum.fee})
+          AND (NOT EXISTS (SELECT 1 FROM "FinancialTransactionAllocation" allocation
+              WHERE allocation."transactionId" = ft.id AND allocation."deletedAt" IS NULL)
+            OR EXISTS (SELECT 1 FROM "AssessmentState" existing
+              WHERE existing.family = ${assessmentFamily.enum.statement_transaction} AND existing.active
+                AND existing.status = ${suggestionStatus.enum.pending}
+                AND existing.data->>${"source"} = cs.source AND existing.data->>${"chargeKey"} = cs."chargeKey"
+                AND existing.data->>${"recommended"} = ${statementTransactionAction.enum.book}))))
       ${after}
     ORDER BY cs.source, cs."chargeKey"
     LIMIT ${input.limit}
@@ -205,8 +212,8 @@ async function nextUnmatchedCharges(
 }
 
 /**
- * How many unmatched charges a scope's import and date bounds cover, for a
- * Sweep's estimate; an account scope narrows that further at generation.
+ * Charge work within the import/date bounds: unmatched charges and matched,
+ * unallocated spending, plus pending booking work that may now be complete.
  */
 export async function countUnmatchedCharges(
   db: Database,

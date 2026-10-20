@@ -181,7 +181,7 @@ export const statementTransactionApplication = z.object({
   kindOverride: kind.optional(),
   rejectedCandidateIds: z.array(financialTransactionShortcode).default([]),
   booking: financialSpendingRequest
-    .omit({ transactionId: true, source: true })
+    .omit({ transactionId: true, source: true, advice: true })
     .optional(),
 });
 export type StatementTransactionApplication = z.infer<

@@ -946,8 +946,14 @@ reevaluated against current values when evidence or policy changes. Automatic
 field assignments admit both additions and corrections on eligible declared
 fields, regardless of who wrote the old value. Declared review requirements,
 validation and inherited/derived resolution still apply; pruning and merging
-are separate actions. Historical receipts remain immutable. Current write and
-input fences reject edits during inference and later writes in the same
+are separate actions. Feedback preserves historical application receipts.
+The mutable AssessmentState projection retains the latest evaluation's input and
+policy alongside its application metadata whenever no replacement is published,
+including when an exact wrong review or retained value suppression filters every
+proposal and for legacy saved forms. Reconciliation may advance a revision once
+after application; settling the current basis makes later discovery skip evidence
+preparation. Deleted subjects are skipped. Current write and input fences reject
+edits during inference and later writes in the same
 application transaction, including ABA edits, before capturing the settled
 post-application fingerprint. These fingerprints avoid repeating unchanged
 work. Rejected proposals without application receipts stay resolved. Eligible

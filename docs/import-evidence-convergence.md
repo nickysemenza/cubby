@@ -16,8 +16,17 @@ The financial spending planner and booking writer are shared by direct finance
 commands, statement create/attach/supersede, matched-transaction `book`, and
 import convergence. Current evidence and the complete allocation graph are
 revalidated in the outer serializable write with its application receipt.
+The review family declares this snapshot requirement; unrelated review families
+retain their existing transaction boundaries. Attach plans use the target
+transaction's current facts, since attaching evidence alone changes no kind,
+amount or posting state.
 Already-booked spending is a no-op, and another possible Purchase prevents a
 new clean booking. All money continues to be `SUM(Expense.cost)`.
+Matched transactions with live allocations create no new statement booking
+work; an existing pending booking is revisited so completion can retire it.
+Expense edits use generic field Suggestions, and allocation reconciliation uses
+explicit finance commands. Transactions without statement observations can
+invoke the shared commands directly; statement discovery uses retained rows.
 
 Clean new spending requires one high-confidence live Cubby spending category
 without conflicting merchant history, plus the existing transaction-kind
@@ -30,7 +39,8 @@ and its booking are created atomically; one charge never establishes a
 Vendor-wide spending default. A member may explicitly choose an existing Vendor
 and acknowledge conflicting category history while correcting a held booking.
 Reviewed category and new business-name choices are retained separately from
-model advice; these choices are never inferred by clean import advice.
+model advice. Booking corrections use the server's retained advice and explicit
+reviewed fields; clients cannot submit replacement model evidence.
 
 Existing Purchase settlement reuses the retained-payment matcher: exact cents,
 card/tender and owner evidence, the existing posting window, and a complete
@@ -40,7 +50,8 @@ including tips, partial payments, splits and combined charges, need review;
 amount/date coincidence never proves identity. Refunds require supported
 original-Purchase evidence independently of that weak-candidate window. Reuse
 recorded negative Expenses before creating a negative lump line. An identified
-original's single live effective category supplies the refund category unless
+original's single live effective category on vendor spending, excluding future
+and reimbursement lines, supplies the refund category unless
 a member explicitly chooses another. An unmatched
 refund needs explicit review before a standalone refund Purchase is booked.
 

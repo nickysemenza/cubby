@@ -27,6 +27,14 @@ export type SpendingAdvicePort = (input: {
   runId: RunId;
 }) => Promise<FinancialSpendingAdvice>;
 
+export function needsSpendingAdvice(judgment: StatementTransactionJudgment) {
+  return Boolean(
+    judgment.create &&
+    judgment.create.status === "posted" &&
+    ["purchase", "refund", "fee"].includes(judgment.create.kind),
+  );
+}
+
 /** Advice has no write authority; every caller still uses the shared financial planner. */
 export async function adviseSpending(
   db: Database,
@@ -38,15 +46,10 @@ export async function adviseSpending(
     spendingAdvice?: SpendingAdvicePort;
   },
 ) {
+  const create = input.judgment.create;
+  if (!create || !needsSpendingAdvice(input.judgment)) return null;
   if (input.spendingAdvice)
     return financialSpendingAdvice.parse(await input.spendingAdvice(input));
-  const create = input.judgment.create;
-  if (
-    !create ||
-    create.status !== "posted" ||
-    !["purchase", "refund", "fee"].includes(create.kind)
-  )
-    return null;
   const merchant = create.merchant?.trim() || create.rawDescription?.trim();
   if (!merchant) return financialSpendingAdvice.parse({});
   const [named] = await resolveNames(db, "vendor", [{ name: merchant }], {

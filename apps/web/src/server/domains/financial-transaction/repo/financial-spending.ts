@@ -37,7 +37,11 @@ import {
 } from "~/server/domains/purchase-import/repo/retained-settlement";
 import { resolveNames } from "~/server/entity-kernel/resolve";
 import { AppError, createAppError } from "~/server/errors/app-error";
-import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
+import {
+  settlementRefsFor,
+  settlementRefsIncluding,
+  type SettlementRef,
+} from "~/server/generic/entity-links/repo/entity-external-ids";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 
@@ -430,14 +434,16 @@ async function discoverSpendingEvidence(
         ? candidateEvidence.find((candidate) => strong.has(candidate.shortcode))
         : undefined;
     if (original) {
-      const negative = original.graph.lines.filter(
-        (line) => line.cost !== null && line.cost < 0,
+      const eligibleLines = original.graph.lines.filter(
+        (line) => !line.future && line.economicRole === "vendor",
+      );
+      const negative = eligibleLines.filter(
+        (line) =>
+          line.cost !== null && line.cost < 0 && line.lineKind === "principal",
       );
       const lines = negative.length
         ? negative
-        : original.graph.lines.filter(
-            (line) => line.cost !== null && line.cost > 0,
-          );
+        : eligibleLines.filter((line) => line.cost !== null && line.cost > 0);
       const categories = new Set(
         lines.map(
           (line) =>
@@ -609,10 +615,23 @@ async function existingSpendingOutcome(
 export async function previewFinancialSpending(
   db: Database,
   raw: z.input<typeof financialSpendingRequest>,
+  attachment?: { settlementRef: SettlementRef },
 ): Promise<FinancialSpendingPlan> {
   const request = spendingRequestBoundary.parse(raw);
   const facts = await spendingFacts(db, request);
-  if (facts.allocations.length) {
+  // Preview an impending reference attachment without duplicating its charge.
+  // Commit still requires that reference to exist in retained evidence.
+  if (attachment && facts.row)
+    facts.source.sourceRefs = await settlementRefsIncluding(
+      db,
+      facts.row.id,
+      attachment.settlementRef,
+    );
+  const deferred =
+    facts.source.status !== "posted" ||
+    facts.row?.ledgerTransferId ||
+    !["purchase", "refund", "fee"].includes(facts.source.kind);
+  if (deferred || facts.allocations.length) {
     const basis = {
       request,
       candidates: [],
@@ -620,6 +639,12 @@ export async function previewFinancialSpending(
         evidence: canonicalJson(jsonSnapshot.parse(facts)),
       }),
     };
+    if (deferred)
+      return {
+        ...basis,
+        status: "deferred",
+        reason: "Only posted purchase, fee and refund evidence books spending.",
+      };
     const existing = await existingSpendingOutcome(db, { facts, basis });
     if (existing) return existing;
   }
@@ -637,22 +662,12 @@ export async function previewFinancialSpending(
     candidateEvidence,
     basis,
   } = evidence;
-  const { row, source } = currentFacts;
+  const { source } = currentFacts;
   const review = (reason: string): FinancialSpendingPlan => ({
     ...basis,
     status: "review_required",
     reason,
   });
-  if (
-    source.status !== "posted" ||
-    row?.ledgerTransferId ||
-    !["purchase", "refund", "fee"].includes(source.kind)
-  )
-    return {
-      ...basis,
-      status: "deferred",
-      reason: "Only posted purchase, fee and refund evidence books spending.",
-    };
   const violation = financialTransactionSettlementViolation({
     linked: true,
     kind: source.kind,
@@ -660,8 +675,6 @@ export async function previewFinancialSpending(
   });
   if (violation || source.amount === 0)
     return review(violation?.message ?? "Spending must have a nonzero amount.");
-  const existing = await existingSpendingOutcome(db, evidence);
-  if (existing) return existing;
   if (request.vendorId && vendor?.shortcode !== request.vendorId)
     return review("The reviewed Vendor is no longer live.");
   const blocker = spendingBlocker({

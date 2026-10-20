@@ -29,6 +29,7 @@ import { Picker } from "~/ui/combobox/picker";
 import { DateDisplay } from "~/ui/common/date-display";
 import { FactList } from "~/ui/common/fact-list";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
+import { Section } from "~/ui/layout/section";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { Input } from "~/ui/primitives/input";
@@ -63,7 +64,6 @@ function SpendingEvidence({ row }: { row: StatementRow }) {
   if (!plan) return null;
   const busy = outcome(row.id)?.state === "pending";
   const booking = {
-    advice: plan.request.advice,
     rejectedPurchaseIds: plan.request.rejectedPurchaseIds,
     ...current.booking,
   };
@@ -173,10 +173,14 @@ function SpendingEvidence({ row }: { row: StatementRow }) {
       {!row.automaticRule &&
       plan.status !== "already_booked" &&
       plan.status !== "deferred" ? (
-        <details open={plan.status === "review_required"}>
-          <summary className="cursor-pointer font-medium">
-            Correct booking
-          </summary>
+        <Section
+          title="Correct booking"
+          headingAs="h4"
+          disclosure={{
+            defaultOpen: plan.status === "review_required",
+            keepMounted: true,
+          }}
+        >
           <div className="flex flex-col gap-2 pt-2">
             <p>
               Acceptance books spending. Corrections record Wrong feedback for
@@ -341,7 +345,7 @@ function SpendingEvidence({ row }: { row: StatementRow }) {
               </label>
             ) : null}
           </div>
-        </details>
+        </Section>
       ) : null}
     </section>
   );

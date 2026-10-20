@@ -13,6 +13,7 @@ import { getDb } from "~/server/db/helpers";
 import { purchase as purchaseTable } from "~/server/db/schema";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { projectCreateFromTasksWorkflow } from "~/server/domains/project/operations.server";
+import { setAutomaticRule } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import { listSuggestions } from "~/server/generic/assessment/repo/suggestion-review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { reconcileDerivedRefreshInputs } from "~/server/testing/background-queue";
@@ -208,6 +209,10 @@ describe("Suggestion supersede", () => {
   });
 
   it("supersedes an earlier pending suggestion when a newer sweep evaluates the same field", async () => {
+    await setAutomaticRule(ctx.db, ctx.actor, {
+      ruleKey: "field.addition",
+      enabled: false,
+    });
     const product = await productFixture(ctx, "Synthetic repeated sweep item", {
       categoryId: taxonomyId("tools"),
     });

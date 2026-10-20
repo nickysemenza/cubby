@@ -1,15 +1,11 @@
 import type { FinancialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { StatementTransactionJudgment } from "@cubby/schemas/statement-suggestion";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { getDb, notDeleted } from "~/server/db/helpers";
-import {
-  financialAccount,
-  financialTransaction,
-  financialTransactionAllocation,
-} from "~/server/db/schema";
+import { getDb } from "~/server/db/helpers";
+import { financialAccount, financialTransaction } from "~/server/db/schema";
 import { previewFinancialSpending } from "~/server/domains/financial-transaction/repo/financial-spending";
 
 /** Statement observations supply evidence to the shared financial planner. */
@@ -32,34 +28,28 @@ export async function prepareStatementSpending(
     (judgment.recommended === "attach" && judgment.candidates.length === 1
       ? judgment.candidates[0]!.transactionId
       : null);
-  const allocated = targetId
-    ? await getDb(db).query.financialTransactionAllocation.findFirst({
-        where: and(
-          eq(
-            financialTransactionAllocation.transactionId,
-            parseEntityId("financialTransaction", targetId),
-          ),
-          notDeleted(financialTransactionAllocation),
+  const matched = targetId
+    ? await getDb(db).query.financialTransaction.findFirst({
+        where: eq(
+          financialTransaction.id,
+          parseEntityId("financialTransaction", targetId),
         ),
       })
     : null;
-  const matched =
-    targetId && (judgment.matchedTransactionId || allocated)
-      ? await getDb(db).query.financialTransaction.findFirst({
-          where: eq(
-            financialTransaction.id,
-            parseEntityId("financialTransaction", targetId),
-          ),
-        })
-      : null;
   if (matched)
-    return previewFinancialSpending(db, {
-      transactionId: parseShortcodeFor(
-        "financialTransaction",
-        matched.shortcode,
-      ),
-      advice,
-    });
+    return previewFinancialSpending(
+      db,
+      {
+        transactionId: parseShortcodeFor(
+          "financialTransaction",
+          matched.shortcode,
+        ),
+        advice,
+      },
+      judgment.recommended === "attach"
+        ? { settlementRef: judgment.create.sourceRef }
+        : undefined,
+    );
   return previewFinancialSpending(db, {
     source: {
       accountId: parseShortcodeFor("financialAccount", account.shortcode),

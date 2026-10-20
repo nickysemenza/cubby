@@ -18,6 +18,7 @@ import {
   expense,
   purchase,
   financialAccount,
+  financialTransaction as transactionTable,
   financialTransactionAllocation,
   vendor as vendorTable,
 } from "~/server/db/schema";
@@ -245,6 +246,43 @@ describe("shared spending booking", () => {
       await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
     ).toEqual([{ cost: 19 }]);
   });
+  // An attachment preview retains the real charge identity and may commit
+  // only after its anticipated stable reference actually exists.
+  it("previews an attachment reference on the real transaction and fences premature booking", async () => {
+    const { transaction, advice } = await fixture();
+    await updateFinancialTransaction(
+      ctx.db,
+      transaction.output.id,
+      { sourceRefs: [] },
+      ctx.actor,
+    );
+    const ref = {
+      source: "synthetic-bank",
+      externalId: "synthetic-attached-charge",
+    };
+    const plan = await previewFinancialSpending(
+      ctx.db,
+      { transactionId: transaction.output.id, advice },
+      { settlementRef: ref },
+    );
+    expect(plan).toMatchObject({
+      status: "ready",
+      request: { transactionId: transaction.output.id },
+    });
+    await expect(
+      commitFinancialSpending(ctx.db, plan, ctx.actor),
+    ).rejects.toThrow("Spending evidence changed");
+    await updateFinancialTransaction(
+      ctx.db,
+      transaction.output.id,
+      { sourceRefs: [ref] },
+      ctx.actor,
+    );
+    await commitFinancialSpending(ctx.db, plan, ctx.actor);
+    expect(
+      await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
+    ).toEqual([{ cost: 42.5 }]);
+  });
   it("requires exactly one source style at the planning boundary", async () => {
     const { account, transaction, advice } = await fixture();
     const source = financialSpendingSource.parse({
@@ -268,6 +306,24 @@ describe("shared spending booking", () => {
     await expect(previewFinancialSpending(ctx.db, { advice })).rejects.toThrow(
       /Invalid input/,
     );
+  });
+  // Legacy retained settlement could allocate holds; allocation discovery must
+  // not turn a settlement-only hold into an unresolvable spending proposal.
+  it("defers an already allocated legacy pending hold before checking booking lineage", async () => {
+    const { transaction, advice } = await fixture();
+    const request = { transactionId: transaction.output.id, advice };
+    const plan = await previewFinancialSpending(ctx.db, request);
+    await commitFinancialSpending(ctx.db, plan, ctx.actor);
+    await getDb(ctx.db)
+      .update(transactionTable)
+      .set({ status: "pending", postedDate: null })
+      .where(eq(transactionTable.shortcode, transaction.output.id));
+    expect((await previewFinancialSpending(ctx.db, request)).status).toBe(
+      "deferred",
+    );
+    expect(
+      await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
+    ).toEqual([{ cost: 42.5 }]);
   });
   it("defers pending spending and non-spending kinds without creating Expenses", async () => {
     const { transaction, advice } = await fixture();
@@ -567,7 +623,7 @@ describe("shared spending booking", () => {
       await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
     ).toEqual([{ cost: 42.5 }]);
   });
-  it("uses an identified original's live category for its negative Expense without fresh model advice", async () => {
+  it("uses an identified original's live category, excluding future and reimbursement lines, without fresh model advice", async () => {
     const { transaction, vendor, category, advice } = await fixture();
     const original = await createRepoEntity(ctx, "purchase", {
       vendorId: vendor.output.id,
@@ -579,6 +635,27 @@ describe("shared spending booking", () => {
       cost: 100,
       trade: "other",
       spendingCategoryId: category.id,
+    });
+    const otherCategory = await createEntity(
+      buildKernelContext(ctx.db, ctx.actor.userId),
+      "spendingCategory",
+      { name: "Synthetic future reimbursement category" },
+    );
+    await createRepoEntity(ctx, "expense", {
+      purchaseId: original.output.id,
+      name: "Synthetic future item",
+      cost: 200,
+      future: true,
+      trade: "other",
+      spendingCategoryId: otherCategory.id,
+    });
+    await createRepoEntity(ctx, "expense", {
+      purchaseId: original.output.id,
+      name: "Synthetic shared-cost repayment",
+      cost: -20,
+      economicRole: "reimbursement",
+      trade: "other",
+      spendingCategoryId: otherCategory.id,
     });
     await updateFinancialTransaction(
       ctx.db,
@@ -604,8 +681,8 @@ describe("shared spending booking", () => {
       .select({ cost: expense.cost, category: expense.spendingCategoryId })
       .from(expense)
       .orderBy(expense.cost);
-    expect(lines.map((line) => line.cost)).toEqual([-12, 100]);
-    expect(lines[0]?.category).toBe(lines[1]?.category);
+    expect(lines.map((line) => line.cost)).toEqual([-20, -12, 100, 200]);
+    expect(lines[1]?.category).toBe(lines[2]?.category);
   });
   it("holds unmatched refunds and reuses a reviewed old original's negative line", async () => {
     const { transaction, advice, vendor } = await fixture();

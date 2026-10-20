@@ -3,6 +3,7 @@ import {
   aiRefreshActivation,
   aiRefreshRunInput,
   suggestionSupersessionReceipt,
+  suggestionAcceptanceReceipt,
   type AiEvaluationTarget,
   type AiProvenance,
 } from "@cubby/schemas/ai-evaluation";
@@ -353,6 +354,33 @@ export async function liveProductIdsAfter(
     )
     .orderBy(product.id)
     .limit(limit);
+}
+
+/** Settle an evaluation with no replacement without rewriting historical Feedback. */
+export async function settleAppliedFieldRefresh(
+  db: Database,
+  id: string,
+  fingerprint: string,
+  provenance: AiProvenance,
+) {
+  const [row] = await getDb(db)
+    .select({ receipt: suggestion.acceptanceReceipt })
+    .from(suggestion)
+    .where(and(eq(suggestion.id, id), eq(suggestion.family, "field")))
+    .for("update");
+  const receipt = suggestionAcceptanceReceipt
+    .nullable()
+    .parse(row?.receipt ?? null);
+  if (!receipt) return;
+  await getDb(db)
+    .update(suggestion)
+    .set({
+      acceptanceReceipt: {
+        ...receipt,
+        evaluatedInput: { fingerprint, provenance },
+      },
+    })
+    .where(eq(suggestion.id, id));
 }
 
 // Applications identify logical targets even when inactive or rejected after

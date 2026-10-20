@@ -44,7 +44,7 @@ import {
 import { isMoneyMoveKind } from "~/server/domains/statement-import/repo/statement-transaction-kind";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
-import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
+import { settlementRefsIncluding } from "~/server/generic/entity-links/repo/entity-external-ids";
 
 const log = createLogger("statement-suggestions");
 
@@ -241,10 +241,7 @@ export async function applyStatementTransactionSuggestion(
     const spending = await previewFinancialSpending(db, {
       transactionId: appliedTransactionId,
       ...application.booking,
-      advice:
-        application.booking?.advice ??
-        published.spending?.request.advice ??
-        null,
+      advice: published.spending?.request.advice ?? null,
     });
     if (spending.status === "deferred") {
       const kind = application.kindOverride ?? judgment.create?.kind;
@@ -327,21 +324,6 @@ async function applyCreate(
   return created.output.id;
 }
 
-async function appendRef(
-  db: Database,
-  transactionId: string,
-  ref: { source: string; externalId: string },
-) {
-  const existing =
-    (await settlementRefsFor(db, [transactionId])).get(transactionId) ?? [];
-  return existing.some(
-    (saved) =>
-      saved.source === ref.source && saved.externalId === ref.externalId,
-  )
-    ? existing
-    : [...existing, ref];
-}
-
 async function applyAttach(
   db: Database,
   judgment: StatementTransactionJudgment,
@@ -372,7 +354,7 @@ async function applyAttach(
         `The transaction's ${field} already matches the statement.`,
       );
   const data: FinancialTransactionUpdateData = {
-    sourceRefs: await appendRef(
+    sourceRefs: await settlementRefsIncluding(
       db,
       target.transactionId,
       judgment.create.sourceRef,
@@ -435,7 +417,11 @@ async function applySupersede(
     db,
     codeOf(transactionId),
     {
-      sourceRefs: await appendRef(db, transactionId, judgment.create.sourceRef),
+      sourceRefs: await settlementRefsIncluding(
+        db,
+        transactionId,
+        judgment.create.sourceRef,
+      ),
       status: "posted",
       postedDate: judgment.statementDate,
       amount: judgment.create.amount,

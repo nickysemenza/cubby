@@ -15,6 +15,7 @@ import {
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 import { dispatchesOperation } from "./support/dispatch-wire";
+import { ensureMemberParty } from "./fixtures/core";
 
 // A stale screen must not book changed bank evidence. Retries must preserve the
 // approved decision, and negative income must expose reimbursement review.
@@ -57,9 +58,12 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
     name: vendorName,
     itemizationExpectation: "not_expected",
   });
+  const owner = await ensureMemberParty(page, "Synthetic booking member");
   const accountId = await create("financialAccount", {
     name: "Synthetic review card",
     identity: { kind: "credit_card", issuer: null, network: "visa" },
+    ledgerPartyId: owner.shortcode,
+    provisional: false,
   });
   const transactionId = await create("financialTransaction", {
     accountId,

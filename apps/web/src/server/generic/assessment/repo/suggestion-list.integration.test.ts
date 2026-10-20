@@ -1,3 +1,4 @@
+import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import {
   recordStatementRowsInput,
   type StatementImportInput,
@@ -6,7 +7,9 @@ import {
 import type { SuggestionListRow } from "@cubby/schemas/suggestion-list";
 import { suggestionListFilters } from "@cubby/schemas/suggestion-list";
 import { eq } from "drizzle-orm";
+import { createEntity } from "tooling/factories/create";
 import { createRepoEntity } from "tooling/factories/repo";
+import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -19,6 +22,7 @@ import { answering } from "~/server/domains/statement-import/repo/statement-deci
 import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
 import { generateStatementSuggestionPage } from "~/server/domains/statement-import/repo/statement-suggestions";
 import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
+import { executeEntity } from "~/server/entity-kernel";
 import { readAssessmentRecordRefs } from "~/server/generic/assessment/repo/review-families";
 import { suggestionFamilies } from "~/server/generic/assessment/repo/suggestion-families";
 import {
@@ -407,12 +411,35 @@ describe("cross-family Suggestion list", () => {
   // Failure mode: bulk accept trusts the ids a client listed, so a charge
   // republished as no longer clean between list and accept is applied.
   it("accepts only what is clean when it runs, skipping a republished charge", async () => {
-    await card(ctx);
+    const owner = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Synthetic suggestion list member",
+      kind: "member",
+    });
+    const account = await card(ctx);
+    await executeEntity(kernelCtx(ctx), {
+      action: "update",
+      entity: "financialAccount",
+      id: account.output.id,
+      data: { ledgerPartyId: owner.output.id, provisional: false },
+    });
+    const category = await createEntity(
+      buildKernelContext(ctx.db, ctx.actor.userId),
+      "spendingCategory",
+      { name: "Synthetic suggestion list groceries" },
+    );
+    const advice = financialSpendingAdvice.parse({
+      spendingCategoryId: category.id,
+      categoryConfidence: "high",
+      vendorName: "Synthetic list grocer",
+      vendorConfidence: "high",
+      counterparty: "business",
+    });
     await record(ctx, [rowInput({ rawDescription: "EXAMPLE MKTPLACE PMTS" })]);
     await generate(ctx);
-    // A create is clean only once a label agrees with the category rule.
+    // Clean creation requires a kind label and categorized member spending.
     await labelStatementSuggestions(ctx.db, {
       port: answering({ kind: "purchase", counterparty: "business" }),
+      spendingAdvice: async () => advice,
       runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
     });
     const listed = await listSuggestionPage(ctx.db, {

@@ -5,7 +5,7 @@ import {
   taxonomyShortcode,
 } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { withAiInputs } from "~/server/ai/evaluation-inputs";
 import { getDb } from "~/server/db/helpers";
@@ -24,6 +24,7 @@ import {
   reviewAssessment,
   reviewAssessmentBatch,
 } from "~/server/generic/assessment/repo/assessment-review";
+import { setAutomaticRule } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import { suggestionCountsByFamily } from "~/server/generic/assessment/repo/suggestion-list";
 import {
   acceptSuggestion,
@@ -57,6 +58,15 @@ import {
 // the review queue.
 describe("Suggestion review", () => {
   const ctx = withTestDb();
+
+  // Manual review needs pending corrections even when confident assignments
+  // would otherwise be accepted by the enabled Automatic rule.
+  beforeEach(() =>
+    setAutomaticRule(ctx.db, ctx.actor, {
+      ruleKey: "field.addition",
+      enabled: false,
+    }),
+  );
 
   const sweepCategories = async (productIds: string[]) =>
     (

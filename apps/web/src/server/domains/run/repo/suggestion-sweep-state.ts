@@ -371,7 +371,11 @@ export async function saveSweepSuggestions(
           input.field,
         ),
       );
-      return applied.length ? ("applied" as const) : ("queued" as const);
+      return applied.length
+        ? ("applied" as const)
+        : created.length
+          ? ("queued" as const)
+          : ("settled" as const);
     },
     { isolationLevel: "serializable" },
   );

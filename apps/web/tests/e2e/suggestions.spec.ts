@@ -483,7 +483,7 @@ test("Find suggestions estimates a Sweep before it starts, then follows its Step
   ).toBeVisible();
 });
 
-// The migration-seeded rules read through `suggestions.rules`: Field Addition
+// The migration-seeded rules read through `suggestions.rules`: Field assignment
 // carried forward On, Statement attach Off until reviews make it eligible.
 test("Automatic rules lists each seeded rule with its state and switch", async ({
   page,
@@ -492,10 +492,10 @@ test("Automatic rules lists each seeded rule with its state and switch", async (
   await page.getByRole("tab", { name: /^Automatic rules/ }).click();
   await expect(page).toHaveURL(/status=rules/);
   const rules = page.getByRole("list", { name: "Automatic rules" });
-  const field = rules.getByRole("listitem", { name: "Field Addition" });
+  const field = rules.getByRole("listitem", { name: "Field assignment" });
   await expect(field.getByText("On", { exact: true })).toBeVisible();
   await expect(
-    field.getByRole("switch", { name: "Field Addition automatic rule" }),
+    field.getByRole("switch", { name: "Field assignment automatic rule" }),
   ).toHaveAttribute("aria-checked", "true");
   const attach = rules.getByRole("listitem", { name: "Statement attach" });
   await expect(attach.getByText("Off", { exact: true })).toBeVisible();

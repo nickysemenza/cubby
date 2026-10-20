@@ -35,6 +35,7 @@ import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import {
   adviseSpending,
+  needsSpendingAdvice,
   type SpendingAdvicePort,
 } from "~/server/domains/financial-transaction/service/spending-advice";
 import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
@@ -262,9 +263,9 @@ function prepareLabelledJudgment(
   }
   // Only context-fitting questions spend the page allowance. Reserve a whole
   // charge synchronously, so a small allowance completes earlier charges first.
-  const reserved = input.reserve(
-    decisions.length + Number(!checkpoint.spending),
-  );
+  const spendingReserved =
+    !checkpoint.spending && needsSpendingAdvice(judgment);
+  const reserved = input.reserve(decisions.length + Number(spendingReserved));
   return {
     decisions: decisions.filter(() => reserved()),
     retainError,
@@ -285,11 +286,15 @@ function prepareLabelledJudgment(
           judgment,
           previous.judgment.spending?.request.advice ?? null,
         );
+      if (!checkpoint.spending && !needsSpendingAdvice(judgment)) {
+        judgment.spending = await prepareStatementSpending(db, judgment, null);
+        checkpoint.spending = true;
+      }
       if (
         !checkpoint.spending &&
         !errors.length &&
         waitingUntil === null &&
-        reserved()
+        (spendingReserved ? reserved() : input.reserve(1)())
       ) {
         try {
           const advice = await adviseSpending(db, {

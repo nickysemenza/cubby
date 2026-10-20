@@ -67,7 +67,10 @@ import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import type { AuditSampler } from "~/server/generic/assessment/repo/automatic-rules";
 import { fieldReviewIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
-import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
+import {
+  fieldInputFingerprint,
+  fieldInputFingerprintIfLive,
+} from "~/server/generic/assessment/repo/field-input-fence";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/audit-log";
 import {
   fenceDerivedInputsAtCommit,
@@ -88,6 +91,7 @@ import {
   pendingFieldRefreshes,
   recordAiRefreshAttemptFailure,
   scheduleEvaluationRun,
+  settleAppliedFieldRefresh,
   uncertainEmailRefreshCandidates,
   type FieldRefreshCursor,
 } from "../repo/ai-refresh-state";
@@ -388,6 +392,23 @@ export async function discoverAiRefresh(
       if (target.kind !== "field") continue;
       const applied =
         first.status === "applied" || first.acceptanceReceipt !== null;
+      const currentFingerprint = applied
+        ? await fieldInputFingerprintIfLive(
+            db,
+            target.entity,
+            target.recordId,
+            target.field,
+          )
+        : null;
+      if (applied && currentFingerprint === null) continue;
+      const evaluated = first.acceptanceReceipt?.evaluatedInput;
+      if (
+        applied &&
+        evaluated &&
+        dependenciesCurrent(evaluated.provenance, activation.manifest) &&
+        evaluated.fingerprint === currentFingerprint
+      )
+        continue;
       // Applications retain history rather than protecting the old author's
       // value. Skip only the exact evidence settled by this application.
       if (
@@ -395,13 +416,7 @@ export async function discoverAiRefresh(
         first.provenance &&
         dependenciesCurrent(first.provenance, activation.manifest) &&
         first.acceptanceReceipt?.appliedInputFingerprint &&
-        first.acceptanceReceipt.appliedInputFingerprint ===
-          (await fieldInputFingerprint(
-            db,
-            target.entity,
-            target.recordId,
-            target.field,
-          ))
+        first.acceptanceReceipt.appliedInputFingerprint === currentFingerprint
       )
         continue;
       const prepared = await prepareField(db, target, ports);
@@ -954,6 +969,29 @@ export async function executeAiRefreshTarget(
         kernel(tx, ports, claimed.runId),
         (error) => applicationFailures.push(scrubErrorMessage(String(error))),
       );
+      const [predecessorId] = target.assessmentIds;
+      if (outcome === "settled" && predecessorId) {
+        const revision = await currentInputRevision(tx);
+        await settleAppliedFieldRefresh(
+          tx,
+          predecessorId,
+          await fieldInputFingerprint(
+            tx,
+            target.entity,
+            target.recordId,
+            target.field,
+          ),
+          saved.provenance,
+        );
+        await fenceDerivedInputsAtCommit(tx, revision, (next) =>
+          fieldInputFingerprint(
+            next,
+            target.entity,
+            target.recordId,
+            target.field,
+          ),
+        );
+      }
       return {
         outcome,
         applicationFailures,

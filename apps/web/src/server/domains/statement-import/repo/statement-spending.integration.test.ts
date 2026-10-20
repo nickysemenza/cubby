@@ -13,6 +13,8 @@ import { getDb } from "~/server/db/helpers";
 import { bookFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-booking";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
+import { executeEntity } from "~/server/entity-kernel";
+import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { listAutomaticDecisions } from "~/server/generic/assessment/repo/automatic-decisions";
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
@@ -136,7 +138,7 @@ describe("statement spending review and re-import", () => {
     });
     expect(await total()).toBe(42.5);
   });
-  it("automatically books an unchanged matched-but-unbooked import once and retains an audit receipt", async () => {
+  it("automatically books an unchanged matched-but-unbooked import once, retains its audit and skips later Expense edits", async () => {
     const { input, account, advice, recorded } = await fixture();
     const observed = (await listStatementRows(ctx.db, {})).data[0]!;
     await createRepoEntity(ctx, "financialTransaction", {
@@ -176,6 +178,25 @@ describe("statement spending review and re-import", () => {
         row.automaticRule?.startsWith("statement_transaction.book_spending@"),
       ),
     ).toBe(true);
+    await executeEntity(
+      kernelCtx(ctx),
+      entityCommandSchema.parse({
+        action: "update",
+        entity: "expense",
+        id: bookedExpense!.shortcode,
+        data: { name: "Synthetic member-corrected expense title" },
+      }),
+    );
+    await label(advice, recorded.batchId!);
+    expect(
+      (
+        await listSuggestionPage(ctx.db, {
+          family: "statement_transaction",
+          limit: 20,
+        })
+      ).items,
+    ).toEqual([]);
+    expect(await total()).toBe(42.5);
   });
   it("retains published category advice when a non-web correction only chooses a Vendor", async () => {
     const { advice } = await fixture();

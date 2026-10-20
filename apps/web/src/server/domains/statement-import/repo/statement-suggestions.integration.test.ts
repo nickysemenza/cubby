@@ -195,18 +195,15 @@ const accept = async (
     ["purchase", "refund", "fee"].includes(suggestion.create.kind) &&
     suggestion.spending?.status !== "ready" &&
     suggestion.spending?.status !== "already_booked";
+  if (needsBooking && !category)
+    throw new Error("Synthetic spending category is required");
   const booking = needsBooking
     ? {
-        advice: financialSpendingAdvice.parse({
-          spendingCategoryId: category?.shortcode,
-          categoryConfidence: "high",
-          vendorName:
-            suggestion.merchant ??
-            suggestion.rawDescription ??
-            "Synthetic reviewed business",
-          vendorConfidence: "high",
-          counterparty: "business",
-        }),
+        spendingCategoryId: category!.shortcode,
+        reviewedVendorName:
+          suggestion.merchant ??
+          suggestion.rawDescription ??
+          "Synthetic reviewed business",
         rejectedPurchaseIds: [],
         categoryHistoryReviewed: true,
       }
@@ -671,6 +668,35 @@ describe("statement Transaction suggestions", () => {
     expect(rows.every((row) => !row.clean && row.siblings === 1)).toBe(true);
   });
 
+  // Matching statement labels must not replace the attach target's actual kind.
+  it("keeps an attach to a non-spending transaction out of clean booking despite matching statement labels", async () => {
+    const account = (await card(ctx)).output;
+    await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.id,
+      kind: "account_transfer",
+      status: "posted",
+      amount: 42.5,
+      postedDate: "2026-05-05",
+      merchant: "Example Grocer",
+      sourceRefs: [],
+    });
+    await record(ctx, [rowInput()]);
+    await generate(ctx);
+    await labelStatementSuggestions(ctx.db, {
+      port: answering({ kind: "purchase", counterparty: "business" }),
+      runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
+    });
+    const [proposal] = await suggestions(ctx);
+    expect(proposal).toMatchObject({
+      recommended: "attach",
+      clean: false,
+      spending: { status: "deferred" },
+    });
+    await expect(accept(ctx, proposal!)).rejects.toThrow(
+      "kind or status cannot book this spending",
+    );
+  });
+
   // Failure modes: a model "same" leaves a descriptor-different attach
   // unreviewable in bulk; a label silently changes the evidence fingerprint
   // the apply step checks.
@@ -712,6 +738,29 @@ describe("statement Transaction suggestions", () => {
     expect((await listStatementRows(ctx.db, {})).data[0]).toMatchObject({
       matchState: "matched",
     });
+  });
+
+  // A pending hold needs kind/counterparty labels, never a spending decision.
+  it("finishes settlement-only labels without reserving spending allowance", async () => {
+    const queue = captureBackgroundQueue();
+    try {
+      await card(ctx);
+      await record(ctx, [rowInput({ providerStatus: "pending" })]);
+      await generate(ctx);
+      const result = await runStatementLabels(ctx.db, {
+        runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
+        port: answering({ kind: "purchase", counterparty: "business" }),
+        spendingAdvice: async () => {
+          throw new Error(
+            "Settlement-only evidence cannot request spending advice",
+          );
+        },
+        decisionLimit: 2,
+      });
+      expect(result).toMatchObject({ labelled: 1, next: null, failed: [] });
+    } finally {
+      queue.restore();
+    }
   });
 
   // A page cap must preserve every candidate and every completed decision,
