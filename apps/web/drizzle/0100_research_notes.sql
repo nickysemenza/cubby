@@ -1,5 +1,7 @@
 -- The approved breaking cutover keeps services enabled. Block concurrent old citation
 -- writes and destination edits inside this transaction; an old writer may fail after DROP.
+SET LOCAL TIME ZONE 'UTC';
+--> statement-breakpoint
 LOCK TABLE "EntitySource" IN ACCESS EXCLUSIVE MODE;
 --> statement-breakpoint
 LOCK TABLE "Entity" IN SHARE ROW EXCLUSIVE MODE;
