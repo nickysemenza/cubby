@@ -166,13 +166,17 @@ export type ScenarioHarness = Awaited<ReturnType<typeof startScenarioHarness>>;
  * Start the built Worker with deterministic purchase-agent peers and load one
  * scenario: the scripted model's steps and the gateway's extraction, audit
  * and decision outputs. `gmail-research` adds the local Google provider and
- * real background consumers. Call `close()` in `afterEach`.
+ * real background consumers. Pass `objectStorage: undefined` when a scenario
+ * never reads or writes objects. Call `close()` in `afterEach`.
  */
 export async function startScenarioHarness(
   databaseUrl: string,
   scenario: ScriptedScenario,
   profile: "purchase-agent" | "gmail-research" = "purchase-agent",
-  options: Pick<WorkerdRuntimeOptions, "coordinatorModels"> = {},
+  options: Pick<
+    WorkerdRuntimeOptions,
+    "coordinatorModels" | "objectStorage"
+  > = {},
 ) {
   const { runtime, prepared: controls } = await openWorkerdRuntime(
     {

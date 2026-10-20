@@ -54,7 +54,7 @@ for entry in "$kit_dir"/*; do
   targets+=("$entry")
 done
 targets+=(apps/apple/App apps/apple/CubbyKit/Sources/cubby apps/apple/CubbyKit/Sources/CubbyAPISupport apps/apple/CubbyKit/Tests)
-swift format lint --strict --configuration apps/apple/.swift-format --recursive "${targets[@]}" || lint_status=1
+swift format lint --parallel --strict --configuration apps/apple/.swift-format --recursive "${targets[@]}" || lint_status=1
 
 exit "$lint_status"
 fi

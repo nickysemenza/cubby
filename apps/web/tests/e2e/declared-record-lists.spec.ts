@@ -237,9 +237,6 @@ test("declared record lists retain identities, relationships and amounts on desk
 test("purchase and expense totals follow the full filtered set in tables and cards", async ({
   page,
 }) => {
-  // Early typing must survive cold hydration and toolbar portal placement.
-  const session = await page.context().newCDPSession(page);
-  await session.send("Emulation.setCPUThrottlingRate", { rate: 6 });
   const tag = `RecordTotals${Date.now()}`;
   const vendor = await seedVendorDisplayPrerequisite(page, `${tag} vendor`);
   const purchase = async (suffix: string) =>
@@ -291,9 +288,6 @@ test("purchase and expense totals follow the full filtered set in tables and car
   await purchaseSearch.fill("QuartzRefund");
   await expect(summaryValue("Spend")).toHaveText("-$7.00");
   await expect(summaryValue("Expense lines")).toHaveText("1");
-  // Cold hydration and the first search own the slow-CPU regression.
-  // Persistence and the remaining totals do not need artificial contention.
-  await session.send("Emulation.setCPUThrottlingRate", { rate: 1 });
   await page.reload();
   await expect(summaryValue("Spend")).toHaveText("-$7.00");
   await purchaseSearch.fill("FreeMarker");

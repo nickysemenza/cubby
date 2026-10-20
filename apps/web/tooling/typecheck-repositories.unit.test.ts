@@ -12,7 +12,7 @@ import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { expect, it } from "vitest";
 
-import { checkerFlags, typeChecker as compiler } from "../../../scripts/tsc.ts";
+import { typeChecker as compiler } from "../../../scripts/tsc.ts";
 import { createRepositoryPrograms } from "./typecheck-repositories";
 
 it("publishes a complete checked incremental boundary and recovers lost output", () => {
@@ -24,11 +24,10 @@ it("publishes a complete checked incremental boundary and recovers lost output",
     writeFileSync(file, content);
   };
   const compile = (args: string[]) => {
-    const result = spawnSync(
-      process.execPath,
-      [compiler, ...args, ...checkerFlags],
-      { cwd: app, encoding: "utf8" },
-    );
+    const result = spawnSync(process.execPath, [compiler, ...args], {
+      cwd: app,
+      encoding: "utf8",
+    });
     if (result.error) throw result.error;
     if (result.status !== 0) throw new Error(result.stdout + result.stderr);
   };

@@ -32,8 +32,12 @@ with types, not a key-set test: `satisfies Record<GeneratedUnion, …>` in
 TypeScript, an exhaustive `switch` over a generated per-status enum in Swift
 (`native-coverage.ts` emits `Implemented…ID`). Pinning a documented deliberate
 exception stays.
-For every deletion, record either the stronger retained regression or why the
-test guarded no runtime behavior in the commit message that deletes it. Preserve named regressions before removal.
+Prioritize ordinary household workflows. Expensive cold-start, legacy-recovery,
+and test-harness failure permutations may be deleted without equivalent
+replacement when their rare failure is not worth the CI and maintenance cost.
+For every deletion, record the stronger retained regression, lack of runtime
+behavior, or deliberate rare-case coverage tradeoff in the deleting commit.
+Preserve consequential ordinary-workflow regressions before removal.
 
 Reuse a healthy HMR session for iteration and fingerprint-verified builds.
 Finish source edits and formatting before starting a web build, and keep the

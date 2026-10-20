@@ -4,7 +4,10 @@ import type { Page } from "@playwright/test";
 import superjson from "superjson";
 import { fieldSuggestionsOut } from "@cubby/schemas/ai";
 import { assessmentReviewInput } from "@cubby/schemas/assessment";
-import type { StatementRowInput } from "@cubby/schemas/statement-row";
+import {
+  recordStatementRowsOut,
+  type StatementRowInput,
+} from "@cubby/schemas/statement-row";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -41,14 +44,15 @@ import {
 
 type Db = Awaited<ReturnType<typeof createEvidenceHarnessContext>>["db"];
 
-/** Publishes statement Suggestions for every unmatched charge, as a statement Sweep step does. */
-async function generateStatementSuggestions(db: Db) {
+/** Keep a scenario's generation independent of earlier imports in its worker database. */
+async function generateStatementSuggestions(db: Db, importId: string) {
   let after: Parameters<typeof generateStatementSuggestionPage>[1]["after"] =
     null;
   for (;;) {
     const page = await generateStatementSuggestionPage(db, {
       after,
       runId: null,
+      scope: { importId },
     });
     if (!page.next) return;
     after = page.next;
@@ -92,6 +96,9 @@ const recordRows =
       })),
     });
     expect(response.ok(), await response.text()).toBe(true);
+    return recordStatementRowsOut
+      .extend({ batchId: z.string() })
+      .parse(response.body).batchId;
   };
 
 const suggestionsTable = (page: Page) =>
@@ -140,14 +147,14 @@ test("Suggestions lists every family with named records and category pills, and 
     identity: { kind: "credit_card", issuer: null, network: "visa" },
     sourceAliases: [{ source: "monarch", alias, externalAccountId: null }],
   });
-  await recordRows(page, alias)(alias, [
+  const importId = await recordRows(page, alias)(alias, [
     {
       statementDate: "2026-05-11",
       providerAmount: -17.25,
       rawDescription: `${alias} CAFE`,
     },
   ]);
-  await generateStatementSuggestions(db);
+  await generateStatementSuggestions(db, importId);
   await drainDerivedRefreshFrontier(db);
   const seedCategoryAdvice = async () =>
     getDb(db)
@@ -285,7 +292,7 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
   const hold = `${alias} HOLD`;
   const cafe = `${alias} CAFE`;
   const record = recordRows(page, alias);
-  await record(alias, [
+  const importId = await record(alias, [
     {
       statementDate: "2026-05-12",
       providerAmount: -61.07,
@@ -307,7 +314,7 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
       rawDescription: cafe,
     },
   ]);
-  await generateStatementSuggestions(db);
+  await generateStatementSuggestions(db, importId);
 
   const view = `/suggestions?family=statement_transaction&record=financialAccount:${account.id}&group=account_month`;
   await gotoAuthenticatedPage(page, view);
@@ -358,7 +365,7 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
     .click();
   await expect(rowFor(hold)).toHaveCount(0);
 
-  await record(`${alias}-posted`, [
+  const postedImportId = await record(`${alias}-posted`, [
     {
       statementDate: "2026-05-06",
       providerAmount: -42.5,
@@ -367,7 +374,7 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
     },
   ]);
   // Settling the recorded hold at its exact amount is clean without labels.
-  await generateStatementSuggestions(db);
+  await generateStatementSuggestions(db, postedImportId);
   await gotoAuthenticatedPage(page, view);
   await page.getByRole("button", { name: "Accept 1 clean" }).click();
   await page

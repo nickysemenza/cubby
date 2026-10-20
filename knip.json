@@ -98,7 +98,6 @@
         "tooling/*": ["./tooling/*"]
       },
       "ignoreBinaries": [
-        "tsgo",
         "rsvg-convert",
         "magick",
         "apple",

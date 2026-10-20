@@ -19,7 +19,7 @@ import {
 } from "../../../packages/schemas/src/entity-definitions/definition";
 import type { ChildTableDeclaration } from "../../../packages/schemas/src/entity-definitions/child-definition";
 import type { EntityDeclaration } from "../../../packages/schemas/src/entity-definitions/definition";
-import { checkerFlags, typeChecker } from "../../../scripts/tsc.ts";
+import { typeChecker } from "../../../scripts/tsc.ts";
 import { generatedHeader, removeExtraArtifacts } from "../generator/artifacts";
 import {
   collectEntityOverrides,
@@ -2248,7 +2248,7 @@ describe("entity table storage", () => {
     );
     const result = spawnSync(
       process.execPath,
-      [typeChecker, "-p", join(root, "tsconfig.json"), ...checkerFlags],
+      [typeChecker, "-p", join(root, "tsconfig.json")],
       { encoding: "utf8" },
     );
     if (result.error) throw result.error;

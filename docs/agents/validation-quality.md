@@ -14,9 +14,8 @@ API does not establish that the configured libraries expose it.
 Typecheck locally only through these entry points, or
 `node scripts/tsc.ts --noEmit -p <tsconfig>` for one project: they ready
 generation and WASM and select tsrs ([typechecking](../development.md#typechecking)).
-Never run `tsc`, `pnpm exec tsc` or tsgo directly, and never set
-`CUBBY_TYPECHECKER=tsgo` locally; tsgo is CI's checker. There is no
-machine-wide typecheck queue. Preserve incremental
+Never run `tsc`, `pnpm exec tsc` or tsgo directly; local and CI checks use tsrs.
+There is no machine-wide typecheck queue. Preserve incremental
 build-info within a checkout, reuse unchanged results, and coordinate heavy
 checks across sessions because cold typechecks can consume substantial memory.
 The root `package.json` owns each static-check command composition.
