@@ -1,0 +1,25 @@
+apps/web/src/entity/page/entity-page-header.preview.test.tsx
+  s_a14da84a78b0eb::t_cc5caa241ff42a 24,26-39,49-52,56-58
+apps/web/src/entity/page/entity-page-header.tsx
+  s_a14da84a78b0eb::t_c62b5dc4494e49 297-298,300,304
+apps/web/src/entity/page/page.unit.test.tsx
+  s_a14da84a78b0eb::t_6072e112e76959 89-91
+apps/web/src/ui/layout/page-header.tsx
+  s_a14da84a78b0eb::t_f919564480a354 82,89,116,120-122
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c350e13cb64a453db68e413b2336a20235c9e002",
+  "prompts": {},
+  "sessions": {
+    "s_a14da84a78b0eb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a4251b55-9ed3-4f78-92dd-cdc1a554513c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
