@@ -23,6 +23,7 @@ const candidate = (transactionId: typeof FTX_A) => ({
   rawDescription: "EXAMPLE GROCER",
   diff: ["postedDate" as const, "status" as const],
   label: null,
+  claimed: false,
 });
 
 const suggestion = (

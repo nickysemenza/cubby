@@ -972,6 +972,43 @@ describe("statement Transaction suggestions", () => {
     expect(twin!.rawDescription).not.toBe(first!.rawDescription);
   });
 
+  // Failure mode: once one of two same-amount charges is attached, the other
+  // has no unmatched sibling left, so a model "same" alone would bulk-attach a
+  // second real charge onto the transaction that already settles the first.
+  it("never cleans an attach to a transaction another charge already settles", async () => {
+    await card(ctx);
+    await record(ctx, [rowInput({ rawDescription: "EXAMPLE CAFE 0001" })]);
+    await record(
+      ctx,
+      [
+        rowInput({
+          rawDescription: "EXAMPLE CAFE 0002",
+          statementDate: "2026-05-05",
+        }),
+      ],
+      { fingerprint: "fp-second-visit" },
+    );
+    await generate(ctx);
+    const older = (await suggestions(ctx)).find(
+      (row) => row.rawDescription === "EXAMPLE CAFE 0001",
+    );
+    await accept(ctx, older!);
+    await label(ctx, answering({ kind: "purchase", counterparty: "business" }));
+    const [second] = await suggestions(ctx);
+    expect(second).toMatchObject({
+      rawDescription: "EXAMPLE CAFE 0002",
+      recommended: "attach",
+      siblings: 0,
+      clean: false,
+      candidates: [
+        expect.objectContaining({
+          claimed: true,
+          label: expect.objectContaining({ same: "same", confidence: "high" }),
+        }),
+      ],
+    });
+  });
+
   // Failure modes: a category rule alone makes a create bulk-acceptable; a
   // label that disagrees with the rule still leaves it clean.
   it("cleans a create only when a label agrees with the category rule", async () => {
