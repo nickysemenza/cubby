@@ -19,7 +19,7 @@ import { expect, test } from "./support/e2e-test";
 
 test("combined records retain server sorting, pagination, and filters after reload", async ({
   page,
-}, testInfo) => {
+}) => {
   test.setTimeout(60_000);
   await page.setViewportSize({ width: 1280, height: 900 });
   const prefix = `Combined records ${Date.now()}`;
@@ -125,7 +125,6 @@ test("combined records retain server sorting, pagination, and filters after relo
   ).toBeVisible();
   await expect(alpha).toBeVisible();
 
-  await page.screenshot({ path: testInfo.outputPath("records-desktop.png") });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(
     page.getByRole("textbox", { name: "Name or shortcode" }),
@@ -142,7 +141,6 @@ test("combined records retain server sorting, pagination, and filters after relo
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(390);
-  await page.screenshot({ path: testInfo.outputPath("records-phone.png") });
 });
 
 // Desktop-only: this is the SSR + cross-page navigation proof for declared

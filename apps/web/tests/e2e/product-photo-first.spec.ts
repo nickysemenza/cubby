@@ -18,7 +18,7 @@ const labelPhoto = fileURLToPath(
 
 test("a member creates a Product from own item and label photos without an import run", async ({
   page,
-}, testInfo) => {
+}) => {
   const name = `Photo-first crew shirt ${Date.now()}`;
   await gotoAuthenticatedPage(page, "/products?create=true");
   await waitForFormHydration(page);
@@ -77,9 +77,7 @@ test("a member creates a Product from own item and label photos without an impor
   expect(bounds!.height).toBe(48);
   expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(titleBounds!.x);
   await expectViewportBounded(page);
-  await page.screenshot({
-    path: testInfo.outputPath("phone-photo-dossier.png"),
-  });
+
   await page
     .locator("#images")
     .getByRole("button", {

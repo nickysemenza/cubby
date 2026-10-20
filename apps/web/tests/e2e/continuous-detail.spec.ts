@@ -76,10 +76,7 @@ test("dense record header preserves identity, actions, and the editor", async ({
       await expect(
         page.getByRole("navigation", { name: "Section index" }),
       ).toBeVisible();
-    if (width !== 1024)
-      await page.screenshot({
-        path: test.info().outputPath(`dense-header-${width}.png`),
-      });
+
     await header
       .getByRole("button", { name: "More actions", exact: true })
       .click();
@@ -104,10 +101,7 @@ test("dense record header preserves identity, actions, and the editor", async ({
     await expect(
       editor.getByRole("textbox", { name: "Name", exact: true }),
     ).toHaveValue(name);
-    if (width !== 1024)
-      await page.screenshot({
-        path: test.info().outputPath(`dense-editor-${width}.png`),
-      });
+
     await editor.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(editor).toBeHidden();
     await expectViewportBounded(page);
@@ -133,9 +127,6 @@ test("dense record header preserves identity, actions, and the editor", async ({
       exact: true,
     }),
   ).toBeVisible();
-  await page.screenshot({
-    path: test.info().outputPath("dense-list-1440.png"),
-  });
 });
 
 // Regressions: empty declared sections disappear; a hash selects a hidden view;
@@ -216,8 +207,5 @@ for (const width of [1440, 390]) {
     }
     await expect(page).toHaveURL(/#plantings$/u);
     await expectViewportBounded(page);
-    await page.screenshot({
-      path: testInfo.outputPath(`continuous-detail-${width}.png`),
-    });
   });
 }

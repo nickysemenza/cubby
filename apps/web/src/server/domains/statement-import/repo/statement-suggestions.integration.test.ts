@@ -528,6 +528,11 @@ describe("statement Transaction suggestions", () => {
     });
     expect(await suggestions(ctx)).toEqual([]);
     expect(await generate(ctx)).toBe(0);
+    // Suppression belongs to retained history even after its projection retires.
+    await getDb(ctx.db).execute(sql`UPDATE "AssessmentState" SET active = false
+      WHERE id = ${suggestion!.assessmentId}::uuid`);
+    expect(await generate(ctx)).toBe(0);
+    expect(await suggestions(ctx)).toEqual([]);
   });
 
   // Failure modes: a hold's posted twin (tip added, later date) becomes a

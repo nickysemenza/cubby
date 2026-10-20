@@ -16,7 +16,7 @@ import { createEntityFixture } from "./fixtures/core";
 test("reviews historical item classification and preserves explicit purpose", async ({
   page,
   baseURL,
-}, testInfo) => {
+}) => {
   const headers = { Origin: baseURL! };
   const categoryName = "Synthetic classification clothing";
   const { id: clothing } = await createEntityFixture(page, "spendingCategory", {
@@ -112,15 +112,9 @@ test("reviews historical item classification and preserves explicit purpose", as
   await expect(
     page.getByRole("button", { name: "Apply reviewed change" }),
   ).toBeVisible();
-  await page.screenshot({
-    path: "/tmp/cubby-classification-review-desktop.png",
-    fullPage: true,
-  });
+
   await page.setViewportSize({ width: 402, height: 874 });
-  await page.screenshot({
-    path: "/tmp/cubby-classification-review-phone.png",
-    fullPage: true,
-  });
+
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.getByRole("button", { name: "Apply reviewed change" }).click();
   await expect(
@@ -324,9 +318,7 @@ test("reviews historical item classification and preserves explicit purpose", as
   ).toBeLessThanOrEqual(
     await winningLabel.evaluate((label) => label.clientWidth),
   );
-  await page.screenshot({
-    path: testInfo.outputPath("inherited-category-desktop.png"),
-  });
+
   await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 402, height: 874 });
   const phoneExplanation = page
@@ -354,9 +346,7 @@ test("reviews historical item classification and preserves explicit purpose", as
   ).toBeLessThanOrEqual(
     await winningLabel.evaluate((label) => label.clientWidth),
   );
-  await page.screenshot({
-    path: testInfo.outputPath("inherited-category-phone.png"),
-  });
+
   await page.keyboard.press("Escape");
   const blocked = await preview({
     action: "productCategory",

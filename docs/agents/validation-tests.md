@@ -162,7 +162,11 @@ When a journey already exposes the destination link, follow that link to exercis
 client navigation. When a record name occurs on links to multiple entity kinds,
 combine its accessible name with the canonical href before choosing a link.
 Keep document loads and reloads that own direct-link, SSR, or
-persistence regressions. Use the existing authenticated request context for fixture setup before any
+persistence regressions. Seed incidental prerequisites through supported
+fixtures instead of repeating unrelated create and search journeys. Ordinary
+passing runs keep assertions and automatic failure screenshots; explicit
+screenshots belong to visual comparisons or intentional demo/exploration
+output. Use the existing authenticated request context for fixture setup before any
 page load. A synthetic socket-only browser peer can use the same-origin session
 response as its document; its separate capture page still exercises the real
 external DOM. A link transition expected to stay within the app can

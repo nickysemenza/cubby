@@ -590,6 +590,21 @@ links remain in Git history.
 
 ## Operational checks
 
+Attribute slow browser work separately to document response, script loading
+and execution, hydration, client navigation, and the first actionable result.
+Use [Playwright's hydration guidance](https://playwright.dev/docs/navigations#hydration)
+and [TanStack's loading lifecycle](https://tanstack.com/router/latest/docs/guide/data-loading)
+before changing readiness or loader boundaries. Router intent preloading and
+Query-owned freshness are already configured; full-document navigation starts
+another client app and cannot reuse the previous document's Query cache.
+
+For Worker initialization, follow the [startup profiling procedure](infrastructure.md).
+For request CPU, use the
+[Worker profiler](https://developers.cloudflare.com/workers/observability/dev-tools/cpu-usage/):
+Worker timers advance on I/O and do not isolate synchronous CPU cost. Keep
+Node-side harness timing separate from Worker CPU, database time, and browser
+hydration. These are diagnostics, not additional required CI checks.
+
 Choose workflow/routing checks under the
 [validation policy](agents/validation.md#before-opening-a-pr); workflow edits
 use `actionlint` without asking for a broad local suite.

@@ -123,7 +123,7 @@ test("explains allocated trades with expandable contributor precedence", async (
 // list a second time exposes nested Label/Ref fields and squeezes the popover.
 test("shows owner rollup evidence once without nested wire fields", async ({
   page,
-}, testInfo) => {
+}) => {
   const fixture = await seedWardrobePrerequisites(
     page,
     "Synthetic owner evidence",
@@ -152,14 +152,10 @@ test("shows owner rollup evidence once without nested wire fields", async ({
   ).toHaveCount(1);
   await expect(panel.getByText("Entity Kind", { exact: true })).toHaveCount(0);
   await expect(panel.getByText("Inherited", { exact: true })).toHaveCount(0);
-  await page.screenshot({
-    path: testInfo.outputPath("owner-evidence-desktop.png"),
-  });
+
   await page.setViewportSize({ width: 390, height: 844 });
   await expectViewportBounded(page);
-  await page.screenshot({
-    path: testInfo.outputPath("owner-evidence-phone.png"),
-  });
+
   const ownerDetails = panel
     .locator("div")
     .filter({

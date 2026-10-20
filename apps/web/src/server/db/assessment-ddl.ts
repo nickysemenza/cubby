@@ -61,9 +61,10 @@ DROP TRIGGER IF EXISTS "AssessmentState_publish_field" ON "AssessmentState";
 CREATE TRIGGER "AssessmentState_publish_field" BEFORE INSERT ON "AssessmentState" FOR EACH ROW EXECUTE FUNCTION "publish_field_assessment"();
 `;
 
-/** Statement suggestion identity and bounded lookup indexes; retirement is background work. */
+/** Inactive statement revisions retain suppression and paid labels, so history lookups cannot use an active-only index. */
 export const statementSuggestionDdl = () => `
 CREATE UNIQUE INDEX IF NOT EXISTS "AssessmentState_statement_charge_key" ON "AssessmentState" ((data->>'source'),(data->>'chargeKey')) WHERE family='statement_transaction' AND active;
+CREATE INDEX IF NOT EXISTS "AssessmentState_statement_charge_history_idx" ON "AssessmentState" ((data->>'source'),(data->>'chargeKey'),"createdAt" DESC,id DESC) WHERE family='statement_transaction';
 CREATE INDEX IF NOT EXISTS "AssessmentState_statement_refs_idx" ON "AssessmentState" USING gin ((data->'refs')) WHERE family='statement_transaction' AND active AND status='pending';
 CREATE INDEX IF NOT EXISTS "AssessmentState_statement_account_idx" ON "AssessmentState" ((data->>'accountId'),(data->>'month')) WHERE family='statement_transaction' AND active AND status='pending';
 CREATE INDEX IF NOT EXISTS "StatementRow_source_charge_idx" ON "StatementRow" (source,(COALESCE("legacyExternalId","externalId"))) WHERE "deletedAt" IS NULL;

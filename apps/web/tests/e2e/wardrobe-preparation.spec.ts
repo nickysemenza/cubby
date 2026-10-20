@@ -1,13 +1,14 @@
-import { seedProductCategoryPrerequisite } from "./fixtures/catalog";
+import {
+  seedProductCategoryPrerequisite,
+  seedProductPrerequisite,
+} from "./fixtures/catalog";
 import {
   attachProductImagePrerequisite,
   seedImagePrerequisite,
 } from "./fixtures/photos";
 import {
   gotoAuthenticatedPage,
-  openProductFromPalette,
   selectComboboxItem,
-  waitForFormHydration,
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
@@ -57,25 +58,11 @@ test("taxonomy edits keep product classification paths and labels separate from 
     page.getByRole("heading", { level: 1, name: renamedType }),
   ).toBeVisible();
 
-  await page.goto("/products?create=true");
-  await waitForFormHydration(page);
-  const createDialog = page.getByRole("dialog");
-  await createDialog
-    .getByRole("textbox", { name: "Name", exact: true })
-    .fill(productName);
-  await selectComboboxItem(
-    page,
-    createDialog.getByRole("combobox", { name: "Category", exact: true }),
-    `${destinationRoot} / ${renamedType}`,
-  );
-  await createDialog.getByRole("button", { name: /^Create$/ }).click();
-  await expect(createDialog).not.toBeVisible({ timeout: 15_000 });
-  await openProductFromPalette(page, productName);
-  await expect(
-    page.getByText(`${destinationRoot} / ${renamedType}`, { exact: true }),
-  ).toBeVisible();
-
-  const productId = new URL(page.url()).pathname.split("/").at(-1)!;
+  const product = await seedProductPrerequisite(page, {
+    name: productName,
+    categoryId: type.id,
+  });
+  const productId = product.id;
   const itemImageName = `wardrobe-item-${suffix}`;
   const labelImageName = `wardrobe-label-${suffix}`;
   const [itemImage, labelImage] = await Promise.all([
@@ -91,6 +78,9 @@ test("taxonomy edits keep product classification paths and labels separate from 
     `/products/${productId}`,
     page.getByRole("heading", { level: 1, name: productName }),
   );
+  await expect(
+    page.getByText(`${destinationRoot} / ${renamedType}`, { exact: true }),
+  ).toBeVisible();
   await expect(
     page.locator("#images").getByRole("img", { name: `${itemImageName}.png` }),
   ).toBeVisible();
@@ -131,11 +121,4 @@ test("taxonomy edits keep product classification paths and labels separate from 
     labels.getByRole("img", { name: `${itemImageName}.png` }),
   ).toHaveCount(0);
   await page.getByTestId("detail-spec-plate").scrollIntoViewIfNeeded();
-  await page.screenshot({
-    path: test.info().outputPath("product-identity-desktop.png"),
-  });
-  await page.screenshot({
-    path: test.info().outputPath("product-images-desktop.png"),
-    fullPage: true,
-  });
 });

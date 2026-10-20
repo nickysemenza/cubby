@@ -191,11 +191,11 @@ test("image results compare descriptions and require explicit attachment confirm
   ).toBeDisabled();
   await description.scrollIntoViewIfNeeded();
   await expectViewportBounded(page);
-  await page.screenshot({ path: "/tmp/cubby-image-results-desktop.png" });
+
   await page.setViewportSize({ width: 390, height: 844 });
   await expectViewportBounded(page);
   await description.scrollIntoViewIfNeeded();
-  await page.screenshot({ path: "/tmp/cubby-image-results-mobile.png" });
+
   await page.setViewportSize({ width: 1280, height: 900 });
   // The Image's generic "Image jobs" section opens the job's own record.
   await page

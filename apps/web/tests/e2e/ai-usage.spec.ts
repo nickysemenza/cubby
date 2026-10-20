@@ -22,7 +22,7 @@ import { createEvidenceHarnessContext } from "./fixtures/core";
 // row limit so an older subscription call is not hidden by newer Gateway calls.
 test("recent AI calls filter transport and status before limiting rows", async ({
   page,
-}, testInfo) => {
+}) => {
   const { db, actor } = await createEvidenceHarnessContext(page);
   const runId = await ensureRun(db, actor, { purpose: "ai_suggest" });
   await getDb(db).execute(sql`
@@ -158,17 +158,13 @@ test("recent AI calls filter transport and status before limiting rows", async (
   await expect(unknownRow.getByText("unpriced charged")).toBeVisible();
   await expect(unknownRow.getByText("unpriced standard")).toBeVisible();
   await recent.getByRole("button", { name: "Clear", exact: true }).click();
-  await page.screenshot({
-    path: testInfo.outputPath("ai-usage.png"),
-    fullPage: true,
-  });
 });
 
 // Savings are split by why the charge was lower, a failed call without usage
 // is not an unpriced call, and the daily chart narrows the summary table.
 test("daily cost chart splits savings and filters the summary table", async ({
   page,
-}, testInfo) => {
+}) => {
   const { db, actor } = await createEvidenceHarnessContext(page);
   const runId = await ensureRun(db, actor, { purpose: "ai_suggest" });
   const evidence = (billingReason: string) =>
@@ -222,5 +218,4 @@ test("daily cost chart splits savings and filters the summary table", async ({
     ).toBeVisible();
   await page.getByRole("button", { name: "30d" }).click();
   await chart.scrollIntoViewIfNeeded();
-  await page.screenshot({ path: testInfo.outputPath("ai-usage-chart.png") });
 });

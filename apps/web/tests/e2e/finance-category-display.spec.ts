@@ -14,7 +14,7 @@ import { dispatchesOperation, unbatchFor } from "./support/dispatch-wire";
 test("linked Expense categories display their readable label and transaction expectation", async ({
   page,
   baseURL,
-}, testInfo) => {
+}) => {
   test.setTimeout(60_000);
   const tag = `Synthetic category display ${Date.now()}`;
   const categoryName = `${tag} dining`;
@@ -151,9 +151,7 @@ test("linked Expense categories display their readable label and transaction exp
   await expect(popover).toContainText(
     "Settlement allocations do not attribute",
   );
-  await page.screenshot({
-    path: testInfo.outputPath("expense-categories-explanation.png"),
-  });
+
   await page.keyboard.press("Escape");
   await openCellExplanation(row, "How itemization is determined");
   await expect(popover).toContainText("Technical details");
@@ -169,9 +167,7 @@ test("linked Expense categories display their readable label and transaction exp
   await expect(popover).toContainText("Itemization compares the purchase");
   await expect(popover).toContainText("Itemized, matches");
   await expect(popover).toContainText("-$56.00");
-  await page.screenshot({
-    path: testInfo.outputPath("itemization-explanation.png"),
-  });
+
   await page.keyboard.press("Escape");
   const unchanged = await entityApi(page.request).get(
     "financialTransaction",

@@ -5,7 +5,7 @@ import { expect, test } from "./support/e2e-test";
 
 test("declared expectation colors and spending category navigation counts", async ({
   page,
-}, testInfo) => {
+}) => {
   test.setTimeout(60_000);
   await page.setViewportSize({ width: 1440, height: 900 });
   const name = `Synthetic color category ${Date.now()}`;
@@ -50,10 +50,7 @@ test("declared expectation colors and spending category navigation counts", asyn
   await expect(categoryNav).toBeVisible();
   await categoryNav.scrollIntoViewIfNeeded();
   await expect(categoryNav).toBeInViewport();
-  await testInfo.attach("expectation-palette", {
-    body: await page.screenshot({ fullPage: false }),
-    contentType: "image/png",
-  });
+
   await page.setViewportSize({ width: 390, height: 844 });
   await gotoAuthenticatedPage(page, `/spending-categories/${category.id}`);
   await expect(
@@ -72,8 +69,4 @@ test("declared expectation colors and spending category navigation counts", asyn
   await expect(mobileBadge).toBeVisible();
   await mobileBadge.scrollIntoViewIfNeeded();
   await expect(mobileBadge).toBeInViewport();
-  await testInfo.attach("mobile-expectation-palette", {
-    body: await page.screenshot({ fullPage: false }),
-    contentType: "image/png",
-  });
 });

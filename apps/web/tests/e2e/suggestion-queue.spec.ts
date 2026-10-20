@@ -194,10 +194,7 @@ test("one queue separates proposals from automatic history and reviews either en
   await expect(
     page.getByRole("link", { name: new RegExp(name) }).first(),
   ).toBeVisible();
-  await page.screenshot({
-    path: testInfo.outputPath("suggestions-desktop.png"),
-    fullPage: true,
-  });
+
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(
     page.getByRole("link", { name: new RegExp(name) }).first(),
@@ -215,44 +212,41 @@ test("one queue separates proposals from automatic history and reviews either en
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
-  await page.screenshot({
-    path: testInfo.outputPath("suggestions-mobile.png"),
-    fullPage: true,
-  });
+
   await page.setViewportSize({ width: 1440, height: 900 });
 
-  for (const path of [`/products/${item.id}`, `/expenses/${charge.id}`]) {
-    await gotoAuthenticatedPage(page, path);
-    const proposals = page.getByRole("region", {
-      name: "Pending suggestions",
-      exact: true,
-    });
-    await expect(proposals).toContainText("Synthetic acquisition connection");
-  }
-  for (const [path, label] of [
-    ["/products", name],
-    ["/expenses", `${name} receipt`],
-  ] as const) {
-    await gotoAuthenticatedPage(
-      page,
-      `${path}?search=${encodeURIComponent(label)}`,
-    );
-    const row = page
-      .getByRole("row")
-      .filter({ has: page.getByRole("link", { name: label, exact: true }) });
-    await row
-      .getByRole("button", { name: "1 pending suggestion", exact: true })
-      .click();
-    const review = page.getByRole("region", {
-      name: "Pending suggestions",
-      exact: true,
-    });
-    await expect(review).toContainText("Synthetic acquisition connection");
-    if (path === "/expenses")
-      await review
-        .getByRole("button", { name: "Confirm", exact: true })
-        .click();
-  }
+  const documentOrigin = await page.evaluate(() => performance.timeOrigin);
+  await page
+    .getByRole("link", { name: new RegExp(name) })
+    .and(page.locator(`a[href="/products/${item.id}"]`))
+    .first()
+    .click();
+  await expect(page).toHaveURL(new RegExp(`/products/${item.id}$`));
+  expect(await page.evaluate(() => performance.timeOrigin)).toBe(
+    documentOrigin,
+  );
+  await expect(
+    page.getByRole("region", { name: "Pending suggestions", exact: true }),
+  ).toContainText("Synthetic acquisition connection");
+
+  // Source detail and target list exercise both endpoints through the shared
+  // review surface; repeating both presentations for each endpoint adds no write coverage.
+  await gotoAuthenticatedPage(
+    page,
+    `/expenses?search=${encodeURIComponent(`${name} receipt`)}`,
+  );
+  const row = page.getByRole("row").filter({
+    has: page.getByRole("link", { name: `${name} receipt`, exact: true }),
+  });
+  await row
+    .getByRole("button", { name: "1 pending suggestion", exact: true })
+    .click();
+  const review = page.getByRole("region", {
+    name: "Pending suggestions",
+    exact: true,
+  });
+  await expect(review).toContainText("Synthetic acquisition connection");
+  await review.getByRole("button", { name: "Confirm", exact: true }).click();
   await expect
     .poll(async () =>
       (
@@ -276,15 +270,9 @@ test("one queue separates proposals from automatic history and reviews either en
   await expect(
     audit.getByRole("link", { name: /Synthetic itemized confirmation/ }),
   ).toBeVisible();
-  await page.screenshot({
-    path: testInfo.outputPath("automatic-decisions-desktop.png"),
-    fullPage: true,
-  });
+
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.screenshot({
-    path: testInfo.outputPath("automatic-decisions-mobile.png"),
-    fullPage: true,
-  });
+
   await page.setViewportSize({ width: 1440, height: 900 });
   await audit.getByRole("button", { name: "Wrong", exact: true }).click();
   await expect(
