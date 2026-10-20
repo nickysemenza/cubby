@@ -517,9 +517,7 @@ function DetailSuggestions(
   props: Omit<ComponentProps<typeof RecordSuggestionsProvider>, "statusTarget">,
 ) {
   const target = useNeedsYouTarget("suggestions");
-  return (
-    <RecordSuggestionsProvider {...props} statusTarget={target ?? undefined} />
-  );
+  return <RecordSuggestionsProvider {...props} statusTarget={target} />;
 }
 
 function FullEntityDetail<E extends GenericDetailEntity>({

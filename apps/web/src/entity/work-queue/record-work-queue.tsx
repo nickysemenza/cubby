@@ -51,6 +51,9 @@ export function RecordWorkQueue({
     ) : (
       <ErrorDisplay error={result.error} title="Work queue" />
     );
+  // Loading holds Needs you open, like quality and suggestions.
+  if (variant === "rows" && input.success && result.isPending)
+    return <div data-needs-row aria-busy="true" className="min-h-10" />;
   const rows = result.data?.items ?? EMPTY_ROWS;
   if (rows.length === 0) return null;
   const memberOptions = memberOptionsOf(result.data?.members ?? []);
