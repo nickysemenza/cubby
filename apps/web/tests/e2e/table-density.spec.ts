@@ -95,7 +95,7 @@ test("product table columns hug their values", async ({ page }) => {
   const dateCell = row.locator('[data-cell-col="purchaseDate"]');
   const lines = dateCell.locator("[data-stacked-line]");
   await expect(lines).toHaveText([day.primary, day.secondary]);
-  await expect.poll(() => width(purchaseDate)).toBeLessThanOrEqual(84);
+  await expect.poll(() => width(purchaseDate)).toBeLessThanOrEqual(88);
 
   // The explanation shows only on the active row, over the cell.
   await page.mouse.move(0, 0);

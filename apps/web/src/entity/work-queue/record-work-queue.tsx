@@ -56,7 +56,10 @@ export function RecordWorkQueue({
   const memberOptions = memberOptionsOf(result.data?.members ?? []);
   if (variant === "rows")
     return (
-      <>
+      <section
+        aria-label="Work queue"
+        className="divide-y divide-hairline-soft"
+      >
         {rows.map((row) => (
           <div
             key={row.key}
@@ -83,7 +86,7 @@ export function RecordWorkQueue({
             <TransferPairAccept transactionId={id} />
           </div>
         ) : null}
-      </>
+      </section>
     );
   return (
     <section aria-label="Work queue" className="min-w-0">
