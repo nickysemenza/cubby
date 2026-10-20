@@ -9,7 +9,7 @@ import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { unwrapDb, withTransactionDatabase } from "~/server/db/helpers";
+import { unwrapDb, withSnapshotWriteDatabase } from "~/server/db/helpers";
 import {
   expenseSpendingCategoryResolutionSql,
   spendingClassificationRevision,
@@ -264,7 +264,7 @@ export async function applyFinanceCategorySuggestion(
 ) {
   const review = financeCategoryReviewSchema.parse(input);
   if (review.entity === "vendor") {
-    return withTransactionDatabase(
+    return withSnapshotWriteDatabase(
       context.db,
       async (db) => {
         const current = await loadVendorSuggestionContext(db, review.entityId);
@@ -322,7 +322,7 @@ export async function applyFinanceCategorySuggestion(
     );
   const financeEntity = review.entity;
   const spendingCategoryId = input.spendingCategoryId;
-  return withTransactionDatabase(
+  return withSnapshotWriteDatabase(
     context.db,
     async (db) => {
       const current = await loadFinanceSuggestionContext(

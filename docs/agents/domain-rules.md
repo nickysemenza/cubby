@@ -132,6 +132,14 @@ orchestrate, and repos alone call `getDb`; transactions use `withTransaction`.
 Its callback receives a Drizzle transaction directly. Use
 `withTransactionDatabase` when a called domain module needs a transaction-bound
 `Database`; `getDb` accepts that facade, not a raw Drizzle transaction.
+DB-only snapshot writers may opt into `withSnapshotWrite` or
+`withSnapshotWriteDatabase`. Each attempt revalidates the original submitted
+evidence and creates its own transaction-local state and deferred publication
+buffers. Enroll buffer flushing through that transaction's `runAfterCommit`;
+an outer buffer survives rollback and leaks abandoned-attempt tasks. Only an
+aborted owned boundary retries; caller-owned transactions and committed effect
+failures never replay. Provider/storage calls and unrestricted callbacks are
+not replay-safe merely because they occur inside a transaction.
 Background Queue invocations, Durable Object work and Workflow steps use
 `withInvocationDb`: the bounded pools lease independent transaction clients and
 close when the awaited scope finishes. Never share one standalone client across

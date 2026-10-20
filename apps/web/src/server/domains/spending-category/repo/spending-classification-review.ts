@@ -18,6 +18,7 @@ import {
   unwrapDb,
   uuidArrayParam,
   withTransactionDatabase,
+  withSnapshotWriteDatabase,
 } from "~/server/db/helpers";
 import { product, entityExternalId } from "~/server/db/schema";
 import {
@@ -532,7 +533,7 @@ export async function applySpendingClassificationReview(
           ...input.request.mergeIds,
         ])
       : [];
-  return withTransactionDatabase(
+  return withSnapshotWriteDatabase(
     ctx.db,
     async (db) => {
       if (mergedCategories.length)

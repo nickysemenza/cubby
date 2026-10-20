@@ -44,7 +44,11 @@ import { type output as ZodOutput, type ZodSchema, z } from "zod";
 import type { ListReadRow } from "~/entity/model/list-read-fields";
 import { selectListReadFields } from "~/entity/model/list-read-schema";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { updateLiveAndReturn, withTransactionOn } from "~/server/db/helpers";
+import {
+  runAfterCommit,
+  updateLiveAndReturn,
+  withTransactionOn,
+} from "~/server/db/helpers";
 import type {
   EntityKernelContext,
   EntityKernelDeleteResult,
@@ -744,14 +748,14 @@ export function defineRepository<
       // Every DB touch inside the delete goes through the transaction-bound
       // context (a pool-bound service UPDATE on a row this transaction locked
       // waits forever), and queue publications wait for the commit.
-      const deferred = deferPublications();
       const { result, affectedEdges } = await executeDeleteWithEffects(
         ctx.db,
         removable,
         ids,
         lifecycle.delete,
-        (transactionDb) =>
-          deleteInTransaction(
+        async (transactionDb) => {
+          const deferred = deferPublications();
+          const result = await deleteInTransaction(
             {
               ...ctx,
               db: transactionDb,
@@ -764,9 +768,13 @@ export function defineRepository<
               },
             },
             ids,
-          ),
+          );
+          await runAfterCommit(transactionDb, (committedDb) =>
+            deferred.flush(committedDb),
+          );
+          return result;
+        },
       );
-      await deferred.flush(ctx.db);
       return { ...result, affectedEdges };
     };
 

@@ -7,6 +7,7 @@ import {
   resolveDatabaseRuntime,
 } from "~/server/db/database-runtime";
 import type { RepositoryQueryTransaction } from "~/server/db/repository-access.boundary";
+import { isSerializationFailure } from "~/server/errors/db-errors";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 /** Work that must not happen unless the enclosing transaction commits. */
@@ -187,45 +188,81 @@ export const parentTransactionDatabase = (
  * Transaction wrapper for interactive transactions (sequential operations).
  * Use this in repo functions when you need multiple operations to be atomic.
  */
-export const withTransaction = async <T>(
+const withTransactionAttempts = async <T>(
+  db: Database,
+  fn: (tx: DrizzleTransaction) => Promise<T>,
+  config: PgTransactionConfig | undefined,
+  attempts: number,
+): Promise<T> => {
+  const parentBefore = beforeCommitQueues.get(db);
+  const limit = isTransaction(getDb(db)) ? 1 : attempts;
+  for (let attempt = 1; ; attempt++) {
+    const pending: AfterCommitEffect[] = [];
+    const before: BeforeCommitEntry[] = [];
+    let result: T;
+    try {
+      result = await withTrace(TraceNames.db("transaction"), async () => {
+        return await getDb(db).transaction(async (tx) => {
+          afterCommitQueues.set(tx, pending);
+          beforeCommitQueues.set(tx, before);
+          transactionParents.set(tx, db);
+          try {
+            const value = await fn(tx);
+            if (!parentBefore) {
+              for (const entry of before.filter(
+                (entry) => entry.phase === "validation",
+              ))
+                await entry.effect(tx);
+              for (const entry of before.filter(
+                (entry) => entry.phase === "fence",
+              ))
+                await entry.effect(tx);
+              for (const entry of before.filter(
+                (entry) => entry.phase === "capture",
+              ))
+                await entry.effect(tx);
+            }
+            return value;
+          } finally {
+            transactionParents.delete(tx);
+          }
+        }, config);
+      });
+    } catch (error) {
+      if (attempt >= limit || !isSerializationFailure(error)) throw error;
+      continue;
+    }
+    // Commit succeeded: effect failures must never enter the replay catch.
+    if (parentBefore) parentBefore.push(...before);
+    const parent = afterCommitQueues.get(db);
+    if (parent) parent.push(...pending);
+    else await flushAfterCommit(db, pending);
+    return result;
+  }
+};
+
+export const withTransaction = <T>(
   db: Database,
   fn: (tx: DrizzleTransaction) => Promise<T>,
   config?: PgTransactionConfig,
-): Promise<T> => {
-  const pending: AfterCommitEffect[] = [];
-  const before: BeforeCommitEntry[] = [];
-  const parentBefore = beforeCommitQueues.get(db);
-  const result = await withTrace(TraceNames.db("transaction"), async () => {
-    return await getDb(db).transaction(async (tx) => {
-      afterCommitQueues.set(tx, pending);
-      beforeCommitQueues.set(tx, before);
-      transactionParents.set(tx, db);
-      try {
-        const value = await fn(tx);
-        if (!parentBefore) {
-          for (const entry of before.filter(
-            (entry) => entry.phase === "validation",
-          ))
-            await entry.effect(tx);
-          for (const entry of before.filter((entry) => entry.phase === "fence"))
-            await entry.effect(tx);
-          for (const entry of before.filter(
-            (entry) => entry.phase === "capture",
-          ))
-            await entry.effect(tx);
-        }
-        return value;
-      } finally {
-        transactionParents.delete(tx);
-      }
-    }, config);
-  });
-  if (parentBefore) parentBefore.push(...before);
-  const parent = afterCommitQueues.get(db);
-  if (parent) parent.push(...pending);
-  else await flushAfterCommit(db, pending);
-  return result;
+): Promise<T> => withTransactionAttempts(db, fn, config, 1);
+
+type SnapshotWriteConfig = PgTransactionConfig & {
+  isolationLevel: "serializable" | "repeatable read";
+  accessMode?: "read write";
 };
+
+/**
+ * Opt-in recovery for DB-only snapshot writes. Rebuild all callback-local
+ * state and revalidate the original review on each attempt; effects and
+ * publication buffers belong to that attempt's transaction. Caller-owned
+ * boundaries execute once, and committed consumer failures never replay.
+ */
+export const withSnapshotWrite = <T>(
+  db: Database,
+  fn: (tx: DrizzleTransaction) => Promise<T>,
+  config: SnapshotWriteConfig,
+): Promise<T> => withTransactionAttempts(db, fn, config, 3);
 
 /**
  * Composable transaction: **join** the caller's transaction when one is already
@@ -279,3 +316,10 @@ export const withTransactionDatabase = async <T>(
   config?: PgTransactionConfig,
 ): Promise<T> =>
   withTransaction(db, (tx) => fn(databaseForTransaction(tx)), config);
+
+export const withSnapshotWriteDatabase = <T>(
+  db: Database,
+  fn: (transactionDb: Database) => Promise<T>,
+  config: SnapshotWriteConfig,
+): Promise<T> =>
+  withSnapshotWrite(db, (tx) => fn(databaseForTransaction(tx)), config);

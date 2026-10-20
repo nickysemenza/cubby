@@ -1,18 +1,24 @@
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getDb, runAfterCommit } from "~/server/db/helpers";
-import { recipe } from "~/server/db/schema";
+import { derivedRefreshWork, recipe } from "~/server/db/schema";
 import {
   deleteRecipes,
   RECIPE_DELETE_EDGE_POLICY,
 } from "~/server/domains/recipe/repo/crud";
+import { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
+import {
+  entityKernelContextSchema,
+  executeEntityAs,
+} from "~/server/entity-kernel";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   createRecipeFixture,
   makeRecipeInput,
 } from "~/server/testing/repo.fixtures";
+import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { executeDeleteWithEffects } from "./delete-effects";
 
@@ -24,7 +30,10 @@ describe("delete effect snapshot contention", () => {
   beforeEach(() => {
     queue = captureBackgroundQueue();
   });
-  afterEach(() => queue.restore());
+  afterEach(() => {
+    queue.restore();
+    vi.restoreAllMocks();
+  });
   const fixture = () =>
     createRecipeFixture(
       ctx.db,
@@ -89,5 +98,65 @@ describe("delete effect snapshot contention", () => {
       .from(recipe)
       .where(eq(recipe.id, subject.entityId));
     expect(stored?.deletedAt).toBeInstanceOf(Date);
+  });
+
+  it("discards buffered parent recomputations from a late aborted delete attempt", async () => {
+    const subject = await fixture();
+    await createRecipeFixture(
+      ctx.db,
+      makeRecipeInput({
+        name: "Synthetic deletion parent recipe",
+        sections: [
+          {
+            ingredients: [
+              {
+                type: "recipe",
+                recipeId: subject.id,
+                ingredientId: null,
+                amounts: [{ value: 1, unit: "each" }],
+              },
+            ],
+            instructions: [{ instruction: "Combine." }],
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    queue.tasks.length = 0;
+    const dispatch = RecipeCostingService.prototype.dispatchRecompute;
+    let interrupted = false;
+    let attempts = 0;
+    vi.spyOn(
+      RecipeCostingService.prototype,
+      "dispatchRecompute",
+    ).mockImplementation(async function (
+      this: RecipeCostingService,
+      ids,
+      metadata,
+    ) {
+      const result = await dispatch.call(this, ids, metadata);
+      if (metadata?.source === "recipe.delete") attempts++;
+      if (!interrupted && metadata?.source === "recipe.delete") {
+        interrupted = true;
+        await getDb(ctx.db)
+          .update(derivedRefreshWork)
+          .set({ availableAt: new Date(0) })
+          .where(eq(derivedRefreshWork.entityId, subject.entityId));
+      }
+      return result;
+    });
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, {
+        auth: { userId: ctx.actor.userId },
+      }),
+    );
+    await executeEntityAs(context, "delete", {
+      entity: "recipe",
+      ids: [subject.id],
+    });
+    expect(attempts).toBe(2);
+    expect(
+      queue.tasks.filter((task) => task.kind === "recipe-totals.recompute"),
+    ).toHaveLength(1);
   });
 });

@@ -19,6 +19,8 @@ export {
   unwrapDb,
   withTransaction,
   withTransactionDatabase,
+  withSnapshotWrite,
+  withSnapshotWriteDatabase,
   withTransactionOn,
 } from "./core";
 // CRUD operations
