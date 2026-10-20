@@ -637,8 +637,10 @@ async function stopRunForReviewOnce(
           inArray(runTable.status, [...ACTIVE_RUN_STATUSES]),
         ),
       )
-      .returning({ purpose: runTable.purpose });
-    if (stopped?.purpose === "mail_import")
+      .returning({ purpose: runTable.purpose, input: runTable.input });
+    // A Run without a roster (erased, or a legacy/manual Mail import) has no
+    // Email to return, and stopping it for review must never fail on parsing one.
+    if (stopped?.purpose === "mail_import" && stopped.input !== null)
       await releaseUnsettledMailRunSources(tx, runId);
     return { findingId: finding?.id ?? existingFinding?.id ?? null };
   });
