@@ -120,16 +120,17 @@
     display: block;
   }
   .ledger[data-ledger="facts"][data-facts-layout="leader"] > .ledger-row {
-    grid-template-columns: fit-content(55%) minmax(0.75rem, 1fr) fit-content(
-        60%
-      ) auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
     column-gap: var(--brand-space-2);
   }
   .ledger[data-ledger="facts"][data-facts-layout="leader"]
     > .ledger-row::before {
     content: "";
-    grid-column: 2;
-    grid-row: 1;
+    order: 2;
+    flex: 1 1 0.75rem;
+    min-width: 0.75rem;
     align-self: center;
     margin-top: 0.4rem;
     border-bottom: 1.5px dotted color-mix(in oklab, var(--border) 85%, black);
@@ -137,15 +138,18 @@
   .ledger[data-ledger="facts"][data-facts-layout="leader"]
     > .ledger-row
     > [data-ledger-slot="primary"] {
-    grid-column: 1;
+    order: 1;
+    flex: 0 1 auto;
     min-width: 0;
+    max-width: 55%;
   }
   .ledger[data-ledger="facts"][data-facts-layout="leader"]
     > .ledger-row
     > [data-ledger-slot="secondary"] {
-    grid-column: 3;
-    grid-row: 1;
-    justify-self: end;
+    order: 3;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 65%;
     text-align: end;
   }
   .ledger[data-ledger="facts"][data-facts-layout="leader"]
@@ -154,15 +158,24 @@
     > div {
     justify-content: flex-end;
   }
+  /* The edit trigger's negative start margin aligns its text in a left-aligned
+     grid; here it trimmed the value's max-content, so short values wrapped. */
+  .ledger[data-ledger="facts"][data-facts-layout="leader"]
+    [data-slot="basic-info-value"]
+    [data-cell-edit-trigger] {
+    margin-inline-start: 0;
+  }
   .ledger[data-ledger="facts"][data-facts-layout="leader"]
     > .ledger-row
     > [data-ledger-slot="actions"] {
-    grid-column: 4;
+    order: 4;
+    flex: none;
   }
   .ledger[data-ledger="facts"][data-facts-layout="leader"]
     > .ledger-row
     > [data-ledger-slot="detail"] {
-    grid-column: 1 / -1;
+    order: 5;
+    flex-basis: 100%;
   }
 }
 

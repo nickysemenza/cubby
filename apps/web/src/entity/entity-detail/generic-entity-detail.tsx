@@ -24,7 +24,6 @@ import { type ComponentProps, lazy, Suspense, useState } from "react";
 import { z } from "zod";
 
 import { RecordEmoji } from "~/entity/components/record-emoji";
-import { renderDetailFieldValue } from "~/entity/display/entity-display";
 import { heroChipLabel } from "~/entity/display/enum-field-display";
 import { detailEditRequest } from "~/entity/editing/editor-requests";
 import {
@@ -45,10 +44,7 @@ import {
 import { featureRegistry } from "~/entity/feature-registry";
 import { FieldExplanation } from "~/entity/fields/field-explanation";
 import { Page } from "~/entity/page/page";
-import type {
-  DetailHeroActions,
-  DetailHeroStat,
-} from "~/entity/page/page-hero";
+import type { DetailHeroActions } from "~/entity/page/page-hero";
 import { RecordSuggestionsProvider } from "~/entity/suggestions/record-suggestions";
 import { RecordWorkQueue } from "~/entity/work-queue/record-work-queue";
 import { useNativeRunEvidence } from "~/lib/native-workspace";
@@ -82,6 +78,7 @@ import { ConnectedRecordsSection } from "./connected-records-table";
 import { DetailActionProvider, DetailActionTarget } from "./detail-action-bar";
 import { DetailActivity } from "./detail-activity";
 import { detailEditOverrideFor } from "./detail-edit-overrides";
+import { detailHeroStats } from "./detail-hero-stats";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 import { detailSlotsFor } from "./detail-slots";
 import { EntityRecordFields } from "./entity-record-fields";
@@ -151,17 +148,7 @@ function heroOf<E extends GenericDetailEntity>(
   const chip = chipField ? heroChipLabel(entity, record, chipField) : null;
   const heroStamp =
     chip === null ? undefined : { label: chip, tone: "ink" as const };
-  const heroStats: DetailHeroStat[] = hero.stats.flatMap((key) => {
-    const statField = field(key);
-    return statField
-      ? [
-          {
-            label: statField.label,
-            value: renderDetailFieldValue(entity, record, statField),
-          },
-        ]
-      : [];
-  });
+  const heroStats = detailHeroStats(entity, record);
   const breadcrumbField =
     hero.breadcrumb === null ? undefined : field(hero.breadcrumb);
   return { heroStamp, heroStats, breadcrumbField };

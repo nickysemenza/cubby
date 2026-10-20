@@ -68,7 +68,6 @@ export function DetailActivity({ entity, id }: { entity: Entity; id: string }) {
     >
       <SectionHeading title="Activity" />
       <RecordList
-        variant="timeline"
         aria-label="Activity"
         state={
           activity.isError
@@ -91,7 +90,7 @@ export function DetailActivity({ entity, id }: { entity: Entity; id: string }) {
                 <time
                   dateTime={event.date}
                   title={formatInstant(event.date, "dateShortTime")}
-                  className="inline-block w-12 font-mono text-xs text-muted-foreground tabular-nums"
+                  className="inline-block w-12 font-mono text-xs whitespace-nowrap text-muted-foreground tabular-nums"
                 >
                   {formatInstant(event.date, "dateShort").replace(
                     /, \d{4}$/,

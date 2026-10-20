@@ -22,10 +22,12 @@ import { entityDetailFor } from "~/entity/entity-detail";
 import { PreviewQuery } from "~/entity/preview/preview-query";
 import { RecordSuggestionsProvider } from "~/entity/suggestions/record-suggestions";
 import { RecordWorkQueue } from "~/entity/work-queue/record-work-queue";
+import { FactsAddProvider, FactsLayoutProvider } from "~/ui/common/basic-info";
 import { SectionHeading, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
 import { detailEditOverrideFor } from "./detail-edit-overrides";
+import { detailHeroStats, KeyNumbersGrid } from "./detail-hero-stats";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 import { EntityRecordFields } from "./entity-record-fields";
 import {
@@ -121,64 +123,73 @@ function ResolvedInspectorRecord<E extends GenericDetailEntity>({
     .filter((field) => field.display.detail)
     .map((field) => field.key);
   return (
-    <RecordSuggestionsProvider
-      entity={entity}
-      records={[record]}
-      fieldKeys={fields}
-    >
-      <RecordQualityProvider
+    <>
+      <div className="-mx-4 -mt-3 mb-3">
+        <KeyNumbersGrid stats={detailHeroStats(entity, record)} />
+      </div>
+      <RecordSuggestionsProvider
         entity={entity}
-        id={record.id}
-        visibleFields={fields}
+        records={[record]}
+        fieldKeys={fields}
       >
-        <Stack gap="md">
-          {editable ? (
-            <div>
-              <Button
-                variant="outline"
-                size="xs"
-                onClick={() => setEditing(true)}
-              >
-                Edit record
-              </Button>
-            </div>
+        <RecordQualityProvider
+          entity={entity}
+          id={record.id}
+          visibleFields={fields}
+        >
+          <FactsLayoutProvider layout="leader">
+            <FactsAddProvider onAdd={editable ? () => setEditing(true) : null}>
+              <Stack gap="md">
+                {editable ? (
+                  <div>
+                    <Button
+                      variant="outline"
+                      size="xs"
+                      onClick={() => setEditing(true)}
+                    >
+                      Edit record
+                    </Button>
+                  </div>
+                ) : null}
+                <RecordWorkQueue id={record.id} />
+                {fieldSections.map((section) => (
+                  <section key={section.id} className="min-w-0">
+                    <SectionHeading title={section.title} />
+                    <QualitySectionChecks section={section.id} />
+                    <EntityRecordFields
+                      entity={entity}
+                      record={record}
+                      fields={section.fields}
+                    />
+                  </section>
+                ))}
+                <InspectorCheckSections
+                  entity={entity}
+                  id={record.id}
+                  fieldSections={fieldSections.map((section) => section.id)}
+                />
+              </Stack>
+            </FactsAddProvider>
+          </FactsLayoutProvider>
+          {EditOverride && editing ? (
+            <EditOverride
+              record={
+                // SAFETY: the override registry returns this entity's record editor.
+                record as never
+              }
+              onClose={() => setEditing(false)}
+            />
           ) : null}
-          <RecordWorkQueue id={record.id} />
-          {fieldSections.map((section) => (
-            <section key={section.id} className="min-w-0">
-              <SectionHeading title={section.title} />
-              <QualitySectionChecks section={section.id} />
-              <EntityRecordFields
-                entity={entity}
-                record={record}
-                fields={section.fields}
-              />
-            </section>
-          ))}
-          <InspectorCheckSections
-            entity={entity}
-            id={record.id}
-            fieldSections={fieldSections.map((section) => section.id)}
-          />
-        </Stack>
-        {EditOverride && editing ? (
-          <EditOverride
-            record={
-              // SAFETY: the override registry returns this entity's record editor.
-              record as never
-            }
-            onClose={() => setEditing(false)}
-          />
-        ) : null}
-        {editRequest ? (
-          <EntityEditDialog
-            open
-            onOpenChange={setEditing}
-            request={editRequest}
-          />
-        ) : null}
-      </RecordQualityProvider>
-    </RecordSuggestionsProvider>
+          {editRequest ? (
+            <EntityEditDialog
+              open
+              onOpenChange={setEditing}
+              request={editRequest}
+            />
+          ) : null}
+        </RecordQualityProvider>
+      </RecordSuggestionsProvider>
+    </>
   );
 }
 
