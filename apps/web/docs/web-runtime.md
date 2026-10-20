@@ -120,12 +120,6 @@ Fresh enrichment replaces retained values, and failures still expose diagnostics
 The same scope retains completed totals during refresh. Related previews send
 at most 1000 source IDs per request and send none when no relation is visible;
 loading and raw read errors belong to the affected batch's cells.
-
-A saving suggestion's optimistic value remains measurable by column fitting;
-mark its pending spinner busy, rather than the already-known value. Loading
-placeholders are excluded from fitting; an acknowledged value still contributes
-its content width while its acceptance response is pending.
-
 Live suggestions wait for their target projection; an absent deferred field is
 not an empty saved value. Explicit nulls and resolved references remain eligible.
 Stored suggestion reads split grouped-list rosters into at most 250 record IDs

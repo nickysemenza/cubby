@@ -683,7 +683,9 @@ test("suggests an existing variant and previews every merge decision for a creat
   await page
     .getByRole("button", { name: "Show evidence", exact: true })
     .click();
-  await expect(page.getByText(evidence)).toBeVisible();
+  await expect(
+    page.getByRole("paragraph").filter({ hasText: evidence }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Review merge" }).click();
   const dialog = page.getByRole("dialog");
   await expect(

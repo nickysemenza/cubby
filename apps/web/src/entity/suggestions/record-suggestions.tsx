@@ -1756,12 +1756,16 @@ export function RecordFieldSuggestion({
             <Spinner
               className="size-3 shrink-0"
               aria-label="Saving suggested value"
-              aria-busy="true"
             />
           ) : null
         }
       >
-        <span inert={accepted.pending ? true : undefined}>{value}</span>
+        <span
+          aria-busy={accepted.pending}
+          inert={accepted.pending ? true : undefined}
+        >
+          {value}
+        </span>
       </CellFrame>
     );
   }
