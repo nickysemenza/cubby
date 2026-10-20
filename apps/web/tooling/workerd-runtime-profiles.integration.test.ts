@@ -15,7 +15,6 @@ import { expectWriteLands } from "./workerd-runtime-fixtures";
 // - a profile silently stops running a real queue consumer (or starts one it
 //   should not), so a lane "passes" without exercising background work;
 // - a runtime points the Worker at the wrong database.
-// Start and close lifecycle lives in workerd-runtime.integration.test.ts.
 
 // What each real consumer logs for a body it cannot parse. Peers that drop
 // messages log nothing, and an unconsumed queue never delivers.

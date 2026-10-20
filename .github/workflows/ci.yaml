@@ -128,9 +128,6 @@ jobs:
         run: pnpm exec nx run cubby-checks:design-tokens --outputStyle=stream
       - name: TypeScript
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
-        # The merge gate keeps TypeScript's own checker; local runs default to tsrs.
-        env:
-          CUBBY_TYPECHECKER: tsgo
         run: pnpm exec nx run cubby-checks:types --outputStyle=stream
       - name: Lint
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}

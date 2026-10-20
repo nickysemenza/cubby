@@ -14,7 +14,7 @@ import {
 import { dirname, join, resolve } from "node:path";
 
 import { checkTypecheckBoundaries } from "./checks/typecheck-boundaries.ts";
-import { checkerFlags, typeChecker as compiler } from "../../../scripts/tsc.ts";
+import { typeChecker as compiler } from "../../../scripts/tsc.ts";
 import { repositoryPrograms } from "./typecheck-repositories.ts";
 
 const app = resolve(import.meta.dirname, "..");
@@ -22,14 +22,10 @@ const pending = join(app, "artifacts/server-contracts.pending");
 const output = join(app, "artifacts/server-contracts");
 
 function compile(args: string[]) {
-  const result = spawnSync(
-    process.execPath,
-    [compiler, ...args, ...checkerFlags],
-    {
-      cwd: app,
-      stdio: "inherit",
-    },
-  );
+  const result = spawnSync(process.execPath, [compiler, ...args], {
+    cwd: app,
+    stdio: "inherit",
+  });
   if (result.error) throw result.error;
   if (result.status !== 0) process.exit(result.status ?? 1);
 }

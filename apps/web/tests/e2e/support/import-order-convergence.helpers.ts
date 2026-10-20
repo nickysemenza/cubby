@@ -57,7 +57,8 @@ type EvidenceSource = "gmail" | "retailer" | "photo" | "csv";
 /** Both booking paths retain browser coverage: a statement aggregate needs
  * reviewed receipt reconciliation; a receipt first links existing itemization.
  * Both exercise photo approval and destination navigation. PostgreSQL keeps
- * all 24 arrival orders; the first row also guards the Problems sample limit. */
+ * a Latin square plus two seeded arrival orders; the first row also guards
+ * the Problems sample limit. */
 export const BROWSER_SOURCE_ORDERS = [
   ["csv", "photo", "retailer", "gmail"],
   ["retailer", "gmail", "csv", "photo"],

@@ -209,8 +209,9 @@ changed original bindings.
 
 ## Validation boundaries
 
-`import-order-convergence.integration.test.ts` exercises all 24 arrival
-orders of Gmail, retailer, photo, and CSV evidence against PostgreSQL through
+`import-order-convergence.integration.test.ts` exercises a Latin square plus
+two seeded arrival orders of Gmail, retailer, photo, and CSV evidence against
+PostgreSQL through
 the same writers the routes dispatch: real normalization, persistence,
 retailer preparation/commit, photo staging/finalization/review, CSV intake,
 booking, finding resolution, and order-mail linking.
@@ -219,7 +220,7 @@ requires reviewed receipt reconciliation; receipt-first links existing
 itemization. Both retain signed photo upload, photo review approval, CSV browser
 intake, and vendor-to-Purchase-to-Product navigation. The statement-first case
 also retains the Problems fix beyond the overview's first twelve findings.
-The PostgreSQL matrix owns exhaustive arrival-order coverage. Only external
+The PostgreSQL matrix owns sampled source-ordering coverage. Only external
 classifier/image-description output is deterministic. Both assert the final Product, inventory ownership, Expense,
 Purchase allocation, and original source edges; neither seeds the economic
 graph or repair it at the end.

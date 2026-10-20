@@ -58,7 +58,12 @@
       "command": "bash apps/apple/tooling/apple-check.sh lint",
       "cache": true,
       "inputs": [
-        "{projectRoot}/**/*.swift",
+        "{projectRoot}/App/**/*.swift",
+        "{projectRoot}/CubbyKit/Sources/CubbyKit/**/*.swift",
+        "!{projectRoot}/CubbyKit/Sources/CubbyKit/Generated/**/*.swift",
+        "{projectRoot}/CubbyKit/Sources/cubby/**/*.swift",
+        "{projectRoot}/CubbyKit/Sources/CubbyAPISupport/**/*.swift",
+        "{projectRoot}/CubbyKit/Tests/**/*.swift",
         "{projectRoot}/.swift-format",
         "{workspaceRoot}/apps/apple/tooling/apple-check.sh",
         // stdout only: some Swift builds print a driver version to stderr.

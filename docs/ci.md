@@ -74,7 +74,9 @@ pass never allocates a Mac. Minor and patch Xcode updates within the declared
 major reuse passes, including in the cache-first nightly; bump
 `.xcode-version` (and the `xcode-27` runner label) to change majors, and
 dispatch `fresh=true` to build against the image's current toolchain. TestFlight's toolchain policy is independent. Swift formatting keys the
-runner's `swift --version` stdout. `apps/apple/tooling/apple-inputs.test.ts` fails
+runner's `swift --version` stdout and the handwritten paths the lint script
+checks; emitter-owned Swift is excluded. Lint processes those files in parallel.
+`apps/apple/tooling/apple-inputs.test.ts` fails
 if an Apple pass gains any other runtime input.
 
 A developer pass satisfies hosted CI only when all execution-sensitive inputs
@@ -549,8 +551,11 @@ readiness p50/p95 and total job-minutes when a tradeoff is unclear, but do not
 hold a clear improvement for a fixed sample quota. Warm, cold and environment
 changes are different populations. Native historical nightly/dispatch runs are
 valid setup/build evidence; PR samples whose Mac jobs all skipped say nothing
-about cold native queueing. The 4–7 minute warm goal is a target, not a measured
-guarantee. Optional purchase import starts only after required CI succeeds and
+about cold native queueing. The ordinary changed-code PR goal is a five-minute
+p50, with p95 and cold/native runs measured separately. Prefer fewer runners
+and runner-minutes within that budget; a substantial resource saving can
+justify moving toward six minutes. These are targets, not measured guarantees.
+Optional purchase import starts only after required CI succeeds and
 uses one repository background slot. Superseded PR revisions cancel; sibling
 failures do not cancel independent checks. Rust formatting, Clippy and tests
 collect results separately, and Playwright has no failure-count cutoff; setup
