@@ -123,8 +123,8 @@ loading and raw read errors belong to the affected batch's cells.
 
 A saving suggestion's optimistic value remains measurable by column fitting;
 mark its pending spinner busy, rather than the already-known value. Loading
-placeholders are excluded from fitting, so marking the value busy collapses a
-narrow category cell while its acceptance response is pending.
+placeholders are excluded from fitting; an acknowledged value still contributes
+its content width while its acceptance response is pending.
 
 Live suggestions wait for their target projection; an absent deferred field is
 not an empty saved value. Explicit nulls and resolved references remain eligible.

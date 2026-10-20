@@ -481,7 +481,7 @@ test("list pills accept immediately without unloading another row's suggestion",
   });
   await gotoAuthenticatedPage(
     page,
-    `/products?q=${encodeURIComponent(prefix)}`,
+    `/products?searchQuery=${encodeURIComponent(prefix)}`,
   );
   const table = page.getByRole("table", { name: /Products table/i });
   const first = table.getByRole("row").filter({ hasText: names[0] });
@@ -489,6 +489,22 @@ test("list pills accept immediately without unloading another row's suggestion",
   const pillName = `Accept suggested value: ${categoryName}`;
   await expect(first.getByRole("button", { name: pillName })).toBeEnabled();
   await expect(second.getByRole("button", { name: pillName })).toBeEnabled();
+  // This journey guards acknowledgement and row continuity. Give the category
+  // a readable width through the real resize control before accepting it.
+  const header = table.locator('th[data-column-id="categoryId"]');
+  const grip = await header
+    .getByTitle("Drag to resize · double-click to reset")
+    .boundingBox();
+  if (!grip) throw new Error("Category resize control is not rendered");
+  const x = grip.x + grip.width / 2;
+  const y = grip.y + grip.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 200, y, { steps: 8 });
+  await page.mouse.up();
+  await expect
+    .poll(async () => (await header.boundingBox())?.width ?? 0)
+    .toBeGreaterThan(180);
   await first.getByRole("button", { name: pillName }).click();
   await expect(first.getByRole("button", { name: pillName })).toHaveCount(0);
   await expect(first.getByText(categoryName, { exact: true })).toBeVisible();

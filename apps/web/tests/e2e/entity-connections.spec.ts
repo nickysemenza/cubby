@@ -15,6 +15,7 @@ import {
   uniqueName,
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
+import { dispatchesOperation } from "./support/dispatch-wire";
 
 // Failure modes: a list connection silently applies on discovery; review writes
 // another row; accepting from one endpoint leaves a second pending review.
@@ -44,7 +45,10 @@ test("RTable connection review binds the chosen Expense and settles both endpoin
   const saved = () =>
     readExpense(page, line.id, z.object({ productId: z.string().nullable() }));
   expect((await saved()).productId).toBeNull();
-  await gotoAuthenticatedPage(page, `/products?q=${encodeURIComponent(name)}`);
+  await gotoAuthenticatedPage(
+    page,
+    `/products?searchQuery=${encodeURIComponent(name)}`,
+  );
   const row = page.getByRole("row").filter({ hasText: name });
   await row
     .getByRole("button", { name: "1 pending suggestion", exact: true })
@@ -55,7 +59,12 @@ test("RTable connection review binds the chosen Expense and settles both endpoin
   });
   expect((await saved()).productId).toBeNull();
   await expect(review).toContainText("This Expense acquired this Product");
-  await review.getByRole("button", { name: "Confirm", exact: true }).click();
+  await Promise.all([
+    page.waitForResponse((response) =>
+      dispatchesOperation(response.request(), "assessment.reviewBatch"),
+    ),
+    review.getByRole("button", { name: "Confirm", exact: true }).click(),
+  ]);
   await expect.poll(async () => (await saved()).productId).toBe(item.id);
   await gotoAuthenticatedPage(page, `/expenses/${line.id}#relationships`);
   const settled = page.getByRole("region", {
@@ -96,7 +105,10 @@ test("Purchase title column exposes inverse acquisition review", async ({
       unknowns: ["Amount and quantity remain unknown"],
     },
   });
-  await gotoAuthenticatedPage(page, `/purchases?q=${encodeURIComponent(name)}`);
+  await gotoAuthenticatedPage(
+    page,
+    `/purchases?searchQuery=${encodeURIComponent(name)}`,
+  );
   const row = page.getByRole("row").filter({ hasText: name });
   await row
     .getByRole("button", { name: "1 pending suggestion", exact: true })
@@ -107,7 +119,12 @@ test("Purchase title column exposes inverse acquisition review", async ({
   });
   await expect(review).toContainText("Review retrospective acquisition");
   await expect.poll(() => readEntityConnections(db, source)).not.toEqual([]);
-  await review.getByRole("button", { name: "Confirm", exact: true }).click();
+  await Promise.all([
+    page.waitForResponse((response) =>
+      dispatchesOperation(response.request(), "assessment.reviewBatch"),
+    ),
+    review.getByRole("button", { name: "Confirm", exact: true }).click(),
+  ]);
   await expect.poll(() => readEntityConnections(db, source)).toEqual([]);
   await gotoAuthenticatedPage(page, `/products/${item.id}#relationships`);
   const settled = page.getByRole("region", {
