@@ -113,6 +113,20 @@ struct RunSnapshotTests {
         #expect(session.snapshot?.raw == latest.raw)
     }
 
+    @Test @MainActor func malformedRefreshRetainsTheReviewAndShowsRawDiagnostics() async throws {
+        let old = try snapshot()
+        let session = RunReviewSession(snapshot: old)
+        var malformed = try #require(old.raw.objectValue)
+        malformed["status"] = 42
+        await session.refresh(
+            runID: "RUN-2345", loadSnapshot: { try RunSnapshot(.object(malformed)) },
+            loadReview: { nil })
+        #expect(session.snapshot?.raw == old.raw)
+        let message = try #require(session.error)
+        #expect(message.contains("status"))
+        #expect(message.contains("42"))
+    }
+
     @Test @MainActor func cancelledRefreshRetainsTheFrozenReview() async throws {
         let old = try snapshot("reviewed")
         let next = try snapshot("unseen")

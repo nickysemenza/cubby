@@ -134,7 +134,7 @@ public final class RunReviewSession {
                 } catch {
                     guard pendingCandidates == nil else { continue }
                     reportDiagnostic(error, "Check photo candidates")
-                    candidatesError = error.localizedDescription
+                    candidatesError = error.userMessage
                 }
             }
         }
@@ -189,7 +189,7 @@ public final class RunReviewSession {
         } catch {
             guard generation == refreshGeneration else { return }
             reportDiagnostic(error, "Load import run review")
-            self.error = error.localizedDescription
+            self.error = error.userMessage
         }
     }
 
@@ -221,7 +221,7 @@ public final class RunReviewSession {
             return true
         } catch {
             reportDiagnostic(error, "Update import run")
-            actionError = error.localizedDescription
+            actionError = error.userMessage
             return false
         }
     }
