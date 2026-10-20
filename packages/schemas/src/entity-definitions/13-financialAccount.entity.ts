@@ -66,6 +66,11 @@ export default defineEntity({
       emoji: "🏦",
     },
     detail: {
+      activityRelations: [{ relation: "purchases", dateField: "date" }],
+      hero: {
+        chart: { kind: "monthlyExpenseSpend", viewKey: "expenses" },
+        stats: ["transactionCount"],
+      },
       omitRelations: {
         vendors:
           "Three joins through transactions; the Transactions table links each transaction's vendor.",

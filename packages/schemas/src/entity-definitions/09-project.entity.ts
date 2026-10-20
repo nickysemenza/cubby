@@ -69,6 +69,13 @@ export default defineEntity({
     icons: { phosphor: "Hammer", sfSymbol: "hammer", emoji: "🛠️" },
     spans: [{ start: "startDate", end: "endDate", label: "Dates" }],
     detail: {
+      activityRelations: [
+        { relation: "purchases", dateField: "date" },
+        { relation: "defaultPurchases", dateField: "date" },
+        { relation: "tasks", dateField: "dueDate" },
+        { relation: "expenses", dateField: "date" },
+        { relation: "images", dateField: "capturedAt" },
+      ],
       relationFilterOverrides: {
         purchases: { descriptor: "related:purchase.projects" },
         "purchased-products": { descriptor: "related:product.projects" },
@@ -83,8 +90,10 @@ export default defineEntity({
           "A subset of the Purchases table; each purchase shows its default project as a field.",
       },
       hero: {
+        chart: { kind: "monthlyExpenseSpend", viewKey: "relation:expenses" },
+        stats: ["spent", "costEstimate"],
         chip: "status",
-        stats: ["costEstimate"],
+
         extraActions: ["setStatus"],
       },
       additionalSections: [

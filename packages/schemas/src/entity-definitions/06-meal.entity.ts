@@ -45,6 +45,7 @@ export default defineEntity({
       emoji: "🍽️",
     },
     detail: {
+      activityRelations: [{ relation: "images", dateField: "capturedAt" }],
       omitRelations: {
         eaters: "The composition slot renders each eater's portions.",
         "food-ingredients":
@@ -54,7 +55,7 @@ export default defineEntity({
         recipes:
           "The composition slot renders served recipes with their portions.",
       },
-      hero: { when: { field: "date", label: "Eaten" } },
+      hero: { stats: ["calories"], when: { field: "date", label: "Eaten" } },
       additionalSections: [
         {
           kind: "slot",

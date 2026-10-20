@@ -28,6 +28,7 @@ export default defineEntity({
     },
     icons: { phosphor: "Carrot", sfSymbol: "leaf", emoji: "🥕" },
     detail: {
+      activityRelations: [{ relation: "meals", dateField: "date" }],
       omitRelations: {
         eaters:
           "Who ate it is per-portion meal data; the Meals table on this page shows each meal and its eaters.",

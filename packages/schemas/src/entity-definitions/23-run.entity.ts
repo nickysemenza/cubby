@@ -56,15 +56,19 @@ export default defineEntity({
       emoji: "🤖",
     },
     detail: {
+      activityRelations: [
+        { relation: "purchases", dateField: "date" },
+        { relation: "emails", dateField: "receivedAt" },
+      ],
       omitRelations: {
         purchases:
           "The Changes slot's audit log lists every record the run wrote, purchases included; Purchase stores no run reference to filter by.",
       },
       hero: {
+        stats: ["attempt"],
         chip: "status",
-        // Order counts belong to import runs only; the `import-stats`
-        // slot renders them, so AI runs don't show four zeros.
-        stats: [],
+        // Import-only order counts stay in the `import-stats` slot.
+
         breadcrumb: "vendorAccountId",
       },
       additionalSections: [

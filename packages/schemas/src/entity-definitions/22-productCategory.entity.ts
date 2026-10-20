@@ -26,6 +26,10 @@ export default defineEntity({
     recordEmojiField: "emoji",
     titleField: "name",
     detail: {
+      hero: {
+        chart: { kind: "monthlyExpenseSpend", viewKey: "expenses" },
+        stats: ["productCount"],
+      },
       additionalSections: [
         {
           kind: "slot",

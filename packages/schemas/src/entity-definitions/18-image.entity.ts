@@ -60,7 +60,10 @@ export default defineEntity({
     },
     icons: { phosphor: "Image", sfSymbol: "photo", emoji: "🖼️" },
     detail: {
-      hero: { when: { field: "capturedAt", label: "Taken" } },
+      hero: {
+        stats: ["width", "height", "size"],
+        when: { field: "capturedAt", label: "Taken" },
+      },
       additionalSections: [
         { kind: "slot", id: "associations", title: "Used by" },
       ],

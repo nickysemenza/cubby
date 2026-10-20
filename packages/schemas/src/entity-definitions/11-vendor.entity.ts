@@ -51,6 +51,19 @@ export default defineEntity({
     },
     icons: { phosphor: "Storefront", sfSymbol: "storefront", emoji: "🏪" },
     detail: {
+      activityRelations: [
+        { relation: "expenses", dateField: "date" },
+        { relation: "purchases", dateField: "date" },
+      ],
+      hero: {
+        chart: { kind: "monthlyExpenseSpend", viewKey: "relation:expenses" },
+        stats: [
+          "spend",
+          "purchaseCount",
+          "latestPurchaseDate",
+          "unknownCategoryLineCount",
+        ],
+      },
       additionalSections: [
         {
           kind: "slot",

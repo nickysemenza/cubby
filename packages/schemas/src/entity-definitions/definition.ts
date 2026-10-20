@@ -1276,7 +1276,17 @@ const buildMetadataSchemas = () => {
             .object({
               /** An enum or boolean field rendered as the title chip. */
               chip: fieldKey.nullable().optional().default(null),
-              stats: z.array(fieldKey).optional().default([]),
+              stats: z.array(fieldKey).max(4).optional().default([]),
+              /** Expense-only monthly series through a declared connection view. */
+              chart: z
+                .object({
+                  kind: z.literal("monthlyExpenseSpend"),
+                  viewKey: nonEmptyString(),
+                })
+                .strict()
+                .nullable()
+                .optional()
+                .default(null),
               /** A reference field rendered as the ancestry breadcrumb. */
               breadcrumb: fieldKey.nullable().optional().default(null),
               /**
@@ -1295,13 +1305,28 @@ const buildMetadataSchemas = () => {
             })
             .strict()
             .prefault({})
-            .transform(({ chip, stats, breadcrumb, when, extraActions }) => ({
-              chip,
-              stats,
-              breadcrumb,
-              when,
-              actions: extraActions,
-            })),
+            .transform(
+              ({ chip, stats, chart, breadcrumb, when, extraActions }) => ({
+                chip,
+                stats,
+                chart,
+                breadcrumb,
+                when,
+                actions: extraActions,
+              }),
+            ),
+          /** Only these relations contribute dated records to merged activity. */
+          activityRelations: z
+            .array(
+              z
+                .object({
+                  relation: nonEmptyString(),
+                  dateField: fieldKey,
+                })
+                .strict(),
+            )
+            .optional()
+            .default([]),
           /** Null includes every declared section in Overview. A whitelist keeps
            * supporting detail reachable through its existing section id. */
           overviewSections: z
@@ -1349,6 +1374,7 @@ const buildMetadataSchemas = () => {
         .transform(
           ({
             sectionOverrides,
+            activityRelations,
             overviewSections,
             additionalSections,
             relationFilterOverrides,
@@ -1359,6 +1385,7 @@ const buildMetadataSchemas = () => {
             variant: variantOverride,
             hero,
             sections: sectionOverrides,
+            activityRelations,
             overviewSections,
             additionalSections,
             relationFilterOverrides,

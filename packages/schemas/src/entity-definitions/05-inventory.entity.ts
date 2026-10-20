@@ -52,7 +52,9 @@ export default defineEntity({
       actionLabel: "Add to Inventory",
     },
     icons: { phosphor: "Package", sfSymbol: "cube.box", emoji: "🗃️" },
-    detail: {},
+    detail: {
+      hero: { stats: ["amount"] },
+    },
     list: {
       // Installed fixtures (a wired-in dimmer) are not movable stock, so a
       // fresh inventory list opens on stock; clearing it shows both.

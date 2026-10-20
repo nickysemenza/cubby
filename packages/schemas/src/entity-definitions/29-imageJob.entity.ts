@@ -69,7 +69,10 @@ export default defineEntity({
       emoji: "🖼️",
     },
     detail: {
-      hero: { chip: "state", stats: [] },
+      hero: {
+        stats: ["attempts", "failuresSinceRetry", "durationMs"],
+        chip: "state",
+      },
       additionalSections: [
         { kind: "slot", id: "attempts", title: "Attempts and events" },
       ],

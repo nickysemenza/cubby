@@ -69,6 +69,14 @@ export default defineEntity({
     },
     icons: { phosphor: "Barcode", sfSymbol: "shippingbox", emoji: "📦" },
     detail: {
+      activityRelations: [
+        { relation: "plantings", dateField: "sowedOn" },
+        { relation: "purchases", dateField: "date" },
+        { relation: "expenses", dateField: "date" },
+        { relation: "tasks", dateField: "dueDate" },
+        { relation: "meals", dateField: "date" },
+        { relation: "images", dateField: "capturedAt" },
+      ],
       overviewSections: [
         "overview",
         "ownership",
@@ -95,6 +103,13 @@ export default defineEntity({
       // whose target happens to also be Product — say what's missing
       // instead of what type it is.
       hero: {
+        chart: { kind: "monthlyExpenseSpend", viewKey: "relation:expenses" },
+        stats: [
+          "expenseTotal",
+          "expenseCount",
+          "onHandUnits",
+          "componentCount",
+        ],
         extraActions: ["addToInventory", "recordSale", "discard"],
       },
       additionalSections: [
