@@ -8,8 +8,8 @@ import {
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 
-import { BulkActionBar } from "./bulk-action-bar";
 import type { BulkAction } from "./bulk-actions.types";
+import { BulkActionBar } from "./bulk/bulk-action-bar";
 import type { CubbyRow as Row } from "./table-features";
 import { useBulkActions } from "./use-bulk-actions";
 

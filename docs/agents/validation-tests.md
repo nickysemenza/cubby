@@ -352,3 +352,7 @@ Product/Purchase proof and idempotent preservation).
 Provider discovery scenarios turn Mail import on and assert the exact targeted
 queries paged, interleaved new-mail reads, and that completed coverage chains no
 further pass.
+
+Disclosure bodies mount only after opening. Explanation journeys open Technical details before asserting rule identifiers or descriptions; filter journeys use Clear all and drive inline presence controls directly. Table title subtitles can repeat category links, so scope category assertions to their declared column.
+
+Optional nested form controls stay unmounted until requested: mounting a numeric controller can expand a null parent into an object and mark an untouched bulk field dirty. The bulk-edit checkbox journey retains the regression that unrelated fields must stay out of the write.

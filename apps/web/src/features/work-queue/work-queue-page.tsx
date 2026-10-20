@@ -73,8 +73,9 @@ import { formatCount } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { CurrencyValue } from "~/ui/common/currency-value";
-import { BulkActionBar } from "~/ui/data-table/bulk-action-bar";
 import type { BulkActionsConfig } from "~/ui/data-table/bulk-actions.types";
+import { BulkActionBar } from "~/ui/data-table/bulk/bulk-action-bar";
+import { tableMoneyTotals } from "~/ui/data-table/bulk/table-money";
 import { textCellData } from "~/ui/data-table/cell-data";
 import { reconcileRowSelection } from "~/ui/data-table/row-selection";
 import {
@@ -83,7 +84,6 @@ import {
   type CubbyRow,
 } from "~/ui/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
-import { tableMoneyTotals } from "~/ui/data-table/table-money";
 import { useBulkActions } from "~/ui/data-table/use-bulk-actions";
 import { useTableConfig } from "~/ui/data-table/use-table-config";
 import { EmptyState } from "~/ui/feedback/empty-state";

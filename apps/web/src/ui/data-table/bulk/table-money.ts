@@ -1,7 +1,7 @@
 import type { RowData } from "@tanstack/react-table";
 
-import type { CubbyColumn, CubbyRow } from "./table-features";
-import { mobileColumnLabel } from "./table-meta";
+import type { CubbyColumn, CubbyRow } from "../table-features";
+import { mobileColumnLabel } from "../table-meta";
 
 /** Currency projections already loaded by the table; never parse formatted text. */
 export function tableMoneyTotals<TData extends RowData>(

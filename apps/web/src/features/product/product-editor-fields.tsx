@@ -465,7 +465,6 @@ export function ProductLabelNutritionField({
     <Disclosure
       summary={`Package label${hasServing ? "" : " (optional)"}`}
       defaultOpen={form.getValues(servingPath) != null}
-      keepMounted
     >
       <Stack gap="sm">
         <NullableNumericField

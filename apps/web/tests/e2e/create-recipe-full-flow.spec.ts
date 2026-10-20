@@ -55,9 +55,7 @@ test.describe("Create Recipe - Full Flow", () => {
     ).toBeVisible({ timeout: 10000 });
 
     const ingredientsSidebar = page.locator("aside").filter({
-      has: page
-        .locator(":scope > div > h3")
-        .filter({ hasText: /^Ingredients$/ }),
+      has: page.getByRole("heading", { name: "Ingredients", exact: true }),
     });
     await expect(ingredientsSidebar).toHaveCount(1);
     const ingredientRow = ingredientsSidebar.getByRole("listitem").filter({

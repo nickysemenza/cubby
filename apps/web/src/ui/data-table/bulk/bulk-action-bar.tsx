@@ -9,8 +9,8 @@ import { Spinner } from "~/ui/primitives/spinner";
 import {
   type BulkAction,
   resolveBulkActionAvailability,
-} from "./bulk-actions.types";
-import type { CubbyRow as Row } from "./table-features";
+} from "../bulk-actions.types";
+import type { CubbyRow as Row } from "../table-features";
 import type { tableMoneyTotals } from "./table-money";
 
 export interface BulkActionBarProps<TData extends RowData> {

@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { cn } from "~/lib/utils";
 
 /** `muted` and `warning` carry meaning; they are not decoration choices. */
-export type PanelTone = "default" | "muted" | "warning";
+type PanelTone = "default" | "muted" | "warning";
 
 const TONE_CLASS = {
   default: "border border-border bg-card text-card-foreground",

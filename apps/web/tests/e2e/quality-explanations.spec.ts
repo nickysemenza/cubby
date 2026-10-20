@@ -96,6 +96,9 @@ test("quality leads entity tables, explains its calculation, and restores tempor
   await popover.getByText("Score arithmetic", { exact: true }).click();
   await expect(popover).toContainText("applicable weight");
 
+  await popover
+    .getByRole("button", { name: "Technical details", exact: true })
+    .click();
   await expect(popover).toContainText("product.data-quality");
   const calculation = popover.getByRole("heading", {
     name: "Score calculation",
@@ -185,6 +188,9 @@ test("quality leads entity tables, explains its calculation, and restores tempor
   await expect(page).toHaveURL(/sort=.*dataQuality/);
   await openCellExplanation(unassessedRow, /How (data )?quality is determined/);
   await expect(popover).toContainText("Not assessed");
+  await popover
+    .getByRole("button", { name: "Technical details", exact: true })
+    .click();
   await expect(popover).toContainText("No weighted checks apply");
   await page.keyboard.press("Escape");
 });
@@ -609,6 +615,9 @@ test("specialist board cards and gallery sections retain the shared quality expl
     .getByRole("button", { name: /How (data )?quality is determined/ })
     .click();
   const popover = page.locator('[data-slot="popover-content"]:visible');
+  await popover
+    .getByRole("button", { name: "Technical details", exact: true })
+    .click();
   await expect(popover).toContainText("task.data-quality");
   await page.keyboard.press("Escape");
   const locationName = `${name} shelf`;
@@ -621,6 +630,9 @@ test("specialist board cards and gallery sections retain the shared quality expl
   await expect(locationSection).toContainText("Not assessed");
   await locationSection
     .getByRole("button", { name: /How (data )?quality is determined/ })
+    .click();
+  await popover
+    .getByRole("button", { name: "Technical details", exact: true })
     .click();
   await expect(popover).toContainText("location.data-quality");
   expect(task.id).toBeTruthy();

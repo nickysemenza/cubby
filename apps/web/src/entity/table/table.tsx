@@ -38,6 +38,7 @@ import {
 } from "~/ui/primitives/table";
 
 import type { BulkActionPreview } from "../../ui/data-table/bulk-actions.types";
+import { tableMoneyTotals } from "../../ui/data-table/bulk/table-money";
 import { CellSelectionContext } from "../../ui/data-table/cell-selection-context";
 import {
   columnOffsetValue,
@@ -55,7 +56,6 @@ import type {
   CubbyRow as Row,
 } from "../../ui/data-table/table-features";
 import { isUnpaged } from "../../ui/data-table/table-features";
-import { tableMoneyTotals } from "../../ui/data-table/table-money";
 import { TreeStatusRow } from "../../ui/data-table/tree-status-row";
 import { useDataTableController } from "../../ui/data-table/use-data-table-controller";
 import type { GroupConfig } from "../../ui/data-table/use-grouped-list";

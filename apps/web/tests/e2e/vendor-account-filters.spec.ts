@@ -62,7 +62,7 @@ test("vendor accounts filter by member from the Filters menu", async ({
   await expect(chip).toBeVisible();
   await expect(account(birch)).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Clear", exact: true }).click();
+  await page.getByRole("button", { name: "Clear all", exact: true }).click();
   await expect(account(birch)).toBeVisible();
   expect(new URL(page.url()).searchParams.has("ledgerPartyId")).toBe(false);
 

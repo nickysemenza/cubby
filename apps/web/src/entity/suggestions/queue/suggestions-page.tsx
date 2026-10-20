@@ -38,8 +38,8 @@ import { invalidateOperationTags } from "~/integrations/tanstack-query/operation
 import { formatCount, formatCurrency } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
-import { BulkActionBar } from "~/ui/data-table/bulk-action-bar";
 import type { BulkActionsConfig } from "~/ui/data-table/bulk-actions.types";
+import { BulkActionBar } from "~/ui/data-table/bulk/bulk-action-bar";
 import type { CubbyRow } from "~/ui/data-table/table-features";
 import type { FilterConfig } from "~/ui/data-table/table-meta";
 import { useBulkActions } from "~/ui/data-table/use-bulk-actions";

@@ -163,6 +163,9 @@ test("linked Expense categories display their readable label and transaction exp
   await expect(
     popover.getByText("Confirmed allocations", { exact: true }),
   ).toHaveCount(0);
+  await popover
+    .getByRole("button", { name: "Technical details", exact: true })
+    .click();
   await expect(popover).toContainText("Itemization compares the purchase");
   await expect(popover).toContainText("Itemized, matches");
   await expect(popover).toContainText("-$56.00");
