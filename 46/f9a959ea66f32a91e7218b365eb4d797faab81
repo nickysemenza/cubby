@@ -1,0 +1,41 @@
+apps/apple/App/Shared/DesignSystem/RecordListRow.swift
+  s_359d51740d6cee::t_c837bd710c2242 7,36-45
+apps/apple/App/Shared/Entity/List/EntityBoardListView.swift
+  s_359d51740d6cee::t_d2289d1904bf81 145-147
+apps/apple/App/Shared/Report/RecordsBlockView.swift
+  s_359d51740d6cee::t_9979d83deb30f6 23-27,47
+apps/apple/CubbyKit/Sources/CubbyKit/List/EntityBoardPlan.swift
+  s_359d51740d6cee::t_d85d210ebbd4b2 5-16
+apps/apple/CubbyKit/Tests/CubbyKitTests/List/EntityBoardPlanTests.swift
+  s_359d51740d6cee::t_eafb575eb97999 8-20
+apps/apple/DESIGN.md
+  s_359d51740d6cee::t_8e3647d5344a72 23-24
+apps/web/src/entity/entity-list/board/board-plan.ts
+  s_359d51740d6cee::t_7cf1f9e33e1952 3,18-43
+apps/web/src/entity/entity-list/board/board-plan.unit.test.ts
+  s_359d51740d6cee::t_fdf6ce5601149a 4,13-21
+apps/web/src/entity/entity-list/board/entity-board.tsx
+  s_359d51740d6cee::t_39de7893a3a3b4 11,59,174,187-190,317-320,323-333,335-336
+apps/web/src/ui/dnd/sensors.ts
+  s_359d51740d6cee::t_d0042dc6d1760b 74,125-134
+apps/web/tests/e2e/filters-menu.spec.ts
+  s_359d51740d6cee::t_27a4cd4e8f8d51 258-268
+docs/entities.md
+  s_359d51740d6cee::t_b084f6d13aa418 32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "46f9a959ea66f32a91e7218b365eb4d797faab81",
+  "prompts": {},
+  "sessions": {
+    "s_359d51740d6cee": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15a5b-cd3e-7de2-9758-1362bd955be4",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
