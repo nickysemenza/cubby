@@ -30,6 +30,7 @@ import {
 } from "~/server/db/schema";
 import { createProduct } from "~/server/domains/product/repo/crud";
 import { entityKernelContextSchema } from "~/server/entity-kernel/adapter";
+import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
 import {
   lookupShortcodes,
   resolveLiveShortcode,
@@ -160,7 +161,7 @@ export async function seedPending(
   row: Pick<
     typeof suggestionTable.$inferInsert,
     "entity" | "recordId" | "field" | "currentValue" | "suggestedValue" | "kind"
-  >,
+  > & { field: string },
 ) {
   const runId = await ensureRun(ctx.db, ctx.actor, {
     purpose: "ai_suggest",
@@ -175,6 +176,14 @@ export async function seedPending(
       model: PRIMARY_MODEL,
       status: "pending",
       ...row,
+      data: {
+        liveInputFingerprint: await fieldInputFingerprint(
+          ctx.db,
+          row.entity,
+          row.recordId,
+          row.field,
+        ),
+      },
     })
     .returning({ id: suggestionTable.id });
   if (!saved) throw new Error("Synthetic Suggestion was not persisted");

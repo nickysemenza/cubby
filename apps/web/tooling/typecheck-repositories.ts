@@ -251,10 +251,10 @@ export function createRepositoryPrograms(
         noEmitOnError: true,
         paths: {
           ...paths,
-          "~/server/generic/derived-refresh/capture.boundary": [
+          "~/server/generic/derived-refresh/repo/capture.boundary": [
             join(
               app,
-              "artifacts/server-contracts/server/generic/derived-refresh/capture.boundary.d.ts",
+              "artifacts/server-contracts/server/generic/derived-refresh/repo/capture.boundary.d.ts",
             ),
           ],
           "~/server/db/repository-access.boundary": [

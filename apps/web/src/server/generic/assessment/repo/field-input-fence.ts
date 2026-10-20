@@ -25,7 +25,7 @@ export async function fieldInputFingerprint(
     (candidate) => candidate.key === field,
   );
   const policy = model?.control?.suggest;
-  if (!policy) throw new Error(`Unknown suggestible field: ${entity}.${field}`);
+  if (!model) throw new Error(`Unknown assessment field: ${entity}.${field}`);
   const table = Object.entries(SHORTCODE_TABLE).find(
     ([key]) => key === entity,
   )?.[1];
@@ -40,11 +40,12 @@ export async function fieldInputFingerprint(
       `Suggestion subject is no longer live: ${entity}:${recordId}`,
     );
   const row = z.record(z.string(), z.json()).parse(source.value);
-  const backings = "backedBy" in policy ? (policy.backedBy ?? []) : [];
+  const backings =
+    policy && "backedBy" in policy ? (policy.backedBy ?? []) : [];
   const keys = [
     ...new Set([
       field,
-      ...policy.basis,
+      ...(policy?.basis ?? []),
       ...backings.map((backing) =>
         "via" in backing ? backing.via : backing.column,
       ),
@@ -80,8 +81,22 @@ export async function fieldInputFingerprint(
           parseEntityId("product", recordId),
         ),
       );
+  // Own writes have a point revision. An unrelated row of the same kind must
+  // not invalidate adjacent review actions; inherited bases still need the
+  // kind epoch because their deciding ancestor can be a different row.
+  const inherited = keys.some((key) =>
+    entityFieldModels[kind].fields.some(
+      (field) => field.key === key && field.resolution,
+    ),
+  );
+  const revisionKeys = [
+    ...refreshInputKeys(kind).filter(
+      (key) => inherited || key !== `kind:${kind}`,
+    ),
+    `entity:${kind}:${recordId}`,
+  ];
   basis.scopeRevisions = z
     .json()
-    .parse(await readInputRevisions(db, refreshInputKeys(kind)));
+    .parse(await readInputRevisions(db, revisionKeys));
   return sha256Hex(canonicalJson(basis));
 }

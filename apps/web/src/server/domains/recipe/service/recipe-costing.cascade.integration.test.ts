@@ -10,13 +10,12 @@ import {
 } from "~/server/domains/product/repo/crud";
 import { createRecipe, updateRecipe } from "~/server/domains/recipe/repo/crud";
 import { getRecipeTotalsState } from "~/server/domains/recipe/repo/totals";
-import {
-  entityKernelContextSchema,
-  executeEntity,
-} from "~/server/entity-kernel";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { requireActor } from "~/server/http/request-context";
-import { captureBackgroundQueue } from "~/server/testing/background-queue";
+import {
+  captureBackgroundQueue,
+  drainDerivedRefreshFrontier,
+} from "~/server/testing/background-queue";
 import {
   ingredientRef,
   makeProductInput,
@@ -155,6 +154,7 @@ describe("recipe totals cascade", () => {
     await drainFrontier();
     queue.tasks.length = 0;
     await changePrice(tree.product, 9);
+    await drainDerivedRefreshFrontier(ctx.db);
     expect(await stale(tree.child)).toBe(true);
     expect(await stale(tree.grandparent)).toBe(true);
     await drainFrontier();
@@ -168,20 +168,11 @@ describe("recipe totals cascade", () => {
     expect(await stale(tree.parent)).toBe(false);
   });
 
-  it("reports pending totals while the input frontier is unfinished", async () => {
+  it("invalidates its own totals before background publication", async () => {
     const tree = await seedTree();
     await changePrice(tree.product, 9);
-    const read = await executeEntity(
-      entityKernelContextSchema.parse(
-        createTestRequestContext(ctx.db, {
-          auth: { userId: ctx.actor.userId },
-        }),
-      ),
-      { action: "get", entity: "recipe", id: tree.childCode, missing: "error" },
-    );
-    if (read.action !== "get" || read.entity !== "recipe" || !read.item)
-      throw new Error("Expected synthetic recipe");
-    expect(read.item.totals?.cost).toMatchObject({ status: "pending" });
+    await drainDerivedRefreshFrontier(ctx.db);
+    expect(await stale(tree.child)).toBe(true);
     await drainFrontier();
     expect(await stale(tree.child)).toBe(false);
     expect(await stale(tree.grandparent)).toBe(false);

@@ -3,7 +3,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
+import { getDb, withTransaction } from "~/server/db/helpers";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { replaceSettlementRefs } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -53,7 +53,7 @@ describe("provisional financial accounts", () => {
       deletedAt: options.deleted ? new Date() : null,
     });
     if (options.refs)
-      await getDb(db).transaction((tx) =>
+      await withTransaction(db, (tx) =>
         replaceSettlementRefs(tx, created.id, [
           { source: "test-bank", externalId: label("ref") },
         ]),

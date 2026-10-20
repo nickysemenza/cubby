@@ -38,7 +38,7 @@ import {
   type RepositoryQueryTransaction,
 } from "~/server/db/repository-access.boundary";
 import { createAppError } from "~/server/errors/app-error";
-import { recordContextRefresh } from "~/server/generic/derived-refresh/capture.boundary";
+import { recordContextRefresh } from "~/server/generic/derived-refresh/repo/capture.boundary";
 
 type Db = RepositoryQueryInput;
 

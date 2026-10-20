@@ -1,5 +1,6 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -38,6 +39,360 @@ describe("summary mutation output demand", () => {
     queue = captureBackgroundQueue();
   });
   afterEach(() => queue.restore());
+  // Non-column scalars must retain normalized receipts and citation equality;
+  // inherited Source values can differ from the saved override in the receipt.
+  it("keeps linked Project URL citations current through unrelated saves and clearing", async () => {
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const subject = await createRepoEntity(ctx, "project");
+    const url = "https://drive.google.com/drive/folders/synthetic-folder";
+    const result = await executeEntityMutationRead(
+      context,
+      {
+        action: "update",
+        entity: "project",
+        id: subject.output.id,
+        data: { googleDriveFolderUrl: url },
+        sources: [
+          {
+            fieldPath: "googleDriveFolderUrl",
+            quote: "Synthetic folder label",
+          },
+        ],
+      },
+      ["id", "googleDriveFolderUrl"],
+    );
+    expect(result.item).toMatchObject({ googleDriveFolderUrl: url });
+    const read = async () =>
+      (
+        await executeEntityAs(context, "get", {
+          entity: "project",
+          id: subject.output.id,
+          missing: "error",
+        })
+      ).item;
+    expect(await read()).toMatchObject({
+      sources: [expect.objectContaining({ supportsCurrentValue: true })],
+    });
+    await executeEntityMutationRead(
+      context,
+      {
+        action: "update",
+        entity: "project",
+        id: subject.output.id,
+        data: { notes: "Synthetic unrelated edit" },
+        sources: [
+          {
+            fieldPath: "googleDriveFolderUrl",
+            quote: "Synthetic second observation",
+          },
+        ],
+      },
+      ["id"],
+    );
+    expect(await read()).toMatchObject({
+      sources: expect.arrayContaining([
+        expect.objectContaining({
+          quote: "Synthetic second observation",
+          supportsCurrentValue: true,
+        }),
+      ]),
+    });
+    await executeEntityMutationRead(
+      context,
+      {
+        action: "update",
+        entity: "project",
+        id: subject.output.id,
+        data: { googleDriveFolderUrl: null },
+      },
+      ["id"],
+    );
+    expect(await read()).toMatchObject({
+      googleDriveFolderUrl: null,
+      sources: expect.arrayContaining([
+        expect.objectContaining({
+          quote: "Synthetic folder label",
+          supportsCurrentValue: false,
+        }),
+      ]),
+    });
+  });
+
+  it("fingerprints inherited Project values while returning the saved override", async () => {
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const parent = await createRepoEntity(ctx, "project", {
+      defaultTrade: "plumbing",
+    });
+    const child = await createRepoEntity(ctx, "project", {
+      parentProjectId: parent.output.id,
+      defaultTrade: "electrical",
+    });
+    const result = await executeEntityMutationRead(
+      context,
+      {
+        action: "update",
+        entity: "project",
+        id: child.output.id,
+        data: { defaultTrade: null },
+        sources: [
+          { fieldPath: "defaultTrade", quote: "Synthetic inherited trade" },
+        ],
+      },
+      ["id", "defaultTrade"],
+    );
+    expect(result.item).toMatchObject({ defaultTrade: null });
+    const read = async () =>
+      (
+        await executeEntityAs(context, "get", {
+          entity: "project",
+          id: child.output.id,
+          missing: "error",
+        })
+      ).item;
+    expect(await read()).toMatchObject({
+      defaultTrade: "plumbing",
+      sources: [expect.objectContaining({ supportsCurrentValue: true })],
+    });
+    await executeEntityMutationRead(
+      context,
+      {
+        action: "update",
+        entity: "project",
+        id: parent.output.id,
+        data: { defaultTrade: "electrical" },
+      },
+      ["id"],
+    );
+    expect(await read()).toMatchObject({
+      sources: [expect.objectContaining({ supportsCurrentValue: false })],
+    });
+  });
+
+  it("returns and fingerprints card scalar projections instead of the identity object", async () => {
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const account = await createRepoEntity(ctx, "financialAccount", {
+      identity: { kind: "credit_card", issuer: null, network: null },
+    });
+    const result = await executeEntityMutationRead(
+      context,
+      {
+        action: "update",
+        entity: "financialAccount",
+        id: account.output.id,
+        data: { issuer: "Synthetic Bank", network: "visa" },
+        sources: [
+          { fieldPath: "issuer", quote: "Synthetic issuer label" },
+          { fieldPath: "network", quote: "Synthetic network label" },
+        ],
+      },
+      ["id", "issuer", "network"],
+    );
+    expect(result.item).toMatchObject({
+      issuer: "Synthetic Bank",
+      network: "visa",
+    });
+    const read = await executeEntityAs(context, "get", {
+      entity: "financialAccount",
+      id: account.output.id,
+      missing: "error",
+    });
+    expect(read.item).toMatchObject({
+      sources: expect.arrayContaining([
+        expect.objectContaining({
+          fieldPath: "issuer",
+          supportsCurrentValue: true,
+        }),
+        expect.objectContaining({
+          fieldPath: "network",
+          supportsCurrentValue: true,
+        }),
+      ]),
+    });
+  });
+  it("keeps Expense purchase scalar citations equal to the normalized detail values", async () => {
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const subject = await createRepoEntity(ctx, "expense", {
+      vendor: "Synthetic initial merchant",
+      orderId: "synthetic-order-one",
+      trade: "other",
+    });
+    const result = await executeEntityMutationRead(
+      context,
+      {
+        action: "update",
+        entity: "expense",
+        id: subject.output.id,
+        data: {
+          vendor: "Synthetic current merchant",
+          orderId: "synthetic-order-two",
+        },
+        sources: [
+          { fieldPath: "vendor", quote: "Synthetic merchant heading" },
+          { fieldPath: "orderId", quote: "Synthetic order heading" },
+        ],
+      },
+      ["id", "vendor", "orderId"],
+    );
+    expect(result.item).toMatchObject({
+      vendor: "Synthetic current merchant",
+      orderId: "synthetic-order-two",
+    });
+    const read = async () =>
+      (
+        await executeEntityAs(context, "get", {
+          entity: "expense",
+          id: subject.output.id,
+          missing: "error",
+        })
+      ).item;
+    expect(await read()).toMatchObject({
+      sources: expect.arrayContaining([
+        expect.objectContaining({
+          fieldPath: "vendor",
+          supportsCurrentValue: true,
+        }),
+        expect.objectContaining({
+          fieldPath: "orderId",
+          supportsCurrentValue: true,
+        }),
+      ]),
+    });
+    await executeEntityMutationRead(
+      context,
+      {
+        action: "update",
+        entity: "expense",
+        id: subject.output.id,
+        data: { orderId: null },
+      },
+      ["id"],
+    );
+    expect(await read()).toMatchObject({
+      sources: expect.arrayContaining([
+        expect.objectContaining({
+          fieldPath: "orderId",
+          supportsCurrentValue: false,
+        }),
+      ]),
+    });
+  });
+
+  it("normalizes Inventory amount columns in receipts and scalar citations", async () => {
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const product = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic amount product" }),
+      ctx.actor,
+    );
+    const location = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Synthetic amount shelf" }),
+      ctx.actor,
+    );
+    const entry = await createInventoryEntry(
+      ctx.db,
+      {
+        productId: product.entityId,
+        locationId: location.entityId,
+        amount: { value: 1, unit: "each" },
+        ownershipMode: "inherit",
+      },
+      ctx.actor,
+    );
+    const result = await executeEntityMutationRead(
+      context,
+      {
+        action: "update",
+        entity: "inventory",
+        id: parseShortcodeFor("inventory", entry.id),
+        data: { amount: { value: 2, unit: "each" } },
+        sources: [{ fieldPath: "amount", quote: "Synthetic counted amount" }],
+      },
+      ["id", "amount"],
+    );
+    expect(result.item).toMatchObject({ amount: { value: 2, unit: "each" } });
+    const read = async () =>
+      (
+        await executeEntityAs(context, "get", {
+          entity: "inventory",
+          id: entry.id,
+          missing: "error",
+        })
+      ).item;
+    expect(await read()).toMatchObject({
+      sources: [expect.objectContaining({ supportsCurrentValue: true })],
+    });
+    await executeEntityMutationRead(
+      context,
+      {
+        action: "update",
+        entity: "inventory",
+        id: parseShortcodeFor("inventory", entry.id),
+        data: { amount: { value: 3, unit: "each" } },
+      },
+      ["id"],
+    );
+    expect(await read()).toMatchObject({
+      sources: [expect.objectContaining({ supportsCurrentValue: false })],
+    });
+  });
+
+  it("projects a single FinancialTransaction allocation as a Purchase identity", async () => {
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const vendor = await createRepoEntity(ctx, "vendor");
+    const purchase = await createRepoEntity(ctx, "purchase", {
+      vendorId: vendor.output.id,
+      date: "2026-04-01",
+      orderId: "synthetic-source-allocation",
+    });
+    const account = await createRepoEntity(ctx, "financialAccount", {
+      identity: { kind: "cash" },
+    });
+    const transaction = await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      kind: "purchase",
+      status: "posted",
+      postedDate: "2026-04-01",
+      amount: 4,
+      allocations: [{ purchaseId: purchase.output.id, amount: 4 }],
+    });
+    const result = await executeEntityMutationRead(
+      context,
+      {
+        action: "update",
+        entity: "financialTransaction",
+        id: transaction.output.id,
+        data: { notes: "Synthetic allocation observation" },
+        sources: [
+          { fieldPath: "purchaseId", quote: "Synthetic single allocation" },
+        ],
+      },
+      ["id"],
+    );
+    expect(result.item).toEqual({ id: transaction.output.id });
+    const read = await executeEntityAs(context, "get", {
+      entity: "financialTransaction",
+      id: transaction.output.id,
+      missing: "error",
+    });
+    expect(read.item).toMatchObject({
+      purchaseId: purchase.output.id,
+      sources: [expect.objectContaining({ supportsCurrentValue: true })],
+    });
+  });
+
   it("uses a final-read callback instead of invoking unrequested non-Product detail hydration", async () => {
     const seeded = await findOrCreateIngredient(
       ctx.db,

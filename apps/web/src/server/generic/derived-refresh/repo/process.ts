@@ -34,7 +34,6 @@ import {
   publishPreparedSearchDocuments,
 } from "~/server/generic/search/repo/search-document";
 
-import type { DerivedRefreshPorts } from "../refresh-ports.boundary";
 import {
   prepareAssessmentRetirement,
   publishAssessmentRetirement,
@@ -55,6 +54,7 @@ import {
   recordPhaseFailure,
   type PhaseFailureInput,
 } from "./phase-failure";
+import type { DerivedRefreshPorts } from "./refresh-ports.boundary";
 
 /** Work failures survive transport retries and newly created Run attempts. */
 export async function retryDerivedRefreshFailures(db: Database) {

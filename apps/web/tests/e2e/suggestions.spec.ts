@@ -1,3 +1,5 @@
+import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
+import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import type { Page } from "@playwright/test";
 import superjson from "superjson";
 import { fieldSuggestionsOut } from "@cubby/schemas/ai";
@@ -114,20 +116,7 @@ test("Suggestions lists every family with named records and category pills, and 
   });
   const itemId = await resolveOrThrow(db, "product", item.id);
   const runId = await ensureRun(db, actor, { purpose: "ai_suggest" });
-  await getDb(db).insert(suggestionTable).values({
-    runId,
-    entity: "product",
-    recordId: itemId,
-    field: "categoryId",
-    currentValue: null,
-    suggestedValue: category.id,
-    confidence: 0.91,
-    runnerUpValue: null,
-    runnerUpConfidence: null,
-    model: "typesafe/jev",
-    kind: "addition",
-    status: "pending",
-  });
+
   const charge = await createEntityFixture(page, "expense", {
     name: productName,
     cost: 24,
@@ -159,6 +148,31 @@ test("Suggestions lists every family with named records and category pills, and 
     },
   ]);
   await generateStatementSuggestions(db);
+  await drainDerivedRefreshFrontier(db);
+  await getDb(db)
+    .insert(suggestionTable)
+    .values({
+      runId,
+      entity: "product",
+      recordId: itemId,
+      field: "categoryId",
+      currentValue: null,
+      suggestedValue: category.id,
+      confidence: 0.91,
+      runnerUpValue: null,
+      runnerUpConfidence: null,
+      model: "typesafe/jev",
+      kind: "addition",
+      status: "pending",
+      data: {
+        liveInputFingerprint: await fieldInputFingerprint(
+          db,
+          "product",
+          itemId,
+          "categoryId",
+        ),
+      },
+    });
 
   await gotoAuthenticatedPage(page, "/suggestions");
   const families = page.getByRole("group", { name: "Suggestion families" });
@@ -444,23 +458,34 @@ test("list pills accept immediately without unloading another row's suggestion",
   const firstRecordId = recordIds[0];
   if (!firstRecordId) throw new Error("Synthetic first Product is missing");
   const runId = await ensureRun(db, actor, { purpose: "ai_suggest" });
+  await drainDerivedRefreshFrontier(db);
   await getDb(db)
     .insert(suggestionTable)
     .values(
-      recordIds.map((recordId) => ({
-        runId,
-        entity: "product",
-        recordId,
-        field: "categoryId",
-        currentValue: null,
-        suggestedValue: category.id,
-        confidence: 0.97,
-        runnerUpValue: null,
-        runnerUpConfidence: null,
-        model: "typesafe/jev",
-        kind: "addition" as const,
-        status: "pending" as const,
-      })),
+      await Promise.all(
+        recordIds.map(async (recordId) => ({
+          runId,
+          entity: "product",
+          recordId,
+          field: "categoryId",
+          currentValue: null,
+          suggestedValue: category.id,
+          confidence: 0.97,
+          runnerUpValue: null,
+          runnerUpConfidence: null,
+          model: "typesafe/jev",
+          kind: "addition" as const,
+          status: "pending" as const,
+          data: {
+            liveInputFingerprint: await fieldInputFingerprint(
+              db,
+              "product",
+              recordId,
+              "categoryId",
+            ),
+          },
+        })),
+      ),
     );
   const acceptance = Promise.withResolvers<void>();
   await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {

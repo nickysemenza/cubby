@@ -7,7 +7,7 @@ import { getDb } from "~/server/db/helpers";
 import { derivedRefreshWork, searchDocument } from "~/server/db/schema";
 import type { StepRunOwner } from "~/server/domains/run/repo/run-step";
 import type { StepContext } from "~/server/domains/run/service/step-run";
-import type { DerivedRefreshPorts } from "~/server/generic/derived-refresh/refresh-ports.boundary";
+import type { DerivedRefreshPorts } from "~/server/generic/derived-refresh/repo/refresh-ports.boundary";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   createProductFixture,

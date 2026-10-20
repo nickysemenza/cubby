@@ -25,7 +25,10 @@ import {
   executeEntityAs,
 } from "~/server/entity-kernel";
 import { executeEntityMutationRead } from "~/server/entity-kernel/execute";
-import { captureBackgroundQueue } from "~/server/testing/background-queue";
+import {
+  captureBackgroundQueue,
+  drainDerivedRefreshFrontier,
+} from "~/server/testing/background-queue";
 import {
   createProductFixture,
   createRecipeFixture,
@@ -139,6 +142,7 @@ describe("generic bulk updates", () => {
     await bulk("product", [product.id], {
       manufacturer: "Synthetic original maker",
     });
+    await drainDerivedRefreshFrontier(ctx.db);
     expect(await suggestionStatus(ctx.db, id)).toBe("superseded");
     expect(await suggestionStatus(ctx.db, basis.id)).toBe("superseded");
   });
@@ -337,9 +341,11 @@ describe("generic bulk updates", () => {
       }),
       ctx.actor,
     );
+    await drainDerivedRefreshFrontier(ctx.db);
     await context().services.recipeCosting.recomputeQueued([recipe.entityId]);
     expect(await selectStaleRecipeIds(ctx.db, [recipe.entityId])).toEqual([]);
     await bulk("ingredient", [ingredient.shortcode], { usuallyOnHand: true });
+    await drainDerivedRefreshFrontier(ctx.db);
     expect(await selectStaleRecipeIds(ctx.db, [recipe.entityId])).toEqual([
       recipe.entityId,
     ]);

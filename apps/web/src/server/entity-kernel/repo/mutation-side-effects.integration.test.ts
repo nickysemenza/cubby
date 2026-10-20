@@ -19,7 +19,7 @@ import { TEST_USER_ID, withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { processDerivedRefreshPage } from "~/server/domains/run/service/derived-refresh";
-import type { DerivedRefreshPorts } from "~/server/generic/derived-refresh/refresh-ports.boundary";
+import type { DerivedRefreshPorts } from "~/server/generic/derived-refresh/repo/refresh-ports.boundary";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
 beforeEach(() => {

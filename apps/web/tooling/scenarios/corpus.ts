@@ -192,6 +192,9 @@ export async function seedCorpus(
   );
   try {
     await seedConnectedHousehold(pool, userId, options, readImage);
+    const { drainDerivedRefreshFrontier } =
+      await import("~/server/testing/background-queue");
+    await drainDerivedRefreshFrontier(buildScenarioDatabase(pool), 50_000);
     const coverage = await readHouseholdCoverage(pool);
     console.log(
       `[household] ${coverage.map((row) => `${row.entity}:${row.status === "external" ? row.reason : row.count}`).join(", ")}`,

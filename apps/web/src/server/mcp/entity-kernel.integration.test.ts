@@ -11,6 +11,7 @@ import { projectEntityResult } from "~/contracts/mcp-projections";
 import { mock } from "~/lib/test/mock-schema";
 import type { USDAClient } from "~/server/clients/usda";
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
+import { recipeLineCoverage } from "~/server/domains/recipe/operations/recipe.server";
 import {
   entityKernelContextSchema,
   executeEntity,
@@ -132,8 +133,17 @@ describe("MCP entity kernel boundary", () => {
     });
     expect(updated.item).toMatchObject({
       name: "Renamed kernel staple",
-      usuallyOnHand: true,
     });
+    expect(
+      (
+        await executeEntity(context, {
+          action: "get",
+          entity: "ingredient",
+          id,
+          missing: "error",
+        })
+      ).item,
+    ).toMatchObject({ usuallyOnHand: true });
     await executeEntity(context, {
       action: "bulkUpdate",
       entity: "ingredient",
@@ -321,9 +331,7 @@ describe("MCP entity kernel boundary", () => {
       }),
     });
     expect(created.isError).not.toBe(true);
-    const createdWish = wishSummaryResultSchema.parse(
-      created.structuredContent,
-    ).item;
+    const createdWish = idResultSchema.parse(created.structuredContent).item;
     const other = await callEntity({
       action: "create",
       entity: "vendor",
@@ -331,9 +339,7 @@ describe("MCP entity kernel boundary", () => {
         overrides: { name: "MCP list filter vendor" },
       }),
     });
-    const otherVendor = wishSummaryResultSchema.parse(
-      other.structuredContent,
-    ).item;
+    const otherVendor = idResultSchema.parse(other.structuredContent).item;
 
     const fetched = await callEntity({
       action: "get",
@@ -549,14 +555,7 @@ describe("MCP entity kernel boundary", () => {
 
     it("offers unlinked products as candidates and links one through the product update path", async () => {
       const entityKernel = kernel();
-      const call = (args: ToolArguments) =>
-        callMcpTool(
-          createMcpServer(),
-          "entity",
-          args,
-          kernelRequestContext(entityKernel),
-          { entityKernel },
-        );
+      const call = (args: ToolArguments) => callKernel(args, entityKernel);
       const fresh = await indexedProduct("Example Basil, Fresh 1 oz");
       const seeds = await indexedProduct("Example Basil Seeds");
       await indexedProduct("Unrelated Gadget");
@@ -629,20 +628,13 @@ describe("MCP entity kernel boundary", () => {
       ),
     });
 
-    it("reports per line what stops costing on create, update, and full detail", async () => {
+    it("returns bounded write receipts and loads line coverage through full detail", async () => {
       const entityKernel = entityKernelContextSchema.parse(
         createTestRequestContext(ctx.db, {
           auth: { userId: testUserId("test-user-id") },
         }),
       );
-      const call = (args: ToolArguments) =>
-        callMcpTool(
-          createMcpServer(),
-          "entity",
-          args,
-          kernelRequestContext(entityKernel),
-          { entityKernel },
-        );
+      const call = (args: ToolArguments) => callKernel(args, entityKernel);
       const [leek, thyme] = await Promise.all(
         ["coverage leek", "coverage thyme"].map((name) =>
           findOrCreateIngredient(ctx.db, name),
@@ -671,7 +663,11 @@ describe("MCP entity kernel boundary", () => {
         }),
       });
       expect(created.isError).not.toBe(true);
-      const summary = lineCoverageSchema.parse(created.structuredContent);
+      const receipt = idResultSchema.parse(created.structuredContent);
+      const summary = lineCoverageSchema.parse({
+        item: receipt.item,
+        lineCoverage: await recipeLineCoverage(entityKernel, receipt.item.id),
+      });
       expect(summary.lineCoverage.map((line) => line.name)).toEqual([
         "coverage leek",
         "coverage thyme",
@@ -692,7 +688,7 @@ describe("MCP entity kernel boundary", () => {
       });
       expect(renamed.isError).not.toBe(true);
       expect(
-        lineCoverageSchema.parse(renamed.structuredContent).lineCoverage,
+        await recipeLineCoverage(entityKernel, summary.item.id),
       ).toHaveLength(2);
     });
   });

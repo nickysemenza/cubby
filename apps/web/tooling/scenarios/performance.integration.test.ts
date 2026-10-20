@@ -105,5 +105,8 @@ it("seeds connected performance history readable by the real Work queue", async 
     false,
   );
   expect(queue.items.length).toBeGreaterThan(0);
-  expect(seeded.queryCount).toBeLessThan(100);
+  // Durable capture adds bounded metadata work per seeded authoritative write.
+  expect(seeded.queryCount).toBeLessThan(
+    100 + 10 * Number(result.rows[0]?.created_audits),
+  );
 }, 120_000);

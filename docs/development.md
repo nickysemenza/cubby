@@ -254,6 +254,9 @@ native PostgreSQL installation remain owned by their existing runners.
   `apps/web/tooling/dev-services/shared-postgres.ts`), started on first use and reused
   afterwards. A common migration-keyed base template feeds each checkout's
   namespaced test pools and the shared dev-corpus template.
+  Offline browser journeys run the real provider-free derived frontier in
+  their Node harness; queue peers still drop provider work. The corpus settles
+  its initial SQL projections before becoming a cloneable template.
   All template layers use IntegreSQL's initializer election without a template
   lock. Recovery supports one Mac or one CI runner: all clients must share the
   same host temporary marker directory and service incarnation. Separate machines,

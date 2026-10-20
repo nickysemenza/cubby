@@ -292,7 +292,11 @@ export async function logAuditEntry(
         changedFields: entry.changes ? Object.keys(entry.changes) : undefined,
         scopes: collectChangeRefs(
           entry.entityKind,
-          entry.changes ? readStoredChanges(entry.changes) : null,
+          // Match jsonb's stored representation: nested repository audit
+          // inputs can still contain Date values before serialization.
+          entry.changes
+            ? readStoredChanges(JSON.parse(JSON.stringify(entry.changes)))
+            : null,
         ).map((ref) => ({ entityKind: ref.entity, entityId: ref.id })),
       },
     ]);

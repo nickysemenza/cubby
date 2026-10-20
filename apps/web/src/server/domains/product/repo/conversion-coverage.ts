@@ -15,7 +15,7 @@ import {
   product,
   productConversionCoverage,
 } from "~/server/db/retained-tables";
-import { recordDerivedRefreshRoots } from "~/server/generic/derived-refresh/capture.boundary";
+import { recordDerivedRefreshRoots } from "~/server/generic/derived-refresh/repo/capture.boundary";
 
 const PRODUCT_CONVERSION_COVERAGE_ENGINE_VERSION = "conversion-coverage-v1";
 const productConversionCoverageStatusSchema = z.enum(["ready", "unavailable"]);

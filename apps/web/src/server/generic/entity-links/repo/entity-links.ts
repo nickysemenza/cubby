@@ -25,7 +25,7 @@ import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import { entityLink } from "~/server/db/retained-tables";
 import { createAppError } from "~/server/errors/app-error";
-import { recordContextRefresh as captureContextRefresh } from "~/server/generic/derived-refresh/capture.boundary";
+import { recordContextRefresh as captureContextRefresh } from "~/server/generic/derived-refresh/repo/capture.boundary";
 
 /** `entityLink` or an alias of it. */
 type LinkTable = {

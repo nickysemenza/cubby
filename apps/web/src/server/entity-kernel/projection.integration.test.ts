@@ -8,7 +8,10 @@ import { buildKernelContext } from "tooling/scenarios/context";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { beforeEach, afterEach, describe, expect, it } from "vitest";
 
-import { captureBackgroundQueue } from "~/server/testing/background-queue";
+import {
+  captureBackgroundQueue,
+  drainDerivedRefreshFrontier,
+} from "~/server/testing/background-queue";
 let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
 beforeEach(() => {
   backgroundQueue = captureBackgroundQueue();
@@ -52,10 +55,8 @@ const searchDocumentTitle = async (
 };
 
 /**
- * A search document is written by the same request that writes the entity —
- * inside the kernel's transaction — never by a queue task that might not run.
- * A recording queue (nothing runs inline) proves the projection can only have
- * come from the write path itself.
+ * Writes commit durable roots without projecting synchronously. The real
+ * provider-free frontier then repairs direct and dependent documents.
  */
 describe("entity kernel search projections", () => {
   const ctx = withTestDb();
@@ -82,7 +83,7 @@ describe("entity kernel search projections", () => {
     return published;
   };
 
-  it("projects on create and re-projects on update before responding", async () => {
+  it("projects created and updated records through durable background work", async () => {
     const published = recordingQueue();
     const created = await executeEntity(context(), {
       action: "create",
@@ -101,6 +102,10 @@ describe("entity kernel search projections", () => {
       "ingredient",
     );
     if (!entityId) throw new Error("created ingredient did not resolve");
+    expect(
+      await getSearchDocumentEmbeddingText(ctx.db, "ingredient", entityId),
+    ).toBeNull();
+    await drainDerivedRefreshFrontier(ctx.db);
     const first = await getSearchDocumentEmbeddingText(
       ctx.db,
       "ingredient",
@@ -114,6 +119,7 @@ describe("entity kernel search projections", () => {
       id: parseShortcodeFor("ingredient", created.item.id),
       data: { name: "Projected turmeric" },
     });
+    await drainDerivedRefreshFrontier(ctx.db);
     const second = await getSearchDocumentEmbeddingText(
       ctx.db,
       "ingredient",
@@ -122,17 +128,12 @@ describe("entity kernel search projections", () => {
     expect(second?.embeddingText).toContain("Projected turmeric");
     expect(second?.embeddingText).not.toContain("Projected saffron");
 
-    // The embedding is the only work handed to the queue; the projection
-    // was already current when the response returned.
-    expect(published.map((message) => message.task.kind)).toEqual([
-      "entity-embedding.refresh",
-      "entity-embedding.refresh",
-    ]);
+    expect(published.length).toBeGreaterThanOrEqual(2);
+    expect([...new Set(published.map((message) => message.task.kind))]).toEqual(
+      ["derived-refresh.wakeup"],
+    );
   });
 
-  // No recording queue here: publishing with no bound queue runs the
-  // embedding-refresh task inline (see `publishInBackground`), which is what
-  // actually re-projects the fanned-out planting document below.
   it("projects a planting by its plant name and re-projects it when the plant is renamed", async () => {
     const cropPlant = await createPlantFixture(
       ctx.db,
@@ -174,6 +175,7 @@ describe("entity kernel search projections", () => {
     );
     if (!entityId) throw new Error("created planting did not resolve");
 
+    await drainDerivedRefreshFrontier(ctx.db);
     expect(await searchDocumentTitle(ctx.db, "planting", entityId)).toBe(
       "Projected garden basil",
     );
@@ -184,6 +186,7 @@ describe("entity kernel search projections", () => {
       id: parseShortcodeFor("plant", cropPlant.id),
       data: { name: "Projected garden thai basil" },
     });
+    await drainDerivedRefreshFrontier(ctx.db);
 
     expect(await searchDocumentTitle(ctx.db, "planting", entityId)).toBe(
       "Projected garden thai basil",
@@ -219,6 +222,7 @@ describe("entity kernel search projections", () => {
       "gardenEntry",
     );
     if (!entityId) throw new Error("created garden entry did not resolve");
+    await drainDerivedRefreshFrontier(ctx.db);
 
     expect(
       await searchDocumentTitle(ctx.db, "gardenEntry", entityId),
@@ -264,6 +268,7 @@ describe("entity kernel search projections", () => {
         "inventory",
       );
       if (!productId || !inventoryId) throw new Error("seed did not resolve");
+      await drainDerivedRefreshFrontier(ctx.db);
       return { category, productId, ids: [productId, inventoryId] };
     };
     const typeHints = async (ids: string[]) =>
@@ -286,11 +291,17 @@ describe("entity kernel search projections", () => {
         data: { name },
       });
 
-    it("inside the write, before the queue runs anything", async () => {
+    it("defers dependent projections until the background frontier runs", async () => {
       const { category, ids } = await seedCategoryFamily();
       recordingQueue();
 
       await rename(category.id, "Projected awnings");
+
+      expect(await typeHints(ids)).toEqual([
+        "Projected covers",
+        "Projected covers",
+      ]);
+      await drainDerivedRefreshFrontier(ctx.db);
 
       expect(await typeHints(ids)).toEqual([
         "Projected awnings",
@@ -298,10 +309,8 @@ describe("entity kernel search projections", () => {
       ]);
     });
 
-    // A descendant projection runs in the category's write transaction, so
-    // its failure undoes the edit, as for every other search dependency.
-    it("rolls the edit back when a descendant projection fails", async () => {
-      const { category, productId, ids } = await seedCategoryFamily();
+    it("keeps the saved edit when a background descendant projection fails", async () => {
+      const { category, productId } = await seedCategoryFamily();
       recordingQueue();
       const db = getDb(ctx.db);
       await db.execute(sql`
@@ -316,8 +325,11 @@ describe("entity kernel search projections", () => {
       );
       try {
         // The raised message rides on `cause`; the thrown error names the query.
-        await expect(rename(category.id, "Projected awnings")).rejects.toThrow(
-          'INSERT INTO "SearchDocument"',
+        await expect(
+          rename(category.id, "Projected awnings"),
+        ).resolves.toMatchObject({ action: "update" });
+        await expect(drainDerivedRefreshFrontier(ctx.db)).rejects.toThrow(
+          "synthetic projection failure",
         );
       } finally {
         await db.execute(
@@ -333,11 +345,10 @@ describe("entity kernel search projections", () => {
         missing: "error",
       });
       if (after.action !== "get") throw new Error("expected get");
-      expect(after.item).toMatchObject({ name: "Projected covers" });
-      expect(await typeHints(ids)).toEqual([
-        "Projected covers",
-        "Projected covers",
-      ]);
+      expect(after.item).toMatchObject({ name: "Projected awnings" });
+      expect(await searchDocumentTitle(ctx.db, "product", productId)).toBe(
+        "Projected tarp",
+      );
     });
   });
 });

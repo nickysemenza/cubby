@@ -1270,11 +1270,20 @@ the write. Normal write bodies expose one final-output reader through
 projected create/update readers. A declared writer without that capability is
 refused when bindings load. Mandatory mutation snapshots and domain work run
 before the final reader; requesting a reference skips only response hydration.
-Field-scoped Sources reuse the mutation's authoritative snapshot,
-with the same JSON normalization, read paths and fingerprint algorithm as detail
-reads. Projected writes retain authoritative evidence separately from their
-response fields; the owning reader supplies a cited field absent from that snapshot,
-using the mutation's returned identity when an update folds into a surviving row.
+Field-scoped Sources use scalar projections with the same JSON normalization,
+read paths and fingerprint algorithm as detail reads. Linked URLs, card identity
+fields, amounts and to-one purchase fields have narrow scalar adapters. Cited
+inherited fields select their effective value separately from the receipt's
+stored override. These reads use the returned identity when an update folds into
+a surviving row; they never fall back to full detail hydration. New collection
+citations retain evidence without a whole-collection fingerprint; existing
+hash-based citations still compare against detail values. Explicit unchanged
+writes capture a durable root even when no audit diff exists, so background
+processing can retire pending advice for that write intent.
+Field advice fences use the target's point revision and shared input epochs.
+An inherited target or basis retains its own-kind epoch for ancestor changes;
+ordinary scalar advice does not become stale when an unrelated row of the same
+kind is accepted. Connection discovery keeps its broader corpus epochs.
 
 Partial updates preserve omitted fields. Scalar patching rejects undeclared
 keys, skips unchanged rows, and audits changes in the same transaction;

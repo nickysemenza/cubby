@@ -54,7 +54,7 @@ import {
 } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
-import { recordContextRefresh } from "~/server/generic/derived-refresh/capture.boundary";
+import { recordContextRefresh } from "~/server/generic/derived-refresh/repo/capture.boundary";
 import {
   ensureExternalSources,
   assertSettlementRefsAvailable,

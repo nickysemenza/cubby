@@ -727,5 +727,13 @@ export async function seedEntity<E extends EntityKernelEntity>(
   });
   const createdResult =
     generatedEntityMutationCreateResultSchema.parse(created);
-  return parseEntityPublicOutput(entity, createdResult.item);
+  // Fixtures needing a full record read it explicitly; mutation receipts only
+  // carry saved fields and cannot satisfy the detail contract.
+  const detail = await ENTITY_KERNEL_OPERATIONS[entity].get(context, {
+    id: createdResult.item.id,
+    missing: "error",
+  });
+  if (!("item" in detail))
+    throw new Error("Synthetic fixture detail was not returned");
+  return parseEntityPublicOutput(entity, detail.item);
 }

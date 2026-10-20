@@ -550,17 +550,18 @@ function FullEntityDetail<E extends GenericDetailEntity>({
     });
   }
 
-  sections.push({
-    id: "suggestions",
-    title: "Suggestions",
-    icon: SparkleIcon,
-    placement: "primary",
-    content: (
-      <Suspense fallback={<SlotFallback />}>
-        <RecordProposals key={bag.id} id={bag.id} />
-      </Suspense>
-    ),
-  });
+  if (!sections.some((section) => section.id === "suggestions"))
+    sections.push({
+      id: "suggestions",
+      title: "Suggestions",
+      icon: SparkleIcon,
+      placement: "primary",
+      content: (
+        <Suspense fallback={<SlotFallback />}>
+          <RecordProposals key={bag.id} id={bag.id} />
+        </Suspense>
+      ),
+    });
   sections.push({
     id: "automatic-decisions",
     title: "Review automatic decisions",

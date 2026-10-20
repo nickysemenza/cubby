@@ -5,8 +5,8 @@ import type {
 
 import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";
 
-import { captureDerivedRefresh } from "./repo/capture";
-import { captureContextRefresh } from "./repo/context-capture";
+import { captureDerivedRefresh } from "./capture";
+import { captureContextRefresh } from "./context-capture";
 
 export async function recordDerivedRefreshRoots(
   db: RepositoryQueryInput,

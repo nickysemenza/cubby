@@ -25,9 +25,9 @@ export async function prepareAssessmentRetirement(
   db: Database,
   subject: { entityKind: Entity; entityId: string; after: string | null },
 ) {
-  const fields = entityFieldModels[subject.entityKind].fields
-    .filter((field) => field.control?.suggest)
-    .map((field) => field.key);
+  const fields = entityFieldModels[subject.entityKind].fields.map(
+    (field) => field.key,
+  );
   const candidates = await getDb(db)
     .select()
     .from(assessmentState)

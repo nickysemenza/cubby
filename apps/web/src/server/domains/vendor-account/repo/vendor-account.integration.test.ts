@@ -237,9 +237,9 @@ describe("vendor account creation persistence", () => {
       })
       .from(vendorAccount)
       .where(eq(vendorAccount.id, createdRow.id));
-    expect(created.item.displayName).toBe(
-      "Import owner vendor · Import owner member",
-    );
+    expect(
+      (await getVendorAccountByShortcode(ctx.db, created.item.id))?.displayName,
+    ).toBe("Import owner vendor · Import owner member");
     expect(persistedAccount).toEqual({
       vendorId: vendor.id,
       ledgerPartyId: party.id,

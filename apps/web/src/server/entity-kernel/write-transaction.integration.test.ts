@@ -10,6 +10,7 @@ import {
   executeEntity,
 } from "~/server/entity-kernel";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import { makeRecipeInput } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
@@ -64,6 +65,7 @@ describe("entity kernel write transaction", () => {
       );
       if (!entityId) throw new Error("created recipe did not resolve");
       // A fresh recipe is the case whose stale mark actually rewrites the row.
+      await drainDerivedRefreshFrontier(ctx.db);
       await context().services.recipeCosting.recomputeQueued([entityId]);
       expect(await selectStaleRecipeIds(ctx.db, [entityId])).toEqual([]);
       published.length = 0;
@@ -75,13 +77,14 @@ describe("entity kernel write transaction", () => {
         data: { name: "Kernel write tx (renamed)" },
       });
 
-      // The stale mark committed with the rename, and the wakeup went out
-      // once — after the transaction — not from inside it.
+      // Durable work commits with the rename; its later page invalidates totals.
+      expect(await selectStaleRecipeIds(ctx.db, [entityId])).toEqual([]);
+      await drainDerivedRefreshFrontier(ctx.db);
       expect(await selectStaleRecipeIds(ctx.db, [entityId])).toEqual([
         entityId,
       ]);
       expect(published.map((m) => m.task.kind)).toContain(
-        "recipe-totals.recompute",
+        "derived-refresh.wakeup",
       );
     },
   );

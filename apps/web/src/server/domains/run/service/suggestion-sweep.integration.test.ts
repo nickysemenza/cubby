@@ -21,6 +21,7 @@ import { loadFinanceSuggestionContext } from "~/server/domains/financial-transac
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import { listSuggestions } from "~/server/generic/assessment/repo/suggestion-review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 
 import { pauseSuggestionSweep } from "./suggestion-sweep";
 import {
@@ -424,6 +425,7 @@ describe("persisted Suggestion sweeps", () => {
       },
       { context, samplePair: () => true, ...categoryPorts() },
     );
+    await drainDerivedRefreshFrontier(ctx.db);
     const rows = await runSuggestions(ctx.db, started.id);
     expect(rows).toHaveLength(2);
     const [pairKey] = new Set(rows.map((row) => row.pairKey));

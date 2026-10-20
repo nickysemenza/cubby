@@ -58,6 +58,7 @@ import {
 } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { AppError, createAppError } from "~/server/errors/app-error";
 import { findPgError } from "~/server/errors/db-errors";
+import { currentAuditReceiptCount } from "~/server/generic/audit-log/repo/audit-receipts";
 import { withListGroupBy } from "~/server/generic/list/repo/list";
 import { listTotalLabels } from "~/server/generic/list/repo/list-display-labels";
 import { withChildCounts } from "~/server/generic/list/repo/list-read-adapters";
@@ -90,6 +91,7 @@ import {
   parseSorts,
 } from "./list-input";
 import { readMutationReceiptFields } from "./repo/mutation-receipt";
+import { captureMutationEvent } from "./repo/mutation-side-effects";
 
 type EntityListInput<TFilters = unknown> = {
   filters: TFilters;
@@ -330,6 +332,7 @@ const buildUpdateOperation = <
                 ),
               ),
             );
+            const auditCount = currentAuditReceiptCount();
             const updated = await validated.run(
               writeContext,
               validated.id,
@@ -338,6 +341,20 @@ const buildUpdateOperation = <
                 repositoryRecordInput(binding.entity, data),
               ),
             );
+            // Explicit unchanged writes still retire pending advice. Their
+            // repository emits no audit, so capture that intent durably here.
+            if (
+              validated.submittedFields.length > 0 &&
+              currentAuditReceiptCount() === auditCount
+            ) {
+              const event = sideEffectEventFor(
+                binding,
+                "updated",
+                updated.entityId,
+                `${binding.entity}.update`,
+              );
+              if (event) await captureMutationEvent(writeContext.db, event);
+            }
             await writeRecordEmoji(
               writeContext.db,
               binding.entity,
@@ -362,6 +379,11 @@ const buildUpdateOperation = <
                   source.fieldPath ? [source.fieldPath] : [],
                 ),
               ],
+              {
+                sourceFields: validated.sources.flatMap((source) =>
+                  source.fieldPath ? [source.fieldPath] : [],
+                ),
+              },
             );
             if (validated.sources.length > 0)
               await recordWriteSources(
@@ -653,6 +675,11 @@ const buildEntityOperations = <
                     source.fieldPath ? [source.fieldPath] : [],
                   ),
                 ],
+                {
+                  sourceFields: validated.sources.flatMap((source) =>
+                    source.fieldPath ? [source.fieldPath] : [],
+                  ),
+                },
               );
               if (validated.sources.length > 0)
                 await recordWriteSources(

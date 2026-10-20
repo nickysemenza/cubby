@@ -22,6 +22,7 @@ import {
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { executeEntity } from "~/server/entity-kernel";
 import { acceptSuggestion } from "~/server/generic/assessment/repo/suggestion-review";
+import { reconcileDerivedRefreshInputs } from "~/server/testing/background-queue";
 
 // Failure modes: scalar acceptance drops an identity sibling; a stale full-form
 // identity undoes an accepted scalar; a raw identity write leaves advice pending;
@@ -42,6 +43,17 @@ describe("Account scalar suggestion acceptance", () => {
     });
     expect(result).toMatchObject({
       action: "create",
+      item: { identity: { kind: "cash" } },
+    });
+    if (result.action !== "create")
+      throw new Error("Synthetic account was not created");
+    const detail = await executeEntity(kernelCtx(ctx), {
+      action: "get",
+      entity: "financialAccount",
+      id: result.item.id,
+      missing: "error",
+    });
+    expect(detail).toMatchObject({
       item: { identity: { kind: "cash" }, issuer: null, network: null },
     });
   });
@@ -372,6 +384,7 @@ describe("Account scalar suggestion acceptance", () => {
     await getDb(ctx.db).execute(
       sql`UPDATE "FinancialAccount" SET identity = jsonb_set(identity, '{network}', '"visa"') WHERE id = ${id}`,
     );
+    await reconcileDerivedRefreshInputs(ctx.db);
     expect(await suggestionStatus(ctx.db, advice.id)).toBe("superseded");
   });
 

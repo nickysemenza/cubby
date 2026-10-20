@@ -15,6 +15,7 @@ import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { projectCreateFromTasksWorkflow } from "~/server/domains/project/operations.server";
 import { listSuggestions } from "~/server/generic/assessment/repo/suggestion-review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { reconcileDerivedRefreshInputs } from "~/server/testing/background-queue";
 import { bulkUpdateFor } from "~/server/testing/entity-kernel";
 
 import {
@@ -43,6 +44,7 @@ const rawProductCategoryWrite =
       categoryId: taxonomyId("tools"),
     });
     const productRecordId = await recordId(ctx.db, product.id, "product");
+    await reconcileDerivedRefreshInputs(ctx.db);
     const { id } = await seedPending(ctx, {
       entity: "product",
       recordId: productRecordId,
@@ -141,6 +143,7 @@ describe("Suggestion supersede", () => {
     "marks a pending Suggestion $expected after $write",
     async ({ act, expected }) => {
       const id = await act(ctx);
+      await reconcileDerivedRefreshInputs(ctx.db);
       expect(await suggestionStatus(ctx.db, id)).toBe(expected);
     },
   );
@@ -195,11 +198,13 @@ describe("Suggestion supersede", () => {
       .update(purchaseTable)
       .set({ date: "2026-09-04" })
       .where(eq(purchaseTable.id, purchases[2]!.id));
+    await reconcileDerivedRefreshInputs(ctx.db);
     expect(
       await Promise.all(
         assessmentIds.map((id) => suggestionStatus(ctx.db, id)),
       ),
-    ).toEqual(["superseded", "superseded", "pending"]);
+      // A Purchase epoch conservatively retires advice for unchanged siblings too.
+    ).toEqual(["superseded", "superseded", "superseded"]);
   });
 
   it("supersedes an earlier pending suggestion when a newer sweep evaluates the same field", async () => {

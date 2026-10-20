@@ -1,4 +1,6 @@
 import { test as base, expect } from "@playwright/test";
+import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
+import { getFixtureDb } from "../fixtures/core";
 
 import { retryStaleKeepAlive } from "../../../tooling/stale-keep-alive";
 import {
@@ -13,6 +15,7 @@ import {
 
 type TestFixtures = {
   e2eFailureDiagnostics: void;
+  e2eDerivedRefresh: void;
   /** `false` starts the test's browser signed out of the worker's account. */
   signedIn: boolean;
 };
@@ -75,6 +78,35 @@ const test = base.extend<TestFixtures, WorkerFixtures>({
     retryStaleKeepAlive(request);
     await provide(request);
   },
+  // Offline lanes omit provider consumers, but user journeys still exercise
+  // eventual SQL projections through the real paged frontier.
+  e2eDerivedRefresh: [
+    async ({ workerdProfile, e2eRuntime: _e2eRuntime }, provide) => {
+      if (workerdProfile !== "offline") return provide();
+      const controller = new AbortController();
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let wake: (() => void) | undefined;
+      const pump = (async () => {
+        while (!controller.signal.aborted) {
+          await drainDerivedRefreshFrontier(getFixtureDb());
+          if (!controller.signal.aborted)
+            await new Promise<void>((resolve) => {
+              wake = resolve;
+              timer = setTimeout(resolve, 100);
+            });
+        }
+      })();
+      try {
+        await provide();
+      } finally {
+        controller.abort();
+        clearTimeout(timer);
+        wake?.();
+        await pump;
+      }
+    },
+    { auto: true },
+  ],
   e2eFailureDiagnostics: [
     async ({ e2eRuntime }, provide, testInfo) => {
       // The harness is shared by every test in this Playwright worker.
