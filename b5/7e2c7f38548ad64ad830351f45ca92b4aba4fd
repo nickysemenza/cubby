@@ -1,0 +1,177 @@
+apps/web/src/entity/display/detail-field-renderers/inventory.tsx
+  s_a14da84a78b0eb::t_8563d43c035925 5,23-27,29
+apps/web/src/entity/entity-detail/email-review.tsx
+  s_a14da84a78b0eb::t_90b21b2811327a 13,91-92,165
+apps/web/src/entity/entity-detail/entity-workbench-inspector.unit.test.tsx
+  s_a14da84a78b0eb::t_bb379c7d9556a7 227-228,235,238,240-243,259
+apps/web/src/entity/entity-detail/generic-entity-detail.unit.test.tsx
+  s_a14da84a78b0eb::t_0989a710ee5137 228
+apps/web/src/entity/entity-detail/record-quality.tsx
+  s_a14da84a78b0eb::t_c4da5bf273830a 28,129-130,133,339-341
+apps/web/src/entity/fields/field-explanation.tsx
+  s_a14da84a78b0eb::t_492ef9a2156109 31-36,436-437,445,702-705,715,742-746,756-777,779-782,784-792,794-796
+apps/web/src/entity/fields/field-resolution-explanation.tsx
+  s_a14da84a78b0eb::t_e1c2e771caf57b 6,11,267-269,276,293-305,315,324-326,335,358-380,382-416
+apps/web/src/entity/navigation/workspace-navigator.tsx
+  s_a14da84a78b0eb::t_06586ac15a3bd1 12,114-131
+apps/web/src/entity/relationships/graph-explorer.tsx
+  s_a14da84a78b0eb::t_0c3952faaba2f2 32,700-701,703,705,755
+apps/web/src/entity/suggestions/queue/automatic-decisions.tsx
+  s_a14da84a78b0eb::t_25775f7150b653 21,204,208
+apps/web/src/entity/suggestions/record-stored-suggestions.unit.test.tsx
+  s_a14da84a78b0eb::t_c2d62b1a11f822 310,377,447
+apps/web/src/entity/suggestions/record-suggestions.unit.test.tsx
+  s_a14da84a78b0eb::t_a37d8b5772bf84 319,674
+apps/web/src/entity/suggestions/suggestion-body.tsx
+  s_a14da84a78b0eb::t_0a0397ab8ab66f 10-15,175-176,185,212-219
+apps/web/src/entity/suggestions/suggestion-review.unit.test.tsx
+  s_a14da84a78b0eb::t_e5aae2774f6136 67-68
+apps/web/src/features/collection/smart-collection-page.tsx
+  s_a14da84a78b0eb::t_8d090da851a503 19,151-161,167-185,188-226,228-233,236-237,242-281,283,285-315,317-322,324
+apps/web/src/features/cookbook/slots.tsx
+  s_a14da84a78b0eb::t_ade413c5444442 18,64-69
+apps/web/src/features/finance/possible-vendor.tsx
+  s_a14da84a78b0eb::t_58ac3f56dfa006 6,78-83,100
+apps/web/src/features/finance/possible-vendor.unit.test.tsx
+  s_a14da84a78b0eb::t_63a05423ad7c37 3,70-72
+apps/web/src/features/image/image-processing-panel.tsx
+  s_a14da84a78b0eb::t_f8d6bce3acbf6c 32,60,62,65,69-70,73-74,79,81-86,89-90,93-94,146-149,164,307,309
+apps/web/src/features/ingredient/enrichment-editor.tsx
+  s_a14da84a78b0eb::t_3ebc01687c2c74 31,220-221,245
+apps/web/src/features/inventory/quick-inventory-add.tsx
+  s_a14da84a78b0eb::t_5f6c630cab7ebc 37,380-387,391-397,399,401-403,407-421
+apps/web/src/features/meal/meal-nutrition-summary.tsx
+  s_a14da84a78b0eb::t_a902749fda3a8f 25,206-209,262,266-269,271
+apps/web/src/features/meal/meal-nutrition.tsx
+  s_a14da84a78b0eb::t_a2954f3f44d1c0 10,65-66,69
+apps/web/src/features/meal/meal-preparation/portion-sheet.tsx
+  s_a14da84a78b0eb::t_d24c9e20cd32ae 349,353
+apps/web/src/features/meal/slots.tsx
+  s_a14da84a78b0eb::t_1b17e87a472759 25,309,348
+apps/web/src/features/nutrition/full-nutrient-breakdown.tsx
+  s_a14da84a78b0eb::t_2646fa90f455a6 3,23-28
+apps/web/src/features/problems/components/problem-assembly.tsx
+  s_a14da84a78b0eb::t_edda379a6d5d0b 12-13,151-168,171-224
+apps/web/src/features/problems/problems-overview.tsx
+  s_a14da84a78b0eb::t_4fe2132599f557 21,302-317
+apps/web/src/features/product/label-nutrition-review.tsx
+  s_a14da84a78b0eb::t_92f2d6b2d3b102 16,108-110,143
+apps/web/src/features/product/product-editor-fields.tsx
+  s_a14da84a78b0eb::t_2bdbc91768621b 40,465-476,478-529,532-534,537-546
+apps/web/src/features/product/product-variant-evidence.tsx
+  s_a14da84a78b0eb::t_90d4dc4fd756eb 4,34-35,41
+apps/web/src/features/project/needs-attention.tsx
+  s_a14da84a78b0eb::t_454d43a6a93b13 19,189-198
+apps/web/src/features/purchase/agent-context-breakdown.tsx
+  s_a14da84a78b0eb::t_f61f7ab37fea24 7,10,61,63-64,66,162,215,217,281,283-288,290,345
+apps/web/src/features/purchase/agent-context-breakdown.unit.test.tsx
+  s_a14da84a78b0eb::t_45758c808e47cd 109-114,148-150,237
+apps/web/src/features/purchase/purchase-import-run-detail.tsx
+  s_a14da84a78b0eb::t_46c0209a3eb198 56,274-287,942-961
+apps/web/src/features/purchase/purchase-import-run-detail.unit.test.tsx
+  s_a14da84a78b0eb::t_7e450d1d819464 503-505
+apps/web/src/features/recipe/cookbook-import/book-group-card.tsx
+  s_a14da84a78b0eb::t_d379f3d16dd303 19,593-604
+apps/web/src/features/recipe/cookbook-import/book-group-card.unit.test.tsx
+  s_a14da84a78b0eb::t_2b999387b31359 373-374
+apps/web/src/features/recipe/cookbook-import/run-report-panel.tsx
+  s_a14da84a78b0eb::t_e1f2a18c1c27cb 18,215-255,257-260,262,264,266-271,273,275-310,312-330
+apps/web/src/features/recipe/recipe-detail.tsx
+  s_a14da84a78b0eb::t_08f51ee93c4686 31-32,579-588
+apps/web/src/features/recipe/recipe-flow-view.tsx
+  s_a14da84a78b0eb::t_e5ce1dc54e96a5 33,322-327,336
+apps/web/src/features/recipe/recipe-prep-sheet-view.tsx
+  s_a14da84a78b0eb::t_70e44ca6d9435a 2,10-11,58-95,333-337
+apps/web/src/features/recipe/recipe-walkthrough.tsx
+  s_a14da84a78b0eb::t_6d26ddea73b31f 13,147-151,155,245-246,260
+apps/web/src/features/recipe/recipe-walkthrough.unit.test.tsx
+  s_a14da84a78b0eb::t_47ec74abcbf620 35-39,58-59,99-102
+apps/web/src/features/run/photo-group-review.tsx
+  s_a14da84a78b0eb::t_302e76acf1862e 68,625-626,633,1041-1042,1056,1234-1235,1238-1239,1241,1399,1683,1714,1810-1811,1814
+apps/web/src/features/task/next-tasks.tsx
+  s_a14da84a78b0eb::t_27585219c35585 24,262-264
+apps/web/src/features/units/unit-coverage-panel.tsx
+  s_a14da84a78b0eb::t_864f3c8352bd2e 8,99-111,113-124
+apps/web/src/routes/_authenticated/settings.tsx
+  s_a14da84a78b0eb::t_fe0a2302f10f27 49,157-162,465
+apps/web/src/ui/common/ledger.css
+  s_a14da84a78b0eb::t_fdaa12b00c92de 512
+apps/web/src/ui/common/record-list.tsx
+  s_a14da84a78b0eb::t_cc6e66b238533b 13,460-466
+apps/web/src/ui/common/record-list.unit.test.tsx
+  s_a14da84a78b0eb::t_012f72878baaf7 30-31,34,36-37
+apps/web/src/ui/common/scalar-value.tsx
+  s_a14da84a78b0eb::t_3eb3b4f1107368 8,86-87,90
+apps/web/src/ui/common/scalar-value.unit.test.tsx
+  s_a14da84a78b0eb::t_8725fc4e140bd0 79-84
+apps/web/src/ui/feedback/error-details.tsx
+  s_e5624ca02fc242::t_d6df697c1ab0e8 8,22,117,121
+apps/web/src/ui/feedback/error-details.unit.test.tsx
+  s_359d51740d6cee::t_83cf7900ec8ad6 7,66-68,82,96-98
+apps/web/src/ui/feedback/route-error.tsx
+  s_a14da84a78b0eb::t_56ab70bd2d2798 24,189-192,194-216,218-226,228-237
+apps/web/src/ui/overlays/side-panel.tsx
+  s_89f5879f3c3263::t_a268e871e85752 16-20,397-398,428-436
+apps/web/src/ui/text/json-renderer.tsx
+  s_a14da84a78b0eb::t_e9b3811d184234 1,4-5,31-33,35-40
+apps/web/src/ui/text/trace.tsx
+  s_a14da84a78b0eb::t_cc79b8a8ba9c18 5-9,86-91,93-94,96-98,105-108,110,112,119-122,124,133
+apps/web/src/ui/visualizations/dependency-graph-canvas.unit.test.tsx
+  s_a14da84a78b0eb::t_dac9087fcab189 112-114,160-162
+apps/web/src/ui/visualizations/dependency-graph-viewer.tsx
+  s_a14da84a78b0eb::t_692a95799af5f5 12,194-197,265
+apps/web/tests/e2e/attribute-explanations.spec.ts
+  s_a14da84a78b0eb::t_d24d7ac3fbbf25 78
+apps/web/tests/e2e/inspect-contract.spec.ts
+  s_a14da84a78b0eb::t_b30dca49f03058 54
+apps/web/tests/e2e/meal-nutrition.spec.ts
+  s_a14da84a78b0eb::t_b289b00db2cfd8 114-119
+apps/web/tests/e2e/quality-explanations.spec.ts
+  s_a14da84a78b0eb::t_68bf0a9c10968b 85-89
+apps/web/tests/e2e/resolution-evidence.spec.ts
+  s_a14da84a78b0eb::t_8aa25f2d33c111 69,72,76-78,116-118,140,164,167,171-173
+apps/web/tests/e2e/section-navigation.spec.ts
+  s_a14da84a78b0eb::t_8c87145eeade37 35,39
+apps/web/tests/e2e/spending-classification-review.spec.ts
+  s_a14da84a78b0eb::t_f41e2966794013 263-266
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b57e2c7f38548ad64ad830351f45ca92b4aba4fd",
+  "prompts": {},
+  "sessions": {
+    "s_359d51740d6cee": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15a5b-cd3e-7de2-9758-1362bd955be4",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_89f5879f3c3263": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c23e8c35-b127-4de4-adab-ab6c272d16e1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_a14da84a78b0eb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a4251b55-9ed3-4f78-92dd-cdc1a554513c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_e5624ca02fc242": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "93788da9-bc92-4923-88d3-4f8e5d66a342",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
