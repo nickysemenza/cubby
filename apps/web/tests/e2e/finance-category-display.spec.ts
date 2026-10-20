@@ -8,7 +8,7 @@ import {
   selectComboboxItem,
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
-import { createEntityFixture } from "./fixtures/core";
+import { createEntityFixture, createEntityFixtures } from "./fixtures/core";
 import { dispatchesOperation, unbatchFor } from "./support/dispatch-wire";
 
 test("linked Expense categories display their readable label and transaction expectation", async ({
@@ -47,8 +47,10 @@ test("linked Expense categories display their readable label and transaction exp
     name: `${tag} item`,
     manufacturer: "Synthetic",
   });
-  for (let index = 0; index < 28; index += 1) {
-    await createEntityFixture(page, "expense", {
+  await createEntityFixtures(
+    page,
+    "expense",
+    Array.from({ length: 28 }, () => ({
       name: `${tag} meal`,
       purchaseId,
       cost: -2,
@@ -58,8 +60,8 @@ test("linked Expense categories display their readable label and transaction exp
       costType: "materials",
       trade: "other",
       spendingCategoryId: categoryId,
-    });
-  }
+    })),
+  );
   const { id: transactionId } = await createEntityFixture(
     page,
     "financialTransaction",

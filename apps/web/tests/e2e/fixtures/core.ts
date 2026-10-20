@@ -145,6 +145,23 @@ export async function createEntityFixture<E extends CreatableEntity>(
   return created;
 }
 
+/** Settle a fixture cohort once; intermediate rows need no materialized reads. */
+export async function createEntityFixtures<E extends CreatableEntity>(
+  page: Page,
+  entity: E,
+  overrides: readonly EntityOverrides<E>[],
+): Promise<CreatedEntity[]> {
+  const context = await fixtureKernelContext(page);
+  const created: CreatedEntity[] = [];
+  for (const input of overrides) {
+    created.push(
+      await createEntity(context, entity, input, { faker: e2eFaker() }),
+    );
+  }
+  await drainDerivedRefreshFrontier(getFixtureDb());
+  return created;
+}
+
 /** The signed-in user's member LedgerParty, created on first use. */
 export async function ensureMemberParty(page: Page, name: string) {
   const db = getFixtureDb();
