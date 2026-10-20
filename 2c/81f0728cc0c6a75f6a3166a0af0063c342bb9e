@@ -1,0 +1,93 @@
+apps/web/DESIGN.md
+  s_35c2a05e7b7fae::t_2e8325df5e41f3 162
+apps/web/src/entity/editing/create-dialog-action.tsx
+  s_35c2a05e7b7fae::t_1d880b909f48f8 10,12,95,102-122
+apps/web/src/entity/platform/entity-schema-inspector.tsx
+  s_35c2a05e7b7fae::t_973ac9d1ad1562 14,41,71,97,148-154,156-157,159,187,210,275,333,365,458,478
+apps/web/src/features/developer/ai-smoke-test.tsx
+  s_35c2a05e7b7fae::t_600b186fbec41f 165
+apps/web/src/features/developer/mcp-inspector.tsx
+  s_35c2a05e7b7fae::t_d048db0f46efed 38,41,44,47,51,170
+apps/web/src/features/docs/docs-layout.tsx
+  s_35c2a05e7b7fae::t_e5112ee3f8064d 99
+apps/web/src/features/docs/docs-registry.tsx
+  s_35c2a05e7b7fae::t_ec1d7b7bdf6f09 48-55,85
+apps/web/src/features/labels/label-sheet.tsx
+  s_35c2a05e7b7fae::t_07c2da7389e162 11-12,44-45,58-59
+apps/web/src/features/labels/label-summary.tsx
+  s_35c2a05e7b7fae::t_a065b4d233121d 13,16
+apps/web/src/features/recipe/recipe-form/field-array-item-controls.tsx
+  s_35c2a05e7b7fae::t_1d2b83f0088a1b 13,22,30-31,41-42,52-53
+apps/web/src/features/recipe/recipe-form/index.tsx
+  s_35c2a05e7b7fae::t_a4402996e94697 505-506,518-519,534-535
+apps/web/src/features/recipe/recipe-form/instruction-field-array.tsx
+  s_35c2a05e7b7fae::t_65972e5f467cd1 50,65
+apps/web/src/routes/_authenticated/account.$accountView.tsx
+  s_35c2a05e7b7fae::t_f4a4c9bace2ea3 4,16-22
+apps/web/src/routes/_authenticated/account.connected-apps.tsx
+  s_35c2a05e7b7fae::t_9c1722f8a3c446 75-76,82,91-92,117,131,138,145
+apps/web/src/routes/_authenticated/ai.tsx
+  s_35c2a05e7b7fae::t_84bbf427c4b16c 32
+apps/web/src/routes/_authenticated/entities.tsx
+  s_35c2a05e7b7fae::t_84bcb4b5b35d38 157
+apps/web/src/routes/_authenticated/entities_.schema.$entity.tsx
+  s_35c2a05e7b7fae::t_e4918453c50cd2 31
+apps/web/src/routes/_authenticated/labels.tsx
+  s_35c2a05e7b7fae::t_fbd77ba72055a4 190,211,289,292
+apps/web/src/routes/_authenticated/mcp.tsx
+  s_35c2a05e7b7fae::t_88d507f7884ec6 14
+apps/web/src/routes/_authenticated/settings.tsx
+  s_35c2a05e7b7fae::t_f28dee40a72926 159,164
+apps/web/src/routes/oauth.consent.tsx
+  s_35c2a05e7b7fae::t_4ca6dd545e9e20 43-57,59-61,158-160,163,169,172,184,188-194,203,209
+apps/web/src/ui/combobox/picker.tsx
+  s_35c2a05e7b7fae::t_b93dba5846d9f5 363-364,405,408-409,716,787
+apps/web/src/ui/forms/form-utils.tsx
+  s_35c2a05e7b7fae::t_10e88ed015600a 143,324-327,337-340
+apps/web/src/ui/overlays/overlay.tsx
+  s_35c2a05e7b7fae::t_4806826853c6dd 197,213,218-222
+apps/web/src/ui/primitives/alert-dialog.tsx
+  s_35c2a05e7b7fae::t_37b5b15c1d7f95 83
+apps/web/src/ui/primitives/command.tsx
+  s_35c2a05e7b7fae::t_eef5028beb1d37 79,83,151
+apps/web/src/ui/primitives/dialog.tsx
+  s_35c2a05e7b7fae::t_702f7a9f774475 70,84
+apps/web/src/ui/primitives/field.tsx
+  s_35c2a05e7b7fae::t_43654f4fb6540b 104
+apps/web/src/ui/primitives/input-group.tsx
+  s_35c2a05e7b7fae::t_f2cb85d7832089 13
+apps/web/src/ui/primitives/input.tsx
+  s_35c2a05e7b7fae::t_65a28c25df7bf7 14
+apps/web/src/ui/primitives/popover.tsx
+  s_35c2a05e7b7fae::t_8543e6a6db222d 47,61
+apps/web/src/ui/primitives/sheet.tsx
+  s_35c2a05e7b7fae::t_7175e4a83825ca 51,66,84
+apps/web/src/ui/primitives/textarea.tsx
+  s_35c2a05e7b7fae::t_cfec18c80e8c0d 12
+apps/web/src/features/developer/mcp-usage-dashboard.tsx
+  s_2034f37bd849a7::t_6e5352492aa727 24,51,54,138,141,144,147,698-710,792-804
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2c81f0728cc0c6a75f6a3166a0af0063c342bb9e",
+  "prompts": {},
+  "sessions": {
+    "s_2034f37bd849a7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15b4d-4961-7890-a13d-4387d8ef89d5",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_35c2a05e7b7fae": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15b4b-861b-70e0-aaf5-9697f5e120b5",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
