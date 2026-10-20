@@ -33,8 +33,9 @@ export function MonthlySpendChart({
   const range = Math.max(1, peak + trough);
   // Share of the plot above the zero baseline; all of it without credits.
   const zero = trough === 0 ? 100 : (peak / range) * 100;
+  // A tiny month stays visible, but never past its side of the baseline.
   const extent = (cents: number) =>
-    `${Math.max(6, (Math.abs(cents) / range) * 100)}%`;
+    `${Math.max(Math.min(6, cents > 0 ? zero : 100 - zero), (Math.abs(cents) / range) * 100)}%`;
   const first = months.at(0);
   const last = months.at(-1);
   return (

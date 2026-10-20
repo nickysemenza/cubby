@@ -165,8 +165,11 @@ export function SectionStack({ sections }: { sections: IndexedSection[] }) {
 
 function hashForDetailTarget(id: string, groups: IndexedSectionGroup[]) {
   const alias = id.replace("detail-group-", "");
-  return groups.some((group) =>
-    group.sections.some((section) => section.id === alias),
+  // A lead entry is a group whose id is its own anchor (e.g. facts `overview`).
+  return groups.some(
+    (group) =>
+      (group.id === alias && group.id !== id) ||
+      group.sections.some((section) => section.id === alias),
   )
     ? id
     : alias;
@@ -562,7 +565,7 @@ export function IndexedSections({
     void navigate({
       to: ".",
       search: true,
-      hash: hashForDetailTarget(id, groups),
+      hash: hashForDetailTarget(id, indexGroups),
       replace: false,
       resetScroll: false,
       hashScrollIntoView: false,
