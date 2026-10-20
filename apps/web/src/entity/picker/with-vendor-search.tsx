@@ -167,15 +167,16 @@ export function WithVendorShortcodeSearch({
         showErrorToast(message);
         throw new Error(message);
       }
-      toast.success(`Added vendor ${result.result.name}`);
-      // EntityEditResultFor deliberately types `id` as a plain string and
-      // `name` as optional; this is the ingress where the fresh vendor enters
-      // branded-shortcode land, so parse the id for real instead of asserting,
-      // and fall back to the name the vendor was created with.
+      const savedName =
+        typeof result.result.name === "string"
+          ? result.result.name
+          : name.trim();
+      toast.success(`Added vendor ${savedName}`);
+      // Receipts omit values outside the submitted scalar fields.
       return buildVendorComboboxItem(
         {
           id: parseShortcodeFor("vendor", result.result.id),
-          name: result.result.name ?? name.trim(),
+          name: savedName,
         },
         { itemId: "shortcode" },
       );

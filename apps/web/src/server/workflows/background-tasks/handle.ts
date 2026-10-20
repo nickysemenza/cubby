@@ -76,14 +76,24 @@ export async function handleBackgroundTask(
   ports: BackgroundTaskPorts = productionBackgroundTaskPorts,
 ): Promise<BackgroundTaskOutcome> {
   switch (task.kind) {
+    case "derived-refresh.wakeup": {
+      const { wakeDerivedRefresh } =
+        await import("~/server/domains/run/service/derived-refresh");
+      await wakeDerivedRefresh(db);
+      return "succeeded";
+    }
     case "recipe-totals.recompute": {
-      const { buildCrudServices } =
-        await import("~/server/http/request-context");
-      const { services } = buildCrudServices(db);
-      const recomputed = await services.recipeCosting.recomputeQueued(
-        task.recipeIds,
+      const { captureDerivedRefresh } =
+        await import("~/server/generic/derived-refresh/repo/capture");
+      const { wakeDerivedRefresh } =
+        await import("~/server/domains/run/service/derived-refresh");
+      await captureDerivedRefresh(
+        db,
+        task.recipeIds.map((entityId) => ({ entityKind: "recipe", entityId })),
+        { invalidate: false },
       );
-      return recomputed > 0 ? "succeeded" : "skipped";
+      await wakeDerivedRefresh(db);
+      return "succeeded";
     }
     case "entity-embedding.refresh": {
       const ref = { entityKind: task.entityKind, entityId: task.entityId };

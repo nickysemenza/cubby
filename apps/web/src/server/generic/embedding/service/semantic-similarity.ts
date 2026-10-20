@@ -12,6 +12,8 @@ import { hydrateSearchHitRefs } from "~/server/generic/search/service/search.ser
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { bindWorkflow, workflow } from "~/server/workflows/runtime";
 
+import { getSemanticEmbeddingConfig } from "./semantic/config";
+
 /** Shared by explicit similarity requests and product relatedness. Readiness
  * gates candidate work; hydration removes deleted references and private IDs. */
 export const findSimilarEntitiesWorkflow = bindWorkflow(
@@ -32,36 +34,41 @@ export const findSimilarEntitiesWorkflow = bindWorkflow(
       when: async (_, { readiness }) => readiness === "ready",
       whenTrue: (branch) =>
         branch
-          .call("candidates", (_, { input }) =>
-            findSimilarEntities(productionVectorStore, input.source, {
+          .call("candidates", ({ context }, { input }) =>
+            findSimilarEntities(context, productionVectorStore, input.source, {
               targetType: input.pair.target,
               limit: input.input.limit,
+              config: getSemanticEmbeddingConfig(),
             }),
           )
           .call("hits", ({ context }, { candidates }) =>
-            hydrateSearchHitRefs(context, candidates),
+            hydrateSearchHitRefs(context, candidates.candidates),
           )
-          .output(({ candidates, hits }): SimilarEntitiesOut["results"] => {
+          .output(({ candidates, hits }) => {
             const hitByRef = new Map(
               hits.map(
                 (hit) => [`${hit.entityKind}:${hit.entityId}`, hit] as const,
               ),
             );
-            return candidates.flatMap((candidate) => {
-              const hit = hitByRef.get(
-                `${candidate.entityKind}:${candidate.entityId}`,
-              );
-              if (!hit) return [];
-              const { entityId: _privateEntityId, ...entity } = hit;
-              return [{ similarity: candidate.similarity, entity }];
-            });
+            return {
+              complete: candidates.complete,
+              results: candidates.candidates.flatMap((candidate) => {
+                const hit = hitByRef.get(
+                  `${candidate.entityKind}:${candidate.entityId}`,
+                );
+                if (!hit) return [];
+                const { entityId: _privateEntityId, ...entity } = hit;
+                return [{ similarity: candidate.similarity, entity }];
+              }),
+            } satisfies Pick<SimilarEntitiesOut, "results" | "complete">;
           }),
       whenFalse: (branch) =>
-        branch.output((): SimilarEntitiesOut["results"] => []),
+        branch.output(() => ({ results: [], complete: false })),
     })
     .output(({ input, pair, readiness, matches }): SimilarEntitiesOut => ({
       source: { entityKind: pair.source, entityId: input.sourceId },
-      status: readiness,
-      results: matches,
+      status: readiness === "ready" && !matches.complete ? "stale" : readiness,
+      complete: matches.complete,
+      results: matches.results,
     })),
 );

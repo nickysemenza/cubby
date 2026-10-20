@@ -7,6 +7,12 @@ import type { AuditEntityKind, AuditFieldChange } from "@cubby/schemas/audit";
 import type { Amount } from "@cubby/schemas/codec";
 import type { AuditChannel } from "@cubby/schemas/context";
 import {
+  type derivedRefreshState,
+  type derivedRefreshCursorState,
+  embeddingArtifactState,
+  type derivedRefreshOwners,
+} from "@cubby/schemas/derived-refresh";
+import {
   type EntityAttachmentRole,
   entityAttachmentRoleValues,
 } from "@cubby/schemas/entity-attachment";
@@ -49,6 +55,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import type { z } from "zod";
 
 import { entityIdentity } from "~/server/db/entity-identity-schema";
 
@@ -80,6 +87,7 @@ import {
   ledgerTransfer,
   run,
 } from "./generated/entity-table-definitions.gen";
+import { sqlEnumConstant } from "./sql-enum";
 
 export type { Amount };
 
@@ -167,6 +175,24 @@ export const entityEmbedding = pgTable(
     provider: text("provider").notNull(),
     model: text("model").notNull(),
     dimensions: integer("dimensions").notNull(),
+    artifactState: text("artifactState")
+      .notNull()
+      .default("legacy")
+      .$type<z.infer<typeof embeddingArtifactState>>(),
+    /** Old Worker bookkeeping never changes this artifact's captured input hash. */
+    artifactHash: text("artifactHash"),
+    vectorHash: text("vectorHash"),
+    submissionId: text("submissionId"),
+    observedAt: timestamp("observedAt", { mode: "date" }),
+    indexedAt: timestamp("indexedAt", { mode: "date" }),
+    deletionId: text("deletionId"),
+    availableAt: timestamp("availableAt", { mode: "date" })
+      .notNull()
+      .defaultNow(),
+    leaseToken: uuid("leaseToken"),
+    leaseExpiresAt: timestamp("leaseExpiresAt", { mode: "date" }),
+    visibilityAttempts: integer("visibilityAttempts").notNull().default(0),
+    lastError: text("lastError"),
     ...baseTimestamps(),
     ...softDeletedAt(),
   },
@@ -188,6 +214,18 @@ export const entityEmbedding = pgTable(
       table.model,
       table.dimensions,
     ),
+    uniqueIndex("EntityEmbedding_one_submission_key")
+      .on(
+        table.entityKind,
+        table.entityId,
+        table.provider,
+        table.model,
+        table.dimensions,
+      )
+      .where(
+        sql`${table.artifactState} IN (${sqlEnumConstant(embeddingArtifactState, "prepared")},${sqlEnumConstant(embeddingArtifactState, "submitting")},${sqlEnumConstant(embeddingArtifactState, "submitted")})`,
+      ),
+    index("EntityEmbedding_recovery_idx").on(table.availableAt, table.id),
   ],
 );
 
@@ -704,6 +742,175 @@ export const auditLog = pgTable(
     ),
   ],
 );
+
+/** Input revisions are independent of queue delivery and materialization. */
+export const derivedRefreshRevision = pgTable("DerivedRefreshRevision", {
+  key: text("key").primaryKey(),
+  revision: integer("revision").notNull().default(0),
+});
+
+/** Durable work retains the immutable audit delta, including removed edges. */
+export const derivedRefreshWork = pgTable(
+  "DerivedRefreshWork",
+  {
+    id: pkUuid(),
+    ...entityRef<Entity>({ nullable: false }),
+    auditId: uuid("auditId").references(() => auditLog.id),
+    inputFingerprint: text("inputFingerprint").notNull(),
+    version: integer("version").notNull().default(1),
+    changedFields: jsonb("changedFields").$type<Record<string, boolean>>(),
+    state: text("state")
+      .$type<z.infer<typeof derivedRefreshState>>()
+      .notNull()
+      .default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    hasFailures: boolean("hasFailures").notNull().default(false),
+    leaseToken: uuid("leaseToken"),
+    leaseExpiresAt: timestamp("leaseExpiresAt", { mode: "date" }),
+    publishing: boolean("publishing").notNull().default(false),
+    publishAfter: uuid("publishAfter"),
+    lastError: text("lastError"),
+    availableAt: timestamp("availableAt", { mode: "date" })
+      .notNull()
+      .defaultNow(),
+    ...baseTimestamps(),
+  },
+  (table) => [
+    entityRefFk("DerivedRefreshWork_entity_fk", table),
+    uniqueIndex("DerivedRefreshWork_root_key").on(
+      table.entityKind,
+      table.entityId,
+    ),
+    index("DerivedRefreshWork_due_idx").on(
+      table.state,
+      table.availableAt,
+      table.id,
+    ),
+    index("DerivedRefreshWork_entity_idx").on(table.entityKind, table.entityId),
+  ],
+);
+
+/** One visited frontier per wave prevents dependency cycles and lost cursors. */
+export const derivedRefreshScope = pgTable(
+  "DerivedRefreshScope",
+  {
+    id: pkUuid(),
+    workId: uuid("workId")
+      .notNull()
+      .references(() => derivedRefreshWork.id, { onDelete: "cascade" }),
+    ...entityRef<Entity>({ nullable: false }),
+    projected: boolean("projected").notNull().default(false),
+    traverse: boolean("traverse").notNull().default(true),
+    version: integer("version").notNull().default(0),
+    phase: text("phase").notNull().default("projection"),
+    route: integer("route").notNull().default(0),
+    after: uuid("after"),
+    done: boolean("done").notNull().default(false),
+  },
+  (table) => [
+    entityRefFk("DerivedRefreshScope_entity_fk", table),
+    uniqueIndex("DerivedRefreshScope_wave_entity_key").on(
+      table.workId,
+      table.entityKind,
+      table.entityId,
+    ),
+    index("DerivedRefreshScope_pending_idx").on(
+      table.workId,
+      table.done,
+      table.id,
+    ),
+  ],
+);
+
+/** Scheduling revisions never reset failures for the same semantic phase input. */
+export const derivedRefreshFailure = pgTable(
+  "DerivedRefreshFailure",
+  {
+    ...entityRef<Entity>({ nullable: false }),
+    phase: text("phase").notNull(),
+    fingerprint: text("fingerprint").notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    lastError: text("lastError").notNull(),
+    ...baseTimestamps(),
+  },
+  (table) => [
+    entityRefFk("DerivedRefreshFailure_entity_fk", table),
+    uniqueIndex("DerivedRefreshFailure_input_key").on(
+      table.entityKind,
+      table.entityId,
+      table.phase,
+      table.fingerprint,
+    ),
+  ],
+);
+
+/** Kept after deletion: an older publication may never recreate missing output. */
+export const derivedRefreshPublication = pgTable(
+  "DerivedRefreshPublication",
+  {
+    ...entityRef<Entity>({ nullable: false }),
+    phase: text("phase").notNull(),
+    revision: integer("revision").notNull(),
+  },
+  (table) => [
+    entityRefFk("DerivedRefreshPublication_entity_fk", table),
+    uniqueIndex("DerivedRefreshPublication_entity_phase_key").on(
+      table.entityKind,
+      table.entityId,
+      table.phase,
+    ),
+  ],
+);
+
+/** Two-sided reconciliation is independent of application hook coverage. */
+export const derivedRefreshSnapshot = pgTable(
+  "DerivedRefreshSnapshot",
+  {
+    ...entityRef<Entity>({ nullable: false }),
+    fingerprint: text("fingerprint").notNull(),
+    ...baseTimestamps(),
+  },
+  (table) => [
+    entityRefFk("DerivedRefreshSnapshot_entity_fk", table),
+    uniqueIndex("DerivedRefreshSnapshot_entity_key").on(
+      table.entityKind,
+      table.entityId,
+    ),
+  ],
+);
+
+/** Per-row observations detect SQL-only changes without corpus aggregation. */
+export const derivedRefreshObservedInput = pgTable(
+  "DerivedRefreshObservedInput",
+  {
+    key: text("key").primaryKey(),
+    scope: text("scope").notNull(),
+    fingerprint: text("fingerprint").notNull(),
+    owners: jsonb("owners")
+      .$type<z.infer<typeof derivedRefreshOwners>>()
+      .notNull()
+      .default([]),
+    seenAt: timestamp("seenAt", { mode: "date" }).notNull(),
+  },
+);
+
+export const derivedRefreshCursor = pgTable("DerivedRefreshCursor", {
+  key: text("key").primaryKey(),
+  cursor: jsonb("cursor").$type<z.infer<typeof derivedRefreshCursorState>>(),
+  availableAt: timestamp("availableAt", { mode: "date" })
+    .notNull()
+    .defaultNow(),
+});
+
+/** A pass covers its captured epoch; newer edits remain eligible for the next pass. */
+export const derivedDiscoveryPass = pgTable("DerivedDiscoveryPass", {
+  family: text("family").primaryKey(),
+  fingerprint: text("fingerprint").notNull(),
+  coveredFingerprint: text("coveredFingerprint"),
+  runId: uuid("runId")
+    .$type<RunId>()
+    .references(() => run.id),
+});
 
 type AppSettingValue =
   | string

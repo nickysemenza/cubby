@@ -1,10 +1,4 @@
 import { imageOut } from "@cubby/schemas/image";
-import { mealOut } from "@cubby/schemas/meal";
-import {
-  buildNutrition,
-  nutritionTotals,
-  withMacros,
-} from "@cubby/schemas/nutrition";
 import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -42,30 +36,6 @@ const existing = imageOut.parse(
     },
   }),
 );
-// `mock()`'s random `nutritionTotals` almost never satisfies its own
-// `covered <= total` coverage refinement (independent per-nutrient random
-// ints rarely land in order across all 22 keys, times two for `recipes[]`),
-// so every nutrient is pinned to the "unavailable" branch instead, which
-// carries no `coverage` field at all. Built once, at import time, and reused
-// by every test below — only `images` varies per case.
-const zeroTotals = nutritionTotals.parse(
-  withMacros({
-    cost: { status: "unavailable", reason: "no_data" },
-    nutrition: buildNutrition(() => ({
-      status: "unavailable",
-      reason: "no_data",
-    })),
-  }),
-);
-const mealTemplate = mock(mealOut, {
-  seed: 2,
-  overrides: { id: mealId, recipes: [], totals: zeroTotals },
-});
-const mealRecordWithImages = (images: (typeof existing)[]) => ({
-  ...mealTemplate,
-  images,
-});
-
 function chooseFiles(...files: File[]) {
   fireEvent.change(screen.getByLabelText("Choose photos"), {
     target: { files },
@@ -81,7 +51,8 @@ describe("EntityPhotosSection", () => {
         return {
           action: "update",
           entity: "meal",
-          item: mealRecordWithImages([]),
+          item: { id: mealId },
+          appliedFields: [],
           sideEffects: {},
         };
       },
@@ -124,7 +95,8 @@ describe("EntityPhotosSection", () => {
         return {
           action: "update",
           entity: "meal",
-          item: mealRecordWithImages([existing]),
+          item: { id: mealId },
+          appliedFields: [],
           sideEffects: {},
         };
       },
@@ -150,6 +122,7 @@ describe("EntityPhotosSection", () => {
         id={mealId}
         images={[]}
         transport={transport}
+        readImages={async () => [existing]}
         uploadImageOperation={uploadImageOperation}
       />,
       { wrapper: harness.wrapper },
@@ -196,7 +169,8 @@ describe("EntityPhotosSection", () => {
         return {
           action: "update",
           entity: "meal",
-          item: mealRecordWithImages([existing]),
+          item: { id: mealId },
+          appliedFields: [],
           sideEffects: {},
         };
       },
@@ -221,6 +195,7 @@ describe("EntityPhotosSection", () => {
         id={mealId}
         images={[]}
         transport={transport}
+        readImages={async () => [existing]}
         uploadImageOperation={uploadImageOperation}
       />,
       { wrapper: harness.wrapper },

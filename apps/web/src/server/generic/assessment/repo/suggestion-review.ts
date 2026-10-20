@@ -38,9 +38,15 @@ import {
 } from "~/server/generic/assessment/repo/assessment";
 import { withAuditReceipts } from "~/server/generic/audit-log/repo/audit-receipts";
 import {
+  currentInputRevision,
+  fenceDerivedInputsAtCommit,
+} from "~/server/generic/derived-refresh/repo/freshness";
+import {
   lookupShortcodes,
   resolveLiveShortcodes,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
+
+import { fieldInputFingerprint } from "./field-input-fence";
 
 /** Shared executions publish one suggestion history; every live requester can inspect it. */
 const requestedSuggestionRun = (code: string) => sql`(
@@ -407,6 +413,23 @@ export async function acceptSuggestion(
       .for("update");
     if (!row) throw new Error(`Pending Suggestion not found: ${id}`);
     const parsed = suggestionRowSchema.parse(row);
+    const revision = await currentInputRevision(transactionDb);
+    const fence = z
+      .object({ liveInputFingerprint: z.string() })
+      .safeParse(row.data);
+    if (
+      !fence.success ||
+      fence.data.liveInputFingerprint !==
+        (await fieldInputFingerprint(
+          transactionDb,
+          parsed.entity,
+          parsed.recordId,
+          parsed.field,
+        ))
+    )
+      throw new Error(
+        "Suggestion inputs changed; evaluate this field again before applying",
+      );
     if (automatic && requiresSuggestionReview(parsed.entity, parsed.field))
       throw new Error(
         `Field ${parsed.entity}.${parsed.field} requires member review`,
@@ -437,6 +460,9 @@ export async function acceptSuggestion(
       intent: "apply",
       receipt: z.json().parse(receipt),
     });
+    await fenceDerivedInputsAtCommit(transactionDb, revision, (tx) =>
+      fieldInputFingerprint(tx, parsed.entity, parsed.recordId, parsed.field),
+    );
     return { id, status: "applied" as const };
   });
 }

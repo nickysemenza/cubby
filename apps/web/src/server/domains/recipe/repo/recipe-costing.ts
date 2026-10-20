@@ -32,6 +32,7 @@ import type {
   RecipeTotals,
   StoredRecipeTotals,
 } from "@cubby/schemas/recipe-shared";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { TIER1_NUTRIENT_KEYS } from "@cubby/usda";
 import { createLogger } from "@cubby/worker-tracing";
 import { keyBy, uniq } from "es-toolkit";
@@ -42,6 +43,7 @@ import {
   type CostingRow,
   computeRecipeCosting,
   flattenSections,
+  recipeWasmInput,
   type RecipeCostingInput,
 } from "~/lib/recipe-costing";
 import {
@@ -49,15 +51,18 @@ import {
   getRecipeIngredientName,
 } from "~/lib/recipe-graph";
 import type { Database } from "~/server/db";
-import { getIngredientsByIDs } from "~/server/domains/ingredient/repo/ingredient-with-food";
+import {
+  getIngredientsByIDs,
+  enrichPreparedIngredients,
+} from "~/server/domains/ingredient/repo/ingredient-with-food";
+import { getIngredientsByIDsLean } from "~/server/domains/ingredient/repo/search";
+import { foodLookupParamFromProduct } from "~/server/domains/product/repo/helpers";
 import {
   getRecipesByIDs,
   getSubRecipeClosure,
 } from "~/server/domains/recipe/repo/crud";
 import {
   commitRecipeTotals,
-  findRecipeIdsUsingIngredients,
-  findStaleParentRecipeIds,
   getRecipeTotalsState,
   markRecipesStale,
   selectAllActiveRecipeIds,
@@ -66,6 +71,8 @@ import {
 } from "~/server/domains/recipe/repo/totals";
 import type { UsdaFoodBatchPort } from "~/server/domains/usda-food/repo/usda-helpers";
 import { createAppError } from "~/server/errors/app-error";
+import { captureDerivedRefresh } from "~/server/generic/derived-refresh/repo/capture";
+import { currentInputRevision } from "~/server/generic/derived-refresh/repo/freshness";
 import {
   resolveAllPresent,
   resolveLiveShortcodes,
@@ -185,6 +192,60 @@ export class RecipeCostingService {
     return this.db;
   }
 
+  /** Fingerprint authoritative inputs before provider/WASM work can fail. */
+  async prepareRefresh(recipeId: RecipeId) {
+    const recipes = await getRecipesByIDs(this.db, [recipeId]);
+    const recipeMap = await getSubRecipeClosure(this.db, recipes);
+    const closure = [...recipes, ...Object.values(recipeMap)];
+    const ingredients = await getIngredientsByIDsLean(
+      this.db,
+      await resolveAllPresent(
+        this.db,
+        "ingredient",
+        collectIngredientIds(closure),
+      ),
+    );
+    const fingerprint = await sha256Hex(
+      JSON.stringify([
+        "recipe-costing-input-v1",
+        closure
+          .map((recipe) => recipeWasmInput(recipe, getRecipeIngredientName))
+          .sort((a, b) => a.id.localeCompare(b.id)),
+        ingredients
+          .map((ingredient) => ({
+            id: ingredient.id,
+            naKinds: ingredient.naKinds,
+            products: ingredient.product
+              .map((product) => ({
+                id: product.id,
+                price: product.pricing.effectivePrice,
+                unitMappings: product.unitMappings,
+                labelNutrition: product.labelNutrition,
+                food: foodLookupParamFromProduct(product),
+              }))
+              .sort((a, b) => a.id.localeCompare(b.id)),
+          }))
+          .sort((a, b) => a.id.localeCompare(b.id)),
+      ]),
+    );
+    return {
+      fingerprint,
+      compute: async (): Promise<RecipeTotals | null> => {
+        const recipe = recipes[0];
+        if (!recipe) return null;
+        const enriched = await enrichPreparedIngredients(
+          this.usdaClient,
+          ingredients,
+        );
+        const computed = await this.computePreparedTotals(recipes, {
+          ingMap: keyBy(enriched, (ingredient) => ingredient.id),
+          recipeMap,
+        });
+        return computed.get(recipe.id)?.totals ?? null;
+      },
+    };
+  }
+
   private async loadContext(recipes: RecipeCostingInput[]): Promise<{
     ingMap: Record<string, IngredientWithFoodLeanOut>;
     recipeMap: Record<string, RecipeGraphOut>;
@@ -240,7 +301,18 @@ export class RecipeCostingService {
     Map<RecipeShortcode, { totals: RecipeTotals; complete: boolean }>
   > {
     const { ingMap, recipeMap } = await this.loadContext(recipes);
+    return this.computePreparedTotals(recipes, { ingMap, recipeMap });
+  }
 
+  private async computePreparedTotals(
+    recipes: RecipeCostingInput[],
+    {
+      ingMap,
+      recipeMap,
+    }: Awaited<ReturnType<RecipeCostingService["loadContext"]>>,
+  ): Promise<
+    Map<RecipeShortcode, { totals: RecipeTotals; complete: boolean }>
+  > {
     // One engine call for the whole batch (ingredients serialized once). Traced
     // separately so WASM engine time is visible apart from DB/USDA IO. NOTE:
     // wall-clock timing of this call is meaningless on workerd — its frozen clock
@@ -394,17 +466,9 @@ export class RecipeCostingService {
   }
 
   /**
-   * Queue-consumer entry (also run inline by the recipe page's repair-on-read
-   * and by "Settle now"). Recompute only this bounded chunk in the current
-   * invocation; parents whose totals changed are invalidated in the same
-   * transaction as the child's write and published afterwards.
-   *
-   * Publication is decided by the parents' CURRENT staleness, not by whether
-   * this wakeup staled them: an already-fresh child still publishes its stale
-   * parents, so a parent whose earlier publication was lost is recovered by
-   * any later wakeup of any child. A duplicate wakeup for a fresh child never
-   * re-stales a fresh parent — it only re-publishes parents that are stale
-   * anyway, which their own freshness gate turns into a no-op.
+   * Recompute only this supplied chunk. The generic refresh frontier owns
+   * parent traversal and invalidation; a duplicate queue message does not
+   * enumerate parents or create a second propagation wave.
    */
   async recomputeQueued(recipeIds: RecipeId[]): Promise<number> {
     return this.tracedRecompute(
@@ -423,16 +487,6 @@ export class RecipeCostingService {
         const visited = new Set<RecipeId>();
         if (staleRecipeIds.length > 0) {
           await this.recomputeTree(staleRecipeIds, visited, "queue");
-        }
-        const staleParents = await findStaleParentRecipeIds(this.db, recipeIds);
-        if (staleParents.length > 0) {
-          await this.publishChunks(
-            staleParents,
-            "recipe-costing.parent-cascade",
-          );
-          log.info(
-            `[recompute-queue] published ${staleParents.length} stale parent recipe(s) for follow-up recompute`,
-          );
         }
         return visited.size;
       },
@@ -461,6 +515,7 @@ export class RecipeCostingService {
     for (const id of todo) visited.add(id);
 
     const tLoad = performance.now();
+    const inputRevision = await currentInputRevision(this.db);
     const recipes = await getRecipesByIDs(this.db, todo);
     const totalsMap = await this.computeTotals(recipes);
     const resolvedRecipeIds = await resolveLiveShortcodes(
@@ -496,6 +551,8 @@ export class RecipeCostingService {
       freshOnlyIds,
       changedIds,
       processedIds: todo,
+      inputRevision,
+      cascadeParents: cascadeMode === "inline",
     });
     const writeMs = Math.round(performance.now() - tWrite);
     // One line per processed chunk. `load+compute` is real wall-clock (it spans
@@ -538,27 +595,30 @@ export class RecipeCostingService {
     metadata: RecipeRecomputeDispatchMetadata = {
       entity: { entityKind: "ingredient", entityId: ingredientId },
     },
-  ): Promise<number> {
+  ): Promise<void> {
     return this.recomputeForIngredients([ingredientId], metadata);
   }
 
   async recomputeForIngredients(
     ingredientIds: IngredientId[],
     metadata: RecipeRecomputeDispatchMetadata = {},
-  ): Promise<number> {
-    if (ingredientIds.length === 0) return 0;
+  ): Promise<void> {
+    if (ingredientIds.length === 0) return;
     const uniqueIngredientIds = uniq(ingredientIds);
     return await withTrace(
       TraceNames.service("recipeCosting", "dispatchForIngredient"),
       async (span) => {
-        const recipeIds = uniq(
-          await findRecipeIdsUsingIngredients(this.db, uniqueIngredientIds),
-        );
         span.setAttributes({
           "ingredient.count": uniqueIngredientIds.length,
-          "recipe.dispatched": recipeIds.length,
+          "refresh.source": metadata.source ?? "recipe-costing",
         });
-        return await this.dispatchRecompute(recipeIds, metadata);
+        await captureDerivedRefresh(
+          this.db,
+          uniqueIngredientIds.map((entityId) => ({
+            entityKind: "ingredient",
+            entityId,
+          })),
+        );
       },
     );
   }

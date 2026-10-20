@@ -55,7 +55,7 @@ export async function productIdentityEvidenceFence(
       UNION ALL SELECT 'identity-image', id::text, xmin::text FROM "Image" WHERE id IN (SELECT id FROM photos)
       UNION ALL SELECT 'identity-analysis', id::text, xmin::text FROM "AiAnalysis" WHERE "entityKind" = ${entitySchema.enum.image} AND "entityId" IN (SELECT id FROM photos)
       UNION ALL SELECT 'state', id::text, xmin::text FROM "AssessmentState" WHERE id IN (SELECT id FROM history) OR "recordId" IN (SELECT id FROM photos)
-      UNION ALL SELECT 'assessment', id::text, xmin::text FROM "Assessment" WHERE id IN (SELECT id FROM history) OR id::text IN (
+      UNION ALL SELECT 'identity-assessment', id::text, xmin::text FROM "Assessment" WHERE id IN (SELECT id FROM history) OR id::text IN (
         SELECT jsonb_array_elements_text(CASE WHEN jsonb_typeof(evidence->'signals'->'conflictLineage') = 'array' THEN evidence->'signals'->'conflictLineage' ELSE '[]'::jsonb END) FROM history
       )
       UNION ALL SELECT 'binding', id::text, xmin::text FROM "ImportSourceProduct" WHERE "productId" IN (SELECT id FROM targets)

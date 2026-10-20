@@ -430,7 +430,6 @@ const createTaskWithOutput = async <TOutput>(
       trade: data.trade,
     });
     await assertEffectiveTaskTrade(tx, created.id);
-    await validateLiveEffectiveTrades(tx);
     if (data.pendingImageIds && data.pendingImageIds.length > 0) {
       const resolvedImageIds = await resolveAllPresent(
         tx,
@@ -643,8 +642,19 @@ const updateTaskWithOutput = async <TOutput>(
       sortOrder: data.sortOrder,
     });
     const updated = await updateLiveAndReturn(tx, task, updateValues, id);
-    await assertEffectiveTaskTrade(tx, id);
-    await validateLiveEffectiveTrades(tx);
+    if (
+      [
+        "trade",
+        "parentTaskId",
+        "projectId",
+        "projectMode",
+        "subjectProductId",
+        "subjectProductMode",
+      ].some((key) => key in data)
+    ) {
+      await assertEffectiveTaskTrade(tx, id);
+      await validateLiveEffectiveTrades(tx, { kind: "task", ids: [id] });
+    }
     ({ detachedImageKeys } = await syncEntityImages(
       tx,
       "task",

@@ -72,7 +72,6 @@
   "apps/web/src/server/workflows/runs/lifecycle.ts": 1,
   "apps/web/src/server/domains/cookbook/repo/cookbook.ts": 1,
   "apps/web/src/server/domains/product/repo/crud.ts": 1,
-  "apps/web/src/server/generic/embedding/repo/entity-embedding-cleanup.ts": 5,
   "apps/web/src/server/domains/product/repo/orphan-condition.ts": 1,
   "apps/web/src/server/domains/run/repo/ensure-run.ts": 2,
   "apps/web/src/server/generic/embedding/repo/entity-embedding-refresh.ts": 2

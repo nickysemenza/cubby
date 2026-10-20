@@ -754,7 +754,9 @@ export function FieldVerificationEvidence({
             <span className="font-medium">
               {source.supportsCurrentValue === false
                 ? "Earlier value"
-                : "Current value"}
+                : source.supportsCurrentValue === true
+                  ? "Current value"
+                  : "Recorded evidence"}
             </span>
             {source.selectedVariant ? (
               <span className="text-muted-foreground">

@@ -38,6 +38,7 @@ import {
   type RepositoryQueryTransaction,
 } from "~/server/db/repository-access.boundary";
 import { createAppError } from "~/server/errors/app-error";
+import { recordContextRefresh } from "~/server/generic/derived-refresh/capture.boundary";
 
 type Db = RepositoryQueryInput;
 
@@ -226,7 +227,13 @@ export async function replaceSettlementRefs(
           ),
         ),
       );
-  if (added.length === 0) return;
+  if (added.length === 0) {
+    if (removed.length)
+      await recordContextRefresh(tx, "EntityExternalId", [
+        { entityKind: "financialTransaction", entityId: transactionId },
+      ]);
+    return;
+  }
   await ensureExternalSources(
     tx,
     added.map((ref) => ref.source),
@@ -241,6 +248,9 @@ export async function replaceSettlementRefs(
       isPrimary: null,
     })),
   );
+  await recordContextRefresh(tx, "EntityExternalId", [
+    { entityKind: "financialTransaction", entityId: transactionId },
+  ]);
 }
 
 /**
@@ -290,7 +300,7 @@ export async function setSingleExternalId(
     owner.entityId,
   );
   if (value && current?.externalId === value.externalId) {
-    if (current.url !== value.url)
+    if (current.url !== value.url) {
       await tx
         .update(entityExternalId)
         .set({ url: value.url })
@@ -302,6 +312,8 @@ export async function setSingleExternalId(
             eq(entityExternalId.externalId, value.externalId),
           ),
         );
+      await recordContextRefresh(tx, "EntityExternalId", [owner]);
+    }
     return;
   }
   if (current)
@@ -315,7 +327,10 @@ export async function setSingleExternalId(
           eq(entityExternalId.source, slot.source),
         ),
       );
-  if (!value) return;
+  if (!value) {
+    if (current) await recordContextRefresh(tx, "EntityExternalId", [owner]);
+    return;
+  }
   await assertExternalIdAvailable(tx, { ...slot, ...value }, owner.entityId);
   await ensureExternalSources(tx, [slot.source]);
   await tx.insert(entityExternalId).values({
@@ -327,6 +342,7 @@ export async function setSingleExternalId(
     url: value.url,
     isPrimary: true,
   });
+  await recordContextRefresh(tx, "EntityExternalId", [owner]);
 }
 
 /**

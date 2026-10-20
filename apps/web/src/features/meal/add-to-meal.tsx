@@ -1,5 +1,5 @@
 import type { RecipeShortcode } from "@cubby/schemas/identifiers";
-import type { MealOut } from "@cubby/schemas/meal";
+import { mealOut, type MealOut } from "@cubby/schemas/meal";
 import {
   MEAL_KIND_LABELS,
   type MealKind,
@@ -86,9 +86,10 @@ const slotForNow = (): MealType => {
  * Plans the current recipe onto a day, either by extending one of that day's
  * existing meals or by creating a new one. Lives on recipe detail pages.
  */
-function createdMeal(result: EntityBrowserMutationResult): MealOut | undefined {
+const createdMealReceipt = mealOut.pick({ id: true, date: true });
+function createdMeal(result: EntityBrowserMutationResult) {
   return result.action === "create" && result.entity === "meal"
-    ? result.item
+    ? createdMealReceipt.parse(result.item)
     : undefined;
 }
 

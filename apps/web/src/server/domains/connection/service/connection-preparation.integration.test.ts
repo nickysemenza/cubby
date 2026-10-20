@@ -1,13 +1,15 @@
 import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { and, eq } from "drizzle-orm";
 import { TEST_AI_WORK_LAUNCHER } from "tooling/ai-work";
 import { buildEntity } from "tooling/factories/build";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
+import { setCfEnv } from "~/server/cf-env";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
   aiEvaluation,
@@ -17,18 +19,23 @@ import {
   expense,
   searchDocument,
   product,
+  derivedRefreshWork,
 } from "~/server/db/schema";
 import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";
 import { scheduleConnectionRefresh } from "~/server/domains/run/repo/connection-refresh";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import { executeAiRefreshTarget } from "~/server/domains/run/service/ai-refresh";
+import { processDerivedRefreshPage } from "~/server/domains/run/service/derived-refresh";
 import {
   kernelCtx,
   PRIMARY_MODEL,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
+import { createInMemoryVectorizeIndex } from "~/server/generic/embedding/service/semantic/vector-store";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
 import { readWorkQueueWith } from "~/server/generic/work-queue/repo/work-queue";
+import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   createProductFixture,
   createIngredientFixture,
@@ -44,7 +51,7 @@ import { prepareEntityConnections } from "./entity-connections";
 async function prepareCombinedConnections(
   ...args: Parameters<typeof prepareEntityConnections>
 ) {
-  const publications = await prepareEntityConnections(...args);
+  const { publications } = await prepareEntityConnections(...args);
   return async (db: Parameters<(typeof publications)[number]>[0]) => {
     for (const publish of publications) await publish(db);
   };
@@ -55,7 +62,9 @@ async function prepareCombinedConnections(
 // key reopens the exact inference a member already graded Wrong inline.
 describe("connection preparation and publication authority", () => {
   const ctx = withTestDb();
+  let queue: ReturnType<typeof captureBackgroundQueue>;
   beforeEach(async () => {
+    queue = captureBackgroundQueue();
     await getDb(ctx.db).insert(user).values({
       id: systemActor().userId,
       name: "Synthetic system",
@@ -65,6 +74,7 @@ describe("connection preparation and publication authority", () => {
       updatedAt: new Date(),
     });
   });
+  afterEach(() => queue.restore());
   async function fixture() {
     const name = "Synthetic publication fence wrench";
     const item = await createProductFixture(
@@ -78,6 +88,16 @@ describe("connection preparation and publication authority", () => {
       trade: "electrical",
       subjectProductId: null,
     });
+    let drained = false;
+    for (let page = 0; page < 250; page++) {
+      const result = await processDerivedRefreshPage(ctx.db);
+      expect(result.errors).toEqual([]);
+      if (result.done) {
+        drained = true;
+        break;
+      }
+    }
+    expect(drained).toBe(true);
     return {
       source: { entityKind: "task" as const, entityId: task.output.id },
       task,
@@ -105,6 +125,64 @@ describe("connection preparation and publication authority", () => {
       },
     };
   };
+
+  it("publishes valid connections but retains retryable incomplete coverage instead of a durable negative", async () => {
+    const values = Array.from(
+      { length: getSemanticEmbeddingConfig().dimensions },
+      (_, axis) => (axis === 0 ? 1 : 0),
+    );
+    setCfEnv(
+      fromPartial<Env & { CUBBY_TEST_AI_GATEWAY: { fetch: typeof fetch } }>({
+        VECTORIZE: createInMemoryVectorizeIndex(),
+        BACKGROUND_QUEUE: { sendBatch: async () => {} },
+        CUBBY_TEST_AI_GATEWAY: {
+          fetch: async () =>
+            Response.json({ data: [{ index: 0, embedding: values }] }),
+        },
+      }),
+    );
+    const target = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic Acme Driver", manufacturer: "Acme" }),
+      ctx.actor,
+    );
+    const payment = await createRepoEntity(ctx, "expense", {
+      name: "Synthetic Acme Driver",
+      cost: 20,
+      trade: "other",
+      costType: "materials",
+    });
+    await refreshSearchDocument(ctx.db, "product", target.entityId);
+    await refreshSearchDocument(ctx.db, "expense", payment.entityId);
+    await getDb(ctx.db)
+      .update(derivedRefreshWork)
+      .set({ state: "completed", publishing: false });
+    const source = {
+      entityKind: "expense",
+      entityId: payment.output.id,
+    } satisfies Parameters<typeof scheduleConnectionRefresh>[1];
+    await activateAiRefresh(ctx.db, "synthetic-incomplete-coverage", {
+      enabled: true,
+    });
+    const { runId } = await scheduleConnectionRefresh(ctx.db, source);
+    if (!runId) throw new Error("Synthetic incomplete evaluation missing");
+    const [evaluation] = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.runId, runId));
+    if (!evaluation) throw new Error("Synthetic incomplete target missing");
+    await executeAiRefreshTarget(ctx.db, evaluation.id, {
+      context: kernelCtx(ctx),
+    });
+    const [settled] = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.id, evaluation.id));
+    expect(settled?.state).toBe("retry_wait");
+    expect(await readEntityConnections(ctx.db, source)).toContainEqual(
+      expect.objectContaining({ relation: "product-expense" }),
+    );
+  });
 
   for (const change of ["cancel", "obsolete"] as const)
     it(`publishes no actionable Assessment when an in-flight attempt becomes ${change}`, async () => {

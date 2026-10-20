@@ -45,6 +45,7 @@ import { auditLog } from "~/server/db/schema";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { identityShortcodes } from "~/server/entity-kernel/repo/entity-identity";
 import { captureAuditId } from "~/server/generic/audit-log/repo/audit-receipts";
+import { captureDerivedRefresh } from "~/server/generic/derived-refresh/repo/capture";
 import type { RemovalAuditEntry } from "~/server/generic/removal/repo/core";
 import {
   type EntityRef,
@@ -281,7 +282,21 @@ export async function logAuditEntry(
       ...auditActorColumns(actor),
     })
     .returning({ id: auditLog.id });
-  if (inserted) captureAuditId(inserted.id);
+  if (inserted) {
+    captureAuditId(inserted.id);
+    await captureDerivedRefresh(db, [
+      {
+        auditId: inserted.id,
+        entityKind: entry.entityKind,
+        entityId: entry.entityId,
+        changedFields: entry.changes ? Object.keys(entry.changes) : undefined,
+        scopes: collectChangeRefs(
+          entry.entityKind,
+          entry.changes ? readStoredChanges(entry.changes) : null,
+        ).map((ref) => ({ entityKind: ref.entity, entityId: ref.id })),
+      },
+    ]);
+  }
 }
 
 /**
@@ -306,8 +321,26 @@ export async function logAuditEntries(
   const inserted = await unwrapDb(db)
     .insert(auditLog)
     .values(auditRecords)
-    .returning({ id: auditLog.id });
+    .returning({
+      id: auditLog.id,
+      entityKind: auditLog.entityKind,
+      entityId: auditLog.entityId,
+      changes: auditLog.changes,
+    });
   for (const row of inserted) captureAuditId(row.id);
+  await captureDerivedRefresh(
+    db,
+    inserted.map((row) => ({
+      auditId: row.id,
+      entityKind: row.entityKind,
+      entityId: row.entityId,
+      changedFields: row.changes ? Object.keys(row.changes) : undefined,
+      scopes: collectChangeRefs(
+        row.entityKind,
+        row.changes ? readStoredChanges(row.changes) : null,
+      ).map((ref) => ({ entityKind: ref.entity, entityId: ref.id })),
+    })),
+  );
 }
 
 /**

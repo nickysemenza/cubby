@@ -26,7 +26,12 @@ import { startOperationDefinition } from "~/lib/start-operation-observability";
 import { deleteStoredObjects } from "~/server/clients/s3";
 import type { UsdaFoodLookupPort } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
-import { getDb, notDeleted, runAfterCommit } from "~/server/db/helpers";
+import {
+  getDb,
+  notDeleted,
+  runAfterCommit,
+  databaseForTransaction,
+} from "~/server/db/helpers";
 import { product as productTable } from "~/server/db/schema";
 import { getRecipeUsagesForIngredient } from "~/server/domains/ingredient/repo/search";
 import { loadProductOwners } from "~/server/domains/inventory/repo/ownership";
@@ -388,3 +393,56 @@ export const createProductWriteActions = (
   updateProduct: (id, data, actor) =>
     updateProductWithFood(db, usdaClient, id, data, actor),
 });
+
+/** Kernel receipts need no quality, recipe coverage, gallery or USDA hydration. */
+export const createProductReceiptActions = (
+  db: Database,
+  usdaClient: UsdaFoodLookupPort,
+): ProductWriteActions<ProductMutationSnapshot> => {
+  const references = async (
+    data: Pick<
+      ProductUpdateInput["data"],
+      "categoryId" | "ingredientId" | "growsPlantId"
+    >,
+  ) => ({
+    categoryId:
+      data.categoryId == null
+        ? data.categoryId
+        : await resolveOrThrow(db, "productCategory", data.categoryId),
+    ingredientId:
+      data.ingredientId == null
+        ? data.ingredientId
+        : await resolveOrThrow(db, "ingredient", data.ingredientId),
+    growsPlantId:
+      data.growsPlantId == null
+        ? data.growsPlantId
+        : await resolveOrThrow(db, "plant", data.growsPlantId),
+  });
+  return {
+    getProductByID: (id) => getProductWithFood(db, usdaClient, id),
+    getProductMutationSnapshot: (id) => readProductMutationSnapshot(db, id),
+    createProduct: async (data, actor) => {
+      const refs = await references(data);
+      return createProductRecord(
+        db,
+        { ...data, ...refs, ingredientId: refs.ingredientId ?? null },
+        actor,
+        undefined,
+        (tx, row) =>
+          readProductMutationSnapshot(databaseForTransaction(tx), row.id),
+      );
+    },
+    updateProduct: async (id, data, actor) => {
+      const { product, detachedImageKeys } = await updateProductRepo(
+        db,
+        id,
+        { ...data, ...(await references(data)) },
+        actor,
+        (tx, row) =>
+          readProductMutationSnapshot(databaseForTransaction(tx), row.id),
+      );
+      await runAfterCommit(db, () => deleteStoredObjects(detachedImageKeys));
+      return { output: product, entityId: id };
+    },
+  };
+};

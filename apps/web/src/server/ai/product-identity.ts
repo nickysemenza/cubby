@@ -32,6 +32,7 @@ import {
 } from "~/server/domains/product/repo/product-identity-claims";
 import { variantSourceSide } from "~/server/domains/product/repo/product-variant-evidence";
 import { findSimilarEntities } from "~/server/generic/embedding/repo/entity-embedding";
+import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { semanticEmbeddingsConfigured } from "~/server/generic/embedding/service/semantic/embeddings";
 import { productionVectorStore } from "~/server/generic/embedding/service/semantic/vector-store";
 
@@ -139,16 +140,23 @@ export async function retrieveProductIdentityCandidates(
   }
   if (semanticEmbeddingsConfigured())
     try {
-      const neighbours = await findSimilarEntities(
+      const scan = await findSimilarEntities(
+        db,
         productionVectorStore,
         { entityKind: "product", entityId: id },
-        { targetType: "product", limit: 20 },
+        {
+          targetType: "product",
+          limit: 20,
+          config: getSemanticEmbeddingConfig(),
+        },
       );
-      coverage.semanticNeighbours = {
-        status: "queried",
-        count: neighbours.length,
-      };
-      for (const neighbour of neighbours)
+      coverage.semanticNeighbours = scan.complete
+        ? { status: "queried", count: scan.candidates.length }
+        : {
+            status: "failed",
+            error: "Semantic candidate coverage is pending or incomplete",
+          };
+      for (const neighbour of scan.candidates)
         ids.add(parseEntityId("product", neighbour.entityId));
     } catch (error) {
       // Exact and lexical retrieval still stand; the outage is on the result.

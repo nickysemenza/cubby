@@ -304,7 +304,9 @@ const update = defineMutationWriter({
       // Moving a category to `not_allowed` is refused while any Expense in it
       // still links a Product; the error lists them.
       if (data.productExpectation === "not_allowed")
-        await validateProductPolicy(tx);
+        await validateProductPolicy(tx, {
+          inherited: { kind: "spendingCategory", ids: [id] },
+        });
       return readOutput(receipt, async () => ({
         output: await crud.getByID(tx, id),
         entityId: id,
@@ -440,7 +442,9 @@ async function mergeSpendingCategories(
       survivorChanges: { mergedFrom: { from: null, to: loserIds } },
     });
     // Lines that moved into a `not_allowed` keeper cannot keep a Product.
-    await validateProductPolicy(tx);
+    await validateProductPolicy(tx, {
+      inherited: { kind: "spendingCategory", ids: [keepId] },
+    });
     return mergeSummary.parse({
       deletedIds: uniq(input.mergeIds),
       merged: removed,

@@ -32,6 +32,7 @@ const activityIconFallback = {
   mail_discovery: "vendorAccount",
   mail_reclassify: "run",
   maintenance: "run",
+  derived_refresh: "run",
   sweep: "run",
   subject_lift: "image",
   describe_image: "image",

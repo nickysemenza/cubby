@@ -15,6 +15,7 @@ export class AppError extends Error {
   readonly code: AppErrorCode;
   readonly reason: AppErrorReason;
   readonly blockers?: readonly PublicImpactItem[];
+  readonly blockersIncomplete?: boolean;
 
   constructor(options: {
     code: AppErrorCode;
@@ -22,12 +23,14 @@ export class AppError extends Error {
     message: string;
     cause?: unknown;
     blockers?: readonly PublicImpactItem[];
+    blockersIncomplete?: boolean;
   }) {
     super(options.message, { cause: options.cause });
     this.name = "AppError";
     this.code = options.code;
     this.reason = options.reason;
     this.blockers = options.blockers;
+    this.blockersIncomplete = options.blockersIncomplete;
   }
 }
 
@@ -48,6 +51,7 @@ const publicErrorCarrierSchema = z.object({
     .object({
       reason: z.string().optional().catch(undefined),
       blockers: z.array(publicImpactItemSchema).optional().catch(undefined),
+      blockersIncomplete: z.boolean().optional().catch(undefined),
     })
     .optional()
     .catch(undefined),
@@ -111,6 +115,7 @@ export function createBlockedError(
   reason: AppErrorReason,
   message: string,
   blockers: readonly PublicImpactItem[],
+  options: { incomplete?: boolean } = {},
 ): AppError {
   const error = createAppError(reason, message);
   return new AppError({
@@ -118,6 +123,7 @@ export function createBlockedError(
     reason,
     message,
     blockers,
+    blockersIncomplete: options.incomplete,
     cause: error.cause,
   });
 }
@@ -150,6 +156,7 @@ export interface PublicErrorPayload {
   reason?: string;
   /** Present only for a refusal built by {@link createBlockedError}. */
   blockers?: PublicImpactItem[];
+  blockersIncomplete?: boolean;
 }
 
 export function toPublicErrorPayload(error: UnparsedError): PublicErrorPayload {
@@ -159,6 +166,7 @@ export function toPublicErrorPayload(error: UnparsedError): PublicErrorPayload {
     payload.code = appError.code;
     payload.reason = appError.reason;
     if (appError.blockers) payload.blockers = [...appError.blockers];
+    if (appError.blockersIncomplete) payload.blockersIncomplete = true;
     return payload;
   }
 
@@ -169,6 +177,7 @@ export function toPublicErrorPayload(error: UnparsedError): PublicErrorPayload {
   if (parsed.data.cause?.blockers) {
     payload.blockers = parsed.data.cause.blockers;
   }
+  if (parsed.data.cause?.blockersIncomplete) payload.blockersIncomplete = true;
   return payload;
 }
 

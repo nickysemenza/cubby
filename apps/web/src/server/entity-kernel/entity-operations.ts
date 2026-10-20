@@ -1,5 +1,5 @@
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { entityMutationItem } from "@cubby/schemas/entity-mutation";
 import type { EntitySourceInput } from "@cubby/schemas/entity-source";
 import {
   ENTITY_LABEL,
@@ -17,17 +17,13 @@ import {
   type ListGroupSummary,
   type PaginationParams,
 } from "@cubby/schemas/pagination";
-import type { SearchableEntityRef } from "@cubby/schemas/search";
 import { getErrorMessage } from "@cubby/shared";
-import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
-import { listReadRowSchema } from "~/entity/model/list-read-fields";
 import { listReadFields } from "~/entity/model/list-read-schema";
 import { deleteStoredObjects } from "~/server/clients/s3";
-import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import { withTransactionDatabase } from "~/server/db/helpers";
 import { runAfterCommit } from "~/server/db/helpers/core";
-import { assessmentState as suggestionTable } from "~/server/db/schema";
 import {
   canUpdateColumns,
   updateColumns,
@@ -40,7 +36,6 @@ import {
   normalizeRecordEmoji,
   repositoryRecordInput,
   writeRecordEmoji,
-  withRecordEmoji,
   recordEmojiBeforeUpdate,
   auditRecordEmoji,
   normalizeSavedRecordEmoji,
@@ -54,12 +49,10 @@ import {
   assertEntitySourceFieldPaths,
   entityDetailJson,
   recordEntitySources,
-  sourceSnapshotCovers,
 } from "~/server/entity-kernel/repo/entity-source";
 import {
   isMutationSideEffectRef,
   type MutationSideEffectEvent,
-  projectMutationEvent,
   runMutationSideEffectsForEntities,
   runMutationSideEffects,
 } from "~/server/entity-kernel/repo/mutation-side-effects";
@@ -96,6 +89,7 @@ import {
   parseSchema,
   parseSorts,
 } from "./list-input";
+import { readMutationReceiptFields } from "./repo/mutation-receipt";
 
 type EntityListInput<TFilters = unknown> = {
   filters: TFilters;
@@ -149,22 +143,19 @@ const sideEffectEventFor = <
 };
 
 /**
- * Run a repository write and the refresh of every search projection it
- * changes inside ONE transaction. The projection is a SQL view of the row
- * being written; a projection that cannot be written is a reason for the
- * write to fail, not something to repair later.
+ * Commit authoritative writes and durable refresh capture together.
  */
-const writeWithProjections = async <
+const writeWithRefreshCapture = async <
   E extends EntityKernelEntity,
   S extends EntityBindingSchemas,
   TResult extends { entityId: EntityInternalId<E> },
 >(
   context: EntityKernelContext,
-  binding: EntityKernelCoreBinding<E, S>,
-  action: "created" | "updated",
-  source: string,
+  _binding: EntityKernelCoreBinding<E, S>,
+  _action: "created" | "updated",
+  _source: string,
   write: (context: EntityKernelContext) => Promise<TResult>,
-): Promise<TResult & { projectedRefs: SearchableEntityRef[] }> => {
+): Promise<TResult> => {
   // Every declared write, including identity-only entities, uses the transaction-bound context.
   // Everything the adapter reaches through the context must run on the
   // transaction: a service still bound to the request pool would UPDATE a row
@@ -185,16 +176,9 @@ const writeWithProjections = async <
           ),
         },
       });
-      const event = sideEffectEventFor(
-        binding,
-        action,
-        result.entityId,
-        source,
-      );
-      const projectedRefs = event
-        ? await projectMutationEvent(transactionDb, event)
-        : [];
-      return { ...result, projectedRefs };
+      // The repository's audit writer captured durable refresh intent in this
+      // transaction. Dependency expansion belongs to the background processor.
+      return result;
     },
   );
   await deferred.flush(context.db);
@@ -221,14 +205,11 @@ const runSideEffects = async <
   action: "created" | "updated",
   entityId: EntityInternalId<E>,
   source: string,
-  projectedRefs: SearchableEntityRef[],
 ): Promise<void> => {
   const event = sideEffectEventFor(binding, action, entityId, source);
   if (!event) return;
-  // The projections were refreshed inside the write transaction above.
   await runMutationSideEffects(ctx.db, event, undefined, {
-    projection: "skip",
-    projectedRefs,
+    captured: true,
   });
 };
 
@@ -244,20 +225,10 @@ const recordWriteSources = async <
   context: EntityKernelContext,
   binding: EntityKernelCoreBinding<E, S>,
   entityId: EntityInternalId<E>,
-  code: string,
   sources: readonly EntitySourceInput[],
   snapshot: unknown,
 ): Promise<void> => {
-  const detail = sources.some((source) => source.fieldPath !== undefined)
-    ? entityDetailJson.parse(
-        sourceSnapshotCovers(binding.entity, snapshot, sources)
-          ? snapshot
-          : await binding.repository.get(
-              context,
-              parseSchema<S["id"], string>(binding.schemas.id, code),
-            ),
-      )
-    : undefined;
+  const detail = entityDetailJson.parse(snapshot);
   await recordEntitySources(context.db, {
     entityKind: binding.entity,
     entityId,
@@ -266,8 +237,6 @@ const recordWriteSources = async <
     detail,
   });
 };
-
-const writtenCode = z.object({ id: z.string() });
 
 type MutationReadDemand<Read extends boolean> = Read extends true
   ? { fields: readonly string[] }
@@ -281,61 +250,6 @@ const mutationReadFields = (entity: EntityKernelEntity, fields: unknown) => {
       throw new Error(`Unknown mutation response field: ${field}`);
   }
   return requested;
-};
-
-/** Target and basis changes supersede pending suggestions in the mutation transaction. */
-const supersedeWriteSuggestions = async (
-  context: EntityKernelContext,
-  entity: EntityKernelEntity,
-  ids: readonly string[],
-  changedFields: readonly string[],
-): Promise<void> => {
-  const dependentFields = entityFieldModels[entity].fields
-    .filter((field) =>
-      field.control?.suggest?.basis?.some((input) =>
-        changedFields.includes(input),
-      ),
-    )
-    .map((field) => field.key);
-  if (dependentFields.length)
-    await getDb(context.db)
-      .update(suggestionTable)
-      .set({
-        status: "superseded",
-        supersessionReceipt: {
-          reason: "input_changed",
-          evaluationId: null,
-          at: new Date().toISOString(),
-        },
-      })
-      .where(
-        and(
-          eq(suggestionTable.entity, entity),
-          inArray(suggestionTable.recordId, ids),
-          inArray(suggestionTable.field, dependentFields),
-          eq(suggestionTable.status, "pending"),
-        ),
-      );
-  if (changedFields.length) {
-    await getDb(context.db)
-      .update(suggestionTable)
-      .set({
-        status: "superseded",
-        supersessionReceipt: {
-          reason: "target_changed",
-          evaluationId: null,
-          at: new Date().toISOString(),
-        },
-      })
-      .where(
-        and(
-          eq(suggestionTable.entity, entity),
-          inArray(suggestionTable.recordId, ids),
-          inArray(suggestionTable.field, changedFields),
-          eq(suggestionTable.status, "pending"),
-        ),
-      );
-  }
 };
 
 const buildUpdateOperation = <
@@ -362,22 +276,22 @@ const buildUpdateOperation = <
           ? mutationReadFields(binding.entity, input.fields)
           : undefined;
         const run = binding.repository.update;
-        if (!schema || !run)
+        if (!schema || !run || !read)
           throw createAppError(
             "CONSTRAINT_VIOLATION",
             `${ENTITY_LABEL[binding.entity]} does not support update`,
           );
         assertEntitySourceFieldPaths(binding.entity, input.sources);
         return {
-          projected: fields !== undefined && read !== undefined,
-          run:
-            fields && read
-              ? (
-                  context: EntityKernelContext,
-                  id: Parameters<typeof run>[1],
-                  data: Parameters<typeof run>[2],
-                ) => read(context, id, data, fields)
-              : run,
+          responseFields: fields,
+          submittedFields: Object.keys(
+            z.record(z.string(), z.unknown()).parse(input.data),
+          ),
+          run: (
+            context: EntityKernelContext,
+            id: Parameters<typeof run>[1],
+            data: Parameters<typeof run>[2],
+          ) => read(context, id, data, ["id"]),
           sources: input.sources ?? [],
           id: parseSchema<S["id"], string>(binding.schemas.id, input.id),
           data: parseSchema(
@@ -392,7 +306,7 @@ const buildUpdateOperation = <
         };
       })
       .commit("updated", async ({ context }, { validated }) =>
-        writeWithProjections(
+        writeWithRefreshCapture(
           context,
           binding,
           "updated",
@@ -424,15 +338,6 @@ const buildUpdateOperation = <
                 repositoryRecordInput(binding.entity, data),
               ),
             );
-            const changedFields = Object.keys(
-              z.record(z.string(), z.unknown()).parse(validated.data),
-            );
-            await supersedeWriteSuggestions(
-              writeContext,
-              binding.entity,
-              [updated.entityId],
-              changedFields,
-            );
             await writeRecordEmoji(
               writeContext.db,
               binding.entity,
@@ -447,22 +352,39 @@ const buildUpdateOperation = <
               previousEmoji,
               validated.data,
             );
+            const receipt = await readMutationReceiptFields(
+              writeContext.db,
+              binding.entity,
+              updated.entityId,
+              [
+                ...validated.submittedFields,
+                ...validated.sources.flatMap((source) =>
+                  source.fieldPath ? [source.fieldPath] : [],
+                ),
+              ],
+            );
             if (validated.sources.length > 0)
               await recordWriteSources(
                 writeContext,
                 binding,
                 updated.entityId,
-                writtenCode.parse(updated.output).id,
                 validated.sources,
-                updated.sourceSnapshot ?? updated.output,
+                receipt.sourceSnapshot,
               );
             return {
               ...updated,
-              output: (
-                await withRecordEmoji(writeContext.db, binding.entity, [
-                  updated.output,
-                ])
-              )[0],
+              output: {
+                id: receipt.item.id,
+                ...Object.fromEntries(
+                  Object.entries(receipt.item).filter(
+                    ([key]) =>
+                      key !== "id" &&
+                      validated.submittedFields.includes(key) &&
+                      (!validated.responseFields ||
+                        validated.responseFields.includes(key)),
+                  ),
+                ),
+              },
             };
           },
         ),
@@ -477,20 +399,15 @@ const buildUpdateOperation = <
           "updated",
           updated.entityId,
           `${binding.entity}.update`,
-          updated.projectedRefs,
         ),
       )
       .output(({ validated, updated }) => {
-        const item = validated.projected
-          ? listReadRowSchema.parse(updated.output)
-          : parseSchema<S["output"], typeof updated.output>(
-              binding.schemas.output,
-              updated.output,
-            );
+        const item = entityMutationItem.parse(updated.output);
         const result = {
           action: "update" as const,
           entity: binding.entity,
           item,
+          appliedFields: validated.submittedFields,
           sideEffects: mutationSideEffectsWithWarnings(updated.warnings),
         };
         return result;
@@ -684,21 +601,21 @@ const buildEntityOperations = <
             ? mutationReadFields(binding.entity, input.fields)
             : undefined;
           const run = binding.repository.create;
-          if (!schema || !run)
+          if (!schema || !run || !read)
             throw createAppError(
               "CONSTRAINT_VIOLATION",
               `${ENTITY_LABEL[binding.entity]} does not support create`,
             );
           assertEntitySourceFieldPaths(binding.entity, input.sources);
           return {
-            projected: fields !== undefined && read !== undefined,
-            run:
-              fields && read
-                ? (
-                    context: EntityKernelContext,
-                    data: Parameters<typeof run>[1],
-                  ) => read(context, data, fields)
-                : run,
+            responseFields: fields,
+            submittedFields: Object.keys(
+              z.record(z.string(), z.unknown()).parse(input.data),
+            ),
+            run: (
+              context: EntityKernelContext,
+              data: Parameters<typeof run>[1],
+            ) => read(context, data, ["id"]),
             sources: input.sources ?? [],
             data: parseSchema(
               presentSchema<S["createInput"]>(schema),
@@ -707,7 +624,7 @@ const buildEntityOperations = <
           };
         })
         .commit("created", async ({ context }, { validated }) =>
-          writeWithProjections(
+          writeWithRefreshCapture(
             context,
             binding,
             "created",
@@ -726,22 +643,39 @@ const buildEntityOperations = <
                 created.entityId,
                 validated.data,
               );
+              const receipt = await readMutationReceiptFields(
+                writeContext.db,
+                binding.entity,
+                created.entityId,
+                [
+                  ...validated.submittedFields,
+                  ...validated.sources.flatMap((source) =>
+                    source.fieldPath ? [source.fieldPath] : [],
+                  ),
+                ],
+              );
               if (validated.sources.length > 0)
                 await recordWriteSources(
                   writeContext,
                   binding,
                   created.entityId,
-                  writtenCode.parse(created.output).id,
                   validated.sources,
-                  created.sourceSnapshot ?? created.output,
+                  receipt.sourceSnapshot,
                 );
               return {
                 ...created,
-                output: (
-                  await withRecordEmoji(writeContext.db, binding.entity, [
-                    created.output,
-                  ])
-                )[0],
+                output: {
+                  id: receipt.item.id,
+                  ...Object.fromEntries(
+                    Object.entries(receipt.item).filter(
+                      ([key]) =>
+                        key !== "id" &&
+                        validated.submittedFields.includes(key) &&
+                        (!validated.responseFields ||
+                          validated.responseFields.includes(key)),
+                    ),
+                  ),
+                },
               };
             },
           ),
@@ -756,20 +690,15 @@ const buildEntityOperations = <
             "created",
             created.entityId,
             `${binding.entity}.create`,
-            created.projectedRefs,
           ),
         )
         .output(({ validated, created }) => {
-          const item = validated.projected
-            ? listReadRowSchema.parse(created.output)
-            : parseSchema<S["output"], typeof created.output>(
-                binding.schemas.output,
-                created.output,
-              );
+          const item = entityMutationItem.parse(created.output);
           const result = {
             action: "create" as const,
             entity: binding.entity,
             item,
+            appliedFields: validated.submittedFields,
             sideEffects: mutationSideEffectsWithWarnings(created.warnings),
           };
           return result;
@@ -872,14 +801,6 @@ const buildEntityOperations = <
                     validated.ids,
                     validated.data,
                   );
-                  await supersedeWriteSuggestions(
-                    writeContext,
-                    binding.entity,
-                    result.updatedIds,
-                    Object.keys(
-                      z.record(z.string(), z.unknown()).parse(validated.data),
-                    ),
-                  );
                   const events = result.updatedIds.flatMap(
                     (id): MutationSideEffectEvent[] => {
                       const ref = parseEntityRef<ShortcodeEntity>(
@@ -897,7 +818,12 @@ const buildEntityOperations = <
                         : [];
                     },
                   );
-                  await runMutationSideEffectsForEntities(db, events);
+                  await runMutationSideEffectsForEntities(
+                    db,
+                    events,
+                    undefined,
+                    { captured: true },
+                  );
                 } else {
                   for (const id of validated.ids) {
                     offending = id;
@@ -939,6 +865,7 @@ const buildEntityOperations = <
                 code: error.code,
                 reason: error.reason,
                 blockers: error.blockers,
+                blockersIncomplete: error.blockersIncomplete,
                 message,
                 cause: error,
               });

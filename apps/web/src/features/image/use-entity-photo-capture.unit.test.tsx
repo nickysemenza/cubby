@@ -1,5 +1,4 @@
 import { imageOut } from "@cubby/schemas/image";
-import { locationOut } from "@cubby/schemas/location";
 import { testShortcode } from "@cubby/schemas/testing";
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -52,13 +51,6 @@ function fakeUploadImage() {
   }));
 }
 
-function locationRecord(images: (typeof oldImage)[]) {
-  return mock(locationOut, {
-    seed: 3,
-    overrides: { id: locationId, images },
-  });
-}
-
 describe("useEntityPhotoCapture", () => {
   it("uploads, attaches, and reorders the new photo to cover when other images exist", async () => {
     const commands: EntityBrowserMutationInput[] = [];
@@ -68,13 +60,11 @@ describe("useEntityPhotoCapture", () => {
         if (command.action !== "update" || command.entity !== "location") {
           throw new Error("expected a location update");
         }
-        const attaching = "pendingImageIds" in command.data;
         return {
           action: "update",
           entity: "location",
-          item: locationRecord(
-            attaching ? [oldImage, newImage] : [newImage, oldImage],
-          ),
+          item: { id: locationId },
+          appliedFields: [],
           sideEffects: {},
         };
       },
@@ -85,6 +75,7 @@ describe("useEntityPhotoCapture", () => {
         useEntityPhotoCapture("location", {
           transport,
           uploadImageOperation: fakeUploadImage(),
+          readImages: async () => [oldImage, newImage],
         }),
       { wrapper: harness.wrapper },
     );
@@ -117,7 +108,8 @@ describe("useEntityPhotoCapture", () => {
         return {
           action: "update",
           entity: "location",
-          item: locationRecord([oldImage, newImage]),
+          item: { id: locationId },
+          appliedFields: [],
           sideEffects: {},
         };
       },
@@ -128,6 +120,7 @@ describe("useEntityPhotoCapture", () => {
         useEntityPhotoCapture("location", {
           transport,
           uploadImageOperation: fakeUploadImage(),
+          readImages: async () => [oldImage, newImage],
         }),
       { wrapper: harness.wrapper },
     );
@@ -157,7 +150,8 @@ describe("useEntityPhotoCapture", () => {
         return {
           action: "update",
           entity: "location",
-          item: locationRecord([newImage]),
+          item: { id: locationId },
+          appliedFields: [],
           sideEffects: {},
         };
       },
@@ -168,6 +162,7 @@ describe("useEntityPhotoCapture", () => {
         useEntityPhotoCapture("location", {
           transport,
           uploadImageOperation: fakeUploadImage(),
+          readImages: async () => [newImage],
         }),
       { wrapper: harness.wrapper },
     );
@@ -188,7 +183,8 @@ describe("useEntityPhotoCapture", () => {
         return {
           action: "update",
           entity: "location",
-          item: locationRecord([oldImage]),
+          item: { id: locationId },
+          appliedFields: [],
           sideEffects: {},
         };
       },

@@ -23,7 +23,6 @@ import type { Database } from "~/server/db";
 import {
   getDb,
   notDeleted,
-  runAfterCommit,
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import {
@@ -35,7 +34,6 @@ import {
   image,
 } from "~/server/db/schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
-import { runMutationSideEffects } from "~/server/entity-kernel/repo/mutation-side-effects";
 import {
   assertApplicationReceipt,
   publishAssessment,
@@ -46,6 +44,7 @@ import {
   acceptSuggestion,
   applyFieldCorrection,
 } from "~/server/generic/assessment/repo/suggestion-review";
+import { captureContextRefresh } from "~/server/generic/derived-refresh/repo/context-capture";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 type Review = z.infer<typeof assessmentReviewInput>;
@@ -269,16 +268,9 @@ const assessmentFamilies = {
         .update(assessmentState)
         .set({ confirmedValue: correction, status: "applied" })
         .where(eq(assessmentState.id, state.id));
-      await runAfterCommit(db, (committedDb) =>
-        runMutationSideEffects(committedDb, {
-          entity: {
-            entity: "image",
-            id: parseEntityId("image", state.recordId),
-          },
-          action: "updated",
-          source: "image-feedback",
-        }),
-      );
+      await captureContextRefresh(db, "AssessmentState", [
+        { entityKind: "image", entityId: state.recordId },
+      ]);
     },
   },
   product_pair: {

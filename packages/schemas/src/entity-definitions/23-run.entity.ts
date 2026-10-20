@@ -830,6 +830,13 @@ export default defineEntity({
         where:
           "{purpose} = 'maintenance' AND {status} IN ('running', 'paused_auth')",
       },
+      {
+        name: "Run_one_active_derived_refresh",
+        on: ["purpose"],
+        unique: true,
+        where:
+          "{purpose} = 'derived_refresh' AND {status} IN ('running', 'paused_auth', 'paused')",
+      },
     ],
     checks: [
       { column: "trigger" },

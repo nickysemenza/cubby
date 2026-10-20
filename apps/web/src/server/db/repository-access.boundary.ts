@@ -11,6 +11,8 @@ import {
   parentTransactionDatabase,
   withTransaction,
   withTransactionDatabase,
+  runAfterCommit,
+  runBeforeCommit,
 } from "~/server/db/helpers/core";
 
 /** Native SQL builders without the assembled relational schema or pool ownership. */
@@ -37,6 +39,20 @@ export type RepositoryQueryTransaction = RepositoryQueryClient &
     "rollback"
   >;
 export type RepositoryQueryInput = Database | RepositoryQueryTransaction;
+
+export const repositoryBeforeCommit = (
+  db: RepositoryQueryInput,
+  effect: (tx: RepositoryQueryTransaction) => Promise<void>,
+  options?: {
+    phase?: "validation" | "fence" | "capture";
+    changedKeys?: readonly string[];
+  },
+): Promise<void> => runBeforeCommit(db, effect, options);
+
+export const repositoryAfterCommit = (
+  db: RepositoryQueryInput,
+  effect: (committedDb: Database) => Promise<void>,
+): Promise<void> => runAfterCommit(db, effect);
 
 export function repositoryParentDatabase(
   db: RepositoryQueryInput,

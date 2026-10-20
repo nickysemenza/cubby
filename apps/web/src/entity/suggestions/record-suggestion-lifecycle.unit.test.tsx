@@ -17,7 +17,6 @@ import { exactRippleTags } from "~/integrations/tanstack-query/cache-tags";
 import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
-import { mock } from "~/lib/test/mock-schema";
 
 import type { EntitySuggestionsOperations } from "./field-suggestion";
 import {
@@ -367,7 +366,8 @@ describe("suggestion lifecycle", () => {
       return {
         action: "update" as const,
         entity: "product" as const,
-        item: { ...mock(productTopLevelOut, { seed: 1 }), id, categoryId },
+        item: { id, categoryId },
+        appliedFields: [],
         sideEffects: {},
       };
     });

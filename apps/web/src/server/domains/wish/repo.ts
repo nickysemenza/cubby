@@ -358,9 +358,12 @@ const wishCrud = createEntityCrud({
   // The candidate set is a link set, not a column, but it is audited as the
   // `candidateProductIds` field.
   relations: {
-    read: async (tx, id) => ({
-      candidateProductIds: await candidateShortcodes(tx, id),
-    }),
+    read: async (tx, id, data) =>
+      data.candidateProductIds === undefined
+        ? {}
+        : {
+            candidateProductIds: await candidateShortcodes(tx, id),
+          },
     write: async (tx, id, data) => {
       if (data.candidateProductIds === undefined) return;
       await replaceLinkSet(

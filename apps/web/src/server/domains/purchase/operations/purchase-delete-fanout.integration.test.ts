@@ -1,11 +1,13 @@
 import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
 import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { expenseCreateInput } from "@cubby/schemas/project";
-import { purchaseCreateInput, purchaseOut } from "@cubby/schemas/purchase";
-import { vendorCreateInput, vendorOut } from "@cubby/schemas/vendor";
+import { purchaseCreateInput } from "@cubby/schemas/purchase";
+import { vendorCreateInput } from "@cubby/schemas/vendor";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { productionDerivedRefreshPorts } from "~/server/domains/run/service/derived-refresh";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
 beforeEach(() => {
@@ -41,21 +43,21 @@ describe("purchase deletion embedding fanout", () => {
       }),
     });
     if (vendorResult.action !== "create") throw new Error("unreachable");
-    const vendor = vendorOut.parse(vendorResult.item);
+    const vendorId = parseShortcodeFor("vendor", vendorResult.item.id);
 
     const purchaseResult = await executeEntity(context, {
       action: "create",
       entity: "purchase",
       data: mock(purchaseCreateInput, {
         overrides: {
-          vendorId: vendor.id,
+          vendorId,
           orderId: "DETACH-1",
           pendingImageIds: [],
         },
       }),
     });
     if (purchaseResult.action !== "create") throw new Error("unreachable");
-    const purchase = purchaseOut.parse(purchaseResult.item);
+    const purchaseId = parseShortcodeFor("purchase", purchaseResult.item.id);
 
     const { entityId: expenseId } = await createExpense(
       ctx.db,
@@ -63,7 +65,7 @@ describe("purchase deletion embedding fanout", () => {
         overrides: {
           lineKind: "principal",
           name: "Detached line",
-          purchaseId: purchase.id,
+          purchaseId,
           cost: 25,
           date: "2026-07-01",
           trade: "other",
@@ -83,7 +85,7 @@ describe("purchase deletion embedding fanout", () => {
       mock(financialTransactionCreateInput, {
         overrides: {
           accountId: account.id,
-          purchaseId: purchase.id,
+          purchaseId,
           kind: "purchase",
           status: "posted",
           amount: 25,
@@ -97,12 +99,13 @@ describe("purchase deletion embedding fanout", () => {
     await executeEntity(context, {
       action: "delete",
       entity: "purchase",
-      ids: [purchase.id],
+      ids: [purchaseId],
     });
 
-    // Financial rows are projected synchronously. Draining any published
-    // follow-up work must retain those projections after detach.
-    await backgroundQueue.drain(ctx.db);
+    // Durable work must rebuild the financial projections after detach.
+    await backgroundQueue.drain(ctx.db, {
+      derivedRefreshPorts: productionDerivedRefreshPorts,
+    });
     const [expenseDoc, transactionDoc] = await Promise.all([
       getSearchDocumentEmbeddingText(ctx.db, "expense", expenseId),
       getSearchDocumentEmbeddingText(

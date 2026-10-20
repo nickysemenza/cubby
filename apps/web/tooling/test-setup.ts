@@ -80,6 +80,7 @@ const toTestDatabase = (
 interface QueryMeasurement {
   count: number;
   statements: string[];
+  tables: Set<string>;
 }
 
 const queryMeasurement = new AsyncLocalStorage<QueryMeasurement>();
@@ -90,6 +91,12 @@ const countObservedStatement = (text: string) => {
   measurement.count += 1;
   // Normalize in-list arity (`in ($1, $2, …)` → `in (…)`) so a diff of
   // two measurements compares statement SHAPES, not page sizes.
+  // Inspect full SQL before shortening display excerpts: long SELECT lists must not hide dependent reads.
+  for (const match of text.matchAll(
+    /\b(?:FROM|JOIN|UPDATE|INTO)\s+"([A-Za-z][A-Za-z0-9_]*)"/giu,
+  )) {
+    if (match[1]) measurement.tables.add(match[1]);
+  }
   measurement.statements.push(
     text
       .replace(/\s+/g, " ")
@@ -112,18 +119,23 @@ const countPoolQueries = (pool: Pool): Pool =>
  * CI and a shared local PostgreSQL instance make time budgets flaky, while an
  * accidental per-row query is deterministic and actionable.
  */
-export async function countTestDbQueries<T>(
-  run: () => Promise<T>,
-): Promise<{ result: T; queryCount: number; statements: string[] }> {
+export async function countTestDbQueries<T>(run: () => Promise<T>): Promise<{
+  result: T;
+  queryCount: number;
+  statements: string[];
+  tables: string[];
+}> {
   const measurement = {
     count: 0,
     statements: [],
+    tables: new Set<string>(),
   } satisfies QueryMeasurement;
   const result = await queryMeasurement.run(measurement, run);
   return {
     result,
     queryCount: measurement.count,
     statements: measurement.statements,
+    tables: [...measurement.tables].sort(),
   };
 }
 

@@ -126,6 +126,7 @@
     "./ai-smoke": "./src/ai-smoke.ts",
     "./mutation-side-effects": "./src/mutation-side-effects.ts",
     "./background-tasks": "./src/background-tasks.ts",
+    "./derived-refresh": "./src/derived-refresh.ts",
     "./maintenance": "./src/maintenance.ts",
     "./queue-messages": "./src/queue-messages.ts",
     "./telemetry": "./src/telemetry.ts",
@@ -198,7 +199,8 @@
     "./email-actions": "./src/email-actions.ts",
     "./ai-evaluation": "./src/ai-evaluation.ts",
     "./assessment": "./src/assessment.ts",
-    "./decision-step": "./src/decision-step.ts"
+    "./decision-step": "./src/decision-step.ts",
+    "./entity-mutation": "./src/entity-mutation.ts"
   },
   "scripts": {
     "typecheck": "node ../../scripts/ensure.ts generate && node ../../scripts/tsc.ts --noEmit",

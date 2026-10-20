@@ -17,6 +17,7 @@ import {
   searchIngredientsForMerge,
 } from "~/server/domains/ingredient/repo/search";
 import { findSemanticEntityCandidates } from "~/server/generic/embedding/repo/entity-embedding-search";
+import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import {
   embedQuery,
   semanticEmbeddingsConfigured,
@@ -54,12 +55,17 @@ async function productionSemanticLeg(
   const embedding = await embedQuery(name, { db, runId });
   if (!embedding) return [];
 
-  const candidates = await findSemanticEntityCandidates(
+  const scan = await findSemanticEntityCandidates(
+    db,
     productionVectorStore,
     embedding,
-    { entityKinds: ["ingredient"], limit },
+    {
+      entityKinds: ["ingredient"],
+      limit,
+      config: getSemanticEmbeddingConfig(),
+    },
   );
-  const ids = candidates
+  const ids = scan.candidates
     .map((candidate) => parseEntityId("ingredient", candidate.entityId))
     .filter((id) => id !== excludeId);
   if (ids.length === 0) return [];

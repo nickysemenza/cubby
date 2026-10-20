@@ -15,6 +15,7 @@ export const WORKFLOW_RUN_PURPOSES = [
   "mail_reclassify",
   "suggestion_sweep",
   "maintenance",
+  "derived_refresh",
   "sweep",
 ] as const;
 export type WorkflowRunPurpose = (typeof WORKFLOW_RUN_PURPOSES)[number];

@@ -95,7 +95,7 @@ export const modulesChildren = [
       },
       {
         name: "EntitySource_field_fingerprint_check",
-        sql: "({fieldPath} IS NULL) = ({valueFingerprint} IS NULL)",
+        sql: "{fieldPath} IS NOT NULL OR {valueFingerprint} IS NULL",
       },
       {
         name: "EntitySource_quote_length_check",

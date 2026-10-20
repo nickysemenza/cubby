@@ -1,12 +1,10 @@
 import { countableEntities } from "@cubby/schemas/entity-manifest";
-import { imageOut } from "@cubby/schemas/image";
 import { MutationObserver, QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 
 import { entityListFor } from "~/entity/entity-list";
 import { type EntityMutationTransport } from "~/entity/entity-mutation-command";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
-import { mock } from "~/lib/test/mock-schema";
 import {
   entityBrowserMutationResultSchema,
   type EntityBrowserMutationInput,
@@ -117,7 +115,8 @@ describe("kernel browser transport", () => {
       entityBrowserMutationResultSchema.safeParse({
         action: "update",
         entity: "image",
-        item: mock(imageOut, { seed: 1 }),
+        item: { id: "IMG-4K7M", name: "Synthetic image" },
+        appliedFields: ["name"],
         sideEffects: {},
       }).success,
     ).toBe(true);

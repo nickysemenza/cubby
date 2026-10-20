@@ -17,7 +17,10 @@ import { Spinner } from "~/ui/primitives/spinner";
 
 import EntityImageList from "../../entity/components/entity-image-list";
 import { useActionMutation } from "../../entity/hooks/use-action-mutation";
-import { useEntityPhotoCapture } from "./use-entity-photo-capture";
+import {
+  useEntityPhotoCapture,
+  type UseEntityPhotoCaptureOptions,
+} from "./use-entity-photo-capture";
 
 type GalleryUpdateVariables<E extends GalleryEntity> = EntityMutationVariables<
   E,
@@ -31,6 +34,7 @@ interface EntityPhotosSectionProps<E extends GalleryEntity> {
   /** Injectable transport seams for tests; production keeps the real ones. */
   transport?: EntityMutationTransport;
   uploadImageOperation?: typeof imageUpload.uploadImage;
+  readImages?: UseEntityPhotoCaptureOptions["readImages"];
 }
 
 /**
@@ -57,11 +61,13 @@ export function EntityPhotosSection<E extends GalleryEntity>({
   images,
   transport,
   uploadImageOperation,
+  readImages,
 }: EntityPhotosSectionProps<E>) {
   const inputRef = useRef<HTMLInputElement>(null);
   const { capture, isCapturing } = useEntityPhotoCapture(entity, {
     transport,
     uploadImageOperation,
+    readImages,
   });
   const remove = useActionMutation({
     mutationFn: entityMutationOptionsFactory(entity, "update", transport),

@@ -549,7 +549,45 @@ export async function applySpendingClassificationReview(
       );
       // A new Vendor, mapping, or Expense category can put a Product where
       // its effective spending category forbids one.
-      await validateProductPolicy(db);
+      if (request.action === "products")
+        await validateProductPolicy(db, {
+          inherited: {
+            kind: "product",
+            ids: await resolveAllOrThrow(db, "product", request.productIds),
+          },
+        });
+      else if (request.action === "productCategory")
+        await validateProductPolicy(db, {
+          inherited: {
+            kind: "productCategory",
+            ids: [
+              await resolveOrThrow(
+                db,
+                "productCategory",
+                request.productCategoryId,
+              ),
+            ],
+          },
+        });
+      else if (request.action === "vendor")
+        await validateProductPolicy(db, {
+          vendorId: await resolveOrThrow(db, "vendor", request.vendorId),
+        });
+      else if (request.action === "spendingCategoryMerge")
+        await validateProductPolicy(db, {
+          inherited: {
+            kind: "spendingCategory",
+            ids: [await resolveOrThrow(db, "spendingCategory", request.keepId)],
+          },
+        });
+      else
+        await validateProductPolicy(db, {
+          expenseIds: await resolveAllOrThrow(
+            db,
+            "expense",
+            request.expenseIds,
+          ),
+        });
       return {
         applied: true as const,
         updatedRecords:

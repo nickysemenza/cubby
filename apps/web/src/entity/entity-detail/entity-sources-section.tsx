@@ -88,10 +88,16 @@ function sourceFacts({
 }): Fact[] {
   const current = new Set<string>();
   const earlier = new Set<string>();
-  for (const source of citations)
-    (source.fieldPath && !source.supportsCurrentValue ? earlier : current).add(
-      fieldLabel(entity, source),
-    );
+  const evidence = new Set<string>();
+  for (const source of citations) {
+    const group =
+      source.supportsCurrentValue === false
+        ? earlier
+        : source.supportsCurrentValue === true
+          ? current
+          : evidence;
+    group.add(fieldLabel(entity, source));
+  }
   for (const label of current) earlier.delete(label);
   const seen = latestSeen(citations);
   return [
@@ -103,6 +109,16 @@ function sourceFacts({
             value: [...current].join(", "),
             title: [...current].join(", "),
             className: "text-foreground",
+          },
+        ]
+      : []),
+    ...(evidence.size
+      ? [
+          {
+            id: "evidence",
+            label: "Evidence for",
+            value: [...evidence].join(", "),
+            title: [...evidence].join(", "),
           },
         ]
       : []),
@@ -145,7 +161,7 @@ function Citation({ source, entity }: { source: Source; entity: Entity }) {
         <span className="font-medium text-foreground">
           {fieldLabel(entity, source)}
         </span>
-        {source.fieldPath && !source.supportsCurrentValue ? (
+        {source.fieldPath && source.supportsCurrentValue === false ? (
           <span>earlier value</span>
         ) : null}
         {source.selectedVariant ? (

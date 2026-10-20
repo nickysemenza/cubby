@@ -11,7 +11,7 @@ import { unwrapDb } from "~/server/db/helpers/core";
 export const productClassificationEvidenceSql = (
   productId: SQL,
 ) => sql<string>`concat(
-  'Taxonomy revision: ', (SELECT md5(string_agg(json_build_array(c."id", c."name", c."aliases", c."description", c."parentId", c."sortOrder", c."feature", c."deletedAt")::text, E'\n' ORDER BY c."id")) FROM "ProductCategory" c),
+  'Taxonomy revision: ', coalesce((SELECT revision FROM "DerivedRefreshRevision" WHERE key='kind:productCategory'),0),
   E'\n', COALESCE((
     SELECT string_agg(concat(COALESCE(pi."purpose", ${productImagePurpose.enum.item}), ': ',
       COALESCE(correction."description", analysis."result"->>'description', ''),

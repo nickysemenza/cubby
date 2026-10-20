@@ -38,6 +38,7 @@ import {
   countConnectionSweepSources,
   ensureConnectionSweepRun,
   prepareConnectionSweepPage,
+  ConnectionAdmissionDeferred,
 } from "../repo/connection-refresh";
 import { ensureRun, systemActor } from "../repo/ensure-run";
 import {
@@ -353,7 +354,7 @@ const connectionTotals = z
   .object({ scanned: z.number().default(0), covered: z.number().default(0) })
   .default({ scanned: 0, covered: 0 });
 
-const ROSTER_PAGE = 200;
+const ROSTER_PAGE = 10;
 
 async function connectionPage(
   { db, run, step, launcher, retrying }: PageContext,
@@ -367,12 +368,22 @@ async function connectionPage(
     ? runEntityId.parse(cursor.childRunId)
     : null;
   if (!childRunId) {
-    childRunId = await ensureConnectionSweepRun(
-      db,
-      actorOf(run),
-      run.id,
-      run.trigger === "scheduled" ? "scheduled" : "manual",
-    );
+    try {
+      childRunId = await ensureConnectionSweepRun(
+        db,
+        actorOf(run),
+        run.id,
+        run.trigger === "scheduled" ? "scheduled" : "manual",
+      );
+    } catch (error) {
+      if (error instanceof ConnectionAdmissionDeferred)
+        return {
+          kind: "paused",
+          reason: error.message,
+          until: new Date(Date.now() + 60_000),
+        };
+      throw error;
+    }
     if (!childRunId) {
       // An unattended pass with AI refresh off has nothing to evaluate; a
       // member's Sweep reports why instead of finishing quietly.

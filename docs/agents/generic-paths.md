@@ -87,12 +87,14 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   selection/count budget.
   `load(where, projection)` enriches selected IDs only; never pass list predicates
   or pagination into a relational query. The scaffold restores selected order.
-- Search fan-out: a record whose search text embeds another entity is one
-  `searchDependents` entry (`server/entity-kernel/repo/mutation-side-effects.ts`) naming
-  an explicit query in `server/generic/embedding/repo/entity-embedding-cleanup.ts`; it drives
-  both the projection refresh and the embedding wave. Writers call
-  `runMutationSideEffects(ForEntities)`, or `refreshDerivedSearchRefs` for
-  refs captured before an edge is removed.
+- Derived refresh: writers capture changed roots and known old/new endpoints through
+  `server/generic/derived-refresh/capture.boundary.ts`; authoritative audit writes
+  register roots automatically. `repo/dependencies.ts` declares direct keyset
+  frontiers; `repo/process.ts` owns durable phases and short publication fences.
+  The Run service injects recipe/provider computation outside publication
+  transactions. Queue messages wake this path; periodic reconciliation repairs
+  missed hooks. [Background derived data](../entities.md#background-derived-data)
+  owns freshness, failure and discovery semantics.
 - Unbounded reads: `listAll` (never a literal huge `pageSize`).
 - Money: `cents`, `dollars`, `round2` (`@cubby/shared`); expense
   rollups select `expenseAggregateFields` (`server/db/computed/expense-aggregate-sql.ts`);
@@ -100,6 +102,9 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   `actualExpense`/`plannedExpense` there, or `actualExpenseSql(alias)` in raw SQL.
 - Postgres errors: `findPgError`, `isUniqueViolation`, `isStatementTimeout`
   (`server/errors/db-errors.ts`) walk Drizzle's `cause` chain.
+- SQL predicates: use Drizzle `or(...)` for disjunctions. Parenthesize a raw
+  SQL `OR` before composing it with `and(...)`; otherwise an update can escape
+  its identity predicate through SQL operator precedence.
 - Logging and tracing: `createLogger`, `withSpan`/span core
   (`@cubby/worker-tracing`); no raw `console.*` in server or Worker code.
   The logger serializes native Error messages, stacks, causes, and diagnostic

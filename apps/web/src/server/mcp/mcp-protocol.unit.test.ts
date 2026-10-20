@@ -24,7 +24,10 @@ import { z } from "zod";
 import { projectEntityResult } from "~/contracts/mcp-projections";
 import { MCP_TOOLS } from "~/contracts/mcp-tools";
 import { mock } from "~/lib/test/mock-schema";
-import { entityMcpReadCommandSchema } from "~/server/entity-kernel/contracts";
+import {
+  entityMcpReadCommandSchema,
+  entityMutationReadResultSchema,
+} from "~/server/entity-kernel/contracts";
 
 import {
   bindingsWithKernelExecutor,
@@ -355,36 +358,19 @@ describe("MCP protocol smoke", () => {
     },
   );
 
-  it("retains write coverage in summary results", () => {
-    expect(
-      projectEntityResult(
-        { resultDetail: "summary" },
-        {
-          action: "update",
-          entity: "product",
-          item: {
-            id: "PRD-2ABC",
-            name: "Synthetic product",
-            dataQuality: {
-              status: "needs_attention",
-              gaps: [
-                { check: "cover", kind: "missing" },
-                { check: "barcode", kind: "defect" },
-              ],
-            },
-          },
-        },
-      ),
-    ).toMatchObject({
-      item: {
-        coverage: {
-          status: "needs_attention",
-          missingChecks: ["cover"],
-          defectChecks: ["barcode"],
-        },
-      },
-    });
-  });
+  it.each(["summary", "full"] as const)(
+    "preserves the same bounded write receipt in %s mode",
+    (resultDetail) => {
+      const receipt = {
+        action: "update",
+        entity: "product",
+        item: { id: "PRD-2ABC", name: "Synthetic product" },
+        appliedFields: ["name"],
+        sideEffects: { derivedRefresh: { mode: "background" } },
+      } satisfies z.infer<typeof entityMutationReadResultSchema>;
+      expect(projectEntityResult({ resultDetail }, receipt)).toEqual(receipt);
+    },
+  );
 
   const nullKernel = {
     entityKernel: {
@@ -692,34 +678,24 @@ describe("MCP protocol smoke", () => {
     expect(recordDatabaseWrite).toHaveBeenCalledOnce();
     expect(recordDatabaseWrite).toHaveBeenCalledWith("mcp.entity.commands");
   });
-  it("executes summary commands with reference-only output while full commands retain complete validation", async () => {
+  it("projects summary references and full receipts without an expanded output read", async () => {
     const full = mock(productTopLevelOut, { overrides: { externalIds: [] } });
     const runEntity = vi.fn<ExecuteEntity>(
       async (_context, command, detail) => {
         if (command.action !== "create" || command.entity !== "product")
           throw new Error("Unexpected command");
-        if (detail === "reference")
-          return {
-            action: "create",
-            entity: "product",
-            item: { id: full.id },
-            sideEffects: {},
-          };
-        if (detail === "full" && command.data.name === "Incomplete full result")
-          return {
-            action: "create",
-            entity: "product",
-            item: { id: full.id },
-            sideEffects: {},
-          };
-        if (detail === "full")
-          return {
-            action: "create",
-            entity: "product",
-            item: full,
-            sideEffects: {},
-          };
-        throw new Error("Batch did not select its output read");
+        if (detail !== undefined)
+          throw new Error("Mutation requested a hidden expanded read");
+        return {
+          action: "create",
+          entity: "product",
+          item:
+            command.data.name === "Missing receipt identity"
+              ? { name: command.data.name }
+              : { id: full.id, name: command.data.name },
+          appliedFields: ["name"],
+          sideEffects: { derivedRefresh: { mode: "background" } },
+        };
       },
     );
     const server = kernelServer(runEntity);
@@ -750,14 +726,14 @@ describe("MCP protocol smoke", () => {
     expect(detail.isError).not.toBe(true);
     expect(detail.structuredContent).toMatchObject({
       summary: { succeeded: 1, failed: 0 },
-      results: [{ item: { item: { id: full.id, name: full.name } } }],
+      results: [{ item: { item: { id: full.id, name: command.data.name } } }],
     });
     const invalidFull = await callMcpTool(
       server,
       "entity",
       {
         action: "commands",
-        commands: [{ ...command, data: { name: "Incomplete full result" } }],
+        commands: [{ ...command, data: { name: "Missing receipt identity" } }],
         resultDetail: "full",
       },
       {},

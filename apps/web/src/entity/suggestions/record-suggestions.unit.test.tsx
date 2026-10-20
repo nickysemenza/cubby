@@ -7,9 +7,7 @@ import type {
   SettledSuggestionQuestion,
 } from "@cubby/schemas/ai";
 import { suggestionReviewRowSchema } from "@cubby/schemas/ai";
-import { inventoryEntryOut } from "@cubby/schemas/inventory";
 import { productTopLevelOut } from "@cubby/schemas/product";
-import { expenseOut } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import {
   act,
@@ -846,10 +844,10 @@ describe("record suggestions", () => {
               action: "update",
               entity: "inventory",
               item: {
-                ...mock(inventoryEntryOut, { seed: 1 }),
                 id: record.id,
                 locationId,
               },
+              appliedFields: [],
               sideEffects: {},
             };
           },
@@ -939,7 +937,8 @@ describe("record suggestions", () => {
             return {
               action: "update",
               entity: "product",
-              item,
+              item: { id: item.id },
+              appliedFields: [],
               sideEffects: {},
             };
           },
@@ -1187,10 +1186,10 @@ describe("record suggestions", () => {
               action: "update",
               entity: "expense",
               item: {
-                ...mock(expenseOut, { seed: 1 }),
                 id: record.id,
                 costType: "tools",
               },
+              appliedFields: [],
               sideEffects: {},
             };
           },

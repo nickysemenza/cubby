@@ -22,7 +22,12 @@ import {
   fieldSubjectKey,
   matchFieldRules,
 } from "~/server/generic/assessment/repo/automatic-rules";
+import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/audit-log";
+import {
+  currentInputRevision,
+  fenceDerivedInputsAtCommit,
+} from "~/server/generic/derived-refresh/repo/freshness";
 
 export type SuggestionValue =
   | string
@@ -114,6 +119,13 @@ export async function saveSweepSuggestions(
   return withTransactionDatabase(
     db,
     async (tx) => {
+      const inputRevision = await currentInputRevision(tx);
+      const liveInputFingerprint = await fieldInputFingerprint(
+        tx,
+        input.entity,
+        input.recordId,
+        input.field,
+      );
       const typedRecordId = parseEntityId(input.entity, input.recordId);
       const saved = await getDb(tx)
         .select()
@@ -318,6 +330,7 @@ export async function saveSweepSuggestions(
             pairKey: entry.pairKey,
             kind: entry.kind,
             data: {
+              liveInputFingerprint,
               reviewKey: entry.reviewKey ?? null,
               ...stamp,
               // Applying re-evaluates the rule against these same facts.
@@ -336,6 +349,14 @@ export async function saveSweepSuggestions(
         context: txContext,
         onFailure: (_id, error) => onApplyFailure?.(error),
       });
+      await fenceDerivedInputsAtCommit(tx, inputRevision, (current) =>
+        fieldInputFingerprint(
+          current,
+          input.entity,
+          input.recordId,
+          input.field,
+        ),
+      );
       return applied.length ? ("applied" as const) : ("queued" as const);
     },
     { isolationLevel: "serializable" },

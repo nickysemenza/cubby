@@ -118,6 +118,7 @@ import {
   emailFinancialAssociation,
   emailRetrievalFailure,
   run as runTable,
+  derivedDiscoveryPass,
   runApproval,
   runControlEvent,
   runOperation,
@@ -1435,6 +1436,17 @@ export const ENTITY_EDGES = {
   // run (purchases it touched, claims it advanced, findings it produced) are
   // `history`, mirroring vendorAccount's own edges above.
   run: edges({
+    "DerivedDiscoveryPass.runId": {
+      column: derivedDiscoveryPass.runId,
+      role: "history",
+      label: "discovery passes",
+      description:
+        "The coalesced Sweep owner of a captured discovery input epoch.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason: "Coverage retains its Sweep owner through Run archival.",
+      },
+    },
     "AiEvaluationRequest.runId": {
       column: aiEvaluationRequest.runId,
       role: "history",

@@ -1,20 +1,15 @@
 import type { RecipeId, RecipeShortcode } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { fromPartial } from "@total-typescript/shoehorn";
 import { withTestDb } from "tooling/test-setup";
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, afterEach, describe, expect, it } from "vitest";
 
-import { setCfEnv } from "~/server/cf-env";
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import {
   createProduct,
   updateProduct,
 } from "~/server/domains/product/repo/crud";
 import { createRecipe, updateRecipe } from "~/server/domains/recipe/repo/crud";
-import {
-  getRecipeTotalsState,
-  markRecipesStale,
-} from "~/server/domains/recipe/repo/totals";
+import { getRecipeTotalsState } from "~/server/domains/recipe/repo/totals";
 import {
   entityKernelContextSchema,
   executeEntity,
@@ -30,10 +25,9 @@ import {
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 /**
- * The cascade invariant behind the queue task: a child's committed totals
- * invalidate its parents in the same transaction, and publication of those
- * parents depends on their CURRENT staleness — never on having observed the
- * transition — so a lost wakeup is recoverable and a duplicate one is inert.
+ * Authoritative changes remain durable when wake-ups are lost. The generic
+ * frontier computes each affected recipe and visits parent links once per wave;
+ * pending reads and cyclic graphs must remain truthful and terminating.
  */
 describe("recipe totals cascade", () => {
   const ctx = withTestDb();
@@ -49,29 +43,6 @@ describe("recipe totals cascade", () => {
     queue = captureBackgroundQueue();
   });
   afterEach(() => queue.restore());
-
-  /** A queue that records what was published, and can refuse. */
-  const installQueue = (options: { fail?: boolean } = {}) => {
-    const published: RecipeId[][] = [];
-    setCfEnv(
-      fromPartial<Env>({
-        BACKGROUND_QUEUE: {
-          sendBatch: async (
-            messages: Iterable<{
-              body: { task: { kind: string; recipeIds?: RecipeId[] } };
-            }>,
-          ) => {
-            if (options.fail) throw new Error("publication refused");
-            for (const message of messages) {
-              if (message.body.task.recipeIds)
-                published.push(message.body.task.recipeIds);
-            }
-          },
-        },
-      }),
-    );
-    return published;
-  };
 
   const stale = async (id: RecipeId) =>
     (await getRecipeTotalsState(ctx.db, id))?.totalsComputedAt == null;
@@ -168,91 +139,38 @@ describe("recipe totals cascade", () => {
     );
   };
 
-  it("drains real cascading tasks and bounds unfinished follow-up work", async () => {
+  const drainFrontier = async () => {
+    const { processDerivedRefreshPage } =
+      await import("~/server/domains/run/service/derived-refresh");
+    for (let page = 0; page < 2_000; page++) {
+      const result = await processDerivedRefreshPage(ctx.db);
+      expect(result.errors).toEqual([]);
+      if (result.done) return;
+    }
+    throw new Error("Synthetic recipe frontier did not terminate");
+  };
+
+  it("materializes a parent chain through the bounded generic frontier", async () => {
     const tree = await seedTree();
-    await queue.drain(ctx.db);
+    await drainFrontier();
+    queue.tasks.length = 0;
     await changePrice(tree.product, 9);
-    await costing().dispatchRecompute([tree.child]);
     expect(await stale(tree.child)).toBe(true);
-    await expect(queue.drain(ctx.db, 1)).rejects.toThrow(
-      "possible cascade cycle",
-    );
-    expect(queue.tasks.length).toBeGreaterThan(0);
-    expect(await queue.drain(ctx.db)).toBeGreaterThan(0);
+    expect(await stale(tree.grandparent)).toBe(true);
+    await drainFrontier();
+    expect(await stale(tree.child)).toBe(false);
+    expect(await stale(tree.parent)).toBe(false);
+    expect(await stale(tree.grandparent)).toBe(false);
+    // A duplicate delivery neither enumerates parents nor creates another wave.
+    queue.tasks.length = 0;
+    await costing().recomputeQueued([tree.child]);
     expect(queue.tasks).toEqual([]);
-    expect(await stale(tree.child)).toBe(false);
     expect(await stale(tree.parent)).toBe(false);
-    expect(await stale(tree.grandparent)).toBe(false);
   });
 
-  it("commits the child and stales its parent together, then publishes the parent", async () => {
+  it("reports pending totals while the input frontier is unfinished", async () => {
     const tree = await seedTree();
     await changePrice(tree.product, 9);
-    await markRecipesStale(ctx.db, [tree.child]);
-    const published = installQueue();
-
-    await costing().recomputeQueued([tree.child]);
-
-    expect(await stale(tree.child)).toBe(false);
-    expect(await stale(tree.parent)).toBe(true);
-    expect(published).toEqual([[tree.parent]]);
-  });
-
-  it("keeps the parent stale and recoverable when publication fails after commit", async () => {
-    const tree = await seedTree();
-    await changePrice(tree.product, 9);
-    await markRecipesStale(ctx.db, [tree.child]);
-    installQueue({ fail: true });
-
-    await expect(costing().recomputeQueued([tree.child])).rejects.toThrow(
-      "publication refused",
-    );
-
-    // The child's own commit stands; the parent's staleness is durable.
-    expect(await stale(tree.child)).toBe(false);
-    expect(await stale(tree.parent)).toBe(true);
-
-    // Any later wakeup of the (already fresh) child republishes the parent —
-    // no transition needs to be observed again.
-    const published = installQueue();
-    await costing().recomputeQueued([tree.child]);
-    expect(published).toEqual([[tree.parent]]);
-  });
-
-  it("never re-stales a fresh parent on a duplicate wakeup", async () => {
-    const tree = await seedTree();
-    const published = installQueue();
-    // Everything is fresh: a stray wakeup must publish nothing and stale nothing.
-    await costing().recomputeQueued([tree.child]);
-    expect(published).toEqual([]);
-    expect(await stale(tree.parent)).toBe(false);
-    expect(await stale(tree.grandparent)).toBe(false);
-  });
-
-  it("settles a deep cascade one wakeup at a time", async () => {
-    const tree = await seedTree();
-    await changePrice(tree.product, 9);
-    await markRecipesStale(ctx.db, [tree.child]);
-    const published = installQueue();
-
-    await costing().recomputeQueued([tree.child]);
-    expect(published).toEqual([[tree.parent]]);
-    await costing().recomputeQueued([tree.parent]);
-    expect(published).toEqual([[tree.parent], [tree.grandparent]]);
-    await costing().recomputeQueued([tree.grandparent]);
-
-    expect(await stale(tree.child)).toBe(false);
-    expect(await stale(tree.parent)).toBe(false);
-    expect(await stale(tree.grandparent)).toBe(false);
-    expect(published).toHaveLength(2);
-  });
-
-  it("repairs a stale recipe on read and publishes its stale parents", async () => {
-    const tree = await seedTree();
-    await changePrice(tree.product, 9);
-    await markRecipesStale(ctx.db, [tree.child]);
-    const published = installQueue();
-
     const read = await executeEntity(
       entityKernelContextSchema.parse(
         createTestRequestContext(ctx.db, {
@@ -262,95 +180,40 @@ describe("recipe totals cascade", () => {
       { action: "get", entity: "recipe", id: tree.childCode, missing: "error" },
     );
     if (read.action !== "get" || read.entity !== "recipe" || !read.item)
-      throw new Error("expected a recipe");
-
-    // The page never sees "pending": the read recomputed before returning.
-    expect(read.item.totals?.cost).not.toMatchObject({ status: "pending" });
+      throw new Error("Expected synthetic recipe");
+    expect(read.item.totals?.cost).toMatchObject({ status: "pending" });
+    await drainFrontier();
     expect(await stale(tree.child)).toBe(false);
-    expect(await stale(tree.parent)).toBe(true);
-    expect(published).toEqual([[tree.parent]]);
+    expect(await stale(tree.grandparent)).toBe(false);
   });
 
-  it("returns the recipe when repair-on-read fails after the child's commit", async () => {
+  it("terminates a cyclic dependency frontier without repeated cache invalidation", async () => {
     const tree = await seedTree();
-    await changePrice(tree.product, 9);
-    await markRecipesStale(ctx.db, [tree.child]);
-    installQueue({ fail: true });
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-
-    try {
-      // The repair is best-effort: a failure after the child's commit must
-      // not fail the GET, or every later read would re-run the same failure.
-      const read = await executeEntity(
-        entityKernelContextSchema.parse(
-          createTestRequestContext(ctx.db, {
-            auth: { userId: ctx.actor.userId },
-          }),
-        ),
-        {
-          action: "get",
-          entity: "recipe",
-          id: tree.childCode,
-          missing: "error",
-        },
-      );
-      if (read.action !== "get" || read.entity !== "recipe" || !read.item)
-        throw new Error("expected a recipe");
-
-      expect(read.item.totals?.cost).not.toMatchObject({ status: "pending" });
-      expect(await stale(tree.child)).toBe(false);
-      expect(await stale(tree.parent)).toBe(true);
-      // The freshness notifier also warns when no Durable Object is bound
-      // (always, under vitest), so assert the repair warning itself.
-      expect(warn).toHaveBeenCalledWith(
-        "[repair-on-read] [recipe.get] failed",
-        expect.objectContaining({
-          recipes: [tree.child],
-          error: expect.objectContaining({ message: "publication refused" }),
-        }),
-      );
-    } finally {
-      warn.mockRestore();
-    }
+    await updateRecipe(
+      ctx.db,
+      tree.child,
+      {
+        sections: [
+          {
+            instructions: [{ instruction: "Synthetic cycle" }],
+            ingredients: [
+              {
+                type: "recipe",
+                recipeId: tree.parentCode,
+                ingredientId: null,
+                amounts: [{ value: 1, unit: "each" }],
+              },
+            ],
+          },
+        ],
+      },
+      ctx.actor,
+    );
+    await drainFrontier();
+    expect(await stale(tree.child)).toBe(false);
+    expect(await stale(tree.parent)).toBe(false);
+    queue.tasks.length = 0;
+    await drainFrontier();
+    expect(queue.tasks).toEqual([]);
   });
-
-  it(
-    "stops at a sub-recipe cycle instead of re-staling around it",
-    { timeout: 10_000 },
-    async () => {
-      const tree = await seedTree();
-      // Close the loop: the child now also includes its own parent.
-      await updateRecipe(
-        ctx.db,
-        tree.child,
-        {
-          sections: [
-            {
-              instructions: [{ instruction: "Use parent" }],
-              ingredients: [
-                {
-                  type: "recipe" as const,
-                  recipeId: tree.parentCode,
-                  ingredientId: null,
-                  amounts: [{ value: 1, unit: "each" }],
-                },
-              ],
-            },
-          ],
-        },
-        ctx.actor,
-      );
-      await markRecipesStale(ctx.db, [tree.child]);
-      const published = installQueue();
-
-      // Inline transport would recurse here without bound; queued it would
-      // ping-pong. Either way the totals around a cycle never converge, so
-      // the cascade must refuse to stale a parent that is also a descendant.
-      await costing().recomputeQueued([tree.child]);
-
-      expect(await stale(tree.child)).toBe(false);
-      expect(await stale(tree.parent)).toBe(false);
-      expect(published).toEqual([]);
-    },
-  );
 });

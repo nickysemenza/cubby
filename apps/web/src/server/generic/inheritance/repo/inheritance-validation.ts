@@ -1,13 +1,71 @@
 import { publicImpactItemSchema } from "@cubby/schemas/entity-integrity";
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { unwrapDb } from "~/server/db/helpers";
 import { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
-import { effectiveExpenseTradeSql } from "~/server/domains/expense/repo/expense-inheritance";
+import {
+  effectiveExpenseProjectSql,
+  effectiveExpenseTradeSql,
+} from "~/server/domains/expense/repo/expense-inheritance";
 import { classificationPolicySql } from "~/server/domains/spending-category/repo/classification-field-policy";
 import { createBlockedError } from "~/server/errors/app-error";
+import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
+
+export type InheritanceScope =
+  | {
+      kind:
+        | "task"
+        | "project"
+        | "product"
+        | "productCategory"
+        | "spendingCategory"
+        | "purchase";
+      ids: readonly string[];
+    }
+  | { kind: "all"; purpose: "maintenance" };
+
+const idsSql = (ids: readonly string[]) =>
+  ids.length
+    ? sql`(${sql.join(
+        ids.map((id) => sql`${id}::uuid`),
+        sql`, `,
+      )})`
+    : sql`(SELECT NULL::uuid WHERE false)`;
+
+/** This affected graph is the explicitly approved authoritative-validation exception. */
+function scopePredicate(
+  scope: InheritanceScope,
+  entity: "task" | "expense",
+): SQL {
+  if (scope.kind === "all") return sql`true`;
+  const roots = idsSql(scope.ids);
+  if (scope.kind === "task")
+    return entity === "task"
+      ? sql`t.id IN ${hierarchyDescendantsSql("task", roots)}`
+      : sql`false`;
+  if (scope.kind === "project") {
+    const projects = hierarchyDescendantsSql("project", roots);
+    return entity === "task"
+      ? sql`${effectiveFieldSql("task", "projectId", "t")} IN ${projects}`
+      : sql`${effectiveExpenseProjectSql("e")} IN ${projects}`;
+  }
+  if (scope.kind === "purchase")
+    return entity === "expense" ? sql`e."purchaseId" IN ${roots}` : sql`false`;
+  if (scope.kind === "spendingCategory")
+    return entity === "expense"
+      ? sql`${effectiveExpenseSpendingCategorySql("e")} IN ${hierarchyDescendantsSql("spendingCategory", roots)}`
+      : sql`false`;
+  const products =
+    scope.kind === "product"
+      ? roots
+      : sql`(SELECT p.id FROM "Product" p
+    WHERE p."categoryId" IN ${hierarchyDescendantsSql("productCategory", roots)} AND p."deletedAt" IS NULL)`;
+  return entity === "task"
+    ? sql`${effectiveFieldSql("task", "subjectProductId", "t")} IN ${products}`
+    : sql`e."productId" IN ${products}`;
+}
 
 /**
  * Validate the prospective graph before committing any change that can move
@@ -16,9 +74,10 @@ import { createBlockedError } from "~/server/errors/app-error";
  */
 export async function validateLiveInheritedPolicies(
   tx: Database | DrizzleTransaction,
+  scope: InheritanceScope,
 ): Promise<void> {
-  await validateLiveEffectiveTrades(tx);
-  await validateLiveProductPolicy(tx);
+  await validateLiveEffectiveTrades(tx, scope);
+  await validateLiveProductPolicy(tx, { inherited: scope });
 }
 
 /**
@@ -27,6 +86,7 @@ export async function validateLiveInheritedPolicies(
  */
 export async function validateLiveEffectiveTrades(
   tx: Database | DrizzleTransaction,
+  scope: InheritanceScope,
 ): Promise<void> {
   const result = await unwrapDb(tx).execute<{
     entity: string;
@@ -35,18 +95,19 @@ export async function validateLiveEffectiveTrades(
   }>(sql`
     SELECT 'task' AS entity, t."shortcode", t."name"
     FROM "Task" t
-    WHERE t."deletedAt" IS NULL AND ${effectiveFieldSql("task", "trade", "t")} IS NULL
+    WHERE ${scopePredicate(scope, "task")} AND t."deletedAt" IS NULL AND ${effectiveFieldSql("task", "trade", "t")} IS NULL
     UNION ALL
     SELECT 'expense', e."shortcode", e."name"
     FROM "Expense" e
-    WHERE e."deletedAt" IS NULL AND e."lineKind" = 'principal'
+    WHERE ${scopePredicate(scope, "expense")} AND e."deletedAt" IS NULL AND e."lineKind" = 'principal'
       AND ${effectiveExpenseTradeSql("e")} IS NULL
+    LIMIT 51
   `);
   if (result.rows.length === 0) return;
   throw createBlockedError(
     "CONSTRAINT_VIOLATION",
     "This change leaves required trades unresolved. Choose a trade or supply a default for the affected records.",
-    result.rows.map((row) =>
+    result.rows.slice(0, 50).map((row) =>
       publicImpactItemSchema.parse({
         code: "required-trade-unresolved",
         effect: "block",
@@ -56,14 +117,16 @@ export async function validateLiveEffectiveTrades(
         byTargetId: { [row.shortcode]: 1 },
       }),
     ),
+    { incomplete: result.rows.length > 50 },
   );
 }
 
 /** Which Expenses a line-level write touched; omitted checks the whole graph. */
-type ProductPolicyScope =
+export type ProductPolicyScope =
   | { expenseIds: readonly string[] }
   | { purchaseId: string }
-  | { vendorId: string };
+  | { vendorId: string }
+  | { inherited: InheritanceScope };
 
 /**
  * The product policy for the Expenses a line-level write touched, for a
@@ -72,7 +135,7 @@ type ProductPolicyScope =
  */
 export const validateProductPolicy = (
   tx: Database | DrizzleTransaction,
-  scope?: ProductPolicyScope,
+  scope: ProductPolicyScope,
 ) => validateLiveProductPolicy(tx, scope);
 
 /**
@@ -84,7 +147,7 @@ export const validateProductPolicy = (
  */
 async function validateLiveProductPolicy(
   tx: Database | DrizzleTransaction,
-  scope?: ProductPolicyScope,
+  scope: ProductPolicyScope,
 ): Promise<void> {
   if (scope && "expenseIds" in scope && scope.expenseIds.length === 0) return;
   const result = await unwrapDb(tx).execute<{
@@ -107,8 +170,8 @@ async function validateLiveProductPolicy(
         effectiveExpenseSpendingCategorySql("e"),
       )}
       ${
-        !scope
-          ? sql``
+        "inherited" in scope
+          ? sql`AND ${scopePredicate(scope.inherited, "expense")}`
           : "purchaseId" in scope
             ? sql`AND e."purchaseId" = ${scope.purchaseId}::uuid`
             : "vendorId" in scope
@@ -119,13 +182,13 @@ async function validateLiveProductPolicy(
                 )})`
       }
     ORDER BY e."shortcode"
-    LIMIT 50
+    LIMIT 51
   `);
   if (result.rows.length === 0) return;
   throw createBlockedError(
     "CONSTRAINT_VIOLATION",
     "This change links a Product to spending whose category does not allow one. Give the line its own spending category, or unlink the Product.",
-    result.rows.map((row) =>
+    result.rows.slice(0, 50).map((row) =>
       publicImpactItemSchema.parse({
         code: "product-not-allowed",
         effect: "block",
@@ -135,5 +198,6 @@ async function validateLiveProductPolicy(
         byTargetId: { [row.shortcode]: 1 },
       }),
     ),
+    { incomplete: result.rows.length > 50 },
   );
 }

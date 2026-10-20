@@ -273,6 +273,17 @@ const toWRow = (
   section_name: row.sectionName,
 });
 
+export const recipeWasmInput = (
+  recipe: RecipeCostingInput,
+  getIngredientName: (ingredient: SectionIngredientOut) => string,
+) => ({
+  id: recipe.id,
+  recipe_yield: recipe.yield,
+  rows: flattenSections(recipe.sections).map((row) =>
+    toWRow(row, getIngredientName),
+  ),
+});
+
 export const toWProductInput = (
   p: ProductWithMappingsAndFoodOut,
 ): WProductInput => ({
@@ -460,13 +471,9 @@ export const computeRecipeCosting = (
 
   const input: WCostingInput = {
     root_ids: recipes.map((r) => r.id),
-    recipes: [...closure.values()].map((r) => ({
-      id: r.id,
-      recipe_yield: r.yield,
-      rows: flattenSections(r.sections).map((row) =>
-        toWRow(row, getIngredientName),
-      ),
-    })),
+    recipes: [...closure.values()].map((recipe) =>
+      recipeWasmInput(recipe, getIngredientName),
+    ),
     ingredients: Object.entries(ingMap).map(([id, ing]) => ({
       id,
       products: ing.product.map(toWProductInput),

@@ -564,6 +564,17 @@ export const createFinancialTransaction = defineMutationWriter({
   },
 });
 
+const allocationStateFields = [
+  "allocations",
+  "purchaseId",
+  "amount",
+  "kind",
+  "status",
+  "accountId",
+  "transactionDate",
+  "postedDate",
+] satisfies readonly (keyof FinancialTransactionUpdateData)[];
+
 type FinancialTransactionDbRow = typeof financialTransaction.$inferSelect;
 
 export const lockUpdatePurchases = async (
@@ -765,6 +776,9 @@ export const updateFinancialTransaction = defineMutationWriter({
     options: FinancialTransactionUpdateOptions = {},
   ) => {
     const id = await resolveOrThrow(db, "financialTransaction", shortcode);
+    const changesAllocationState = allocationStateFields.some(
+      (field) => data[field] !== undefined,
+    );
     await withTransaction(db, async (tx) => {
       // Funding-evidence advisory keys precede both entity rows and account keys.
       // Evidence creation uses the same order, so it cannot validate an old row
@@ -785,7 +799,7 @@ export const updateFinancialTransaction = defineMutationWriter({
       // an allocation to this transaction without holding its FOR UPDATE lock,
       // which is taken below, and the set is re-read under that lock before
       // anything is written.
-      await lockUpdatePurchases(tx, id, data);
+      if (changesAllocationState) await lockUpdatePurchases(tx, id, data);
       await tx
         .select({ id: financialTransaction.id })
         .from(financialTransaction)
@@ -836,15 +850,19 @@ export const updateFinancialTransaction = defineMutationWriter({
         data.accountId === undefined
           ? before.accountId
           : await resolveOrThrow(tx, "financialAccount", data.accountId);
-      const beforeSourceRefs =
-        (await settlementRefsFor(tx, [id])).get(id) ?? [];
+      const inspectSourceRefs = data.sourceRefs !== undefined;
+      const beforeSourceRefs = inspectSourceRefs
+        ? ((await settlementRefsFor(tx, [id])).get(id) ?? [])
+        : [];
       const sourceRefs = data.sourceRefs ?? beforeSourceRefs;
-      await lockFinancialEvidenceKeys(
-        tx,
-        "transaction-ref",
-        sourceRefs.map((ref) => `${ref.source}\0${ref.externalId}`),
-      );
-      await assertSettlementRefsAvailable(tx, sourceRefs, id);
+      if (inspectSourceRefs) {
+        await lockFinancialEvidenceKeys(
+          tx,
+          "transaction-ref",
+          sourceRefs.map((ref) => `${ref.source}\0${ref.externalId}`),
+        );
+        await assertSettlementRefsAvailable(tx, sourceRefs, id);
+      }
 
       // `purchaseId` is input sugar only — there is no such column any more, so it
       // never reaches the physical update. `sourceRefs` lives in EntityExternalId.
@@ -862,7 +880,9 @@ export const updateFinancialTransaction = defineMutationWriter({
       // deriveUpdateData drops that refinement, so the same check belongs here
       // rather than silently letting one field win.
       assertAllocationShorthandAgrees(data);
-      const state = await deriveUpdatedTransactionState(tx, id, before, data);
+      const state = changesAllocationState
+        ? await deriveUpdatedTransactionState(tx, id, before, data)
+        : null;
       await tx
         .update(financialTransaction)
         .set(values)
@@ -905,15 +925,16 @@ export const updateFinancialTransaction = defineMutationWriter({
       //     slice for the whole amount", or clear it;
       //   • an amount change on a singly-allocated transaction, where the sole
       //     legal allocation value is the new amount.
-      await applyUpdatedAllocations(
-        tx,
-        id,
-        data,
-        state,
-        actor,
-        options,
-        before,
-      );
+      if (state)
+        await applyUpdatedAllocations(
+          tx,
+          id,
+          data,
+          state,
+          actor,
+          options,
+          before,
+        );
 
       // Data-quality targets come from applyAllocationChanges, which knows the
       // union of before/after purchases; nothing else here can name one.

@@ -1362,8 +1362,20 @@ export const updatePurchase = defineMutationWriter({
         id,
       );
 
-      await validatePurchaseItemInheritance(tx, [id]);
-      await validateLiveInheritedPolicies(tx);
+      if (
+        [
+          "vendorId",
+          "defaultProjectId",
+          "spendingCategoryId",
+          "defaultTrade",
+        ].some((key) => key in data)
+      ) {
+        await validatePurchaseItemInheritance(tx, [id]);
+        await validateLiveInheritedPolicies(tx, {
+          kind: "purchase",
+          ids: [id],
+        });
+      }
 
       const changes = computeChanges(before, after, [
         ...entityFieldModels.purchase.audit,

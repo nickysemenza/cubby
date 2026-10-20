@@ -11,7 +11,6 @@ import { runAfterCommit } from "~/server/db/helpers/core";
 import {
   isMutationSideEffectRef,
   type MutationSideEffectEvent,
-  refreshProjectionsForEvent,
   runMutationSideEffects,
 } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { createAppError } from "~/server/errors/app-error";
@@ -158,15 +157,11 @@ export const resolveEntity = async (
           create: true,
           actor: ctx.actorContext,
         });
-        for (const event of createdEvents(rows))
-          await refreshProjectionsForEvent(transactionDb, event);
         return rows;
       })
     : await resolveNames(ctx.db, entity, requests, { create: false });
   for (const event of createdEvents(resolved))
-    await runMutationSideEffects(ctx.db, event, undefined, {
-      projection: "skip",
-    });
+    await runMutationSideEffects(ctx.db, event, undefined, { captured: true });
   return entityResolveResultSchema.parse({
     action: "resolve",
     entity,

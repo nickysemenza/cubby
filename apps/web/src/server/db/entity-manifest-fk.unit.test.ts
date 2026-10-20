@@ -79,6 +79,8 @@ const NON_ENTITY_FK_TARGETS = {
   // Background-job bookkeeping (queue/inline processing metadata), not a
   // domain entity a user ever looks up by id.
   BackgroundBatch: "operational bookkeeping, not a domain entity",
+  AuditLog: "immutable row-change evidence retained by derived refresh work",
+  DerivedRefreshWork: "a resumable derived-data wave, not a domain entity",
   // Better-Auth / OAuth-provider tables (auth.schema.ts) — infrastructure for
   // sign-in and MCP OAuth 2.1, not app-domain entities. Referenced (directly
   // or transitively) by AuditLog.userId and the oauth_* tables' own edges.
@@ -121,6 +123,11 @@ const NON_ENTITY_FK_TARGETS = {
  * once its edge becomes graph-visible.
  */
 const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
+  "DerivedDiscoveryPass.runId": {
+    classification: "metadata",
+    reason:
+      "retains the Sweep owner and covered input epoch for automatic discovery",
+  },
   "AiEvaluationRequest.runId": {
     classification: "metadata",
     reason:

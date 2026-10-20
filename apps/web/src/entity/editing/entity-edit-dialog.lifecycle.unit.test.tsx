@@ -35,7 +35,8 @@ function editorPort(beforeWrite: () => Promise<void> = async () => undefined) {
     return entityBrowserMutationResultSchema.parse({
       action: "update",
       entity: "vendor",
-      item: record,
+      item: { id: record.id, name: record.name },
+      appliedFields: ["name"],
       sideEffects: {},
     });
   });

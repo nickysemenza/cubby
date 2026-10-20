@@ -15,10 +15,8 @@ import {
 } from "~/server/domains/product/repo/write/product-orchestration";
 import {
   createProductWriteActions,
-  createProductReadActions,
-  readProductMutationFields,
+  createProductReceiptActions,
 } from "~/server/domains/product/repo/write/product-writes";
-import { entityDetailJson } from "~/server/entity-kernel/repo/entity-source";
 import {
   mutationEvents,
   runMutationSideEffectsForEntities,
@@ -97,41 +95,18 @@ export const productRepository = defineRepository("product", {
       warnings: result.sideEffects.warnings,
     };
   },
-  createRead: async (ctx, data, fields) => {
-    let sourceSnapshot: z.infer<ReturnType<typeof z.json>> | undefined;
+  createRead: async (ctx, data, _fields) => {
     const { output, entityId } = await createProductWithReadSideEffects(
       {
         db: ctx.db,
-        product: createProductReadActions(
-          ctx.db,
-          ctx.usdaClient,
-          async (product, id) => {
-            const projected = await readProductMutationFields(
-              ctx.db,
-              ctx.usdaClient,
-              product,
-              id,
-              fields,
-            );
-            sourceSnapshot = entityDetailJson.parse({
-              ...product,
-              ...projected,
-            });
-            return projected;
-          },
-        ),
+        product: createProductReceiptActions(ctx.db, ctx.usdaClient),
         recipeCosting: ctx.services.recipeCosting,
         upcLookupClient: ctx.upcLookupClient,
       },
       data,
       ctx.actorContext,
     );
-    return {
-      output,
-      entityId,
-      sourceSnapshot,
-      warnings: output.sideEffects.warnings,
-    };
+    return { output, entityId, warnings: output.sideEffects.warnings };
   },
   update: async (ctx, shortcode, data) => {
     const entityId = await productShortcodes.one(ctx.db, shortcode);
@@ -147,37 +122,19 @@ export const productRepository = defineRepository("product", {
     );
     return { output, entityId };
   },
-  updateRead: async (ctx, shortcode, data, fields) => {
+  updateRead: async (ctx, shortcode, data, _fields) => {
     const entityId = await productShortcodes.one(ctx.db, shortcode);
-    let sourceSnapshot: z.infer<ReturnType<typeof z.json>> | undefined;
     const output = await updateProductWithReadSideEffects(
       {
         db: ctx.db,
-        product: createProductReadActions(
-          ctx.db,
-          ctx.usdaClient,
-          async (product, id) => {
-            const projected = await readProductMutationFields(
-              ctx.db,
-              ctx.usdaClient,
-              product,
-              id,
-              fields,
-            );
-            sourceSnapshot = entityDetailJson.parse({
-              ...product,
-              ...projected,
-            });
-            return projected;
-          },
-        ),
+        product: createProductReceiptActions(ctx.db, ctx.usdaClient),
         recipeCosting: ctx.services.recipeCosting,
       },
       entityId,
       data,
       ctx.actorContext,
     );
-    return { output, entityId, sourceSnapshot };
+    return { output, entityId, warnings: output.sideEffects.warnings };
   },
   delete: async (ctx, shortcodes) => {
     const ids = await productShortcodes.all(ctx.db, shortcodes);

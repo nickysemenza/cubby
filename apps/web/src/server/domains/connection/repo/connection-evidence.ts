@@ -125,7 +125,7 @@ const relevantFields = new Map<string, readonly string[]>(
   }),
 );
 
-export function connectionRelevantFields(kind: string): readonly string[] {
+function connectionRelevantFields(kind: string): readonly string[] {
   return relevantFields.get(kind) ?? ["name"];
 }
 

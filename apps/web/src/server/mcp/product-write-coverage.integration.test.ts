@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
+import { recipeLineCoverage } from "~/server/domains/recipe/operations/recipe.server";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { createMcpServer } from "~/server/mcp/server";
 import {
@@ -19,25 +20,11 @@ import { callMcpTool, kernelRequestContext } from "../testing/mcp-test-utils";
 import type { ToolArguments } from "./tools/tool-registration";
 
 const gap = z.enum(["price", "weight", "nutrients"]);
-const changedLine = z.object({
-  recipeId: z.string(),
-  id: z.string(),
-  name: z.string(),
-  before: z.array(gap),
-  after: z.array(gap),
-});
-const changesSchema = z.object({
-  recipesChecked: z.number(),
-  truncated: z.boolean(),
-  closed: z.array(changedLine),
-  regressed: z.array(changedLine),
-});
 const lineCoverageSchema = z.array(
   z.object({ id: z.string(), name: z.string(), missing: z.array(gap) }),
 );
 const writeResult = z.object({
   item: z.object({ id: z.string() }).passthrough(),
-  recipeCoverageChanges: changesSchema.optional(),
   lineCoverage: lineCoverageSchema.optional(),
 });
 
@@ -96,7 +83,7 @@ describe("coverage diagnostics on product and recipe writes", () => {
     });
     expect(recipe.isError).not.toBe(true);
     const recipeId = writeResult.parse(recipe.structuredContent).item.id;
-    return { call, flour: flour!, product, recipeId };
+    return { call, entityKernel, flour: flour!, product, recipeId };
   };
 
   const mapping = {
@@ -105,20 +92,10 @@ describe("coverage diagnostics on product and recipe writes", () => {
     source: null,
   };
 
-  it("reports the recipe line a product update closed", async () => {
-    const { call, product, recipeId } = await setup();
-
-    const unrelated = await call("entity", {
-      action: "update",
-      entity: "product",
-      id: product.id,
-      data: { notes: "Stored in the pantry." },
-    });
-    expect(unrelated.isError).not.toBe(true);
-    expect(
-      writeResult.parse(unrelated.structuredContent).recipeCoverageChanges,
-    ).toBeUndefined();
-
+  it("keeps coverage on a separate read when a Product mapping closes a gap", async () => {
+    const { call, entityKernel, product, recipeId } = await setup();
+    const before = await recipeLineCoverage(entityKernel, recipeId);
+    expect(before[0]?.missing).toContain("weight");
     const updated = await call("entity", {
       action: "update",
       entity: "product",
@@ -126,34 +103,23 @@ describe("coverage diagnostics on product and recipe writes", () => {
       data: { unitMappings: [mapping] },
     });
     expect(updated.isError).not.toBe(true);
-    const changes = writeResult.parse(
-      updated.structuredContent,
-    ).recipeCoverageChanges;
-    expect(changes).toMatchObject({
-      recipesChecked: 1,
-      truncated: false,
-      regressed: [],
-    });
-    expect(changes?.closed).toHaveLength(1);
-    const [line] = changes!.closed;
-    expect(line).toMatchObject({ recipeId, name: "coverage flour" });
-    expect(line!.before).toContain("weight");
-    expect(line!.after).not.toContain("weight");
-
-    // The same write again changes nothing, so nothing is reported closed.
-    const repeat = await call("entity", {
+    expect(updated.structuredContent).not.toHaveProperty(
+      "recipeCoverageChanges",
+    );
+    expect(updated.structuredContent).not.toHaveProperty("lineCoverage");
+    const after = await recipeLineCoverage(entityKernel, recipeId);
+    expect(after[0]?.missing).not.toContain("weight");
+    await call("entity", {
       action: "update",
       entity: "product",
       id: product.id,
       data: { unitMappings: [mapping] },
     });
-    expect(
-      writeResult.parse(repeat.structuredContent).recipeCoverageChanges,
-    ).toMatchObject({ recipesChecked: 1, closed: [], regressed: [] });
+    expect(await recipeLineCoverage(entityKernel, recipeId)).toEqual(after);
   });
 
-  it("reports a regression when a product update removes the mapping", async () => {
-    const { call, product } = await setup();
+  it("reports a removed mapping's gap on an explicit read", async () => {
+    const { call, entityKernel, product, recipeId } = await setup();
     await call("entity", {
       action: "update",
       entity: "product",
@@ -166,15 +132,16 @@ describe("coverage diagnostics on product and recipe writes", () => {
       id: product.id,
       data: { unitMappings: [] },
     });
-    const changes = writeResult.parse(
-      removed.structuredContent,
-    ).recipeCoverageChanges;
-    expect(changes?.closed).toEqual([]);
-    expect(changes?.regressed).toHaveLength(1);
-    expect(changes?.regressed[0]?.after).toContain("weight");
+    expect(removed.isError).not.toBe(true);
+    expect(removed.structuredContent).not.toHaveProperty(
+      "recipeCoverageChanges",
+    );
+    expect(
+      (await recipeLineCoverage(entityKernel, recipeId))[0]?.missing,
+    ).toContain("weight");
   });
 
-  it("attaches the same diagnostics to entity.commands items", async () => {
+  it("keeps entity.commands receipts bounded for Product and Recipe writes", async () => {
     const { call, flour, product } = await setup();
     const batch = await call("entity", {
       action: "commands",
@@ -218,8 +185,12 @@ describe("coverage diagnostics on product and recipe writes", () => {
       "succeeded",
       "succeeded",
     ]);
-    expect(results[0]?.item?.recipeCoverageChanges?.closed).toHaveLength(1);
-    expect(results[1]?.item?.lineCoverage).toHaveLength(1);
+    expect(batch.structuredContent).not.toHaveProperty("recipeCoverageChanges");
+    for (const result of results) {
+      expect(result.item).not.toHaveProperty("recipeCoverageChanges");
+      expect(result.item).not.toHaveProperty("lineCoverage");
+      expect(result.item?.item.id).toBeDefined();
+    }
   });
 
   it("returns lineCoverage from recipe_import writes", async () => {

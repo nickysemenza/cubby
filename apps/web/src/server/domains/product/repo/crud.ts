@@ -1519,12 +1519,32 @@ export const createProduct = async (
   (await createProductRecord(db, data, actor, reads)).output;
 
 /** `createProduct` with the inserted row's id, so a caller never re-resolves the code it just minted. */
-export const createProductRecord = async (
+export function createProductRecord(
+  db: Database,
+  data: ProductRepoCreateInput,
+  actor: ActorContext,
+  reads?: ProductCreateReads,
+): Promise<{ output: ProductTopLevelOut; entityId: ProductId }>;
+export function createProductRecord<TOutput>(
+  db: Database,
+  data: ProductRepoCreateInput,
+  actor: ActorContext,
+  reads: ProductCreateReads | undefined,
+  readOutput: (
+    tx: DrizzleTransaction,
+    row: typeof product.$inferSelect,
+  ) => Promise<TOutput>,
+): Promise<{ output: TOutput; entityId: ProductId }>;
+export async function createProductRecord<TOutput>(
   db: Database,
   data: ProductRepoCreateInput,
   actor: ActorContext,
   reads: ProductCreateReads = defaultProductCreateReads,
-): Promise<{ output: ProductTopLevelOut; entityId: ProductId }> => {
+  readOutput?: (
+    tx: DrizzleTransaction,
+    row: typeof product.$inferSelect,
+  ) => Promise<TOutput>,
+): Promise<{ output: ProductTopLevelOut | TOutput; entityId: ProductId }> {
   const {
     ingredientId,
     unitMappings,
@@ -1666,6 +1686,11 @@ export const createProductRecord = async (
         action: "create",
       });
 
+      if (readOutput)
+        return {
+          output: await readOutput(tx, newProduct),
+          entityId: newProduct.id,
+        };
       const growsPlant = productData.growsPlantId
         ? await tx.query.plant.findFirst({
             where: and(
@@ -1708,7 +1733,7 @@ export const createProductRecord = async (
     await throwIfDuplicateProduct(db, data, error);
     throw error;
   }
-};
+}
 
 /** The entity kernel resolves text-collection patches before a repository sees them. */
 const resolvedTextCollection = (
@@ -1728,12 +1753,35 @@ const isExternalIdPatch = (
  * rollback, so they ride out of the transaction rather than being dropped inside
  * it; `updateProductWithFood` drains them once the commit is real.
  */
-export const updateProduct = async (
+export function updateProduct(
   db: Database,
   id: ProductId,
   data: ProductRepoUpdateData,
   actor: ActorContext,
-): Promise<{ product: ProductTopLevelOut; detachedImageKeys: string[] }> => {
+): Promise<{ product: ProductTopLevelOut; detachedImageKeys: string[] }>;
+export function updateProduct<TOutput>(
+  db: Database,
+  id: ProductId,
+  data: ProductRepoUpdateData,
+  actor: ActorContext,
+  readOutput: (
+    tx: DrizzleTransaction,
+    row: typeof product.$inferSelect,
+  ) => Promise<TOutput>,
+): Promise<{ product: TOutput; detachedImageKeys: string[] }>;
+export async function updateProduct<TOutput>(
+  db: Database,
+  id: ProductId,
+  data: ProductRepoUpdateData,
+  actor: ActorContext,
+  readOutput?: (
+    tx: DrizzleTransaction,
+    row: typeof product.$inferSelect,
+  ) => Promise<TOutput>,
+): Promise<{
+  product: ProductTopLevelOut | TOutput;
+  detachedImageKeys: string[];
+}> {
   const {
     ingredientId,
     unitMappings,
@@ -1754,6 +1802,13 @@ export const updateProduct = async (
       ? externalIdsInput
       : undefined;
 
+  const classificationRequested =
+    externalIdsInput !== undefined ||
+    data.upc !== undefined ||
+    data.isbn !== undefined ||
+    data.categoryId !== undefined ||
+    ingredientId !== undefined ||
+    data.fdc_id !== undefined;
   let detachedImageKeys: string[] = [];
 
   // The identity this update lands on, captured inside the transaction for the
@@ -1806,17 +1861,19 @@ export const updateProduct = async (
         item.op === "add" ? [item.key] : [],
       ),
     ];
-    const impliedFeature = impliedProductFeature({
-      fdc_id:
-        updateData.fdc_id === undefined
-          ? beforeProduct.fdc_id
-          : updateData.fdc_id,
-      ingredientId:
-        updateData.ingredientId === undefined
-          ? beforeProduct.ingredientId
-          : updateData.ingredientId,
-      hasIsbn: externalIdsContainIsbn(resultingExternalIds),
-    });
+    const impliedFeature = classificationRequested
+      ? impliedProductFeature({
+          fdc_id:
+            updateData.fdc_id === undefined
+              ? beforeProduct.fdc_id
+              : updateData.fdc_id,
+          ingredientId:
+            updateData.ingredientId === undefined
+              ? beforeProduct.ingredientId
+              : updateData.ingredientId,
+          hasIsbn: externalIdsContainIsbn(resultingExternalIds),
+        })
+      : null;
     if (impliedFeature !== null) {
       updateData.categoryId = await resolveProductCategory(
         tx,
@@ -1873,12 +1930,19 @@ export const updateProduct = async (
         throw createAppError("PRODUCT_NOT_FOUND", `Product ${id} not found`);
       }
 
-      const beforeExternalIds = await tx.query.entityExternalId.findMany({
-        where: and(
-          eq(entityExternalId.entityId, id),
-          notDeleted(entityExternalId),
-        ),
-      });
+      const identifiersRequested =
+        externalIdsInput !== undefined ||
+        data.upc !== undefined ||
+        data.isbn !== undefined;
+      const beforeExternalIds =
+        readOutput && !classificationRequested
+          ? []
+          : await tx.query.entityExternalId.findMany({
+              where: and(
+                eq(entityExternalId.entityId, id),
+                notDeleted(entityExternalId),
+              ),
+            });
 
       const { desiredExternalIds, incomingGtin, updateData } =
         await prepareUpdate(tx, beforeProduct, beforeExternalIds);
@@ -1902,16 +1966,14 @@ export const updateProduct = async (
         : beforeProduct;
 
       if (updated.categoryId !== beforeProduct.categoryId)
-        await validateLiveInheritedPolicies(tx);
+        await validateLiveInheritedPolicies(tx, { kind: "product", ids: [id] });
 
       // Conversion coverage and inventory valuation are invalidated only after
       // mappings land; both are projections of the resulting conversion graph.
       await syncProductUpdateDependents(tx, incomingGtin, desiredExternalIds);
-      const admittedCategoryId = await assertProductCategoryChange(
-        tx,
-        id,
-        updated.categoryId,
-      );
+      const admittedCategoryId = classificationRequested
+        ? await assertProductCategoryChange(tx, id, updated.categoryId)
+        : updated.categoryId;
       if (admittedCategoryId !== updated.categoryId)
         throw createAppError(
           "CONSTRAINT_VIOLATION",
@@ -1936,26 +1998,32 @@ export const updateProduct = async (
       );
       // Fetch all associated images (live only — just-removed ones must not
       // reappear in the response) in display order.
-      const productImages = await tx.query.entityAttachment.findMany({
-        where: and(
-          eq(entityAttachment.entityId, updated.id),
-          notDeleted(entityAttachment),
-        ),
-        with: {
-          image: true,
-        },
-        orderBy: [
-          asc(entityAttachment.sortOrder),
-          asc(entityAttachment.createdAt),
-        ],
-      });
+      const productImages =
+        !readOutput || galleryRequested
+          ? await tx.query.entityAttachment.findMany({
+              where: and(
+                eq(entityAttachment.entityId, updated.id),
+                notDeleted(entityAttachment),
+              ),
+              with: {
+                image: true,
+              },
+              orderBy: [
+                asc(entityAttachment.sortOrder),
+                asc(entityAttachment.createdAt),
+              ],
+            })
+          : [];
 
-      const currentExternalIdRows = await tx.query.entityExternalId.findMany({
-        where: and(
-          eq(entityExternalId.entityId, updated.id),
-          notDeleted(entityExternalId),
-        ),
-      });
+      const currentExternalIdRows =
+        !readOutput || identifiersRequested
+          ? await tx.query.entityExternalId.findMany({
+              where: and(
+                eq(entityExternalId.entityId, updated.id),
+                notDeleted(entityExternalId),
+              ),
+            })
+          : beforeExternalIds;
 
       const scalarChanges = computeChanges(
         { ...beforeProduct, externalIds: beforeExternalIds },
@@ -1978,6 +2046,7 @@ export const updateProduct = async (
         });
       }
 
+      if (readOutput) return readOutput(tx, updated);
       const pricing = await loadProductPricing(tx, [updated]);
       const qualities = await loadProductDataQualities(tx, [updated.id]);
       return dbProductToTopLevelAPI({
@@ -2009,7 +2078,7 @@ export const updateProduct = async (
     }
     throw error;
   }
-};
+}
 
 type ExternalIdRow = typeof entityExternalId.$inferSelect;
 type ExternalIdPatchItem = ExternalIdPatch[number];
