@@ -3,9 +3,11 @@ import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
 import type { ListGroupSummary } from "@cubby/schemas/pagination";
 import {
   DndContext,
+  rectIntersection,
   useDraggable,
   useDroppable,
   type DragEndEvent,
@@ -165,7 +167,8 @@ export function EntityBoard({
           target?.board === view.id &&
           target?.destination?.before !== active?.rowId &&
           (target?.destination?.before !== undefined ||
-            target?.destination?.key !== active?.groupKey),
+            target?.destination?.key !== active?.groupKey ||
+            target?.end === true),
       ),
     [view.id],
   );
@@ -245,13 +248,18 @@ export function EntityBoard({
       showErrorToast(error);
     }
   };
-  const onDragEnd = ({ active, over }: DragEndEvent) => {
+  const onDragEnd = ({ active, over, activatorEvent }: DragEndEvent) => {
     const target = over?.data.current;
     if (typeof active.id !== "string" || target?.board !== view.id) return;
     const destination: Destination = target.destination;
     if (destination.before === active.id) return;
     const rect = active.rect.current.translated;
-    if (destination.before && rect && over) {
+    if (
+      !(activatorEvent instanceof KeyboardEvent) &&
+      destination.before &&
+      rect &&
+      over
+    ) {
       const side =
         rect.top + rect.height / 2 > over.rect.top + over.rect.height / 2
           ? "bottom"
@@ -311,7 +319,21 @@ export function EntityBoard({
           </Button>
         </p>
       ) : (
-        <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+        <DndContext
+          sensors={sensors}
+          onDragEnd={onDragEnd}
+          collisionDetection={(args) =>
+            rectIntersection({
+              ...args,
+              droppableContainers: args.droppableContainers.filter(
+                (container) =>
+                  args.pointerCoordinates !== null ||
+                  container.data.current?.destination?.before !==
+                    args.active.id,
+              ),
+            })
+          }
+        >
           <div className="flex max-w-full items-start gap-3 overflow-x-auto pb-2">
             {groups.slice(groupPage * 12, (groupPage + 1) * 12).map((group) => (
               <BoardGroup
@@ -327,6 +349,7 @@ export function EntityBoard({
                 move={move}
                 moveToGroup={moveToGroup}
                 pending={commands.pending}
+                acceptsNoValue={choice.filter.noValue}
               />
             ))}
           </div>
@@ -366,6 +389,7 @@ function BoardGroup({
   move,
   moveToGroup,
   pending,
+  acceptsNoValue,
 }: {
   entity: BoardEntity;
   view: EntityBoardListView;
@@ -378,6 +402,7 @@ function BoardGroup({
   move: (id: string, destination: Destination) => void;
   moveToGroup: (id: string, key: string) => Promise<void>;
   pending: boolean;
+  acceptsNoValue: boolean;
 }) {
   const [page, setPage] = useState(0);
   const input = boardGroupPage(
@@ -404,10 +429,11 @@ function BoardGroup({
   const rows: BoardRow[] = query.data?.items ?? [];
   const loading = useHydratedLoading(query.isLoading);
   const destination = { key: group.key, rows };
+  const acceptsPlacement = group.key !== FILTER_NONE || acceptsNoValue;
   const drop = useDroppable({
     id: `group:${group.key}`,
     data: { board: view.id, destination },
-    disabled: pending || !view.reorder,
+    disabled: pending || !view.reorder || !acceptsPlacement,
   });
   const capped = view.caps.some(
     (cap) => cap.field === groupBy && cap.value === group.key,
@@ -440,11 +466,11 @@ function BoardGroup({
             row={row}
             destination={{ ...destination, before: row.id }}
             disabled={pending}
-            manualOrder={!capped}
+            manualOrder={!capped && acceptsPlacement}
           >
             {view.reorder && (
               <div className="flex flex-wrap gap-1">
-                {!capped && index > 0 && (
+                {!capped && acceptsPlacement && index > 0 && (
                   <Button
                     size="sm"
                     variant="ghost"
@@ -459,7 +485,7 @@ function BoardGroup({
                     Earlier
                   </Button>
                 )}
-                {!capped && index < rows.length - 1 && (
+                {!capped && acceptsPlacement && index < rows.length - 1 && (
                   <Button
                     size="sm"
                     variant="ghost"
@@ -476,10 +502,14 @@ function BoardGroup({
                 )}
                 <Picker
                   label={`Move ${String(row[entitySummary[entity].titleField] ?? row.id)}`}
-                  options={groups.map((group) => ({
-                    value: group.key,
-                    label: group.label,
-                  }))}
+                  options={groups
+                    .filter(
+                      (group) => group.key !== FILTER_NONE || acceptsNoValue,
+                    )
+                    .map((group) => ({
+                      value: group.key,
+                      label: group.label,
+                    }))}
                   value={group.key}
                   onValueChange={(key) => {
                     if (key && key !== group.key) void moveToGroup(row.id, key);
@@ -490,6 +520,9 @@ function BoardGroup({
             )}
           </BoardCard>
         ))
+      )}
+      {!capped && acceptsPlacement && view.reorder && (
+        <BoardEnd view={view} destination={destination} disabled={pending} />
       )}
       {!query.isLoading && rows.length === 0 && !query.error && (
         <p className="p-2 text-sm text-muted-foreground">No records</p>
@@ -547,7 +580,7 @@ function BoardCard({
   const drag = useDraggable({
     id: row.id,
     data: { rowId: row.id, groupKey: destination.key },
-    disabled: disabled || !view.reorder || !manualOrder,
+    disabled: disabled || !view.reorder,
   });
   const drop = useDroppable({
     id: `card:${row.id}`,
@@ -563,7 +596,7 @@ function BoardCard({
       className="space-y-2 border-b p-2 text-sm"
     >
       <div className="flex items-start gap-2">
-        {view.reorder && manualOrder && (
+        {view.reorder && (
           <button
             type="button"
             ref={drag.setActivatorNodeRef}
@@ -598,5 +631,29 @@ function BoardCard({
       </dl>
       {children}
     </article>
+  );
+}
+
+/** A distinct end anchor lets keyboard users append without targeting the source container. */
+function BoardEnd({
+  view,
+  destination,
+  disabled,
+}: {
+  view: EntityBoardListView;
+  destination: Destination;
+  disabled: boolean;
+}) {
+  const drop = useDroppable({
+    id: `end:${destination.key}`,
+    data: { board: view.id, destination, end: true },
+    disabled,
+  });
+  return (
+    <div
+      ref={drop.setNodeRef}
+      className="min-h-11"
+      aria-label={`End of ${destination.key}`}
+    />
   );
 }

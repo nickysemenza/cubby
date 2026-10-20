@@ -1,3 +1,4 @@
+// Keep this re-export before lifecycle imports: image writers initialize during their import cycle.
 export { defineMutationWriter, type MutationReceipt } from "./mutation-writer";
 
 /**

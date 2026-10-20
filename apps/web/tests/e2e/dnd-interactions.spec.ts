@@ -32,3 +32,24 @@ test("moves a task between statuses with the keyboard and persists it", async ({
   await expect(taskDropTarget(page, "Later")).toContainText(name);
   await expect(taskDropTarget(page, "Not started")).not.toContainText(name);
 });
+
+test("keyboard dragging reaches the last position in the same group", async ({
+  page,
+}, testInfo) => {
+  const prefix = fixtureName("e2e keyboard ordering", testInfo);
+  await seedTaskPrerequisite(page, { name: `${prefix} first` });
+  await seedTaskPrerequisite(page, { name: `${prefix} second` });
+  await seedTaskPrerequisite(page, { name: `${prefix} third` });
+  const source = page.getByRole("button", { name: `Drag ${prefix} third` });
+  await gotoAuthenticatedPage(
+    page,
+    `/tasks?view=board&searchQuery=${encodeURIComponent(prefix)}`,
+    source,
+  );
+  const committed = waitForDndMutation(page, "task", "entity.list");
+  await dragByKeyboard(source, ["ArrowDown", "ArrowDown", "ArrowDown"]);
+  await committed;
+  await reloadAuthenticatedPage(page, taskDropTarget(page, "Not started"));
+  const cards = taskDropTarget(page, "Not started").getByRole("article");
+  await expect(cards.last()).toContainText(`${prefix} third`);
+});

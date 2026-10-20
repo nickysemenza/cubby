@@ -67,6 +67,9 @@ struct EntityBoardListView: View {
                 Text("No records to show").foregroundStyle(.secondary)
             }
             if let current {
+                let capped = EntityBoardPlan.isCapped(spec, groupBy: groupBy, key: current.id)
+                let acceptsPlacement =
+                    current.id != EntityListSection.noValueKey || choice?.filter?.noValue == true
                 Section("\(current.label) · \(current.count)") {
                     ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
@@ -75,12 +78,18 @@ struct EntityBoardListView: View {
                             }
                             if spec.reorder != nil {
                                 Menu("Move", systemImage: "arrow.up.arrow.down") {
-                                    ForEach(groups.filter { $0.id != current.id }) { destination in
+                                    ForEach(
+                                        groups.filter {
+                                            $0.id != current.id
+                                                && ($0.id != EntityListSection.noValueKey
+                                                    || choice?.filter?.noValue == true)
+                                        }
+                                    ) { destination in
                                         Button(destination.label) {
                                             Task { await move(row, to: destination) }
                                         }
                                     }
-                                    if !EntityBoardPlan.isCapped(spec, groupBy: groupBy, key: current.id) {
+                                    if !capped && acceptsPlacement {
                                         Button("Move earlier") { Task { await reorder(index, offset: -1) } }
                                             .disabled(index == 0)
                                         Button("Move later") { Task { await reorder(index, offset: 1) } }
@@ -94,7 +103,7 @@ struct EntityBoardListView: View {
                         }
                     }
                     let size = EntityBoardPlan.pageSize(spec, groupBy: groupBy, key: current.id)
-                    if EntityBoardPlan.isCapped(spec, groupBy: groupBy, key: current.id) {
+                    if capped {
                         Text("\(rows.count) of \(current.count) shown").foregroundStyle(.secondary)
                     } else {
                         HStack {
