@@ -4,7 +4,11 @@ import type { Page } from "@playwright/test";
 import superjson from "superjson";
 import { fieldSuggestionsOut } from "@cubby/schemas/ai";
 import { assessmentReviewInput } from "@cubby/schemas/assessment";
-import { recordStatementRowsOut, recordStatementRowsInput, type StatementRowInput } from "@cubby/schemas/statement-row";
+import {
+  recordStatementRowsOut,
+  recordStatementRowsInput,
+  type StatementRowInput,
+} from "@cubby/schemas/statement-row";
 import { eq, sql } from "drizzle-orm";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
@@ -419,7 +423,8 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
     actor,
   );
   // Posting the hold books spending only after current category and identity advice.
-  if (!posted.batchId) throw new Error("Synthetic posted import was not saved");
+  if (!posted.batchId)
+    throw new Error("Synthetic posted statement import was not saved");
   await generateStatementSuggestions(db, posted.batchId);
   await labelSpending();
   await gotoAuthenticatedPage(page, view);

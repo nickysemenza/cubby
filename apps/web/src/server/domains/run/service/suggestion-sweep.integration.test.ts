@@ -205,7 +205,29 @@ describe("persisted Suggestion sweeps", () => {
     ]);
     const finished = await savedRun(ctx.db, started.id);
     expect(finished.status).toBe("completed");
-    expect(finished.progress).toMatchObject({ done: 2, total: 2, queued: 2 });
+    expect(finished.progress).toMatchObject({
+      done: 2,
+      total: 2,
+      queued: 0,
+      applied: 0,
+      failed: 0,
+    });
+    expect(
+      await getDb(ctx.db)
+        .select({ state: aiEvaluation.state, receipt: aiEvaluation.receipt })
+        .from(aiEvaluation)
+        .where(eq(aiEvaluation.runId, started.id)),
+    ).toEqual([
+      {
+        state: "completed",
+        receipt: expect.objectContaining({ outcome: "settled" }),
+      },
+      {
+        state: "completed",
+        receipt: expect.objectContaining({ outcome: "settled" }),
+      },
+    ]);
+    expect(await runSuggestions(ctx.db, started.id)).toEqual([]);
 
     await expect(
       resumeSuggestionSweep(ctx.db, started.id, { context, suggest }),
