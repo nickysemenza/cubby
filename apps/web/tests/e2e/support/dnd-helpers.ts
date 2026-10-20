@@ -38,7 +38,10 @@ export async function dragByKeyboard(
   // KeyboardSensor attaches its document key listener in a zero-delay task.
   // One frame models human input cadence without a fixed sleep.
   await nextAnimationFrame(source);
-  for (const move of moves) await source.press(move);
+  for (const move of moves) {
+    await source.press(move);
+    await nextAnimationFrame(source);
+  }
   await source.press("Space");
 }
 
