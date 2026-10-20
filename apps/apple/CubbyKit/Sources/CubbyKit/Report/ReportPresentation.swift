@@ -314,7 +314,16 @@ public struct ReportPresentation: Hashable, Sendable {
         }
     }
 
+    public struct Progress: Hashable, Sendable {
+        public let label: String
+        public let processed: Double
+        public let total: Double?
+        public let summary: String
+        public let detail: String
+    }
+
     public enum Block: Hashable, Sendable {
+        case progress(Progress)
         case records(Records)
         case stats(title: String?, figures: [Figure])
         case chart(Chart)
@@ -372,6 +381,11 @@ public struct ReportPresentation: Hashable, Sendable {
 
     private static func block(_ block: Components.Schemas.ReportBlock) -> Block {
         switch block {
+        case .progress(let progress):
+            return .progress(
+                Progress(
+                    label: progress.label, processed: progress.processed,
+                    total: progress.total, summary: progress.summary, detail: progress.detail))
         case .stats(let stats):
             return .stats(
                 title: stats.title,

@@ -1006,6 +1006,104 @@ export function runStepsBlocks(report: RunStepsReport): ReportBlock[] {
   return [records(rows, { title: "Steps" })];
 }
 
+function workProgressBlocks(
+  progress: RunLiveProgress["workProgress"],
+): ReportBlock[] {
+  if (!progress) return [];
+  const phase = progress.current;
+  const summary = (work: typeof phase) =>
+    `${formatCount(work.processed)} / ${work.total === null ? "unknown" : formatCount(work.total)} ${work.unit} · ${formatCount(work.failures)} failed`;
+  const rate =
+    phase.ratePerSecond === null
+      ? null
+      : `${formatCount(Math.round(phase.ratePerSecond * 60))} ${phase.unit}/min`;
+  const estimate = phase.finished
+    ? phase.state === "failed"
+      ? "Phase ended with failures"
+      : "Phase complete"
+    : phase.etaSeconds === null
+      ? phase.total === null
+        ? "Total unknown"
+        : "Estimating…"
+      : `About ${formatDuration(Math.ceil(phase.etaSeconds / 30) * 30_000)} remaining`;
+  return [
+    {
+      kind: "progress",
+      label: phase.label,
+      processed: phase.processed,
+      total: phase.total,
+      summary: summary(phase),
+      detail: [
+        phaseLabel(phase.state),
+        rate,
+        estimate,
+        phase.estimateState === "paused" || phase.estimateState === "stale"
+          ? `Using ${phase.estimateState} rate · last progress ${formatInstant(phase.sampledAt, "dateShortTime")}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+    },
+    ...(progress.completed.length
+      ? [
+          records(
+            progress.completed.map((completed, index) =>
+              row(`phase:${index}`, {
+                title: completed.label,
+                body: summary(completed),
+                state: {
+                  kind: completed.failures ? "warning" : "done",
+                  label: "Completed",
+                },
+              }),
+            ),
+            { title: "Completed phases" },
+          ),
+        ]
+      : []),
+  ];
+}
+
+function progressRows(events: RunLiveProgress["progress"]): Row[] {
+  const rows: Row[] = [];
+  for (let index = 0; index < events.length; index++) {
+    const event = events[index]!;
+    const starts = (entry: typeof event) =>
+      entry.phase === "attempt_started" &&
+      entry.detail?.startsWith("Started Workflow instance ");
+    const group = [event];
+    if (starts(event)) {
+      while (events[index + 1] && starts(events[index + 1]!))
+        group.push(events[++index]!);
+    }
+    const last = group.at(-1)!;
+    rows.push(
+      group.length > 1
+        ? row(event.id, {
+            title: `${formatCount(group.length)} Workflow instances started`,
+            at: last.createdAt,
+            body: last.detail ?? undefined,
+            detail: {
+              label: "Show Workflow handoffs",
+              text: group
+                .map(
+                  (entry) =>
+                    `${formatInstant(entry.createdAt, "dateShortTime")} · ${entry.detail}`,
+                )
+                .join("\n"),
+            },
+          })
+        : row(event.id, {
+            title: phaseLabel(event.phase),
+            body: event.detail ?? undefined,
+            at: event.createdAt,
+            state: statusState(event.phase),
+          }),
+    );
+  }
+  return rows;
+}
+
 /** Durable progress for every Run, including work done outside the page that opened it. */
 export function liveProgressBlocks(
   runId: RunDetail["publicId"],
@@ -1014,28 +1112,19 @@ export function liveProgressBlocks(
   const active = progress.status === "running";
   const age = progressAge(progress);
   return [
+    ...workProgressBlocks(progress.workProgress),
     note(progressHeadline(progress), undefined, true),
     ...(age ? [note(age)] : []),
     ...workflowBlocks(runId, progress),
     ...(progress.discovery
       ? [discoveryCountsBlock(progress.discovery, active)]
       : []),
-    records(
-      progress.progress.map((event) =>
-        row(event.id, {
-          title: phaseLabel(event.phase),
-          body: event.detail ?? undefined,
-          at: event.createdAt,
-          state: statusState(event.phase),
-        }),
-      ),
-      {
-        empty: active
-          ? "Waiting for the first progress update…"
-          : "No progress updates were recorded for this Run.",
-        presentation: "timeline",
-      },
-    ),
+    records(progressRows(progress.progress), {
+      empty: active
+        ? "Waiting for the first progress update…"
+        : "No progress updates were recorded for this Run.",
+      presentation: "timeline",
+    }),
   ];
 }
 

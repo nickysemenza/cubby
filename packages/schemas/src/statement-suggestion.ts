@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 
 import {
   generatedFinancialTransactionKindValues,
@@ -151,6 +152,16 @@ export const statementTransactionJudgment = z.object({
 export type StatementTransactionJudgment = z.infer<
   typeof statementTransactionJudgment
 >;
+
+/** Unpublished model work owned by one pending assessment, fenced by its inputs. */
+export const statementLabelCheckpoint = z.object({
+  revision: z.string(),
+  model: supportedDecisionModelSchema,
+  judgment: statementTransactionJudgment,
+  kind: z.boolean(),
+  counterparty: z.boolean(),
+});
+export type StatementLabelCheckpoint = z.infer<typeof statementLabelCheckpoint>;
 
 /**
  * The member's chosen action. A choice that differs from the recommendation is

@@ -251,6 +251,11 @@ async function selectNonPhotoTargets(
     completedAt: receipt.completedAt ? new Date(receipt.completedAt) : null,
   }));
 }
+/** The authoritative roster and latest applicable outcomes used by shared Run progress. */
+export function readRunProgressTargets(db: Database, runId: RunId) {
+  return selectNonPhotoTargets(getDb(db), runId);
+}
+
 function selectRestartTargets(
   client: DrizzleClient | DrizzleTransaction,
   runId: RunId,

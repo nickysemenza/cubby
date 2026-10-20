@@ -36,6 +36,7 @@ import {
   runRetirementReason,
   runStatus,
 } from "@cubby/schemas/run-fields";
+import { runWorkProgress } from "@cubby/schemas/run-work-progress";
 import { sweepEstimateOut, sweepStartInput } from "@cubby/schemas/sweep";
 import { z } from "zod";
 
@@ -324,6 +325,7 @@ export const runContract = defineContract("run", {
       findings: runDetail.shape.findings,
       targetsTotal: z.number().int(),
       targetsCompleted: z.number().int(),
+      workProgress: runWorkProgress,
       /**
        * Each target's outcome: what the run worked and why it ended where it
        * did (a skip keeps its reason in `warning`).

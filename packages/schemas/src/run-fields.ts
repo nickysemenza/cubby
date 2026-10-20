@@ -1,4 +1,5 @@
 import { workflowRecoveryProgress } from "./workflow-runs";
+import type { RunWorkSamples } from "./run-work-progress";
 import {
   type AiRefreshRunInput,
   aiRefreshProgress,
@@ -513,6 +514,8 @@ export const runProgressEvent = runProgressStamp.extend({
   createdAt: z.iso.datetime(),
 });
 export type RunProgressEvent = z.infer<typeof runProgressEvent>;
+/** Live-only sampling metadata; history retains the original small event payload. */
+export type RunLiveProgressEvent = RunProgressEvent & { work?: RunWorkSamples };
 export type RunProgressHistory = RunProgressEvent[];
 export type RunProgressEventIds = string[];
 

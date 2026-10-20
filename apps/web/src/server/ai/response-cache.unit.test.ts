@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import * as cfEnv from "~/server/cf-env";
 
+import { AiWorkDeferredError, withCooperativeAiWork } from "./cooperative-work";
 import {
   AiResponseCacheBatch,
   aiResponseCacheKey,
@@ -28,6 +29,84 @@ const input = (name: string) => ({
 const validate = z.object({ choice: z.string() }).parse;
 
 describe("AI response cache", () => {
+  // Cold-cache request growth consumes an instance budget even with bounded decisions.
+  it("uses one claim and one publication for a cold synthetic decision", async () => {
+    const calls: string[] = [];
+    const namespace = fromPartial<
+      NonNullable<ReturnType<typeof cfEnv.getAiResponseCacheNamespace>>
+    >({
+      getByName: () =>
+        fromPartial({
+          readOrClaim: async () => {
+            calls.push("claim");
+            return { kind: "claimed", token: "synthetic-lease" };
+          },
+          publish: async () => {
+            calls.push("publish");
+            return true;
+          },
+          renew: async () => {
+            calls.push("renew");
+            return true;
+          },
+        }),
+    });
+    const mock = vi
+      .spyOn(cfEnv, "getAiResponseCacheNamespace")
+      .mockReturnValue(namespace);
+    try {
+      await withAiResponseCache({
+        enabled: true,
+        keyInput: input("synthetic-cold-transport"),
+        validate,
+        compute: async () => {
+          calls.push("gateway");
+          return { choice: "one" };
+        },
+      });
+      expect(calls).toEqual(["claim", "gateway", "publish"]);
+    } finally {
+      mock.mockRestore();
+    }
+  });
+
+  // A contended cache lease must become durable Workflow waiting, not a polling loop.
+  it("yields a Workflow on its first contended cache lookup", async () => {
+    const read = vi
+      .fn()
+      .mockReturnValueOnce({ kind: "busy" })
+      .mockReturnValue({ kind: "hit", value: '{"choice":"one"}' });
+    const namespace = fromPartial<
+      NonNullable<ReturnType<typeof cfEnv.getAiResponseCacheNamespace>>
+    >({
+      getByName: () => fromPartial({ readOrClaim: read }),
+    });
+    const mock = vi
+      .spyOn(cfEnv, "getAiResponseCacheNamespace")
+      .mockReturnValue(namespace);
+    const compute = vi.fn();
+    try {
+      await expect(
+        withCooperativeAiWork(() =>
+          withAiResponseCache({
+            enabled: true,
+            keyInput: input("synthetic-workflow-contention"),
+            validate,
+            compute,
+          }),
+        ),
+      ).rejects.toSatisfy(
+        (error: unknown) =>
+          error instanceof AiWorkDeferredError &&
+          error.until - Date.now() >= 14_000,
+      );
+      expect(read).toHaveBeenCalledOnce();
+      expect(compute).not.toHaveBeenCalled();
+    } finally {
+      mock.mockRestore();
+    }
+  });
+
   // A full group's pair reads must be bounded by shards/chunks, not candidate count.
   it("batches 240 cache lookups and reuses hits while handling misses", async () => {
     const { getAiResponseCacheNamespace } = await import("~/server/cf-env");

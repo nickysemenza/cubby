@@ -324,6 +324,7 @@
         "packages/schemas/src/photo-categories.ts",
         "packages/schemas/src/photo-run-input.ts",
         "packages/schemas/src/recipe-shared.ts",
+        "packages/schemas/src/run-work-progress.ts",
         "packages/schemas/src/unitmapping.ts"
       ],
       "excludeFiles": ["**/*.test.ts", "packages/schemas/src/entity-fields.ts"],

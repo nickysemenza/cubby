@@ -750,7 +750,7 @@ export default defineEntity({
         kind: "json",
         type: {
           module: "@cubby/schemas/run-fields",
-          export: "RunProgressEvent",
+          export: "RunLiveProgressEvent",
         },
       },
       {

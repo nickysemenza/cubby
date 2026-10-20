@@ -4,6 +4,7 @@ import { runEntityId, type ImageId } from "@cubby/schemas/identifiers";
 import { createLogger } from "@cubby/worker-tracing";
 
 import type { Database } from "~/server/db";
+import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
 
 import {
   type EmbeddingRefreshPort,
@@ -49,12 +50,21 @@ const productionMarkCalendarFeedDirty: MarkCalendarFeedDirtyPort = async (
 };
 
 export interface BackgroundTaskPorts {
+  readonly continueWorkflow: (
+    db: Database,
+    params: WorkflowRunParams,
+  ) => Promise<void>;
   readonly embedding: EmbeddingRefreshPort;
   readonly extractImageMetadata: ExtractImageMetadataPort;
   readonly markCalendarFeedDirty: MarkCalendarFeedDirtyPort;
 }
 
 export const productionBackgroundTaskPorts: BackgroundTaskPorts = {
+  continueWorkflow: async (db, params) =>
+    (await import("~/server/workflows/runs/continuation")).continueWorkflowRun(
+      db,
+      params,
+    ),
   embedding: productionEmbeddingRefreshPort,
   extractImageMetadata: productionExtractImageMetadata,
   markCalendarFeedDirty: productionMarkCalendarFeedDirty,
@@ -76,6 +86,13 @@ export async function handleBackgroundTask(
   ports: BackgroundTaskPorts = productionBackgroundTaskPorts,
 ): Promise<BackgroundTaskOutcome> {
   switch (task.kind) {
+    case "workflow.continue": {
+      await ports.continueWorkflow(db, {
+        runId: task.runId,
+        attempt: task.attempt,
+      });
+      return "succeeded";
+    }
     case "derived-refresh.wakeup": {
       const { wakeDerivedRefresh } =
         await import("~/server/domains/run/service/derived-refresh");

@@ -397,6 +397,32 @@ A report may say the record is `live` (clients poll; there is no realtime transp
 shows several slots of one record (a Run) polls one `entityReport.getMany`, so the server loads the
 record once per poll.
 
+**Run work progress.** The storage-only `getRunWorkProgress` projection supplies
+both `imports_read.run_status.workProgress` and the Run's shared `progress`
+report block. Every Run purpose declares a count source: step receipts,
+target outcomes, operations, images, model calls, or its typed checkpoint.
+Exploratory populations have `total: null`, never an invented zero. Step drivers
+can declare phase and units; the runtime persists absolute samples in RunStep
+metadata, preserving completed phases across pages and Workflow attempts.
+Other Run checkpoints and progress events retain samples in live-progress
+metadata; samples use the checkpoint write time, while heartbeat-only events
+do not refresh a work sample. Timeline history
+retains its small event payload. Legacy records start sampling from their next
+checkpoint without rewriting earlier history. Target counts reuse the roster's
+latest applicable outcomes, and photo preparation includes device failures.
+Live reads resolve current outcomes rather than serving a cached count; Mail
+import, product enrichment, and purchase validation admit at most 50 sources
+per Run.
+Processed means succeeded, skipped, and failed; failures remain separately
+visible. Generation charges and label suggestions never share a percentage.
+Retries clear terminal samples and failure counts immediately, then reset
+sampling while retaining a compatible phase/unit rate. ETA uses
+that rate only with a known total; paused or stale estimates identify the reused
+rate and last progress time. Unknown totals show counts and a rate without a
+finish time. Web and Apple draw the same server-composed summary and estimate.
+Consecutive successful Workflow starts fold into one expandable timeline entry;
+phase changes and errors stay separate, and stored events are retained.
+
 **Derived relationships.** A relationship whose provenance is `derived` is
 inferred from stored evidence rather than one FK path and stores nothing of its
 own (ADR 0011). It names the target's list filter descriptor that answers

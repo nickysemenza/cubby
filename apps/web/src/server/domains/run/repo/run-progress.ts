@@ -5,12 +5,14 @@ import {
   runProgressEvent,
   runStatus,
   type RunProgressEvent,
+  isStepRunPurpose,
 } from "@cubby/schemas/run-fields";
+import { runWorkSamples } from "@cubby/schemas/run-work-progress";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { getDb, withTransaction } from "~/server/db/helpers/core";
+import { getDb, withTransactionDatabase } from "~/server/db/helpers/core";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { run } from "~/server/db/schema";
 import {
@@ -96,6 +98,9 @@ export async function getRunLiveProgress(
   const events = record.run.progressHistory ?? [];
   return {
     status: runStatus.parse(record.run.status),
+    workProgress: await (
+      await import("./work-progress")
+    ).getRunWorkProgress(db, shortcode),
     progress: events.map((event) => ({
       id: event.eventId,
       phase: event.phase,
@@ -129,7 +134,8 @@ export async function recordRunProgress(
   now = new Date(),
 ): Promise<{ recorded: boolean }> {
   const id = runEntityId.parse(input.runId);
-  return withTransaction(db, async (tx) => {
+  return withTransactionDatabase(db, async (database) => {
+    const tx = getDb(database);
     const [current] = await tx
       .select()
       .from(run)
@@ -157,10 +163,18 @@ export async function recordRunProgress(
       detail: input.detail ?? null,
       createdAt: now.toISOString(),
     });
+    const work = isStepRunPurpose(current.purpose)
+      ? null
+      : await (
+          await import("./work-progress")
+        ).getRunWorkProgress(database, current.shortcode, now);
     await tx
       .update(run)
       .set({
-        liveProgress: event,
+        liveProgress: {
+          ...event,
+          ...(work && { work: runWorkSamples.parse(work) }),
+        },
         progressHistory: [...(current.progressHistory ?? []), event].slice(
           -100,
         ),

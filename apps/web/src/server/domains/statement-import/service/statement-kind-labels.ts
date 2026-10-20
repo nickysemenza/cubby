@@ -34,6 +34,7 @@ export async function labelStatementKind(
     model: SupportedDecisionModel;
     port?: DecisionPort;
     usage: Usage;
+    parts?: readonly ("kind" | "counterparty")[];
   },
 ): Promise<NonNullable<StatementTransactionJudgment["create"]>> {
   const ask = async (
@@ -55,8 +56,12 @@ export async function labelStatementKind(
     return choice && result.confidence === "high" ? choice : null;
   };
   const [kindChoice, counterpartyChoice] = await settleDecisions([
-    ask(STATEMENT_TRANSACTION_KIND_FEATURE),
-    ask(STATEMENT_COUNTERPARTY_FEATURE),
+    !context.parts || context.parts.includes("kind")
+      ? ask(STATEMENT_TRANSACTION_KIND_FEATURE)
+      : Promise.resolve(create.votes.label),
+    !context.parts || context.parts.includes("counterparty")
+      ? ask(STATEMENT_COUNTERPARTY_FEATURE)
+      : Promise.resolve(create.counterparty.label),
   ]);
   const kind = financialTransactionKind
     .nullable()

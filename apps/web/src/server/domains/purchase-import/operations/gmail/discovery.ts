@@ -411,11 +411,14 @@ export async function listMailDiscovery(
       coverage,
       discoveryMode(coverage),
     );
-    const [frozen] = await getDb(db)
-      .update(runTable)
-      .set({ progress: patchProgress({ phase: "fetching", page }) })
-      .where(eligibleAttempt(params))
-      .returning({ id: runTable.id });
+    const frozen = await (
+      await import("~/server/domains/run/repo/ai-work-state")
+    ).writeRunningAttemptProgress(
+      db,
+      runEntityId.parse(params.runId),
+      params.attempt,
+      { progress: patchProgress({ phase: "fetching", page }) },
+    );
     return frozen
       ? {
           kind: "listed",

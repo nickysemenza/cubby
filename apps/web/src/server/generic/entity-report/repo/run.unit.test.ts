@@ -769,6 +769,7 @@ describe("liveProgressBlocks", () => {
     status: "running" as const,
     progress: events([300, 200]),
     discovery: null,
+    workProgress: null,
     workflow: {
       purpose: "mail_discovery" as const,
       attempt: 2,
@@ -782,6 +783,111 @@ describe("liveProgressBlocks", () => {
         ? block.rows.flatMap((r) => r.commands ?? [])
         : [],
     );
+
+  it("presents phase work without blending completed phases or hiding failed items", () => {
+    const blocks = liveProgressBlocks(RUN_ID, {
+      ...progress,
+      workProgress: {
+        current: {
+          phase: "labels",
+          label: "Labelling",
+          unit: "suggestions",
+          processed: 40,
+          total: 100,
+          failures: 2,
+          sampledAt: "2026-09-20T16:01:00.000Z",
+          ratePerSecond: 2,
+          finished: false,
+          state: "paused",
+          etaSeconds: 30,
+          estimateState: "paused",
+        },
+        completed: [],
+      },
+    });
+    expect(blocks).toContainEqual(
+      expect.objectContaining({
+        kind: "progress",
+        label: "Labelling",
+        processed: 40,
+        total: 100,
+        summary: "40 / 100 suggestions · 2 failed",
+        detail: expect.stringContaining("paused"),
+      }),
+    );
+  });
+
+  it("does not estimate already completed zero-item work", () => {
+    const blocks = liveProgressBlocks(RUN_ID, {
+      ...progress,
+      status: "completed",
+      workProgress: {
+        current: {
+          phase: "empty",
+          label: "Checking",
+          unit: "items",
+          processed: 0,
+          total: 0,
+          failures: 0,
+          sampledAt: "2026-09-20T16:01:00.000Z",
+          ratePerSecond: null,
+          finished: true,
+          state: "completed",
+          etaSeconds: null,
+          estimateState: null,
+        },
+        completed: [],
+      },
+    });
+    expect(blocks).toContainEqual(
+      expect.objectContaining({
+        kind: "progress",
+        detail: "Completed · Phase complete",
+      }),
+    );
+  });
+
+  it("folds only consecutive successful Workflow starts while retaining diagnostics", () => {
+    const blocks = liveProgressBlocks(RUN_ID, {
+      ...progress,
+      progress: [
+        {
+          ...events([0])[0]!,
+          id: "start-1",
+          phase: "attempt_started",
+          detail: "Started Workflow instance RUN-4K7M-1",
+        },
+        {
+          ...events([0])[0]!,
+          id: "start-2",
+          phase: "attempt_started",
+          detail: "Started Workflow instance RUN-4K7M-2",
+        },
+        {
+          ...events([0])[0]!,
+          id: "error",
+          phase: "failed",
+          detail: "Synthetic upstream failure",
+        },
+        {
+          ...events([0])[0]!,
+          id: "start-3",
+          phase: "attempt_started",
+          detail: "Started Workflow instance RUN-4K7M-3",
+        },
+      ],
+    });
+    const rows = recordsOf(blocks).rows;
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toMatchObject({
+      title: "2 Workflow instances started",
+      detail: { text: expect.stringContaining("RUN-4K7M-1") },
+    });
+    expect(rows[1]).toMatchObject({
+      state: { kind: "failed" },
+      lines: [{ text: "Synthetic upstream failure" }],
+    });
+  });
 
   // A ledger clips quiet rows, so a failed phase must carry its state for its detail to wrap.
   it("marks a failed progress phase as a destructive state", () => {

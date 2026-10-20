@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { searchableEntities } from "./entity-manifest";
-import { imageId, locationId, parseEntityRef, recipeId } from "./identifiers";
+import {
+  imageId,
+  locationId,
+  parseEntityRef,
+  recipeId,
+  runEntityId,
+} from "./identifiers";
 import { imageProcessingResult } from "./image-processing";
 import { derivedRefreshWakeupTask } from "./derived-refresh";
 
@@ -16,6 +22,7 @@ import { derivedRefreshWakeupTask } from "./derived-refresh";
  */
 export const backgroundTaskKinds = [
   "derived-refresh.wakeup",
+  "workflow.continue",
   "recipe-totals.recompute",
   "entity-embedding.refresh",
   "location-ai.description.refresh",
@@ -122,6 +129,14 @@ export const maintenanceRecoverTaskSchema = z.object({
   coordinatorRetireBefore: z.iso.datetime().optional(),
 });
 
+/** A fresh queue invocation creates the successor; the Run attempt fences replay. */
+export const workflowContinuationTaskSchema = z.object({
+  kind: z.literal("workflow.continue"),
+  ...taskEnvelopeFields,
+  runId: runEntityId,
+  attempt: z.number().int().positive(),
+});
+
 export const maintenancePurchaseDiscoveryTaskSchema = z.object({
   kind: z.literal("maintenance.purchase-discovery"),
   ...taskEnvelopeFields,
@@ -162,6 +177,7 @@ export const statementSuggestionsLabelTaskSchema = z.object({
 
 export const backgroundTaskSchema = z.discriminatedUnion("kind", [
   derivedRefreshWakeupTask,
+  workflowContinuationTaskSchema,
   recipeTotalsRecomputeTaskSchema,
   entityEmbeddingRefreshTaskSchema,
   locationAiDescriptionRefreshTaskSchema,

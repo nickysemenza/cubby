@@ -25,6 +25,8 @@ import {
   statementTransactionAction,
   type StatementTransactionJudgment,
   STATEMENT_LABEL_REVISION,
+  statementLabelCheckpoint,
+  type StatementLabelCheckpoint,
 } from "@cubby/schemas/statement-suggestion";
 import { cents } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -51,7 +53,10 @@ import {
   suggestionRefKey,
 } from "~/server/domains/statement-import/repo/statement-charge";
 import { statementImportMembers } from "~/server/domains/statement-import/repo/statement-import-membership";
-import { statementLabelInputs } from "~/server/domains/statement-import/repo/statement-label-input";
+import {
+  statementLabelInputs,
+  statementLabelSubject,
+} from "~/server/domains/statement-import/repo/statement-label-input";
 import {
   decideStatementKind,
   kindAgreed,
@@ -1190,10 +1195,11 @@ export async function publishChargeProposal(
       judgment: unknown;
       producer: unknown;
       needsLabel: string | null;
+      checkpoint: unknown;
     }>(sql`
       SELECT s.id, s.status, s.fingerprint, ${suggestionField("evidenceFingerprint")} AS "evidenceFingerprint",
         s.suppression, s.active, a.judgment, a.producer,
-        ${suggestionField("needsLabel")} AS "needsLabel"
+        ${suggestionField("needsLabel")} AS "needsLabel", s.data->'labelCheckpoint' AS checkpoint
       FROM "AssessmentState" s JOIN "Assessment" a ON a.id = s.id
       WHERE s.family = ${assessmentFamily.enum.statement_transaction}
         AND ${suggestionField("source")} = ${charge.source}
@@ -1204,6 +1210,7 @@ export async function publishChargeProposal(
     const prior = stored.map((row) => ({
       ...row,
       producer: assessmentProducer.nullable().parse(row.producer),
+      checkpoint: statementLabelCheckpoint.nullable().parse(row.checkpoint),
     }));
     if (prior.some((row) => row.suppression !== null)) return "suppressed";
     // A charge matched, ignored or superseded after it was listed (an accept or
@@ -1295,6 +1302,17 @@ export async function publishChargeProposal(
         )})
       `);
     const { judgment } = proposal;
+    const checkpoint =
+      producer.kind === "rule"
+        ? prior
+            .flatMap((row) => (row.checkpoint ? [row.checkpoint] : []))
+            .find(
+              (saved) =>
+                saved.revision === STATEMENT_LABEL_REVISION &&
+                canonicalJson(statementLabelSubject(saved.judgment)) ===
+                  canonicalJson(statementLabelSubject(judgment)),
+            )
+        : undefined;
     const published = await publishAssessment(
       tx,
       {
@@ -1331,6 +1349,7 @@ export async function publishChargeProposal(
           // Rule output awaits the decision model's labels: candidate
           // identity, and the kind and counterparty of every create.
           needsLabel: producer.kind === "rule" && judgment.create !== null,
+          ...(checkpoint && { labelCheckpoint: checkpoint }),
           ...(await automaticRuleStamp(
             "statement_transaction",
             matchStatementRules(judgment),
@@ -1437,7 +1456,34 @@ export async function generateStatementSuggestionPage(
 }
 
 /** A label pass's position in `(createdAt, id)` order. */
-export type LabelCursor = { createdAt: string; id: string };
+export type LabelCursor = {
+  createdAt: string;
+  id: string;
+  inclusive?: boolean;
+};
+
+/** A partial judgment is unpublished work, not a new advisory assessment. */
+export async function recordStatementLabelCheckpoint(
+  db: Database,
+  input: {
+    charge: ChargeRef;
+    evidenceFingerprint: string;
+    checkpoint: StatementLabelCheckpoint;
+  },
+) {
+  const checkpoint = statementLabelCheckpoint.parse(input.checkpoint);
+  const { rows } = await unwrapDb(db).execute<{ id: string }>(sql`
+    UPDATE "AssessmentState" s
+    SET data = jsonb_set(coalesce(s.data, '{}'::jsonb), '{labelCheckpoint}', ${JSON.stringify(checkpoint)}::jsonb),
+      "updatedAt" = now()
+    WHERE ${pendingSuggestion()}
+      AND ${suggestionField("source")} = ${input.charge.source}
+      AND ${suggestionField("chargeKey")} = ${input.charge.chargeKey}
+      AND ${suggestionField("evidenceFingerprint")} = ${input.evidenceFingerprint}
+    RETURNING s.id
+  `);
+  return rows.length > 0;
+}
 
 /**
  * Pending rule suggestions awaiting decision-model labels after the cursor.
@@ -1455,17 +1501,22 @@ export async function suggestionsNeedingLabels(
     createdAt: string;
     subject: unknown;
     evidenceFingerprint: string;
+    checkpoint: unknown;
   }>(sql`
     SELECT s.id, to_char(s."createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt",
-      a.subject, ${suggestionField("evidenceFingerprint")} AS "evidenceFingerprint"
+      a.subject, ${suggestionField("evidenceFingerprint")} AS "evidenceFingerprint",
+      s.data->'labelCheckpoint' AS checkpoint
     FROM "AssessmentState" s JOIN "Assessment" a ON a.id = s.id
     WHERE ${pendingSuggestion()} AND (${suggestionField("needsLabel")})::boolean
       ${importScope(importId)}
-      ${after ? sql`AND (s."createdAt", s.id) > (${after.createdAt}::timestamp, ${after.id}::uuid)` : sql``}
+      ${after ? sql`AND (s."createdAt", s.id) ${after.inclusive ? sql`>=` : sql`>`} (${after.createdAt}::timestamp, ${after.id}::uuid)` : sql``}
     ORDER BY s."createdAt", s.id
     LIMIT ${limit}
   `);
-  return rows;
+  return rows.map((row) => ({
+    ...row,
+    checkpoint: statementLabelCheckpoint.nullable().parse(row.checkpoint),
+  }));
 }
 
 /**

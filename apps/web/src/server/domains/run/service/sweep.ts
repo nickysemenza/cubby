@@ -258,13 +258,19 @@ const statementCursor = z.union([
   }),
   z.object({
     phase: z.literal("label"),
-    after: z.object({ createdAt: z.string(), id: z.string() }).nullable(),
+    after: z
+      .object({
+        createdAt: z.string(),
+        id: z.string(),
+        inclusive: z.boolean().optional(),
+      })
+      .nullable(),
   }),
   z.object({ phase: z.literal("finished") }),
 ]);
 
 async function statementPage(
-  { db, run, step }: PageContext,
+  { db, run, step, retrying }: PageContext,
   scope: Extract<
     SweepFamilyScope,
     { family: "statement_transaction" }
@@ -288,8 +294,25 @@ async function statementPage(
       runId: run.id,
       scope,
     });
+    const previous = step.meta?.work?.current;
     return {
       kind: "progress",
+      execution: { phase: "statement_generate", pagesPerInstance: 100 },
+      work: {
+        phase: "statement_generate",
+        label: "Generating suggestions",
+        unit: "charges",
+        processed:
+          (previous?.phase === "statement_generate" ? previous.processed : 0) +
+          page.published +
+          page.unchanged +
+          page.outOfScope,
+        total:
+          found ??
+          (previous?.phase === "statement_generate" ? previous.total : null),
+        failures: 0,
+        finished: page.next === null,
+      },
       ...(found !== undefined && { found }),
       delta: {
         done: page.published + page.unchanged,
@@ -311,6 +334,7 @@ async function statementPage(
   try {
     outcome = await labelStatementSuggestions(db, {
       runId: run.id,
+      cooperative: true,
       after: cursor.after,
       importId: scope.importId ?? null,
     });
@@ -323,23 +347,63 @@ async function statementPage(
       };
     throw error;
   }
-  return {
-    kind: "progress",
-    ...(cursor.after === null &&
-      outcome.active && { found: step.found + labelsAhead }),
+  const previous = step.meta?.work?.current;
+  const samePhase = previous?.phase === "statement_label";
+  const checkpoint = {
+    work: {
+      phase: "statement_label",
+      label: "Labelling suggestions",
+      unit: "suggestions",
+      processed:
+        (samePhase
+          ? Math.max(0, previous.processed - (retrying ? previous.failures : 0))
+          : 0) +
+        outcome.labelled +
+        outcome.stale +
+        outcome.failed.length,
+      total: samePhase ? previous.total : outcome.active ? labelsAhead : null,
+      failures:
+        (samePhase && !retrying ? previous.failures : 0) +
+        outcome.failed.length,
+      finished: outcome.next === null && !outcome.paused,
+    },
     delta: {
       done: outcome.labelled,
       skipped: outcome.stale,
       failed: outcome.failed.length,
     },
     errors: outcome.failed,
-    ...(!outcome.active && {
-      meta: { detail: { labels: "off: automatic AI work is disabled" } },
-    }),
     cursor: outcome.next
       ? { phase: "label", after: outcome.next }
       : { phase: "finished" },
+  };
+  if (outcome.paused)
+    return {
+      ...checkpoint,
+      kind: "paused",
+      reason: outcome.paused.reason,
+      until: new Date(outcome.paused.until),
+      delta: {
+        ...checkpoint.delta,
+        ...(cursor.after === null && { found: labelsAhead }),
+      },
+    };
+  return {
+    ...checkpoint,
+    kind: "progress",
     done: outcome.next === null,
+    execution: { phase: "statement_label", pagesPerInstance: 10 },
+    ...(outcome.waitingUntil !== null && {
+      waitSeconds: Math.max(
+        1,
+        Math.ceil((outcome.waitingUntil - Date.now()) / 1_000),
+      ),
+    }),
+    ...(cursor.after === null &&
+      outcome.active && { found: step.found + labelsAhead }),
+    ...(!outcome.active && {
+      meta: { detail: { labels: "off: automatic AI work is disabled" } },
+    }),
   };
 }
 

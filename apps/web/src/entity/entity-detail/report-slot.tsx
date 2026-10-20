@@ -31,6 +31,7 @@ import { buttonVariants } from "~/ui/primitives/button";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 import { Eyebrow } from "~/ui/primitives/eyebrow";
+import { Progress } from "~/ui/primitives/progress";
 import { Skeleton } from "~/ui/primitives/skeleton";
 import {
   TableBody,
@@ -223,7 +224,7 @@ const blockKey = (block: ReportBlock, index: number) =>
   block.kind === "records" && block.form
     ? // A form keeps its answers while other batches appear or the block's title changes.
       `form:${block.form.command.id}`
-    : `${index}:${block.kind}:${block.kind === "note" ? block.text : block.kind === "schedule" ? "" : (block.title ?? "")}`;
+    : `${index}:${block.kind}:${block.kind === "note" ? block.text : block.kind === "progress" ? block.label : block.kind === "schedule" ? "" : (block.title ?? "")}`;
 
 /**
  * Draws the generic report blocks a detail slot's server read returns. A slot
@@ -251,6 +252,27 @@ export function ReportBlocks({
       {blocks.map((block, index) => {
         const key = blockKey(block, index);
         switch (block.kind) {
+          case "progress":
+            return (
+              <section
+                key={key}
+                aria-label={block.label}
+                className="space-y-2 py-1"
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
+                  <span className="font-medium">{block.label}</span>
+                  <span className="text-xs tabular-nums">{block.summary}</span>
+                </div>
+                <Progress
+                  value={block.processed}
+                  max={block.total ?? undefined}
+                  indeterminate={block.total === null}
+                  aria-label={block.label}
+                  aria-valuetext={block.summary}
+                />
+                <Description size="xs">{block.detail}</Description>
+              </section>
+            );
           case "stats":
             return <Stats key={key} block={block} />;
           case "chart":

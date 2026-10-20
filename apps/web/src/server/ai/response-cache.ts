@@ -11,6 +11,7 @@ import type { UnparsedError } from "~/lib/error-utils";
 import type { AiChatRequest } from "~/server/ai/run-feature";
 import { afterResponse, getAiResponseCacheNamespace } from "~/server/cf-env";
 
+import { deferCooperativeAiWork } from "./cooperative-work";
 import {
   AI_RESPONSE_CACHE_BATCH_SIZE,
   type CacheClaim,
@@ -345,6 +346,8 @@ export async function withAiResponseCache<T>(args: {
     }
     if (claim.kind === "busy") {
       args.onWait?.();
+      // A durable page should wait for the holder, not burn pages on subsecond polls.
+      deferCooperativeAiWork(Date.now() + 15_000);
       force = false;
       await sleep(250);
       continue;

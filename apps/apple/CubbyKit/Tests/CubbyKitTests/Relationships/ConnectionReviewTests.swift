@@ -398,7 +398,13 @@ private actor ConnectionClient: EntityRelationshipsClient {
             runId: runID, purpose: .aiRefresh, status: status, startedAt: .distantPast,
             endedAt: status == .running ? nil : .distantPast,
             coordinatorModel: nil, agentModelMs: 0, ordersSeen: 0, imported: 0, updated: 0,
-            skipped: 0, findings: [], targetsTotal: 0, targetsCompleted: 0, targets: [], progress: [],
+            skipped: 0, findings: [], targetsTotal: 0, targetsCompleted: 0,
+            workProgress: .init(
+                current: .init(
+                    phase: "evaluate", label: "Evaluating", unit: "items",
+                    processed: 0, total: nil, failures: 0, sampledAt: .distantPast,
+                    ratePerSecond: nil, finished: false, state: .running, etaSeconds: nil,
+                    estimateState: nil), completed: []), targets: [], progress: [],
             operations: status == .failed
                 ? [
                     .init(
