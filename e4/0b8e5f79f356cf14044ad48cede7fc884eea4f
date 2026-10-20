@@ -1,0 +1,21 @@
+apps/web/src/contracts/ai.contract.ts
+  s_359d51740d6cee::t_20daaeed16f180 42,256
+tools/oxlint/cubby/no-raw-enum-literal-in-sql-baseline.json
+  s_359d51740d6cee::t_32b0a7d8016f7d 23,35-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e40b8e5f79f356cf14044ad48cede7fc884eea4f",
+  "prompts": {},
+  "sessions": {
+    "s_359d51740d6cee": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15a5b-cd3e-7de2-9758-1362bd955be4",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
