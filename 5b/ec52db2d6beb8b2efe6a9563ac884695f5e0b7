@@ -1,0 +1,21 @@
+apps/web/src/entity/entity-detail/spend-chart.tsx
+  s_9b829d577c7e4c::t_973f6f6579a47c 36,38
+apps/web/src/ui/data-table/indexed-sections.tsx
+  s_9b829d577c7e4c::t_c28255c228e9b2 168-172,568
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5bec52db2d6beb8b2efe6a9563ac884695f5e0b7",
+  "prompts": {},
+  "sessions": {
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
