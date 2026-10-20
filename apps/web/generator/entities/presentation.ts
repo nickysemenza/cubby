@@ -1,4 +1,4 @@
-import { relationshipProvenanceSchema } from "../../../../packages/schemas/src/entity-integrity.ts";
+import { relationshipProvenanceSchema } from "./list-fields.ts";
 import { connectedViews } from "../../../../packages/schemas/src/connected-view-definitions.ts";
 import { listViewId } from "../../../../packages/schemas/src/entity-definitions/definition.ts";
 import type {
