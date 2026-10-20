@@ -1,49 +1,7 @@
-import {
-  expect,
-  type Locator,
-  type Page,
-  type Response,
-} from "@playwright/test";
+import type { Page, Response } from "@playwright/test";
 
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import { dispatchesOperation } from "./dispatch-wire";
-
-async function nextAnimationFrame(locator: Locator) {
-  await locator.evaluate(
-    () =>
-      new Promise<void>((resolve) => {
-        let settled = false;
-        const finish = () => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(fallback);
-          resolve();
-        };
-        // Use a frame for keyboard input cadence, with a bounded fallback if
-        // the document stops producing frames.
-        const fallback = setTimeout(finish, 50);
-        requestAnimationFrame(finish);
-      }),
-  );
-}
-
-/** Activate dnd-kit from the focused grip, navigate, and commit. */
-export async function dragByKeyboard(
-  source: Locator,
-  moves: readonly ("ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight")[],
-) {
-  await source.focus();
-  await expect(source).toBeFocused();
-  await source.press("Space");
-  // KeyboardSensor attaches its document key listener in a zero-delay task.
-  // One frame models human input cadence without a fixed sleep.
-  await nextAnimationFrame(source);
-  for (const move of moves) {
-    await source.press(move);
-    await nextAnimationFrame(source);
-  }
-  await source.press("Space");
-}
 
 const operationHeader = (response: Response, suffix = "") =>
   response.request().headers()[`x-cubby-operation${suffix}`];

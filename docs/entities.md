@@ -31,6 +31,8 @@ allow moves between groups but do not offer manual ordering. Task trade grouping
 the required effective trade; clearing an inherited source must still leave a resolvable
 trade. No-value groups without a declared no-value filter remain readable but cannot be placement destinations or manually reordered. No-project placement uses the canonical reference-presence filter. Clearable grouping choices retain their no-value destination even when its count is zero.
 
+Web boards use pointer/touch dragging; keyboard users use the Earlier/Later buttons and Move picker. Drag grips are excluded from keyboard focus and the accessibility tree.
+
 ## Generic by default
 
 Cubby's entities share one declaration spine, and every client — web, iOS and
