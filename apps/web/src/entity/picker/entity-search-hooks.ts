@@ -83,15 +83,7 @@ export interface UseEntitySearchConfig<TId extends string, TRow, TDetail> {
    * dialog in the picker at all).
    */
   createNew: "dialog" | "none";
-  /** Required when `createNew` isn't "none": parses the dialog's raw save
-   * result into the shape `buildDetail` expects. */
-  parseCreatedResult?: CreatedResultParser<TDetail>;
 }
-
-/** A boundary parser for a create dialog's raw save result. */
-export type CreatedResultParser<TDetail> = (
-  result: unknown,
-) => TDetail | undefined;
 
 /**
  * Defer an entity-list options query until the picker is first opened (or the

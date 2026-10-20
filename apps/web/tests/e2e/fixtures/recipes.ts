@@ -176,12 +176,12 @@ export async function seedNutritionPrerequisite(
   const context = createTestRequestContext(db, {
     auth: { userId: await fixtureUserId(page) },
   });
-  await context.services.recipeCosting.recompute([row.id]);
   const meal = await createEntityFixture(page, "meal", {
     date: "2026-09-09",
     name: `${name} meal`,
     recipes: [{ recipeId: recipe.id, scale: 1 }],
   });
+  await context.services.recipeCosting.recompute([row.id]);
   return { recipe, measured, incomplete, meal };
 }
 

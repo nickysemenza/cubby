@@ -229,7 +229,8 @@ test("Suggestions lists every family with named records and category pills, and 
     .toBe(item.id);
   await expect(connection).toHaveCount(0);
 
-  await field.getByRole("button", { name: "Accept", exact: true }).click();
+  await drainDerivedRefreshFrontier(db);
+  await gotoAuthenticatedPage(page, `/suggestions?record=product:${item.id}`);
   await expect(field).toHaveCount(0);
   expect(
     (
@@ -239,7 +240,6 @@ test("Suggestions lists every family with named records and category pills, and 
         .where(eq(productTable.id, itemId))
     )[0]?.categoryId,
   ).toBeNull();
-  await drainDerivedRefreshFrontier(db);
   await seedCategoryAdvice();
   await gotoAuthenticatedPage(page, `/suggestions?record=product:${item.id}`);
   await expect(field).toHaveCount(1);

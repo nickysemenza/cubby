@@ -49,6 +49,7 @@ describe("derived refresh publication ownership", () => {
       withTransactionDatabase(
         ctx.db,
         async (tx) => {
+          // Establish the foreground snapshot before the other connection fences it.
           const revision = await currentInputRevision(tx);
           await withTransactionDatabase(ctx.db, (background) =>
             assertInputRevision(background, revision),

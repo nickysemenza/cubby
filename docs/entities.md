@@ -1261,6 +1261,10 @@ Repositories own database access, transactions, invariants, and the exact
 mutation order. Workflow services own operations that are not entity CRUD, such
 as expense splitting, reconciliation, cookbook import, and product enrichment.
 Extensions delegate to those services instead of branching inside the kernel.
+Delete-effect accounting keeps its repeatable-read snapshot. A background cache
+write may replace a tuple after that snapshot; the owning delete boundary makes
+bounded fresh-transaction retries on serialization failure. A caller-owned
+transaction or a committed delete's consumer failure propagates without replay.
 
 Summary `entity.commands` writes request reference-only mutation projections,
 without hydrating unreturned detail or coverage. Trusted operation receipts keep

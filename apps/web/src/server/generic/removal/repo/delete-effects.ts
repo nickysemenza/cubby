@@ -9,8 +9,14 @@ import {
   INCOMING_EDGES,
   type IncomingEdge,
 } from "~/server/db/entity-incoming-edges";
-import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import {
+  getDb,
+  isTransaction,
+  runAfterCommit,
+  withTransactionDatabase,
+} from "~/server/db/helpers";
 import { countByTarget } from "~/server/entity-kernel/repo/impact";
+import { isSerializationFailure } from "~/server/errors/db-errors";
 import { resolveAllOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 /** Effects that leave a successful delete with no changed incoming rows. */
@@ -92,20 +98,42 @@ export async function executeDeleteWithEffects<
       ),
     );
 
-  // `withTransactionDatabase`, not a raw `.transaction()`: the delete's
-  // publications and R2 deletes must wait for the outermost commit.
-  return withTransactionDatabase(
-    db,
-    async (transactionDb) => {
-      const ids = await resolveAllOrThrow(transactionDb, entity, shortcodes);
-      const before = await snapshot(transactionDb, ids);
-      const result = await execute(transactionDb);
-      const after = await snapshot(transactionDb, ids);
-      return {
-        result,
-        affectedEdges: calculateAffectedDeleteEdges(policy, before, after),
-      };
-    },
-    { isolationLevel: "repeatable read" },
-  );
+  for (let attempt = 0; ; attempt++) {
+    let committed = false;
+    try {
+      return await withTransactionDatabase(
+        db,
+        async (transactionDb) => {
+          // First after-commit effect: a consumer failure must never replay
+          // the deletion, even if it wraps a Postgres serialization failure.
+          await runAfterCommit(transactionDb, async () => {
+            committed = true;
+          });
+          const ids = await resolveAllOrThrow(
+            transactionDb,
+            entity,
+            shortcodes,
+          );
+          const before = await snapshot(transactionDb, ids);
+          const result = await execute(transactionDb);
+          const after = await snapshot(transactionDb, ids);
+          return {
+            result,
+            affectedEdges: calculateAffectedDeleteEdges(policy, before, after),
+          };
+        },
+        { isolationLevel: "repeatable read" },
+      );
+    } catch (error) {
+      // Background cache publication can replace a source tuple after the
+      // accounting snapshot. Only an owned, aborted boundary gets a fresh one.
+      if (
+        committed ||
+        isTransaction(getDb(db)) ||
+        attempt >= 2 ||
+        !isSerializationFailure(error)
+      )
+        throw error;
+    }
+  }
 }

@@ -34,10 +34,29 @@ export async function settleDerivedRefreshForDiscovery(
   throw new Error("Synthetic discovery publication exceeded its page budget");
 }
 
-/** Run the real provider-free frontier when a test needs settled projections. */
+const frontierDrains = new WeakMap<Database, Promise<void>>();
+
+/** Explicit fixture settlement waits for the offline pump on the same handle. */
 export async function drainDerivedRefreshFrontier(
   db: Database,
   maxPages = 10_000,
+): Promise<void> {
+  const previous = frontierDrains.get(db) ?? Promise.resolve();
+  const draining = previous.then(() =>
+    advanceDerivedRefreshFrontier(db, maxPages),
+  );
+  frontierDrains.set(db, draining);
+  try {
+    await draining;
+  } finally {
+    if (frontierDrains.get(db) === draining) frontierDrains.delete(db);
+  }
+}
+
+/** Run the real provider-free frontier when a test needs settled projections. */
+async function advanceDerivedRefreshFrontier(
+  db: Database,
+  maxPages: number,
 ): Promise<void> {
   const { processDerivedRefreshPage } =
     await import("~/server/generic/derived-refresh/repo/process");

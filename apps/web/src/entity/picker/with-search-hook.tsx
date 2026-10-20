@@ -4,13 +4,10 @@ import type {
   ProductShortcode,
   ShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import { infLocation } from "@cubby/schemas/location";
-import { productTopLevelOut } from "@cubby/schemas/product";
 import { useQuery } from "@tanstack/react-query";
 import type { ComponentProps } from "react";
 import type { ReactNode } from "react";
 import { Suspense } from "react";
-import type { z } from "zod";
 
 import { captureRequest } from "~/entity/editing/editor-requests";
 import type { EntityEditDialog as EntityEditDialogComponent } from "~/entity/editing/entity-edit-dialog";
@@ -38,7 +35,6 @@ import {
   resolveBlankFilterKey,
   useEntitySearchRows,
   type EntitySearchScope,
-  type CreatedResultParser,
   type PickerSearchEntity,
   type UseEntitySearchConfig,
 } from "./entity-search-hooks";
@@ -92,10 +88,6 @@ export type EntitySearchEntity = Exclude<PickerSearchEntity, "vendor">;
 
 const detailPlaceholder = (entity: PickerSearchEntity) =>
   `${entityManifest[entity].shortcodePrefix}2222`;
-
-function parseCreated<T>(schema: z.ZodType<T>): CreatedResultParser<T> {
-  return (result: unknown) => schema.safeParse(result).data;
-}
 
 // --- create-from-picker resolution (hook-shaped: `useEntitySearchRows`
 // calls it unconditionally through the config). ---
@@ -182,7 +174,6 @@ function manifestConfig<E extends ManifestPickerEntity>(
       buildSearchHitComboboxItem(hit, entity as never) as never,
     useOnCreateNew: create === "dialog" ? useDialogCreateNew : useNoCreateNew,
     createNew: create,
-    parseCreatedResult: parseCreated(pickerRecord),
   };
 }
 
@@ -235,7 +226,6 @@ const locationConfig: UseEntitySearchConfig<
   buildSearchHit: (hit) => buildSearchHitComboboxItem(hit, "location"),
   useOnCreateNew: useDialogCreateNew,
   createNew: "dialog",
-  parseCreatedResult: parseCreated(infLocation),
 };
 
 function productConfig(
@@ -257,7 +247,6 @@ function productConfig(
     buildSearchHit: (hit) => buildSearchHitComboboxItem(hit, "product"),
     useOnCreateNew: useProductCreateNew,
     createNew: "dialog",
-    parseCreatedResult: parseCreated(productTopLevelOut),
   };
 }
 
@@ -346,9 +335,9 @@ export function useEntityListSource<E extends EntitySearchEntity>(
             name: pendingName,
           })}
           onSuccess={(result) => {
-            const parsed = config.parseCreatedResult?.(result);
-            if (parsed !== undefined)
-              resolveWithEntity(config.buildDetail(parsed));
+            // Save receipts contain the normalized identity/title, not the
+            // detail graph. Resolve before the dialog closes its pending choice.
+            resolveWithEntity(buildRecordComboboxItem(entity, result));
           }}
         />
       </Suspense>

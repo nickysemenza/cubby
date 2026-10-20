@@ -255,7 +255,10 @@ native PostgreSQL installation remain owned by their existing runners.
   afterwards. A common migration-keyed base template feeds each checkout's
   namespaced test pools and the shared dev-corpus template.
   Offline browser journeys run the real provider-free derived frontier in
-  their Node harness; queue peers still drop provider work. The corpus settles
+  their Node harness; queue peers still drop provider work. Fixture creators
+  settle SQL projections before returning, serialized with that pump; fixtures
+  that require populated Recipe totals compute them after their input writes
+  settle. The corpus settles
   its initial SQL projections before becoming a cloneable template.
   All template layers use IntegreSQL's initializer election without a template
   lock. Recovery supports one Mac or one CI runner: all clients must share the
