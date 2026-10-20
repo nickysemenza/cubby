@@ -9,8 +9,8 @@ import { describe, expect, it } from "vitest";
 import { getDb } from "~/server/db/helpers";
 import { entityLink, financialTransactionAllocation } from "~/server/db/schema";
 import { deletePurchases } from "~/server/domains/purchase/repo/purchase";
-import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { canonicalJson } from "~/server/lib/canonical-json";
 
 import {
   captureConnectionBasis,

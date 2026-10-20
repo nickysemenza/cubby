@@ -54,10 +54,10 @@ import { statementImportMembers } from "~/server/domains/statement-import/repo/s
 import { updateStatementRows } from "~/server/domains/statement-import/repo/statement-row";
 import { statementTransactionKind } from "~/server/domains/statement-import/repo/statement-transaction-kind";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
-import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
 import { createAppError } from "~/server/errors/app-error";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
+import { canonicalJson } from "~/server/lib/canonical-json";
 
 /** Rule revision stamped on every published pair; bump with any policy change. */
 const TRANSFER_PAIR_REVISION = "2026-10-19.1";

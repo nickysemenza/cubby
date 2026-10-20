@@ -1,4 +1,3 @@
-import { entityRecordSourceInputs } from "@cubby/schemas/entity-source";
 import type { McpToolCallTelemetry } from "@cubby/schemas/telemetry";
 import { McpServer } from "@modelcontextprotocol/server";
 import { describe, expect, it, vi } from "vitest";
@@ -64,7 +63,25 @@ function createBatchServer(): McpServer {
 }
 
 describe("MCP batch actions", () => {
-  it("emits command entity attribution when a Source has a parsed date", async () => {
+  // A cached pre-cutover caller must fail, rather than save fields while silently discarding research.
+  it("refuses retired citation input before executing a mutation", async () => {
+    const result = await callMcpTool(createMcpServer(), "entity", {
+      action: "commands",
+      commands: [
+        {
+          action: "update",
+          entity: "product",
+          id: "PRD-4K7M",
+          data: { notes: "Synthetic notes" },
+          sources: [{ quote: "Synthetic research" }],
+        },
+      ],
+    });
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result)).toContain("sources");
+  });
+
+  it("emits command entity attribution for an ordinary write", async () => {
     const emit = vi.fn(async (_event: McpToolCallTelemetry) => undefined);
     // Attribution precedes context resolution; no database is supplied, so
     // this checks the production telemetry boundary without executing a write.
@@ -79,9 +96,6 @@ describe("MCP batch actions", () => {
             entity: "product",
             id: "PRD-4K7M",
             data: { manufacturer: "Example Maker" },
-            sources: [
-              { quote: "Exact item", observedAt: "2026-07-20T12:00:00.000Z" },
-            ],
           },
         ],
       },
@@ -102,11 +116,11 @@ describe("MCP batch actions", () => {
     );
   });
 
-  it("attributes a batch with parsed Source dates before invoking its members", async () => {
+  it("attributes a batch with parsed dates before invoking its members", async () => {
     const server = new McpServer({ name: "batch-test", version: "1.0.0" });
     const input = z.object({
       entityId: z.string(),
-      sources: entityRecordSourceInputs,
+      observedAt: z.coerce.date(),
     });
     const run = vi.fn(
       async (_context: unknown, item: z.output<typeof input>) => ({
@@ -131,16 +145,14 @@ describe("MCP batch actions", () => {
       items: [
         {
           entityId: "PRD-4K7M",
-          sources: [
-            { quote: "Exact item", observedAt: "2026-07-20T12:00:00.000Z" },
-          ],
+          observedAt: "2026-07-20T12:00:00.000Z",
         },
       ],
     });
 
     expect(response.isError).not.toBe(true);
     expect(run).toHaveBeenCalledOnce();
-    expect(run.mock.calls[0]?.[1].sources[0]?.observedAt).toBeInstanceOf(Date);
+    expect(run.mock.calls[0]?.[1].observedAt).toBeInstanceOf(Date);
     expect(batchResultSchema.parse(response.structuredContent).summary).toEqual(
       { requested: 1, succeeded: 1, failed: 0 },
     );

@@ -352,7 +352,6 @@ export function createEntityCrud<
 export type MutationReceipt<E extends ShortcodeEntity> = {
   entityId: EntityId<E>;
   shortcode?: string;
-  sourceSnapshot?: z.infer<ReturnType<typeof z.json>>;
   detachedImageKeys?: string[];
   warnings?: readonly string[];
 };

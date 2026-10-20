@@ -7,10 +7,10 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { assessment } from "~/server/db/schema";
-import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { assessmentCandidateKey } from "~/server/generic/assessment/repo/assessment-state";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { canonicalJson } from "~/server/lib/canonical-json";
 
 /** Preferences preserve the exact declared candidate key, independently of grades. */
 export async function assessRecommendation(

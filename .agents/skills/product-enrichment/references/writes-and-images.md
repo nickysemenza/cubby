@@ -27,12 +27,11 @@ then follow [product identity](product-identity.md): merge a source-proven
 obvious duplicate when its evidence and impact checks pass; propose ambiguous
 pairs with `product_enrichment.propose_match` for human review.
 
-Record why: every fact you write carries a Source (`fieldPath`, `url`, the
-relevant `quote`, `observedAt`, `selectedVariant`), and an attached catalog image
-carries a record-level Source for its page. Pass `sources` at the top level of
-the `entity.create` or `entity.update` mutation, alongside `data`; entity fields
-belong in `data`. Verify the persisted Sources through readback before reporting
-the fact as evidence-backed. Establish the purchased item →
+Record why in ordinary `notes`: preserve existing text and add useful URLs or
+Cubby record shortcodes, relevant excerpts, observation dates and variant context.
+Include `notes` inside the mutation's `data`; there is no separate citation input
+on entity writes or image attachments. Read the saved notes back before reporting
+the research as retained. Establish the purchased item →
 selected variant → representative asset connection; a group-level image alone
 does not prove the ordered variant. Cubby rechecks identifier ownership, gallery
 count and image integrity; inspect per-item refusals and propose a match when an

@@ -685,7 +685,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
           action === "update"
             ? ",id:shortcodeSchema(" + JSON.stringify(entity.key) + ")"
             : "";
-        return `z.object({action:z.literal(${JSON.stringify(action)}),entity:z.literal(${JSON.stringify(entity.key)})${id},data:${schemaRef.export},sources:entitySourceInputs.optional()})`;
+        return `z.strictObject({action:z.literal(${JSON.stringify(action)}),entity:z.literal(${JSON.stringify(entity.key)})${id},data:${schemaRef.export}})`;
       })
       .join(",\n  ");
   const mutationResultVariants = (action: "create" | "update") =>
@@ -1641,7 +1641,6 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         'import { mutationSideEffectsSchema } from "@cubby/schemas/mutation-side-effects";\n' +
         'import { entityMutationItemFor, entityMutationAppliedFields } from "@cubby/schemas/entity-mutation";\n' +
         'import { withEntityDetailMedia, withEntityListMedia } from "@cubby/schemas/entity-read-media";\n' +
-        'import { entitySourceInputs } from "@cubby/schemas/entity-source";\n' +
         'import { listChildCountSchema, paginatedMetaSchema } from "@cubby/schemas/pagination";\n' +
         'import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";\n' +
         `${schemaImports}\n` +

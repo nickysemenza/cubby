@@ -14,7 +14,6 @@ import {
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
-import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
 import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import {
   type AuditSampler,
@@ -28,6 +27,7 @@ import {
   currentInputRevision,
   fenceDerivedInputsAtCommit,
 } from "~/server/generic/derived-refresh/repo/freshness";
+import { canonicalJson } from "~/server/lib/canonical-json";
 
 export type SuggestionValue =
   | string

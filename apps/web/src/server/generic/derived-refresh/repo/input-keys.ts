@@ -4,7 +4,6 @@ const refreshContextTables = [
   "EntityLink",
   "EntityAttachment",
   "EntityExternalId",
-  "EntitySource",
   "AiAnalysis",
   "FinancialTransactionAllocation",
   "ExpenseAttribution",

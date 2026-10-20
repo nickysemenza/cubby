@@ -36,14 +36,6 @@ public struct EntityRow: Identifiable, Sendable, Hashable {
         try raw.decoded(T.self)
     }
 
-    /// Where facts about this record were seen (the detail read's `sources`); a list row, or a
-    /// record with none, answers `[]`.
-    public var sources: [EntitySourceRead] {
-        guard let sources = raw["sources"], sources != .null else { return [] }
-        return
-            (try? sources.decoded([EntitySourceRead].self)) ?? []
-    }
-
     /// The entity's image ids in display order — the order `setImageOrder` rewrites. Read from a
     /// detail payload's `attachments`; a list row carries none and answers `[]`.
     public var imageIDs: [ImageCode] {

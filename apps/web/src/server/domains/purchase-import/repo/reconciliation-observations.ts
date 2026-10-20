@@ -30,12 +30,12 @@ import {
   readImportSourceClaimFamily,
   readSourceFamilyOrder,
 } from "~/server/domains/purchase-import/repo/source-claim-family";
-import { entityDetailJson } from "~/server/entity-kernel/repo/entity-source";
+import { jsonSnapshot } from "~/server/lib/canonical-json";
 
 /** JSONB changes object-key order; review hashes must describe values, not serialization order. */
 export function reconciliationFingerprint(value: unknown): Promise<string> {
   const objectSchema = z.record(z.string(), z.json());
-  const canonical = (input: z.infer<typeof entityDetailJson>): string => {
+  const canonical = (input: z.infer<typeof jsonSnapshot>): string => {
     if (Array.isArray(input)) return `[${input.map(canonical).join(",")}]`;
     const object = objectSchema.safeParse(input);
     if (!object.success) return JSON.stringify(input);
@@ -44,7 +44,7 @@ export function reconciliationFingerprint(value: unknown): Promise<string> {
       .map((key) => `${JSON.stringify(key)}:${canonical(object.data[key]!)}`)
       .join(",")}}`;
   };
-  return sha256Hex(canonical(entityDetailJson.parse(value)));
+  return sha256Hex(canonical(jsonSnapshot.parse(value)));
 }
 
 export async function recordSourceOrderObservation(

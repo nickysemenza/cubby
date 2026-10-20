@@ -1,6 +1,5 @@
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { entityMutationItem } from "@cubby/schemas/entity-mutation";
-import type { EntitySourceInput } from "@cubby/schemas/entity-source";
 import {
   ENTITY_LABEL,
   ENTITY_NOT_FOUND_REASON,
@@ -48,11 +47,6 @@ import {
   isShortcodeEntity,
   resolveEntityIdentity,
 } from "~/server/entity-kernel/repo/entity-identity";
-import {
-  assertEntitySourceFieldPaths,
-  entityDetailJson,
-  recordEntitySources,
-} from "~/server/entity-kernel/repo/entity-source";
 import {
   isMutationSideEffectRef,
   type MutationSideEffectEvent,
@@ -217,31 +211,6 @@ const runSideEffects = async <
   });
 };
 
-/**
- * Caller sources ride the write's transaction. A field-scoped source is
- * fingerprinted against the mutation's authoritative snapshot using the same
- * JSON normalization and field paths as a later detail read.
- */
-const recordWriteSources = async <
-  E extends EntityKernelEntity,
-  S extends EntityBindingSchemas,
->(
-  context: EntityKernelContext,
-  binding: EntityKernelCoreBinding<E, S>,
-  entityId: EntityInternalId<E>,
-  sources: readonly EntitySourceInput[],
-  snapshot: unknown,
-): Promise<void> => {
-  const detail = entityDetailJson.parse(snapshot);
-  await recordEntitySources(context.db, {
-    entityKind: binding.entity,
-    entityId,
-    sources,
-    recorder: context.actorContext,
-    detail,
-  });
-};
-
 type MutationReadDemand<Read extends boolean> = Read extends true
   ? { fields: readonly string[] }
   : { fields?: never };
@@ -270,7 +239,6 @@ const buildUpdateOperation = <
       {
         id: string;
         data: unknown;
-        sources?: EntitySourceInput[];
       } & MutationReadDemand<Read>
     >(`${binding.entity}.update`)
       .call("validated", async ({ context }, { input }) => {
@@ -285,7 +253,6 @@ const buildUpdateOperation = <
             "CONSTRAINT_VIOLATION",
             `${ENTITY_LABEL[binding.entity]} does not support update`,
           );
-        assertEntitySourceFieldPaths(binding.entity, input.sources);
         return {
           responseFields: fields,
           submittedFields: Object.keys(
@@ -296,7 +263,6 @@ const buildUpdateOperation = <
             id: Parameters<typeof run>[1],
             data: Parameters<typeof run>[2],
           ) => read(context, id, data, ["id"]),
-          sources: input.sources ?? [],
           id: parseSchema<S["id"], string>(binding.schemas.id, input.id),
           data: parseSchema(
             presentSchema<S["updateInput"]>(schema),
@@ -361,26 +327,8 @@ const buildUpdateOperation = <
               writeContext.db,
               binding.entity,
               updated.entityId,
-              [
-                ...validated.submittedFields,
-                ...validated.sources.flatMap((source) =>
-                  source.fieldPath ? [source.fieldPath] : [],
-                ),
-              ],
-              {
-                sourceFields: validated.sources.flatMap((source) =>
-                  source.fieldPath ? [source.fieldPath] : [],
-                ),
-              },
+              validated.submittedFields,
             );
-            if (validated.sources.length > 0)
-              await recordWriteSources(
-                writeContext,
-                binding,
-                updated.entityId,
-                validated.sources,
-                receipt.sourceSnapshot,
-              );
             // Older commands in the same batch may already name this root.
             // Only a new enrollment from this update replaces its fallback.
             const rootKey = `entity:${binding.entity}:${updated.entityId}`;
@@ -618,7 +566,6 @@ const buildEntityOperations = <
         EntityKernelContext,
         {
           data: unknown;
-          sources?: EntitySourceInput[];
         } & MutationReadDemand<Read>
       >(`${binding.entity}.create`)
         .call("validated", async (_, { input }) => {
@@ -633,7 +580,6 @@ const buildEntityOperations = <
               "CONSTRAINT_VIOLATION",
               `${ENTITY_LABEL[binding.entity]} does not support create`,
             );
-          assertEntitySourceFieldPaths(binding.entity, input.sources);
           return {
             responseFields: fields,
             submittedFields: Object.keys(
@@ -643,7 +589,6 @@ const buildEntityOperations = <
               context: EntityKernelContext,
               data: Parameters<typeof run>[1],
             ) => read(context, data, ["id"]),
-            sources: input.sources ?? [],
             data: parseSchema(
               presentSchema<S["createInput"]>(schema),
               normalizeRecordEmoji(binding.entity, input.data),
@@ -674,26 +619,8 @@ const buildEntityOperations = <
                 writeContext.db,
                 binding.entity,
                 created.entityId,
-                [
-                  ...validated.submittedFields,
-                  ...validated.sources.flatMap((source) =>
-                    source.fieldPath ? [source.fieldPath] : [],
-                  ),
-                ],
-                {
-                  sourceFields: validated.sources.flatMap((source) =>
-                    source.fieldPath ? [source.fieldPath] : [],
-                  ),
-                },
+                validated.submittedFields,
               );
-              if (validated.sources.length > 0)
-                await recordWriteSources(
-                  writeContext,
-                  binding,
-                  created.entityId,
-                  validated.sources,
-                  receipt.sourceSnapshot,
-                );
               return {
                 ...created,
                 output: {

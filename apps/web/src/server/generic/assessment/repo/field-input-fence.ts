@@ -8,10 +8,10 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { getProductClassificationEvidence } from "~/server/db/computed/product-classification-evidence";
 import { getDb } from "~/server/db/helpers";
-import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import { refreshInputKeys } from "~/server/generic/derived-refresh/repo/input-keys";
 import { readInputRevisions } from "~/server/generic/derived-refresh/repo/revisions";
+import { canonicalJson } from "~/server/lib/canonical-json";
 
 /** Exact authoritative target/basis snapshot also catches SQL-only writers. */
 export async function fieldInputFingerprint(

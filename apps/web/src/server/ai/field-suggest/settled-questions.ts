@@ -28,7 +28,7 @@ import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { aiAnalysis, feedback } from "~/server/db/schema";
-import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
+import { canonicalJson } from "~/server/lib/canonical-json";
 import { settleBatch } from "~/server/workflows/settle-batch";
 
 /**

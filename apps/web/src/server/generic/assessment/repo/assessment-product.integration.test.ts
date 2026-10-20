@@ -1,11 +1,9 @@
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { acceptedSourceOrder } from "@cubby/schemas/purchase-import";
 import { SHORTCODE_CHARS } from "@cubby/shared";
-import { sha256Hex } from "@cubby/shared/sha256";
 import { eq, inArray } from "drizzle-orm";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
 import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/policy/feature-identity";
@@ -29,16 +27,12 @@ import {
   assessment,
   assessmentState,
   entityExternalId,
-  entitySource,
   importSourceClaim,
   importSourceOrder,
   importSourceProduct,
   externalSource,
-  feedback,
   product,
-  inventoryEntry,
 } from "~/server/db/schema";
-import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import {
   prepareProductIdentityPairRequest,
   productIdentitySnapshot,
@@ -51,12 +45,7 @@ import {
   prepareProductPairPublication,
 } from "~/server/domains/product/repo/match/product-match-candidate";
 import { getProductMatchQueue } from "~/server/domains/product/repo/match/product-match-review";
-import { mergeProducts } from "~/server/domains/product/repo/merge";
 import { loadProductIdentifierClaims } from "~/server/domains/product/repo/product-identity-claims";
-import {
-  groundedVariantEvidence,
-  variantLiteral,
-} from "~/server/domains/product/repo/product-variant-evidence";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
   discoverAiRefresh,
@@ -67,77 +56,29 @@ import {
   productFixture,
   recordId,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
-import { executeEntity } from "~/server/entity-kernel";
-import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
 import { mergeReviewedProductPair } from "~/server/generic/assessment/repo/assessment-product";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { findDuplicateProductIdentities } from "~/server/generic/problems/repo/detectors-product";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { createMcpServer } from "~/server/mcp/server";
-import { reconcileDerivedRefreshInputs } from "~/server/testing/background-queue";
-import { callMcpTool } from "~/server/testing/mcp-test-utils";
-import {
-  createLocationFixture,
-  makeLocationInput,
-} from "~/server/testing/repo.fixtures";
 
-// The external model seam selects explicit fixture facts, never a runtime vocabulary classifier.
-const variantPort =
-  (
-    facts: Record<
-      string,
-      { color: string | null; size: string | null; pack: string | null }
-    >,
-  ): DecisionPort =>
-  async (request) => {
-    const subject = z
-      .object({
-        phase: z.string(),
-        dimension: z.enum(["color", "size", "pack"]),
-        name: z.string().optional(),
-        first: variantLiteral.optional(),
-        second: variantLiteral.optional(),
-      })
-      .safeParse(JSON.parse(request.state));
-    const entries = Object.entries(request.questions.selection.criteria);
-    let choice = "c0";
-    if (subject.success && subject.data.phase === "variant_literal") {
-      const wanted = facts[subject.data.name ?? ""]?.[subject.data.dimension];
-      choice =
-        entries.find(([, value]) => {
-          const span = variantLiteral.safeParse(
-            JSON.parse(value.startsWith("{") ? value : "null"),
-          );
-          return wanted && span.success && span.data.value === wanted;
-        })?.[0] ?? "none";
-    } else if (subject.success && subject.data.phase === "variant_relation") {
-      choice =
-        subject.data.first?.value === subject.data.second?.value ? "c0" : "c1";
-    }
-    return {
-      answers: {
-        selection: {
-          type: "choice",
-          choice,
-          confidence: 0.99,
-          probabilities: Object.fromEntries(
-            entries.map(([key]) => [
-              key,
-              key === choice ? 0.99 : 0.01 / Math.max(1, entries.length - 1),
-            ]),
-          ),
-        },
-      },
-    };
-  };
+const identityPort: DecisionPort = async () => ({
+  answers: {
+    selection: {
+      type: "choice",
+      choice: "c0",
+      confidence: 0.99,
+      probabilities: { c0: 0.99, c1: 0.003, c2: 0.003, c3: 0.004 },
+    },
+  },
+});
 
 // Failure modes: an unavailable model hides exact rule evidence; discovery
 // direction duplicates the same immutable pair; stale identity permits merge;
 // merging rewrites the original subject instead of retiring current actions;
 // a new scan resurfaces an unchanged pair after a member's wrong verdict.
-// Shared exact claims must not merge Source-confirmed conflicting variants;
+// Shared exact claims must not merge current model or historical conflicts;
 // an accepted raw style SKU is association evidence, not variant granularity.
-// Agent proposals must not erase verified conflicts; completed old policies
+// Agent proposals and equal models must not erase historical conflicts; old policies
 // must not authorize an unchanged-fingerprint merge after rule activation.
 async function publishProductIdentity(
   db: Parameters<typeof prepareProductPairPublication>[0],
@@ -252,13 +193,9 @@ describe("stored Product identity pairs", () => {
       expect(focused.items.map((pair) => pair.assessmentId)).toEqual([last.id]);
     },
   );
-  const boundVariantPair = async (
+  const acceptedIdentityPair = async (
     names: readonly [string, string],
     sku?: string,
-    facts?: readonly [
-      { color: string | null; size: string | null; pack: string | null },
-      { color: string | null; size: string | null; pack: string | null },
-    ],
   ) => {
     const products = await Promise.all(
       names.map((name) =>
@@ -350,57 +287,12 @@ describe("stored Product identity pairs", () => {
           productId: id,
         })),
       );
-    await getDb(ctx.db)
-      .insert(entitySource)
-      .values(
-        await Promise.all(
-          ids.flatMap((id, index) =>
-            ["name", "model", "manufacturer"].map(async (fieldPath) => ({
-              entityId: id,
-              entityKind: "product" as const,
-              fieldPath,
-              valueFingerprint: await sha256Hex(
-                canonicalJson(
-                  fieldPath === "name"
-                    ? names[index]!
-                    : fieldPath === "model"
-                      ? "SYNTH-STYLE"
-                      : "Synthetic apparel maker",
-                ),
-              ),
-              url: sku
-                ? "https://catalog.example.test/style/family"
-                : "https://www.amazon.com/dp/B000000001",
-              quote:
-                fieldPath === "name"
-                  ? names[index]!
-                  : fieldPath === "model"
-                    ? `SYNTH-STYLE · ${names[index]}`
-                    : `Synthetic apparel maker · ${names[index]}`,
-              userId: ctx.actor.userId,
-              channel: "web" as const,
-            })),
-          ),
-        ),
-      );
-    return {
-      products,
-      ids,
-      runId,
-      decisionPort: variantPort(
-        Object.fromEntries(
-          names.map((name, index) => [
-            name,
-            facts?.[index] ?? { color: null, size: null, pack: null },
-          ]),
-        ),
-      ),
-    };
+    return { products, ids, runId, decisionPort: identityPort };
   };
   // Claim loading must share issuer reads across accepted lines, while a later
   // operation must observe current registry ownership instead of a stale cache.
   it("loads retained identifier issuers in a constant query budget", async () => {
-    const { ids } = await boundVariantPair(
+    const { ids } = await acceptedIdentityPair(
       ["Synthetic batch identity alpha", "Synthetic batch identity beta"],
       "SYNTHETIC-SHARED-SKU",
     );
@@ -459,7 +351,7 @@ describe("stored Product identity pairs", () => {
   // Regression: one unresolvable issuer threw inside the catalog-wide claim
   // load and failed the duplicate detector for every Product.
   it("drops only the claim whose issuer cannot resolve and reports it raw", async () => {
-    const { ids } = await boundVariantPair(
+    const { ids } = await acceptedIdentityPair(
       ["Synthetic dropped claim alpha", "Synthetic dropped claim beta"],
       "SYNTHETIC-DROPPED-SKU",
     );
@@ -496,72 +388,29 @@ describe("stored Product identity pairs", () => {
       status: "unconfigured",
     });
   });
-  it("keeps an agent propose_match conflict through the queue and actual merge", async () => {
-    const { products, ids, decisionPort } = await boundVariantPair(
-      [
-        "Synthetic blue medium shirt, pack of 2",
-        "Synthetic red medium shirt, pack of 2",
-      ],
-      undefined,
-      [
-        { color: "blue", size: "medium", pack: "2" },
-        { color: "red", size: "medium", pack: "2" },
-      ],
-    );
-    const location = await createLocationFixture(
-      ctx.db,
-      makeLocationInput({ name: "Synthetic conflict shelf" }),
-      ctx.actor,
-    );
-    await createInventoryEntry(
-      ctx.db,
-      {
-        productId: ids[0]!,
-        locationId: location.entityId,
-        amount: { value: 1, unit: "each" },
-      },
-      ctx.actor,
-    );
-    const ports = {
-      context: kernelCtx(ctx),
-      productIdentityPorts: { decisionPort },
-    };
-    const active = await activateAiRefresh(
-      ctx.db,
-      "synthetic:grounded-durable-pass",
-      { enabled: true },
-    );
-    await saveAiDiscoveryCursor(ctx.db, {
-      revision: active.revision,
-      field: null,
-      fieldDone: true,
-      email: null,
-      emailDone: true,
-      product: null,
-      productDone: false,
+  it("blocks differing current models without citations despite an exact identifier", async () => {
+    const { products, ids, runId } = await acceptedIdentityPair([
+      "Synthetic current model A",
+      "Synthetic current model B",
+    ]);
+    await getDb(ctx.db)
+      .update(product)
+      .set({ model: "SYNTH-OTHER", notes: "Same item according to research" })
+      .where(eq(product.id, ids[1]!));
+    const result = await evaluateProductIdentity(ctx.db, ids[0]!, runId, {
+      decisionPort: identityPort,
     });
-    await discoverAiRefresh(ctx.db, ports);
-    const targets = (await getDb(ctx.db).select().from(aiEvaluation)).filter(
-      (row) => row.target.kind === "product",
-    );
-    expect(targets).toHaveLength(2);
-    for (const target of targets)
-      expect(await executeAiRefreshTarget(ctx.db, target.id, ports)).toBe(true);
-    const original = (await getDb(ctx.db).select().from(assessment))[0]!;
-    const proposal = await callMcpTool(
-      createMcpServer(),
-      "product_enrichment",
-      {
-        action: "propose_match",
-        productIds: products.map((row) => row.id),
-        evidence: "Synthetic agent sees both sources",
-        sourceUrls: ["https://www.amazon.com/dp/B000000001"],
-      },
-      { db: ctx.db },
-    );
-    expect(proposal.isError).not.toBe(true);
-    const queue = await getProductMatchQueue(ctx.db, {});
-    const candidate = queue.items[0]!;
+    expect(result.pairs[0]).toMatchObject({
+      actionable: true,
+      conflict: true,
+      signals: { variantEvidence: null },
+    });
+    await publishProductIdentity(ctx.db, result);
+    const candidate = (await getProductMatchQueue(ctx.db, {})).items[0]!;
+    expect(candidate.identityConflict).toBe(true);
+    expect(candidate.conflictReasons).toEqual([
+      expect.stringMatching(/^Model:/),
+    ]);
     await expect(
       mergeReviewedProductPair(kernelCtx(ctx), {
         keepId: products[0]!.id,
@@ -570,467 +419,14 @@ describe("stored Product identity pairs", () => {
         expectedFingerprint: candidate.fingerprint!,
       }),
     ).rejects.toThrow(/conflict/);
-    expect(candidate.identityConflict).toBe(true);
-    expect(
-      (await getDb(ctx.db).select().from(inventoryEntry))[0]?.amountValue,
-    ).toBe(1);
-    expect(
-      (await getDb(ctx.db).select().from(assessment)).find(
-        (row) => row.id === original.id,
-      )?.subject,
-    ).toEqual(original.subject);
-  });
-  // A stale grounded conflict must fence every later publisher, including exact outage fallback and agents.
-  it("retains pending conflict verification after a quote edit until fresh grounded evidence clears it", async () => {
-    const names = [
-      "Synthetic blue medium shirt, pack of 2",
-      "Synthetic red medium shirt, pack of 2",
-    ] as const;
-    const { products, ids, runId, decisionPort } = await boundVariantPair(
-      names,
-      undefined,
-      [
-        { color: "blue", size: "medium", pack: "2" },
-        { color: "red", size: "medium", pack: "2" },
-      ],
-    );
-    const original = await evaluateProductIdentity(ctx.db, ids[0]!, runId, {
-      decisionPort,
-      model: "typesafe/jev",
-    });
-    expect(original.pairs[0]?.conflict).toBe(true);
-    const proof = groundedVariantEvidence.parse(
-      z
-        .object({ variantEvidence: groundedVariantEvidence })
-        .parse(original.pairs[0]!.signals).variantEvidence,
-    );
-    const color = proof.dimensions.find((row) => row.dimension === "color")!;
-    expect(color.first?.sourceId).not.toBe(color.second?.sourceId);
-    expect(proof.producer).toMatchObject({
-      kind: "model",
-      model: "typesafe/jev",
-      runId,
-    });
-    for (const corrupt of [
-      { ...color.first!, start: color.first!.start + 1 },
-      { ...color.first!, sourceId: color.second!.sourceId },
-      { ...color.first!, productId: color.second!.productId },
-      { ...color.first!, valueFingerprint: "invalid-current-value" },
-    ]) {
-      const bad = {
-        ...proof,
-        dimensions: proof.dimensions.map((row) =>
-          row.dimension === "color" ? { ...row, first: corrupt } : row,
-        ),
-      };
-      expect(
-        await prepareProductIdentityPair(ctx.db, [ids[0]!, ids[1]!], {
-          variantEvidence: z.json().parse(bad),
-        }),
-      ).toMatchObject({ conflict: false, verification: "unknown" });
-    }
-    await publishProductIdentity(ctx.db, original);
-    // The Source now supports a changed current name, while the earlier literal remains immutable.
-    const nextName = "Synthetic second blue medium shirt, pack of 2";
-    await getDb(ctx.db)
-      .update(product)
-      .set({ name: nextName })
-      .where(eq(product.id, ids[1]!));
-    const sources = await getDb(ctx.db)
-      .select()
-      .from(entitySource)
-      .where(eq(entitySource.entityId, ids[1]!));
-    const source = sources.find((row) => row.fieldPath === "name")!;
-    await getDb(ctx.db)
-      .update(entitySource)
-      .set({
-        quote: nextName,
-        valueFingerprint: await sha256Hex(canonicalJson(nextName)),
-      })
-      .where(eq(entitySource.id, source.id));
-    await reconcileDerivedRefreshInputs(ctx.db);
-    const staleQueue = await getProductMatchQueue(ctx.db, {});
-    expect(staleQueue.items).toEqual([]);
-    const partial = await evaluateProductIdentity(ctx.db, ids[0]!, runId, {
-      decisionPort: variantPort({
-        [names[0]]: { color: null, size: "medium", pack: "2" },
-        [nextName]: { color: null, size: "medium", pack: "2" },
-      }),
-    });
-    expect(partial.pairs[0]).toMatchObject({
-      conflict: false,
-      signals: { verification: "pending_verification" },
-    });
-    await publishProductIdentity(ctx.db, partial);
-    const outage = await evaluateProductIdentity(ctx.db, ids[0]!, runId, {
-      decisionPort: async () => {
-        throw new Error("Synthetic model outage");
-      },
-    });
-    expect(outage.pairs[0]).toMatchObject({
-      conflict: false,
-      signals: { verification: "pending_verification" },
-    });
-    await publishProductIdentity(ctx.db, outage);
-    const proposal = await callMcpTool(
-      createMcpServer(),
-      "product_enrichment",
-      {
-        action: "propose_match",
-        productIds: products.map((row) => row.id),
-        evidence: "Synthetic exact claim after source edit",
-        sourceUrls: [],
-      },
-      { db: ctx.db },
-    );
-    expect(proposal.isError).not.toBe(true);
-    const candidate = (await getProductMatchQueue(ctx.db, {})).items[0]!;
-    expect(candidate).toMatchObject({
-      identityConflict: false,
-      signals: ["Variant verification pending"],
-    });
-    await expect(
-      mergeReviewedProductPair(kernelCtx(ctx), {
-        keepId: products[0]!.id,
-        mergeId: products[1]!.id,
-        assessmentId: candidate.assessmentId,
-        expectedFingerprint: candidate.fingerprint!,
-      }),
-    ).rejects.toThrow(/verification/);
-    const fresh = await evaluateProductIdentity(ctx.db, ids[0]!, runId, {
-      decisionPort: variantPort({
-        [names[0]]: { color: "blue", size: "medium", pack: "2" },
-        [nextName]: { color: "blue", size: "medium", pack: "2" },
-      }),
-    });
-    expect(fresh.pairs[0]).toMatchObject({
-      conflict: false,
-      signals: { verification: "current" },
-    });
-    await publishProductIdentity(ctx.db, fresh);
-    const ready = (await getProductMatchQueue(ctx.db, {})).items[0]!;
-    await mergeReviewedProductPair(kernelCtx(ctx), {
-      keepId: products[0]!.id,
-      mergeId: products[1]!.id,
-      assessmentId: ready.assessmentId,
-      expectedFingerprint: ready.fingerprint!,
-    });
-    expect(
-      (await getDb(ctx.db).select().from(assessment)).some(
-        (row) =>
-          z
-            .object({ conflict: z.boolean().optional() })
-            .passthrough()
-            .parse(row.evidence).conflict,
-      ),
-    ).toBe(true);
-  });
-  // The Workbench must show the detector's stored grounding, not an abstention.
-  it("shows stored grounded variant relations and the raw conflict on the match card", async () => {
-    const { ids, runId, decisionPort } = await boundVariantPair(
-      [
-        "Synthetic blue medium scarf, pack of 2",
-        "Synthetic red medium scarf, pack of 2",
-      ],
-      undefined,
-      [
-        { color: "blue", size: "medium", pack: "2" },
-        { color: "red", size: "medium", pack: "2" },
-      ],
-    );
-    await publishProductIdentity(
-      ctx.db,
-      await evaluateProductIdentity(ctx.db, ids[0]!, runId, { decisionPort }),
-    );
-    const [item] = (await getProductMatchQueue(ctx.db, {})).items;
-    expect(item?.variant).toMatchObject({
-      color: { relation: "different" },
-      size: { relation: "same" },
-    });
-    expect(item?.identityConflict).toBe(true);
-    expect(item?.conflictReasons).toEqual([
-      expect.stringMatching(/Color.*"(blue|red)".*"(blue|red)"/),
-    ]);
-  });
-  it("carries unresolved grounded conflict through actual Product merges", async () => {
-    const { products, ids, runId, decisionPort } = await boundVariantPair(
-      [
-        "Synthetic blue medium shirt, pack of 2",
-        "Synthetic red medium shirt, pack of 2",
-      ],
-      undefined,
-      [
-        { color: "blue", size: "medium", pack: "2" },
-        { color: "red", size: "medium", pack: "2" },
-      ],
-    );
-    await publishProductIdentity(
-      ctx.db,
-      await evaluateProductIdentity(ctx.db, ids[0]!, runId, { decisionPort }),
-    );
-    const [historical] = await getDb(ctx.db).select().from(assessment);
-    let previous = products[0]!;
-    for (const name of [
-      "Synthetic first replacement",
-      "Synthetic second replacement",
-    ]) {
-      const keeper = await productFixture(ctx, name);
-      const keeperId = await recordId(ctx.db, keeper.id, "product");
-      const previousId = await recordId(ctx.db, previous.id, "product");
-      const prepared = await prepareProductIdentityPair(ctx.db, [
-        keeperId,
-        previousId,
-      ]);
-      const candidate = await publishProductPair(ctx.db, {
-        productIds: [keeperId, previousId],
-        source: "agent",
-        evidence: "Synthetic reviewed same item",
-        sourceUrls: [],
-        fingerprint: prepared!.fingerprint,
-      });
-      await mergeReviewedProductPair(kernelCtx(ctx), {
-        keepId: keeper.id,
-        mergeId: previous.id,
-        assessmentId: candidate.id,
-        expectedFingerprint: candidate.fingerprint!,
-      });
-      const remaining = await prepareProductIdentityPair(ctx.db, [
-        keeperId,
-        ids[1]!,
-      ]);
-      expect(remaining).toMatchObject({
-        conflict: false,
-        verification: "pending_verification",
-      });
-      const proposal = await publishProductPair(ctx.db, {
-        productIds: [keeperId, ids[1]!],
-        source: "agent",
-        evidence: "Synthetic post-merge proposal",
-        sourceUrls: [],
-        fingerprint: remaining!.fingerprint,
-      });
-      await expect(
-        mergeReviewedProductPair(kernelCtx(ctx), {
-          keepId: keeper.id,
-          mergeId: products[1]!.id,
-          assessmentId: proposal.id,
-          expectedFingerprint: proposal.fingerprint!,
-        }),
-      ).rejects.toThrow(/verification/);
-      previous = keeper;
-    }
-    expect(
-      (
-        await getDb(ctx.db)
-          .select()
-          .from(assessment)
-          .where(eq(assessment.id, historical!.id))
-      )[0]?.subject,
-    ).toEqual(historical!.subject);
-  });
-  // Every Product merge entry point must fence current or unresolved conflicts, including loser–loser pairs.
-  it.each(
-    [false, true].flatMap((multiway) =>
-      ["current", "stale", "excluded"].map((evidence) => ({
-        multiway,
-        evidence,
-      })),
-    ),
-  )(
-    "refuses a generic merge atomically across every combined pair: %j",
-    async ({ multiway, evidence }) => {
-      const { products, ids, runId, decisionPort } = await boundVariantPair(
-        [
-          "Synthetic blue medium shirt, pack of 2",
-          "Synthetic red medium shirt, pack of 2",
-        ],
-        undefined,
-        [
-          { color: "blue", size: "medium", pack: "2" },
-          { color: "red", size: "medium", pack: "2" },
-        ],
-      );
-      await publishProductIdentity(
-        ctx.db,
-        await evaluateProductIdentity(ctx.db, ids[0]!, runId, { decisionPort }),
-      );
-      const neutral = await productFixture(
-        ctx,
-        "Synthetic neutral merge keeper",
-      );
-      const neutralId = await recordId(ctx.db, neutral.id, "product");
-      const location = await createLocationFixture(
-        ctx.db,
-        makeLocationInput({ name: "Synthetic guarded merge shelf" }),
-        ctx.actor,
-      );
-      for (const [index, id] of ids.entries())
-        await createInventoryEntry(
-          ctx.db,
-          {
-            productId: id,
-            locationId: location.entityId,
-            amount: { value: index + 2, unit: "each" },
-          },
-          ctx.actor,
-        );
-      if (evidence === "stale") {
-        const sources = await getDb(ctx.db)
-          .select()
-          .from(entitySource)
-          .where(eq(entitySource.entityId, ids[1]!));
-        const source = sources.find((row) => row.fieldPath === "name")!;
-        await getDb(ctx.db)
-          .update(entitySource)
-          .set({ quote: "Synthetic edited source without variant facts" })
-          .where(eq(entitySource.id, source.id));
-      }
-      if (evidence === "excluded")
-        await getDb(ctx.db)
-          .update(product)
-          .set({ name: "Misc" })
-          .where(eq(product.id, ids[1]!));
-      const neutralPairs = await Promise.all(
-        ids.map((id) => prepareProductIdentityPair(ctx.db, [neutralId, id])),
-      );
-      expect(
-        neutralPairs.every(
-          (pair) =>
-            pair === null ||
-            (!pair.conflict && pair.verification !== "pending_verification"),
-        ),
-      ).toBe(true);
-      const readPreserved = () =>
-        Promise.all([
-          getDb(ctx.db).select().from(product).orderBy(product.id),
-          getDb(ctx.db)
-            .select()
-            .from(inventoryEntry)
-            .orderBy(inventoryEntry.id),
-          getDb(ctx.db).select().from(assessment).orderBy(assessment.id),
-          getDb(ctx.db)
-            .select()
-            .from(assessmentState)
-            .orderBy(assessmentState.id),
-          getDb(ctx.db).select().from(feedback).orderBy(feedback.id),
-          getDb(ctx.db).select().from(entitySource).orderBy(entitySource.id),
-          getDb(ctx.db)
-            .select()
-            .from(importSourceProduct)
-            .orderBy(importSourceProduct.id),
-        ]);
-      const before = await readPreserved();
-      const input = {
-        keepId: multiway ? neutral.id : products[0]!.id,
-        mergeIds: multiway ? products.map((row) => row.id) : [products[1]!.id],
-      };
-      await expect(
-        executeEntity(kernelCtx(ctx), {
-          action: "merge",
-          entity: "product",
-          data: input,
-        }),
-      ).rejects.toThrow(/conflict|verification/);
-      expect(await readPreserved()).toEqual(before);
-      await expect(mergeProducts(ctx.db, input, ctx.actor)).rejects.toThrow(
-        /conflict|verification/,
-      );
-      expect(await readPreserved()).toEqual(before);
-    },
-  );
-  it("keeps model conflict history pending until current Source-bound model values agree", async () => {
-    const { products, ids, runId, decisionPort } = await boundVariantPair([
-      "Synthetic model item A",
-      "Synthetic model item B",
-    ]);
-    const rows = await getDb(ctx.db)
-      .select()
-      .from(entitySource)
-      .where(eq(entitySource.entityId, ids[1]!));
-    const source = rows.find((row) => row.fieldPath === "model")!;
-    await getDb(ctx.db)
-      .update(product)
-      .set({ model: "SYNTH-OTHER" })
-      .where(eq(product.id, ids[1]!));
-    await getDb(ctx.db)
-      .update(entitySource)
-      .set({
-        quote: "SYNTH-OTHER",
-        valueFingerprint: await sha256Hex(canonicalJson("SYNTH-OTHER")),
-      })
-      .where(eq(entitySource.id, source.id));
-    const conflict = await evaluateProductIdentity(ctx.db, ids[0]!, runId, {
-      decisionPort,
-    });
-    expect(conflict.pairs[0]).toMatchObject({ conflict: true });
-    await publishProductIdentity(ctx.db, conflict);
-    await getDb(ctx.db)
-      .delete(entitySource)
-      .where(eq(entitySource.id, source.id));
-    const outagePort = async () => {
-      throw new Error("Synthetic model outage");
-    };
-    const missing = await evaluateProductIdentity(ctx.db, ids[0]!, runId, {
-      decisionPort: outagePort,
-    });
-    expect(missing.pairs[0]).toMatchObject({
-      conflict: false,
-      signals: { verification: "pending_verification" },
-    });
-    await publishProductIdentity(ctx.db, missing);
-    const blocked = (await getProductMatchQueue(ctx.db, {})).items[0]!;
-    await expect(
-      mergeReviewedProductPair(kernelCtx(ctx), {
-        keepId: products[0]!.id,
-        mergeId: products[1]!.id,
-        assessmentId: blocked.assessmentId,
-        expectedFingerprint: blocked.fingerprint!,
-      }),
-    ).rejects.toThrow(/verification/);
-    await getDb(ctx.db)
-      .update(product)
-      .set({ model: "SYNTH-STYLE" })
-      .where(eq(product.id, ids[1]!));
-    await getDb(ctx.db)
-      .insert(entitySource)
-      .values({
-        entityId: ids[1]!,
-        entityKind: "product",
-        fieldPath: "model",
-        quote: "SYNTH-STYLE",
-        valueFingerprint: await sha256Hex(canonicalJson("SYNTH-STYLE")),
-        url: "https://catalog.example.test/current-model",
-        userId: ctx.actor.userId,
-        channel: "web",
-      });
-    const cleared = await evaluateProductIdentity(ctx.db, ids[0]!, runId, {
-      decisionPort: outagePort,
-    });
-    expect(cleared.pairs[0]).toMatchObject({ conflict: false });
-    expect(
-      z.object({ verification: z.string() }).parse(cleared.pairs[0]!.signals)
-        .verification,
-    ).not.toBe("pending_verification");
-    await publishProductIdentity(ctx.db, cleared);
-    const ready = (await getProductMatchQueue(ctx.db, {})).items[0]!;
-    await mergeReviewedProductPair(kernelCtx(ctx), {
-      keepId: products[0]!.id,
-      mergeId: products[1]!.id,
-      assessmentId: ready.assessmentId,
-      expectedFingerprint: ready.fingerprint!,
-    });
   });
   it("refuses a completed prior-rule admission with unchanged evidence", async () => {
-    const { products, ids, runId, decisionPort } = await boundVariantPair(
+    const { products, ids, runId, decisionPort } = await acceptedIdentityPair(
       [
         "Synthetic prior blue medium shirt, pack of 2",
         "Synthetic next red medium shirt, pack of 2",
       ],
       "SYNTH-STYLE",
-      [
-        { color: "blue", size: "medium", pack: "2" },
-        { color: "red", size: "medium", pack: "2" },
-      ],
     );
     const pair = await prepareProductIdentityPair(ctx.db, [ids[0]!, ids[1]!]);
     const command = {
@@ -1082,6 +478,10 @@ describe("stored Product identity pairs", () => {
       }),
     ).rejects.toThrow(/obsolete/);
     expect(await getProductMatchQueue(ctx.db, {})).toMatchObject({ items: [] });
+    await getDb(ctx.db)
+      .update(product)
+      .set({ model: "SYNTH-OTHER" })
+      .where(eq(product.id, ids[1]!));
     const current = await evaluateProductIdentity(ctx.db, ids[0]!, runId, {
       decisionPort,
     });
@@ -1105,101 +505,13 @@ describe("stored Product identity pairs", () => {
       }),
     ).rejects.toThrow(/conflict/);
   });
-  it.each([
-    [
-      "Synthetic blue medium shirt, pack of 2",
-      "Synthetic red medium shirt, pack of 2",
-      { color: "blue", size: "medium", pack: "2" },
-      { color: "red", size: "medium", pack: "2" },
-    ],
-    [
-      "Synthetic blue small shirt, pack of 2",
-      "Synthetic blue large shirt, pack of 2",
-      { color: "blue", size: "small", pack: "2" },
-      { color: "blue", size: "large", pack: "2" },
-    ],
-    [
-      "Synthetic blue medium shirt, pack of 2",
-      "Synthetic blue medium shirt, pack of 4",
-      { color: "blue", size: "medium", pack: "2" },
-      { color: "blue", size: "medium", pack: "4" },
-    ],
-  ] as const)(
-    "refuses an exact claim with verified conflicting variants: %s / %s",
-    async (first, second, firstFacts, secondFacts) => {
-      const { products, ids, runId, decisionPort } = await boundVariantPair(
-        [first, second],
-        undefined,
-        [firstFacts, secondFacts],
-      );
-      const result = await evaluateProductIdentity(ctx.db, ids[0]!, runId, {
-        decisionPort,
-      });
-      expect(result.pairs).toHaveLength(1);
-      expect(result.pairs[0]).toMatchObject({
-        actionable: true,
-        conflict: true,
-      });
-      await publishProductIdentity(ctx.db, result);
-      const [pair] = await getDb(ctx.db)
-        .select()
-        .from(assessmentState)
-        .where(eq(assessmentState.family, "product_pair"));
-      await expect(
-        mergeReviewedProductPair(kernelCtx(ctx), {
-          keepId: products[0]!.id,
-          mergeId: products[1]!.id,
-          assessmentId: pair!.id,
-          expectedFingerprint: pair!.fingerprint!,
-        }),
-      ).rejects.toThrow(/conflict/);
-    },
-  );
-  it("keeps an accepted shared style SKU with different verified sizes as a recommendation", async () => {
-    const { products, ids, runId, decisionPort } = await boundVariantPair(
-      [
-        "Synthetic blue small shirt, pack of 2",
-        "Synthetic blue large shirt, pack of 2",
-      ],
-      "SYNTH-STYLE",
-      [
-        { color: "blue", size: "small", pack: "2" },
-        { color: "blue", size: "large", pack: "2" },
-      ],
-    );
-    const result = await evaluateProductIdentity(ctx.db, ids[0]!, runId, {
-      decisionPort,
-    });
-    expect(result.pairs).toHaveLength(1);
-    expect(result.pairs[0]).toMatchObject({
-      actionable: false,
-      conflict: true,
-    });
-    await publishProductIdentity(ctx.db, result);
-    const [state] = await getDb(ctx.db)
-      .select()
-      .from(assessmentState)
-      .where(eq(assessmentState.family, "product_pair"));
-    await expect(
-      mergeReviewedProductPair(kernelCtx(ctx), {
-        keepId: products[0]!.id,
-        mergeId: products[1]!.id,
-        assessmentId: state!.id,
-        expectedFingerprint: state!.fingerprint!,
-      }),
-    ).rejects.toThrow(/conflict/);
-  });
-  it("keeps raw SKUs uncertain despite matching three dimensions and different verified fits", async () => {
-    const { ids, runId, decisionPort } = await boundVariantPair(
+  it("keeps raw SKUs and matching model text as recommendations", async () => {
+    const { ids, runId, decisionPort } = await acceptedIdentityPair(
       [
         "Synthetic slim-fit blue medium shirt, pack of 2",
         "Synthetic relaxed-fit blue medium shirt, pack of 2",
       ],
       "SYNTH-VARIANT-2",
-      [
-        { color: "blue", size: "medium", pack: "2" },
-        { color: "blue", size: "medium", pack: "2" },
-      ],
     );
     const result = await evaluateProductIdentity(ctx.db, ids[0]!, runId, {
       decisionPort,
@@ -1211,7 +523,7 @@ describe("stored Product identity pairs", () => {
     });
   });
   it("refuses a prior Product identity policy publication after activation advances", async () => {
-    const { ids, runId } = await boundVariantPair(
+    const { ids, runId } = await acceptedIdentityPair(
       [
         "Synthetic prior blue medium shirt, pack of 2",
         "Synthetic next red medium shirt, pack of 2",
@@ -1269,7 +581,7 @@ describe("stored Product identity pairs", () => {
     expect(await getDb(ctx.db).select().from(assessment)).toHaveLength(0);
   });
   it("publishes exact rule evidence through an activated catalog pass while the model is unavailable", async () => {
-    const { ids } = await boundVariantPair([
+    const { ids } = await acceptedIdentityPair([
       "Synthetic first blue medium shirt, pack of 2",
       "Synthetic second blue medium shirt, pack of 2",
     ]);
@@ -1494,7 +806,7 @@ describe("stored Product identity pairs", () => {
         assessmentId: pair!.id,
         expectedFingerprint: pair!.fingerprint!,
       }),
-    ).rejects.toThrow(/stale|changed/);
+    ).rejects.toThrow(/stale|changed|conflict/);
     expect(
       (await productIdentitySnapshot(ctx.db, bId))?.fingerprint,
     ).toBeTruthy();
@@ -1545,53 +857,38 @@ describe("stored Product identity pairs", () => {
       2,
     );
   });
-  it.each(["URL", "selectedVariant"])(
-    "retrieves Source %s candidates without names, models, exact claims or embeddings",
-    async (clue) => {
-      const a = await productFixture(ctx, "Synthetic catalog alpha", {
-          manufacturer: "Synthetic Alpha",
-          model: null,
-        }),
-        b = await productFixture(ctx, "Synthetic catalog omega", {
-          manufacturer: "Synthetic Omega",
-          model: null,
-        });
-      const ids = await Promise.all(
-        [a, b].map((row) => recordId(ctx.db, row.id, "product")),
-      );
-      await getDb(ctx.db)
-        .insert(entitySource)
-        .values(
-          ids.map((id, index) => ({
-            entityId: id,
-            entityKind: "product" as const,
-            fieldPath: "name",
-            valueFingerprint: "synthetic-retained-ranking",
-            selectedVariant:
-              clue === "selectedVariant"
-                ? "Synthetic edition · blue · medium"
-                : index
-                  ? "red"
-                  : "blue",
-            url:
-              clue === "URL"
-                ? "https://catalog.example.test/shared-family"
-                : `https://catalog.example.test/retained-${index}`,
-            quote: "Retained family page",
-            userId: ctx.actor.userId,
-            channel: "web" as const,
-          })),
-        );
-      expect(
-        (await retrieveProductIdentityCandidates(ctx.db, ids[0]!)).candidates,
-      ).toContain(ids[1]);
-      expect(
-        await prepareProductIdentityPair(ctx.db, [ids[0]!, ids[1]!]),
-      ).toMatchObject({ exact: false, conflict: false });
-    },
-  );
+  it("does not retrieve candidates from shared research URLs or claimed variants", async () => {
+    const a = await productFixture(ctx, "Synthetic catalog alpha", {
+      manufacturer: "Synthetic Alpha",
+      model: null,
+    });
+    const b = await productFixture(ctx, "Synthetic catalog omega", {
+      manufacturer: "Synthetic Omega",
+      model: null,
+    });
+    const ids = await Promise.all(
+      [a, b].map((row) => recordId(ctx.db, row.id, "product")),
+    );
+    await getDb(ctx.db)
+      .update(product)
+      .set({
+        notes:
+          "https://catalog.example.test/shared-family Selected variant: blue medium",
+      })
+      .where(inArray(product.id, ids));
+    expect(
+      (await retrieveProductIdentityCandidates(ctx.db, ids[0]!)).candidates,
+    ).not.toContain(ids[1]);
+    expect(
+      await prepareProductIdentityPair(ctx.db, [ids[0]!, ids[1]!]),
+    ).toMatchObject({
+      exact: false,
+      verification: "unknown",
+      variantEvidence: null,
+    });
+  });
   it("honors a nonexact model distinct verdict without suppressing a revised assessment", async () => {
-    const { ids, runId } = await boundVariantPair(
+    const { ids, runId } = await acceptedIdentityPair(
       [
         "Synthetic blue small shirt, pack of 2",
         "Synthetic red large shirt, pack of 2",
@@ -1650,28 +947,18 @@ describe("stored Product identity pairs", () => {
     await publishProductIdentity(ctx.db, revised);
     expect(await listProductMatchRows(ctx.db)).toHaveLength(1);
   });
-  it("keeps a same-URL partial variant and model verdict as a recommendation", async () => {
+  it("keeps research notes and a positive model verdict as a recommendation", async () => {
     const a = await productFixture(ctx, "Synthetic partial A"),
       b = await productFixture(ctx, "Synthetic partial B");
     const ids = await Promise.all(
       [a, b].map((row) => recordId(ctx.db, row.id, "product")),
     );
-    const modelFingerprint = await sha256Hex(canonicalJson("TEST-123"));
     await getDb(ctx.db)
-      .insert(entitySource)
-      .values(
-        ids.map((id) => ({
-          entityId: id,
-          entityKind: "product" as const,
-          fieldPath: "model",
-          valueFingerprint: modelFingerprint,
-          selectedVariant: "blue",
-          url: "https://catalog.example.test/style/family",
-          quote: "Blue style family",
-          userId: ctx.actor.userId,
-          channel: "web" as const,
-        })),
-      );
+      .update(product)
+      .set({
+        notes: "Blue style family https://catalog.example.test/style/family",
+      })
+      .where(inArray(product.id, ids));
     const runId = await ensureRun(ctx.db, ctx.actor, {
       purpose: "ai_suggest",
       trigger: "manual",

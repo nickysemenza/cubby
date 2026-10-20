@@ -826,7 +826,7 @@ A new bare wrong verdict is a Miss, without suppressing future evidence. It reso
 
 Confirmed image descriptions remain authoritative in display, classification and search even without generated analysis. Image-analysis retries publish the first retained result for that exact analysis identity; a later response cannot replace immutable Assessment evidence or confirmed text. Live description authority disappears with the Image; history and inactive confirmation times survive. Current field targets and declared inputs supersede pending Assessments through both generated Postgres triggers and kernel invalidation. Historical byte hashes, model versions, provenance and actor intent are never reconstructed.
 
-Product identity retrieval and triage run through existing Run-backed AiEvaluation work, gated by AI refresh activation. A resumable cursor covers every live Product, with explicit miscellaneous exclusions counted as coverage. Exact identifier retrieval is independent of name/model gates; semantic similarity and model verdicts are candidate evidence. Reads use stored pair Assessments. Source-confirmed model, size, color and pack conflicts block pair application, including weak recommendations. With exact identifier admission they become identity-conflict Problems. Raw receipt SKUs retain unknown variant granularity and remain ranking evidence even with matching size, color and pack; explicit ASINs can establish exact identity. Uncorroborated title text and partial selected variants remain ranking evidence. Connected pairs may share one Problem presentation, but each merge names exactly one independently assessed pair and rechecks its evidence. Merging and survivor image ordering commit together. Stock combines; duplicate receiving is a separate reviewed inventory correction.
+Product identity retrieval and triage run through existing Run-backed AiEvaluation work, gated by AI refresh activation. A resumable cursor covers every live Product, with explicit miscellaneous exclusions counted as coverage. Exact identifier retrieval is independent of name/model gates; semantic similarity and model verdicts are candidate evidence. Reads use stored pair Assessments. Current nonnull model disagreements and retained historical identity conflicts block pair application, including weak recommendations. Equal current model strings or research notes do not verify identity or clear historical conflicts; uncertain variant matches remain pending review. An explicit merge can supersede historical advice only after identity inputs differ from every retained conflicting comparison, with current conflicts rechecked transactionally. Automatic matching remains blocked; notes do not unlock it. With exact identifier admission they become identity-conflict Problems. Raw receipt SKUs retain unknown variant granularity and remain ranking evidence even with matching size, color and pack; explicit ASINs can establish exact identity. Uncorroborated title text and partial selected variants remain ranking evidence. Connected pairs may share one Problem presentation, but each merge names exactly one independently assessed pair and rechecks its evidence. Merging and survivor image ordering commit together. Stock combines; duplicate receiving is a separate reviewed inventory correction.
 
 The deployed AI refresh manifest compares exact per-feature prompt/policy
 versions, including rollbacks. Its Run-backed AiEvaluation ledger deduplicates
@@ -1276,14 +1276,7 @@ the write. Normal write bodies expose one final-output reader through
 projected create/update readers. A declared writer without that capability is
 refused when bindings load. Mandatory mutation snapshots and domain work run
 before the final reader; requesting a reference skips only response hydration.
-Field-scoped Sources use scalar projections with the same JSON normalization,
-read paths and fingerprint algorithm as detail reads. Linked URLs, card identity
-fields, amounts and to-one purchase fields have narrow scalar adapters. Cited
-inherited fields select their effective value separately from the receipt's
-stored override. These reads use the returned identity when an update folds into
-a surviving row; they never fall back to full detail hydration. New collection
-citations retain evidence without a whole-collection fingerprint; existing
-hash-based citations still compare against detail values. Explicit unchanged
+Explicit unchanged
 writes capture a durable root even when no audit diff exists, so background
 processing can retire pending advice for that write intent. The fallback checks
 this update's transaction enrollments, including released savepoints, rather
@@ -1523,9 +1516,6 @@ from the owning row, including in mixed patches. Decoding an existing JSON
 column still costs its stored size; that does not permit a relational detail
 read or rewriting untouched child rows. Member lookups require matching indexes.
 
-Source recording reuses bounded scalar snapshots. Collection citations, and
-fields whose current value is absent from that snapshot, retain their evidence
-with whole-field support unassessed. They never force full response hydration.
 Required authoritative validation and audit records remain transactional.
 `sideEffects.derivedRefresh.mode = "background"` describes the freshness policy;
 it does not claim a particular Run or provider request has already completed.
@@ -2651,35 +2641,14 @@ table each (ADR 0007):
   slug's spelling never names a Vendor. Merging two Vendors that each have an
   issuer is refused until one is reconciled, and Problems lists Product
   identifiers held under a Vendor's non-issuer source.
-- `EntitySource(entityId/entityKind, fieldPath, url, sourceEntityId/sourceEntityKind, quote, observedAt,
-  selectedVariant, valueFingerprint, recorder)` records where a fact about an
-  entity was seen ([terminology](guide/terminology.md#purchase-research) "Source";
-  `entity-kernel/repo/entity-source.ts`). Every create/update command and image attach
-  accepts `sources[]`; the kernel validates `fieldPath` against the manifest
-  (a writable field the detail returns at its read key or, for a reference
-  read as an object such as Product `ingredientId`, its `display.readPath`),
-  writes the rows in the mutation's transaction, takes the recorder from the
-  actor (never input) and fingerprints the post-write field value. A new Source
-  attached to a collection field retains the field association and citation
-  without reading or hashing the whole collection; `valueFingerprint` and
-  `supportsCurrentValue` are null, meaning whole-field support is unassessed.
-  It is evidence for the edit, and later edits do not automatically certify or
-  retire it. Existing hash-based Sources remain supported. Detail reads compare
-  their hashes with the current field value, so an overwritten value reads as
-  an earlier value. Merge moves and de-duplicates
-  Sources to the survivor (`finalizeMerge`); a soft delete keeps them. Internal
-  citations accept a `sourceEntity` shortcode and store a typed durable Entity
-  identity; recognized Cubby URLs normalize to that reference on writes. External
-  URLs stay URLs. Reads return `sourceEntity` with its kind, shortcode, name and
-  deletion state. A target merge repoints citations and de-duplicates them; target
-  deletion preserves the citation and quote as history. Sources group explicit
-  citations by document. Evidence-marked connected views supplement them with
-  live related documents and witnessed paths, without assigning field support
-  or persisting duplicate relationship-only Sources. Product evidence follows
-  declared purchase relationships to purchase documents and accepted/reviewed
-  Emails; Purchase evidence uses those same direct relationships. Derived Email
-  traversal reuses the association policy, excluding suggestions and thread-only
-  context. The generic preview reports counts and links to complete paged views.
+- Research belongs in ordinary editable `notes`: preserve links or record shortcodes,
+  relevant excerpts, field/variant context and observation dates as useful prose.
+  Notes have no field-support or current/stale contract and do not verify identity.
+  Inherited values resolve dynamically through field declarations independently
+  of research. Merge preserves both records' notes, retaining original whitespace
+  and avoiding exact whole-note duplicates. Evidence-marked connected views
+  remain live relationships in Connected records, including purchase documents
+  and accepted/reviewed Emails; they never certify a researched field.
 
 A field declared with `collection: { key }` accepts patch items on
 `entity.update` as well as a full replacement: `{op: "add" | "replace" |

@@ -130,10 +130,9 @@ const uploadReceipt = (result: {
 export const attachFileWorkflow = (
   db: Database,
   input: z.output<typeof mcpAttachFileInput>,
-  recorder?: ActorContext,
 ) =>
   translateImageFailure(
-    () => attachFileToEntity(db, input, recorder),
+    () => attachFileToEntity(db, input),
     "IMAGE_UPLOAD_FAILED",
     "Failed to attach file",
     true,
@@ -320,11 +319,10 @@ export const imageUploadHandlers = implementOperationDomain(
         throw new Error(
           `${input.entityId} names a ${parsed?.type ?? "unknown"}; files attach to a ${attachableImageEntity.options.join(", ")}.`,
         );
-      return attachFileWorkflow(
-        context.db,
-        { ...input, entityKind: attachable.data },
-        context.actorContext,
-      );
+      return attachFileWorkflow(context.db, {
+        ...input,
+        entityKind: attachable.data,
+      });
     },
   },
 );

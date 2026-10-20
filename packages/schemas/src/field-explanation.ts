@@ -2,7 +2,6 @@ import { z } from "zod";
 import { dataExceptionReason, dataQualityStatus } from "./data-quality-shape";
 import { entityRefSchema } from "./entity";
 import { reportRecordsBlock } from "./entity-report";
-import { entitySourceRead } from "./entity-source";
 import {
   fieldResolutionSchema,
   fieldResolutionSourceSchema,
@@ -20,21 +19,6 @@ export const fieldExplanationSource = z.object({
   entity: entityRefSchema.nullable(),
   value: z.json(),
 });
-
-/**
- * A Source recorded for this field: where its value was seen, and whether the
- * field still holds the value that Source supported.
- */
-export const fieldExplanationVerification = entitySourceRead
-  .omit({ observedAt: true, createdAt: true })
-  .extend({
-    key: z.string(),
-    observedAt: z.iso.datetime().nullable(),
-    createdAt: z.iso.datetime(),
-  });
-export type FieldExplanationVerification = z.infer<
-  typeof fieldExplanationVerification
->;
 
 export const qualityBreakdown = z.object({
   /** Null when not assessed; otherwise the weighted score after caps. */
@@ -155,7 +139,6 @@ export const fieldExplanationOutput = z.object({
     description: z.string(),
   }),
   sources: z.array(fieldExplanationSource),
-  verifications: z.array(fieldExplanationVerification).default([]),
   resolution: fieldResolutionSchema.nullable(),
   resolutionEvidence: z
     .object({

@@ -466,6 +466,42 @@ describe("purchase repository — mergePurchases", () => {
     return { imageId: img.id, joinId: join.id };
   };
 
+  it("preserves both notes in requested donor order without exact duplicates", async () => {
+    const vendorId = await vendorShortcodeByName(
+      ctx.db,
+      "Synthetic research vendor",
+    );
+    const rows = [];
+    for (const notes of [
+      "  Keeper research\n",
+      "First donor research  ",
+      "Second donor research",
+      "First donor research  ",
+    ]) {
+      rows.push(
+        (
+          await createRepoEntity(ctx, "purchase", {
+            vendorId,
+            date: "2026-01-01",
+            notes,
+          })
+        ).output,
+      );
+    }
+    const [keeper, first, second, duplicate] = rows;
+    const result = await mergePurchases(
+      ctx.db,
+      {
+        keepId: keeper!.id,
+        mergeIds: [second!.id, first!.id, duplicate!.id],
+      },
+      ctx.actor,
+    );
+    expect(result.purchase.notes).toBe(
+      "  Keeper research\n\n\nSecond donor research\n\nFirst donor research  ",
+    );
+  });
+
   it("re-points expenses, moves documents, and soft-deletes the loser", async () => {
     const vendorId = await vendorShortcodeByName(ctx.db, "Merge Vendor");
     const { output: keeper } = await createRepoEntity(ctx, "purchase", {

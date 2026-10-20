@@ -5,7 +5,11 @@ import { unknownProductVariantComparison } from "~/server/domains/product/repo/p
 import { groundedVariantEvidence } from "~/server/domains/product/repo/product-variant-evidence";
 
 const snapshotModel = z
-  .object({ id: z.string().optional(), verifiedModel: z.string().nullable() })
+  .object({
+    id: z.string().optional(),
+    model: z.string().nullable().optional(),
+    verifiedModel: z.string().nullable().optional(),
+  })
   .passthrough();
 const storedPair = z
   .object({
@@ -40,13 +44,19 @@ export function readStoredProductPair(data: unknown, firstId?: string) {
   const conflictReasons: string[] = [];
   if (snapshots.success) {
     const [a, b] = snapshots.data;
+    const firstModel = a.model !== undefined ? a.model : a.verifiedModel;
+    const secondModel = b.model !== undefined ? b.model : b.verifiedModel;
     if (
-      a.verifiedModel !== null &&
-      b.verifiedModel !== null &&
-      a.verifiedModel !== b.verifiedModel
+      firstModel != null &&
+      secondModel != null &&
+      firstModel !== secondModel
     ) {
-      const [first, second] = ordered([a.verifiedModel, b.verifiedModel], a.id);
-      conflictReasons.push(`Verified model: "${first}" vs "${second}"`);
+      const [first, second] = ordered([firstModel, secondModel], a.id);
+      const label =
+        a.model !== undefined || b.model !== undefined
+          ? "Model"
+          : "Verified model";
+      conflictReasons.push(`${label}: "${first}" vs "${second}"`);
     }
   }
   for (const row of grounded.data?.dimensions ?? []) {

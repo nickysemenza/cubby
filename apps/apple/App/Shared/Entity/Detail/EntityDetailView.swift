@@ -467,8 +467,7 @@ struct EntityDetailContent: View {
                     Link("Open on web", destination: appModel.webURL(for: descriptor.key, id: row.id))
                 }
             }
-            if let connectedRecords, descriptor.presentation.connectedViews.contains(where: { !$0.evidence })
-            {
+            if let connectedRecords {
                 ConnectedRecordsSection(model: connectedRecords).detailContentsAnchor("connected-records")
             }
             if let relationshipsModel {
@@ -477,55 +476,6 @@ struct EntityDetailContent: View {
                         model: relationshipsModel, onAccepted: onRelationshipAccepted)
                 }.detailContentsAnchor("relationships")
             }
-            let sources = row.sources
-            ContinuousDetailSection(title: "Sources") {
-                ForEach(
-                    Array(
-                        groupedSources(
-                            sources,
-                            record: { source in
-                                source.sourceEntity.map { "\($0.entityKind.rawValue):\($0.entityId)" }
-                            },
-                            url: \.url
-                        ).enumerated()), id: \.offset
-                ) { _, group in
-                    if let first = group.first {
-                        EntitySourceDocument(
-                            entity: first.sourceEntity.flatMap {
-                                EntityKey(rawValue: $0.entityKind.rawValue)
-                            },
-                            id: first.sourceEntity?.entityId, name: first.sourceEntity?.name,
-                            deleted: first.sourceEntity?.deleted ?? false, url: first.url)
-                    }
-                    ForEach(Array(group.enumerated()), id: \.offset) { _, source in
-                        EntitySourceRow(
-                            label: source.fieldPath.map { descriptor.field($0)?.label ?? $0 } ?? "Record",
-                            supportsCurrentValue: source.fieldPath == nil ? nil : source.supportsCurrentValue,
-                            quote: source.quote, selectedVariant: source.selectedVariant,
-                            seenAt: source.observedAt ?? source.createdAt, runID: source.recorder.runId)
-                    }
-                }
-                if connectedRecords == nil && sources.isEmpty {
-                    Text("No sources").foregroundStyle(.secondary)
-                        .preference(key: DetailSectionEmpty.self, value: true)
-                }
-                if let connectedRecords {
-                    if let error = connectedRecords.error, connectedRecords.preview == nil {
-                        InlineLoadFailure(message: error) { await connectedRecords.refresh() }
-                    } else if let preview = connectedRecords.preview {
-                        ConnectedRecordsPreviewContent(
-                            source: connectedRecords.source, preview: preview, evidence: true,
-                            excludedTargets: Set(
-                                sources.compactMap { source in
-                                    source.sourceEntity.map { "\($0.entityKind.rawValue):\($0.entityId)" }
-                                }), showEmpty: sources.isEmpty)
-                    } else {
-                        LoadingIndicator(label: "Loading sources")
-                    }
-                }
-            }
-            .detailContentsAnchor("sources")
-            .task(id: connectedRecords?.source) { await connectedRecords?.loadInitial() }
             ContinuousDetailSection(title: "Raw record") { RawRecordDisclosure(raw: row.raw) }
                 .detailContentsAnchor("raw-record")
         }
@@ -623,7 +573,7 @@ struct EntityDetailContent: View {
             DetailContentsEntry(
                 id: $0.id, title: $0.title ?? $0.id, group: "Record")
         }
-            + (connectedRecords == nil || !presentation.connectedViews.contains(where: { !$0.evidence })
+            + (connectedRecords == nil
                 ? []
                 : [
                     DetailContentsEntry(
@@ -632,8 +582,7 @@ struct EntityDetailContent: View {
             + (relationshipsModel == nil
                 ? [] : [DetailContentsEntry(id: "relationships", title: "Relationships", group: "Relations")])
             + [
-                DetailContentsEntry(id: "sources", title: "Sources", group: "Provenance"),
-                DetailContentsEntry(id: "raw-record", title: "Raw record", group: "Provenance"),
+                DetailContentsEntry(id: "raw-record", title: "Raw record", group: "Provenance")
             ]
     }
 

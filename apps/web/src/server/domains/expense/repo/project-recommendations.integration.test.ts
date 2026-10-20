@@ -18,8 +18,8 @@ import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-der
 import { createProduct } from "~/server/domains/product/repo/crud";
 import { projectContentDatesExcluding } from "~/server/domains/project/repo/analytics";
 import { getEntityRecommendations } from "~/server/domains/recommendation/service/entity-recommendations.service";
-import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { canonicalJson } from "~/server/lib/canonical-json";
 import { makeProductInput } from "~/server/testing/repo.fixtures";
 
 import {

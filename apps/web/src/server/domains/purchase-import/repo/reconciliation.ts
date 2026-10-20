@@ -685,13 +685,15 @@ export async function commitSourceOrderReconciliation(
           state.target.vendorId,
           productsByExternalIdentity,
           {
-            recorder: actor,
             onCreated: (id) =>
               audit.push({
                 entityKind: "product" as const,
                 entityId: id,
                 action: "create" as const,
-                changes: { name: { from: null, to: line.title } },
+                changes: {
+                  name: { from: null, to: line.title },
+                  notes: { from: null, to: null },
+                },
               }),
           },
         )

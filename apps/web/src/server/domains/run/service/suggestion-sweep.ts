@@ -36,11 +36,11 @@ import { settleArrivedFindingsForProduct } from "~/server/domains/purchase-impor
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
-import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
 import type { AuditSampler } from "~/server/generic/assessment/repo/automatic-rules";
 import { fieldReviewIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/audit-log";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { canonicalJson } from "~/server/lib/canonical-json";
 import { type WorkflowLauncher } from "~/server/workflows/runs/launcher";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 

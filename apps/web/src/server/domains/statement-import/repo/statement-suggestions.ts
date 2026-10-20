@@ -59,13 +59,13 @@ import {
   ownAccountNamed,
   statementTransactionKind,
 } from "~/server/domains/statement-import/repo/statement-transaction-kind";
-import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import {
   automaticRuleStamp,
   matchStatementRules,
   statementSubjectKey,
 } from "~/server/generic/assessment/repo/automatic-rules";
+import { canonicalJson } from "~/server/lib/canonical-json";
 
 /** Matching revision and Automatic attach precision window; clean-only changes use the policy below. */
 export const STATEMENT_SUGGESTION_REVISION = "2026-10-18.3";

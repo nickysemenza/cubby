@@ -33,7 +33,6 @@ import { moveInventoryEntries } from "~/server/domains/inventory/repo/bulk";
 import { setProjectToolUsage } from "~/server/domains/project/repo/tools";
 import { confirmPurchaseAcquisition } from "~/server/domains/purchase/repo/purchase-products";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
-import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { assessmentCandidateKey } from "~/server/generic/assessment/repo/assessment-state";
 import {
@@ -41,6 +40,7 @@ import {
   resolveShortcodes,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { canonicalJson } from "~/server/lib/canonical-json";
 
 import {
   acquisitionPairEligible,

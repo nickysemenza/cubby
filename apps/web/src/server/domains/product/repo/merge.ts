@@ -69,6 +69,7 @@ import {
 } from "~/server/domains/product-category/repo/product-category";
 import { markProductConversionCoverageInputStale } from "~/server/domains/product/repo/conversion-coverage";
 import { repointProductMatchCandidatesTx } from "~/server/domains/product/repo/match/product-match-candidate";
+import { historicalConflictInputsChanged } from "~/server/domains/product/repo/product-variant-evidence";
 import { unitMappingSides } from "~/server/domains/product/repo/unit-mappings";
 import {
   impact,
@@ -95,6 +96,7 @@ import {
 import {
   assertDistinctMergeTargets,
   finalizeMerge,
+  mergeNotes,
   resolveMergeTargets,
 } from "~/server/generic/merge/repo/core";
 import { cascadeRemoval } from "~/server/generic/removal/repo/core";
@@ -220,10 +222,8 @@ export const PRODUCT_MERGE_EDGE_POLICY = {
 } as const satisfies IncomingEdgePolicy<"product", OperationDisposition>;
 
 /**
- * Columns the survivor adopts from a merged-away product when — and only when —
- * its own value is null. Fill-never-overwrite, the same rule `foldChargeInto`
- * and `planVendorMerge` apply: the keeper is the record the operator chose, so
- * its values stand, and only its GAPS get filled.
+ * Scalar values fill the keeper's gaps, as in `foldChargeInto` and
+ * `planVendorMerge`. Notes instead preserve both records' original texts.
  *
  * Barcodes are NOT here and must not be: a product carries a set of them, and
  * folding a set into a "fill the keeper's null" rule is what made every merge
@@ -1059,7 +1059,12 @@ async function buildProductMergePlan(
     }
   };
   for (const column of CARRIED_COLUMNS) {
-    carryColumn(column);
+    if (column !== "notes") carryColumn(column);
+  }
+  const notes = mergeNotes(keeper.notes, ...losers.map((row) => row.notes));
+  if (notes !== keeper.notes) {
+    carried.notes = notes;
+    carriedFields.push("notes");
   }
 
   return {
@@ -1405,10 +1410,17 @@ export const mergeProducts = async (
             "CONSTRAINT_VIOLATION",
             "Confirmed variant conflict prevents Product merging",
           );
-        if (pair.verification === "pending_verification")
+        if (
+          pair.verification === "pending_verification" &&
+          !(await historicalConflictInputsChanged(
+            transactionDb,
+            pair.priorConflictIds,
+            pair.fingerprint,
+          ))
+        )
           throw createAppError(
             "CONSTRAINT_VIOLATION",
-            "Historical variant conflict requires fresh current verification before merging",
+            "Historical identity conflict; review updated inputs before merging",
           );
       }
     }
@@ -2047,13 +2059,13 @@ const previewMergeProductsFromPlan = async (
       disposition: {
         code: "carry-product-fields",
         effect: "preserve",
-        description: `Empty survivor fields filled without overwriting existing values: ${
+        description: `Survivor fields carried (notes combine both records): ${
           plan.carriedFields
             .map((field) => CARRIED_FIELD_LABELS[field])
             .join(", ") || "none"
         }.`,
       },
-      label: "empty survivor fields filled",
+      label: "survivor fields preserved",
       byTargetId:
         plan.carriedFields.length > 0
           ? { [keepId]: plan.carriedFields.length }
@@ -2458,7 +2470,11 @@ export async function previewProductMergeDecisions(
       fieldValue(plan.keeper, column),
       fieldValue(incoming, column),
       fieldValue(carried ? plan.carried : plan.keeper, column),
-      carried ? "fill" : "keep",
+      column === "notes" && carried && plan.keeper.notes
+        ? "combine"
+        : carried
+          ? "fill"
+          : "keep",
     );
   }
   add(

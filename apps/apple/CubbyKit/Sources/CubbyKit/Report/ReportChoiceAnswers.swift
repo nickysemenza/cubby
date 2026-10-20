@@ -143,19 +143,19 @@ public struct ReportChoiceAnswers: Equatable, Sendable {
         return SourceFeedback(
             url: url.isEmpty || validURL(url)
                 ? nil
-                : "Enter a full URL of at most \(count(SharedConstants.entitySourceURLMax)) characters.",
-            quote: quote.utf16.count > SharedConstants.entitySourceQuoteMax
-                ? "Shorten the quote to at most \(count(SharedConstants.entitySourceQuoteMax)) characters."
+                : "Enter a full URL of at most \(count(SharedConstants.distinctFromURLMax)) characters.",
+            quote: quote.utf16.count > SharedConstants.distinctFromQuoteMax
+                ? "Shorten the quote to at most \(count(SharedConstants.distinctFromQuoteMax)) characters."
                 : nil,
             quoteLength:
-                "\(count(quote.utf16.count)) of \(count(SharedConstants.entitySourceQuoteMax)) characters."
+                "\(count(quote.utf16.count)) of \(count(SharedConstants.distinctFromQuoteMax)) characters."
         )
     }
 
-    /// Zod's `z.url()` bound by `ENTITY_SOURCE_URL_MAX`: a scheme and a host, any scheme. Lengths
+    /// Zod's `z.url()` bound by `DISTINCT_FROM_URL_MAX`: a scheme and a host, any scheme. Lengths
     /// count UTF-16 units, as zod does.
     private static func validURL(_ url: String) -> Bool {
-        guard url.utf16.count <= SharedConstants.entitySourceURLMax,
+        guard url.utf16.count <= SharedConstants.distinctFromURLMax,
             let components = URLComponents(string: url),
             components.scheme?.isEmpty == false, components.host?.isEmpty == false
         else { return false }
@@ -202,7 +202,7 @@ public struct ReportChoiceAnswers: Equatable, Sendable {
             guard
                 sources.allSatisfy({
                     Self.validURL($0.url) && !$0.quote.isEmpty
-                        && $0.quote.utf16.count <= SharedConstants.entitySourceQuoteMax
+                        && $0.quote.utf16.count <= SharedConstants.distinctFromQuoteMax
                 })
             else { return nil }
             return .new(sources)

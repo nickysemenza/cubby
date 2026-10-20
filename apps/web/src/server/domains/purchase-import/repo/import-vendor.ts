@@ -4,7 +4,7 @@ import type {
   DistinctFromVendor,
   PreparedVendorCandidate,
 } from "@cubby/schemas/purchase-import";
-import { arrayContains, and, eq, ilike } from "drizzle-orm";
+import { arrayContains, and, eq, ilike, sql } from "drizzle-orm";
 
 import {
   distinctSenderDomain,
@@ -15,23 +15,23 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { vendor } from "~/server/db/schema";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
-import { recordEntitySources } from "~/server/entity-kernel/repo/entity-source";
 import { resolveNames } from "~/server/entity-kernel/resolve";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
+import { captureDerivedRefresh } from "~/server/generic/derived-refresh/repo/capture";
 
 type Db = Database | DrizzleTransaction;
 
 export type ImportVendorInput = {
   name: string;
   sender: string | null;
-  /** The order Email's external key, quoted in recorded Sources. */
+  /** The order Email's external key, retained in research notes. */
   evidence: string | null;
   distinctFrom?: readonly DistinctFromVendor[];
 };
 
 const SIMILAR_NAME_REASON =
-  "Similar Vendor name: reuse it by vendorId, or mark it distinctFrom with a Source.";
+  "Similar Vendor name: reuse it by vendorId, or mark it distinctFrom with research notes.";
 const SAME_DOMAIN_REASON =
   "Same website domain as the order Email's sender, shared by several Vendors.";
 
@@ -157,26 +157,30 @@ async function learnSenderAlias(
         .join(", ")}; name the order's vendorId explicitly.`,
     );
   const aliases = [...owner.aliases, name];
+  const research = `Order Email ${input.evidence ?? "(unknown message)"} from ${address} names the merchant "${name}".`;
   await unwrapDb(db)
     .update(vendor)
-    .set({ aliases })
+    .set({
+      aliases,
+      notes: sql`concat_ws(E'\n\n', nullif(${vendor.notes}, ''), ${research}::text)`,
+    })
     .where(eq(vendor.id, owner.id));
   await logAuditEntry(db, actor, {
     entityKind: "vendor",
     entityId: owner.id,
     action: "update",
-    changes: { aliases: { from: owner.aliases, to: aliases } },
+    changes: {
+      aliases: { from: owner.aliases, to: aliases },
+      notes: { from: null, to: null },
+    },
   });
-  await recordEntitySources(db, {
-    entityKind: "vendor",
-    entityId: owner.id,
-    sources: [
-      {
-        quote: `Order Email ${input.evidence ?? "(unknown message)"} from ${address} names the merchant "${name}".`,
-      },
-    ],
-    recorder: actor,
-  });
+  await captureDerivedRefresh(db, [
+    {
+      entityKind: "vendor",
+      entityId: owner.id,
+      changedFields: ["aliases", "notes"],
+    },
+  ]);
   return owner.id;
 }
 
@@ -240,7 +244,7 @@ export async function senderProofVendor(db: Db, sender: string | null) {
  * An imported order's Vendor (terminology "Sender proof", "Vendor alias"):
  * an exact sender address one Vendor records, else the one Vendor whose
  * website registrable domain is the sender's (a shared domain never counts),
- * each learning the merchant name as an alias with the Email as its Source;
+ * each learning the merchant name as an alias with the Email in research notes;
  * else the exact name or alias. A new Vendor beside a same-domain or
  * similar-name candidate needs a sourced Distinct-from decision.
  */
@@ -274,17 +278,28 @@ export async function resolveImportVendor(
         .map(({ candidate }) => `${candidate.vendorId} ("${candidate.name}")`)
         .join(
           ", ",
-        )}; name the order's vendorId, or mark each in vendor.distinctFrom with a Source showing the difference.`,
+        )}; name the order's vendorId, or mark each in vendor.distinctFrom with research notes showing the difference.`,
     );
   const created = await findOrCreateVendor(db, name);
-  await recordEntitySources(db, {
-    entityKind: "vendor",
-    entityId: created,
-    sources: (input.distinctFrom ?? []).map(({ url, quote }) => ({
-      url,
-      quote,
-    })),
-    recorder: actor,
-  });
+  const research = (input.distinctFrom ?? [])
+    .map(({ url, quote }) => [quote, url].filter(Boolean).join("\n"))
+    .join("\n\n");
+  if (research) {
+    await unwrapDb(db)
+      .update(vendor)
+      .set({
+        notes: sql`concat_ws(E'\n\n', nullif(${vendor.notes}, ''), ${research}::text)`,
+      })
+      .where(eq(vendor.id, created));
+    await logAuditEntry(db, actor, {
+      entityKind: "vendor",
+      entityId: created,
+      action: "update",
+      changes: { notes: { from: null, to: null } },
+    });
+    await captureDerivedRefresh(db, [
+      { entityKind: "vendor", entityId: created, changedFields: ["notes"] },
+    ]);
+  }
   return created;
 }

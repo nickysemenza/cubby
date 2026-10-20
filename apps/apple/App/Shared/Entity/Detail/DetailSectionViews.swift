@@ -725,36 +725,6 @@ struct FieldExplanationLabel: View {
                             }
                         }
                     }
-                    if !resolved.verifications.isEmpty {
-                        Divider()
-                        explanationSectionLabel("Sources")
-                        ForEach(
-                            Array(
-                                groupedSources(
-                                    resolved.verifications,
-                                    record: { source in
-                                        source.sourceEntity.map { "\($0.entityKind.rawValue):\($0.entityId)" }
-                                    },
-                                    url: \.url
-                                ).enumerated()), id: \.offset
-                        ) { _, group in
-                            if let first = group.first {
-                                EntitySourceDocument(
-                                    entity: first.sourceEntity.flatMap {
-                                        EntityKey(rawValue: $0.entityKind.rawValue)
-                                    },
-                                    id: first.sourceEntity?.entityId, name: first.sourceEntity?.name,
-                                    deleted: first.sourceEntity?.deleted ?? false, url: first.url)
-                            }
-                            ForEach(group, id: \.key) { verification in
-                                EntitySourceRow(
-                                    label: nil, supportsCurrentValue: verification.supportsCurrentValue,
-                                    quote: verification.quote, selectedVariant: verification.selectedVariant,
-                                    seenAt: verification.observedAt ?? verification.createdAt,
-                                    runID: verification.recorder.runId)
-                            }
-                        }
-                    }
                     if !resolved.sources.isEmpty {
                         Divider()
                         explanationSectionLabel("Evidence")
@@ -1563,75 +1533,5 @@ private struct RecordReferenceList: View {
                 }
             }
         }
-    }
-}
-
-/// One Source: where a fact about a record was seen. A field-scoped source says whether it still
-/// supports the field's current value or describes a value since overwritten.
-struct EntitySourceRow: View {
-    let label: String?
-    let supportsCurrentValue: Bool?
-    let quote: String?
-    let selectedVariant: String?
-    let seenAt: Date
-    let runID: String?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-            HStack(spacing: FieldGuideTokens.Space.xs) {
-                if let label { Text(label).font(.callout.weight(.medium)) }
-                if let supports = supportsCurrentValue {
-                    Text(supports ? "Current value" : "Earlier value")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(
-                            supports ? FieldGuideTokens.graphite : FieldGuideTokens.graphiteSecondary)
-                }
-            }
-            if let quote, !quote.isEmpty {
-                Text("“\(quote)”").font(.callout).foregroundStyle(.secondary)
-            }
-            if let selectedVariant, !selectedVariant.isEmpty {
-                Text("Selected variant: \(selectedVariant)").font(.callout.weight(.medium))
-            }
-            DateDisplay(date: seenAt)
-                .font(.caption).foregroundStyle(.secondary)
-            if let runID {
-                NavigationLink(runID, value: Route.entityDetail(.run, id: runID)).font(.caption)
-            }
-        }
-    }
-}
-
-struct EntitySourceDocument: View {
-    let entity: EntityKey?
-    let id: String?
-    let name: String?
-    let deleted: Bool
-    let url: String?
-
-    var body: some View {
-        if let entity, let id {
-            if deleted {
-                Text("\(name ?? EntityCatalog[entity].singular) (deleted)")
-                    .font(.callout.weight(.medium)).foregroundStyle(.secondary)
-            } else {
-                NavigationLink(
-                    name ?? EntityCatalog[entity].singular,
-                    value: Route.entityDetail(entity, id: id)
-                )
-                .font(.callout.weight(.medium))
-            }
-        }
-        if let url, let link = URL(string: url) {
-            Link(link.host() ?? url, destination: link).font(.caption)
-        }
-    }
-}
-
-#Preview("Source document") {
-    NavigationStack {
-        EntitySourceDocument(
-            entity: .email, id: "EML-4K7M", name: "Order confirmation",
-            deleted: false, url: nil)
     }
 }

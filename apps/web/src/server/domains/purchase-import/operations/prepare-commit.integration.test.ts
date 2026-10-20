@@ -21,7 +21,6 @@ import { getDb, withTransaction } from "~/server/db/helpers";
 import {
   auditLog,
   entityAttachment,
-  entitySource,
   entityExternalId,
   expense,
   externalSource,
@@ -165,17 +164,20 @@ describe("caller-driven purchase import", () => {
       expect(expenses.map((row) => row.date)).toEqual(
         expected ? [expected] : [],
       );
-      const sources = await getDb(ctx.db)
-        .select()
-        .from(entitySource)
-        .where(eq(entitySource.entityId, order!.id));
+      expect(order?.notes?.includes("email receipt time") ?? false).toBe(
+        printed === null && existing === null && expected !== null,
+      );
+      const noteAudits = await getDb(ctx.db)
+        .select({ changes: auditLog.changes })
+        .from(auditLog)
+        .where(eq(auditLog.entityId, order!.id));
       expect(
-        sources.some(
-          (row) =>
-            row.fieldPath === "date" &&
-            row.quote?.includes("email receipt time"),
-        ),
-      ).toBe(printed === null && existing === null && expected !== null);
+        noteAudits.filter((entry) =>
+          Object.hasOwn(entry.changes ?? {}, "notes"),
+        ).length,
+      ).toBeGreaterThanOrEqual(
+        printed === null && existing === null && expected !== null ? 1 : 0,
+      );
       expect((await memberImport(ctx.db, ctx.actor, input)).committed).toEqual(
         result.committed,
       );

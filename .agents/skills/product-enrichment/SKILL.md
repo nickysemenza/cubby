@@ -1,12 +1,12 @@
 ---
 name: product-enrichment
-description: Burn down Cubby's Research queue - enrich Products with verified identity facts, Sources and representative cover images using your own browser. Use for missing product metadata/images, specific Products from purchase import, or source-backed corrections.
+description: Burn down Cubby's Research queue - enrich Products with researched identity facts, notes and representative cover images using your own browser. Use for missing product metadata/images, specific Products from purchase import, or source-backed corrections.
 ---
 
 # Enrich Cubby products
 
 Research exact Product identity and representative images, then write them with
-the Sources that support them. This is Burn-down (ADR 0010): your Claude or Codex
+research notes with useful links and excerpts. This is Burn-down (ADR 0010): your Claude or Codex
 session owns the browser, the searching and the judgment; Cubby owns ownership,
 identifier collisions, image integrity and safe writes. Nothing researches
 Products unattended, so an absent session leaves the Research queue as it is.
@@ -68,7 +68,7 @@ evidence invalidates the exception and reopens the gap. Preserve zero cost,
 source quantity and existing stock; binding a Product never receives it.
 
 For branded seed packets, `manufacturer` is the packet brand established by the
-packet or exact product source. A credited seed grower stays in the Source quote;
+packet or exact product source. A credited seed grower stays in the research notes;
 it does not replace the packet brand, and a retailer's name alone does not
 establish it. When the brand is unclear, keep the current value or leave it
 blank and report the gap.
@@ -83,8 +83,8 @@ public preview does not establish that authenticated evidence is unavailable;
 check the requested signed-in browser live. Missing browser tooling is an
 execution limitation, not evidence for an unavailable exception.
 Do not begin with generic name search when usable purchase sources exist. For groceries and other receipt-titled items, the purchase's own receipt or
-order-page line is the identity Source: cite it with `sourceEntity` (the Purchase)
-and quote the line verbatim; a retailer page then adds the image and identifiers. Use
+order-page line is identity evidence: retain the Purchase shortcode and the
+verbatim line in notes; a retailer page then adds the image and identifiers. Use
 broader search for unavailable sources or facts those sources cannot establish.
 
 Prove the exact variant before writing: accepted purchased-item URL, existing external-ID URL, deterministic
@@ -99,12 +99,10 @@ SKUs in their typed slot. Use lowercase kebab-case source slugs. A source/kind/
 external-ID tuple has one live owner; do not invent, relabel, or choose between
 variants. Preserve ambiguity as unresolved work with its competing candidates.
 
-Connect the ordered item to the observed selected variant, then record each fact
-with a Source on `entity.update` (and record-level `sources` on
-`image.attach_files`); [the generic Source contract](../../../docs/entities.md#identity-attachments-and-the-physical-graph)
-owns its shape. Cite Cubby evidence with `sourceEntity` (the existing record’s
-shortcode), external evidence with `url`; preserve field scope, quote, observation
-time and selected variant. Quote the
+Connect the ordered item to the observed selected variant. Preserve useful
+links or Cubby record shortcodes, excerpts, field/variant context and observation
+dates in the Product's ordinary `notes`, alongside existing note text. These are
+editable research notes, not proof that a field remains current. Quote the
 relevant text, not the page; screenshots and full HTML are optional. Structured
 Product data is useful evidence; visible content and selected-variant state can
 also establish facts when JSON-LD is missing or describes a group. A quotation
@@ -113,7 +111,7 @@ identifier kinds and issuer ownership. An identifier another Product owns
 requires review, never reassignment.
 
 Your writes are the member's: a supported value may replace an existing one, and
-the earlier value's Sources stay visible as "earlier value". When a fact cannot
+preserve useful prior research in notes with enough context to distinguish it. When a fact cannot
 be established, set a `data_exception` on that gap (`reason: unavailable` with a
 note naming what you checked) so the Product leaves the Research queue until new
 evidence changes it; do not loop on unchanged failures. Promote a verified image

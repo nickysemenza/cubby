@@ -92,7 +92,6 @@ const contextTables = [
   "EntityLink",
   "EntityAttachment",
   "EntityExternalId",
-  "EntitySource",
   "AiAnalysis",
   "FinancialTransactionAllocation",
   "ExpenseAttribution",

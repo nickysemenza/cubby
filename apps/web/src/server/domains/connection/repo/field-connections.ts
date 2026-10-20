@@ -20,8 +20,8 @@ import {
 import { assessmentState } from "~/server/db/schema";
 import { saveSweepSuggestions } from "~/server/domains/run/repo/suggestion-sweep-state";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
-import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
 import { SHORTCODE_TABLE } from "~/server/generic/shortcode/repo/shortcode-tables";
+import { canonicalJson } from "~/server/lib/canonical-json";
 
 import {
   captureConnectionBasis,

@@ -11,7 +11,6 @@ import {
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { nonEmptyTuple } from "./identifiers";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
-import { entityRecordSourceInputs } from "./entity-source";
 import { entityFilterList, oneOrMany, presenceFilter } from "./pagination";
 import { auditDateFilterFields } from "./base-entity";
 import { imageCaptureLocation } from "./image-capture-fields";
@@ -395,7 +394,6 @@ export const attachFileFields = {
     .string()
     .regex(/^[a-f0-9]{64}$/)
     .optional(),
-  sources: entityRecordSourceInputs.optional(),
   expectedBytes: z.int().positive().max(MAX_IMAGE_UPLOAD_BYTES).optional(),
   purpose: productImagePurpose
     .optional()
@@ -409,7 +407,7 @@ export const attachFileFields = {
 };
 
 export const mcpAttachFileInput = z
-  .object(attachFileFields)
+  .strictObject(attachFileFields)
   .superRefine((value, ctx) => {
     const sources = [value.url, value.data, value.uploadId].filter(Boolean);
     if (sources.length !== 1) {

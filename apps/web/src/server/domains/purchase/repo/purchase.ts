@@ -159,6 +159,7 @@ import {
 } from "~/server/generic/list/repo/list-projection";
 import {
   finalizeMerge,
+  mergeNotes,
   repointEdge,
   resolveMergeTargets,
 } from "~/server/generic/merge/repo/core";
@@ -2060,6 +2061,7 @@ const carryChargeMetadata = async (
   tx: DrizzleTransaction,
   deadId: PurchaseId,
   survivorId: PurchaseId,
+  options: { notes?: string | null },
 ) => {
   const selection = {
     purchaserOverrideId: purchase.purchaserOverrideId,
@@ -2111,6 +2113,10 @@ const carryChargeMetadata = async (
       "CONSTRAINT_VIOLATION",
       "These Purchases have conflicting purchaser overrides. Reconcile them before merging.",
     );
+  const notes =
+    options.notes === undefined
+      ? mergeNotes(survivor.notes, dead.notes)
+      : options.notes;
   const carried = buildPartialUpdateValues({
     purchaserOverrideId: carryMissing(
       survivor.purchaserOverrideId,
@@ -2131,7 +2137,7 @@ const carryChargeMetadata = async (
 
     statedTotal: carryMissing(survivor.statedTotal, dead.statedTotal),
     displayLabel: carryMissing(survivor.displayLabel, dead.displayLabel),
-    notes: carryMissing(survivor.notes, dead.notes),
+    notes: notes !== survivor.notes ? notes : undefined,
     date: carryMissing(survivor.date, dead.date),
   });
   if (Object.keys(carried).length > 0) {
@@ -2244,6 +2250,7 @@ export const foldChargeInto = async (
   deadId: PurchaseId,
   survivorId: PurchaseId,
   actor: ActorContext,
+  options: { notes?: string | null } = {},
 ): Promise<void> => {
   // Purchase-level vendor truth has to come along, not just the lines and documents.
   // `statedTotal` especially: it is the reconciliation cue the whole `Purchase`
@@ -2251,13 +2258,13 @@ export const foldChargeInto = async (
   // single-line charge silently destroyed it (the fold is reached from
   // `resolveCharge`, not only from an explicit merge).
   //
-  // Only fills a field the survivor DOESN'T have — never overwrites. When both
+  // Notes preserve both original texts; other metadata fills gaps. When both
   // carry a `statedTotal` and they disagree, the survivor's stands and the
   // discarded one is named in the audit row rather than vanishing: two different
   // stated totals is a real conflict and picking silently would be the worse
   // failure.
   const { carried, discardedStatedTotal, survivorStatedTotal } =
-    await carryChargeMetadata(tx, deadId, survivorId);
+    await carryChargeMetadata(tx, deadId, survivorId, options);
 
   await preservePurchaseItemAttribution(tx, [deadId], survivorId);
 
@@ -2425,7 +2432,7 @@ export const mergePurchases = async (
         inArray(purchase.id, [keepId, ...losers]),
         notDeleted(purchase),
       ),
-      columns: { id: true, vendorId: true, orderId: true },
+      columns: { id: true, vendorId: true, orderId: true, notes: true },
     });
 
     const keeper = rows.find((r) => r.id === keepId);
@@ -2451,13 +2458,18 @@ export const mergePurchases = async (
     }
 
     const orderIdBearers = rows.filter((r) => r.orderId !== null);
+    // Plan from original rows so repeated donor notes cannot be appended twice by sequential folds.
+    const notes = mergeNotes(
+      keeper.notes,
+      ...losers.map((id) => rows.find((row) => row.id === id)?.notes),
+    );
 
     // Fold while each source Purchase is still live so inherited Expense
     // attribution can be resolved and preserved. Each fold soft-deletes its
     // source, which also vacates the partial unique-index slot before the
     // keeper adopts an order id below.
     for (const loser of losers) {
-      await foldChargeInto(tx, loser, keepId, actor);
+      await foldChargeInto(tx, loser, keepId, actor, { notes });
     }
     // Carried metadata (a category) can reclassify the keeper's own lines.
     await validateProductPolicy(tx, { purchaseId: keepId });

@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { assertDistinctMergeTargets } from "./core";
+import { assertDistinctMergeTargets, mergeNotes } from "./core";
+
+describe("mergeNotes", () => {
+  it("preserves original whitespace and removes only exact duplicate texts", () => {
+    expect(
+      mergeNotes(null, "", "  First\n", "Second  ", "  First\n", "Second"),
+    ).toBe("  First\n\n\nSecond  \n\nSecond");
+    expect(mergeNotes(null, "")).toBeNull();
+    expect(mergeNotes("  ", null)).toBe("  ");
+  });
+});
 
 describe("assertDistinctMergeTargets", () => {
   it("accepts a keeper distinct from every merge target", () => {
