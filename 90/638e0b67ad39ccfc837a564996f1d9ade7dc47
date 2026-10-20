@@ -1,0 +1,19 @@
+apps/web/tests/tester-army/web-visual-helpers.ts
+  s_edabbc81f55b5d::t_96ec56c4b9e728 44-50,57,66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "90638e0b67ad39ccfc837a564996f1d9ade7dc47",
+  "prompts": {},
+  "sessions": {
+    "s_edabbc81f55b5d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15b26-9ea0-7252-b88f-b156944090c3",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
