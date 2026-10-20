@@ -1,0 +1,21 @@
+apps/web/src/entity/entity-list/board/entity-board.tsx
+  s_359d51740d6cee::t_c2c00a72247bf3 552-558,563
+apps/web/src/features/product/product-bulk-add-to-inventory-dialog.tsx
+  s_359d51740d6cee::t_39860935b8f2e3 364
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b2dd7325dddd148ee33d18fd15448ff933954b61",
+  "prompts": {},
+  "sessions": {
+    "s_359d51740d6cee": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15a5b-cd3e-7de2-9758-1362bd955be4",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
