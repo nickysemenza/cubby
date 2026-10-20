@@ -1,0 +1,35 @@
+apps/apple/App/Shared/Entity/List/EntityBoardListView.swift
+  s_359d51740d6cee::t_36a28c5a41feff 83-88
+apps/web/src/entity/entity-list/board/entity-board.tsx
+  s_359d51740d6cee::t_8eb3e7321b7e84 166-168,252,443,447,462,536,544,549-550,555,566
+apps/web/src/server/domains/task/repo/crud.ts
+  s_359d51740d6cee::t_980a193bde52c6 755-759,802
+apps/web/src/server/domains/task/repo/task-reorder.integration.test.ts
+  s_359d51740d6cee::t_f3c2ea25958d12 91-134
+apps/web/src/server/entity-kernel/repo/mutation-writer.ts
+  s_359d51740d6cee::t_8427739ef7f70f 1-82
+apps/web/src/server/entity-kernel/repo/repository.ts
+  s_359d51740d6cee::t_8764bae1557e06 1-2
+apps/web/tests/e2e/shelf-triage.spec.ts
+  s_359d51740d6cee::t_44ab7a4b84085a 150
+docs/entities.md
+  s_359d51740d6cee::t_6633dce8d1d546 29-32
+packages/schemas/src/project.ts
+  s_359d51740d6cee::t_f384b22abc1e09 238
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b83255d88fa6357d8f70bcc75d02fceead6d72fc",
+  "prompts": {},
+  "sessions": {
+    "s_359d51740d6cee": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15a5b-cd3e-7de2-9758-1362bd955be4",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
