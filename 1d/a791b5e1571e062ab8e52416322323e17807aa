@@ -1,0 +1,59 @@
+apps/web/DESIGN.md
+  s_9b829d577c7e4c::t_fd19f131b869b5 24,28,36
+apps/web/cloudflare.config.ts
+  s_9b829d577c7e4c::t_ed5f91bb933b63 8,12-27
+apps/web/src/entity/components/entity-identity-mark.unit.test.tsx
+  s_9b829d577c7e4c::t_c881eb880698a8 14
+apps/web/src/entity/components/record-mark.unit.test.tsx
+  s_9b829d577c7e4c::t_bf1b71111edc83 47,89
+apps/web/src/entity/entities.tsx
+  s_9b829d577c7e4c::t_039500d40705bc 45,659-660,674-677
+apps/web/src/entity/navigation/application-directory.tsx
+  s_9b829d577c7e4c::t_a1d2228e468071 147
+apps/web/src/entity/navigation/sidebar-rail-group.tsx
+  s_9b829d577c7e4c::t_cdd696a635da79 62-64,66
+apps/web/src/entity/navigation/workspace-navigator.tsx
+  s_9b829d577c7e4c::t_918ee7844fc49d 113,115
+apps/web/src/entity/platform/entity-manifest-grid.tsx
+  s_9b829d577c7e4c::t_e67202e25e31a7 118
+apps/web/src/features/design/sections/basics-section.tsx
+  s_9b829d577c7e4c::t_6db998b4715445 40-45,57,60,62-67
+apps/web/src/features/design/sections/records-section.tsx
+  s_9b829d577c7e4c::t_ea26e319b0f85f 45-46
+apps/web/src/features/project/project-schedule-model.ts
+  s_9b829d577c7e4c::t_59437dbca8f255 14,16,22
+apps/web/src/features/tools/tool-gallery-page.tsx
+  s_9b829d577c7e4c::t_00123f005c33dd 182,397,655,673,957
+apps/web/src/lib/auth.ts
+  s_9b829d577c7e4c::t_49d3c675a91c3c 26-28,96-107
+apps/web/src/lib/workflows/run-workflows.json
+  s_9b829d577c7e4c::t_a7a1cdad099954 1-17
+apps/web/src/lib/workflows/run-workflows.ts
+  s_9b829d577c7e4c::t_8b3b90dcc9f270 1-2,4-5
+apps/web/src/server/entity-kernel/repo/repository.ts
+  s_9b829d577c7e4c::t_90afd37f3f11ba 377-426
+apps/web/src/server/workflows/runs/launcher.ts
+  s_9b829d577c7e4c::t_b5c7ce520bd937 2
+apps/web/src/styles.css
+  s_9b829d577c7e4c::t_62547a87a2bd3e 5-6,278,280-284
+apps/web/src/ui/data-table/rendered-column-fit.preview.test.tsx
+  s_9b829d577c7e4c::t_92587f8066f4ae 312-331,333-339
+apps/web/tests/e2e/filters-menu.spec.ts
+  s_9b829d577c7e4c::t_8443122d81e0a3 28-30,32-43,45-48,279-281,369-371,373-382,385,387
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1da791b5e1571e062ab8e52416322323e17807aa",
+  "prompts": {},
+  "sessions": {
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
