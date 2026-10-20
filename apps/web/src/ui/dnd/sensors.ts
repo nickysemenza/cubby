@@ -13,7 +13,8 @@ export interface CubbyDndSensorOptions {
   pointerDistance?: number;
   touchDelay?: number;
   touchTolerance?: number;
-  keyboardCoordinates?: KeyboardCoordinateGetter;
+  /** Null disables keyboard dragging when the surface provides ordinary move controls. */
+  keyboardCoordinates?: KeyboardCoordinateGetter | null;
   immediatePointer?: boolean;
 }
 
@@ -71,7 +72,6 @@ class CubbyMouseSensor extends MouseSensor {
  */
 export function createValidTargetKeyboardCoordinates(
   isValid: ValidKeyboardTarget,
-  alignCenters = false,
 ): KeyboardCoordinateGetter {
   return (event, { currentCoordinates, context }) => {
     const direction =
@@ -122,16 +122,8 @@ export function createValidTargetKeyboardCoordinates(
 
     if (!best) return undefined;
     return {
-      x:
-        currentCoordinates.x +
-        best.rect.left -
-        activeRect.left +
-        (alignCenters ? (best.rect.width - activeRect.width) / 2 : 0),
-      y:
-        currentCoordinates.y +
-        best.rect.top -
-        activeRect.top +
-        (alignCenters ? (best.rect.height - activeRect.height) / 2 : 0),
+      x: currentCoordinates.x + best.rect.left - activeRect.left,
+      y: currentCoordinates.y + best.rect.top - activeRect.top,
     };
   };
 }
@@ -160,8 +152,12 @@ export function useCubbyDndSensors({
     activationConstraint: { delay: touchDelay, tolerance: touchTolerance },
   });
   const keyboard = useSensor(KeyboardSensor, {
-    coordinateGetter: keyboardCoordinates,
+    coordinateGetter: keyboardCoordinates ?? sortableKeyboardCoordinates,
   });
 
-  return useSensors(pointer, touch, keyboard);
+  return useSensors(
+    pointer,
+    touch,
+    keyboardCoordinates === null ? undefined : keyboard,
+  );
 }

@@ -8,7 +8,6 @@ import type { ListGroupSummary } from "@cubby/schemas/pagination";
 import {
   DndContext,
   rectIntersection,
-  closestCenter,
   useDraggable,
   useDroppable,
   type DragEndEvent,
@@ -44,10 +43,7 @@ import {
   type FilterBarField,
 } from "~/ui/data-table/filter-bar-core";
 import { useFilterBarDraft } from "~/ui/data-table/use-filter-bar-draft";
-import {
-  useCubbyDndSensors,
-  createValidTargetKeyboardCoordinates,
-} from "~/ui/dnd/sensors";
+import { useCubbyDndSensors } from "~/ui/dnd/sensors";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { ListLoadingSkeleton } from "~/ui/feedback/loading-skeletons";
@@ -162,24 +158,11 @@ export function EntityBoard({
   const loading = useHydratedLoading(query.isLoading);
   const commands = useReportCommands();
   const queryClient = useQueryClient();
-  const keyboardCoordinates = useMemo(
-    () =>
-      createValidTargetKeyboardCoordinates(
-        (active, target) =>
-          target?.board === view.id &&
-          target?.destination?.before !== active?.rowId &&
-          (target?.destination?.before !== undefined ||
-            target?.destination?.key !== active?.groupKey ||
-            target?.end === true),
-        true,
-      ),
-    [view.id],
-  );
   const sensors = useCubbyDndSensors({
     pointerDistance: 4,
     touchDelay: 250,
     touchTolerance: 8,
-    keyboardCoordinates,
+    keyboardCoordinates: null,
   });
   const summaries = query.data?.meta.groups ?? [];
   const roster =
@@ -240,18 +223,13 @@ export function EntityBoard({
       showErrorToast(error);
     }
   };
-  const onDragEnd = ({ active, over, activatorEvent }: DragEndEvent) => {
+  const onDragEnd = ({ active, over }: DragEndEvent) => {
     const target = over?.data.current;
     if (typeof active.id !== "string" || target?.board !== view.id) return;
     const destination: Destination = target.destination;
     if (destination.before === active.id) return;
     const rect = active.rect.current.translated;
-    if (
-      !(activatorEvent instanceof KeyboardEvent) &&
-      destination.before &&
-      rect &&
-      over
-    ) {
+    if (destination.before && rect && over) {
       const side =
         rect.top + rect.height / 2 > over.rect.top + over.rect.height / 2
           ? "bottom"
@@ -314,26 +292,7 @@ export function EntityBoard({
         <DndContext
           sensors={sensors}
           onDragEnd={onDragEnd}
-          collisionDetection={(args) => {
-            if (args.pointerCoordinates !== null) return rectIntersection(args);
-            // Keyboard targets share centers, so a tall card cannot obscure the end marker.
-            return closestCenter({
-              ...args,
-              droppableContainers: args.droppableContainers.filter(
-                (container) => {
-                  const target = container.data.current;
-                  const active = args.active.data.current;
-                  return (
-                    target?.board === view.id &&
-                    target?.destination?.before !== active?.rowId &&
-                    (target?.destination?.before !== undefined ||
-                      target?.destination?.key !== active?.groupKey ||
-                      target?.end === true)
-                  );
-                },
-              ),
-            });
-          }}
+          collisionDetection={rectIntersection}
         >
           <div className="flex max-w-full items-start gap-3 overflow-x-auto pb-2">
             {groups.slice(groupPage * 12, (groupPage + 1) * 12).map((group) => (
@@ -522,9 +481,6 @@ function BoardGroup({
           </BoardCard>
         ))
       )}
-      {!capped && acceptsPlacement && view.reorder && (
-        <BoardEnd view={view} destination={destination} disabled={pending} />
-      )}
       {!query.isLoading && rows.length === 0 && !query.error && (
         <p className="p-2 text-sm text-muted-foreground">No records</p>
       )}
@@ -580,7 +536,6 @@ function BoardCard({
 }) {
   const drag = useDraggable({
     id: row.id,
-    data: { rowId: row.id, groupKey: destination.key },
     disabled: disabled || !view.reorder,
   });
   const drop = useDroppable({
@@ -603,6 +558,8 @@ function BoardCard({
             ref={drag.setActivatorNodeRef}
             {...drag.listeners}
             {...drag.attributes}
+            tabIndex={-1}
+            aria-hidden="true"
             aria-label={`Drag ${String(row[entitySummary[entity].titleField] ?? row.id)}`}
             className="min-h-11 px-2 text-muted-foreground md:min-h-7"
           >
@@ -632,29 +589,5 @@ function BoardCard({
       </dl>
       {children}
     </article>
-  );
-}
-
-/** A distinct end anchor lets keyboard users append without targeting the source container. */
-function BoardEnd({
-  view,
-  destination,
-  disabled,
-}: {
-  view: EntityBoardListView;
-  destination: Destination;
-  disabled: boolean;
-}) {
-  const drop = useDroppable({
-    id: `end:${destination.key}`,
-    data: { board: view.id, destination, end: true },
-    disabled,
-  });
-  return (
-    <div
-      ref={drop.setNodeRef}
-      className="min-h-11"
-      aria-label={`End of ${destination.key}`}
-    />
   );
 }
