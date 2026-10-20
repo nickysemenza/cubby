@@ -43,6 +43,8 @@ export type InlineRefLinkProps = {
   className?: string;
   /** Compact mode: truncates long names with max-width */
   compact?: boolean;
+  /** Keep a resolved identity readable in narrow record-review cards. */
+  wrap?: boolean;
   /** Truncate the name to the available flex width (no fixed cap). Parent must be min-w-0. */
   truncate?: boolean;
   /** An adjacent dedicated image/mark already identifies this record. */
@@ -263,6 +265,7 @@ export function InlineRefLink(props: InlineRefLinkProps) {
     openInNewTab,
     className,
     compact,
+    wrap,
     truncate,
     stacked,
     context,
@@ -309,9 +312,11 @@ export function InlineRefLink(props: InlineRefLinkProps) {
             data-stacked-line=""
             className={cn(
               nameClass,
-              detail
-                ? "block truncate leading-[15px]"
-                : "line-clamp-2 leading-[14px] break-words whitespace-normal",
+              wrap
+                ? "line-clamp-2 leading-snug break-words whitespace-normal"
+                : detail
+                  ? "block truncate leading-[15px]"
+                  : "line-clamp-2 leading-[14px] break-words whitespace-normal",
             )}
           >
             {name}

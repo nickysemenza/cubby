@@ -385,6 +385,23 @@ const assessmentFamilies = {
     transactionBound: false,
     actions: ["correct", "wrong", "uncertain", "dismissed"],
     apply: async (db, context, state, input) => {
+      const [prediction] = await getDb(db)
+        .select({ subject: assessment.subject })
+        .from(assessment)
+        .where(eq(assessment.id, state.id))
+        .limit(1);
+      const subject = assessmentSubjects.recommendation.parse(
+        prediction?.subject,
+      );
+      if (subject.scope === "product.tag-propagation") {
+        if (input.verdict !== "correct" || input.correction.present)
+          throw new Error(
+            "Tag additions require acceptance of the current proposal",
+          );
+        const { applyTagSuggestion } = await import("./tag-suggestions");
+        await applyTagSuggestion(db, context, state);
+        return;
+      }
       const { applyEntityConnection } =
         await import("~/server/domains/connection/repo/entity-connections");
       return applyEntityConnection(db, context, state, input);

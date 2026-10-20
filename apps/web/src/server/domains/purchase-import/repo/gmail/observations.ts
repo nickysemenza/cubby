@@ -27,7 +27,10 @@ import {
 } from "~/server/db/schema";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { recordFeedback } from "~/server/generic/assessment/repo/assessment";
-import { ensureEmailAssessment } from "~/server/generic/assessment/repo/assessment-email";
+import {
+  ensureEmailAssessment,
+  EMAIL_OBSERVATION_RECEIPT,
+} from "~/server/generic/assessment/repo/assessment-email";
 import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 /** The caller holds the Email lock; stored unknown telemetry remains unknown. */
@@ -175,6 +178,19 @@ export async function recordEmailClassificationObservation(
       databaseForTransaction(tx),
       observation.id,
     );
+    await recordFeedback(databaseForTransaction(tx), {
+      assessmentId: assessment.id,
+      operationId: "classification-observed",
+      authority: "automatic",
+      actorUserId: null,
+      verdict: "ungraded",
+      intent: "history",
+      correction: { present: false },
+      metadata: {
+        kind: EMAIL_OBSERVATION_RECEIPT,
+        predictionId: observation.id,
+      },
+    });
     if (parsed.stage === "resolution")
       await recordFeedback(databaseForTransaction(tx), {
         assessmentId: assessment.id,

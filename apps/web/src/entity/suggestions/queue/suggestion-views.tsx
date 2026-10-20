@@ -39,7 +39,6 @@ import {
 } from "~/ui/hooks/filter-option-types";
 import { NoneValue } from "~/ui/primitives/none-value";
 
-import { AuthorizedBy, AutomaticWrongCell } from "./automatic-rules";
 import { kindAgreement } from "./statement-kind-votes";
 import { SuggestionActionsCell, ExpandCell } from "./suggestion-actions";
 import {
@@ -56,10 +55,9 @@ import {
 } from "./suggestion-values";
 
 /**
- * The table's view: every family's shared columns, one family's own, or the
- * changes Automatic rules applied.
+ * The table's view: every family's shared columns or one family's own.
  */
-export type SuggestionView = "all" | SuggestionListFamily | "applied";
+export type SuggestionView = "all" | SuggestionListFamily;
 
 type Row = SuggestionListRow;
 const helper = createCubbyColumnHelper<Row>();
@@ -129,13 +127,20 @@ const VIEW_FILTERS = {
     multiselect("strength"),
     { columnId: "clean", kind: "multiselect", value: "boolean" },
   ],
-  applied: [],
-} satisfies Record<SuggestionView, readonly ColumnFilterSpec[]>;
+} satisfies Partial<Record<SuggestionView, readonly ColumnFilterSpec[]>>;
 
 /** The filter codec's specs for a view (URL keys are the column ids). */
 export const viewFilterSpecs = (
   view: SuggestionView,
-): readonly FilterSpecCore[] => VIEW_FILTERS[view];
+): readonly FilterSpecCore[] => viewSetting(VIEW_FILTERS, view) ?? [];
+
+/** Specialized views override the generic defaults only where their columns differ. */
+export function viewSetting<Value>(
+  registry: Partial<Record<SuggestionView, Value>>,
+  view: SuggestionView,
+): Value | undefined {
+  return registry[view];
+}
 
 /** `a..b`, `a..` or `..b`; a bare value is the lower bound. */
 function parseRange(raw: string, numeric: boolean) {
@@ -158,7 +163,7 @@ export function buildWhere(
   state: TableStateReturn,
 ): SuggestionListFilters["where"] {
   const where: SuggestionListFilters["where"] = {};
-  for (const spec of VIEW_FILTERS[view]) {
+  for (const spec of viewSetting(VIEW_FILTERS, view) ?? []) {
     if (spec.value === "range") {
       const raw = state.getColumnFilter(spec.columnId);
       if (!raw) continue;
@@ -282,7 +287,7 @@ const recordColumn = helper.accessor((row) => row.record.id, {
   enableSorting: false,
   meta: attachCubbyColumnMeta<Row>({
     entityColumnRole: "identity",
-    mobile: { slot: "title" },
+    mobile: { slot: "title", renderTitle: true },
   }),
   cell: ({ row }) => <SuggestionRecord row={row.original} />,
 });
@@ -370,7 +375,14 @@ function allColumns() {
         meta: attachCubbyColumnMeta<Row>({
           mobile: { slot: "meta", priority: 0, label: "Family" },
         }),
-        cell: ({ row }) => FAMILY_LABEL[row.original.family],
+        cell: ({ row }) => (
+          <span
+            className="block truncate"
+            title={FAMILY_LABEL[row.original.family]}
+          >
+            {FAMILY_LABEL[row.original.family]}
+          </span>
+        ),
       }),
     );
     add(cleanColumn);
@@ -935,7 +947,9 @@ function statementColumns(
 
 function recommendationColumns() {
   const evidence = (row: Row) =>
-    row.family === "recommendation" ? row.evidence : null;
+    row.family === "recommendation" && !("kind" in row.evidence)
+      ? row.evidence
+      : null;
   return createCubbyColumnCollection<Row>((add) => {
     leadingColumns(add);
     add(recordColumn);
@@ -1008,71 +1022,6 @@ function recommendationColumns() {
   });
 }
 
-/** Changes an Automatic rule applied: what changed, the rule, and Wrong…. */
-function appliedColumns() {
-  return createCubbyColumnCollection<Row>((add) => {
-    add(
-      helper.display({
-        id: "expand",
-        header: "",
-        size: 32,
-        enableSorting: false,
-        enableHiding: false,
-        enableResizing: false,
-        meta: attachCubbyColumnMeta<Row>({ entityColumnRole: "selection" }),
-        cell: ExpandCell,
-      }),
-    );
-    add(recordColumn);
-    add(
-      helper.display({
-        id: "whatChanges",
-        header: "What changed",
-        size: 320,
-        meta: attachCubbyColumnMeta<Row>({
-          mobile: { slot: "subtitle", priority: 0, label: "What changed" },
-        }),
-        cell: ({ row }) => <WhatChanges row={row.original} />,
-      }),
-    );
-    add(
-      helper.accessor((row) => row.automaticRule, {
-        id: "automaticRule",
-        header: "Authorized by",
-        size: 260,
-        enableSorting: false,
-        meta: attachCubbyColumnMeta<Row>({
-          mobile: { slot: "meta", priority: 0, label: "Authorized by" },
-        }),
-        cell: ({ row }) => <AuthorizedBy row={row.original} />,
-      }),
-    );
-    add(
-      helper.accessor((row) => row.family, {
-        id: "family",
-        header: "Family",
-        size: 104,
-        meta: attachCubbyColumnMeta<Row>({
-          mobile: { slot: "meta", priority: 1, label: "Family" },
-        }),
-        cell: ({ row }) => FAMILY_LABEL[row.original.family],
-      }),
-    );
-    add(ageColumn);
-    add(
-      helper.display({
-        id: "actions",
-        header: "",
-        size: 160,
-        enableSorting: false,
-        enableHiding: false,
-        meta: attachCubbyColumnMeta<Row>({ mobile: { slot: "trailing" } }),
-        cell: ({ row }) => <AutomaticWrongCell row={row.original} />,
-      }),
-    );
-  });
-}
-
 /** Rosters for the statement and transfer-pair reference filters, read only when opened. */
 export const REFERENCE_ROSTERS = [
   { key: "account", target: "financialAccount" },
@@ -1086,8 +1035,6 @@ export function viewColumns(
   providerCategoryLabel: string,
 ): CubbyColumnCollection<Row> {
   switch (view) {
-    case "all":
-      return allColumns();
     case "field":
       return fieldColumns();
     case "statement_transaction":
@@ -1096,8 +1043,8 @@ export function viewColumns(
       return recommendationColumns();
     case "transfer_pair":
       return transferPairColumns(rosters);
-    case "applied":
-      return appliedColumns();
+    default:
+      return allColumns();
   }
 }
 
@@ -1114,5 +1061,4 @@ export const VIEW_HIDDEN_COLUMNS = {
   },
   recommendation: { entityKind: false },
   transfer_pair: { account: false, merchant: false },
-  applied: {},
-} satisfies Record<SuggestionView, Record<string, false>>;
+} satisfies Partial<Record<SuggestionView, Record<string, false>>>;

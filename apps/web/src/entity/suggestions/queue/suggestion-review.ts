@@ -129,7 +129,7 @@ const base = (row: SuggestionListRow) => ({
   evidence: null,
 });
 
-/** Accept the row as suggested; null when its family reviews elsewhere (the Workbench). */
+/** Accept the row as suggested; rows requiring a separate choice offer another action. */
 export function acceptItem(
   row: SuggestionListRow,
   statementChoice?: StatementChoice,
@@ -144,21 +144,17 @@ export function acceptItem(
       intent: "apply",
       application: { kind: "transfer_pair" },
     };
-  return { ...base(row), verdict: "correct", intent: "apply" };
+  return {
+    ...base(row),
+    verdict: "correct",
+    intent: "apply",
+    application: row.review?.application,
+  };
 }
 
 /** Wrong: the suggestion was mistaken; it applies nothing. */
 export function wrongItem(row: SuggestionListRow): ReviewItem | null {
   if (!offers(row, "reject")) return null;
-  return { ...base(row), verdict: "wrong", intent: "history" };
-}
-
-/**
- * Wrong on an automatic application: a history-only Miss against the rule
- * that applied it. The application stays; correcting it is the record's own edit.
- */
-export function automaticMissItem(row: SuggestionListRow): ReviewItem | null {
-  if (!row.automaticRule) return null;
   return { ...base(row), verdict: "wrong", intent: "history" };
 }
 
@@ -192,11 +188,19 @@ export function dismissItem(row: SuggestionListRow): ReviewItem {
  * suppresses its charge or pair.
  */
 export function neverSuggestItem(row: SuggestionListRow): ReviewItem | null {
+  if (row.review?.suppression && offers(row, "never_suggest"))
+    return {
+      ...base(row),
+      verdict: "dismissed",
+      intent: "history",
+      suppression: row.review.suppression,
+    };
   if (row.family === "statement_transaction")
     return statementDismissItem(row.evidence);
   if (row.family === "transfer_pair") return transferPairDismissItem(row);
   if (row.family !== "recommendation" || !offers(row, "never_suggest"))
     return null;
+  if ("kind" in row.evidence) return null;
   const suppression = row.evidence.review.suppression;
   if (!suppression) return null;
   return {

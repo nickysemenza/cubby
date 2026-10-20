@@ -30,7 +30,10 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   queue chain or an ad hoc counter.
 - Suggestion review: `suggestions.list`/`acceptClean` over the family registry
   (`server/generic/assessment/repo/suggestion-families.ts`) and the Suggestions page; apply
-  stays the family's `reviewAssessment` handler. Never a family-specific review list.
+  stays the family's `reviewAssessment` handler. `review-families.ts` declares affected
+  records, actionability and automatic-audit admission. Web list badges and detail sections
+  reuse `entity/suggestions/queue`; automatic history uses `suggestions.automaticDecisions`.
+  Never a family-specific review list or a status-only pending count.
 - Run detail: web renders `GenericEntityDetail` with the declared `run` slots; on Apple
   every Run route (`Route.entityDetail(.run, …)`) opens `RunConsoleView`, the
   declared hero and `run` slots through `DetailSlotRegistry`. Its status follows the batched

@@ -26,18 +26,14 @@ export function relationshipDiscoveryContract() {
     const assignment = async () =>
       (await readExpense(page, fixture.expense.id, projectAssignment))
         .projectId;
-    const alternative = page
-      .getByRole("button", { name: `${name} suggested`, exact: true })
-      .first();
-    await expect(alternative).toBeVisible();
-    await alternative.click();
-    await expect(
-      page.getByRole("button", { name: "Apply change", exact: true }).first(),
-    ).toBeVisible();
+    const proposals = page.getByRole("region", {
+      name: "Pending suggestions",
+      exact: true,
+    });
+    await expect(proposals).toContainText(`${name} suggested`);
     expect(await assignment()).toBe(fixture.current.id);
-    await page
-      .getByRole("button", { name: "Apply change", exact: true })
-      .first()
+    await proposals
+      .getByRole("button", { name: "Confirm", exact: true })
       .click();
     await expect.poll(assignment).toBe(fixture.target.id);
 

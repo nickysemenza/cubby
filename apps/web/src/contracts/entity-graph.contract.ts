@@ -93,6 +93,10 @@ export const entityGraphContract = defineContract("entity", {
 
 export const connectionContract = defineContract("connection", {
   read: query({
+    mcp: {
+      omit: "client_view",
+      note: "Native legacy read; agents use the scoped suggestion_queue",
+    },
     input: entityGraphRootSchema,
     output: connectionDiscoveryOut,
     cache: {

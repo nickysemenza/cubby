@@ -1,17 +1,17 @@
+import { assessmentReviewFamilies } from "@cubby/schemas/assessment-review-family";
 import { entityFieldByKey } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
-import { SWEEP_FAMILY_LABEL } from "@cubby/schemas/run-fields";
 import type { StatementTransactionAction } from "@cubby/schemas/statement-suggestion";
+import { suggestionListFamily } from "@cubby/schemas/suggestion-list";
 import type {
   SuggestionImpact,
-  SuggestionListFamily,
   SuggestionListRow,
   SuggestionRecordRef,
   SuggestionStrength,
 } from "@cubby/schemas/suggestion-list";
 import type { TransferPairJudgment } from "@cubby/schemas/transfer-pair-suggestion";
-import { humanize } from "@cubby/shared";
+import { humanize, mapRecord } from "@cubby/shared";
 import { match } from "ts-pattern";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
@@ -20,20 +20,20 @@ import { formatCurrency } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import { ChipCluster } from "~/ui/common/chip-cluster";
 import { StackedValue } from "~/ui/common/stacked-value";
+import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Badge } from "~/ui/primitives/badge";
 import { NoneValue } from "~/ui/primitives/none-value";
 
-export const FAMILY_LABEL = {
-  statement_transaction: "Statement",
-  recommendation: "Connection",
-  field: "Field",
-  transfer_pair: "Transfer pair",
-} satisfies Record<SuggestionListFamily, string>;
+export const FAMILY_LABEL = mapRecord(
+  suggestionListFamily.options,
+  (family) => assessmentReviewFamilies[family].label,
+);
 
 /** Chip order on the page: the family most often bulk-reviewed first. */
-export const FAMILY_CHIPS = (
-  ["statement_transaction", "transfer_pair", "recommendation", "field"] as const
-).map((family) => ({ family, label: SWEEP_FAMILY_LABEL[family] }));
+export const FAMILY_CHIPS = suggestionListFamily.options.map((family) => ({
+  family,
+  label: assessmentReviewFamilies[family].label,
+}));
 
 const STRENGTH_BARS = { strong: 3, medium: 2, weak: 1 } as const;
 
@@ -120,12 +120,16 @@ export function ImpactLabels({ impact }: { impact: SuggestionImpact[] }) {
   return (
     <ChipCluster
       lines={1}
+      limit={1}
       items={ordered.map((item) => ({
         key: `${item.kind}:${item.label}`,
         label: item.label,
         node: (
-          <Badge variant={item.kind === "caution" ? "warning" : "outline"}>
-            {item.label}
+          <Badge
+            className="max-w-full min-w-0 shrink"
+            variant={item.kind === "caution" ? "warning" : "outline"}
+          >
+            <span className="truncate">{item.label}</span>
           </Badge>
         ),
       }))}
@@ -141,13 +145,15 @@ export function RecordLink({
   record: SuggestionRecordRef;
   wrap?: boolean;
 }) {
+  const mobile = useIsMobile();
+  const wraps = wrap ?? mobile;
   return (
     <EntityRefLink
       variant="byId"
       entityKind={record.entity}
       entityId={record.id}
-      compact={!wrap}
-      wrap={wrap}
+      compact={!wraps}
+      wrap={wraps}
     />
   );
 }
@@ -255,8 +261,13 @@ export function WhatChanges({ row }: { row: SuggestionListRow }) {
       </span>
     ))
     .with({ family: "recommendation" }, ({ evidence }) => (
-      <span className="inline-flex min-w-0 items-center gap-1.5">
-        <span className="shrink-0 text-muted-foreground">{evidence.label}</span>
+      <span className="inline-flex max-w-full min-w-0 items-center gap-1.5">
+        <span
+          className="min-w-0 truncate text-muted-foreground"
+          title={"kind" in evidence ? evidence.description : evidence.label}
+        >
+          {"kind" in evidence ? evidence.description : evidence.label}
+        </span>
         {row.other ? <RecordLink record={row.other} /> : null}
       </span>
     ))
@@ -269,7 +280,7 @@ export function WhatChanges({ row }: { row: SuggestionListRow }) {
         {row.other ? <RecordLink record={row.other} /> : null}
       </span>
     ))
-    .exhaustive();
+    .otherwise(({ evidence }) => <span>{evidence.description}</span>);
 }
 
 /** Statement rows name the charge; other families name their record. */

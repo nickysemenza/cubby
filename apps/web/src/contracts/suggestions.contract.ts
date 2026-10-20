@@ -1,4 +1,10 @@
 import {
+  automaticDecisionListInput,
+  automaticDecisionListOut,
+  suggestionRecordCountsInput,
+  suggestionRecordCountsOut,
+} from "@cubby/schemas/automatic-decision";
+import {
   automaticRuleOut,
   automaticRulesOut,
   setAutomaticRuleInput,
@@ -17,6 +23,27 @@ import { defineContract, mutation, query } from "~/contracts/define";
 
 /** Pending Suggestions of every family; review goes through `assessment.review(Batch)`. */
 export const suggestionsContract = defineContract("suggestions", {
+  automaticDecisions: query({
+    input: automaticDecisionListInput,
+    output: automaticDecisionListOut,
+    readPolicy: "strong",
+    transport: "post",
+    cache: { profile: "stable", tags: [["suggestions"]] },
+  }),
+  recordCounts: query({
+    input: suggestionRecordCountsInput,
+    output: suggestionRecordCountsOut,
+    mcp: {
+      omit: "client_view",
+      note: "Per-row counts; agents read scoped suggestion_queue rows",
+    },
+    readPolicy: "strong",
+    transport: "post",
+    cache: {
+      profile: "stable",
+      tags: [["suggestions"], ["statementRow"], ["connections"]],
+    },
+  }),
   list: query({
     input: suggestionListInput,
     output: suggestionListOut,

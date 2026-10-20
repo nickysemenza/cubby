@@ -7,7 +7,31 @@ import {
   assessment,
   emailClassificationObservation,
 } from "~/server/db/retained-tables";
-import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
+import {
+  publishAssessment,
+  recordFeedback,
+} from "~/server/generic/assessment/repo/assessment";
+
+export const EMAIL_OBSERVATION_RECEIPT = "email_classification_observation";
+export const EMAIL_APPLICATION_RECEIPT = "email_classification_application";
+
+/** Called inside the transaction that publishes the effective Email routing. */
+export async function recordEmailClassificationApplication(
+  db: Database,
+  predictionId: string,
+) {
+  const assessment = await ensureEmailAssessment(db, predictionId);
+  await recordFeedback(db, {
+    assessmentId: assessment.id,
+    operationId: "classification-applied",
+    authority: "automatic",
+    actorUserId: null,
+    verdict: "ungraded",
+    intent: "history",
+    correction: { present: false },
+    metadata: { kind: EMAIL_APPLICATION_RECEIPT, predictionId, applied: true },
+  });
+}
 
 /** Observations retain retrieval/model lineage; Assessments own the review identity. */
 export async function ensureEmailAssessment(

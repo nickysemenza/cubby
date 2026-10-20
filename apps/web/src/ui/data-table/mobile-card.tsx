@@ -36,7 +36,7 @@ interface MobileCardProps {
   children?: ReactNode;
   className?: string;
   detailsHref?: string;
-  title?: string;
+  title?: ReactNode;
   titleIcon?: Icon;
   subtitle?: ReactNode;
   imageSlot?: ReactNode;
@@ -68,12 +68,15 @@ function PrimaryTitle({
   titleIcon: TitleIcon,
   iconClassName = "size-3.5",
 }: {
-  title: string | undefined;
+  title: ReactNode;
   detailsHref?: string;
   onClick?: () => void;
   titleIcon?: Icon;
   iconClassName?: string;
 }) {
+  if (typeof title !== "string" && title !== undefined) {
+    return <div className="flex min-h-11 min-w-0 items-center">{title}</div>;
+  }
   const content = (
     <span className="flex min-w-0 items-baseline gap-2 text-left">
       {TitleIcon && (
@@ -83,7 +86,7 @@ function PrimaryTitle({
       )}
       <span
         className="line-clamp-2 min-w-0 flex-1 text-sm leading-snug font-medium break-words"
-        title={title}
+        title={typeof title === "string" ? title : undefined}
       >
         {title}
       </span>

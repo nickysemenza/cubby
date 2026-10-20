@@ -162,6 +162,8 @@ export function ByIdRefLink({
         // by the same fetchable entity guard above.
         data={data as never}
         compact={wrap ? false : compact}
+        stacked={wrap ? true : undefined}
+        wrap={wrap}
         className={wrap ? "max-w-full min-w-0 [&>span]:break-words" : undefined}
       />
     );

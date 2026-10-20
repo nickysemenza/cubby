@@ -21,6 +21,7 @@ import {
   type GmailNormalizedMessage,
 } from "~/server/domains/purchase-import/repo/gmail/types";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
+import { recordEmailClassificationApplication } from "~/server/generic/assessment/repo/assessment-email";
 
 import {
   deferClassificationRefresh,
@@ -706,7 +707,11 @@ async function acquireEligible(
                   retain,
                 )
               : null;
-          if (reclassified) return reclassified;
+          if (reclassified) {
+            if (observation && reclassified.kind === "confirmed")
+              await recordEmailClassificationApplication(tx, observation.id);
+            return reclassified;
+          }
           const recorded = {
             classificationStage: decision.stage,
             classificationReason: decision.reason,
@@ -734,6 +739,8 @@ async function acquireEligible(
                   ? "completed"
                   : "blocked",
             });
+            if (observation)
+              await recordEmailClassificationApplication(tx, observation.id);
             return {
               kind:
                 decision.classification === "unrelated"
@@ -768,6 +775,8 @@ async function acquireEligible(
             orderMailId,
           });
           await restoreOrderMailContent(tx, orderMailId);
+          if (observation)
+            await recordEmailClassificationApplication(tx, observation.id);
           return { kind: "saved", orderMailId };
         },
       )) ?? { kind: "skipped" }

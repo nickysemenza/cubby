@@ -1,6 +1,9 @@
 import { formatConfidence } from "@cubby/schemas/ai";
 import { financialTransactionKind } from "@cubby/schemas/financial-transaction";
-import type { SuggestionListRow } from "@cubby/schemas/suggestion-list";
+import type {
+  SuggestionListRow,
+  DeclaredSuggestionEvidence,
+} from "@cubby/schemas/suggestion-list";
 import { humanize } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
 import type { ReactNode } from "react";
@@ -15,6 +18,7 @@ import { renderOptionCell } from "~/entity/table/column-helpers";
 import { formatCurrency } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import { DateDisplay } from "~/ui/common/date-display";
+import { FactList } from "~/ui/common/fact-list";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
@@ -426,6 +430,7 @@ type ConnectionRow = Extract<SuggestionListRow, { family: "recommendation" }>;
 
 function ConnectionEvidence({ row }: { row: ConnectionRow }) {
   const proposal = row.evidence;
+  if ("kind" in proposal) return <DeclaredEvidence evidence={proposal} />;
   const lines = [
     ...proposal.evidence.reasons.map((text) => ({ text, tone: "" })),
     ...proposal.evidence.contradictions.map((text) => ({
@@ -651,7 +656,31 @@ export function SuggestionEvidence({ row }: { row: SuggestionListRow }) {
         .with({ family: "transfer_pair" }, (pair) => (
           <TransferPairEvidence row={pair} />
         ))
-        .exhaustive()}
+        .otherwise(({ evidence }) => (
+          <DeclaredEvidence evidence={evidence} />
+        ))}
+    </div>
+  );
+}
+
+function DeclaredEvidence({
+  evidence,
+}: {
+  evidence: DeclaredSuggestionEvidence;
+}) {
+  return (
+    <div className="space-y-2">
+      <p className="text-sm whitespace-pre-wrap">{evidence.description}</p>
+      <FactList
+        facts={evidence.facts.map((fact, index) => ({
+          id: `${fact.label}:${index}`,
+          label: fact.label,
+          value:
+            typeof fact.value === "string"
+              ? fact.value
+              : JSON.stringify(fact.value),
+        }))}
+      />
     </div>
   );
 }

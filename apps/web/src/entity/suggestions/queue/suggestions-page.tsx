@@ -8,10 +8,12 @@ import {
 } from "@cubby/schemas/suggestion-list";
 import { humanize } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { EyeSlashIcon } from "@phosphor-icons/react/dist/csr/EyeSlash";
 import { ProhibitIcon } from "@phosphor-icons/react/dist/csr/Prohibit";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import {
   useCallback,
   useMemo,
@@ -64,6 +66,7 @@ import {
   buildWhere,
   viewColumns,
   viewFilterSpecs,
+  viewSetting,
   type SuggestionView,
 } from "./suggestion-views";
 import { parseRecordParam, type SuggestionsSearch } from "./suggestions-search";
@@ -77,28 +80,16 @@ type ScopeFilters = Omit<
   "order" | "cursor" | "offset" | "limit" | "groups"
 >;
 
-/**
- * The route scope as list filters. A financial account's statement
- * Suggestions belong to its StatementRows, so an account record filters the
- * statement family's account column; any other record lists by `recordIds`.
- */
+/** Record scoping expands each family's declared affected records. */
 function scopeFilters(search: SuggestionsSearch): ScopeFilters {
   const record = parseRecordParam(search.record);
   const recordScope: ScopeFilters = record
-    ? record.entity === "financialAccount"
-      ? {
-          family: "statement_transaction",
-          where: { account: { in: [record.code] } },
-        }
-      : { entity: record.entity, recordIds: [record.code] }
+    ? { entity: record.entity, recordIds: [record.code] }
     : {};
   return {
     ...recordScope,
     ...(search.family ? { family: search.family } : {}),
     ...(search.runId ? { runId: search.runId } : {}),
-    ...(search.status === "applied_automatically"
-      ? { appliedAutomatically: true }
-      : {}),
   };
 }
 
@@ -106,17 +97,15 @@ function scopeFilters(search: SuggestionsSearch): ScopeFilters {
 const familyOf = (search: SuggestionsSearch) =>
   search.family ?? scopeFilters(search).family ?? "all";
 
-/** The table's view: what rules applied, else the family's own. */
-const viewOf = (search: SuggestionsSearch): SuggestionView =>
-  search.status === "applied_automatically" ? "applied" : familyOf(search);
+/** Legacy automatic-application URLs redirect before rendering this page. */
+const viewOf = (search: SuggestionsSearch): SuggestionView => familyOf(search);
 
 /** A count as a segment's trailing hint; "…" while it loads. */
 const countHint = (count: number | undefined) =>
   count === undefined ? "…" : formatCount(count);
 
 /**
- * The page's three tabs: pending Suggestions, the changes Automatic rules
- * applied without review, and the rules themselves with their switches.
+ * Proposal review and rule configuration share scope; audit has its own route.
  */
 function StatusTabs({
   search,
@@ -125,70 +114,35 @@ function StatusTabs({
   search: SuggestionsSearch;
   onSearch: (patch: Partial<SuggestionsSearch>) => void;
 }) {
-  const { appliedAutomatically: _applied, ...scope } = scopeFilters({
-    ...search,
-    status: undefined,
-  });
-  const counts = useQuery(
-    suggestions.counts.queryOptions({ ...scope, where: scope.where ?? {} }),
-  );
-  // Counts read pending outcomes; the applied view's total comes from its list.
-  const applied = useQuery(
-    suggestions.list.queryOptions({
-      ...scope,
-      appliedAutomatically: true,
-      limit: 1,
-    }),
-  );
-  const pending = counts.data?.families.reduce(
-    (sum, row) => sum + row.pending,
-    0,
-  );
-  const rules = useQuery(suggestions.rules.queryOptions({}));
-  const rulesOn = rules.data?.rules.filter((rule) => rule.enabled).length;
-  const tab = (label: string, hint: string | undefined) => (
-    <>
-      {label}
-      {hint === undefined ? null : (
-        <span className="text-xs font-normal text-muted-foreground tabular-nums">
-          {hint}
-        </span>
-      )}
-    </>
-  );
   return (
-    <Tabs
-      value={search.status ?? "pending"}
-      onValueChange={(value) =>
-        onSearch(
-          value === "applied_automatically" || value === "rules"
-            ? { status: value, group: undefined }
-            : { status: undefined },
-        )
-      }
-    >
-      <TabsList
-        variant="line"
-        aria-label="Suggestion status"
-        className="h-auto max-w-full flex-wrap justify-start gap-2 [&>[data-slot=tabs-trigger]]:flex-none"
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <Tabs
+        value={search.status === "rules" ? "rules" : "pending"}
+        onValueChange={(value) =>
+          onSearch({ status: value === "rules" ? "rules" : undefined })
+        }
       >
-        <TabsTrigger value="pending">
-          {tab("Pending", countHint(pending))}
-        </TabsTrigger>
-        <TabsTrigger value="applied_automatically">
-          {tab(
-            "Applied automatically",
-            countHint(applied.data?.meta.totalCount),
-          )}
-        </TabsTrigger>
-        <TabsTrigger value="rules">
-          {tab(
-            "Automatic rules",
-            rules.data ? `${rulesOn} of ${rules.data.rules.length} on` : "…",
-          )}
-        </TabsTrigger>
-      </TabsList>
-    </Tabs>
+        <TabsList variant="line" aria-label="Suggestion status">
+          <TabsTrigger value="pending">Pending</TabsTrigger>
+          <TabsTrigger value="rules">Automatic rules</TabsTrigger>
+        </TabsList>
+      </Tabs>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="basis-full justify-start md:basis-auto"
+        render={
+          <Link
+            to="/automatic-decisions"
+            search={{ record: parseRecordParam(search.record)?.code }}
+          />
+        }
+        nativeButton={false}
+      >
+        Review automatic decisions
+        <CaretRightIcon aria-hidden />
+      </Button>
+    </div>
   );
 }
 
@@ -299,7 +253,13 @@ export function SuggestionsPage({
       <FindSuggestionsDialog
         open={finding}
         onOpenChange={setFinding}
-        preset={search.family ? { families: [search.family] } : undefined}
+        preset={
+          search.family === "product_pair"
+            ? { families: ["recommendation"] }
+            : search.family && search.family !== "image_description"
+              ? { families: [search.family] }
+              : undefined
+        }
         onStarted={(runId) => onSearch({ sweep: runId })}
       />
       <div className="flex flex-col gap-2 px-2 pt-2 md:px-4">
@@ -342,60 +302,41 @@ function FamilyChips({
   search: SuggestionsSearch;
   onSearch: (patch: Partial<SuggestionsSearch>) => void;
 }) {
-  const {
-    family: _family,
-    appliedAutomatically,
-    ...scope
-  } = scopeFilters({
+  const { family: _family, ...scope } = scopeFilters({
     ...search,
     family: undefined,
   });
   const counts = useQuery({
     ...suggestions.counts.queryOptions({ ...scope, where: scope.where ?? {} }),
-    enabled: !appliedAutomatically,
   });
-  // The applied view counts each family from its own list total.
-  const applied = useQuery({
-    ...suggestions.list.queryOptions({
-      ...scope,
-      appliedAutomatically: true,
-      limit: 1,
-    }),
-    enabled: Boolean(appliedAutomatically),
-  });
-  const appliedFacet = applied.data?.facets.family;
   const count = (family?: SuggestionListFamily) => {
-    if (appliedAutomatically) {
-      if (!applied.data) return undefined;
-      return family
-        ? (appliedFacet?.find((facet) => facet.value === family)?.count ?? 0)
-        : applied.data.meta.totalCount;
-    }
     if (!counts.data) return undefined;
     return counts.data.families
       .filter((row) => !family || row.family === family)
       .reduce((sum, row) => sum + row.pending, 0);
   };
   return (
-    <Picker
-      mode="segmented"
-      label="Suggestion families"
-      options={[
-        { value: "all", label: "All", hint: countHint(count()) },
-        ...FAMILY_CHIPS.map((chip) => ({
-          value: chip.family,
-          label: chip.label,
-          hint: countHint(count(chip.family)),
-        })),
-      ]}
-      value={familyOf(search)}
-      onValueChange={(value) =>
-        onSearch({
-          family: FAMILY_CHIPS.find((chip) => chip.family === value)?.family,
-          group: undefined,
-        })
-      }
-    />
+    <div className="max-w-full overflow-x-auto">
+      <Picker
+        mode="segmented"
+        label="Suggestion families"
+        options={[
+          { value: "all", label: "All", hint: countHint(count()) },
+          ...FAMILY_CHIPS.map((chip) => ({
+            value: chip.family,
+            label: chip.label,
+            hint: countHint(count(chip.family)),
+          })),
+        ]}
+        value={familyOf(search)}
+        onValueChange={(value) =>
+          onSearch({
+            family: FAMILY_CHIPS.find((chip) => chip.family === value)?.family,
+            group: undefined,
+          })
+        }
+      />
+    </div>
   );
 }
 
@@ -450,8 +391,7 @@ const QUICK_FILTERS = {
   statement_transaction: ["clean", "action", "kind", "account", "owner"],
   recommendation: ["relation", "entityKind"],
   transfer_pair: ["clean", "strength", "owner"],
-  applied: [],
-} satisfies Record<SuggestionView, readonly string[]>;
+} satisfies Partial<Record<SuggestionView, readonly string[]>>;
 
 function QuickFilters({
   table,
@@ -466,46 +406,50 @@ function QuickFilters({
 }) {
   return (
     <>
-      {QUICK_FILTERS[view].map((columnId) => {
-        const column = table.getColumn(columnId);
-        const config: FilterConfig | undefined =
-          column?.columnDef.meta?.filterConfig;
-        if (!config?.options || config.freeText) return null;
-        const label =
-          config.label ??
-          (typeof column?.columnDef.header === "string"
-            ? column.columnDef.header
-            : humanize(columnId));
-        const options = config.options.map((option) => ({
-          ...option,
-          hint: hints[columnId]?.[option.value],
-        }));
-        return (
-          <Picker
-            key={columnId}
-            multiple
-            compact
-            label={label}
-            placeholder={`Any ${label.toLowerCase()}`}
-            className="w-44"
-            options={options}
-            isLoading={config.isLoading}
-            onSearchChange={config.onSearchChange}
-            records={config.records}
-            onOpenChange={(open) => {
-              if (open)
-                config.onActivate?.(tableState.getColumnFilterValues(columnId));
-            }}
-            values={tableState.getColumnFilterValues(columnId) ?? []}
-            onValuesChange={(values) =>
-              tableState.setColumnFilters((previous) => [
-                ...previous.filter((filter) => filter.id !== columnId),
-                ...(values.length ? [{ id: columnId, value: values }] : []),
-              ])
-            }
-          />
-        );
-      })}
+      {(viewSetting(QUICK_FILTERS, view) ?? QUICK_FILTERS.all).map(
+        (columnId) => {
+          const column = table.getColumn(columnId);
+          const config: FilterConfig | undefined =
+            column?.columnDef.meta?.filterConfig;
+          if (!config?.options || config.freeText) return null;
+          const label =
+            config.label ??
+            (typeof column?.columnDef.header === "string"
+              ? column.columnDef.header
+              : humanize(columnId));
+          const options = config.options.map((option) => ({
+            ...option,
+            hint: hints[columnId]?.[option.value],
+          }));
+          return (
+            <Picker
+              key={columnId}
+              multiple
+              compact
+              label={label}
+              placeholder={`Any ${label.toLowerCase()}`}
+              className="w-full md:w-44"
+              options={options}
+              isLoading={config.isLoading}
+              onSearchChange={config.onSearchChange}
+              records={config.records}
+              onOpenChange={(open) => {
+                if (open)
+                  config.onActivate?.(
+                    tableState.getColumnFilterValues(columnId),
+                  );
+              }}
+              values={tableState.getColumnFilterValues(columnId) ?? []}
+              onValuesChange={(values) =>
+                tableState.setColumnFilters((previous) => [
+                  ...previous.filter((filter) => filter.id !== columnId),
+                  ...(values.length ? [{ id: columnId, value: values }] : []),
+                ])
+              }
+            />
+          );
+        },
+      )}
     </>
   );
 }
@@ -662,7 +606,10 @@ function SuggestionsTableBody({
     getRowId: (row) => row.id,
     rowSelection: selection.rowSelection,
     onRowSelectionChange: selection.onRowSelectionChange,
-    initialColumnVisibility: VIEW_HIDDEN_COLUMNS[view],
+    initialColumnVisibility: viewSetting<Record<string, false>>(
+      VIEW_HIDDEN_COLUMNS,
+      view,
+    ),
     scrollRestorationId: `suggestions-${view}`,
     rowContentVersion: review,
   });
@@ -743,8 +690,7 @@ function SuggestionsTableBody({
     const rows = list.data;
     const index = rows.findIndex((row) => row.id === current);
     const row = rows[index];
-    // Applied rows are already settled: A and D have nothing to review.
-    const reviewable = view === "applied" ? undefined : row;
+    const reviewable = row;
     // A settled row leaves the list: the next row (else the previous) stays current.
     const advance = () => {
       const next = rows[index + 1] ?? rows[index - 1];
@@ -825,7 +771,7 @@ function SuggestionsTableBody({
             mode="choose"
             compact
             label="Sort"
-            className="w-60"
+            className="w-full md:w-60"
             options={
               order
                 ? ORDER_OPTIONS
@@ -858,7 +804,7 @@ function SuggestionsTableBody({
             />
           ) : null}
         </div>
-        {cleanCount > 0 && !grouped && view !== "applied" ? (
+        {cleanCount > 0 && !grouped ? (
           <div className="flex flex-wrap items-center gap-2 rounded-md border border-positive/30 bg-positive/5 px-2.5 py-1.5 text-xs">
             <span className="font-medium text-positive">Clean</span>
             <span>
@@ -964,9 +910,7 @@ function SuggestionsTableBody({
         showColumnMenu
         emptyState={
           <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-            {view === "applied"
-              ? "No Automatic rule has applied a change here."
-              : "No pending suggestions here. Find suggestions to look again."}
+            No pending suggestions here. Find suggestions to look again.
           </p>
         }
       />

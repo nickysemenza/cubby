@@ -5,7 +5,7 @@ import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { dismissItem } from "~/features/suggestions/suggestion-review";
+import { dismissItem } from "~/entity/suggestions/queue/suggestion-review";
 import {
   databaseForTransaction,
   getDb,
@@ -36,6 +36,7 @@ import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
 import type { WorkflowLauncher } from "~/server/workflows/runs/launcher";
 
 import { reviewAssessment } from "./assessment-review";
+import { readAssessmentRecordRefs } from "./review-families";
 import { acceptCleanSuggestions, listSuggestionPage } from "./suggestion-list";
 
 describe("transfer pairs in the global queue", () => {
@@ -185,6 +186,25 @@ describe("transfer pairs in the global queue", () => {
       limit: 100,
     });
     expect(page.items).toHaveLength(1);
+    // Every account and owner on either leg gets the same scoped proposal.
+    const pairId = page.items[0]!.assessmentId;
+    const refs =
+      (await readAssessmentRecordRefs(ctx.db, [pairId])).get(pairId) ?? [];
+    expect(
+      refs.filter((ref) => ref.entity === "financialAccount"),
+    ).toHaveLength(2);
+    expect(refs.filter((ref) => ref.entity === "ledgerParty")).toHaveLength(1);
+    for (const ref of refs) {
+      expect(
+        (
+          await listSuggestionPage(ctx.db, {
+            family: "transfer_pair",
+            entity: ref.entity,
+            recordIds: [ref.id],
+          })
+        ).items.map((item) => item.assessmentId),
+      ).toContain(pairId);
+    }
     const merchantMatches = await listSuggestionPage(ctx.db, {
       family: "transfer_pair",
       where: { merchant: { search: "Synthetic clearing" } },

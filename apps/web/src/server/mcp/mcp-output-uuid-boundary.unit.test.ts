@@ -85,7 +85,6 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   // evaluation receipt; its producing Run is an entity shortcode.
   "imports_read.items[].assessmentId",
   "imports_read.items[].producer.evaluationId",
-  "entity_read.proposals[].review.assessmentId",
   "entity.proposals[].review.assessmentId",
   "entity.assessmentId",
   "entity.feedbackId",
@@ -93,8 +92,6 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "entity.items[].feedbackId",
   "activity.duplicateProductIdentities[].assessmentId",
   "activity.duplicateProductIdentities[].pairs[].assessmentId",
-  "activity.items[].review.assessmentId",
-  "activity.items[].assessmentId",
   // Audit rows are opaque receipts, not entity links; these identify the exact acceptance writes.
   "entity_read.items[].evidence.acceptanceReceipt.auditIds[]",
   "run.id",

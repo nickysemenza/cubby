@@ -1,5 +1,9 @@
 import { entityManifest } from "@cubby/schemas/entity-manifest";
-import type { ProductId, ProductShortcode } from "@cubby/schemas/identifiers";
+import {
+  productShortcode,
+  type ProductId,
+  type ProductShortcode,
+} from "@cubby/schemas/identifiers";
 import type { TagPropagationRecommendationOut } from "@cubby/schemas/recommendations";
 import type { RelatednessOut } from "@cubby/schemas/relatedness";
 import type { SimilarEntitiesOut } from "@cubby/schemas/search";
@@ -202,6 +206,11 @@ const productTagPropagationWorkflowDefinition = workflow<
             .map(([tag, supportingProductCount]) => ({
               tag,
               supportingProductCount,
+              supportingProductIds: input.evidence.rows
+                .filter(
+                  (row) => row.id !== input.input && row.tags.includes(tag),
+                )
+                .map((row) => productShortcode.parse(row.id)),
             }))
             .sort(
               (a, b) =>

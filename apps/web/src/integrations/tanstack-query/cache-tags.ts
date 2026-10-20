@@ -210,11 +210,6 @@ export const ripple = {
   runOnly: exactRippleTags([["run"]]),
   memberLogins: exactRippleTags([["ledgerParty"], ["run"]]),
   productOnly: exactRippleTags([["product"]]),
-  recommendationPlacement: exactRippleTags([["recommendations", "placement"]]),
-  recommendationTagPropagation: exactRippleTags([
-    ["recommendations", "tagPropagation"],
-    ["relatedness", "product"],
-  ]),
   product: productBase,
   /** Taxonomy moves change Product evidence and inherited food-project costs. */
   productCategory: rippleTags(productBase, [

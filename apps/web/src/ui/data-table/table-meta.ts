@@ -67,6 +67,8 @@ export type MobileSlot =
 export interface MobileColumnMeta {
   /** Retain a semantic null state rendered by the cell, such as Not assessed. */
   showWhenEmpty?: boolean;
+  /** Preserve a resolved identity link instead of its shortcode accessor. */
+  renderTitle?: boolean;
   slot?: MobileSlot;
   /** Lower values render first within a slot. */
   priority?: number;

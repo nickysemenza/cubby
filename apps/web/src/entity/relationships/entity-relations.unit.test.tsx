@@ -2,8 +2,6 @@ import type {
   EntityGraphExploreOutput,
   EntityGraphOutput,
 } from "@cubby/schemas/entity-graph";
-import { entityRecommendationsOut } from "@cubby/schemas/entity-recommendations";
-import { expenseOut } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import {
   act,
@@ -13,16 +11,11 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { useState } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { installFeatures } from "~/features/registry";
-import {
-  inventory,
-  entityGraph,
-  recommendations,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
-import { mock } from "~/lib/test/mock-schema";
 
 import { EntityRelations, type EntityRelationsState } from "./entity-relations";
 
@@ -80,157 +73,12 @@ const initial: EntityGraphExploreOutput = {
 let harness: ReturnType<typeof createBrowserTestHarness>;
 beforeEach(() => {
   harness = createBrowserTestHarness();
-  const recommendationOptions = recommendations.forEntity.queryOptions(root);
-  harness.queryClient.setQueryDefaults(recommendationOptions.queryKey, {
-    staleTime: Number.POSITIVE_INFINITY,
-  });
-  harness.queryClient.setQueryData(recommendationOptions.queryKey, {
-    source: root,
-    basisKey: "no-suggestions",
-    groups: [],
-  });
 });
 afterEach(() => {
   harness.dispose();
 });
 
 describe("shared entity Relations", () => {
-  it("keeps a full-page project proposal read-only until its reviewed change is applied", async () => {
-    const expenseId = testShortcode("expense", "EXP-PROJ");
-    const projectId = testShortcode("project", "PRJ-KTCN");
-    const expenseRoot = { entityKind: "expense", entityId: expenseId } as const;
-    const graph: EntityGraphExploreOutput = {
-      nodes: [{ ...expenseRoot, label: "Fixture purchase", metadata: {} }],
-      edges: [],
-      branches: [],
-      truncated: false,
-      paths: [],
-      completion: {
-        status: "exhausted",
-        requestedDepth: 1,
-        reachedDepth: 0,
-      },
-    };
-    const update = vi.fn(async () => ({
-      ...mock(expenseOut, {
-        seed: 12,
-        overrides: { id: expenseId, projectId },
-      }),
-      sideEffects: {},
-    }));
-
-    render(
-      <EntityRelations
-        entity="expense"
-        sourceId={expenseId}
-        operations={{
-          ...entityGraph,
-          explore: entityGraph.explore.withTransport(async () => graph),
-          graph: entityGraph.graph.withTransport(async () => graph),
-        }}
-        recommendationOperations={{
-          forEntity: recommendations.forEntity.withTransport(async () =>
-            entityRecommendationsOut.parse({
-              source: expenseRoot,
-              basisKey: "expense-project:fixture",
-              groups: [
-                {
-                  kind: "expense-project",
-                  status: "ready",
-                  currentTarget: null,
-                  proposals: [
-                    {
-                      kind: "expense-project",
-                      expenseId,
-                      target: { id: projectId, name: "Kitchen refresh" },
-                      effectiveStart: "2026-08-01",
-                      effectiveEnd: "2026-10-31",
-                      sameTradeCount: 2,
-                      exactProductCount: 1,
-                      supportingExpenses: [],
-                      reasons: ["The purchase date falls within this project."],
-                    },
-                  ],
-                },
-              ],
-            }),
-          ),
-        }}
-        recommendationActionOperations={{
-          expenseUpdate: () => ({ mutationFn: update }),
-          inventoryMove: inventory.moveEntries,
-        }}
-      />,
-      { wrapper: harness.wrapper },
-    );
-
-    fireEvent.click(
-      await screen.findByRole("button", {
-        name: "Review Kitchen refresh suggestion",
-      }),
-    );
-    expect(update).not.toHaveBeenCalled();
-    expect(screen.getByText("Current:").parentElement).toHaveTextContent(
-      "Unassigned",
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Apply change" }));
-    await waitFor(() =>
-      expect(update).toHaveBeenCalledWith(
-        {
-          id: expenseId,
-          data: { projectId },
-        },
-        expect.anything(),
-      ),
-    );
-  });
-
-  it("keeps relationship data usable when suggestions fail and retries them independently", async () => {
-    harness.queryClient.removeQueries({
-      queryKey: recommendations.forEntity.queryOptions(root).queryKey,
-    });
-    let failSuggestions = true;
-    const recommendationOperations = {
-      forEntity: recommendations.forEntity.withTransport(async () => {
-        if (failSuggestions) throw new Error("recommendations unavailable");
-        return {
-          source: root,
-          basisKey: "retry-basis",
-          groups: [],
-        };
-      }),
-    };
-    const operations = {
-      ...entityGraph,
-      explore: entityGraph.explore.withTransport(async () => initial),
-      graph: entityGraph.graph.withTransport(async () => initial),
-    };
-    render(
-      <EntityRelations
-        entity="cookbook"
-        sourceId={root.entityId}
-        operations={operations}
-        recommendationOperations={recommendationOperations}
-      />,
-      { wrapper: harness.wrapper },
-    );
-
-    expect(
-      await screen.findByRole("heading", { name: "Recipes" }),
-    ).toBeVisible();
-    expect(
-      await screen.findByText("recommendations unavailable"),
-    ).toBeVisible();
-    failSuggestions = false;
-    fireEvent.click(screen.getByRole("button", { name: "Retry suggestions" }));
-    await waitFor(() =>
-      expect(
-        screen.queryByText("recommendations unavailable"),
-      ).not.toBeInTheDocument(),
-    );
-    expect(screen.getByRole("heading", { name: "Recipes" })).toBeVisible();
-  });
-
   it("explicitly explores two or three hops and reports bounded completion", async () => {
     const requests: Array<{ id: string; depth: number }> = [];
     const operations = {

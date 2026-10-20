@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
 import { usePageIdentity, usePageWorkbenchTarget } from "~/entity/page/page";
-import { ConnectionSuggestionsProvider } from "~/entity/relatedness/connection-suggestions";
+import { ProposalCountProvider } from "~/entity/suggestions/proposal-counts";
 import {
   RecordSuggestionsBulkAction,
   RecordSuggestionsProvider,
@@ -1315,7 +1315,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
   };
 
   return (
-    <ConnectionSuggestionsProvider
+    <ProposalCountProvider
       entity={entity}
       records={
         isLoading || isTransitioning ? [] : rows.map((row) => row.original)
@@ -1402,7 +1402,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
           </Stack>
         </EntityDisplayImagesProvider>
       </RecordSuggestionsProvider>
-    </ConnectionSuggestionsProvider>
+    </ProposalCountProvider>
   );
 }
 

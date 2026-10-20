@@ -115,7 +115,13 @@ describe("getProductTagPropagation", () => {
     ).resolves.toEqual({
       status: "ready",
       currentTags: ["already"],
-      proposals: [{ tag: "shared", supportingProductCount: 3 }],
+      proposals: [
+        {
+          tag: "shared",
+          supportingProductCount: 3,
+          supportingProductIds: [oneId, twoId, threeId],
+        },
+      ],
     });
   });
 });

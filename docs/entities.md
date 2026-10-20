@@ -2390,10 +2390,11 @@ similarity index are unavailable.
 - **Product relatedness:** semantic candidates and shared-tag evidence remain
   discovery, with their similarity readiness state.
 
-Graph proximity alone never enables a write. An expense project proposal uses
-the expense update and inventory placement the move operation; both require
-explicit acceptance, keep the proposal on failure, and refresh affected views
-on success. A changed source basis clears an outstanding proposal. When a move
+Graph proximity alone never enables a write. A Sweep publishes expense project
+and inventory placement proposals into the shared Suggestion queue. Passive reads
+never discover candidates. Their family handler uses the expense update or
+inventory move operation after explicit acceptance, rechecks the stored basis,
+keeps failures reviewable and refreshes affected views on success. When a move
 coalesces stock into an existing row, both clients follow the surviving row and
 replace the deleted source in navigation.
 
@@ -2692,8 +2693,13 @@ behind the cell's mark. Percentages describe model confidence, not a
 guarantee of correctness. Accept shows local saving feedback; completed row
 enrichment stays visible throughout same-query refreshes. A changed target, declared basis or backing field supersedes its older pending Suggestions, and a later sweep supersedes prior pending rows
 for the same record and field. Suggestions remain available to evaluation after
-review. The `/suggestions` page lists every family's pending Suggestions
-(fields, statement transactions, connections) on one server-filtered table
+review.
+
+### Shared proposal queue and automatic decisions
+
+The `/suggestions` page lists actionable proposals from fields,
+statement transactions, connections and recommendations (including tag additions
+and placement moves), Product pairs, image descriptions and transfer pairs on one server-filtered table
 (`suggestions.list` over the family registry in
 `server/generic/assessment/repo/suggestion-families.ts`): family chips with counts, each family's own columns,
 inline evidence, keyboard review (↑/↓, →, A, D), a confirmed "Accept N clean"
@@ -2701,13 +2707,46 @@ that re-lists before each chunk, bulk Dismiss and Never suggest (no bulk
 Wrong), and Find suggestions, which estimates and starts a Sweep. A
 collapsible Automatic rules section lists each rule's state, measured
 precision and member switch (`suggestions.rules`/`setRule`; On only when
-eligible, Off after a confirm), and `status=applied_automatically` lists what
-rules applied with the authorizing rule and a Wrong… that records a Miss (not
-an undo). Its `family`, `record` (`<kind>:<CODE>`) and `runId` params scope it. The `/ai`
+eligible, Off after a confirm). Its `family`, `record` (`<kind>:<CODE>`) and `runId` params scope it.
+Every entity list batches the same queue's pending counts and opens its shared
+inline review; detail pages show a scoped Suggestions section. Family declarations
+expand every affected record: both endpoints of connections and pairs, reference
+values of fields, and a statement row's account and candidate Transactions.
+Non-actionable Product pairs remain ordinary history. A merge still requires
+explicit survivor and impact confirmation, and identity conflicts cannot merge.
+Tag proposals retain the source and every supporting Product's revision; listing,
+publication and confirmation recheck those revisions and the supporting tags.
+Older count-only and stale tag advice stays stored with its existing status and is
+excluded from the queue; a later Sweep may publish a proposal with a new basis.
+Project, placement and tag proposals appear after a Sweep publishes them; passive
+record reads never discover or publish new advice.
+Similar-Product browsing stays informational; photo-import choices stay in their Run.
+
+`/automatic-decisions` is the separate generic **Review automatic decisions** view,
+newest first, with family and review-status filters. It also appears on each affected
+record's detail page. Email relevance, automatic Email links, mail-import outcomes
+and automatic-rule application receipts enter through declarations; member-made
+Email link decisions remain ordinary history. Wrong records Feedback through the
+existing family path: relevance and link decisions offer their correction choices;
+mail-import outcomes and rule applications keep their applied effects and link to
+affected records for domain correction. Wrong and corrected decisions remain in the
+audit. Legacy Email predictions without application receipts are included with
+**Unverified application**, even if they disagree with the Email's current relevance.
+New ingestion records observation and application receipts atomically with routing;
+known unapplied predictions stay ordinary history. Observation receipts coexist
+with member Feedback: readers select the intended operation or authority instead
+of assuming Feedback row order. No status reset or backlog cleanup is needed.
+The former automatic-application URL redirects to this audit, and
+Workbench bookmarks redirect to the shared queue or informational Product detail.
+Apple queue/audit/list/detail parity is tracked separately in [#2654](https://github.com/nickysemenza/cubby/issues/2654).
+The `/ai`
 page's Decisions tab catalogs every decision's basis, options, rules and
 rendered request (`ai.decisionCatalog`) with a Jev/Clef Try panel. The
 household's Work has one row per Suggestion family linking into the page,
 and a Sweep Run's detail links to its own.
+
+### Automatic semantic classification
+
 Automatic semantic classification uses the same declared Decision features:
 receipt roles, UPC offer comparability, weak image provenance, and Product
 title variants. Authoritative assignments bypass inference. Valid uncertainty

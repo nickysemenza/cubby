@@ -1,3 +1,5 @@
+import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { startOperation } from "./support/start-operation";
 import superjson from "superjson";
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
@@ -652,9 +654,38 @@ test("suggests an existing variant and previews every merge decision for a creat
     .getByRole("button", { name: /^Compare(?: existing Products)?$/ })
     .click();
   await page.locator(`a[href*="candidate=${existing.id}"]`).click();
-  await expect(page).toHaveURL(/recommendations\/workbench/);
+  await expect(page).toHaveURL(
+    (url) =>
+      url.pathname === "/suggestions" &&
+      url.searchParams.get("family") === "product_pair" &&
+      url.searchParams.get("record") === `product:${createdId}`,
+  );
+  // Title similarity alone stays informational. Seed the separately published
+  // actionable proposal whose merge preview this journey exercises.
+  await expect(
+    page.getByText(
+      "No pending suggestions here. Find suggestions to look again.",
+    ),
+  ).toBeVisible();
+  const { db } = await createEvidenceHarnessContext(page);
+  await publishProductPair(db, {
+    productIds: [
+      await resolveOrThrow(db, "product", existing.id),
+      await resolveOrThrow(db, "product", createdId!),
+    ],
+    source: "agent",
+    evidence,
+    sourceUrls: ["https://retailer.example/crew-shirt"],
+    actionable: true,
+  });
+  await page.reload();
   await expect(page.getByText(candidateName).first()).toBeVisible();
-  await expect(page.getByText(evidence)).toBeVisible();
+  await page
+    .getByRole("button", { name: "Show evidence", exact: true })
+    .click();
+  await expect(
+    page.getByRole("paragraph").filter({ hasText: evidence }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Review merge" }).click();
   const dialog = page.getByRole("dialog");
   await expect(

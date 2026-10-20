@@ -21,7 +21,7 @@ import {
   resolutionIsDerived,
   resolutionIsInherited,
 } from "~/entity/fields/field-resolution";
-import { ConnectionCell } from "~/entity/relatedness/connection-suggestions";
+import { ProposalCount } from "~/entity/suggestions/proposal-counts";
 import { RecordFieldSuggestion } from "~/entity/suggestions/record-suggestions";
 import { cn } from "~/lib/utils";
 import { DenseCellContext } from "~/ui/common/stacked-value";
@@ -233,7 +233,7 @@ function DesktopDataCell<TItem extends RowData>({
             <DenseCellContext
               value={{ linksTo: cell.column.columnDef.meta?.linksTo ?? null }}
             >
-              <ConnectionCell record={cell.row.original} field={cell.column.id}>
+              <ProposalCount record={cell.row.original} field={cell.column.id}>
                 <RecordFieldSuggestion
                   record={cell.row.original}
                   field={cell.column.id}
@@ -241,7 +241,7 @@ function DesktopDataCell<TItem extends RowData>({
                 >
                   {explained}
                 </RecordFieldSuggestion>
-              </ConnectionCell>
+              </ProposalCount>
             </DenseCellContext>
           </CellKeyProvider>
         </div>

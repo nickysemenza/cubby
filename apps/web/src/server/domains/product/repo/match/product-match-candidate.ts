@@ -18,6 +18,7 @@ import {
   or,
   sql,
   getTableColumns,
+  type SQL,
 } from "drizzle-orm";
 import type { PgTransactionConfig } from "drizzle-orm/pg-core";
 import { z } from "zod";
@@ -78,6 +79,9 @@ export const currentProductPairPolicy = (producer: AssessmentProducer | null) =>
     producer.revision === PRODUCT_IDENTITY_RULE_REVISION) ||
   (producer.kind === "model" &&
     producer.revision === PRODUCT_IDENTITY_FEATURE.promptVersion);
+
+export const currentProductPairPolicySql = (producer: SQL) =>
+  sql`(${producer} IS NULL OR ${producer}->>${assessmentProducer.keyof().enum.kind} = ${assessmentProducer.shape.kind.enum.agent} OR (${producer}->>${assessmentProducer.keyof().enum.kind} = ${assessmentProducer.shape.kind.enum.rule} AND ${producer}->>'revision' = ${PRODUCT_IDENTITY_RULE_REVISION}) OR (${producer}->>${assessmentProducer.keyof().enum.kind} = ${assessmentProducer.shape.kind.enum.model} AND ${producer}->>'revision' = ${PRODUCT_IDENTITY_FEATURE.promptVersion}))`;
 
 export async function publishProductPair(
   db: Database,
@@ -383,6 +387,7 @@ export async function listProductMatchRows(
   options: {
     reviewableOnly?: boolean;
     actionableOnly?: boolean;
+    assessmentIds?: readonly string[];
     candidateId?: ProductId;
     limit?: number;
   } = {},
@@ -395,7 +400,14 @@ export async function listProductMatchRows(
       and(
         eq(assessmentState.family, "product_pair"),
         eq(assessmentState.active, true),
-        sql`(${assessment.producer} IS NULL OR ${assessment.producer}->>${assessmentProducer.keyof().enum.kind} = ${assessmentProducer.shape.kind.enum.agent} OR (${assessment.producer}->>${assessmentProducer.keyof().enum.kind} = ${assessmentProducer.shape.kind.enum.rule} AND ${assessment.producer}->>'revision' = ${PRODUCT_IDENTITY_RULE_REVISION}) OR (${assessment.producer}->>${assessmentProducer.keyof().enum.kind} = ${assessmentProducer.shape.kind.enum.model} AND ${assessment.producer}->>'revision' = ${PRODUCT_IDENTITY_FEATURE.promptVersion}))`,
+        eq(assessment.served, true),
+        options.assessmentIds
+          ? sql`${assessmentState.id} IN (${sql.join(
+              options.assessmentIds.map((id) => sql`${id}::uuid`),
+              sql`, `,
+            )})`
+          : undefined,
+        currentProductPairPolicySql(sql`${assessment.producer}`),
         options.reviewableOnly
           ? and(
               eq(assessmentState.status, "pending"),

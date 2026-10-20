@@ -3,9 +3,6 @@ import type { ExpenseOut } from "@cubby/schemas/project";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { renderDetailFieldValue } from "~/entity/display/entity-display";
-import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
-import { useUpdateMutation } from "~/entity/hooks/use-update-mutation";
-import { ProjectSuggestionChips } from "~/features/expense/project-suggestion-chips";
 import { formatCurrency } from "~/lib/number-format";
 import { Stack } from "~/ui/layout";
 
@@ -19,16 +16,8 @@ const projectField = entityFieldModels.expense.fields.find(
   (field) => field.key === "projectId",
 );
 
-/**
- * The project link plus the relationship-discovery suggestions for it: an
- * unassigned or doubtfully assigned line offers the projects its siblings
- * and vendor point at, applied with one click.
- */
+/** Allocated projects retain their per-share amounts; proposals use the shared queue. */
 function ExpenseProjectField({ expense }: { expense: ExpenseOut }) {
-  const update = useUpdateMutation({
-    mutationFn: entityMutationOptionsFactory("expense", "update"),
-    entity: "expense",
-  });
   return (
     <Stack gap="xs">
       {expense.fieldResolutions?.projectId?.mode === "allocated" ? (
@@ -66,15 +55,6 @@ function ExpenseProjectField({ expense }: { expense: ExpenseOut }) {
         </Stack>
       ) : projectField ? (
         renderDetailFieldValue("expense", expense, projectField)
-      ) : null}
-      {expense.fieldResolutions?.projectId?.mode !== "allocated" ? (
-        <ProjectSuggestionChips
-          expense={expense}
-          isPending={update.isPending}
-          onAssign={async (projectId) => {
-            await update.mutateAsync({ id: expense.id, data: { projectId } });
-          }}
-        />
       ) : null}
     </Stack>
   );

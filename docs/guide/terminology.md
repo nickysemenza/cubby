@@ -686,8 +686,13 @@ duplicates.
 
 **Suggestion**:
 A classification, field value or record change that has been computed but not
-yet accepted by the household, with a confidence.
+yet accepted by the household. It changes data only when accepted, or when an
+explicit Automatic rule authorizes its application.
 _Avoid_: proposal, Jev suggestion, recommendation
+
+**Automatic decision**:
+A classification or change already acted on without waiting for household
+review. The household can review it afterwards and mark it Wrong.
 
 **Transaction suggestion**:
 A Suggestion, computed from one unmatched statement charge, to create a

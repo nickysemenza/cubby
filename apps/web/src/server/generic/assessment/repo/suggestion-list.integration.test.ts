@@ -4,6 +4,8 @@ import {
   type StatementRowInput,
 } from "@cubby/schemas/statement-row";
 import type { SuggestionListRow } from "@cubby/schemas/suggestion-list";
+import { suggestionListFilters } from "@cubby/schemas/suggestion-list";
+import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -17,6 +19,8 @@ import { answering } from "~/server/domains/statement-import/repo/statement-deci
 import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
 import { generateStatementSuggestionPage } from "~/server/domains/statement-import/repo/statement-suggestions";
 import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
+import { readAssessmentRecordRefs } from "~/server/generic/assessment/repo/review-families";
+import { suggestionFamilies } from "~/server/generic/assessment/repo/suggestion-families";
 import {
   createProductFixture,
   makeProductInput,
@@ -25,6 +29,7 @@ import {
 import {
   acceptCleanSuggestions,
   listSuggestionPage,
+  suggestionRecordCounts,
   suggestionCountsByFamily,
 } from "./suggestion-list";
 
@@ -149,6 +154,110 @@ const readyKey = (row: SuggestionListRow) =>
 
 describe("cross-family Suggestion list", () => {
   const ctx = withTestDb();
+
+  // Entity-wide history can contain more ids than a Postgres Bind message
+  // permits. A scoped key read must use a bounded number of parameters.
+  it("reads a large assessment roster through every proposal adapter", async () => {
+    const item = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic roster product" }),
+      ctx.actor,
+    );
+    const id = await fieldSuggestion(ctx, item, "model", 0.9, new Date());
+    const assessmentIds = [
+      id,
+      ...Array.from({ length: 65536 }, () => crypto.randomUUID()),
+    ];
+    for (const [family, presentation] of Object.entries(suggestionFamilies)) {
+      const keys = await presentation.keys(ctx.db, {
+        filters: suggestionListFilters.parse({}),
+        assessmentIds,
+      });
+      expect(keys.map((key) => key.assessmentId)).toEqual(
+        family === "field" ? [id] : [],
+      );
+    }
+    // Per-record counts expand the whole touching roster, not only one page.
+    expect(
+      (await readAssessmentRecordRefs(ctx.db, assessmentIds)).get(id),
+    ).toEqual([{ entity: "product", id: item.id }]);
+  });
+
+  // Reference proposals touch both the old and proposed records, even when
+  // neither is the field's primary subject or entity kind.
+  it("scopes reference-valued field proposals to both referenced records", async () => {
+    const item = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic reference drill" }),
+      ctx.actor,
+    );
+    const current = await createRepoEntity(ctx, "productCategory", {
+      name: "Synthetic current tools",
+    });
+    const proposed = await createRepoEntity(ctx, "productCategory", {
+      name: "Synthetic proposed tools",
+    });
+    const id = await fieldSuggestion(ctx, item, "categoryId", 0.9, new Date());
+    await getDb(ctx.db)
+      .update(assessmentState)
+      .set({
+        currentValue: current.output.id,
+        suggestedValue: proposed.output.id,
+      })
+      .where(eq(assessmentState.id, id));
+    for (const record of [current.output.id, proposed.output.id]) {
+      const page = await listSuggestionPage(ctx.db, {
+        family: "field",
+        entity: "productCategory",
+        recordIds: [record],
+      });
+      expect(page.items.map((row) => row.assessmentId)).toEqual([id]);
+      expect(
+        (await suggestionRecordCounts(ctx.db, { recordIds: [record] })).records,
+      ).toEqual([{ id: record, pending: 1 }]);
+    }
+  });
+
+  // A row can offer several existing Transactions; every candidate must expose
+  // review, rather than only the preferred candidate or owning account.
+  it("scopes a statement proposal to its account and every candidate", async () => {
+    const account = (await card(ctx)).output;
+    const candidates = await Promise.all(
+      ["2026-05-04", "2026-05-05"].map(
+        async (postedDate) =>
+          (
+            await createRepoEntity(ctx, "financialTransaction", {
+              accountId: account.id,
+              kind: "purchase",
+              status: "posted",
+              amount: 42.5,
+              postedDate,
+              merchant: "Example Grocer",
+              sourceRefs: [],
+            })
+          ).output,
+      ),
+    );
+    await record(ctx, [rowInput()]);
+    await generate(ctx);
+    const unscoped = await listSuggestionPage(ctx.db, {
+      family: "statement_transaction",
+    });
+    expect(unscoped.items).toHaveLength(1);
+    for (const id of [
+      account.id,
+      ...candidates.map((candidate) => candidate.id),
+    ]) {
+      expect(
+        (
+          await listSuggestionPage(ctx.db, {
+            family: "statement_transaction",
+            recordIds: [id],
+          })
+        ).items.map((row) => row.assessmentId),
+      ).toEqual(unscoped.items.map((row) => row.assessmentId));
+    }
+  });
 
   // Failure modes: one family's rows sort as a block instead of interleaving
   // by readiness; a weak row outranks a clean one; paging repeats or skips.

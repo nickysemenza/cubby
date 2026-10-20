@@ -8,14 +8,13 @@ import {
   type EntityGraphOutput,
 } from "@cubby/schemas/entity-graph";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
-import type { EntityRecommendationGroup } from "@cubby/schemas/entity-recommendations";
 import { countLabel } from "@cubby/shared/pluralize";
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
 import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { ListIcon } from "@phosphor-icons/react/dist/csr/List";
 import { NetworkIcon } from "@phosphor-icons/react/dist/csr/Network";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 
@@ -26,21 +25,8 @@ import {
   entityLabel,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
-import {
-  entityMutationOptionsFactory,
-  type EntityMutationOptionsFactory,
-} from "~/entity/entity-contracts";
-import { featureRegistry } from "~/entity/feature-registry";
-import { ConnectionSuggestions } from "~/entity/relatedness/connection-suggestions";
-import {
-  EntityRecommendations,
-  type EntityRecommendationOperations,
-} from "~/entity/relatedness/entity-recommendations";
 import { EntityGraphPicker } from "~/entity/relationships/entity-graph-picker";
-import {
-  inventory,
-  entityGraph,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
@@ -124,25 +110,12 @@ type EntityGraphOperations = {
   connections?: typeof entityGraph.connections;
 };
 
-export interface EntityRecommendationActionOperations {
-  expenseUpdate: EntityMutationOptionsFactory<"expense", "update">;
-  inventoryMove: typeof inventory.moveEntries;
-}
-
-const productionRecommendationActionOperations: EntityRecommendationActionOperations =
-  {
-    expenseUpdate: entityMutationOptionsFactory("expense", "update"),
-    inventoryMove: inventory.moveEntries,
-  };
-
 export function EntityRelations({
   entity,
   sourceId,
   state,
   onStateChange,
   operations = entityGraph,
-  recommendationOperations,
-  recommendationActionOperations = productionRecommendationActionOperations,
   placement = "explorer",
 }: {
   entity: Entity;
@@ -155,8 +128,6 @@ export function EntityRelations({
   state?: EntityRelationsState;
   onStateChange?: (state: EntityRelationsState) => void;
   operations?: EntityGraphOperations;
-  recommendationOperations?: EntityRecommendationOperations;
-  recommendationActionOperations?: EntityRecommendationActionOperations;
 }) {
   const [localView, setLocalView] = useState<"list" | "graph">("list");
   const router = useRouter();
@@ -168,12 +139,7 @@ export function EntityRelations({
   if (placement === "detail")
     return (
       <Stack gap="md">
-        <RelationshipRecommendations
-          source={root}
-          operations={recommendationOperations}
-          actionOperations={recommendationActionOperations}
-          exclude={DETAIL_SLOT_RECOMMENDATIONS}
-        />
+        <RelationshipRecommendations source={root} />
         <GraphExplorer
           key={`${entity}:${sourceId}`}
           root={root}
@@ -221,8 +187,6 @@ export function EntityRelations({
         onStateChange?.(next);
       }}
       operations={operations}
-      recommendationOperations={recommendationOperations}
-      recommendationActionOperations={recommendationActionOperations}
     />
   );
 }
@@ -232,15 +196,11 @@ function useEntityRelationsModel({
   state,
   onStateChange,
   operations,
-  recommendationOperations,
-  recommendationActionOperations,
 }: {
   root: EntityRef;
   state?: EntityRelationsState;
   onStateChange?: (state: EntityRelationsState) => void;
   operations: EntityGraphOperations;
-  recommendationOperations?: EntityRecommendationOperations;
-  recommendationActionOperations: EntityRecommendationActionOperations;
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -473,8 +433,6 @@ function useEntityRelationsModel({
     paths,
     pathIndex,
     setPathIndex,
-    recommendationOperations,
-    recommendationActionOperations,
     selectedRef,
   };
 }
@@ -485,43 +443,15 @@ function EntityRelationsSession(
   return <EntityRelationsContent {...useEntityRelationsModel(props)} />;
 }
 
-/** Groups a detail page already shows in its own slot. */
-const DETAIL_SLOT_RECOMMENDATIONS = ["product-related"] as const;
-
-function RelationshipRecommendations({
-  source,
-  operations,
-  actionOperations,
-  exclude,
-}: {
-  source: EntityRef;
-  operations?: EntityRecommendationOperations;
-  actionOperations: EntityRecommendationActionOperations;
-  exclude?: readonly EntityRecommendationGroup["kind"][];
-}) {
-  const expenseUpdate = useMutation(actionOperations.expenseUpdate());
-  const { useInventoryPlacementAction } = featureRegistry().components;
-  const inventoryPlacement = useInventoryPlacementAction({
-    moveOperation: actionOperations.inventoryMove,
-  });
-
+function RelationshipRecommendations({ source }: { source: EntityRef }) {
   return (
-    <>
-      <ConnectionSuggestions source={source} />
-      <EntityRecommendations
-        source={source}
-        operations={operations}
-        exclude={exclude}
-        pending={expenseUpdate.isPending || inventoryPlacement.isPending}
-        onAcceptExpenseProject={async (proposal) => {
-          await expenseUpdate.mutateAsync({
-            id: proposal.expenseId,
-            data: { projectId: proposal.target.id },
-          });
-        }}
-        onAcceptInventoryPlacement={inventoryPlacement.accept}
-      />
-    </>
+    <Link
+      to="/suggestions"
+      search={{ record: `${source.entityKind}:${source.entityId}` }}
+      className="text-sm underline underline-offset-2"
+    >
+      Review suggestions for this record
+    </Link>
   );
 }
 
@@ -554,8 +484,6 @@ function EntityRelationsContent(
     paths,
     pathIndex,
     setPathIndex,
-    recommendationOperations,
-    recommendationActionOperations,
     selectedRef,
   } = model;
   const relationshipOptions = useMemo<PickerOption[]>(
@@ -570,22 +498,14 @@ function EntityRelationsContent(
   if (loading)
     return (
       <Stack gap="md">
-        <RelationshipRecommendations
-          source={selectedRef}
-          operations={recommendationOperations}
-          actionOperations={recommendationActionOperations}
-        />
+        <RelationshipRecommendations source={selectedRef} />
         <output>Loading relationships…</output>
       </Stack>
     );
   if (initial.isError)
     return (
       <Stack gap="md">
-        <RelationshipRecommendations
-          source={selectedRef}
-          operations={recommendationOperations}
-          actionOperations={recommendationActionOperations}
-        />
+        <RelationshipRecommendations source={selectedRef} />
         <ErrorDisplay
           error={initial.error}
           title="relationships"
@@ -595,11 +515,7 @@ function EntityRelationsContent(
     );
   return (
     <Stack gap="md">
-      <RelationshipRecommendations
-        source={selectedRef}
-        operations={recommendationOperations}
-        actionOperations={recommendationActionOperations}
-      />
+      <RelationshipRecommendations source={selectedRef} />
       {data.nodes.length === 0 && (
         <p role="alert">
           This record is unavailable or has been deleted. Choose another

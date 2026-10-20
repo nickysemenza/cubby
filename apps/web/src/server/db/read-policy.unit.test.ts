@@ -17,7 +17,8 @@ describe("shared read policy", () => {
       "location.makeTree",
       "meal.getPreparations",
       "project.dashboardSummary",
-      "recommendations.placement",
+      "suggestions.list",
+      "suggestions.automaticDecisions",
       "recipe.getDependencyGraph",
       "task.board",
     ] as const) {

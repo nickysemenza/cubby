@@ -14,7 +14,6 @@ import type { ListSlotTable } from "~/entity/entity-list/list-slots";
 import type { FinancialTransactionFormFields } from "~/features/finance/financial-transaction-form";
 import type { SpendingCategoryMergeReview } from "~/features/finance/spending-classification-review";
 import type { EntityPhotosSection } from "~/features/image/entity-photos-section";
-import type { useInventoryPlacementAction } from "~/features/inventory/inventory-placement-suggestion";
 import type { ProductDiscardDialog } from "~/features/product/product-discard-dialog";
 import type { useUpcAwareCreate } from "~/features/product/use-upc-aware-create";
 import type { createUnitMappingsColumn } from "~/features/units/unit-mappings-column";
@@ -79,7 +78,6 @@ export interface FeatureRegistry {
     FinancialTransactionFormFields: typeof FinancialTransactionFormFields;
     EntityPhotosSection: typeof EntityPhotosSection;
     createUnitMappingsColumn: typeof createUnitMappingsColumn;
-    useInventoryPlacementAction: typeof useInventoryPlacementAction;
     useUpcAwareCreate: typeof useUpcAwareCreate;
   };
 }

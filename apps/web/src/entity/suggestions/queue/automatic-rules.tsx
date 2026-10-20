@@ -1,11 +1,9 @@
 import {
   AUTOMATIC_RULE_MIN_PRECISION,
   AUTOMATIC_RULE_MIN_REVIEWS,
-  automaticRuleKey,
   type AutomaticRuleKey,
   type AutomaticRuleOut,
 } from "@cubby/schemas/automatic-rule";
-import type { SuggestionListRow } from "@cubby/schemas/suggestion-list";
 import { getErrorMessage } from "@cubby/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -26,26 +24,12 @@ import {
   AlertDialogTitle,
 } from "~/ui/primitives/alert-dialog";
 import { Badge } from "~/ui/primitives/badge";
-import { Button } from "~/ui/primitives/button";
 import { Switch } from "~/ui/primitives/switch";
-
-import { automaticMissItem } from "./suggestion-review";
-import { useSuggestionReview } from "./suggestion-review-context";
-import { RecordLink } from "./suggestion-values";
 
 const RULE_NAME = {
   "field.addition": "Field Addition",
   "statement_transaction.attach": "Statement attach",
 } satisfies Record<AutomaticRuleKey, string>;
-
-/** `<ruleKey>@<revision>[@<model>]` as its rule and revision, or null when unknown. */
-function parseRuleStamp(stamp: string) {
-  const [key, revision, model] = stamp.split("@");
-  const ruleKey = automaticRuleKey.safeParse(key).data;
-  return ruleKey && revision
-    ? { ruleKey, name: RULE_NAME[ruleKey], revision, model: model ?? null }
-    : null;
-}
 
 /** Floored to a tenth so a rule just under the bar never reads as at it. */
 const formatPrecision = (precision: number) =>
@@ -210,103 +194,5 @@ function RuleRow({
         </AlertDialogContent>
       </AlertDialog>
     </LedgerRow>
-  );
-}
-
-/** The rule that applied a row, with its revision and current measured precision. */
-export function AuthorizedBy({ row }: { row: SuggestionListRow }) {
-  const rules = useQuery(suggestions.rules.queryOptions({}));
-  const stamp = row.automaticRule ? parseRuleStamp(row.automaticRule) : null;
-  if (!stamp)
-    return (
-      <span className="font-mono text-xs">
-        {row.automaticRule ?? "Unknown"}
-      </span>
-    );
-  const rule = rules.data?.rules.find((item) => item.ruleKey === stamp.ruleKey);
-  // Precision is measured per revision; an earlier one's is not today's.
-  const current = rule?.revision === stamp.revision ? rule : null;
-  return (
-    <span className="flex min-w-0 flex-col">
-      <span className="inline-flex items-center gap-1.5">
-        <Badge variant="slate">Automatic</Badge>
-        <span className="truncate">{stamp.name}</span>
-      </span>
-      <span className="truncate text-2xs text-muted-foreground tabular-nums">
-        revision {stamp.revision}
-        {current?.precision != null
-          ? ` · ${formatPrecision(current.precision)} precision now`
-          : rule && !current
-            ? " · an earlier revision"
-            : null}
-      </span>
-    </span>
-  );
-}
-
-/**
- * Wrong on an automatic change records a Miss against its rule through the
- * normal review path. It is not an undo: the change stays, corrected on its record.
- */
-export function AutomaticWrongCell({ row }: { row: SuggestionListRow }) {
-  const { review, outcome } = useSuggestionReview();
-  const [confirming, setConfirming] = useState(false);
-  const [recorded, setRecorded] = useState(false);
-  const state = outcome(row.id);
-  const name = row.automaticRule
-    ? (parseRuleStamp(row.automaticRule)?.name ?? row.automaticRule)
-    : "its rule";
-  return (
-    <div className="flex min-w-0 items-center justify-end gap-1">
-      {state?.state === "failed" ? (
-        <span
-          role="alert"
-          className="min-w-0 truncate text-xs text-destructive"
-          title={state.error}
-        >
-          {state.error}
-        </span>
-      ) : recorded ? (
-        <span className="text-xs text-muted-foreground">Miss recorded</span>
-      ) : null}
-      <Button
-        size="xs"
-        variant="ghost"
-        disabled={state?.state === "pending"}
-        onClick={(event) => {
-          event.stopPropagation();
-          setConfirming(true);
-        }}
-      >
-        Wrong…
-      </Button>
-      <AlertDialog open={confirming} onOpenChange={setConfirming}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Record a Miss against {name}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This records a Miss, counted as a corrected automatic application
-              of the rule. Automatic applications sit outside its precision
-              window, so precision does not move. There is no undo: the change
-              itself stays; correct it on{" "}
-              <RecordLink record={row.other ?? row.record} />.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                setConfirming(false);
-                void review([row], automaticMissItem).then((failures) =>
-                  setRecorded(failures.length === 0),
-                );
-              }}
-            >
-              Record Miss
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
   );
 }

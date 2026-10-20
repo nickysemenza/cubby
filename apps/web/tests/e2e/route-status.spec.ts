@@ -27,7 +27,8 @@ test("incomplete deep links render without a server error", async ({
 
   const workbench = await page.goto("/recommendations/workbench");
   expect(workbench?.status()).toBe(200);
+  await expect(page).toHaveURL(/\/suggestions(?:\?|$)/u);
   await expect(
-    page.getByText("Open this workbench from a current recommendation."),
+    page.getByRole("heading", { name: "Suggestions", exact: true }),
   ).toBeVisible();
 });

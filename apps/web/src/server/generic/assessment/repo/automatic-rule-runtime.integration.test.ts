@@ -25,6 +25,7 @@ import {
 } from "~/server/domains/statement-import/repo/statement-suggestions";
 import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { listAutomaticDecisions } from "~/server/generic/assessment/repo/automatic-decisions";
 import {
   applyAutomaticRules,
   listAutomaticRules,
@@ -655,6 +656,26 @@ describe("Automatic rules", () => {
     const state = await stateOf(ctx, suggestion.id);
     expect(state.data.auditSample).toBe(false);
     expect(state.status).toBe("applied");
+    // Automatic applications stay available to historical grading reads.
+    const history = await listSuggestionPage(ctx.db, {
+      family: "statement_transaction",
+      status: "applied",
+    });
+    expect(history.items.map((item) => item.assessmentId)).toContain(
+      suggestion.id,
+    );
+    const audited = (
+      await listAutomaticDecisions(ctx.db, {
+        family: "statement_transaction",
+        recordIds: [existing.id],
+      })
+    ).items.find((item) => item.id === suggestion.id);
+    expect(audited?.records).toEqual(
+      expect.arrayContaining([
+        { entity: "financialTransaction", id: existing.id },
+        expect.objectContaining({ entity: "financialAccount" }),
+      ]),
+    );
     const [stamp] = state.data.matchedRules!;
     expect(stamp).toMatch(/^statement_transaction\.attach@.+@.+/);
     const events = await feedbackFor(ctx, suggestion.id);
@@ -685,15 +706,13 @@ describe("Automatic rules", () => {
     ).rows;
     expect(transaction?.postedDate).toBe("2026-05-05");
 
-    const view = await listSuggestionPage(ctx.db, {
+    const view = await listAutomaticDecisions(ctx.db, {
       family: "statement_transaction",
-      appliedAutomatically: true,
     });
     expect(view.items).toEqual([
       expect.objectContaining({
-        assessmentId: suggestion.id,
+        id: suggestion.id,
         automaticRule: `${ruleBase(ATTACH)}`,
-        matchedRules: [stamp],
       }),
     ]);
 

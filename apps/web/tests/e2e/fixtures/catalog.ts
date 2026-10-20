@@ -1,3 +1,4 @@
+import { publishEntityConnection } from "~/server/domains/connection/repo/entity-connections";
 import type { EntityOverrides } from "../../../tooling/factories/build";
 import { taxonomyShortcode } from "../../../tooling/product-category-fixtures";
 import { type ProductCreateInput } from "@cubby/schemas/product";
@@ -219,6 +220,18 @@ export async function seedPlacementReviewPrerequisite(
     productId: product.id,
     locationId: unknown.id,
     amount: { value: 1, unit: "each" },
+  });
+  // Passive record reads expose only proposals already published by a Sweep.
+  await publishEntityConnection(getFixtureDb(), {
+    relation: "inventory-location",
+    source: { entityKind: "inventory", entityId: source.id },
+    target: { entityKind: "location", entityId: target.id },
+    label: "Review inventory placement",
+    evidence: {
+      reasons: ["Synthetic exact Product stock at one known destination"],
+      contradictions: [],
+      unknowns: ["Confirm the physical location"],
+    },
   });
   return { source, destination, target };
 }

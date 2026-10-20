@@ -1,4 +1,8 @@
 import {
+  suggestionRecordCountsInput,
+  suggestionRecordCountsOut,
+} from "@cubby/schemas/automatic-decision";
+import {
   acceptCleanSuggestionsInput,
   type acceptCleanSuggestionsOut,
   suggestionColumns,
@@ -6,6 +10,7 @@ import {
   suggestionCountsOut,
   suggestionGroup,
   suggestionListFamily,
+  suggestionListFilters,
   suggestionListInput,
   suggestionListOut,
   type SuggestionColumnValue,
@@ -15,6 +20,7 @@ import {
   type SuggestionListRow,
   type SuggestionOrder,
 } from "@cubby/schemas/suggestion-list";
+import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -26,6 +32,11 @@ import {
   suggestionFamilies,
 } from "~/server/generic/assessment/repo/suggestion-families";
 import { resolveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
+
+import {
+  readAssessmentRecordRefs,
+  touchingAssessmentIds,
+} from "./review-families";
 
 type Value = SuggestionColumnValue | SuggestionColumnValue[];
 type Filter = SuggestionListFilters["where"][string];
@@ -216,18 +227,63 @@ async function scopedKeys(db: Database, filters: SuggestionListFilters) {
     throw new Error(
       `Unknown Suggestion column ${unknown.join(", ")}; columns here: ${[...known].join(", ")}`,
     );
-  const scoped = filters.appliedAutomatically
-    ? { ...filters, status: "applied" as const }
-    : filters;
+  const scoped = filters;
   const query = await familyQuery(db, scoped);
+  const touching = await touchingAssessmentIds(db, {
+    entity: filters.entity,
+    records: query.records,
+    eligibility: sql`a.served AND s.family IN (${sql.join(
+      families.map((family) => sql`${family}`),
+      sql`, `,
+    )})
+      AND s.status = ${filters.status} ${filters.status === "pending" ? sql`AND s.active` : sql``}
+      ${filters.runId ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${filters.runId})` : sql``}`,
+  });
+  if (touching?.size === 0) return { families, keys: [], all: [] };
+  const familyScope = {
+    filters: { ...query.filters, entity: undefined, recordIds: undefined },
+    assessmentIds: touching ? [...touching] : undefined,
+  };
   const keys = (
     await Promise.all(
-      families.map((family) => suggestionFamilies[family].keys(db, query)),
+      families.map((family) =>
+        suggestionFamilies[family].keys(db, familyScope),
+      ),
     )
   )
     .flat()
-    .filter((key) => !scoped.appliedAutomatically || key.automaticRule);
+    .filter(
+      (key) =>
+        (filters.status !== "pending" || key.automaticRule === null) &&
+        (!touching || touching.has(key.assessmentId)),
+    );
   return { families, keys: filterKeys(keys, filters.where), all: keys };
+}
+
+/** Counts use the queue's eligibility and declared subjects, including either endpoint. */
+export async function suggestionRecordCounts(
+  db: Database,
+  raw: z.input<typeof suggestionRecordCountsInput>,
+) {
+  const input = suggestionRecordCountsInput.parse(raw);
+  if (!input.recordIds.length)
+    return suggestionRecordCountsOut.parse({ records: [] });
+  const { keys } = await scopedKeys(
+    db,
+    suggestionListFilters.parse({ recordIds: input.recordIds }),
+  );
+  const refs = await readAssessmentRecordRefs(
+    db,
+    keys.map((key) => key.assessmentId),
+  );
+  const counts = new Map(input.recordIds.map((id) => [id, 0]));
+  for (const references of refs.values())
+    for (const record of references)
+      if (counts.has(record.id))
+        counts.set(record.id, (counts.get(record.id) ?? 0) + 1);
+  return suggestionRecordCountsOut.parse({
+    records: [...counts].map(([id, pending]) => ({ id, pending })),
+  });
 }
 
 async function hydrate(
@@ -428,6 +484,9 @@ const acceptAsIs = (row: SuggestionListRow) => {
       return suggestionFamilies.recommendation.acceptAsIs(row);
     case "transfer_pair":
       return suggestionFamilies.transfer_pair.acceptAsIs(row);
+    case "product_pair":
+    case "image_description":
+      return null;
   }
 };
 

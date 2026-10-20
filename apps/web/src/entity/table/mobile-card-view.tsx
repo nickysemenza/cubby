@@ -20,6 +20,7 @@ import {
 } from "react";
 
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
+import { ProposalCount } from "~/entity/suggestions/proposal-counts";
 import {
   RecordRowSuggestions,
   RecordSuggestionBoundary,
@@ -334,7 +335,7 @@ function RowContent<TItem extends RowData>({
   showThumb: boolean;
   thumb: ReactNode;
   row: Row<TItem>;
-  title: string;
+  title: ReactNode;
   /** The canonical route: the title becomes a link stretched over the row. */
   href?: string;
   longPress: LongPressHandlers;
@@ -373,9 +374,16 @@ function RowContent<TItem extends RowData>({
             {title}
           </Link>
         ) : (
-          <span className={titleClass}>{title}</span>
+          <span
+            className={
+              typeof title === "string" ? titleClass : "block min-w-0 text-sm/5"
+            }
+          >
+            {title}
+          </span>
         )}
         <RowSubtitle parts={subtitleParts} />
+        <ProposalCount record={row.original} />
       </span>
       <RowTrailingValues entries={trailingEntries} />
       {rowActions && (

@@ -1,8 +1,11 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, redirect } from "@tanstack/react-router";
 
 import { RoutePending } from "~/entity/navigation/route-pending";
-import { SuggestionsPage } from "~/features/suggestions/suggestions-page";
-import { suggestionsSearchSchema } from "~/features/suggestions/suggestions-search";
+import { SuggestionsPage } from "~/entity/suggestions/queue/suggestions-page";
+import {
+  suggestionsSearchSchema,
+  parseRecordParam,
+} from "~/entity/suggestions/queue/suggestions-search";
 import { pageTitle } from "~/lib/page-title";
 import { RouteErrorComponent } from "~/ui/feedback/route-error";
 
@@ -10,6 +13,16 @@ export const Route = createFileRoute("/_authenticated/suggestions")({
   // `family`, `record` (`<kind>:<CODE>`) and `runId` scope the list; column
   // filters ride beside them under their column ids (`useTableState`).
   validateSearch: suggestionsSearchSchema,
+  beforeLoad: ({ search }) => {
+    if (search.status === "applied_automatically")
+      throw redirect({
+        to: "/automatic-decisions",
+        search: {
+          family: search.family,
+          record: parseRecordParam(search.record)?.code,
+        },
+      });
+  },
   component: SuggestionsRoute,
   pendingComponent: RoutePending,
   errorComponent: RouteErrorComponent,
