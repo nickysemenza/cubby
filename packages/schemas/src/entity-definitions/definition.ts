@@ -1,4 +1,5 @@
 import { enumRoles } from "@cubby/shared/enum-palette";
+import type { ShortcodeFor, ShortcodeType } from "@cubby/shared";
 import { z } from "zod";
 import { sortDirection } from "../pagination";
 import {
@@ -2899,8 +2900,52 @@ export const defineEntity = <const T extends EntityDeclaration>(
       ? unknown
       : {
           invalidLabelPath: InvalidLabelPaths<NoInfer<T>>;
-        }),
+        }) &
+    (InvalidReferenceFields<NoInfer<T>> extends never
+      ? unknown
+      : { invalidReferenceField: InvalidReferenceFields<NoInfer<T>> }),
 ): T => declaration;
+
+type ReferenceItem<E extends ShortcodeType> =
+  | ShortcodeFor<E>
+  | { id: ShortcodeFor<E> };
+
+type ReferenceValue<F, E extends ShortcodeType> = F extends { kind: "number" }
+  ? number
+  : F extends { reference: { multiple: true } }
+    ? readonly ReferenceItem<E>[]
+    : ReferenceItem<E>;
+
+type InvalidReferenceSchemas<F, E extends ShortcodeType> = F extends {
+  key: infer Key extends string;
+  validation: infer V;
+}
+  ? {
+      [
+        Mode in keyof V & ("read" | "create" | "update")
+      ]: V[Mode] extends z.ZodType
+        ? NonNullable<z.output<V[Mode]>> extends ReferenceValue<F, E>
+          ? never
+          : `${Key}.validation.${Mode}`
+        : never;
+    }[keyof V & ("read" | "create" | "update")]
+  : never;
+
+type InvalidReferenceField<F> = F extends {
+  key: infer Key extends string;
+  reference: { entity: infer E extends string };
+}
+  ? E extends ShortcodeType
+    ? InvalidReferenceSchemas<F, E>
+    : `${Key}.reference.entity`
+  : never;
+
+/** Keep the reference target, cardinality and public schema's branded identity correlated. */
+type InvalidReferenceFields<D> = D extends {
+  model: { fields: readonly (infer F)[] };
+}
+  ? InvalidReferenceField<F>
+  : never;
 
 type ReadableDeclaration = {
   model: {

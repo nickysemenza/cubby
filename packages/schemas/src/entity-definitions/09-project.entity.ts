@@ -606,7 +606,7 @@ Rules:
       {
         key: "blockedByIds",
         kind: "identifier",
-        reference: { entity: "task", multiple: true },
+        reference: { entity: "project", multiple: true },
         control: { kind: "specialized", renderer: "entity-multi-select" },
         display: {
           columnLabel: "Blocked by",
@@ -672,7 +672,7 @@ Rules:
       {
         key: "blockingIds",
         kind: "identifier",
-        reference: { entity: "task", multiple: true },
+        reference: { entity: "project", multiple: true },
         display: { list: true, detail: true },
         validation: {
           read: z.array(projectShortcode),

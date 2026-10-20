@@ -7,8 +7,12 @@ modules and emits references to the declared schemas; it never serializes Zod
 internals or reconstructs refinements.
 
 `definition.ts` owns the strict metadata schemas and their inferred declaration
-types. `defineEntity` preserves literals without parsing at runtime; the compiler
-parses metadata and applies defaults before typed compilation. Cross-entity
+types. `defineEntity` preserves literals without parsing at runtime and checks
+that reference targets and cardinality agree with the branded identifiers in
+their read, create, and update schemas. References may project identifiers or
+records with a branded `id`; numeric related-record counts remain scalar
+projections. Storage-only references need no public schema. The compiler parses
+metadata and applies defaults before typed compilation. Cross-entity
 references, capability compatibility, field rosters, and physical storage remain
 semantic compiler checks. Field-validation Zod instances pass through unchanged.
 

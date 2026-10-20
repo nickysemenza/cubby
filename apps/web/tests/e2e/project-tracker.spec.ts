@@ -1,10 +1,50 @@
 import { seedTaskPrerequisite } from "./fixtures/catalog";
+import { createEntityFixture } from "./fixtures/core";
+import { entityApi } from "./support/entity-api";
 import {
   gotoAuthenticatedPage,
   openCommandPalette,
   selectComboboxItem,
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
+
+// Both dependency directions must resolve Project names and URLs through the
+// generic reference renderer rather than sending Project IDs to Task detail.
+test("project dependencies resolve project references in both directions", async ({
+  page,
+}) => {
+  const suffix = Date.now();
+  const blockerName = `e2e prerequisite project ${suffix}`;
+  const dependentName = `e2e dependent project ${suffix}`;
+  const blocker = await createEntityFixture(page, "project", {
+    name: blockerName,
+  });
+  const dependent = await createEntityFixture(page, "project", {
+    name: dependentName,
+  });
+  const updated = await entityApi(page.request).update(
+    "project",
+    dependent.id,
+    {
+      blockedByIds: [blocker.id],
+    },
+  );
+  expect(updated.ok()).toBe(true);
+
+  for (const [owner, target, name] of [
+    [blocker, dependent, dependentName],
+    [dependent, blocker, blockerName],
+  ] as const) {
+    await gotoAuthenticatedPage(page, `/projects/${owner.id}`);
+    const dependencies = page.locator("section").filter({
+      has: page.getByRole("heading", { name: "Dependencies", exact: true }),
+    });
+    await expect(
+      dependencies.getByRole("link", { name, exact: true }),
+    ).toHaveAttribute("href", `/projects/${target.id}`);
+    await expect(page.getByText(/Invalid task shortcode/)).toHaveCount(0);
+  }
+});
 
 test("command palette search deep-links a task straight to its detail page", async ({
   page,
