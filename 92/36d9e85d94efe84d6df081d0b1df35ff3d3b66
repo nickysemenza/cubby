@@ -1,0 +1,41 @@
+apps/web/generator/entities/render/swift-catalog.ts
+  s_9b829d577c7e4c::t_b3159aaf960fa6 568-570,573-576,594
+apps/web/src/entity/entity-detail/detail-activity.tsx
+  s_9b829d577c7e4c::t_5820d187ec6172 4-8,10,17,23,69-70,72-74,80,100-105,108-111,161-163,167-197
+apps/web/src/entity/entity-detail/generic-entity-detail.tsx
+  s_9b829d577c7e4c::t_81326716574618 736-739,746-748
+apps/web/src/entity/entity-detail/spend-chart.tsx
+  s_9b829d577c7e4c::t_1388d005469ce1 15,31-37,50-54,67,69-83
+apps/web/src/entity/suggestions/suggestion-status.tsx
+  s_9b829d577c7e4c::t_8fb4ee15523999 150-151
+apps/web/src/entity/table/detail-page.tsx
+  s_9b829d577c7e4c::t_a2fabb90dbe74c 73-74,172,276
+apps/web/src/server/generic/entity-detail/repo/detail-data.integration.test.ts
+  s_9b829d577c7e4c::t_11775ef7a8acc4 196-199
+apps/web/src/server/generic/entity-detail/repo/detail-data.ts
+  s_9b829d577c7e4c::t_cecee7cd3ce180 13,38,113-118,127,139,150
+apps/web/src/ui/data-table/indexed-sections.tsx
+  s_9b829d577c7e4c::t_e2bd09a747a6d9 283,454,461-463,481-483,490-491
+apps/web/tests/e2e/continuous-detail.spec.ts
+  s_9b829d577c7e4c::t_865c1f77fb71b2 165,173,184,188
+packages/schemas/src/entity-detail-data.ts
+  s_9b829d577c7e4c::t_d358aa139dd728 31-32
+packages/schemas/src/manifest-wire.ts
+  s_9b829d577c7e4c::t_81bcb26630d9a1 241-242,249,252,258
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "9236d9e85d94efe84d6df081d0b1df35ff3d3b66",
+  "prompts": {},
+  "sessions": {
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
