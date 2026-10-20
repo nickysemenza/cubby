@@ -171,7 +171,7 @@ nonisolated enum EntityFieldValue {
     }
 
     static func formattedDate(_ string: String) -> String? {
-        DatePresentation.value(string)?.absolute
+        DatePresentation.absolute(of: string)
     }
 
     static func dateValue(in raw: JSONValue, field: FieldDescriptor, surface: String) -> String? {
@@ -180,7 +180,7 @@ nonisolated enum EntityFieldValue {
                 || field.format == "timestamp"
         else { return nil }
         let value = field.surfaceValue(in: raw, surface: surface)
-        guard let string = value?.stringValue, DatePresentation.value(string) != nil else { return nil }
+        guard let string = value?.stringValue, DatePresentation.isDate(string) else { return nil }
         return string
     }
 }

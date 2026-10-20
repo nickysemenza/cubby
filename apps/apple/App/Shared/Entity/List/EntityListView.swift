@@ -1027,8 +1027,7 @@ struct EntityListView: View {
 
     #if os(macOS)
         private func tableFact(_ field: FieldDescriptor, row: EntityRow) -> EntityRowPresentation.Fact? {
-            EntityRowPresentation.resolve(descriptor: descriptor, row: row, columns: [field.key])
-                .facts.first { $0.id == field.key }
+            EntityRowPresentation.fact(field.key, descriptor: descriptor, row: row)
         }
     #endif
 

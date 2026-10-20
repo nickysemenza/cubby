@@ -994,12 +994,8 @@ private struct ExplanationEvidenceValue: View {
                     ) { key in
                         if let item = values[key] {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(
-                                    key.replacingOccurrences(
-                                        of: "([a-z0-9])([A-Z])", with: "$1 $2", options: .regularExpression
-                                    ).replacingOccurrences(of: "_", with: " ").capitalized
-                                )
-                                .font(.caption).foregroundStyle(.secondary)
+                                Text(FieldKeyWords.spaced(key).capitalized)
+                                    .font(.caption).foregroundStyle(.secondary)
                                 ExplanationEvidenceValue(value: item, property: key).font(.callout)
                             }
                         }

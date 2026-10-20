@@ -41,6 +41,23 @@ struct DatePresentationTests {
         #expect(DatePresentation.timestamp(now.addingTimeInterval(1), now: now).relative == "now")
     }
 
+    /// Row labels read only the absolute string; it must match the full presentation's.
+    @Test func absoluteAndIsDateAgreeWithValue() {
+        let now = instant("2026-10-13T18:52:00Z")
+        let inputs = [
+            "2026-10-13", "2025-02-01", "2026-02-30", "2026-10-13T18:50:00Z",
+            "2026-10-13T18:50:00.123Z", "2024-01-05T08:00:00-08:00", "not a date", "",
+        ]
+        for input in inputs {
+            for compact in [false, true] {
+                #expect(
+                    DatePresentation.absolute(of: input, now: now, compact: compact)
+                        == DatePresentation.value(input, now: now, compact: compact)?.absolute)
+            }
+            #expect(DatePresentation.isDate(input) == (DatePresentation.value(input) != nil))
+        }
+    }
+
     @Test func compactMonthsAndOtherYearsRemainUnambiguous() {
         let now = instant("2026-10-13T18:52:00Z")
         #expect(
