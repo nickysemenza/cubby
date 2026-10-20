@@ -652,7 +652,9 @@ test("suggests an existing variant and previews every merge decision for a creat
     .getByRole("button", { name: /^Compare(?: existing Products)?$/ })
     .click();
   await page.locator(`a[href*="candidate=${existing.id}"]`).click();
-  await expect(page).toHaveURL(/recommendations\/workbench/);
+  await expect(page).toHaveURL(
+    /suggestions\?family=product_pair&record=product:/,
+  );
   await expect(page.getByText(candidateName).first()).toBeVisible();
   await expect(page.getByText(evidence)).toBeVisible();
   await page.getByRole("button", { name: "Review merge" }).click();

@@ -27,19 +27,15 @@ test("full Relationships review applies an expense alternative", async ({
   const name = `e2e full relationship ${Date.now()}`;
   const fixture = await seedRelationshipReviewPrerequisite(page, name);
   await gotoAuthenticatedPage(page, `/expenses/${fixture.expense.id}`);
-  await page
-    .getByRole("heading", { level: 2, name: "Relations", exact: true })
-    .scrollIntoViewIfNeeded();
-  await page
-    .getByRole("button", {
-      name: `Review ${name} suggested suggestion`,
-      exact: true,
-    })
-    .click();
+  const proposals = page.getByRole("region", {
+    name: "Pending suggestions",
+    exact: true,
+  });
+  await expect(proposals).toContainText(`${name} suggested`);
   const assignment = async () =>
     (await readExpense(page, fixture.expense.id, projectAssignment)).projectId;
   expect(await assignment()).toBe(fixture.current.id);
-  await page.getByRole("button", { name: "Apply change", exact: true }).click();
+  await proposals.getByRole("button", { name: "Confirm", exact: true }).click();
   await expect.poll(assignment).toBe(fixture.target.id);
 });
 
@@ -49,21 +45,17 @@ test("placement acceptance follows the surviving stock row after merging", async
   const name = `e2e placement ${Date.now()}`;
   const fixture = await seedPlacementReviewPrerequisite(page, name);
   await gotoAuthenticatedPage(page, `/inventory/${fixture.source.id}`);
-  await page
-    .getByRole("heading", { level: 2, name: "Relations", exact: true })
-    .scrollIntoViewIfNeeded();
-  await page
-    .getByRole("button", {
-      name: `Review ${name} workshop suggestion`,
-      exact: true,
-    })
-    .click();
+  const proposals = page.getByRole("region", {
+    name: "Pending suggestions",
+    exact: true,
+  });
+  await expect(proposals).toContainText(`${name} workshop`);
   expect(
     (
       await entityApi(page.request).get("inventory", fixture.source.id, {})
     ).ok(),
   ).toBe(true);
-  await page.getByRole("button", { name: "Apply change", exact: true }).click();
+  await proposals.getByRole("button", { name: "Confirm", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(fixture.destination.id));
   const survivor = z.object({
     location: z.object({ id: z.string() }),

@@ -162,7 +162,11 @@ test("Suggestions lists every family with named records and category pills, and 
 
   await gotoAuthenticatedPage(page, "/suggestions");
   const families = page.getByRole("group", { name: "Suggestion families" });
-  for (const family of ["Statements", "Connections", "Fields"])
+  for (const family of [
+    "Statements",
+    "Connections and recommendations",
+    "Fields",
+  ])
     await expect(
       families.getByRole("button", { name: new RegExp(`^${family} [1-9]`) }),
     ).toBeVisible();
@@ -276,7 +280,7 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
   ]);
   await generateStatementSuggestions(db);
 
-  const view = `/suggestions?record=financialAccount:${account.id}&group=account_month`;
+  const view = `/suggestions?family=statement_transaction&record=financialAccount:${account.id}&group=account_month`;
   await gotoAuthenticatedPage(page, view);
   const table = suggestionsTable(page);
   const rowFor = (text: string) =>
@@ -408,8 +412,13 @@ test("Automatic rules lists each seeded rule with its state and switch", async (
   await expect(
     attach.getByRole("switch", { name: "Statement attach automatic rule" }),
   ).toHaveAttribute("aria-disabled", "true");
-  await page.getByRole("tab", { name: /^Applied automatically/ }).click();
-  await expect(page).toHaveURL(/status=applied_automatically/);
+  await page
+    .getByRole("button", { name: "Review automatic decisions" })
+    .click();
+  await expect(page).toHaveURL(/\/automatic-decisions/);
+  await expect(
+    page.getByRole("region", { name: "Automatic decisions", exact: true }),
+  ).toBeVisible();
 });
 
 // Acceptance must acknowledge the chosen value before the response arrives,
@@ -472,7 +481,7 @@ test("list pills accept immediately without unloading another row's suggestion",
   });
   await gotoAuthenticatedPage(
     page,
-    `/products?q=${encodeURIComponent(prefix)}`,
+    `/products?search=${encodeURIComponent(prefix)}`,
   );
   const table = page.getByRole("table", { name: /Products table/i });
   const first = table.getByRole("row").filter({ hasText: names[0] });

@@ -14,16 +14,25 @@ import {
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
-test("recommendations workbench direct entry shows guidance", async ({
+// Failure modes: retained workbench bookmarks stop loading or lose their
+// related Product scope after review moves into the shared Suggestions queue.
+test("legacy workbench bookmarks redirect to Suggestions or the related Product", async ({
   page,
-}) => {
+}, testInfo) => {
   await gotoAuthenticatedPage(page, "/recommendations/workbench");
+  await expect(page).toHaveURL(/\/suggestions(?:\?|$)/u);
   await expect(
-    page.getByRole("heading", { name: "Recommendations Workbench" }),
+    page.getByRole("heading", { name: "Suggestions", exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByText("Open this workbench from a current recommendation."),
-  ).toBeVisible();
+
+  const name = uniqueName(testInfo, "Legacy related Product");
+  const product = await seedProductPrerequisite(page, { name });
+  await gotoAuthenticatedPage(
+    page,
+    `/recommendations/workbench?kind=product-related&source=${product.id}`,
+  );
+  await expect(page).toHaveURL(new RegExp(`/products/${product.id}$`, "u"));
+  await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
 });
 
 test("browser Back restores the search query and scroll", async ({

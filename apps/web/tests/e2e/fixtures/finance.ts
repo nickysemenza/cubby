@@ -1,3 +1,4 @@
+import { publishEntityConnection } from "~/server/domains/connection/repo/entity-connections";
 import type { Page } from "@playwright/test";
 import { count, eq } from "drizzle-orm";
 import * as schema from "~/server/db/schema";
@@ -126,6 +127,18 @@ export async function seedRelationshipReviewPrerequisite(
     cost: 20,
     trade: "electrical",
     costType: "materials",
+  });
+  // Passive record reads expose only proposals already published by a Sweep.
+  await publishEntityConnection(getFixtureDb(), {
+    relation: "expense-project",
+    source: { entityKind: "expense", entityId: expense.id },
+    target: { entityKind: "project", entityId: target.id },
+    label: "Review Project assignment",
+    evidence: {
+      reasons: ["Synthetic matching trade and date window"],
+      contradictions: [],
+      unknowns: ["Confirm the intended Project"],
+    },
   });
   return { current, target, product, expense };
 }
