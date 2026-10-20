@@ -58,6 +58,22 @@ persisted progress without depending on provider retention. Instance diagnostics
 expire independently of Run history. The Run's Cloudflare dashboard link requires
 provider sign-in and can outlive the instance.
 
+Step-ledger Runs hand off after bounded committed pages; the subrequest cap
+belongs to the Workflow instance, so a new `step.do` alone does not reset it
+([Cloudflare limits](https://developers.cloudflare.com/workflows/reference/limits/)).
+Statement Sweeps also bound generation and label page sizes. The driver owns
+those executable bounds; continuation retains the RunStep cursors and the
+attempt/cancellation fences instead of starting generation over.
+
+Page failures are logged before database failure bookkeeping. If bookkeeping
+also fails, the original error and the complete recording-error chain survive
+in the retry's message. Each Workflow failure-write retry opens a fresh database
+scope. If all retries fail, the combined raw diagnostic is the terminal instance
+error, allowing reconciliation in a later invocation to save it on the Run.
+Only credential-shaped values are scrubbed; SQL, parameters, SQLSTATE codes and
+upstream bodies remain visible. An unrecoverable CPU termination can bypass
+JavaScript catches and must be diagnosed from provider invocation outcomes.
+
 Retired executor purposes preserve recorded inputs/checkpoints but cannot resume.
 Catch-up reconciles attempts that ended without finishing their Run. Discovery
 readiness and usage reads remain storage-only; current cursor coverage is not a

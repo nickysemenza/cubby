@@ -22,6 +22,10 @@ import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
 import {
+  statementLabelSubject,
+  statementCandidateSubject,
+} from "~/server/domains/statement-import/repo/statement-label-input";
+import {
   buildChargeProposals,
   chargeId,
   type ChargeRef,
@@ -38,7 +42,7 @@ import { applyAutomaticRulesForCharge } from "~/server/generic/assessment/repo/a
 import { runFailureText } from "~/server/workflows/runs/lifecycle";
 
 /** One label page labels at most this many suggestions. */
-const STATEMENT_LABEL_BATCH = 100;
+const STATEMENT_LABEL_BATCH = 10;
 /** Page rebuilds after automatic rules move the ledger mid-page. */
 const MAX_LABEL_ROUNDS = 3;
 
@@ -93,27 +97,14 @@ async function labelledJudgment(
   const judgment: StatementTransactionJudgment = structuredClone(
     current.judgment,
   );
-  const statement = {
-    descriptor: current.canonical.rawDescription,
-    merchant: current.canonical.merchant,
-    category: current.canonical.sourceCategory,
-    date: current.canonical.statementDate,
-    amount: current.canonical.amount,
-    status: judgment.providerStatus,
-  };
+  const statement = statementLabelSubject(judgment);
   const create = judgment.create;
   await settleDecisions([
     ...judgment.candidates.map(async (candidate) => {
       const prompt = STATEMENT_CHARGE_IDENTITY_FEATURE.prompt(
         JSON.stringify({
           statement,
-          transaction: {
-            descriptor: candidate.rawDescription,
-            merchant: candidate.merchant,
-            date: candidate.postedDate ?? candidate.transactionDate,
-            amount: candidate.amount,
-            status: candidate.status,
-          },
+          transaction: statementCandidateSubject(candidate),
         }),
       );
       if (!decisionChoiceFitsContext(prompt)) return;

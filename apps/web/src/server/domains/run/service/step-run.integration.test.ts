@@ -1,5 +1,5 @@
 import type { RunId } from "@cubby/schemas/identifiers";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -78,6 +78,44 @@ describe("step-ledger Runs", () => {
 
   const readRun = async (id: RunId) =>
     (await getDb(ctx.db).select().from(run).where(eq(run.id, id)))[0];
+
+  // A second database error during the step's failure checkpoint must not
+  // hide the original page failure from the outer Workflow recorder.
+  it("preserves the page error when writing its failed step also errors", async () => {
+    const { params } = await startRun();
+    await getDb(ctx.db).execute(sql`
+      CREATE FUNCTION synthetic_fail_step() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        IF NEW.errors IS DISTINCT FROM OLD.errors THEN
+          RAISE EXCEPTION 'Synthetic failure checkpoint timeout' USING ERRCODE = '57014';
+        END IF;
+        RETURN NEW;
+      END $$
+    `);
+    await getDb(ctx.db).execute(sql`
+      CREATE TRIGGER synthetic_fail_step BEFORE UPDATE ON "RunStep"
+      FOR EACH ROW EXECUTE FUNCTION synthetic_fail_step()
+    `);
+    const driver: StepDriver = {
+      key: "synthetic",
+      label: "Synthetic step",
+      page: async () => {
+        throw new Error("Synthetic original page failure");
+      },
+    };
+    try {
+      await expect(
+        advanceStepRun(ctx.db, params, async () => [driver]),
+      ).rejects.toThrow(
+        /Synthetic original page failure[\s\S]*57014[\s\S]*Synthetic failure checkpoint timeout/u,
+      );
+    } finally {
+      await getDb(ctx.db).execute(
+        sql`DROP TRIGGER synthetic_fail_step ON "RunStep"`,
+      );
+      await getDb(ctx.db).execute(sql`DROP FUNCTION synthetic_fail_step()`);
+    }
+  });
 
   it("pages each step in order, keeps failures with raw errors, and retries only the failed step", async () => {
     const { id, params } = await startRun();

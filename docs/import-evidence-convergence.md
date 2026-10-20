@@ -135,7 +135,21 @@ transaction. A create is refused while any candidate the member has not
 rejected remains. A same-amount charge from another export is a possible
 firmed-up twin and is never bulk-acceptable. Decision-model labels rank
 candidates and choose a fallback kind; on their own they never authorize an
-attach or suppress a create. The vanished-hold void is the one
+attach or suppress a create.
+
+A repeated statement Sweep keeps labels for the same source and charge key
+when the statement model inputs and the candidate identities/model inputs
+match. Observation occurrences, memos, rule/history votes and clean-policy
+changes can move the broader evidence fingerprint without requiring fresh
+model decisions. Replacement suggestions retain the original model provenance,
+copy only the model votes and candidate labels, and recompute kind and clean
+status from current rules, history and transfer evidence. Changed model inputs
+or candidates retire the old labels atomically with the replacement; suppressed
+or settled charges remain excluded. Generation and label pages commit per
+charge, so interruption preserves reusable labels and completed publications.
+Acceptance always validates the current broader evidence fingerprint.
+
+The vanished-hold void is the one
 bounded absence judgment: it applies only to a transaction recorded from rows
 the provider itself marked pending, with no posted twin, after a later export
 of that account covers dates seven days past the hold without containing it,

@@ -9,15 +9,14 @@ import { getAiGatewayEgress, setCfEnv } from "../cf-env";
 import { withInvocationDb } from "../db";
 import type { WorkflowRunParams } from "./runs/contract";
 import { runDeploymentBoundary } from "./runs/deployment";
-import { failWorkflowRun, runFailureText } from "./runs/lifecycle";
+import { failWorkflowRun } from "./runs/lifecycle";
+import { runStepRunWorkflow } from "./step-run-execution";
 
 /**
  * One attempt of a step-ledger Run (maintenance, sweep). Every page and every
  * child wait counts toward one instance's bound; past it the attempt hands off
  * to a fresh instance that resumes from the RunStep cursors.
  */
-const STEP_RUN_PAGES_PER_INSTANCE = 200;
-
 export class StepRunWorkflow extends WorkflowEntrypoint<
   Env,
   WorkflowRunParams
@@ -34,52 +33,43 @@ export class StepRunWorkflow extends WorkflowEntrypoint<
       withInvocationDb(this.env.HYPERDRIVE.connectionString, async () =>
         work((await import("../db")).db),
       );
-    try {
-      const boundary = runDeploymentBoundary(this.env, step, event.payload);
-      for (let page = 0; page < STEP_RUN_PAGES_PER_INSTANCE; page++) {
-        if (await boundary(`page:${page}`))
-          return { runId: event.payload.runId };
-        const advance = await step.do(
-          `page:${page}`,
-          {
-            retries: { limit: 2, delay: "5 seconds", backoff: "exponential" },
-            timeout: "15 minutes",
-          },
-          () => withDb((db) => advanceStepRun(db, event.payload)),
-        );
-        if (advance.kind !== "continue" && advance.kind !== "wait")
-          return { runId: event.payload.runId };
-        if (advance.kind === "wait")
-          try {
-            await step.waitForEvent(`child:${page}`, {
-              type: "step-run",
-              timeout: `${advance.seconds} seconds`,
-            });
-          } catch {
-            // SILENT: the wait is only a hint; its timeout (or any other end)
-            // falls through to the next page, which re-reads the child.
-          }
-      }
-      await boundary("continue", true);
-    } catch (error) {
-      await step.do(
-        "fail",
-        { retries: { limit: 2, delay: "5 seconds", backoff: "exponential" } },
-        () =>
+    await runStepRunWorkflow(
+      {
+        do: (name, config, callback) =>
+          step.do(
+            name,
+            {
+              ...config,
+              ...(name.startsWith("page:") && { timeout: "15 minutes" }),
+            },
+            callback,
+          ),
+        sleep: (name, duration) => step.sleep(name, duration),
+      },
+      {
+        boundary: runDeploymentBoundary(this.env, step, event.payload),
+        advance: () => withDb((db) => advanceStepRun(db, event.payload)),
+        wait: async (page, seconds) => {
+          await step.waitForEvent(`child:${page}`, {
+            type: "step-run",
+            timeout: `${seconds} seconds`,
+          });
+        },
+        // Every retry opens a fresh awaited scope, including its database pool.
+        fail: (message) =>
           withDb((db) =>
             failWorkflowRun(db, event.payload, {
               failureCode: "step_run_workflow_failed",
-              message: runFailureText(
-                error instanceof Error ? error : String(error),
-              ),
+              message,
             }),
           ),
-      );
-      await getAiGatewayEgress(CUBBY_AI_GATEWAY_ID)?.scheduleAiWorkRecovery(
-        event.payload.runId,
-      );
-      throw error;
-    }
+        recover: async () => {
+          await getAiGatewayEgress(CUBBY_AI_GATEWAY_ID)?.scheduleAiWorkRecovery(
+            event.payload.runId,
+          );
+        },
+      },
+    );
     return { runId: event.payload.runId };
   }
 }
