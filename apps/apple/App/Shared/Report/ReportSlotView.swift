@@ -358,6 +358,8 @@ private struct ReportScheduleView: View {
     var body: some View {
         let rows = schedule.visibleRows(collapsed: collapsed)
         let names = Dictionary(uniqueKeysWithValues: schedule.rows.map { ($0.id, $0.name) })
+        // Every row's segments feed the extent, so read it once per render, not once per row.
+        let domain = schedule.domain
         VStack(alignment: .leading, spacing: 0) {
             Text(
                 "\(schedule.rows.count) activities · \(schedule.rows.filter { $0.segments.isEmpty }.count) without dates"
@@ -370,7 +372,7 @@ private struct ReportScheduleView: View {
                         HStack(spacing: FieldGuideTokens.Space.sm) {
                             label(row)
                                 .frame(width: labelWidth, alignment: .leading)
-                            timeline(row)
+                            timeline(row, domain: domain)
                                 .frame(width: 320, height: rowHeight)
                         }
                         .frame(minHeight: rowHeight)
@@ -418,9 +420,9 @@ private struct ReportScheduleView: View {
         }
     }
 
-    private func timeline(_ row: ReportPresentation.Schedule.Row) -> some View {
+    private func timeline(_ row: ReportPresentation.Schedule.Row, domain: ClosedRange<Date>?) -> some View {
         GeometryReader { proxy in
-            if let domain = schedule.domain {
+            if let domain {
                 let span = max(domain.upperBound.timeIntervalSince(domain.lowerBound), 86_400)
                 let x = { (date: Date) in
                     CGFloat(date.timeIntervalSince(domain.lowerBound) / span) * (proxy.size.width - 8) + 4

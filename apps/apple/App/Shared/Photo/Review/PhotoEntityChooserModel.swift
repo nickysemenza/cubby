@@ -45,8 +45,11 @@ final class PhotoEntityChooserModel {
     var searchRows: [EntityRow] { search?.rows ?? [] }
     var dateMatches: [EntityRow] { hasDateMatches ? dateLane.rows : [] }
     var recentRows: [EntityRow] {
-        recentLane.rows.filter {
-            !Self.isSameSemanticDay($0, key: semanticDateKey, captureDate: captureDate, calendar: calendar)
+        guard let captureDate, let key = semanticDateKey else { return recentLane.rows }
+        let captureDay = Self.plainDate(captureDate, calendar: calendar)
+        return recentLane.rows.filter {
+            !Self.isSameSemanticDay(
+                $0, key: key, captureDate: captureDate, captureDay: captureDay, calendar: calendar)
         }
     }
     var hasMoreDateMatches: Bool { hasDateMatches && dateLane.hasMore }
@@ -245,12 +248,10 @@ final class PhotoEntityChooserModel {
     }
 
     private nonisolated static func isSameSemanticDay(
-        _ row: EntityRow, key: String?, captureDate: Date?, calendar: Calendar
+        _ row: EntityRow, key: String, captureDate: Date, captureDay: String, calendar: Calendar
     ) -> Bool {
-        guard let captureDate, let key, let raw = row.raw[key]?.stringValue else { return false }
-        if raw.count >= 10 {
-            return String(raw.prefix(10)) == plainDate(captureDate, calendar: calendar)
-        }
+        guard let raw = row.raw[key]?.stringValue else { return false }
+        if raw.count >= 10 { return raw.prefix(10) == captureDay }
         guard let parsed = ISO8601DateFormatter().date(from: raw) else { return false }
         return calendar.isDate(parsed, inSameDayAs: captureDate)
     }

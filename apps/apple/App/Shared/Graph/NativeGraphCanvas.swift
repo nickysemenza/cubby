@@ -100,8 +100,9 @@ struct NativeGraphCanvas: View {
                         ForEach(graph.nodes) { node in Button(node.label) { onSelect(node) } }
                         // Edges are drawn in a Canvas, so VoiceOver reaches them only through
                         // these buttons, which share the tap path's edge selection.
+                        let labels = Dictionary(graph.nodes.map { ($0.id, $0.label) }) { first, _ in first }
                         ForEach(graph.edges) { edge in
-                            Button(edgeAccessibilityLabel(edge)) { onSelectEdge(edge.id) }
+                            Button(edgeAccessibilityLabel(edge, labels: labels)) { onSelectEdge(edge.id) }
                                 .accessibilityAddTraits(selectedEdgeID == edge.id ? .isSelected : [])
                         }
                     }
@@ -316,10 +317,8 @@ struct NativeGraphCanvas: View {
         }
         return false
     }
-    private func edgeAccessibilityLabel(_ edge: EntityGraphEdge) -> String {
-        let label = { (ref: EntityRef) in
-            graph.nodes.first { $0.id == ref.stableKey }?.label ?? ref.id
-        }
+    private func edgeAccessibilityLabel(_ edge: EntityGraphEdge, labels: [String: String]) -> String {
+        let label = { (ref: EntityRef) in labels[ref.stableKey] ?? ref.id }
         return "\(label(edge.source)) → \(label(edge.target)), \(edge.label)"
     }
 
