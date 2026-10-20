@@ -43,7 +43,14 @@ export async function connectedChatGptInference(
   const status = await plan.status();
   if (!status.connected || status.needsReauthorization) return null;
   options.onSelected?.();
-  return inferChatGptPlan(plan, body, options);
+  try {
+    return await inferChatGptPlan(plan, body, options);
+  } catch (error) {
+    // Refresh may discover removed permission or a rejected registration only
+    // after selection. Advance the ladder once that state has been persisted.
+    if ((await plan.status()).needsReauthorization) return null;
+    throw error;
+  }
 }
 
 export async function inferChatGptPlan(

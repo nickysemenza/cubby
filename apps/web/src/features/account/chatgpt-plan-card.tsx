@@ -75,7 +75,7 @@ export function ChatGptPlanSettings() {
         purchase-import agent. Cubby keeps its current Luna and Sol models.
       </p>
 
-      {budget.data && connected ? (
+      {budget.data && connected && !status.data?.needsReauthorization ? (
         <p className="text-sm text-muted-foreground">
           When your plan’s usage limit or Cubby’s{" "}
           {formatCurrency(budget.data.plan.limitUsd)} per 6-hour plan cap is
@@ -89,15 +89,26 @@ export function ChatGptPlanSettings() {
         {status.data?.issue ? (
           <Stack gap="sm">
             <StatusText tone="destructive">{status.data.issue}</StatusText>
-            {!connected ? (
+            <Row align="center" gap="sm" wrap>
               <Button
                 variant="outline"
-                disabled={dismiss.isPending}
-                onClick={() => dismiss.mutate()}
-              >
-                Dismiss warning
-              </Button>
-            ) : null}
+                nativeButton={false}
+                render={
+                  <a href={CHATGPT_USAGE_URL} target="_blank" rel="noreferrer">
+                    ChatGPT settings
+                  </a>
+                }
+              />
+              {!connected ? (
+                <Button
+                  variant="outline"
+                  disabled={dismiss.isPending}
+                  onClick={() => dismiss.mutate()}
+                >
+                  Dismiss warning
+                </Button>
+              ) : null}
+            </Row>
           </Stack>
         ) : null}
         {connected &&
@@ -160,14 +171,19 @@ export function ChatGptPlanSettings() {
             {!status.data?.needsReauthorization ? (
               <>
                 <Row align="center" justify="between" gap="sm" wrap>
-                  <a
-                    className="inline-flex min-h-11 items-center text-sm underline underline-offset-4"
-                    href={CHATGPT_USAGE_URL}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Manage usage
-                  </a>
+                  <Button
+                    variant="outline"
+                    nativeButton={false}
+                    render={
+                      <a
+                        href={CHATGPT_USAGE_URL}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Manage usage
+                      </a>
+                    }
+                  />
                   <Button
                     variant="outline"
                     disabled={models.isFetching}

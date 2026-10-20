@@ -193,7 +193,8 @@ describe("ChatGPT connection recovery", () => {
     async (failure) => {
       vi.useFakeTimers();
       const revoke = vi.fn(async () => {
-        if (failure === "network") throw new Error("example network failure");
+        if (failure === "network")
+          throw new TypeError("example network failure");
         return new Response("example refusal", { status: Number(failure) });
       });
       const { session, records } = harness(async (url) =>
@@ -222,6 +223,7 @@ describe("ChatGPT connection recovery", () => {
           ? "example network failure"
           : `OpenAI revocation HTTP ${failure}: example refusal`,
       );
+      expect((await session.status()).issue).not.toContain("Error: TypeError:");
       expect((await session.authorizationHost()).hostId).toBe(
         "urn:uuid:example",
       );
@@ -309,7 +311,7 @@ it("returns the last 503 body when the next wait cannot fit the deadline", async
     { input: [] },
     "gpt-6-sol",
     undefined,
-    Date.now() + 5000,
+    Date.now() + 10_500,
   );
   await vi.advanceTimersByTimeAsync(2000);
   const response = await pending;

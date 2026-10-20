@@ -39,8 +39,8 @@ First registration uses `dynamic_agent_client`; later authorization reuses the
 issued client ID. Reauthorization sends the saved validated email as `login_hint`;
 it never sends `id_token_hint`. When refresh removed `chatgpt.tokens.use.direct`,
 the authorization-host response flags permission recovery and the CLI adds
-`prompt=consent` to request that permission again. Ordinary sign-ins omit it;
-`force_reconsent` is not confirmed for this integration. A state-validated `access_denied` callback reports
+`prompt=consent` to request that permission again. Ordinary sign-ins omit it.
+A state-validated `access_denied` callback reports
 “You declined ChatGPT plan access.” without exchanging a code. It securely sends the authorization code and original verifier
 through the generated `chatgpt.connect` operation. Workers exchanges the code, verifies the
 signed ID token's issuer, audience, expiration, nonce and the originally registered account identity, checks the granted
@@ -71,10 +71,10 @@ PostgreSQL schema change or new environment secret is required.
 After the first successful connection, Settings shows a dismissible note:
 “Background AI work in Cubby uses your ChatGPT plan. Manage usage in ChatGPT
 settings.” Got it persists on the shared connection, including across reconnects.
-While connected, the card reads the current plan and paid caps from AI funding status: when the
+While connected with usable authorization, the card reads the current plan and paid caps from AI funding status: when the
 plan usage limit or Cubby’s plan cap is reached, background work continues on
-paid billing within the paid cap for the same six-hour window. `budget.ts` owns
-those limits. A plan quota refusal without an OpenAI reset hint says that the
+paid billing within the household’s $1.00 per 6-hour paid budget. `budget.ts`
+owns those limits. A plan quota refusal without an OpenAI reset hint says that the
 reset is unknown and offers Manage usage. Cubby may re-probe at its own window
 boundary; that boundary is never presented as OpenAI’s reset time.
 
@@ -160,7 +160,8 @@ with credential-shaped values scrubbed. Before a stream opens, HTTP 503
 `subscription_sharing_user_unavailable`) retries the same plan request at 2, 8,
 and 30 seconds, subject to caller cancellation and the request deadline. One
 retry budget covers both the original and breakpoint-stripped requests. If the
-next delay cannot fit the remaining deadline, Cubby returns the last 503 body
+next delay plus five seconds of headroom for the retried request cannot fit
+the remaining deadline, Cubby returns the last 503 body
 without waiting; exhausted retries also return that refusal to the existing funding ladder. No started stream is replayed.
 Agent/coordinator calls treat `response.incomplete` as failure; the separate
 Rust structured-extraction forwarder retains incomplete output and usage for
@@ -180,6 +181,7 @@ A connected plan needing reauthorization (including removed permission or a
 rejected registration) is skipped just like a disconnected plan: funding
 ladders advance to their next source, ordinary callers use their existing paid
 route, and subscription-only callers fail closed with `subscription_unavailable`.
+This also applies to the first request whose refresh discovers the unusable state.
 Settings explains that fallback and omits the unavailable model catalog.
 
 Disconnect ChatGPT attempts renewable-session revocation, retrying network and
@@ -189,7 +191,7 @@ identity, and host ID remain. Settings then says: “Cubby cleared its tokens bu
 couldn't confirm OpenAI revoked them; disconnect Cubby in ChatGPT settings to be
 sure.” The persisted warning includes the raw failure diagnostic with only
 credential-shaped values scrubbed. Discovery parse errors, unexpected endpoint
-origins, and 4xx refusals fail immediately; only network and 5xx failures retry.
+origins, and 4xx refusals fail immediately.
 Dismiss warning clears it on the shared connection, and the next successful
 connect also clears it. An explicitly disconnected deployment resumes its
 existing paid AI Gateway route.

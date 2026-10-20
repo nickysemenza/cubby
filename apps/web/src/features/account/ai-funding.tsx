@@ -212,6 +212,7 @@ export function AiFundingSettings() {
                 </p>
                 <Button
                   variant="outline"
+                  nativeButton={false}
                   render={
                     <a
                       href={CHATGPT_USAGE_URL}

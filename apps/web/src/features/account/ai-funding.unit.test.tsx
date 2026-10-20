@@ -110,10 +110,9 @@ describe("AI funding controls", () => {
         "ChatGPT plan usage limit reached; ChatGPT didn’t say when it resets",
       ),
     ).toBeVisible();
-    expect(screen.getByRole("link", { name: "Manage usage" })).toHaveAttribute(
-      "href",
-      "https://chatgpt.com/settings/usage",
-    );
+    expect(
+      screen.getByRole("button", { name: "Manage usage" }),
+    ).toHaveAttribute("href", "https://chatgpt.com/settings/usage");
   });
 
   it("saves an edited credit budget", () => {

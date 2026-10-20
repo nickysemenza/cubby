@@ -19,12 +19,20 @@ const log = createLogger("chatgpt-plan");
 const INVALID_CLIENT =
   "OpenAI no longer accepts Cubby’s registration — connect again.";
 
+// Leave five seconds after backoff for the retried upstream request to respond.
+const RETRY_HEADROOM_MS = 5000;
+
 function retryDelay(attempt: number, deadlineAt: number): number | null {
   const delay = [2000, 8000, 30000][attempt];
-  return delay !== undefined && Date.now() + delay < deadlineAt ? delay : null;
+  return delay !== undefined &&
+    Date.now() + delay + RETRY_HEADROOM_MS < deadlineAt
+    ? delay
+    : null;
 }
 
-class RevocationNetworkError extends Error {}
+class RevocationNetworkError extends Error {
+  override name = "RevocationNetworkError";
+}
 
 const AUTH = "https://auth.openai.com";
 const TOKEN = `${AUTH}/api/accounts/oauth/token`;
@@ -402,7 +410,10 @@ export class ChatGptSession {
           try {
             return await this.upstream(input, init);
           } catch (error) {
-            throw new RevocationNetworkError(String(error), { cause: error });
+            throw new RevocationNetworkError(
+              error instanceof Error ? error.message : String(error),
+              { cause: error },
+            );
           }
         };
         try {

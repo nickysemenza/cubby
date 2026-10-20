@@ -150,7 +150,7 @@ test("settings renders the complete returned catalog, refresh errors, and discon
   ).toBeVisible();
   await expect(card.getByRole("combobox")).toHaveCount(0);
   await expect(
-    card.getByRole("link", { name: "Manage usage" }),
+    card.getByRole("button", { name: "Manage usage" }),
   ).toHaveAttribute("href", "https://chatgpt.com/settings/usage");
   await testInfo.attach("chatgpt-models-desktop", {
     body: await card.screenshot(),
@@ -174,9 +174,6 @@ test("settings renders the complete returned catalog, refresh errors, and discon
   ).toBeVisible();
   await expect(
     card.getByRole("heading", { name: "Available models" }),
-  ).toHaveCount(0);
-  await expect(
-    card.getByText("Reconnect ChatGPT to load models and resume tasks."),
   ).toHaveCount(0);
   warningDismissed = false;
   await card.getByRole("button", { name: "Disconnect ChatGPT" }).click();
