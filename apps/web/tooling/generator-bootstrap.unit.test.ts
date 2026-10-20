@@ -4,7 +4,18 @@ import { expect, it } from "vitest";
 
 // Install starts with no generated schemas. A warm Vitest import graph hides
 // renderer dependencies on those outputs, so load the real renderer afresh.
-it("renders native shared constants before generated schemas exist", () => {
+it.each([
+  {
+    name: "native shared constants",
+    module: "./apps/web/generator/entities/render/swift-shared-constants.ts",
+    size: "module.renderSwiftSharedConstants().length",
+  },
+  {
+    name: "declaration pagination primitives",
+    module: "./packages/schemas/src/pagination.ts",
+    size: "module.sortDirection.options.length",
+  },
+])("loads $name before generated schemas exist", ({ module, size }) => {
   const root = fileURLToPath(new URL("../../../", import.meta.url));
   const probe = `
     import { registerHooks } from 'node:module';
@@ -15,9 +26,9 @@ it("renders native shared constants before generated schemas exist", () => {
       }
       return resolved;
     }});
-    const { renderSwiftSharedConstants } = await import('./apps/web/generator/entities/render/swift-shared-constants.ts');
+    const module = await import(${JSON.stringify(module)});
     // Not console.log: Nx sets FORCE_COLOR, which colors an inspected number.
-    process.stdout.write(String(renderSwiftSharedConstants().length));
+    process.stdout.write(String(${size}));
   `;
   const output = execFileSync(
     process.execPath,

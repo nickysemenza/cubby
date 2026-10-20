@@ -1,7 +1,7 @@
 import {
   CURRENT_MEMBER_FILTER,
   UNRESOLVABLE_ENTITY_FILTER,
-} from "@cubby/shared";
+} from "../../shared/src/filter.ts";
 import { z } from "zod";
 
 /** The one page-size ceiling and default every list boundary shares. */
